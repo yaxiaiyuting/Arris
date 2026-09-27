@@ -536,6 +536,9 @@ object CatalogAggregator {
         when (anchor.source) {
             MusicSource.NETEASE -> neAlbumSongs(anchor.id).map { trackCandidateOf(it) }
             MusicSource.QQMUSIC -> qqAlbumSongs(anchor.id).map { trackCandidateOf(it) }
+            // v3.1.0：B 站没有「专辑」这个概念（音频区只有单曲与歌单），跨源匹配对它无意义。
+            // 这里**不是** `else`：将来再加音源时编译器会再把这一处指出来（v2.6.2 的纪律）。
+            MusicSource.BILIBILI -> emptyList()
         }
 
     // ---------------------------------------------------------- 对端查找 ----
@@ -582,6 +585,9 @@ object CatalogAggregator {
             val albums = when (other) {
                 MusicSource.QQMUSIC -> qqAlbumsOf(candidate.key.id)
                 MusicSource.NETEASE -> neArtistAlbums(candidate.key.id)
+                // 结构上不可达：`other` 来自 MusicSource.otherThan（只遍历 loginSources）。
+                // 仍然显式写出来，理由同 albumTrackCandidates。
+                MusicSource.BILIBILI -> emptyList()
             }
             val withAlbums = candidate.copy(albumNames = albums.map { it.name })
             val verdict = CrossSourceMatcher.gradeArtist(anchor.name, anchorNames, withAlbums, unique)
@@ -614,6 +620,8 @@ object CatalogAggregator {
         val anchorNames = anchorTracks.map { it.name }
         val anchorArtist = anchor.artistKey?.name.orEmpty()
         val candidates: List<QqAlbum> = when (other) {
+            // 结构上不可达（同 findCounterpartAlbum）；显式分支见 albumTrackCandidates 的说明。
+            MusicSource.BILIBILI -> emptyList()
             MusicSource.QQMUSIC -> runCatching { QqCatalogApi.searchAlbums(anchor.name, 10) }.getOrDefault(emptyList())
             MusicSource.NETEASE -> runCatching {
                 RetrofitClient.api.searchAlbum(keyword = anchor.name, limit = 10).result?.albums.orEmpty()
@@ -633,6 +641,7 @@ object CatalogAggregator {
             val tracks = when (other) {
                 MusicSource.QQMUSIC -> qqAlbumSongs(c.mid)
                 MusicSource.NETEASE -> neAlbumSongs(c.mid)
+                MusicSource.BILIBILI -> emptyList()
             }
             val candidate = CrossSourceMatcher.AlbumCandidate(
                 key = AlbumKey(other, c.mid, c.name),
@@ -674,6 +683,10 @@ object CatalogAggregator {
             MusicSource.NETEASE -> runCatching {
                 RetrofitClient.api.search(keyword = keyword, type = 1, limit = 20).result?.songs.orEmpty()
             }.getOrDefault(emptyList())
+            // v3.1.0：B 站的「对端查找」不做 —— 音频区的搜索命中率与网易云/QQ 的曲目
+            // 不是同一套命名（标题里常年带【】与翻唱标注），跨源匹配的假阳性会直接
+            // 体现为「单曲页推荐了另一首歌」。宁可没有对端，也不给错的对端。
+            MusicSource.BILIBILI -> emptyList()
         }.map { trackCandidateOf(it) }
     }
 

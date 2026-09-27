@@ -138,6 +138,11 @@ enum class TrackAvailability {
 
         /** 按曲目所属音源分派。**唯一入口**，调用方不要自己 when。 */
         fun of(song: SongItem): TrackAvailability = when (song.musicSource) {
+            // v3.1.0：B 站的音频区响应里**没有**任何版权/可播字段（`song/info` 只给
+            // 标题/UP主/封面/时长/歌词）。按本类型的既有纪律，「不知道」必须是
+            // [UNKNOWN] 而不是 [FREE] —— 猜成 FREE 会让一首放不出来的曲子排到前面，
+            // 用户点下去只会跳歌。B 站真正的可播性判据在取链那一步（拿不到 URL 就跳）。
+            MusicSource.BILIBILI -> UNKNOWN
             MusicSource.QQMUSIC -> ofQq(song.memberOnly)
             MusicSource.NETEASE -> ofNetease(
                 privilegeSt = song.privilege?.st,
@@ -215,6 +220,8 @@ enum class TrackVersionTag {
         fun of(song: SongItem): TrackVersionTag = when (song.musicSource) {
             MusicSource.QQMUSIC -> UNKNOWN
             MusicSource.NETEASE -> ofOriginCoverType(song.originCoverType)
+            // B 站音频区没有「原唱/翻唱」这种结构化标注（翻唱信息写在标题里）。
+            MusicSource.BILIBILI -> UNKNOWN
         }
 
         /** 网易云 `originCoverType`：原唱。 */

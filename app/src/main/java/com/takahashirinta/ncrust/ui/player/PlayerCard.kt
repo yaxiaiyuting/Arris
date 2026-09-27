@@ -2105,6 +2105,7 @@ private fun ArtistLineWithSource(
     val sourceLabel = when (song.musicSource) {
         MusicSource.NETEASE -> strings.sourceNetease
         MusicSource.QQMUSIC -> strings.sourceQqMusic
+        MusicSource.BILIBILI -> strings.source.sourceBilibili
     }
     val artistStr = if (showArtist) song.artists?.joinToString("/") { it.name }.orEmpty() else ""
     Row(modifier = modifier) {

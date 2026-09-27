@@ -10,6 +10,8 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import com.takahashirinta.ncrust.bili.BiliPrefs
+import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -219,6 +221,8 @@ private fun SettingsPreferenceGroupPage(
     var lyricsInMediaSession by remember {
         mutableStateOf(prefs.getBoolean("lyrics_in_media_session", false))
     }
+    /** v3.1.0 · B：B 站音源开关的进程内镜像（初值 = `BiliPrefs.read(context)`）。 */
+    var biliEnabled by remember { mutableStateOf(BiliPrefs.read(context)) }
     var lyricsTtmlEnabled by remember { mutableStateOf(LyricsDisplayPrefs.readTtmlEnabled(prefs)) }
     var lyricsTtmlFirst by remember { mutableStateOf(LyricsDisplayPrefs.readTtmlFirst(prefs)) }
     var lyricsRomanization by remember { mutableStateOf(LyricsDisplayPrefs.readRomanization(prefs)) }
@@ -299,6 +303,8 @@ private fun SettingsPreferenceGroupPage(
             "motion_particles" -> motionParticles
             "motion_wave_bands" -> motionWaveBands
             "motion_breathing" -> motionBreathing
+            // v3.1.0 · B：B 站音源开关。读的是 `BiliPrefs` 的进程内镜像（初值来自盘）。
+            "bilibili_enabled" -> BiliSourceProvider.isEnabled
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
             "lyrics_word_animation" -> lyricsWordAnimation
             else -> prefs.all[key]
@@ -318,6 +324,8 @@ private fun SettingsPreferenceGroupPage(
         "lyrics_in_media_session" -> lyricsInMediaSession
         "lyrics_ttml_enabled" -> lyricsTtmlEnabled
         "lyrics_ttml_first" -> lyricsTtmlFirst
+        // v3.1.0 · B：B 站音源开关
+        "bilibili_enabled" -> biliEnabled
         "lyrics_romanization" -> lyricsRomanization
         "lyrics_dynamic_font" -> dynamicFontEnabled
         "ui_motion_enabled" -> uiMotionEnabled
@@ -376,6 +384,11 @@ private fun SettingsPreferenceGroupPage(
             "lyrics_in_media_session" -> {
                 lyricsInMediaSession = value
                 playerViewModel.setLyricsInMediaSession(value)
+            }
+            // BiliPrefs.setEnabled（唯一读写入口，它会刷新进程内镜像）
+            "bilibili_enabled" -> {
+                biliEnabled = value
+                BiliPrefs.setEnabled(context, value)
             }
             "lyrics_ttml_enabled" -> {
                 lyricsTtmlEnabled = value
@@ -806,6 +819,7 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
     "audio_visualizer" -> strings.audioVisualizerLabel         // titleKey = audioVisualizerLabel
     "auto_rotate" -> strings.autoRotateLabel                   // titleKey = autoRotateLabel
     "artist_reco_enabled" -> strings.artistRecoTitle           // titleKey = artistRecoTitle
+    "bilibili_enabled" -> strings.bilibiliEnabledLabel         // titleKey = bilibiliEnabledLabel
     "page_transition_enabled" -> strings.motion.pageTransitionLabel
     "lyrics_translation" -> strings.lyricsTranslationLabel
     "lyrics_word_animation" -> strings.lyricsWordAnimationLabel
@@ -859,6 +873,7 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when 
     "motion_particles" -> strings.waveform.motionParticlesDescription
     "motion_wave_bands" -> strings.waveform.motionWaveBandsDescription
     "motion_breathing" -> strings.waveform.motionBreathingDescription
+    "bilibili_enabled" -> strings.bilibiliEnabledDescription
     else -> null
 }
 

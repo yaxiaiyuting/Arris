@@ -48,6 +48,7 @@ import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
 import com.takahashirinta.ncrust.ui.components.SongTags
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.warmup.ListPrefetch
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import io.github.takahashirinta.kanesumi.controls.MetroTabItem
 import io.github.takahashirinta.kanesumi.controls.MetroTabRow
@@ -201,6 +202,12 @@ fun AlbumDetailScreen(
         loaded?.songs.orEmpty().filter { filter.accepts(it.song.musicSource) }
     }
     val songItems = remember(songs) { songs.map { it.song } }
+    // v3.1.0 · P0-C：进入专辑页就预取前 N 首的封面（N 按网络类型：WiFi 5 / 移动 2 / 离线 0）。
+    // 只预取封面与元数据，**绝不预取 URL**（URL 有时效，见 ListPrefetch 的 KDoc）。
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(songItems) {
+        ListPrefetch.prefetchList(prefetchContext, "album:$albumId", songItems)
+    }
     val preferredSource = loaded?.preferredSource
     val availabilityNote = loaded?.availabilityNote.orEmpty()
 

@@ -197,6 +197,37 @@ object SearchRanking {
      * - [rank] 决定**两个音源之间**的顺序（会员买在哪家，哪家先出）；
      * - [demoteNoCopyright] 只决定**同一音源组内部**无版权行的位置。
      */
+    /**
+     * v3.1.0 · B：**三源**版本。B 站的结果**追加在最后**，前两源的顺序一个字节不改。
+     *
+     * ## 为什么 B 站不参与 [rank] 的会员交错
+     *
+     * [rank] 的全部依据是「用户买在哪一家的会员」——B 站音源在本版**没有登录态**
+     * （匿名可用，见 `bili-research/bili-auth.md`），既没有会员信号，也没有
+     * `TrackAccess` 的判据（音频区/视频搜索都不返回版权字段）。把它塞进交错里
+     * 只会让「有会员的那一家先出」这条规则变得不再可预测。
+     *
+     * ## 为什么是「追加」而不是「另起一屏」
+     *
+     * 用户报告的原始诉求是「能搜到 B 站的东西」并且「按音源归属标注、可筛选」。
+     * 追加 + 行上的音源角标 + 统计行的第三段（`B站 5 首`）三件事一起，
+     * 既让 B 站可见，又让**关掉 B 站开关时整张表与 v3.0.0 逐字相同**
+     * （`bili` 为空时直接返回两源结果，连一次 `demoteNoCopyright` 都不多做）。
+     */
+    fun <T> order(
+        netease: List<RankedSong<T>>,
+        qq: List<RankedSong<T>>,
+        bili: List<RankedSong<T>>,
+        neteaseVip: Boolean,
+        qqVip: Boolean,
+    ): List<RankedSong<T>> {
+        val two = order(netease, qq, neteaseVip, qqVip)
+        if (bili.isEmpty()) return two
+        // B 站内部仍然按无版权沉底（虽然目前恒为 UNKNOWN ⇒ 这是个恒等变换，
+        // 写出来是为了「将来 B 站有版权字段时不需要再想一遍」）。
+        return two + demoteNoCopyright(bili)
+    }
+
     fun <T> order(
         netease: List<RankedSong<T>>,
         qq: List<RankedSong<T>>,

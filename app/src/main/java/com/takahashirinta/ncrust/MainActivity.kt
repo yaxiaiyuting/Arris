@@ -77,6 +77,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.PlaylistEditApi
 import com.takahashirinta.ncrust.network.PlaylistWriteResult
+import com.takahashirinta.ncrust.bili.BiliPrefs
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
@@ -218,6 +219,9 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
         RetrofitClient.init(this)
+        // v3.1.0 · B：B 站音源的开关镜像（默认关闭）。与 RetrofitClient.init 同处 ——
+        // 两者都是「进程级的一次性配置」，分开写会让下一个读代码的人只找到一个。
+        BiliPrefs.init(this)
         // v2.1.0 · C：接线 QQ 音乐音源（注册 Provider + 初始化它自己的 HTTP 通道）。
         // 与 RetrofitClient.init 并列，幂等。
         com.takahashirinta.ncrust.qq.QqMusicSourceProvider.install(this)

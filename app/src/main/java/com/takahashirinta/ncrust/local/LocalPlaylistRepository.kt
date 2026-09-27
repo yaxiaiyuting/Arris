@@ -88,6 +88,11 @@ object LocalPlaylistRepository {
                 val pid = key.id.toLongOrNull() ?: return null
                 runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull()
             }
+            // v3.1.0：B 站的「歌单」（音频区收藏夹 amid）本轮**不做同步** ——
+            // 它既没有登录态可依附（匿名拿到的收藏夹不是用户的），
+            // 也与「本地歌单 / 云歌单」这套两源模型不同构。
+            // 返回 null 的语义是「这个 key 没有远程来源」，调用方会保留本地内容。
+            MusicSource.BILIBILI -> null
         }
     }
 

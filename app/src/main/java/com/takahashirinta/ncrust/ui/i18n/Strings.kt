@@ -389,6 +389,13 @@ data class Strings(
     // 调用点（strings.offlineCacheXxx / strings.cacheSizeLabel / strings.cacheCleared）原样保住。
     // 刻意不用顶层扩展属性：扩展属性在别的包里要逐条 import，而成员属性对 `LocalStrings.current.x`
     // 天然可见。成员属性不进构造函数，所以不会再撑大那个已经贴着 dex 255 上限的参数表。
+    // v3.1.0 · B：B 站音源开关的两条文案走**转发属性**（与 HF1 的三组同一手法）：
+    // 它们住在 `SettingsStrings`（分组），而 registry 的 titleKey 走的是 `Strings` 上的
+    // 可达路径（`SettingsRegistryTest.everyTitleKeyResolvesToARealStringsAccessorPath`）。
+    // 成员属性不进构造函数 ⇒ 主构造器预算一个槽都不占。
+    val bilibiliEnabledLabel: String get() = settings.bilibiliEnabledLabel
+    val bilibiliEnabledDescription: String get() = settings.bilibiliEnabledDescription
+    val aggFilterBili: String get() = source.aggFilterBili
     val offlineCacheUsage: (String, String, String) -> String get() = offline.offlineCacheUsage
     val offlineCacheListTitle: (Int) -> String get() = offline.offlineCacheListTitle
     val offlineCachePartial: String get() = offline.offlineCachePartial
@@ -884,6 +891,8 @@ data class SourceStrings(
     val aggFilterNetease: String,
     /** 「只看 QQ 音乐」口径。 */
     val aggFilterQq: String,
+    /** v3.1.0： 「只看 B 站」口径。B 站音源关闭时这一档不出现在 UI 上（见 `SourceFilter`）。 */
+    val aggFilterBili: String,
     /** 默认播放源的一行说明，(音源名) -> 文案。 */
     val aggPreferredSource: (String) -> String,
     /** 「为什么默认这一源」的补充说明（来自探测结果，不编理由），(说明) -> 文案。 */
@@ -940,6 +949,29 @@ data class SourceStrings(
      * 正确结果是"用户自己搜到那张专辑"。说清楚"已为你搜索"就够。
      */
     val albumNavSearchFallback: String,
+
+    // ---------------------------------------------------------------- v3.1.0 · B 站音源 ----
+    // 这两条进 [SourceStrings] 而不是外层主构造器：本组 59 个参数（预警线 80），
+    // 外层已经到 134（预算 150）—— 按 v2.2.1 规则 5「新增文案必须往分组里放」。
+
+    /**
+     * B 站（音源名）。**各语言保持同一串**：它是专有名词，与 [sourceQqMusic] 同一条纪律。
+     *
+     * 用「B站」而不是「哔哩哔哩」：搜索统计行是 `网易云 30 首 · QQ 音乐 0 首 · B站 5 首`，
+     * 四字品牌名会把那一行撑到折行（手机上 360dp 宽只放得下约 22 个全角字符）。
+     */
+    val sourceBilibili: String,
+
+    /**
+     * 统计行的**第三段**：`(前两源那半句, B 站那半句) -> 整行`。
+     *
+     * ⚠️ 为什么是「拼在已有那行后面」而不是一条全新的三源模板：
+     * B 站音源是**默认关闭**的，未启用它的用户（绝大多数）看到的统计行必须与
+     * v3.0.0 **逐字相同**。做成「两源模板 + 可选第三段」之后，
+     * [com.takahashirinta.ncrust.ui.components.SourceCounts.summary] 在
+     * `biliStatus == SKIPPED` 时直接短路返回两源那行，连一次多余拼接都不做。
+     */
+    val sourceSummaryBili: (String, String) -> String,
 )
 
 /**
@@ -1314,7 +1346,19 @@ data class SettingsStrings(
     val batteryTitle: String,
     val batteryMessage: String,
     val batteryAllow: String,
-    val batteryLater: String
+    val batteryLater: String,
+    // ---------- v3.1.0 · B：B 站音源开关 ----------
+    // 按 v2.2.1 规则 5：新增文案必须往分组里放（外层主构造器预算 150，本组 64 → 66）。
+    /** 设置页开关标题。 */
+    val bilibiliEnabledLabel: String,
+    /**
+     * 开关的副标题。
+     *
+     * ⚠️ 必须写清三件事，否则「打开了会怎样」对用户是黑箱：
+     * 它从**哪些地方**取内容（B 站音频区与视频音轨）、需要**联网到第三方**、
+     * 以及它**不会**影响另外两个音源。
+     */
+    val bilibiliEnabledDescription: String,
 )
 
 

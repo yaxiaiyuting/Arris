@@ -100,6 +100,19 @@ object SourceIdDomain {
                 val asLong = v.toLongOrNull()
                 !(asLong != null && asLong in 1 until NETEASE_ID_MAX)
             }
+
+            /**
+             * v3.1.0 · B：B 站的页面身份就是 **auid**（十进制数字）。
+             *
+             * ⚠️ **它与网易云的值域重叠**（实测 auid 2.3×10⁷ 落在网易云的量级里），
+             * 所以这一条分支**不能**用来判「这个数字属于哪个源」—— 值域在这里
+             * 结构性地不可用。真正承担隔离的是 [SourceIds.BILI_ID_FLAG]：应用内部的
+             * 数字 id 一律是 `BILI_ID_FLAG or auid`，而**字符串**身份（本函数的入参）
+             * 只在「已经知道音源是 B 站」的路径上出现（搜索结果的 sid、音频区 URI 解析）。
+             * 换句话说：本分支回答的是「这个串在 B 站域内合不合法」，不是「它是不是 B 站」。
+             */
+            MusicSource.BILIBILI ->
+                v.all { it in '0'..'9' } && v.toLongOrNull()?.let { it in 1 until NETEASE_ID_MAX } == true
         }
     }
 }

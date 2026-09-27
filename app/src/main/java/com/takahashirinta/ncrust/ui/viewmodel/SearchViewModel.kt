@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.takahashirinta.ncrust.auth.NeteaseVipStore
 import com.takahashirinta.ncrust.network.*
+import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import com.takahashirinta.ncrust.qq.QqAccountAvailability
 import com.takahashirinta.ncrust.qq.QqAuthStore
 import com.takahashirinta.ncrust.qq.QqClient
@@ -94,6 +95,16 @@ class SearchViewModel : ViewModel() {
      */
     private val QQ_SEARCH_BUDGET_MS = 5_000L
 
+    /**
+     * v3.1.0 · B：B 站搜索的时间预算。
+     *
+     * 比 QQ 的 5 秒更短是有依据的：B 站这条链路要**先取 wbi 密钥再签名请求**，
+     * 冷启动时是两通（探针实测每通 TTFB 100~180ms，两通 < 500ms），
+     * 但风控命中时会返回 412 并触发一次密钥刷新重试 —— 那条路要 4 通。
+     * 4 秒足够覆盖它，同时不让「B 站挂了」把搜索结果拖长。
+     */
+    private val BILI_SEARCH_BUDGET_MS = 4_000L
+
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
         searchJob?.cancel()
@@ -124,10 +135,17 @@ class SearchViewModel : ViewModel() {
      * `coroutineScope { }`，内联的局部函数会横跨协程边界 —— 语义没变，
      * v2.1.4 的会员排序与 v2.3.0 的沉底规则**一个字没动**。
      */
-    private fun publish(neteaseList: List<SongItem>, qqList: List<SongItem>) {
+    private fun publish(
+        neteaseList: List<SongItem>,
+        qqList: List<SongItem>,
+        // v3.1.0 · B：默认空列表 ⇒ 所有旧调用点与单测零改动，且**行为与 v3.0.0 相同**。
+        biliList: List<SongItem> = emptyList(),
+    ) {
         val (neteaseVip, qqVip) = vipFlagsProvider()
         // v2.3.0 · C：`order` = v2.1.4 的 `rank`（会员买在哪家哪家先出）
         // + 把「服务端显式声明无版权」的行沉底。两者作用在不同的层，见其 KDoc。
+        // v3.1.0 · B：三源重载把 B 站**追加**在最后（B 站没有会员信号，
+        // 不参与交错；`bili` 为空时与两源版本逐字相同）。
         _songs.value = SearchRanking.order(
             netease = neteaseList.map {
                 RankedSong(
@@ -140,6 +158,15 @@ class SearchViewModel : ViewModel() {
                 RankedSong(
                     it,
                     TrackAccess.ofQqMemberOnly(it.memberOnly),
+                    TrackAvailability.of(it),
+                )
+            },
+            bili = biliList.map {
+                // B 站没有版权字段（`TrackAvailability.of` 对它是恒 UNKNOWN），
+                // 会员判定同样没有依据 ⇒ UNKNOWN。两者都是「不参与重排」的中性取值。
+                RankedSong(
+                    it,
+                    TrackAccess.UNKNOWN,
                     TrackAvailability.of(it),
                 )
             },
@@ -182,6 +209,9 @@ class SearchViewModel : ViewModel() {
                     val keyword = _query.value
                     val startedAt = System.currentTimeMillis()
                     val qqAllowed = QqClient.isLoggedIn() || QqAccountAvailability.allowAnonymousSearch
+                    // v3.1.0 · B：B 站由**用户开关**决定（铁律 24）。关着时不发请求，
+                    // 统计行显示「未启用」而不是「0 首」—— 与 QQ 的 SKIPPED 同一条纪律。
+                    val biliAllowed = BiliSourceProvider.isEnabled
                     // v2.5.6 · P1：本轮分段耗时。`dispatch` 打在两个 `async` 真正启动之前 ——
                     // 它必须包含「请求已经发出去了但首字节还没回来」那一段，
                     // 否则 TTFB 会被算漏（探针 §5 指出这正是旧埋点最缺的一格）。
@@ -232,6 +262,24 @@ class SearchViewModel : ViewModel() {
                         } else {
                             null
                         }
+                        // B 站：与 QQ 同一条纪律（硬预算 + 超时/失败都只是「这一轮没有它」）。
+                        // ⚠️ 它**不能**把已有结果拖住：预算 4s、且发布顺序一个字没改。
+                        val biliDeferred = if (biliAllowed) async {
+                            try {
+                                val r = withTimeoutOrNull(BILI_SEARCH_BUDGET_MS) {
+                                    SourceRouter.searchSongs(MusicSource.BILIBILI, keyword, 20)
+                                }
+                                r?.let { BiliOutcome(it, timedOut = false) }
+                                    ?: BiliOutcome(emptyList(), timedOut = true)
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                android.util.Log.w("SearchViewModel", "bili search failed", e)
+                                BiliOutcome(emptyList(), timedOut = false, failed = true)
+                            }
+                        } else {
+                            null
+                        }
 
                         // ① **先到先发布**（v2.5.6 · P1）—— 本版对搜索延迟唯一有效的客户端改动。
                         //
@@ -259,17 +307,22 @@ class SearchViewModel : ViewModel() {
                         var netease: List<SongItem>? = null
                         var neteaseError: Throwable? = null
                         var qqOutcome: QqOutcome? = null
+                        var biliOutcome: BiliOutcome? = null
 
-                        if (qqDeferred != null) {
+                        if (qqDeferred != null || biliDeferred != null) {
                             kotlinx.coroutines.selects.select {
                                 neteaseDeferred.onAwait { (songs, failure) ->
                                     netease = songs
                                     neteaseError = failure
                                     trace.mark(SearchLatencyTrace.MARK_NETEASE_DONE)
                                 }
-                                qqDeferred.onAwait { outcome ->
+                                qqDeferred?.onAwait { outcome ->
                                     qqOutcome = outcome
                                     trace.mark(SearchLatencyTrace.MARK_QQ_DONE)
+                                }
+                                biliDeferred?.onAwait { outcome ->
+                                    biliOutcome = outcome
+                                    trace.mark(SearchLatencyTrace.MARK_BILI_DONE)
                                 }
                             }
                         } else {
@@ -288,7 +341,11 @@ class SearchViewModel : ViewModel() {
                         // 写进去只会闪一下过期数据。补守卫**不会**留下空白 ——
                         // 新的一轮搜索自己会发布。
                         if (_query.value == keyword) {
-                            publish(netease.orEmpty(), qqOutcome?.songs.orEmpty())
+                            publish(
+                                netease.orEmpty(),
+                                qqOutcome?.songs.orEmpty(),
+                                biliOutcome?.songs.orEmpty(),
+                            )
                             _albums.value = emptyList()
                             _artists.value = emptyList()
                             _sourceCounts.value = SourceCounts(
@@ -302,6 +359,8 @@ class SearchViewModel : ViewModel() {
                                 },
                                 qqCount = qqOutcome?.songs?.size ?: 0,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
+                                biliCount = biliOutcome?.songs?.size ?: 0,
+                                biliStatus = biliStatusOf(biliOutcome, biliAllowed),
                             )
                             // 转圈到此结束 —— 屏幕上已经有东西了。
                             _isLoading.value = false
@@ -320,9 +379,14 @@ class SearchViewModel : ViewModel() {
                             qqOutcome = qqDeferred.await()
                             trace.mark(SearchLatencyTrace.MARK_QQ_DONE)
                         }
+                        if (biliDeferred != null && biliOutcome == null) {
+                            biliOutcome = biliDeferred.await()
+                            trace.mark(SearchLatencyTrace.MARK_BILI_DONE)
+                        }
 
                         val neteaseList = netease.orEmpty()
                         val qq = qqOutcome?.songs.orEmpty()
+                        val bili = biliOutcome?.songs.orEmpty()
 
                         // ③ 合并发布**只在内容真的会变时**做。
                         //
@@ -334,10 +398,10 @@ class SearchViewModel : ViewModel() {
                         val shouldRepublish = if (neteaseArrivedSecond) {
                             neteaseList.isNotEmpty()
                         } else {
-                            qq.isNotEmpty()
+                            qq.isNotEmpty() || bili.isNotEmpty()
                         }
                         if (shouldRepublish && _query.value == keyword) {
-                            publish(neteaseList, qq)
+                            publish(neteaseList, qq, bili)
                             trace.mark(SearchLatencyTrace.MARK_MERGED_PUBLISH)
                         }
                         if (_query.value == keyword) {
@@ -346,11 +410,13 @@ class SearchViewModel : ViewModel() {
                                 neteaseStatus = SourceSearchStatus.DONE,
                                 qqCount = qq.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
+                                biliCount = bili.size,
+                                biliStatus = biliStatusOf(biliOutcome, biliAllowed),
                             )
                         }
                         // ④ 两个源都没结果，且主源确实报过错 ⇒ 让界面能显示错误/重试，
                         // 而不是一块什么都没有的空白。
-                        if (neteaseList.isEmpty() && qq.isEmpty() && neteaseError != null) {
+                        if (neteaseList.isEmpty() && qq.isEmpty() && bili.isEmpty() && neteaseError != null) {
                             _error.value = neteaseError?.message
                         }
                         val (nVip, qVip) = vipFlagsProvider()
@@ -358,6 +424,7 @@ class SearchViewModel : ViewModel() {
                         android.util.Log.i(
                             "SearchViewModel",
                             "aggregate query='$keyword' netease=${neteaseList.size} qq=${qq.size} " +
+                                "bili=${bili.size} biliAllowed=$biliAllowed " +
                                 "qqTimedOut=${qqOutcome?.timedOut} qqAllowed=$qqAllowed " +
                                 "vip(netease=$nVip qq=$qVip) " +
                                 "elapsed=${System.currentTimeMillis() - startedAt}ms",
@@ -428,6 +495,18 @@ class SearchViewModel : ViewModel() {
         else -> SourceSearchStatus.DONE
     }
 
+    /**
+     * v3.1.0 · B：B 站那一侧的状态映射。与 [qqStatusOf] **逐条同构**，
+     * 只是把「未登录」换成了「用户没启用」——两者在界面上都是「这一轮没发起」。
+     */
+    private fun biliStatusOf(outcome: BiliOutcome?, allowed: Boolean): SourceSearchStatus = when {
+        !allowed -> SourceSearchStatus.SKIPPED
+        outcome == null -> SourceSearchStatus.PENDING
+        outcome.timedOut -> SourceSearchStatus.TIMEOUT
+        outcome.failed -> SourceSearchStatus.ERROR
+        else -> SourceSearchStatus.DONE
+    }
+
     private fun clearResults() {
         _songs.value = emptyList()
         _albums.value = emptyList()
@@ -445,6 +524,16 @@ class SearchViewModel : ViewModel() {
  * 旧代码只有一个列表，超时与「确实 0 条」在类型上完全一样，
  * 于是界面只能显示「QQ 音乐 0 首」—— 而对超时来说那句话是错的。
  */
+/**
+ * v3.1.0 · B：B 站补充源这一轮的结果。与 [QqOutcome] 同构（超时与「确实 0 条」
+ * 在类型上必须分得开 —— 那是 v2.5.5 用一整版修出来的东西，不能在新源上重犯）。
+ */
+private data class BiliOutcome(
+    val songs: List<SongItem>,
+    val timedOut: Boolean,
+    val failed: Boolean = false,
+)
+
 private data class QqOutcome(
     val songs: List<SongItem>,
     /** `withTimeoutOrNull` 返回 null ⇒ 预算用完。 */

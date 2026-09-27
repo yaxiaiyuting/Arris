@@ -141,12 +141,19 @@ data class PlaylistGroup(
  * - 不按名字/曲目数跨源排序（那会让「QQ 的歌单」和「网易云的同名歌单」看起来像一个东西）；
  * - 不丢弃空组（调用方需要知道「这个音源有 0 个歌单」并显示空状态，而不是整组消失）。
  *
- * 组顺序按 [MusicSource.selectable]（与 UI 上音源切换的顺序一致，稳定可预期），
+ * 组顺序按 [MusicSource.loginSources]（与 UI 上音源切换的顺序一致，稳定可预期），
  * 组内保持传入顺序。
+ *
+ * ## v3.1.0：默认源从 `selectable` 换成 `loginSources`
+ *
+ * B 站接入后 `selectable` 有三个值，而 B 站**没有歌单同步能力**（音频区收藏夹本轮不做，
+ * 见 `LocalPlaylistRepository.loadRemoteSongs`）。继续用 `selectable` 会让收藏页
+ * 凭空多出一个永远空的「B 站」分组 —— 一个只在接入新源时出现、用户又点不出东西的分组。
+ * 换成 `loginSources` 之后，库页的形态与 v3.0.0 **逐字相同**（网易云 + QQ 两组）。
  */
 fun groupPlaylistsBySource(
     playlists: List<Playlist>,
-    sources: List<MusicSource> = MusicSource.selectable,
+    sources: List<MusicSource> = MusicSource.loginSources,
 ): List<PlaylistGroup> {
     val bySource = playlists.groupBy { it.key.source }
     return sources.map { src -> PlaylistGroup(src, bySource[src].orEmpty()) }

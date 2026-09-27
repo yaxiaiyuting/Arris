@@ -31,17 +31,49 @@ package com.takahashirinta.ncrust.source
 enum class MusicSource(val key: String) {
     NETEASE("netease"),
     QQMUSIC("qqmusic"),
+
+    /**
+     * v3.1.0 · B：B 站**音频区**（`au<auid>`）。
+     *
+     * ## 为什么 key 必须显式写死
+     *
+     * `key` 会进队列持久化 JSON、离线缓存 key、`MediaItem.mediaId`。v2.1.0 的注释已经写明了
+     * 用 ordinal 的后果；这里再加一条**只属于 B 站**的理由：它是**默认关闭**的音源
+     * （`bilibili_enabled`），一个老版本的 App 读到 `"bilibili"` 会经
+     * [fromKey] 回落成 [DEFAULT] —— 也就是把一首 B 站曲目当成网易云的同号歌曲。
+     * 这正是 [SourceIds.BILI_ID_FLAG] 存在的理由（id 自带的标志位不会丢）。
+     */
+    BILIBILI("bilibili"),
     ;
 
-    /** 该音源的歌曲是否需要 `sourceId`（QQ 音乐取链必须带 songmid，网易云不需要）。 */
+    /** 该音源的歌曲是否需要 `sourceId`（QQ 音乐取链必须带 songmid；B 站用 auid 就够）。 */
     val requiresSourceId: Boolean get() = this == QQMUSIC
 
     companion object {
         /** 旧数据、未知 key 的归属。 */
         val DEFAULT = NETEASE
 
-        /** 所有可登录、可在 UI 上切换的音源（顺序即 UI 顺序）。 */
-        val selectable: List<MusicSource> = listOf(NETEASE, QQMUSIC)
+        /**
+         * 全部音源（顺序即 UI 顺序）。
+         *
+         * v3.1.0：**它不再等于「可登录的音源」** —— B 站没有账号体系接入（本轮不做登录），
+         * 靠设置里的 `bilibili_enabled` 独立开关控制显隐。需要「另一个**可登录**音源」的调用方
+         * （跨源匹配、无版权提示）请用 [loginSources]。
+         */
+        val selectable: List<MusicSource> = listOf(NETEASE, QQMUSIC, BILIBILI)
+
+        /**
+         * v3.1.0 · B：**可登录**的音源（网易云 / QQ 音乐）。
+         *
+         * 与 [selectable] 分开是必需的，不是洁癖：[otherThan] 的语义是
+         * 「另一个**能拿到这首歌**的地方」，它被用在
+         * 「此源无版权，可切另一源」的提示与跨源匹配上。把 B 站塞进去会让
+         * 网易云的无版权提示变成「去 B 站试试」——而 B 站在默认关闭时根本不可用。
+         *
+         * `PlaybackGuardTest` 与 `PlaylistModelsTest` 都断言过
+         * `otherThan(NETEASE) == QQMUSIC`，本版**不改这两条语义**。
+         */
+        val loginSources: List<MusicSource> = listOf(NETEASE, QQMUSIC)
 
         /** 解析字符串 key；null / 空串 / 不认识的值一律回落 [DEFAULT]。 */
         fun fromKey(key: String?): MusicSource =
@@ -51,11 +83,14 @@ enum class MusicSource(val key: String) {
          * v2.3.0 · C：**另一个**可登录音源（用于「此源无版权，可切另一源」的提示）。
          *
          * 只有一个可选音源时返回 null（调用方据此**不发提示** —— 不能提示用户去一个不存在的地方）。
-         * 返回值来自 [selectable]，所以它与 UI 上音源切换的顺序、以及将来新增第三个音源时的行为
-         * 是同一份定义，不需要再改这里。
+         * 返回值来自 [loginSources]，所以它与 UI 上音源切换的顺序、以及将来新增第三个
+         * **可登录**音源时的行为是同一份定义，不需要再改这里。
+         *
+         * ⚠️ v3.1.0 起它**不再**遍历 [selectable]：B 站不是可登录音源，
+         * 也不该出现在「换一个源试试」的提示里（默认关闭时那条提示是死路）。
          */
         fun otherThan(source: MusicSource): MusicSource? =
-            selectable.firstOrNull { it != source }
+            loginSources.firstOrNull { it != source }
     }
 }
 
@@ -163,8 +198,48 @@ object SourceIds {
      */
     const val QQ_ID_FLAG: Long = 1L shl 62
 
+    /**
+     * v3.1.0 · B：B 站音频曲目的 id 标志位。
+     *
+     * ## 为什么 B 站**必须**有标志位，而网易云/QQ 的隔离方案在这里不成立
+     *
+     * QQ 的隔离靠「网易云 id 远小于 `2^62`」这条**值域**事实。B 站的 `auid` 破坏了这个前提：
+     * 实测样本 `22760301`（约 2.3×10⁷）与网易云的 songId 是**同一个量级**
+     * （网易云百万~十亿）。也就是说 `TrackKey(BILIBILI, 22760301)` 与
+     * `TrackKey(NETEASE, 22760301)` 在**裸 id** 上无法区分 —— 而本应用有 10+ 处以裸
+     * `Long` 为键的跨版本持久化结构（队列、续播进度、离线缓存 key、歌词缓存 key……）。
+     *
+     * 所以 B 站走和 QQ 一样的做法：**把 id 抬到一个网易云永远到不了的区间**。
+     * 用位 61（`1L shl 61`）而不是位 62，是为了让两个标志位互不干扰：
+     * - 位 62 = QQ 音乐（[QQ_ID_FLAG]）
+     * - 位 61 = B 站（本常量）
+     *
+     * 判序必须是「先看位 62、再看位 61」（见 [sourceOfId]）：两个位同时置位的 id
+     * 在本应用里不会被造出来（[qqId] / [biliId] 各自只置自己那一位），
+     * 但读外部数据时先判谁是有定义的 —— 先判 QQ，与 v2.1.5 起的历史行为一致。
+     */
+    const val BILI_ID_FLAG: Long = 1L shl 61
+
     /** 是否为 [qqId] 造出来的 QQ 音乐 id。 */
     fun isQqId(id: Long): Boolean = (id and QQ_ID_FLAG) != 0L
+
+    /** v3.1.0：是否为 [biliId] 造出来的 B 站 id。 */
+    fun isBiliId(id: Long): Boolean = !isQqId(id) && (id and BILI_ID_FLAG) != 0L
+
+    /**
+     * v3.1.0：造一个 B 站的数字 id（`BILI_ID_FLAG or auid`）。
+     *
+     * @param rawAuid 服务端给的 `sid`（音频 auid）。**<= 0 或已占到任一标志位时返回 0**——
+     *   与 QQ 那条路的散列兜底不同：B 站的 `auid` 是接口的**必需参数**（不是可替代的身份），
+     *   造一个假 id 只会让取链必然 404。调用方拿到 0 应当把该条目整个丢掉。
+     */
+    fun biliId(rawAuid: Long): Long {
+        if (rawAuid <= 0L || rawAuid >= BILI_ID_FLAG) return 0L
+        return BILI_ID_FLAG or rawAuid
+    }
+
+    /** v3.1.0：反解 [biliId]；传入的不是 B 站 id 时返回 null（理由同 [qqRawId]）。 */
+    fun biliRawId(id: Long): Long? = if (isBiliId(id)) id and (BILI_ID_FLAG - 1L) else null
 
     /**
      * 从**裸 id** 反推音源（v2.1.5）。纯逻辑，JVM 可单测。
@@ -185,8 +260,13 @@ object SourceIds {
      * [com.takahashirinta.ncrust.network.SongItem.sourceId]。所以本函数只负责
      * 「别问错平台」，不负责「能不能取到」。
      */
-    fun sourceOfId(id: Long): MusicSource =
-        if (isQqId(id)) MusicSource.QQMUSIC else MusicSource.NETEASE
+    fun sourceOfId(id: Long): MusicSource = when {
+        isQqId(id) -> MusicSource.QQMUSIC
+        // v3.1.0：位 61 = B 站。**必须排在最后**：判序与 v2.1.5 起的历史行为一致
+        // （先 QQ），改判序会让「位 62 已置位」的历史数据被重新解释成 B 站。
+        isBiliId(id) -> MusicSource.BILIBILI
+        else -> MusicSource.NETEASE
+    }
 
     /**
      * 造一个 QQ 音乐的数字 id。

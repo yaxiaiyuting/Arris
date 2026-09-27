@@ -59,6 +59,20 @@ data class SongUrlResult(
      * 离线兜底会「退化成这首歌的任意档位」，这是那条路径唯一的诚实出口。
      */
     val fallbackFromLevel: String? = null,
+    /**
+     * v3.1.0 · B：这条 URL 的**绝对**过期时刻（`System.currentTimeMillis()` 口径）；
+     * `null` = 「本音源不提供显式过期时间，用调用方的默认 TTL」。
+     *
+     * ## 为什么必须由 Provider 交出来，而不是让缓存层自己猜
+     *
+     * 铁律 26：B 站音频流 URL 有时效。实测（`docs/verification/v3.1.0/bili-research/EVIDENCE.md`）
+     * 响应里的 `timeout` 是 **10800s（3h）**，而 URL 自带的 `deadline` 参数是
+     * **now + 7200s（2h）** —— 两者不一致，且 URL 自己那个更保守。
+     * 只有拿到 URL 的那一层（Provider）才知道该信哪个，所以过期时刻在这里算好、
+     * 一路带到缓存条目上。给 `null` 的音源（网易云 / QQ）行为**逐字不变**：
+     * 缓存仍按既有的 5 分钟常量判新鲜。
+     */
+    val expiresAtMs: Long? = null,
 )
 
 object SongUrlFetcher {

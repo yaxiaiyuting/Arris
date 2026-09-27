@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.ui.screen
 
+import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -51,6 +52,9 @@ import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
 import com.takahashirinta.ncrust.ui.components.AlbumSearchItem
 import com.takahashirinta.ncrust.ui.components.ArtistSearchItem
+import com.takahashirinta.ncrust.source.musicSource
+import com.takahashirinta.ncrust.ui.components.SourceFilter
+import com.takahashirinta.ncrust.warmup.ListPrefetch
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongTags
@@ -117,6 +121,17 @@ fun SearchScreen(
     val currentType by viewModel.currentType.collectAsState()
     val context = LocalContext.current
     val strings = LocalStrings.current
+    // v3.1.0 · B：音源筛选（纯本地，不重新发请求 —— 见 SourceFilter 的 KDoc）。
+    // 默认「双源」= 不过滤，与 v3.0.0 的行为逐字相同。
+    var sourceFilter by remember { mutableStateOf(SourceFilter.ALL) }
+    val biliEnabled = BiliSourceProvider.isEnabled
+    val visibleSongs = remember(songs, sourceFilter) {
+        sourceFilter.filter(songs) { it.musicSource }
+    }
+    // v3.1.0 · P0-C：进入搜索结果就预取前 N 首的封面（N 按网络类型；只封面，不预取 URL）。
+    LaunchedEffect(songs) {
+        ListPrefetch.prefetchList(context, "search:${viewModel.query.value}", songs)
+    }
     // v2.1.4：聚合搜索的排序要知道「用户有哪些平台的会员」（见 SearchRanking）。
     // 这里**现读、不缓存**：登录/登出后下一次搜索立刻按新的会员状态排，
     // 不需要任何失效逻辑。两个判据都来自服务端，取不到一律按非会员处理（保守那一侧）。
@@ -460,7 +475,7 @@ fun SearchScreen(
 
                 when (currentType) {
                     1 -> {
-                        if (songs.isEmpty() && !isLoading) {
+                        if (visibleSongs.isEmpty() && !isLoading) {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -480,6 +495,34 @@ fun SearchScreen(
                                 // 音源来源小字（真机反馈：纯网易云的结果在界面上看不出「来自哪里」）。
                                 // 放在列表**第一项**而不是外面套一层 Column —— 后者要动布局结构，
                                 // 而这里只需要一行字。
+                                // v3.1.0 · B：音源筛选行。只在**搜到过东西**时出现 ——
+                                // 空结果时给一排筛选档，用户点下去只会得到另一个空列表。
+                                if (songs.isNotEmpty()) {
+                                    item(key = "source-filter") {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            SourceFilter.visible(biliEnabled).forEach { filter ->
+                                                val selected = filter == sourceFilter
+                                                MetroText(
+                                                    text = filter.label(strings),
+                                                    color = if (selected) {
+                                                        LocalMetroColors.current.primary
+                                                    } else {
+                                                        LocalMetroColors.current.onSurfaceVariant
+                                                    },
+                                                    style = TextStyle(fontSize = 12.sp),
+                                                    modifier = Modifier.clickable {
+                                                        sourceFilter = filter
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 sourceCounts?.let { counts ->
                                     item(key = "source-summary") {
                                         // v2.5.5 · G：统计行现在能表达「还没回来」。
@@ -513,7 +556,7 @@ fun SearchScreen(
                                 }
                                 // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed
                                 // 只为拿到下标，key 显式传同一条（`it.id`）⇒ diff 行为不变。
-                                itemsIndexed(songs, key = { _, item -> item.id }) { index, item ->
+                                itemsIndexed(visibleSongs, key = { _, item -> item.id }) { index, item ->
                                     SongCard(
                                         song = item,
                                         style = SongCardStyle.LIST,

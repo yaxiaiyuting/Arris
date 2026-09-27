@@ -78,6 +78,9 @@ internal class SearchLatencyTrace(
         val segments = listOf(
             MARK_DISPATCH to MARK_NETEASE_DONE,
             MARK_DISPATCH to MARK_QQ_DONE,
+            // v3.1.0 · B：B 站那一侧的分段耗时。加进这张表才有得看 ——
+            // 不加的话 `summary()` 里根本没有这一格，等于新源没有埋点。
+            MARK_DISPATCH to MARK_BILI_DONE,
             MARK_DISPATCH to MARK_FIRST_PUBLISH,
             MARK_FIRST_PUBLISH to MARK_MERGED_PUBLISH,
             MARK_DISPATCH to MARK_DONE,
@@ -104,6 +107,16 @@ internal class SearchLatencyTrace(
         const val MARK_QQ_DONE = "qq_done"
 
         /** **第一次**把结果写进 `_songs` —— 用户看到第一屏结果的时刻。 */
+        /**
+         * v3.1.0 · B：B 站那一侧返回的时刻。
+         *
+         * 它是三个源里唯一需要**两通**才能出结果的（先 nav 取 wbi 密钥、再签名搜索），
+         * 所以这一格与 `netease_done` / `qq_done` 的差值是「wbi 那两跳花了多少」的
+         * 唯一观测点。风控命中时还会多两通（412 → 刷新密钥 → 重试），
+         * 那时这一格的数字会明显偏大 —— 那是**有效信号**，不是噪声。
+         */
+        const val MARK_BILI_DONE = "bili_done"
+
         const val MARK_FIRST_PUBLISH = "first_publish"
 
         /** 两条腿都到齐后的合并发布。 */

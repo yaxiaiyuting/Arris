@@ -62,6 +62,9 @@ object SongTags {
     fun sourceLabel(source: MusicSource, strings: Strings): String = when (source) {
         MusicSource.QQMUSIC -> strings.sourceQqMusic
         MusicSource.NETEASE -> strings.sourceNetease
+        // v3.1.0：B 站也要有名字 —— 搜索聚合之后「这一行来自哪里」必须一眼可见
+        // （v2.1.0 · E 的原话：纯网易云的结果看不出「来自哪里」）。
+        MusicSource.BILIBILI -> strings.source.sourceBilibili
     }
 
     /** 版权可用性文案；[TrackAvailability.UNKNOWN] 返回 null（不显示）。 */

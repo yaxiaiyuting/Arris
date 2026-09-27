@@ -187,6 +187,14 @@ data class SettingsEntry(
      */
     val isNewInV300: Boolean = false,
     /**
+     * v3.1.0「B 站音源」新增项（v3.0.0 的盘上不存在这个键）。
+     *
+     * 与 [isNewInV280] / [isNewInV290] / [isNewInV300] 并列而不是复用：那几条断言各自
+     * 钉住**一个版本**新增了什么，合并成一个「新键」标志会让「顺手夹带了无关功能项」
+     * 不再被机械挡住。
+     */
+    val isNewInV310: Boolean = false,
+    /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
      * 目前只有 `motion_degrade_level` / `motion_degrade_log` 两个：它们属于 v2.9.0 的
@@ -338,6 +346,25 @@ object SettingsRegistry {
             )
         )
         add(action("action.background_activity", SettingsGroup.GENERAL, "batteryTitle"))
+        // v3.1.0 · B：**B 站音源的独立开关**（铁律 24：用户可选择是否启用）。
+        //
+        // 放在「通用」而不是「账号与登录」：它不是一个账号（B 站本轮没有登录接入），
+        // 而是一个**内容源开关**。放进账号组会让那一页的语义从「登录」变成「登录 + 杂项」。
+        //
+        // 默认**关闭**（`BiliPrefs.DEFAULT_ENABLED = false`）。读写走
+        // `BiliPrefs.setEnabled` / `BiliPrefs.read`（唯一入口，会同步刷新进程内镜像）。
+        add(
+            pref(
+                key = "bilibili_enabled",
+                type = SettingsEntryType.SWITCH,
+                default = false, // bili/BiliPrefs.kt:126 DEFAULT_ENABLED
+                group = SettingsGroup.GENERAL,
+                titleKey = "bilibiliEnabledLabel",
+                subtitleKey = "bilibiliEnabledDescription",
+                // 它是本版新增的键：盘上不存在旧值，所以「缺键 = 关闭」是唯一解释。
+                newInV310 = true,
+            )
+        )
 
         // ── 外观与动效 ────────────────────────────────────────────────────────────────
         add(
@@ -983,6 +1010,7 @@ object SettingsRegistry {
         legacyV290: Boolean = false,
         newInV300: Boolean = false,
         legacyV300: Boolean = false,
+        newInV310: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1001,6 +1029,7 @@ object SettingsRegistry {
         legacyV290 = legacyV290,
         isNewInV300 = newInV300,
         legacyV300 = legacyV300,
+        isNewInV310 = newInV310,
         isAdvanced = advanced,
         isInternal = internal,
     )

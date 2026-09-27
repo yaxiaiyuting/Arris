@@ -66,11 +66,23 @@ data class SourceCounts(
     val neteaseStatus: SourceSearchStatus = SourceSearchStatus.DONE,
     val qqCount: Int = 0,
     val qqStatus: SourceSearchStatus = SourceSearchStatus.PENDING,
+    /**
+     * v3.1.0 · B：B 站音频区的条数。
+     *
+     * 默认 [SourceSearchStatus.SKIPPED]（**不是** DONE+0）是有意的：B 站音源默认关闭，
+     * 关着的时候这一轮**根本没有发起**任何 B 站请求 —— 那既不是「0 首」也不是「失败」。
+     * 这条默认值同时是「关掉 B 站开关 = 与 v3.0.0 逐字相同」的结构性保证：
+     * [summary] 在 SKIPPED 时会**短路**掉第三段，不产生任何新文案。
+     */
+    val biliCount: Int = 0,
+    val biliStatus: SourceSearchStatus = SourceSearchStatus.SKIPPED,
 ) {
 
     /** 还有源在飞。 */
     val hasPending: Boolean
-        get() = neteaseStatus == SourceSearchStatus.PENDING || qqStatus == SourceSearchStatus.PENDING
+        get() = neteaseStatus == SourceSearchStatus.PENDING ||
+            qqStatus == SourceSearchStatus.PENDING ||
+            biliStatus == SourceSearchStatus.PENDING
 
     /** QQ 这一轮超时或失败了 —— 界面给一条可点重试的提示，而不是一个哑掉的 0。 */
     val qqUnavailable: Boolean
@@ -93,8 +105,13 @@ data class SourceCounts(
      * 并有单测断言「两源都 DONE 时两条路径产出**逐字相同**的文案」——
      * 换路径不许顺手改口径。
      */
-    fun summary(strings: Strings): String =
-        strings.searchSourceSummaryWithStatus(neteaseText(strings), qqText(strings))
+    fun summary(strings: Strings): String {
+        val two = strings.searchSourceSummaryWithStatus(neteaseText(strings), qqText(strings))
+        // v3.1.0 · B：**关掉 B 站时这一行逐字不变**。这不是顺手优化，而是铁律 27 的落点：
+        // 未启用 B 站的用户看到的统计行必须与 v3.0.0 完全相同（连一次文案拼接都不多做）。
+        if (biliStatus == SourceSearchStatus.SKIPPED) return two
+        return strings.source.sourceSummaryBili(two, biliText(strings))
+    }
 
     /** 网易云侧那半句。 */
     fun neteaseText(strings: Strings): String = sideText(neteaseStatus, neteaseCount, strings)
@@ -105,6 +122,9 @@ data class SourceCounts(
      * ★ **绝不在未返回时返回 "0"** —— 这一条是本版的核心修复，由 `SourceCountsTest` 钉住。
      */
     fun qqText(strings: Strings): String = sideText(qqStatus, qqCount, strings)
+
+    /** v3.1.0 · B：B 站侧那半句。判据与 [qqText] 完全一致（同一个 [sideText]）。 */
+    fun biliText(strings: Strings): String = sideText(biliStatus, biliCount, strings)
 
     private fun sideText(status: SourceSearchStatus, count: Int, strings: Strings): String =
         when (status) {
@@ -119,5 +139,6 @@ data class SourceCounts(
     fun isDone(source: MusicSource): Boolean = when (source) {
         MusicSource.NETEASE -> neteaseStatus == SourceSearchStatus.DONE
         MusicSource.QQMUSIC -> qqStatus == SourceSearchStatus.DONE
+        MusicSource.BILIBILI -> biliStatus == SourceSearchStatus.DONE
     }
 }

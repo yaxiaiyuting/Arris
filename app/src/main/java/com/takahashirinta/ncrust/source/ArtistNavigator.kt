@@ -178,6 +178,10 @@ object ArtistNavigator {
         val sameSourceId: String? = when (source) {
             MusicSource.NETEASE -> artist?.id?.toString()
             MusicSource.QQMUSIC -> artist?.mid
+            // v3.1.0：B 站的「作者」是 UP 主，音频区接口只给名字不给 mid，
+            // 而本应用又没有 UP 主主页。返回 null ⇒ 走下面的 keyword 搜索降级
+            // （与本源内没有可用身份的既有行为一致），绝不猜一个数字 mid 去别的源查。
+            MusicSource.BILIBILI -> null
         }
         if (idDomainMatches(source, sameSourceId)) {
             return ArtistNav.Direct(source, sameSourceId!!.trim(), keyword.orEmpty())

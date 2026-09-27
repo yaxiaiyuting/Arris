@@ -50,6 +50,8 @@ import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.TtmlDoc
 import com.takahashirinta.ncrust.lyric.TtmlParser
+import com.takahashirinta.ncrust.bili.BiliSourceProvider
+import com.takahashirinta.ncrust.network.BoundedParallel
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.qq.QqApi
@@ -57,6 +59,7 @@ import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.TrackKey
+import com.takahashirinta.ncrust.warmup.ListPrefetch
 import com.takahashirinta.ncrust.source.isResolvable
 import com.takahashirinta.ncrust.source.songRefOf
 import com.takahashirinta.ncrust.player.AutoSkipGuard
@@ -71,6 +74,8 @@ import com.takahashirinta.ncrust.player.SourceFallbackHintGate
 import com.takahashirinta.ncrust.player.classifyFailure
 import com.takahashirinta.ncrust.player.maySkipOnUrlFailure
 import com.takahashirinta.ncrust.player.PlaybackStateManager
+import com.takahashirinta.ncrust.player.PreloadCacheEntry
+import com.takahashirinta.ncrust.player.PreloadCachePolicy
 import com.takahashirinta.ncrust.player.PlayReporter
 import com.takahashirinta.ncrust.player.SongUrlFetcher
 import com.takahashirinta.ncrust.qq.QqProbeCounters
@@ -334,6 +339,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val label = when (other) {
             MusicSource.QQMUSIC -> strings.sourceQqMusic
             MusicSource.NETEASE -> strings.sourceNetease
+            // 结构上不可达：other 来自 MusicSource.otherThan（只遍历 loginSources，
+            // v3.1.0 起不含 B 站）。显式写出来是为了让「将来把 B 站加进 loginSources」
+            // 时这一处会立刻被想一遍，而不是悄悄显示一个错误的名字。
+            MusicSource.BILIBILI -> strings.source.sourceBilibili
         }
         val text = strings.tagSwitchSourceHint + "：" + label
         runCatching { Toast.makeText(app, text, Toast.LENGTH_LONG).show() }
@@ -403,22 +412,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // Song ID most recently requested by playSong; lets a concurrent preload detect a same-song race.
     private var latestPlaySongId = -1L
 
-    private data class PreloadCacheEntry(
-        val url: String,
-        val actualLevel: String,
-        // 取链时用的请求档位:播放失败降档重试时,只有档位一致才允许命中缓存,
-        // 避免把上一档(可能播不出声)的 URL 原样放回播放器。
-        val requestedLevel: String,
-        // A3：缓存也要带上实际文件参数与档位上限，否则走缓存开播时算不出音质状态。
-        val br: Long = 0L,
-        val type: String = "",
-        val songMaxLevel: String? = null,
-        val timestamp: Long = System.currentTimeMillis()
-    )
+    // v3.1.0 · P0-B：条目与新鲜度判据搬到 `player/PreloadCachePolicy.kt`，
+    // 原因是判据原本在这一处内联表达式里被抄了三遍，而 B 站需要**第二种 TTL 模型**
+    // （服务端给的绝对过期时刻，不是一个时长）。字段与语义与 v3.0.0 逐字相同。
     private val preloadCache = mutableMapOf<Long, PreloadCacheEntry>()
-    private val CACHE_TTL_MS = 5 * 60 * 1_000L
+    private val CACHE_TTL_MS = PreloadCachePolicy.DEFAULT_TTL_MS
     // Prevents duplicate preload launches for the same song while one is in flight.
     private var currentlyPreloadingSongId = -1L
+
+    /**
+     * v3.1.0 · P0-A：开播时的并行辅助腿（歌词 + 封面）。
+     *
+     * **刻意不在下一次 playSong 时 cancel 它** —— 它自带世代闸门
+     * （`LyricLoadCoordinator`），旧歌的响应会被整包丢弃；而 cancel 会走进
+     * `loadNeteaseLyrics` 那个会吞 `CancellationException` 的 `catch (e: Exception)`。
+     * 保留这个引用只是为了诊断（`isActive`）与将来真的需要停掉它时有把手。
+     */
+    private var auxiliaryJob: Job? = null
 
     // ⚠️ 下面这三个**必须声明在 init 块之前**（v1.9.0 · S1 hotfix）。
     //
@@ -1118,6 +1128,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             TAG_TRACK,
             "playSong -> currentTrack=$track cacheKey=${lyricCoordinator.cacheKeyOf(track)}"
         )
+        // ★ v3.1.0 · P0-A：**取链与歌词同时发起**。
+        //
+        // v3.0.0 的形状是「取链（阻塞）→ 取链返回 → 才 launch 取词」，
+        // 两段 RTT **相加**。探针实测这两段各自 P50 在 80~250ms 量级
+        // （`docs/verification/v3.1.0/net-research/net-latency-breakdown.md` §1），
+        // 相加就是用户感知里那一段「点了没反应」。
+        //
+        // 现在：身份先落地（上一行的 onTrackChanged），随后立刻开辅助腿
+        //（歌词 + 封面），取链那条腿在下面照旧跑 —— 两者在时间上重叠。
+        //
+        // ⚠️ 为什么歌词**不**放进 playJob：playJob 会被下一次 playSong `cancel()`，
+        // 而 `loadNeteaseLyrics` 的重试循环用的是 `catch (e: Exception)`，
+        // 会把 CancellationException 一起吞掉（v2.5.2 点名的形状）。
+        // 把歌词挂在 playJob 上会让「快速连点两首歌」把第一首的取词变成一次
+        // 静默的半途而废。它们必须是兄弟，不是父子。
+        startAuxiliaryLoad(track, artworkUrl)
         needsPreload.value = false
         refreshGaplessSetting()
 
@@ -1165,7 +1191,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // Fast path: URL was preloaded and cached for THIS requested level — skip network round-trip.
         // 缓存条目带档位:播放失败降档重试时,绝不会把上一档(可能已证明播不出声)的 URL 原样喂回。
         val cachedEntry = preloadCache[songId]?.takeIf {
-            it.requestedLevel == selectedQuality && System.currentTimeMillis() - it.timestamp <= CACHE_TTL_MS
+            // v3.1.0 · P0-B：判据的唯一落点（铁律 22：过期的 URL 不得使用）。
+            PreloadCachePolicy.isFresh(it, selectedQuality, defaultTtlMs = CACHE_TTL_MS)
         }
         if (cachedEntry != null) {
             clearPreloadedState()
@@ -1176,7 +1203,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     cachedEntry.br, cachedEntry.type, cachedEntry.songMaxLevel,
                 ),
             )
-            resetLyricsForNewSong()
+            // v3.1.0 · P0-A：`resetLyricsForNewSong()` 与取词都已在 startAuxiliaryLoad 里
+            // 于本函数**开头**做过一次。这里再 reset 会把已经落地的歌词（本地缓存命中时
+            // 可能只要几毫秒）清掉 —— 那正是「切歌瞬间歌词闪一下空白」的形状。
             currentSongId.value = songId
             currentSongName.value = title
             currentSongArtist.value = artist
@@ -1198,7 +1227,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             else
                 getApplication<Application>().startService(intent)
             isPlaying.value = true
-            viewModelScope.launch { fetchLyrics(track) }
             PlaybackStateManager.saveState(
                 getApplication(), songId, title, artist, artworkUrl, true,
                 sourceKey = ref.source, sourceId = sourceId, mediaId = mediaId,
@@ -1231,11 +1259,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (fetchVersion != songPlayVersion) return@launch
                 // setMediaItem 会替换整个播放列表，槽位随之作废。
                 clearPreloadedState()
-                resetLyricsForNewSong()
-                // 歌词请求异步化: 旧实现在这里顺序等待(失败退避最坏 3s+),
-                // 开播被歌词请求拖住, 慢网络/风控下"点了没反应"。切到 launch 后
-                // 播放立即开始, 歌词就绪了再自动切回歌词视图。
-                viewModelScope.launch { fetchLyrics(track) }
+                // v3.1.0 · P0-A：取词与封面已在本函数开头并行发起（startAuxiliaryLoad），
+                // 这里**只**替换播放列表。原先那两行（reset + launch）留在这里的含义是
+                // 「等取链回来再开始取词」—— 那正是本版要拆掉的串行。
                 withContext(Dispatchers.Main) {
                     applyQualityVerdict(selectedQuality, result)
                     currentSongId.value = songId
@@ -1524,6 +1550,72 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      *  1. preloadNextSong 误判「这首已经在槽位里」而不再预载 → 无缝播放静默失效；
      *  2. onSongTransitioned 把一首并不在播放列表里的歌当成已切歌 → 串台。
      */
+    /**
+     * v3.1.0 · P0-A：开播时的**并行辅助腿** —— 歌词 + 封面，与取链同时跑。
+     *
+     * 三件事都在这里定死，不在调用点各写一遍：
+     * 1. **先清空上一首的歌词状态**（`resetLyricsForNewSong`）：它必须在取词**之前**，
+     *    否则本地缓存命中时「新歌词先到、旧的清空后到」会把新歌词抹掉；
+     * 2. **并发上限**走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]（铁律 23）；
+     * 3. **取消原样传播**：`BoundedParallel` 对 `CancellationException` 直接 rethrow，
+     *    不落进「子任务失败」那一支（铁律：不吞 CancellationException）。
+     *
+     * 封面这一腿用的是列表项**已有的** URL —— 它不产生新的元数据请求，
+     * 只是把「播起来之后封面才开始解码」提前到「点下去就开始解码」。
+     */
+    private fun startAuxiliaryLoad(track: TrackKey, artworkUrl: String) {
+        resetLyricsForNewSong()
+        val app = getApplication<Application>()
+        auxiliaryJob = viewModelScope.launch {
+            BoundedParallel.runAll(
+                listOf(
+                    "lyrics" to {
+                        fetchLyrics(track)
+                        true
+                    },
+                    "cover" to {
+                        ListPrefetch.prefetchCover(app, artworkUrl)
+                        true
+                    },
+                ),
+            )
+            Unit
+        }
+    }
+
+    /**
+     * v3.1.0 · P0-B：把**下一首**的行级歌词预取进 [LyricsCache]，不进 UI 状态。
+     *
+     * ## 为什么不能直接调 `fetchLyrics(nextTrack)`
+     *
+     * 那条路会写 `lyrics` / `lyricsSongId` 这些**当前曲目**的状态流 ——
+     * 预取一首还没播的歌会把界面上的歌词换成下一首的（正是 v2.1.5 串台的形状）。
+     * 所以这里只做「请求 + 落缓存」：走的是与正式路径**同一张表、同一组字段**
+     * （`LyricsCache.put`），切歌时 `loadNeteaseLyrics` 会以缓存命中把它秒回。
+     *
+     * 只对**网易云**曲目做：QQ 与 B 站的歌词不进这张表（字段形状不同，
+     * 见 `loadQqLyrics` / `loadBiliLyrics` 的 KDoc），给它们预取等于白花一次请求。
+     *
+     * 失败完全静默：预取失败不该在日志里伪装成播放故障。
+     */
+    private suspend fun prefetchNeteaseLyrics(track: TrackKey) {
+        if (track.source != MusicSource.NETEASE || track.id <= 0L) return
+        runCatching {
+            val resp = RetrofitClient.api.getLyric(id = track.id)
+            if (resp.code == 200) {
+                LyricsCache.put(
+                    getApplication(),
+                    track.id,
+                    resp.lrc?.lyric ?: "",
+                    resp.tlyric?.lyric ?: "",
+                    resp.yrc?.lyric ?: "",
+                    resp.romalrc?.lyric ?: "",
+                )
+                Log.d(TAG_TRACK, "prefetched lyric for next track=$track")
+            }
+        }
+    }
+
     private fun clearPreloadedState() {
         preloadedSongId = -1L
         preloadedTitle = ""
@@ -1582,8 +1674,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // （MainScreen 在切歌瞬间与进入最后 60s 各调一次，重复调用已被上面的槽位判断
                 // 挡掉），所以挂在这里最准。单独 launch：预取是为了省掉切歌时的等待，
                 // 绝不能反过来挤占取链、把播放拖慢；拿不到下一首时根本不会走到这里。
-                if (lyricsTtmlEnabled.value) {
-                    launch { AmllTtmlClient.prefetch(getApplication(), songId) }
+                // v3.1.0 · P0-B：下一首的**三样**辅助内容并行预取，与下面的取链同跑。
+                // v3.0.0 只预取 TTML（且受开关门控），LRC 与封面都要等切歌那一刻才开始 ——
+                // 而切歌那一刻正是最不该再花时间的地方。
+                launch {
+                    val aux = ArrayList<Pair<String, suspend () -> Boolean?>>(3)
+                    if (lyricsTtmlEnabled.value) {
+                        aux += "ttml" to {
+                            AmllTtmlClient.prefetch(getApplication(), songId)
+                            true
+                        }
+                    }
+                    aux += "lyric-lrc" to {
+                        prefetchNeteaseLyrics(nextTrack)
+                        true
+                    }
+                    aux += "cover" to {
+                        ListPrefetch.prefetchCover(getApplication(), artworkUrl)
+                        true
+                    }
+                    runCatching { BoundedParallel.runAll(aux) }
+                    Unit
                 }
                 val quality = if (isOnWifi())
                     qualityApiLevels.getOrElse(prefs.getInt("wifi_quality", 3)) { "lossless" }
@@ -1591,8 +1702,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     qualityApiLevels.getOrElse(prefs.getInt("mobile_quality", 1)) { "higher" }
                 // 缓存命中(同档 + TTL 内)则跳过网络, 但仍走下方入队路径。
                 val cacheHit = preloadCache[songId]?.takeIf {
-                    it.requestedLevel == quality &&
-                        System.currentTimeMillis() - it.timestamp <= CACHE_TTL_MS
+                    PreloadCachePolicy.isFresh(it, quality, defaultTtlMs = CACHE_TTL_MS)
                 }
                 val result = cacheHit?.let {
                     SongUrlResult(it.url, it.actualLevel, it.br, it.type, it.songMaxLevel)
@@ -1610,6 +1720,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // Store in cache regardless of staleness — URL is valid even if a new song started.
                     preloadCache[songId] = PreloadCacheEntry(
                         result.url, result.actualLevel, quality, result.br, result.type, result.songMaxLevel,
+                        // v3.1.0：把 Provider 给的绝对过期时刻带上（B 站必需；网易云/QQ 为 null）。
+                        expiresAtMs = result.expiresAtMs,
                     )
                     if (capturedVersion != songPlayVersion) {
                         // playSong was called while this fetch was in flight.
@@ -1805,6 +1917,55 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         Log.i(TAG_TRACK, "qq lyric APPLIED track=$track lines=" + lines.size)
     }
 
+    /**
+     * v3.1.0 · B：B 站音源的取词。
+     *
+     * ## 两条腿的歌词能力不同，这里如实分派
+     *
+     * - **音频区曲目**（`sourceId = au:<auid>`）：`song/info` 的 `lyric` 字段就是
+     *   **LRC 原文**，直接交给既有的 [LrcParser]（不新写解析器）。
+     * - **视频音轨**（`sourceId = bv:...`）：B 站没有歌词数据源 ⇒
+     *   `BiliSourceProvider.fetchLyric` 返回 null，这里记 [LyricLoadCoordinator.markEmpty]
+     *   （「这首歌没有歌词」），而不是 [LyricLoadCoordinator.fail] ——
+     *   重试一百次也不会有歌词，把它标成可重试的错误只会让界面白转圈。
+     *
+     * 缓存：**不走 [LyricsCache]**。那张表存的是网易云的字段形状
+     * （lrc/tlyric/yrc/romalrc/ttml），往里塞 B 站的数据要么新加字段 + 迁移逻辑
+     * （v1.9.3 的教训），要么污染网易云的字段语义 —— 与 QQ 那条路同一取舍
+     * （见 `loadQqLyrics` 的 KDoc）。代价是每次播放现取一次，已写进未验证项。
+     */
+    private suspend fun loadBiliLyrics(track: TrackKey, load: LyricLoadCoordinator.Load) {
+        val ref = songRefOf(track.source, track.id, track.sourceId, track.mediaId)
+        val raw = runCatching { BiliSourceProvider.fetchLyric(ref) }.getOrNull()
+        if (!lyricCoordinator.isCurrent(load)) {
+            Log.i(TAG_TRACK, "bili lyric DROPPED (stale): track=$track")
+            return
+        }
+        // null = 这个数据源没有歌词（视频音轨）；空串 = 确实是纯音乐。
+        if (raw.isNullOrBlank()) {
+            lyricCoordinator.markEmpty(load)
+            lyricsNoContentSongId.value = track.id
+            Log.i(TAG_TRACK, "bili lyric EMPTY track=$track (source=${if (raw == null) "none" else "blank"})")
+            return
+        }
+        val lines = withContext(Dispatchers.Default) { LrcParser.parse(raw) }
+        if (!lyricCoordinator.isCurrent(load)) return
+        if (lines.isEmpty()) {
+            lyricCoordinator.markEmpty(load)
+            lyricsNoContentSongId.value = track.id
+            return
+        }
+        if (!lyricCoordinator.accept(load, lines.size)) return
+        lyrics.value = lines
+        // B 站音频区只给一份主轨（没有 tlyric / romalrc 的对应接口），
+        // 所以译文与音译显式清空 —— 而不是沿用上一首的（那正是 v2.1.5 的串台形状）。
+        translatedLyrics.value = emptyList()
+        romanizedLyrics.value = emptyList()
+        lyricsSongId.value = track.id
+        lyricsNoContentSongId.value = -1L
+        Log.i(TAG_TRACK, "bili lyric APPLIED track=$track lines=" + lines.size)
+    }
+
     /** 日志用：「来源/行数」。 */
     private fun trackText(track: LyricTrack): String =
         (track.source?.cacheTag ?: "none") + "/" + track.lines.size
@@ -1837,6 +1998,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // v2.1.5：分叉依据是**这次请求的身份**，不是全局字段。
             if (track.source == MusicSource.QQMUSIC) {
                 loadQqLyrics(track, load)
+                return
+            }
+            // v3.1.0 · B：B 站音源的取词。**不能**落进下面那条网易云的链 ——
+            // TTML DB 是按网易云 id 索引的，拿 B 站的合成 id 去查只会 404
+            // （极小概率命中一首完全无关的歌的 TTML，与 QQ 那条路的理由逐字相同）。
+            if (track.source == MusicSource.BILIBILI) {
+                loadBiliLyrics(track, load)
                 return
             }
             val netease = loadNeteaseLyrics(track, load)

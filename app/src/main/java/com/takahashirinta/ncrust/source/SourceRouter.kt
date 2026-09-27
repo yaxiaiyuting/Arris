@@ -32,6 +32,11 @@ object SourceRouter {
     init {
         // 网易云恒可用；QQ 音乐在 B 阶段注册（它的客户端需要先 init 拿到 cookie）。
         register(NeteaseSourceProvider)
+        // v3.1.0 · B：B 站。**注册是无条件的**，但 Provider 的每条路径第一行都判
+        // `BiliPrefs.isEnabled()` —— 关闭时它返回空列表 / null，一个请求都不发。
+        // 为什么不在这里按开关条件注册：注册表是 `object` 的 init，只在类加载时跑一次，
+        // 而开关是**用户随时可改**的（改完不该重启 App）。判据放在 Provider 里才是对的。
+        register(com.takahashirinta.ncrust.bili.BiliSourceProvider)
     }
 
     /**

@@ -7,6 +7,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.library.LibraryManager
+import com.takahashirinta.ncrust.network.ConnectionWarmup
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.PlaylistApi
@@ -200,6 +201,14 @@ object AppWarmup {
                     toplists = ContentCache.toplistItems,
                 )
             }
+
+            // v3.1.0 · P1-B：连接预热（DNS + TCP/TLS + 回池）。
+            //
+            // ⚠️ 它是**独立 launch**、且在 `withTimeoutOrNull` 的 8 秒预算**之外**：
+            // 预热是尽力而为，绝不能因为它慢而把首页预取挤掉（谁都不等它，它也不占预算）。
+            // 收益上界是探针实测的「冷连接 ~365ms / host，复用后 wait=2~9ms」
+            // （`docs/verification/v3.1.0/net-research/net-latency-breakdown.md` §4）。
+            scope.launch { runCatchingCancellable { ConnectionWarmup.warmUp() } }
 
             // 阶段三：收藏库刷新(已登录时)。3 次额外网络往返，同样谁都不等。
             if (CookieManager.hasCookie(app)) {

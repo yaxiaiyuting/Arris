@@ -40,6 +40,7 @@ import com.takahashirinta.ncrust.ui.components.SongMenuAction
 import com.takahashirinta.ncrust.ui.components.SongTags
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.warmup.ListPrefetch
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import io.github.takahashirinta.kanesumi.controls.MetroTabItem
@@ -190,6 +191,11 @@ fun ArtistDetailScreen(
     //
     // 输入是**当前口径过滤后**的 `songs` —— 用户切到「只看 QQ」再点全部播放时，
     // 播的就该是 QQ 那一段，而不是偷偷播全部（任务书 4.1「顺序：按当前排序」）。
+    // v3.1.0 · P0-C：进入艺人页预取前 N 首封面（只封面，不预取 URL）。
+    val prefetchContext = LocalContext.current
+    LaunchedEffect(songs) {
+        ListPrefetch.prefetchList(prefetchContext, "artist:$artistId", songs.map { it.song })
+    }
     val playAllPlan = remember(songs, preferredSource) {
         PlayAllDedup.plan(songs, preferredSource)
     }

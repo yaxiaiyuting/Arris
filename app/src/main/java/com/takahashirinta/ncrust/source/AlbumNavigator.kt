@@ -183,6 +183,9 @@ object AlbumNavigator {
         return when (source) {
             MusicSource.NETEASE -> album.id?.takeIf { it > 0L }?.toString()
             MusicSource.QQMUSIC -> album.mid?.trim()?.takeIf { it.isNotEmpty() }
+            // v3.1.0：B 站音频区没有专辑页面 —— 「转到专辑」对它没有目标。
+            // 返回 null 让调用方走「不可跳转」的既有分支（不猜、不搜同名）。
+            MusicSource.BILIBILI -> null
         }
     }
 
