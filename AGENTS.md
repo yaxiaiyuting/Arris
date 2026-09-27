@@ -4497,3 +4497,220 @@ v3.0.0 **全部删除**。理由：
    读起来像"一个缺角"；上边界也避开了标题栏与底部控制条。
    随机源沿用粒子那一套（`Random(PARTICLE_RANDOM_SEED)` 固定种子）⇒ 同一段音频每次得到
    同一套出生点，"是不是随机看着乱"可以复现。
+
+## v3.1.0 新增（本 fork · 并行预加载 + B站音源）
+
+版本：`versionName = "3.1.0-gpl"` / `versionCode = 54`（`tools/next-version.sh` 三源交叉验证 = 54 ⇒ 下一个可用 **55**）。
+交付验证：**142 suite / 1945 用例全绿**、`lint` 0 error、`assembleDebug` + `assembleRelease` 成功、
+release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷启无崩溃。
+完整报告：[`docs/verification/v3.1.0/verification/REPORT.md`](docs/verification/v3.1.0/verification/REPORT.md)。
+
+### 5 条新纪律（先读这 5 条，再看细节）
+
+1. **B站音源必须有独立开关，且默认关闭。**
+   - 可执行判据（不是口号）：**关掉开关时一个请求都不发**，落点
+     `BiliSourceProviderTest.关掉开关之后一个请求都不发 —— 搜索返回空`（同组还有
+     `关掉开关之后取链返回 null 且不解析载荷`）。这由**结构**保证而不是靠调用方自觉：
+     `BiliSourceProvider` 的**每一条对外路径第一行**都判 `isEnabled`
+     （`BiliSourceProvider.kt:72` / `:91` / `:126` / `:152`）。
+   - 键名硬约束：`bilibili_enabled` 必须与 `SettingsRegistry` **逐字一致**
+     （`BiliPrefs.KEY_ENABLED` = `BiliPrefs.kt:121`；注册项 = `SettingsRegistry.kt:358`），
+     守卫测试 `BiliSourceProviderTest.开关的 prefs 键与设置注册表逐字一致（铁律 17 显式声明）`
+     —— 改键名而不同步注册表会直接变红。
+   - 默认值：`BiliPrefs.DEFAULT_ENABLED = false`（`BiliPrefs.kt:124`），**缺键 = 关闭**
+     （判据是 `getBoolean(KEY, DEFAULT_ENABLED)`，不是 `contains`）。
+   - 开关的**注册是无条件的**（`SourceRouter.kt:35`）：注册表是 `object` 的 init、只在类加载时跑一次，
+     而开关用户随时可改 ⇒ 判据只能放在 Provider 里。**不要**改成「按开关条件注册」。
+   - 理由与本版另一处取舍**相反**且都成立：v3.0.0 的五个动效开关**默认全开**（那是本机渲染，
+     默认关会让「升级后没变化」成为默认体验），这里**默认关**（那是外部平台流量 + 风控不确定性 +
+     能力不完整：视频条目无歌词、匿名无 FLAC）。
+
+2. **B站搜索 API 需要 Wbi 签名，必须实现，不得跳过；但要分清「签名被拒」与「路径被封」。**
+   - 可执行判据：`BiliWbiTest` 的**四条固定向量**逐字节钉住算法 ——
+     `签名向量 A —— 视频搜索（含中文关键词）`、`签名向量 B —— 取播放地址`、
+     `签名向量 C —— 空格编成加号`、`签名向量 D —— 敏感字符先剔除再编码`
+     （另有无网络依赖的 `mixinKey 与实测值一致` / `乱序表是 64 个互不相同的下标`）。
+     离线官方向量自检脚本：`python3 docs/verification/v3.1.0/bili-research/wbi_golden.py`。
+   - **`-352` 才是签名被拒**：`BiliSourceProviderTest.只有 -352 与 -403 算签名被拒；-1200 不算`
+     （`-403` = 缺 `w_rid` 的经典风控，`-352` = 风控校验失败；两者 HTTP 都是 **200**）。
+   - **412 是路径级封禁、重签无效**：`BiliSourceProviderTest.HTTP 412 的 HTML 正文不算签名问题（重签无效）`。
+     实测 `/x/player/wbi/playurl` 的**四种签名/Cookie 组合全部 412** ⇒ 归到「签名失败」只会白白多打一次 nav。
+     同理 `-1200`（`被降级过滤的请求`）是**参数非法**（`search_type=music`/`audio` 与乱填的 `foobar`
+     返回完全相同）或越界翻页，刷新密钥无用。
+   - 密钥只放**内存**（`@Volatile` + `WBI_KEY_TTL_MS = 6h`，`BiliApi.kt:124`），**不落盘**：
+     跨天冷启动拿到一个失效 key 只会白多一次失败。全站统一、与账号/IP/UA 无关。
+   - 实测出处：[`bili-research/wbi-signature.md`](docs/verification/v3.1.0/bili-research/wbi-signature.md)、
+     [`EVIDENCE.md` §3/§4/§13](docs/verification/v3.1.0/bili-research/EVIDENCE.md)、
+     `evidence/90-wbi-ab.txt`、`evidence/91-wbi-golden-vector.txt`。
+
+3. **B站音频流 URL 有时效，TTL 必须按 URL 的 `deadline` 反推 —— 不是响应里的 `timeout` 的 3 小时。**
+   - 可执行判据：`PreloadCachePolicyTest` 的**两模型边界** ——
+     `显式过期时刻优先于固定 TTL`、`显式过期时刻到了就不可用（边界取过期）`、
+     `显式过期时刻为 null 时退回固定 TTL（网易云与 QQ 的行为不变）`、
+     `两种模型下档位判据都在最前面`。解析侧：`BiliParseTest.TTL 按 deadline 算 而不是按 timeout（实测两者差 1 小时）`。
+   - 数字（实测，[`EVIDENCE.md` §7](docs/verification/v3.1.0/bili-research/EVIDENCE.md)）：响应字段
+     `timeout = 10800`（名义 3 小时，**恒定常量**），URL query 里的 `deadline = now + 7200`（真实 2 小时，连测 3 次
+     7200/7200/7201）。**两者差 1 小时，只有 `deadline` 是真的。** deadline 缺失才退 `timeout`，
+     两者都缺退 30 分钟；另留安全系数（网络往返 + 起播 + seek）。
+   - 同一首歌的 URL **每次都不同**（`trid`/`upsig` 全变）⇒ 缓存键**不能**用完整 URL。B站 CDN 的路径是
+     **内容寻址**的（`<hash>-<档位>.m4a` 不变、query 全变），所以键取文件名并加 `bili:` 前缀与既有键空间隔离：
+     `BiliCdn.cacheKeyFor`（`BiliCdn.kt:107-112`），守卫 `BiliSourceProviderTest.缓存键取内容寻址的文件名 且与既有键空间隔离`。
+   - 过期时刻必须由**产出 URL 的那一层**算好带上来：`SongUrlResult.expiresAtMs`（`SongUrlFetcher.kt:62-75`，
+     默认 `null` ⇒ 网易云/QQ 的 5 分钟模型**逐字不变**）。**不要**让缓存层去猜服务端的 TTL。
+
+4. **B站音源接入不得破坏现有音源行为（铁律 27 在这一版的具体落点）。**
+   - 可执行判据（三条，缺一不可）：
+     1. **跨源 Referer 会互相打死** ⇒ 判据只能是 **host 白名单**：
+        `BiliCdnTest.网易云与 QQ 的 host 一个都不能命中` —— **11 个 host 逐个断言**
+        （`music.163.com` / `interface3.music.163.com` / `interface.music.163.com` /
+        `clientlogusf.music.163.com` / `u.y.qq.com` / `c.y.qq.com` /
+        `isure.stream.qqmusic.qq.com` / `ws.stream.qqmusic.qq.com` / `dl.stream.qqmusic.qq.com`
+        / 后缀伪装的 `evilbilivideo.com` / `notbilibili.com`，另有空串与 `null`）。
+        ⚠️ `BiliCdnTest` 是 `app/src/test/java/com/takahashirinta/ncrust/bili/BiliSourceProviderTest.kt`
+        **里的一个测试类**（:209 起），**不是独立文件** —— 按类名找，别按文件名找。
+        配套：`BiliSourceProviderTest.非 B 站 host 不给缓存键（交给既有规则）`、
+        `BiliSourceProviderTest.请求头只有一个 Referer`（不带 Cookie）。
+        **白名单宁可漏加也不能加宽**：漏加的症状是「部分 B站歌放不出来」，误加的症状是
+        「网易云和 QQ 全部放不出来」（实测：拿 B站 Referer 请求别家同样 403）。
+     2. **关掉 B站时统计行逐字不变**：`SourceCountsBiliTest.B 站关闭时统计行逐字不变`
+        （结构保证在 `SourceCounts.summary`：`biliStatus == SKIPPED` 时**短路**第三段，
+        `SourceCounts.kt:108-114`；`biliStatus` 默认就是 `SKIPPED` 而不是 `DONE+0`）。
+        同组还有 `B 站为空时与两源版本逐字相同`。
+     3. **待播槽位不变量一行未改**：`player/PreloadSlot.kt` **逐字节未改**，
+        自证方式 `git diff --stat v3.0.0-gpl HEAD -- app/src/main/java/com/takahashirinta/ncrust/player/PreloadSlot.kt`
+        **输出为空**（该文件最后一次改动是 `63916fc`，早于本版），19 条 `PreloadSlotTest` 继续守着它。
+        预加载新增的三样内容（LRC / 封面 / 带 TTL 的 URL）**都不进 ExoPlayer 播放列表**。
+   - 另两条同方向的守卫：`BiliSourceProviderTest.来源缺少载荷时取链返回 null 而不是退回别的音源`
+     （B站失败**不许**回落到别的音源）、`SourceCountsBiliTest.B 站不参与会员交错（它没有会员信号）`。
+   - 具体的「按 host 限定」实现落点：`OfflineAudioCache.dataSourceFactory` 上游挂一层
+     `ResolvingDataSource`（`OfflineAudioCache.kt:142-150`），缓存键走 `BiliCdn.cacheKeyFor`
+     （`:154-161`）—— **非 B站 host 的请求头与缓存键逐字不变**。
+
+5. **虚拟机验证必须在交付报告里明确标注口径，不许当成真机结论。**
+   - 可执行判据：`docs/verification/v3.1.0/verification/REPORT.md` 的
+     **诚实清单第一条**就是「模拟器网络不代表真机」——模拟器走**宿主机网络栈**，
+     数字与真机**不可换算**，只用于 A/B 对照；且模拟器把宿主网络**报成蜂窝**（`cell=true`）。
+     同一条口径也写在 §1 验收表第 7 行的注里。
+   - 为什么是纪律而不是客套：本版三台设备里**两台是模拟器**，而 B站那条链路的失败模式
+     （CDN 风控 403）**恰恰与出口有关** ⇒ 把模拟器结论写成「通过」会让下一个人
+     在真机上重复踩同一个坑。原始告示见
+     [`net-research/EVIDENCE-EMULATOR.md`](docs/verification/v3.1.0/net-research/EVIDENCE-EMULATOR.md) 开头。
+   - 附带要求（同一类错误）：**文件名必须能自证属于哪一版**。
+     `docs/verification/v3.1.0/verification/api33-smoke.txt` 是 **v3.0.0** 的基线冒烟
+     （`versionName=3.0.0-gpl`），v3.1.0 的三份冒烟全部在 `verification/release-smoke/` 下。
+
+### 本版踩到的坑（下一个改这里的人必读）
+
+四条都是**实测**发现的，不是推断；每条都给出可以直接重跑的证据文件。
+
+1. **B站音频区没有搜索接口** ⇒ 只能「视频搜索 + 音频区播放」两条腿。
+   穷举 **10 个**候选端点：8 个 **HTTP 404**、`/web/menu/search` **200 但空壳**
+   （`{"code":0,"data":null}`）、`app.` 与 `api.` 的 `x/v2/search/type?search_type=audio`
+   返回 `{"code":-400}`；而通用搜索 `search/all/v2` 的 `pageinfo` 与 `result_type` 枚举里
+   **都没有** audio/music。⇒ 任务书「用音频区搜索」的前提**被证伪**，不要再去试第 11 个候选。
+   证据：[`bili-research/EVIDENCE.md` §12](docs/verification/v3.1.0/bili-research/EVIDENCE.md)、
+   `evidence/36-45-probe-*.txt`、`evidence/57-search-all-v2.txt`。
+   ⚠️ 顺带一个**非法取值**的坑：`search_type=music` / `audio` 与故意乱填的 `foobar`
+   返回**完全相同**的 `{"code":-1200,"message":"被降级过滤的请求"}` ⇒ 它们是**非法取值**，不是风控。
+   证据：`evidence/47` / `48` / `49-searchtype-*.txt`。
+
+2. **`song/info` 的 `lyric` 字段是 LRC 文件的 URL，不是歌词正文** ⇒ 正文必须走 `/song/lyric`。
+   实测 `lyric = "http://i0.hdslb.com/bfs/music/149994607539.lrc"`（`evidence/02-songinfo-au39.txt`），
+   而 `/song/lyric` 返回 `data = "[00:33.26]让我掉下眼泪的\n…"`（`evidence/21-lyric-au39.txt`）。
+   代码判据：`BiliParse.looksLikeUrl` 把 URL 形状一律判成「没有正文」，守卫
+   `BiliParseTest.歌词正文走 song_lyric 而不是 song_info 的 lyric 字段`、`looksLikeUrl 认出三种 URL 形状`。
+   ⚠️ 另一个两义性：**无歌词时 `code` 仍是 0**，靠 `data == null` 判空（空串是「有这一栏但没内容」）——
+   `BiliParseTest.song_lyric 的两义性：没有 data 是 null 空串是空串`。
+   这个缺陷在本版**真的发生过一次**（`0b4ed2c` 修掉），所以它同时是一条守卫单测。
+
+3. **`/x/player/wbi/playurl` 是路径级封禁（四种签名组合全 412）** ⇒ 必须走旧路径 + `fnval=4048` + `buvid3`。
+   实测：`/x/player/wbi/playurl` 无签名 **412**、带正确签名**也是 412**（`evidence/65-playurl-wbi-nosign.txt`、
+   `EVIDENCE.md` §13 的验签矩阵），而旧路径 `/x/player/playurl?...&fnval=4048` 返回
+   `code:0` + 3 条 DASH 音轨（30216/30232/30280，`evidence/64-playurl-legacy-dash.txt`）。
+   ⇒ 失败时**降级到旧路径**，而不是「重签一次再试 wbi 路径」。代码落点：`BiliApi.PLAYURL_URL`（:86）、
+   `PLAYURL_FNVAL = "4048"`（:93），守卫 `BiliSourceProviderTest.播放地址走旧路径而不是 wbi 路径`。
+   ⚠️ 412 的形状是 **HTML 正文**（不是 JSON），所以 `isSignatureRejected` 的第一条就是
+   「非 JSON 直接返回 false」——写成 `code != 0 就算签名失败` 会让每一次播放都白打一次 nav。
+
+4. **B站 CDN 强校验 `Referer`（带 206 / 不带 403），而且跨源 Referer 会互相打死** ⇒ 只能按 host 白名单注入。
+   实测同一条 320K 直链：`Referer: https://www.bilibili.com/` → **206**；只带 UA（无 Referer）→ **403**；
+   带**外部** Referer（`https://example.com/`）→ **403**；模拟 ExoPlayer 指纹
+   （`UA=ExoPlayerLib/1.2.1` + `Accept-Encoding: identity`）→ **403**。**三种流（音频区 web 192K /
+   APP 320K / 视频 DASH）完全一致。** ⇒ 取链会成功、URL 会拿到、日志一切正常，**一去取字节就 403**，
+   用户看到的是「一直缓冲」。
+   证据：`evidence/80-cdn-referer-and-ttl.txt`、`evidence/96-cdn-referer-exoplayer.txt`；
+   真机复现见 [`verification/EVIDENCE-bili-probe.md`](docs/verification/v3.1.0/verification/EVIDENCE-bili-probe.md)。
+   反过来同样成立且已实测（`net-research/EVIDENCE-S6.md` §4 的 A/B）：**拿 B站 Referer 去请求网易云也会被拒** ⇒
+   绝不能给所有请求统一塞一个默认头，判据只能是 `BiliCdn.needsReferer(host)`（纯函数 + host 白名单），
+   落点在 `OfflineAudioCache.dataSourceFactory` 的 `ResolvingDataSource`。
+   ⚠️ 两个附带坑：① `Content-Type` 是 `application/octet-stream`（不是 `audio/mp4`），ExoPlayer 靠**嗅探**识别
+   （魔数 `ftypM4A`），将来若显式设 `mimeType` 必须写 `audio/mp4`；② 修好 Referer 后要**清一次
+   `filesDir/offline/audio`** 再验证，否则历史 403 可能已被写进 `SimpleCache`，表现为「修了还是没声」
+   （`FLAG_IGNORE_CACHE_ON_ERROR` 是否足够**未实测**）。
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 并行请求编排的**唯一**原语（硬上限 4 / 三态 / 取消原样传播） | `network/BoundedParallel.kt` |
+| URL 预加载缓存的**新鲜度判据**（两模型纯函数） | `player/PreloadCachePolicy.kt` |
+| 列表预加载（只封面 / N 按网络分档 / 绝不预取 URL） | `warmup/ListPrefetch.kt` |
+| 连接预热（DNS + TCP/TLS，失败静默，不给 B站预热） | `network/ConnectionWarmup.kt` |
+| 取链与歌词/封面**并发发起** | `ui/viewmodel/PlayerViewModel.kt`（`startAuxiliaryLoad`） |
+| 下一首预载内容（URL + LRC + TTML + 封面） | `ui/viewmodel/PlayerViewModel.kt`（`preloadNextSong`） |
+| B站网络层（独立 client / wbi 密钥 / 旧路径取流） | `bili/BiliApi.kt` |
+| B站解析层（纯逻辑，只依赖 `org.json`） | `bili/BiliModels.kt` |
+| Wbi 签名（纯逻辑，无 Android 无 IO） | `bili/BiliWbi.kt` |
+| 开关（唯一读写入口 + 进程内镜像）+ 档位映射与有界阶梯 | `bili/BiliPrefs.kt` |
+| **CDN 取流约束**（Referer host 白名单 + 内容寻址缓存键） | `bili/BiliCdn.kt` |
+| Provider（两条腿 + 每条路径第一行判开关 + 绝不抛） | `bili/BiliSourceProvider.kt` |
+| 音源枚举与 **id 标志位**（位 61，与 QQ 的位 62 并存） | `source/MusicSource.kt`（`BILIBILI` / `SourceIds.BILI_ID_FLAG`） |
+| `selectable` 与 **`loginSources`** 的分家（换源提示不许指向 B站） | `source/MusicSource.kt` |
+| 三源搜索的发布与三态 | `ui/viewmodel/SearchViewModel.kt` |
+| 三源排序（B站追加在最后、不参与会员交错） | `search/SearchRanking.kt` |
+| 统计行第三段（**SKIPPED 时短路**） | `ui/components/SourceCounts.kt` |
+| 「只看某音源」本地筛选档 | `ui/components/SourceFilter.kt` |
+| 设置项归属（**通用**组，不是账号与登录）与 `newInV310` 标志 | `ui/settings/SettingsRegistry.kt` |
+| 仪器化探针（真实网络 + 真实生产代码） | `app/src/androidTest/java/com/takahashirinta/ncrust/probe/BiliV310ProbeTest.kt` |
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **B站登录 / 大会员 / FLAC**：匿名已覆盖「搜索 → 播放 → 歌词」全链路；登录把风险从出口 IP 升级到
+  **用户自己的账号**，只换来收藏夹 / 投币 / FLAC。UI 上如实写「无需登录」「最高 320K（匿名）」，
+  **不承诺**「登录可得无损」（匿名环境无法确认登录后能否拿到 FLAC）。
+- **B站收藏夹同步**：匿名不可用（`code:4511003 用户未登录`）⇒ `LocalPlaylistRepository.loadRemoteSongs`
+  对 B站返回 `null`，收藏页分组仍是网易云 + QQ 两组（`groupPlaylistsBySource` 默认源改为 `loginSources`）。
+- **视频画面模式**：本版只取 DASH **音轨**，不取视频轨、不做画面渲染。
+- **B站音频区歌单/榜单作为发现源**：`menu/rank` / `menu/hit` / `song/of-menu` 实测匿名可用，
+  但没有「我的歌单」语义可依附，本版不做入口。
+- **B站视频搜索翻页**：只取第一页。
+- **AMLL TTML / 逐字歌词用于 B站**：音频区只给行级 LRC，无逐字/翻译/TTML 数据源 ⇒ 走既有诚实降级。
+- **跨源匹配含 B站**：`CatalogAggregator` 的 5 处 B站分支一律返回空列表（B站标题常年带【】与翻唱标注，
+  假阳性会直接表现为「单曲页推荐了另一首歌」）；写成**显式分支**而不是 `else`，将来加音源时编译器会再指出来。
+- **真·FFT**：v3.0.0 的判决未被推翻（数据源可靠、性能未被证明），本版不翻案。
+
+### 本版新增的未验证项（与 `REPORT.md` 的诚实清单一致）
+
+- **ExoPlayer 取 B站 CDN 流未验证**（本版最大的空白）：四种 media3 数据源 × 七种头组合在同设备上**全部 403**，
+  而同设备**第一次**裸请求带 Referer 是 206 ⇒ 判定为**出口级风控/限流**，不是某个头写错。
+  **所以本版不声称「B站可以播放」**，只声称「取链（URL / TTL / 音质）已实测通过」。
+  复现：在未被限流的出口上重跑 `BiliV310ProbeTest#probeExoPlayerCanPlayBiliStream`（403 时打印 SKIP，其它错误才变红）。
+- **并行之后「点按 → 出声」快了多少毫秒：完全未采集**（本轮只有 JVM 单测与探针，没有端到端延迟对照）；
+  并发上限 4 是否最优（vs 6）、列表预取的流量与解码影响、移动数据 5→2 省下的字节数、预取 LRC 的命中率均未采集。
+- **B站歌词不进 `LyricsCache`**（那张表存的是网易云字段形状）⇒ 每次播放现取，**断网无词**。
+- **B站媒体流不参与「离线下载」承诺**：`OfflineUrlStore` 没有 TTL 字段而 B站直链 2 小时轮换；
+  播放期 `SimpleCache` 靠**内容寻址键**命中。⚠️ **未实测**：`OfflineLibrary.record` 的 key 由
+  `OfflineKeys.keyOf(uri)` 算出，与 `SimpleCache` 给 B站用的 `BiliCdn.cacheKeyFor` **不是同一个函数**，
+  两者对账后 B站曲目能否留在离线曲目清单里没有验证过。
+- **老版本 App 读到 `"bilibili"` 音源 key 的真实表现未实测**（源码审计：`fromKey` 回落 `NETEASE` ⇒
+  可能把一首 B站曲目当网易云同号歌取链；设备上未复现）。
+- **Wbi 密钥跨天轮换未实测**（本次会话只观测到一个 key 值，「6h TTL + `-352` 强制刷新一次」是否够用需跨天长跑）。
+- **`search_type=au` / `song` 是否也返回 `-1200` 无原始证据**（只采到 `music` / `audio` / `foobar` 三份）。
+- **`type=-1`（30 秒试听）未复现**（23 首样本全是完整曲，但实现里保留了防御分支）。
+- **匿名无 FLAC**：`quality=3` 静默降级为 320K（`type:2`，ffprobe 实测 321584 bps），`qualities[]` 里根本没有 `type:3`。
+- **腾讯 / 网易以外没有真机播放验证**：真机 S6 上只跑了 release 包的**冷启冒烟**（安装 → 冷启 → 无崩溃 →
+  首页三请求 → 截图），B站曲目的真机播放没有验证过。
+- **UI 自动化端到端尝试失败**（`uiautomator` 定位不到底部导航「搜索」入口，脚本点在空坐标上）——
+  记录如实保留在 `docs/verification/v3.1.0/verification/ui-automation-attempt/`，**没有被包装成「通过」**；
+  替代方案是仪器化探针 + release 冒烟。
+- **`/x/player/wbi/playurl` 的 412 是出口相关的**：本机出口四种组合全 412，不代表所有出口都 412。
