@@ -54,7 +54,6 @@ import com.takahashirinta.ncrust.ui.i18n.formatCacheBytes
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.languagePresets
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
-import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import com.takahashirinta.ncrust.ui.settings.PREFS_SETTINGS
 import com.takahashirinta.ncrust.ui.settings.SettingsEntry
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
@@ -62,6 +61,7 @@ import com.takahashirinta.ncrust.ui.settings.SettingsRegistry
 import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
 import com.takahashirinta.ncrust.ui.settings.SettingsRowKind
 import com.takahashirinta.ncrust.ui.settings.SettingsVisibility
+import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import com.takahashirinta.ncrust.ui.theme.AccentSource
 import com.takahashirinta.ncrust.ui.theme.AccentSourceSelector
 import com.takahashirinta.ncrust.ui.theme.BackgroundImageManager
@@ -101,7 +101,7 @@ import kotlinx.coroutines.withContext
  * 每一项的读写仍然走**既有入口**（`KeepScreenOnSetting.write` / `RotationSetting.write` /
  * `VisualizerSetting.write` / `PageTransitionSetting.writeEnabled`（状态提升在 MainScreen）/
  * `ArtistReco.setEnabled` / `LyricsDisplayPrefs.*` 与 `PlayerViewModel.setXxx` /
- * `VisualizerPrefs.*` / `OfflineAudioCache.setMaxMb`），`wifi_quality` / `mobile_quality` /
+ * `MotionPrefs.*` / `OfflineAudioCache.setMaxMb`），`wifi_quality` / `mobile_quality` /
  * `gapless_playback` / `lyrics_translation` / `lyrics_in_media_session` **继续用原来的裸
  * `prefs.edit()`**（迁移时**没有**顺手给它们补包装 —— 那等于新增第三套语义）。
  * `lyrics_word_animation` 的回显走 `LyricsDisplayPrefs.readWordAnimation`（读路径带一次性迁移），
@@ -224,18 +224,17 @@ private fun SettingsPreferenceGroupPage(
     var lyricsRomanization by remember { mutableStateOf(LyricsDisplayPrefs.readRomanization(prefs)) }
     var dynamicFontEnabled by remember { mutableStateOf(LyricsDisplayPrefs.readDynamicFont(prefs)) }
 
-    // ── 波形效果分级（v2.8.0 新增 7 键）────────────────────────────────────────────
+    // ── 统一「动效强度」（v2.9.0 新增 4 键）──────────────────────────────────────
     // 档位回显 = 显式选择优先，否则用**设备静态判据解析出来的默认档**
     // （低端机 = 简洁档）。解析只读，绝不写回盘；「用户没选过」这个信息必须保留
-    // （VisualizerPrefs.hasExplicitTier）。写入只发生在用户真的选了档位那一刻。
-    var waveformTier by remember {
-        mutableIntStateOf(VisualizerPrefs.readTier(prefs, VisualizerPrefs.deviceDefaultTier(context)))
+    // （MotionPrefs.hasExplicitTier）。写入只发生在用户真的选了档位那一刻。
+    //
+    // v2.8.0 的 5 个炫技细分开关**不再是设置项**：它们已合并进档位，registry 里标了
+    // `internal`（不渲染），所以这里不再需要它们的状态变量。
+    var motionTier by remember {
+        mutableIntStateOf(MotionPrefs.readTier(prefs, MotionPrefs.deviceDefaultTier(context)))
     }
-    var waveformShowcase by remember { mutableStateOf(VisualizerPrefs.readShowcase(prefs)) }
-    var waveformShockwave by remember { mutableStateOf(VisualizerPrefs.readShockwave(prefs)) }
-    var waveformParticles by remember { mutableStateOf(VisualizerPrefs.readParticles(prefs)) }
-    var waveformPerspective by remember { mutableStateOf(VisualizerPrefs.readPerspective(prefs)) }
-    var waveformDrag by remember { mutableStateOf(VisualizerPrefs.readTapInteraction(prefs)) }
+    var uiMotionEnabled by remember { mutableStateOf(MotionPrefs.readUiMotionEnabled(prefs)) }
 
     // ── 存储与缓存 ────────────────────────────────────────────────────────────────
     var offlineCacheMb by remember { mutableIntStateOf(OfflineAudioCache.maxMb(context)) }
@@ -286,8 +285,8 @@ private fun SettingsPreferenceGroupPage(
      */
     val read: (String) -> Any? = { key ->
         when (key) {
-            "visualizer_tier" -> waveformTier
-            "visualizer_showcase" -> waveformShowcase
+            "motion_tier" -> motionTier
+            "ui_motion_enabled" -> uiMotionEnabled
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
             "lyrics_word_animation" -> lyricsWordAnimation
             else -> prefs.all[key]
@@ -309,11 +308,7 @@ private fun SettingsPreferenceGroupPage(
         "lyrics_ttml_first" -> lyricsTtmlFirst
         "lyrics_romanization" -> lyricsRomanization
         "lyrics_dynamic_font" -> dynamicFontEnabled
-        "visualizer_showcase" -> waveformShowcase
-        "visualizer_shockwave" -> waveformShockwave
-        "visualizer_particles" -> waveformParticles
-        "visualizer_perspective" -> waveformPerspective
-        "visualizer_drag" -> waveformDrag
+        "ui_motion_enabled" -> uiMotionEnabled
         else -> false
     }
 
@@ -380,26 +375,10 @@ private fun SettingsPreferenceGroupPage(
                 dynamicFontEnabled = value
                 playerViewModel.setDynamicLyricFont(value)
             }
-            // v2.8.0 波形：VisualizerPrefs.setXxx（它同时刷新进程内 effects 镜像）
-            "visualizer_showcase" -> {
-                waveformShowcase = value
-                VisualizerPrefs.setShowcase(context, value)
-            }
-            "visualizer_shockwave" -> {
-                waveformShockwave = value
-                VisualizerPrefs.setShockwave(context, value)
-            }
-            "visualizer_particles" -> {
-                waveformParticles = value
-                VisualizerPrefs.setParticles(context, value)
-            }
-            "visualizer_perspective" -> {
-                waveformPerspective = value
-                VisualizerPrefs.setPerspective(context, value)
-            }
-            "visualizer_drag" -> {
-                waveformDrag = value
-                VisualizerPrefs.setTapInteraction(context, value)
+            // v2.9.0：「界面动效」总开关（MotionPrefs 是唯一读写入口，它会刷新进程内镜像）。
+            "ui_motion_enabled" -> {
+                uiMotionEnabled = value
+                MotionPrefs.setUiMotionEnabled(context, value)
             }
         }
     }
@@ -462,8 +441,10 @@ private fun SettingsPreferenceGroupPage(
 
                     SettingsRowKind.TIER_DROPDOWN -> item(key = entry.id) {
                         MetroDropdownRow(
-                            label = strings.waveform.visualizerTierLabel,
-                            selectedIndex = waveformTier,
+                            // v2.9.0：标题 / 说明都改成「动效强度」——它现在同时驱动波形与界面动效。
+                            // 三个候选名沿用 v2.8.0 的「简洁 / 精致 / 炫技」（语义没变，只是覆盖面变大）。
+                            label = strings.waveform.motionIntensityLabel,
+                            selectedIndex = motionTier,
                             options = listOf(
                                 strings.waveform.visualizerTierSimple,
                                 strings.waveform.visualizerTierRefined,
@@ -471,10 +452,12 @@ private fun SettingsPreferenceGroupPage(
                             ),
                             // 说明里写清「低端设备默认简洁档」：用户看到的「简洁」可能是设备判据
                             // 解析出来的默认值，不是他自己选的。
-                            hint = strings.waveform.visualizerTierDescription,
+                            hint = strings.waveform.motionIntensityDescription,
                             onSelect = {
-                                waveformTier = it
-                                VisualizerPrefs.setTier(context, it)
+                                motionTier = it
+                                // 走 MotionPrefs：它同时**重置自动降级水位**
+                                // （用户显式改档位永远优先于自动降级，见 MotionDegrade 的 KDoc）。
+                                MotionPrefs.setTier(context, it)
                             }
                         )
                     }
@@ -793,6 +776,8 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
     "lyrics_ttml_first" -> strings.lyricsTtmlFirstLabel
     "lyrics_romanization" -> strings.lyricsRomanizationLabel
     "lyrics_dynamic_font" -> strings.dynamicFontLabel
+    "motion_tier" -> strings.waveform.motionIntensityLabel           // titleKey = waveform.motionIntensityLabel
+    "ui_motion_enabled" -> strings.waveform.uiMotionLabel            // titleKey = waveform.uiMotionLabel
     "theme_mode" -> strings.themeModeSectionTitle
     "theme_color_index" -> strings.themeSectionTitle
     "accent_source" -> strings.accentSourceSectionTitle
@@ -822,11 +807,7 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when 
     "lyrics_in_media_session" -> strings.lyricsInMediaSessionHint
     "lyrics_romanization" -> strings.lyricsRomanizationHint
     "lyrics_dynamic_font" -> strings.dynamicFontHint
-    "visualizer_showcase" -> strings.waveform.visualizerShowcaseDescription
-    "visualizer_shockwave" -> strings.waveform.visualizerShockwaveDescription
-    "visualizer_particles" -> strings.waveform.visualizerParticlesDescription
-    "visualizer_perspective" -> strings.waveform.visualizerPerspectiveDescription
-    "visualizer_drag" -> strings.waveform.visualizerDragDescription
+    "ui_motion_enabled" -> strings.waveform.uiMotionDescription
     else -> null
 }
 

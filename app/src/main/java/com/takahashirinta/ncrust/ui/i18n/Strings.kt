@@ -1350,6 +1350,16 @@ data class WaveformStrings(
 
     /** 「亮度 = 时间新旧，不是频谱」的说明。 */
     val visualizerNotSpectrumHint: String,
+
+    // v2.9.0：统一「动效强度」——一个档位同时驱动波形与界面动效。
+    /** 档位标题：v2.8.0 的「波形效果档位」升级为「动效强度」。 */
+    val motionIntensityLabel: String,
+    /** 档位说明。**必须**同时写清三件事：①三档各开什么（波形 + 界面动效）；②低端设备默认简洁档；③界面动效另有总开关。 */
+    val motionIntensityDescription: String,
+    /** 「界面动效」总开关标题（A 档基础界面动效默认开，这里可以整关）。 */
+    val uiMotionLabel: String,
+    /** 总开关说明。**必须**写明：关掉 = 背景回纯色、无呼吸/脉冲/粒子，性能最优；且**不影响波形**档位。 */
+    val uiMotionDescription: String,
 )
 
 /**

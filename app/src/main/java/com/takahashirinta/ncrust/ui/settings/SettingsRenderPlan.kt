@@ -38,7 +38,7 @@ enum class SettingsRowKind {
     /** 音质档位下拉（8 档 + FLAC 不支持提示 + 立即生效）。 */
     QUALITY_DROPDOWN,
 
-    /** 波形效果档位下拉（简洁 / 精致 / 炫技；缺 key 时回显**解析出的设备默认档**）。 */
+    /** 动效强度下拉（简洁 / 精致 / 炫技；缺 key 时回显**解析出的设备默认档**）。v2.9.0 起同时驱动波形与界面动效。 */
     TIER_DROPDOWN,
 
     /** 主题模式三选一（跟随系统 / 深色 / 浅色）。 */
@@ -159,7 +159,8 @@ object SettingsRenderPlan {
 
             // 播放与音质
             "wifi_quality", "mobile_quality" -> SettingsRowKind.QUALITY_DROPDOWN
-            "visualizer_tier" -> SettingsRowKind.TIER_DROPDOWN
+            // v2.9.0：波形档位下拉升级为**统一动效强度**下拉（同一个 RowKind，文案与键都换了）。
+            "motion_tier" -> SettingsRowKind.TIER_DROPDOWN
 
             // 歌词：字号是「有限档位」下拉（不是连续值）
             "lyrics_font_scale" -> SettingsRowKind.DROPDOWN

@@ -114,6 +114,11 @@ val en = Strings(
         visualizerDragLabel = "Tap to switch colouring",
         visualizerDragDescription = "Tap the strip to switch between the flowing gradient and time-ordered tinting. Dragging is not implemented in this version (gesture conflicts were not verified on a device).",
         visualizerNotSpectrumHint = "Brightness shows recency, not frequency: this version has no frequency data and does not separate lows/mids/highs.",
+        // v2.9.0: motion intensity (unified tier) + interface motion master switch.
+        motionIntensityLabel = "Motion intensity",
+        motionIntensityDescription = "One setting drives both the waveform and the interface motion. Simple: rounded bars with peak hold, and only the basic interface motion (blurred cover backdrop, breathing background, cover elevation and cross-fade). Refined: adds a flowing gradient, top dots and breathing to the waveform, plus a full-screen waveform, lyric pulse, beat pulse and parallax to the interface. Showcase: adds shockwave, particles, 3D and tap to the waveform, plus background particles, halo bloom and 3D cover rotation to the interface. Low-end devices (low RAM / 3 GB class / Android 7.x) start at Simple.",
+        uiMotionLabel = "Interface motion",
+        uiMotionDescription = "Controls the player's interface motion (backdrop blur, breathing, lyric pulse, beat pulse, particles and so on). It does not affect the waveform tier. When off, the backdrop returns to a solid colour and no per-frame effect runs — the cheapest option. If frame times stay over budget the app first trims interface motion, then lowers the waveform tier.",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "Previous",

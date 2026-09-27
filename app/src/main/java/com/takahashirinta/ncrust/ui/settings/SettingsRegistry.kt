@@ -18,6 +18,9 @@ import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.SweepEasing
 import com.takahashirinta.ncrust.player.QualityLadder
+import com.takahashirinta.ncrust.ui.player.motion.MotionDegrade
+import com.takahashirinta.ncrust.ui.player.motion.MotionIntensity
+import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 
 /** 主设置文件（与其余设置项一致：`LyricsDisplayPrefs.PREFS_NAME`）。 */
 const val PREFS_SETTINGS = "ncrust_settings"
@@ -160,6 +163,22 @@ data class SettingsEntry(
     val prefsFile: String = PREFS_SETTINGS,
     /** v2.8.0「波形可视化分级」新增项（迁移前不存在这个键）。 */
     val isNewInV280: Boolean = false,
+    /**
+     * v2.9.0「统一动效强度」新增项（v2.8.0 的盘上不存在这些键）。
+     *
+     * 与 [isNewInV280] 并列而不是复用它：那两个断言各自钉住**一个版本**新增了什么，
+     * 合并成一个"新键"标志会让「v2.9.0 顺手夹带了无关功能项」不再被机械挡住。
+     */
+    val isNewInV290: Boolean = false,
+    /**
+     * v2.9.0 起**不再参与渲染**、只作为迁移源保留的 v2.8.0 键。
+     *
+     * 判据是机械的：这批键必须同时满足 [isNewInV280] = true 与 [isInternal] = true，
+     * 由 `SettingsRegistryTest.v280KeysAreAllLegacyUnderV290` 逐键断言。
+     * 它存在的意义是让「哪些键属于旧模型」成为一份**可枚举**的清单 ——
+     * 下一个读到 `visualizer_showcase` 的人一眼能看出它已经不是开关了。
+     */
+    val legacyV290: Boolean = false,
     /** 代码/探针显式标注的「高级 / 实验性」（探针清单的「是否高级/实验性」列）。 */
     val isAdvanced: Boolean = false,
     /**
@@ -417,10 +436,15 @@ object SettingsRegistry {
             pref(
                 key = "visualizer_tier",
                 type = SettingsEntryType.CHOICE,
-                default = 1, // probe-waveform-tier.md §3.3：默认 T1；静态判据判低端机 → 0
+                default = 1, // 读路径默认仍由 VisualizerTier.defaultTier 解析（低端机 → 0）
                 group = SettingsGroup.PLAYBACK,
                 choices = listOf(0, 1, 2), // 0 = T0 简洁 / 1 = T1 精致 / 2 = T2 炫技
                 newInV280 = true,
+                // v2.9.0：**降级为迁移源**。统一「动效强度」接管渲染之后，这个键只在
+                // `MotionPrefs.migrate` 里被读一次（搬进 `motion_tier`）。留着不删是纪律
+                // （回滚安装不丢用户数据），但不能有 UI 入口 —— 两个键都能改档位就是双轨。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -431,6 +455,9 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -441,6 +468,9 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -451,6 +481,9 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -461,6 +494,9 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -471,6 +507,9 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
             )
         )
         add(
@@ -482,6 +521,67 @@ object SettingsRegistry {
                 advanced = true,
                 internal = true,
                 newInV280 = true,
+                // v2.9.0：迁移源（`MotionPrefs` 用的是自己的 `motion_version` 水位，
+                // 这个键保留只为「不丢项」与回滚）。原本就没有 UI 入口，标 legacy 是为了
+                // 让"哪些键属于 v2.8.0 的旧模型"在一处可枚举。
+                legacyV290 = true,
+            )
+        )
+
+        // ── v2.9.0 新增：统一「动效强度」（4 键）─────────────────────────────────────
+        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
+        // **不实现任何读写**（读写仍走 MotionPrefs.setTier / setUiMotionEnabled）。
+        add(
+            pref(
+                key = "motion_tier",
+                type = SettingsEntryType.CHOICE,
+                // 默认值同样是**解析出来的**（`MotionPrefs.readTier` 缺 key 时用设备判据），
+                // 这里写精致档只是为了回显/断言的期望值，与 v2.8.0 的口径一致。
+                default = MotionIntensity.REFINED,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionIntensityLabel",
+                subtitleKey = "waveform.motionIntensityDescription",
+                choices = listOf(
+                    MotionIntensity.SIMPLE,
+                    MotionIntensity.REFINED,
+                    MotionIntensity.SHOWCASE,
+                ),
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "ui_motion_enabled",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_UI_MOTION, // true（铁律 22：A 档默认开，但保留总开关）
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.uiMotionLabel",
+                subtitleKey = "waveform.uiMotionDescription",
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_degrade_level",
+                type = SettingsEntryType.INFO,
+                default = MotionDegrade.NONE,
+                group = SettingsGroup.PLAYBACK,
+                advanced = true,
+                internal = true, // 派生状态：帧时间实测写它，没有 UI 入口
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_version",
+                type = SettingsEntryType.INFO,
+                // 缺 key 的读数是 `VERSION_PRE_V290`（= 0 = 「还没搬过」），
+                // 不是「搬到 0」—— 这个两义性与 v1.9.3 的「缺失 vs 空」同源，必须写清。
+                default = MotionPrefs.VERSION_PRE_V290,
+                group = SettingsGroup.PLAYBACK,
+                advanced = true,
+                internal = true,
+                newInV290 = true,
             )
         )
 
@@ -764,6 +864,8 @@ object SettingsRegistry {
         prefsFile: String = PREFS_SETTINGS,
         secondaryGroup: SettingsGroup? = null,
         newInV280: Boolean = false,
+        newInV290: Boolean = false,
+        legacyV290: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -778,6 +880,8 @@ object SettingsRegistry {
         choices = choices,
         prefsFile = prefsFile,
         isNewInV280 = newInV280,
+        isNewInV290 = newInV290,
+        legacyV290 = legacyV290,
         isAdvanced = advanced,
         isInternal = internal,
     )

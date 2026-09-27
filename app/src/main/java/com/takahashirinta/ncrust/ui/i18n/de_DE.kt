@@ -114,6 +114,11 @@ val deDE = Strings(
         visualizerDragLabel = "Tippen wechselt die Färbung",
         visualizerDragDescription = "Ein Tippen auf den Streifen wechselt zwischen fließendem Verlauf und zeitlich geordneter Färbung. Ziehen ist in dieser Version nicht umgesetzt (Gestenkonflikte wurden nicht auf einem Gerät geprüft).",
         visualizerNotSpectrumHint = "Die Helligkeit zeigt die Aktualität, kein Spektrum: Diese Version hat keine Frequenzdaten und trennt keine Tiefen, Mitten oder Höhen.",
+        // v2.9.0: Bewegungsintensität (vereinte Stufe) + Hauptschalter für die Oberflächenanimation.
+        motionIntensityLabel = "Bewegungsintensität",
+        motionIntensityDescription = "Eine Stufe steuert zugleich die Wellenform und die Oberflächenanimation. Einfach: abgerundete Balken mit Peak-Hold, von der Oberflächenanimation bleibt nur das Grundlegende (unscharfer Cover-Hintergrund, atmender Hintergrund, Anheben des Covers und Überblenden beim Titelwechsel). Verfeinert: zusätzlich fließender Verlauf, Lichtpunkte auf den Balkenspitzen und Atmen in der Wellenform, dazu Vollbild-Wellenform, Liedtext-Puls, Beat-Puls und Parallaxe in der Oberfläche. Showcase: zusätzlich Schockwelle, Partikel, 3D und Tippen in der Wellenform, dazu Hintergrundpartikel, Halo-Ausbreitung und 3D-Drehung des Covers in der Oberfläche. Schwache Geräte (wenig RAM / 3-GB-Klasse / Android 7.x) starten mit Einfach.",
+        uiMotionLabel = "Oberflächenanimation",
+        uiMotionDescription = "Steuert die Oberflächenanimation des Players (Hintergrundunschärfe, Atmen, Liedtext-Puls, Beat-Puls, Partikel und so weiter); die Wellenform-Stufe bleibt davon unberührt. Ausgeschaltet kehrt der Hintergrund zu einer Volltonfarbe zurück und es läuft keine Animation pro Frame – die günstigste Variante. Bleiben die Frame-Zeiten über dem Budget, reduziert die App zuerst automatisch die Oberflächenanimation und senkt danach die Wellenform-Stufe.",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "Vorheriger",
