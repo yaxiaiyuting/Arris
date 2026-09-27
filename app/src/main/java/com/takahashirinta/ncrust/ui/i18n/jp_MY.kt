@@ -13,6 +13,21 @@ val jpMY = Strings(
     back = "戻",
 
     settings = SettingsStrings(
+        // v2.8.0：二段 設定 の 七 枚 の 群 札（順 は SettingsGroup の 宣言 に 同じ）。
+        settingsGroupAccountTitle = "口座 と 入",
+        settingsGroupAccountSubtitle = "NetEase と QQ Music の 口座",
+        settingsGroupGeneralTitle = "一般",
+        settingsGroupGeneralSubtitle = "言語、廻轉、推薦",
+        settingsGroupAppearanceTitle = "主題 と 動效",
+        settingsGroupAppearanceSubtitle = "主題色、配色、頁面 切替 の 動效",
+        settingsGroupPlaybackTitle = "再世 と 音質",
+        settingsGroupPlaybackSubtitle = "再世 の 行、音質 の 段、音聲 波形",
+        settingsGroupLyricsTitle = "歌詞",
+        settingsGroupLyricsSubtitle = "譯、逐字、表示 の 様",
+        settingsGroupStorageTitle = "貯 と 藏",
+        settingsGroupStorageSubtitle = "貯 音 と 久良 の 表示",
+        settingsGroupAboutTitle = "Ncrust 之事",
+        settingsGroupAboutSubtitle = "版 と 項目 の 情報",
         qualitySectionTitle = "音質 設定",
         wifiQualityLabel = "WiFi 環境",
         mobileQualityLabel = "移動 環境",

@@ -13,6 +13,22 @@ val en = Strings(
     back = "Back",
 
     settings = SettingsStrings(
+        // v2.8.0: the 7 top-level group cards of the two-level settings menu
+        // (order = SettingsGroup declaration order).
+        settingsGroupAccountTitle = "Account & Sign-in",
+        settingsGroupAccountSubtitle = "NetEase & QQ Music accounts",
+        settingsGroupGeneralTitle = "General",
+        settingsGroupGeneralSubtitle = "Language, rotation, recommendations",
+        settingsGroupAppearanceTitle = "Appearance & Motion",
+        settingsGroupAppearanceSubtitle = "Theme, colors, transitions",
+        settingsGroupPlaybackTitle = "Playback & Quality",
+        settingsGroupPlaybackSubtitle = "Playback, quality, visualizer",
+        settingsGroupLyricsTitle = "Lyrics",
+        settingsGroupLyricsSubtitle = "Translation, word-by-word, styling",
+        settingsGroupStorageTitle = "Storage & Cache",
+        settingsGroupStorageSubtitle = "Offline cache & library display",
+        settingsGroupAboutTitle = "About",
+        settingsGroupAboutSubtitle = "Version & project info",
         qualitySectionTitle = "Audio Quality",
         wifiQualityLabel = "On Wi-Fi",
         mobileQualityLabel = "On Mobile Data",

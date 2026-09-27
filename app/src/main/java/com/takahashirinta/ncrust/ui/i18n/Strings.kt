@@ -26,7 +26,7 @@ package com.takahashirinta.ncrust.ui.i18n
  *
  * | 组 | 条数 | 功能面 | 主要消费文件 |
  * |---|---|---|---|
- * | [SettingsStrings] | 64 | 设置页及其卫星对话框 | `ui/screen/UserScreen.kt` 等 |
+ * | [SettingsStrings] | 64 → **78** | 设置页及其卫星对话框（v2.8.0 加 14 条分组卡片文案） | `ui/screen/UserScreen.kt` 等 |
  * | [AboutStrings] | 25 | 关于页 | `ui/screen/AboutScreen.kt` |
  * | [PlayerUiStrings] | 31 | 播放器界面（传输控件 / 歌词页 / 队列面板） | `ui/player/` 下的若干文件 |
  *
@@ -580,6 +580,26 @@ data class Strings(
     val batteryAllow: String get() = settings.batteryAllow
     val batteryLater: String get() = settings.batteryLater
 
+    // ---------- 转发属性（v2.8.0）：二级菜单分组文案 → [SettingsStrings] ----------
+    // 这 14 条是**新文案**（没有老调用点要保住），补转发属性是为了让
+    // `SettingsRegistry` 里 `SettingsGroup.titleKey` / `subtitleKey` 存的**裸路径**
+    // （`"settingsGroupAccountTitle"`）与组路径（`"settings.settingsGroupAccountTitle"`）
+    // 都能解析 —— 该文件只存字符串、不做编译期校验，少一条就会渲染成空白卡片。
+    val settingsGroupAccountTitle: String get() = settings.settingsGroupAccountTitle
+    val settingsGroupAccountSubtitle: String get() = settings.settingsGroupAccountSubtitle
+    val settingsGroupGeneralTitle: String get() = settings.settingsGroupGeneralTitle
+    val settingsGroupGeneralSubtitle: String get() = settings.settingsGroupGeneralSubtitle
+    val settingsGroupAppearanceTitle: String get() = settings.settingsGroupAppearanceTitle
+    val settingsGroupAppearanceSubtitle: String get() = settings.settingsGroupAppearanceSubtitle
+    val settingsGroupPlaybackTitle: String get() = settings.settingsGroupPlaybackTitle
+    val settingsGroupPlaybackSubtitle: String get() = settings.settingsGroupPlaybackSubtitle
+    val settingsGroupLyricsTitle: String get() = settings.settingsGroupLyricsTitle
+    val settingsGroupLyricsSubtitle: String get() = settings.settingsGroupLyricsSubtitle
+    val settingsGroupStorageTitle: String get() = settings.settingsGroupStorageTitle
+    val settingsGroupStorageSubtitle: String get() = settings.settingsGroupStorageSubtitle
+    val settingsGroupAboutTitle: String get() = settings.settingsGroupAboutTitle
+    val settingsGroupAboutSubtitle: String get() = settings.settingsGroupAboutSubtitle
+
     // ---------- 转发属性（v2.5.3 · P0）：关于页 → [AboutStrings] ----------
     // 与 v2.0.0 · HF1 的 [OfflineStrings] 同一套做法：搬家不改调用点。
     val aboutTitle: String get() = about.aboutTitle
@@ -1104,9 +1124,46 @@ data class MotionStrings(
  * 老调用点（`strings.xxx`）由 [Strings] 类体里的转发属性保住，一条都不用改；
  * 新代码可以直接写 `strings.settings.xxx`。
  *
+ * ## v2.8.0：二级菜单的 14 条分组文案（64 → 78）
+ *
+ * 设置界面改成「一级分组卡片 → 二级页」，本组开头新增 **7 组 × (标题 + 副标题)**。
+ * 字段名逐字等于 `ui/settings/SettingsRegistry.kt` 里 `SettingsGroup.titleKey` /
+ * `subtitleKey` 的取值（那边只存**路径字符串**、不 import 本文件，改名必须两边同步改，
+ * 否则卡片会渲染成空白）；组顺序 = `SettingsGroup` 的声明顺序 =
+ * ACCOUNT / GENERAL / APPEARANCE / PLAYBACK / LYRICS / STORAGE / ABOUT。
+ *
+ * 为什么进组而不是进主构造器：外层 135 被
+ * `StringsConstructorBudgetTest` 的精确值断言钉住，而组预算 120 还剩 42 ——
+ * 这正是 v2.5.3 拆组要买到的东西。加完是 `1(this) + 78 = 79` 个 dex 槽（距 255 还有 176）。
+ *
  * 参数数量监控见 `StringsConstructorBudgetTest`。
  */
 data class SettingsStrings(
+
+    // ---------- v2.8.0：设置界面二级菜单的 7 个一级分组（顺序 = SettingsGroup 声明顺序） ----------
+    // 卡片标题＝xxxTitle、卡片副标题＝xxxSubtitle；副标题是**内容清单**（「语言、旋转、推荐」），
+    // 不是标题的同义改写 —— 两行写成同一句话用户会看到重复的一行字（v2.1.3 规则 10）。
+    /** 账号与登录：网易云 / QQ 音乐两个互相独立的账号。 */
+    val settingsGroupAccountTitle: String,
+    val settingsGroupAccountSubtitle: String,
+    /** 通用：语言、旋转、音乐人推荐、后台运行。 */
+    val settingsGroupGeneralTitle: String,
+    val settingsGroupGeneralSubtitle: String,
+    /** 外观与动效：主题模式 / 主题色 / 主题色来源 / 页面切换动效 / 自定义背景。 */
+    val settingsGroupAppearanceTitle: String,
+    val settingsGroupAppearanceSubtitle: String,
+    /** 播放与音质：音质档位、播放行为、波形可视化（含 v2.8.0 新增的波形分级）。 */
+    val settingsGroupPlaybackTitle: String,
+    val settingsGroupPlaybackSubtitle: String,
+    /** 歌词：翻译、逐字、字号、TTML、音译、动态字号。 */
+    val settingsGroupLyricsTitle: String,
+    val settingsGroupLyricsSubtitle: String,
+    /** 存储与缓存：离线缓存上限、库页显示偏好、清理入口。 */
+    val settingsGroupStorageTitle: String,
+    val settingsGroupStorageSubtitle: String,
+    /** 关于：只读入口（本分组没有任何 prefs 键）。 */
+    val settingsGroupAboutTitle: String,
+    val settingsGroupAboutSubtitle: String,
 
     // User screen — sections
     val qualitySectionTitle: String,

@@ -13,6 +13,22 @@ val ruRU = Strings(
     back = "Назад",
 
     settings = SettingsStrings(
+        // v2.8.0: 7 карточек-групп двухуровневого меню настроек
+        // (порядок = порядок объявления SettingsGroup).
+        settingsGroupAccountTitle = "Аккаунт и вход",
+        settingsGroupAccountSubtitle = "Аккаунты NetEase и QQ Music",
+        settingsGroupGeneralTitle = "Общие",
+        settingsGroupGeneralSubtitle = "Язык, поворот, рекомендации",
+        settingsGroupAppearanceTitle = "Внешний вид и анимация",
+        settingsGroupAppearanceSubtitle = "Тема, цвета, переходы",
+        settingsGroupPlaybackTitle = "Воспроизведение и качество",
+        settingsGroupPlaybackSubtitle = "Воспроизведение, качество, визуализация",
+        settingsGroupLyricsTitle = "Текст песен",
+        settingsGroupLyricsSubtitle = "Перевод, пословно, оформление",
+        settingsGroupStorageTitle = "Хранилище и кэш",
+        settingsGroupStorageSubtitle = "Офлайн-кэш и вид библиотеки",
+        settingsGroupAboutTitle = "О программе",
+        settingsGroupAboutSubtitle = "Версия и информация о проекте",
         qualitySectionTitle = "Качество звука",
         wifiQualityLabel = "В сети Wi-Fi",
         mobileQualityLabel = "В мобильной сети",

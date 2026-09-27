@@ -13,6 +13,22 @@ val deDE = Strings(
     back = "Zurück",
 
     settings = SettingsStrings(
+        // v2.8.0: die 7 Gruppenkarten des zweistufigen Einstellungsmenüs
+        // (Reihenfolge = Deklarationsreihenfolge von SettingsGroup).
+        settingsGroupAccountTitle = "Konto & Anmeldung",
+        settingsGroupAccountSubtitle = "NetEase- und QQ-Music-Konten",
+        settingsGroupGeneralTitle = "Allgemein",
+        settingsGroupGeneralSubtitle = "Sprache, Drehung, Empfehlungen",
+        settingsGroupAppearanceTitle = "Darstellung & Bewegung",
+        settingsGroupAppearanceSubtitle = "Farbschema, Akzentfarben, Übergänge",
+        settingsGroupPlaybackTitle = "Wiedergabe & Qualität",
+        settingsGroupPlaybackSubtitle = "Wiedergabe, Qualität, Visualisierung",
+        settingsGroupLyricsTitle = "Liedtext",
+        settingsGroupLyricsSubtitle = "Übersetzung, Wort für Wort, Darstellung",
+        settingsGroupStorageTitle = "Speicher & Cache",
+        settingsGroupStorageSubtitle = "Offline-Cache & Bibliotheksansicht",
+        settingsGroupAboutTitle = "Über",
+        settingsGroupAboutSubtitle = "Version & Projektinfo",
         qualitySectionTitle = "Audioqualität",
         wifiQualityLabel = "Im WLAN",
         mobileQualityLabel = "Bei mobilen Daten",

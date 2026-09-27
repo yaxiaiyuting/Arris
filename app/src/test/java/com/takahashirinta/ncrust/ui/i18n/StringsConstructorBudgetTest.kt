@@ -253,7 +253,9 @@ class StringsConstructorBudgetTest {
     @Test
     fun `v2_5_3 三个新组的规模被钉住`() {
         val expected = mapOf(
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 64,
+            // v2.8.0：SettingsStrings 64 → 78（二级菜单的 14 条分组文案，见下面那条 v2_8_0 用例）。
+            // AboutStrings / PlayerUiStrings 本版一条都没加。
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 78,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -439,6 +441,86 @@ class StringsConstructorBudgetTest {
             21,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaylistsStrings")),
         )
+    }
+
+    /**
+     * v2.8.0「设置界面二级菜单」：**14 条分组文案（7 组 × 标题 / 副标题）落进 `SettingsStrings`**。
+     *
+     * 这是分组机制的正向用法 —— 与 v2.6.0 的 4 条同一形状：外层 135 一个参数都没动
+     * （上面那条精确值断言照旧绿），14 条全部进组 ⇒ 组参数 **64 → 78**，
+     * `1(this) + 78 = 79` 个 dex 槽（距 255 还有 176；距组硬上限 120 还有 42）。
+     *
+     * 三条断言各自挡一种「不会编译失败」的事故：
+     *  - **八种语言都非空**：字段加了、某个语言的值忘了填（具名实参 + 默认值会让它静默）；
+     *  - **同一语言内 14 条互不撞词**：副标题直接抄标题 —— 卡片上两行一样的字，
+     *    用户会以为界面卡住了（v2.1.3 规则 10 的同一形状）；
+     *  - **每种语言至少有 2 种取值**：整块文案只改了文件名没改内容（回落成了同一份）。
+     *    这里刻意**不**要求 8 种全不同 —— 繁简同形词是真实存在的（见 `layoutCard` 那条注释）。
+     */
+    @Test
+    fun `v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用`() {
+        assertEquals(
+            "v2.8.0 的分组文案必须进 SettingsStrings —— 外层主构造器一个参数都不该加",
+            135,
+            primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
+        )
+        assertEquals(
+            "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
+            78,
+            primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
+        )
+        // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
+        assertEquals(79, dexSlots(78, false))
+
+        val fields: List<Pair<String, (SettingsStrings) -> String>> = listOf(
+            "settingsGroupAccountTitle" to { s: SettingsStrings -> s.settingsGroupAccountTitle },
+            "settingsGroupAccountSubtitle" to { s: SettingsStrings -> s.settingsGroupAccountSubtitle },
+            "settingsGroupGeneralTitle" to { s: SettingsStrings -> s.settingsGroupGeneralTitle },
+            "settingsGroupGeneralSubtitle" to { s: SettingsStrings -> s.settingsGroupGeneralSubtitle },
+            "settingsGroupAppearanceTitle" to { s: SettingsStrings -> s.settingsGroupAppearanceTitle },
+            "settingsGroupAppearanceSubtitle" to { s: SettingsStrings -> s.settingsGroupAppearanceSubtitle },
+            "settingsGroupPlaybackTitle" to { s: SettingsStrings -> s.settingsGroupPlaybackTitle },
+            "settingsGroupPlaybackSubtitle" to { s: SettingsStrings -> s.settingsGroupPlaybackSubtitle },
+            "settingsGroupLyricsTitle" to { s: SettingsStrings -> s.settingsGroupLyricsTitle },
+            "settingsGroupLyricsSubtitle" to { s: SettingsStrings -> s.settingsGroupLyricsSubtitle },
+            "settingsGroupStorageTitle" to { s: SettingsStrings -> s.settingsGroupStorageTitle },
+            "settingsGroupStorageSubtitle" to { s: SettingsStrings -> s.settingsGroupStorageSubtitle },
+            "settingsGroupAboutTitle" to { s: SettingsStrings -> s.settingsGroupAboutTitle },
+            "settingsGroupAboutSubtitle" to { s: SettingsStrings -> s.settingsGroupAboutSubtitle },
+        )
+        assertEquals("分组文案的字段数不对：7 组 × (标题 + 副标题)", 14, fields.size)
+
+        val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
+        presets.forEach { s ->
+            val values = fields.map { (_, get) -> get(s.settings) }
+            values.forEachIndexed { i, value ->
+                assertTrue("${fields[i].first} 为空", value.isNotBlank())
+            }
+            assertEquals(
+                "同一语言里 14 条分组文案有重复（副标题抄了标题？）：$values",
+                14,
+                values.distinct().size,
+            )
+        }
+        fields.forEach { (name, get) ->
+            val values = presets.map { get(it.settings) }
+            assertTrue(
+                "$name 的 8 种语言取值全同（疑似只改了文件名没改内容）：${values.first()}",
+                values.distinct().size >= 2,
+            )
+        }
+
+        // 转发属性（`Strings.settingsGroupXxx`）也必须在 —— `SettingsRegistry` 的
+        // `SettingsGroup.titleKey` / `subtitleKey` 存的是**裸路径字符串**，没有编译期校验。
+        presets.forEach { s ->
+            fields.forEach { (name, get) ->
+                val forward = Strings::class.java.methods.firstOrNull {
+                    it.parameterCount == 0 && it.name == "get" + name.replaceFirstChar { c -> c.uppercaseChar() }
+                }
+                assertNotNull("$name 的转发属性不存在（SettingsRegistry 的裸路径会解析不到）", forward)
+                assertEquals(name, get(s.settings), forward!!.invoke(s))
+            }
+        }
     }
 
     /**

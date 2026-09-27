@@ -203,7 +203,9 @@ class StringsMigrationTest {
     /** 三个新组的**组参数确实挂上了**，且条目数与分组表一致。 */
     @Test
     fun `三个新分组都被真正填充`() {
-        val expectedSizes = mapOf("settings" to 64, "about" to 25, "playerUi" to 31)
+        // v2.8.0：settings 64 → 78（二级菜单的 7 组 × 标题/副标题）。
+        // about / playerUi 本版没动 —— 这三个数只随各自的文案变动。
+        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->
