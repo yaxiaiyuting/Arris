@@ -8,12 +8,15 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,7 +41,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerFrameMonitor
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerTier
 import com.takahashirinta.ncrust.ui.player.waveform.WaveformEffectsState
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
@@ -345,6 +350,26 @@ fun AudioVisualizerBars(
             Modifier
         }
     }
+    // v2.8.0 · P1-A：帧时间监控（只用于**一次性**自动降级，见 VisualizerFrameMonitor 的 KDoc）。
+    // 注册条件三条，缺一不可：
+    //  1. 只在可视化**挂载**期间（本组件存在 = 挂载）⇒ 没挂载就没有监听器，不常驻；
+    //  2. 已经在简洁档就别注册了（没得降，注册只是白看帧）；
+    //  3. 已经自动降过一次就别注册了（永不恢复、也永不二次降级）。
+    // Activity 从 LocalContext 往上找；找不到（例如预览/测试宿主）就静默不监控。
+    val hostActivity = remember(context) { findHostActivity(context) }
+    val frameMonitorEnabled = effects.tier > VisualizerTier.SIMPLE && !effects.autoDowngraded
+    DisposableEffect(hostActivity, frameMonitorEnabled) {
+        val activity = hostActivity
+        if (!frameMonitorEnabled || activity == null) {
+            onDispose { }
+        } else {
+            val monitor = VisualizerFrameMonitor.start(activity) {
+                // 降级动作本身也在隔离边界里（写 prefs + 刷新状态都可能失败，失败就当没降）。
+                runCatching { VisualizerPrefs.applyAutoDowngrade(activity) }
+            }
+            onDispose { monitor?.stop() }
+        }
+    }
 
     LaunchedEffect(barCount, frameIntervalMs, effects) {
         val budgetNs = frameIntervalMs * 1_000_000L
@@ -464,6 +489,19 @@ private const val PERSPECTIVE_CAMERA_DISTANCE_FACTOR = 14f
 private fun Modifier.visualizerPerspective(density: Float): Modifier = graphicsLayer {
     rotationX = PERSPECTIVE_DEGREES
     cameraDistance = PERSPECTIVE_CAMERA_DISTANCE_FACTOR * density
+}
+
+/**
+ * 从 Compose 的 `LocalContext` 往上找宿主 Activity（帧时间监控要拿它的 `Window`）。
+ *
+ * 找不到就返回 `null`（Compose 预览 / 非 Activity 宿主 / 测试宿主）—— 监控静默关闭，
+ * 绝不为了"一定要监控"去抛异常或强转。
+ */
+private tailrec fun findHostActivity(context: Context?): Activity? = when (context) {
+    null -> null
+    is Activity -> context
+    is ContextWrapper -> findHostActivity(context.baseContext)
+    else -> null
 }
 
 /**
@@ -593,7 +631,6 @@ private class FlowBrushCache(private val color: Color) {
 
 /** 涟漪描边宽度（dp）。细线更像"冲击波"，粗了会像一圈柱子。 */
 private const val RIPPLE_STROKE_DP = 1.5f
-
 /** 涟漪最大半径 = 条带长边 × 它。1.1 让涟漪在消失前刚好越过整条带子。 */
 private const val RIPPLE_MAX_RADIUS_FRACTION = 1.1f
 
