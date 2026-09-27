@@ -18,7 +18,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ChevronRight
@@ -31,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +44,6 @@ import com.takahashirinta.ncrust.RotationSetting
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.reco.ArtistReco
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
-import io.github.takahashirinta.kanesumi.controls.MetroSwitch
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
@@ -64,6 +61,10 @@ import com.takahashirinta.ncrust.qq.QqProfile
 import com.takahashirinta.ncrust.power.BackgroundActivity
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
 import com.takahashirinta.ncrust.ui.components.QrAuthorizeScreen
+import com.takahashirinta.ncrust.ui.components.CacheUsageLine
+import com.takahashirinta.ncrust.ui.components.MetroDropdownRow
+import com.takahashirinta.ncrust.ui.components.SectionTitle
+import com.takahashirinta.ncrust.ui.components.SettingSwitchRow
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -962,73 +963,6 @@ private fun ProfileBlock(
     }
 }
 
-/** Groove 风分区标题：16sp semi-bold、上留白 4dp、左 16dp。 */
-@Composable
-private fun SectionTitle(text: String) {
-    MetroText(
-        text,
-        color = LocalMetroColors.current.onBackground,
-        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
-    )
-}
-
-/**
- * 开关设置行：标题与 Switch 同一行垂直居中，描述（可选）另起一行。
- * 描述不参与对齐，避免 Switch 被顶到与描述顶部对齐。
- *
- * P2 · 无障碍与触控：
- *  - 整行挂 [toggleable] + [Role.Switch]：TalkBack 才能把「标题 + 开关」读成一个可切换
- *    控件。Kanesumi 的 MetroSwitch 是裸 Box + pointerInput、自身零 semantics，原先整行对
- *    无障碍服务不存在（用户页 3 个开关全走这里）。开关状态由 toggleable 写入的
- *    ToggleableState 播报 —— 由系统按当前语言朗读，比自造 stateDescription 文案更准，
- *    也不必新增 8 个语言文件的词条（本轮红线）。
- *  - 整行可点后命中区 = 52dp 高的整行，原先只有 52×28dp 的 Switch 本身。
- *  - 点在 Switch 上时回调会走两次：MetroSwitch 自己的 pointerInput 不消费 tap，父级
- *    toggleable 也会收到。但两次携带的都是同一个「取反后的目标值」，而 checked 是外部
- *    提升的状态、两处读到的都是同一次组合的值 —— 净效果仍是翻转一次；各调用点的副作用
- *    （写 prefs / 刷新 ViewModel / ArtistReco.setEnabled）都是幂等的。Kanesumi 不在本仓库
- *    版本控制内，不能改库让它消费这个事件（改了发布产物不可复现）。
- */
-@Composable
-private fun SettingSwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    description: String? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                role = Role.Switch,
-                onValueChange = onCheckedChange
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MetroText(
-            title,
-            color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.bodyMedium,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(Modifier.width(16.dp))
-        MetroSwitch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-    if (description != null) {
-        MetroText(
-            description,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.caption,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
-        )
-    }
-}
-
 /** 主题模式三选一：跟随系统 / 深色 / 浅色。 */
 @Composable
 private fun ThemeModeSelector(
@@ -1082,29 +1016,6 @@ private fun ThemeModeSelector(
     }
 }
 
-/** 缓存占用的分项行（v2.0.0 · T3）：左侧名称、右侧数字，缩进一级、弱化显示。 */
-@Composable
-private fun CacheUsageLine(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 32.dp, end = 16.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MetroText(
-            label,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 12.sp),
-            modifier = Modifier.weight(1f)
-        )
-        MetroText(
-            value,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 12.sp)
-        )
-    }
-}
-
 /** 清除缓存确认弹窗。 */
 @Composable
 private fun ClearCacheConfirmDialog(
@@ -1142,78 +1053,6 @@ private fun ClearCacheConfirmDialog(
                 DialogButton(text = strings.clearCache, accent = true, onClick = onConfirm)
             }
         }
-    }
-}
-
-/**
- * 单行下拉：左侧 label + 右侧「选中值 + ▼」，点击整行弹出垂直菜单。
- *
- * 多语言鲁棒：
- *  - label 用 weight(1f)，任何语言都能换行，不会挤到右侧值。
- *  - 选中值用 maxLines=1 + Ellipsis + widthIn(max=160dp)，极端长文会截断但不会撑破布局。
- *  - 下拉展开的菜单里每项独占一行，完整显示，用户始终能看到完整名字。
- */
-@Composable
-private fun MetroDropdownRow(
-    label: String,
-    selectedIndex: Int,
-    options: List<String>,
-    hint: String? = null,
-    onSelect: (Int) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    // Box 只包住下拉行本身：MetroSelectorFlyout 需要锚在这一行上，
-    // 提示文案放在 Box 之外，避免把弹出菜单的锚点推下去。
-    Column {
-        Box {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = true }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                MetroText(
-                    label,
-                    color = LocalMetroColors.current.onBackground,
-                    style = TextStyle(fontSize = 15.sp),
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(12.dp))
-                MetroText(
-                    options.getOrElse(selectedIndex) { "" },
-                    color = LocalMetroColors.current.primary,
-                    style = TextStyle(fontSize = 15.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 160.dp)
-                )
-                MetroIcon(
-                    Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = LocalMetroColors.current.onSurfaceVariant,
-                    sizeDp = 20.dp,
-                )
-            }
-            // UWP ComboBox 移植:选中项落回锚点原位,菜单从锚点双向展开。
-            MetroSelectorFlyout(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                options = options,
-                selectedIndex = selectedIndex,
-                onSelect = onSelect,
-            )
-        }
-    if (hint != null) {
-        MetroText(
-            hint,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 12.sp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
-        )
-    }
     }
 }
 
