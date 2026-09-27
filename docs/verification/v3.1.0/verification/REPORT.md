@@ -20,7 +20,7 @@
 | 6 | 各音源互不影响 | ✅ | `PROBE-BILI-ROUTER loginSources=[netease, qqmusic]` / `selectable=[netease, qqmusic, bilibili]`；单测 `SourceCountsBiliTest.B 站关闭时统计行逐字不变`、`BiliSourceProviderTest.网易云与 QQ 的 host 一个都不能命中`、`BiliSourceProviderTest.来源缺少载荷时取链返回 null 而不是退回别的音源` |
 | 7 | 虚拟机验证通过 | ✅ **（口径受限，见注）** | [release-smoke/api24-smoke.txt](release-smoke/api24-smoke.txt)、[release-smoke/api33-smoke.txt](release-smoke/api33-smoke.txt)、截图 [api24-launch.png](release-smoke/api24-launch.png)、[api33-launch.png](release-smoke/api33-launch.png)；三台设备均 `install: Success` + 进程存活 + `crashes / fatal` 为空 + 首页三请求正常 |
 | 8 | 单测 / lint / 构建全绿 | ✅ | 单测：`142 suite / 1945 用例 / 0 失败 / 0 错误 / 0 跳过`（`app/build/test-results/testDebugUnitTest/*.xml` 汇总，2026-09-28 03:23）；lint：`0 error`（32 warning，`app/build/reports/lint-results-debug.xml`，03:24）；`assembleDebug` = `app-debug.apk` 31,090,089 B（03:25）、`assembleRelease` = `app-release.apk` 10,157,540 B（03:27） |
-| 9 | tag / APK / gradle versionCode 一致 | 待发布后回填 | <!-- RELEASE-BACKFILL --> |
+| 9 | tag / APK / gradle versionCode 一致 | ✅ | 见下方「发布状态回填」 |
 
 > **⚠️ 第 7 条的口径（必须与结论一起读）**：模拟器走的是**宿主机网络栈**，其网络数字与真机**不可换算**，只用于 A/B 对照（同一份探针在两种环境下形状是否一致）—— 原话见 [net-research/EVIDENCE-EMULATOR.md](../net-research/EVIDENCE-EMULATOR.md) 开头的告示，该文件还记录模拟器把宿主网络**报成蜂窝**（`network=wifi=false cell=true`）。**「模拟器上通过」不等于「真实移动网络下通过」。**
 >
@@ -240,3 +240,31 @@ bash tools/next-version.sh    # 注意：脚本在仓库外 <repo>-gpl/tools/，
 | [release-smoke/](release-smoke/) | `api24-smoke.txt`、`api33-smoke.txt`、`s6-smoke.txt` + `api24-launch.png`、`api33-launch.png`、`s6-launch.png` |
 | [ui-automation-attempt/](ui-automation-attempt/) | 失败的 UI 自动化记录（如实保留，未被包装成「通过」） |
 | [next-version.txt](next-version.txt) | 三源交叉验证：工作区 `versionCode=54` ⇒ 下一个可用 **55** |
+
+---
+
+## 发布状态回填（发布后补记，**不是发布前写的**）
+
+| 项 | 实测值 | 自证命令 |
+|---|---|---|
+| tag | `v3.1.0-gpl` → `28c1d9b456b49acb19bc777f0c779ed5a04dc176` | `git rev-list -n1 v3.1.0-gpl` |
+| tag 指向的 versionCode / versionName | **54** / `3.1.0-gpl` | `git show v3.1.0-gpl:app/build.gradle.kts \| grep -E "versionCode = \|versionName = "` |
+| 本地 `app/build.gradle.kts` | 54 / `3.1.0-gpl` | `grep -E "versionCode = \|versionName = " app/build.gradle.kts` |
+| 产物 `aapt2 dump badging` | `versionCode='54' versionName='3.1.0-gpl'` | `aapt2 dump badging dist/Ncrust-v3.1.0-gpl-release.apk` |
+| 产物 sha256（本地） | `bce84c154c64a48ff48d50fb6b9ad02660d2efe8a57572005147b5a610c96c13` | `sha256sum dist/Ncrust-v3.1.0-gpl-release.apk` |
+| 产物 sha256（GitHub 侧独立计算） | `sha256:bce84c154c64a48ff48d50fb6b9ad02660d2efe8a57572005147b5a610c96c13` | `gh release view v3.1.0-gpl --json assets` |
+| 资产大小 | 10,157,540 B（与本地逐字节同源） | 同上 |
+| release | **已发布（非 draft）**，`isDraft=false` / `isPrerelease=false` | `gh release view v3.1.0-gpl --json isDraft,isPrerelease` |
+| release URL | https://github.com/yaxiaiyuting/Ncrust/releases/tag/v3.1.0-gpl | — |
+| 打 tag 前工作区 | **干净**（`git status --porcelain` 为空） | — |
+| 已发布 tag 是否被移动过 | **没有**。合并远端 README 提交时用的是 `git merge`（不是 rebase），tag 仍指向产出 APK 的那个提交 `28c1d9b`，合并后它可从 master 到达 | `git merge-base --is-ancestor v3.1.0-gpl^{commit} master` |
+
+### 为什么那次是 merge 而不是 rebase（值得记一笔）
+
+推送 master 时被拒（非快进）：远端有一个**用户在 GitHub 网页上**直接改 README 徽章的提交
+（`e962aa8 Update version badge from 2.9.0 to 3.0.0`），本地没有。两条历史都改了同一行徽章。
+
+选择的处置是 `git merge origin/master` + 冲突取本地那行（3.1.0），**而不是 rebase**：
+rebase 会重写本地提交、让已经推送的 `v3.1.0-gpl` 指向一个不再位于 master 上的悬挂提交。
+按本仓库纪律（**发布过的 tag 绝不移动**），tag 必须留在原地 —— 而 merge 让那个提交变成
+master 的祖先，两件事同时成立。
