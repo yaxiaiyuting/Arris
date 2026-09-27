@@ -203,13 +203,15 @@ class StringsMigrationTest {
     /**
      * 每个新分组的**组参数确实挂上了**，且条目数与分组表一致。
      *
-     * v2.5.3 的三组 + v2.8.0 的 [WaveformStrings]（第四个组，16 条）都在这里。
+     * v2.5.3 的三组 + v2.8.0 的 [WaveformStrings]（第四个组，v2.9.0 起 20 条）都在这里。
      */
     @Test
     fun `每个新分组都被真正填充（v2_5_3 三组 + v2_8_0 波形组）`() {
         // v2.8.0：settings 64 → 78（二级菜单的 7 组 × 标题/副标题）、新增 waveform 16 条。
         // about / playerUi 本版没动 —— 这几个数只随各自的文案变动。
-        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31, "waveform" to 16)
+        // v2.9.0：waveform 16 → 20（统一「动效强度」的 4 条文案；按纪律进 WaveformStrings 而不是
+        // 已经 78 条的 settings 组 —— 后者再加 4 条就会越过 80 的组预警线）。
+        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31, "waveform" to 20)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

@@ -556,19 +556,20 @@ class StringsConstructorBudgetTest {
      * 属性名逐字等于 `ui/player/waveform/VisualizerStrings.kt` 的 `Property.*` 常量。
      */
     @Test
-    fun `v2_8_0 的 16 条波形分级文案进了 WaveformStrings 且八种语言都可用`() {
+    fun `v2_8_0 的 16 条波形分级文案 + v2_9_0 的 4 条动效文案都在 WaveformStrings 且八种语言都可用`() {
         assertEquals(
             "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136",
             136,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
-            "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            16,
+            "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言。" +
+                "（v2.8.0 = 16，v2.9.0 加 4 条统一动效文案 ⇒ 20；组预算 120 还很宽，不必再拆组。）",
+            20,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.WaveformStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
-        assertEquals(17, dexSlots(16, false))
+        assertEquals(21, dexSlots(20, false))
 
         val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
             "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },

@@ -190,35 +190,41 @@ class WaveformSettingsGatingTest {
 
     @Test
     fun `theSevenWaveformKeysLandOnThePlaybackPageWithTheExpectedControls`() {
-        val expected = mapOf(
-            "visualizer_tier" to SettingsRowKind.TIER_DROPDOWN,
-            "visualizer_showcase" to SettingsRowKind.SWITCH,
-            "visualizer_shockwave" to SettingsRowKind.SWITCH,
-            "visualizer_particles" to SettingsRowKind.SWITCH,
-            "visualizer_perspective" to SettingsRowKind.SWITCH,
-            "visualizer_drag" to SettingsRowKind.SWITCH,
-            // 第 7 个是迁移水位：进 registry（防丢项），但**不渲染**
+        // v2.9.0 起：v2.8.0 的 7 个键**全部**降级为迁移源（`legacyV290` + `internal`）——
+        // 它们仍然在 registry 里（防丢项 + 回滚不丢数据），但**一行都不渲染**：
+        // 统一「动效强度」接管渲染之后，再给它们 UI 入口就是同一状态的两个可写入口（双轨）。
+        val legacy = mapOf(
+            "visualizer_tier" to SettingsRowKind.INTERNAL,
+            "visualizer_showcase" to SettingsRowKind.INTERNAL,
+            "visualizer_shockwave" to SettingsRowKind.INTERNAL,
+            "visualizer_particles" to SettingsRowKind.INTERNAL,
+            "visualizer_perspective" to SettingsRowKind.INTERNAL,
+            "visualizer_drag" to SettingsRowKind.INTERNAL,
             "visualizer_tier_version" to SettingsRowKind.INTERNAL,
         )
-        expected.forEach { (id, kind) ->
+        legacy.forEach { (id, kind) ->
             val entry = requireNotNull(SettingsRegistry.entryById(id)) { "registry 里没有 $id" }
             assertTrue("$id 必须标成 v2.8.0 新增项", entry.isNewInV280)
+            assertTrue("$id 必须标成 v2.9.0 的迁移源", entry.legacyV290)
             assertEquals("$id 的主分组必须是播放与音质", "playback", entry.group.id)
             assertEquals("$id 的控件形态", kind, SettingsRenderPlan.rowKindOf(entry))
         }
         assertEquals(
-            "波形 7 项必须全部落在播放与音质页（前 6 条渲染 + 1 条内部）",
-            listOf(
-                "visualizer_tier",
-                "visualizer_showcase",
-                "visualizer_shockwave",
-                "visualizer_particles",
-                "visualizer_perspective",
-                "visualizer_drag",
-            ),
+            "v2.8.0 的 7 个键一个都不能出现在二级页上（全部由迁移逻辑消费）",
+            emptyList<String>(),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
                 .filter { it.startsWith("visualizer_") },
         )
+        // 接替它们的两个可见项。
+        assertEquals(
+            "统一动效强度必须落在播放与音质页，且顺序是「档位 → 总开关」",
+            listOf("motion_tier", "ui_motion_enabled"),
+            SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
+                .filter { it.startsWith("motion_") || it == "ui_motion_enabled" },
+        )
+        val tierEntry = requireNotNull(SettingsRegistry.entryById("motion_tier"))
+        assertEquals(SettingsRowKind.TIER_DROPDOWN, SettingsRenderPlan.rowKindOf(tierEntry))
+        assertTrue("motion_tier 必须标成 v2.9.0 新增项", tierEntry.isNewInV290)
     }
 
     // ── 内存版 SharedPreferences（与 VisualizerPrefsTest / LyricsSourcePrefsTest 同形）────

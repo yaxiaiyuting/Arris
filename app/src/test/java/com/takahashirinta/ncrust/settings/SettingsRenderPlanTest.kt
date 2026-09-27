@@ -66,22 +66,29 @@ class SettingsRenderPlanTest {
                 "account" to 2,      // 网易云账号块 + QQ 音乐账号块
                 "general" to 4,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行
                 "appearance" to 5,   // 主题模式 / 主题色 / 主题色来源 / 页面切换动效 / 自定义背景
-                "playback" to 11,    // 音质×2 / 无缝 / 禁止熄屏 / 可视化 / 波形 6 项
+                // v2.9.0：v2.8.0 的 6 个波形项降级为迁移源（不渲染），换成统一动效强度 2 项
+                // ⇒ 11 − 6 + 2 = 7。逐项：音质×2 / 无缝 / 禁止熄屏 / 可视化 / 动效强度 / 界面动效。
+                "playback" to 7,
                 "lyrics" to 9,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
                 "storage" to 3,      // 离线缓存上限 / 清除缓存 / 离线缓存管理
                 "about" to 1,        // 关于
             ),
             counts,
         )
-        assertEquals(35, counts.values.sum())
-        // 55 条 registry 条目 = 16 条内部项（从来不渲染） + 4 条库页承载 + 35 条二级页渲染
-        assertEquals(55, SettingsRegistry.allEntries().size)
-        assertEquals(16, SettingsRegistry.allEntries().count { it.isInternal })
+        // v2.9.0：35 → 31（减 6 个降级为迁移源的波形项、加 2 个统一动效项）。
+        assertEquals(31, counts.values.sum())
+        // 59 条 registry 条目 = 24 条内部项（从来不渲染） + 4 条库页承载 + 31 条二级页渲染
+        //
+        // v2.9.0 的内部项从 16 涨到 24：+6 是 v2.8.0 的波形键（降级为迁移源），
+        // +2 是 v2.9.0 的两个派生键（降级水位 / 迁移水位）。
+        // 条目总数 55 → 59 = 新增的 4 个动效键。
+        assertEquals(59, SettingsRegistry.allEntries().size)
+        assertEquals(24, SettingsRegistry.allEntries().count { it.isInternal })
         assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
         assertEquals(
             "内部项 + 库页承载 + 二级页渲染必须等于全部条目（不丢项）",
             SettingsRegistry.allEntries().size,
-            16 + 4 + counts.values.sum(),
+            24 + 4 + counts.values.sum(),
         )
     }
 
@@ -123,26 +130,18 @@ class SettingsRenderPlanTest {
         SettingsRenderPlan.allPlannedRows().forEach { entry ->
             assertTrue("内部项不得进入渲染计划：${entry.id}", !entry.isInternal)
         }
-        // 文案来源有两处（都必须在测试里留痕）：
-        //  ① registry 的 titleKey（绝大多数既有项）；
-        //  ② `Strings.waveform.*`（v2.8.0 的 6 个波形项 —— 它们的文案由并行的 i18n 任务
-        //     落在 `WaveformStrings`，registry 里 titleKey 仍为 null，
-        //     `SettingsRegistryTest.titleLessEntriesAreExactlyTheDocumentedOnes` 就是这么钉的）。
-        // 所以这里断言「没有文案的渲染行**恰好**是那 6 个」，而不是「全都有文案」。
+        // v2.9.0：文案来源**收敛成一处** —— registry 的 `titleKey`。
+        // v2.8.0 时那 6 个波形项没有 titleKey（文案由并行的 i18n 任务落在 `WaveformStrings`），
+        // 所以当时这条断言写的是「没有文案的渲染行恰好是那 6 个」。v2.9.0 把它们全部降级为
+        // 迁移源（不渲染），接替的 `motion_tier` / `ui_motion_enabled` **带** titleKey，
+        // 于是"没有文案的渲染行"变成空集 —— 这比白名单更强：**任何**新增的渲染行都必须自带文案。
         val titleLess = SettingsRenderPlan.allPlannedRows()
             .filter { it.titleKey.isNullOrBlank() }
             .map { it.id }
             .toSet()
         assertEquals(
-            "二级页渲染但没有 titleKey 的项必须恰好是这 6 个波形项（其余任何一条都要补 titleKey）",
-            setOf(
-                "visualizer_tier",
-                "visualizer_showcase",
-                "visualizer_shockwave",
-                "visualizer_particles",
-                "visualizer_perspective",
-                "visualizer_drag",
-            ),
+            "二级页渲染的每一行都必须有 titleKey（v2.9.0 起文案来源只有 registry 一处）",
+            emptySet<String>(),
             titleLess,
         )
         // 全量 = 各组之和（不丢一条）

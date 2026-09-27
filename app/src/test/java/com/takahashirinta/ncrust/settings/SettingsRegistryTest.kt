@@ -19,8 +19,10 @@ import com.takahashirinta.ncrust.ui.settings.SettingsEntry
 import com.takahashirinta.ncrust.ui.settings.SettingsEntryType
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
 import com.takahashirinta.ncrust.ui.settings.SettingsRegistry
+import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -41,7 +43,10 @@ class SettingsRegistryTest {
     @Test
     fun `legacyPrefKeysArePreservedExactly`() {
         val actual = SettingsRegistry.allEntries()
-            .filter { !it.isNewInV280 }
+            // v2.9.0：新增的 4 个动效键同样不属于"口径 C 的 42 个既有键"，
+            // 所以两个"某版本新增"标志都要排除 —— 否则这条断言会因为**新增**而变红，
+            // 那正好把"机械防线"变成"每次加功能都要改测试"的噪声源。
+            .filter { !it.isNewInV280 && !it.isNewInV290 }
             .mapNotNull { it.key }
             .toSet()
 
@@ -73,9 +78,59 @@ class SettingsRegistryTest {
         assertEquals("key 必须唯一", all.size, all.toSet().size)
         assertTrue("key 不能带空白", all.none { it != it.trim() || it.isEmpty() })
 
-        val legacy = SettingsRegistry.allEntries().filter { !it.isNewInV280 }.mapNotNull { it.key }.toSet()
-        val fresh = SettingsRegistry.allEntries().filter { it.isNewInV280 }.mapNotNull { it.key }.toSet()
-        assertTrue("新键不得与既有键重名", (legacy intersect fresh).isEmpty())
+        val legacy = SettingsRegistry.allEntries()
+            .filter { !it.isNewInV280 && !it.isNewInV290 }
+            .mapNotNull { it.key }
+            .toSet()
+        val v280 = SettingsRegistry.allEntries().filter { it.isNewInV280 }.mapNotNull { it.key }.toSet()
+        val v290 = SettingsRegistry.allEntries().filter { it.isNewInV290 }.mapNotNull { it.key }.toSet()
+        assertTrue("新键不得与既有键重名", (legacy intersect v280).isEmpty())
+        assertTrue("新键不得与既有键重名", (legacy intersect v290).isEmpty())
+        assertTrue("v2.8.0 与 v2.9.0 的新键不得重名", (v280 intersect v290).isEmpty())
+    }
+
+    @Test
+    fun `newV290KeysAreExactlyTheMotionSet`() {
+        // 机械防线之二：v2.9.0 只允许新增这一组「统一动效强度」的键。
+        // 顺手夹带一个无关功能项（一起听 / 下载管理 / 流量管理 / 备份恢复…）会在这里变红。
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV290 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals("v2.9.0 新增项", NEW_V290_KEYS, actual)
+        assertEquals(4, NEW_V290_KEYS.size)
+    }
+
+    @Test
+    fun `v280KeysAreAllLegacyUnderV290`() {
+        // v2.9.0 把统一档位接过去之后，v2.8.0 的 7 个键**全部**降级为迁移源：
+        // 既不能有 UI 入口（两个键都能改档位 = 双轨），也不能悄悄删掉（回滚安装会丢用户数据）。
+        val legacy = SettingsRegistry.allEntries().filter { it.legacyV290 }
+        assertEquals("v2.8.0 的 7 个键必须全部标 legacy", NEW_V280_KEYS, legacy.mapNotNull { it.key }.toSet())
+        legacy.forEach {
+            assertTrue("${it.key} 标了 legacy 却没有 internal ⇒ 会在设置页渲染出来", it.isInternal)
+            assertTrue("${it.key} 不是 v2.8.0 新增项却标了 legacy", it.isNewInV280)
+        }
+    }
+
+    @Test
+    fun `v290EntriesAreReachableAndHaveStrings`() {
+        // 「设置项可达性」：非 internal 的新项必须被渲染计划照顾到，且标题/副标题文案齐全。
+        val v290 = SettingsRegistry.allEntries().filter { it.isNewInV290 }
+        val rendered = v290.filter { !it.isInternal }
+        assertEquals(
+            "v2.9.0 只有「动效强度」与「界面动效」两项有 UI 入口",
+            setOf("motion_tier", "ui_motion_enabled"),
+            rendered.mapNotNull { it.key }.toSet(),
+        )
+        rendered.forEach { entry ->
+            assertTrue("${entry.id} 必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+            assertNotNull("${entry.id} 缺 titleKey", entry.titleKey)
+            assertTrue(
+                "${entry.id} 的 titleKey 必须指向 waveform 组（新文案按纪律放 WaveformStrings）",
+                entry.titleKey!!.startsWith("waveform."),
+            )
+        }
     }
 
     @Test
@@ -270,9 +325,11 @@ class SettingsRegistryTest {
 
     @Test
     fun `titleLessEntriesAreExactlyTheDocumentedOnes`() {
-        // 25 条：16 条内部项 − 1 条遗留键（lyrics_word_by_word 有文案但无 UI）
+        // 33 条：18 条内部项 − 1 条遗留键（lyrics_word_by_word 有文案但无 UI）
         //        + 6 条 v2.8.0 新增项（文案随 UI 阶段进 i18n）
+        //        + 2 条 v2.9.0 派生键（降级水位 / 迁移水位，无 UI 入口）
         //        + 4 条库页显示偏好（文案在库页，结构探针 §1.2 建议不迁移）。
+        // 注：v2.9.0 的两个**可见**新项（motion_tier / ui_motion_enabled）**有**文案，不在本清单里。
         val actual = SettingsRegistry.allEntries().filter { it.titleKey == null }.map { it.id }.toSet()
         assertEquals(TITLE_LESS_IDS, actual)
     }
@@ -365,6 +422,14 @@ class SettingsRegistryTest {
          * 同表里的 `visualizer_auto_downgraded` 是**运行期诊断标记**（不是配置项），
          * 按「迁移水位进 registry、运行期标记不进」的口径排除在外，由波形任务自己管。
          */
+        /** v2.9.0 新增的 4 个动效键（统一「动效强度」）。 */
+        val NEW_V290_KEYS: Set<String> = setOf(
+            "motion_tier",
+            "ui_motion_enabled",
+            "motion_degrade_level",
+            "motion_version",
+        )
+
         val NEW_V280_KEYS: Set<String> = setOf(
             "visualizer_tier",
             "visualizer_showcase",
@@ -383,6 +448,11 @@ class SettingsRegistryTest {
             "artist_reco_target_id", "artist_reco_anchor_ids", "artist_reco_auto_anchor_ids",
             "artist_reco_auto_anchor_at", "quality_ladder_version",
             "visualizer_tier_version",
+            // v2.9.0：v2.8.0 的 6 个波形键降级为迁移源（internal = true），
+            // 新增的 2 个派生键（降级水位 / 迁移水位）同样没有 UI 入口。
+            "visualizer_tier", "visualizer_showcase", "visualizer_shockwave",
+            "visualizer_particles", "visualizer_perspective", "visualizer_drag",
+            "motion_degrade_level", "motion_version",
         )
 
         /** 高级 / 实验性（探针清单的「是否高级/实验性」列 + v2.8.0 的炫技项）。 */
@@ -393,6 +463,9 @@ class SettingsRegistryTest {
             "artist_reco_target_id", "artist_reco_anchor_ids",
             "visualizer_showcase", "visualizer_shockwave", "visualizer_particles",
             "visualizer_perspective", "visualizer_drag", "visualizer_tier_version",
+            // v2.9.0：两个派生键标 advanced（它们是给排查用的内部水位，
+            // 不渲染、但语义上属于"高级/实验性"这一档）。
+            "motion_degrade_level", "motion_version",
         )
 
         /** 无 prefs key 的行为行（结构探针 §1「非 prefs 行」全表，一条都不能丢）。 */
@@ -412,6 +485,8 @@ class SettingsRegistryTest {
             // v2.8.0 新增项：文案随 UI 阶段进 SettingsStrings（本任务禁止改 ui/i18n 目录）
             "visualizer_tier", "visualizer_showcase", "visualizer_shockwave",
             "visualizer_particles", "visualizer_perspective", "visualizer_drag",
+            // v2.9.0 的两个派生键：没有 UI 入口，也就没有文案路径。
+            "motion_degrade_level", "motion_version",
             // 库页显示偏好：文案在库页，设置页不迁移这 4 项
             "library_playlist_layout", "library_section_collapsed_local",
             "library_section_collapsed_netease", "library_section_collapsed_qq",
