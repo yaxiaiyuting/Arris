@@ -1,0 +1,19 @@
+=== api24 / emulator-5554 ===
+model: Android SDK built for x86_64
+sdk:   24
+rel:   7.0
+install: Success
+started, waiting 25s...
+--- resumed activity:
+Failed to write while dumping service activity: Broken pipe
+    mResumedActivity: ActivityRecord{35d1987 u0 com.takahashirinta.ncrust/.MainActivity t13}
+--- process alive:
+8339
+--- crashes / fatal (应为空):
+--- app 关键日志:
+09-28 03:27:05.609 I/NcrustHttpTiming( 8339): path=/eapi/v1/discovery/recommend/resource ttfb=72ms body=1ms total=240ms
+09-28 03:27:05.614 I/NcrustHttpTiming( 8339): path=/eapi/v2/discovery/recommend/songs ttfb=77ms body=0ms total=245ms
+09-28 03:27:05.736 I/NcrustHttpTiming( 8339): path=/api/v1/discovery/new/songs ttfb=180ms body=44ms total=367ms
+--- dumpsys package version:
+    versionName=3.1.0-gpl
+screenshot: Ncrust/docs/verification/v3.1.0/verification/release-smoke/api24-launch.png (87836 bytes)

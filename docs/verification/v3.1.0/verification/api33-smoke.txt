@@ -1,0 +1,17 @@
+=== api33 / emulator-5556 ===
+model: sdk_gphone64_x86_64
+sdk:   33
+rel:   13
+install: Success
+started, waiting 25s...
+--- resumed activity:
+--- process alive:
+8445
+--- crashes / fatal (应为空):
+--- app 关键日志:
+09-28 03:21:18.818 I/NcrustHttpTiming( 8445): path=/eapi/v2/discovery/recommend/songs ttfb=81ms body=0ms total=795ms
+09-28 03:21:18.825 I/NcrustHttpTiming( 8445): path=/eapi/v1/discovery/recommend/resource ttfb=84ms body=1ms total=800ms
+09-28 03:21:19.003 I/NcrustHttpTiming( 8445): path=/api/v1/discovery/new/songs ttfb=241ms body=25ms total=980ms
+--- dumpsys package version:
+    versionName=3.0.0-gpl
+screenshot: Ncrust/docs/verification/v3.1.0/verification/api33-launch.png (74340 bytes)

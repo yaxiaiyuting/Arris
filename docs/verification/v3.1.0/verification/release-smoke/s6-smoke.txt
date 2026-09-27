@@ -1,0 +1,19 @@
+=== s6 / 0715f763f54c023a ===
+model: SM-G9209
+sdk:   24
+rel:   7.0
+install: Success
+started, waiting 25s...
+--- resumed activity:
+Failed to write while dumping service activity: Broken pipe
+    mResumedActivity: ActivityRecord{bf61444d0 u0 com.takahashirinta.ncrust/.MainActivity t343}
+--- process alive:
+25525
+--- crashes / fatal (应为空):
+--- app 关键日志:
+09-28 03:28:03.383 I/NcrustHttpTiming(25525): path=/eapi/v1/discovery/recommend/resource ttfb=107ms body=1ms total=278ms
+09-28 03:28:03.386 I/NcrustHttpTiming(25525): path=/eapi/v2/discovery/recommend/songs ttfb=129ms body=1ms total=281ms
+09-28 03:28:03.525 I/NcrustHttpTiming(25525): path=/api/v1/discovery/new/songs ttfb=258ms body=15ms total=420ms
+--- dumpsys package version:
+    versionName=3.1.0-gpl
+screenshot: Ncrust/docs/verification/v3.1.0/verification/release-smoke/s6-launch.png (115074 bytes)

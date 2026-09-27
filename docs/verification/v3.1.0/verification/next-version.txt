@@ -1,0 +1,8 @@
+       v2.8.0-gpl=51
+       v2.6.2-gpl=50
+       v2.6.1-gpl=49
+  ② 已发布 APK 的 aapt2 dump badging 实测（红线 19：不看 release 标题）:
+       Ncrust-v2.6.2-gpl-release.apk=50
+  ③ 工作区 build.gradle.kts: versionCode=54 versionName=3.1.0-gpl
+  ----
+  三源最大值 = 54  ⇒ 下一个可用 versionCode = 55

@@ -1,0 +1,44 @@
+--- 00-first-launch.log
+  aggregate: 1
+    aggregate query='miku' netease=30 qq=30 bili=0 biliAllowed=false qqTimedOut=false qqAllowed=true vip(netease=false qq=false) elapsed=1317ms
+  biliAllowed: ['false']
+  bili=N: ['0']
+  BiliApi 行数: 0
+  currentTrack=bilibili: 0
+  bili lyric: 0
+  HttpTiming 行数: 8
+--- 01-search-bili-off.log
+  aggregate: 1
+    aggregate query='miku' netease=30 qq=30 bili=0 biliAllowed=false qqTimedOut=false qqAllowed=true vip(netease=false qq=false) elapsed=2279ms
+  biliAllowed: ['false']
+  bili=N: ['0']
+  BiliApi 行数: 0
+  currentTrack=bilibili: 0
+  bili lyric: 0
+  HttpTiming 行数: 5
+--- 02-search-bili-on.log
+  aggregate: 1
+    aggregate query='miku' netease=30 qq=30 bili=0 biliAllowed=false qqTimedOut=false qqAllowed=true vip(netease=false qq=false) elapsed=1198ms
+  biliAllowed: ['false']
+  bili=N: ['0']
+  BiliApi 行数: 0
+  currentTrack=bilibili: 0
+  bili lyric: 0
+  HttpTiming 行数: 5
+--- 03-play-last-result.log
+  aggregate: 0
+  biliAllowed: []
+  bili=N: []
+  BiliApi 行数: 0
+  currentTrack=bilibili: 0
+  bili lyric: 0
+  HttpTiming 行数: 0
+--- 04-search-bili-off-again.log
+  aggregate: 1
+    aggregate query='miku' netease=30 qq=30 bili=0 biliAllowed=false qqTimedOut=false qqAllowed=true vip(netease=false qq=false) elapsed=606ms
+  biliAllowed: ['false']
+  bili=N: ['0']
+  BiliApi 行数: 0
+  currentTrack=bilibili: 0
+  bili lyric: 0
+  HttpTiming 行数: 5
