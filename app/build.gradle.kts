@@ -297,8 +297,15 @@ android {
         //   `ncrust-release-v2.jks`（cert SHA-256 `e62eca39…bbec82`）。
         //   后果：**老用户无法覆盖安装，必须先完全卸载**（会清掉登录态与离线缓存）。
         //   `applicationId` / 权限 / 华为卡片一律未动。
-        versionCode = 51
-        versionName = "2.8.0-gpl"
+        //
+        //   v2.9.0 定号：`tools/next-version.sh` 三源交叉校验 ——
+        //     ① 最近 5 个 tag：v2.8.0-gpl=51 / v2.6.2-gpl=50 / v2.6.1-gpl=49 / v2.6.0-gpl=48 / v2.5.6-gpl=47
+        //     ② 已发布 APK 实测：Ncrust-v2.6.2-gpl-release.apk=50（v2.8.0 的还是 draft，本地在仓库外的 dist/）
+        //     ③ 工作区：51 / 2.8.0-gpl
+        //   三源最大值 = 51 ⇒ 下一个可用 **52**。
+        //   （打 tag 前会用 `git show v2.9.0-gpl:app/build.gradle.kts | grep version` 自证一次。）
+        versionCode = 52
+        versionName = "2.9.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
