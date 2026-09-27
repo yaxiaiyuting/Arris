@@ -373,24 +373,31 @@ fun AudioVisualizerBars(
 
     LaunchedEffect(barCount, frameIntervalMs, effects) {
         val budgetNs = frameIntervalMs * 1_000_000L
-        var lastFrameNs = 0L
-        var lastPumpNs = 0L
+        // v2.8.0 · P1-A（perf）：帧时钟状态放进**循环外**的复用数组，回调也提升到循环外。
+        //
+        // 旧写法是 `while(true) { withFrameNanos { now -> ... } }`，回调捕获两个可变局部变量
+        // （lastFrameNs / lastPumpNs）—— Kotlin 会在**每次求值**那个 lambda 表达式时新建一个
+        // 实例（捕获可变局部量还要额外的 Ref），也就是**每帧一次小对象分配**；探针 §7 #3 把这条
+        // 列为「未确认」正是因为当时没有产物可 javap。这里把状态搬进 `LongArray(2)`（循环外建一次）、
+        // 回调也提前建成一个 val：整段循环只创建 1 个 lambda 实例，帧路径上零分配。
+        val clock = LongArray(2)
+        val onFrame: (Long) -> Unit = { now ->
+            if (clock[0] == 0L || now - clock[0] >= budgetNs) {
+                val dtMs = if (clock[1] == 0L) frameIntervalMs.toFloat()
+                else ((now - clock[1]) / 1_000_000f).coerceIn(1f, 100f)
+                clock[0] = now
+                clock[1] = now
+                WaveformStore.pump(active = true, dtMs = dtMs, effects = effects)
+            }
+        }
         while (true) {
             if (currentActive.value()) {
-                withFrameNanos { now ->
-                    if (lastFrameNs == 0L || now - lastFrameNs >= budgetNs) {
-                        val dtMs = if (lastPumpNs == 0L) frameIntervalMs.toFloat()
-                        else ((now - lastPumpNs) / 1_000_000f).coerceIn(1f, 100f)
-                        lastFrameNs = now
-                        lastPumpNs = now
-                        WaveformStore.pump(active = true, dtMs = dtMs, effects = effects)
-                    }
-                }
+                withFrameNanos(onFrame)
             } else {
                 // 暂停 / 缓冲：用 delay 而不是帧时钟 —— 归零过程不需要跟着刷新率走。
                 delay(frameIntervalMs)
-                lastFrameNs = 0L
-                lastPumpNs = 0L
+                clock[0] = 0L
+                clock[1] = 0L
                 WaveformStore.pump(active = false, dtMs = frameIntervalMs.toFloat(), effects = effects)
             }
         }
