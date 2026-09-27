@@ -77,18 +77,19 @@ class SettingsRenderPlanTest {
         )
         // v2.9.0：35 → 31（减 6 个降级为迁移源的波形项、加 2 个统一动效项）。
         assertEquals(31, counts.values.sum())
-        // 59 条 registry 条目 = 24 条内部项（从来不渲染） + 4 条库页承载 + 31 条二级页渲染
+        // 61 条 registry 条目 = 26 条内部项（从来不渲染） + 4 条库页承载 + 31 条二级页渲染
         //
-        // v2.9.0 的内部项从 16 涨到 24：+6 是 v2.8.0 的波形键（降级为迁移源），
-        // +2 是 v2.9.0 的两个派生键（降级水位 / 迁移水位）。
-        // 条目总数 55 → 59 = 新增的 4 个动效键。
-        assertEquals(59, SettingsRegistry.allEntries().size)
-        assertEquals(24, SettingsRegistry.allEntries().count { it.isInternal })
+        // v2.9.0 的内部项从 16 涨到 25：+7 是 v2.8.0 的波形键（降级为迁移源，含此前漏枚举的
+        // visualizer_auto_downgraded），
+        // 另 +3 是 v2.9.0 的三个派生键（降级水位 / 降级日志 / 迁移水位）。
+        // 条目总数 55 → 61 = 新增的 5 个动效键 + 补枚举的 1 个 v2.8.0 漏项。
+        assertEquals(61, SettingsRegistry.allEntries().size)
+        assertEquals(26, SettingsRegistry.allEntries().count { it.isInternal })
         assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
         assertEquals(
             "内部项 + 库页承载 + 二级页渲染必须等于全部条目（不丢项）",
             SettingsRegistry.allEntries().size,
-            24 + 4 + counts.values.sum(),
+            26 + 4 + counts.values.sum(),
         )
     }
 

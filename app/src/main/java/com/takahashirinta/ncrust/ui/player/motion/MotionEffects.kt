@@ -136,6 +136,96 @@ object MotionDegrade {
 
     /** 该级别是否要求把波形档位降一级。 */
     fun cutsWaveformTier(level: Int): Boolean = sanitize(level) >= WAVEFORM_DOWN
+
+    /**
+     * 「严重超标」的门槛（窗口内超标帧数的比例）。
+     *
+     * 0.7 的依据：普通门槛是 0.4（`FrameBudgetPolicy.OVER_BUDGET_FRAMES / WINDOW_FRAMES`），
+     * 而 PCL110 实测正好落在 0.40（24/60）—— 刚好越线的设备不该被剥夺唯一看得见的动效。
+     * 0.7 对应「100 帧里 70 帧超标」，那是"一直在掉"，不是"偶尔抖"。
+     */
+    const val SEVERE_OVER_BUDGET_RATIO = 0.7f
+
+    /** 由「窗口内超标帧数 / 窗口长度」判定是否严重。 */
+    fun isSevere(overBudgetFrames: Int, windowFrames: Int): Boolean {
+        if (windowFrames <= 0) return false
+        return overBudgetFrames.toFloat() / windowFrames >= SEVERE_OVER_BUDGET_RATIO
+    }
+
+    /**
+     * v2.9.0（真机反馈后补）：**静态判据已经把某台设备放到最低档时，阶梯止步于 [UI_ADVANCED_OFF]。**
+     *
+     * ## 为什么（真机实测暴露的退化）
+     *
+     * S6（Android 7.0 / API 24）被 [MotionIntensity.defaultFor] 判成低端 ⇒ 起始档 = 简洁。
+     * 简洁档下 B/C 档界面动效**本来就是关的** ⇒ 第 1 级降级是一个**空操作**，
+     * 而第 2 级会把 A 档（背景模糊 + 呼吸 + 封面阴影）也砍掉 —— 那是这台设备**唯一**的动效。
+     *
+     * 更要命的是「砍了也白砍」：v2.8.0 自己的 KDoc 就写着判据**不知道是谁把帧顶起来的**
+     * （归因要 Perfetto），而 S6 在**完全关掉波形**的对照轮里同样 95% 超标 —— 说明它本来就慢，
+     * 砍掉每帧只有「一次图层属性更新」的背景呼吸并不会让它变快。用户看到的只是
+     * 「播放页变回了 v2.8.0 的老样子」，而且**永不恢复**。这是纯粹的损失。
+     *
+     * 所以：静态判据已判定为最低档的设备，阶梯到 [UI_ADVANCED_OFF] 为止（只砍 B/C，
+     * 且只在那台设备确实有 B/C 可砍时才会推进 —— 见 [nextEffective]）。
+     * 非低端设备（有 B/C 可砍、也砍得起）仍然走完整的三级阶梯。
+     *
+     * @param atFloorTier 调用方用**同一个**静态判据算出来的「起始档是否已是最低档」
+     *   （`MotionIntensity.defaultFor(...) == SIMPLE`），不是用户当前选的档位 ——
+     *   用户显式选炫技的设备应当享有完整阶梯。
+     * @param severe v2.9.0（真机反馈后补）：判据本身是否**严重**超标（见 [SEVERE_OVER_BUDGET_RATIO]）。
+     *
+     * ## 为什么还要一个「严重」闸门（两台真机各踩了一次）
+     *
+     * S6 与 PCL110 实测都在**一次 30 秒窗口**里把水位推到了 2（砍掉 A 档 = 播放页变回 v2.8.0
+     * 的老样子），而两台的判据分别是 `54/60` 与 **`24/60`（正好卡在 40% 门槛上）**。
+     * 24/60 说明这台 144Hz 旗舰只是"偶尔抖"，而 v2.8.0 自己的 KDoc 就写着判据
+     * **不知道是谁把帧顶起来的**（归因要 Perfetto）—— 拿一个刚好越线的比例去永久砍掉
+     * 用户唯一能看到的界面动效，收益与代价完全不成比例。
+     *
+     * 所以：**只有严重超标（≥ [SEVERE_OVER_BUDGET_RATIO]）才允许把阶梯推过第 1 级。**
+     * 轻微超标只砍 B/C（那部分本来就"可有可无"），A 档（背景模糊 + 呼吸）保留 ——
+     * 它是普通用户唯一看得见的那一层。
+     */
+    fun maxLevelFor(atFloorTier: Boolean, severe: Boolean): Int = when {
+        atFloorTier -> UI_ADVANCED_OFF
+        !severe -> UI_ADVANCED_OFF
+        else -> MAX
+    }
+
+    /**
+     * v2.9.0：**推进到下一个「确实有东西可砍」的级别**；没有则返回 `null`。
+     *
+     * 与裸的 [next] 的区别：`next` 只按水位递增，会在「B 档本来就是关的」这种配置上空推一级，
+     * 让水位与实际观感脱钩（水位说降了、画面没变；下一次再降就直接砍到 A 档）。
+     * 这里逐级试到第一个**真的会改变画面**的级别为止 —— 水位因此始终等价于「实际生效的削减」。
+     *
+     * @param advancedUiOn 当前配置下 B 档是否有任何一项开着。
+     * @param basicUiOn 当前配置下 A 档是否有任何一项开着。
+     * @param waveformAboveFloor 波形档位是否高于最低档（否则第 3 级也是空操作）。
+     * @param maxLevel 上界（见 [maxLevelFor]）。
+     */
+    fun nextEffective(
+        current: Int,
+        advancedUiOn: Boolean,
+        basicUiOn: Boolean,
+        waveformAboveFloor: Boolean,
+        maxLevel: Int = MAX,
+    ): Int? {
+        val cap = maxLevel.coerceIn(NONE, MAX)
+        var level = sanitize(current)
+        while (level < cap) {
+            level++
+            val effective = when (level) {
+                UI_ADVANCED_OFF -> advancedUiOn
+                UI_ALL_OFF -> basicUiOn
+                WAVEFORM_DOWN -> waveformAboveFloor
+                else -> false
+            }
+            if (effective) return level
+        }
+        return null
+    }
 }
 
 /**

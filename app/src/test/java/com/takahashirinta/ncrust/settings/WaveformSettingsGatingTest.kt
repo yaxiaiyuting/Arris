@@ -190,7 +190,7 @@ class WaveformSettingsGatingTest {
 
     @Test
     fun `theSevenWaveformKeysLandOnThePlaybackPageWithTheExpectedControls`() {
-        // v2.9.0 起：v2.8.0 的 7 个键**全部**降级为迁移源（`legacyV290` + `internal`）——
+        // v2.9.0 起：v2.8.0 的 8 个键**全部**降级为迁移源（`legacyV290` + `internal`）——
         // 它们仍然在 registry 里（防丢项 + 回滚不丢数据），但**一行都不渲染**：
         // 统一「动效强度」接管渲染之后，再给它们 UI 入口就是同一状态的两个可写入口（双轨）。
         val legacy = mapOf(
@@ -201,6 +201,8 @@ class WaveformSettingsGatingTest {
             "visualizer_perspective" to SettingsRowKind.INTERNAL,
             "visualizer_drag" to SettingsRowKind.INTERNAL,
             "visualizer_tier_version" to SettingsRowKind.INTERNAL,
+            // v2.8.0 的第 8 个键：v2.9.0 补进 registry（v2.8.0 时漏枚举，见 probe-tier-migration §1.3）。
+            "visualizer_auto_downgraded" to SettingsRowKind.INTERNAL,
         )
         legacy.forEach { (id, kind) ->
             val entry = requireNotNull(SettingsRegistry.entryById(id)) { "registry 里没有 $id" }
@@ -210,7 +212,7 @@ class WaveformSettingsGatingTest {
             assertEquals("$id 的控件形态", kind, SettingsRenderPlan.rowKindOf(entry))
         }
         assertEquals(
-            "v2.8.0 的 7 个键一个都不能出现在二级页上（全部由迁移逻辑消费）",
+            "v2.8.0 的 8 个键一个都不能出现在二级页上（全部由迁移逻辑消费）",
             emptyList<String>(),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
                 .filter { it.startsWith("visualizer_") },

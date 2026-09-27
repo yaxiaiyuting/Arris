@@ -34,6 +34,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -275,7 +276,7 @@ fun PlayerCard(
     // 因为它承担的是"整块背景在流动"的观感，太薄会被读成一条装饰线。
     // 仍按窗口高夹取：PCL110 横屏可用高只有 363dp，固定 120dp 会把封面压掉一圈。
     val waveBackdropHeightDp = with(density) {
-        minOf(140.dp.toPx(), screenHeightPx * 0.24f).toDp()
+        minOf(120.dp.toPx(), screenHeightPx * 0.20f).toDp()
     }
 
     // 迷你条与顶栏按钮的触觉反馈
@@ -320,6 +321,10 @@ fun PlayerCard(
     // v2.9.0 · A 档：封面随节拍上浮的最大位移（px）。在这里换算一次，
     // 而不是在 graphicsLayer 块里调 `dp.toPx()` —— 那个块每帧都会跑。
     val coverFloatPx = with(density) { AppMotion.COVER_FLOAT_DP.toPx() }
+
+    // v2.9.0：换歌时清掉**界面动效那一层**的包络与特效池（基线 / 脉冲 / 光晕 / 粒子）。
+    // 不清波形环形缓冲：那会让新歌开头几帧的波形是空的（上一首的柱子滚出去是既有的换歌观感）。
+    LaunchedEffect(song?.id) { MotionClock.clear() }
 
     // 完全收起时才激活迷你播放栏；derivedStateOf 将重组限制在阈值穿越处
     val miniBarEnabled by remember { derivedStateOf { progress.value < 0.01f } }
@@ -787,14 +792,32 @@ fun PlayerCard(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(waveBackdropHeightDp)
-                    // 压暗到 WAVE_BACKDROP_ALPHA：背景级波形的职责是"有东西在流动"，
-                    // 抢过前景就违反了 §7.3「歌词可读性优先」。前景内容全部画在它之上。
-                    .graphicsLayer {
-                        alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) * WAVE_BACKDROP_ALPHA
-                    },
+                    .height(waveBackdropHeightDp),
             ) {
-                AudioVisualizerBars(modifier = Modifier.fillMaxSize())
+                // 压暗到 WAVE_BACKDROP_ALPHA：背景级波形的职责是"有东西在流动"，
+                // 抢过前景就违反了 §7.3「歌词可读性优先」。前景内容全部画在它之上。
+                AudioVisualizerBars(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) *
+                                WAVE_BACKDROP_ALPHA
+                        },
+                )
+                // v2.9.0（真机观感修正）：**上沿渐隐**。
+                // 平铺的一条带子在真机上是一条硬边（PCL110 截图复核：横跨整屏的一条直线，
+                // 看起来像渲染错误而不是设计）。这里在带子的上半部压一层由不透明到透明的
+                // 渐变，波形因此"从背景里浮出来"而不是"被裁了一刀"。
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to LocalMetroColors.current.background,
+                                1.0f to Color.Transparent,
+                            )
+                        )
+                )
             }
         }
 
@@ -978,6 +1001,12 @@ fun PlayerCard(
                                     centeredLayout = usesSideCover,
                                     // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。
                                     lyricPulseEnabled = motion.lyricPulse,
+                                    // v2.9.0 · P1：歌词引擎用它判断"外推锚点属于哪一首"。
+                                    // 必须是一个**换歌必变、同曲不变**的稳定身份 ——
+                                    // `(音源, id)` 是本仓库对曲目身份的既有口径（v2.6.1/v2.6.2 的
+                                    // `TrackKey` 同源），不能只用 id（两个音源的 id 空间虽然结构性
+                                    // 隔离，但把口径写全比依赖那个不变量便宜）。
+                                    trackKey = song?.let { "${it.source}:${it.id}" },
                                 )
                             }
                         }
@@ -1765,7 +1794,11 @@ fun PlayerCard(
                         // （`MotionClock.generation` 是一个 Compose 状态，读它只让这一层失效，
                         // 不触发任何重组 —— 与播放器整体「GPU 零重组」的原则一致）。
                         // 静态时 pulse() == 0f ⇒ 下面三项都恰好是"没有效果"的值。
-                        val beatPulse = if (motion.beatPulse || motion.cover3d) {
+                        // A 档的「封面随节拍微微浮动」也读它 —— 帧时钟在 A 档本来就要跑
+                        // （背景呼吸是逐帧的），所以这里不新增任何成本。
+                        val beatPulse = if (
+                            motion.coverElevation || motion.beatPulse || motion.cover3d
+                        ) {
                             MotionClock.generation
                             MotionClock.pulse()
                         } else 0f
@@ -1856,7 +1889,7 @@ private fun Modifier.collapsibleHeight(collapse: Animatable<Float, AnimationVect
 // v2.9.0 · B 档：背景级波形的不透明度。0.32 的依据：在 OLED 黑底上 32% 的主题色
 // 已经能明确读出"整块背景在流动"，而压在它上面的歌词行（onBackground 全白）
 // 对比度仍远高于 WCAG AA 的 4.5:1 —— 任务书 §7.3「歌词可读性优先」。
-private const val WAVE_BACKDROP_ALPHA = 0.32f
+private const val WAVE_BACKDROP_ALPHA = 0.26f
 
 // 新封面超过该阈值仍未就绪，才退化为纯色占位（"实在不出来再禁用"）。
 private const val COVER_HOLD_MS = 400L

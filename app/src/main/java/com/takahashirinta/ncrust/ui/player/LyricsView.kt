@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -64,6 +65,10 @@ fun LyricsView(
     // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。默认 **false** ——
     // 关掉时渲染路径与 v2.8.0 逐字节一致（见 NcrustLyricsPanel 的同名参数）。
     lyricPulseEnabled: Boolean = false,
+    // v2.9.0 · P1（用户报告「歌词会在歌曲没加载出来之前先播放」）：
+    // **当前曲目的稳定身份**（换歌时必须变、同一首歌内必须不变）。
+    // 默认 null 时下面那条「换歌作废锚点」的效果不发生 —— 老调用点行为不变。
+    trackKey: Any? = null,
     showTranslation: Boolean = true,
     // v1.9.3：音译轨（罗马音 / 粤拼），与 translatedLyrics 同构。数据来自 PlayerViewModel
     // 的 v1.9.2 音译轨，渲染层**不重新合并**，只按 timeMs 配对取用。
@@ -184,6 +189,7 @@ fun LyricsView(
         PositionAnchor().apply {
             anchorPosMs = positionState.value
             anchorNanos = System.nanoTime()
+            anchorTrackKey = trackKey
         }
     }
 
@@ -241,15 +247,54 @@ fun LyricsView(
     // 阈值 1.5s：正常播放时 displayPosition 只会比采样超前 ≤1 个 tick（500ms），
     // 超过就说明发生了 seek（前进或后退），必须立刻对齐，否则前进跳转要等
     // 下一行边界、后退跳转则永远追不上（外推循环只写更大的值）。
+    // `trackKey` 用 rememberUpdatedState 读取：本效果以 Unit 为 key（只订阅一次位置流），
+    // 直接捕获 `trackKey` 会永远读到首次组合时的那个值，于是「这条采样属于哪一首」永远错。
+    val currentTrackKey = rememberUpdatedState(trackKey)
     LaunchedEffect(Unit) {
         snapshotFlow { positionState.value }.collect { pos ->
             anchor.anchorPosMs = pos
             anchor.anchorNanos = System.nanoTime()
+            anchor.anchorTrackKey = currentTrackKey.value
             val drift = kotlin.math.abs(pos - displayPosition.longValue)
             if (!isPlaying || drift > 1_500L) {
                 displayPosition.longValue = pos
             }
         }
+    }
+
+    // v2.9.0 · P1（用户报告「歌词会在歌曲没加载出来之前先播放」）：**换歌时作废外推锚点**。
+    //
+    // ## 症状与根因（先读这段，再改这里）
+    //
+    // 点一首新歌之后，歌词面板在新歌音频还没加载出来时就开始滚动 / 高亮 —— 看起来像
+    // 「歌词先播了」。根因不是歌词引擎，而是**锚点的归属**：
+    //
+    //  - `anchor` 是一个「位置 + 单调时刻」的快照，外推循环用 `anchorPosMs + 已过时间`
+    //    当作当前播放位置；
+    //  - 切歌那一刻，`anchorPosMs` 还是**上一首**的位置（比如 3:30），而 `isPlaying`
+    //    要等 ExoPlayer 的状态机走到 `STATE_BUFFERING` 才翻假 —— 中间那一小段里
+    //    外推循环是**开着**的；
+    //  - 真正把锚点拉回来的是 2Hz 位置采样，最多要等 500ms（再加上缓冲时间）。
+    //
+    // 于是那一段窗口里，新歌的歌词被「上一首的时间戳」定位 —— 直接跳到很靠后的行、
+    // 或者逐字光标一路扫过去。等第一条采样到达才 `drift > 1500` 拉回开头，用户看到的就是
+    // 「歌词先播了一下，然后跳回第一句」。
+    //
+    // ## 修法
+    //
+    // 1. 换歌**立即**把显示位置与锚点归零（新歌总是从 0 开始）；
+    // 2. 外推**只在锚点属于当前曲目时**才允许（见下面 `anchorValid`）——
+    //    这样即使有一条迟到的旧采样把锚点重新武装起来，也不会被拿去做外推。
+    //
+    // ## 代价（如实记录）
+    //
+    // 「进程重建后续播」会先显示第一行，最多 500ms 后被第一条采样纠正到真实行。
+    // 这个代价比"歌词先播"小得多，而且只发生在冷重建这一种场景。
+    LaunchedEffect(trackKey) {
+        anchor.anchorPosMs = 0L
+        anchor.anchorNanos = System.nanoTime()
+        anchor.anchorTrackKey = trackKey
+        displayPosition.longValue = 0L
     }
 
     // 外推循环 = v1.4.1 的按需唤醒 + v1.5.2 的逐字逐帧窗口:
@@ -262,14 +307,21 @@ fun LyricsView(
     //    行/词边界再写一次。静态时零状态写入、零帧调度，不会让渲染管线在整首歌里 60fps 空转。
     //
     // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
-    LaunchedEffect(isPlaying, isVisible, enabled, boundaries, sweepWindows) {
+    LaunchedEffect(isPlaying, isVisible, enabled, boundaries, sweepWindows, trackKey) {
         if (!isPlaying || !isVisible || !enabled) {
             displayPosition.longValue = positionState.value
             return@LaunchedEffect
         }
         while (true) {
-            val nowMs =
+            // 锚点必须属于当前曲目才允许外推：迟到的旧采样可能把锚点重新指向上一首的位置，
+            // 那种值一旦参与外推就会让新歌的歌词跳到错误的行（见上面「换歌作废锚点」）。
+            // 不匹配时退化成"用画面上的值"，等第一条属于本曲的采样到达即可。
+            val anchorValid = anchor.anchorTrackKey == trackKey
+            val nowMs = if (anchorValid) {
                 anchor.anchorPosMs + (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
+            } else {
+                displayPosition.longValue
+            }
             // 位置回退（seek / 切歌）：外推值是**单调抬高**出来的，不主动跟下去就会停在旧位置；
             // 把它拉回 nowMs，保证面板永远不会拿一个"未来"的位置去定位歌词行。
             if (displayPosition.longValue > nowMs + POSITION_SNAP_BACK_MS) {
@@ -278,8 +330,11 @@ fun LyricsView(
             // ① 正在唱的这一行 → 逐帧推进。
             if (inSweepWindow(nowMs, sweepWindows, timestamps)) {
                 withFrameNanos { }
-                val t = anchor.anchorPosMs + (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
-                if (t > displayPosition.longValue) displayPosition.longValue = t
+                if (anchorValid) {
+                    val t = anchor.anchorPosMs +
+                        (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
+                    if (t > displayPosition.longValue) displayPosition.longValue = t
+                }
                 continue
             }
             // ② 其余时间 → 按需唤醒。
@@ -292,6 +347,7 @@ fun LyricsView(
             val waitMs = next - nowMs
             // 上限 1s:seek/tap 改变锚点后,最多 1s 重新对齐。
             if (waitMs > 0) delay(waitMs.coerceAtMost(1_000L))
+            if (!anchorValid) continue
             val extrapolated =
                 anchor.anchorPosMs + (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
             // 只在真正越过该边界时写,长间隔里不会每秒写一次状态。
@@ -451,6 +507,15 @@ private fun FontScaleButton(
 private class PositionAnchor {
     var anchorPosMs: Long = 0L
     var anchorNanos: Long = 0L
+
+    /**
+     * v2.9.0 · P1：这个锚点属于哪一首歌。
+     *
+     * 外推只有在 [anchorTrackKey] 与当前曲目一致时才允许 —— 锚点是一个「上一首的位置 + 时刻」
+     * 的快照，拿它去外推新歌的时间轴就是我们修的那个 bug（见 `LyricsView` 里
+     * 「换歌作废锚点」那段注释）。
+     */
+    var anchorTrackKey: Any? = null
 }
 
 // 返回严格大于 positionMillis 的最小行时间戳;没有则 null。timestamps 升序。

@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -111,8 +112,11 @@ fun MotionBackdrop(
                         if (motion.backgroundBreathing) {
                             MotionClock.generation
                             val level = MotionClock.level()
+                            // 「亮度 ±5%」的落地方向是**安静时最多压暗 5%、满响度回到 1.0**
+                            // （而不是 0.95..1.05 —— 那会被 `coerceIn(0,1)` 夹掉上半段，
+                            // 实际变成"响度到一半就不再有变化"，S6 实测复核时发现）。
                             alpha = (1f - AppMotion.BREATH_ALPHA_AMPLITUDE +
-                                AppMotion.BREATH_ALPHA_AMPLITUDE * 2f * level).coerceIn(0f, 1f)
+                                AppMotion.BREATH_ALPHA_AMPLITUDE * level).coerceIn(0f, 1f)
                             val breathScale = 1f + AppMotion.BREATH_SCALE_AMPLITUDE * level
                             scaleX = breathScale
                             scaleY = breathScale
@@ -137,12 +141,30 @@ fun MotionBackdrop(
                     filterQuality = FilterQuality.High,
                 )
             }
-            // 可读性遮罩（见 KDoc 第 2 条）。比例 0.62 是「能看出封面颜色、但文字对比度
-            // 与纯色背景同档」的折中；两个主题各自用各自的背景色，所以深浅色都不会跑偏。
+            // 可读性遮罩（见 KDoc 第 2 条），**纵向渐变而不是一层平铺**。
+            //
+            // 为什么不用平铺（v2.9.0 真机观感修正）：平铺 62% 会把整屏压成同一个亮度，
+            // 彩色背景因此读起来像"一块脏灰"，而且顶部标题栏与底部控制区**本来就更需要**
+            // 对比度、中间歌词区反而更需要背景色。渐变一次解决两件事：
+            //   · 顶部 0.82 —— 标题栏/收起按钮压在最亮处容易糊；
+            //   · 中部 0.72 —— 颜色从这里露出来（这是"美化"的全部意义）；
+            //   · 底部 0.86 —— 进度条与传输键的对比度，同时让歌词面板自身的黑色渐隐带
+            //     （`NcrustLyricsPanel` 的 [background, Transparent]）接得上、不出现硬接缝。
+            // 三个值都是**压暗比例**：1.0 = 完全纯色（等于关掉动效）。
+            //
+            // ⚠️ 中部**不能靠"压得更暗"来求稳**：第一次实现用平铺 0.62，S6 截图复核的结论是
+            // 「一块脏灰」—— 灰的原因是**没有色度**，不是太亮。所以本版把颜色的来源放在
+            // `CoverBlur.SATURATION`（2.6）上，遮罩只负责对比度。
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(fallback.copy(alpha = BACKDROP_SCRIM_ALPHA))
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to fallback.copy(alpha = BACKDROP_SCRIM_TOP),
+                            0.42f to fallback.copy(alpha = BACKDROP_SCRIM_MIDDLE),
+                            1.00f to fallback.copy(alpha = BACKDROP_SCRIM_BOTTOM),
+                        )
+                    )
             )
         }
 
@@ -194,13 +216,19 @@ fun MotionBackdrop(
 }
 
 /**
- * v2.9.0 · B 档：**背景级波形的着色遮罩比例**。
+ * v2.9.0 · A 档：**模糊背景之上的可读性遮罩**（「歌词可读性优先」的落点，任务书 §7.3）。
  *
- * 背景级波形（横屏铺满底部）要能看见，但不能盖过前景。0.22 的依据：
- * 在 OLED 黑底上 22% 的主题色已经能明确读出「有东西在动」，
- * 而压在它上面的歌词行（`onBackground` 全白）对比度仍然远高于 WCAG AA 的 4.5:1。
+ * 三个值从上到下：标题栏区压得最暗、中间歌词区放亮（露出封面颜色）、底部控制区再压暗。
+ * 压暗色用**主题背景色**而不是纯黑 —— 深色主题下就是 OLED 黑，浅色主题下是暖白，
+ * 两个主题因此都不会跑偏。
+ *
+ * ⚠️ 不要与另外两个数字混淆：
+ *  - `PlayerCard.WAVE_BACKDROP_ALPHA`（0.32）= **背景级波形**那一层的不透明度（B 档）；
+ *  - `AppMotion.BREATH_ALPHA_AMPLITUDE`（0.05）= 背景随响度的明暗幅度。
  */
-private const val BACKDROP_SCRIM_ALPHA = 0.62f
+private const val BACKDROP_SCRIM_TOP = 0.82f
+private const val BACKDROP_SCRIM_MIDDLE = 0.72f
+private const val BACKDROP_SCRIM_BOTTOM = 0.86f
 
 /** C 档光晕：中心纵向位置（屏幕高的比例）。0.42 ≈ 封面中心偏上，与前景封面呼应。 */
 private const val HALO_CENTER_Y_FRACTION = 0.42f

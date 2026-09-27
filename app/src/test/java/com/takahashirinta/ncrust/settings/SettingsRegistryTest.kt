@@ -98,7 +98,7 @@ class SettingsRegistryTest {
             .mapNotNull { it.key }
             .toSet()
         assertEquals("v2.9.0 新增项", NEW_V290_KEYS, actual)
-        assertEquals(4, NEW_V290_KEYS.size)
+        assertEquals(5, NEW_V290_KEYS.size)
     }
 
     @Test
@@ -106,7 +106,7 @@ class SettingsRegistryTest {
         // v2.9.0 把统一档位接过去之后，v2.8.0 的 7 个键**全部**降级为迁移源：
         // 既不能有 UI 入口（两个键都能改档位 = 双轨），也不能悄悄删掉（回滚安装会丢用户数据）。
         val legacy = SettingsRegistry.allEntries().filter { it.legacyV290 }
-        assertEquals("v2.8.0 的 7 个键必须全部标 legacy", NEW_V280_KEYS, legacy.mapNotNull { it.key }.toSet())
+        assertEquals("v2.8.0 的 8 个键必须全部标 legacy", NEW_V280_KEYS, legacy.mapNotNull { it.key }.toSet())
         legacy.forEach {
             assertTrue("${it.key} 标了 legacy 却没有 internal ⇒ 会在设置页渲染出来", it.isInternal)
             assertTrue("${it.key} 不是 v2.8.0 新增项却标了 legacy", it.isNewInV280)
@@ -325,7 +325,7 @@ class SettingsRegistryTest {
 
     @Test
     fun `titleLessEntriesAreExactlyTheDocumentedOnes`() {
-        // 33 条：18 条内部项 − 1 条遗留键（lyrics_word_by_word 有文案但无 UI）
+        // 34 条：19 条内部项 − 1 条遗留键（lyrics_word_by_word 有文案但无 UI）
         //        + 6 条 v2.8.0 新增项（文案随 UI 阶段进 i18n）
         //        + 2 条 v2.9.0 派生键（降级水位 / 迁移水位，无 UI 入口）
         //        + 4 条库页显示偏好（文案在库页，结构探针 §1.2 建议不迁移）。
@@ -427,6 +427,7 @@ class SettingsRegistryTest {
             "motion_tier",
             "ui_motion_enabled",
             "motion_degrade_level",
+            "motion_degrade_log",
             "motion_version",
         )
 
@@ -438,6 +439,10 @@ class SettingsRegistryTest {
             "visualizer_perspective",
             "visualizer_drag",
             "visualizer_tier_version",
+            // v2.9.0 补：它是**迁移源**（迁移读它决定起始降级水位），因此必须被枚举到 ——
+            // 否则「不丢项」的双向等值断言盖不到它（probe-tier-migration.md §1.3 记的就是这个洞）。
+            // v2.8.0 的「运行期标记不进 registry」口径因此在本版被推翻，理由见上面的 KDoc。
+            "visualizer_auto_downgraded",
         )
 
         /** 无 UI 入口的内部项（§2.2 的 13 项 + 2 条账号凭证 + v2.8.0 的迁移水位）。 */
@@ -452,7 +457,8 @@ class SettingsRegistryTest {
             // 新增的 2 个派生键（降级水位 / 迁移水位）同样没有 UI 入口。
             "visualizer_tier", "visualizer_showcase", "visualizer_shockwave",
             "visualizer_particles", "visualizer_perspective", "visualizer_drag",
-            "motion_degrade_level", "motion_version",
+            "visualizer_auto_downgraded",
+            "motion_degrade_level", "motion_degrade_log", "motion_version",
         )
 
         /** 高级 / 实验性（探针清单的「是否高级/实验性」列 + v2.8.0 的炫技项）。 */
@@ -463,9 +469,10 @@ class SettingsRegistryTest {
             "artist_reco_target_id", "artist_reco_anchor_ids",
             "visualizer_showcase", "visualizer_shockwave", "visualizer_particles",
             "visualizer_perspective", "visualizer_drag", "visualizer_tier_version",
-            // v2.9.0：两个派生键标 advanced（它们是给排查用的内部水位，
+            "visualizer_auto_downgraded",
+            // v2.9.0：三个派生键标 advanced（它们是给排查用的内部水位/日志，
             // 不渲染、但语义上属于"高级/实验性"这一档）。
-            "motion_degrade_level", "motion_version",
+            "motion_degrade_level", "motion_degrade_log", "motion_version",
         )
 
         /** 无 prefs key 的行为行（结构探针 §1「非 prefs 行」全表，一条都不能丢）。 */
@@ -485,8 +492,9 @@ class SettingsRegistryTest {
             // v2.8.0 新增项：文案随 UI 阶段进 SettingsStrings（本任务禁止改 ui/i18n 目录）
             "visualizer_tier", "visualizer_showcase", "visualizer_shockwave",
             "visualizer_particles", "visualizer_perspective", "visualizer_drag",
-            // v2.9.0 的两个派生键：没有 UI 入口，也就没有文案路径。
-            "motion_degrade_level", "motion_version",
+            "visualizer_auto_downgraded",
+            // v2.9.0 的三个派生键：没有 UI 入口，也就没有文案路径。
+            "motion_degrade_level", "motion_degrade_log", "motion_version",
             // 库页显示偏好：文案在库页，设置页不迁移这 4 项
             "library_playlist_layout", "library_section_collapsed_local",
             "library_section_collapsed_netease", "library_section_collapsed_qq",

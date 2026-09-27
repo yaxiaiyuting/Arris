@@ -47,6 +47,7 @@ class MotionPrefsTest {
         assertEquals("motion_tier", MotionPrefs.KEY_TIER)
         assertEquals("ui_motion_enabled", MotionPrefs.KEY_UI_MOTION)
         assertEquals("motion_degrade_level", MotionPrefs.KEY_DEGRADE_LEVEL)
+        assertEquals("motion_degrade_log", MotionPrefs.KEY_DEGRADE_LOG)
         assertEquals("motion_version", MotionPrefs.KEY_VERSION)
     }
 
@@ -275,13 +276,17 @@ class MotionPrefsTest {
     }
 
     @Test
-    fun `界面动效总开关不重置降级水位`() {
+    fun `界面动效总开关也重置降级水位`() {
+        // v2.9.0 真机反馈后改：原本「只有改档位才重置」在 S6 上害了用户 ——
+        // 阶梯推到第 2 级把 A 档也砍了、播放页变回老样子且永不恢复，而用户在设置里
+        // 唯一的抓手就是这个开关：关掉再打开却发现什么都没回来。那不是"两个生命周期不同"，
+        // 那是用户没有任何可发现的恢复路径。
         val prefs = MemoryPrefs()
-        MotionPrefs.writeDegradeLevel(prefs, MotionDegrade.UI_ADVANCED_OFF)
+        MotionPrefs.writeDegradeLevel(prefs, MotionDegrade.UI_ALL_OFF)
         MotionPrefs.writeUiMotionEnabled(prefs, false)
         assertEquals(
-            "总开关是稳定偏好，与设备实测的降级结论生命周期不同",
-            MotionDegrade.UI_ADVANCED_OFF,
+            "用户对本组动效设置的任何显式操作都必须重置自动降级的结论",
+            MotionDegrade.NONE,
             MotionPrefs.readDegradeLevel(prefs),
         )
     }
@@ -316,9 +321,130 @@ class MotionPrefsTest {
     fun `已经在简洁档时第三级不再越界`() {
         val prefs = MemoryPrefs()
         MotionPrefs.writeTier(prefs, MotionIntensity.SIMPLE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
         MotionPrefs.writeDegradeLevel(prefs, MotionDegrade.UI_ALL_OFF)
-        assertEquals(MotionDegrade.WAVEFORM_DOWN, MotionPrefs.applyAutoDowngrade(prefs))
+        // 波形已经在最低档 ⇒ 第 3 级是**空操作** ⇒ `nextEffective` 不推进水位
+        // （水位必须始终等价于"实际生效的削减"，否则水位说降了、画面没变）。
+        assertNull(MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
         assertEquals(MotionIntensity.SIMPLE, MotionPrefs.readTier(prefs, modernDefault))
+    }
+
+    @Test
+    fun `空操作的级别会被跳过而不是白占一格水位`() {
+        // 简洁档 + 界面动效开着：B/C 档**本来就是关的** ⇒ 第 1 级是空操作 ⇒ 直接推进到第 2 级。
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeTier(prefs, MotionIntensity.SIMPLE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertEquals(MotionDegrade.UI_ALL_OFF, MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
+        assertFalse("A 档必须被砍掉", MotionPrefs.readEffects(prefs, modernDefault).anyUiMotion)
+    }
+
+    @Test
+    fun `静态判据已在最低档的设备止步于第一级`() {
+        // S6（API 24）实测退化：静态判据判低端 ⇒ 起始档 = 简洁 ⇒ 第 1 级是空操作、
+        // 第 2 级会砍掉这台设备**唯一**的动效（A 档），而砍了也白砍（它本来就慢）。
+        // 所以 `maxLevelFor(atFloorTier = true)` 把阶梯封在第一级。
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertEquals(
+            MotionDegrade.UI_ADVANCED_OFF,
+            MotionPrefs.applyAutoDowngrade(prefs, MotionIntensity.SIMPLE, severe = true),
+        )
+        assertNull(
+            "封顶之后不再推进（第 2 级会砍掉低端设备唯一的动效）",
+            MotionPrefs.applyAutoDowngrade(prefs, MotionIntensity.SIMPLE, severe = true),
+        )
+    }
+
+    @Test
+    fun `轻微超标只砍 B 档界面动效`() {
+        // PCL110 实测判据是 24/60（正好卡在 40% 门槛）—— 一台 144Hz 旗舰"偶尔抖"，
+        // 不该因此永久失去唯一看得见的界面动效。非严重超标封在第 1 级。
+        assertFalse(MotionDegrade.isSevere(24, 60))
+        assertTrue("刚好越线不算严重", MotionDegrade.isSevere(42, 60))
+        assertTrue(MotionDegrade.isSevere(54, 60))
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertEquals(
+            MotionDegrade.UI_ADVANCED_OFF,
+            MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = false),
+        )
+        assertNull(
+            "轻微超标不得再往下推（第 2 级会砍掉 A 档）",
+            MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = false),
+        )
+        assertTrue("A 档必须留着", MotionPrefs.readEffects(prefs, modernDefault).anyBasic)
+    }
+
+    @Test
+    fun `严重超标才允许推过第一级`() {
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertEquals(
+            MotionDegrade.UI_ADVANCED_OFF,
+            MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = true),
+        )
+        assertEquals(
+            MotionDegrade.UI_ALL_OFF,
+            MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = true),
+        )
+    }
+
+    @Test
+    fun `v2 纠正迁移把过量的降级夹回来`() {
+        // 真机现场：v1 的阶梯把水位推到 2（A 档被砍），而当时判据只是刚好越线。
+        // 升级到 v2 必须把那台设备救回来，而不是让它永远停在"老 UI"。
+        val prefs = MemoryPrefs()
+        prefs.putRaw(MotionPrefs.KEY_VERSION, 1)
+        prefs.putRaw(MotionPrefs.KEY_DEGRADE_LEVEL, MotionDegrade.UI_ALL_OFF)
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SHOWCASE)
+        prefs.putRaw(MotionPrefs.KEY_UI_MOTION, true)
+
+        assertTrue(MotionPrefs.migrate(prefs, modernDefault))
+        assertEquals(
+            "非严重超标的上界是第 1 级",
+            MotionDegrade.UI_ADVANCED_OFF,
+            MotionPrefs.readDegradeLevel(prefs),
+        )
+        assertEquals("纠正动作必须留痕", MotionPrefs.CURRENT_VERSION, MotionPrefs.readVersion(prefs))
+        val log = MotionPrefs.readDegradeLog(prefs)
+        assertTrue("日志要写清把什么夹成了什么：$log", log.contains("v2-migration-clamp"))
+    }
+
+    @Test
+    fun `纠正迁移不会把本来就在第一级的盘改坏`() {
+        val prefs = MemoryPrefs()
+        prefs.putRaw(MotionPrefs.KEY_VERSION, 1)
+        prefs.putRaw(MotionPrefs.KEY_DEGRADE_LEVEL, MotionDegrade.UI_ADVANCED_OFF)
+        MotionPrefs.migrate(prefs, modernDefault)
+        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionPrefs.readDegradeLevel(prefs))
+        assertEquals("没有需要夹的东西就不该写日志", "", MotionPrefs.readDegradeLog(prefs))
+    }
+
+    @Test
+    fun `降级会写一条可解释的日志`() {
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        MotionPrefs.applyAutoDowngrade(prefs, modernDefault, reason = "over-budget 54/60", severe = true)
+        val log = MotionPrefs.readDegradeLog(prefs)
+        assertTrue("日志必须写清级别：$log", log.contains("level=1"))
+        assertTrue("日志必须写清判据：$log", log.contains("over-budget 54/60"))
+        assertTrue("日志必须写清当时的档位：$log", log.contains("tier=2"))
+    }
+
+    @Test
+    fun `降级日志有界且从头部丢最旧的整行`() {
+        var log = ""
+        for (i in 1..12) log = MotionPrefs.appendDegradeLog(log, "entry-$i")
+        val lines = log.lines()
+        assertEquals("只保留最后几条", MotionPrefs.DEGRADE_LOG_KEEP, lines.size)
+        assertEquals("最新的那条必须在", "entry-12", lines.last())
+        assertTrue("不能出现空行（最新一条被切一半的形态）", lines.none { it.isEmpty() })
+        assertTrue(log.length <= MotionPrefs.DEGRADE_LOG_MAX_CHARS)
     }
 
     @Test
@@ -338,7 +464,8 @@ class MotionPrefsTest {
     @Test
     fun `当前水位常量与阶梯上界一致`() {
         assertEquals(MotionDegrade.WAVEFORM_DOWN, MotionDegrade.MAX)
-        assertEquals(1, MotionPrefs.CURRENT_VERSION)
+        // v1 = v2.9.0 首版；v2 = 真机反馈后的纠正迁移（把过量的降级夹回新规则的上界）。
+        assertEquals(2, MotionPrefs.CURRENT_VERSION)
         assertEquals(VisualizerTier.REFINED, MotionIntensity.DEFAULT)
     }
 }

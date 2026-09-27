@@ -99,7 +99,13 @@ object MotionClock {
         return changed
     }
 
-    /** 换歌 / 停止：清空包络与特效池（与 `WaveformStore.clear()` 一起调）。 */
+    /**
+     * 换歌：清空**界面动效这一层**的包络与特效池（基线、脉冲、光晕、粒子）。
+     *
+     * 刻意**不清** `WaveformStore` 的环形缓冲：那会让新歌开头几帧的波形是空的
+     * （上一首的柱子滚出去本来就是既有的"换歌观感"）。本层的状态是自己的，
+     * 清它是为了「新歌的第一个强拍不被上一首的基线吃掉」。
+     */
     fun clear() {
         envelope.clear()
         backdrop.clear()
@@ -158,17 +164,31 @@ fun MotionFrameClock(
 
     // ---- 帧时间监控（一次性自动降级，每进程最多推进一级）----
     val hostActivity = remember(context) { findHostActivity(context) }
+    // v2.9.0：多加一条「本进程还没判定过」。`FrameBudgetPolicy` 只保证**每个实例**判定一次，
+    // 而这个 `DisposableEffect` 会在播放器收起再展开（或 motion/monitorEnabled 变化）时
+    // 重新注册一个新实例 —— S6 实测因此出现过「同一进程水位 0 → 2」。真正的「每进程一级」
+    // 由 `MotionPrefs.hasDecidedDegradeThisProcess()` 提供。
     val monitorEnabled = clockNeeded &&
         motion.degradeLevel < MotionDegrade.MAX &&
+        !MotionPrefs.hasDecidedDegradeThisProcess() &&
         (waveform.tier > VisualizerTier.SIMPLE || motion.anyUiMotion)
     DisposableEffect(hostActivity, monitorEnabled) {
         val activity = hostActivity
         if (!monitorEnabled || activity == null) {
             onDispose { }
         } else {
-            val monitor = VisualizerFrameMonitor.start(activity) {
+            val monitor = VisualizerFrameMonitor.start(activity) { overBudget, windowFrames ->
                 // 降级动作本身也在隔离边界里（写 prefs + 刷新状态都可能失败，失败就当没降）。
-                runCatching { MotionPrefs.applyAutoDowngrade(activity) }
+                // reason 带上判据本身：`motion_degrade_log` 落盘后，这就是"为什么画面变简单了"
+                // 的唯一解释来源（真机上缺了它，用户只能报"回退成老 UI 了"）。
+                runCatching {
+                    MotionPrefs.applyAutoDowngrade(
+                        activity,
+                        reason = "over-budget $overBudget/$windowFrames",
+                        // 轻微超标只砍 B/C；严重超标（≥70%）才允许继续往下推（见 maxLevelFor 的 KDoc）。
+                        severe = MotionDegrade.isSevere(overBudget, windowFrames),
+                    )
+                }
             }
             onDispose { monitor?.stop() }
         }

@@ -22,7 +22,7 @@ import android.content.SharedPreferences
  * 「类型不符 ⇒ 抛异常 ⇒ 被读路径吞掉 ⇒ 回落默认值」这条真实链路在测试里抹掉。
  *
  * 与 v2.8.0 的 `VisualizerPrefsTest` 里那个私有 FakePrefs 是同一个东西；
- * v2.9.0 起提到公共位置，供 `MotionPrefsTest` / `MotionSettingsReachabilityTest` 复用。
+ * v2.9.0 起提到公共位置，供 `MotionPrefsTest` 与 `SettingsRegistryTest` 等复用。
  */
 class MemoryPrefs(
     private val values: MutableMap<String, Any?> = mutableMapOf(),

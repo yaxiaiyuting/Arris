@@ -48,7 +48,7 @@ internal class VisualizerFrameMonitor private constructor(
     /** 监听器本体：**具名类**而不是 lambda —— 触发时要注销自己（lambda 里 `this` 不指向它）。 */
     private class Listener(
         private val window: Window,
-        private val onSustainedOverBudget: () -> Unit,
+        private val onSustainedOverBudget: (overBudgetFrames: Int, windowFrames: Int) -> Unit,
     ) : Window.OnFrameMetricsAvailableListener {
 
         private val policy = FrameBudgetPolicy()
@@ -61,7 +61,9 @@ internal class VisualizerFrameMonitor private constructor(
                 if (!policy.onFrame(duration)) return
                 // 先注销再回调：即使回调抛异常（也被下面吞掉），也不会继续采样。
                 runCatching { this.window.removeOnFrameMetricsAvailableListener(this) }
-                onSustainedOverBudget()
+                // v2.9.0：把"窗口内超标多少帧"一并交出去 —— 降级日志必须能写清判据，
+                // 否则下一次再有人看到"画面自己变简单了"仍然无从归因。
+                onSustainedOverBudget(policy.overBudgetCount(), FrameBudgetPolicy.WINDOW_FRAMES)
             }
         }
     }
@@ -73,7 +75,10 @@ internal class VisualizerFrameMonitor private constructor(
          * @param onSustainedOverBudget 判定「持续超标」时回调一次（在主线程上）。调用方负责
          *   有界降级；本类在回调后立即注销。
          */
-        fun start(activity: Activity, onSustainedOverBudget: () -> Unit): VisualizerFrameMonitor? {
+        fun start(
+            activity: Activity,
+            onSustainedOverBudget: (overBudgetFrames: Int, windowFrames: Int) -> Unit,
+        ): VisualizerFrameMonitor? {
             val window = runCatching { activity.window }.getOrNull() ?: return null
             val handler = runCatching { Handler(Looper.getMainLooper()) }.getOrNull() ?: return null
             val listener = Listener(window, onSustainedOverBudget)

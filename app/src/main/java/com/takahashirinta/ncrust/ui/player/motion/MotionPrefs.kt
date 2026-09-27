@@ -69,6 +69,7 @@ object MotionPrefs {
     const val KEY_TIER = "motion_tier"
     const val KEY_UI_MOTION = "ui_motion_enabled"
     const val KEY_DEGRADE_LEVEL = "motion_degrade_level"
+    const val KEY_DEGRADE_LOG = "motion_degrade_log"
     const val KEY_VERSION = "motion_version"
 
     // ---- 默认值 ----
@@ -78,11 +79,20 @@ object MotionPrefs {
     /** 降级水位默认 0（未降级）。 */
     const val DEFAULT_DEGRADE_LEVEL = MotionDegrade.NONE
 
+    /** 降级日志的默认值（空串 = 从未降级过）。 */
+    const val DEFAULT_DEGRADE_LOG = ""
+
+    /** 日志里保留的最后几条（每条一行，越新越靠后）。 */
+    const val DEGRADE_LOG_KEEP = 5
+
+    /** 日志总长上限（字符）。截断只从**头部**丢最旧的整行 —— 绝不把最新一条切一半。 */
+    const val DEGRADE_LOG_MAX_CHARS = 700
+
     /** 迁移水位的「未迁移」值：缺 key 或 v2.8.0 及更早的盘。 */
     const val VERSION_PRE_V290 = 0
 
     /** 当前水位。加语义 ⇒ +1 并在 [migrate] 里补一段搬运逻辑。 */
-    const val CURRENT_VERSION = 1
+    const val CURRENT_VERSION = 2
 
     // ------------------------------------------------------------------
     // 纯读（键缺失 / 类型不符都不抛异常 —— 坏数据最坏只是回落默认值）
@@ -109,6 +119,12 @@ object MotionPrefs {
 
     fun readDegradeLevel(prefs: SharedPreferences): Int =
         MotionDegrade.sanitize(intOrNull(prefs, KEY_DEGRADE_LEVEL) ?: DEFAULT_DEGRADE_LEVEL)
+
+    /** 降级日志（任务书 §8.1「降级日志落盘」）。空串 = 从未降级过。 */
+    fun readDegradeLog(prefs: SharedPreferences): String =
+        runCatching { prefs.getString(KEY_DEGRADE_LOG, DEFAULT_DEGRADE_LOG) }
+            .getOrNull()
+            .orEmpty()
 
     /** 缺 key 视为「未迁移」（[VERSION_PRE_V290]），不是「已迁移到 0」—— 两义性必须分清。 */
     fun readVersion(prefs: SharedPreferences): Int =
@@ -139,14 +155,31 @@ object MotionPrefs {
             it.putInt(KEY_TIER, MotionIntensity.sanitize(tier, MotionIntensity.REFINED))
             it.putInt(KEY_DEGRADE_LEVEL, MotionDegrade.NONE)
         }
+        // 用户显式改档位：本进程的「已判定」标记也一起清掉 —— 否则用户改完档位，
+        // 这一进程内再也不会做任何自动降级（那是"改了设置没反应"的另一种形态）。
+        degradeDecidedThisProcess = false
     }
 
     /**
-     * 写「界面动效」总开关。**不顺带重置降级水位**：总开关是用户的稳定偏好，
-     * 降级水位是设备实测的结论，两者的生命周期不同（重置只发生在改档位那一刻）。
+     * 写「界面动效」总开关。
+     *
+     * v2.9.0（真机反馈后改）：**同时重置降级水位**。
+     *
+     * 原本的设计是「只有改档位才重置」，理由是「总开关是稳定偏好、降级水位是设备实测结论」。
+     * 真机上这个区分害了用户：S6 上阶梯推到第 2 级把 A 档也砍了，播放页变回 v2.8.0 的老样子
+     * 且**永不恢复**，而用户在设置里唯一的抓手就是「界面动效」这个开关 ——
+     * 关掉再打开却发现什么都没回来（因为水位没被重置）。那不是"两个生命周期不同"，
+     * 那是**用户没有任何可发现的恢复路径**。
+     *
+     * 现在的语义：**任何一次用户对本组动效设置的显式操作，都重置自动降级的结论。**
+     * 自动降级的本意是"替用户省一点"，不是"覆盖用户的意图"。
      */
     fun writeUiMotionEnabled(prefs: SharedPreferences, enabled: Boolean) {
-        safeEdit(prefs) { it.putBoolean(KEY_UI_MOTION, enabled) }
+        safeEdit(prefs) {
+            it.putBoolean(KEY_UI_MOTION, enabled)
+            it.putInt(KEY_DEGRADE_LEVEL, MotionDegrade.NONE)
+        }
+        degradeDecidedThisProcess = false
     }
 
     fun writeDegradeLevel(prefs: SharedPreferences, level: Int) {
@@ -194,6 +227,28 @@ object MotionPrefs {
      */
     fun migrate(prefs: SharedPreferences, deviceDefault: Int): Boolean {
         if (readVersion(prefs) >= CURRENT_VERSION) return false
+        // v2（v2.9.0 真机反馈后的纠正迁移）：v1 的阶梯在两台真机上都被推到了第 2 级
+        // （A 档被砍、播放页变回 v2.8.0 的老样子），而当时的判据只是"刚好越线"。
+        // 新规则把非严重超标封在第 1 级，所以这里把**已经落盘的过量降级夹回来** ——
+        // 否则那两台设备永远不会恢复（水位是单向的，用户也没有可发现的恢复路径）。
+        val clampTo = MotionDegrade.maxLevelFor(
+            atFloorTier = MotionIntensity.sanitize(deviceDefault, MotionIntensity.REFINED) ==
+                MotionIntensity.SIMPLE,
+            severe = false,
+        )
+        val before = readDegradeLevel(prefs)
+        if (before > clampTo) {
+            safeEdit(prefs) {
+                it.putInt(KEY_DEGRADE_LEVEL, clampTo)
+                it.putString(
+                    KEY_DEGRADE_LOG,
+                    appendDegradeLog(
+                        readDegradeLog(prefs),
+                        degradeLogEntry(before.coerceAtMost(clampTo), readTier(prefs, deviceDefault), readUiMotionEnabled(prefs), "v2-migration-clamp $before->$clampTo"),
+                    ),
+                )
+            }
+        }
         val legacyTier = intOrNull(prefs, LegacyKeys.KEY_TIER)
         val legacyShowcase = bool(prefs, LegacyKeys.KEY_SHOWCASE, false)
         val legacyAutoDowngraded = bool(prefs, LegacyKeys.KEY_AUTO_DOWNGRADED, false)
@@ -222,15 +277,58 @@ object MotionPrefs {
      *
      * @return 降级后的水位；`null` = 不动作（已到顶）。
      */
-    fun applyAutoDowngrade(prefs: SharedPreferences): Int? {
-        val next = MotionDegrade.next(readDegradeLevel(prefs)) ?: return null
-        val currentTier = readTier(prefs, MotionIntensity.REFINED)
+    fun applyAutoDowngrade(
+        prefs: SharedPreferences,
+        deviceDefaultTier: Int = MotionIntensity.REFINED,
+        reason: String = "frame-budget",
+        severe: Boolean = true,
+    ): Int? {
+        val currentTier = readTier(prefs, deviceDefaultTier)
+        val uiOn = readUiMotionEnabled(prefs)
+        val current = readEffects(prefs, deviceDefaultTier)
+        // 逐级试到第一个**真的会改变画面**的级别；静态判据已在最低档的设备止步于第 1 级
+        // （理由见 MotionDegrade.maxLevelFor 的 KDoc —— S6 实测退化就是从这里来的）。
+        val atFloorTier = MotionIntensity.sanitize(deviceDefaultTier, MotionIntensity.REFINED) ==
+            MotionIntensity.SIMPLE
+        val next = MotionDegrade.nextEffective(
+            current = readDegradeLevel(prefs),
+            advancedUiOn = uiOn && current.tier >= MotionIntensity.REFINED,
+            basicUiOn = uiOn,
+            waveformAboveFloor = currentTier > MotionIntensity.SIMPLE,
+            maxLevel = MotionDegrade.maxLevelFor(atFloorTier, severe),
+        ) ?: return null
+        degradeDecidedThisProcess = true
         val cutTier = MotionDegrade.cutsWaveformTier(next) && currentTier > MotionIntensity.SIMPLE
+        val entry = degradeLogEntry(next, currentTier, uiOn, reason)
         safeEdit(prefs) {
             it.putInt(KEY_DEGRADE_LEVEL, next)
             if (cutTier) it.putInt(KEY_TIER, currentTier - 1)
+            // 降级日志落盘（任务书 §8.1）：用户下次打开设置页前，这条记录是唯一能解释
+            // "为什么画面变简单了"的东西 —— 真机上正是缺了它，用户只能报"回退成老 UI 了"。
+            it.putString(KEY_DEGRADE_LOG, appendDegradeLog(readDegradeLog(prefs), entry))
         }
         return next
+    }
+
+    /** 一条降级记录：`<epochMs> level=<n> tier=<a>→<b> ui=<bool> why=<reason>`。 */
+    fun degradeLogEntry(level: Int, tierBefore: Int, uiMotionOn: Boolean, reason: String): String =
+        "${System.currentTimeMillis()} level=$level tier=$tierBefore ui=$uiMotionOn why=$reason"
+
+    /**
+     * 追加一条日志，只保留最后 [DEGRADE_LOG_KEEP] 条、总长不超过 [DEGRADE_LOG_MAX_CHARS]。
+     * **从头部丢最旧的整行**，绝不把最新一条切一半（切一半的日志比没有更糟）。
+     */
+    fun appendDegradeLog(existing: String, entry: String): String {
+        val lines = (existing.lines().filter { it.isNotBlank() } + entry.trim())
+            .filter { it.isNotEmpty() }
+            .takeLast(DEGRADE_LOG_KEEP)
+            .toMutableList()
+        // 太长就从**头部**丢最旧的整行，直到放得下；只剩一行时不再丢（宁可略超长，
+        // 也不能把最新那条切一半 —— 半条日志比没有更糟）。
+        while (lines.size > 1 && lines.joinToString("\n").length > DEGRADE_LOG_MAX_CHARS) {
+            lines.removeAt(0)
+        }
+        return lines.joinToString("\n")
     }
 
     // ------------------------------------------------------------------
@@ -246,6 +344,23 @@ object MotionPrefs {
     )
 
     private var loadedFromDisk = false
+
+    /**
+     * v2.9.0：**进程内**已经判定过一次降级。
+     *
+     * 为什么需要它（真机实测暴露的缺口）：`FrameBudgetPolicy` 只保证「**每个实例**最多判定一次」，
+     * 而 `MotionFrameClock` 的 `DisposableEffect` 会在播放器收起再展开时**重新注册一个新实例**
+     * （`monitorEnabled` / `motion` 变化也会重建）。S6 实测因此出现「同一个进程里水位从 0 连跳到 2」
+     * —— 与「每进程最多推进一级」的书面契约不符（虽然有界性没被破坏：上界仍是 3）。
+     *
+     * 所以把「每进程一次」落在**进程级标志**上，而不是依赖监听器的生命周期。
+     * 用户手动改档位时（[writeTier]）连同水位一起清零，用户显式改档位永远优先于自动降级。
+     */
+    @Volatile
+    private var degradeDecidedThisProcess: Boolean = false
+
+    /** 帧时间监控在注册前先问它：本进程是否已经判定过降级（判定过就不必再注册监听器）。 */
+    fun hasDecidedDegradeThisProcess(): Boolean = degradeDecidedThisProcess
 
     /** 组合期读这一个状态：设置变化 / 自动降级时只重组一次。 */
     val effects: State<MotionEffects> get() = effectsStateHolder
@@ -299,14 +414,22 @@ object MotionPrefs {
      *
      * @return 降级后的水位；`null` = 不动作（已到顶）。
      */
-    fun applyAutoDowngrade(context: Context): Int? {
-        val next = runCatching { applyAutoDowngrade(prefs(context)) }.getOrNull() ?: return null
+    fun applyAutoDowngrade(
+        context: Context,
+        reason: String = "frame-budget",
+        severe: Boolean = true,
+    ): Int? {
+        val deviceDefault = deviceDefaultTier(context)
+        val next = runCatching {
+            applyAutoDowngrade(prefs(context), deviceDefault, reason, severe)
+        }.getOrNull() ?: return null
         refresh(context)
         return next
     }
 
     internal fun resetForTest() {
         loadedFromDisk = false
+        degradeDecidedThisProcess = false
         effectsStateHolder.value = MotionEffects.of(
             tier = MotionIntensity.REFINED,
             uiMotionEnabled = DEFAULT_UI_MOTION,

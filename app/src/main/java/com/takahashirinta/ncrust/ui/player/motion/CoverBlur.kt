@@ -207,7 +207,64 @@ object CoverBlur {
         }
     }
 
-    /** 降采样 + 模糊一步到位（生产路径用的就是它）。 */
+    /**
+     * v2.9.0（真机观感修正）：**提饱和度 + 提亮度 + 抬黑位**。
+     *
+     * ## 为什么必须有这一步（S6 实测数据，不是审美偏好）
+     *
+     * 只做「降采样 + 模糊」的背景在真机上是**灰的**：S6 竖屏实测逐段平均色是
+     * `[43,43,46]`、`[38,38,40]`、`[45,45,48]` —— 三个通道几乎相等（色度≈0）。
+     * 原因不是 bug，是**盒式平均的必然结果**：一张高对比、多色的插画封面被平均成 32×32 之后，
+     * 互补色互相抵消，剩下的就是它自己的平均亮度。再叠 62% 的主题色遮罩，
+     * 画面读起来就是「一块脏灰」而不是「这张封面的颜色」。
+     *
+     * ## 三步（顺序不能反）
+     *
+     * 1. **提饱和度**（[SATURATION]）：把每个通道推离该像素的亮度
+     *    `c' = luma + (c - luma) × sat`。这是"vibrance"的整数近似 ——
+     *    它**只放大已有的色度**，不会给灰像素凭空造色（`c == luma` 时 `c'` 不变）。
+     * 2. **抬黑位**（[BLACK_FLOOR]）：`c'' = floor + c' × (255 - floor) / 255`。
+     *    模糊之后的暗部会压到接近纯黑，而纯黑在主题色遮罩下与"没有背景"无法区分 ——
+     *    抬一个下限，背景才始终**可辨认**（也让"关掉动效 = 纯色背景"这件事在观感上仍有区别）。
+     * 3. **提亮**（[BRIGHTNESS_GAIN]）：最后整体乘一个增益。放在抬黑位之后，
+     *    否则增益会把黑位又压回去。
+     *
+     * 全程整数运算、**原地修改**（这张图刚刚才被算出来，没有别的持有者），
+     * 1024 个像素各三步算术 ≈ 微秒级。
+     */
+    fun vibrance(
+        pixels: IntArray,
+        size: Int,
+        saturation: Float = SATURATION,
+        gain: Float = BRIGHTNESS_GAIN,
+        blackFloor: Int = BLACK_FLOOR,
+    ): IntArray {
+        require(size > 0) { "size must be > 0" }
+        require(pixels.size >= size * size) { "pixel array is smaller than size*size" }
+        val count = size * size
+        for (i in 0 until count) {
+            val p = pixels[i]
+            val a = (p ushr A_SHIFT) and CHANNEL_MASK
+            val r = (p ushr R_SHIFT) and CHANNEL_MASK
+            val g = (p ushr G_SHIFT) and CHANNEL_MASK
+            val b = p and CHANNEL_MASK
+            // Rec.709 亮度（整数近似 ×256，避免浮点）。
+            val luma = (r * 54 + g * 183 + b * 19) shr 8
+            val nr = adjust(r, luma, saturation, gain, blackFloor)
+            val ng = adjust(g, luma, saturation, gain, blackFloor)
+            val nb = adjust(b, luma, saturation, gain, blackFloor)
+            pixels[i] = (a shl A_SHIFT) or (nr shl R_SHIFT) or (ng shl G_SHIFT) or nb
+        }
+        return pixels
+    }
+
+    private fun adjust(value: Int, luma: Int, saturation: Float, gain: Float, blackFloor: Int): Int {
+        val saturated = luma + ((value - luma) * saturation).toInt()
+        val floored = blackFloor + saturated * (CHANNEL_MASK - blackFloor) / CHANNEL_MASK
+        return (floored * gain).toInt().coerceIn(0, CHANNEL_MASK)
+    }
+
+    /** 降采样 + 模糊 + 观感修正一步到位（生产路径用的就是它）。 */
     fun downsampleAndBlur(
         src: IntArray,
         srcW: Int,
@@ -215,7 +272,35 @@ object CoverBlur {
         dst: Int = DOWNSAMPLE_PX,
         radius: Int = BLUR_RADIUS_PX,
         passes: Int = BLUR_PASSES,
-    ): IntArray = blur(downsample(src, srcW, srcH, dst), dst, radius, passes)
+        vibrance: Boolean = true,
+    ): IntArray {
+        val blurred = blur(downsample(src, srcW, srcH, dst), dst, radius, passes)
+        return if (vibrance) vibrance(blurred, dst) else blurred
+    }
+
+    /**
+     * 提饱和度倍数。1.8 的依据：S6 实测「模糊后色度≈0」，需要接近翻倍的推离才能让
+     * 主题色遮罩之下仍然读得出**是这张封面的颜色**；再高（≥2.4）会让本就有色的封面
+     * 溢出成霓虹色（整数运算还会在通道上先撞到 255）。
+     */
+    const val SATURATION = 2.6f
+
+    /**
+     * 整体提亮倍数。**1.12** —— 第二次真机观感修正后调低了。
+     *
+     * 第一次取 1.30，结果是「灰得更亮」（S6 截图复核），因为提亮不产生色度。
+     * 真正让背景"有颜色"的是 [SATURATION]；亮度只需要把抬黑位之后的暗部稍微顶起来。
+     */
+    const val BRIGHTNESS_GAIN = 1.12f
+
+    /**
+     * 暗部下限（0..255）。**24** ≈ 9%。
+     *
+     * 两个作用：① 保证最暗的封面也不会与"关掉动效后的纯色背景"长得一样；
+     * ② 给底部的可读性遮罩留一点"底色"，否则顶部/底部的 0.82 遮罩压下来就是纯黑，
+     * 与歌词面板自身的黑色渐隐带之间会出现一条硬接缝（S6 截图复核时看到的正是它）。
+     */
+    const val BLACK_FLOOR = 24
 }
 
 /**
@@ -240,6 +325,9 @@ object CoverBlurCache {
 
     /** 缓存条目数上限（每张 32×32 ARGB = 4 KB，4 张合计 16 KB）。 */
     const val CACHE_ENTRIES: Int = 4
+
+    /** 诊断 tag：模糊失败时打一条 WARN（现场唯一能区分"没开"与"算失败"的信号）。 */
+    private const val TAG = "CoverBlur"
 
     private val cache = LruCache<String, ImageBitmap>(CACHE_ENTRIES)
 
@@ -271,7 +359,14 @@ object CoverBlurCache {
             return it
         }
         val result = withContext(Dispatchers.Default) {
-            runCatching { compute(bitmap) }.getOrNull()
+            runCatching { compute(bitmap) }
+                .onFailure {
+                    // v2.9.0：**必须留痕**。PCL110 上 `Config.HARDWARE` 让 getPixels 抛异常，
+                    // 而"取不到就回退纯色"的契约把这个失败完全吞掉了 —— 现场表现只是
+                    // "这台设备没有美化"，谁都不会想到是像素读取失败。
+                    android.util.Log.w(TAG, "封面模糊失败，回退纯色背景", it)
+                }
+                .getOrNull()
         } ?: return null
         misses++
         cache.put(key, result)
@@ -289,20 +384,42 @@ object CoverBlurCache {
     }
 
     /**
-     * 真正的计算：`Bitmap` → 32×32 降采样 → 三遍盒式模糊 → `ImageBitmap`。
+     * 真正的计算：`Bitmap` →（必要时先转软件位图）→ 32×32 降采样 → 三遍盒式模糊 →
+     * 观感修正 → `ImageBitmap`。
      *
      * 全程只做一次 `getPixels`（一次 JNI 往返、一次源像素缓冲分配）。源图很大时
      * 这一个 `IntArray` 就是本方案唯一的大分配 —— 它在**每次切歌**发生一次，
      * 且立即被 GC 回收（不缓存源像素）。这是「不缓存中间态」的有意取舍：
      * 缓存 1000² 的像素数组（4 MB）比重新读一次像素贵得多。
+     *
+     * ## ⚠️ `Config.HARDWARE` 必须先 copy 成软件位图（PCL110 真机踩到，API 26+ 全中）
+     *
+     * Coil 在 API 26+ 上默认允许**硬件位图**（`allowHardware`），而
+     * `Bitmap.getPixels` 对 `Config.HARDWARE` 会抛
+     * `IllegalStateException: unable to getPixels(), pixel access is not supported on
+     * Config#HARDWARE bitmaps`。
+     *
+     * 症状非常隐蔽：背景层**静默**退回纯色（异常被 `runCatching` 吞掉、日志里什么都没有），
+     * 于是「S6（API 24，没有硬件位图）有美化、PCL110（API 36）没有」——
+     * 看起来像"新设备不支持"，其实是**唯一一条读取路径在 API 26+ 上必然失败**。
+     * 官方给出的唯一读法就是 `copy(ARGB_8888, false)`（会走一次 GPU→CPU 回读）。
+     *
+     * 代价：API 26+ 上多一次全尺寸 copy。它发生在**每首歌一次**、且在
+     * `Dispatchers.Default` 上，与 `getPixels` 本身同量级，可以接受。
      */
     private fun compute(bitmap: Bitmap): ImageBitmap {
         require(!bitmap.isRecycled) { "cover bitmap is recycled" }
-        val w = bitmap.width
-        val h = bitmap.height
-        require(w > 0 && h > 0) { "cover bitmap has zero size" }
+        require(bitmap.width > 0 && bitmap.height > 0) { "cover bitmap has zero size" }
+        val source = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                ?: error("cannot copy hardware bitmap to software")
+        } else {
+            bitmap
+        }
+        val w = source.width
+        val h = source.height
         val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
         val out = CoverBlur.downsampleAndBlur(pixels, w, h)
         val size = CoverBlur.DOWNSAMPLE_PX
         val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)

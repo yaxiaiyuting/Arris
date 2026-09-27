@@ -512,6 +512,22 @@ object SettingsRegistry {
                 legacyV290 = true,
             )
         )
+        // v2.9.0 补：v2.8.0 实际写了 **8 个**键，但 registry 当时只枚举了 7 个 ——
+        // `visualizer_auto_downgraded` 既不在 registry、也不在 42 键清单里，于是
+        // 「不丢项」的双向等值断言**盖不到它**（探针 probe-tier-migration.md §1.3 记录了这个洞）。
+        // v2.9.0 的迁移仍然读它，所以它必须进入枚举集合：Internal（无 UI 入口）+ legacyV290。
+        add(
+            pref(
+                key = "visualizer_auto_downgraded",
+                type = SettingsEntryType.INFO,
+                default = false, // VisualizerPrefs.DEFAULT_AUTO_DOWNGRADED
+                group = SettingsGroup.PLAYBACK,
+                advanced = true,
+                internal = true,
+                newInV280 = true,
+                legacyV290 = true,
+            )
+        )
         add(
             pref(
                 key = "visualizer_tier_version",
@@ -568,6 +584,17 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 advanced = true,
                 internal = true, // 派生状态：帧时间实测写它，没有 UI 入口
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_degrade_log",
+                type = SettingsEntryType.TEXT,
+                default = MotionPrefs.DEFAULT_DEGRADE_LOG, // ""（从未降级）
+                group = SettingsGroup.PLAYBACK,
+                advanced = true,
+                internal = true, // 诊断用：见 motion_degrade_level 的说明
                 newInV290 = true,
             )
         )

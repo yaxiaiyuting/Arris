@@ -158,6 +158,17 @@ class MotionEffectsTest {
     }
 
     @Test
+    fun `非严重超标时阶梯封在第一级`() {
+        // 两台真机各踩过一次：判据只是"刚好越线"，却把 A 档也砍了。
+        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionDegrade.maxLevelFor(atFloorTier = false, severe = false))
+        assertEquals(MotionDegrade.MAX, MotionDegrade.maxLevelFor(atFloorTier = false, severe = true))
+        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionDegrade.maxLevelFor(atFloorTier = true, severe = true))
+        assertFalse(MotionDegrade.isSevere(24, 60))
+        assertFalse(MotionDegrade.isSevere(0, 0))
+        assertTrue(MotionDegrade.isSevere(54, 60))
+    }
+
+    @Test
     fun `降级级别与界面动效的对应关系是单调的`() {
         // 单调性：水位升高 ⇒ 开着的能力位只减不增（防止将来有人写出"降级反而开了新效果"）。
         var previous = effects(MotionIntensity.SHOWCASE, degrade = 0)

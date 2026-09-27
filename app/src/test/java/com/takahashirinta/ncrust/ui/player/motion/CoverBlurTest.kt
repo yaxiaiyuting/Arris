@@ -174,6 +174,48 @@ class CoverBlurTest {
     }
 
     @Test
+    fun `观感修正把灰色糊图推成有色`() {
+        // S6 实测：只做降采样 + 模糊的背景平均色是 [43,43,46] —— 三通道几乎相等（色度≈0），
+        // 读起来是"一块脏灰"。vibrance 必须把色度拉开，同时不改变灰像素。
+        val size = 4
+        val source = IntArray(size * size) { argb(255, 90, 60, 70) }
+        val before = red(source[0]) - green(source[0])
+        val beforeLuma = red(source[0])
+        // ⚠️ `vibrance` 是**原地修改**（那张图刚算出来、没有别的持有者），
+        // 所以基线必须在调用**之前**取 —— 这正是本用例第一版踩到的坑。
+        val out = CoverBlur.vibrance(source, size)
+        val after = red(out[0]) - green(out[0])
+        assertTrue("色度必须被拉开（$before → $after）", after > before)
+        assertTrue("整体必须更亮（$beforeLuma → ${red(out[0])}）", red(out[0]) > beforeLuma)
+    }
+
+    @Test
+    fun `观感修正不会给纯灰像素凭空造色`() {
+        val size = 4
+        val grey = IntArray(size * size) { argb(255, 80, 80, 80) }
+        val out = CoverBlur.vibrance(grey, size)
+        assertEquals("灰像素的三通道必须仍然相等", red(out[0]), green(out[0]))
+        assertEquals(green(out[0]), blue(out[0]))
+    }
+
+    @Test
+    fun `观感修正抬了黑位所以最暗的封面仍可辨认`() {
+        val size = 4
+        val black = IntArray(size * size) { argb(255, 0, 0, 0) }
+        val out = CoverBlur.vibrance(black, size)
+        assertTrue("纯黑必须被抬到可辨认的下限之上", red(out[0]) >= CoverBlur.BLACK_FLOOR)
+    }
+
+    @Test
+    fun `观感修正不越界也不改透明度`() {
+        val size = 4
+        val bright = IntArray(size * size) { argb(200, 255, 255, 255) }
+        val out = CoverBlur.vibrance(bright, size)
+        assertTrue(out.all { red(it) in 0..255 && green(it) in 0..255 && blue(it) in 0..255 })
+        assertTrue("透明度必须原样保留", out.all { (it ushr 24) and 0xFF == 200 })
+    }
+
+    @Test
     fun `默认常量与任务书一致`() {
         assertEquals("铁律 24 / 任务书 §4.1：降采样到 ~32px", 32, CoverBlur.DOWNSAMPLE_PX)
         assertTrue(CoverBlur.BLUR_RADIUS_PX > 0)
