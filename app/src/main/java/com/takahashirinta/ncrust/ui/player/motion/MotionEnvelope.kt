@@ -265,11 +265,27 @@ class MotionBackdropState(
     // ---- 光晕（瞬态驱动，幅度随力度、可多圈）----
     private val haloProgress = FloatArray(HALO_CAPACITY) { -1f }
     private val haloScale = FloatArray(HALO_CAPACITY) { 1f }
+
+    /**
+     * 光晕的**出生点**（归一化坐标，相对整屏）。
+     *
+     * v3.0.0（真机观感修正）：以前所有冲击波/光晕都从**画面正中**扩散，
+     * 连着几下鼓点就是同一个位置反复炸圈，看起来像"一个固定的装饰动画"。
+     * 现在每次瞬态取一个随机出生点（[SPAWN_X_MIN]..[SPAWN_X_MAX] /
+     * [SPAWN_Y_MIN]..[SPAWN_Y_MAX]），同一击的多圈**共用同一个出生点**
+     * （否则一次击打会看起来像两件独立的事）。
+     */
+    private val haloX = FloatArray(HALO_CAPACITY) { 0.5f }
+    private val haloY = FloatArray(HALO_CAPACITY) { HALO_CENTER_Y_FRACTION }
     private var haloCursor = 0
 
     // ---- 冲击波（瞬态驱动，径向渐晕）----
     private val shockProgress = FloatArray(SHOCK_CAPACITY) { -1f }
     private val shockScale = FloatArray(SHOCK_CAPACITY) { 1f }
+
+    /** 冲击波的出生点（与光晕同源、同一次瞬态取同一个点）。 */
+    private val shockX = FloatArray(SHOCK_CAPACITY) { 0.5f }
+    private val shockY = FloatArray(SHOCK_CAPACITY) { HALO_CENTER_Y_FRACTION }
     private var shockCursor = 0
 
     // ---- 粒子（中高频能量驱动，连续生成）----
@@ -328,12 +344,15 @@ class MotionBackdropState(
 
         if (bindings.transients > 0) {
             val scale = MotionBindings.strengthScale(bindings.strength)
+            // 一次瞬态一个出生点：冲击波与光晕**共用**它（它们是同一件事的两种表现）。
+            val spawnX = SPAWN_X_MIN + random.nextFloat() * (SPAWN_X_MAX - SPAWN_X_MIN)
+            val spawnY = SPAWN_Y_MIN + random.nextFloat() * (SPAWN_Y_MAX - SPAWN_Y_MIN)
             if (motion.haloBloom) {
-                spawnHalos(scale, motion.haloRings)
+                spawnHalos(scale, motion.haloRings, spawnX, spawnY)
                 changed = true
             }
             if (motion.shockwave) {
-                spawnShock(scale)
+                spawnShock(scale, spawnX, spawnY)
                 changed = true
             }
         }
@@ -438,7 +457,7 @@ class MotionBackdropState(
     }
 
     /** 一次瞬态扩 [rings] 圈光晕，圈与圈之间错开起始进度（"多圈"的全部实现）。 */
-    private fun spawnHalos(scale: Float, rings: Int) {
+    private fun spawnHalos(scale: Float, rings: Int, x: Float, y: Float) {
         val count = rings.coerceIn(1, HALO_CAPACITY)
         var spawned = 0
         while (spawned < count) {
@@ -446,15 +465,19 @@ class MotionBackdropState(
             haloCursor = (haloCursor + 1) % HALO_CAPACITY
             haloProgress[slot] = MotionBindings.ringStartOffset(spawned)
             haloScale[slot] = scale
+            haloX[slot] = x
+            haloY[slot] = y
             spawned++
         }
     }
 
-    private fun spawnShock(scale: Float) {
+    private fun spawnShock(scale: Float, x: Float, y: Float) {
         val slot = shockCursor
         shockCursor = (shockCursor + 1) % SHOCK_CAPACITY
         shockProgress[slot] = 0f
         shockScale[slot] = scale
+        shockX[slot] = x
+        shockY[slot] = y
     }
 
     private fun spawnParticle() {
@@ -483,11 +506,23 @@ class MotionBackdropState(
     /** 光晕的幅度倍率（0.55..1，随击打力度）。 */
     fun haloScaleAt(index: Int): Float = haloScale[index]
 
+    /** 光晕出生点的归一化 x（0..1，相对屏幕宽）。 */
+    fun haloXAt(index: Int): Float = haloX[index]
+
+    /** 光晕出生点的归一化 y（0..1，相对屏幕高）。 */
+    fun haloYAt(index: Int): Float = haloY[index]
+
     /** 冲击波扩散进度（0..1）；负数 = 该槽位空着。 */
     fun shockProgressAt(index: Int): Float = shockProgress[index]
 
     /** 冲击波的幅度倍率（0.55..1）。 */
     fun shockScaleAt(index: Int): Float = shockScale[index]
+
+    /** 冲击波出生点的归一化 x（0..1）。 */
+    fun shockXAt(index: Int): Float = shockX[index]
+
+    /** 冲击波出生点的归一化 y（0..1）。 */
+    fun shockYAt(index: Int): Float = shockY[index]
 
     fun particleLifeAt(index: Int): Float = particleLife[index]
     fun particleXAt(index: Int): Float = particleX[index]
@@ -540,6 +575,30 @@ class MotionBackdropState(
 
         /** 出生点横向散布（归一化，相对屏幕宽）。 */
         const val PARTICLE_SPAWN_SPREAD = 0.3f
+
+        // ---- v3.0.0：冲击波 / 光晕的**随机出生点**（归一化，相对整屏）----
+
+        /**
+         * 出生点的横向范围。
+         *
+         * 0.18..0.82 而不是 0..1：光晕的最大半径是屏幕短边的 0.7 倍，贴边出生会让
+         * 大部分圆弧跑到屏幕外，读起来像"一个缺角"。这个区间让圆心至少离左右边缘
+         * 18% 屏宽，圆看起来仍然是"从某处扩散开"，而不是"从边上挤进来"。
+         */
+        const val SPAWN_X_MIN = 0.18f
+        const val SPAWN_X_MAX = 0.82f
+
+        /**
+         * 出生点的纵向范围。
+         *
+         * 0.28..0.72：避开状态栏/标题栏（顶部）与底部控制条 —— 那两个区域被前景内容压着，
+         * 圆在那里扩散基本看不见。中段也覆盖了封面与歌词区，观感上"在画面里到处炸"。
+         */
+        const val SPAWN_Y_MIN = 0.28f
+        const val SPAWN_Y_MAX = 0.72f
+
+        /** 默认（无随机时）的纵向中心：与 v2.9.0 的固定位置一致（封面中心偏上）。 */
+        const val HALO_CENTER_Y_FRACTION = 0.42f
 
         /** 固定随机种子：同一段音频每次得到同一套粒子分布（排查"是不是随机看着乱"用）。 */
         const val PARTICLE_RANDOM_SEED = 0x2C0FFEE

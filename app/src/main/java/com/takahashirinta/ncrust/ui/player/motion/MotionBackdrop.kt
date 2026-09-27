@@ -183,7 +183,6 @@ fun MotionBackdrop(
                 MotionClock.generation
                 val backdrop = MotionClock.backstage
                 if (size.width <= 0f || size.height <= 0f) return@Canvas
-                val center = Offset(size.width / 2f, size.height * HALO_CENTER_Y_FRACTION)
                 val maxRadius = size.minDimension * HALO_MAX_RADIUS_FRACTION
                 val brush = if (motion.haloBloom || motion.shockwave) {
                     gradientCache.obtain(maxRadius)
@@ -199,10 +198,14 @@ fun MotionBackdrop(
                         if (radius < 1f) continue
                         // 渐晕：中心不透明、边缘透明，越扩越淡。
                         // `scale` 让同一个缓存 Brush 适配任意半径（画布矩阵同时作用于 shader）。
+                        // v3.0.0：**每个槽位自己的出生点**（不再固定屏幕中心）。
                         drawCircle(
                             brush = brush,
                             radius = radius,
-                            center = center,
+                            center = Offset(
+                                backdrop.shockXAt(i) * size.width,
+                                backdrop.shockYAt(i) * size.height,
+                            ),
                             alpha = (1f - progress).coerceIn(0f, 1f) * SHOCK_MAX_ALPHA,
                         )
                     }
@@ -219,7 +222,10 @@ fun MotionBackdrop(
                         drawCircle(
                             color = haloColor.copy(alpha = alpha),
                             radius = radius,
-                            center = center,
+                            center = Offset(
+                                backdrop.haloXAt(i) * size.width,
+                                backdrop.haloYAt(i) * size.height,
+                            ),
                             style = Stroke(width = strokeWidth),
                         )
                     }
@@ -299,9 +305,6 @@ private class RadialGradientCache(private val color: Color) {
 private const val BACKDROP_SCRIM_TOP = 0.82f
 private const val BACKDROP_SCRIM_MIDDLE = 0.72f
 private const val BACKDROP_SCRIM_BOTTOM = 0.86f
-
-/** C 档光晕：中心纵向位置（屏幕高的比例）。0.42 ≈ 封面中心偏上，与前景封面呼应。 */
-private const val HALO_CENTER_Y_FRACTION = 0.42f
 
 /** C 档光晕：最大半径（屏幕短边的比例）。0.7 会扩到屏幕之外，读起来像"充满"而不是"一个圈"。 */
 private const val HALO_MAX_RADIUS_FRACTION = 0.7f

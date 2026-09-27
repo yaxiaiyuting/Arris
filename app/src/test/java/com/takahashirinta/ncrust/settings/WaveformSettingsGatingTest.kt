@@ -189,7 +189,7 @@ class WaveformSettingsGatingTest {
     // ── 3. 7 个波形键在二级页上的落位 ────────────────────────────────────────────────
 
     @Test
-    fun `theSevenWaveformKeysLandOnThePlaybackPageWithTheExpectedControls`() {
+    fun `theWaveformAndMotionKeysLandOnTheAppearancePageWithTheExpectedControls`() {
         // v2.9.0 起：v2.8.0 的 8 个键**全部**降级为迁移源（`legacyV290` + `internal`）——
         // 它们仍然在 registry 里（防丢项 + 回滚不丢数据），但**一行都不渲染**：
         // 统一「动效强度」接管渲染之后，再给它们 UI 入口就是同一状态的两个可写入口（双轨）。
@@ -208,18 +208,18 @@ class WaveformSettingsGatingTest {
             val entry = requireNotNull(SettingsRegistry.entryById(id)) { "registry 里没有 $id" }
             assertTrue("$id 必须标成 v2.8.0 新增项", entry.isNewInV280)
             assertTrue("$id 必须标成 v2.9.0 的迁移源", entry.legacyV290)
-            assertEquals("$id 的主分组必须是播放与音质", "playback", entry.group.id)
+            assertEquals("$id 的主分组必须是外观与动效（v3.0.0 起）", "appearance", entry.group.id)
             assertEquals("$id 的控件形态", kind, SettingsRenderPlan.rowKindOf(entry))
         }
         assertEquals(
             "v2.8.0 的 8 个键一个都不能出现在二级页上（全部由迁移逻辑消费）",
             emptyList<String>(),
-            SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
+            SettingsRenderPlan.plannedRowsOf("appearance").map { it.id }
                 .filter { it.startsWith("visualizer_") },
         )
         // 接替它们的两个可见项。
         assertEquals(
-            "统一动效强度必须落在播放与音质页，且顺序是「档位 → 总开关」",
+            "统一动效强度与五个独立开关必须落在**外观与动效**页（v3.0.0：它们控制画面，不是音质）",
             listOf(
                 "motion_tier",
                 "ui_motion_enabled",
@@ -230,12 +230,25 @@ class WaveformSettingsGatingTest {
                 "motion_wave_bands",
                 "motion_breathing",
             ),
-            SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
+            SettingsRenderPlan.plannedRowsOf("appearance").map { it.id }
                 .filter { it.startsWith("motion_") || it == "ui_motion_enabled" },
         )
         val tierEntry = requireNotNull(SettingsRegistry.entryById("motion_tier"))
         assertEquals(SettingsRowKind.TIER_DROPDOWN, SettingsRenderPlan.rowKindOf(tierEntry))
         assertTrue("motion_tier 必须标成 v2.9.0 新增项", tierEntry.isNewInV290)
+    }
+
+    /** v3.0.0：音频可视化开关也跟着动效一起搬到外观与动效页（它控制的也是画面）。 */
+    @Test
+    fun `音频可视化开关与动效设置同页`() {
+        val visualizer = requireNotNull(SettingsRegistry.entryById("audio_visualizer"))
+        assertEquals("appearance", visualizer.group.id)
+        assertEquals(SettingsRowKind.SWITCH, SettingsRenderPlan.rowKindOf(visualizer))
+        // 播放与音质页现在只剩「音质 + 播放行为」。
+        assertEquals(
+            listOf("wifi_quality", "mobile_quality", "gapless_playback", "keep_screen_on"),
+            SettingsRenderPlan.plannedRowsOf("playback").map { it.id },
+        )
     }
 
     // ── 内存版 SharedPreferences（与 VisualizerPrefsTest / LyricsSourcePrefsTest 同形）────

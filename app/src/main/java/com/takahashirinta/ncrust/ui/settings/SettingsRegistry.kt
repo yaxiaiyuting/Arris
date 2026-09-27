@@ -391,6 +391,273 @@ object SettingsRegistry {
             )
         )
 
+        add(
+            pref(
+                key = "audio_visualizer",
+                type = SettingsEntryType.SWITCH,
+                default = true, // VisualizerSetting.DEFAULT_ENABLED（ui/player/AudioVisualizer.kt:40）
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "audioVisualizerLabel",
+                subtitleKey = "audioVisualizerDescription",
+            )
+        )
+
+        // ⚠️ **v3.0.0 起：下面这一组「视觉/动效」设置项的主分组是
+        // `APPEARANCE`（外观与动效），不是 `PLAYBACK`（播放与音质）。**
+        // 它们控制的是"画面长什么样"，与音质档位/无缝播放/禁止熄屏那几项没有任何关系 ——
+        // 放在播放与音质页会让用户在"我要调动效"时去翻音质设置。
+        // 分组只影响**渲染在哪一页**，键名 / 语义 / 默认值一个都没动。
+        //
+        // v2.8.0 新增：波形可视化分级。键名由并行的「波形任务」定义并提供读写 API
+        // （docs/verification/v2.8.0/probe-waveform-tier.md §3.3）；本文件**只定义条目**，
+        // 不实现任何读写。⚠️ 除 visualizer_tier（默认 1，probe §3.3）外的默认值
+        // 在探针里没有给出，这里取保守值（C 档炫技一律默认关），以波形任务落地为准。
+        add(
+            pref(
+                key = "visualizer_tier",
+                type = SettingsEntryType.CHOICE,
+                default = 1, // 读路径默认仍由 VisualizerTier.defaultTier 解析（低端机 → 0）
+                group = SettingsGroup.APPEARANCE,
+                choices = listOf(0, 1, 2), // 0 = T0 简洁 / 1 = T1 精致 / 2 = T2 炫技
+                newInV280 = true,
+                // v2.9.0：**降级为迁移源**。统一「动效强度」接管渲染之后，这个键只在
+                // `MotionPrefs.migrate` 里被读一次（搬进 `motion_tier`）。留着不删是纪律
+                // （回滚安装不丢用户数据），但不能有 UI 入口 —— 两个键都能改档位就是双轨。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_showcase",
+                type = SettingsEntryType.SWITCH,
+                default = false, // 未确认（探针未定义该键的默认值）；C 档炫技默认关
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_shockwave",
+                type = SettingsEntryType.SWITCH,
+                default = false, // 未确认；同上
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_particles",
+                type = SettingsEntryType.SWITCH,
+                default = false, // 未确认；同上
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_perspective",
+                type = SettingsEntryType.SWITCH,
+                default = false, // 未确认；同上
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_drag",
+                type = SettingsEntryType.SWITCH,
+                default = false, // 未确认；同上
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                newInV280 = true,
+                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
+                internal = true,
+                legacyV290 = true,
+            )
+        )
+        // v2.9.0 补：v2.8.0 实际写了 **8 个**键，但 registry 当时只枚举了 7 个 ——
+        // `visualizer_auto_downgraded` 既不在 registry、也不在 42 键清单里，于是
+        // 「不丢项」的双向等值断言**盖不到它**（探针 probe-tier-migration.md §1.3 记录了这个洞）。
+        // v2.9.0 的迁移仍然读它，所以它必须进入枚举集合：Internal（无 UI 入口）+ legacyV290。
+        add(
+            pref(
+                key = "visualizer_auto_downgraded",
+                type = SettingsEntryType.INFO,
+                default = false, // VisualizerPrefs.DEFAULT_AUTO_DOWNGRADED
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                internal = true,
+                newInV280 = true,
+                legacyV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "visualizer_tier_version",
+                type = SettingsEntryType.INFO,
+                default = 1, // probe-waveform-tier.md §3.3：迁移水位，范式同 quality_ladder_version
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                internal = true,
+                newInV280 = true,
+                // v2.9.0：迁移源（`MotionPrefs` 用的是自己的 `motion_version` 水位，
+                // 这个键保留只为「不丢项」与回滚）。原本就没有 UI 入口，标 legacy 是为了
+                // 让"哪些键属于 v2.8.0 的旧模型"在一处可枚举。
+                legacyV290 = true,
+            )
+        )
+
+        // ── v2.9.0 新增：统一「动效强度」（4 键）─────────────────────────────────────
+        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
+        // **不实现任何读写**（读写仍走 MotionPrefs.setTier / setUiMotionEnabled）。
+        add(
+            pref(
+                key = "motion_tier",
+                type = SettingsEntryType.CHOICE,
+                // 默认值同样是**解析出来的**（`MotionPrefs.readTier` 缺 key 时用设备判据），
+                // 这里写精致档只是为了回显/断言的期望值，与 v2.8.0 的口径一致。
+                default = MotionIntensity.REFINED,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionIntensityLabel",
+                subtitleKey = "waveform.motionIntensityDescription",
+                choices = listOf(
+                    MotionIntensity.SIMPLE,
+                    MotionIntensity.REFINED,
+                    MotionIntensity.SHOWCASE,
+                ),
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "ui_motion_enabled",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_UI_MOTION, // true（铁律 22：A 档默认开，但保留总开关）
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.uiMotionLabel",
+                subtitleKey = "waveform.uiMotionDescription",
+                newInV290 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_degrade_level",
+                type = SettingsEntryType.INFO,
+                default = MotionDegrade.NONE,
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                internal = true, // 派生状态：帧时间实测写它，没有 UI 入口
+                newInV290 = true,
+                // v3.0.0：**自动降级机制已整个删除** ⇒ 这个键不再参与任何渲染决策。
+                // 留着不删是纪律（回滚安装不丢数据），标 legacy 是为了让「它已经不是开关了」
+                // 在枚举里一眼可见（与 v2.9.0 把 visualizer_showcase 标 legacyV290 同一手法）。
+                legacyV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_degrade_log",
+                type = SettingsEntryType.TEXT,
+                default = MotionPrefs.DEFAULT_DEGRADE_LOG, // ""（从未降级）
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                internal = true, // 诊断用：见 motion_degrade_level 的说明
+                newInV290 = true,
+                legacyV300 = true,
+            )
+        )
+        // ── v3.0.0 新增：每个新动效的独立开关（5 键，铁律 26）───────────────────────
+        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
+        // **不实现任何读写**（读写走 MotionPrefs.setSwitch + KEY_* 常量）。
+        // 默认全开：档位才是「这一档有没有这类动效」的判据，开关只做 AND
+        // （缺 key 解析成开 = 升级后观感只随档位表变化，不会因为新键没写而少画东西）。
+        add(
+            pref(
+                key = "motion_shockwave",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionShockwaveLabel",
+                subtitleKey = "waveform.motionShockwaveDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_halo",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionHaloLabel",
+                subtitleKey = "waveform.motionHaloDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_particles",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionParticlesLabel",
+                subtitleKey = "waveform.motionParticlesDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_wave_bands",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionWaveBandsLabel",
+                subtitleKey = "waveform.motionWaveBandsDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_breathing",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionBreathingLabel",
+                subtitleKey = "waveform.motionBreathingDescription",
+                newInV300 = true,
+            )
+        )
+
+        add(
+            pref(
+                key = "motion_version",
+                type = SettingsEntryType.INFO,
+                // 缺 key 的读数是 `VERSION_PRE_V290`（= 0 = 「还没搬过」），
+                // 不是「搬到 0」—— 这个两义性与 v1.9.3 的「缺失 vs 空」同源，必须写清。
+                default = MotionPrefs.VERSION_PRE_V290,
+                group = SettingsGroup.APPEARANCE,
+                advanced = true,
+                internal = true,
+                newInV290 = true,
+            )
+        )
+
         // ── 播放与音质 ────────────────────────────────────────────────────────────────
         add(
             pref(
@@ -430,266 +697,6 @@ object SettingsRegistry {
                 group = SettingsGroup.PLAYBACK,
                 titleKey = "keepScreenOnLabel",
                 subtitleKey = "keepScreenOnHint",
-            )
-        )
-        add(
-            pref(
-                key = "audio_visualizer",
-                type = SettingsEntryType.SWITCH,
-                default = true, // VisualizerSetting.DEFAULT_ENABLED（ui/player/AudioVisualizer.kt:40）
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "audioVisualizerLabel",
-                subtitleKey = "audioVisualizerDescription",
-            )
-        )
-
-        // v2.8.0 新增：波形可视化分级。键名由并行的「波形任务」定义并提供读写 API
-        // （docs/verification/v2.8.0/probe-waveform-tier.md §3.3）；本文件**只定义条目**，
-        // 不实现任何读写。⚠️ 除 visualizer_tier（默认 1，probe §3.3）外的默认值
-        // 在探针里没有给出，这里取保守值（C 档炫技一律默认关），以波形任务落地为准。
-        add(
-            pref(
-                key = "visualizer_tier",
-                type = SettingsEntryType.CHOICE,
-                default = 1, // 读路径默认仍由 VisualizerTier.defaultTier 解析（低端机 → 0）
-                group = SettingsGroup.PLAYBACK,
-                choices = listOf(0, 1, 2), // 0 = T0 简洁 / 1 = T1 精致 / 2 = T2 炫技
-                newInV280 = true,
-                // v2.9.0：**降级为迁移源**。统一「动效强度」接管渲染之后，这个键只在
-                // `MotionPrefs.migrate` 里被读一次（搬进 `motion_tier`）。留着不删是纪律
-                // （回滚安装不丢用户数据），但不能有 UI 入口 —— 两个键都能改档位就是双轨。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_showcase",
-                type = SettingsEntryType.SWITCH,
-                default = false, // 未确认（探针未定义该键的默认值）；C 档炫技默认关
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                newInV280 = true,
-                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_shockwave",
-                type = SettingsEntryType.SWITCH,
-                default = false, // 未确认；同上
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                newInV280 = true,
-                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_particles",
-                type = SettingsEntryType.SWITCH,
-                default = false, // 未确认；同上
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                newInV280 = true,
-                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_perspective",
-                type = SettingsEntryType.SWITCH,
-                default = false, // 未确认；同上
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                newInV280 = true,
-                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_drag",
-                type = SettingsEntryType.SWITCH,
-                default = false, // 未确认；同上
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                newInV280 = true,
-                // v2.9.0：细分开关合并进档位 ⇒ 只作为**迁移源**保留，不再有 UI 入口。
-                internal = true,
-                legacyV290 = true,
-            )
-        )
-        // v2.9.0 补：v2.8.0 实际写了 **8 个**键，但 registry 当时只枚举了 7 个 ——
-        // `visualizer_auto_downgraded` 既不在 registry、也不在 42 键清单里，于是
-        // 「不丢项」的双向等值断言**盖不到它**（探针 probe-tier-migration.md §1.3 记录了这个洞）。
-        // v2.9.0 的迁移仍然读它，所以它必须进入枚举集合：Internal（无 UI 入口）+ legacyV290。
-        add(
-            pref(
-                key = "visualizer_auto_downgraded",
-                type = SettingsEntryType.INFO,
-                default = false, // VisualizerPrefs.DEFAULT_AUTO_DOWNGRADED
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                internal = true,
-                newInV280 = true,
-                legacyV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "visualizer_tier_version",
-                type = SettingsEntryType.INFO,
-                default = 1, // probe-waveform-tier.md §3.3：迁移水位，范式同 quality_ladder_version
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                internal = true,
-                newInV280 = true,
-                // v2.9.0：迁移源（`MotionPrefs` 用的是自己的 `motion_version` 水位，
-                // 这个键保留只为「不丢项」与回滚）。原本就没有 UI 入口，标 legacy 是为了
-                // 让"哪些键属于 v2.8.0 的旧模型"在一处可枚举。
-                legacyV290 = true,
-            )
-        )
-
-        // ── v2.9.0 新增：统一「动效强度」（4 键）─────────────────────────────────────
-        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
-        // **不实现任何读写**（读写仍走 MotionPrefs.setTier / setUiMotionEnabled）。
-        add(
-            pref(
-                key = "motion_tier",
-                type = SettingsEntryType.CHOICE,
-                // 默认值同样是**解析出来的**（`MotionPrefs.readTier` 缺 key 时用设备判据），
-                // 这里写精致档只是为了回显/断言的期望值，与 v2.8.0 的口径一致。
-                default = MotionIntensity.REFINED,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionIntensityLabel",
-                subtitleKey = "waveform.motionIntensityDescription",
-                choices = listOf(
-                    MotionIntensity.SIMPLE,
-                    MotionIntensity.REFINED,
-                    MotionIntensity.SHOWCASE,
-                ),
-                newInV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "ui_motion_enabled",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_UI_MOTION, // true（铁律 22：A 档默认开，但保留总开关）
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.uiMotionLabel",
-                subtitleKey = "waveform.uiMotionDescription",
-                newInV290 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_degrade_level",
-                type = SettingsEntryType.INFO,
-                default = MotionDegrade.NONE,
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                internal = true, // 派生状态：帧时间实测写它，没有 UI 入口
-                newInV290 = true,
-                // v3.0.0：**自动降级机制已整个删除** ⇒ 这个键不再参与任何渲染决策。
-                // 留着不删是纪律（回滚安装不丢数据），标 legacy 是为了让「它已经不是开关了」
-                // 在枚举里一眼可见（与 v2.9.0 把 visualizer_showcase 标 legacyV290 同一手法）。
-                legacyV300 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_degrade_log",
-                type = SettingsEntryType.TEXT,
-                default = MotionPrefs.DEFAULT_DEGRADE_LOG, // ""（从未降级）
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                internal = true, // 诊断用：见 motion_degrade_level 的说明
-                newInV290 = true,
-                legacyV300 = true,
-            )
-        )
-        // ── v3.0.0 新增：每个新动效的独立开关（5 键，铁律 26）───────────────────────
-        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
-        // **不实现任何读写**（读写走 MotionPrefs.setSwitch + KEY_* 常量）。
-        // 默认全开：档位才是「这一档有没有这类动效」的判据，开关只做 AND
-        // （缺 key 解析成开 = 升级后观感只随档位表变化，不会因为新键没写而少画东西）。
-        add(
-            pref(
-                key = "motion_shockwave",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionShockwaveLabel",
-                subtitleKey = "waveform.motionShockwaveDescription",
-                newInV300 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_halo",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionHaloLabel",
-                subtitleKey = "waveform.motionHaloDescription",
-                newInV300 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_particles",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionParticlesLabel",
-                subtitleKey = "waveform.motionParticlesDescription",
-                newInV300 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_wave_bands",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionWaveBandsLabel",
-                subtitleKey = "waveform.motionWaveBandsDescription",
-                newInV300 = true,
-            )
-        )
-        add(
-            pref(
-                key = "motion_breathing",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.PLAYBACK,
-                titleKey = "waveform.motionBreathingLabel",
-                subtitleKey = "waveform.motionBreathingDescription",
-                newInV300 = true,
-            )
-        )
-
-        add(
-            pref(
-                key = "motion_version",
-                type = SettingsEntryType.INFO,
-                // 缺 key 的读数是 `VERSION_PRE_V290`（= 0 = 「还没搬过」），
-                // 不是「搬到 0」—— 这个两义性与 v1.9.3 的「缺失 vs 空」同源，必须写清。
-                default = MotionPrefs.VERSION_PRE_V290,
-                group = SettingsGroup.PLAYBACK,
-                advanced = true,
-                internal = true,
-                newInV290 = true,
             )
         )
 

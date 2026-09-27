@@ -328,6 +328,95 @@ class MotionEnvelopeTest {
         assertFalse(hasAny(backdrop))
     }
 
+    // ── 3b. v3.0.0：冲击波 / 光晕的**随机出生点** ─────────────────────────────────
+
+    /**
+     * **出生点必须真的随机**（不再是"永远在屏幕正中"）。
+     *
+     * 这条断言的是「随机」这件事本身，而不只是"值合法"：连续多次瞬态的出生点
+     * 必须出现过多个不同的位置 —— 否则用户看到的还是同一个装饰动画在原地反复炸。
+     */
+    @Test
+    fun `冲击波与光晕的出生点每次不同`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        val seen = mutableSetOf<Pair<Int, Int>>()
+        repeat(40) {
+            // 每次瞬态之后把上一批清掉，保证每次都是"新出生"的槽位。
+            backdrop.clear()
+            backdrop.update(bindingsWith(transients = 1, strength = 0.8f), motion, 16f, active = true)
+            val shock = backdrop.shockProgressAt(0)
+            if (shock >= 0f) {
+                seen += (backdrop.shockXAt(0) * 1000).toInt() to (backdrop.shockYAt(0) * 1000).toInt()
+            }
+        }
+        assertTrue("出生点必须出现过多个不同位置（实测 ${seen.size} 个）", seen.size >= 10)
+    }
+
+    @Test
+    fun `出生点落在安全区间内且有限`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        repeat(200) {
+            backdrop.update(bindingsWith(transients = 1, strength = 1f), motion, 16f, active = true)
+        }
+        for (i in 0 until backdrop.shockCapacity) {
+            if (backdrop.shockProgressAt(i) < 0f) continue
+            assertTrue("x 必须有限", backdrop.shockXAt(i).isFinite())
+            assertTrue("y 必须有限", backdrop.shockYAt(i).isFinite())
+            assertTrue(
+                "x 必须落在 [${MotionBackdropState.SPAWN_X_MIN}, ${MotionBackdropState.SPAWN_X_MAX}]（实测 ${backdrop.shockXAt(i)}）",
+                backdrop.shockXAt(i) in MotionBackdropState.SPAWN_X_MIN..MotionBackdropState.SPAWN_X_MAX,
+            )
+            assertTrue(
+                "y 必须落在 [${MotionBackdropState.SPAWN_Y_MIN}, ${MotionBackdropState.SPAWN_Y_MAX}]（实测 ${backdrop.shockYAt(i)}）",
+                backdrop.shockYAt(i) in MotionBackdropState.SPAWN_Y_MIN..MotionBackdropState.SPAWN_Y_MAX,
+            )
+        }
+        for (i in 0 until backdrop.haloCapacity) {
+            if (backdrop.haloProgressAt(i) < 0f) continue
+            assertTrue(backdrop.haloXAt(i) in MotionBackdropState.SPAWN_X_MIN..MotionBackdropState.SPAWN_X_MAX)
+            assertTrue(backdrop.haloYAt(i) in MotionBackdropState.SPAWN_Y_MIN..MotionBackdropState.SPAWN_Y_MAX)
+        }
+    }
+
+    /** 同一击的多圈光晕**共用同一个出生点**（否则一次击打看起来像两件独立的事）。 */
+    @Test
+    fun `同一击的多圈共用出生点`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        assertEquals(2, motion.haloRings)
+        backdrop.update(bindingsWith(transients = 1, strength = 1f), motion, 16f, active = true)
+        val live = (0 until backdrop.haloCapacity).filter { backdrop.haloProgressAt(it) >= 0f }
+        assertEquals(2, live.size)
+        assertEquals(
+            "两圈必须同心",
+            backdrop.haloXAt(live[0]),
+            backdrop.haloXAt(live[1]),
+            0f,
+        )
+        assertEquals(backdrop.haloYAt(live[0]), backdrop.haloYAt(live[1]), 0f)
+        // 而且要与同一次瞬态的冲击波同心。
+        assertEquals("冲击波与光晕同源 ⇒ 同心", backdrop.haloXAt(live[0]), backdrop.shockXAt(0), 0f)
+    }
+
+    /** 固定种子 ⇒ 同一段音频每次得到同一套出生点（与粒子同一手法，便于排查）。 */
+    @Test
+    fun `出生点可复现`() {
+        fun run(): List<Pair<Float, Float>> {
+            val backdrop = MotionBackdropState()
+            val motion = showcaseEffects()
+            repeat(5) {
+                backdrop.clear()
+                backdrop.update(bindingsWith(transients = 1, strength = 1f), motion, 16f, active = true)
+            }
+            return (0 until backdrop.shockCapacity)
+                .filter { backdrop.shockProgressAt(it) >= 0f }
+                .map { backdrop.shockXAt(it) to backdrop.shockYAt(it) }
+        }
+        assertEquals("同一颗种子必须给出同一套出生点", run(), run())
+    }
+
     @Test
     fun `粒子坐标是归一化的`() {
         val backdrop = MotionBackdropState()
