@@ -11,19 +11,14 @@ package com.takahashirinta.ncrust.ui.player
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
-import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
@@ -37,13 +32,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
-import com.takahashirinta.ncrust.ui.player.waveform.VisualizerFrameMonitor
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
-import com.takahashirinta.ncrust.ui.player.waveform.VisualizerTier
 import com.takahashirinta.ncrust.ui.player.waveform.WaveformEffectsState
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
@@ -190,6 +182,17 @@ object WaveformStore {
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
     fun snapshot(bars: FloatArray, peaks: FloatArray) = ring.copyInto(bars, peaks)
 
+    /**
+     * v2.9.0：最新的**未平滑**柱值（0..1）。
+     *
+     * 界面动效的响度包络（`ui/player/motion/MotionEnvelope.kt`）与 C 档节拍判据共用它。
+     * 与 `WaveformEffectsState.update` 同一个口径：**必须用未平滑值** ——
+     * 用画面值（`bars`）会把起音按 τ=22ms 抹圆，节拍判据直接失效。
+     *
+     * 只在 `pump` 之后读（`pump` 负责把新柱搬进 targets；搬之前读到的是上一帧的值）。
+     */
+    fun newestBar(): Float = ring.newestTarget()
+
     /** B 档：呼吸亮度倍率。draw 阶段直接读（不是 Compose state ⇒ 不触发重组）。 */
     fun breatheScale(): Float = ring.breatheScale()
 
@@ -310,19 +313,14 @@ fun visualizerFrameIntervalMs(context: Context): Long {
  */
 @Composable
 fun AudioVisualizerBars(
-    activeProvider: () -> Boolean,
     modifier: Modifier = Modifier,
     barCount: Int = WaveformStore.BAR_COUNT,
 ) {
-    val context = LocalContext.current
     val barColor = LocalMetroColors.current.primary
-    val currentActive = rememberUpdatedState(activeProvider)
     val bars = remember(barCount) { FloatArray(barCount) }
     val peaks = remember(barCount) { FloatArray(barCount) }
-    // 设备档位只算一次（isLowRamDevice 不会变）。
-    val frameIntervalMs = remember(context) { visualizerFrameIntervalMs(context) }
     // 分级：**组合期读一次**（改设置或发生一次自动降级时才会重组一次）。
-    // 帧循环与 draw 只用这个捕获值 —— 帧路径里零 state 读（除了下面 draw 里的 generation）。
+    // draw 只用这个捕获值 —— 帧路径里零 state 读（除了下面 draw 里的 generation）。
     val effects = VisualizerPrefs.effects.value
     val flowBrushCache = remember(barColor) { FlowBrushCache(barColor) }
     val density = LocalDensity.current
@@ -350,58 +348,19 @@ fun AudioVisualizerBars(
             Modifier
         }
     }
-    // v2.8.0 · P1-A：帧时间监控（只用于**一次性**自动降级，见 VisualizerFrameMonitor 的 KDoc）。
-    // 注册条件三条，缺一不可：
-    //  1. 只在可视化**挂载**期间（本组件存在 = 挂载）⇒ 没挂载就没有监听器，不常驻；
-    //  2. 已经在简洁档就别注册了（没得降，注册只是白看帧）；
-    //  3. 已经自动降过一次就别注册了（永不恢复、也永不二次降级）。
-    // Activity 从 LocalContext 往上找；找不到（例如预览/测试宿主）就静默不监控。
-    val hostActivity = remember(context) { findHostActivity(context) }
-    val frameMonitorEnabled = effects.tier > VisualizerTier.SIMPLE && !effects.autoDowngraded
-    DisposableEffect(hostActivity, frameMonitorEnabled) {
-        val activity = hostActivity
-        if (!frameMonitorEnabled || activity == null) {
-            onDispose { }
-        } else {
-            val monitor = VisualizerFrameMonitor.start(activity) {
-                // 降级动作本身也在隔离边界里（写 prefs + 刷新状态都可能失败，失败就当没降）。
-                runCatching { VisualizerPrefs.applyAutoDowngrade(activity) }
-            }
-            onDispose { monitor?.stop() }
-        }
-    }
-
-    LaunchedEffect(barCount, frameIntervalMs, effects) {
-        val budgetNs = frameIntervalMs * 1_000_000L
-        // v2.8.0 · P1-A（perf）：帧时钟状态放进**循环外**的复用数组，回调也提升到循环外。
-        //
-        // 旧写法是 `while(true) { withFrameNanos { now -> ... } }`，回调捕获两个可变局部变量
-        // （lastFrameNs / lastPumpNs）—— Kotlin 会在**每次求值**那个 lambda 表达式时新建一个
-        // 实例（捕获可变局部量还要额外的 Ref），也就是**每帧一次小对象分配**；探针 §7 #3 把这条
-        // 列为「未确认」正是因为当时没有产物可 javap。这里把状态搬进 `LongArray(2)`（循环外建一次）、
-        // 回调也提前建成一个 val：整段循环只创建 1 个 lambda 实例，帧路径上零分配。
-        val clock = LongArray(2)
-        val onFrame: (Long) -> Unit = { now ->
-            if (clock[0] == 0L || now - clock[0] >= budgetNs) {
-                val dtMs = if (clock[1] == 0L) frameIntervalMs.toFloat()
-                else ((now - clock[1]) / 1_000_000f).coerceIn(1f, 100f)
-                clock[0] = now
-                clock[1] = now
-                WaveformStore.pump(active = true, dtMs = dtMs, effects = effects)
-            }
-        }
-        while (true) {
-            if (currentActive.value()) {
-                withFrameNanos(onFrame)
-            } else {
-                // 暂停 / 缓冲：用 delay 而不是帧时钟 —— 归零过程不需要跟着刷新率走。
-                delay(frameIntervalMs)
-                clock[0] = 0L
-                clock[1] = 0L
-                WaveformStore.pump(active = false, dtMs = frameIntervalMs.toFloat(), effects = effects)
-            }
-        }
-    }
+    // v2.9.0：**帧时间监控与帧循环都搬到了 `ui/player/motion/MotionClock.kt`**。
+    //
+    // 为什么必须搬：界面动效（背景呼吸 / 节拍脉冲 / 粒子 / 光晕）在**竖屏手机**也要跑，
+    // 而竖屏手机上本组件根本不挂载（`PlayerLayout.visualizerSlot` 在那一格恒为 false）。
+    // 两处各起一条循环会让同一个 `WaveformStore.pump` 每帧被调用两次 ——
+    // `consumePending` 幂等，但**动画相位**（渐变流动 / 呼吸）会每帧前进两次，
+    // 流动速度直接翻倍，而这个 bug 只在横屏/平板上出现，竖屏测不出来。
+    // 监控同理：只挂在波形组件里的话，竖屏用户开着背景模糊时永远不会触发自动降级，
+    // 而「优先砍界面动效」正是 v2.9.0 的降级策略。
+    //
+    // 本组件的契约因此变成：**只读**（draw 阶段读 `WaveformStore.generation` 与快照），
+    // 推进由 `MotionFrameClock`（在 `PlayerCard` 里挂载恰好一次）负责。
+    // v2.8.0 的「不空转 / 零分配 / 零重组」三条契约一字未改，只是执行者换了地方。
 
     Canvas(modifier.then(clipModifier).then(perspectiveModifier).then(tapModifier)) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
@@ -496,19 +455,6 @@ private const val PERSPECTIVE_CAMERA_DISTANCE_FACTOR = 14f
 private fun Modifier.visualizerPerspective(density: Float): Modifier = graphicsLayer {
     rotationX = PERSPECTIVE_DEGREES
     cameraDistance = PERSPECTIVE_CAMERA_DISTANCE_FACTOR * density
-}
-
-/**
- * 从 Compose 的 `LocalContext` 往上找宿主 Activity（帧时间监控要拿它的 `Window`）。
- *
- * 找不到就返回 `null`（Compose 预览 / 非 Activity 宿主 / 测试宿主）—— 监控静默关闭，
- * 绝不为了"一定要监控"去抛异常或强转。
- */
-private tailrec fun findHostActivity(context: Context?): Activity? = when (context) {
-    null -> null
-    is Activity -> context
-    is ContextWrapper -> findHostActivity(context.baseContext)
-    else -> null
 }
 
 /**

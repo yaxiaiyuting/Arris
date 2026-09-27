@@ -14,6 +14,7 @@ package com.takahashirinta.ncrust.ui.player
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.draw.shadow
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -58,6 +59,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.Coil
 import coil.compose.AsyncImagePainter
+import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
+import com.takahashirinta.ncrust.ui.player.motion.MotionClock
+import com.takahashirinta.ncrust.ui.player.motion.MotionFrameClock
+import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
+import com.takahashirinta.ncrust.ui.theme.AppMotion
 import coil.compose.rememberAsyncImagePainter
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.player.SongUrlFetcher
@@ -265,8 +271,25 @@ fun PlayerCard(
         PlayerLayout.visualizerHeightDp(LocalConfiguration.current.screenHeightDp.toFloat()).dp
     }
 
+    // v2.9.0 · B 档：背景级波形条的高度。比左栏那条（32~56dp）高一档，
+    // 因为它承担的是"整块背景在流动"的观感，太薄会被读成一条装饰线。
+    // 仍按窗口高夹取：PCL110 横屏可用高只有 363dp，固定 120dp 会把封面压掉一圈。
+    val waveBackdropHeightDp = with(density) {
+        minOf(140.dp.toPx(), screenHeightPx * 0.24f).toDp()
+    }
+
     // 迷你条与顶栏按钮的触觉反馈
     val haptic = LocalHapticFeedback.current
+
+    // ── v2.9.0 · A 档：动效状态 + 封面位图的唯一持有者 ────────────────────────────────
+    // 分级：**组合期读一次**（用户改设置或发生一次自动降级时才会重组一次）。
+    // 帧路径只读这个捕获值 —— 逐帧变化的量全部走 MotionClock 的 generation，不读 state。
+    val motion = MotionPrefs.effects.value
+    // 背景模糊的输入。由 `StableCover` 上抛 —— 它是全仓库**唯一**持有"当前这张封面位图"
+    // 的地方（跨切歌保留上一张，见那里的 KDoc）。这里再解一次码会多一份内存，
+    // 而且可能与前景显示的不是同一张图（Coil 缓存被清 / 尺寸不同）。
+    var coverArtKey by remember { mutableStateOf<String?>(null) }
+    var coverArtBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     // 唯一封面 overlay：全屏 ↔ miniBar 始终是同一个 cover，只平滑移动/缩放，绝不消失。
     // 宽屏大图落点由左栏"封面区"实测得到（区域化，分辨率无关）。
@@ -294,6 +317,9 @@ fun PlayerCard(
     val largeCoverCenterX = if (usesSideCover) wideCoverCenter.x else screenWidthPx / 2f
     val largeCoverCenterY = if (usesSideCover) wideCoverCenter.y else screenHeightPx * 0.3f + dp24px
     val boundsCenter = coverSizePx / 2f
+    // v2.9.0 · A 档：封面随节拍上浮的最大位移（px）。在这里换算一次，
+    // 而不是在 graphicsLayer 块里调 `dp.toPx()` —— 那个块每帧都会跑。
+    val coverFloatPx = with(density) { AppMotion.COVER_FLOAT_DP.toPx() }
 
     // 完全收起时才激活迷你播放栏；derivedStateOf 将重组限制在阈值穿越处
     val miniBarEnabled by remember { derivedStateOf { progress.value < 0.01f } }
@@ -712,6 +738,66 @@ fun PlayerCard(
                 .background(LocalMetroColors.current.surface)
         )
 
+        // ── v2.9.0：全屏动效背景层（竖屏 + 横屏共用同一个实现）────────────────────────
+        //
+        // 位置：两张纯色底板**之上**、Column（封面/歌词/控件等全部前景）**之下**。
+        // 所以它是真正的"背景"：z 序最低的前景内容全都浮在它上面，且它自己没有任何
+        // pointerInput ⇒ 不新增任何命中面（AGENTS.md 触摸陷阱第 1 条）。
+        //
+        // 关掉「界面动效」总开关、或自动降级到 UI_ALL_OFF 时**整层不挂载** ——
+        // 不是 `alpha = 0`（那仍然参与绘制与命中测试）。铁律「关掉 = 零开销」由结构保证。
+        if (motion.anyUiMotion) {
+            MotionBackdrop(
+                coverKey = coverArtKey,
+                coverBitmap = coverArtBitmap,
+                motion = motion,
+                parallaxProvider = { progress.value },
+                // 视差行程按屏幕高给（不是固定 dp）：横竖屏切换时行程跟着屏幕走，
+                // 两处尺寸来源（LocalConfiguration 与 PlayerCard）不会打架。
+                parallaxTravelPx = screenHeightPx * AppMotion.PARALLAX_TRAVEL_FRACTION,
+                modifier = Modifier.graphicsLayer {
+                    // 与前景同样的折叠淡出曲线（复用既有 (p-0.7)/0.3 的形状）。
+                    alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f)
+                },
+            )
+        }
+
+        // ── v2.9.0 · 唯一的帧时钟（波形 + 界面动效共用一条循环）──────────────────────
+        // 为什么必须挂在这里：竖屏手机上波形组件根本不挂载（`visualizerSlot` 恒 false），
+        // 而背景呼吸/节拍脉冲/粒子在竖屏也要跑。两处各起一条循环会让动画相位每帧前进两次。
+        // 详见 `ui/player/motion/MotionClock.kt` 的 KDoc。它不产生任何 UI 节点。
+        MotionFrameClock(
+            activeProvider = { isPlaying && !playerViewModel.isBuffering.value },
+            enabled = hasSong && expandedMounted,
+        )
+
+        // ── v2.9.0 · B 档：**背景级波形**（横屏铺满底部横跨全屏 / 竖屏在歌词后面流动）──
+        //
+        // 它解决的问题是任务书 §7.2 的原话：「波形从左侧扩展到全屏底部横跨」。
+        // 实现上**不动任何既有布局**（§7.3）：左栏那条波形原样留在原地，
+        // 这一条是**额外**的一层背景 —— 所以"不改变现有横屏布局结构"这条要求由结构保证，
+        // 而不是靠"改得小心"。
+        //
+        // 复用 `AudioVisualizerBars` 而不是再写一份画法：A/B/C 三档的渲染差异
+        // （圆角柱 / 峰值 / 渐变流动 / 光点 / 冲击波 / 粒子 / 3D）都已经在那里，
+        // 复制一份必然分叉。绘制成本是每帧多一次 Canvas（B 档默认关，S6 这类低端机
+        // 默认简洁档 ⇒ 这一层根本不挂载）。
+        if (motion.fullScreenWaveform) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(waveBackdropHeightDp)
+                    // 压暗到 WAVE_BACKDROP_ALPHA：背景级波形的职责是"有东西在流动"，
+                    // 抢过前景就违反了 §7.3「歌词可读性优先」。前景内容全部画在它之上。
+                    .graphicsLayer {
+                        alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) * WAVE_BACKDROP_ALPHA
+                    },
+            ) {
+                AudioVisualizerBars(modifier = Modifier.fillMaxSize())
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -723,6 +809,20 @@ fun PlayerCard(
 
                 // 底部播放控件（窄屏整宽 / 宽屏左栏共用）。常挂载，alpha 只在 draw 阶段调。
                 val playerControls: @Composable () -> Unit = {
+                    // v2.9.0 · B 档：整条控制区随节拍轻微脉冲（任务书 §5.3）。
+                    // 2% 是刻意的上限 —— 控制条是点击目标，缩放再大就会影响点击手感。
+                    // 逐帧量在 graphicsLayer 块里读，只让这一层失效，不触发重组。
+                    Box(
+                        modifier = Modifier.graphicsLayer {
+                            if (motion.beatPulse) {
+                                MotionClock.generation
+                                val pulseScale = 1f + MotionClock.pulse() * AppMotion.BEAT_PULSE_SCALE
+                                scaleX = pulseScale
+                                scaleY = pulseScale
+                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            }
+                        }
+                    ) {
                     FullPlayerControls(
                         isPlaying = isPlaying,
                         showLyrics = showLyrics,
@@ -823,6 +923,7 @@ fun PlayerCard(
                             }
                         } else null
                     )
+                    }
                 }
 
                 // 歌词 / 队列双面板（窄屏整宽 / 宽屏右栏共用）。
@@ -875,6 +976,8 @@ fun PlayerCard(
                                     // 竖屏的 36%；配合面板里的「5s 无触碰自动居中」，
                                     // 用户手动翻过歌词之后它会自己回到正中。
                                     centeredLayout = usesSideCover,
+                                    // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。
+                                    lyricPulseEnabled = motion.lyricPulse,
                                 )
                             }
                         }
@@ -1010,11 +1113,7 @@ fun PlayerCard(
                                 // 大屏分支与下面的宽屏两栏分支**共用同一份实现**（一个挂载
                                 // 落点函数 + 一个 slot composable），避免两处各写一份 if。
                                 if (visualizerSlot) {
-                                    AudioVisualizerSlot(
-                                        heightDp = visualizerHeightDp,
-                                        isPlaying = isPlaying,
-                                        isBuffering = playerViewModel.isBuffering,
-                                    )
+                                    AudioVisualizerSlot(heightDp = visualizerHeightDp)
                                 }
                                 Spacer(Modifier.height(10.dp))
                                 Row(
@@ -1136,11 +1235,7 @@ fun PlayerCard(
                             // 挂载判据见 PlayerLayout.visualizerSlot 的 A/B 矩阵：
                             // 只有「平板 + 横屏」这一格由无变有，其余五格不动。
                             if (visualizerSlot) {
-                                AudioVisualizerSlot(
-                                    heightDp = visualizerHeightDp,
-                                    isPlaying = isPlaying,
-                                    isBuffering = playerViewModel.isBuffering,
-                                )
+                                AudioVisualizerSlot(heightDp = visualizerHeightDp)
                             }
                             // 歌名 / 歌手 + 控件：限宽居中，与封面成组（单栏时不再铺满整宽显得散）。
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -1646,6 +1741,18 @@ fun PlayerCard(
                 model = CoverUrls.large(s.album?.picUrl),
                 contentDescription = null,
                 placeholderColor = LocalMetroColors.current.surfaceVariant,
+                // v2.9.0 · A/C 档：封面浮起阴影 / 随节拍微浮动 / 3D 旋转 / 切歌淡入。
+                // 全部由 `motion` 这一个能力位对象驱动，关掉时这三行的效果与 v2.8.0 逐像素一致。
+                shadowElevation = if (motion.coverElevation) AppMotion.COVER_SHADOW_ELEVATION_DP else null,
+                crossfadeEnabled = motion.coverTransition,
+                onCoverBitmap = { key, bitmap ->
+                    // 只在真的换了图/键时写 state（这个回调会在每次 Coil 状态变化时被调到，
+                    // 无条件赋值会让每次状态变化都触发一次背景层重组）。
+                    if (key != coverArtKey || bitmap !== coverArtBitmap) {
+                        coverArtKey = key
+                        coverArtBitmap = bitmap
+                    }
+                },
                 modifier = Modifier
                     .then(
                         if (usesSideCover) Modifier.size(coverSizeDp)
@@ -1654,6 +1761,14 @@ fun PlayerCard(
                     .graphicsLayer {
                         val p = progress.value
                         val normalizedP = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                        // v2.9.0 · B/C 档：随节拍的量。**只在 graphicsLayer 块里读**
+                        // （`MotionClock.generation` 是一个 Compose 状态，读它只让这一层失效，
+                        // 不触发任何重组 —— 与播放器整体「GPU 零重组」的原则一致）。
+                        // 静态时 pulse() == 0f ⇒ 下面三项都恰好是"没有效果"的值。
+                        val beatPulse = if (motion.beatPulse || motion.cover3d) {
+                            MotionClock.generation
+                            MotionClock.pulse()
+                        } else 0f
                         // 侧栏布局（宽屏两栏 / 大屏左栏）封面恒为大图（缩到 mini 是窄屏
                         // "大封面↔歌词"切换的语义）；它随分栏进度在左栏与居中之间平滑移动。
                         val lyricAnimValue = if (usesSideCover) 0f else lyricAnimProgress.value
@@ -1669,8 +1784,20 @@ fun PlayerCard(
                         scaleX = currentBaseScale
                         scaleY = currentBaseScale
                         translationX = currentCenterX - boundsCenter
-                        translationY = currentCenterY - boundsCenter
+                        // A 档：随节拍**上浮**最多 ±2dp（任务书 §4.3）。用位移而不是缩放：
+                        // 缩放会与上面那条展开/收起动画的 scale 叠加，出问题时无法归因。
+                        val floatPx = if (motion.coverElevation) {
+                            beatPulse * coverFloatPx
+                        } else 0f
+                        translationY = currentCenterY - boundsCenter - floatPx
                         transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        // C 档：3D 旋转（竖屏为主）。角度很小（≤6°），读起来是"封面被推了一下"，
+                        // 不是"封面在转圈"；相机距离跟着 density 走，避免高分屏上透视夸张。
+                        if (motion.cover3d) {
+                            rotationY = beatPulse * AppMotion.COVER_3D_DEGREES
+                            rotationX = -beatPulse * AppMotion.COVER_3D_DEGREES * 0.4f
+                            cameraDistance = AppMotion.COVER_3D_CAMERA_DISTANCE_FACTOR * density.density
+                        }
                     },
                 contentScale = ContentScale.Crop,
                 // v2.5.0 · B：大封面 = AppShapes.large(16dp) + 1dp outlineVariant 描边。
@@ -1726,6 +1853,11 @@ private fun Modifier.collapsibleHeight(collapse: Animatable<Float, AnimationVect
         }
     }
 
+// v2.9.0 · B 档：背景级波形的不透明度。0.32 的依据：在 OLED 黑底上 32% 的主题色
+// 已经能明确读出"整块背景在流动"，而压在它上面的歌词行（onBackground 全白）
+// 对比度仍远高于 WCAG AA 的 4.5:1 —— 任务书 §7.3「歌词可读性优先」。
+private const val WAVE_BACKDROP_ALPHA = 0.32f
+
 // 新封面超过该阈值仍未就绪，才退化为纯色占位（"实在不出来再禁用"）。
 private const val COVER_HOLD_MS = 400L
 
@@ -1772,8 +1904,30 @@ private fun StableCover(
     shape: Shape = AppShapes.large,
     /** v2.5.0 · B：描边色。传 `null` 表示不画描边（留给将来的"无边框"场景）。 */
     frameColor: Color? = null,
+    /**
+     * v2.9.0 · A 档：浮起阴影的高度。`null` = 不画阴影（= v2.8.0 的观感）。
+     *
+     * **必须传 `AppShapes.large` 作为 shape**（见下面的实现）：阴影与裁切/描边共用同一个
+     * shape 才不会在圆角处露出错位的方角。
+     */
+    shadowElevation: androidx.compose.ui.unit.Dp? = null,
+    /** v2.9.0 · A 档：切歌时是否淡入（`AppMotion.coverFade`）。`false` = v2.8.0 的硬切。 */
+    crossfadeEnabled: Boolean = false,
+    /**
+     * v2.9.0 · A 档：把「当前正在显示的封面位图 + 它的缓存键」上抛给调用方。
+     *
+     * 为什么需要这个回调：背景模糊的输入必须是**前景正在显示的那张图**。这个 Box 是
+     * 全仓库唯一持有它的地方（`lastBitmap` 跨切歌保留）。在别处重新解码会多一份内存，
+     * 而且可能与前景不是同一张（Coil 缓存被清 / 请求尺寸不同）。
+     *
+     * `key` 传 `null` 表示"当前没有可用封面"（调用方据此回退纯色背景）。
+     */
+    onCoverBitmap: (key: String?, bitmap: Bitmap?) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
+    // 阴影颜色：纯黑而不是主题色。阴影的职责是"分层"，用主题色会让每张封面
+    // 都投出一圈品牌色的光晕 —— 与 v2.5.0「颜色应当来自封面本身」的取色目标冲突。
+    val shadowColor = Color.Black
     val painter = rememberAsyncImagePainter(
         model = model,
         imageLoader = Coil.imageLoader(context),
@@ -1781,20 +1935,46 @@ private fun StableCover(
     val state = painter.state
     // 最近一次成功加载的封面位图（跨切歌保留）。
     var lastBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    // v2.9.0 · A 档：这幅位图对应的缓存键（背景模糊用 URL 作键；与位图同时更新，
+    // 保证背景与前景永远是同一首歌的图）。
+    var lastKey by remember { mutableStateOf<String?>(null) }
+    // v2.9.0 · A 档：切歌淡入。**不卸载任何子树** —— 只驱动上层 Image 的 alpha。
+    // v2.6.0 的教训是 `AnimatedContent` 会在切换期把旧子树卸载掉（状态丢失 + 命中区抖动），
+    // 这里刻意用一个 `Animatable` + `graphicsLayer` 实现同一观感，子树始终挂载。
+    val crossfade = remember { Animatable(1f) }
+    val modelKey = model as? String
     // 新图超过阈值仍未就绪 → 退化占位色。
     var timedOut by remember { mutableStateOf(false) }
 
     LaunchedEffect(state) {
         val s = state
         if (s is AsyncImagePainter.State.Success) {
-            (s.result.drawable as? BitmapDrawable)?.bitmap?.let { lastBitmap = it }
+            (s.result.drawable as? BitmapDrawable)?.bitmap?.let {
+                lastBitmap = it
+                lastKey = modelKey
+                // 上抛给背景层。同键同实例时不重复回调（避免每次状态变化都重组背景层）。
+                onCoverBitmap(modelKey, it)
+            }
             timedOut = false
         }
     }
     LaunchedEffect(model) {
         timedOut = false
         delay(COVER_HOLD_MS)
-        if (painter.state !is AsyncImagePainter.State.Success) timedOut = true
+        if (painter.state !is AsyncImagePainter.State.Success) {
+            timedOut = true
+            // 超时且没有旧图可垫 ⇒ 当前确实没有封面，背景层据此回退纯色。
+            if (lastBitmap == null) onCoverBitmap(null, null)
+        }
+    }
+    // v2.9.0 · A 档：model 变化 ⇒ 淡入一次。关掉时 snap 到 1f（= 与 v2.8.0 逐帧一致）。
+    LaunchedEffect(model, crossfadeEnabled) {
+        if (!crossfadeEnabled) {
+            crossfade.snapTo(1f)
+            return@LaunchedEffect
+        }
+        crossfade.snapTo(0f)
+        crossfade.animateTo(1f, AppMotion.coverFade)
     }
 
     // ⚠️ 顺序：`modifier`（含调用点的 graphicsLayer 变换）在前，clip/border 在后。
@@ -1803,6 +1983,22 @@ private fun StableCover(
     // 反过来写会把封面裁在屏幕左上角。
     Box(
         modifier = modifier
+            // v2.9.0 · A 档：浮起阴影。**在 clip 之前**（= 更外层），这样阴影画在裁切层之外、
+            // 跟随同一个 `graphicsLayer` 变换一起移动/缩放；顺序反过来阴影会被自己裁掉。
+            // `clip = false` 是有意的：裁切交给下面的 `clip(shape)`，两处都裁会多一层离屏缓冲。
+            .then(
+                if (shadowElevation != null) {
+                    Modifier.shadow(
+                        elevation = shadowElevation,
+                        shape = shape,
+                        clip = false,
+                        ambientColor = shadowColor,
+                        spotColor = shadowColor,
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clip(shape)
             .then(
                 if (frameColor != null) Modifier.border(1.dp, frameColor, shape) else Modifier
@@ -1822,10 +2018,15 @@ private fun StableCover(
         }
         // 上层：当前请求的 painter。必须真正绘制它，Coil 才会在 onRemembered 里发起
         // 请求；loading 时它不画东西，露出底层旧图/占位色。
+        //
+        // v2.9.0 · A 档：`crossfade` 只驱动这一层的 alpha（在 graphicsLayer 块里读，
+        // 每帧只让这一层失效、不触发重组，也不卸载任何子树）。
         Image(
             painter = painter,
             contentDescription = contentDescription,
-            modifier = Modifier.matchParentSize(),
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = crossfade.value },
             contentScale = contentScale,
         )
     }
@@ -1990,15 +2191,11 @@ private fun TrayLyricLine(
  * try/catch 会破坏 Compose 的重组语义，反而制造新的失败面）。
  */
 @Composable
-private fun AudioVisualizerSlot(
-    heightDp: Dp,
-    isPlaying: Boolean,
-    isBuffering: kotlinx.coroutines.flow.StateFlow<Boolean>,
-) {
+private fun AudioVisualizerSlot(heightDp: Dp) {
+    // v2.9.0：`activeProvider` 参数**取消**了 —— 「播放中且未在缓冲」现在由
+    // `MotionFrameClock`（在 PlayerCard 里挂载恰好一次）读取，本组件退化为纯读取方。
+    // 保留这个参数只会留下一个"看起来在驱动帧循环、其实没人读"的假接口。
     AudioVisualizerBars(
-        // 只在帧循环里读，不在这里订阅 isBuffering：在 PlayerCard 组合期订阅缓冲状态
-        // 会让整棵子树随缓冲抖动重组（既有注释 warn 过同一件事）。
-        activeProvider = { isPlaying && !isBuffering.value },
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)

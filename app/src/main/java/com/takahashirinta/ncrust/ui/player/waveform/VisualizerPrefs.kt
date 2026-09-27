@@ -11,9 +11,10 @@ package com.takahashirinta.ncrust.ui.player.waveform
 import android.app.ActivityManager
 import android.content.Context
 import android.content.SharedPreferences
+import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import android.os.Build
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 
 /**
  * v2.8.0 · P1-A：波形分级相关的**全部落盘键**与读写入口（`ncrust_settings`）。
@@ -203,25 +204,26 @@ object VisualizerPrefs {
     // 进程内镜像（组合期读它，避免每次重组都读盘；音频线程**不读这里**）
     // ------------------------------------------------------------------
 
-    private val effectsStateHolder = mutableStateOf(
-        VisualizerEffects.of(
-            tier = VisualizerTier.REFINED,
-            showcase = DEFAULT_SHOWCASE,
-            shockwave = false,
-            particles = false,
-            perspective = false,
-            tapInteraction = false,
-            autoDowngraded = DEFAULT_AUTO_DOWNGRADED,
-        )
-    )
+    /**
+     * v2.9.0：**镜像的持有者搬到了 `MotionPrefs`**（统一「动效强度」的唯一真相）。
+     *
+     * v2.8.0 时这里有一个自己的 `mutableStateOf(VisualizerEffects)`。v2.9.0 引入统一档位后，
+     * 波形那一半只是 `MotionEffects.waveform` —— 再留一份独立镜像就会出现「两个 state、
+     * 两次刷新、可能不一致」。所以这里改成 `derivedStateOf`：
+     *
+     *  - **读取方一行都不用改**（`AudioVisualizerBars` 读的还是 `VisualizerPrefs.effects.value`）；
+     *  - 类型从 `MutableState` 收窄成 `State` —— 这正是我们想要的**类型级保证**：
+     *    波形渲染层从此在编译期就不可能自己去改这个值，唯一写入口是 `MotionPrefs`。
+     */
+    private val effectsState = derivedStateOf { MotionPrefs.effects.value.waveform }
 
     private var loadedFromDisk = false
 
     /** 组合期读这一个状态：设置变化（含自动降级）时只重组一次，帧路径里不再读任何 state。 */
-    val effects: MutableState<VisualizerEffects> get() = effectsStateHolder
+    val effects: State<VisualizerEffects> get() = effectsState
 
     /** 当前渲染档位（帧时间监控判据用）。 */
-    val currentTier: Int get() = effectsStateHolder.value.tier
+    val currentTier: Int get() = effectsState.value.tier
 
     /**
      * 进程内初始化：读盘 + 迁移 + 解析设备默认档。**幂等**，且与
@@ -229,18 +231,22 @@ object VisualizerPrefs {
      * （在播放器组合之前，避免首帧按默认值渲染）。
      */
     fun ensureLoaded(context: Context) {
-        if (loadedFromDisk) return
-        val prefs = prefs(context)
-        // 迁移失败不阻断读取：它只写一个水位，坏了也不该让可视化整体不可用。
-        runCatching { migrate(prefs) }
-        effectsStateHolder.value = runCatching { readEffects(prefs, deviceDefaultTier(context)) }
-            .getOrElse { effectsStateHolder.value }
+        // v2.9.0：初始化入口保持不变（`VisualizerSetting.read` 仍只调这一个），
+        // 但它现在委托给 `MotionPrefs` —— 档位、界面动效总开关、降级水位是**同一份**状态。
         loadedFromDisk = true
+        MotionPrefs.ensureLoaded(context)
     }
 
-    /** 用户显式选择档位（设置页调用）。 */
-    fun setTier(context: Context, tier: Int) = update(context) { writeTier(it, tier) }
+    /**
+     * v2.9.0：**用户改档位走 `MotionPrefs`**（统一档位只有一个写入口）。
+     *
+     * 保留这个函数是因为设置页仍在调它；它现在只是转发，语义变成「改**动效强度**」
+     * 而不是「改波形档位」——包括**重置降级水位**（见 `MotionPrefs.writeTier`）。
+     */
+    fun setTier(context: Context, tier: Int) = MotionPrefs.setTier(context, tier)
 
+    // ---- v2.9.0：以下 5 个 C 档细分开关**不再是渲染开关**（合并进档位），
+    // 读写一律委托给 MotionPrefs，避免"设置页写了一个没人读的键、用户以为生效了"。 ----
     fun setShowcase(context: Context, enabled: Boolean) = update(context) { writeShowcase(it, enabled) }
 
     fun setShockwave(context: Context, enabled: Boolean) = update(context) { writeShockwave(it, enabled) }
@@ -271,36 +277,24 @@ object VisualizerPrefs {
      *
      * @return 降级后的档位；`null` = 不动作（已降过 / 已在最低档）。
      */
-    fun applyAutoDowngrade(context: Context): Int? {
-        val current = effectsStateHolder.value
-        val next = runCatching {
-            applyAutoDowngrade(prefs(context), current.tier, current.autoDowngraded)
-        }.getOrNull() ?: return null
-        refresh(context)
-        return next
-    }
+    /**
+     * v2.9.0：自动降级改用 **`MotionDegrade` 的三级阶梯**（优先砍界面动效、再砍波形档位）。
+     *
+     * 返回的是**降级水位**（0..3），不再是档位 —— 调用方（`MotionFrameClock`）也不关心返回值。
+     */
+    fun applyAutoDowngrade(context: Context): Int? = MotionPrefs.applyAutoDowngrade(context)
 
     internal fun resetForTest() {
         loadedFromDisk = false
-        effectsStateHolder.value = VisualizerEffects.of(
-            tier = VisualizerTier.REFINED,
-            showcase = DEFAULT_SHOWCASE,
-            shockwave = false,
-            particles = false,
-            perspective = false,
-            tapInteraction = false,
-        )
+        MotionPrefs.resetForTest()
     }
 
     private inline fun update(context: Context, write: (SharedPreferences) -> Unit) {
         val prefs = prefs(context)
         runCatching { write(prefs) }
-        refresh(context)
-    }
-
-    private fun refresh(context: Context) {
-        effectsStateHolder.value = runCatching { readEffects(prefs(context), deviceDefaultTier(context)) }
-            .getOrElse { effectsStateHolder.value }
+        // 这 5 个键已经不是渲染开关了，写盘之后刷新一次进程内镜像只是为了保持
+        // 「设置页改完立刻一致」这条既有行为（镜像本身由 MotionPrefs 重新解析）。
+        MotionPrefs.ensureLoaded(context)
         loadedFromDisk = true
     }
 

@@ -61,6 +61,9 @@ import kotlinx.coroutines.flow.StateFlow
 fun LyricsView(
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine> = emptyList(),
+    // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。默认 **false** ——
+    // 关掉时渲染路径与 v2.8.0 逐字节一致（见 NcrustLyricsPanel 的同名参数）。
+    lyricPulseEnabled: Boolean = false,
     showTranslation: Boolean = true,
     // v1.9.3：音译轨（罗马音 / 粤拼），与 translatedLyrics 同构。数据来自 PlayerViewModel
     // 的 v1.9.2 音译轨，渲染层**不重新合并**，只按 timeMs 配对取用。
@@ -365,6 +368,8 @@ fun LyricsView(
             } else {
                 LyricsPanelScroll.LEAD_FRACTION
             },
+            // v2.9.0 · B 档：纯透传（判定在 PlayerCard，本组件不读设置）。
+            lyricPulseEnabled = lyricPulseEnabled,
         )
 
         // 上下边缘淡出,让歌词从黑里浮出来(沿用原实现;高度见 fadeHeight)

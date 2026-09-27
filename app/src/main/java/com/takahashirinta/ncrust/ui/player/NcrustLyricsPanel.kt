@@ -75,6 +75,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
+import com.takahashirinta.ncrust.ui.player.motion.MotionClock
+import com.takahashirinta.ncrust.ui.theme.AppMotion
 import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import com.takahashirinta.ncrust.lyric.LrcWord
@@ -174,6 +176,11 @@ fun NcrustLyricsPanel(
     // v2.3.0 · E：定位目标比例。默认 = 竖屏的 LEAD_FRACTION(0.36)，
     // 横屏 / 大屏右栏由调用方传 CENTER_FRACTION(0.5) —— 短面板下 0.36 看起来是歪的。
     leadFraction: Float = LyricsPanelScroll.LEAD_FRACTION,
+    // v2.9.0 · B 档：**歌词律动**（当前行随节拍轻微缩放，任务书 §5.2）。
+    // 默认 **false** —— 关闭时下面那一行的渲染表达式与 v2.8.0 逐字相同
+    // （`scale` 就是原来的值，不额外乘 1f），这是"关掉开关等于没这功能"的机械保证。
+    // 幅度上限见 `AppMotion.LYRIC_PULSE_SCALE`（3%，判据是"不干扰阅读"）。
+    lyricPulseEnabled: Boolean = false,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
@@ -546,7 +553,18 @@ fun NcrustLyricsPanel(
                                 // 连续距离驱动缩放:无翻转瞬间,行间渐变交接。
                                 // 缩放放在整行(原句+翻译)外层,双语同时放大/缩小。
                                 val dist = abs(index - smoothCurrentIndex.value)
-                                val scale = lerp(1f, inactiveScale, (dist / 1.8f).coerceIn(0f, 1f))
+                                var scale = lerp(1f, inactiveScale, (dist / 1.8f).coerceIn(0f, 1f))
+                                // v2.9.0 · B 档：只有**当前行**随节拍脉冲。
+                                //
+                                // `MotionClock.generation` 刻意写在 `if (index == currentIndex)`
+                                // **里面**：Compose 的快照观察是动态的，只有当前行这一层会订阅
+                                // 帧时钟 —— 若写在外面，28 行歌词每帧各失效一次，那是纯浪费。
+                                // 跨行时 `smoothCurrentIndex` 变化会让所有行重新执行本块，
+                                // 依赖因此自然迁移到新的当前行，不会留下悬空的订阅。
+                                if (lyricPulseEnabled && index == currentIndex) {
+                                    MotionClock.generation
+                                    scale *= 1f + MotionClock.pulse() * AppMotion.LYRIC_PULSE_SCALE
+                                }
                                 scaleX = scale
                                 scaleY = scale
                                 transformOrigin = TransformOrigin(0f, 0.5f)
