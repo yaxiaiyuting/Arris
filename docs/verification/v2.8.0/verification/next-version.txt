@@ -1,0 +1,24 @@
+# v2.8.0 versionCode 三源交叉校验（tools/next-version.sh 重建版）
+# 决策时刻（提交 versionCode=51 **之前**）的实测输出见下方「决策记录」；
+# 下面这次是**已 bump 之后**为了留档重跑的原始输出（③ 因此读到 51）。
+
+## 决策记录（bump 前，用于定号）
+① tags: v2.6.2-gpl=50 v2.6.1-gpl=49 v2.6.0-gpl=48 v2.5.6-gpl=47 v2.5.5-gpl=46
+② 已发布 APK: Ncrust-v2.6.2-gpl-release.apk=50 (aapt2 dump badging，红线 19 不看标题)
+③ 工作区: versionCode=50 versionName=2.6.2-gpl
+⇒ max = 50 ⇒ 本版 51 / versionName 2.8.0-gpl
+
+## 留档重跑（bump 后）
+next-version.sh —— versionCode 三源交叉校验
+  仓库: /home/duanjb666/deepseek/Ncrust   (fetch: NO)
+  ① 最近 5 个 tag 指向的 build.gradle.kts:
+       v2.6.2-gpl=50
+       v2.6.1-gpl=49
+       v2.6.0-gpl=48
+       v2.5.6-gpl=47
+       v2.5.5-gpl=46
+  ② 已发布 APK 的 aapt2 dump badging 实测（红线 19：不看 release 标题）:
+       Ncrust-v2.6.2-gpl-release.apk=50
+  ③ 工作区 build.gradle.kts: versionCode=51 versionName=2.8.0-gpl
+  ----
+  三源最大值 = 51  ⇒ 下一个可用 versionCode = 52

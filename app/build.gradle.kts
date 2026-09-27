@@ -281,8 +281,24 @@ android {
         //   三源一致 ⇒ 下一个可用 **50**。
         //   实测记录：docs/verification/v2.6.2/verification/next-version.txt
         //   打 tag 前用 `git show v2.6.2-gpl:app/build.gradle.kts | grep version` 自证过。
-        versionCode = 50
-        versionName = "2.6.2-gpl"
+        //
+        //   v2.8.0（本版）：versionCode 出处：`tools/next-version.sh`（**带 fetch**）三源交叉验证 ——
+        //     ① 最近 5 个 tag 的 `app/build.gradle.kts` 最大 = 50（`v2.6.2-gpl`）；
+        //     ② **已发布 APK** 的 `aapt2 dump badging` = 50（本轮重新下载 release 资产
+        //        `Ncrust-v2.6.2-gpl-release.apk` 实测；红线 19：不看 release 标题里写的号）；
+        //     ③ 工作区 `app/build.gradle.kts` = 50。
+        //   三源一致 ⇒ 下一个可用 **51**。
+        //   ⚠️ v2.7.x 从未存在：tag / release 列表里没有 v2.7.0，任务书直接给到 v2.8.0，
+        //   版本号按「max + 1」取 51（不是 52，也不是沿用 50）。
+        //   实测记录：docs/verification/v2.8.0/verification/next-version.txt
+        //
+        //   ⚠️ **本版签名与历史版本不同**：原 release 密钥（`ncrust-release.jks`）随工作区一起丢失
+        //   （从不在 git：`.gitignore:18-20` 排除 `*.jks`/`keystore.properties`），用户改用新密钥
+        //   `ncrust-release-v2.jks`（cert SHA-256 `e62eca39…bbec82`）。
+        //   后果：**老用户无法覆盖安装，必须先完全卸载**（会清掉登录态与离线缓存）。
+        //   `applicationId` / 权限 / 华为卡片一律未动。
+        versionCode = 51
+        versionName = "2.8.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
