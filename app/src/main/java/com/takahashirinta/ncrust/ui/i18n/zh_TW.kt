@@ -95,6 +95,25 @@ val zhTW = Strings(
         batteryAllow = "前往設定",
         batteryLater = "暫不"
     ),
+    // v2.8.0：波形效果分級（獨立分組，理由見 WaveformStrings 的 KDoc）。
+    waveform = WaveformStrings(
+        visualizerTierLabel = "波形效果檔位",
+        visualizerTierDescription = "簡潔：圓角柱 + 峰值保持；精緻：再加漸層流動、柱頂光點與呼吸；炫技：再加衝擊波、粒子與 3D 透視。低端裝置（低記憶體 / 3 GB 級 / Android 7.x）預設簡潔檔。",
+        visualizerTierSimple = "簡潔",
+        visualizerTierRefined = "精緻",
+        visualizerTierShowcase = "炫技",
+        visualizerShowcaseLabel = "炫技效果",
+        visualizerShowcaseDescription = "僅「炫技」檔生效；關閉後炫技檔與精緻檔外觀一致。",
+        visualizerShockwaveLabel = "衝擊波",
+        visualizerShockwaveDescription = "強節拍時從中心擴散漣漪。節拍來自響度相對基線的突變，慢歌或動態壓縮強的曲目可能不觸發。",
+        visualizerParticlesLabel = "粒子",
+        visualizerParticlesDescription = "節拍時迸出粒子。粒子數量固定有上限，低端裝置上開銷隨繪製筆數線性增加。",
+        visualizerPerspectiveLabel = "3D 透視",
+        visualizerPerspectiveDescription = "給波形條加一個固定傾角。會新增一層渲染層，是炫技檔裡合成開銷最高的一項。",
+        visualizerDragLabel = "點按切換著色",
+        visualizerDragDescription = "點一下波形條，在「漸層流動」與「按時序著色」之間切換。本版未實作拖曳（手勢與播放器衝突風險未在真機驗證）。",
+        visualizerNotSpectrumHint = "波形亮度表示時間新舊，不是頻譜：本版沒有頻域資料，不區分低/中/高頻。",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "前章",
         playButton = "奏",

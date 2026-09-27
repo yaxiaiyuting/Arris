@@ -95,6 +95,25 @@ val jpMY = Strings(
         batteryAllow = "設定 開",
         batteryLater = "後"
     ),
+    // v2.8.0：波形 動效 の 段（別 の 群。理由 は WaveformStrings の KDoc に 在 り）。
+    waveform = WaveformStrings(
+        visualizerTierLabel = "波形 動效 の 段",
+        visualizerTierDescription = "簡素：角丸 柱 + ピーク 保持。精巧：加 漸化 流動、柱頂 光點 と 呼吸。絢爛：加 衝撃波、粒子 と 3D 透視。低端 端末（低 メモリ ／ 3 GB 級 ／ Android 7.x）は 簡素 を 既定 と す。",
+        visualizerTierSimple = "簡素",
+        visualizerTierRefined = "精巧",
+        visualizerTierShowcase = "絢爛",
+        visualizerShowcaseLabel = "絢爛 動效",
+        visualizerShowcaseDescription = "絢爛 の 段 に のみ 效 あり。閉づれば 絢爛 は 精巧 と 同じ 様 と なる。",
+        visualizerShockwaveLabel = "衝撃波",
+        visualizerShockwaveDescription = "強 き 拍 の 時、中心 より 漣 広がる。拍 は 音量 の 基準線 より の 急變 に 由る —— 緩 き 曲、圧縮 強 き 曲 は 発 せ ざる 事 有 り。",
+        visualizerParticlesLabel = "粒子",
+        visualizerParticlesDescription = "拍 の 時、粒子 迸る。粒子 の 數 は 上限 固定、低端 端末 に て は 描畫 數 に 比例 し て 費 増 す。",
+        visualizerPerspectiveLabel = "3D 透視",
+        visualizerPerspectiveDescription = "波形 柱 に 固定 の 傾 を 加ふ。描畫 層 一 を 増 し、絢爛 の 段 に て 合成 費 最 も 高 き 項 な り。",
+        visualizerDragLabel = "押 に て 着色 切替",
+        visualizerDragDescription = "波形 柱 を 押 せ ば、「漸化 流動」と「時序 に 由る 着色」と の 間 に 切替 ふ。本 版 は 引 ずる 操作 未 実装（手 の 動き と 再世 器 の 衝突 は 実機 未 検証）。",
+        visualizerNotSpectrumHint = "波形 の 明暗 は 時 の 新旧 を 示 す のみ、スペクトル に 非 ず。本 版 に 周波數 の 情報 無 く、低/中/高 を 分 か ず。",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "前",
         playButton = "奏",

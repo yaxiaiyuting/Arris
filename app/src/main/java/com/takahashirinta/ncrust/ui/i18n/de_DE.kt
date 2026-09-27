@@ -96,6 +96,25 @@ val deDE = Strings(
         batteryAllow = "Einstellungen öffnen",
         batteryLater = "Später"
     ),
+    // v2.8.0: Wellenform-Effektstufen (eigene Gruppe – Begründung im KDoc von WaveformStrings).
+    waveform = WaveformStrings(
+        visualizerTierLabel = "Wellenform-Effekte",
+        visualizerTierDescription = "Einfach: abgerundete Balken mit Peak-Hold. Verfeinert: zusätzlich fließender Verlauf, Lichtpunkte auf den Balkenspitzen und Atmen. Showcase: zusätzlich Schockwelle, Partikel und 3D-Perspektive. Schwache Geräte (wenig RAM / 3-GB-Klasse / Android 7.x) starten mit Einfach.",
+        visualizerTierSimple = "Einfach",
+        visualizerTierRefined = "Verfeinert",
+        visualizerTierShowcase = "Showcase",
+        visualizerShowcaseLabel = "Showcase-Effekte",
+        visualizerShowcaseDescription = "Gilt nur für die Stufe Showcase; ausgeschaltet sieht Showcase aus wie Verfeinert.",
+        visualizerShockwaveLabel = "Schockwelle",
+        visualizerShockwaveDescription = "Bei starken Beats breiten sich Wellen vom Zentrum aus. Beats werden aus Lautstärkesprüngen über einer Grundlinie erkannt – langsame oder stark komprimierte Titel lösen daher möglicherweise nie aus.",
+        visualizerParticlesLabel = "Partikel",
+        visualizerParticlesDescription = "Bei Beats spritzen Partikel heraus. Der Vorrat ist fest und begrenzt; auf schwachen Geräten wachsen die Zeichenaufrufe linear.",
+        visualizerPerspectiveLabel = "3D-Perspektive",
+        visualizerPerspectiveDescription = "Neigt den Wellenform-Streifen. Fügt eine Renderebene hinzu – der teuerste Compositing-Posten der Showcase-Stufe.",
+        visualizerDragLabel = "Tippen wechselt die Färbung",
+        visualizerDragDescription = "Ein Tippen auf den Streifen wechselt zwischen fließendem Verlauf und zeitlich geordneter Färbung. Ziehen ist in dieser Version nicht umgesetzt (Gestenkonflikte wurden nicht auf einem Gerät geprüft).",
+        visualizerNotSpectrumHint = "Die Helligkeit zeigt die Aktualität, kein Spektrum: Diese Version hat keine Frequenzdaten und trennt keine Tiefen, Mitten oder Höhen.",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "Vorheriger",
         playButton = "Abspielen",

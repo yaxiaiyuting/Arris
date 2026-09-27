@@ -96,6 +96,25 @@ val ruRU = Strings(
         batteryAllow = "Открыть настройки",
         batteryLater = "Позже"
     ),
+    // v2.8.0: уровни эффектов волны (отдельная группа — обоснование в KDoc WaveformStrings).
+    waveform = WaveformStrings(
+        visualizerTierLabel = "Эффекты волны",
+        visualizerTierDescription = "Простой: скруглённые столбцы с удержанием пиков. Улучшенный: плюс текучий градиент, точки на вершинах и «дыхание». Эффектный: плюс ударная волна, частицы и 3D-перспектива. Слабые устройства (мало ОЗУ / класс 3 ГБ / Android 7.x) начинают с простого уровня.",
+        visualizerTierSimple = "Простой",
+        visualizerTierRefined = "Улучшенный",
+        visualizerTierShowcase = "Эффектный",
+        visualizerShowcaseLabel = "Эффекты уровня «Эффектный»",
+        visualizerShowcaseDescription = "Действует только на уровне «Эффектный»; при выключении он выглядит так же, как «Улучшенный».",
+        visualizerShockwaveLabel = "Ударная волна",
+        visualizerShockwaveDescription = "На сильных битах от центра расходятся волны. Биты определяются по скачкам громкости относительно базовой линии, поэтому медленные или сильно сжатые треки могут их не вызвать.",
+        visualizerParticlesLabel = "Частицы",
+        visualizerParticlesDescription = "На битах разлетаются частицы. Их запас фиксирован и ограничен; на слабых устройствах число вызовов отрисовки растёт линейно.",
+        visualizerPerspectiveLabel = "3D-перспектива",
+        visualizerPerspectiveDescription = "Наклоняет полосу волны. Добавляет слой отрисовки — самый дорогой по композитингу пункт уровня «Эффектный».",
+        visualizerDragLabel = "Нажатие меняет окраску",
+        visualizerDragDescription = "Нажатие на полосу переключает между текучим градиентом и окраской по времени. Перетаскивание в этой версии не реализовано (конфликты жестов не проверялись на устройстве).",
+        visualizerNotSpectrumHint = "Яркость показывает новизну, а не спектр: в этой версии нет данных о частотах, низкие/средние/высокие не разделяются.",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "Предыдущий",
         playButton = "Воспроизвести",

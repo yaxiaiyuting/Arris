@@ -95,6 +95,25 @@ val jpJP = Strings(
         batteryAllow = "設定を開く",
         batteryLater = "後で"
     ),
+    // v2.8.0：波形エフェクトの段階（独立したグループ。理由は WaveformStrings の KDoc）。
+    waveform = WaveformStrings(
+        visualizerTierLabel = "波形エフェクト",
+        visualizerTierDescription = "シンプル：角丸バー + ピークホールド。洗練：さらにグラデーションの流れ、バー頂点の光点と呼吸。ショーケース：さらに衝撃波、粒子、3D パース。低スペック端末（低メモリ / 3 GB 級 / Android 7.x）はシンプルが既定です。",
+        visualizerTierSimple = "シンプル",
+        visualizerTierRefined = "洗練",
+        visualizerTierShowcase = "ショーケース",
+        visualizerShowcaseLabel = "ショーケース効果",
+        visualizerShowcaseDescription = "「ショーケース」段階でのみ有効です。オフにするとショーケースは洗練と同じ見た目になります。",
+        visualizerShockwaveLabel = "衝撃波",
+        visualizerShockwaveDescription = "強いビートで中心から波紋が広がります。ビートは基準線に対する音量の急変で検出するため、スローテンポや圧縮の強い曲では発動しないことがあります。",
+        visualizerParticlesLabel = "粒子",
+        visualizerParticlesDescription = "ビートに合わせて粒子が飛び散ります。粒子数は上限つきで固定、低スペック端末では描画回数に比例して負荷が増えます。",
+        visualizerPerspectiveLabel = "3D パース",
+        visualizerPerspectiveDescription = "波形バーに固定の傾きを付けます。描画レイヤーが 1 枚増え、ショーケースで最も合成コストが高い項目です。",
+        visualizerDragLabel = "タップで着色を切り替え",
+        visualizerDragDescription = "波形バーをタップすると「グラデーションの流れ」と「時系列の着色」を切り替えます。本バージョンではドラッグは未実装です（ジェスチャと再生器の競合は実機で未検証）。",
+        visualizerNotSpectrumHint = "波形の明るさは時間の新旧を表し、スペクトラムではありません。本バージョンには周波数データがなく、低域/中域/高域は区別しません。",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "前へ",
         playButton = "再生",

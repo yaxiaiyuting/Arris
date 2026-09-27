@@ -96,6 +96,25 @@ val en = Strings(
         batteryAllow = "Open settings",
         batteryLater = "Not now"
     ),
+    // v2.8.0: waveform effect tiers (own group — see the KDoc on WaveformStrings).
+    waveform = WaveformStrings(
+        visualizerTierLabel = "Waveform effects",
+        visualizerTierDescription = "Simple: rounded bars with peak hold. Refined: adds a flowing gradient, top dots and breathing. Showcase: adds shockwave, particles and 3D perspective. Low-end devices (low RAM / 3 GB class / Android 7.x) start at Simple.",
+        visualizerTierSimple = "Simple",
+        visualizerTierRefined = "Refined",
+        visualizerTierShowcase = "Showcase",
+        visualizerShowcaseLabel = "Showcase effects",
+        visualizerShowcaseDescription = "Only applies to the Showcase tier; when off, Showcase looks identical to Refined.",
+        visualizerShockwaveLabel = "Shockwave",
+        visualizerShockwaveDescription = "Ripples out from the centre on strong beats. Beats are detected from loudness jumps over a baseline, so slow or heavily compressed tracks may never trigger it.",
+        visualizerParticlesLabel = "Particles",
+        visualizerParticlesDescription = "Particles burst out on beats. The pool is fixed and capped; draw calls grow linearly on low-end GPUs.",
+        visualizerPerspectiveLabel = "3D perspective",
+        visualizerPerspectiveDescription = "Tilts the waveform strip. Adds one render layer — the most expensive compositing item in the Showcase tier.",
+        visualizerDragLabel = "Tap to switch colouring",
+        visualizerDragDescription = "Tap the strip to switch between the flowing gradient and time-ordered tinting. Dragging is not implemented in this version (gesture conflicts were not verified on a device).",
+        visualizerNotSpectrumHint = "Brightness shows recency, not frequency: this version has no frequency data and does not separate lows/mids/highs.",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "Previous",
         playButton = "Play",

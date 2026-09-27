@@ -95,6 +95,25 @@ val koNK = Strings(
         batteryAllow = "설정 열기",
         batteryLater = "나중에"
     ),
+    // v2.8.0: 파형 효과 단계 (따로 묶음 — 리유는 WaveformStrings의 KDoc).
+    waveform = WaveformStrings(
+        visualizerTierLabel = "파형 효과 단계",
+        visualizerTierDescription = "간결: 모서리가 둥근 기둥 + 봉우리 유지. 정교: 여기에 그라데이션 흐름, 기둥 위의 빛점과 숨쉬기를 더합니다. 화려: 여기에 충격파, 알갱이와 3D 투시를 더합니다. 저사양 기기(적은 메모리 / 3 GB급 / Android 7.x)는 간결이 기본입니다.",
+        visualizerTierSimple = "간결",
+        visualizerTierRefined = "정교",
+        visualizerTierShowcase = "화려",
+        visualizerShowcaseLabel = "화려한 효과",
+        visualizerShowcaseDescription = "'화려' 단계에만 적용됩니다. 끄면 화려 단계는 정교 단계와 같은 모습이 됩니다.",
+        visualizerShockwaveLabel = "충격파",
+        visualizerShockwaveDescription = "강한 박자에 중심에서 물결이 퍼집니다. 박자는 소리크기가 기준선에 비해 갑자기 변하는것으로 검출하므로, 느린 곡이나 압축이 강한 곡에서는 발동하지 않을수 있습니다.",
+        visualizerParticlesLabel = "알갱이",
+        visualizerParticlesDescription = "박자에 알갱이가 튀어나옵니다. 알갱이 수는 고정된 상한이 있고, 저사양 기기에서는 그리기 횟수에 비례해 부담이 늘어납니다.",
+        visualizerPerspectiveLabel = "3D 투시",
+        visualizerPerspectiveDescription = "파형 기둥에 고정된 기울기를 줍니다. 그리기 층이 하나 늘어나며, 화려 단계에서 합성 부담이 가장 큰 항목입니다.",
+        visualizerDragLabel = "눌러서 색 바꾸기",
+        visualizerDragDescription = "파형을 누르면 '그라데이션 흐름'과 '차례대로 색칠하기' 사이를 바꿉니다. 이번 버전에서는 끌기가 구현되지 않았습니다(손짓과 재생기 충돌 위험은 실제 기기에서 검증되지 않았습니다).",
+        visualizerNotSpectrumHint = "파형 밝기는 시간의 새로움을 나타내며 스펙트럼이 아닙니다. 이번 버전에는 주파수 자료가 없어 낮은/중간/높은 주파수를 가리지 않습니다.",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "이전곡",
         playButton = "재생",

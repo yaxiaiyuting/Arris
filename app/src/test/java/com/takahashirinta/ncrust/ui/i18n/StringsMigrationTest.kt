@@ -28,7 +28,7 @@
  * | 要求 | 用例 |
  * |---|---|
  * | 旧 key 访问路径 | `v2_5_2 的全部路径逐值不变（搬家 ≠ 改文案）` |
- * | 新 key 访问路径 | `旧 key 与新分组路径一一对应且取值相同` + `三个新分组都被真正填充` |
+ * | 新 key 访问路径 | `旧 key 与新分组路径一一对应且取值相同` + `每个新分组都被真正填充（v2_5_3 三组 + v2_8_0 波形组）` |
  * | 默认值回落 | `漏填的语言回落构造器默认值（aboutDesignSystemLabel）` |
  * | 多语言一致性 | `8 种语言的路径集合完全一致` + `跨语言该不同的文案确实不同` + `跨语言全同的路径集合与 v2_5_2 一致` |
  *
@@ -200,12 +200,16 @@ class StringsMigrationTest {
         }
     }
 
-    /** 三个新组的**组参数确实挂上了**，且条目数与分组表一致。 */
+    /**
+     * 每个新分组的**组参数确实挂上了**，且条目数与分组表一致。
+     *
+     * v2.5.3 的三组 + v2.8.0 的 [WaveformStrings]（第四个组，16 条）都在这里。
+     */
     @Test
-    fun `三个新分组都被真正填充`() {
-        // v2.8.0：settings 64 → 78（二级菜单的 7 组 × 标题/副标题）。
-        // about / playerUi 本版没动 —— 这三个数只随各自的文案变动。
-        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31)
+    fun `每个新分组都被真正填充（v2_5_3 三组 + v2_8_0 波形组）`() {
+        // v2.8.0：settings 64 → 78（二级菜单的 7 组 × 标题/副标题）、新增 waveform 16 条。
+        // about / playerUi 本版没动 —— 这几个数只随各自的文案变动。
+        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31, "waveform" to 16)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

@@ -99,6 +99,8 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.SettingsStrings",
         "com.takahashirinta.ncrust.ui.i18n.AboutStrings",
         "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings",
+        // v2.8.0：波形效果分级那一组（16 条）。加组时必须同步这里，否则它是**监控盲区**。
+        "com.takahashirinta.ncrust.ui.i18n.WaveformStrings",
     )
 
     /** dex 槽位算式：`this(1) + N + ceil(N/32) 个默认值 mask + DefaultConstructorMarker(1)`。 */
@@ -167,23 +169,23 @@ class StringsConstructorBudgetTest {
     }
 
     /**
-     * v2.5.3 的**搬家账**：128 才是本版的目标值。
+     * v2.5.3 的**搬家账**：128 才是本版的目标值（v2.8.0 起是 136）。
      *
      * 单钉一个精确值而不是「< 150」是有意的：这条会在有人**顺手**往主构造器里
      * 加参数时立刻变红，迫使他在「拆组」与「改这个断言」之间做一次显式选择 ——
      * 而后者会留下一条可追溯的提交记录。范围断言做不到这一点。
      */
     @Test
-    fun `v2_5_5 之后 Strings 主构造器稳定在 135`() {
+    fun `v2_8_0 之后 Strings 主构造器稳定在 136`() {
         val clazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")
         assertEquals(
             "Strings 主构造器参数数变了。若是有意加文案，请把新文案放进嵌套组" +
                 "（外层一个都不要加），然后同步改这条断言并在提交信息里说明。",
-            135, primaryParams(clazz),
+            136, primaryParams(clazz),
         )
-        // 余量：135 ⇒ 1(this) + 135 + 5(mask) + 1(marker) = 142 槽，距 255 还有 113。
-        assertEquals(142, dexSlots(135, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(135, true) >= 100)
+        // 余量：136 ⇒ 1(this) + 136 + ceil(136/32)=5(mask) + 1(marker) = 143 槽，距 255 还有 112。
+        assertEquals(143, dexSlots(136, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(136, true) >= 100)
     }
 
     /**
@@ -382,7 +384,8 @@ class StringsConstructorBudgetTest {
      * v2.6.0 · P1/P2：库页歌单 tab 的**两条布局标签 + 两条折叠文案**。
      *
      * 四条全部进 `PlaylistsStrings`（组参数 17 → 21），**外层 `Strings` 一个都没加** ——
-     * 所以上面那条「稳定在 135」的精确值断言**不需要改**，这正是分组机制要买到的东西。
+     * 所以上面那条「稳定在 N」的精确值断言在本版**不需要改**，这正是分组机制要买到的东西。
+     * （v2.8.0 它从 135 涨到 136，涨的是**组参数**那一个槽，不是 v2.6.0 这批文案。）
      *
      * 「不许撞词」不是洁癖：
      *  - `layoutCard` 与 `layoutList` 是同一排里相邻的两个按钮，写成同一个词
@@ -430,11 +433,13 @@ class StringsConstructorBudgetTest {
      *
      * 本版的两组新文案全部落在既有组里，外层主构造器**一个参数都没加** ——
      * 这条用例把「135」这个数与本版的关系写成断言，而不是让它悄悄跟着变。
+     * （v2.8.0 加了一个组参数后这个数变成 136，出处见下面那条 v2_8_0 波形组用例。）
      */
     @Test
     fun `v2_6_0 没有往 Strings 主构造器加任何参数`() {
         assertEquals("v2.5.5 是 135；v2.6.0 的新文案进了 PlaylistsStrings，外层应当一点没动", 135, 135)
-        assertEquals(135, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        // v2.8.0：外层唯一的变化是 +1 个**组参数**（`waveform`），不是往外层加文案。
+        assertEquals(136, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -446,9 +451,10 @@ class StringsConstructorBudgetTest {
     /**
      * v2.8.0「设置界面二级菜单」：**14 条分组文案（7 组 × 标题 / 副标题）落进 `SettingsStrings`**。
      *
-     * 这是分组机制的正向用法 —— 与 v2.6.0 的 4 条同一形状：外层 135 一个参数都没动
-     * （上面那条精确值断言照旧绿），14 条全部进组 ⇒ 组参数 **64 → 78**，
+     * 这是分组机制的正向用法 —— 与 v2.6.0 的 4 条同一形状：14 条全部进组，
+     * 外层**没有**为它们加参数 ⇒ 组参数 **64 → 78**，
      * `1(this) + 78 = 79` 个 dex 槽（距 255 还有 176；距组硬上限 120 还有 42）。
+     * （外层在 v2.8.0 从 135 涨到 136，出处是波形组那**一个**组参数，见下面那条用例。）
      *
      * 三条断言各自挡一种「不会编译失败」的事故：
      *  - **八种语言都非空**：字段加了、某个语言的值忘了填（具名实参 + 默认值会让它静默）；
@@ -460,8 +466,8 @@ class StringsConstructorBudgetTest {
     @Test
     fun `v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用`() {
         assertEquals(
-            "v2.8.0 的分组文案必须进 SettingsStrings —— 外层主构造器一个参数都不该加",
-            135,
+            "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数",
+            136,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
@@ -520,6 +526,158 @@ class StringsConstructorBudgetTest {
                 assertNotNull("$name 的转发属性不存在（SettingsRegistry 的裸路径会解析不到）", forward)
                 assertEquals(name, get(s.settings), forward!!.invoke(s))
             }
+        }
+    }
+
+    /**
+     * v2.8.0「波形效果分级」：**16 条文案落在独立分组 [WaveformStrings]**。
+     *
+     * ## 为什么单开一组
+     *
+     * `SettingsStrings` 已经 **78**，而组**预警线是 80**（硬上限 120）：16 条塞进去 = 94，
+     * 每一轮测试都打 WARN，违背「再加字段请拆组」的纪律。代价是外层多**一个**组参数
+     * （135 → **136**，预算 150 仍余 14），组本身 `1(this) + 16 = 17` 个 dex 槽。
+     *
+     * ## 三条事实约束的机械防线（写错就是骗用户）
+     *
+     * 文案层面无法逐句机翻校验，但三条硬要求各自有一个**可以机械检查的锚点**：
+     *
+     * 1. **标签必须是「点按」而不是「拖拽」**：`visualizerDragLabel` 里出现任何语言的
+     *    「拖」字都判失败（本版根本没实现拖拽，实际行为是点一下切换着色）；
+     *    并且 `visualizerDragDescription` 必须写明「未实现」（8 种语言各一个锚点词）。
+     * 2. **必须写明不是频谱**：`visualizerNotSpectrumHint` 必须点名「频谱 / spectrum /
+     *    スペクトル / 스펙트럼 / Spektrum / спектр」——本版没有频域数据源。
+     * 3. **必须写明低端设备默认档**：`visualizerTierDescription` 必须同时出现
+     *    「低端设备」类词与「默认 / 既定 / start at / начинают с」类词。
+     *
+     * 其余三条是每个新组都要过的：八种语言**非空**、同一语言内 16 条**互不撞词**
+     * （档位三选一尤其：同一个词会让用户分不出在选哪个）、每种语言**至少 2 种取值**
+     * （防止整块文案只改了文件名）。转发属性（`Strings.visualizerXxx`）也逐条比对 ——
+     * 属性名逐字等于 `ui/player/waveform/VisualizerStrings.kt` 的 `Property.*` 常量。
+     */
+    @Test
+    fun `v2_8_0 的 16 条波形分级文案进了 WaveformStrings 且八种语言都可用`() {
+        assertEquals(
+            "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136",
+            136,
+            primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
+        )
+        assertEquals(
+            "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
+            16,
+            primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.WaveformStrings")),
+        )
+        // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
+        assertEquals(17, dexSlots(16, false))
+
+        val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
+            "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },
+            "visualizerTierDescription" to { w: WaveformStrings -> w.visualizerTierDescription },
+            "visualizerTierSimple" to { w: WaveformStrings -> w.visualizerTierSimple },
+            "visualizerTierRefined" to { w: WaveformStrings -> w.visualizerTierRefined },
+            "visualizerTierShowcase" to { w: WaveformStrings -> w.visualizerTierShowcase },
+            "visualizerShowcaseLabel" to { w: WaveformStrings -> w.visualizerShowcaseLabel },
+            "visualizerShowcaseDescription" to { w: WaveformStrings -> w.visualizerShowcaseDescription },
+            "visualizerShockwaveLabel" to { w: WaveformStrings -> w.visualizerShockwaveLabel },
+            "visualizerShockwaveDescription" to { w: WaveformStrings -> w.visualizerShockwaveDescription },
+            "visualizerParticlesLabel" to { w: WaveformStrings -> w.visualizerParticlesLabel },
+            "visualizerParticlesDescription" to { w: WaveformStrings -> w.visualizerParticlesDescription },
+            "visualizerPerspectiveLabel" to { w: WaveformStrings -> w.visualizerPerspectiveLabel },
+            "visualizerPerspectiveDescription" to { w: WaveformStrings -> w.visualizerPerspectiveDescription },
+            "visualizerDragLabel" to { w: WaveformStrings -> w.visualizerDragLabel },
+            "visualizerDragDescription" to { w: WaveformStrings -> w.visualizerDragDescription },
+            "visualizerNotSpectrumHint" to { w: WaveformStrings -> w.visualizerNotSpectrumHint },
+        )
+        assertEquals("波形分级的字段数不对", 16, fields.size)
+
+        val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
+        presets.forEach { s ->
+            val values = fields.map { (_, get) -> get(s.waveform) }
+            values.forEachIndexed { i, value ->
+                assertTrue("${fields[i].first} 为空", value.isNotBlank())
+            }
+            assertEquals(
+                "同一语言里 16 条波形文案有重复：$values",
+                16,
+                values.distinct().size,
+            )
+            // 档位三选一：三个词必须互不相同，否则用户分不出在选哪一档。
+            val tiers = listOf(
+                s.waveform.visualizerTierSimple,
+                s.waveform.visualizerTierRefined,
+                s.waveform.visualizerTierShowcase,
+            )
+            assertEquals("三档文案有重复：$tiers", 3, tiers.distinct().size)
+        }
+        fields.forEach { (name, get) ->
+            val values = presets.map { get(it.waveform) }
+            assertTrue(
+                "$name 的 8 种语言取值全同（疑似只改了文件名没改内容）：${values.first()}",
+                values.distinct().size >= 2,
+            )
+        }
+
+        // 转发属性（`Strings.visualizerXxx`）必须在，且与组内同值。
+        presets.forEach { s ->
+            fields.forEach { (name, get) ->
+                val forward = Strings::class.java.methods.firstOrNull {
+                    it.parameterCount == 0 && it.name == "get" + name.replaceFirstChar { c -> c.uppercaseChar() }
+                }
+                assertNotNull("$name 的转发属性不存在", forward)
+                assertEquals(name, get(s.waveform), forward!!.invoke(s))
+            }
+        }
+
+        // ---- 事实约束 1：标签说「点按」，说明里写明拖拽未实现 ----
+        val dragWords = listOf("拖", "drag", "zieh", "перетаск", "끌", "드래그", "ドラッグ", "引 ずる")
+        val notImplemented = listOf(
+            "未实现", "未實作", "not implemented", "未実装", "未 実装",
+            "구현되지 않았", "nicht umgesetzt", "не реализовано",
+        )
+        presets.forEach { s ->
+            val label = s.waveform.visualizerDragLabel.lowercase()
+            dragWords.forEach { word ->
+                assertTrue(
+                    "visualizerDragLabel 里出现了「$word」—— 本版没有拖拽，标签必须写点按：${s.waveform.visualizerDragLabel}",
+                    !label.contains(word.lowercase()),
+                )
+            }
+            val desc = s.waveform.visualizerDragDescription
+            assertTrue(
+                "visualizerDragDescription 必须写明拖拽未实现：$desc",
+                notImplemented.any { desc.contains(it) },
+            )
+        }
+
+        // ---- 事实约束 2：必须写明「不是频谱」 ----
+        val spectrumWords = listOf(
+            "频谱", "頻譜", "frequency", "スペクトラ", "スペクトル", "스펙트럼", "spektrum", "спектр",
+        )
+        presets.forEach { s ->
+            val hint = s.waveform.visualizerNotSpectrumHint.lowercase()
+            assertTrue(
+                "visualizerNotSpectrumHint 必须点名频谱：${s.waveform.visualizerNotSpectrumHint}",
+                spectrumWords.any { hint.contains(it) },
+            )
+        }
+
+        // ---- 事实约束 3：必须写明低端设备默认简洁档 ----
+        val lowEndWords = listOf(
+            "低端设备", "低端裝置", "low-end", "低スペック", "低端 端末", "저사양",
+            "schwache geräte", "слабые устройства",
+        )
+        val defaultWords = listOf("默认", "預設", "start at", "既定", "기본", "starten mit", "начинают с")
+        presets.forEach { s ->
+            val desc = s.waveform.visualizerTierDescription
+            val lower = desc.lowercase()
+            assertTrue(
+                "visualizerTierDescription 必须写明低端设备：$desc",
+                lowEndWords.any { lower.contains(it.lowercase()) },
+            )
+            assertTrue(
+                "visualizerTierDescription 必须写明低端设备的默认档：$desc",
+                defaultWords.any { lower.contains(it.lowercase()) },
+            )
         }
     }
 

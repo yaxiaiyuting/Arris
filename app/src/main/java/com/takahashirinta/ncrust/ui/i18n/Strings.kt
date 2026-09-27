@@ -29,9 +29,13 @@ package com.takahashirinta.ncrust.ui.i18n
  * | [SettingsStrings] | 64 → **78** | 设置页及其卫星对话框（v2.8.0 加 14 条分组卡片文案） | `ui/screen/UserScreen.kt` 等 |
  * | [AboutStrings] | 25 | 关于页 | `ui/screen/AboutScreen.kt` |
  * | [PlayerUiStrings] | 31 | 播放器界面（传输控件 / 歌词页 / 队列面板） | `ui/player/` 下的若干文件 |
+ * | [WaveformStrings] | **16** | 波形效果分级（v2.8.0 新开一组，理由见该类 KDoc） | `ui/player/waveform/` |
  *
  * 净效果：`245 - 120 + 3 = 128` 个主构造参数 ⇒ `1 + 128 + 4 + 1 = 134` 个 dex 槽，
  * **余量 121**。分组依据与调用点分布见 `docs/verification/v2.5.3/probe-strings.md`。
+ *
+ * v2.8.0 起：[SettingsStrings] 涨到 78（+14 条分组卡片文案），另开 [WaveformStrings]（16 条），
+ * 外层主构造参数 128 → **136** ⇒ `1 + 136 + 5 + 1 = 143` 个 dex 槽，**余量 112**。
  *
  * ## API 兼容：老调用点一行都没改
  *
@@ -68,6 +72,12 @@ data class Strings(
     // 理由见本类 KDoc「参数预算」一节：主构造器当时是 245 = 255 个 dex 槽用满。
     // 调用点由类体里的转发属性原样保住 —— `strings.xxx` 一行都不用改。
     val settings: SettingsStrings,
+    // v2.8.0：波形效果分级那一组（16 条）落进 [WaveformStrings]。
+    // 为什么不塞进 [SettingsStrings]：那边已经是 78，而组预警线是 80 —— 16 条进去会到 94，
+    // 每一轮测试都打 WARN，违背「再加字段请拆组」的纪律（组规模见 StringsConstructorBudgetTest）。
+    // 组名故意叫 `waveform` 而不是 `visualizer`：避免与
+    // `ui/player/waveform/VisualizerStrings.kt`（那边是**属性名常量**，不是文案）混淆。
+    val waveform: WaveformStrings,
     // v2.5.3 · P0：播放器界面那一组（31 条）搬进 [PlayerUiStrings]。
     // 理由见本类 KDoc「参数预算」一节：主构造器当时是 245 = 255 个 dex 槽用满。
     // 调用点由类体里的转发属性原样保住 —— `strings.xxx` 一行都不用改。
@@ -599,6 +609,26 @@ data class Strings(
     val settingsGroupStorageSubtitle: String get() = settings.settingsGroupStorageSubtitle
     val settingsGroupAboutTitle: String get() = settings.settingsGroupAboutTitle
     val settingsGroupAboutSubtitle: String get() = settings.settingsGroupAboutSubtitle
+
+    // ---------- 转发属性（v2.8.0）：波形效果分级 → [WaveformStrings] ----------
+    // 属性名逐字等于 `ui/player/waveform/VisualizerStrings.kt` 的 `Property.*` 常量
+    // （那是全仓库唯一的字面量落点，设置页消费方按这些名字取文案）。
+    val visualizerTierLabel: String get() = waveform.visualizerTierLabel
+    val visualizerTierDescription: String get() = waveform.visualizerTierDescription
+    val visualizerTierSimple: String get() = waveform.visualizerTierSimple
+    val visualizerTierRefined: String get() = waveform.visualizerTierRefined
+    val visualizerTierShowcase: String get() = waveform.visualizerTierShowcase
+    val visualizerShowcaseLabel: String get() = waveform.visualizerShowcaseLabel
+    val visualizerShowcaseDescription: String get() = waveform.visualizerShowcaseDescription
+    val visualizerShockwaveLabel: String get() = waveform.visualizerShockwaveLabel
+    val visualizerShockwaveDescription: String get() = waveform.visualizerShockwaveDescription
+    val visualizerParticlesLabel: String get() = waveform.visualizerParticlesLabel
+    val visualizerParticlesDescription: String get() = waveform.visualizerParticlesDescription
+    val visualizerPerspectiveLabel: String get() = waveform.visualizerPerspectiveLabel
+    val visualizerPerspectiveDescription: String get() = waveform.visualizerPerspectiveDescription
+    val visualizerDragLabel: String get() = waveform.visualizerDragLabel
+    val visualizerDragDescription: String get() = waveform.visualizerDragDescription
+    val visualizerNotSpectrumHint: String get() = waveform.visualizerNotSpectrumHint
 
     // ---------- 转发属性（v2.5.3 · P0）：关于页 → [AboutStrings] ----------
     // 与 v2.0.0 · HF1 的 [OfflineStrings] 同一套做法：搬家不改调用点。
@@ -1268,6 +1298,59 @@ data class SettingsStrings(
     val batteryLater: String
 )
 
+
+/**
+ * v2.8.0：**波形效果分级**的文案组（16 条）。
+ *
+ * ## 为什么单开一组
+ *
+ * 这批文案原本该进 [SettingsStrings]，但那边已经是 **78** 个参数，而
+ * `StringsConstructorBudgetTest` 的组**预警线是 80**（硬上限 120）：16 条塞进去 = 94，
+ * 每一轮测试都会打印 WARN。按仓库纪律「再加字段请拆组」，这里单开一组，
+ * 外层 `Strings` 只多**一个**组参数（135 → **136**，仍 < 150 的预算）。
+ *
+ * ## 命中三条事实约束（写错就是骗用户）
+ *
+ * 1. [visualizerDragLabel] / [visualizerDragDescription]：本版**没有实现拖拽**，
+ *    实际行为是**点一下**波形条在「渐变流动」与「按时序着色」之间切换；
+ *    文案必须写「点按」，且在说明里写明拖拽未实现（手势与播放器的冲突未在真机验证）。
+ * 2. [visualizerNotSpectrumHint]：必须写明**不是频谱** —— 本版没有频域数据源，
+ *    亮度表达的是**时间新旧**，不是低/中/高频。
+ * 3. [visualizerTierDescription]：必须写明**低端设备默认简洁档** —— 用户看到的
+ *    「已选：简洁」可能是系统按设备判据解析出来的默认值，不是他自己选的。
+ *
+ * 属性名逐字等于 `ui/player/waveform/VisualizerStrings.kt` 的 `Property.*` 常量
+ * （那是全仓库唯一的字面量落点，改名前先看那里）。参数数量监控见 `StringsConstructorBudgetTest`。
+ */
+data class WaveformStrings(
+
+    // 三选一：档位本身（顺序 = visualizer_tier 的 0 / 1 / 2）
+    val visualizerTierLabel: String,
+    /** 档位说明。**必须**含「低端设备默认简洁档」。 */
+    val visualizerTierDescription: String,
+    val visualizerTierSimple: String,
+    val visualizerTierRefined: String,
+    val visualizerTierShowcase: String,
+
+    // 炫技档总开关
+    val visualizerShowcaseLabel: String,
+    val visualizerShowcaseDescription: String,
+
+    // 炫技档的三个子效果
+    val visualizerShockwaveLabel: String,
+    val visualizerShockwaveDescription: String,
+    val visualizerParticlesLabel: String,
+    val visualizerParticlesDescription: String,
+    val visualizerPerspectiveLabel: String,
+    val visualizerPerspectiveDescription: String,
+
+    /** 点按切换着色。**不是**拖拽（本版未实现拖拽）。 */
+    val visualizerDragLabel: String,
+    val visualizerDragDescription: String,
+
+    /** 「亮度 = 时间新旧，不是频谱」的说明。 */
+    val visualizerNotSpectrumHint: String,
+)
 
 /**
  * v2.5.3 · P0：**关于页**的文案组（项目信息 / 技术栈 / 名单 / 致谢）。

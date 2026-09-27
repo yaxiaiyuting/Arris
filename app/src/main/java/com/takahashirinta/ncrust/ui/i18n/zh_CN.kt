@@ -95,6 +95,25 @@ val zhCN = Strings(
         batteryAllow = "去设置",
         batteryLater = "暂不"
     ),
+    // v2.8.0：波形效果分级（独立分组，理由见 WaveformStrings 的 KDoc）。
+    waveform = WaveformStrings(
+        visualizerTierLabel = "波形效果档位",
+        visualizerTierDescription = "简洁：圆角柱 + 峰值保持；精致：再加渐变流动、柱顶光点与呼吸；炫技：再加冲击波、粒子与 3D 透视。低端设备（低内存 / 3 GB 级 / Android 7.x）默认简洁档。",
+        visualizerTierSimple = "简洁",
+        visualizerTierRefined = "精致",
+        visualizerTierShowcase = "炫技",
+        visualizerShowcaseLabel = "炫技效果",
+        visualizerShowcaseDescription = "仅「炫技」档生效；关闭后炫技档与精致档外观一致。",
+        visualizerShockwaveLabel = "冲击波",
+        visualizerShockwaveDescription = "强节拍时从中心扩散涟漪。节拍来自响度相对基线的突变，慢歌或动态压缩强的曲目可能不触发。",
+        visualizerParticlesLabel = "粒子",
+        visualizerParticlesDescription = "节拍时迸出粒子。粒子数量固定有上限，低端设备上开销随绘制笔数线性增加。",
+        visualizerPerspectiveLabel = "3D 透视",
+        visualizerPerspectiveDescription = "给波形条加一个固定倾角。会新增一层渲染层，是炫技档里合成开销最高的一项。",
+        visualizerDragLabel = "点按切换着色",
+        visualizerDragDescription = "点一下波形条，在「渐变流动」与「按时序着色」之间切换。本版未实现拖拽（手势与播放器冲突风险未在真机验证）。",
+        visualizerNotSpectrumHint = "波形亮度表示时间新旧，不是频谱：本版没有频域数据，不区分低/中/高频。",
+    ),
     playerUi = PlayerUiStrings(
         prevButton = "上一首",
         playButton = "播放",
