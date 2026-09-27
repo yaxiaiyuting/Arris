@@ -171,12 +171,19 @@ class TrackKeyTest {
         val realNeteaseIds = listOf(
             1L, 287035L, 5257138L, 1959528822L, 33894312L,
             1_000_000_000L, 9_999_999_999L, // 远超真实规模，仍未触到位 62
-            SourceIds.QQ_ID_FLAG - 1L,      // 标志位下沿
+            // v3.1.0：边界值从 `QQ_ID_FLAG - 1` 换成 `BILI_ID_FLAG - 1`。
+            // 前者恰好把**位 61**置了起来，而位 61 从 v3.1.0 起归 B 站 ——
+            // 它因此不再是「网易云的边界值」（见下面那条新断言）。
+            SourceIds.BILI_ID_FLAG - 1L,    // 位 61 / 62 都为 0 的上沿
         )
         for (id in realNeteaseIds) {
             assertFalse("netease id $id must not look like a QQ id", SourceIds.isQqId(id))
+            assertFalse("netease id $id must not look like a Bilibili id", SourceIds.isBiliId(id))
             assertEquals(MusicSource.NETEASE, SourceIds.sourceOfId(id))
         }
+        // v3.1.0：位 61 是 B 站。`QQ_ID_FLAG - 1` 把位 61 也置起来了 ⇒ 它现在**正确地**
+        // 被判成 B 站。这条断言把这个边界写下来，而不是让下一个读到这里的人以为它是网易云。
+        assertEquals(MusicSource.BILIBILI, SourceIds.sourceOfId(SourceIds.QQ_ID_FLAG - 1L))
         assertEquals(MusicSource.QQMUSIC, SourceIds.sourceOfId(SourceIds.QQ_ID_FLAG))
         assertEquals(MusicSource.QQMUSIC, SourceIds.sourceOfId(SourceIds.qqId(456L, "mid")))
     }

@@ -256,8 +256,9 @@ class StringsConstructorBudgetTest {
     fun `v2_5_3 三个新组的规模被钉住`() {
         val expected = mapOf(
             // v2.8.0：SettingsStrings 64 → 78（二级菜单的 14 条分组文案，见下面那条 v2_8_0 用例）。
+            // v3.1.0：78 → 80（B 站音源开关的标题 + 说明，按纪律进分组而不是外层）。
             // AboutStrings / PlayerUiStrings 本版一条都没加。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 78,
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 80,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -472,11 +473,11 @@ class StringsConstructorBudgetTest {
         )
         assertEquals(
             "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            78,
+            80,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
-        assertEquals(79, dexSlots(78, false))
+        assertEquals(81, dexSlots(80, false))
 
         val fields: List<Pair<String, (SettingsStrings) -> String>> = listOf(
             "settingsGroupAccountTitle" to { s: SettingsStrings -> s.settingsGroupAccountTitle },

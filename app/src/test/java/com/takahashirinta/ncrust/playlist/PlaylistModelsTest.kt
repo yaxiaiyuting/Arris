@@ -136,7 +136,8 @@ class PlaylistModelsTest {
     @Test
     fun `组顺序稳定为 selectable 顺序且空组保留`() {
         val groups = groupPlaylistsBySource(listOf(pl(MusicSource.QQMUSIC, "1")))
-        assertEquals(MusicSource.selectable, groups.map { it.source })
+        // v3.1.0：默认分组源是 loginSources（B 站没有歌单同步 ⇒ 不进库页分组）。
+        assertEquals(MusicSource.loginSources, groups.map { it.source })
         val ne = groups.first { it.source == MusicSource.NETEASE }
         assertTrue("空组必须保留，UI 才能显示空状态", ne.playlists.isEmpty())
         val qq = groups.first { it.source == MusicSource.QQMUSIC }
@@ -159,7 +160,7 @@ class PlaylistModelsTest {
     @Test
     fun `空输入返回全空组而不是空列表`() {
         val groups = groupPlaylistsBySource(emptyList())
-        assertEquals(MusicSource.selectable.size, groups.size)
+        assertEquals(MusicSource.loginSources.size, groups.size)
         assertTrue(groups.all { it.playlists.isEmpty() })
     }
 }

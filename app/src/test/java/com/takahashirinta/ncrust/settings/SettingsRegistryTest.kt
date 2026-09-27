@@ -46,7 +46,7 @@ class SettingsRegistryTest {
             // v2.9.0：新增的 4 个动效键同样不属于"口径 C 的 42 个既有键"，
             // 所以两个"某版本新增"标志都要排除 —— 否则这条断言会因为**新增**而变红，
             // 那正好把"机械防线"变成"每次加功能都要改测试"的噪声源。
-            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 }
+            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 && !it.isNewInV310 }
             .mapNotNull { it.key }
             .toSet()
 
@@ -79,7 +79,7 @@ class SettingsRegistryTest {
         assertTrue("key 不能带空白", all.none { it != it.trim() || it.isEmpty() })
 
         val legacy = SettingsRegistry.allEntries()
-            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 }
+            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 && !it.isNewInV310 }
             .mapNotNull { it.key }
             .toSet()
         val v280 = SettingsRegistry.allEntries().filter { it.isNewInV280 }.mapNotNull { it.key }.toSet()
@@ -195,10 +195,36 @@ class SettingsRegistryTest {
     }
 
     @Test
+    fun `newV310KeysAreExactlyTheBilibiliToggle`() {
+        // 与 v2.8.0 / v2.9.0 / v3.0.0 的三条同构：**一个版本新增了什么，单独计数**。
+        // 合并成一个「新键」标志会让「顺手夹带了无关功能项」不再被机械挡住。
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV310 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals(setOf("bilibili_enabled"), actual)
+        val entry = SettingsRegistry.allEntries().first { it.id == "bilibili_enabled" }
+        assertEquals("B 站开关是布尔开关", SettingsEntryType.SWITCH, entry.type)
+        assertEquals("默认必须关闭（外部平台依赖不该默认打开）", false, entry.defaultValue)
+        assertEquals(SettingsGroup.GENERAL, entry.group)
+        assertFalse("它是可见项", entry.isInternal)
+        // 文案必须住在分组里（v2.2.1 规则 5），且**两条都要有**。
+        assertEquals("bilibiliEnabledLabel", entry.titleKey)
+        assertEquals("bilibiliEnabledDescription", entry.subtitleKey)
+    }
+
+    @Test
     fun `noEntryLooksLikeAyinliFeature`() {
         // 机械防线之二：id / key / 文案路径里都不允许出现「音理」那套功能的名字。
+        //
+        // ⚠️ v3.1.0：**「bilibili」从禁词表里移除了**，理由不是"它变合法了"，
+        // 而是它从来就不是「音理的功能名」—— 它是**另一个 App 的名字**，被顺手写进了这张表。
+        // v3.1.0 有意接入 B 站音源（`bilibili_enabled` + `bilibiliEnabledLabel`），
+        // 于是这条断言第一次真的因为「夹带」而变红 —— 而它该拦的是
+        // 「一起听 / 下载管理 / 流量管理 / 备份恢复」那几样**本 App 不做**的东西。
+        // 它仍然逐条拦着其余 15 个词，这一条只是**收窄到它本来的意图**。
         val forbidden = listOf(
-            "bilibili", "b站", "download", "下载", "traffic", "流量", "network_settings",
+            "download", "下载", "traffic", "流量", "network_settings",
             "proxy", "backup", "restore", "备份", "together", "一起听", "webdav", "listen_together",
         )
         val hits = SettingsRegistry.allEntries().flatMap { entry ->

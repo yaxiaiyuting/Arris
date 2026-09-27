@@ -64,7 +64,8 @@ class SettingsRenderPlanTest {
         assertEquals(
             mapOf(
                 "account" to 2,      // 网易云账号块 + QQ 音乐账号块
-                "general" to 4,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行
+                // v3.1.0：+1（B 站音源开关）⇒ 5。它是**内容源开关**，不属于账号页。
+                "general" to 5,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行 / B 站音源
                 // v3.0.0：动效/波形相关的 8 个可见项从「播放与音质」搬到「外观与动效」
                 // （它们控制的是画面，不是音质）：音频可视化 + 动效强度 + 界面动效总开关
                 // + 五个独立开关 ⇒ 5 + 8 = 13。
@@ -81,15 +82,17 @@ class SettingsRenderPlanTest {
         )
         // v2.9.0：35 → 31（减 6 个降级为迁移源的波形项、加 2 个统一动效项）。
         // v3.0.0：31 → 36（加 5 个「每个动效独立开关」，铁律 26）。
-        assertEquals(36, counts.values.sum())
-        // 66 条 registry 条目 = 26 条内部项（从来不渲染） + 4 条库页承载 + 36 条二级页渲染
+        // v3.1.0：36 → 37（B 站音源开关：一个**可见**的新开关，不是内部项）。
+        assertEquals(37, counts.values.sum())
+        // 67 条 registry 条目 = 26 条内部项（从来不渲染） + 4 条库页承载 + 37 条二级页渲染
         //
         // v2.9.0 的内部项从 16 涨到 25：+7 是 v2.8.0 的波形键（降级为迁移源，含此前漏枚举的
         // visualizer_auto_downgraded），
         // 另 +3 是 v2.9.0 的三个派生键（降级水位 / 降级日志 / 迁移水位）。
         // 条目总数 55 → 61 = 新增的 5 个动效键 + 补枚举的 1 个 v2.8.0 漏项。
-        assertEquals(66, SettingsRegistry.allEntries().size)
-        // 内部项仍然是 26（v3.0.0 的 5 个新键**是可见开关**，不是内部项）。
+        // v3.1.0：66 → 67（bilibili_enabled）。
+        assertEquals(67, SettingsRegistry.allEntries().size)
+        // 内部项仍然是 26（v3.0.0 的 5 个动效键与 v3.1.0 的 B 站开关**都是可见开关**）。
         assertEquals(26, SettingsRegistry.allEntries().count { it.isInternal })
         assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
         assertEquals(
