@@ -23,6 +23,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
 
@@ -31,6 +32,9 @@ import kotlinx.coroutines.delay
  *
  * 默认**开**：可视化只出现在横屏大屏模式，不影响竖屏日常使用；关掉时
  * [AudioVisualizerBars] 整个不挂载（连帧时钟都不跑），所以关掉等于这个功能不存在。
+ *
+ * v2.8.0 · P1-A：本对象同时是分级设置的**进程内初始化入口**
+ * （[read] 里调用 `VisualizerPrefs.ensureLoaded`，见那里的注释）。
  */
 object VisualizerSetting {
 
@@ -51,6 +55,11 @@ object VisualizerSetting {
             WaveformStore.enabled = enabled
             loadedFromDisk = true
         }
+        // v2.8.0 · P1-A：分级（档位 / C 档细分 / 自动降级标记）与总开关共用同一个初始化入口。
+        // 放在这里而不是 NcrustApplication：调用点 MainActivity.onCreate 与 PlaybackService
+        // 都已经在读总开关，多一个 Application 改动只会多一处「谁先谁后」的不确定性。
+        // ensureLoaded 自身幂等，重复调用只是多一次布尔判断。
+        VisualizerPrefs.ensureLoaded(context)
         return stateHolder.value
     }
 
