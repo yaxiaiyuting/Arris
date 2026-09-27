@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,6 +17,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
 import com.takahashirinta.ncrust.ui.screen.*
+import com.takahashirinta.ncrust.ui.settings.SettingsGroup
+import com.takahashirinta.ncrust.ui.settings.SettingsGroupRoute
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.PageTransitionSetting
 import java.net.URLDecoder
@@ -75,6 +78,24 @@ object NavRoutes {
     const val ARTIST_SRC = "artist/{source}/{artistId}/{artistName}"
     const val ALBUM_SRC = "album/{source}/{albumId}"
     const val SONG_SRC = "song/{source}/{songId}"
+
+    /**
+     * v2.8.0：**设置二级页**（一级分组卡片点进来的详情页）。
+     *
+     * 路由模板与参数名取自 [SettingsGroupRoute]（纯逻辑、JVM 可单测）——
+     * 这里只做引用，不再写第二份字面量：`"settings/{group}"` 与 `"group"` 各只有一处。
+     *
+     * 为什么走导航库而不是设置页内部状态 + BackHandler（结构探针 §4.2 选型）：
+     * 返回栈正确性由库保证（进程重建后系统会把整条路由重新喂回来），转场复用
+     * `pageTransitionEnabled` 那一处真相，骨架直接复用 [com.takahashirinta.ncrust.ui.components.DetailScaffold]。
+     *
+     * ⚠️ 进入时**不要**加 `launchSingleTop = true`：连续点两个不同分组时会复用栈顶条目、
+     * 参数不更新（表现为「点 B 分组却还是 A 分组的内容」）。
+     */
+    const val SETTINGS_GROUP = SettingsGroupRoute.PATTERN
+
+    /** v2.8.0：设置二级页路由（`settings/{SettingsGroup.id}`）。 */
+    fun settingsGroup(groupId: String) = SettingsGroupRoute.route(groupId)
 
     fun album(albumId: Long) = "album/$albumId"
     fun artist(artistId: Long) = "artist/$artistId"
@@ -141,6 +162,18 @@ fun MainNavGraph(
      * 是为了让「默认值只有一处真相」。
      */
     pageTransitionEnabled: Boolean = PageTransitionSetting.DEFAULT_ENABLED,
+    /**
+     * v2.8.0：设置**二级页**的内容。
+     *
+     * 为什么做成「内容 lambda」而不是给 [MainNavGraph] 加十几个设置回调参数：
+     * 二级页要用到的状态全部提升在 `MainScreen` / `MainActivity`（主题、语言、页面转场、
+     * cookie 刷新计数、PlayerViewModel…），而这些状态的持有者本来就是 `MainScreen` ——
+     * 它就在 [MainNavGraph] 的调用点上。走一个 lambda，参数清单只在一处（`MainScreen`），
+     * 导航图本身不必知道「设置页需要什么」。
+     *
+     * 默认值渲染空内容：这样 [MainNavGraph] 的既有调用点（含测试/预览）一个都不用改。
+     */
+    settingsGroupContent: @Composable (SettingsGroup, onBack: () -> Unit) -> Unit = { _, _ -> },
     startDestination: String = NavRoutes.HOME
 ) {
     // v2.5.1 · F：页面切换动效**用户可配，默认启用**。
@@ -164,6 +197,37 @@ fun MainNavGraph(
     ) {
         composable(NavRoutes.HOME) {
             // 不渲染任何内容，由 MainScreen 的 Scaffold 内容填充
+        }
+
+        /**
+         * v2.8.0：设置二级页。
+         *
+         * **未知 group 的兜底**（结构探针 §4.3-4）：进程重建 / 版本升级删掉分组之后，
+         * 系统可能把一条对不上的 `settings/xxx` 路由重新喂回来。解析失败必须
+         * **安全回落一级页**：
+         *  - 能弹栈就弹（回到设置 tab，用户看到的就是一级页）；
+         *  - 弹不动（这条路由就是栈底，例如日后被当成深链入口）才 `navigate(HOME)`，
+         *    并 `launchSingleTop` 避免压出一串 HOME。
+         * 两条路都**不抛异常**，也不留白屏 —— 与 `AccentSource.getOrDefault(PRESET)` 同一条纪律。
+         */
+        composable(
+            route = NavRoutes.SETTINGS_GROUP,
+            arguments = listOf(navArgument(SettingsGroupRoute.ARG) { type = NavType.StringType })
+        ) { backStackEntry ->
+            val group = SettingsGroupRoute.resolve(
+                backStackEntry.arguments?.getString(SettingsGroupRoute.ARG)
+            )
+            if (group == null) {
+                LaunchedEffect(Unit) {
+                    if (!navController.popBackStack()) {
+                        navController.navigate(NavRoutes.HOME) { launchSingleTop = true }
+                    }
+                }
+            } else {
+                // 返回**只**用 popBackStack（与上面 Album 那一段同一条纪律）：
+                // navigate(HOME) 会把栈压平、丢掉 tab 屏的状态。
+                settingsGroupContent(group) { navController.popBackStack() }
+            }
         }
 
         composable(

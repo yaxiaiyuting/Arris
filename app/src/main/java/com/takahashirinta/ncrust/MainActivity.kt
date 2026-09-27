@@ -2559,6 +2559,15 @@ fun MainScreen(
                     onShowSongMenu = { song, actions -> showSongMenu(song, actions) },
                     // v2.5.1 · F：页面转场开关（用户可配，默认启用）。
                     pageTransitionEnabled = pageTransitionEnabled,
+                    // v2.8.0：设置二级页（路由 `settings/{group}`）的内容。
+                    // 状态全部提升在 MainScreen（主题 / 语言 / 页面转场 / cookie 刷新计数 /
+                    // PlayerViewModel），所以二级页由这里构造 —— 见 MainNavGraph 的参数 KDoc。
+                    settingsGroupContent = { settingsGroup, onBackSettingsGroup ->
+                        SettingsGroupScreen(
+                            group = settingsGroup,
+                            onBack = onBackSettingsGroup,
+                        )
+                    },
                     startDestination = NavRoutes.HOME
                 )
             }

@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -237,5 +238,53 @@ internal fun CacheUsageLine(label: String, value: String) {
             color = LocalMetroColors.current.onSurfaceVariant,
             style = TextStyle(fontSize = 12.sp)
         )
+    }
+}
+
+/**
+ * 「左侧标题 + 右侧箭头」的可点行（关于 / 离线缓存管理 / 后台运行 三处共用）。
+ *
+ * v2.8.0 阶段 3 新增的**组件**（不是搬运）：抽取前这三处各自手写了同一个 8 行 `Row`
+ * （`UserScreen.kt:708-735` / `:820-839` / `:845-864`），视觉逐字一致
+ * （`padding(h=16, v=14)`、15sp、`ChevronRight` 20dp、`onSurfaceVariant`）。
+ *
+ * [accent] = true 时标题用主题色（「清除缓存」那一路的既有写法）；
+ * [trailing] 非空时右侧渲染一段主题色文字**替代**箭头（「清除缓存」四项分账的既有写法）。
+ */
+@Composable
+internal fun SettingActionRow(
+    label: String,
+    onClick: () -> Unit,
+    accent: Boolean = false,
+    trailing: String? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MetroText(
+            label,
+            color = if (accent) LocalMetroColors.current.primary
+            else LocalMetroColors.current.onBackground,
+            style = TextStyle(fontSize = 15.sp),
+            modifier = Modifier.weight(1f)
+        )
+        if (trailing != null) {
+            MetroText(
+                trailing,
+                color = LocalMetroColors.current.primary,
+                style = TextStyle(fontSize = 15.sp)
+            )
+        } else {
+            MetroIcon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = LocalMetroColors.current.onSurfaceVariant,
+                sizeDp = 20.dp,
+            )
+        }
     }
 }
