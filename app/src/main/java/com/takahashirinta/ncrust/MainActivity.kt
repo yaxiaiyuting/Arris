@@ -2522,26 +2522,10 @@ fun MainScreen(
                         )
 
                         3 -> UserScreen(
-                            onOpenAbout = { showAbout = true },
-                            themeIndex = themeIndex,
-                            onThemeChange = onThemeChange,
-                            themeMode = themeMode,
-                            onThemeModeChange = onThemeModeChange,
-                            accentSource = accentSource,
-                            onAccentSourceChange = onAccentSourceChange,
-                            onRefreshSystemAccent = onRefreshSystemAccent,
-                            onShowWebLogin = { showWebLogin = true },
-                                // 二维码为主入口；网页登录是它内部的兜底按钮。
-                                onShowQqLogin = { showQqQr = true },
-                                // v2.1.1：手机号验证码登录（微信用户的可用路径）。
-                                onShowQqPhoneLogin = { showQqPhone = true },
-                            refreshTrigger = cookieRefreshTrigger,
-                            onLanguageChange = onLanguageChange,
-                            // v2.5.1 · F：页面切换动效（唯一写入口在这一行回调里）。
-                            pageTransitionEnabled = pageTransitionEnabled,
-                            onPageTransitionChange = { enabled ->
-                                pageTransitionEnabled = enabled
-                                PageTransitionSetting.writeEnabled(context, enabled)
+                            // v2.8.0：一级页只负责「点哪张卡片」，二级页的内容与所需状态
+                            // 由下面的 settingsGroupContent 提供（状态全部提升在本函数里）。
+                            onOpenSettingsGroup = { group ->
+                                navController.navigate(NavRoutes.settingsGroup(group.id))
                             },
                         )
                     }
@@ -2566,6 +2550,30 @@ fun MainScreen(
                         SettingsGroupScreen(
                             group = settingsGroup,
                             onBack = onBackSettingsGroup,
+                            // ⚠️ 必须传 Activity 作用域的这个实例：二级页组合在 NavHost 里，
+                            // 在那里调 viewModel() 会造出第二个 PlayerViewModel。
+                            playerViewModel = playerViewModel,
+                            themeIndex = themeIndex,
+                            onThemeChange = onThemeChange,
+                            themeMode = themeMode,
+                            onThemeModeChange = onThemeModeChange,
+                            accentSource = accentSource,
+                            onAccentSourceChange = onAccentSourceChange,
+                            onRefreshSystemAccent = onRefreshSystemAccent,
+                            onLanguageChange = onLanguageChange,
+                            pageTransitionEnabled = pageTransitionEnabled,
+                            // v2.5.1 · F：页面切换动效的唯一写入口（状态 + 落盘都在这里）。
+                            onPageTransitionChange = { enabled ->
+                                pageTransitionEnabled = enabled
+                                PageTransitionSetting.writeEnabled(context, enabled)
+                            },
+                            cookieRefreshTrigger = cookieRefreshTrigger,
+                            onShowWebLogin = { showWebLogin = true },
+                            // 二维码为主入口；网页登录是它内部的兜底按钮。
+                            onShowQqLogin = { showQqQr = true },
+                            // v2.1.1：手机号验证码登录（微信用户的可用路径）。
+                            onShowQqPhoneLogin = { showQqPhone = true },
+                            onOpenAbout = { showAbout = true },
                         )
                     },
                     startDestination = NavRoutes.HOME
