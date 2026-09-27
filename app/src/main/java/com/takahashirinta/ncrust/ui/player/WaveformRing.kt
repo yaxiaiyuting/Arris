@@ -289,6 +289,13 @@ class WaveformRing(
     /** B 档：渐变流动相位（0..1 循环）。 */
     fun flowPhase01(): Float = if (flowPhase.isFinite()) flowPhase else 0f
 
+    /**
+     * 最新一根柱的**未平滑**数据值（C 档节拍检测的输入）。
+     *
+     * 用未平滑值而不是 [bars]：起音时间常数 22ms 会把 onset 抹圆（探针 §1 明确要求用 targets）。
+     */
+    fun newestTarget(): Float = targets[barCount - 1]
+
     /** 单测用：画面值（平滑后）。 */
     fun barAt(index: Int): Float = bars[index]
 

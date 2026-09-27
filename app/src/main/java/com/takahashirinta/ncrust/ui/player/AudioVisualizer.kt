@@ -12,6 +12,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -28,13 +30,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
+import com.takahashirinta.ncrust.ui.player.waveform.WaveformEffectsState
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
 import kotlin.math.sqrt
@@ -130,6 +135,22 @@ object WaveformStore {
     private val ring = WaveformRing(capacity = CAPACITY, barCount = BAR_COUNT)
 
     /**
+     * v2.8.0 · P1-A：C 档（冲击波 / 粒子）的有界状态机。UI 线程独占，定长 SoA 数组，零分配。
+     * A/B 档不用它（关掉时 `pump` 连 `update` 都不调用）。
+     */
+    private val showcaseState = WaveformEffectsState()
+
+    /**
+     * v2.8.0 · P1-A：点按交互翻转的着色模式（**进程内、不落盘**）。
+     *
+     * 语义：`false` = 按档位默认（精致/炫技档渐变流动、简洁档按时序着色），
+     * `true` = 取反。点按是给"炫技"档用户的一个即时对比手段；
+     * 落盘会多出第 9 个设置键、并且要处理"档位改了这个键还算不算数"，超出本版范围。
+     */
+    @Volatile
+    private var coloringInverted: Boolean = false
+
+    /**
      * 开关的**音频线程侧镜像**。volatile：关掉后 render 回调里只剩一次读。
      * 之所以不动态拆掉 AudioProcessor：ExoPlayer 建好之后改不了 audio sink，
      * 为了一个开关重建播放器会打断播放 —— 而这里省下的开销本来就是纳秒级。
@@ -148,12 +169,17 @@ object WaveformStore {
     }
 
     /**
-     * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸尚未收敛）时才让画面失效。
+     * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸/C 档特效尚未收敛）时才让画面失效。
      * @param dtMs 距上一帧的毫秒数（平滑系数由它算，见 [WaveformRing.pump]）。
      * @param effects 当前档位的能力位（组合期读一次后捕获，帧路径里不再读任何 state）。
      */
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
-        if (ring.pump(active, dtMs, effects)) generationState.intValue++
+        var changed = ring.pump(active, dtMs, effects)
+        // C 档：只有真的开着才推进（关掉时连函数都不进 ⇒ 零成本）。
+        if (effects.shockwave || effects.particles) {
+            if (showcaseState.update(ring.newestTarget(), dtMs, active, effects)) changed = true
+        }
+        if (changed) generationState.intValue++
     }
 
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
@@ -165,9 +191,28 @@ object WaveformStore {
     /** B 档：渐变流动相位（0..1）。draw 阶段直接读。 */
     fun flowPhase01(): Float = ring.flowPhase01()
 
+    /** C 档：涟漪 / 粒子的只读访问（draw 阶段直接读）。 */
+    val showcase: WaveformEffectsState get() = showcaseState
+
+    /** C 档点按交互：翻转「渐变流动 ↔ 按时序着色」，并让画面立刻失效一次。 */
+    fun toggleColoringMode() {
+        coloringInverted = !coloringInverted
+        generationState.intValue++
+    }
+
+    /**
+     * draw 阶段读：这一帧到底用不用渐变流动。
+     *
+     * 是**普通字段读**而不是 Compose state —— 点按时手动 +1 一次 `generation` 就够触发重绘，
+     * 不需要为此重组整棵播放器子树。
+     */
+    fun isColoringInverted(): Boolean = coloringInverted
+
     /** 单测 / 调试用。 */
     internal fun resetForTest() {
         ring.clear()
+        showcaseState.clear()
+        coloringInverted = false
         enabled = VisualizerSetting.DEFAULT_ENABLED
     }
 }
@@ -233,6 +278,30 @@ fun visualizerFrameIntervalMs(context: Context): Long {
  *     x 上 `+phase` 抵消 —— 柱子停在原地、Brush 的采样坐标在动，这就是「流动」。
  *  3. **呼吸只改 alpha**：改 Brush 参数会迫使 shader 每帧重建（回到第 1 条的高成本路线），
  *     所以呼吸只乘在 `alpha` 上（探针 §2「渐变流动 × 呼吸」那一格的 ✅ 分支）。
+ *
+ * ## v2.8.0 · P1-A：C 档（炫技，默认关）与**拖拽交互的降级说明**
+ *
+ * C 档四项（冲击波 / 粒子 / 3D 透视 / 交互）各自独立开关，且都要求 `tier == 炫技` 且
+ * `visualizer_showcase == true`（映射的唯一落点是 `VisualizerEffects.of`）。
+ * 每帧增量：涟漪 ≤3 笔描边圆 + 粒子 ≤24 笔实心圆 + 透视多一层 render layer。
+ *
+ * **「拖拽交互」在本版降级为「点按切换着色模式」，理由如下（不是偷懒，是风险与边界）**：
+ *
+ *  1. **挂载点不在本任务的改动范围**：可视化条是 `PlayerCard.kt` 里的 `AudioVisualizerSlot`
+ *     调用的（大屏左栏 / 平板横屏两栏），手势归属判定按仓库范式（`PlayerDragSnap.kt`）
+ *     应当与它同层，而本任务允许改的文件不含 `PlayerCard.kt`。
+ *  2. **附近已有命中面**：大屏左栏里，可视化条正下方就是 `clickable { onSongInfoClick() }`
+ *     的歌名/歌手区，卡片根部还有两个 `pointerInput`（整卡拖拽 / 展开态吞事件）。
+ *     整卡拖拽在 `bigScreenActive` 时被显式停用（`PlayerCard.kt` 的 `if (bigScreenActive) return@pointerInput`），
+ *     但"某一形态下刚好没冲突"不等于**手势分解（slop / 方向认领）**是对的。
+ *  3. **无设备 ⇒ 无法取证**：AGENTS.md 的触摸陷阱合集与 v1.7.0 · P0 都说明这类判定
+ *     必须真机 A/B 才能声称结论；本环境没有设备，写一个"看起来对"的拖拽检测器是拿用户的
+ *     播放器手势做赌注。
+ *
+ * 所以本版：**开关默认关 ⇒ 默认零新增命中面**；打开后是一个 `detectTapGestures`（点一下
+ * 在「渐变流动 ↔ 按时序着色」之间切换），不消费任何 MOVE 事件、不与拖拽竞争方向。
+ * 文案也如实写成「点按切换着色」而不是「拖拽」（见 `VisualizerStrings`）。
+ * 真要做拖拽，先补一份「手势归属」纯函数 + 单测（照 `PlayerDragSnap.kt`），再上真机 A/B。
  */
 @Composable
 fun AudioVisualizerBars(
@@ -255,8 +324,26 @@ fun AudioVisualizerBars(
     val cornerRadiusPx = with(density) { BAR_CORNER_RADIUS_DP.dp.toPx() }
     val dotRadiusPx = with(density) { BAR_DOT_RADIUS_DP.dp.toPx() }
     val peakCapPx = with(density) { BAR_PEAK_CAP_DP.dp.toPx() }
+    val rippleStroke = remember(density) { Stroke(width = with(density) { RIPPLE_STROKE_DP.dp.toPx() }) }
+    val particleRadiusPx = with(density) { PARTICLE_RADIUS_DP.dp.toPx() }
     val perspectiveModifier = remember(effects.perspective, density) {
         if (effects.perspective) Modifier.visualizerPerspective(density.density) else Modifier
+    }
+    // C 档：涟漪/粒子会画到条带之外（粒子有重力、涟漪半径超过条带高），必须裁剪。
+    // 只在 C 档挂 clip：A/B 档保持"视觉零变化"（现状不裁剪也没有越界内容）。
+    val clipModifier = remember(effects.anyShowcase) {
+        if (effects.anyShowcase) Modifier.clipToBounds() else Modifier
+    }
+    // C 档的点按交互（「拖拽交互」的有界降级，理由见 AudioVisualizerBars 的 KDoc）。
+    // **默认关 ⇒ 默认零新增命中面**：开关关掉时这里返回 Modifier，不挂任何 pointerInput。
+    val tapModifier = remember(effects.tapInteraction) {
+        if (effects.tapInteraction) {
+            Modifier.pointerInput(Unit) {
+                detectTapGestures { WaveformStore.toggleColoringMode() }
+            }
+        } else {
+            Modifier
+        }
     }
 
     LaunchedEffect(barCount, frameIntervalMs, effects) {
@@ -284,7 +371,7 @@ fun AudioVisualizerBars(
         }
     }
 
-    Canvas(modifier.then(perspectiveModifier)) {
+    Canvas(modifier.then(clipModifier).then(perspectiveModifier).then(tapModifier)) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
         WaveformStore.generation
         WaveformStore.snapshot(bars, peaks)
@@ -295,7 +382,13 @@ fun AudioVisualizerBars(
         val minBar = 1.dp.toPx()
         // 呼吸：只在 B 档读；不是 Compose state ⇒ 不触发重组，只是一次字段读。
         val breath = if (effects.breathe) WaveformStore.breatheScale() else 1f
-        val flowBrush = if (effects.flow) flowBrushCache.obtain(size.width) else null
+        // 点按交互翻转着色模式：普通字段读 + 点按时手动失效一次（见 WaveformStore.toggleColoringMode）。
+        val flow = effects.flow != WaveformStore.isColoringInverted()
+        // C 档：涟漪画在柱子**下面**（背景层），粒子画在柱子**上面**（前景层）。
+        if (effects.shockwave) {
+            drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
+        }
+        val flowBrush = if (flow) flowBrushCache.obtain(size.width) else null
         if (flowBrush != null) {
             val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
             // 画布整体左移 phase，每根柱再右移 phase 抵消：柱子不动、色带在流。
@@ -314,6 +407,9 @@ fun AudioVisualizerBars(
                 cornerRadiusPx = cornerRadiusPx, dotRadiusPx = dotRadiusPx,
                 peakCapPx = peakCapPx, breath = breath,
             )
+        }
+        if (effects.particles) {
+            drawParticles(WaveformStore.showcase, barColor, particleRadiusPx, breath)
         }
     }
 }
@@ -492,5 +588,72 @@ private class FlowBrushCache(private val color: Color) {
         cachedWidth = width
         cached = brush
         return brush
+    }
+}
+
+/** 涟漪描边宽度（dp）。细线更像"冲击波"，粗了会像一圈柱子。 */
+private const val RIPPLE_STROKE_DP = 1.5f
+
+/** 涟漪最大半径 = 条带长边 × 它。1.1 让涟漪在消失前刚好越过整条带子。 */
+private const val RIPPLE_MAX_RADIUS_FRACTION = 1.1f
+
+/** 涟漪最大不透明度（出生时）。0.55 在"看得见"与"不盖住柱子"之间。 */
+private const val RIPPLE_MAX_ALPHA = 0.55f
+
+/** 粒子基础半径（dp）。 */
+private const val PARTICLE_RADIUS_DP = 1.3f
+
+/**
+ * C 档：冲击波涟漪（画在柱子下面）。
+ *
+ * 形状是**以条带中心为圆心的描边圆**，半径按进度从 0 扩到 `长边 × 1.1`、alpha 线性淡出。
+ * 在 32~56dp 高的条带里它看起来是"一圈横向扩散的波"，配合 `clipToBounds` 不会溢出到封面区。
+ * 上限 3 个（[WaveformEffectsState.RIPPLE_CAPACITY]），每帧最多 3 笔 `drawCircle`。
+ */
+private fun DrawScope.drawShockwaveRipples(
+    state: WaveformEffectsState,
+    barColor: Color,
+    stroke: Stroke,
+    breath: Float,
+) {
+    val centerX = size.width / 2f
+    val centerY = size.height / 2f
+    val maxRadius = maxOf(size.width, size.height) * RIPPLE_MAX_RADIUS_FRACTION
+    for (i in 0 until state.rippleCapacity) {
+        val progress = state.rippleProgressAt(i)
+        if (progress < 0f) continue
+        val radius = progress * maxRadius
+        if (radius < 1f) continue
+        drawCircle(
+            color = barColor,
+            radius = radius,
+            center = Offset(centerX, centerY),
+            alpha = (1f - progress) * RIPPLE_MAX_ALPHA * breath,
+            style = stroke,
+        )
+    }
+}
+
+/**
+ * C 档：粒子（画在柱子上面）。
+ *
+ * 位置在状态里是**归一化坐标**（0..1），这里乘宽高 ⇒ 旋转/分栏后自动跟着变，不需要重算轨迹。
+ * 半径与 alpha 都随寿命衰减；池容量固定 24，每帧最多 24 笔 `drawCircle`。
+ */
+private fun DrawScope.drawParticles(
+    state: WaveformEffectsState,
+    barColor: Color,
+    particleRadiusPx: Float,
+    breath: Float,
+) {
+    for (i in 0 until state.particleCapacity) {
+        val life = state.particleLifeAt(i)
+        if (life <= 0f) continue
+        drawCircle(
+            color = barColor,
+            radius = particleRadiusPx * (0.4f + 0.6f * life),
+            center = Offset(state.particleXAt(i) * size.width, state.particleYAt(i) * size.height),
+            alpha = life * breath,
+        )
     }
 }
