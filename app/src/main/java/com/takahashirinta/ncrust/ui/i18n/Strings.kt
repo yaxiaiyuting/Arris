@@ -630,6 +630,25 @@ data class Strings(
     val visualizerDragDescription: String get() = waveform.visualizerDragDescription
     val visualizerNotSpectrumHint: String get() = waveform.visualizerNotSpectrumHint
 
+    // ---------- 转发属性（v2.9.0 / v3.0.0）：统一「动效强度」与独立开关 ----------
+    // 与上面同一套做法：搬家不改调用点。**计算属性不占构造参数**，
+    // 所以这里加多少条都不会动 `StringsConstructorBudgetTest` 钉住的那个数。
+    val motionIntensityLabel: String get() = waveform.motionIntensityLabel
+    val motionIntensityDescription: String get() = waveform.motionIntensityDescription
+    val uiMotionLabel: String get() = waveform.uiMotionLabel
+    val uiMotionDescription: String get() = waveform.uiMotionDescription
+    // v3.0.0：五个「每个动效独立开关」的标题与说明（铁律 26）。
+    val motionShockwaveLabel: String get() = waveform.motionShockwaveLabel
+    val motionShockwaveDescription: String get() = waveform.motionShockwaveDescription
+    val motionHaloLabel: String get() = waveform.motionHaloLabel
+    val motionHaloDescription: String get() = waveform.motionHaloDescription
+    val motionParticlesLabel: String get() = waveform.motionParticlesLabel
+    val motionParticlesDescription: String get() = waveform.motionParticlesDescription
+    val motionWaveBandsLabel: String get() = waveform.motionWaveBandsLabel
+    val motionWaveBandsDescription: String get() = waveform.motionWaveBandsDescription
+    val motionBreathingLabel: String get() = waveform.motionBreathingLabel
+    val motionBreathingDescription: String get() = waveform.motionBreathingDescription
+
     // ---------- 转发属性（v2.5.3 · P0）：关于页 → [AboutStrings] ----------
     // 与 v2.0.0 · HF1 的 [OfflineStrings] 同一套做法：搬家不改调用点。
     val aboutTitle: String get() = about.aboutTitle
@@ -1360,6 +1379,33 @@ data class WaveformStrings(
     val uiMotionLabel: String,
     /** 总开关说明。**必须**写明：关掉 = 背景回纯色、无呼吸/脉冲/粒子，性能最优；且**不影响波形**档位。 */
     val uiMotionDescription: String,
+
+    // ── v3.0.0：音频特征驱动的动效，**每个都有自己的开关**（铁律 26）───────────────
+    // 文案上的硬要求（三条都不是措辞偏好，是事实约束）：
+    //  1. 冲击波 / 光晕的说明必须写明触发源是「鼓点 / 瞬态」，不是"随机"或"一直有"；
+    //  2. 粒子的说明必须写明它跟的是**中高频**（人声 / 弦乐 / 镲片），
+    //     否则用户会以为粒子跟鼓点走、进而觉得"没对上拍"；
+    //  3. 多频段那一条**必须**点名「不是频谱」——它只是三个带宽很宽的频带包络。
+    /** 冲击波开关标题。 */
+    val motionShockwaveLabel: String,
+    /** 冲击波说明。**必须**写明：由鼓点等瞬态触发，力度越大扩散越大。 */
+    val motionShockwaveDescription: String,
+    /** 光晕开关标题。 */
+    val motionHaloLabel: String,
+    /** 光晕说明。**必须**写明：与冲击波同一个触发源（瞬态），炫技档会多扩一圈。 */
+    val motionHaloDescription: String,
+    /** 粒子开关标题。 */
+    val motionParticlesLabel: String,
+    /** 粒子说明。**必须**写明：跟随**中高频**能量（人声 / 弦乐 / 镲片），能量越强生成越快。 */
+    val motionParticlesDescription: String,
+    /** 多频段波形开关标题。 */
+    val motionWaveBandsLabel: String,
+    /** 多频段波形说明。**必须**点名「不是频谱」，并说明横轴仍是时间。 */
+    val motionWaveBandsDescription: String,
+    /** 背景呼吸开关标题。 */
+    val motionBreathingLabel: String,
+    /** 背景呼吸说明。**必须**写明：跟随整体响度。 */
+    val motionBreathingDescription: String,
 )
 
 /**

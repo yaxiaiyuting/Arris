@@ -179,6 +179,21 @@ data class SettingsEntry(
      * 下一个读到 `visualizer_showcase` 的人一眼能看出它已经不是开关了。
      */
     val legacyV290: Boolean = false,
+    /**
+     * v3.0.0「音频特征驱动动效」新增项（v2.9.0 的盘上不存在这些键）。
+     *
+     * 与 [isNewInV280] / [isNewInV290] 并列而不是复用：那几条断言各自钉住**一个版本**
+     * 新增了什么，合并成一个「新键」标志会让「顺手夹带了无关功能项」不再被机械挡住。
+     */
+    val isNewInV300: Boolean = false,
+    /**
+     * v3.0.0 起**不再参与渲染**的历史键。
+     *
+     * 目前只有 `motion_degrade_level` / `motion_degrade_log` 两个：它们属于 v2.9.0 的
+     * 自动降级机制，而那个机制在 v3.0.0 被整个删除。保留不删是纪律（回滚安装不丢数据），
+     * 但要能被一眼认出来 —— 由 `SettingsRegistryTest.v290DegradeKeysAreInertUnderV300` 断言。
+     */
+    val legacyV300: Boolean = false,
     /** 代码/探针显式标注的「高级 / 实验性」（探针清单的「是否高级/实验性」列）。 */
     val isAdvanced: Boolean = false,
     /**
@@ -585,6 +600,10 @@ object SettingsRegistry {
                 advanced = true,
                 internal = true, // 派生状态：帧时间实测写它，没有 UI 入口
                 newInV290 = true,
+                // v3.0.0：**自动降级机制已整个删除** ⇒ 这个键不再参与任何渲染决策。
+                // 留着不删是纪律（回滚安装不丢数据），标 legacy 是为了让「它已经不是开关了」
+                // 在枚举里一眼可见（与 v2.9.0 把 visualizer_showcase 标 legacyV290 同一手法）。
+                legacyV300 = true,
             )
         )
         add(
@@ -596,8 +615,70 @@ object SettingsRegistry {
                 advanced = true,
                 internal = true, // 诊断用：见 motion_degrade_level 的说明
                 newInV290 = true,
+                legacyV300 = true,
             )
         )
+        // ── v3.0.0 新增：每个新动效的独立开关（5 键，铁律 26）───────────────────────
+        // 键名与默认值的单一真相是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目、
+        // **不实现任何读写**（读写走 MotionPrefs.setSwitch + KEY_* 常量）。
+        // 默认全开：档位才是「这一档有没有这类动效」的判据，开关只做 AND
+        // （缺 key 解析成开 = 升级后观感只随档位表变化，不会因为新键没写而少画东西）。
+        add(
+            pref(
+                key = "motion_shockwave",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionShockwaveLabel",
+                subtitleKey = "waveform.motionShockwaveDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_halo",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionHaloLabel",
+                subtitleKey = "waveform.motionHaloDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_particles",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionParticlesLabel",
+                subtitleKey = "waveform.motionParticlesDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_wave_bands",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionWaveBandsLabel",
+                subtitleKey = "waveform.motionWaveBandsDescription",
+                newInV300 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_breathing",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "waveform.motionBreathingLabel",
+                subtitleKey = "waveform.motionBreathingDescription",
+                newInV300 = true,
+            )
+        )
+
         add(
             pref(
                 key = "motion_version",
@@ -893,6 +974,8 @@ object SettingsRegistry {
         newInV280: Boolean = false,
         newInV290: Boolean = false,
         legacyV290: Boolean = false,
+        newInV300: Boolean = false,
+        legacyV300: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -909,6 +992,8 @@ object SettingsRegistry {
         isNewInV280 = newInV280,
         isNewInV290 = newInV290,
         legacyV290 = legacyV290,
+        isNewInV300 = newInV300,
+        legacyV300 = legacyV300,
         isAdvanced = advanced,
         isInternal = internal,
     )

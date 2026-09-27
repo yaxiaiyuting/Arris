@@ -161,56 +161,169 @@ class MotionEnvelopeTest {
         }
     }
 
-    // ── 3. 特效池（C 档）────────────────────────────────────────────────────────────
+    // ── 3. 特效池（v3.0.0：瞬态 → 冲击波/光晕；中高频能量 → 粒子）────────────────
+
+    /** 造一份"刚发生一次瞬态"的特征输入。 */
+    private fun bindingsWith(
+        midHigh: Float = 0f,
+        transients: Int = 0,
+        strength: Float = 0f,
+    ): MotionBindings = MotionBindings().apply {
+        // 中高频平均能量 = midHigh ⇒ mid = high = midHigh（update 取两者均值）。
+        update(
+            rms = 0.5f,
+            low = 0.2f,
+            mid = midHigh,
+            high = midHigh,
+            centroid = 0.5f,
+            available = true,
+            transientCount = 0L,
+            transientStrength = strength,
+        )
+        // 第一次 update 只对齐计数；再推一次把 transients 变成真正的"本帧新增"。
+        if (transients > 0) {
+            update(
+                rms = 0.5f,
+                low = 0.2f,
+                mid = midHigh,
+                high = midHigh,
+                centroid = 0.5f,
+                available = true,
+                transientCount = transients.toLong(),
+                transientStrength = strength,
+            )
+        }
+    }
+
+    private fun showcaseEffects() = MotionEffects.of(
+        tier = MotionIntensity.SHOWCASE,
+        uiMotionEnabled = true,
+    )
 
     @Test
-    fun `光晕与粒子池定长且有上限`() {
+    fun `冲击波与光晕池定长且有上限`() {
         val backdrop = MotionBackdropState()
-        repeat(500) { backdrop.update(strongBeat = true, dtMs = 16f, haloEnabled = true, particlesEnabled = true) }
+        val motion = showcaseEffects()
+        repeat(500) {
+            backdrop.update(bindingsWith(transients = 1, strength = 1f), motion, dtMs = 16f, active = true)
+        }
         // 池容量就是硬上界：不断触发也只会覆盖最旧的槽位。
-        assertEquals(2, backdrop.haloCapacity)
-        assertEquals(32, backdrop.particleCapacity)
-        assertTrue("粒子数必须落在池容量内（任务书 §6.1：16~32 个）", backdrop.particleCapacity in 16..32)
+        assertEquals(4, backdrop.haloCapacity)
+        assertEquals(2, backdrop.shockCapacity)
+        assertEquals(40, backdrop.particleCapacity)
+        assertTrue("存活数必须落在池容量内", backdrop.aliveHalos() <= 4)
+        assertTrue(backdrop.aliveShocks() <= 2)
+        assertTrue(backdrop.aliveParticles() <= 40)
     }
 
     @Test
-    fun `强拍只产生有上限的粒子`() {
+    fun `炫技档一次瞬态扩两圈光晕且只出一个冲击波`() {
         val backdrop = MotionBackdropState()
-        backdrop.update(strongBeat = true, dtMs = 16f, haloEnabled = true, particlesEnabled = true)
-        var alive = 0
-        for (i in 0 until backdrop.particleCapacity) {
-            if (backdrop.particleLifeAt(i) > 0f) alive++
-        }
+        val motion = showcaseEffects()
+        assertEquals(2, motion.haloRings)
+        backdrop.update(bindingsWith(transients = 1, strength = 1f), motion, dtMs = 16f, active = true)
+        assertEquals("炫技档多圈", 2, backdrop.aliveHalos())
+        assertEquals(1, backdrop.aliveShocks())
+        // 两圈错开起始进度（否则看起来就是一圈）。
+        val progresses = (0 until backdrop.haloCapacity)
+            .map { backdrop.haloProgressAt(it) }
+            .filter { it >= 0f }
+        assertEquals(2, progresses.size)
+        assertTrue("两圈必须错开：$progresses", progresses[0] != progresses[1])
+    }
+
+    @Test
+    fun `精致档一次瞬态只扩一圈`() {
+        val backdrop = MotionBackdropState()
+        val motion = MotionEffects.of(tier = MotionIntensity.REFINED, uiMotionEnabled = true)
+        assertEquals(1, motion.haloRings)
+        backdrop.update(bindingsWith(transients = 1, strength = 0.5f), motion, dtMs = 16f, active = true)
+        assertEquals(1, backdrop.aliveHalos())
+    }
+
+    @Test
+    fun `粒子生成速率与中高频能量正相关`() {
+        // 纯函数层面：能量越高，速率越高；低于门槛恒为 0。
+        assertEquals(0f, MotionBindings.particleRateHz(0f, MotionEffects.DENSITY_LOW), 0f)
         assertEquals(
-            "一次强拍恰好迸出 PARTICLES_PER_BEAT 个",
-            MotionBackdropState.PARTICLES_PER_BEAT,
-            alive,
+            0f,
+            MotionBindings.particleRateHz(MotionBindings.PARTICLE_THRESHOLD, MotionEffects.DENSITY_LOW),
+            0f,
         )
+        val mid = MotionBindings.particleRateHz(0.2f, MotionEffects.DENSITY_LOW)
+        val high = MotionBindings.particleRateHz(0.4f, MotionEffects.DENSITY_LOW)
+        assertTrue("能量越高生成越快（$mid → $high）", high > mid && mid > 0f)
+        assertTrue(
+            "高密度档的上限更高",
+            MotionBindings.particleRateHz(0.4f, MotionEffects.DENSITY_HIGH) > high,
+        )
+    }
+
+    @Test
+    fun `安静段落不生成粒子`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        // 中高频能量为 0（安静段落）：连续跑 200 帧也不该有一个粒子。
+        repeat(200) { backdrop.update(bindingsWith(midHigh = 0f), motion, dtMs = 16f, active = true) }
+        assertEquals("安静段落生成粒子 = 铁律 25 禁止的假反应", 0, backdrop.aliveParticles())
+    }
+
+    @Test
+    fun `粒子由中高频能量驱动且速率有界`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        // 高能量跑 1 秒：生成数应当接近速率上限（26/s），且不超过池容量。
+        repeat(60) { backdrop.update(bindingsWith(midHigh = 0.5f), motion, dtMs = 16f, active = true) }
+        val alive = backdrop.aliveParticles()
+        assertTrue("高能量段必须真的生成粒子（$alive）", alive > 5)
+        assertTrue("但不超过池容量的硬上界（$alive）", alive <= backdrop.particleCapacity)
+        assertTrue("累加器有界", backdrop.emitAccumulator() <= 1f)
     }
 
     @Test
     fun `关掉能力位时立刻清空残留`() {
         val backdrop = MotionBackdropState()
-        backdrop.update(true, 16f, haloEnabled = true, particlesEnabled = true)
+        val on = showcaseEffects()
+        backdrop.update(bindingsWith(midHigh = 0.5f, transients = 1, strength = 1f), on, 16f, active = true)
         assertTrue(hasAny(backdrop))
-        backdrop.update(false, 16f, haloEnabled = false, particlesEnabled = false)
-        assertFalse("改设置后画面必须马上跟上，而不是让残留飘完", hasAny(backdrop))
+        // 用户把这三项全关掉 ⇒ 画面必须马上跟上，而不是让残留飘完。
+        val off = MotionEffects.of(
+            tier = MotionIntensity.SHOWCASE,
+            uiMotionEnabled = true,
+            switches = MotionSwitches(shockwave = false, halo = false, particles = false),
+        )
+        backdrop.update(bindingsWith(), off, 16f, active = true)
+        assertFalse("关掉之后必须没有残留", hasAny(backdrop))
     }
 
     @Test
     fun `特效自然演完之后不再要求重绘`() {
         val backdrop = MotionBackdropState()
-        backdrop.update(true, 16f, haloEnabled = true, particlesEnabled = true)
+        val motion = showcaseEffects()
+        backdrop.update(bindingsWith(midHigh = 0.5f, transients = 1, strength = 1f), motion, 16f, active = true)
         var guard = 0
-        while (backdrop.update(false, 16f, haloEnabled = true, particlesEnabled = true) && guard < 20000) guard++
+        // 之后不再有瞬态、也没有中高频能量 ⇒ 存活的特效演完就收敛。
+        while (backdrop.update(bindingsWith(), motion, 16f, active = true) && guard < 20000) guard++
         assertFalse("必须收敛", hasAny(backdrop))
         assertTrue("收敛时间必须有限（$guard 帧）", guard < 5000)
     }
 
     @Test
-    fun `clear 清空两个池`() {
+    fun `暂停时不生成新特效但已存在的会演完`() {
         val backdrop = MotionBackdropState()
-        backdrop.update(true, 16f, haloEnabled = true, particlesEnabled = true)
+        val motion = showcaseEffects()
+        backdrop.update(bindingsWith(midHigh = 0.5f, transients = 1, strength = 1f), motion, 16f, active = true)
+        val before = backdrop.aliveParticles()
+        backdrop.update(bindingsWith(midHigh = 0.5f), motion, 16f, active = false)
+        assertTrue("暂停时不得新增粒子", backdrop.aliveParticles() <= before)
+        assertEquals("暂停时累加器归零（恢复播放不补触发）", 0f, backdrop.emitAccumulator(), 0f)
+    }
+
+    @Test
+    fun `clear 清空三个池`() {
+        val backdrop = MotionBackdropState()
+        val motion = showcaseEffects()
+        backdrop.update(bindingsWith(midHigh = 0.5f, transients = 1, strength = 1f), motion, 16f, active = true)
         backdrop.clear()
         assertFalse(hasAny(backdrop))
     }
@@ -218,7 +331,10 @@ class MotionEnvelopeTest {
     @Test
     fun `粒子坐标是归一化的`() {
         val backdrop = MotionBackdropState()
-        repeat(50) { backdrop.update(true, 16f, haloEnabled = true, particlesEnabled = true) }
+        val motion = showcaseEffects()
+        repeat(50) {
+            backdrop.update(bindingsWith(midHigh = 0.5f, transients = 1, strength = 0.8f), motion, 16f, active = true)
+        }
         for (i in 0 until backdrop.particleCapacity) {
             if (backdrop.particleLifeAt(i) <= 0f) continue
             assertTrue("x 必须有限", backdrop.particleXAt(i).isFinite())
@@ -227,8 +343,44 @@ class MotionEnvelopeTest {
         }
     }
 
+    // ── 4. v3.0.0：特征链路不可用时回落内置判据 ────────────────────────────────────
+
+    @Test
+    fun `特征不可用时回落内置判据`() {
+        val e = MotionEnvelope()
+        // 先建立基线（安静的若干帧）。
+        repeat(20) { e.update(0.05f, 0.05f, 16f, active = true) }
+        // 一次低频突变：externalAvailable=false ⇒ 走内置判据。
+        e.update(0.5f, 0.5f, 16f, active = true)
+        assertTrue("内置判据必须能触发脉冲", e.pulse() > 0.9f)
+    }
+
+    @Test
+    fun `特征可用时瞬态由音频线程给出`() {
+        val e = MotionEnvelope()
+        // 响度完全不变（内置判据永远不该触发），但外部报了 1 次瞬态。
+        repeat(20) { e.update(0.1f, 0.1f, 16f, active = true, transients = 0, strength = 0f, externalAvailable = true) }
+        assertEquals("平静时不该有脉冲", 0f, e.pulse(), 0f)
+        e.update(0.1f, 0.1f, 16f, active = true, transients = 1, strength = 1f, externalAvailable = true)
+        assertTrue("外部瞬态必须触发脉冲", e.pulse() > 0.9f)
+        assertTrue("强度足够高 ⇒ 强拍", e.strongBeat)
+    }
+
+    @Test
+    fun `强度不足时不算强拍`() {
+        val e = MotionEnvelope()
+        e.update(
+            0.1f, 0.1f, 16f, active = true,
+            transients = 1, strength = MotionEnvelope.STRONG_BEAT_STRENGTH * 0.5f,
+            externalAvailable = true,
+        )
+        assertTrue("脉冲照旧", e.pulse() > 0.9f)
+        assertFalse("但不算强拍", e.strongBeat)
+    }
+
     private fun hasAny(backdrop: MotionBackdropState): Boolean {
         for (i in 0 until backdrop.haloCapacity) if (backdrop.haloProgressAt(i) >= 0f) return true
+        for (i in 0 until backdrop.shockCapacity) if (backdrop.shockProgressAt(i) >= 0f) return true
         for (i in 0 until backdrop.particleCapacity) if (backdrop.particleLifeAt(i) > 0f) return true
         return false
     }

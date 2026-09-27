@@ -10,7 +10,6 @@ package com.takahashirinta.ncrust.ui.player.waveform
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -225,55 +224,86 @@ class VisualizerTierTest {
     }
 
     // ------------------------------------------------------------------
-    // 3. 降级策略的有界性（铁律 4：只降一级、每进程最多一次、不无限重试）
+    // 3. v3.0.0：自动降级机制已删除（渲染只看用户选的档位）
+    // ------------------------------------------------------------------
+
+    /**
+     * `VisualizerTier` 上不再有 `downgradedTier`。
+     *
+     * 用反射断言而不是注释：机制删掉之后，谁把它加回来，构建就会因为这条用例而变红。
+     * 理由见 `ui/player/motion/MotionDegrade` 的 KDoc ——
+     * **判据不知道是谁把帧顶起来的，而它却会改写用户选的档位，于是渲染结果不再可推导**。
+     */
+    @Test
+    fun `不存在任何降级函数`() {
+        val names = VisualizerTier::class.java.declaredMethods.map { it.name.lowercase() }
+        val forbidden = names.filter { it.contains("downgrade") || it.contains("degrade") }
+        assertTrue("VisualizerTier 不该再有降级函数：$forbidden", forbidden.isEmpty())
+    }
+
+    /** 静态判据只决定**初始**档，越界值的归一化仍然要正确（它现在唯一的用途）。 */
+    @Test
+    fun `越界档位归一化到调用方给的默认档`() {
+        assertEquals(VisualizerTier.SIMPLE, VisualizerTier.sanitize(99, VisualizerTier.SIMPLE))
+        assertEquals(VisualizerTier.REFINED, VisualizerTier.sanitize(-4, VisualizerTier.REFINED))
+        assertEquals(VisualizerTier.SHOWCASE, VisualizerTier.sanitize(VisualizerTier.SHOWCASE, VisualizerTier.SIMPLE))
+    }
+
+    // ------------------------------------------------------------------
+    // 4. v3.0.0：多频段调制档（waveBandMode）
     // ------------------------------------------------------------------
 
     @Test
-    fun `连续超标也只降一级`() {
-        // 第一次：T2 → T1
-        val first = VisualizerTier.downgradedTier(VisualizerTier.SHOWCASE, autoDowngraded = false)
-        assertEquals(VisualizerTier.REFINED, first)
-        // 第二次：标记已置位 ⇒ 不再降（哪怕帧时间继续超标）
-        assertNull(VisualizerTier.downgradedTier(first!!, autoDowngraded = true))
-        assertNull(VisualizerTier.downgradedTier(VisualizerTier.SHOWCASE, autoDowngraded = true))
+    fun `多频段调制档的取值与语义`() {
+        assertEquals(0, VisualizerEffects.MODE_WAVE_BAND_OFF)
+        assertEquals(1, VisualizerEffects.MODE_WAVE_BAND_TINT)
+        assertEquals(2, VisualizerEffects.MODE_WAVE_BAND_LANES)
+
+        val off = VisualizerEffects.of(
+            tier = VisualizerTier.REFINED, showcase = true, shockwave = true,
+            particles = true, perspective = true, tapInteraction = true,
+        )
+        assertEquals("默认关（老调用点行为不变）", VisualizerEffects.MODE_WAVE_BAND_OFF, off.waveBandMode)
+        assertFalse(off.waveBandOn)
+        assertFalse(off.waveBandLanes)
+
+        val tint = VisualizerEffects.of(
+            tier = VisualizerTier.REFINED, showcase = true, shockwave = true,
+            particles = true, perspective = true, tapInteraction = true,
+            waveBandMode = VisualizerEffects.MODE_WAVE_BAND_TINT,
+        )
+        assertTrue(tint.waveBandOn)
+        assertFalse(tint.waveBandLanes)
+
+        val lanes = VisualizerEffects.of(
+            tier = VisualizerTier.SHOWCASE, showcase = true, shockwave = true,
+            particles = true, perspective = true, tapInteraction = true,
+            waveBandMode = VisualizerEffects.MODE_WAVE_BAND_LANES,
+        )
+        assertTrue(lanes.waveBandLanes)
     }
 
     @Test
-    fun `精致档再降一次到简洁档，之后不再降`() {
-        val next = VisualizerTier.downgradedTier(VisualizerTier.REFINED, autoDowngraded = false)
-        assertEquals(VisualizerTier.SIMPLE, next)
-        assertNull(VisualizerTier.downgradedTier(next!!, autoDowngraded = true))
+    fun `简洁档一律关掉多频段调制`() {
+        // 简洁档的契约是「波形基础 + 背景美化」，多频段是精致档起才有的那一层。
+        val simple = VisualizerEffects.of(
+            tier = VisualizerTier.SIMPLE, showcase = true, shockwave = true,
+            particles = true, perspective = true, tapInteraction = true,
+            waveBandMode = VisualizerEffects.MODE_WAVE_BAND_LANES,
+        )
+        assertEquals(VisualizerEffects.MODE_WAVE_BAND_OFF, simple.waveBandMode)
     }
 
+    /** **真频谱着色的能力位仍然恒为 false**（铁律 28：不做真 FFT 的翻案）。 */
     @Test
-    fun `已经在最低档时不降级`() {
-        assertNull(VisualizerTier.downgradedTier(VisualizerTier.SIMPLE, autoDowngraded = false))
-        assertNull(VisualizerTier.downgradedTier(VisualizerTier.SIMPLE, autoDowngraded = true))
-    }
-
-    /** 脏值（越界档位）不得让降级路径算出越界结果：先归一化再降。 */
-    @Test
-    fun `越界档位先归一化再降一级`() {
-        assertEquals(VisualizerTier.SIMPLE, VisualizerTier.downgradedTier(99, autoDowngraded = false))
-        assertEquals(VisualizerTier.SIMPLE, VisualizerTier.downgradedTier(-4, autoDowngraded = false))
-    }
-
-    /** 无论从哪一档开始，最多只会发生一次降级（把「已降过」沿调用链传下去）。 */
-    @Test
-    fun `从任何档位出发最多降一次`() {
-        for (start in VisualizerTier.RANGE) {
-            var tier = start
-            var downgraded = false
-            var steps = 0
-            while (true) {
-                val next = VisualizerTier.downgradedTier(tier, downgraded) ?: break
-                tier = next
-                downgraded = true
-                steps++
-                assertTrue("降级次数必须有界", steps <= 1)
-            }
-            assertEquals(if (start == VisualizerTier.SIMPLE) 0 else 1, steps)
-            assertEquals(maxOf(VisualizerTier.SIMPLE, start - 1), tier)
+    fun `真频谱着色能力位恒为 false`() {
+        for (mode in 0..2) {
+            val e = VisualizerEffects.of(
+                tier = VisualizerTier.SHOWCASE, showcase = true, shockwave = true,
+                particles = true, perspective = true, tapInteraction = true,
+                waveBandMode = mode,
+            )
+            assertFalse("多频段调制不是频谱着色", e.spectrumColoring)
         }
     }
 }

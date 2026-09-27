@@ -235,6 +235,13 @@ private fun SettingsPreferenceGroupPage(
         mutableIntStateOf(MotionPrefs.readTier(prefs, MotionPrefs.deviceDefaultTier(context)))
     }
     var uiMotionEnabled by remember { mutableStateOf(MotionPrefs.readUiMotionEnabled(prefs)) }
+    // v3.0.0：五个「每个动效独立开关」（铁律 26）。初值走 MotionPrefs 的解析（缺 key = 开）。
+    val motionSwitches = MotionPrefs.readSwitches(prefs)
+    var motionShockwave by remember { mutableStateOf(motionSwitches.shockwave) }
+    var motionHalo by remember { mutableStateOf(motionSwitches.halo) }
+    var motionParticles by remember { mutableStateOf(motionSwitches.particles) }
+    var motionWaveBands by remember { mutableStateOf(motionSwitches.waveBands) }
+    var motionBreathing by remember { mutableStateOf(motionSwitches.breathing) }
 
     // ── 存储与缓存 ────────────────────────────────────────────────────────────────
     var offlineCacheMb by remember { mutableIntStateOf(OfflineAudioCache.maxMb(context)) }
@@ -287,6 +294,11 @@ private fun SettingsPreferenceGroupPage(
         when (key) {
             "motion_tier" -> motionTier
             "ui_motion_enabled" -> uiMotionEnabled
+            "motion_shockwave" -> motionShockwave
+            "motion_halo" -> motionHalo
+            "motion_particles" -> motionParticles
+            "motion_wave_bands" -> motionWaveBands
+            "motion_breathing" -> motionBreathing
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
             "lyrics_word_animation" -> lyricsWordAnimation
             else -> prefs.all[key]
@@ -309,6 +321,12 @@ private fun SettingsPreferenceGroupPage(
         "lyrics_romanization" -> lyricsRomanization
         "lyrics_dynamic_font" -> dynamicFontEnabled
         "ui_motion_enabled" -> uiMotionEnabled
+        // v3.0.0：五个独立动效开关
+        "motion_shockwave" -> motionShockwave
+        "motion_halo" -> motionHalo
+        "motion_particles" -> motionParticles
+        "motion_wave_bands" -> motionWaveBands
+        "motion_breathing" -> motionBreathing
         else -> false
     }
 
@@ -379,6 +397,28 @@ private fun SettingsPreferenceGroupPage(
             "ui_motion_enabled" -> {
                 uiMotionEnabled = value
                 MotionPrefs.setUiMotionEnabled(context, value)
+            }
+            // v3.0.0：五个独立开关。写入口只有 `MotionPrefs.setSwitch`（它负责刷新进程内镜像，
+            // 渲染层读的是那个镜像 —— 设置页与播放页不会出现两份状态）。
+            "motion_shockwave" -> {
+                motionShockwave = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_SHOCKWAVE, value)
+            }
+            "motion_halo" -> {
+                motionHalo = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_HALO, value)
+            }
+            "motion_particles" -> {
+                motionParticles = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_PARTICLES, value)
+            }
+            "motion_wave_bands" -> {
+                motionWaveBands = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_WAVE_BANDS, value)
+            }
+            "motion_breathing" -> {
+                motionBreathing = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_BREATHING, value)
             }
         }
     }
@@ -778,6 +818,12 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
     "lyrics_dynamic_font" -> strings.dynamicFontLabel
     "motion_tier" -> strings.waveform.motionIntensityLabel           // titleKey = waveform.motionIntensityLabel
     "ui_motion_enabled" -> strings.waveform.uiMotionLabel            // titleKey = waveform.uiMotionLabel
+    // v3.0.0：五个独立动效开关（文案同样住在 Strings.waveform）
+    "motion_shockwave" -> strings.waveform.motionShockwaveLabel
+    "motion_halo" -> strings.waveform.motionHaloLabel
+    "motion_particles" -> strings.waveform.motionParticlesLabel
+    "motion_wave_bands" -> strings.waveform.motionWaveBandsLabel
+    "motion_breathing" -> strings.waveform.motionBreathingLabel
     "theme_mode" -> strings.themeModeSectionTitle
     "theme_color_index" -> strings.themeSectionTitle
     "accent_source" -> strings.accentSourceSectionTitle
@@ -808,6 +854,11 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when 
     "lyrics_romanization" -> strings.lyricsRomanizationHint
     "lyrics_dynamic_font" -> strings.dynamicFontHint
     "ui_motion_enabled" -> strings.waveform.uiMotionDescription
+    "motion_shockwave" -> strings.waveform.motionShockwaveDescription
+    "motion_halo" -> strings.waveform.motionHaloDescription
+    "motion_particles" -> strings.waveform.motionParticlesDescription
+    "motion_wave_bands" -> strings.waveform.motionWaveBandsDescription
+    "motion_breathing" -> strings.waveform.motionBreathingDescription
     else -> null
 }
 

@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -168,11 +169,15 @@ fun MotionBackdrop(
             )
         }
 
-        // ---- C 档：强拍光晕 + 粒子（画在遮罩之上，才看得见）----
-        if (motion.haloBloom || motion.particles) {
+        // ---- v3.0.0：瞬态冲击波 / 光晕 + 中高频粒子（画在遮罩之上，才看得见）----
+        if (motion.shockwave || motion.haloBloom || motion.particles) {
             val haloColor = LocalMetroColors.current.primary
             val particleColor = LocalMetroColors.current.onBackground
             val strokeWidth = with(density) { 2.dp.toPx() }
+            // 径向渐变 Brush **必须缓存**：在 draw lambda 里 `Brush.radialGradient(...)` 等于
+            // 每帧新建一个 Brush + 一个 colors List + 一个 native SkShader（违反零分配）。
+            // 这里按「颜色 + 半径」缓存，只在主题色或尺寸变化时重建。
+            val gradientCache = remember(haloColor) { RadialGradientCache(haloColor) }
             Canvas(Modifier.fillMaxSize()) {
                 // 在 draw 阶段读：只让这块画布失效重绘，不触发重组。
                 MotionClock.generation
@@ -180,12 +185,36 @@ fun MotionBackdrop(
                 if (size.width <= 0f || size.height <= 0f) return@Canvas
                 val center = Offset(size.width / 2f, size.height * HALO_CENTER_Y_FRACTION)
                 val maxRadius = size.minDimension * HALO_MAX_RADIUS_FRACTION
-                if (motion.haloBloom) {
+                val brush = if (motion.haloBloom || motion.shockwave) {
+                    gradientCache.obtain(maxRadius)
+                } else {
+                    null
+                }
+                // 冲击波画在光晕**下面**（z 序）：它是"一下"，光晕是"余韵"。
+                if (motion.shockwave && brush != null) {
+                    for (i in 0 until backdrop.shockCapacity) {
+                        val progress = backdrop.shockProgressAt(i)
+                        if (progress < 0f) continue
+                        val radius = maxRadius * backdrop.shockScaleAt(i) * progress
+                        if (radius < 1f) continue
+                        // 渐晕：中心不透明、边缘透明，越扩越淡。
+                        // `scale` 让同一个缓存 Brush 适配任意半径（画布矩阵同时作用于 shader）。
+                        drawCircle(
+                            brush = brush,
+                            radius = radius,
+                            center = center,
+                            alpha = (1f - progress).coerceIn(0f, 1f) * SHOCK_MAX_ALPHA,
+                        )
+                    }
+                }
+                if (motion.haloBloom && brush != null) {
                     for (i in 0 until backdrop.haloCapacity) {
                         val progress = backdrop.haloProgressAt(i)
                         if (progress < 0f) continue
-                        val radius = maxRadius * progress
-                        // 越扩越淡：alpha 线性归零，配合半径增长读起来像"散开"而不是"画圈"。
+                        val radius = maxRadius * backdrop.haloScaleAt(i) * progress
+                        if (radius < 1f) continue
+                        // 光晕是**描边环**（与冲击波的实心渐晕区分开）：
+                        // 越扩越淡，配合半径增长读起来像"散开"而不是"画圈"。
                         val alpha = (1f - progress).coerceIn(0f, 1f) * HALO_MAX_ALPHA
                         drawCircle(
                             color = haloColor.copy(alpha = alpha),
@@ -216,6 +245,47 @@ fun MotionBackdrop(
 }
 
 /**
+ * v3.0.0：**径向渐变 Brush 的缓存**（零分配的关键一环）。
+ *
+ * ## 为什么不能每帧 `Brush.radialGradient(...)`
+ *
+ * 那个调用会分配三样东西：一个 `Brush`、一个 `List<Color>`、以及在绘制时创建的
+ * native `SkShader`。放在 `Canvas {}` 的 draw lambda 里就是**每帧每槽位一次**。
+ *
+ * ## 为什么按半径缓存一次就够
+ *
+ * 缓存的是「半径 = [maxRadius] 的径向渐变」，绘制时按进度缩放**画布**：
+ * Skia 的 shader 受画布矩阵影响，所以同一个 Brush 能画出任意半径的圆。
+ * 半径变化（旋转 / 分栏 / 进出大屏）时重建一次，之后每帧零分配。
+ *
+ * @param color 光晕颜色（主题色）。主题色变化时 `remember(color)` 会重建本对象。
+ */
+private class RadialGradientCache(private val color: Color) {
+    private var cachedRadius = Float.NaN
+    private var cached: Brush? = null
+
+    fun obtain(radiusPx: Float): Brush {
+        val radius = if (radiusPx > 0f) radiusPx else 1f
+        val existing = cached
+        if (existing != null && cachedRadius == radius) return existing
+        val brush = Brush.radialGradient(
+            // 中心亮、边缘透明：这就是「渐晕」的全部内容。
+            // 中间那一段（0.45）保持较高不透明度，让圆看起来是"一圈厚的光"而不是"一个点"。
+            colorStops = arrayOf(
+                0.00f to color.copy(alpha = 1f),
+                0.45f to color.copy(alpha = 0.55f),
+                1.00f to color.copy(alpha = 0f),
+            ),
+            center = Offset.Zero,
+            radius = radius,
+        )
+        cachedRadius = radius
+        cached = brush
+        return brush
+    }
+}
+
+/**
  * v2.9.0 · A 档：**模糊背景之上的可读性遮罩**（「歌词可读性优先」的落点，任务书 §7.3）。
  *
  * 三个值从上到下：标题栏区压得最暗、中间歌词区放亮（露出封面颜色）、底部控制区再压暗。
@@ -238,6 +308,14 @@ private const val HALO_MAX_RADIUS_FRACTION = 0.7f
 
 /** C 档光晕：起始最大不透明度。0.35 足够可见，又不会在浅色封面上糊成一团。 */
 private const val HALO_MAX_ALPHA = 0.35f
+
+/**
+ * v3.0.0 冲击波：起始最大不透明度。
+ *
+ * 比光晕（0.35）低一档（0.28）：冲击波是**实心渐晕**，覆盖面积远大于一圈描边，
+ * 同样的 alpha 会让画面明显发白。两次重击叠加时也只是短暂到 0.56，仍在可读范围内。
+ */
+private const val SHOCK_MAX_ALPHA = 0.28f
 
 /** C 档粒子半径（dp）。2dp：一眼能看到，又不会被读成"画面脏了"。 */
 private const val PARTICLE_RADIUS_DP = 2f

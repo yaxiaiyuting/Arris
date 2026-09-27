@@ -11,7 +11,6 @@ package com.takahashirinta.ncrust.ui.player.waveform
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -234,55 +233,46 @@ class VisualizerPrefsTest {
     }
 
     // ------------------------------------------------------------------
-    // 有界自动降级：只降一级、只发生一次、落盘标记
+    // v3.0.0：自动降级机制已整个删除
     // ------------------------------------------------------------------
 
+    /**
+     * `VisualizerPrefs` 上不再有任何"降级"入口；`visualizer_auto_downgraded` 只剩**读**。
+     *
+     * 这条用反射断言而不是注释：机制删掉之后，谁把它加回来（哪怕只是加一个方法），
+     * 构建就会因为这条用例而变红。
+     */
     @Test
-    fun `自动降级只降一级并落盘标记`() {
-        val prefs = FakePrefs()
-        VisualizerPrefs.writeTier(prefs, VisualizerTier.SHOWCASE)
-        val next = VisualizerPrefs.applyAutoDowngrade(prefs, VisualizerTier.SHOWCASE, alreadyDowngraded = false)
-        assertEquals(VisualizerTier.REFINED, next)
-        assertEquals(VisualizerTier.REFINED, VisualizerPrefs.readTier(prefs, modernDefault))
-        assertTrue("必须落盘标记，否则冷启动后会再降一次", VisualizerPrefs.readAutoDowngraded(prefs))
+    fun `不存在任何自动降级入口`() {
+        val names = VisualizerPrefs::class.java.declaredMethods.map { it.name.lowercase() }
+        // 只禁「推进降级」那一类名字。读历史标记的 `readAutoDowngraded` 必须保留
+        // （`MotionPrefs.migrate` 仍要读它来补迁移说明）。
+        val forbidden = names.filter { it.contains("applydowngrade") || it.contains("downgradedtier") }
+        assertTrue("VisualizerPrefs 不该再有降级入口：$forbidden", forbidden.isEmpty())
+        // 读历史标记的入口保留（`MotionPrefs.migrate` 仍要读它来补迁移说明）。
+        assertTrue(
+            "读历史标记的入口必须在",
+            VisualizerPrefs::class.java.declaredMethods.any { it.name == "readAutoDowngraded" },
+        )
     }
 
+    /** 降级标记现在只是一个**历史值**：读得到、但不影响任何能力位。 */
     @Test
-    fun `已降过时不再降级，也不改盘`() {
-        val prefs = FakePrefs()
-        VisualizerPrefs.writeTier(prefs, VisualizerTier.SHOWCASE)
-        VisualizerPrefs.applyAutoDowngrade(prefs, VisualizerTier.SHOWCASE, alreadyDowngraded = false)
-        val afterFirst = prefs.getAll().toMap()
-        // 用户手动改回炫技档之后，自动降级不得再插一脚（标记已置位）
-        VisualizerPrefs.writeTier(prefs, VisualizerTier.SHOWCASE)
-        assertNull(VisualizerPrefs.applyAutoDowngrade(prefs, VisualizerTier.SHOWCASE, alreadyDowngraded = true))
-        assertEquals(VisualizerTier.SHOWCASE, VisualizerPrefs.readTier(prefs, modernDefault))
-        assertEquals(afterFirst[VisualizerPrefs.KEY_AUTO_DOWNGRADED], prefs.getAll()[VisualizerPrefs.KEY_AUTO_DOWNGRADED])
-    }
-
-    @Test
-    fun `简洁档不掉级`() {
-        val prefs = FakePrefs()
-        VisualizerPrefs.writeTier(prefs, VisualizerTier.SIMPLE)
-        assertNull(VisualizerPrefs.applyAutoDowngrade(prefs, VisualizerTier.SIMPLE, alreadyDowngraded = false))
-        assertEquals(VisualizerTier.SIMPLE, VisualizerPrefs.readTier(prefs, modernDefault))
-        assertFalse(VisualizerPrefs.readAutoDowngraded(prefs))
-    }
-
-    /** 降级后的档位与标记一起读回来，效果矩阵立刻按新档位算（不会出现「盘里降了、画面没降」）。 */
-    @Test
-    fun `降级后 readEffects 立刻反映新档位`() {
+    fun `历史降级标记不再影响能力位`() {
         val prefs = FakePrefs()
         VisualizerPrefs.writeTier(prefs, VisualizerTier.SHOWCASE)
         VisualizerPrefs.writeShowcase(prefs, true)
         VisualizerPrefs.writeShockwave(prefs, true)
-        assertTrue(VisualizerPrefs.readEffects(prefs, modernDefault).shockwave)
+        val before = VisualizerPrefs.readEffects(prefs, modernDefault)
+        assertTrue(before.shockwave)
+        assertFalse(before.autoDowngraded)
 
-        VisualizerPrefs.applyAutoDowngrade(prefs, VisualizerTier.SHOWCASE, alreadyDowngraded = false)
+        // 手工把历史标记与档位写成一个"曾经降过级"的盘。
+        prefs.putRaw(VisualizerPrefs.KEY_AUTO_DOWNGRADED, true)
         val after = VisualizerPrefs.readEffects(prefs, modernDefault)
-        assertEquals(VisualizerTier.REFINED, after.tier)
-        assertTrue(after.autoDowngraded)
-        assertFalse("降级后 C 档效果必须真的关掉", after.shockwave)
+        assertEquals("档位由键决定，不由标记决定", VisualizerTier.SHOWCASE, after.tier)
+        assertTrue("标记只用于诊断回显", after.autoDowngraded)
+        assertTrue("炫技档的 C 档效果照旧", after.shockwave)
     }
 
     // ------------------------------------------------------------------

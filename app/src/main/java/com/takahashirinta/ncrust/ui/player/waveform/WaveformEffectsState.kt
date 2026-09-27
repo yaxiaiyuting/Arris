@@ -76,6 +76,14 @@ class WaveformEffectsState(
     private var cooldownMs = 0f
 
     /**
+     * v3.0.0：上一次看到的**外部**瞬态计数（`-1` = 还没接上外部信号）。
+     *
+     * 有它才能把「累计计数」变成「这一帧发生了几次」。首次拿到外部信号时只对齐、不补触发
+     * （否则起播第一次调用会把「从进程启动以来」的全部计数一次性炸出来）。
+     */
+    private var lastTransientCount = NO_EXTERNAL_TRANSIENT
+
+    /**
      * 每帧推进一步。
      *
      * @param newestBar 最新的**未平滑**柱值（`WaveformRing` 的 targets 尾元素）——
@@ -89,20 +97,23 @@ class WaveformEffectsState(
         update(newestBar, newestBar, dtMs, active, effects)
 
     /**
-     * v2.9.0：**节拍判据改用低频（鼓 / 贝斯）通道**。
+     * v3.0.0：**瞬态判据可以来自音频线程**（`AudioFeatureExtractor` 的 `transient`）。
      *
-     * ## 为什么
+     * ## 为什么要有这条外部通道
      *
-     * 全带 RMS 对「一句高音」与「一下底鼓」给出的是同一种响应 —— 那是「涟漪乱触发、
-     * 真鼓点反而不明显」的根源。低频通道来自 `PcmRms.analyze` 的**一阶低通**
-     * （截止 150Hz，与全带 RMS 同一次逐样本遍历，不是 FFT、不是第二遍扫描），
-     * 底鼓与贝斯落在这一带、人声与旋律重音不在。
+     * v2.9.0 的判据跑在 UI 帧时钟上、读的是**最新一根柱**；而一根柱 = 一次 `handleBuffer`。
+     * 缓冲率高于帧率时，一帧里到达的多根柱只有最后一根被看到 —— 前面那些柱里的击打
+     * **永远不被判定**（快鼓点会漏）。音频线程上的判据**每一次回调都判定**，
+     * 并把结果累计成一个单调计数，UI 侧比较前后差值就知道「这一帧发生了几次」。
      *
-     * ## 诚实边界（不改，也不许含糊）
+     * ## 兼容性（老调用点与单测一行不改）
      *
-     *  - 只有一个低频通道，**没有**低/中/高频之分 —— 底鼓与贝斯仍然不可区分；
-     *  - 慢歌 / 无鼓的曲目（古典、清唱）低频能量低 ⇒ **触发变少是正确行为**，不是 bug；
-     *  - 传入 `newestBass` 为 NaN/负数时回落全带值（老调用点与单测走的也是这条）。
+     * `transientCount` 的默认值是 `-1`，语义是「**没有外部信号，用内置判据**」。
+     * 只有真的接上音频特征链路（`WaveformStore.featuresAvailable()` 为 true）时，
+     * 调用方才传 `>= 0` 的计数。两条路径**互斥**：外部信号有效时内置判据整个不跑，
+     * 所以不会出现「同一次击打被判两次」。
+     *
+     * @param transientCount 音频线程的瞬态累计计数；`-1` = 没有外部信号。
      */
     fun update(
         newestBar: Float,
@@ -110,6 +121,7 @@ class WaveformEffectsState(
         dtMs: Float,
         active: Boolean,
         effects: VisualizerEffects,
+        transientCount: Long = NO_EXTERNAL_TRANSIENT,
     ): Boolean {
         val dt = dtMs.coerceIn(0f, 200f)
         var changed = false
@@ -132,9 +144,36 @@ class WaveformEffectsState(
             // 起播第一根柱必然被判成 onset —— 那是误触发）。
             baseline = 0f
             cooldownMs = 0f
+            // 外部计数也要对齐：暂停期间攒下的瞬态不该在恢复播放时一次性炸出来。
+            if (transientCount != NO_EXTERNAL_TRANSIENT) lastTransientCount = transientCount
             return changed
         }
 
+        if (transientCount != NO_EXTERNAL_TRANSIENT) {
+            // ---- 外部（音频线程）判据 ----
+            val previous = lastTransientCount
+            lastTransientCount = transientCount
+            if (previous < 0L) return changed
+            // 有界：一帧最多补 [MAX_TRANSIENTS_PER_FRAME] 次，绝不因为一次长卡顿
+            // 把几百个涟漪灌进池里（池本身也是覆盖式的，但那样画面会"炸一下"）。
+            val delta = (transientCount - previous).coerceIn(0L, MAX_TRANSIENTS_PER_FRAME.toLong())
+            var spawned = 0
+            while (spawned < delta) {
+                if (effects.shockwave) {
+                    spawnRipple()
+                    changed = true
+                }
+                if (effects.particles) {
+                    spawnParticles()
+                    changed = true
+                }
+                spawned++
+            }
+            return changed
+        }
+
+        // ---- 内置判据（v2.9.0 的行为，特征链路不可用时走这条）----
+        lastTransientCount = NO_EXTERNAL_TRANSIENT
         // 低频通道不可用时回落全带值：行为与 v2.8.0 的判据一致。
         val onsetSource = if (newestBass.isFinite() && newestBass >= 0f) newestBass else newestBar
         val value = if (onsetSource.isFinite()) onsetSource.coerceIn(0f, 1f) else 0f
@@ -170,6 +209,7 @@ class WaveformEffectsState(
         particleCursor = 0
         baseline = 0f
         cooldownMs = 0f
+        lastTransientCount = NO_EXTERNAL_TRANSIENT
     }
 
     // ------------------------------------------------------------------
@@ -339,5 +379,23 @@ class WaveformEffectsState(
 
         /** 固定随机种子：同一段音频每次得到同一套粒子分布（排查"是不是随机看着乱"用）。 */
         const val PARTICLE_RANDOM_SEED = 0x5EED2F
+
+        /**
+         * v3.0.0：`transientCount` 的哨兵值 —— 「没有外部信号，用内置判据」。
+         *
+         * 用 `-1` 而不是 `0`：外部计数从 0 开始（进程启动时一次瞬态都没发生），
+         * 用 0 当哨兵会让「真的没有瞬态」与「没有外部信号」变成同一件事。
+         */
+        const val NO_EXTERNAL_TRANSIENT = -1L
+
+        /**
+         * v3.0.0：一帧最多补触发几次外部瞬态。
+         *
+         * 有界的理由（铁律 4）：UI 一帧里到达的缓冲数受帧率限制，正常情况下是 0~3；
+         * 一次长卡顿（比如 500ms 掉帧）可能攒下十几次。补满它们只会让画面"炸一下"，
+         * 而不补又会让「卡顿期间的鼓点」永久丢失。取 4：既覆盖正常帧，
+         * 又把异常帧的代价钉死在 4 次（池本身也是覆盖式的，不会扩容）。
+         */
+        const val MAX_TRANSIENTS_PER_FRAME = 4
     }
 }

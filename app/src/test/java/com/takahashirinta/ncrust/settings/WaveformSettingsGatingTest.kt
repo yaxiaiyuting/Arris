@@ -220,7 +220,16 @@ class WaveformSettingsGatingTest {
         // 接替它们的两个可见项。
         assertEquals(
             "统一动效强度必须落在播放与音质页，且顺序是「档位 → 总开关」",
-            listOf("motion_tier", "ui_motion_enabled"),
+            listOf(
+                "motion_tier",
+                "ui_motion_enabled",
+                // v3.0.0：五个独立开关（铁律 26），顺序 = registry 声明顺序。
+                "motion_shockwave",
+                "motion_halo",
+                "motion_particles",
+                "motion_wave_bands",
+                "motion_breathing",
+            ),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id }
                 .filter { it.startsWith("motion_") || it == "ui_motion_enabled" },
         )

@@ -211,7 +211,9 @@ class StringsMigrationTest {
         // about / playerUi 本版没动 —— 这几个数只随各自的文案变动。
         // v2.9.0：waveform 16 → 20（统一「动效强度」的 4 条文案；按纪律进 WaveformStrings 而不是
         // 已经 78 条的 settings 组 —— 后者再加 4 条就会越过 80 的组预警线）。
-        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31, "waveform" to 20)
+        // v3.0.0：waveform 20 → 30（五个独立开关 × 标题/说明；同样按纪律进 WaveformStrings，
+        // 外层 `Strings` 一个参数都没加）。
+        val expectedSizes = mapOf("settings" to 78, "about" to 25, "playerUi" to 31, "waveform" to 30)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

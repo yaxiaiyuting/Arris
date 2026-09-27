@@ -46,7 +46,7 @@ class SettingsRegistryTest {
             // v2.9.0：新增的 4 个动效键同样不属于"口径 C 的 42 个既有键"，
             // 所以两个"某版本新增"标志都要排除 —— 否则这条断言会因为**新增**而变红，
             // 那正好把"机械防线"变成"每次加功能都要改测试"的噪声源。
-            .filter { !it.isNewInV280 && !it.isNewInV290 }
+            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 }
             .mapNotNull { it.key }
             .toSet()
 
@@ -79,14 +79,18 @@ class SettingsRegistryTest {
         assertTrue("key 不能带空白", all.none { it != it.trim() || it.isEmpty() })
 
         val legacy = SettingsRegistry.allEntries()
-            .filter { !it.isNewInV280 && !it.isNewInV290 }
+            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 }
             .mapNotNull { it.key }
             .toSet()
         val v280 = SettingsRegistry.allEntries().filter { it.isNewInV280 }.mapNotNull { it.key }.toSet()
         val v290 = SettingsRegistry.allEntries().filter { it.isNewInV290 }.mapNotNull { it.key }.toSet()
+        val v300 = SettingsRegistry.allEntries().filter { it.isNewInV300 }.mapNotNull { it.key }.toSet()
         assertTrue("新键不得与既有键重名", (legacy intersect v280).isEmpty())
         assertTrue("新键不得与既有键重名", (legacy intersect v290).isEmpty())
         assertTrue("v2.8.0 与 v2.9.0 的新键不得重名", (v280 intersect v290).isEmpty())
+        assertTrue("新键不得与既有键重名（v3.0.0）", (legacy intersect v300).isEmpty())
+        assertTrue("v2.9.0 与 v3.0.0 的新键不得重名", (v290 intersect v300).isEmpty())
+        assertTrue("v2.8.0 与 v3.0.0 的新键不得重名", (v280 intersect v300).isEmpty())
     }
 
     @Test
@@ -99,6 +103,63 @@ class SettingsRegistryTest {
             .toSet()
         assertEquals("v2.9.0 新增项", NEW_V290_KEYS, actual)
         assertEquals(5, NEW_V290_KEYS.size)
+    }
+
+    @Test
+    fun `newV300KeysAreExactlyTheMotionSwitchSet`() {
+        // 机械防线之三：v3.0.0 只允许新增「每个动效一个独立开关」这一组（铁律 26）。
+        // 顺手夹带一个无关功能项（一起听 / 下载管理 / 流量管理 / 备份恢复…）会在这里变红。
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV300 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals("v3.0.0 新增项", NEW_V300_KEYS, actual)
+        assertEquals("恰好五个独立开关", 5, NEW_V300_KEYS.size)
+    }
+
+    @Test
+    fun `v290DegradeKeysAreInertUnderV300`() {
+        // v3.0.0 把自动降级机制整个删除了：这两个键不再参与任何渲染决策，
+        // 但**保留不删**（回滚安装不丢数据）。判据是机械的：必须同时
+        // 「标 legacyV300」+「internal（没有 UI 入口）」+「属于 v2.9.0 的新增项」。
+        val inert = SettingsRegistry.allEntries().filter { it.legacyV300 }
+        assertEquals(
+            "只有降级水位与降级日志这两个键是 v3.0.0 的历史键",
+            setOf("motion_degrade_level", "motion_degrade_log"),
+            inert.mapNotNull { it.key }.toSet(),
+        )
+        inert.forEach {
+            assertTrue("${it.key} 标了 legacyV300 却没有 internal ⇒ 会在设置页渲染出来", it.isInternal)
+            assertTrue("${it.key} 不是 v2.9.0 新增项却标了 legacyV300", it.isNewInV290)
+        }
+        // 反过来：v2.9.0 的另外三个键**仍然在驱动渲染**（不能被顺手标成历史键）。
+        val stillLive = SettingsRegistry.allEntries()
+            .filter { it.isNewInV290 && !it.legacyV300 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals(
+            setOf("motion_tier", "ui_motion_enabled", "motion_version"),
+            stillLive,
+        )
+    }
+
+    @Test
+    fun `v300 switches are reachable and have strings`() {
+        // 「设置项可达性」：五个开关必须被渲染计划覆盖，且标题/副标题文案齐全
+        // （文案住在 `Strings.waveform`，与 v2.9.0 的四条同一口径）。
+        val v300 = SettingsRegistry.allEntries().filter { it.isNewInV300 }
+        v300.forEach { entry ->
+            assertFalse("${entry.id} 不该是内部项 —— 用户必须能关掉每一个新动效", entry.isInternal)
+            assertTrue("${entry.id} 必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+            assertEquals("${entry.id} 必须是一个开关", SettingsEntryType.SWITCH, entry.type)
+            assertEquals("${entry.id} 的默认值必须是开（缺 key = 与档位表一致）", true, entry.defaultValue)
+            assertNotNull("${entry.id} 缺 titleKey", entry.titleKey)
+            assertNotNull("${entry.id} 缺 subtitleKey", entry.subtitleKey)
+            assertTrue(
+                "${entry.id} 的文案必须指向 waveform 组",
+                entry.titleKey!!.startsWith("waveform.") && entry.subtitleKey!!.startsWith("waveform."),
+            )
+        }
     }
 
     @Test
@@ -429,6 +490,14 @@ class SettingsRegistryTest {
             "motion_degrade_level",
             "motion_degrade_log",
             "motion_version",
+        )
+
+        val NEW_V300_KEYS: Set<String> = setOf(
+            "motion_shockwave",
+            "motion_halo",
+            "motion_particles",
+            "motion_wave_bands",
+            "motion_breathing",
         )
 
         val NEW_V280_KEYS: Set<String> = setOf(

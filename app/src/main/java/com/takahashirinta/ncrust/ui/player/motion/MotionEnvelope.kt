@@ -17,34 +17,28 @@ import kotlin.random.Random
 
 /**
  * v2.9.0 · A/B/C：**界面动效的每帧包络**（纯逻辑，JVM 可直测）。
+ * v3.0.0：输入换成真实音频特征（RMS 包络 + 音频线程判定的瞬态）。
  *
  * ## 它解决什么问题
  *
  * 背景呼吸（A）、节拍脉冲（B）、歌词律动（B）、粒子与光晕（C）都需要同一个东西：
- * 「现在有多响、刚刚是不是一下重拍」。数据源只有 v2.8.0 已有的那个每回调一个 RMS
- * （`WaveformStore` 的环形缓冲），所以这里把它加工成三个**每帧只推进一步**的量：
+ * 「现在有多响、刚刚是不是一下重拍」。v2.9.0 的数据源是每回调一个全带 RMS + 低频通道；
+ * v3.0.0 换成 `MotionBindings`（音频线程一次遍历算出的 RMS / 三频段 / 质心 / 瞬态），
+ * 于是这里只剩两件事：
  *
  * | 输出 | 语义 | 用途 |
  * |---|---|---|
  * | [level] | 平滑后的响度（0..1，起音快 / 回落慢） | 背景呼吸幅度、节拍脉冲幅度 |
  * | [pulse] | 重拍脉冲（1 = 刚触发，指数衰减到 0） | 封面浮动、播放键脉冲、歌词行缩放 |
- * | 强拍标记 | 比普通节拍更高的门槛 | 光晕扩散（C 档，任务书 §6.2 要求「强节拍」） |
+ * | [strongBeat] | 本帧的瞬态是否达到「强拍」门槛 | 光晕圈数 / 冲击波幅度 |
  *
- * ## 为什么不用 `WaveformRing.breatheScale()`（v2.8.0 已经有一个呼吸相位）
+ * ## 两条路径，靠 [MotionBindings.available] 切换（不是靠 try/catch）
  *
- * 那个是**正弦相位**（`BREATHE_PERIOD_MS = 3200ms` 的自由振荡），与音量无关 ——
- * 它的语义是「一直在轻轻呼吸」，挂在**波形条自己的 alpha** 上。
- * 任务书 §4.2 要的是「随 RMS 明暗/缩放波动」，即**音量驱动**。两者是两件事，
- * 硬改成同一个会把 v2.8.0 的波形呼吸一起改掉（那是回归）。
- *
- * ## 为什么另起一个节拍检测器（而不复用 `WaveformEffectsState` 的）
- *
- * 那个检测器与**涟漪/粒子池**是同一个对象（`spawnRipple()` 就被它直接调用），
- * 而它的生命周期挂在哪条波形挂在哪 —— 竖屏手机根本不挂波形（`PlayerLayout.visualizerSlot`
- * 在「手机竖屏」这一格恒为 false）。界面动效在竖屏**必须**有节拍数据，所以这里需要
- * 一个独立的检测器。两者的**判据参数逐字相同**（直接引用
- * [WaveformEffectsState] 的常量，不复制数值）：同一段音频在两条链路上给出的
- * onset 时刻因此是一致的，不会出现「波形跳了但背景没跳」。
+ * - **特征链路可用**：瞬态由音频线程判定（`AudioFeatureExtractor` 每缓冲一次，
+ *   不漏缓冲），本层只做「把计数变成脉冲」的衰减动画；
+ * - **不可用**：回落 v2.9.0 的内置判据（低频通道相对基线的突变 + 冷却）。
+ *   判据参数**逐字引用** [WaveformEffectsState] 的常量，两条路径给出的 onset 时刻
+ *   因此是一致的，不会出现「波形跳了但背景没跳」。
  *
  * ## 有界性（铁律 4）
  *
@@ -57,6 +51,7 @@ class MotionEnvelope {
     private var baseline = 0f
     private var cooldownMs = 0f
     private var pulse = 0f
+    private var strongHold = false
 
     /** 平滑响度（0..1），已 clamp。 */
     fun level(): Float = level
@@ -64,27 +59,45 @@ class MotionEnvelope {
     /** 重拍脉冲（0..1）。 */
     fun pulse(): Float = pulse
 
+    /** 本帧的瞬态是否达到「强拍」门槛。 */
+    var strongBeat: Boolean = false
+        private set
+
     /**
-     * 每帧推进一步。
+     * 每帧推进一步（v2.9.0 的老重载：只有全带 RMS，走内置判据）。
      *
-     * @param newestBar 最新的**未平滑**柱值（`WaveformStore` 的 targets 尾元素）。
-     *   与 `WaveformEffectsState` 同一个口径：用未平滑值，否则起音会被 τ=22ms 的平滑抹圆。
+     * @param newestBar 最新的**未平滑**柱值。与 `WaveformEffectsState` 同一个口径：
+     *   用未平滑值，否则起音会被 τ=22ms 的平滑抹圆。
      * @param active 播放中且未在缓冲。false 时 [level]/[pulse] 单调回落到 0，
      *   并清空基线 —— 暂停期间基线若继续衰减到 0，起播第一根柱必然被判成 onset（误触发）。
      * @return 画面是否需要重绘（还有动画没收敛）。
      */
     fun update(newestBar: Float, dtMs: Float, active: Boolean): Boolean =
-        update(newestBar, newestBar, dtMs, active)
+        update(newestBar, newestBar, dtMs, active, 0, 0f, externalAvailable = false)
+
+    /** v2.9.0 的老重载：全带 + 低频，走内置判据。 */
+    fun update(newestBar: Float, newestBass: Float, dtMs: Float, active: Boolean): Boolean =
+        update(newestBar, newestBass, dtMs, active, 0, 0f, externalAvailable = false)
 
     /**
-     * v2.9.0：**节拍判据改用低频（鼓 / 贝斯）通道**（与 `WaveformEffectsState` 同一口径、
-     * 同一组阈值常量）。理由与诚实边界写在 `WaveformEffectsState.update` 的 KDoc 上 ——
-     * 一句话：全带 RMS 分不出"一句高音"和"一下底鼓"，低频可以。
+     * v3.0.0：**特征驱动**的重载。
      *
      * @param newestBar 全带 RMS（未平滑）：用于**响度包络**（背景呼吸的幅度）。
-     * @param newestBass 低频能量（未平滑）：用于**节拍与强拍**。
+     * @param newestBass 低频能量（未平滑）：**只在** [externalAvailable] 为 false 时
+     *   用作内置节拍判据的输入（特征链路可用时瞬态由音频线程给出）。
+     * @param transients 本帧新发生的瞬态次数（来自 [MotionBindings.transients]）。
+     * @param strength 最近一次瞬态的强度（0..1）。
+     * @param externalAvailable 音频特征链路是否可用（false ⇒ 走内置判据）。
      */
-    fun update(newestBar: Float, newestBass: Float, dtMs: Float, active: Boolean): Boolean {
+    fun update(
+        newestBar: Float,
+        newestBass: Float,
+        dtMs: Float,
+        active: Boolean,
+        transients: Int,
+        strength: Float,
+        externalAvailable: Boolean,
+    ): Boolean {
         val dt = dtMs.coerceIn(0f, 200f)
         var changed = false
 
@@ -102,24 +115,55 @@ class MotionEnvelope {
             }
             baseline = 0f
             cooldownMs = 0f
+            strongBeat = false
+            strongHold = false
             return changed || level != 0f
         }
 
-        // 响度包络仍然跟全带 RMS（背景呼吸要的是"整体多响"，不是"有没有鼓"）。
+        // 响度包络跟全带 RMS（背景呼吸要的是"整体多响"，不是"有没有鼓"）。
         val levelValue = if (newestBar.isFinite()) newestBar.coerceIn(0f, 1f) else 0f
-        // 节拍判据用低频通道；不可用时回落全带值（老调用点与单测走这条）。
-        val onsetSource = if (newestBass.isFinite() && newestBass >= 0f) newestBass else newestBar
-        val value = if (onsetSource.isFinite()) onsetSource.coerceIn(0f, 1f) else 0f
         // 起音快 / 回落慢：与 WaveformRing 的 ATTACK/RELEASE 同源手感，
         // 但这一层要的是"音量包络"而不是"柱高"，所以时间常数更大（背景不该跟着每个缓冲块抖）。
         val tau = if (levelValue > level) ATTACK_TAU_MS else RELEASE_TAU_MS
         val k = 1f - exp(-dt / tau)
         if (level != levelValue) {
             val next = level + (levelValue - level) * k
-            level = if (next.isFinite()) next.coerceIn(0f, 1f) else levelValue
+            // 吸附：无限逼近永远"不等于"目标，不吸附就会永远要求重绘 ——
+            // 表现是「音乐放着、画面已经全黑，帧时钟还在 60fps 空转」。
+            // 这**不是**理论风险：v2.9.0 的实现在这条分支上没有吸附，
+            // `MotionBindingsTest.静音输入下所有随时间变化的量都收敛到零` 把它抓了出来。
+            level = when {
+                !next.isFinite() -> levelValue
+                kotlin.math.abs(next - levelValue) < LEVEL_EPSILON -> levelValue
+                else -> next.coerceIn(0f, 1f)
+            }
             changed = true
         }
 
+        if (externalAvailable) {
+            // ---- 特征链路：瞬态由音频线程判定 ----
+            baseline = 0f
+            cooldownMs = 0f
+            val fired = transients > 0
+            if (fired) {
+                // 一帧里发生多次时脉冲不叠加（叠加会超过 1 然后被 clamp，反而看不出"更强"）；
+                // 强度交给 strongBeat 表达。
+                pulse = 1f
+                changed = true
+            }
+            val nextStrong = fired && strength >= STRONG_BEAT_STRENGTH
+            if (nextStrong != strongHold) {
+                strongHold = nextStrong
+                changed = true
+            }
+            strongBeat = nextStrong
+            return changed
+        }
+
+        // ---- 内置判据（v2.9.0 的行为，特征链路不可用时走这条）----
+        strongHold = false
+        val onsetSource = if (newestBass.isFinite() && newestBass >= 0f) newestBass else newestBar
+        val value = if (onsetSource.isFinite()) onsetSource.coerceIn(0f, 1f) else 0f
         val jump = value - baseline
         // 先算 jump 再更新基线：否则一次强 onset 会立刻把基线抬起来、把自己判掉。
         baseline += (value - baseline) * (1f - exp(-dt / WaveformEffectsState.BASELINE_TAU_MS))
@@ -133,8 +177,7 @@ class MotionEnvelope {
         if (onset) {
             cooldownMs = WaveformEffectsState.ONSET_COOLDOWN_MS
             pulse = 1f
-            // 强拍：绝对增量达到普通门槛的 2.4 倍（0.12）。任务书 §6.2 要求光晕只在
-            // **强**节拍触发 —— 每个普通拍都炸一圈光环会变成噪声。
+            // 强拍：绝对增量达到普通门槛的 2.4 倍（0.12），与 v2.9.0 逐字一致。
             strongBeat = jump >= STRONG_BEAT_ABS_MIN
             changed = true
         } else {
@@ -143,11 +186,7 @@ class MotionEnvelope {
         return changed
     }
 
-    /** 本帧是否触发了一次**强**节拍（只在触发的这一帧为 true，消费方自己转成持续状态）。 */
-    var strongBeat: Boolean = false
-        private set
-
-    /** 单测 / 诊断：当前基线。 */
+    /** 单测 / 诊断：当前基线（只有内置判据路径会更新它）。 */
     fun baselineValue(): Float = baseline
 
     /** 换歌 / 停止时清空。 */
@@ -157,6 +196,7 @@ class MotionEnvelope {
         cooldownMs = 0f
         pulse = 0f
         strongBeat = false
+        strongHold = false
     }
 
     companion object {
@@ -169,8 +209,21 @@ class MotionEnvelope {
         /** 重拍脉冲的衰减时间常数（毫秒）：350ms 衰减到 1/e，肉眼刚好"弹一下"。 */
         const val PULSE_TAU_MS = 350f
 
-        /** 强拍门槛（相对基线的绝对增量）。普通门槛是 `ONSET_ABS_MIN = 0.05`，这里取 2.4 倍。 */
+        /** 内置判据的强拍门槛（相对基线的绝对增量）。普通门槛是 `ONSET_ABS_MIN = 0.05`，这里 2.4 倍。 */
         const val STRONG_BEAT_ABS_MIN = 0.12f
+
+        /**
+         * v3.0.0：特征链路下的强拍门槛（瞬态强度 0..1）。
+         *
+         * 0.35 的依据：瞬态强度是「增量 ÷ 0.20」的 clamp（见
+         * `AudioFeatureExtractor.ONSET_STRENGTH_FULL`），0.35 对应增量 0.07 ——
+         * 落在内置判据的强拍门槛（0.12）**之下**是有意的：音频线程的判据在
+         * **每一次回调**上都判定，捕获到的增量比 UI 帧上看到的更锐利（帧上那根柱
+         * 已经被「取最新一根」平滑过），所以同一个击打在两条链路上的数值不可直接比。
+         * 取 0.35 是让「强拍」在两条链路上**同样稀有**（真机听感校准的起点，可由单测钉住，
+         * 但数值本身仍需真机复核 —— 见 `docs/verification/v3.0.0/probe/probe-motion-binding.md`）。
+         */
+        const val STRONG_BEAT_STRENGTH = 0.35f
 
         /** 脉冲吸附阈值：小于它直接归零，避免"永远差一点、永远要重绘"。 */
         const val PULSE_EPSILON = 0.004f
@@ -181,28 +234,45 @@ class MotionEnvelope {
 }
 
 /**
- * v2.9.0 · C 档：**背景层的粒子与光晕**（纯逻辑，定长 SoA，零分配）。
+ * v3.0.0 · 音频驱动：**背景层的冲击波 / 光晕 / 粒子**（纯逻辑，定长 SoA，零分配）。
  *
  * 与 `WaveformEffectsState` 的关系：那个画在**波形条内部**（归一化坐标相对 28 根柱子），
  * 这个画在**整屏背景层**（归一化坐标相对屏幕）。两者的池是独立的 —— 波形条在竖屏
  * 根本不挂载，而背景层在竖屏**必须**有粒子。
  *
+ * ## 与 v2.9.0 的三处差别（都是「绑定到真实音频特征」那条铁律的直接后果）
+ *
+ * | 效果 | v2.9.0 | v3.0.0 |
+ * |---|---|---|
+ * | 光晕 | 强拍触发，幅度固定 | **瞬态**触发，幅度随**击打力度**（[MotionBindings.strengthScale]），炫技档**多圈**（错开起始进度） |
+ * | 冲击波 | 无 | **瞬态**触发，从画面中心扩散的径向渐晕，寿命独立于光晕 |
+ * | 粒子 | 强拍触发一小簇（固定 6 个） | **中高频能量**驱动的连续生成，速率与能量正相关（[MotionBindings.particleRateHz]） |
+ *
  * ## 有界性（铁律 4，逐条给依据）
  *
  * | 量 | 上限 | 依据 |
  * |---|---|---|
- * | 光晕 | [HALO_CAPACITY] = 2 | 强拍门槛（0.12 增量）本身就比普通拍稀有；寿命 900ms 内最多重叠 2 圈 |
- * | 粒子 | [PARTICLE_CAPACITY] = 32 | 任务书 §6.1 明确「如 16~32 个」；寿命 900ms + 冷却 180ms ⇒ 稳态 ≤ 25，取 32 是硬上界且让池满路径可达 |
- * | 每次强拍粒子 | [PARTICLES_PER_BEAT] = 6 | 一次重拍一小簇；6 × 5 拍写满一轮池 |
+ * | 光晕 | [HALO_CAPACITY] = 4 | 瞬态冷却 180ms + 寿命 900ms + 炫技档每次 2 圈 ⇒ 稳态最多约 10 个"想要"存活，池按游标覆盖最旧的，**硬上界 4** |
+ * | 冲击波 | [SHOCK_CAPACITY] = 2 | 同源触发、寿命 700ms；2 个已经能读出"连着两下" |
+ * | 粒子 | [PARTICLE_CAPACITY] = 40 | 高密度档 26 个/秒 × 寿命 900ms ≈ 24 个稳态；40 是硬上界且让"池满覆盖最旧"路径可达 |
+ * | 每帧新粒子 | [MAX_PARTICLES_PER_FRAME] = 4 | 一帧最多补 4 个，长卡顿之后不会一次性炸出一屏 |
  *
  * 池满时**覆盖最旧的**（游标轮转），绝不扩容、绝不等待 —— 与 v2.8.0 的取舍一致。
  */
 class MotionBackdropState(
     private val random: Random = Random(PARTICLE_RANDOM_SEED),
 ) {
+    // ---- 光晕（瞬态驱动，幅度随力度、可多圈）----
     private val haloProgress = FloatArray(HALO_CAPACITY) { -1f }
+    private val haloScale = FloatArray(HALO_CAPACITY) { 1f }
     private var haloCursor = 0
 
+    // ---- 冲击波（瞬态驱动，径向渐晕）----
+    private val shockProgress = FloatArray(SHOCK_CAPACITY) { -1f }
+    private val shockScale = FloatArray(SHOCK_CAPACITY) { 1f }
+    private var shockCursor = 0
+
+    // ---- 粒子（中高频能量驱动，连续生成）----
     private val particleX = FloatArray(PARTICLE_CAPACITY)
     private val particleY = FloatArray(PARTICLE_CAPACITY)
     private val particleVx = FloatArray(PARTICLE_CAPACITY)
@@ -210,46 +280,99 @@ class MotionBackdropState(
     private val particleLife = FloatArray(PARTICLE_CAPACITY)
     private var particleCursor = 0
 
+    /** 粒子生成累加器（个）。**有界**：只在 `[0, 1)` 区间内推进，绝不无限增长。 */
+    private var particleEmitAcc = 0f
+
     /**
      * 每帧推进一步。
      *
-     * @param strongBeat 本帧是否触发强拍（来自 [MotionEnvelope.strongBeat]）。
-     * @param haloEnabled / [particlesEnabled] 能力位：关掉时**立刻**清空对应状态
-     *   （用户改设置后画面要马上跟上，而不是让残留粒子飘完）。
+     * @param bindings 本帧的音频特征（瞬态次数 / 强度 / 中高频能量）。
+     * @param motion 当前档位的能力位（含炫技档的密度与圈数）。
+     * @param active 播放中且未在缓冲。false 时不产生新的特效，但**已存在的会自然演完**
+     *   （冻结在半空比让它消失更难看，而且寿命有上界 ⇒ 不会永远重绘）。
      * @return 是否需要重绘。
      */
-    fun update(strongBeat: Boolean, dtMs: Float, haloEnabled: Boolean, particlesEnabled: Boolean): Boolean {
+    fun update(
+        bindings: MotionBindings,
+        motion: MotionEffects,
+        dtMs: Float,
+        active: Boolean,
+    ): Boolean {
         val dt = dtMs.coerceIn(0f, 200f)
         var changed = false
-        if (!haloEnabled && hasHalos()) {
+
+        // 关掉的能力位：立刻清空（用户改设置后画面要马上跟上，而不是让残留粒子飘完）。
+        if (!motion.haloBloom && hasHalos()) {
             haloProgress.fill(-1f)
             changed = true
         }
-        if (!particlesEnabled && hasParticles()) {
-            particleLife.fill(0f)
+        if (!motion.shockwave && hasShocks()) {
+            shockProgress.fill(-1f)
             changed = true
         }
+        if (!motion.particles && hasParticles()) {
+            particleLife.fill(0f)
+            particleEmitAcc = 0f
+            changed = true
+        }
+
         if (advanceHalos(dt)) changed = true
+        if (advanceShocks(dt)) changed = true
         if (advanceParticles(dt)) changed = true
-        if (strongBeat) {
-            if (haloEnabled) {
-                haloProgress[haloCursor] = 0f
-                haloCursor = (haloCursor + 1) % HALO_CAPACITY
+
+        if (!active) {
+            // 暂停：累加器归零，恢复播放时不补触发暂停期间"欠下"的粒子。
+            particleEmitAcc = 0f
+            return changed
+        }
+
+        if (bindings.transients > 0) {
+            val scale = MotionBindings.strengthScale(bindings.strength)
+            if (motion.haloBloom) {
+                spawnHalos(scale, motion.haloRings)
                 changed = true
             }
-            if (particlesEnabled) {
-                spawnParticles()
+            if (motion.shockwave) {
+                spawnShock(scale)
                 changed = true
             }
         }
+
+        if (motion.particles) {
+            // 生成速率与**中高频能量**正相关；低于门槛恒为 0（安静段落不生成）。
+            val rateHz = MotionBindings.particleRateHz(
+                midHigh = bindings.midHigh,
+                density = motion.particleDensity,
+            )
+            if (rateHz > 0f) {
+                particleEmitAcc += rateHz * dt / 1000f
+                var emitted = 0
+                while (particleEmitAcc >= 1f && emitted < MAX_PARTICLES_PER_FRAME) {
+                    particleEmitAcc -= 1f
+                    spawnParticle()
+                    emitted++
+                }
+                // 有界：累加器最多留 1 个"欠账"，避免速率计算异常时无限增长。
+                if (particleEmitAcc > 1f) particleEmitAcc = 1f
+                if (emitted > 0) changed = true
+            } else {
+                // 能量掉到门槛以下：把不足一个的零头丢掉，避免"攒到下一次爆发"。
+                particleEmitAcc = 0f
+            }
+        }
+
         return changed
     }
 
+    /** 换歌 / 停止。 */
     fun clear() {
         haloProgress.fill(-1f)
+        shockProgress.fill(-1f)
         particleLife.fill(0f)
         haloCursor = 0
+        shockCursor = 0
         particleCursor = 0
+        particleEmitAcc = 0f
     }
 
     private fun advanceHalos(dt: Float): Boolean {
@@ -260,6 +383,19 @@ class MotionBackdropState(
             if (progress < 0f) continue
             val next = progress + step
             haloProgress[i] = if (next >= 1f) -1f else next
+            changed = true
+        }
+        return changed
+    }
+
+    private fun advanceShocks(dt: Float): Boolean {
+        var changed = false
+        val step = dt / SHOCK_LIFE_MS
+        for (i in shockProgress.indices) {
+            val progress = shockProgress[i]
+            if (progress < 0f) continue
+            val next = progress + step
+            shockProgress[i] = if (next >= 1f) -1f else next
             changed = true
         }
         return changed
@@ -291,48 +427,107 @@ class MotionBackdropState(
         return false
     }
 
+    private fun hasShocks(): Boolean {
+        for (i in shockProgress.indices) if (shockProgress[i] >= 0f) return true
+        return false
+    }
+
     private fun hasParticles(): Boolean {
         for (i in particleLife.indices) if (particleLife[i] > 0f) return true
         return false
     }
 
-    private fun spawnParticles() {
-        var emitted = 0
-        while (emitted < PARTICLES_PER_BEAT) {
-            val slot = particleCursor
-            particleCursor = (particleCursor + 1) % PARTICLE_CAPACITY
-            // 从画面中心附近的窄扇区向上/向外抛，避免粒子出生就贴边（与波形粒子同一手法）。
-            val angle = PI * (PARTICLE_ANGLE_MIN_FRACTION +
-                (PARTICLE_ANGLE_MAX_FRACTION - PARTICLE_ANGLE_MIN_FRACTION) * random.nextFloat())
-            val speed = PARTICLE_SPEED_MIN + random.nextFloat() * (PARTICLE_SPEED_MAX - PARTICLE_SPEED_MIN)
-            particleX[slot] = 0.5f + (random.nextFloat() - 0.5f) * PARTICLE_SPAWN_SPREAD
-            particleY[slot] = 0.5f
-            particleVx[slot] = (cos(angle) * speed).toFloat()
-            particleVy[slot] = (-sin(angle) * speed).toFloat()
-            particleLife[slot] = 1f
-            emitted++
+    /** 一次瞬态扩 [rings] 圈光晕，圈与圈之间错开起始进度（"多圈"的全部实现）。 */
+    private fun spawnHalos(scale: Float, rings: Int) {
+        val count = rings.coerceIn(1, HALO_CAPACITY)
+        var spawned = 0
+        while (spawned < count) {
+            val slot = haloCursor
+            haloCursor = (haloCursor + 1) % HALO_CAPACITY
+            haloProgress[slot] = MotionBindings.ringStartOffset(spawned)
+            haloScale[slot] = scale
+            spawned++
         }
+    }
+
+    private fun spawnShock(scale: Float) {
+        val slot = shockCursor
+        shockCursor = (shockCursor + 1) % SHOCK_CAPACITY
+        shockProgress[slot] = 0f
+        shockScale[slot] = scale
+    }
+
+    private fun spawnParticle() {
+        val slot = particleCursor
+        particleCursor = (particleCursor + 1) % PARTICLE_CAPACITY
+        // 从画面中心附近的窄扇区向上/向外抛，避免粒子出生就贴边（与波形粒子同一手法）。
+        val angle = PI * (PARTICLE_ANGLE_MIN_FRACTION +
+            (PARTICLE_ANGLE_MAX_FRACTION - PARTICLE_ANGLE_MIN_FRACTION) * random.nextFloat())
+        val speed = PARTICLE_SPEED_MIN + random.nextFloat() * (PARTICLE_SPEED_MAX - PARTICLE_SPEED_MIN)
+        particleX[slot] = 0.5f + (random.nextFloat() - 0.5f) * PARTICLE_SPAWN_SPREAD
+        particleY[slot] = 0.5f
+        particleVx[slot] = (cos(angle) * speed).toFloat()
+        particleVy[slot] = (-sin(angle) * speed).toFloat()
+        particleLife[slot] = 1f
     }
 
     // ---- 渲染侧只读访问（draw 阶段调用，零分配）----
 
     val haloCapacity: Int get() = HALO_CAPACITY
+    val shockCapacity: Int get() = SHOCK_CAPACITY
     val particleCapacity: Int get() = PARTICLE_CAPACITY
 
     /** 光晕扩散进度（0..1）；负数 = 该槽位空着。 */
     fun haloProgressAt(index: Int): Float = haloProgress[index]
 
+    /** 光晕的幅度倍率（0.55..1，随击打力度）。 */
+    fun haloScaleAt(index: Int): Float = haloScale[index]
+
+    /** 冲击波扩散进度（0..1）；负数 = 该槽位空着。 */
+    fun shockProgressAt(index: Int): Float = shockProgress[index]
+
+    /** 冲击波的幅度倍率（0.55..1）。 */
+    fun shockScaleAt(index: Int): Float = shockScale[index]
+
     fun particleLifeAt(index: Int): Float = particleLife[index]
     fun particleXAt(index: Int): Float = particleX[index]
     fun particleYAt(index: Int): Float = particleY[index]
 
+    /** 单测 / 诊断：当前存活数。 */
+    fun aliveHalos(): Int {
+        var n = 0
+        for (i in haloProgress.indices) if (haloProgress[i] >= 0f) n++
+        return n
+    }
+
+    fun aliveShocks(): Int {
+        var n = 0
+        for (i in shockProgress.indices) if (shockProgress[i] >= 0f) n++
+        return n
+    }
+
+    fun aliveParticles(): Int {
+        var n = 0
+        for (i in particleLife.indices) if (particleLife[i] > 0f) n++
+        return n
+    }
+
+    /** 单测 / 诊断：粒子生成累加器。 */
+    fun emitAccumulator(): Float = particleEmitAcc
+
     companion object {
-        const val HALO_CAPACITY = 2
-        const val PARTICLE_CAPACITY = 32
-        const val PARTICLES_PER_BEAT = 6
+        const val HALO_CAPACITY = 4
+        const val SHOCK_CAPACITY = 2
+        const val PARTICLE_CAPACITY = 40
+
+        /** 一帧最多生成几个粒子（长卡顿后的有界补发）。 */
+        const val MAX_PARTICLES_PER_FRAME = 4
 
         /** 光晕寿命（毫秒）。 */
         const val HALO_LIFE_MS = 900f
+
+        /** 冲击波寿命（毫秒）。比光晕短：它是"一下"，不是"一圈余韵"。 */
+        const val SHOCK_LIFE_MS = 700f
 
         /** 粒子寿命（毫秒）。 */
         const val PARTICLE_LIFE_MS = 900f

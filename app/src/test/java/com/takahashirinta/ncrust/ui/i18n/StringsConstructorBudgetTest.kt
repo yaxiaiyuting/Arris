@@ -556,7 +556,7 @@ class StringsConstructorBudgetTest {
      * 属性名逐字等于 `ui/player/waveform/VisualizerStrings.kt` 的 `Property.*` 常量。
      */
     @Test
-    fun `v2_8_0 的 16 条波形分级文案 + v2_9_0 的 4 条动效文案都在 WaveformStrings 且八种语言都可用`() {
+    fun `v2_8_0 的 16 条 + v2_9_0 的 4 条 + v3_0_0 的 10 条动效文案都在 WaveformStrings 且八种语言都可用`() {
         assertEquals(
             "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136",
             136,
@@ -564,12 +564,13 @@ class StringsConstructorBudgetTest {
         )
         assertEquals(
             "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言。" +
-                "（v2.8.0 = 16，v2.9.0 加 4 条统一动效文案 ⇒ 20；组预算 120 还很宽，不必再拆组。）",
-            20,
+                "（v2.8.0 = 16，v2.9.0 加 4 条 ⇒ 20；v3.0.0 加 5 个独立开关 × 2 条 ⇒ 30。" +
+                "组预算 120 还很宽，不必再拆组。）",
+            30,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.WaveformStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
-        assertEquals(21, dexSlots(20, false))
+        assertEquals(31, dexSlots(30, false))
 
         val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
             "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },
@@ -588,8 +589,19 @@ class StringsConstructorBudgetTest {
             "visualizerDragLabel" to { w: WaveformStrings -> w.visualizerDragLabel },
             "visualizerDragDescription" to { w: WaveformStrings -> w.visualizerDragDescription },
             "visualizerNotSpectrumHint" to { w: WaveformStrings -> w.visualizerNotSpectrumHint },
+            // v3.0.0：五个独立开关（铁律 26），每个都要有标题与说明
+            "motionShockwaveLabel" to { w: WaveformStrings -> w.motionShockwaveLabel },
+            "motionShockwaveDescription" to { w: WaveformStrings -> w.motionShockwaveDescription },
+            "motionHaloLabel" to { w: WaveformStrings -> w.motionHaloLabel },
+            "motionHaloDescription" to { w: WaveformStrings -> w.motionHaloDescription },
+            "motionParticlesLabel" to { w: WaveformStrings -> w.motionParticlesLabel },
+            "motionParticlesDescription" to { w: WaveformStrings -> w.motionParticlesDescription },
+            "motionWaveBandsLabel" to { w: WaveformStrings -> w.motionWaveBandsLabel },
+            "motionWaveBandsDescription" to { w: WaveformStrings -> w.motionWaveBandsDescription },
+            "motionBreathingLabel" to { w: WaveformStrings -> w.motionBreathingLabel },
+            "motionBreathingDescription" to { w: WaveformStrings -> w.motionBreathingDescription },
         )
-        assertEquals("波形分级的字段数不对", 16, fields.size)
+        assertEquals("波形分级的字段数不对", 26, fields.size)
 
         val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
         presets.forEach { s ->
@@ -598,8 +610,8 @@ class StringsConstructorBudgetTest {
                 assertTrue("${fields[i].first} 为空", value.isNotBlank())
             }
             assertEquals(
-                "同一语言里 16 条波形文案有重复：$values",
-                16,
+                "同一语言里 26 条波形文案有重复：$values",
+                26,
                 values.distinct().size,
             )
             // 档位三选一：三个词必须互不相同，否则用户分不出在选哪一档。

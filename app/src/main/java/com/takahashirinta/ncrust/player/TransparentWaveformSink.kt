@@ -60,6 +60,25 @@
  *
  * 失败次数记在 [droppedBarCount]（一个 volatile long 自增，**不拼字符串、不打日志**：
  * 音频线程上任何分配都是爆音）。它只用于诊断与单测，不参与任何逻辑。
+ *
+ * ## v3.0.0：旁路数据从「一个 RMS」扩成「一组音频特征」
+ *
+ * 任务书 §4.1 要求瞬态 / 三频段能量 / 频谱质心近似。**这一版仍然不是 FFT**
+ * （决定性依据见 [AudioFeatureExtractor] 的档头：没有分帧、没有窗函数、没有频域变换、
+ * 没有 PCM 环；只有两个一阶低通，与 v2.9.0 已有的低频通道**共用同一次逐样本遍历**）。
+ *
+ * 三条结构上的契约（顺序本身就是契约）：
+ *
+ *  1. **一次遍历算全部**：`AudioFeatureExtractor.process` 里同时产出
+ *     RMS / 低频 / 中频 / 高频 / 质心近似 / 瞬态，**不是**「每加一个特征多扫一遍样本」；
+ *  2. **两个开关都关 = 零开销**：可视化开关与「界面动效需要音频特征」开关**都**为 false 时，
+ *     本回调只剩两次 volatile 读，连一次样本遍历都不跑（v2.8.0 的纪律保住了）。
+ *     v2.9.0 只有可视化一个开关，于是「关掉可视化」会把界面动效的节拍数据一起掐掉 ——
+ *     那是缺陷不是特性，v3.0.0 把两个需求分开；
+ *  3. **失败即降级，不即失效**：`process` 返回 false（采样率未知 / 编码不支持）或它自己抛异常时，
+ *     回落到 `PcmRms.analyze`（RMS-only，v2.9.0 的行为），界面动效那一侧由
+ *     `MotionEnvelope` 的**内置判据**兜底 —— 用户看到的是「动效退化成 v2.9.0」，
+ *     而不是「动效全没了」或「播放断了」。
  */
 
 package com.takahashirinta.ncrust.player
@@ -97,18 +116,14 @@ import kotlin.math.sqrt
 @UnstableApi
 class TransparentWaveformSink(
     private val enabled: () -> Boolean = { WaveformStore.enabled },
-    private val onBar: (Double, Double) -> Unit = WaveformStore::onBar,
-    analyze: ((ByteBuffer, Int) -> Long)? = null,
+    private val featuresEnabled: () -> Boolean = { WaveformStore.motionFeaturesEnabled },
+    private val onBar: (Double, Double, Double) -> Unit = WaveformStore::onBar,
+    private val onFeatures: (Double, Double, Double, Double, Double, Boolean) -> Unit =
+        WaveformStore::onFeatures,
+    private val onTransient: (Int, Float) -> Unit = WaveformStore::onTransient,
+    private val extractor: AudioFeatureExtractor = AudioFeatureExtractor(),
+    private val fallbackAnalyze: (ByteBuffer, Int, Int, Int, Array<DoubleArray>) -> Long = PcmRms::analyze,
 ) : TeeAudioProcessor.AudioBufferSink {
-
-    /**
-     * 一次遍历算出（低频, 全带）两个标量。
-     *
-     * 默认实现是**成员函数引用**（闭包捕获 `this`）：构造时分配一次，之后每次回调零分配。
-     * 之所以不在构造参数默认值里直接写 `::analyzePcm`：默认值在**实例存在之前**求值，
-     * 那里拿不到 `this`（也拿不到 `sampleRateHz` 与滤波状态）。
-     */
-    private val analyze: (ByteBuffer, Int) -> Long = analyze ?: { b, e -> analyzePcm(b, e) }
 
     private var channelCount = 0
     private var encoding = C.ENCODING_INVALID
@@ -117,8 +132,14 @@ class TransparentWaveformSink(
     /** v2.9.0：低通需要的采样率（来自 [flush]）。0 = 还不知道 ⇒ 低频通道退化成全带。 */
     private var sampleRateHz = 0
 
-    /** v2.9.0：一阶低通的跨缓冲状态。构造时分配一次，之后**零分配**。 */
-    private val bassFilterState = DoubleArray(1)
+    /**
+     * v2.9.0：一阶低通的跨缓冲状态（**降级路径**用；正常路径的状态在 [extractor] 里）。
+     *
+     * v3.0.0：形状从 `DoubleArray(1)` 改成 `Array(8) { DoubleArray(2) }` —— 与
+     * [AudioFeatureExtractor] 同一处修正（交错 PCM 必须**每声道**一个状态，
+     * 否则有效截止频率会乘以声道数）。构造时分配一次，之后零分配。
+     */
+    private val bassFilterState = Array(PcmRms.MAX_CHANNELS) { DoubleArray(2) }
 
     /**
      * 被隔离边界吞掉的柱数（诊断 + 单测用）。
@@ -137,16 +158,24 @@ class TransparentWaveformSink(
         this.bytesPerSample = bytesPerSampleOf(encoding)
         // 格式变化（换歌 / 换设备）⇒ 采样率可能变、滤波器状态也不再对应，一并重置。
         this.sampleRateHz = if (sampleRateHz > 0) sampleRateHz else 0
-        bassFilterState[0] = 0.0
+        for (channel in bassFilterState.indices) {
+            bassFilterState[channel][0] = 0.0
+            bassFilterState[channel][1] = 0.0
+        }
+        // v3.0.0：特征提取器的系数跟着采样率走；采样率未知时它自己置 available=false，
+        // 调用方据此走高一段的降级路径（RMS-only）。
+        extractor.configure(this.sampleRateHz, this.channelCount)
     }
 
     /**
      * **音频线程**。零分配、零锁、零异常（任务书对可视化的性能契约）。
      *
-     * 三件事按顺序发生，顺序本身就是契约：
+     * 四件事按顺序发生，顺序本身就是契约：
      *  1. 未知编码（24bit / 32bit 整数等）与声道数 0 直接返回：宁可没有可视化，也不能让播放失败；
-     *  2. **开关前置**：关掉可视化 ⇒ 连 RMS 都不算（用户关掉开关后本回调只剩一次 volatile 读）；
-     *  3. 「RMS + 回调」在**同一个** try 里 ⇒ 任何 Throwable 都在这里终结，绝不向上抛
+     *  2. **开关前置**：可视化与「界面动效要特征」**两个**开关都关 ⇒ 连一次样本遍历都不跑
+     *     （v2.8.0 的「关掉开关 = 零开销」原样保留，只是从「一个开关」变成「两个都关」）；
+     *  3. **一次遍历算全部特征**（[AudioFeatureExtractor.process]），失败回落 RMS-only；
+     *  4. 「计算 + 三个回调」在**同一个** try 里 ⇒ 任何 Throwable 都在这里终结，绝不向上抛
      *     （media3 的 tee 与 AudioSink 都不兜异常，抛出去就是 v2.2.1 的级联形状）。
      *
      * 失败时的行为是**丢弃这一根柱**，不是补一个 0：补 0 会在画面上画出一个假的静音凹陷。
@@ -154,12 +183,54 @@ class TransparentWaveformSink(
     override fun handleBuffer(buffer: ByteBuffer) {
         val bps = bytesPerSample
         if (bps == 0 || channelCount == 0) return
-        if (!enabled()) return
+        val wantBars = enabled()
+        val wantFeatures = featuresEnabled()
+        if (!wantBars && !wantFeatures) return
         try {
-            // v2.9.0：**一次遍历同时算低频与全带**（不是两遍）。
-            // 多出来的只有每样本一次乘加 —— 与"再走一遍全部样本"差一个数量级。
-            val packed = analyze(buffer, encoding)
-            onBar(PcmRms.bassOf(packed).toDouble(), PcmRms.fullOf(packed).toDouble())
+            // v3.0.0：**一次遍历同时算全带 / 低频 / 中频 / 高频 / 质心 / 瞬态**（不是多遍）。
+            // 多出来的只有每样本两次乘加 —— 与"每加一个特征再走一遍全部样本"差一个数量级。
+            if (extractor.process(buffer, encoding)) {
+                if (wantBars) {
+                    onBar(
+                        extractor.rms.toDouble(),
+                        extractor.low.toDouble(),
+                        AudioFeatureExtractor.bandMix(extractor.low, extractor.mid, extractor.high)
+                            .toDouble(),
+                    )
+                }
+                if (wantFeatures) {
+                    onFeatures(
+                        extractor.rms.toDouble(),
+                        extractor.low.toDouble(),
+                        extractor.mid.toDouble(),
+                        extractor.high.toDouble(),
+                        extractor.spectralCentroid.toDouble(),
+                        true,
+                    )
+                    // v3.0.0：一个缓冲里**可能发生多次击打**（真机实测缓冲粒度 100ms，
+                    // 见 `AudioFeatureExtractor.transientCount` 的 KDoc）—— 报个数，不是报一个 bool。
+                    if (extractor.transientCount > 0) {
+                        onTransient(extractor.transientCount, extractor.transientStrength)
+                    }
+                }
+            } else {
+                // 降级路径（v2.9.0 的行为）：只有全带 RMS + 低频，没有任何新特征。
+                val packed = fallbackAnalyze(
+                    buffer,
+                    encoding,
+                    sampleRateHz,
+                    channelCount,
+                    bassFilterState,
+                )
+                val full = PcmRms.fullOf(packed).toDouble()
+                val bass = PcmRms.bassOf(packed).toDouble()
+                if (wantBars) onBar(full, bass, 0.0)
+                if (wantFeatures) {
+                    // available = false：消费方据此回落到**自己的**内置判据（v2.9.0 的包络），
+                    // 而不是把「没有中高频」误当成「中高频能量为零」。
+                    onFeatures(full, bass, 0.0, 0.0, 0.0, false)
+                }
+            }
         } catch (t: Throwable) {
             // 有意吞掉：这是隔离边界本身。计数不分配、不上锁。
             droppedBarCount += 1L
@@ -167,14 +238,6 @@ class TransparentWaveformSink(
     }
 
     private fun bytesPerSampleOf(encoding: Int): Int = PcmRms.bytesPerSample(encoding)
-
-    /**
-     * 默认分析器：把「这次回调的采样率 + 跨缓冲的滤波状态」闭包进来，交给 [PcmRms.analyze]。
-     *
-     * 构造时被包成一个 lambda（捕获 `this`）分配一次，之后每次回调都不分配。
-     */
-    private fun analyzePcm(buffer: ByteBuffer, encoding: Int): Long =
-        PcmRms.analyze(buffer, encoding, sampleRateHz, bassFilterState)
 }
 
 /**
@@ -231,40 +294,62 @@ internal object PcmRms {
      *
      * @param sampleRateHz 采样率（来自 `AudioBufferSink.flush`）。≤0 时退化成"不做低通"
      *   （低频值 = 全带值），宁可退化也不要拿一个错的截止频率去滤波。
-     * @param state **调用方持有**的一元 `DoubleArray`（滤波状态）。用数组而不是返回值，
-     *   是为了让这个函数在音频线程上**零分配**：状态跨缓冲必须连续，
+     * @param channelCount 声道数（来自 `AudioBufferSink.flush`）。交错 PCM 的相邻样本属于
+     *   不同声道，所以**每个声道各有一个滤波状态** —— 共用一个状态会让有效截止频率
+     *   乘以声道数（立体声下 150Hz 变成 300Hz，6 声道变成 900Hz）。上限 [MAX_CHANNELS]。
+     * @param state **调用方持有**的二维 `Array<DoubleArray>`（滤波状态：`[声道][0]` 低通）。
+     *   用数组而不是返回值，是为了让这个函数在音频线程上**零分配**：状态跨缓冲必须连续，
      *   而"把状态包进返回值"就得每缓冲建一个对象。
      */
-    fun analyze(view: ByteBuffer, encoding: Int, sampleRateHz: Int, state: DoubleArray): Long {
+    fun analyze(
+        view: ByteBuffer,
+        encoding: Int,
+        sampleRateHz: Int,
+        channelCount: Int,
+        state: Array<DoubleArray>,
+    ): Long {
         val bps = bytesPerSample(encoding)
         if (bps == 0) return pack(0f, 0f)
+        if (state.isEmpty()) {
+            // 调用方给了长度为 0 的状态数组：不做滤波，低频退化成全带
+            // （与「采样率未知」同一口径）。**绝不抛异常** —— 音频线程上抛一次就是 v2.2.1。
+            val full = of(view, encoding)
+            return pack(full.toFloat(), full.toFloat())
+        }
         val base = view.position()
         val count = view.remaining() / bps
         if (count <= 0) return pack(0f, 0f)
         val littleEndian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
         // 一阶低通系数：截止 [BASS_CUTOFF_HZ]，a = 1 - exp(-2π fc / fs)。
         val a = lowPassCoefficient(sampleRateHz)
-        var lp = if (state.isNotEmpty() && state[0].isFinite()) state[0] else 0.0
+        val channels = channelCount.coerceIn(1, minOf(MAX_CHANNELS, state.size))
         var sumFull = 0.0
         var sumBass = 0.0
         var index = base
         when (encoding) {
             C.ENCODING_PCM_16BIT -> {
                 var i = 0
+                var channel = 0
                 while (i < count) {
                     val lo = view.get(index).toInt() and 0xFF
                     val hi = view.get(index + 1).toInt()
                     val raw = if (littleEndian) (hi shl 8) or lo else (lo shl 8) or (hi and 0xFF)
                     val v = raw.toShort() / 32768.0
+                    val slot = state[channel]
+                    var lp = if (slot.isNotEmpty() && slot[0].isFinite()) slot[0] else 0.0
                     sumFull += v * v
                     lp += a * (v - lp)
                     sumBass += lp * lp
+                    slot[0] = if (lp.isFinite()) lp else 0.0
                     index += 2
                     i++
+                    channel++
+                    if (channel >= channels) channel = 0
                 }
             }
             C.ENCODING_PCM_FLOAT -> {
                 var i = 0
+                var channel = 0
                 while (i < count) {
                     val b0 = view.get(index).toInt() and 0xFF
                     val b1 = view.get(index + 1).toInt() and 0xFF
@@ -276,16 +361,20 @@ internal object PcmRms {
                         (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
                     }
                     val v = Float.fromBits(bits).toDouble()
+                    val slot = state[channel]
+                    var lp = if (slot.isNotEmpty() && slot[0].isFinite()) slot[0] else 0.0
                     sumFull += v * v
                     lp += a * (v - lp)
                     sumBass += lp * lp
+                    slot[0] = if (lp.isFinite()) lp else 0.0
                     index += 4
                     i++
+                    channel++
+                    if (channel >= channels) channel = 0
                 }
             }
             else -> return pack(0f, 0f)
         }
-        if (state.isNotEmpty()) state[0] = if (lp.isFinite()) lp else 0.0
         val full = sqrt(sumFull / count)
         val bass = sqrt(sumBass / count)
         return pack(
@@ -293,6 +382,12 @@ internal object PcmRms {
             if (full.isFinite()) full.toFloat() else 0f,
         )
     }
+
+    /**
+     * 滤波状态的声道上限。与 `AudioFeatureExtractor.MAX_CHANNELS` 同值（8）：
+     * 本应用实测的最高声道数是 QQ 臻品档的 6 声道 FLAC，8 留了两个余量槽位。
+     */
+    const val MAX_CHANNELS = 8
 
     /**
      * 低通系数。截止 [BASS_CUTOFF_HZ]（底鼓基频 50–100Hz、贝斯 40–200Hz 的公共带）。

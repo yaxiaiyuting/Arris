@@ -180,25 +180,15 @@ object VisualizerPrefs {
     }
 
     /**
-     * 帧时间实测触发的一次性降级（纯函数，落盘 + 返回新档位；`null` = 不动作）。
+     * v3.0.0：**自动降级已整个删除**（见 `ui/player/motion/MotionDegrade` 的 KDoc）。
      *
-     * 三条边界全在 [VisualizerTier.downgradedTier] 里（已降过 / 已在最低档 / 只降一级）。
-     * 动作是**两个键一起写**：`visualizer_tier` = 新档、`visualizer_auto_downgraded` = true。
-     * 两个都不落盘的话，「每进程最多一次」在冷启动后就会重新发生一次，而用户会看到
-     * 设置页的档位在两次启动之间来回跳。
+     * 这里原本有两个 `applyAutoDowngrade`：v2.8.0 的纯函数版（按 `visualizer_tier` 降一级）
+     * 与 v2.9.0 转发到 `MotionPrefs` 的版本。两者都随机制一起删掉了 ——
+     * 渲染只看用户选的档位，没有任何后台改写路径。
+     *
+     * `visualizer_auto_downgraded` 这个键**保留**（回滚安装不丢数据、`MotionPrefs.migrate`
+     * 仍读它来补一条迁移说明），但它不再驱动任何渲染决策。
      */
-    fun applyAutoDowngrade(
-        prefs: SharedPreferences,
-        currentTier: Int,
-        alreadyDowngraded: Boolean,
-    ): Int? {
-        val next = VisualizerTier.downgradedTier(currentTier, alreadyDowngraded) ?: return null
-        safeEdit(prefs) {
-            it.putInt(KEY_TIER, next)
-            it.putBoolean(KEY_AUTO_DOWNGRADED, true)
-        }
-        return next
-    }
 
     // ------------------------------------------------------------------
     // 进程内镜像（组合期读它，避免每次重组都读盘；音频线程**不读这里**）
@@ -273,16 +263,10 @@ object VisualizerPrefs {
     }
 
     /**
-     * 帧时间监控发现「持续超标」时调用：落盘 + 刷新进程内状态。
-     *
-     * @return 降级后的档位；`null` = 不动作（已降过 / 已在最低档）。
+     * v3.0.0：**这两条转发已删除** —— `VisualizerPrefs.applyAutoDowngrade`（context 版）
+     * 与 `VisualizerTier.downgradedTier` 随自动降级机制一起下线。
+     * 渲染只看用户选的档位（见 `ui/player/motion/MotionDegrade` 的 KDoc）。
      */
-    /**
-     * v2.9.0：自动降级改用 **`MotionDegrade` 的三级阶梯**（优先砍界面动效、再砍波形档位）。
-     *
-     * 返回的是**降级水位**（0..3），不再是档位 —— 调用方（`MotionFrameClock`）也不关心返回值。
-     */
-    fun applyAutoDowngrade(context: Context): Int? = MotionPrefs.applyAutoDowngrade(context)
 
     internal fun resetForTest() {
         loadedFromDisk = false

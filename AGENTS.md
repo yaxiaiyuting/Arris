@@ -4353,3 +4353,120 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 慢歌/无鼓曲目（古典、清唱）触发变少是**正确行为**；低频通道不可用时回落全带值
 （老调用点与单测走的也是这条）。音频线程的代价是每样本一次乘加，仍在原有的
 `try` 隔离边界内、仍在 `enabled` 开关**之后**。
+
+## v3.0.0 新增（本 fork · 音频特征驱动动效 + 取消自动降级）
+
+### 四条新纪律（先读这四条，再看细节）
+
+1. **动效绑定必须基于真实音频特征，不得用伪随机或固定周期伪装「随音乐变化」。**
+   - 可执行判据（不是口号）：**静音输入下所有随时间变化的量必须收敛到精确的 0，且收敛后不再排帧**。
+     落点 `MotionBindingsTest.静音输入下所有随时间变化的量都收敛到零`。
+     它在本版实现过程中真的抓出了一个缺陷：响度包络没有吸附阈值（无限逼近 0 但永不等于 0）
+     ⇒ 音乐放着、画面已全黑，帧时钟还在 60fps 空转。
+   - 判据的读法：**「这个视觉量跟的是哪个音频特征」必须能一句话答出来，并且能在代码里指出那一行。**
+     答不出来就是假反应。随机数只允许用在**形状抖动**（粒子出生角度/速度，固定种子可复现），
+     **不允许**用在「有多少个」「多强」「什么时候」。
+   - 反例参照（写进 `ref-research/` 的批判）：NeriPlayer 的 GLSL 里 `beatWave/radialPulse/ribbonWave`
+     都是 `sin(uAnimTime·常数)` —— 音频只控振幅、周期固定；它自己也有 `WAVE_AMPLITUDE = 6f` 的常量组件。
+     结论：**不能靠「这个 App 有反应式效果」推断它的每个动画都是真的。**
+2. **每个新动效必须有独立开关。**
+   - 五条：`motion_shockwave` / `motion_halo` / `motion_particles` / `motion_wave_bands` / `motion_breathing`，
+     默认全开（缺 key = 开）。「默认全开」是刻意的：开关是为了让用户**能关掉**某一样，
+     而不是让他去发现某一样；默认关会让「升级后没变化」成为默认体验，而档位表里明明写着它们。
+   - 「独立」由单测逐项证伪：关掉任意一项**只**影响那一项（`MotionEffectsTest` 五条用例）。
+   - 关掉之后**画面必须马上跟上**（残留粒子/光晕立刻清空），而不是让它们飘完。
+3. **音频特征提取不得在音频线程做重计算，不得引入 GC 压力。**
+   - 具体到数字：**每样本约 17 flop**（v2.9.0 是 8）；**每次回调零分配**
+     （状态在 `configure` 时分配一次，≤128 B）；**一次遍历算完全部特征**（没有第二遍扫描、
+     没有分帧、没有窗函数、没有 PCM 环）。
+   - 「关掉开关 = 零开销」现在是**两个**开关：`WaveformStore.enabled`（画不画波形）与
+     `motionFeaturesEnabled`（界面动效要不要特征）。两者都关时音频线程只剩两次 volatile 读。
+     ⚠️ v2.9.0 只有一个开关，于是「关掉音频可视化」会**静默掐掉**背景呼吸与节拍脉冲 —— 那是缺陷。
+   - 真实增量由仪器探针实测（`AudioTapProbeTest` 的 `PROBE-FEATURE-COST`）：
+     S6 上 4096 帧立体声 **574 µs / 次 = 162 倍实时**。**结论是「风险不在吞吐，
+     而在分配 / 阻塞 / 异常」** —— 那三样才是要守的东西。
+4. **不做真 FFT 的翻案，除非调研证明数据源可靠且性能可控。**
+   - 调研的判决：**「数据源可靠」已证明**（自家解码输出的 PCM 旁路，与 NeriPlayer 同一条路），
+     **「性能可控」未被证明** —— 上面那个 162 倍实时只覆盖**两个一阶低通**，
+     不含 FFT 需要的分帧、窗函数与 PCM 环。**所以不翻案。**
+   - 横向旁证：调研的 7 个开源 Android 播放器里，**全量 grep `audiofx.Visualizer|getFft` 命中 0 条**；
+     唯一出现真 FFT 的是 Metrolist 的**听歌识曲**（服务于识别，不是画面）。
+
+### 真机实测改变了两条设计（下一个改这里的人必读）
+
+**音频旁路的缓冲粒度是 100ms（4410 帧 / 11 Hz），不是"几十 Hz"。**
+（`AudioTapProbeTest` 在 S6 与 PCL110 上都是 `avgBufferMs=100.00`；原始输出见
+`docs/verification/v3.0.0/probe/EVIDENCE.md`。）两条后果：
+
+1. **所有时间基准必须从样本数反算**（`帧数 ÷ 声道数 ÷ 采样率`）；基线系数必须按 `dt` 现算
+   —— 固定步长（曾经写的 0.026）在 100ms 粒度下会把 0.8s 的基线变成 **3.5s**。
+2. **判据不能只按"一个缓冲一次"结算**：10ms 的击打落在 100ms 缓冲里，整缓冲 RMS 会被稀释
+   √10 ≈ 3.2 倍（幅度 0.4 的击打整缓冲只有 0.081 < 0.10 门槛 ⇒ 漏检；子帧下有 0.247 ⇒ 判出）。
+   所以有 `SUB_FRAME_MS = 10`，每样本只多两次加法，分辨率从 11 Hz 提到 ~100 Hz。
+
+**诚实边界（不许含糊）**：特征的**发布**仍是每缓冲一次 ⇒ 视觉对一次击打的反应最多滞后
+「一个缓冲 + 一帧」≈ **100~133ms**。这是数据通路的性质（PCM 每 100ms 才到齐），不是判据的问题；
+本轮**没有**量化实际对齐误差。
+
+### ⚠️ 本版把「自动降级」整个删除了（用户明确要求，别再加回来）
+
+v2.8.0 的「帧时间超标 ⇒ 降一档」，v2.9.0 扩成四级阶梯（砍 B → 砍 A → 波形降档，**并改写 `motion_tier`**），
+v3.0.0 **全部删除**。理由：
+
+- 判据（60 帧窗口内 40% 超标）**不知道是谁把帧顶起来的**（归因要 Perfetto）；
+  S6 上「完全关掉波形」的对照轮同样 95% 超标 ⇒ 砍掉的动效往往不是肇事者；
+- 它会**改写 `motion_tier`** ⇒ 设置页显示的档位与用户点的那一档不再一致；
+- 最要命的是**渲染结果不再可推导**：「为什么这台机器少一层特效」在代码里找不到答案。
+
+**渲染的输入只剩三样**：用户选的档位、界面动效总开关、五个独立开关。
+两条**反射断言**把这个结构性保证钉死（谁加回来谁构建变红）：
+`MotionEffectsTest.能力位对象上不存在降级水位字段`、`MotionPrefsTest.不存在任何推进降级水位的公开入口`。
+
+性能兜底改由**用户可见、可预期**的手段承担：① 低端设备的**初始档位**由静态判据解析
+（只在用户没选过时生效，永不覆盖用户选择）；② 五个独立开关；③ 每个动效**自身**的硬上界
+（池容量 / 寿命 / 冷却 / 每帧生成上限）。`FrameBudgetPolicy` 与 `VisualizerFrameMonitor`
+**保留为诊断工具，无生产调用点**。历史键 `motion_degrade_level` / `motion_degrade_log`
+保留不删（`legacyV300`），迁移会补一条「机制已移除 + 旧水位是什么」的说明。
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 无 FFT 的特征提取（三频段 / 质心 / 瞬态 / 子帧） | `player/AudioFeatureExtractor.kt` |
+| 音频旁路 sink（两个开关 + 三条降级路径） | `player/TransparentWaveformSink.kt` |
+| 特征发布（volatile 标量 + 单调计数） | `ui/player/AudioVisualizer.kt`（`WaveformStore`） |
+| 逐柱频带着色的历史窗口 | `ui/player/WaveformRing.kt`（`mixRing` / `newestMix`） |
+| **特征 → 动效参数**的绑定层（纯逻辑） | `ui/player/motion/MotionBindings.kt` |
+| 冲击波 / 光晕 / 粒子的定长池 | `ui/player/motion/MotionEnvelope.kt`（`MotionBackdropState`） |
+| 径向渐变 Brush 缓存 + 渲染 | `ui/player/motion/MotionBackdrop.kt` |
+| 逐柱着色 + 三频带能量条 | `ui/player/AudioVisualizer.kt`（`drawWaveformBars` / `drawBandLanes`） |
+| 档位表 / 独立开关 / 降级遗留常量 | `ui/player/motion/MotionEffects.kt` |
+| prefs 键 + 迁移（水位 3→4） | `ui/player/motion/MotionPrefs.kt` |
+| 仪器探针（缓冲粒度 + 纯算术开销） | `app/src/androidTest/java/com/takahashirinta/ncrust/probe/AudioTapProbeTest.kt` |
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **真 FFT / 按频段分色画柱子**：判决见纪律 4 与 `ref-research/audio-feature-extraction.md`。
+  `spectrumColoring` 仍然恒为 false，有单测守。
+- **`RuntimeShader` / AGSL**：**API 33**，而验收机 S6 是 API 24 ⇒ 在验收机上该效果根本不存在，
+  任何「没掉帧」都无法取证。本版用**缓存好的** `Brush.radialGradient` + `drawCircle`。
+- **`android.media.audiofx.Visualizer`**：需要 `RECORD_AUDIO`；`session 0` 抓的是输出混音；
+  `getFft` 是 8-bit 幅度；capture size 必须是 2 的幂。调研的 7 个播放器**零采用**。
+- **`drawPoints` 画大量粒子**：形参是 `List<Offset>`（`Offset` 是 value class，进 List 必装箱），
+  且 `AndroidCanvas` 的 `PointMode.Points` 是逐点 `nativeCanvas.drawPoint()`，没有批处理。
+- **`Modifier.blur` / `BlurMaskFilter`**：前者 API < 31 是 no-op，后者在硬件加速画布上被忽略。
+- **HCT 取色接进光晕**：项目里没有独立的 HCT 取色模块（唯一从封面取色的是 `CoverBlur.vibrance()`，
+  只用于背景模糊）。把它接到光晕要每首歌重算 Brush，收益不抵成本。光晕用主题色。
+- **照抄 NeriPlayer 的 `BgEffectPainter.java`**：它的文件头署名 `ReChronoRain/HyperCeiler`，
+  而 HyperCeiler 是 **AGPL-3.0** —— 与 GPLv3 不可调和。要借鉴就 clean-room 重写。
+
+### 本版新增的未验证项（与 release notes 保持一致）
+
+- **音画同步延迟未量化**：结构性上界 100~133ms（见上），但没用高速摄影/音频对齐工具实测过。
+- **真机播放下的音频线程欠载率未采集**（只测了纯算术：162 倍实时）。
+- **6 声道 FLAC（QQ 臻品档）端到端未验证**（纯数学有单测：`六声道不会把截止频率乘六`）。
+- **`ONSET_PEAK_RATIO = 1.6` / `ONSET_COOLDOWN_MS = 90` 未做曲风矩阵 A/B**（合成轨道 + 文献量级是全部依据）。
+- **WGR-W09（华为平板）仍未能驱动**（锁屏且无 root）⇒ 该设备上的横屏动效与帧时间未验证。
+- **浅色主题下的逐柱着色对比度未复核**。
+- **取消自动降级之后 S6 在炫技档下是否可用** —— 本版性能上最大的风险点，
+  唯一的判据是 release 包的帧时间数据（见 `docs/verification/v3.0.0/verification/`）。

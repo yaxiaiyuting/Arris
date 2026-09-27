@@ -86,19 +86,11 @@ object VisualizerTier {
         if (raw in RANGE) raw else if (fallback in RANGE) fallback else REFINED
 
     /**
-     * 帧时间实测触发的**有界**降级：返回要落到的档位，`null` = 不做任何动作。
-     *
-     * 三条边界（任务书铁律 4：失败处理必须有界）：
-     *  - 已经降过一次（`autoDowngraded == true`）⇒ `null`，**永不恢复、永不二次降级**；
-     *  - 已经在最低档 ⇒ `null`（没有可降的空间）；
-     *  - 否则**只降一级**（T2→T1、T1→T0），绝不跨级。
+     * v3.0.0：**`downgradedTier` 已删除**（连同 `VisualizerPrefs.applyAutoDowngrade`
+     * 与整个自动降级机制）。渲染只看用户选的档位 —— 理由见
+     * `ui/player/motion/MotionDegrade` 的 KDoc：判据不知道是谁把帧顶起来的，
+     * 而它却会改写用户的选择，于是「为什么这台机器少一层特效」在代码里找不到答案。
      */
-    fun downgradedTier(current: Int, autoDowngraded: Boolean): Int? {
-        val tier = sanitize(current, REFINED)
-        if (autoDowngraded) return null
-        if (tier <= SIMPLE) return null
-        return tier - 1
-    }
 }
 
 /**
@@ -143,6 +135,20 @@ class VisualizerEffects(
      * 有一个单点落点，而不是散落的 if。
      */
     val spectrumColoring: Boolean = false,
+    /**
+     * v3.0.0：**多频段能量对波形的调制档**（0 关 / 1 逐柱着色 / 2 逐柱着色 + 三频带能量条）。
+     *
+     * ## 它不是频谱（写在这里，防止下一个人误读）
+     *
+     * 柱子的横轴仍然是**时间**（左旧右新），`mix` 只决定这一根柱子偏「低沉色」还是
+     * 「明亮色」；能量条只显示三个频带各自的**当前能量**，没有频率轴、没有分帧、
+     * 没有窗函数。[spectrumColoring] 仍然恒为 `false`。
+     *
+     * 数据源是 `AudioFeatureExtractor` 的**两个一阶低通**（150 Hz / 2 kHz），
+     * 频带之间泄漏很大 —— 它足以支撑「画面上看得出来哪一带在动」，
+     * **不足以**支撑任何「这是频谱」的读法。
+     */
+    val waveBandMode: Int = MODE_WAVE_BAND_OFF,
 ) {
     /**
      * 互斥规则（**API 层二选一，不是优先级问题**）：同一笔绘制要么 `color=` 要么 `brush=`。
@@ -159,10 +165,25 @@ class VisualizerEffects(
     /** C 档是否有任何一项开着（用于决定要不要挂 `clipToBounds` 与 render layer）。 */
     val anyShowcase: Boolean get() = shockwave || particles || perspective
 
+    /** v3.0.0：多频段调制是否开着（逐柱着色）。 */
+    val waveBandOn: Boolean get() = waveBandMode != MODE_WAVE_BAND_OFF
+
+    /** v3.0.0：是否还要画三频带能量条。 */
+    val waveBandLanes: Boolean get() = waveBandMode == MODE_WAVE_BAND_LANES
+
     companion object {
         const val MODE_TIME_TINT = 0
         const val MODE_FLOW = 1
         const val MODE_SPECTRUM = 2
+
+        /** v3.0.0：多频段调制关闭。 */
+        const val MODE_WAVE_BAND_OFF = 0
+
+        /** v3.0.0：逐柱按「明亮度占比」着色（时间轴不变）。 */
+        const val MODE_WAVE_BAND_TINT = 1
+
+        /** v3.0.0：逐柱着色 **+** 三频带能量条（炫技档）。 */
+        const val MODE_WAVE_BAND_LANES = 2
 
         /**
          * 与档位无关的**基线效果集**（只有 A 档效果）。
@@ -197,6 +218,14 @@ class VisualizerEffects(
             perspective: Boolean,
             tapInteraction: Boolean,
             autoDowngraded: Boolean = false,
+            /**
+             * v3.0.0：多频段调制档（见 [VisualizerEffects.waveBandMode]）。
+             *
+             * 它**不是** C 档细分开关：任务书的档位表把「波形特别触发」放在**精致**档
+             * （`tier >= REFINED` 即可），所以门槛单独写，不走 `showcaseOn`。
+             * 默认 `OFF` ⇒ 老调用点（含 `BASELINE` 与 v2.8.0 的单测）行为一字不变。
+             */
+            waveBandMode: Int = MODE_WAVE_BAND_OFF,
         ): VisualizerEffects {
             val t = VisualizerTier.sanitize(tier, VisualizerTier.REFINED)
             val refined = t >= VisualizerTier.REFINED
@@ -216,6 +245,9 @@ class VisualizerEffects(
                 particles = showcaseOn && particles,
                 perspective = showcaseOn && perspective,
                 tapInteraction = showcaseOn && tapInteraction,
+                // 低于精致档一律关：简洁档的契约是「波形基础 + 背景呼吸」，
+                // 多频段调制是精致档及以上才有的那一层。
+                waveBandMode = if (refined) waveBandMode else MODE_WAVE_BAND_OFF,
             )
         }
     }

@@ -192,14 +192,29 @@ class TransparentWaveformSinkTest {
         )
     }
 
+    /** 测试用：可以抛异常的特征提取器（生产路径没有子类）。 */
+    private class ThrowingExtractor : AudioFeatureExtractor() {
+        override fun process(view: ByteBuffer, encoding: Int): Boolean =
+            throw ArithmeticException("模拟 PCM 分析内部炸了")
+    }
+
+    /** 测试用：数一数 process 被调用了几次（证伪「关掉开关 = 零开销」）。 */
+    private class CountingExtractor : AudioFeatureExtractor() {
+        var calls = 0
+        override fun process(view: ByteBuffer, encoding: Int): Boolean {
+            calls++
+            return super.process(view, encoding)
+        }
+    }
+
     /** ① 消费端抛异常 ⇒ 被吞掉，**绝不向上抛**，且计入 droppedBarCount。 */
     @Test
     fun `a throwing bar consumer never propagates out of handleBuffer`() {
         var calls = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            // v2.9.0：onBar 现在收两个参数（全带 RMS + 低频通道）。
-            onBar = { _, _ ->
+            // v3.0.0：onBar 收三个参数（全带 RMS + 低频通道 + 明亮度占比）。
+            onBar = { _, _, _ ->
                 calls++
                 throw IllegalStateException("模拟 push() 里将来加了会抛的代码")
             },
@@ -211,14 +226,32 @@ class TransparentWaveformSinkTest {
         assertEquals(5L, sink.droppedBarCount)
     }
 
+    /** ①b v3.0.0：特征回调抛异常同样被吞掉（它就是界面动效那条新链路）。 */
+    @Test
+    fun `a throwing feature consumer never propagates out of handleBuffer`() {
+        var featureCalls = 0
+        val sink = TransparentWaveformSink(
+            enabled = { true },
+            featuresEnabled = { true },
+            onFeatures = { _, _, _, _, _, _ ->
+                featureCalls++
+                throw IllegalStateException("模拟特征发布里将来加了会抛的代码")
+            },
+        )
+        sink.flush(44_100, 2, C.ENCODING_PCM_16BIT)
+        repeat(3) { sink.handleBuffer(pcm16(1000, -1000, 2000, -2000)) }
+        assertEquals(3, featureCalls)
+        assertEquals(3L, sink.droppedBarCount)
+    }
+
     /** ② PCM 分析自己抛异常 ⇒ 同样被吞掉，消费端不会被调用（不会补一个假的 0 柱）。 */
     @Test
     fun `a throwing rms is isolated and drops the bar`() {
         var consumed = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            onBar = { _, _ -> consumed++ },
-            analyze = { _, _ -> throw ArithmeticException("模拟 PCM 分析内部炸了") },
+            onBar = { _, _, _ -> consumed++ },
+            extractor = ThrowingExtractor(),
         )
         sink.flush(44_100, 6, C.ENCODING_PCM_16BIT)
         sink.handleBuffer(pcm16(1, 2, 3, 4, 5, 6))
@@ -229,42 +262,92 @@ class TransparentWaveformSinkTest {
     /** ③ 开关关掉 ⇒ **PCM 遍历一次都不跑**（探针 §5：「关掉开关 = 零开销」此前不成立）。 */
     @Test
     fun `disabling the visualizer skips the whole rms walk`() {
-        var rmsCalls = 0
+        val extractor = CountingExtractor()
         var consumed = 0
         val sink = TransparentWaveformSink(
             enabled = { false },
-            onBar = { _, _ -> consumed++ },
-            analyze = { _, _ ->
-                rmsCalls++
-                PcmRms.pack(0.5f, 0.5f)
-            },
+            featuresEnabled = { false },
+            onBar = { _, _, _ -> consumed++ },
+            extractor = extractor,
         )
         sink.flush(44_100, 2, C.ENCODING_PCM_16BIT)
         repeat(8) { sink.handleBuffer(pcm16(1000, -1000, 2000, -2000)) }
-        assertEquals("关掉开关后不得再遍历 PCM", 0, rmsCalls)
+        assertEquals("关掉开关后不得再遍历 PCM", 0, extractor.calls)
         assertEquals(0, consumed)
+    }
+
+    /**
+     * ③b v3.0.0：**「关掉可视化」不再掐掉界面动效的音频特征**。
+     *
+     * 这是 v2.9.0 的一个真实缺陷：界面动效的节拍数据与波形共用同一个开关，
+     * 于是用户关掉「音频可视化」之后，背景呼吸与节拍脉冲会静默失效，而设置页里
+     * 那个开关一个字都没提这件事。现在两个需求分开：只要界面动效需要特征，
+     * 音频线程就照算。
+     */
+    @Test
+    fun `motion features keep running when only the visualizer is off`() {
+        val extractor = CountingExtractor()
+        var bars = 0
+        var features = 0
+        val sink = TransparentWaveformSink(
+            enabled = { false },
+            featuresEnabled = { true },
+            onBar = { _, _, _ -> bars++ },
+            onFeatures = { _, _, _, _, _, _ -> features++ },
+            extractor = extractor,
+        )
+        sink.flush(44_100, 2, C.ENCODING_PCM_16BIT)
+        repeat(4) { sink.handleBuffer(pcm16(1000, -1000, 2000, -2000)) }
+        assertEquals("特征必须照算", 4, extractor.calls)
+        assertEquals("但一根柱都不许推（波形是关的）", 0, bars)
+        assertEquals("特征发布 4 次", 4, features)
     }
 
     /** ④ 未知编码 / 声道数 0 ⇒ 连开关都不看（位置最靠前的漏斗）。 */
     @Test
     fun `unknown encoding and zero channels short circuit before the gate`() {
         var gateReads = 0
-        var rmsCalls = 0
+        val extractor = CountingExtractor()
         val sink = TransparentWaveformSink(
             enabled = {
                 gateReads++
                 true
             },
-            analyze = { _, _ ->
-                rmsCalls++
-                PcmRms.pack(0f, 0f)
-            },
+            extractor = extractor,
         )
         sink.flush(44_100, 6, C.ENCODING_PCM_24BIT)
         sink.handleBuffer(pcm16(1, 2, 3))
         sink.flush(44_100, 0, C.ENCODING_PCM_16BIT)
         sink.handleBuffer(pcm16(1, 2, 3))
         assertEquals(0, gateReads)
-        assertEquals(0, rmsCalls)
+        assertEquals(0, extractor.calls)
+    }
+
+    /**
+     * ⑤ v3.0.0：**特征提取器不可用时降级到 RMS-only**（而不是没有数据、更不是崩）。
+     *
+     * 采样率未知（`flush(0, …)`）是这条降级路径在真机上唯一可能的触发条件：
+     * 提取器 `available = false` ⇒ 调用方回落到 `PcmRms` 的纯 RMS + 低频口径，
+     * 并明确告知消费方 `available = false`（而不是把「测不到中高频」伪装成「中高频为零」）。
+     */
+    @Test
+    fun `unknown sample rate falls back to rms only`() {
+        var bars = 0
+        var lastAvailable: Boolean? = null
+        var lastMid = -1.0
+        val sink = TransparentWaveformSink(
+            enabled = { true },
+            featuresEnabled = { true },
+            onBar = { _, _, _ -> bars++ },
+            onFeatures = { _, _, mid, _, _, available ->
+                lastMid = mid
+                lastAvailable = available
+            },
+        )
+        sink.flush(0, 2, C.ENCODING_PCM_16BIT)
+        sink.handleBuffer(pcm16(1000, -1000, 2000, -2000))
+        assertEquals("降级路径仍然要出一根柱", 1, bars)
+        assertEquals("必须明确标记为不可用", false, lastAvailable)
+        assertEquals("降级时中频恒为 0（如实表达「测不到」）", 0.0, lastMid, 0.0)
     }
 }

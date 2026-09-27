@@ -23,31 +23,36 @@ import com.takahashirinta.ncrust.ui.player.waveform.VisualizerTier
  * |---|---|---|
  * | 挂载点 | 只有横屏/平板（`PlayerLayout.visualizerSlot`） | 竖屏也有（背景层） |
  * | 失败面 | 音频线程链路上的绘制 | 只是背景少一层 |
- * | 降级顺序 | **后**砍 | **先**砍 |
  *
  * 所以对外仍然只有一个 `动效强度` 档位（[MotionIntensity]），对内是**两张能力位表**：
  * 波形那份继续由 [VisualizerEffects] 拥有（v2.8.0 的渲染代码一行不改），
  * 界面动效那份是 [MotionEffects] 自己的字段。两张表的**唯一交汇点**是本文件：
  * 同一个 `tier` 进去，两边各取所需。
  *
- * ## 三层（A / B / C）与「界面动效总开关」
+ * ## v3.0.0：**渲染只看用户选的档位 —— 自动降级机制已整个删除**
  *
- * | 档 | 界面动效 | 波形（v2.8.0 既有） |
- * |---|---|---|
- * | 简洁 | A 全开 | 圆角柱 + 峰值保持 + 缓动 + 镜像 |
- * | 精致（默认） | A + B | + 渐变流动 / 光点 / 呼吸 |
- * | 炫技 | A + B + C | + 冲击波 / 粒子 / 3D / 点按 |
+ * v2.8.0 有「帧时间超标 ⇒ 自动降一档」，v2.9.0 把它扩成四级阶梯。真机反馈与工程判断
+ * 都指向同一个结论：**这套机制制造的混乱多于它省下的帧**。
  *
- * [MotionEffects.uiMotionEnabled] 是**总开关**（设置项 `ui_motion_enabled`，默认开）：
- * 关掉 = 三层全关、背景回纯色、零帧时钟，性能回到 v2.8.0 之前。**A 档默认开**
- * 正是通过「总开关默认 true + 档位默认精致」两条一起表达的（任务书铁律 22）。
+ *  - 判据（60 帧窗口内 40% 超标）**不知道是谁把帧顶起来的**（归因要 Perfetto），
+ *    而在 S6 上实测「完全关掉波形」的对照轮同样 95% 超标 ⇒ 它砍掉的动效并不是肇事者；
+ *  - 它会**改写 `motion_tier`**，于是设置页显示的档位与用户点的那一档不再是一回事
+ *    （v2.9.0 补记里用户报的「点了炫技，进一次横屏之后冲击波/粒子在竖屏和横屏里都没了」
+ *    就是这条）；
+ *  - 最要命的是**渲染逻辑不再可推导**：同一份配置在不同进程、不同会话里画出不同的画面，
+ *    「为什么这台机器少一层」在代码里找不到答案，只能去翻降级日志。
  *
- * ## 旧「炫技细分开关」去哪了
+ * 所以 v3.0.0 把整条链路删掉：**没有 `degradeLevel` 字段、没有阶梯、没有帧时间触发**。
+ * [MotionEffects.of] 的输入只剩三样 —— 档位、界面动效总开关、每个动效的独立开关。
+ * 性能兜底改由**用户可见、可预期**的手段承担：
  *
- * v2.8.0 的 `visualizer_showcase` / `visualizer_shockwave` / `visualizer_particles` /
- * `visualizer_perspective` / `visualizer_drag` 五个键在 v2.9.0 **不再参与渲染决策**：
- * 炫技档就是「全开」，细分交给档位本身。见 [MotionPrefs.migrate] 的搬运规则
- * （`tier==2 且 showcase==false` 的老盘会被搬到精致档 —— 那正是它在 v2.8.0 下**实际渲染**的样子）。
+ *  1. 低端设备的**初始档位**由静态判据解析（[MotionIntensity.defaultFor]，只在
+ *     「用户没选过」时生效，一旦用户选了就以用户为准，永不覆盖）；
+ *  2. 每个动效都有自己的开关（[MotionSwitches]），用户想省电可以逐项关；
+ *  3. 每个动效**自身**都有硬上界（池容量、寿命、冷却、每帧上限），不会因为机器慢就失控。
+ *
+ * `motion_degrade_level` / `motion_degrade_log` 两个键**保留不删**（回滚安装不丢数据），
+ * 但它们**不再参与任何渲染决策** —— 见 [MotionDegrade]。
  */
 object MotionIntensity {
 
@@ -69,189 +74,143 @@ object MotionIntensity {
     /** 越界值归一化（回落调用方给的设备默认档，再兜底精致档）。 */
     fun sanitize(raw: Int, fallback: Int): Int = VisualizerTier.sanitize(raw, fallback)
 
-    /** 设备静态判据 → 起始档。三条判据与 v2.8.0 完全同源（低内存 / 3.5GiB 级 / API<26）。 */
+    /**
+     * 设备静态判据 → **初始**档。三条判据与 v2.8.0 完全同源（低内存 / 3.5GiB 级 / API<26）。
+     *
+     * ⚠️ 它只在**用户从未选过档位**时生效（`MotionPrefs.hasExplicitTier` 为 false）。
+     * 它**不是**降级：不会在运行期改写用户的选择，也不是「这台机器只能跑这一档」的断言。
+     */
     fun defaultFor(isLowRamDevice: Boolean, totalMemBytes: Long, sdkInt: Int): Int =
         VisualizerTier.defaultTier(isLowRamDevice, totalMemBytes, sdkInt)
 }
 
 /**
- * v2.9.0：**自动降级的阶梯**（纯逻辑，有界）。
+ * v3.0.0：**v2.9.0 自动降级的遗留常量**（只用于读旧盘与设置注册表的默认值）。
  *
- * 任务书铁律 23：**优先砍界面动效，再砍波形档位**。这条纪律在这里被写成一张
- * 显式的、可单测的阶梯表，而不是散落在三处的 `if`：
+ * ## 为什么整个机制删掉了（写给下一个想把它加回来的人）
  *
- * | 级别 | 名字 | 动作 | 用户感知 |
- * |---|---|---|---|
- * | 0 | [NONE] | 什么都不做 | — |
- * | 1 | [UI_ADVANCED_OFF] | 关掉 **B 档**界面动效（全屏波形 / 歌词律动 / 节拍脉冲 / 视差） | 背景模糊与呼吸还在，画面安静一点 |
- * | 2 | [UI_ALL_OFF] | 再关掉 **A 档**界面动效（背景回纯色） | 播放页与 v2.8.0 完全一致 |
- * | 3 | [WAVEFORM_DOWN] | 波形档位**降一级**（写回 `motion_tier`） | 波形少一层特效 |
+ * 自动降级的本意是「替用户省一点」。真机上的实际效果是**渲染结果不可推导**：
  *
- * ## 三条边界（铁律 4：失败处理必须有界）
+ *  - 判据不知道是谁把帧顶起来的（归因要 Perfetto）；S6 上「完全关掉波形」的对照轮
+ *    同样 95% 超标 ⇒ 砍掉的动效往往不是肇事者；
+ *  - 它会**改写 `motion_tier`**，于是设置页显示的档位与用户点的那一档不再一致；
+ *  - 同一个进程里还会因为组件重新注册而连跳数级（v2.9.0 补记第 2 条）。
  *
- * 1. **每进程最多推进一级**：调用方（`MotionPrefs.applyAutoDowngrade`）在拿到新级别后
- *    就落盘；同一个进程内 `FrameBudgetPolicy` 只判定一次，所以不会连跳三级；
- * 2. **总共最多三级**：[MAX] 之后 [next] 恒返回 `null` —— 永不自动恢复、永不无限降级；
- * 3. **用户手动改档位时重置**：`MotionPrefs.setTier` 把级别写回 [NONE]，
- *    用户「我要炫技」的显式意图永远优先于自动降级。
+ * 于是「为什么这台机器少一层特效」在代码里找不到答案，只能去翻降级日志 ——
+ * 那是把**不可见的状态**引入了渲染路径。v3.0.0 的取舍是：
+ * **宁可让用户在低端机上自己把档位调低，也不要让画面在用户不知情时变化。**
  *
- * ## 为什么每进程只降一级而不是一次降到底
+ * ## 这两个键现在的语义
  *
- * 与 v2.8.0 的 `VisualizerTier.downgradedTier` 同源：降级是**一次性单向阀**，
- * 判据（60 帧窗口内 40% 超标）本身不知道是谁把帧顶起来的（归因要 Perfetto）。
- * 误判的代价必须小 —— 「用户少看一层特效」而不是「用户被一次扒光所有动效」。
- * 三级阶梯让「判定错了」这件事最多只损失一档，且下一级只在**再次**触发时才发生。
+ * | 键 | 现在的语义 |
+ * |---|---|
+ * | `motion_degrade_level` | **历史值，不参与任何渲染决策**。保留只为「回滚安装不丢数据」。 |
+ * | `motion_degrade_log` | 同上；v3.0.0 的迁移会往里面追加一条「机制已移除」的说明。 |
+ *
+ * 级别数值沿用 v2.9.0 的定义（1 = 砍 B 档界面动效 / 2 = 砍 A 档 / 3 = 波形降级），
+ * 这样一条老日志在新版本里读起来仍然是原意。
  */
 object MotionDegrade {
 
+    /** 旧的「未降级」。 */
     const val NONE: Int = 0
+
+    /** 旧的「砍 B 档界面动效」。 */
     const val UI_ADVANCED_OFF: Int = 1
+
+    /** 旧的「再砍 A 档界面动效」。 */
     const val UI_ALL_OFF: Int = 2
+
+    /** 旧的「波形档位降一级」。 */
     const val WAVEFORM_DOWN: Int = 3
 
-    /** 阶梯上界。到顶之后 [next] 恒为 null。 */
+    /** 旧阶梯的上界。**只是历史常量**，没有任何推进逻辑了。 */
     const val MAX: Int = WAVEFORM_DOWN
 
     val RANGE: IntRange = NONE..MAX
 
-    /** 越界值归一化：非法一律回落 [NONE]（不写回盘，同 `offline_cache_mb` 的口径）。 */
+    /** 越界值归一化（读旧盘用；非法一律回落 [NONE]）。 */
     fun sanitize(raw: Int): Int = if (raw in RANGE) raw else NONE
 
-    /**
-     * 推进一级。`null` = 已经到顶（**不动作**）。
-     *
-     * 刻意不接受「已经降过」的布尔标记：那正是 v2.8.0 用 `visualizer_auto_downgraded`
-     * 表达的东西，而本版的级别本身就是一个 0..3 的水位，水位到顶即终止。
-     */
-    fun next(current: Int): Int? {
-        val level = sanitize(current)
-        return if (level >= MAX) null else level + 1
-    }
-
-    /** 该级别下界面动效的 B 档是否还能开（≤[UI_ADVANCED_OFF] 时不能）。 */
-    fun allowsAdvancedUi(level: Int): Boolean = sanitize(level) < UI_ADVANCED_OFF
-
-    /** 该级别下界面动效的 A 档是否还能开（≤[UI_ALL_OFF] 时不能）。 */
-    fun allowsBasicUi(level: Int): Boolean = sanitize(level) < UI_ALL_OFF
-
-    /** 该级别是否要求把波形档位降一级。 */
-    fun cutsWaveformTier(level: Int): Boolean = sanitize(level) >= WAVEFORM_DOWN
-
-    /**
-     * 「严重超标」的门槛（窗口内超标帧数的比例）。
-     *
-     * 0.7 的依据：普通门槛是 0.4（`FrameBudgetPolicy.OVER_BUDGET_FRAMES / WINDOW_FRAMES`），
-     * 而 PCL110 实测正好落在 0.40（24/60）—— 刚好越线的设备不该被剥夺唯一看得见的动效。
-     * 0.7 对应「100 帧里 70 帧超标」，那是"一直在掉"，不是"偶尔抖"。
-     */
-    const val SEVERE_OVER_BUDGET_RATIO = 0.7f
-
-    /** 由「窗口内超标帧数 / 窗口长度」判定是否严重。 */
-    fun isSevere(overBudgetFrames: Int, windowFrames: Int): Boolean {
-        if (windowFrames <= 0) return false
-        return overBudgetFrames.toFloat() / windowFrames >= SEVERE_OVER_BUDGET_RATIO
-    }
-
-    /**
-     * v2.9.0（真机反馈后补）：**静态判据已经把某台设备放到最低档时，阶梯止步于 [UI_ADVANCED_OFF]。**
-     *
-     * ## 为什么（真机实测暴露的退化）
-     *
-     * S6（Android 7.0 / API 24）被 [MotionIntensity.defaultFor] 判成低端 ⇒ 起始档 = 简洁。
-     * 简洁档下 B/C 档界面动效**本来就是关的** ⇒ 第 1 级降级是一个**空操作**，
-     * 而第 2 级会把 A 档（背景模糊 + 呼吸 + 封面阴影）也砍掉 —— 那是这台设备**唯一**的动效。
-     *
-     * 更要命的是「砍了也白砍」：v2.8.0 自己的 KDoc 就写着判据**不知道是谁把帧顶起来的**
-     * （归因要 Perfetto），而 S6 在**完全关掉波形**的对照轮里同样 95% 超标 —— 说明它本来就慢，
-     * 砍掉每帧只有「一次图层属性更新」的背景呼吸并不会让它变快。用户看到的只是
-     * 「播放页变回了 v2.8.0 的老样子」，而且**永不恢复**。这是纯粹的损失。
-     *
-     * 所以：静态判据已判定为最低档的设备，阶梯到 [UI_ADVANCED_OFF] 为止（只砍 B/C，
-     * 且只在那台设备确实有 B/C 可砍时才会推进 —— 见 [nextEffective]）。
-     * 非低端设备（有 B/C 可砍、也砍得起）仍然走完整的三级阶梯。
-     *
-     * @param atFloorTier 调用方用**同一个**静态判据算出来的「起始档是否已是最低档」
-     *   （`MotionIntensity.defaultFor(...) == SIMPLE`），不是用户当前选的档位 ——
-     *   用户显式选炫技的设备应当享有完整阶梯。
-     * @param severe v2.9.0（真机反馈后补）：判据本身是否**严重**超标（见 [SEVERE_OVER_BUDGET_RATIO]）。
-     *
-     * ## 为什么还要一个「严重」闸门（两台真机各踩了一次）
-     *
-     * S6 与 PCL110 实测都在**一次 30 秒窗口**里把水位推到了 2（砍掉 A 档 = 播放页变回 v2.8.0
-     * 的老样子），而两台的判据分别是 `54/60` 与 **`24/60`（正好卡在 40% 门槛上）**。
-     * 24/60 说明这台 144Hz 旗舰只是"偶尔抖"，而 v2.8.0 自己的 KDoc 就写着判据
-     * **不知道是谁把帧顶起来的**（归因要 Perfetto）—— 拿一个刚好越线的比例去永久砍掉
-     * 用户唯一能看到的界面动效，收益与代价完全不成比例。
-     *
-     * 所以：**只有严重超标（≥ [SEVERE_OVER_BUDGET_RATIO]）才允许把阶梯推过第 1 级。**
-     * 轻微超标只砍 B/C（那部分本来就"可有可无"），A 档（背景模糊 + 呼吸）保留 ——
-     * 它是普通用户唯一看得见的那一层。
-     */
-    fun maxLevelFor(atFloorTier: Boolean, severe: Boolean, userChoseTier: Boolean = false): Int = when {
-        // v2.9.0（真机反馈第三轮）：**用户显式选过档位 ⇒ 阶梯止步于第 1 级。**
-        //
-        // 现场：用户把档位调到「炫技」，进了一次横屏之后冲击波 / 粒子 / 3D **在竖屏和横屏
-        // 里都消失了** —— 那不是画不出来，是阶梯走到了第 3 级、把 `motion_tier` 从 2 改成了 1
-        // （而「写回档位」正是 v2.8.0 留下的语义）。用户没有任何办法知道这件事发生过。
-        //
-        // 判据本身（v2.8.0 自己的 KDoc）**不知道是谁把帧顶起来的**，归因要 Perfetto。
-        // 拿这样一个信号去**永久覆盖用户刚刚做出的显式选择**，代价与收益完全不成比例：
-        // 用户点「炫技」就是在说"我要看效果"，把效果收走不是省电，是违约。
-        //
-        // 所以：显式选过档位 ⇒ 只砍 B/C 这些"额外"的界面动效，**绝不动波形档位、
-        // 也绝不砍 A 档**；没选过（用设备判据解析出来的默认档）⇒ 才允许走完整阶梯 ——
-        // 那时的档位是**应用自己**定的，应用当然可以自己调整。
-        userChoseTier -> UI_ADVANCED_OFF
-        atFloorTier -> UI_ADVANCED_OFF
-        !severe -> UI_ADVANCED_OFF
-        else -> MAX
-    }
-
-    /**
-     * v2.9.0：**推进到下一个「确实有东西可砍」的级别**；没有则返回 `null`。
-     *
-     * 与裸的 [next] 的区别：`next` 只按水位递增，会在「B 档本来就是关的」这种配置上空推一级，
-     * 让水位与实际观感脱钩（水位说降了、画面没变；下一次再降就直接砍到 A 档）。
-     * 这里逐级试到第一个**真的会改变画面**的级别为止 —— 水位因此始终等价于「实际生效的削减」。
-     *
-     * @param advancedUiOn 当前配置下 B 档是否有任何一项开着。
-     * @param basicUiOn 当前配置下 A 档是否有任何一项开着。
-     * @param waveformAboveFloor 波形档位是否高于最低档（否则第 3 级也是空操作）。
-     * @param maxLevel 上界（见 [maxLevelFor]）。
-     */
-    fun nextEffective(
-        current: Int,
-        advancedUiOn: Boolean,
-        basicUiOn: Boolean,
-        waveformAboveFloor: Boolean,
-        maxLevel: Int = MAX,
-    ): Int? {
-        val cap = maxLevel.coerceIn(NONE, MAX)
-        var level = sanitize(current)
-        while (level < cap) {
-            level++
-            val effective = when (level) {
-                UI_ADVANCED_OFF -> advancedUiOn
-                UI_ALL_OFF -> basicUiOn
-                WAVEFORM_DOWN -> waveformAboveFloor
-                else -> false
-            }
-            if (effective) return level
-        }
-        return null
+    /** 一条降级记录的历史格式（`MotionPrefs` 迁移时往日志里补说明用）。 */
+    fun describeLegacyLevel(level: Int): String = when (sanitize(level)) {
+        NONE -> "none"
+        UI_ADVANCED_OFF -> "ui-advanced-off"
+        UI_ALL_OFF -> "ui-all-off"
+        else -> "waveform-down"
     }
 }
 
 /**
- * v2.9.0：**一档到底开哪些动效**（不可变值对象，只在设置/降级变化时构造一次）。
+ * v3.0.0：**每个新动效的独立开关**（任务书铁律 26）。
+ *
+ * ## 为什么是一个值对象而不是五个布尔参数
+ *
+ * `MotionEffects.of` 的参数已经不少，再加 5 个会把「一档开哪些效果」变成一张
+ * 十参数的调用（铁律 14：参数数量监控）。这五个开关的**生命周期完全一致**
+ * —— 都只在设置变化时读一次盘、都只在 `MotionEffects.of` 里被消费 ——
+ * 所以它们天然是一个值对象。
+ *
+ * ## 默认全 `true`：**默认值不得改**这条纪律在这里的表达
+ *
+ * 这五个键在 v2.9.0 不存在，所以「缺 key」必须解析成「与 v2.9.0 观感一致」的那一侧。
+ * 而「一致」是靠**档位**保证的，不是靠开关：开关只做 AND，档位（[MotionIntensity]）
+ * 才是「这一档有没有这类动效」的判据。于是默认全开 = 升级后观感只随档位表变化，
+ * 不会因为「新键没写」而少画东西。
+ *
+ * @param shockwave `motion_shockwave`：瞬态触发的冲击波。
+ * @param halo `motion_halo`：瞬态触发的光晕。
+ * @param particles `motion_particles`：中高频能量驱动的粒子。
+ * @param waveBands `motion_wave_bands`：多频段能量对波形的调制（逐柱着色 / 能量条）。
+ * @param breathing `motion_breathing`：背景随 RMS 的呼吸。
+ */
+class MotionSwitches(
+    val shockwave: Boolean = true,
+    val halo: Boolean = true,
+    val particles: Boolean = true,
+    val waveBands: Boolean = true,
+    val breathing: Boolean = true,
+) {
+    /** 有没有任何一项「音频驱动的新动效」开着。 */
+    val anyBinding: Boolean get() = shockwave || halo || particles || waveBands || breathing
+
+    companion object {
+        /** 全开（缺 key / 全新安装时的解析结果）。 */
+        val ALL_ON = MotionSwitches()
+    }
+}
+
+/**
+ * v2.9.0：**一档到底开哪些动效**（不可变值对象，只在设置变化时构造一次）。
  *
  * 帧路径里**只读**这个对象，不读任何 Compose state —— 与 v2.8.0 的 [VisualizerEffects]
  * 同一套写法。每个字段后面的注释写清「落在哪、成本量级、为什么这么定」。
  *
- * @param tier 用户选的动效强度（[MotionIntensity] 取值之一），**未含自动降级**。
- * @param degradeLevel [MotionDegrade] 的当前水位。
+ * ## v3.0.0 的档位表（任务书 §4.4）
+ *
+ * | 档 | 界面动效 |
+ * |---|---|
+ * | 简洁 | 波形基础 + 背景模糊 + **背景呼吸** |
+ * | 精致（默认） | 简洁 + **冲击波 / 光晕 / 粒子（低密度）/ 多频段波形调制** + B 档（全屏波形 / 歌词律动 / 节拍脉冲 / 视差） |
+ * | 炫技 | 精致 + **粒子高密度 / 光晕多圈** + C 档（封面 3D） |
+ *
+ * ## 这里**没有** `degradeLevel`
+ *
+ * 不是忘了加，是 v3.0.0 的**结构性保证**：自动降级已整个删除，档位是渲染的**唯一**输入
+ * （连同总开关与逐项开关）。把水位字段删掉而不是「留着但不读」，是为了让
+ * 「渲染偷偷依赖了某个后台状态」这件事在编译期就不可能发生 —— 与 v2.9.0 把
+ * `VisualizerPrefs.effects` 从 `MutableState` 收窄成 `State` 是同一手法。
+ *
+ * ⚠️ 与任务书表格的**一处刻意偏差**（写在这里，不藏在提交信息里）：任务书的「简洁」
+ * 一栏只写了「波形基础 + 背景呼吸」，但本实现**保留背景模糊**。理由是真机事实而不是
+ * 审美：S6 之类的低端设备静态判据就是简洁档，而模糊背景是那台设备上**唯一**看得见的
+ * 美化（v2.9.0 补记第 2 条：阶梯曾把 A 档砍掉，用户看到的就是「播放页变回 v2.8.0 的老样子」）。
+ * 把模糊从简洁档拿掉等于让低端设备的播放页退化成纯色。
+ *
+ * @param tier 用户选的动效强度（[MotionIntensity] 取值之一）。
  * @param uiMotionEnabled 「界面动效」总开关（设置项 `ui_motion_enabled`，默认 true）。
  * @param waveform 波形那一半的能力位（v2.8.0 的渲染代码直接消费它）。
+ * @param switches 五个独立开关（见 [MotionSwitches]）。
  * @param backgroundBlur A：封面背景模糊（降采样 + 预模糊 + 缓存，**每首歌只算一次**）。
  * @param backgroundBreathing A：背景随 RMS 的明暗/缩放呼吸（读的是每帧一次的包络，不读盘）。
  * @param coverElevation A：封面浮起阴影 + 随节拍微浮动（幅度 ±2dp）。
@@ -260,15 +219,18 @@ object MotionDegrade {
  * @param lyricPulse B：当前歌词行随节拍轻微缩放（幅度小，不干扰阅读）。
  * @param beatPulse B：播放键 / 进度条随 RMS 脉冲（幅度小）。
  * @param parallax B：手势拖动时背景与前景不同速度。
- * @param particles C：背景粒子（定长池、零分配、数量有上限）。
- * @param haloBloom C：强节拍时从中心扩散光环（RMS 相对基线突变 + 冷却）。
+ * @param shockwave v3：**瞬态触发**的冲击波（径向渐晕从画面中心扩散）。
+ * @param haloBloom v3：**瞬态触发**的光晕圈（径向渐变描边 + 强度随击打力度）。
+ * @param particles v3：**中高频能量驱动**的粒子（生成速率与能量正相关，定长池）。
+ * @param particleDensity 粒子密度档（[DENSITY_LOW] 精致 / [DENSITY_HIGH] 炫技）。
+ * @param haloRings 每次瞬态扩散几圈光晕（1 = 精致，2 = 炫技「多圈」）。
  * @param cover3d C：封面随节拍轻微 3D 旋转（竖屏为主）。
  */
 class MotionEffects(
     val tier: Int,
-    val degradeLevel: Int,
     val uiMotionEnabled: Boolean,
     val waveform: VisualizerEffects,
+    val switches: MotionSwitches,
     val backgroundBlur: Boolean,
     val backgroundBreathing: Boolean,
     val coverElevation: Boolean,
@@ -277,8 +239,11 @@ class MotionEffects(
     val lyricPulse: Boolean,
     val beatPulse: Boolean,
     val parallax: Boolean,
-    val particles: Boolean,
+    val shockwave: Boolean,
     val haloBloom: Boolean,
+    val particles: Boolean,
+    val particleDensity: Int,
+    val haloRings: Int,
     val cover3d: Boolean,
 ) {
     /** A 档是否有任意一项开着。 */
@@ -289,6 +254,11 @@ class MotionEffects(
     val anyAdvanced: Boolean
         get() = fullScreenWaveform || lyricPulse || beatPulse || parallax
 
+    /** v3.0.0：**音频驱动的新动效**是否有任意一项开着。 */
+    val anyAudioBinding: Boolean
+        get() = shockwave || haloBloom || particles || backgroundBreathing ||
+            waveform.waveBandOn
+
     /** C 档是否有任意一项开着。 */
     val anyShowcase: Boolean get() = particles || haloBloom || cover3d
 
@@ -298,74 +268,115 @@ class MotionEffects(
     /** 是否需要每帧推进一步（只有「随帧变化」的效果才算，静态的阴影/转场不算）。 */
     val needsFrameClock: Boolean
         get() = backgroundBreathing || fullScreenWaveform || lyricPulse || beatPulse ||
-            particles || haloBloom || cover3d
+            shockwave || haloBloom || particles || cover3d
+
+    /**
+     * v3.0.0：这一份配置是否**需要音频特征**（决定音频线程要不要跑特征提取）。
+     *
+     * 它与「要不要画波形」（`WaveformStore.enabled`）是**两件事** —— v2.9.0 把它们
+     * 混成了一个开关，于是「关掉音频可视化」会静默掐掉界面动效的节拍数据。
+     *
+     * 呼吸也要特征：它的幅度来自全带 RMS 的包络，而这个包络的输入就是音频特征
+     * （特征链路不可用时回落 `WaveformStore.newestBar()`，见 `MotionEnvelope`）。
+     */
+    val needsAudioFeatures: Boolean
+        get() = backgroundBreathing || beatPulse || lyricPulse ||
+            shockwave || haloBloom || particles || waveform.waveBandOn
 
     /** 背景层是否需要挂载（模糊背景是背景层的唯一入口；呼吸/粒子/光环都画在它上面）。 */
     val backgroundLayerEnabled: Boolean
-        get() = backgroundBlur || backgroundBreathing || particles || haloBloom || fullScreenWaveform
+        get() = backgroundBlur || backgroundBreathing || particles || haloBloom ||
+            shockwave || fullScreenWaveform
 
-    /** 该配置下**实际渲染**的波形能力位（已含降级后的档位）。 */
+    /** 该配置下**实际渲染**的波形能力位。 */
     val effectiveWaveformTier: Int get() = waveform.tier
 
     companion object {
 
+        /** 粒子低密度档（精致）。 */
+        const val DENSITY_LOW = 0
+
+        /** 粒子高密度档（炫技）。 */
+        const val DENSITY_HIGH = 1
+
         /**
-         * **全关**（总开关关掉、或降级到 [MotionDegrade.UI_ALL_OFF] 及以上时的界面动效部分）。
+         * **能力位映射的唯一落点**（v2.8.0 起就是这条纪律：档位 → 能力位是一次纯函数，
+         * 单测可以逐格断言「这一档到底开了哪些效果」，不需要设备、不需要截图）。
          *
-         * 波形那一半**不受影响** —— 这正是「总开关只管界面动效」这条语义的机械表达。
+         * 四层判据，顺序不能反：**总开关 → 用户选的档位 → 逐项开关**。
+         * （v2.9.0 在这中间还有一层「降级水位」，v3.0.0 已删除 —— 见 [MotionDegrade]。）
+         *
+         * @param waveformShowcaseEnabled 只留给单测做 A/B（证明渲染结果确实由档位驱动，
+         *   而不是由遗留的 `visualizer_showcase` 等键驱动）。
          */
         fun of(
             tier: Int,
             uiMotionEnabled: Boolean,
-            degradeLevel: Int,
             waveformShowcaseEnabled: Boolean = true,
+            switches: MotionSwitches = MotionSwitches.ALL_ON,
         ): MotionEffects {
             val t = MotionIntensity.sanitize(tier, MotionIntensity.REFINED)
-            val level = MotionDegrade.sanitize(degradeLevel)
 
-            // 自动降级到第 3 级 ⇒ 波形档位降一级（写回 `motion_tier` 的是降级后的值，
-            // 这里再算一次是为了「盘上的值被别人改了」的防御；两级同时生效时取更低的那个）。
-            val waveformTier = if (MotionDegrade.cutsWaveformTier(level)) {
-                (t - 1).coerceAtLeast(MotionIntensity.SIMPLE)
-            } else {
-                t
-            }
-
-            // 界面动效：总开关 → 降级水位 → 档位，三层判据，顺序不能反。
             val uiOn = uiMotionEnabled
-            val basic = uiOn && MotionDegrade.allowsBasicUi(level)
-            val advanced = basic && MotionDegrade.allowsAdvancedUi(level) &&
-                t >= MotionIntensity.REFINED
-            val showcase = advanced && t >= MotionIntensity.SHOWCASE
+            val refinedPlus = uiOn && t >= MotionIntensity.REFINED
+            val showcase = refinedPlus && t >= MotionIntensity.SHOWCASE
 
             return MotionEffects(
                 tier = t,
-                degradeLevel = level,
                 uiMotionEnabled = uiMotionEnabled,
+                switches = switches,
                 // 波形：C 档细分开关在 v2.9.0 合并进档位（见文件头 KDoc），所以
-                // 「档位 == 炫技」即全部 C 档能力位打开。`waveformShowcaseEnabled` 只留给
-                // 单测做 A/B（证明渲染结果确实由档位驱动，而不是由遗留键驱动）。
+                // 「档位 == 炫技」即全部 C 档能力位打开。
                 waveform = VisualizerEffects.of(
-                    tier = waveformTier,
+                    tier = t,
                     showcase = waveformShowcaseEnabled,
                     shockwave = waveformShowcaseEnabled,
                     particles = waveformShowcaseEnabled,
                     perspective = waveformShowcaseEnabled,
                     tapInteraction = waveformShowcaseEnabled,
-                    autoDowngraded = level > MotionDegrade.NONE,
+                    // v3.0.0：多频段调制。条件是「精致档及以上」+「用户没关这个开关」；
+                    // 炫技档多画一条三频带能量条。
+                    waveBandMode = if (refinedPlus && switches.waveBands) {
+                        if (showcase) {
+                            VisualizerEffects.MODE_WAVE_BAND_LANES
+                        } else {
+                            VisualizerEffects.MODE_WAVE_BAND_TINT
+                        }
+                    } else {
+                        VisualizerEffects.MODE_WAVE_BAND_OFF
+                    },
                 ),
-                backgroundBlur = basic,
-                backgroundBreathing = basic,
-                coverElevation = basic,
-                coverTransition = basic,
-                fullScreenWaveform = advanced,
-                lyricPulse = advanced,
-                beatPulse = advanced,
-                parallax = advanced,
-                particles = showcase,
-                haloBloom = showcase,
+                // A 档：简洁档起就有（背景模糊 + 呼吸，见类 KDoc 里那处刻意偏差）。
+                backgroundBlur = uiOn,
+                backgroundBreathing = uiOn && switches.breathing,
+                coverElevation = uiOn,
+                coverTransition = uiOn,
+                // B 档：精致档起。
+                fullScreenWaveform = refinedPlus,
+                lyricPulse = refinedPlus,
+                beatPulse = refinedPlus,
+                parallax = refinedPlus,
+                // v3.0.0 的音频驱动动效：精致档就有（低密度 / 单圈），炫技档加密度与圈数。
+                shockwave = refinedPlus && switches.shockwave,
+                haloBloom = refinedPlus && switches.halo,
+                particles = refinedPlus && switches.particles,
+                particleDensity = if (showcase) DENSITY_HIGH else DENSITY_LOW,
+                haloRings = if (showcase) 2 else 1,
+                // C 档：炫技专属。
                 cover3d = showcase,
             )
         }
+
+        /**
+         * **全关**（总开关关掉时的界面动效部分）。
+         *
+         * 波形那一半**不受影响** —— 这正是「总开关只管界面动效」这条语义的机械表达。
+         */
+        fun off(waveformShowcaseEnabled: Boolean = true): MotionEffects =
+            of(
+                tier = MotionIntensity.SIMPLE,
+                uiMotionEnabled = false,
+                waveformShowcaseEnabled = waveformShowcaseEnabled,
+            )
     }
 }

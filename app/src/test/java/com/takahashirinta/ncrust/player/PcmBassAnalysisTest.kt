@@ -45,13 +45,17 @@ class PcmBassAnalysisTest {
         return buf
     }
 
+
+    /** v3.0.0：状态形状从 `DoubleArray(1)` 改成 `Array<DoubleArray>`（每声道一份）。 */
+    private fun monoState() = Array(PcmRms.MAX_CHANNELS) { DoubleArray(2) }
+
     @Test
     fun `低通只让低频通过`() {
         val sampleRate = 44_100
-        val state = DoubleArray(1)
-        val bass60 = PcmRms.analyze(sine(60.0, sampleRate, 8192), C.ENCODING_PCM_16BIT, sampleRate, state)
-        state[0] = 0.0
-        val bass6k = PcmRms.analyze(sine(6000.0, sampleRate, 8192), C.ENCODING_PCM_16BIT, sampleRate, state)
+        val state = monoState()
+        val bass60 = PcmRms.analyze(sine(60.0, sampleRate, 8192), C.ENCODING_PCM_16BIT, sampleRate, 1, state)
+        state[0][0] = 0.0
+        val bass6k = PcmRms.analyze(sine(6000.0, sampleRate, 8192), C.ENCODING_PCM_16BIT, sampleRate, 1, state)
 
         val low = PcmRms.bassOf(bass60)
         val high = PcmRms.bassOf(bass6k)
@@ -69,7 +73,7 @@ class PcmBassAnalysisTest {
         val sampleRate = 44_100
         val buffer = sine(440.0, sampleRate, 4096)
         val reference = PcmRms.of(buffer.duplicate(), C.ENCODING_PCM_16BIT)
-        val packed = PcmRms.analyze(buffer.duplicate(), C.ENCODING_PCM_16BIT, sampleRate, DoubleArray(1))
+        val packed = PcmRms.analyze(buffer.duplicate(), C.ENCODING_PCM_16BIT, sampleRate, 1, monoState())
         assertEquals(reference.toFloat(), PcmRms.fullOf(packed), 1e-5f)
     }
 
@@ -77,7 +81,7 @@ class PcmBassAnalysisTest {
     fun `低频读数是全带的下界`() {
         // 低通是能量意义上的"取一部分"，所以低频 RMS ≤ 全带 RMS。
         val sampleRate = 44_100
-        val packed = PcmRms.analyze(sine(200.0, sampleRate, 4096), C.ENCODING_PCM_16BIT, sampleRate, DoubleArray(1))
+        val packed = PcmRms.analyze(sine(200.0, sampleRate, 4096), C.ENCODING_PCM_16BIT, sampleRate, 1, monoState())
         assertTrue(PcmRms.bassOf(packed) <= PcmRms.fullOf(packed) + 1e-4f)
     }
 
@@ -89,7 +93,7 @@ class PcmBassAnalysisTest {
         assertEquals(1.0, PcmRms.lowPassCoefficient(0), 1e-12)
         assertEquals(1.0, PcmRms.lowPassCoefficient(-1), 1e-12)
         val sampleRate = 44_100
-        val packed = PcmRms.analyze(sine(440.0, sampleRate, 1024), C.ENCODING_PCM_16BIT, 0, DoubleArray(1))
+        val packed = PcmRms.analyze(sine(440.0, sampleRate, 1024), C.ENCODING_PCM_16BIT, 0, 1, monoState())
         assertEquals(PcmRms.fullOf(packed), PcmRms.bassOf(packed), 1e-6f)
     }
 
@@ -121,26 +125,104 @@ class PcmBassAnalysisTest {
         // （状态丢了就会差很多 —— 那正是"状态必须跨缓冲保留"的理由）。
         val sampleRate = 44_100
         val whole = sine(80.0, sampleRate, 4096)
-        val oneShot = PcmRms.analyze(whole.duplicate(), C.ENCODING_PCM_16BIT, sampleRate, DoubleArray(1))
+        val oneShot = PcmRms.analyze(whole.duplicate(), C.ENCODING_PCM_16BIT, sampleRate, 1, monoState())
 
-        val state = DoubleArray(1)
+        val state = monoState()
         val first = sine(80.0, sampleRate, 2048)
-        PcmRms.analyze(first, C.ENCODING_PCM_16BIT, sampleRate, state)
+        PcmRms.analyze(first, C.ENCODING_PCM_16BIT, sampleRate, 1, state)
         val second = sine(80.0, sampleRate, 2048)
-        val secondHalf = PcmRms.analyze(second, C.ENCODING_PCM_16BIT, sampleRate, state)
+        val secondHalf = PcmRms.analyze(second, C.ENCODING_PCM_16BIT, sampleRate, 1, state)
         assertTrue("分两段算的低频读数应与整体接近", abs(PcmRms.bassOf(secondHalf) - PcmRms.bassOf(oneShot)) < 0.05f)
     }
 
     @Test
     fun `空缓冲与未知编码不抛异常`() {
         val empty = ByteBuffer.allocate(0)
-        val packed = PcmRms.analyze(empty, C.ENCODING_PCM_16BIT, 44_100, DoubleArray(1))
+        val packed = PcmRms.analyze(empty, C.ENCODING_PCM_16BIT, 44_100, 1, monoState())
         assertEquals(0f, PcmRms.fullOf(packed), 0f)
-        val unknown = PcmRms.analyze(sine(440.0, 44_100, 128), C.ENCODING_PCM_24BIT, 44_100, DoubleArray(1))
+        val unknown = PcmRms.analyze(sine(440.0, 44_100, 128), C.ENCODING_PCM_24BIT, 44_100, 1, monoState())
         assertEquals(0f, PcmRms.fullOf(unknown), 0f)
         // 状态数组为空也不许崩（调用方传了长度为 0 的数组）。
-        val noState = PcmRms.analyze(sine(440.0, 44_100, 128), C.ENCODING_PCM_16BIT, 44_100, DoubleArray(0))
+        val noState = PcmRms.analyze(sine(440.0, 44_100, 128), C.ENCODING_PCM_16BIT, 44_100, 1, Array(0) { DoubleArray(2) })
         assertTrue(PcmRms.fullOf(noState) > 0f)
         assertEquals(sqrt(0.8 * 0.8 / 2).toFloat(), PcmRms.fullOf(noState), 0.02f)
+        // 没有状态 ⇒ 不做滤波，低频退化成全带（而不是崩，也不是 0）。
+        assertEquals(PcmRms.fullOf(noState), PcmRms.bassOf(noState), 1e-6f)
+    }
+
+    // ------------------------------------------------------------------
+    // v3.0.0 回归：交错 PCM 的滤波状态必须**每声道一份**
+    // ------------------------------------------------------------------
+
+    /** 生成交错多声道正弦（每个声道同一个信号）。 */
+    private fun interleavedSine(
+        freqHz: Double,
+        sampleRateHz: Int,
+        frames: Int,
+        channels: Int,
+        amplitude: Double = 0.8,
+    ): ByteBuffer {
+        val buf = ByteBuffer.allocate(frames * channels * 2).order(ByteOrder.nativeOrder())
+        for (i in 0 until frames) {
+            val v = (sin(2.0 * PI * freqHz * i / sampleRateHz) * amplitude * 32767).toInt()
+            repeat(channels) {
+                buf.put((v and 0xFF).toByte())
+                buf.put(((v shr 8) and 0xFF).toByte())
+            }
+        }
+        buf.flip()
+        return buf
+    }
+
+    /**
+     * **修复前这条会红**：单一状态 + 交错推进 ⇒ 有效截止频率 × 声道数。
+     *
+     * 判据用「同一个 150Hz 正弦在单声道与立体声下的低频读数必须接近」——
+     * 修复前立体声的状态每帧被推进两次，等效截止变成 ~300Hz，
+     * 而 150Hz 正弦在 300Hz 低通下几乎原样通过 ⇒ 读数明显偏大。
+     */
+    @Test
+    fun `立体声的低频读数与单声道一致（有效截止不被声道数放大）`() {
+        val sampleRate = 44_100
+        val frames = 16_384
+        val mono = PcmRms.analyze(
+            interleavedSine(150.0, sampleRate, frames, 1),
+            C.ENCODING_PCM_16BIT, sampleRate, 1, monoState(),
+        )
+        val stereo = PcmRms.analyze(
+            interleavedSine(150.0, sampleRate, frames, 2),
+            C.ENCODING_PCM_16BIT, sampleRate, 2, monoState(),
+        )
+        val monoLow = PcmRms.bassOf(mono)
+        val stereoLow = PcmRms.bassOf(stereo)
+        assertTrue(
+            "立体声低频读数被声道数放大了（单声道 $monoLow / 立体声 $stereoLow）" +
+                "—— 说明滤波状态没有按声道分开",
+            abs(monoLow - stereoLow) < 0.02f,
+        )
+        // 150Hz 正好在截止点上 ⇒ 幅度约降到 1/√2（-3dB），既不是全通也不是全阻。
+        val expected = sqrt(0.8 * 0.8 / 2).toFloat()
+        assertTrue("150Hz 在截止点上不该原样通过：$stereoLow", stereoLow < expected * 0.95f)
+        assertTrue("150Hz 也不该被完全滤掉：$stereoLow", stereoLow > expected * 0.4f)
+    }
+
+    /** 6 声道（QQ 臻品档的实测布局）同样不许把截止频率乘 6。 */
+    @Test
+    fun `六声道的低频读数与单声道一致`() {
+        val sampleRate = 44_100
+        val frames = 8_192
+        val mono = PcmRms.analyze(
+            interleavedSine(150.0, sampleRate, frames, 1),
+            C.ENCODING_PCM_16BIT, sampleRate, 1, monoState(),
+        )
+        val six = PcmRms.analyze(
+            interleavedSine(150.0, sampleRate, frames, 6),
+            C.ENCODING_PCM_16BIT, sampleRate, 6, monoState(),
+        )
+        // 6 声道共用一个状态时等效截止 ≈ 900Hz ⇒ 150Hz 几乎全过（读数≈全带 0.566）。
+        assertTrue(
+            "6 声道下低频通道失真（单声道 ${PcmRms.bassOf(mono)} / 6 声道 ${PcmRms.bassOf(six)}）",
+            abs(PcmRms.bassOf(mono) - PcmRms.bassOf(six)) < 0.03f,
+        )
     }
 }
