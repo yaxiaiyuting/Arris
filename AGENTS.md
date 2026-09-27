@@ -4212,3 +4212,101 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 - **拖拽交互**：降级为「点按切换着色」且默认关。理由：挂载点在 `PlayerCard.kt`（手势密集区，
   紧邻 `clickable { onSongInfoClick() }`），手势分解必须真机 A/B 才能声称结论。
 - 音理（参考 App）的功能项（一起听服务器、B 站登录、下载管理、流量管理、备份与恢复）一律不引入。
+
+## v2.9.0 新增（本 fork · 统一「动效强度」+ 全屏界面动效）
+
+### 四条新纪律（先读这四条，再看细节）
+
+1. **动效是整体视觉体验：波形与界面动效必须统一到一个「动效强度」档位。**
+   - 对外只有一个设置项 `motion_tier`（0 简洁 / 1 精致 / 2 炫技），对内是**两张能力位表**：
+     波形那份仍由 `VisualizerEffects` 拥有（v2.8.0 的渲染代码一行不改），界面动效那份是
+     `MotionEffects` 自己的字段。两张表的**唯一交汇点**是 `MotionEffects.of(...)`。
+   - 判断一个改动是否违反本条：**问「用户能不能把波形调到炫技、而界面动效留在简洁」**。
+     能，就是又造了第二套档位。
+   - `MotionIntensity.SIMPLE/REFINED/SHOWCASE` **直接引用** `VisualizerTier` 的常量（不是复制值）：
+     数值语义只有一处定义，复制一份迟早分叉。
+2. **A 档（基础界面动效）默认开，但保留总开关。**
+   - `ui_motion_enabled` 默认 `true`；关掉 = A/B/C 三层**全部不挂载**（背景回纯色、零帧时钟），
+     而**波形档位完全不受影响**。「关掉开关 = 零开销」由代码结构保证（`MotionFrameClock` 的
+     `clockNeeded` 为 false 时 `LaunchedEffect` 直接 return），不是写在注释里。
+   - 隐藏/关闭一律走**不挂载**，绝不靠 `alpha`（AGENTS.md 触摸陷阱第 1 条）。
+3. **自动降级优先砍界面动效，再砍波形档位。**
+   - 阶梯是**显式的表**（`MotionDegrade`）：0 → 1 砍 B 档界面动效 → 2 砍 A 档 → 3 波形降一级 → 到顶即止。
+     写成一串散落的 `if` 会让「先砍谁」变成不可断言的口头约定。
+   - **每进程最多推进一级**（复用 v2.8.0 的 `FrameBudgetPolicy`：每实例只判定一次），总共最多三级，
+     用户**手动改档位时重置为 0**（`MotionPrefs.writeTier`）。到第 3 级时把降级后的档位**写回**
+     `motion_tier` —— 设置页显示的必须永远是「实际在渲染的那一档」。
+   - 帧监控**复用** `VisualizerFrameMonitor`（API 24+ 的 `FrameMetrics`），但注册点必须跟着
+     `MotionFrameClock` 走：只挂在波形组件里的话，竖屏用户（波形根本不挂载）永远触发不了降级。
+4. **背景模糊必须用低分辨率降采样。**
+   - 顺序是「**先降采样（32×32 盒式平均）→ 再模糊（三遍可分离盒式，Clamp 边界）→ 最后上采样铺满**」，
+     绝不反过来。原图直接高斯模糊的 CPU 代价（1000² = 4 MB 缓冲 × 6 次全缓冲遍历）在 S6 上是
+     几百毫秒量级；`RenderEffect` 那条路则是**每帧**对全屏图层做一遍，而背景每首歌只变一次。
+   - 实现是**纯 Kotlin 整数运算**（`CoverBlur`）：不依赖 `RenderEffect` / `Modifier.blur` /
+     RenderScript，所以 **API 24 上就是完整效果，没有"低版本降级"这一说**（任务书原本要求的
+     「API < 31 降级」在本实现下不存在）。
+   - 缓存以**封面 URL** 为键（不是 bitmap 身份哈希），`LruCache` 4 条 × 4 KB；
+     未命中在 `Dispatchers.Default` 上算（`Bitmap.getPixels` 是十几毫秒量级，不能放组合线程）。
+   - 失败一律回退**纯色背景**（`blurred()` 全程 `runCatching` 返回 null），背景层失败绝不允许
+     影响播放或播放页的任何其它部分；模糊图之上**必须**压一层主题背景色（歌词可读性优先）。
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 统一档位 / 能力位矩阵 / 降级阶梯（纯逻辑） | `ui/player/motion/MotionEffects.kt` |
+| 新 prefs 键 + v2.8.0 迁移 + 有界降级 | `ui/player/motion/MotionPrefs.kt` |
+| 降采样 + 盒式模糊 + URL 键 LRU 缓存 | `ui/player/motion/CoverBlur.kt` |
+| 响度包络 / 节拍与强拍 / C 档特效池（纯逻辑） | `ui/player/motion/MotionEnvelope.kt` |
+| **唯一的帧时钟** + 帧时间监控挂载 | `ui/player/motion/MotionClock.kt` |
+| 全屏动效背景层（模糊 / 呼吸 / 视差 / 粒子 / 光晕） | `ui/player/motion/MotionBackdrop.kt` |
+| 幅度 token（亮度 ±5% / 缩放 ±1% / 浮动 ±2dp / 视差 6% / 歌词 3% / 播放条 2% / 3D 6°） | `ui/theme/AppMotion.kt` |
+| 背景层与背景级波形的挂载点 | `ui/player/PlayerCard.kt`（根 Box 内、内容 Column 之前） |
+| 歌词律动（只让当前行那一层失效） | `ui/player/NcrustLyricsPanel.kt` + `LyricsView.kt` |
+| 设置项 / 门控 / 渲染计划 | `ui/settings/Settings{Registry,RenderPlan,Visibility}.kt` |
+
+### 本版对 v2.8.0 的两处**结构性**改动（不是顺手重构，改之前先读）
+
+1. **帧循环从 `AudioVisualizerBars` 搬进了 `MotionFrameClock`（全仓库只剩一条）。**
+   `WaveformStore.pump` 同一帧被调用两次时，`consumePending` 是幂等的（第二次没有新柱），但
+   **动画相位**（渐变流动 / 呼吸）会每帧前进两次 —— 流动速度直接翻倍，而且这个 bug **只在
+   横屏/平板上出现**（竖屏波形不挂载），竖屏测不出来。所以 `AudioVisualizerBars` 现在是
+   **纯读取方**（它的 `activeProvider` 参数在 v2.9.0 被删除，就是因为那个接口已经没人读了）。
+2. **`VisualizerPrefs.effects` 从 `MutableState` 收窄成 `State`（`derivedStateOf`）。**
+   镜像的持有者搬到 `MotionPrefs`（统一档位的唯一真相）。类型收窄是**有意的类型级保证**：
+   波形渲染层从此在编译期就不可能自己去改这个值。读取方（`AudioVisualizerBars`）一行未改。
+
+### v2.8.0 → v2.9.0 的键迁移（**保住用户实际看到的东西**）
+
+| 旧键（v2.8.0） | 新键（v2.9.0） | 规则 |
+|---|---|---|
+| `visualizer_tier` | `motion_tier` | 搬**有效档**：`tier==2 && !showcase` ⇒ 搬到 1（精致）。理由：v2.8.0 的 C 档要求 `tier==2` **且** `showcase==true`，而 `showcase` 默认 `false` ⇒ 这些盘在 v2.8.0 下渲染出来就是精致档，照抄 2 会让他们突然多出冲击波/粒子（语义变化）。缺 key ⇒ **不写新键**（保留「用户没选过」） |
+| `visualizer_auto_downgraded` | `motion_degrade_level` | 映射到 **1**（砍 B 档界面动效），不是 3。v2.8.0 的降级结果**已经写在 `visualizer_tier` 里**，再扣一次波形就是重复处罚；但完全不理会又等于把一台实测吃力的设备当新机 |
+| `visualizer_showcase` / `_shockwave` / `_particles` / `_perspective` / `_drag` | —（合并进档位） | 五个键**不再参与渲染**，registry 里标 `internal = true` + `legacyV290 = true`。留着不删是纪律（回滚安装不丢数据），但不能有 UI 入口（两个键都能改档位 = 双轨） |
+| `visualizer_tier_version` | `motion_version` | 水位分开：`VERSION_PRE_V290 = 0` 表示「未迁移」，**不是**「搬到 0」（v1.9.3「缺失 vs 空」的同一教训） |
+
+机械防线（`SettingsRegistryTest`）：`newV290KeysAreExactlyTheMotionSet`（v2.9.0 只允许新增那 4 个键）、
+`v280KeysAreAllLegacyUnderV290`（7 个旧键必须同时 `isNewInV280` + `isInternal` + `legacyV290`）、
+`v290EntriesAreReachableAndHaveStrings`（可见的新项必须被渲染计划覆盖且文案齐全）。
+迁移单测在 `ui/player/motion/MotionPrefsTest.kt`（`migratedTier` 四种输入组合、迁移幂等且盘逐键不变、
+不碰无关键、全新安装只写水位一个键、逐级降级且写回盘、用户改档位重置水位）。
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **真 FFT / 多频段频谱**：v2.8.0 的结论（数据链路只有「整块 PCM → 单标量 RMS」）在 v2.9.0 **未被推翻**，
+  本版不翻案。C 档的「频谱可视化」因此**没有做** —— 任务书 §6.4 已注明"除非探针确认数据源"。
+- **覆盖已有布局的"全宽波形"**：任务书 §7.2 的一句话是「波形从左侧扩展到全屏底部横跨」。
+  真去改宿主（把左栏那条挪到根 Box 底部整宽）会动到既有分栏结构与控制条位置，违反同一条任务书的
+  §7.3「不改变现有横屏布局结构」。本版的落地是**额外一层**背景带（卡片底部整宽、`alpha=0.32`、
+  画在所有前景内容之下），左栏那条与全部布局一行未动。
+- **手势（拖拽）交互**：v2.8.0 已降级为「点按切换着色」且默认关，本版不动。
+- **`Modifier.blur` / `RenderEffect`**：见纪律 4。
+- 音理（参考 App）的功能项一律不引入。
+
+### 本版新增的未验证项（与 release notes 保持一致）
+
+- WGR-W09（华为平板 / Android 12）在本次验证时**处于锁屏且无 root**，无法驱动 UI 或注入 prefs
+  ⇒ 该设备上的界面动效与帧时间**未验证**。
+- S6 上的自动降级在 v2.8.0 几乎必触发；v2.9.0 的三级阶梯在 S6 上的实际推进速度只有一次实测样本。
+- 音频线程增量（`TransparentWaveformSink.handleBuffer`）本版未测。
+- Perfetto 归因（"到底是谁把帧顶起来的"）未做，降级判据仍是保守单向阀。
