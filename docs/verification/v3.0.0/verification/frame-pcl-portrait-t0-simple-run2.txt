@@ -1,0 +1,181 @@
+Applications Graphics Acceleration Info:
+Uptime: 73927430 Realtime: 101826210
+
+** Graphics info for pid 8147 [com.takahashirinta.ncrust] **
+
+Stats since: 73897364690326ns
+Total frames rendered: 1824
+Janky frames: 1 (0.05%)
+Janky frames (legacy): 8 (0.44%)
+50th percentile: 8ms
+90th percentile: 9ms
+95th percentile: 10ms
+99th percentile: 14ms
+Number Missed Vsync: 1
+Number High input latency: 3647
+Number Slow UI thread: 1
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: 1
+Number Frame deadline missed (legacy): 0
+HISTOGRAM: 5ms=0 6ms=54 7ms=278 8ms=855 9ms=494 10ms=64 11ms=24 12ms=21 13ms=15 14ms=5 15ms=2 16ms=1 17ms=2 18ms=0 19ms=1 20ms=1 21ms=2 22ms=1 23ms=0 24ms=1 25ms=0 26ms=0 27ms=0 28ms=0 29ms=1 30ms=1 31ms=0 32ms=0 34ms=0 36ms=0 38ms=0 40ms=0 42ms=1 44ms=0 46ms=0 48ms=0 53ms=0 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4ms
+90th gpu percentile: 5ms
+95th gpu percentile: 5ms
+99th gpu percentile: 5ms
+GPU HISTOGRAM: 1ms=1 2ms=2 3ms=19 4ms=1258 5ms=539 6ms=4 7ms=1 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=0
+
+Pipeline=Skia (Vulkan)
+Memory policy:
+  Max surface area: 3561600
+  Max resource usage: 512.87MB (x144)
+  Background retention: 50% (altUiHidden = true)
+  GPU Context timeout: 10
+Contexts: 1 (stopped = 0)
+CPU Caches:
+  Glyph Cache: 12.25 MB (1 entry)
+  Glyph Count: 79 
+Total CPU memory usage:
+  12841422 bytes, 12.25 MB (0.00 bytes is purgeable)
+GPU Caches:
+  Other:
+    Other: 76.39 KB (1 entry)
+    Buffer Object: 2.05 KB (2 entries)
+  Image:
+    Surface: 6.88 MB (35 entries)
+  Scratch:
+    Buffer Object: 1.14 MB (15 entries)
+    Surface: 89.87 MB (61 entries)
+Total GPU memory usage:
+  102721584 bytes, 97.96 MB (7.06 MB is purgeable)
+
+Skia GPU memory Oplus dumper:
+GPU Caches:
+ 24438952 bytes, 23.31 MB (7.06 MB is purgeable)
+  Buffer Object: 1.14 MB (17 entries)
+    skia/gpu_resources/resource_2211 : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_2210 : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_2205 : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_1161 : size[32.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_2283 : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_1160 : size[32.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_2209 : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_214  : size[32.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[32.00 KB]
+    skia/gpu_resources/resource_2202 : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_2213 : size[96.00  KB   ] purgeable_size[96.00 KB] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_211  : size[180.00 bytes] purgeable_size[180.00 bytes] type[Buffer Object] label[MakeVkBuffer] category[Other]
+    skia/gpu_resources/resource_2215 : size[96.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[96.00 KB]
+    skia/gpu_resources/resource_180  : size[32.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[32.00 KB]
+    skia/gpu_resources/resource_2282 : size[128.00 KB   ] purgeable_size[128.00 KB] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_212  : size[1.88   KB   ] purgeable_size[1.88 KB] type[Buffer Object] label[MakeVkBuffer] category[Other]
+    skia/gpu_resources/resource_213  : size[30.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_53   : size[48.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+  Surface: 22.17 MB (34 entries)
+    skia/gpu_resources/resource_2281 : size[2.00   MB   ] category[Scratch] type[Surface] label[TextAtlas] purgeable_size[2.00 MB] Dimensions[2048:1024]
+    skia/gpu_resources/resource_2208 : size[2.00   MB   ] category[Scratch] type[Surface] label[TextAtlas] purgeable_size[2.00 MB] Dimensions[2048:1024]
+    skia/gpu_resources/resource_93   : size[4.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[70:70]
+    skia/gpu_resources/resource_2119 : size[37.52  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[196:196]
+    skia/gpu_resources/resource_267  : size[128.00 KB   ] type[Surface] label[MakeSurfaceDrawContextWithFallback/ResourceAllocatorRegister] category[Scratch] Dimensions[128:256]
+    skia/gpu_resources/resource_2431 : size[64.00  KB   ] purgeable_size[64.00 KB] Dimensions[128:128] type[Surface] label[MakeSurfaceDrawContextWithFallback/ResourceAllocatorRegister] category[Scratch]
+    skia/gpu_resources/resource_90   : size[4.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[70:70]
+    skia/gpu_resources/resource_26   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_42   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_262  : size[64.00  bytes] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[8:8]
+    skia/gpu_resources/resource_29   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_121  : size[12.25  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[112:112]
+    skia/gpu_resources/resource_22   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_113  : size[12.25  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[112:112]
+    skia/gpu_resources/resource_255  : size[13.75  MB   ] type[Surface] label[MakeDevice] category[Scratch] Dimensions[1280:2816]
+    skia/gpu_resources/resource_124  : size[12.25  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[112:112]
+    skia/gpu_resources/resource_36   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_71   : size[128.00 bytes] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Scratch] Dimensions[128:1]
+    skia/gpu_resources/resource_127  : size[12.25  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[112:112]
+    skia/gpu_resources/resource_32   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_101  : size[19.14  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[140:140]
+    skia/gpu_resources/resource_84   : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_66   : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_81   : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_109  : size[19.14  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[140:140]
+    skia/gpu_resources/resource_56   : size[2.00   MB   ] type[Surface] label[TextAtlas] category[Scratch] Dimensions[2048:1024]
+    skia/gpu_resources/resource_18   : size[4.65   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[69:69]
+    skia/gpu_resources/resource_45   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_186  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_206  : size[4.00   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[32:32]
+    skia/gpu_resources/resource_2221 : size[2.00   MB   ] category[Scratch] type[Surface] label[TextAtlas] purgeable_size[2.00 MB] Dimensions[2048:1024]
+    skia/gpu_resources/resource_118  : size[12.25  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[112:112]
+    skia/gpu_resources/resource_39   : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_97   : size[4.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[70:70]
+Skia's Wrapped Objects:
+  Surface: 74.58 MB (14 entries)
+    skia/gpu_resources/resource_155  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_157  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_199  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_138  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_192  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_151  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_226  : size[4.00   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1024:1024]
+    skia/gpu_resources/resource_149  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_153  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_195  : size[976.56 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[500:500]
+    skia/gpu_resources/resource_147  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_159  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_48   : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_68   : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+Total GPU memory usage:
+97.89 MB (7.06 MB is purgeable)
+
+
+GraphicBufferAllocator buffers:
+            Handle |         Size |     W (Stride) x H | Layers |   Format |      Usage | Requestor
+0xb4000074260c9440 |  4096.00 KiB | 1024 (1024) x 1024 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000742d217440 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb40000742d217580 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb40000742d2185c0 |  1000.00 KiB |  500 ( 512) x  500 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000742d218700 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb4000074323da240 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb4000074323da380 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb4000074c22afbc0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb4000074c22aff80 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb4000074c22b00c0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb4000074c22b0200 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb4000074c22b0480 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb4000074c22b05c0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000753be33840 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000753be33d40 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000753be34240 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+0xb40000753be34c40 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [8147]
+Total allocated by GraphicBufferAllocator (estimate): 77616.00 KB
+Imported gralloc buffers:
++ name:AHardwareBuffer pid [8147], id:5480378317678, size:4096.00KiB, w/h:1024x1024, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317671, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317670, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317664, size:1000.00KiB, w/h:500x500, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378317663, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378317660, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378317659, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [8147], id:5480378317657, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378317662, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [8147], id:5480378317656, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378317661, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [8147], id:5480378317672, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317654, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317655, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317652, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317658, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [8147], id:5480378317653, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
+Total imported by gralloc: 78711.00KiB
+
+Profile data in ms:
+
+	com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@5181e12 (visibility=0)
+View hierarchy:
+
+  com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@5181e12
+  7 views, 13.27 kB of render nodes
+
+
+Total ViewRootImpl   : 1
+Total attached Views : 7
+Total RenderNode     : 13.27 kB (used) / 37.34 kB (capacity)
+
+

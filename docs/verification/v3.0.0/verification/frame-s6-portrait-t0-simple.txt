@@ -1,0 +1,88 @@
+Applications Graphics Acceleration Info:
+Uptime: 9958070 Realtime: 9958070
+
+** Graphics info for pid 1809 [com.takahashirinta.ncrust] **
+
+Stats since: 9928003456566ns
+Total frames rendered: 1632
+Janky frames: 1501 (91.97%)
+50th percentile: 22ms
+90th percentile: 30ms
+95th percentile: 32ms
+99th percentile: 40ms
+Number Missed Vsync: 8
+Number High input latency: 0
+Number Slow UI thread: 645
+Number Slow bitmap uploads: 16
+Number Slow issue draw commands: 1186
+HISTOGRAM: 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=3 11ms=1 12ms=5 13ms=5 14ms=39 15ms=59 16ms=22 17ms=25 18ms=227 19ms=250 20ms=97 21ms=56 22ms=60 23ms=54 24ms=69 25ms=118 26ms=109 27ms=107 28ms=86 29ms=69 30ms=45 31ms=36 32ms=31 34ms=31 36ms=8 38ms=3 40ms=6 42ms=0 44ms=1 46ms=0 48ms=1 53ms=1 57ms=1 61ms=1 65ms=2 69ms=2 73ms=1 77ms=1 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+
+Caches:
+Current memory usage / total memory usage (bytes) / hit ratio (%) / biggest memory usage (bytes):
+  TextureCache          6955105 / 92274688   99.9492   7042145
+  LayerCache                  0 / 60817408    0.0000         0 (numLayers = 0)
+  Layers total          0 (numLayers = 0)
+  RenderBufferCache           0 /  8388608    0.0000         0
+  GradientCache           16384 /  2097152   99.9564     16384
+  PathCache                   0 / 16777216    0.0000         0
+  TessellationCache        4224 /  1048576   99.9880
+  TextDropShadowCache         0 /  6291456    0.0000         0
+  PatchCache                  0 /   131072    0.0000         0
+  FontRenderer A8     5242880 /  5242880
+    Font CacheTexture    938308 /  1048576   89.4840 (usage ratio)
+    Font CacheTexture   1155120 /  4194304   27.5402 (usage ratio)
+  FontRenderer RGBA         0 /        0
+  FontRenderer total  5242880 /  5242880
+Other:
+  FboCache                    0 /        0    0.0000
+Total memory usage:
+  12218593 bytes, 11.65 MB
+
+All Textures in TexctureCache 
+# No./ memory usage (bytes)/ size (width X height) / image type / hit count:
+#  1 /    50176 / ( 224 X  224)/   GL_ALPHA / 4579
+#  2 /     9216 / (  96 X   96)/   GL_ALPHA / 4585
+#  3 /    16384 / ( 128 X  128)/   GL_ALPHA / 4588
+#  4 /    16384 / ( 128 X  128)/   GL_ALPHA / 4588
+#  5 /    16384 / ( 128 X  128)/   GL_ALPHA / 4588
+#  6 /     9216 / (  96 X   96)/   GL_ALPHA / 2295
+#  7 /  4665600 / (1080 X 1080)/    GL_RGBA / 9358
+#  8 /     4096 / (  32 X   32)/    GL_RGBA / 2327
+#  9 /   331776 / ( 288 X  288)/    GL_RGBA / 2346
+# 10 /   331776 / ( 288 X  288)/    GL_RGBA / 2390
+# 11 /   331776 / ( 288 X  288)/    GL_RGBA / 4687
+# 12 /   331776 / ( 288 X  288)/    GL_RGBA / 2390
+# 13 /   331776 / ( 288 X  288)/    GL_RGBA / 2390
+# 14 /   331776 / ( 288 X  288)/    GL_RGBA / 2390
+# 15 /    16384 / ( 128 X  128)/   GL_ALPHA / 4588
+# 16 /     7744 / (  88 X   88)/   GL_ALPHA / 2347
+# 17 /    25600 / ( 160 X  160)/   GL_ALPHA / 4588
+# 18 /     7744 / (  88 X   88)/   GL_ALPHA / 2347
+# 19 /    25600 / ( 160 X  160)/   GL_ALPHA / 4588
+# 20 /     7744 / (  88 X   88)/   GL_ALPHA / 2387
+# 21 /     9216 / (  96 X   96)/   GL_ALPHA / 2295
+# 22 /     7744 / (  88 X   88)/   GL_ALPHA / 2347
+# 23 /     7744 / (  88 X   88)/   GL_ALPHA / 2387
+# 24 /     6400 / (  80 X   80)/   GL_ALPHA / 2295
+# 25 /     7744 / (  88 X   88)/   GL_ALPHA / 2387
+# 26 /     9216 / (  96 X   96)/   GL_ALPHA / 2295
+# 27 /     7744 / (  88 X   88)/   GL_ALPHA / 2387
+# 28 /    16384 / ( 128 X  128)/   GL_ALPHA / 4588
+# 29 /     7744 / (  88 X   88)/   GL_ALPHA / 2387
+# 30 /     6241 / (  79 X   79)/   GL_ALPHA / 2391
+
+
+Pipeline=FrameBuilder
+Profile data in ms:
+
+	com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@293840c (visibility=0)
+View hierarchy:
+
+  com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@293840c
+  7 views, 8.45 kB of display lists
+
+
+Total ViewRootImpl: 1
+Total Views:        7
+Total DisplayList:  8.45 kB
+

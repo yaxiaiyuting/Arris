@@ -4442,6 +4442,8 @@ v3.0.0 **全部删除**。理由：
 | 逐柱着色 + 三频带能量条 | `ui/player/AudioVisualizer.kt`（`drawWaveformBars` / `drawBandLanes`） |
 | 档位表 / 独立开关 / 降级遗留常量 | `ui/player/motion/MotionEffects.kt` |
 | prefs 键 + 迁移（水位 3→4） | `ui/player/motion/MotionPrefs.kt` |
+| 设置的**分组归属**（外观与动效 vs 播放与音质） | `ui/settings/SettingsRegistry.kt`（`group =` 那一行 + 声明位置） |
+| 冲击波/光晕的**随机出生点**（区间常量与渲染） | `ui/player/motion/MotionEnvelope.kt`（`SPAWN_*`）+ `MotionBackdrop.kt` |
 | 仪器探针（缓冲粒度 + 纯算术开销） | `app/src/androidTest/java/com/takahashirinta/ncrust/probe/AudioTapProbeTest.kt` |
 
 ### 本版明确**不做**（避免下一个人重复调研）
@@ -4470,3 +4472,28 @@ v3.0.0 **全部删除**。理由：
 - **浅色主题下的逐柱着色对比度未复核**。
 - **取消自动降级之后 S6 在炫技档下是否可用** —— 本版性能上最大的风险点，
   唯一的判据是 release 包的帧时间数据（见 `docs/verification/v3.0.0/verification/`）。
+
+### v3.0.0 补记（真机使用中提出来的两条，不是自查发现的）
+
+两条都是**用户看界面时直接指出来**的，改之前先读这里，别再改回去。
+
+1. **动效/波形设置属于「外观与动效」，不属于「播放与音质」。**
+   用户原话：「界面动效在播放与音质这个菜单里是不是不太合理？放到外观与动效里似乎更合理。」
+   —— 完全成立。`audio_visualizer` / `motion_tier` / `ui_motion_enabled` 与 v2.8.0 的那 8 个
+   `visualizer_*` 键原本都挂在 `PLAYBACK` 下，但它们控制的是**画面长什么样**，
+   与音质档位、无缝播放、禁止熄屏没有任何关系。
+   搬到 `APPEARANCE` 的是 8 个可见项 + 11 个内部项（`visualizer_*` 8 个 +
+   `motion_degrade_*` / `motion_version`），**只改 `group`，键名 / 语义 / 默认值一个都没动**。
+   ⚠️ **声明位置必须跟着搬**：`SettingsRegistryTest.renderOrderListLosesNothing` 要求
+   「按分组顺序拼接 == 声明顺序」，只改 `group` 不改位置会让它变红 —— 那条断言正是为此存在的。
+   副产品：播放与音质页现在只剩 4 项（音质 ×2 + 无缝播放 + 禁止熄屏），外观与动效页 13 项。
+2. **冲击波 / 光晕的出生点必须随机，不能永远在屏幕正中。**
+   用户原话：「这个敲击、冲击波的位置不要只集中在屏幕中间，可以随机在屏幕上的位置出现吧。」
+   —— 原来所有冲击波与光晕都从画面正中扩散，连着几下鼓点就是同一个位置反复炸圈，
+   观感上像"一个固定的装饰动画"，而那正是铁律 25 要避免的形状。
+   现在**每次瞬态取一个随机出生点**（x ∈ 0.18..0.82、y ∈ 0.28..0.72 归一化），
+   同一击的多圈光晕与冲击波**共用**这个点（否则一次击打看起来像两件独立的事）。
+   区间不是 0..1：光晕最大半径是屏幕短边的 0.7 倍，贴边出生会把大部分圆弧推到屏幕外，
+   读起来像"一个缺角"；上边界也避开了标题栏与底部控制条。
+   随机源沿用粒子那一套（`Random(PARTICLE_RANDOM_SEED)` 固定种子）⇒ 同一段音频每次得到
+   同一套出生点，"是不是随机看着乱"可以复现。
