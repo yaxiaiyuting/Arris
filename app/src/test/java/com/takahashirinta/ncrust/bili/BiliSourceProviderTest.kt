@@ -125,6 +125,24 @@ class BiliSourceProviderTest {
         assertTrue("它是 v3.1.0 新增的键", entry.isNewInV310)
     }
 
+    /**
+     * 播放地址**必须**走旧路径。
+     *
+     * 这条断言防的是 v3.1.0 第一版的错：走 `/x/player/wbi/playurl` 时，
+     * 实测「无签名 / 正确签名 / 伪造签名 / 无 Cookie」四种组合**全部 412**
+     * （wbi-signature.md:218,246-260），表现是「搜得到、放不出来」。
+     */
+    @Test
+    fun `播放地址走旧路径而不是 wbi 路径`() {
+        val url = BiliApi.playUrlFor("BV1GJ411x7h7", 137649199L)
+        assertTrue("必须用 /x/player/playurl：$url", url.startsWith("https://api.bilibili.com/x/player/playurl?"))
+        assertFalse("不能走 /x/player/wbi/playurl（412）：$url", url.contains("/wbi/playurl"))
+        assertTrue("fnval 必须是实测过的 4048：$url", url.contains("fnval=4048"))
+        assertTrue(url.contains("bvid=BV1GJ411x7h7"))
+        assertTrue(url.contains("cid=137649199"))
+        assertFalse("旧路径不签名（带了也无害，但不该有 w_rid）：$url", url.contains("w_rid"))
+    }
+
     @Test
     fun `auid 关键词的识别形状`() {
         // 认：显式 au 前缀、B 站音频链接。
@@ -161,7 +179,10 @@ class BiliSignatureRejectionTest {
     }
 
     @Test
-    fun `结构化响应里的 -403 与 -1200 算被拒`() {
+    fun `结构化响应里的 -352 与 -403 与 -1200 都算被拒`() {
+        // -352 是**风控校验失败**：实测「缺签名 / 错签名」就是这一档，而 HTTP 状态是 200。
+        // 漏了它 ⇒ wbi 密钥每天轮换后搜索永远 0 条，且要等 6 小时 TTL 才可能自愈。
+        assertTrue(BiliApi.isSignatureRejected("""{"code":-352,"message":"风控校验失败"}"""))
         assertTrue(BiliApi.isSignatureRejected("""{"code":-403,"message":"访问权限不够"}"""))
         assertTrue(BiliApi.isSignatureRejected("""{"code":-1200,"message":"被降级过滤的请求"}"""))
     }

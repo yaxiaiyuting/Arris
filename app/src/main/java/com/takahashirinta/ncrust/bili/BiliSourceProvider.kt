@@ -150,8 +150,20 @@ object BiliSourceProvider : MusicSourceProvider {
         if (!isEnabled) return null
         val payload = BiliTrack.parseSourceId(song.sourceId) ?: return null
         if (!payload.isAudioZone) return null
-        val track = runCatching { BiliApi.audioInfo(payload.auid!!) }.getOrNull() ?: return null
-        return track.lyric
+        // ★ 走 `/song/lyric` 拿**正文**。
+        //
+        // 曾经写成「取 `song/info` 的 lyric 字段」——那是一个**已修的缺陷**：
+        // 该字段实测是 LRC 文件的 **URL**（`…/149994607539.lrc`），把它交给 `LrcParser`
+        // 会解析出 0 行 ⇒ 界面永远「暂无歌词」，而且不报任何错。
+        // 证据：`docs/verification/v3.1.0/bili-research/evidence/02-songinfo-au39.txt`
+        // 与 `21-lyric-au39.txt`（后者是 `/song/lyric` 的真实正文）。
+        val raw = runCatching { BiliApi.audioLyric(payload.auid!!) }.getOrNull()
+        if (raw == null) return null
+        // 个别曲目服务端在 `data` 里给的是 .lrc 的 URL。**不在取词路径上再发一次网络**：
+        // 那会把一次播放变成两次往返，而且失败面还多一个。如实返回 null（没有可解析的正文），
+        // 让界面显示「暂无歌词」—— 比拿 URL 去解析出 0 行要诚实。
+        if (BiliParse.looksLikeUrl(raw)) return null
+        return raw
     }
 
     /**

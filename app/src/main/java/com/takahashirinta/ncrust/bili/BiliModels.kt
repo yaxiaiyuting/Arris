@@ -40,8 +40,12 @@ import java.net.URLDecoder
  * @property bvid 视频号；音频区曲目为 null（音频区自己的 `bvid` 字段常为空串）。
  * @property aid 视频的 av 号（数字）。
  * @property cid 视频分 P id —— `playurl` 必需，搜索结果里**没有**，要单独问 `view`。
- * @property lyric LRC 原文；只有音频区会给，视频音轨为 null（**不是空串**：
- *   「没有这个数据源」与「这首歌没有歌词」是两件事 —— 与 `LyricsCache` 的既有纪律一致）。
+ * @property lyric ⚠️ **音频区 `song/info` 的原始 `lyric` 字段**：实测它通常是
+ *   **一个 LRC 文件的 URL**（`http://i0.hdslb.com/bfs/music/149994607539.lrc`），
+ *   而不是 LRC 正文，而且大部分曲目是空串。**取词请走 [BiliApi.audioLyric]**
+ *   （`/audio/music-service-c/web/song/lyric`），那里的 `data` 才是正文。
+ *   本字段保留原样是为了让「服务端到底给了什么」不被二次加工掉。
+ *   视频音轨为 null（**不是空串**：「没有这个数据源」与「这首歌没有歌词」是两件事）。
  */
 data class BiliTrack(
     val auid: Long? = null,
@@ -400,6 +404,39 @@ object BiliParse {
             // 两者在 UI 上都是「暂无歌词」，但在缓存与重试判据上不是一回事。
             lyric = if (data.has("lyric")) data.optString("lyric") else null,
         )
+    }
+
+    /**
+     * `/audio/music-service-c/web/song/lyric` 响应 → **LRC 正文**。
+     *
+     * 实测响应：`{"code":0,"msg":"success","data":"[00:33.26]让我掉下眼泪的\n…"}`。
+     *
+     * 判据与 [BiliTrack.lyric] 的两义性保持一致：
+     * - `code != 0` 或没有 `data` 键 ⇒ `null`（**没有这个数据源**）；
+     * - `data` 是空串 ⇒ `""`（**这首歌确实没有歌词**）。
+     *
+     * ⚠️ `data` 也可能是一个 **URL**（个别曲目服务端直接给了 `.lrc` 链接）。
+     * 那**不是**正文，本函数如实返回它 —— 由调用方决定要不要拉。
+     * 之所以不在这里顺手拉一次：那会让「解析函数」变成「会发网络的函数」，
+     * 而本对象的全部价值就是它能在 JVM 里被无网络地断言。
+     */
+    fun parseAudioLyric(body: String?): String? {
+        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return null
+        if (root.optInt("code", -1) != 0) return null
+        if (!root.has("data")) return null
+        return root.optString("data")
+    }
+
+    /**
+     * 这个「歌词值」其实是一个 **LRC 文件的 URL**（而不是 LRC 正文）。
+     *
+     * `song/info` 的 `lyric` 字段实测就是这种形状（见 [BiliApi.audioLyric] 的说明）。
+     * 判据写成纯函数是为了让「拿 URL 当正文解析」这条错路有一个**可断言的守卫**：
+     * `BiliParseTest` 用它证明实现不会把 URL 喂给 `LrcParser`。
+     */
+    fun looksLikeUrl(value: String?): Boolean {
+        val v = value?.trim().orEmpty()
+        return v.startsWith("http://") || v.startsWith("https://") || v.startsWith("//")
     }
 
     /**

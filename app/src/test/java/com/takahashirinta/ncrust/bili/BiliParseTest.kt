@@ -159,7 +159,7 @@ class BiliParseTest {
     "author":"初音未来, MEIKO · Mitchie M",
     "title":"【Mitchie M】Nechusho No!No! (feat. 初音未来 & MEIKO)",
     "cover":"http://i0.hdslb.com/bfs/music/dee637baa58ec632ebf928312dfd8986611a465b.jpg",
-    "lyric":"[00:00.00] 作词 : Mitchie M\n[00:01.00] 作曲 : Mitchie M",
+    "lyric":"http://i0.hdslb.com/bfs/music/149994607539.lrc",
     "duration":112,"bvid":"","aid":0,"cid":0,"statistic":{"sid":2478206,"play":252991}}}
     """.trimIndent()
 
@@ -175,7 +175,9 @@ class BiliParseTest {
             "https://i0.hdslb.com/bfs/music/dee637baa58ec632ebf928312dfd8986611a465b.jpg",
             t.coverUrl,
         )
-        assertTrue("歌词必须是 LRC 原文", t.lyric!!.startsWith("[00:00.00]"))
+        // ⚠️ `song/info` 的 `lyric` 是**文件 URL**，不是正文 —— 实测形状如此
+        // （evidence/02-songinfo-au39.txt）。把它当正文喂 LrcParser 会解析出 0 行。
+        assertTrue("song/info 的 lyric 是 URL", BiliParse.looksLikeUrl(t.lyric))
         assertTrue(t.isAudioZone)
     }
 
@@ -187,6 +189,37 @@ class BiliParseTest {
                 """{"code":4511001,"data":null,"message":"音频未找到或已下架","msg":"音频未找到或已下架"}""",
             ),
         )
+    }
+
+    /** `/audio/music-service-c/web/song/lyric` 的真实响应（`evidence/21-lyric-au39.txt`，截断）。 */
+    private val audioLyricJson =
+        """{"code":0,"msg":"success","data":"[00:33.26]让我掉下眼泪的\n[00:36.93]不止昨夜的酒"}"""
+
+    @Test
+    fun `歌词正文走 song_lyric 而不是 song_info 的 lyric 字段`() {
+        val text = BiliParse.parseAudioLyric(audioLyricJson)
+        assertNotNull(text)
+        assertTrue("必须是 LRC 正文", text!!.startsWith("[00:33.26]"))
+        assertFalse("它不是 URL", BiliParse.looksLikeUrl(text))
+    }
+
+    @Test
+    fun `song_lyric 的两义性：没有 data 是 null 空串是空串`() {
+        assertNull("code!=0 ⇒ 没有这个数据源", BiliParse.parseAudioLyric("""{"code":4511001,"data":null}"""))
+        assertNull("没有 data 键 ⇒ 没有这个数据源", BiliParse.parseAudioLyric("""{"code":0,"msg":"success"}"""))
+        assertEquals("data 为空串 ⇒ 这首歌确实没有歌词", "", BiliParse.parseAudioLyric("""{"code":0,"data":""}"""))
+        assertNull("坏响应不抛", BiliParse.parseAudioLyric("<html>412</html>"))
+        assertNull(BiliParse.parseAudioLyric(null))
+    }
+
+    @Test
+    fun `looksLikeUrl 认出三种 URL 形状`() {
+        assertTrue(BiliParse.looksLikeUrl("http://i0.hdslb.com/x.lrc"))
+        assertTrue(BiliParse.looksLikeUrl("https://i0.hdslb.com/x.lrc"))
+        assertTrue(BiliParse.looksLikeUrl("//i0.hdslb.com/x.lrc"))
+        assertFalse(BiliParse.looksLikeUrl("[00:01.00]歌词"))
+        assertFalse(BiliParse.looksLikeUrl(""))
+        assertFalse(BiliParse.looksLikeUrl(null))
     }
 
     @Test

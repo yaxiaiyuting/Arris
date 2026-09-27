@@ -70,9 +70,30 @@ object BiliApi {
     private const val NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
     private const val SEARCH_URL = "https://api.bilibili.com/x/web-interface/wbi/search/type"
     private const val VIEW_URL = "https://api.bilibili.com/x/web-interface/view"
-    private const val PLAYURL_URL = "https://api.bilibili.com/x/player/wbi/playurl"
+    /**
+     * ⚠️ **必须用旧路径 `/x/player/playurl`，不能用 `/x/player/wbi/playurl`。**
+     *
+     * 实测（2026-09-28，直连，同一 bvid/cid）：
+     * - `/x/player/wbi/playurl` + **正确签名** `w_rid` ⇒ **HTTP 412**（3286 字节 HTML）；
+     *   无签名 / 伪造签名 / 不带 Cookie 四种组合**全部 412**，带正确签名的那次还直接挂住不返回
+     *   ⇒ 这是**路径级封禁**，不是签名写错；
+     * - `/x/player/playurl` + `fnval=4048` ⇒ `code:0` + 完整 DASH（3 条 audio，
+     *   带宽 43962 / 102931 / 203786）。
+     *
+     * `fnval=4048` 与 `fnval=16` 的区别是它同时请求 DASH + 各种特性位；对音频提取没有副作用，
+     * 而旧路径**不接受** wbi 签名（带了也无害，见 [videoAudioStream] 走的是普通 GET）。
+     */
+    private const val PLAYURL_URL = "https://api.bilibili.com/x/player/playurl"
+
+    /**
+     * DASH 的 `fnval`。**4048 = DASH + 一堆特性位**，是社区与实测都拿到完整
+     * `dash.audio[]` 的取值；`fnval=16`（纯 DASH）在旧路径上同样可用，
+     * 但 4048 是实测过的那个，不留"看起来等价"的第二个选择。
+     */
+    private const val PLAYURL_FNVAL = "4048"
     private const val AUDIO_INFO_URL = "https://www.bilibili.com/audio/music-service-c/web/song/info"
     private const val AUDIO_URL = "https://www.bilibili.com/audio/music-service-c/web/url"
+    private const val AUDIO_LYRIC_URL = "https://www.bilibili.com/audio/music-service-c/web/song/lyric"
 
     /** 手机端 Web UA。用 PC 的桌面 UA 会被某些风控策略区别对待（实测 nav 无差别，取保守值）。 */
     private const val UA =
@@ -184,16 +205,51 @@ object BiliApi {
     /**
      * 签名是否被服务端拒绝。
      *
-     * 判据是**两个**：HTTP 层拿不到结构化响应（412 的正文是 HTML，解析不出 `code`），
-     * 或结构化响应里的 `code` 是 `-403`（访问权限不够）/ `-1200`（被降级过滤）。
-     * 只看其中一个都会漏掉另一半。
+     * 判据是**两类**，缺一不可：
+     * 1. HTTP 层拿不到结构化响应 —— 412 的正文是 HTML，解析不出 `code`；
+     * 2. 结构化响应里的 `code` 是 `-352`（**风控校验失败**，实测「缺签名 / 错签名」
+     *    就是这一档，且 HTTP 状态是 200）、`-403`（访问权限不够）、`-1200`（被降级过滤）。
+     *
+     * ## 为什么 `-352` 必须在这里（漏了它的后果是静默的）
+     *
+     * wbi 密钥每天轮换。轮换之后**旧密钥仍然能算出一个 `w_rid`** —— 请求发得出去、
+     * HTTP 也是 200，只是 `code:-352`、`data` 为空。若不认这一档，
+     * 表现就是「B 站搜索从某一天起永远是 0 条」，而且要等到 6 小时的密钥 TTL
+     * 自然到期才可能恢复。认了它，[signedGet] 会**立刻**强制刷新一次密钥再试。
      */
     internal fun isSignatureRejected(body: String?): Boolean {
         val text = body.orEmpty()
         if (text.isBlank()) return true
         if (!text.trimStart().startsWith("{")) return true
         val code = runCatching { org.json.JSONObject(text).optInt("code", 0) }.getOrDefault(0)
-        return code == -403 || code == -1200
+        return code == -352 || code == -403 || code == -1200
+    }
+
+    /**
+     * 取音频区曲目的 **LRC 歌词正文**。
+     *
+     * ## 为什么不能直接用 `song/info` 的 `lyric` 字段
+     *
+     * 实测（`bili-research/evidence/02-songinfo-au39.txt`）：
+     * `song/info` 的 `lyric` 是**一个 LRC 文件的 URL**
+     * （`http://i0.hdslb.com/bfs/music/149994607539.lrc`），**不是歌词正文**；
+     * 而且大部分曲目这个字段是空串。
+     *
+     * 把它当正文喂给 `LrcParser` 的结果是解析出 0 行 ⇒ 界面永远「暂无歌词」——
+     * 一个不会报错、只会静默失效的实现。
+     *
+     * 真正的歌词在 `/audio/music-service-c/web/song/lyric?sid=`：实测 `data`
+     * **直接就是 LRC 文本**（`[00:33.26]让我掉下眼泪的
+…`）。
+     *
+     * @return LRC 正文；服务端没有这份数据时返回 **null**（「没有这个数据源」），
+     *   有但为空时返回**空串**（「这首歌确实没有歌词」）—— 这个两义性与
+     *   `LyricLoadCoordinator.State` 的 Empty / Error 之分是同一条纪律。
+     */
+    fun audioLyric(auid: Long): String? {
+        if (auid <= 0L) return null
+        val body = runCatching { get("$AUDIO_LYRIC_URL?sid=$auid") }.getOrNull() ?: return null
+        return BiliParse.parseAudioLyric(body)
     }
 
     // ---------------------------------------------------------------- 搜索（视频） ----
@@ -239,15 +295,9 @@ object BiliApi {
      */
     fun videoAudioStream(bvid: String, cid: Long): BiliStream? {
         if (bvid.isBlank() || cid <= 0L) return null
-        val params = mapOf(
-            "bvid" to bvid,
-            "cid" to cid.toString(),
-            "fnval" to "16",
-            "fnver" to "0",
-            "fourk" to "1",
-        )
+        // **普通 GET，不签名** —— 见 [PLAYURL_URL] 的实测说明（wbi 路径是封禁的）。
         return try {
-            val body = signedGet(PLAYURL_URL, params)
+            val body = get(playUrlFor(bvid, cid))
             BiliParse.parseDashAudio(body)
         } catch (e: Exception) {
             Log.w(TAG, "playurl failed: $bvid/$cid", e)
@@ -279,6 +329,17 @@ object BiliApi {
             .onFailure { Log.w(TAG, "audio url failed: $auid qn=$qn", it) }
             .getOrNull()
     }
+
+    /**
+     * 播放地址请求的 URL。**抽出来是为了能被单测钉死。**
+     *
+     * 它防的是一次具体的、已经发生过的错：v3.1.0 的第一版走的是
+     * `/x/player/wbi/playurl` + 签名，而那条路径实测**带正确签名也 412**
+     * （见 [PLAYURL_URL] 的四种组合对照）。这种错不会让单测变红、只会让
+     * 「B 站搜得到但放不出来」—— 所以把 URL 的形状本身变成一条断言。
+     */
+    internal fun playUrlFor(bvid: String, cid: Long): String =
+        "$PLAYURL_URL?bvid=$bvid&cid=$cid&fnval=$PLAYURL_FNVAL&fnver=0&fourk=1"
 
     /** 只给诊断用：B 站是否可达（一次极轻量的 nav 请求）。**不在任何热路径上。** */
     fun probeReachable(): Boolean = runCatching { get(NAV_URL).isNotBlank() }.getOrDefault(false)
