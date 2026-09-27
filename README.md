@@ -10,7 +10,7 @@
 
 **This is a GPLv3 fork of [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust), maintained by [yaxiaiyuting](https://github.com/yaxiaiyuting).**
 
-[![Version](https://img.shields.io/badge/version-2.9.0--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Ncrust/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Ncrust/releases)
 [![APK](https://img.shields.io/badge/APK-9.8%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Ncrust/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
