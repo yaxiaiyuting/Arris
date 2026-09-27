@@ -43,6 +43,49 @@ class SettingsRenderPlanTest {
     // ── 1. 恰好一次（不丢项 / 不重复）────────────────────────────────────────────────
 
     @Test
+    fun `levelOneCardListMatchesRegistryGroupsExactly`() {
+        // 一级页（UserScreen）渲染的就是 cardGroups()，这里断言数量与顺序
+        val cards = SettingsRenderPlan.cardGroups()
+        assertEquals(SettingsRegistry.groups(), cards)
+        assertEquals("一级页必须是 7 张卡片", 7, cards.size)
+        assertEquals(
+            listOf("account", "general", "appearance", "playback", "lyrics", "storage", "about"),
+            cards.map { it.id },
+        )
+        assertTrue("每个分组都必须有可渲染的行", cards.all { SettingsRenderPlan.plannedRowsOf(it.id).isNotEmpty() })
+    }
+
+    @Test
+    fun `renderedRowCountPerGroupIsPinnedAndNothingIsLost`() {
+        // 逐组钉住行数：任何「顺手多渲染一行 / 少渲染一行」都会在这里变红。
+        val counts = SettingsRenderPlan.cardGroups().associate { group ->
+            group.id to SettingsRenderPlan.plannedRowsOf(group.id).size
+        }
+        assertEquals(
+            mapOf(
+                "account" to 2,      // 网易云账号块 + QQ 音乐账号块
+                "general" to 4,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行
+                "appearance" to 5,   // 主题模式 / 主题色 / 主题色来源 / 页面切换动效 / 自定义背景
+                "playback" to 11,    // 音质×2 / 无缝 / 禁止熄屏 / 可视化 / 波形 6 项
+                "lyrics" to 9,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
+                "storage" to 3,      // 离线缓存上限 / 清除缓存 / 离线缓存管理
+                "about" to 1,        // 关于
+            ),
+            counts,
+        )
+        assertEquals(35, counts.values.sum())
+        // 55 条 registry 条目 = 16 条内部项（从来不渲染） + 4 条库页承载 + 35 条二级页渲染
+        assertEquals(55, SettingsRegistry.allEntries().size)
+        assertEquals(16, SettingsRegistry.allEntries().count { it.isInternal })
+        assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
+        assertEquals(
+            "内部项 + 库页承载 + 二级页渲染必须等于全部条目（不丢项）",
+            SettingsRegistry.allEntries().size,
+            16 + 4 + counts.values.sum(),
+        )
+    }
+
+    @Test
     fun `everyNonInternalEntryIsMappedExactlyOnce`() {
         val planned = SettingsRegistry.groups().flatMap { SettingsRenderPlan.plannedRowsOf(it.id) }
         val plannedIds = planned.map { it.id }

@@ -45,7 +45,7 @@ import com.takahashirinta.ncrust.ui.components.settingsGroupSubtitle
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
-import com.takahashirinta.ncrust.ui.settings.SettingsRegistry
+import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
 import io.github.takahashirinta.kanesumi.anim.sokuou.rememberMetroFlingBehavior
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
@@ -90,9 +90,9 @@ fun UserScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // 分组顺序 = registry 的枚举声明顺序（一级页卡片列表 == SettingsRegistry.groups()，
-            // 由 SettingsRenderPlanTest / SettingsGroupRouteTest 断言）。
-            SettingsRegistry.groups().forEachIndexed { index, group ->
+            // 分组顺序 = registry 的枚举声明顺序（一级页卡片列表 == SettingsRenderPlan.cardGroups()，
+            // 由 SettingsRenderPlanTest 断言）。
+            SettingsRenderPlan.cardGroups().forEachIndexed { index, group ->
                 item(key = "settings.group.${group.id}") {
                     if (index > 0) SettingsCardDivider()
                     SettingsGroupCard(

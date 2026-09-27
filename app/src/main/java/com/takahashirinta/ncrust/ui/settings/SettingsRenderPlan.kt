@@ -121,6 +121,14 @@ object SettingsRenderPlan {
     /** 不渲染的两种形态。 */
     private val NOT_RENDERED = setOf(SettingsRowKind.INTERNAL, SettingsRowKind.HOSTED_ELSEWHERE)
 
+    /**
+     * **一级页的卡片列表**（数量与顺序 = 7 个分组）。
+     *
+     * 一级页渲染的就是这个函数（`UserScreen.kt`），单测断言的也是它 —— 卡片少一张、
+     * 顺序变了，不可能只发生在一侧。
+     */
+    fun cardGroups(): List<SettingsGroup> = SettingsRegistry.groups()
+
     /** 条目由哪个外部界面承载；`null` = 不是外部承载。 */
     fun hostOf(entryId: String): String? = if (entryId in HOSTED_ELSEWHERE) HOST_LIBRARY else null
 
