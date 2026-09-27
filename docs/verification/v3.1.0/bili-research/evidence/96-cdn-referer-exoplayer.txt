@@ -1,0 +1,52 @@
+# ⚠️ 关键：B站 CDN 对**三种流**都强校验 Referer —— 不带头一律 403
+# 实测时间: 2026-09-28 02:5x (+0800)   出口: 直连(无代理)   身份: 匿名
+# 背景：Ncrust 的 ExoPlayer 数据源工厂是
+#   app/src/main/java/com/takahashirinta/ncrust/cache/OfflineAudioCache.kt:111
+#     fun dataSourceFactory(context: Context): DataSource.Factory =
+#         CacheDataSource.Factory()
+#             .setCache(c)
+#             .setUpstreamDataSourceFactory(DefaultDataSource.Factory(app))   // ← 无任何 defaultRequestProperties
+#             ...
+#     ⇒ DefaultHttpDataSource 只带 UA，**不带 Referer**
+#   app/src/main/java/com/takahashirinta/ncrust/player/SongUrlFetcher.kt:34
+#     data class SongUrlResult(val url: String, ...)   // ← 没有 headers 字段
+#     ⇒ 取链结果无处携带 Referer
+
+=== 1) 音频区 CDN（web 端点 192K）===
+  带 B站 Referer : HTTP=206
+  只带 UA/无Ref  : HTTP=403
+  模拟 ExoPlayer : HTTP=403   (UA=ExoPlayerLib/1.2.1, Accept-Encoding: identity)
+
+=== 2) 音频区 CDN（APP 端点 320K）===
+  带 B站 Referer : HTTP=206
+  模拟 ExoPlayer : HTTP=403
+
+=== 3) 视频 DASH 音轨 CDN（legacy playurl + buvid3）
+  host = b-baaa6b14dc82ptf2i9ztakm7g4wue.edge.mountaintoys.cn:4483
+  带 B站 Referer : HTTP=206
+  只带 UA/无Ref  : HTTP=403
+  模拟 ExoPlayer : HTTP=403
+
+⇒ 结论：**不管走哪条路（音频区 192K / 音频区 320K / 视频 DASH），
+   ExoPlayer 取流都必须带 `Referer: https://www.bilibili.com/`，否则 403。**
+   三条路的表现完全一致 —— 说明这是 B站 CDN（openresty）的统一防盗链策略，
+   与音源方式无关。
+
+⇒ 修法（两选一，或都做）：
+   A. 给 SongUrlResult 加 `headers: Map<String,String>`，由 BiliSourceProvider 填
+      {"Referer": "https://www.bilibili.com/"}；PlaybackService 建 MediaItem 时
+      用 `MediaItem.Builder().setUri(...).setMimeType(...)` + 把 headers 传进
+      一个按 host 判定的 DataSource.Factory。
+   B. 在 OfflineAudioCache.dataSourceFactory 的 DefaultDataSource.Factory 上挂
+      `setDefaultRequestProperties(mapOf("Referer" to "https://www.bilibili.com/"))`
+      —— 但**必须按 host 限定**（只对 bilivideo.com / hdslb.com / *.mountaintoys.cn 等
+      B站 CDN 加），否则会给网易云/QQ 的请求也带上 B站 Referer，
+      有把现有音源打出 403 的风险（本项目已实测过「拿网易云 Referer 请求 B站 → 403」）。
+   C. 更干净的做法：让 Provider 在返回 URL 时**把 Referer 需求编码进结果**
+      （headers 字段），由 PlaybackService 在新版 media3 的
+      `MediaItem.RequestMetadata` / 自定义 `DataSource.Factory` 里落实。
+
+⚠️ 另注：`CacheDataSource` 会把上游响应写进 `SimpleCache`。**403 的响应体也会被写进缓存**
+   吗 —— 取决于 `FLAG_IGNORE_CACHE_ON_ERROR`（当前已设），但**未实测**。
+   建议在实现 Referer 之后，清一次 `filesDir/offline/audio` 再验证，
+   以免历史 403 污染缓存导致「修了还是没声」。
