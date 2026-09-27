@@ -149,16 +149,37 @@ class VisualizerPrefsTest {
     // 迁移：缺 key 取默认、非法值回落、幂等、既有键一个不动
     // ------------------------------------------------------------------
 
+    /**
+     * v1 的迁移在「键缺失」时是**严格 no-op**：`DEFAULT_TIER_VERSION` 与
+     * `CURRENT_TIER_VERSION` 都是 1，缺 key 读出来就是当前水位，没有需要搬运的键。
+     * 这条用例把「no-op 且不偷偷写键」钉住 —— 悄悄写一个等于默认值的键，
+     * 会让「这个键到底代不代表用户选择过」更难判断。
+     */
     @Test
-    fun `迁移把水位从缺省补到当前版本`() {
+    fun `缺 key 时迁移不写盘也不新增键`() {
         val prefs = FakePrefs()
+        prefs.putRaw("audio_visualizer", true)
+        val before = prefs.getAll().toMap()
+        assertFalse(VisualizerPrefs.migrate(prefs))
+        assertEquals(before, prefs.getAll().toMap())
+        assertEquals(VisualizerPrefs.CURRENT_TIER_VERSION, VisualizerPrefs.readTierVersion(prefs))
+    }
+
+    /** 水位**低于**当前版本时（回滚安装 / 脏盘 / 将来的搬运版本）才真的写盘。 */
+    @Test
+    fun `低水位被补到当前版本`() {
+        val prefs = FakePrefs()
+        prefs.putRaw(VisualizerPrefs.KEY_TIER_VERSION, 0)
         assertTrue(VisualizerPrefs.migrate(prefs))
         assertEquals(VisualizerPrefs.CURRENT_TIER_VERSION, VisualizerPrefs.readTierVersion(prefs))
+        // 补过之后第二次就是 no-op
+        assertFalse(VisualizerPrefs.migrate(prefs))
     }
 
     @Test
     fun `迁移幂等——跑两次结果完全一致，第二次不写盘`() {
         val prefs = FakePrefs()
+        prefs.putRaw(VisualizerPrefs.KEY_TIER_VERSION, 0)
         assertTrue(VisualizerPrefs.migrate(prefs))
         val afterFirst = prefs.getAll().toMap()
         assertFalse("第二次必须直接返回", VisualizerPrefs.migrate(prefs))
@@ -189,7 +210,17 @@ class VisualizerPrefsTest {
         assertEquals(before["wifi_quality"], after["wifi_quality"])
         assertEquals(before["theme_index"], after["theme_index"])
         assertEquals(before[VisualizerPrefs.KEY_TIER], after[VisualizerPrefs.KEY_TIER])
-        assertEquals("只允许新增一个水位键", before.size + 1, after.size)
+        assertEquals("v1 的迁移不新增任何键", before.size, after.size)
+
+        // 低水位那条分支同样不许碰既有键
+        val legacy = FakePrefs()
+        legacy.putRaw("audio_visualizer", false)
+        legacy.putRaw(VisualizerPrefs.KEY_TIER_VERSION, 0)
+        legacy.putRaw(VisualizerPrefs.KEY_TIER, 2)
+        VisualizerPrefs.migrate(legacy)
+        assertEquals(false, legacy.getAll()["audio_visualizer"])
+        assertEquals(2, legacy.getAll()[VisualizerPrefs.KEY_TIER])
+        assertEquals(VisualizerPrefs.CURRENT_TIER_VERSION, legacy.getAll()[VisualizerPrefs.KEY_TIER_VERSION])
     }
 
     /** 老用户（只有 audio_visualizer）**不得**被解读成「选了最低档」。 */

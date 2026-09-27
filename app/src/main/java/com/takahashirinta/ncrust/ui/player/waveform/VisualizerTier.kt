@@ -165,6 +165,22 @@ class VisualizerEffects(
         const val MODE_SPECTRUM = 2
 
         /**
+         * 与档位无关的**基线效果集**（只有 A 档效果）。
+         *
+         * 单例常量，不是每次构造：`WaveformRing.pump` 的老重载（无 effects 参数）与
+         * 单测都复用它 —— 那里如果写成默认参数 `effects = of(...)`，每次调用都会分配一个对象，
+         * 而 `pump` 是**每帧**调用的。
+         */
+        val BASELINE: VisualizerEffects = of(
+            tier = VisualizerTier.SIMPLE,
+            showcase = false,
+            shockwave = false,
+            particles = false,
+            perspective = false,
+            tapInteraction = false,
+        )
+
+        /**
          * 档位 + C 档细分开关 → 效果位。**唯一的映射落点**。
          *
          * 规则（逐条对应任务书 §B 与探针 §3.1）：

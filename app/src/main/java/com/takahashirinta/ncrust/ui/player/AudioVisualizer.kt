@@ -21,11 +21,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
+import kotlin.math.sqrt
 
 /**
  * v1.8.0 · T3：「音频可视化」开关的**唯一读写入口**（与 RotationSetting 同一套写法）。
@@ -136,15 +148,22 @@ object WaveformStore {
     }
 
     /**
-     * UI 线程按帧率调用；有新数据（或平滑尚未收敛）时才让画面失效。
+     * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸尚未收敛）时才让画面失效。
      * @param dtMs 距上一帧的毫秒数（平滑系数由它算，见 [WaveformRing.pump]）。
+     * @param effects 当前档位的能力位（组合期读一次后捕获，帧路径里不再读任何 state）。
      */
-    fun pump(active: Boolean, dtMs: Float) {
-        if (ring.pump(active, dtMs)) generationState.intValue++
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
+        if (ring.pump(active, dtMs, effects)) generationState.intValue++
     }
 
-    /** UI 线程：把滚动窗口拷进复用数组。 */
-    fun snapshot(destination: FloatArray) = ring.copyInto(destination)
+    /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
+    fun snapshot(bars: FloatArray, peaks: FloatArray) = ring.copyInto(bars, peaks)
+
+    /** B 档：呼吸亮度倍率。draw 阶段直接读（不是 Compose state ⇒ 不触发重组）。 */
+    fun breatheScale(): Float = ring.breatheScale()
+
+    /** B 档：渐变流动相位（0..1）。draw 阶段直接读。 */
+    fun flowPhase01(): Float = ring.flowPhase01()
 
     /** 单测 / 调试用。 */
     internal fun resetForTest() {
@@ -196,6 +215,24 @@ fun visualizerFrameIntervalMs(context: Context): Long {
  * @param activeProvider 播放中且未在缓冲。用 lambda 而不是布尔参数：这个值只在
  *   帧循环里读，传布尔会让 PlayerCard 订阅 isPlaying/isBuffering 而整树重组
  *   （AGENTS.md「GPU 零重组」）。
+ *
+ * ## v2.8.0 · P1-A：分级渲染（A/B 档，C 档见 WaveformEffectsState）
+ *
+ * | 档 | 这一档画什么 | 每帧增量（相对现状 28 笔） |
+ * |---|---|---|
+ * | 简洁 | 圆角柱（`drawRoundRect`）+ 峰值保持（每柱一笔细横条）+ 按时序着色（现状的 alpha 阶梯）+ 间距（现状已有） | +≤28 笔（峰值只在高于柱顶 1.5dp 时才画） |
+ * | 精致 | 简洁 + 渐变流动（**缓存 1 个 Brush + TileMode.Repeated + 每帧只改平移相位**）+ 柱顶光点（纯色小圆）+ 呼吸（只乘 alpha） | +≤28 笔（光点） |
+ *
+ * 三条「零分配 / 零重组」的实现要点，改这里之前先读：
+ *
+ *  1. **渐变流动不重建 Brush**：探针点名的 `Brush.infiniteLinearGradient` 在 Compose 里
+ *     **不存在**；而「每帧 new 一个 LinearGradient」= 每帧 1 个对象 + 1 个 colors List +
+ *     1 个 native SkShader，直接违反零分配。这里用 `FlowBrushCache`：只在**尺寸变化**
+ *     （旋转 / 进出大屏 / 分栏）时重建，之后每帧只做一次 `translate`（inline，不分配）。
+ *  2. **平移只作用于色带，不作用于柱子**：画布整体 `translate(-phase)`，每根柱再在自己的
+ *     x 上 `+phase` 抵消 —— 柱子停在原地、Brush 的采样坐标在动，这就是「流动」。
+ *  3. **呼吸只改 alpha**：改 Brush 参数会迫使 shader 每帧重建（回到第 1 条的高成本路线），
+ *     所以呼吸只乘在 `alpha` 上（探针 §2「渐变流动 × 呼吸」那一格的 ✅ 分支）。
  */
 @Composable
 fun AudioVisualizerBars(
@@ -207,10 +244,22 @@ fun AudioVisualizerBars(
     val barColor = LocalMetroColors.current.primary
     val currentActive = rememberUpdatedState(activeProvider)
     val bars = remember(barCount) { FloatArray(barCount) }
+    val peaks = remember(barCount) { FloatArray(barCount) }
     // 设备档位只算一次（isLowRamDevice 不会变）。
     val frameIntervalMs = remember(context) { visualizerFrameIntervalMs(context) }
+    // 分级：**组合期读一次**（改设置或发生一次自动降级时才会重组一次）。
+    // 帧循环与 draw 只用这个捕获值 —— 帧路径里零 state 读（除了下面 draw 里的 generation）。
+    val effects = VisualizerPrefs.effects.value
+    val flowBrushCache = remember(barColor) { FlowBrushCache(barColor) }
+    val density = LocalDensity.current
+    val cornerRadiusPx = with(density) { BAR_CORNER_RADIUS_DP.dp.toPx() }
+    val dotRadiusPx = with(density) { BAR_DOT_RADIUS_DP.dp.toPx() }
+    val peakCapPx = with(density) { BAR_PEAK_CAP_DP.dp.toPx() }
+    val perspectiveModifier = remember(effects.perspective, density) {
+        if (effects.perspective) Modifier.visualizerPerspective(density.density) else Modifier
+    }
 
-    LaunchedEffect(barCount, frameIntervalMs) {
+    LaunchedEffect(barCount, frameIntervalMs, effects) {
         val budgetNs = frameIntervalMs * 1_000_000L
         var lastFrameNs = 0L
         var lastPumpNs = 0L
@@ -222,7 +271,7 @@ fun AudioVisualizerBars(
                         else ((now - lastPumpNs) / 1_000_000f).coerceIn(1f, 100f)
                         lastFrameNs = now
                         lastPumpNs = now
-                        WaveformStore.pump(active = true, dtMs = dtMs)
+                        WaveformStore.pump(active = true, dtMs = dtMs, effects = effects)
                     }
                 }
             } else {
@@ -230,38 +279,218 @@ fun AudioVisualizerBars(
                 delay(frameIntervalMs)
                 lastFrameNs = 0L
                 lastPumpNs = 0L
-                WaveformStore.pump(active = false, dtMs = frameIntervalMs.toFloat())
+                WaveformStore.pump(active = false, dtMs = frameIntervalMs.toFloat(), effects = effects)
             }
         }
     }
 
-    Canvas(modifier) {
+    Canvas(modifier.then(perspectiveModifier)) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
         WaveformStore.generation
-        WaveformStore.snapshot(bars)
+        WaveformStore.snapshot(bars, peaks)
         val n = bars.size
         if (n == 0 || size.width <= 0f || size.height <= 0f) return@Canvas
         val gap = size.width * 0.28f / n
         val barWidth = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
-        val half = size.height / 2f
         val minBar = 1.dp.toPx()
-        for (i in 0 until n) {
-            // 幅度用**平方根**映射到高度，而不是线性。
-            // 音乐（尤其母带压缩过的流行乐）的 RMS 通常落在 0.05~0.3，线性映射只能画出
-            // 带宽 5%~30% 的一排小方块，肉眼像"没在动"；sqrt 把 0.09→0.3、0.25→0.5，
-            // 既保留相对强弱，又让整条带子用得上高度。一次 sqrt/柱/帧（28 次）可忽略。
-            val amplitude = kotlin.math.sqrt(bars[i].coerceIn(0f, 1f))
-            val height = (amplitude * size.height).coerceAtLeast(minBar)
-            // 越靠左（越旧）越淡 —— 不用渐变对象，一次 alpha 计算换来"余韵"观感。
-            val alpha = 0.30f + 0.70f * (i + 1).toFloat() / n
-            drawRect(
-                color = barColor.copy(alpha = alpha),
-                topLeft = androidx.compose.ui.geometry.Offset(
-                    x = i * (barWidth + gap),
-                    y = half - height / 2f,
-                ),
-                size = androidx.compose.ui.geometry.Size(barWidth, height),
+        // 呼吸：只在 B 档读；不是 Compose state ⇒ 不触发重组，只是一次字段读。
+        val breath = if (effects.breathe) WaveformStore.breatheScale() else 1f
+        val flowBrush = if (effects.flow) flowBrushCache.obtain(size.width) else null
+        if (flowBrush != null) {
+            val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
+            // 画布整体左移 phase，每根柱再右移 phase 抵消：柱子不动、色带在流。
+            translate(left = -phasePx) {
+                drawWaveformBars(
+                    bars, peaks, barColor, flowBrush, effects,
+                    xShift = phasePx, barWidth = barWidth, gap = gap, minBar = minBar,
+                    cornerRadiusPx = cornerRadiusPx, dotRadiusPx = dotRadiusPx,
+                    peakCapPx = peakCapPx, breath = breath,
+                )
+            }
+        } else {
+            drawWaveformBars(
+                bars, peaks, barColor, null, effects,
+                xShift = 0f, barWidth = barWidth, gap = gap, minBar = minBar,
+                cornerRadiusPx = cornerRadiusPx, dotRadiusPx = dotRadiusPx,
+                peakCapPx = peakCapPx, breath = breath,
             )
         }
+    }
+}
+
+/** 简洁档的按时序着色：越靠左（越旧）越淡。**这不是频谱**，见 [VisualizerEffects.spectrumColoring]。 */
+private const val TIME_TINT_MIN_ALPHA = 0.30f
+private const val TIME_TINT_ALPHA_SPAN = 0.70f
+
+/** 渐变流动一个色带占条带宽度的比例（0.55 ⇒ 一条带上能看到约 1.8 个周期）。 */
+private const val FLOW_TILE_FRACTION = 0.55f
+
+/** 色带两端与中间的不透明度：两端一样暗 ⇒ `TileMode.Repeated` 的接缝不可见（不然会看到硬边）。 */
+private const val FLOW_DIM_ALPHA = 0.55f
+private const val FLOW_BRIGHT_ALPHA = 1.00f
+
+/**
+ * 圆角半径（dp）。
+ *
+ * 为什么不从 `ui/theme/AppShapes` 取：`AppShapes` 提供的是 `Shape`（给 `Modifier.clip` 用），
+ * 而 `drawRoundRect` 要的是 `CornerRadius`（dp 数值），两者不能互转 —— 本仓库目前只有
+ * `RoundedCornerShape` 一个落点，还没有 dp 半径 token。本版不动 `AppShapes.kt`
+ * （不在本次改动范围内），所以半径常量在 draw 侧本地声明；
+ * **遗留项**：把 `CornerRadius` 半径收敛进 `AppShapes`，并把 `CornerRadius(` 加进
+ * `AppShapesSingleSourceTest` 的 forbidden 列表（探针 §1「圆角柱」一栏的建议）。
+ */
+private const val BAR_CORNER_RADIUS_DP = 2f
+
+/** 柱顶光点半径（dp）。细到能读出"这是柱顶"，又不会盖住柱子本身。 */
+private const val BAR_DOT_RADIUS_DP = 1.2f
+
+/** 峰值横条高度（dp）。 */
+private const val BAR_PEAK_CAP_DP = 1.5f
+
+/** 柱高低于 `minBar × 它` 时不画光点：矮柱上的光点会盖掉柱子本身，看起来像噪点。 */
+private const val DOT_MIN_BAR_MULTIPLE = 3f
+
+/** 3D 透视的固定倾角（度）。恒定值 ⇒ 不产生逐帧 layer 失效（动态倾角要每帧重算矩阵）。 */
+private const val PERSPECTIVE_DEGREES = 9f
+
+/** `cameraDistance = 它 × density`。Compose 默认是 8×density，越大透视越弱；14 是"看得出立体但不夸张"。 */
+private const val PERSPECTIVE_CAMERA_DISTANCE_FACTOR = 14f
+
+/**
+ * C 档的 3D 透视：**新增一个 render layer**（探针 §1「3D 透视」一栏）。
+ *
+ * DrawScope 只有 2D 变换（`withTransform/rotate/scale`），没有 `cameraDistance` 语义，
+ * 所以透视只能走 `graphicsLayer`。代价与取舍：
+ *  - 多一层合成：低端机上这是炫技档里最贵的一项 —— 因此它**默认关**、只在 C 档可见；
+ *  - 倾角恒定（不做逐帧动画）⇒ layer 只在挂载/尺寸变化时更新一次，帧路径零成本；
+ *  - 与圆角柱不冲突（圆角在 local 空间画好再被父矩阵变换）。
+ */
+private fun Modifier.visualizerPerspective(density: Float): Modifier = graphicsLayer {
+    rotationX = PERSPECTIVE_DEGREES
+    cameraDistance = PERSPECTIVE_CAMERA_DISTANCE_FACTOR * density
+}
+
+/**
+ * 一帧的柱状绘制（**顶层私有函数**，不是 draw lambda 里的局部函数）。
+ *
+ * 为什么抽出来：需要它的有两个调用点（流动 / 不流动），而局部函数或 lambda 会带来
+ * 捕获与分配的不确定性。这里全部参数都是基本类型或已存在的对象 ⇒ 调用本身**零分配**。
+ *
+ * @param xShift 只有流动模式非 0：画布已整体左移 `xShift`，这里给每根柱补回去。
+ * @param flowBrush 非 null 时用 `brush=`（渐变流动），否则用 `color=`（按时序着色）——
+ *   两者是 API 层的二选一，[VisualizerEffects.colorChannelMode] 是这条规则的唯一读法。
+ */
+private fun DrawScope.drawWaveformBars(
+    bars: FloatArray,
+    peaks: FloatArray,
+    barColor: Color,
+    flowBrush: Brush?,
+    effects: VisualizerEffects,
+    xShift: Float,
+    barWidth: Float,
+    gap: Float,
+    minBar: Float,
+    cornerRadiusPx: Float,
+    dotRadiusPx: Float,
+    peakCapPx: Float,
+    breath: Float,
+) {
+    val n = bars.size
+    val half = size.height / 2f
+    val heightPx = size.height
+    val cornerRadius = CornerRadius(cornerRadiusPx)
+    val dotThreshold = minBar * DOT_MIN_BAR_MULTIPLE
+    val peakVisibleDelta = peakCapPx
+    for (i in 0 until n) {
+        // 幅度用**平方根**映射到高度，而不是线性。
+        // 音乐（尤其母带压缩过的流行乐）的 RMS 通常落在 0.05~0.3，线性映射只能画出
+        // 带宽 5%~30% 的一排小方块，肉眼像"没在动"；sqrt 把 0.09→0.3、0.25→0.5，
+        // 既保留相对强弱，又让整条带子用得上高度。一次 sqrt/柱/帧（28 次）可忽略。
+        val amplitude = sqrt(bars[i].coerceIn(0f, 1f))
+        val barHeight = (amplitude * heightPx).coerceAtLeast(minBar)
+        val left = i * (barWidth + gap) + xShift
+        val top = half - barHeight / 2f
+        // 越靠左（越旧）越淡 —— 不用渐变对象，一次 alpha 计算换来"余韵"观感。
+        // 流动模式下这条色带让给 Brush（同一笔绘制要么 color 要么 brush），alpha 只剩呼吸。
+        val alpha = if (flowBrush == null) {
+            (TIME_TINT_MIN_ALPHA + TIME_TINT_ALPHA_SPAN * (i + 1).toFloat() / n) * breath
+        } else {
+            breath
+        }
+        if (effects.rounded) {
+            if (flowBrush != null) {
+                drawRoundRect(
+                    brush = flowBrush,
+                    topLeft = Offset(left, top),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = cornerRadius,
+                    alpha = alpha,
+                )
+            } else {
+                drawRoundRect(
+                    color = barColor,
+                    topLeft = Offset(left, top),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = cornerRadius,
+                    alpha = alpha,
+                )
+            }
+        } else if (flowBrush != null) {
+            drawRect(brush = flowBrush, topLeft = Offset(left, top), size = Size(barWidth, barHeight), alpha = alpha)
+        } else {
+            drawRect(color = barColor, topLeft = Offset(left, top), size = Size(barWidth, barHeight), alpha = alpha)
+        }
+        if (effects.dots && barHeight > dotThreshold) {
+            drawCircle(
+                color = barColor,
+                radius = dotRadiusPx,
+                center = Offset(left + barWidth / 2f, top - dotRadiusPx),
+                alpha = breath,
+            )
+        }
+        if (effects.peaks) {
+            // 峰值用与柱子**同一个** sqrt 映射，否则两者不可比（峰值会看起来比柱子还矮）。
+            val peakHeight = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx
+            if (peakHeight > barHeight + peakVisibleDelta) {
+                drawRect(
+                    color = barColor,
+                    topLeft = Offset(left, half - peakHeight / 2f - peakCapPx),
+                    size = Size(barWidth, peakCapPx),
+                    alpha = 0.9f * breath,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 渐变流动的 Brush 缓存：**只在宽度变化时重建**（旋转 / 进出大屏 / 平板分栏）。
+ *
+ * 关键点是 `TileMode.Repeated` + 两端同色的色带：让一个周期在任意宽度下都能无缝循环，
+ * 于是"流动"只需要改一个平移量，不需要每帧构造 shader。
+ */
+private class FlowBrushCache(private val color: Color) {
+    private var cachedWidth = Float.NaN
+    private var cached: Brush? = null
+
+    fun obtain(widthPx: Float): Brush {
+        val width = if (widthPx > 0f) widthPx else 1f
+        val existing = cached
+        if (existing != null && cachedWidth == width) return existing
+        val tile = (width * FLOW_TILE_FRACTION).coerceAtLeast(1f)
+        val colors = listOf(
+            color.copy(alpha = FLOW_DIM_ALPHA),
+            color.copy(alpha = FLOW_BRIGHT_ALPHA),
+            color.copy(alpha = FLOW_DIM_ALPHA),
+        )
+        val brush = Brush.linearGradient(
+            colors = colors,
+            start = Offset.Zero,
+            end = Offset(tile, 0f),
+            tileMode = TileMode.Repeated,
+        )
+        cachedWidth = width
+        cached = brush
+        return brush
     }
 }

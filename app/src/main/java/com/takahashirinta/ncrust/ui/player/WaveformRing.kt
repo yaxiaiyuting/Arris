@@ -8,6 +8,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import kotlin.math.abs
 import kotlin.math.exp
 
@@ -35,6 +36,23 @@ import kotlin.math.exp
  *
  * 时间常数形式（`k = 1 - exp(-dt/tau)`）而不是固定系数，是为了**与刷新率无关**：
  * 60fps 与 30fps 下同一条曲线，低端机降帧率不会让观感变形。
+ *
+ * ## v2.8.0 · P1-A：峰值保持 + 两个动画相位（仍然零分配）
+ *
+ * A 档的**峰值保持**（[peaks]）与 B 档的**渐变流动相位** / **呼吸相位**都放在这一层，
+ * 理由有两个，都是踩过的坑：
+ *
+ *  1. **可单测**：这些量都是"每帧推进一步"的纯状态，放 draw lambda 里就只能靠肉眼；
+ *  2. **必须并进收敛判据**：探针 §1 明确警告过「峰值只活在 draw 里 ⇒ bars 一收敛就
+ *     `pump` 返回 false ⇒ 峰值冻在画面上永不落下」（v1.8.1 被单测抓到过同形状的缺陷）。
+ *     所以 [pump] 的返回值把「峰值还在落 / 呼吸还在走」也算进去，`WaveformRingTierTest`
+ *     有专门用例钉住「峰值最终归零且之后不再要求重绘」。
+ *
+ * 两个相位的**空转边界**：相位只在 `active`（播放中且未缓冲）**且画面最新一根柱还有内容**
+ * （`bars[barCount-1] > [ANIMATION_MIN_SIGNAL]`）时前进，而且只有真的前进了才要求重绘 ——
+ * 否则一首歌的静音段会让 60fps 白烧在一条什么都没有的波形上，与 `AudioVisualizer.kt`
+ * 的「不空转」契约冲突。渐变流动没有额外的门槛：它和呼吸共用同一个「有信号」条件
+ * （静音时既没有色带要流、也不该呼吸）。
  */
 class WaveformRing(
     /** 环形缓冲容量（柱数）。UI 掉帧时最多积压这么多，再多就丢最旧的。 */
@@ -67,6 +85,18 @@ class WaveformRing(
     /** 画面上的柱子高度（0..1）= 平滑后的值。UI 线程原地更新。 */
     private val bars = FloatArray(barCount)
 
+    /** A 档：峰值（0..1）。独立数组，每帧原地更新 —— 绝不每帧分配。 */
+    private val peaks = FloatArray(barCount)
+
+    /** 每个柱的峰值保持剩余时间（毫秒）。到 0 之后峰值才按 [PEAK_FALL_PER_SECOND] 下落。 */
+    private val peakHoldMs = FloatArray(barCount)
+
+    /** B 档：渐变流动相位（0..1 循环）。 */
+    private var flowPhase = 0f
+
+    /** B 档：呼吸相位（0..1 循环）。 */
+    private var breathePhase = 0f
+
     /** 音频线程：推入一根柱（RMS 幅度，0..1）。 */
     fun push(value: Float) {
         // NaN / Inf 防御：环形缓冲的边界读在和写者赛跑时理论上可能读到半个值
@@ -80,7 +110,14 @@ class WaveformRing(
         readIndex = writeIndex
         bars.fill(0f)
         targets.fill(0f)
+        peaks.fill(0f)
+        peakHoldMs.fill(0f)
+        flowPhase = 0f
+        breathePhase = 0f
     }
+
+    /** UI 线程按帧率调用（效果全关的基线路径，老调用点与单测沿用这个重载）。 */
+    fun pump(active: Boolean, dtMs: Float): Boolean = pump(active, dtMs, VisualizerEffects.BASELINE)
 
     /**
      * UI 线程按帧率调用。
@@ -89,10 +126,11 @@ class WaveformRing(
      *   false 时把**数据值**归零，画面值按 [RELEASE_TAU_MS] 衰减到 0
      *   —— 暂停/缓冲瞬间清零会"闪一下"，衰减看起来像余震自然消失。
      * @param dtMs 距上一帧的毫秒数。平滑系数由它算出来，所以 30fps 与 60fps 观感一致。
-     * @return 画面是否需要重绘。**完全静止（没有新数据且已收敛）时返回 false** ——
-     *   这是"暂停后不再白烧 GPU"的保证。
+     * @param effects 当前档位的能力位：只决定「峰值保持 / 相位动不动」，渲染细节不在这里。
+     * @return 画面是否需要重绘。**完全静止（没有新数据、已收敛、峰值已落、相位已停）时
+     *   返回 false** —— 这是"暂停后不再白烧 GPU"的保证。
      */
-    fun pump(active: Boolean, dtMs: Float): Boolean {
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects): Boolean {
         var changed = false
         if (active) {
             changed = consumePending()
@@ -100,7 +138,27 @@ class WaveformRing(
             targets.fill(0f)
             changed = true
         }
-        return approach(dtMs) || changed
+        val dt = dtMs.coerceIn(0f, 200f)
+        val animated = approach(dt, effects)
+        // 相位只在「播放中 **且** 画面最新一根柱还有内容」时前进，并且只有真的前进了才要求重绘。
+        // 这一条就是探针 §2「呼吸 / 粒子 / 涟漪 × 暂停即停帧契约」要求的**显式停止条件**：
+        // 静音段与暂停态都不会为动画排帧（`pump` 返回 false ⇒ generation 不增 ⇒ 不失效）。
+        //
+        // 判据用**画面值**（bars 的最后一根）而不是原始数据（targets）：
+        //  - 画面值带 130ms 回落时间常数 ⇒ 单个安静缓冲块（33ms）不会让流动一顿一顿；
+        //  - 它归零就等于"画面上已经什么都没有了"，此时继续排帧纯属白烧（暂停/放完/长期静音）。
+        var phaseAdvanced = false
+        if (active && bars[barCount - 1] > ANIMATION_MIN_SIGNAL) {
+            if (effects.flow) {
+                flowPhase = advancePhase(flowPhase, dt, FLOW_PERIOD_MS)
+                phaseAdvanced = true
+            }
+            if (effects.breathe) {
+                breathePhase = advancePhase(breathePhase, dt, BREATHE_PERIOD_MS)
+                phaseAdvanced = true
+            }
+        }
+        return animated || changed || phaseAdvanced
     }
 
     /** 把环形缓冲里 UI 还没消费的柱搬进 [targets]。 */
@@ -149,24 +207,61 @@ class WaveformRing(
      * （`current != target`），配合下面的收敛截断：只要没到位就继续重绘，一旦吸附到
      * 目标值就精确相等、下一帧自然停。
      *
-     * @return 有柱子还没到位（需要重绘）时为 true。
+     * v2.8.0 起峰值保持也并进这个返回值：峰值下落期间必须继续重绘，落到位之后精确相等。
+     *
+     * @return 有柱子还没到位、或峰值还在动（需要重绘）时为 true。
      */
-    private fun approach(dtMs: Float): Boolean {
-        val dt = dtMs.coerceIn(0f, 200f)
+    private fun approach(dt: Float, effects: VisualizerEffects): Boolean {
         val kAttack = 1f - exp(-dt / ATTACK_TAU_MS)
         val kRelease = 1f - exp(-dt / RELEASE_TAU_MS)
         var changed = false
         for (i in bars.indices) {
             val target = targets[i]
             val current = bars[i]
-            if (current == target) continue
-            val k = if (target > current) kAttack else kRelease
-            val next = current + (target - current) * k
-            // 收敛截断：无限逼近永远不等于目标，不截断就会永远"需要重绘"。
-            bars[i] = if (abs(next - target) < SETTLE_EPSILON) target else next
-            changed = true
+            if (current != target) {
+                val k = if (target > current) kAttack else kRelease
+                val next = current + (target - current) * k
+                // 收敛截断：无限逼近永远不等于目标，不截断就会永远"需要重绘"。
+                bars[i] = if (abs(next - target) < SETTLE_EPSILON) target else next
+                changed = true
+            }
+            if (effects.peaks && advancePeak(i, dt, bars[i])) changed = true
         }
         return changed
+    }
+
+    /**
+     * 峰值保持：`max(柱, 上一帧峰值)`，到达新峰值时重置保持计时；保持期结束后按
+     * [PEAK_FALL_PER_SECOND] 匀速下落，但**绝不低于当前柱高**（否则光点会插进柱子里）。
+     *
+     * @return 峰值是否变化（需要重绘）。
+     */
+    private fun advancePeak(index: Int, dt: Float, bar: Float): Boolean {
+        val previous = peaks[index]
+        val next: Float
+        if (bar >= previous) {
+            next = bar
+            peakHoldMs[index] = PEAK_HOLD_MS
+        } else if (peakHoldMs[index] > 0f) {
+            peakHoldMs[index] = (peakHoldMs[index] - dt).coerceAtLeast(0f)
+            next = previous
+        } else {
+            var fallen = previous - PEAK_FALL_PER_SECOND * dt / 1000f
+            if (fallen < bar) fallen = bar
+            if (fallen < 0f) fallen = 0f
+            next = fallen
+        }
+        if (next == previous) return false
+        peaks[index] = next
+        return true
+    }
+
+    /** 相位推进：只在 [periodMs] 内循环，用取模而不是累加 —— 长跑不会丢精度。 */
+    private fun advancePhase(phase: Float, dt: Float, periodMs: Float): Float {
+        if (periodMs <= 0f) return 0f
+        var next = phase + dt / periodMs
+        if (next >= 1f) next -= (next.toInt()).toFloat()
+        return if (next.isFinite()) next else 0f
     }
 
     /** 把滚动窗口拷进调用方**复用**的数组（避免每帧分配）。 */
@@ -175,11 +270,33 @@ class WaveformRing(
         for (i in 0 until n) destination[i] = bars[i]
     }
 
+    /** 把滚动窗口与峰值一起拷进调用方复用的两个数组（渲染路径用，零分配）。 */
+    fun copyInto(barsDestination: FloatArray, peaksDestination: FloatArray) {
+        copyInto(barsDestination)
+        val n = minOf(peaksDestination.size, barCount)
+        for (i in 0 until n) peaksDestination[i] = peaks[i]
+    }
+
+    /** B 档：呼吸亮度倍率（[1-BREATHE_DEPTH] .. 1）。draw 阶段直接读，不触发重组。 */
+    fun breatheScale(): Float {
+        if (!breathePhase.isFinite()) return 1f
+        // 用 cos 而不是 sin：相位 0（起播那一刻）就是**满亮度** —— 呼吸的第一步不该先暗一下。
+        // 0.5 + 0.5·cos(2π·phase) ∈ [0,1]，再映射到 [1-DEPTH, 1]。
+        val wave = 0.5f + 0.5f * kotlin.math.cos(TWO_PI * breathePhase)
+        return 1f - BREATHE_DEPTH + BREATHE_DEPTH * wave
+    }
+
+    /** B 档：渐变流动相位（0..1 循环）。 */
+    fun flowPhase01(): Float = if (flowPhase.isFinite()) flowPhase else 0f
+
     /** 单测用：画面值（平滑后）。 */
     fun barAt(index: Int): Float = bars[index]
 
     /** 单测用：数据值（未平滑）。 */
     fun targetAt(index: Int): Float = targets[index]
+
+    /** 单测用：峰值。 */
+    fun peakAt(index: Int): Float = peaks[index]
 
     /** 单测用：还没被 UI 消费的柱数。 */
     val pendingCount: Int get() = writeIndex - readIndex
@@ -193,5 +310,36 @@ class WaveformRing(
 
         /** 收敛判据：低于它就吸附到目标值，避免"永远差一点点"导致无限重绘。 */
         const val SETTLE_EPSILON = 0.004f
+
+        /**
+         * 峰值保持时长（毫秒）。取 420ms 的依据：常见流行乐的鼓点间隔在 300~600ms，
+         * 保持 420ms 能让峰值在**同一小节内**读得出"刚才有多响"，又不会跨到下一拍
+         * 而看起来像"卡住了"。
+         */
+        const val PEAK_HOLD_MS = 420f
+
+        /**
+         * 峰值下落速度（每秒，单位是 0..1 幅度）。0.9/s 意味着从满幅落到 0 最多 1.1 秒，
+         * 与回落时间常数（130ms）相比明显更慢 —— 这正是"峰值比柱子掉得慢"的观感来源。
+         */
+        const val PEAK_FALL_PER_SECOND = 0.9f
+
+        /** 渐变流动一个完整周期的时长（毫秒）。2.4s 是一眼能看出"在流动"又不至于晃眼的下限附近。 */
+        const val FLOW_PERIOD_MS = 2400f
+
+        /** 呼吸一个完整周期的时长（毫秒）。3.2s ≈ 平静呼吸，比渐变慢一档避免两个动画打架。 */
+        const val BREATHE_PERIOD_MS = 3200f
+
+        /** 呼吸深度：亮度在 [1-DEPTH, 1] 之间摆动。0.16 在 OLED 黑底上可辨、又不至于像闪烁。 */
+        const val BREATHE_DEPTH = 0.16f
+
+        /**
+         * 动画相位的空转门槛：**画面**最新一根柱低于它就不推进相位（也就不会为它排帧）。
+         * 0.02 远低于音乐 RMS 的常见区间（0.05~0.3，见 AudioVisualizer 的 sqrt 映射注释），
+         * 但高于"全零后的残余"，所以静音段与暂停态都不会白烧帧。
+         */
+        const val ANIMATION_MIN_SIGNAL = 0.02f
+
+        private const val TWO_PI = 6.2831855f
     }
 }
