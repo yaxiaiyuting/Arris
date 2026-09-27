@@ -77,8 +77,11 @@ object VisualizerSetting {
  * v1.8.0 · T3：音频柱状数据的**进程内单例**（音频线程写 / UI 线程读的唯一交汇点）。
  *
  * 数据来源：[com.takahashirinta.ncrust.player.VisualizerRenderersFactory] 注入的
- * `TeeAudioProcessor + WaveformAudioBufferSink`（media3 官方 API，**不需要任何权限**，
- * 也绕开了 `android.media.audiofx.Visualizer` 那条要 RECORD_AUDIO 的路）。
+ * `TeeAudioProcessor` + [com.takahashirinta.ncrust.player.TransparentWaveformSink]
+ * （**不需要任何权限**，也绕开了 `android.media.audiofx.Visualizer` 那条要 RECORD_AUDIO 的路）。
+ *
+ * v2.8.0 · P1-A：这里原先写的是「media3 官方 API `WaveformAudioBufferSink`」—— 那句话从
+ * v2.2.1 起就过期了（它正是 6→1 混音抛异常、把 AudioSink 打挂的那个类，已被上文的 tee 替换）。
  *
  * 为什么 [generation] 用 Compose 状态而不是回调：柱状图必须在 **draw 阶段**读取数据，
  * 用状态失效只触发重绘、不触发重组（与播放器卡片的零重组原则一致）。
@@ -89,15 +92,18 @@ object WaveformStore {
     const val BAR_COUNT = 28
 
     /**
-     * 每秒生成多少根柱。
+     * 环形缓冲容量（柱数）。
      *
-     * v1.8.1：20 → **30**。用户反馈"帧率太低"，一路查下来真正的瓶颈是**信息速率**
-     * （20 柱/秒 = 每 50ms 才有一个新值），而不是重绘帧率。30 是 media3 建议区间
-     * （10–30）的上限：再高音频线程只是白做聚合，再低波形跟不上鼓点。
+     * **真实柱率 = `handleBuffer` 回调率**（`TransparentWaveformSink.handleBuffer` 每回调推一根柱），
+     * 由解码器/渲染器送进 sink 的缓冲粒度决定，**代码不保证任何固定值**（探针 §7 #1 明确未确认）。
+     * 所以这里不写「积压 N 秒」这种换个音频格式就不成立的换算：本容量只承诺一件事 ——
+     * UI 卡顿时最多积压 256 根柱，再多就丢最旧的（绝不回压音频线程）。
+     *
+     * v2.8.0 · P1-A：删掉 `BARS_PER_SECOND = 30`（v1.8.1 引入）。它是 v2.2.1 换掉的
+     * media3 `WaveformAudioBufferSink(barsPerSecond, …)` 的消费者参数，**全仓已无任何引用**，
+     * 「30 柱/秒」和由它推出的「最多积压 8.5 秒」都是过期结论（探针 §0 发现 1）。
+     * 保留一个没人读、却让注释继续撒谎的常量，比删掉它更危险。
      */
-    const val BARS_PER_SECOND = 30
-
-    /** 环形缓冲容量：UI 卡顿时最多积压 8.5 秒，再多丢最旧的（绝不回压音频线程）。 */
     private const val CAPACITY = 256
 
     private val ring = WaveformRing(capacity = CAPACITY, barCount = BAR_COUNT)
@@ -141,7 +147,7 @@ object WaveformStore {
 /** 现代设备的可视权重绘间隔：16ms ≈ 60fps。 */
 const val VISUALIZER_FRAME_INTERVAL_FAST_MS = 16L
 
-/** 低端设备的可视权重绘间隔：33ms ≈ 30fps（数据仍是 30 柱/秒，只是平滑步长更大）。 */
+/** 低端设备的可视权重绘间隔：33ms ≈ 30fps（数据照旧按回调率到达，只是平滑步长更大）。 */
 const val VISUALIZER_FRAME_INTERVAL_SLOW_MS = 33L
 
 /**
@@ -175,8 +181,8 @@ fun visualizerFrameIntervalMs(context: Context): Long {
  *    **零分配**。
  *  - **不空转**：暂停 / 缓冲时走 `delay` 而不是帧时钟；数据归零且平滑收敛之后
  *    [WaveformStore.pump] 返回 false，画面不再失效（不会出现"暂停了还在 60fps 重绘"）。
- *  - **不拖音频线程**：音频线程只做一次数组写；聚合（RMS）由 media3 的
- *    `WaveformAudioBufferSink` 在它自己的回调里完成。
+ *  - **不拖音频线程**：音频线程每回调只做一次 RMS 遍历 + 一次数组写；关掉开关时
+ *    连 RMS 都不算（开关判断在 `TransparentWaveformSink.handleBuffer` 里前置到 RMS 之前）。
  *
  * @param activeProvider 播放中且未在缓冲。用 lambda 而不是布尔参数：这个值只在
  *   帧循环里读，传布尔会让 PlayerCard 订阅 isPlaying/isBuffering 而整树重组
