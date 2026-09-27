@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au999999999
+# time   : 2026-09-28T02:29:07+08:00   (epoch 1790533747)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=999999999
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone02
+x-cache-time: 0
+--- body
+HTTP=200 time=0.203619s ip=2409:8c60:2600:2::211 bytes=88
+{"code":4511001,"data":null,"message":"音频未找到或已下架","msg":"音频未找到或已下架"}

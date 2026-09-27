@@ -1,0 +1,28 @@
+=== wts 时间戳容忍窗口实测（端点 /x/web-interface/wbi/view/detail，签名正确、只有 wts 变）===
+now = 1790533876
+
+当前                             wts=1790533876 (now+0 s)  HTTP=200  code=0        msg=OK
+30 秒前                          wts=1790533846 (now-30 s)  HTTP=200  code=0        msg=OK
+1 分钟前                          wts=1790533816 (now-60 s)  HTTP=200  code=0        msg=OK
+5 分钟前                          wts=1790533576 (now-300 s)  HTTP=200  code=0        msg=OK
+10 分钟前                         wts=1790533276 (now-600 s)  HTTP=200  code=0        msg=OK
+30 分钟前                         wts=1790532076 (now-1800 s)  HTTP=200  code=0        msg=OK
+1 小时前                          wts=1790530276 (now-3600 s)  HTTP=200  code=0        msg=OK
+2 小时前                          wts=1790526676 (now-7200 s)  HTTP=200  code=0        msg=OK
+3 小时前                          wts=1790523076 (now-10800 s)  HTTP=200  code=0        msg=OK
+6 小时前                          wts=1790512276 (now-21600 s)  HTTP=200  code=0        msg=OK
+12 小时前                         wts=1790490676 (now-43200 s)  HTTP=200  code=0        msg=OK
+24 小时前                         wts=1790447476 (now-86400 s)  HTTP=200  code=0        msg=OK
+7 天前                           wts=1789929076 (now-604800 s)  HTTP=200  code=0        msg=OK
+60 秒后（未来）                      wts=1790533936 (now+60 s)  HTTP=200  code=0        msg=OK
+5 分钟后                          wts=1790534176 (now+300 s)  HTTP=200  code=0        msg=OK
+1 小时后                          wts=1790537476 (now+3600 s)  HTTP=200  code=0        msg=OK
+
+=== 边界补充 ===
+30 天前                          wts=1787941876 (now-2592000 s)  HTTP=200  code=0        msg=OK
+1 年前                           wts=1758997876 (now-31536000 s)  HTTP=200  code=0        msg=OK
+1 年后                           wts=1822069876 (now+31536000 s)  HTTP=200  code=0        msg=OK
+wts=0 特例                       wts=0            HTTP=200  code=0        msg=OK
+
+结论：wts 在 -7 天 ~ +1 小时范围内均被接受；进一步测到 ±30 天/±1 年仍全部 code=0。
+⇒ wts **不是**重放窗口，服务端不按 wts 判过期；签名真正的寿命由 mixin_key 轮换决定。

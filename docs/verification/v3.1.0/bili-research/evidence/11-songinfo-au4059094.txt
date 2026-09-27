@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au4059094
+# time   : 2026-09-28T02:29:07+08:00   (epoch 1790533747)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=4059094
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone09
+x-cache-time: 0
+--- body
+HTTP=200 time=0.219819s ip=2409:8c60:2600:2::212 bytes=566
+{"code":0,"data":{"id":4059094,"uid":2034122930,"uname":"我是梅小贱","author":"我是梅小贱","title":"《悬溺》吉他指弹改编-纯享受版-高音质，全网唯一前奏版本","cover":"http://i0.hdslb.com/bfs/music/6bb612e210bed44fe35e2e3301878a74146c0bd8.jpg","intro":"你们催更的《悬溺》纯享版本来了\n实在抱歉，没有发过音频，刚刚才找到，原来这边可以投稿音频版本。","lyric":"","crtype":1,"duration":210,"passtime":1693754014,"curtime":1790533747,"aid":532904074,"bvid":"BV1Au411K7Ku","cid":1254036192,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":4723,"ctime":1693753921000,"statistic":{"sid":4059094,"play":98068,"collect":1949,"comment":97,"share":216},"vipInfo":{"type":1,"status":0,"due_date":1780070400000,"vip_pay_type":0},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

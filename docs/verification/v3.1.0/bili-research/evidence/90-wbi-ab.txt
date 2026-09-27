@@ -1,0 +1,59 @@
+==============================================================================
+Ncrust · B站 Wbi 签名 A/B 对照实验
+时间: 2026-09-28 02:29:37 +0800  epoch = 1790533777
+出口: 直连（http_proxy/https_proxy 已 unset），匿名，无 SESSDATA
+==============================================================================
+
+[0] nav → wbi key
+    nav.code   = -101 (-101 = 未登录，但 wbi key 照常下发)
+    img_key    = 7cd084941338484aae1ad9425b84077c
+    sub_key    = 4932caff0ff746eab6f01bf08b70ac45
+    mixin_key  = ea1db124af3c7062474693fa704f4ff8 (len=32)
+
+------------------------------------------------------------------------------
+[1] 主对照：/x/web-interface/wbi/view/detail  (bvid=BV1GJ411x7h7)
+------------------------------------------------------------------------------
+  A) 无 w_rid / 无 wts
+     GET https://api.bilibili.com/x/web-interface/wbi/view/detail?bvid=BV1GJ411x7h7
+     HTTP=200   0.26s  code=-352     message=风控校验失败  v_voucher=voucher_42e0516d-f6b8-4f0d-8958-9de3ea611277
+
+  B) 有 w_rid（本仓库 wbi_sign_reference.py 现算）
+     wts           = 1790533778
+     signed_query  = bvid=BV1GJ411x7h7&wts=1790533778
+     md5 输入       = bvid=BV1GJ411x7h7&wts=1790533778ea1db124af3c7062474693fa704f4ff8
+     w_rid         = 8c2633241031d11b3e3107856aa1f4a8
+     GET https://api.bilibili.com/x/web-interface/wbi/view/detail?bvid=BV1GJ411x7h7&wts=1790533778&w_rid=8c2633241031d11b3e3107856aa1f4a8
+     HTTP=200   0.58s  code=0        message=OK  data.keys=['Card', 'Related', 'Reply', 'Spec', 'Tags', 'View']
+
+  C) 有 wts 但 w_rid 伪造（全 0）—— 验证服务端真的在算 md5，而不是只看字段存在
+     GET https://api.bilibili.com/x/web-interface/wbi/view/detail?bvid=BV1GJ411x7h7&wts=1790533778&w_rid=00000000000000000000000000000000
+     HTTP=200   0.25s  code=-352     message=风控校验失败  v_voucher=voucher_0b7b0d89-54fb-49b4-859f-c4e1ea2e102b
+
+  D) 有有效 w_rid + buvid3 Cookie（对照：Cookie 不改变结论）
+     HTTP=200   0.61s  code=0        message=OK  data.keys=['Card', 'Related', 'Reply', 'Spec', 'Tags', 'View']
+
+------------------------------------------------------------------------------
+[2] 对照：/x/web-interface/wbi/search/type  —— 本机实测**不强制** w_rid
+------------------------------------------------------------------------------
+  A) 无 w_rid   : HTTP=200   0.58s  code=0        message=OK  data.keys=['egg_hit', 'exp_list', 'in_black_key', 'in_white_key', 'is_hit_web_inf', 'next']
+  B) 有 w_rid   : HTTP=200   0.63s  code=0        message=OK  data.keys=['egg_hit', 'exp_list', 'in_black_key', 'in_white_key', 'is_hit_web_inf', 'next']
+  C) 伪造 w_rid : HTTP=200   0.56s  code=0        message=OK  data.keys=['egg_hit', 'exp_list', 'in_black_key', 'in_white_key', 'is_hit_web_inf', 'next']
+  ⇒ 三者结果一致 ⇒ 该端点在本机出口上不校验 w_rid（见 EVIDENCE.md 第 7 节 100 次连打）
+
+------------------------------------------------------------------------------
+[3] 反例：签名**无法**挽救的两种情况（IP 级风控 / 路径级封禁）
+------------------------------------------------------------------------------
+  space/wbi/acc/info  无签名 : HTTP=200   0.23s  code=-352     message=风控校验失败  v_voucher=voucher_0e0eabda-0079-4f3e-a115-785b6dbffea1
+  space/wbi/acc/info  有签名 : HTTP=200   0.23s  code=-352     message=风控校验失败  v_voucher=voucher_82529fc8-7958-4c83-8cfb-587739c12eef
+  player/wbi/playurl  无签名 : HTTP=412   0.25s  NON-JSON body[0:80]='<!DOCTYPE html>\n<html lang="zh-cn">\n\n<head>\n    <meta http-equiv="Access-Control'
+  player/wbi/playurl  有签名 : HTTP=412   0.24s  NON-JSON body[0:80]='<!DOCTYPE html>\n<html lang="zh-cn">\n\n<head>\n    <meta http-equiv="Access-Control'
+  ⇒ 两者同为 HTTP 412 ⇒ 该路径对本机出口整体封禁，wbi 不是原因也不是解药
+
+------------------------------------------------------------------------------
+[4] 可用替代：/x/player/playurl （**非 wbi** 旧路径）→ 200 + DASH
+------------------------------------------------------------------------------
+   HTTP=200   0.35s  code=0        message=OK  data.keys=['accept_description', 'accept_format', 'accept_quality', 'auto_qn_resp', 'cur_language', 'cur_production_type']
+    dash.audio 条数 = 3
+      id=30216  bw=43962    codecs=mp4a.40.5    deadline=1790540982 (now+7200s)
+      id=30232  bw=102931   codecs=mp4a.40.2    deadline=1790540982 (now+7200s)
+      id=30280  bw=203786   codecs=mp4a.40.2    deadline=1790540982 (now+7200s)

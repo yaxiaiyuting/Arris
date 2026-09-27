@@ -1,0 +1,25 @@
+# 音频 CDN 直链的 Referer 强依赖实测   2026-09-28T02:29:36+08:00
+# URL: https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/ef0083e1cd13e73dcd20bfe3e672c21a-192k.m4a?e=ig8euxZM2rNcNbdlhoNvNC8BqJIz...
+--- A) 带 Referer: https://www.bilibili.com/audio/home
+HTTP=206 bytes=1024
+--- B) 完全不带头
+HTTP=403 bytes=346
+--- C) 带外部 Referer: https://example.com/
+HTTP=403 bytes=347
+--- D) 只带 UA（无 Referer）
+HTTP=403 bytes=347
+--- E) Range 请求的响应头（ExoPlayer 用）
+HTTP/2 206 
+content-type: application/octet-stream
+content-length: 1024
+content-range: bytes 0-1023/6244629
+access-control-expose-headers: Content-Length,Content-Range,x-service-module
+--- F) deadline 与 timeout 的精确差值（连测 3 次）
+  #1 now=1790533776 deadline=1790540976 timeout=10800 deadline-now=7200s
+  #2 now=1790533776 deadline=1790540976 timeout=10800 deadline-now=7200s
+  #3 now=1790533776 deadline=1790540977 timeout=10800 deadline-now=7201s
+--- G) 320K 文件落盘 + ffprobe 实测码率
+HTTP=200 bytes=10374528
+/tmp/.ev320.m4a: ISO Media, Apple iTunes ALAC/AAC-LC (.M4A) Audio
+duration=258.085000
+bit_rate=321584

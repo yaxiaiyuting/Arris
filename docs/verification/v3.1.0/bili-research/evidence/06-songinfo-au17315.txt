@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au17315
+# time   : 2026-09-28T02:29:04+08:00   (epoch 1790533744)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=17315
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone01
+x-cache-time: 0
+--- body
+HTTP=200 time=0.205989s ip=2409:8c62:e10:2::28 bytes=487
+{"code":0,"data":{"id":17315,"uid":4237359,"uname":"吾爱今生","author":"金坷垃 · 吾爱今生","title":"一个袋坷垃三人抢(全明星)","cover":"http://i0.hdslb.com/bfs/music/b04d635e8d24e73d387d74a16a87a0d67a4cc553.jpg","intro":"自制 第二次做pv，累的要死.....","lyric":"http://i0.hdslb.com/bfs/music/151625816017315.lrc","crtype":1,"duration":143,"passtime":1502861570,"curtime":1790533745,"aid":1628855,"bvid":"BV1Vx411P7Lw","cid":2477338,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":4,"ctime":1502794210000,"statistic":{"sid":17315,"play":718,"collect":66,"comment":2,"share":0},"vipInfo":{"type":1,"status":0,"due_date":1581609600000,"vip_pay_type":0},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

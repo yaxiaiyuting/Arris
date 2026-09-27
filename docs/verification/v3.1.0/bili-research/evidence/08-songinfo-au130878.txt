@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au130878
+# time   : 2026-09-28T02:29:05+08:00   (epoch 1790533745)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=130878
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone03
+x-cache-time: 0
+--- body
+HTTP=200 time=0.206628s ip=2409:8c60:2600:2::212 bytes=388
+{"code":0,"data":{"id":130878,"uid":89426615,"uname":"鄢寻双","author":"鄢寻双","title":"《那就是声优！》第6话ED— 耳の中へ","cover":"http://i0.hdslb.com/bfs/music/6e2894b0c8ce5861d9199a0c2f6d3ac9.jpeg","intro":"","lyric":"","crtype":2,"duration":27,"passtime":1530011417,"curtime":1790533746,"aid":0,"bvid":"","cid":0,"msid":268963,"attr":2,"limit":0,"activityId":0,"limitdesc":"","coin_num":0,"ctime":1511851679000,"statistic":{"sid":130878,"play":53,"collect":2,"comment":0,"share":0},"vipInfo":null,"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

@@ -1,0 +1,17 @@
+################################################################
+# name   : stat-song-39
+# time   : 2026-09-28T02:29:16+08:00   (epoch 1790533756)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/stat/song?sid=39
+--- selected response headers
+HTTP/2 200 
+content-type: application/json;charset=UTF-8
+server: Apache-Coyote/1.1
+x-cache-webcdn: MISS from blzone02
+x-cache-time: 0
+--- body
+HTTP=200 time=0.215233s ip=2409:8c60:2600:2::210 bytes=79
+{"code":0,"msg":"success","data":{"sid":39,"play":2981,"collect":96,"comment":39,"share":0}}

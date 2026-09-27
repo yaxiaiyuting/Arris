@@ -1,0 +1,16 @@
+################################################################
+# name   : songurl-app-au39-qn3
+# time   : 2026-09-28T02:29:11+08:00   (epoch 1790533751)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/audio/music-service-c/url?songid=39&quality=3&privilege=2&mid=0&platform=pc
+--- selected response headers
+HTTP/2 200 
+content-type: application/json;charset=UTF-8
+server: Apache-Coyote/1.1
+x-cache-webcdn: BYPASS from blzone09
+--- body
+HTTP=200 time=0.215109s ip=2409:8c62:e10:2::28 bytes=736
+{"code":0,"msg":"success","data":{"sid":39,"type":2,"info":"","timeout":10800,"size":10374528,"cdns":["https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1790540951&gen=playurlv2&os=hwbv&oi=177921880&trid=c701b700931944de9f0d44b57ffebcf5B&mid=0&platform=pc&og=hw&upsig=f5e9b0a969917a539cb1d76648bc713d&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform,og&bvc=vod&nettype=0&orderid=0,1&logo=00000000"],"qualities":[{"type":2,"desc":"高品质","size":10374528,"bps":"320kbit/s","tag":"HQ","require":0,"requiredesc":""},{"type":1,"desc":"标准","size":6244629,"bps":"192kbit/s","tag":"","require":0,"requiredesc":""},{"type":0,"desc":"流畅","size":4179753,"bps":"128kbit/s","tag":"","require":0,"requiredesc":""}],"title":"成都（Cover赵雷）","cover":"http://i0.hdslb.com/bfs/music/a5a79465d73c53606bacca073c33c3bc2822b2ae.jpg"}}

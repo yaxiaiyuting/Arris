@@ -1,0 +1,15 @@
+################################################################
+# name   : nav
+# time   : 2026-09-28T02:29:02+08:00   (epoch 1790533742)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/web-interface/nav
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone10
+--- body
+HTTP=200 time=0.210688s ip=2409:8c62:e10:2::22 bytes=193
+{"code":-101,"message":"账号未登录","ttl":1,"data":{"isLogin":false,"wbi_img":{"img_url":"https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png","sub_url":"https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png"},"ip_region":"CN"}}

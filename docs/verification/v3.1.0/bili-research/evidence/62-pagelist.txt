@@ -1,0 +1,15 @@
+################################################################
+# name   : pagelist
+# time   : 2026-09-28T02:29:33+08:00   (epoch 1790533773)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/player/pagelist?bvid=BV1GJ411x7h7
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone03
+--- body
+HTTP=200 time=0.217946s ip=2409:8c60:2600:2::210 bytes=185
+{"code":0,"message":"OK","ttl":1,"data":[{"cid":137649199,"page":1,"from":"vupload","part":"Never Gonna Give You Up - Rick Astley","duration":213,"vid":"","weblink":"","dimension":{"width":1920,"height":1080,"rotate":0},"ctime":1577835803}]}

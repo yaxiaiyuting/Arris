@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au15
+# time   : 2026-09-28T02:29:04+08:00   (epoch 1790533744)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=15
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone02
+x-cache-time: 0
+--- body
+HTTP=200 time=0.209915s ip=2409:8c62:e10:2::28 bytes=566
+{"code":0,"data":{"id":15,"uid":593871,"uname":"天使vs恶魔","author":"天使vs恶魔","title":"红颜旧（小提琴版）","cover":"http://i0.hdslb.com/bfs/music/7ea41c762e666822835fc672e7efab165b54f952.jpg","intro":"《红颜旧》由由赵佳霖作曲、袁亮作词，是电视剧《琅琊榜》首支插曲。于2015年10月26日与《琅琊榜 电视剧原声带》专辑一起发行。","lyric":"","crtype":1,"duration":218,"passtime":1500002002,"curtime":1790533744,"aid":3438974,"bvid":"BV1rs41197WU","cid":5456260,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":2,"ctime":1499923941000,"statistic":{"sid":15,"play":1995,"collect":100,"comment":5,"share":2},"vipInfo":{"type":1,"status":0,"due_date":1759680000000,"vip_pay_type":0},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

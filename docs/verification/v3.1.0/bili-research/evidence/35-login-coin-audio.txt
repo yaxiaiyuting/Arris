@@ -1,0 +1,16 @@
+################################################################
+# name   : login-coin-audio
+# time   : 2026-09-28T02:29:17+08:00   (epoch 1790533757)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/coin/audio?sid=39
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone03
+x-cache-time: 0
+--- body
+HTTP=200 time=0.213632s ip=2409:8c60:2600:2::210 bytes=77
+{"code":4511003,"data":null,"message":"用户未登录","msg":"用户未登录"}

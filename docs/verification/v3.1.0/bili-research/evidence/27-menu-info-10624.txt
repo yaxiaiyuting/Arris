@@ -1,0 +1,16 @@
+################################################################
+# name   : menu-info-10624
+# time   : 2026-09-28T02:29:14+08:00   (epoch 1790533754)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/menu/info?sid=10624
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone03
+x-cache-time: 0
+--- body
+HTTP=200 time=0.218587s ip=2409:8c60:2600:2::212 bytes=323
+{"code":0,"data":{"menuId":10624,"uid":32708543,"uname":"大家的音乐机","title":"新曲推荐","cover":"http://i0.hdslb.com/bfs/music/a32c1ed4f6ec3f74f8240f4486a750dda3a509e5.jpg","intro":"每天11:00更新，为你推送最新音乐","type":2,"snum":0,"isDefault":0,"collectionId":0,"off":0,"attr":0,"ctime":1501209433,"curtime":1790533754,"statistic":{"sid":10624,"play":2378424,"collect":20304,"comment":1188,"share":653}},"message":"OK","msg":"success"}

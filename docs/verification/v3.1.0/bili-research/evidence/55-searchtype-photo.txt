@@ -1,0 +1,15 @@
+################################################################
+# name   : searchtype-photo
+# time   : 2026-09-28T02:29:29+08:00   (epoch 1790533769)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=photo&keyword=test&page=1
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone08
+--- body
+HTTP=200 time=0.234394s ip=2409:8c62:e10:2::28 bytes=57
+{"code":-1200, "message":"被降级过滤的请求"}

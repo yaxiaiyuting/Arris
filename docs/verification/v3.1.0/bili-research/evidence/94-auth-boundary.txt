@@ -1,0 +1,29 @@
+# B站登录/鉴权边界实测（匿名，直连）   2026-09-28T02:33:24+08:00
+# 说明：本次调研**没有可用的 B站账号**，因此只实测『匿名侧』与『二维码流程的可达性』；
+#       登录成功后的 Cookie 集合与登录态音质提升均为文档推断，见 bili-auth.md 未验证项。
+
+=== [1] 二维码生成 GET https://passport.bilibili.com/x/passport-login/web/qrcode/generate
+HTTP/2 200 
+{"code":0,"message":"OK","ttl":1,"data":{"url":"https://account.bilibili.com/h5/account-h5/auth/scan-web?navhide=1\u0026callback=close\u0026qrcode_key=721a7829c91a1d65dce08a36f0fc4975\u0026from=","qrcode_key":"721a7829c91a1d65dce08a36f0fc4975"}}
+
+=== [2] 轮询（未扫码）GET .../qrcode/poll?qrcode_key=721a7829c91a1d65dce08a36f0fc4975
+{"code":0,"message":"OK","ttl":1,"data":{"url":"","refresh_token":"","timestamp":0,"code":86101,"message":"未扫码"}}
+HTTP=200
+
+=== [3] 轮询（伪造 key = 已失效）
+{"code":0,"message":"OK","ttl":1,"data":{"url":"","refresh_token":"","timestamp":0,"code":86038,"message":"二维码已失效"}}
+HTTP=200
+
+=== [4] nav 纯匿名：不下发任何 Cookie
+HTTP/2 200 
+(上面若只有 HTTP/2 200 而无 set-cookie，即证明 nav 会种 buvid3 的说法在本机不成立)
+
+=== [5] 伪造 SESSDATA 访问需登录的音频端点
+{"code":4511003,"data":null,"message":"用户未登录","msg":"用户未登录"}
+HTTP=200
+⇒ 伪造 Cookie 不被接受（4511003），说明音频区确实**校验** SESSDATA 的有效性，不是只看字段存在。
+
+=== [6] 匿名 vs 有 buvid3 对音频流端点的影响（对照）
+匿名        : {"code":0,"type":1,"size":6244629}
+带 buvid3   : {"code":0,"type":1,"size":6244629}
+带 mid=12345: {"code":0,"type":1,"size":6244629}

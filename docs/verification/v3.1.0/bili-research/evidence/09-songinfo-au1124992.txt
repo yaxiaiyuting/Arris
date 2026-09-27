@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au1124992
+# time   : 2026-09-28T02:29:06+08:00   (epoch 1790533746)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=1124992
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone09
+x-cache-time: 0
+--- body
+HTTP=200 time=0.218770s ip=2409:8c62:e10:2::28 bytes=395
+{"code":0,"data":{"id":1124992,"uid":109246220,"uname":"不认识的网友啊","author":"不认识的网友啊","title":"《男生宿舍》191022期——80元话费等你来拿！","cover":"http://i0.hdslb.com/bfs/music/f755ebea0c0485c476bbf4e5faad14fd2f738369.jpg","intro":"《男生宿舍》191022期——80元话费等你来拿！","lyric":"","crtype":2,"duration":2722,"passtime":1571816281,"curtime":1790533746,"aid":0,"bvid":"","cid":0,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":0,"ctime":1571816006000,"statistic":{"sid":1124992,"play":0,"collect":0,"comment":0,"share":0},"vipInfo":null,"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

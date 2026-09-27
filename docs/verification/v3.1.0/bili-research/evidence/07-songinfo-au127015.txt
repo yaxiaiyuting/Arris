@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au127015
+# time   : 2026-09-28T02:29:05+08:00   (epoch 1790533745)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=127015
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone02
+x-cache-time: 0
+--- body
+HTTP=200 time=0.219893s ip=2409:8c60:2600:2::212 bytes=381
+{"code":0,"data":{"id":127015,"uid":89426615,"uname":"鄢寻双","author":"鄢寻双","title":"《舞武器舞乱伎》ED—ANGERANGER","cover":"http://i0.hdslb.com/bfs/music/0fd9ee97cbf23fc2010ff33ee3cd3943.jpeg","intro":"","lyric":"","crtype":2,"duration":34,"passtime":1530011545,"curtime":1790533745,"aid":0,"bvid":"","cid":0,"msid":332082,"attr":2,"limit":0,"activityId":0,"limitdesc":"","coin_num":0,"ctime":1511849883000,"statistic":{"sid":127015,"play":37,"collect":1,"comment":0,"share":0},"vipInfo":null,"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

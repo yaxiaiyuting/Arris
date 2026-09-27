@@ -1,0 +1,15 @@
+################################################################
+# name   : searchtype-topic
+# time   : 2026-09-28T02:29:28+08:00   (epoch 1790533768)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/web-interface/wbi/search/type?search_type=topic&keyword=test&page=1
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone01
+--- body
+HTTP=200 time=0.271988s ip=2409:8c60:2600:2::212 bytes=57
+{"code":-1200, "message":"被降级过滤的请求"}

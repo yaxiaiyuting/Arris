@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au39
+# time   : 2026-09-28T02:29:03+08:00   (epoch 1790533743)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=39
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone01
+x-cache-time: 0
+--- body
+HTTP=200 time=0.216344s ip=2409:8c60:2600:2::211 bytes=445
+{"code":0,"data":{"id":39,"uid":14452610,"uname":"Roro_Zhang","author":"Roro_Zhang","title":"成都（Cover赵雷）","cover":"http://i0.hdslb.com/bfs/music/a5a79465d73c53606bacca073c33c3bc2822b2ae.jpg","intro":"粉丝群：568439813","lyric":"http://i0.hdslb.com/bfs/music/149994607539.lrc","crtype":1,"duration":258,"passtime":1502179114,"curtime":1790533743,"aid":7361800,"bvid":"BV18s411Y7Wu","cid":12035021,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":7,"ctime":1499945799000,"statistic":{"sid":39,"play":2981,"collect":96,"comment":39,"share":0},"vipInfo":{"type":2,"status":1,"due_date":1835625600000,"vip_pay_type":1},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

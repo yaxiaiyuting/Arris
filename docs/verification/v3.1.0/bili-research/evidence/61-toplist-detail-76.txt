@@ -1,0 +1,15 @@
+################################################################
+# name   : toplist-detail-76
+# time   : 2026-09-28T02:29:33+08:00   (epoch 1790533773)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/copyright-music-publicity/toplist/detail?list_id=76
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone09
+--- body
+HTTP=200 time=0.215048s ip=2409:8c62:e10:2::28 bytes=251
+{"code":0,"message":"0","ttl":1,"data":{"listen_fid":23317138,"all_fid":23672948,"fav_mid":1164440244,"cover_url":"http://i0.hdslb.com/bfs/music-publicity/cfafc7ce8f7f16b35036ca01bcc84f2fdd49b34b.png","is_subscribe":false,"listen_count":5,"listen_music_switch":false,"shoot_video_switch":false,"first_music_cover_url":"https://i0.hdslb.com/bfs/station_src/music_metadata/07e0d9826c574e37df25387cab6df062.jpg","bg_color":"#2d271e"}}

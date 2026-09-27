@@ -1,0 +1,16 @@
+################################################################
+# name   : member-song-39
+# time   : 2026-09-28T02:29:16+08:00   (epoch 1790533756)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/member/song?sid=39
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone02
+x-cache-time: 0
+--- body
+HTTP=200 time=0.216902s ip=2409:8c60:2600:2::210 bytes=176
+{"code":0,"data":[{"type":1,"list":[{"mid":0,"member_id":37,"name":"Roro_Zhang"}]},{"type":2,"list":[{"mid":0,"member_id":38,"name":"赵雷"}]},{"type":3,"list":[{"mid":0,"member_id":38,"name":"赵雷"}]},{"type":4,"list":[{"mid":0,"member_id":38,"name":"赵雷"},{"mid":0,"member_id":39,"name":"喜子"}]},{"type":5,"list":[{"mid":0,"member_id":40,"name":"氩气灯_ArLight"}]},{"type":6,"list":[{"mid":0,"member_id":38,"name":"赵雷"}]},{"type":127,"list":[{"mid":0,"member_id":1,"name":"Roro_Zhang"}]}],"message":"OK","msg":"success"}

@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au1131678
+# time   : 2026-09-28T02:29:06+08:00   (epoch 1790533746)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=1131678
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone09
+x-cache-time: 0
+--- body
+HTTP=200 time=0.305694s ip=2409:8c62:e10:2::22 bytes=445
+{"code":0,"data":{"id":1131678,"uid":87111629,"uname":"MrXPRC","author":"MrXPRC","title":"Brian Tyler - Order of the Assassin","cover":"http://i0.hdslb.com/bfs/music/3dcb2f56410ab2c74c200b2176b7018d1de41cc8.jpg","intro":"刺客信条黑旗，亡灵法师爱德华","lyric":"","crtype":1,"duration":190,"passtime":1572273156,"curtime":1790533747,"aid":0,"bvid":"","cid":0,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":0,"ctime":1572272812000,"statistic":{"sid":1131678,"play":2,"collect":0,"comment":0,"share":0},"vipInfo":{"type":2,"status":1,"due_date":1816963200000,"vip_pay_type":1},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

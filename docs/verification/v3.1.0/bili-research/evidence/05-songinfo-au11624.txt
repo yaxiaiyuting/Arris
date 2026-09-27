@@ -1,0 +1,16 @@
+################################################################
+# name   : songinfo-au11624
+# time   : 2026-09-28T02:29:04+08:00   (epoch 1790533744)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/song/info?sid=11624
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone03
+x-cache-time: 0
+--- body
+HTTP=200 time=0.200488s ip=2409:8c62:e10:2::22 bytes=496
+{"code":0,"data":{"id":11624,"uid":23489661,"uname":"曲回针","author":"曲回针","title":"我等你到三十五岁","cover":"http://i0.hdslb.com/bfs/music/4469edf187bb0dece74504e4a7cf53b57e0966d7.jpg","intro":"自制 原曲：风声 \n填词：狐狸\n翻唱：曲回针\n音频后期：维她命v7","lyric":"http://i0.hdslb.com/bfs/music/150813556111624.lrc","crtype":1,"duration":240,"passtime":1501209534,"curtime":1790533744,"aid":4125663,"bvid":"BV1Ds411Q7ZY","cid":6661366,"msid":0,"attr":0,"limit":0,"activityId":0,"limitdesc":"","coin_num":8,"ctime":1501128002000,"statistic":{"sid":11624,"play":144,"collect":4,"comment":4,"share":0},"vipInfo":{"type":1,"status":0,"due_date":1787500800000,"vip_pay_type":0},"collectIds":[],"is_cooper":0},"message":"OK","msg":"success"}

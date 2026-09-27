@@ -1,0 +1,15 @@
+################################################################
+# name   : finger-spi
+# time   : 2026-09-28T02:29:34+08:00   (epoch 1790533774)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://api.bilibili.com/x/frontend/finger/spi
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: BYPASS from blzone01
+--- body
+HTTP=200 time=0.230935s ip=2409:8c60:2600:2::211 bytes=181
+{"code":0,"data":{"b_3":"C670DC93-22BE-5C14-5E02-E61345C1A26774781infoc","b_4":"C9649593-8547-96EC-8D5F-3AC77D22A48B74781-026092802-+BXdAKNArrSWOZ6Zs0hVgVWmbkFl22eWIWU5XUVnXDU+5txIQ3TwTTo66repBCch"},"message":"ok"}

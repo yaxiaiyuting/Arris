@@ -1,0 +1,16 @@
+################################################################
+# name   : tag-song-39
+# time   : 2026-09-28T02:29:15+08:00   (epoch 1790533755)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/tag/song?sid=39
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone01
+x-cache-time: 0
+--- body
+HTTP=200 time=0.231179s ip=2409:8c60:2600:2::212 bytes=167
+{"code":0,"data":[{"type":"song","subtype":0,"key":1,"info":"音乐"},{"type":"song","subtype":1,"key":3,"info":"人声"},{"type":"song","subtype":2,"key":2,"info":"翻唱"},{"type":"song","subtype":3,"key":32,"info":"汉语"},{"type":"song","subtype":5,"key":41,"info":"网络歌曲"},{"type":"song","subtype":4,"key":10,"info":"民谣"}],"message":"OK","msg":"success"}

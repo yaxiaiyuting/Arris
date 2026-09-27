@@ -1,0 +1,16 @@
+################################################################
+# name   : songurl-web-au39-qn1
+# time   : 2026-09-28T02:29:08+08:00   (epoch 1790533748)
+# egress : DIRECT (http_proxy/https_proxy unset)
+# cmd    : curl -sS --compressed -m 25 '<url>' -H 'User-Agent: <Chrome120>' -H 'Referer: <ref>'
+################################################################
+--- url
+https://www.bilibili.com/audio/music-service-c/web/url?sid=39&quality=1&privilege=2&mid=0&platform=web
+--- selected response headers
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+x-cache-webcdn: MISS from blzone01
+x-cache-time: 0
+--- body
+HTTP=200 time=0.191478s ip=2409:8c62:e10:2::28 bytes=528
+{"code":0,"data":{"sid":39,"title":"","cover":"","type":1,"info":"","timeout":10800,"size":6244629,"cdns":["https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/ef0083e1cd13e73dcd20bfe3e672c21a-192k.m4a?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=\u0026uipk=5\u0026nbs=1\u0026deadline=1790540948\u0026gen=playurlv2\u0026os=hwbv\u0026oi=0\u0026trid=a30aa576a5004d6eb0efe71923092393B\u0026mid=0\u0026platform=pc\u0026og=hw\u0026upsig=f39e8612694e979ea767fc24a6a9e694\u0026uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform,og\u0026bvc=vod\u0026nettype=0\u0026orderid=0,1\u0026logo=00000000"],"qualities":null},"message":"OK","msg":"success"}
