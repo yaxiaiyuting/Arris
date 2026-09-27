@@ -4152,3 +4152,63 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
   真机验证时靠"清空播放队列"或"旋转到竖屏"绕开（见 `probe-album-jump.md` §5）。
 - **搜索历史里没有专辑字段**（`HistoryItem` 只有 `coverUrl`），所以从历史重开的 QQ 曲目
   走「跳搜索」—— 这是正确处置，不是缺陷。
+
+## v2.8.0 新增（本 fork · 波形效果分级 + 设置界面二级菜单）
+
+### 三条新纪律（先读这三条，再看细节）
+
+1. **波形是每帧更新的组件：任何改动必须异常隔离，且必须用 release 包在真机上验证帧时间。**
+   - 隔离边界的判据是「**音频线程上有没有裸路**」，不是「有没有 try」：v2.2.1 只把 RMS 计算包进
+     `runCatching`，而把结果交给 `WaveformStore.onBar` 的那一行留在外面，于是**唯一还能把播放打挂的
+     路径一直在那儿**（media3 的 `TeeAudioProcessor.queueInput` 与 `DefaultAudioSink.handleBuffer`
+     对 sink 回调都不兜异常，字节码已核实）。v2.8.0 把「计算 + 回调」收进**同一个** try，
+     失败只丢这一根柱、绝不补 0（补 0 会在画面上画出一个假的静音凹陷）。
+   - 音频线程上**不许读 SharedPreferences**（那是 IO）：开关量必须是进程内 `@Volatile` 镜像。
+   - 「关掉开关 = 零开销」必须被代码结构保证（判断要在计算**之前**），而不是写在注释里 ——
+     探针实测过旧写法：用户关掉可视化后仍每缓冲跑一遍全样本 RMS。
+   - 帧时间判据不许用 `withFrameNanos` 间隔（S6 上会误判，v1.6.0 已踩过并回退）；
+     要真帧时间用 `Window.addOnFrameMetricsAvailableListener`（API 24+）。
+   - 低端机上「新档位比旧实现更贵」是**可能成立的结论**：v2.8.0 在 S6 上 P50 +5…8 ms、
+     P90 +2…6 ms（见 `docs/verification/v2.8.0/verification/frame-time-verification.md`）。
+     所以本条的验收口径是「有数字、方向明确、缓解措施落地」，不是「必须与旧版打平」。
+2. **设置项重构不得丢项、不得改语义、不得改默认值。**
+   - 判据是**机械的**：`SettingsRegistryTest.legacyPrefKeysArePreservedExactly` 做
+     **双向 key 等值**（既挡丢项，也挡夹带无关功能项）；默认值逐条对齐生产常量与真实读路径；
+     读写必须继续走**既有入口**（`KeepScreenOnSetting` / `RotationSetting` / `VisualizerSetting` /
+     `PageTransitionSetting` / `ArtistReco` / `LyricsDisplayPrefs` / `PlayerViewModel` …），
+     `wifi_quality`/`mobile_quality`/`lyrics_translation`/`lyrics_in_media_session` 继续**裸写**，
+     别顺手补包装。
+   - `lyrics_word_animation` 的**回显**必须走 `LyricsDisplayPrefs.readWordAnimation`（读路径带一次性迁移），
+     用 registry 默认值回显会让老用户的三选一显示错。
+   - 依赖门控（TTML 优先依赖 TTML 开关、渐变质量软依赖逐字模式、C 档细分依赖 tier==2 且 showcase 开）
+     走「**不挂载**或**置灰 + 原因**」，绝不靠 `alpha`（`alpha` 不退出命中测试，见「Compose 触摸陷阱」第 1 条）。
+3. **设置界面重构只重组现有设置项，不引入无关功能项。**
+   - 一级页 = 7 张分组卡片（账号与登录 / 通用 / 外观与动效 / 播放与音质 / 歌词 / 存储与缓存 / 关于），
+     二级页 = 该组的行；卡片与行都由 `ui/settings/SettingsRenderPlan.kt` 驱动，
+     **页面与单测调用同一个函数**（`cardGroups()` / `rowsOf()`），所以「一级页少一张卡」会被单测抓住。
+   - 唯一允许的 UI 新增是「满足某个非 internal 条目必须被渲染恰好一次」所必需的那一处
+     （本版：`offline_cache_mb` 在存储页多一个下拉，读写仍走 `OfflineAudioCache`）——
+     这类新增必须在 commit message 与交付文档里留痕。
+   - 二级页上线与旧 item 块删除**必须同一个 commit**，禁止双轨期同一个 key 挂在两处（状态分裂）。
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 分级纯逻辑（档位 / 效果矩阵 / 有界降级） | `ui/player/waveform/VisualizerTier.kt` |
+| prefs + 幂等迁移（8 个键） | `ui/player/waveform/VisualizerPrefs.kt` |
+| C 档状态机（节拍 + 涟漪/粒子定长池） | `ui/player/waveform/WaveformEffectsState.kt` |
+| 帧预算与监控 | `ui/player/waveform/FrameBudgetPolicy.kt`、`VisualizerFrameMonitor.kt` |
+| 分级渲染 | `ui/player/AudioVisualizer.kt`（`drawWaveformBars` / `FlowBrushCache` / 涟漪 / 粒子 / 透视） |
+| 峰值保持与两个动画相位 | `ui/player/WaveformRing.kt` |
+| 设置注册表 / 门控 / 渲染计划 / 路由 | `ui/settings/Settings{Registry,Visibility,RenderPlan,GroupRoute}.kt` |
+| 一级页 / 二级页 / 卡片 / 行 | `ui/screen/UserScreen.kt`、`SettingsGroupScreen.kt`、`SettingsAccountSection.kt`、`ui/components/SettingsGroupCard.kt`、`SettingsRows.kt` |
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **真 FFT / 多频段分色**：现有数据通路只有「整块 PCM → 单标量 RMS」，真频段要么把逐样本计算搬上
+  音频线程（与 v2.2.1 P0 同级风险），要么新增 PCM 环 + UI 侧 FFT（重做数据层）。本版**不画任何会被
+  读成频谱的东西**（`spectrumColoring` 恒 false，有单测守），只如实提供「越旧越淡」的时序着色。
+- **拖拽交互**：降级为「点按切换着色」且默认关。理由：挂载点在 `PlayerCard.kt`（手势密集区，
+  紧邻 `clickable { onSongInfoClick() }`），手势分解必须真机 A/B 才能声称结论。
+- 音理（参考 App）的功能项（一起听服务器、B 站登录、下载管理、流量管理、备份与恢复）一律不引入。

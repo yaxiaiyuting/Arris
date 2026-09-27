@@ -1,0 +1,272 @@
+Applications Graphics Acceleration Info:
+Uptime: 62137062 Realtime: 90035842
+
+** Graphics info for pid 27976 [com.takahashirinta.ncrust] **
+
+Stats since: 62106977003777ns
+Total frames rendered: 1821
+Janky frames: 5 (0.27%)
+Janky frames (legacy): 118 (6.48%)
+50th percentile: 7ms
+90th percentile: 9ms
+95th percentile: 11ms
+99th percentile: 14ms
+Number Missed Vsync: 2
+Number High input latency: 624
+Number Slow UI thread: 3
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: 5
+Number Frame deadline missed (legacy): 112
+HISTOGRAM: 5ms=74 6ms=415 7ms=618 8ms=489 9ms=84 10ms=35 11ms=30 12ms=31 13ms=18 14ms=10 15ms=1 16ms=3 17ms=2 18ms=0 19ms=2 20ms=1 21ms=2 22ms=0 23ms=0 24ms=0 25ms=1 26ms=1 27ms=0 28ms=1 29ms=0 30ms=2 31ms=0 32ms=0 34ms=0 36ms=0 38ms=1 40ms=0 42ms=0 44ms=0 46ms=0 48ms=0 53ms=0 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4ms
+90th gpu percentile: 4ms
+95th gpu percentile: 4ms
+99th gpu percentile: 4ms
+GPU HISTOGRAM: 1ms=3 2ms=13 3ms=808 4ms=997 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=0
+
+Pipeline=Skia (Vulkan)
+Memory policy:
+  Max surface area: 3561600
+  Max resource usage: 512.87MB (x144)
+  Background retention: 50% (altUiHidden = true)
+  GPU Context timeout: 10
+Contexts: 1 (stopped = 0)
+CPU Caches:
+  Glyph Cache: 12.78 MB (1 entry)
+  Glyph Count: 225 
+Total CPU memory usage:
+  13403276 bytes, 12.78 MB (0.00 bytes is purgeable)
+GPU Caches:
+  Other:
+    Other: 184.12 KB (1 entry)
+    Buffer Object: 2.05 KB (2 entries)
+  Image:
+    Surface: 25.62 MB (58 entries)
+  Scratch:
+    Buffer Object: 1.20 MB (17 entries)
+    Surface: 75.93 MB (76 entries)
+Total GPU memory usage:
+  107934512 bytes, 102.93 MB (3.25 MB is purgeable)
+
+Skia GPU memory Oplus dumper:
+GPU Caches:
+ 9950082 bytes, 9.49 MB (3.25 MB is purgeable)
+  Buffer Object: 1.20 MB (19 entries)
+    skia/gpu_resources/resource_1782 : size[32.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[32.00 KB]
+    skia/gpu_resources/resource_1719 : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_544  : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_893  : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_1784 : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+    skia/gpu_resources/resource_479  : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_55   : size[48.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_894  : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_2127 : size[96.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[96.00 KB]
+    skia/gpu_resources/resource_1545 : size[32.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_257  : size[180.00 bytes] type[Buffer Object] label[MakeVkBuffer] category[Other]
+    skia/gpu_resources/resource_1546 : size[32.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_1781 : size[32.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[32.00 KB]
+    skia/gpu_resources/resource_258  : size[1.88   KB   ] type[Buffer Object] label[MakeVkBuffer] category[Other]
+    skia/gpu_resources/resource_2278 : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_1726 : size[96.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[96.00 KB]
+    skia/gpu_resources/resource_2126 : size[64.00  KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[64.00 KB]
+    skia/gpu_resources/resource_259  : size[30.00  KB   ] type[Buffer Object] label[MakeVkBuffer] category[Scratch]
+    skia/gpu_resources/resource_551  : size[128.00 KB   ] category[Scratch] type[Buffer Object] label[MakeVkBuffer] purgeable_size[128.00 KB]
+  Surface: 8.29 MB (36 entries)
+    skia/gpu_resources/resource_634  : size[2.00   MB   ] category[Scratch] type[Surface] label[TextAtlas] purgeable_size[2.00 MB] Dimensions[2048:1024]
+    skia/gpu_resources/resource_522  : size[12.25  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[12.25 KB] Dimensions[112:112]
+    skia/gpu_resources/resource_514  : size[12.25  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[12.25 KB] Dimensions[112:112]
+    skia/gpu_resources/resource_510  : size[12.25  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[12.25 KB] Dimensions[112:112]
+    skia/gpu_resources/resource_79   : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_48   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_44   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_22   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_573  : size[4.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[70:70]
+    skia/gpu_resources/resource_581  : size[9.38   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[98:98]
+    skia/gpu_resources/resource_502  : size[19.14  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[19.14 KB] Dimensions[140:140]
+    skia/gpu_resources/resource_82   : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_518  : size[12.25  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[12.25 KB] Dimensions[112:112]
+    skia/gpu_resources/resource_173  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_33   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_179  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_30   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_16   : size[4.65   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[69:69]
+    skia/gpu_resources/resource_26   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_578  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_587  : size[9.38   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[98:98]
+    skia/gpu_resources/resource_537  : size[64.00  bytes] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[8:8]
+    skia/gpu_resources/resource_590  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_40   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_584  : size[15.50  KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[126:126]
+    skia/gpu_resources/resource_554  : size[2.00   MB   ] type[Surface] label[TextAtlas] category[Scratch] Dimensions[2048:1024]
+    skia/gpu_resources/resource_494  : size[19.14  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[19.14 KB] Dimensions[140:140]
+    skia/gpu_resources/resource_441  : size[6.89   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[84:84]
+    skia/gpu_resources/resource_498  : size[37.52  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[37.52 KB] Dimensions[196:196]
+    skia/gpu_resources/resource_558  : size[2.00   MB   ] type[Surface] label[TextAtlas] category[Scratch] Dimensions[2048:1024]
+    skia/gpu_resources/resource_506  : size[12.25  KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[12.25 KB] Dimensions[112:112]
+    skia/gpu_resources/resource_176  : size[6.89   KB   ] purgeable_size[6.89 KB] Dimensions[84:84] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image]
+    skia/gpu_resources/resource_564  : size[5.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[77:77]
+    skia/gpu_resources/resource_570  : size[4.79   KB   ] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] category[Image] Dimensions[70:70]
+    skia/gpu_resources/resource_36   : size[5.79   KB   ] category[Image] type[Surface] label[ProxyProvider_CreateNonMippedProxyFromBitmap] purgeable_size[5.79 KB] Dimensions[77:77]
+    skia/gpu_resources/resource_58   : size[2.00   MB   ] type[Surface] label[TextAtlas] category[Scratch] Dimensions[2048:1024]
+Skia's Wrapped Objects:
+  Surface: 93.27 MB (31 entries)
+    skia/gpu_resources/resource_382  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_372  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_367  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_362  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_611  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_602  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_327  : size[196.00 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[224:224]
+    skia/gpu_resources/resource_144  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_282  : size[4.00   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1024:1024]
+    skia/gpu_resources/resource_598  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_150  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_317  : size[196.00 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[224:224]
+    skia/gpu_resources/resource_314  : size[196.00 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[224:224]
+    skia/gpu_resources/resource_148  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_274  : size[4.00   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1024:1024]
+    skia/gpu_resources/resource_432  : size[4.00   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1024:1024]
+    skia/gpu_resources/resource_142  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_380  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_359  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_146  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_418  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_408  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_394  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_415  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_608  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_406  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_593  : size[13.59  MB   ] type[Surface] label[Vk_MakeWrappedTextureRenderTarget] category[Scratch] Dimensions[1272:2800]
+    skia/gpu_resources/resource_324  : size[196.00 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[224:224]
+    skia/gpu_resources/resource_438  : size[4.00   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1024:1024]
+    skia/gpu_resources/resource_392  : size[248.06 KB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[252:252]
+    skia/gpu_resources/resource_426  : size[4.45   MB   ] type[Surface] label[Vk_MakeWrappedTexture] category[Image] Dimensions[1080:1080]
+Total GPU memory usage:
+102.75 MB (3.25 MB is purgeable)
+
+
+GraphicBufferAllocator buffers:
+            Handle |         Size |     W (Stride) x H | Layers |   Format |      Usage | Requestor
+0xb40000741b9c7180 |  4096.00 KiB | 1024 (1024) x 1024 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000741b9c9980 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb40000741b9cad80 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000741b9caec0 |  4096.00 KiB | 1024 (1024) x 1024 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742053f280 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742053f3c0 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb4000074205407c0 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb4000074206b1c40 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb40000742c220900 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c220cc0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221080 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c2216c0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221800 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221940 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221a80 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221bc0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221d00 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c221e40 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c222340 |  4590.00 KiB | 1080 (1088) x 1080 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c288400 |  4096.00 KiB | 1024 (1024) x 1024 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c288540 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38bc80 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38c900 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38ca40 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38d1c0 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38d300 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38d6c0 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38e340 |  4096.00 KiB | 1024 (1024) x 1024 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38f4c0 |   196.00 KiB |  224 ( 224) x  224 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c38fec0 |   196.00 KiB |  224 ( 224) x  224 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a5140 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a5280 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a5500 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a5640 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a5f00 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a6540 |   196.00 KiB |  224 ( 224) x  224 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a6e00 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a9600 |   196.00 KiB |  224 ( 224) x  224 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742c3a99c0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000742f958380 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007437a6e1c0 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007437a6e300 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007437a6e6c0 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007437a6f340 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007437a6fc00 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000753be31180 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000753be31900 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000753be32940 |   400.00 KiB |  320 ( 320) x  320 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb40000753be33d40 |   252.00 KiB |  252 ( 256) x  252 |      1 |        1 | 0x     100 | AHardwareBuffer pid [27976]
+0xb400007568bc72c0 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb400007568bc7e00 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+0xb40000756f743ac0 | 14000.00 KiB | 1272 (1280) x 2800 |      1 |        1 | 0x     b00 | VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust
+Total allocated by GraphicBufferAllocator (estimate): 103998.00 KB
+Imported gralloc buffers:
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378311615, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378311603, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378311601, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [27976], id:5480378311592, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311590, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378311595, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [27976], id:5480378311585, size:4096.00KiB, w/h:1024x1024, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311582, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311581, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311579, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311584, size:4590.00KiB, w/h:1080x1080, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311574, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311573, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311576, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311575, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311578, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311549, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311572, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311555, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311571, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311569, size:196.00KiB, w/h:224x224, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311577, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311568, size:196.00KiB, w/h:224x224, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311558, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311567, size:196.00KiB, w/h:224x224, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311557, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311554, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311526, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311553, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311552, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311551, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311550, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311548, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311570, size:196.00KiB, w/h:224x224, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311545, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311541, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311544, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:VRI[MainActivity]#0(BLAST Consumer)0:com.takahashirinta.ncrust, id:5480378311602, size:14219.00KiB, w/h:1272x2800, usage: 0xb00, req fmt:1, fourcc/mod:875708993/576460752303423602, dataspace: 0x8810000, compressed: true
++ name:AHardwareBuffer pid [27976], id:5480378311543, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311591, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311564, size:4096.00KiB, w/h:1024x1024, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311546, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311566, size:4096.00KiB, w/h:1024x1024, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311556, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311527, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311530, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311542, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311524, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311528, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311586, size:4096.00KiB, w/h:1024x1024, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311580, size:252.00KiB, w/h:252x252, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
++ name:AHardwareBuffer pid [27976], id:5480378311547, size:400.00KiB, w/h:320x320, usage: 0x100, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x0, compressed: false
+Total imported by gralloc: 105093.00KiB
+
+Profile data in ms:
+
+	com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@998099d (visibility=0)
+View hierarchy:
+
+  com.takahashirinta.ncrust/com.takahashirinta.ncrust.MainActivity/android.view.ViewRootImpl@998099d
+  7 views, 13.27 kB of render nodes
+
+
+Total ViewRootImpl   : 1
+Total attached Views : 7
+Total RenderNode     : 13.27 kB (used) / 37.34 kB (capacity)
+
+

@@ -1,0 +1,23 @@
+# v2.8.0 构建与测试证据（实际输出摘要）
+
+流水线：`bash /home/duanjb666/deepseek/gw.sh clean testDebugUnitTest lint assembleDebug assembleRelease`
+结果：**BUILD SUCCESSFUL in 3m 19s**（421 actionable tasks: 205 executed, 216 up-to-date）
+
+## 单测
+- 测试类：122
+- 用例：1687
+- 失败：0
+- 错误：0
+- 跳过：0
+
+## lint
+- `lint` 通过（走仓库既有基线机制 `app/lint-baseline.xml`；新增文件不在基线内 ⇒ 其新问题会让构建失败）
+- HTML 报告：app/build/reports/lint-results-debug.html
+
+## 产物
+- -rw-r--r-- 1 duanjb666 duanjb666 30959017  9月27日 21:03 app/build/outputs/apk/debug/app-debug.apk
+- -rw-r--r-- 1 duanjb666 duanjb666 10108360  9月27日 21:05 app/build/outputs/apk/release/app-release.apk
+
+## 版本
+-         versionCode = 51
+-         versionName = "2.8.0-gpl"
