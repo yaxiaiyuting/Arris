@@ -304,8 +304,17 @@ android {
         //     ③ 工作区：51 / 2.8.0-gpl
         //   三源最大值 = 51 ⇒ 下一个可用 **52**。
         //   （打 tag 前会用 `git show v2.9.0-gpl:app/build.gradle.kts | grep version` 自证一次。）
-        versionCode = 52
-        versionName = "2.9.0-gpl"
+        //
+        //   v3.0.0 定号：`tools/next-version.sh`（**带 fetch**）三源交叉校验 ——
+        //     ① 最近 5 个 tag：v2.9.0-gpl=52 / v2.8.0-gpl=51 / v2.6.2-gpl=50 / v2.6.1-gpl=49 / v2.6.0-gpl=48
+        //     ② 已发布 APK 实测：Ncrust-v2.6.2-gpl-release.apk=50（`aapt2 dump badging`；
+        //        v2.8.0 / v2.9.0 的还是 draft，本地包在仓库外的 dist/ —— 红线 19：不看 release 标题）
+        //     ③ 工作区：52 / 2.9.0-gpl
+        //   三源最大值 = 52 ⇒ 下一个可用 **53**。
+        //   实测记录：docs/verification/v3.0.0/verification/next-version.txt
+        //   （打 tag 前会用 `git show v3.0.0-gpl:app/build.gradle.kts | grep version` 自证一次。）
+        versionCode = 53
+        versionName = "3.0.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
