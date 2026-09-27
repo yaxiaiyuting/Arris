@@ -92,7 +92,25 @@ object BiliApi {
      */
     private const val PLAYURL_FNVAL = "4048"
     private const val AUDIO_INFO_URL = "https://www.bilibili.com/audio/music-service-c/web/song/info"
-    private const val AUDIO_URL = "https://www.bilibili.com/audio/music-service-c/web/url"
+    /**
+     * ⚠️ **必须用 APP 端点 `/audio/music-service-c/url`，不是 web 端点 `/web/url`。**
+     *
+     * 实测（2026-09-28，同一首 au39）：
+     *
+     * | 端点 | 请求 | 结果 |
+     * |---|---|---|
+     * | `/web/url?sid=39&quality=0..3` | qn 四个取值 | **全部返回同一个 `-192k.m4a`**（忽略 quality） |
+     * | `/url?songid=39&quality=2&platform=pc` | 匿名 | **320K**（`type:2`，`size` 10374528，ffprobe 实测 321584 bps） |
+     *
+     * 主键参数名也不同：APP 端点是 **`songid`**（传 `sid` 会得到
+     * `{"code":72000000,"msg":"param missing error: songid"}`）。
+     * 响应里还带一张完整的 `qualities[]`（320k/192k/128k，`require` 全 0，
+     * **没有 type:3** ⇒ 匿名拿不到 FLAC，`quality=3` 被静默降级成 320K）。
+     */
+    private const val AUDIO_URL = "https://api.bilibili.com/audio/music-service-c/url"
+
+    /** 匿名指纹接口：`data.b_3` 就是 `buvid3`。**只给旧版 playurl 用**（见 [playUrlFor]）。 */
+    private const val FINGER_URL = "https://api.bilibili.com/x/frontend/finger/spi"
     private const val AUDIO_LYRIC_URL = "https://www.bilibili.com/audio/music-service-c/web/song/lyric"
 
     /** 手机端 Web UA。用 PC 的桌面 UA 会被某些风控策略区别对待（实测 nav 无差别，取保守值）。 */
@@ -159,14 +177,17 @@ object BiliApi {
 
     // ---------------------------------------------------------------- 基础请求 ----
 
-    private fun get(url: String): String {
-        val request = Request.Builder()
+    private fun get(url: String, cookie: String? = null): String {
+        val builder = Request.Builder()
             .url(url)
             .get()
             .header("User-Agent", UA)
             .header("Referer", REFERER)
             .header("Origin", "https://www.bilibili.com")
-            .build()
+        // 只有旧版 playurl 需要指纹 Cookie（见 [buvid3]）；其余请求一个 Cookie 都不带 ——
+        // B 站音源在本版**没有登录态**，带上一个孤立的指纹只会让指纹在不同接口间不一致。
+        if (!cookie.isNullOrBlank()) builder.header("Cookie", "buvid3=$cookie")
+        val request = builder.build()
         client.newCall(request).execute().use { resp ->
             // 失败也要把正文带出去：B 站的错误是**结构化**的（`code` 字段），
             // 只看 HTTP 状态码会把「-1200 被降级过滤」和「网络挂了」混成一件事故。
@@ -219,10 +240,15 @@ object BiliApi {
      */
     internal fun isSignatureRejected(body: String?): Boolean {
         val text = body.orEmpty()
-        if (text.isBlank()) return true
-        if (!text.trimStart().startsWith("{")) return true
+        // 非 JSON（412 的 HTML 错误页）**不算签名问题**：412 是**路径级封禁**，
+        // 重签一次密钥不会有任何变化（实测四种签名/Cookie 组合全部 412）。
+        // 把它归到签名失败只会白白多打一次 nav。
+        if (text.isBlank() || !text.trimStart().startsWith("{")) return false
         val code = runCatching { org.json.JSONObject(text).optInt("code", 0) }.getOrDefault(0)
-        return code == -352 || code == -403 || code == -1200
+        // -352 = 风控校验失败（缺签名/错签名的真实表现，HTTP 200）；-403 = 访问权限不够。
+        // `-1200`（被降级过滤）**不在此列**：实测非法 search_type 与越界翻页也返回它，
+        // 那不是签名问题 —— 重签只会重复同一次失败。
+        return code == -352 || code == -403
     }
 
     /**
@@ -291,13 +317,15 @@ object BiliApi {
     /**
      * 视频的**音频**流（DASH）。只取 `dash.audio[]`，永不取 `dash.video[]`。
      *
-     * `fnval=16` = 请求 DASH；`fourk=1` 与画质无关（音轨只需要它不拒绝请求）。
+     * `fnval=4048` = 请求 DASH + 一组特性位（见 [PLAYURL_FNVAL]，实测过的那个取值）；
+     * `fourk=1` 与画质无关（音轨只需要它不拒绝请求）。
+     * **还要带匿名指纹**（[buvid3]）：实测这条旧路径不带 `buvid3` 会回 412。
      */
     fun videoAudioStream(bvid: String, cid: Long): BiliStream? {
         if (bvid.isBlank() || cid <= 0L) return null
-        // **普通 GET，不签名** —— 见 [PLAYURL_URL] 的实测说明（wbi 路径是封禁的）。
+        // **普通 GET，不签名**，但要带匿名指纹 —— 见 [PLAYURL_URL] 与 [buvid3] 的实测说明。
         return try {
-            val body = get(playUrlFor(bvid, cid))
+            val body = get(playUrlFor(bvid, cid), cookie = buvid3())
             BiliParse.parseDashAudio(body)
         } catch (e: Exception) {
             Log.w(TAG, "playurl failed: $bvid/$cid", e)
@@ -318,17 +346,31 @@ object BiliApi {
     /**
      * 音频区音频流。
      *
-     * `quality` 就是 `qn`（0/1/2/3）。实测**匿名一律拿到 192K**（请求 qn=0/1/2/3 返回同一个
-     * `-192k.m4a`），所以 [BiliQuality.fallbackLadder] 的逐级下探在匿名下不会真正生效 ——
-     * 它保留是为了将来接登录态时不需要改结构。
+     * `quality` 就是 `qn`（0/1/2/3）。**换成 APP 端点之后阶梯是真的生效的**：
+     * 实测匿名 qn=2 直接给 320K（`type:2`），qn=0/1 分别给 128K/192K，
+     * 响应里的 `qualities[]` 三档 `require` 全为 0。
+     *
+     * FLAC（qn=3）匿名拿不到：`qualities[]` 里**没有 type:3** 条目，
+     * 且 qn=3 会被服务端**静默降级**成 320K —— 这种降级由
+     * `SongUrlResult.levelFromFile = true` 如实标出来（角标显示「已降级」），
+     * 而不是按请求档位自欺。
      */
     fun audioStream(auid: Long, qn: Int): BiliStream? {
         if (auid <= 0L) return null
-        val url = "$AUDIO_URL?sid=$auid&quality=$qn&privilege=2&mid=0&platform=web"
-        return runCatching { BiliParse.parseAudioStream(get(url)) }
+        return runCatching { BiliParse.parseAudioStream(get(audioUrlFor(auid, qn))) }
             .onFailure { Log.w(TAG, "audio url failed: $auid qn=$qn", it) }
             .getOrNull()
     }
+
+    /**
+     * 音频区取流的 URL。**抽出来是为了能被单测钉死**（同 [playUrlFor]）。
+     *
+     * 它防的是一次具体的、已经发生过的错：v3.1.0 的第一版用的是 web 端点
+     * （`/web/url?sid=`），那个端点**完全忽略 `quality` 参数**、匿名一律给 192K ——
+     * 于是「用户选了无损却永远只有 192K」，而且不报任何错。
+     */
+    internal fun audioUrlFor(auid: Long, qn: Int): String =
+        "$AUDIO_URL?songid=$auid&quality=$qn&privilege=2&mid=0&platform=pc"
 
     /**
      * 播放地址请求的 URL。**抽出来是为了能被单测钉死。**
@@ -340,6 +382,36 @@ object BiliApi {
      */
     internal fun playUrlFor(bvid: String, cid: Long): String =
         "$PLAYURL_URL?bvid=$bvid&cid=$cid&fnval=$PLAYURL_FNVAL&fnver=0&fourk=1"
+
+    /**
+     * 匿名指纹 `buvid3`（懒加载 + 缓存）。
+     *
+     * ## 为什么旧版 playurl **必须**带它
+     *
+     * 实测：`/x/player/playurl`（非 wbi 路径）不带 `buvid3` ⇒ **HTTP 412**；
+     * 带上 ⇒ `code:0` + 3 条 DASH 音轨。它匿名就能取：
+     * `GET /x/frontend/finger/spi` → `data.b_3`。
+     *
+     * 取不到时返回 null，请求照发（由服务端回 412）—— 那样失败是**可见的**；
+     * 在这里静默放弃只会让「视频音轨放不出来」变成一个没有线索的现象。
+     */
+    @Volatile private var buvid3: String? = null
+
+    private fun buvid3(): String? {
+        buvid3?.let { return it }
+        val body = runCatching { get(FINGER_URL) }.getOrNull() ?: return null
+        val value = runCatching {
+            org.json.JSONObject(body).optJSONObject("data")?.optString("b_3")
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: return null
+        buvid3 = value
+        Log.i(TAG, "buvid3 acquired: ${value.take(8)}…")
+        return value
+    }
+
+    /** 只给单测用：清掉指纹缓存。 */
+    internal fun clearBuvidForTest() {
+        buvid3 = null
+    }
 
     /** 只给诊断用：B 站是否可达（一次极轻量的 nav 请求）。**不在任何热路径上。** */
     fun probeReachable(): Boolean = runCatching { get(NAV_URL).isNotBlank() }.getOrDefault(false)

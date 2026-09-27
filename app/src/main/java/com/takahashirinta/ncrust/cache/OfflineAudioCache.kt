@@ -9,12 +9,17 @@
 package com.takahashirinta.ncrust.cache
 
 import android.content.Context
+import androidx.annotation.OptIn
+
+import com.takahashirinta.ncrust.bili.BiliCdn
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import java.io.File
 
@@ -42,6 +47,11 @@ import java.io.File
  * 上限默认 512 MiB，可在 prefs 里改（`ncrust_settings` 的 `offline_cache_mb`）。
  * LRU 淘汰由 media3 的 [LeastRecentlyUsedCacheEvictor] 负责。
  */
+// v3.1.0 · B：本文件用到 media3 的 `@UnstableApi`（`ResolvingDataSource` /
+// `SimpleCache` / `CacheDataSource` 等），而 lint 的 `UnsafeOptInUsageError`
+// 要求**逐处**opt-in。约定与 `PlaybackService` 一致：在类型上标一次。
+// 这些 API 在 media3 1.5 上是稳定的，标 `UnstableApi` 是库方的兼容承诺方式，不是风险信号。
+@OptIn(UnstableApi::class)
 object OfflineAudioCache {
 
     /** 缓存目录名（相对 filesDir）。 */
@@ -107,17 +117,48 @@ object OfflineAudioCache {
         }
     }
 
-    /** 给 ExoPlayer 用的数据源工厂：命中本地的片段不再走网络。 */
+    /**
+     * 给 ExoPlayer 用的数据源工厂：命中本地的片段不再走网络。
+     *
+     * ## v3.1.0 · B：两处**按 host 限定**的改动（铁律 27：不得破坏现有音源）
+     *
+     * 1. **上游挂一层 [ResolvingDataSource]**，只对 B 站 CDN 的 host 补
+     *    `Referer: https://www.bilibili.com/`。实测：B 站媒体 CDN 不带 Referer
+     *    一律 **403**（连带 ExoPlayer 指纹的 UA 也 403），而带上就是 206。
+     *    反过来，给网易云/QQ 的请求加 B 站 Referer 也会把它们打死 ——
+     *    所以判据是 host 白名单（[BiliCdn.needsReferer]），不是全局默认头。
+     *    网易云与 QQ 的请求在这里**一个字节都不变**。
+     * 2. **B 站 CDN 用内容寻址的稳定缓存键**：它的直链两小时后会换一条（query 全变），
+     *    但路径里的内容哈希不变，所以键取文件名（[BiliCdn.cacheKeyFor]）。
+     *    非 B 站 CDN 的键**逐字不变**。
+     *
+     * `ResolvingDataSource` 是 media3 自带的、专门用来在**打开数据源之前**
+     * 改写 `DataSpec` 的那一层（`DataSpec.withRequestHeaders`），
+     * 因此不需要自定义 `DataSource`，也不影响缓存写入路径。
+     */
     fun dataSourceFactory(context: Context): DataSource.Factory {
         val app = context.applicationContext
         val c = get(app)
+        val upstream: DataSource.Factory = ResolvingDataSource.Factory(
+            DefaultDataSource.Factory(app),
+        ) { spec ->
+            val host = spec.uri.host
+            if (BiliCdn.needsReferer(host)) spec.withRequestHeaders(BiliCdn.requestHeaders()) else spec
+        }
         return CacheDataSource.Factory()
             .setCache(c)
-            .setUpstreamDataSourceFactory(DefaultDataSource.Factory(app))
+            .setUpstreamDataSourceFactory(upstream)
             .setCacheWriteDataSinkFactory(
                 CacheDataSink.Factory().setCache(c).setFragmentSize(CacheDataSink.DEFAULT_FRAGMENT_SIZE)
             )
-            .setCacheKeyFactory { spec -> OfflineKeys.keyOf(spec.uri.toString()) ?: spec.uri.toString() }
+            .setCacheKeyFactory { spec ->
+                // v3.1.0 · B：B 站 CDN 用**稳定键**（路径里的内容哈希 + 档位后缀），
+                // 因为它的 query（签名与 deadline）每次取链都不同 —— 按完整 URL 做 key
+                // 只会堆一批永远命中不了的片段。非 B 站 CDN 走既有规则，逐字不变。
+                BiliCdn.cacheKeyFor(spec.uri.toString(), spec.uri.host)
+                    ?: OfflineKeys.keyOf(spec.uri.toString())
+                    ?: spec.uri.toString()
+            }
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 

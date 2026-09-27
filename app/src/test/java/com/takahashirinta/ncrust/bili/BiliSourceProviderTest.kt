@@ -172,19 +172,23 @@ class BiliSourceProviderTest {
 class BiliSignatureRejectionTest {
 
     @Test
-    fun `HTTP 412 的 HTML 正文算被拒`() {
-        assertTrue(BiliApi.isSignatureRejected("<!DOCTYPE html><html lang=\"zh-cn\">...412..."))
-        assertTrue(BiliApi.isSignatureRejected(""))
-        assertTrue(BiliApi.isSignatureRejected(null))
+    fun `HTTP 412 的 HTML 正文不算签名问题（重签无效）`() {
+        // 412 是**路径级封禁**：实测「无签名 / 正确签名 / 伪造签名 / 无 Cookie」
+        // 四种组合全部 412。把它当签名失败只会白白多打一次 nav —— 而且救不回来。
+        assertFalse(BiliApi.isSignatureRejected("<!DOCTYPE html><html lang=\"zh-cn\">...412..."))
+        assertFalse(BiliApi.isSignatureRejected(""))
+        assertFalse(BiliApi.isSignatureRejected(null))
     }
 
     @Test
-    fun `结构化响应里的 -352 与 -403 与 -1200 都算被拒`() {
+    fun `只有 -352 与 -403 算签名被拒；-1200 不算`() {
         // -352 是**风控校验失败**：实测「缺签名 / 错签名」就是这一档，而 HTTP 状态是 200。
         // 漏了它 ⇒ wbi 密钥每天轮换后搜索永远 0 条，且要等 6 小时 TTL 才可能自愈。
         assertTrue(BiliApi.isSignatureRejected("""{"code":-352,"message":"风控校验失败"}"""))
         assertTrue(BiliApi.isSignatureRejected("""{"code":-403,"message":"访问权限不够"}"""))
-        assertTrue(BiliApi.isSignatureRejected("""{"code":-1200,"message":"被降级过滤的请求"}"""))
+        // ⚠️ -1200 **不算**：实测非法 search_type（music/audio/foobar）与越界翻页
+        // 返回的都是它 —— 那不是签名问题，重签只会重复同一次失败。
+        assertFalse(BiliApi.isSignatureRejected("""{"code":-1200,"message":"被降级过滤的请求"}"""))
     }
 
     @Test
@@ -192,5 +196,75 @@ class BiliSignatureRejectionTest {
         assertFalse(BiliApi.isSignatureRejected("""{"code":0,"data":{"result":[]}}"""))
         assertFalse(BiliApi.isSignatureRejected("""{"code":-101,"message":"账号未登录"}"""))
         assertFalse(BiliApi.isSignatureRejected("""{"code":4511001,"message":"音频未找到或已下架"}"""))
+    }
+}
+
+/**
+ * B 站 CDN 的取流约束（`BiliCdn`）。
+ *
+ * 这一组的关键不是「命中 B 站」，而是**不命中网易云/QQ** ——
+ * 判据写宽了会把那两个音源一起打死（实测：跨源 Referer 会 403），
+ * 那是铁律 27 里最不能接受的方向。
+ */
+class BiliCdnTest {
+
+    @Test
+    fun `B 站 CDN 的 host 命中`() {
+        assertTrue(BiliCdn.needsReferer("upos-sz-mirrorhw.bilivideo.com"))
+        assertTrue(BiliCdn.needsReferer("b-baaa6b14dc82ptf2i9ztakm7g4wue.edge.mountaintoys.cn").not())
+        assertTrue(BiliCdn.needsReferer("i0.hdslb.com"))
+        assertTrue(BiliCdn.needsReferer("api.bilibili.com"))
+        assertTrue(BiliCdn.needsReferer("UPOS-SZ-MIRRORHW.BILIVIDEO.COM"))
+    }
+
+    @Test
+    fun `网易云与 QQ 的 host 一个都不能命中`() {
+        val mustNotMatch = listOf(
+            "music.163.com",
+            "interface3.music.163.com",
+            "interface.music.163.com",
+            "clientlogusf.music.163.com",
+            "u.y.qq.com",
+            "c.y.qq.com",
+            "isure.stream.qqmusic.qq.com",
+            "ws.stream.qqmusic.qq.com",
+            "dl.stream.qqmusic.qq.com",
+            // 后缀伪装：`evilbilivideo.com` 不是 `bilivideo.com` 的子域。
+            "evilbilivideo.com",
+            "notbilibili.com",
+            "",
+            null,
+        )
+        mustNotMatch.forEach {
+            assertFalse("绝不能给 $it 加 B 站 Referer —— 那会把能播的歌打死", BiliCdn.needsReferer(it))
+        }
+    }
+
+    @Test
+    fun `请求头只有一个 Referer`() {
+        val h = BiliCdn.requestHeaders()
+        assertEquals(1, h.size)
+        assertEquals("https://www.bilibili.com/", h["Referer"])
+        // 不带 Cookie：媒体 CDN 不认登录态，带上反而让指纹在不同接口间不一致。
+        assertFalse(h.containsKey("Cookie"))
+    }
+
+    @Test
+    fun `缓存键取内容寻址的文件名 且与既有键空间隔离`() {
+        val u1 = "https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/0e35503a10eddafee44a1dfee6ff09f7-192k.m4a?e=aaa&deadline=1"
+        val u2 = "https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/0e35503a10eddafee44a1dfee6ff09f7-192k.m4a?e=bbb&deadline=2"
+        val k1 = BiliCdn.cacheKeyFor(u1, "upos-sz-mirrorhw.bilivideo.com")
+        val k2 = BiliCdn.cacheKeyFor(u2, "upos-sz-mirrorhw.bilivideo.com")
+        assertEquals("bili:0e35503a10eddafee44a1dfee6ff09f7-192k.m4a", k1)
+        assertEquals("同一个内容哈希在两次取链后必须得到同一个键（否则缓存永远命中不了）", k1, k2)
+        // 不同档位是不同的文件 ⇒ 不同键。
+        val u3 = u1.replace("-192k", "-320k")
+        assertFalse(k1 == BiliCdn.cacheKeyFor(u3, "upos-sz-mirrorhw.bilivideo.com"))
+    }
+
+    @Test
+    fun `非 B 站 host 不给缓存键（交给既有规则）`() {
+        assertNull(BiliCdn.cacheKeyFor("https://music.163.com/x.mp3?song=1", "music.163.com"))
+        assertNull(BiliCdn.cacheKeyFor("https://x/y.m4a", null))
     }
 }

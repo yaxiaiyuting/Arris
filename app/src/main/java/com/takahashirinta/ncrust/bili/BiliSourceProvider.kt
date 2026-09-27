@@ -141,8 +141,10 @@ object BiliSourceProvider : MusicSourceProvider {
      *   且绝大多数音乐区视频根本没有字幕；
      * - 音频区那条路的歌词是 `song/info` 的 `lyric` 字段，与视频无关。
      *
-     * 所以这里对视频返回 **null**（= 「没有这个数据源」），对音频区返回它的
-     * `lyric` 字段（可能是空串 = 「这首歌确实没有歌词」）。
+     * 所以这里对视频返回 **null**（= 「没有这个数据源」），对音频区返回
+     * **`/audio/music-service-c/web/song/lyric` 的正文**（可能是空串 = 「这首歌确实没有歌词」）。
+     * ⚠️ **不是** `song/info` 的那个 `lyric` 字段 —— 实测它是 LRC 文件的 URL，
+     * 当正文用会解析出 0 行（见 [fetchLyric] 函数体里的说明）。
      * 两种情况的 UI 表现都是「暂无歌词」，但语义不同 —— 与 `LyricLoadCoordinator.State`
      * 把 [空] 与 [失败] 分开是同一条纪律。
      */
