@@ -9,6 +9,7 @@
 package com.takahashirinta.ncrust.ui.player.motion
 
 import android.graphics.Bitmap
+import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -329,6 +330,19 @@ object CoverBlurCache {
     /** 诊断 tag：模糊失败时打一条 WARN（现场唯一能区分"没开"与"算失败"的信号）。 */
     private const val TAG = "CoverBlur"
 
+    /**
+     * 这张位图是不是硬件位图。
+     *
+     * ⚠️ `Bitmap.Config.HARDWARE` **本身是 API 26 才有的枚举常量**，而本模块的 minSdk 是 24 ——
+     * 直接写 `bitmap.config == Bitmap.Config.HARDWARE` 会被 lint 判成
+     * `NewApi: Field requires API level 26 (current min is 24)`（本文件真被它挡下过一次构建）。
+     * 这个版本判断不是形式主义：API 24/25 上 `Bitmap.Config` 类里**根本没有** HARDWARE 这个字段，
+     * 常量引用必须留在 `SDK_INT >= O` 的分支里，靠 ART 的惰性字段解析才安全。
+     */
+    private fun isHardwareConfig(bitmap: Bitmap): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            runCatching { bitmap.config == Bitmap.Config.HARDWARE }.getOrDefault(false)
+
     private val cache = LruCache<String, ImageBitmap>(CACHE_ENTRIES)
 
     /** 单测/诊断：命中次数。 */
@@ -410,7 +424,7 @@ object CoverBlurCache {
     private fun compute(bitmap: Bitmap): ImageBitmap {
         require(!bitmap.isRecycled) { "cover bitmap is recycled" }
         require(bitmap.width > 0 && bitmap.height > 0) { "cover bitmap has zero size" }
-        val source = if (bitmap.config == Bitmap.Config.HARDWARE) {
+        val source = if (isHardwareConfig(bitmap)) {
             bitmap.copy(Bitmap.Config.ARGB_8888, false)
                 ?: error("cannot copy hardware bitmap to software")
         } else {

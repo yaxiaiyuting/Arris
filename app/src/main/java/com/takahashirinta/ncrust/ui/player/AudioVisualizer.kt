@@ -160,10 +160,20 @@ object WaveformStore {
     /** 只应在 draw 阶段读（在组合阶段读会变成每帧重组）。 */
     val generation: Int get() = generationState.intValue
 
-    /** **音频线程**调用：零分配、零锁。 */
-    fun onBar(rootMeanSquare: Double) {
-        if (enabled) ring.push(rootMeanSquare.toFloat())
+    /**
+     * **音频线程**调用：零分配、零锁。
+     *
+     * v2.9.0：多收一个**低频通道**（[bass]）。数据来源与全带 RMS 是**同一次**逐样本遍历
+     * （`PcmRms.analyze`，一阶低通），不是第二遍扫描，也不是 FFT。
+     * 它的唯一消费方是节拍判据：底鼓/贝斯落在这一带，人声与旋律重音不在 ——
+     * 于是「鼓声触发冲击波」成立，而「一句高音也炸一圈涟漪」消失。
+     */
+    fun onBar(rootMeanSquare: Double, bass: Double) {
+        if (enabled) ring.push(rootMeanSquare.toFloat(), bass.toFloat())
     }
+
+    /** 只有全带值的重载（老调用点与单测用）：低频通道取同一个值。 */
+    fun onBar(rootMeanSquare: Double) = onBar(rootMeanSquare, rootMeanSquare)
 
     /**
      * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸/C 档特效尚未收敛）时才让画面失效。
@@ -172,9 +182,12 @@ object WaveformStore {
      */
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
         var changed = ring.pump(active, dtMs, effects)
+        // v2.9.0：低频通道跟着泵一次（判据用最新一根，所以只在这里读一次）。
         // C 档：只有真的开着才推进（关掉时连函数都不进 ⇒ 零成本）。
         if (effects.shockwave || effects.particles) {
-            if (showcaseState.update(ring.newestTarget(), dtMs, active, effects)) changed = true
+            if (showcaseState.update(ring.newestTarget(), ring.newestBass(), dtMs, active, effects)) {
+                changed = true
+            }
         }
         if (changed) generationState.intValue++
     }
@@ -192,6 +205,14 @@ object WaveformStore {
      * 只在 `pump` 之后读（`pump` 负责把新柱搬进 targets；搬之前读到的是上一帧的值）。
      */
     fun newestBar(): Float = ring.newestTarget()
+
+    /**
+     * v2.9.0：最新的**低频（鼓 / 贝斯）**能量（0..1），同样是未平滑值。
+     *
+     * 节拍判据改用它（见 `WaveformEffectsState.update` 与 `MotionEnvelope.update`）——
+     * 全带 RMS 对"一句高音"与"一下底鼓"给出同样的响应，那是「乱触发」的根源。
+     */
+    fun newestBass(): Float = ring.newestBass()
 
     /** B 档：呼吸亮度倍率。draw 阶段直接读（不是 Compose state ⇒ 不触发重组）。 */
     fun breatheScale(): Float = ring.breatheScale()

@@ -73,7 +73,18 @@ class MotionEnvelope {
      *   并清空基线 —— 暂停期间基线若继续衰减到 0，起播第一根柱必然被判成 onset（误触发）。
      * @return 画面是否需要重绘（还有动画没收敛）。
      */
-    fun update(newestBar: Float, dtMs: Float, active: Boolean): Boolean {
+    fun update(newestBar: Float, dtMs: Float, active: Boolean): Boolean =
+        update(newestBar, newestBar, dtMs, active)
+
+    /**
+     * v2.9.0：**节拍判据改用低频（鼓 / 贝斯）通道**（与 `WaveformEffectsState` 同一口径、
+     * 同一组阈值常量）。理由与诚实边界写在 `WaveformEffectsState.update` 的 KDoc 上 ——
+     * 一句话：全带 RMS 分不出"一句高音"和"一下底鼓"，低频可以。
+     *
+     * @param newestBar 全带 RMS（未平滑）：用于**响度包络**（背景呼吸的幅度）。
+     * @param newestBass 低频能量（未平滑）：用于**节拍与强拍**。
+     */
+    fun update(newestBar: Float, newestBass: Float, dtMs: Float, active: Boolean): Boolean {
         val dt = dtMs.coerceIn(0f, 200f)
         var changed = false
 
@@ -94,14 +105,18 @@ class MotionEnvelope {
             return changed || level != 0f
         }
 
-        val value = if (newestBar.isFinite()) newestBar.coerceIn(0f, 1f) else 0f
+        // 响度包络仍然跟全带 RMS（背景呼吸要的是"整体多响"，不是"有没有鼓"）。
+        val levelValue = if (newestBar.isFinite()) newestBar.coerceIn(0f, 1f) else 0f
+        // 节拍判据用低频通道；不可用时回落全带值（老调用点与单测走这条）。
+        val onsetSource = if (newestBass.isFinite() && newestBass >= 0f) newestBass else newestBar
+        val value = if (onsetSource.isFinite()) onsetSource.coerceIn(0f, 1f) else 0f
         // 起音快 / 回落慢：与 WaveformRing 的 ATTACK/RELEASE 同源手感，
         // 但这一层要的是"音量包络"而不是"柱高"，所以时间常数更大（背景不该跟着每个缓冲块抖）。
-        val tau = if (value > level) ATTACK_TAU_MS else RELEASE_TAU_MS
+        val tau = if (levelValue > level) ATTACK_TAU_MS else RELEASE_TAU_MS
         val k = 1f - exp(-dt / tau)
-        if (level != value) {
-            val next = level + (value - level) * k
-            level = if (next.isFinite()) next.coerceIn(0f, 1f) else value
+        if (level != levelValue) {
+            val next = level + (levelValue - level) * k
+            level = if (next.isFinite()) next.coerceIn(0f, 1f) else levelValue
             changed = true
         }
 

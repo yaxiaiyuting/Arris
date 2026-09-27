@@ -198,7 +198,8 @@ class TransparentWaveformSinkTest {
         var calls = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            onBar = {
+            // v2.9.0：onBar 现在收两个参数（全带 RMS + 低频通道）。
+            onBar = { _, _ ->
                 calls++
                 throw IllegalStateException("模拟 push() 里将来加了会抛的代码")
             },
@@ -210,14 +211,14 @@ class TransparentWaveformSinkTest {
         assertEquals(5L, sink.droppedBarCount)
     }
 
-    /** ② RMS 自己抛异常 ⇒ 同样被吞掉，消费端不会被调用（不会补一个假的 0 柱）。 */
+    /** ② PCM 分析自己抛异常 ⇒ 同样被吞掉，消费端不会被调用（不会补一个假的 0 柱）。 */
     @Test
     fun `a throwing rms is isolated and drops the bar`() {
         var consumed = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            onBar = { consumed++ },
-            rootMeanSquare = { _, _ -> throw ArithmeticException("模拟 RMS 内部炸了") },
+            onBar = { _, _ -> consumed++ },
+            analyze = { _, _ -> throw ArithmeticException("模拟 PCM 分析内部炸了") },
         )
         sink.flush(44_100, 6, C.ENCODING_PCM_16BIT)
         sink.handleBuffer(pcm16(1, 2, 3, 4, 5, 6))
@@ -225,17 +226,17 @@ class TransparentWaveformSinkTest {
         assertEquals(1L, sink.droppedBarCount)
     }
 
-    /** ③ 开关关掉 ⇒ **RMS 一次都不跑**（探针 §5：「关掉开关 = 零开销」此前不成立）。 */
+    /** ③ 开关关掉 ⇒ **PCM 遍历一次都不跑**（探针 §5：「关掉开关 = 零开销」此前不成立）。 */
     @Test
     fun `disabling the visualizer skips the whole rms walk`() {
         var rmsCalls = 0
         var consumed = 0
         val sink = TransparentWaveformSink(
             enabled = { false },
-            onBar = { consumed++ },
-            rootMeanSquare = { _, _ ->
+            onBar = { _, _ -> consumed++ },
+            analyze = { _, _ ->
                 rmsCalls++
-                0.5
+                PcmRms.pack(0.5f, 0.5f)
             },
         )
         sink.flush(44_100, 2, C.ENCODING_PCM_16BIT)
@@ -254,9 +255,9 @@ class TransparentWaveformSinkTest {
                 gateReads++
                 true
             },
-            rootMeanSquare = { _, _ ->
+            analyze = { _, _ ->
                 rmsCalls++
-                0.0
+                PcmRms.pack(0f, 0f)
             },
         )
         sink.flush(44_100, 6, C.ENCODING_PCM_24BIT)

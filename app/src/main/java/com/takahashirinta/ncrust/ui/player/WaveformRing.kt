@@ -68,6 +68,15 @@ class WaveformRing(
     private val ring = FloatArray(capacity)
 
     /**
+     * v2.9.0：与 [ring] **逐槽对齐**的低频（鼓 / 贝斯）能量环形缓冲。
+     *
+     * 为什么是平行的第二个环而不是"再算一遍"：两个值来自**同一次**音频线程遍历
+     * （`PcmRms.analyze`），到 UI 侧也必须逐槽对齐 —— 否则节拍判据用的低频值与
+     * 柱状图画的全带值会来自不同的时刻，onset 会与画面错帧。
+     */
+    private val bassRing = FloatArray(capacity)
+
+    /**
      * 写入游标 = 累计写入的柱数（不是下标）。
      *
      * volatile：音频线程写、UI 线程读。**单写者**，所以 UI 侧先快照它、再读
@@ -81,6 +90,9 @@ class WaveformRing(
 
     /** 最新数据（阶跃）。UI 线程原地更新，绝不重新分配。 */
     private val targets = FloatArray(barCount)
+
+    /** v2.9.0：与 [targets] 对齐的**低频**最新值（节拍判据用）。 */
+    private var bassTarget = 0f
 
     /** 画面上的柱子高度（0..1）= 平滑后的值。UI 线程原地更新。 */
     private val bars = FloatArray(barCount)
@@ -97,11 +109,17 @@ class WaveformRing(
     /** B 档：呼吸相位（0..1 循环）。 */
     private var breathePhase = 0f
 
-    /** 音频线程：推入一根柱（RMS 幅度，0..1）。 */
-    fun push(value: Float) {
+    /**
+     * 音频线程：推入一根柱（全带 RMS + 低频能量，都是 0..1）。
+     *
+     * 两个值**共用同一个 writeIndex**：单写者语义不变，UI 侧快照一次游标就能拿到
+     * 对齐的一对值。
+     */
+    fun push(value: Float, bass: Float = value) {
         // NaN / Inf 防御：环形缓冲的边界读在和写者赛跑时理论上可能读到半个值
         // （见 pump 的注释）。宁可画成静音，也不要让 NaN 传染给整块画布。
         ring[writeIndex % capacity] = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
+        bassRing[writeIndex % capacity] = if (bass.isFinite()) bass.coerceIn(0f, 1f) else 0f
         writeIndex += 1
     }
 
@@ -110,6 +128,7 @@ class WaveformRing(
         readIndex = writeIndex
         bars.fill(0f)
         targets.fill(0f)
+        bassTarget = 0f
         peaks.fill(0f)
         peakHoldMs.fill(0f)
         flowPhase = 0f
@@ -175,7 +194,12 @@ class WaveformRing(
         repeat(pending) {
             // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
             // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
-            if (shiftIn(ring[readIndex % capacity])) changed = true
+            val slot = readIndex % capacity
+            if (shiftIn(ring[slot])) changed = true
+            // v2.9.0：低频通道只保留"最新一根"，不参与柱状图的滚动窗口 ——
+            // 节拍判据要的是**当下**这一刻的低频能量，不是历史窗口。
+            val bass = bassRing[slot]
+            if (bass.isFinite()) bassTarget = bass.coerceIn(0f, 1f)
             readIndex += 1
         }
         return changed
@@ -295,6 +319,9 @@ class WaveformRing(
      * 用未平滑值而不是 [bars]：起音时间常数 22ms 会把 onset 抹圆（探针 §1 明确要求用 targets）。
      */
     fun newestTarget(): Float = targets[barCount - 1]
+
+    /** v2.9.0：最新的低频能量（与 [newestTarget] 同一时刻）。 */
+    fun newestBass(): Float = bassTarget
 
     /** 单测用：画面值（平滑后）。 */
     fun barAt(index: Int): Float = bars[index]

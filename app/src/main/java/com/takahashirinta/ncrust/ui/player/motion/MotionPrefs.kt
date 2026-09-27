@@ -92,7 +92,7 @@ object MotionPrefs {
     const val VERSION_PRE_V290 = 0
 
     /** 当前水位。加语义 ⇒ +1 并在 [migrate] 里补一段搬运逻辑。 */
-    const val CURRENT_VERSION = 2
+    const val CURRENT_VERSION = 3
 
     // ------------------------------------------------------------------
     // 纯读（键缺失 / 类型不符都不抛异常 —— 坏数据最坏只是回落默认值）
@@ -227,7 +227,7 @@ object MotionPrefs {
      */
     fun migrate(prefs: SharedPreferences, deviceDefault: Int): Boolean {
         if (readVersion(prefs) >= CURRENT_VERSION) return false
-        // v2（v2.9.0 真机反馈后的纠正迁移）：v1 的阶梯在两台真机上都被推到了第 2 级
+        // v2/v3（v2.9.0 真机反馈后的纠正迁移，跑两次）：v1 的阶梯在两台真机上都被推到了第 2 级
         // （A 档被砍、播放页变回 v2.8.0 的老样子），而当时的判据只是"刚好越线"。
         // 新规则把非严重超标封在第 1 级，所以这里把**已经落盘的过量降级夹回来** ——
         // 否则那两台设备永远不会恢复（水位是单向的，用户也没有可发现的恢复路径）。
@@ -235,6 +235,7 @@ object MotionPrefs {
             atFloorTier = MotionIntensity.sanitize(deviceDefault, MotionIntensity.REFINED) ==
                 MotionIntensity.SIMPLE,
             severe = false,
+            userChoseTier = hasExplicitTier(prefs),
         )
         val before = readDegradeLevel(prefs)
         if (before > clampTo) {
@@ -295,7 +296,7 @@ object MotionPrefs {
             advancedUiOn = uiOn && current.tier >= MotionIntensity.REFINED,
             basicUiOn = uiOn,
             waveformAboveFloor = currentTier > MotionIntensity.SIMPLE,
-            maxLevel = MotionDegrade.maxLevelFor(atFloorTier, severe),
+            maxLevel = MotionDegrade.maxLevelFor(atFloorTier, severe, hasExplicitTier(prefs)),
         ) ?: return null
         degradeDecidedThisProcess = true
         val cutTier = MotionDegrade.cutsWaveformTier(next) && currentTier > MotionIntensity.SIMPLE

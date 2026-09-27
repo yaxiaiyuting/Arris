@@ -70,6 +70,8 @@ import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import com.takahashirinta.ncrust.ui.player.WaveformStore
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.sqrt
 
 /**
@@ -88,18 +90,35 @@ import kotlin.math.sqrt
  *
  * @param enabled 开关的进程内镜像（**不读盘**：音频线程上禁止 IO）。默认读 [WaveformStore.enabled]。
  * @param onBar 柱值消费端。默认 [WaveformStore.onBar]。
- * @param rootMeanSquare RMS 计算。默认 [PcmRms.of]。
+ * @param analyze PCM 分析（全带 RMS + 低频能量，打包成一个 `Long`，见 [PcmRms.pack]）。
+ *   默认走内置的一次遍历实现（[PcmRms.analyze]）。传 `null` 之外的值可以替换它 ——
+ *   单测用它来**证伪异常隔离**（让分析抛异常，断言播放链不受影响）。
  */
 @UnstableApi
 class TransparentWaveformSink(
     private val enabled: () -> Boolean = { WaveformStore.enabled },
-    private val onBar: (Double) -> Unit = WaveformStore::onBar,
-    private val rootMeanSquare: (ByteBuffer, Int) -> Double = PcmRms::of,
+    private val onBar: (Double, Double) -> Unit = WaveformStore::onBar,
+    analyze: ((ByteBuffer, Int) -> Long)? = null,
 ) : TeeAudioProcessor.AudioBufferSink {
+
+    /**
+     * 一次遍历算出（低频, 全带）两个标量。
+     *
+     * 默认实现是**成员函数引用**（闭包捕获 `this`）：构造时分配一次，之后每次回调零分配。
+     * 之所以不在构造参数默认值里直接写 `::analyzePcm`：默认值在**实例存在之前**求值，
+     * 那里拿不到 `this`（也拿不到 `sampleRateHz` 与滤波状态）。
+     */
+    private val analyze: (ByteBuffer, Int) -> Long = analyze ?: { b, e -> analyzePcm(b, e) }
 
     private var channelCount = 0
     private var encoding = C.ENCODING_INVALID
     private var bytesPerSample = 0
+
+    /** v2.9.0：低通需要的采样率（来自 [flush]）。0 = 还不知道 ⇒ 低频通道退化成全带。 */
+    private var sampleRateHz = 0
+
+    /** v2.9.0：一阶低通的跨缓冲状态。构造时分配一次，之后**零分配**。 */
+    private val bassFilterState = DoubleArray(1)
 
     /**
      * 被隔离边界吞掉的柱数（诊断 + 单测用）。
@@ -116,6 +135,9 @@ class TransparentWaveformSink(
         this.channelCount = if (channelCount > 0) channelCount else 0
         this.encoding = encoding
         this.bytesPerSample = bytesPerSampleOf(encoding)
+        // 格式变化（换歌 / 换设备）⇒ 采样率可能变、滤波器状态也不再对应，一并重置。
+        this.sampleRateHz = if (sampleRateHz > 0) sampleRateHz else 0
+        bassFilterState[0] = 0.0
     }
 
     /**
@@ -134,7 +156,10 @@ class TransparentWaveformSink(
         if (bps == 0 || channelCount == 0) return
         if (!enabled()) return
         try {
-            onBar(rootMeanSquare(buffer, encoding))
+            // v2.9.0：**一次遍历同时算低频与全带**（不是两遍）。
+            // 多出来的只有每样本一次乘加 —— 与"再走一遍全部样本"差一个数量级。
+            val packed = analyze(buffer, encoding)
+            onBar(PcmRms.bassOf(packed).toDouble(), PcmRms.fullOf(packed).toDouble())
         } catch (t: Throwable) {
             // 有意吞掉：这是隔离边界本身。计数不分配、不上锁。
             droppedBarCount += 1L
@@ -142,6 +167,14 @@ class TransparentWaveformSink(
     }
 
     private fun bytesPerSampleOf(encoding: Int): Int = PcmRms.bytesPerSample(encoding)
+
+    /**
+     * 默认分析器：把「这次回调的采样率 + 跨缓冲的滤波状态」闭包进来，交给 [PcmRms.analyze]。
+     *
+     * 构造时被包成一个 lambda（捕获 `this`）分配一次，之后每次回调都不分配。
+     */
+    private fun analyzePcm(buffer: ByteBuffer, encoding: Int): Long =
+        PcmRms.analyze(buffer, encoding, sampleRateHz, bassFilterState)
 }
 
 /**
@@ -177,6 +210,119 @@ internal object PcmRms {
         C.ENCODING_PCM_FLOAT -> 4
         else -> 0
     }
+
+    /**
+     * v2.9.0：**低频（鼓 / 贝斯）能量**的一阶（单极点）低通。
+     *
+     * ## 这不是 FFT，也不是频谱（写在最前面，避免下一个人误读）
+     *
+     * 整个计算只有一条递推：`state += a * (x - state)`，每样本**一次乘加**，
+     * 输出是**一个标量**（低频带的 RMS）。没有分帧、没有窗函数、没有频域变换、
+     * 也不画任何"按频段分色"的东西。它唯一的用途是把节拍判据从
+     * 「整段响度」换成「低频能量」—— 底鼓与贝斯落在这一带，人声与旋律重音不在，
+     * 于是「鼓声触发冲击波」成为可能，而「一句高音也炸一圈涟漪」消失。
+     *
+     * 这一点很重要：v2.8.0 明确写了「真 FFT / 多频段分色不做」（数据通路只有单标量 RMS，
+     * 真频段要么在音频线程上倍增计算、要么新增 PCM 环 + UI 侧 FFT）。本函数**两条都不越**：
+     * 它在**已有的那一次**逐样本遍历里多算一次乘加，不新增遍历、不新增缓冲、
+     * 也不产出任何"看起来像频谱"的视觉。
+     *
+     * ## 参数
+     *
+     * @param sampleRateHz 采样率（来自 `AudioBufferSink.flush`）。≤0 时退化成"不做低通"
+     *   （低频值 = 全带值），宁可退化也不要拿一个错的截止频率去滤波。
+     * @param state **调用方持有**的一元 `DoubleArray`（滤波状态）。用数组而不是返回值，
+     *   是为了让这个函数在音频线程上**零分配**：状态跨缓冲必须连续，
+     *   而"把状态包进返回值"就得每缓冲建一个对象。
+     */
+    fun analyze(view: ByteBuffer, encoding: Int, sampleRateHz: Int, state: DoubleArray): Long {
+        val bps = bytesPerSample(encoding)
+        if (bps == 0) return pack(0f, 0f)
+        val base = view.position()
+        val count = view.remaining() / bps
+        if (count <= 0) return pack(0f, 0f)
+        val littleEndian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
+        // 一阶低通系数：截止 [BASS_CUTOFF_HZ]，a = 1 - exp(-2π fc / fs)。
+        val a = lowPassCoefficient(sampleRateHz)
+        var lp = if (state.isNotEmpty() && state[0].isFinite()) state[0] else 0.0
+        var sumFull = 0.0
+        var sumBass = 0.0
+        var index = base
+        when (encoding) {
+            C.ENCODING_PCM_16BIT -> {
+                var i = 0
+                while (i < count) {
+                    val lo = view.get(index).toInt() and 0xFF
+                    val hi = view.get(index + 1).toInt()
+                    val raw = if (littleEndian) (hi shl 8) or lo else (lo shl 8) or (hi and 0xFF)
+                    val v = raw.toShort() / 32768.0
+                    sumFull += v * v
+                    lp += a * (v - lp)
+                    sumBass += lp * lp
+                    index += 2
+                    i++
+                }
+            }
+            C.ENCODING_PCM_FLOAT -> {
+                var i = 0
+                while (i < count) {
+                    val b0 = view.get(index).toInt() and 0xFF
+                    val b1 = view.get(index + 1).toInt() and 0xFF
+                    val b2 = view.get(index + 2).toInt() and 0xFF
+                    val b3 = view.get(index + 3).toInt() and 0xFF
+                    val bits = if (littleEndian) {
+                        (b3 shl 24) or (b2 shl 16) or (b1 shl 8) or b0
+                    } else {
+                        (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+                    }
+                    val v = Float.fromBits(bits).toDouble()
+                    sumFull += v * v
+                    lp += a * (v - lp)
+                    sumBass += lp * lp
+                    index += 4
+                    i++
+                }
+            }
+            else -> return pack(0f, 0f)
+        }
+        if (state.isNotEmpty()) state[0] = if (lp.isFinite()) lp else 0.0
+        val full = sqrt(sumFull / count)
+        val bass = sqrt(sumBass / count)
+        return pack(
+            if (bass.isFinite()) bass.toFloat() else 0f,
+            if (full.isFinite()) full.toFloat() else 0f,
+        )
+    }
+
+    /**
+     * 低通系数。截止 [BASS_CUTOFF_HZ]（底鼓基频 50–100Hz、贝斯 40–200Hz 的公共带）。
+     *
+     * 采样率 ≤0（`flush` 还没被调用过）时返回 **1.0** —— 系数 1 时 `lp = x`，
+     * 即"低频值 = 全带值"。这是刻意的退化：宁可让低频通道等价于总响度
+     * （行为与 v2.8.0 的节拍判据一致），也不要拿一个猜出来的采样率去滤波。
+     */
+    fun lowPassCoefficient(sampleRateHz: Int): Double {
+        if (sampleRateHz <= 0) return 1.0
+        val a = 1.0 - exp(-2.0 * PI * BASS_CUTOFF_HZ / sampleRateHz)
+        return a.coerceIn(0.0, 1.0)
+    }
+
+    /** 把 (低频, 全带) 两个 Float 打进一个 Long：音频线程上零分配地返回两个标量。 */
+    fun pack(bass: Float, full: Float): Long =
+        (bass.toRawBits().toLong() shl 32) or (full.toRawBits().toLong() and 0xFFFF_FFFFL)
+
+    fun bassOf(packed: Long): Float = Float.fromBits((packed ushr 32).toInt())
+
+    fun fullOf(packed: Long): Float = Float.fromBits(packed.toInt())
+
+    /**
+     * 低频截止（Hz）。**150** 的依据：底鼓的基频能量集中在 50–100Hz、贝斯 40–200Hz，
+     * 而人声基频 85–1100Hz、旋律重音更高 —— 150Hz 落在两者之间，
+     * 既保住了鼓组的下盘，又把大部分人声排除在外。
+     *
+     * 这不是"分频段可视化"：它只有一个通道，没有第二、第三个频段可比。
+     */
+    const val BASS_CUTOFF_HZ = 150.0
 
     fun of(view: ByteBuffer, encoding: Int): Double {
         val bps = bytesPerSample(encoding)

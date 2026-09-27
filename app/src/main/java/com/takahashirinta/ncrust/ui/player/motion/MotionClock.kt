@@ -85,7 +85,12 @@ object MotionClock {
      */
     fun frame(active: Boolean, dtMs: Float, waveform: VisualizerEffects, motion: MotionEffects): Boolean {
         WaveformStore.pump(active, dtMs, waveform)
-        var changed = envelope.update(WaveformStore.newestBar(), dtMs, active)
+        var changed = envelope.update(
+            newestBar = WaveformStore.newestBar(),
+            newestBass = WaveformStore.newestBass(),
+            dtMs = dtMs,
+            active = active,
+        )
         if (motion.haloBloom || motion.particles) {
             val backdropChanged = backdrop.update(
                 strongBeat = envelope.strongBeat,

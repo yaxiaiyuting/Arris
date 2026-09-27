@@ -187,7 +187,21 @@ object MotionDegrade {
      * 轻微超标只砍 B/C（那部分本来就"可有可无"），A 档（背景模糊 + 呼吸）保留 ——
      * 它是普通用户唯一看得见的那一层。
      */
-    fun maxLevelFor(atFloorTier: Boolean, severe: Boolean): Int = when {
+    fun maxLevelFor(atFloorTier: Boolean, severe: Boolean, userChoseTier: Boolean = false): Int = when {
+        // v2.9.0（真机反馈第三轮）：**用户显式选过档位 ⇒ 阶梯止步于第 1 级。**
+        //
+        // 现场：用户把档位调到「炫技」，进了一次横屏之后冲击波 / 粒子 / 3D **在竖屏和横屏
+        // 里都消失了** —— 那不是画不出来，是阶梯走到了第 3 级、把 `motion_tier` 从 2 改成了 1
+        // （而「写回档位」正是 v2.8.0 留下的语义）。用户没有任何办法知道这件事发生过。
+        //
+        // 判据本身（v2.8.0 自己的 KDoc）**不知道是谁把帧顶起来的**，归因要 Perfetto。
+        // 拿这样一个信号去**永久覆盖用户刚刚做出的显式选择**，代价与收益完全不成比例：
+        // 用户点「炫技」就是在说"我要看效果"，把效果收走不是省电，是违约。
+        //
+        // 所以：显式选过档位 ⇒ 只砍 B/C 这些"额外"的界面动效，**绝不动波形档位、
+        // 也绝不砍 A 档**；没选过（用设备判据解析出来的默认档）⇒ 才允许走完整阶梯 ——
+        // 那时的档位是**应用自己**定的，应用当然可以自己调整。
+        userChoseTier -> UI_ADVANCED_OFF
         atFloorTier -> UI_ADVANCED_OFF
         !severe -> UI_ADVANCED_OFF
         else -> MAX

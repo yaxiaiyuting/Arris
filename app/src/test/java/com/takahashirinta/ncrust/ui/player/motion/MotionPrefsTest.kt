@@ -292,37 +292,60 @@ class MotionPrefsTest {
     }
 
     @Test
-    fun `自动降级逐级推进并且写回盘`() {
+    fun `用户没选过档位时阶梯可以走到第三级并写回盘`() {
+        // 「没选过」= 盘上没有 motion_tier（档位是设备判据解析出来的）。
+        // 那时档位是**应用自己**定的，应用当然可以自己调整 —— 这才允许走到第 3 级。
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertFalse(MotionPrefs.hasExplicitTier(prefs))
+
+        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
+        assertEquals("第 1 级只砍界面动效", MotionPrefs.readTier(prefs, modernDefault), modernDefault)
+
+        assertEquals(MotionDegrade.UI_ALL_OFF, MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
+        assertEquals(MotionDegrade.WAVEFORM_DOWN, MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
+        assertEquals(
+            "第 3 级才把档位降一级，且写回 motion_tier（设置页显示的必须是实际渲染的那一档）",
+            MotionIntensity.SIMPLE,
+            MotionPrefs.readTier(prefs, modernDefault),
+        )
+        assertNull("到顶之后永不动作", MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
+    }
+
+    @Test
+    fun `用户显式选过档位时阶梯止步于第一级且绝不动档位`() {
+        // 真机现场（第三轮反馈）：用户把档位调到「炫技」，进了一次横屏之后
+        // 冲击波 / 粒子 / 3D 在竖屏和横屏里都消失了 —— 那不是画不出来，
+        // 是阶梯走到第 3 级把 motion_tier 从 2 改成了 1。判据本身不知道是谁把帧顶起来的，
+        // 拿它覆盖用户的显式选择不是省电，是违约。
         val prefs = MemoryPrefs()
         MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeUiMotionEnabled(prefs, true)
+        assertTrue(MotionPrefs.hasExplicitTier(prefs))
 
-        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionPrefs.applyAutoDowngrade(prefs))
-        assertEquals(MotionIntensity.SHOWCASE, MotionPrefs.readTier(prefs, modernDefault))
-        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionPrefs.readDegradeLevel(prefs))
-
-        assertEquals(MotionDegrade.UI_ALL_OFF, MotionPrefs.applyAutoDowngrade(prefs))
+        assertEquals(MotionDegrade.UI_ADVANCED_OFF, MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = true))
+        assertNull(
+            "显式选过档位 ⇒ 不再往下推",
+            MotionPrefs.applyAutoDowngrade(prefs, modernDefault, severe = true),
+        )
         assertEquals(
-            "第 1/2 级只砍界面动效，波形档位必须原封不动",
+            "波形档位必须原封不动 —— 用户点的炫技效果一个都不能少",
             MotionIntensity.SHOWCASE,
             MotionPrefs.readTier(prefs, modernDefault),
         )
-
-        assertEquals(MotionDegrade.WAVEFORM_DOWN, MotionPrefs.applyAutoDowngrade(prefs))
-        assertEquals(
-            "第 3 级才把档位降一级，且写回 motion_tier（设置页显示的必须是实际渲染的那一档）",
-            MotionIntensity.REFINED,
-            MotionPrefs.readTier(prefs, modernDefault),
+        assertTrue(
+            "A 档也必须留着（背景模糊 + 呼吸）",
+            MotionPrefs.readEffects(prefs, modernDefault).anyBasic,
         )
-
-        assertNull("到顶之后永不动作", MotionPrefs.applyAutoDowngrade(prefs))
     }
 
     @Test
     fun `已经在简洁档时第三级不再越界`() {
         val prefs = MemoryPrefs()
-        MotionPrefs.writeTier(prefs, MotionIntensity.SIMPLE)
         MotionPrefs.writeUiMotionEnabled(prefs, true)
-        MotionPrefs.writeDegradeLevel(prefs, MotionDegrade.UI_ALL_OFF)
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SIMPLE)
+        prefs.putRaw(MotionPrefs.KEY_VERSION, MotionPrefs.CURRENT_VERSION)
+        prefs.putRaw(MotionPrefs.KEY_DEGRADE_LEVEL, MotionDegrade.NONE)
         // 波形已经在最低档 ⇒ 第 3 级是**空操作** ⇒ `nextEffective` 不推进水位
         // （水位必须始终等价于"实际生效的削减"，否则水位说降了、画面没变）。
         assertNull(MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
@@ -331,12 +354,36 @@ class MotionPrefsTest {
 
     @Test
     fun `空操作的级别会被跳过而不是白占一格水位`() {
-        // 简洁档 + 界面动效开着：B/C 档**本来就是关的** ⇒ 第 1 级是空操作 ⇒ 直接推进到第 2 级。
+        // 简洁档 + 界面动效开着：B/C 档**本来就是关的** ⇒ 第 1 级是空操作。
+        // 走"没选过档位"这条路（否则阶梯本来就封在第 1 级，看不到跳级行为）。
         val prefs = MemoryPrefs()
-        MotionPrefs.writeTier(prefs, MotionIntensity.SIMPLE)
         MotionPrefs.writeUiMotionEnabled(prefs, true)
-        assertEquals(MotionDegrade.UI_ALL_OFF, MotionPrefs.applyAutoDowngrade(prefs, modernDefault))
-        assertFalse("A 档必须被砍掉", MotionPrefs.readEffects(prefs, modernDefault).anyUiMotion)
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SIMPLE)
+        prefs.putRaw(MotionPrefs.KEY_VERSION, MotionPrefs.CURRENT_VERSION)
+        prefs.putRaw(MotionPrefs.KEY_DEGRADE_LEVEL, MotionDegrade.NONE)
+        // 注意：putRaw 写进去之后 hasExplicitTier 就是 true 了 —— 所以这里直接验证纯函数，
+        // 而不是走 applyAutoDowngrade（那条路要求"没选过"才放行第 2 级）。
+        assertEquals(
+            MotionDegrade.UI_ALL_OFF,
+            MotionDegrade.nextEffective(
+                current = MotionDegrade.NONE,
+                advancedUiOn = false, // 简洁档：B/C 本来就是关的
+                basicUiOn = true,
+                waveformAboveFloor = false,
+                maxLevel = MotionDegrade.MAX,
+            ),
+        )
+        assertEquals(
+            "第 3 级在波形已到最低档时也必须跳过",
+            null,
+            MotionDegrade.nextEffective(
+                current = MotionDegrade.UI_ALL_OFF,
+                advancedUiOn = true,
+                basicUiOn = true,
+                waveformAboveFloor = false,
+                maxLevel = MotionDegrade.MAX,
+            ),
+        )
     }
 
     @Test
@@ -380,8 +427,8 @@ class MotionPrefsTest {
 
     @Test
     fun `严重超标才允许推过第一级`() {
+        // 没选过档位（设备判据解析）+ 严重超标 ⇒ 才允许走到第 2 级。
         val prefs = MemoryPrefs()
-        MotionPrefs.writeTier(prefs, MotionIntensity.SHOWCASE)
         MotionPrefs.writeUiMotionEnabled(prefs, true)
         assertEquals(
             MotionDegrade.UI_ADVANCED_OFF,
@@ -464,8 +511,9 @@ class MotionPrefsTest {
     @Test
     fun `当前水位常量与阶梯上界一致`() {
         assertEquals(MotionDegrade.WAVEFORM_DOWN, MotionDegrade.MAX)
-        // v1 = v2.9.0 首版；v2 = 真机反馈后的纠正迁移（把过量的降级夹回新规则的上界）。
-        assertEquals(2, MotionPrefs.CURRENT_VERSION)
+        // v1 = v2.9.0 首版；v2/v3 = 两轮真机反馈后的纠正迁移
+        // （把过量的降级夹回新规则的上界）。
+        assertEquals(3, MotionPrefs.CURRENT_VERSION)
         assertEquals(VisualizerTier.REFINED, MotionIntensity.DEFAULT)
     }
 }

@@ -85,7 +85,32 @@ class WaveformEffectsState(
      * @param effects 能力位：关掉某项时立刻清空它对应的状态（用户改设置后画面要马上跟上）。
      * @return 是否需要重绘。
      */
-    fun update(newestBar: Float, dtMs: Float, active: Boolean, effects: VisualizerEffects): Boolean {
+    fun update(newestBar: Float, dtMs: Float, active: Boolean, effects: VisualizerEffects): Boolean =
+        update(newestBar, newestBar, dtMs, active, effects)
+
+    /**
+     * v2.9.0：**节拍判据改用低频（鼓 / 贝斯）通道**。
+     *
+     * ## 为什么
+     *
+     * 全带 RMS 对「一句高音」与「一下底鼓」给出的是同一种响应 —— 那是「涟漪乱触发、
+     * 真鼓点反而不明显」的根源。低频通道来自 `PcmRms.analyze` 的**一阶低通**
+     * （截止 150Hz，与全带 RMS 同一次逐样本遍历，不是 FFT、不是第二遍扫描），
+     * 底鼓与贝斯落在这一带、人声与旋律重音不在。
+     *
+     * ## 诚实边界（不改，也不许含糊）
+     *
+     *  - 只有一个低频通道，**没有**低/中/高频之分 —— 底鼓与贝斯仍然不可区分；
+     *  - 慢歌 / 无鼓的曲目（古典、清唱）低频能量低 ⇒ **触发变少是正确行为**，不是 bug；
+     *  - 传入 `newestBass` 为 NaN/负数时回落全带值（老调用点与单测走的也是这条）。
+     */
+    fun update(
+        newestBar: Float,
+        newestBass: Float,
+        dtMs: Float,
+        active: Boolean,
+        effects: VisualizerEffects,
+    ): Boolean {
         val dt = dtMs.coerceIn(0f, 200f)
         var changed = false
 
@@ -110,7 +135,9 @@ class WaveformEffectsState(
             return changed
         }
 
-        val value = if (newestBar.isFinite()) newestBar.coerceIn(0f, 1f) else 0f
+        // 低频通道不可用时回落全带值：行为与 v2.8.0 的判据一致。
+        val onsetSource = if (newestBass.isFinite() && newestBass >= 0f) newestBass else newestBar
+        val value = if (onsetSource.isFinite()) onsetSource.coerceIn(0f, 1f) else 0f
         val jump = value - baseline
         // 先算 jump 再更新基线：否则一次强 onset 会立刻把基线抬起来，把自己判掉。
         baseline += (value - baseline) * (1f - exp(-dt / BASELINE_TAU_MS))
