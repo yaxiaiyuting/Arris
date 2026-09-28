@@ -45,6 +45,30 @@ enum class GatingReason {
      * v2.8.0 新增：`visualizer_tier != 2`（T2 炫技档）⇒ C 档效果根本不参与绘制，不可用。
      */
     TIER_NOT_SHOWCASE_CAPABLE,
+
+    /**
+     * v3.2.0 新增：「界面动效」总闸（`ui_motion_enabled`）关着 ⇒ 所有的动效子开关
+     * 改了也不会有任何画面变化（`MotionEffects.anyUiMotion == false`，A/B/C 三层全不挂载）。
+     */
+    UI_MOTION_DISABLED,
+
+    /**
+     * v3.2.0 新增：「界面律动」总闸（`motion_rhythm_enabled`）关着 ⇒ **律动类**的
+     * 细粒度开关（背景呼吸 / 封面浮动 / 歌词律动 / 控制条脉冲）此刻不参与渲染。
+     *
+     * 注意它**不**影响冲击波 / 光晕 / 粒子 / 多频段波形 —— 那几项不是律动类，
+     * 关律动闸不会碰它们（`MotionEffects.of` 里逐项可读）。
+     */
+    RHYTHM_DISABLED,
+
+    /**
+     * v3.2.0 新增：动效强度是**简洁档** ⇒ 这一项在简洁档不参与渲染。
+     *
+     * 简洁档自 v3.2.0 起是**静态档**（P0-B：用户选了简洁界面还在抖），
+     * 全部逐帧的界面动效都收窄到精致档及以上 ⇒ 简洁档下这些开关是死开关，
+     * 必须置灰而不是让用户点了没反应（`visualizer_showcase` 那条门控的同一条理由）。
+     */
+    TIER_BASIC_ONLY,
 }
 
 /** 一个条目的可见性 / 可用性判定结果。 */
@@ -106,6 +130,41 @@ object SettingsVisibility {
     /** `visualizer_tier` 的合法取值（非法值一律回落 [TIER_DEFAULT]，同 `offline_cache_mb` 的口径）。 */
     val TIER_RANGE: IntRange = 0..TIER_SHOWCASE
 
+    /** v3.2.0：精致档的取值（简洁档是 0；所有逐帧的界面动效都要 ≥ 这一档）。 */
+    const val TIER_REFINED: Int = 1
+
+    /**
+     * v3.2.0：**动效的九个独立开关**（v3.0.0 五项 + v3.2.0 四项）。
+     *
+     * 它们的门控是复合的：先看「界面动效」总闸，再看（律动类的）「界面律动」总闸，
+     * 最后看档位。三层都过了才可用。
+     */
+    val MOTION_SWITCH_IDS: Set<String> = linkedSetOf(
+        "motion_shockwave",
+        "motion_halo",
+        "motion_particles",
+        "motion_wave_bands",
+        "motion_breathing",
+        "motion_rhythm_enabled",
+        "motion_cover_float",
+        "motion_lyric_pulse",
+        "motion_bar_pulse",
+    )
+
+    /**
+     * v3.2.0：**律动类**的细粒度开关（不含律动闸自己）。
+     *
+     * 归类判据是可执行的：渲染路径里是否读 `MotionClock.pulse()` / `MotionClock.level()`
+     * —— 逐项表见 `docs/verification/v3.2.0/probe-ui-jitter.md` §5。
+     * 「封面 3D 旋转」也是律动类，由一个能力位（不是开关）表达，因此不在这个集合里。
+     */
+    val RHYTHM_DETAIL_IDS: Set<String> = linkedSetOf(
+        "motion_breathing",
+        "motion_cover_float",
+        "motion_lyric_pulse",
+        "motion_bar_pulse",
+    )
+
     /**
      * v2.8.0 新增的 **C 档细分开关**（4 项）。它们的门控是复合的：
      * 先看档位（必须 T2），再看 `visualizer_showcase` 总开关。
@@ -126,6 +185,20 @@ object SettingsVisibility {
      * [read] 返回 null（键不存在）或类型不符时，用 registry 里 `visualizer_tier` 的期望默认值。
      */
     fun visualizerTier(read: (String) -> Any?): Int = normalizeTier(intValue("visualizer_tier", read))
+
+    /**
+     * v3.2.0：读当前**统一动效强度**档位（`motion_tier`，已归一化；缺 key 时用 registry 声明的
+     * 精致档）。
+     *
+     * ⚠️ 与 [visualizerTier] 不是同一个键：`visualizer_tier` 是 v2.8.0 的迁移源，
+     * 已经不再参与渲染。这里的缺省口径刻意与 `SettingsRegistry` 里 `motion_tier` 的
+     * `default = MotionIntensity.REFINED` 一致 —— 于是「没选过档位」的盘在设置页上
+     * 等价于精致档；**真实 UI 传入的是解析后的值**（`MotionPrefs.readTier(prefs,
+     * deviceDefaultTier(context))`），所以低端机上会正确置灰。
+     * 这是本文件「只做纯函数、不碰平台能力」这条边界的又一处：设备判据在 UI 层。
+     */
+    fun motionTier(read: (String) -> Any?): Int =
+        normalizeTier(intValue("motion_tier", read))
 
     /**
      * 门控判定（按 id）。未知 id 一律返回 [SettingsAvailability.FREE] —— **不抛异常**
@@ -175,6 +248,31 @@ object SettingsVisibility {
 
                 !boolValue("visualizer_showcase", read) ->
                     SettingsAvailability.disabled(GatingReason.SHOWCASE_DISABLED)
+
+                else -> SettingsAvailability.FREE
+            }
+
+            // v3.2.0：界面律动总闸本身。它是**策略开关**（关掉就是关掉，任何档位都不许绕过），
+            // 所以只受「界面动效」总闸约束，不随档位置灰 —— 用户可以在简洁档先关掉它，
+            // 把档位调高之后它仍然生效。
+            "motion_rhythm_enabled" ->
+                if (boolValue("ui_motion_enabled", read)) {
+                    SettingsAvailability.FREE
+                } else {
+                    SettingsAvailability.disabled(GatingReason.UI_MOTION_DISABLED)
+                }
+
+            // v3.2.0：其余八个动效开关：总闸 → 律动闸（只有律动类看它）→ 档位。
+            // 简洁档自 v3.2.0 起是静态档（P0-B）⇒ 这一档下它们全是死开关，必须置灰。
+            in MOTION_SWITCH_IDS -> when {
+                !boolValue("ui_motion_enabled", read) ->
+                    SettingsAvailability.disabled(GatingReason.UI_MOTION_DISABLED)
+
+                entry.id in RHYTHM_DETAIL_IDS && !boolValue("motion_rhythm_enabled", read) ->
+                    SettingsAvailability.disabled(GatingReason.RHYTHM_DISABLED)
+
+                motionTier(read) < TIER_REFINED ->
+                    SettingsAvailability.disabled(GatingReason.TIER_BASIC_ONLY)
 
                 else -> SettingsAvailability.FREE
             }

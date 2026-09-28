@@ -26,6 +26,14 @@ enum class SettingsRowKind {
     /** QQ 音乐账号块（登录态 + 会员角标 + 登录/登出/手机号登录）。 */
     ACCOUNT_QQ,
 
+    /**
+     * v3.2.0 · P1：B 站账号块（登录态 + 昵称 + 扫码登录/登出）。
+     *
+     * 不合并进 [ACCOUNT_QQ]：两者的**登录通道完全不同**（B 站是 passport 直连扫码、
+     * 不需要 WebView 换票），合并会让渲染分支里出现「按音源分叉」的第二处真相。
+     */
+    ACCOUNT_BILI,
+
     /** 语言下拉（8 个 locale，切换后由 Activity 重放 splash 重建全部文案）。 */
     LANGUAGE_DROPDOWN,
 
@@ -146,6 +154,7 @@ object SettingsRenderPlan {
             // 账号：两块无 key 的行为行（各自是一整块 UI，不是一行）
             "action.account_netease" -> SettingsRowKind.ACCOUNT_PROFILE
             "action.account_qq" -> SettingsRowKind.ACCOUNT_QQ
+            "action.account_bili" -> SettingsRowKind.ACCOUNT_BILI
 
             // 通用
             "language_code" -> SettingsRowKind.LANGUAGE_DROPDOWN

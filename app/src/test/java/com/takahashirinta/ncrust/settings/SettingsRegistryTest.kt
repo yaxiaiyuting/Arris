@@ -46,7 +46,10 @@ class SettingsRegistryTest {
             // v2.9.0：新增的 4 个动效键同样不属于"口径 C 的 42 个既有键"，
             // 所以两个"某版本新增"标志都要排除 —— 否则这条断言会因为**新增**而变红，
             // 那正好把"机械防线"变成"每次加功能都要改测试"的噪声源。
-            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 && !it.isNewInV310 }
+            .filter {
+                !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
+                    !it.isNewInV310 && !it.isNewInV320
+            }
             .mapNotNull { it.key }
             .toSet()
 
@@ -79,7 +82,10 @@ class SettingsRegistryTest {
         assertTrue("key 不能带空白", all.none { it != it.trim() || it.isEmpty() })
 
         val legacy = SettingsRegistry.allEntries()
-            .filter { !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 && !it.isNewInV310 }
+            .filter {
+                !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
+                    !it.isNewInV310 && !it.isNewInV320
+            }
             .mapNotNull { it.key }
             .toSet()
         val v280 = SettingsRegistry.allEntries().filter { it.isNewInV280 }.mapNotNull { it.key }.toSet()
@@ -211,6 +217,49 @@ class SettingsRegistryTest {
         // 文案必须住在分组里（v2.2.1 规则 5），且**两条都要有**。
         assertEquals("bilibiliEnabledLabel", entry.titleKey)
         assertEquals("bilibiliEnabledDescription", entry.subtitleKey)
+    }
+
+    @Test
+    fun `newV320KeysAreExactlyTheRhythmSwitchSet`() {
+        // 机械防线之四：v3.2.0 只允许新增「界面律动那一层的闸」这一组（1 个总闸 + 3 个细粒度）。
+        // 顺手夹带一个无关功能项（一起听 / 下载管理 / 流量管理 / 备份恢复…）会在这里变红。
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV320 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals("v3.2.0 新增项", NEW_V320_KEYS, actual)
+        assertEquals("恰好四个（一个总闸 + 三个细粒度开关）", 4, NEW_V320_KEYS.size)
+        // 复用不重复造键：背景呼吸用的是 v3.0.0 的 `motion_breathing`，**不许**再开一个同义键。
+        assertFalse(
+            "背景呼吸只有一个键（motion_breathing），不许再造同义键",
+            actual.any { it.contains("breath") && it != "motion_breathing" },
+        )
+        assertFalse("v3.0.0 的键不得被重复标记", actual.any { it in NEW_V300_KEYS })
+    }
+
+    @Test
+    fun `v320 switches are reachable and have strings`() {
+        // 与 v3.0.0 的五条同一口径：可见、被渲染计划覆盖、是开关、默认开、文案路径必须真实存在
+        // （路径存在性由 `everyTitleKeyResolvesToARealStringsAccessorPath` 用 i18n 快照单独钉住）。
+        val v320 = SettingsRegistry.allEntries().filter { it.isNewInV320 }
+        v320.forEach { entry ->
+            assertFalse("${entry.id} 不该是内部项 —— 用户必须能关掉每一项", entry.isInternal)
+            assertTrue("${entry.id} 必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+            assertEquals("${entry.id} 必须是一个开关", SettingsEntryType.SWITCH, entry.type)
+            assertEquals("${entry.id} 的默认值必须是开（缺 key = 与档位表一致）", true, entry.defaultValue)
+            assertEquals(
+                "${entry.id} 属于「外观与动效」（v3.0.0 纪律：声明位置必须跟着 group 走）",
+                SettingsGroup.APPEARANCE,
+                entry.group,
+            )
+            assertNotNull("${entry.id} 缺 titleKey", entry.titleKey)
+            assertNotNull("${entry.id} 缺 subtitleKey", entry.subtitleKey)
+            assertTrue(
+                "${entry.id} 的文案必须指向 waveform 组（动效文案的唯一归属）",
+                entry.titleKey!!.startsWith("waveform.") &&
+                    entry.subtitleKey!!.startsWith("waveform."),
+            )
+        }
     }
 
     @Test
@@ -526,6 +575,18 @@ class SettingsRegistryTest {
             "motion_breathing",
         )
 
+        /**
+         * v3.2.0 新增的 4 个键：**界面律动**那一层的闸。
+         *
+         * 注意背景呼吸**不在**这里 —— 它复用 v3.0.0 的 `motion_breathing`（不许造同义键）。
+         */
+        val NEW_V320_KEYS: Set<String> = setOf(
+            "motion_rhythm_enabled",
+            "motion_cover_float",
+            "motion_lyric_pulse",
+            "motion_bar_pulse",
+        )
+
         val NEW_V280_KEYS: Set<String> = setOf(
             "visualizer_tier",
             "visualizer_showcase",
@@ -572,7 +633,8 @@ class SettingsRegistryTest {
 
         /** 无 prefs key 的行为行（结构探针 §1「非 prefs 行」全表，一条都不能丢）。 */
         val ACTION_IDS: Set<String> = setOf(
-            "action.account_netease", "action.account_qq", "action.background_activity",
+            "action.account_netease", "action.account_qq", "action.account_bili",
+            "action.background_activity",
             "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
         )
 

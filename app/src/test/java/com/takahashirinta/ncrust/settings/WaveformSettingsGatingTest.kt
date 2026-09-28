@@ -219,7 +219,7 @@ class WaveformSettingsGatingTest {
         )
         // 接替它们的两个可见项。
         assertEquals(
-            "统一动效强度与五个独立开关必须落在**外观与动效**页（v3.0.0：它们控制画面，不是音质）",
+            "统一动效强度与独立开关必须落在**外观与动效**页（v3.0.0：它们控制画面，不是音质）",
             listOf(
                 "motion_tier",
                 "ui_motion_enabled",
@@ -229,6 +229,11 @@ class WaveformSettingsGatingTest {
                 "motion_particles",
                 "motion_wave_bands",
                 "motion_breathing",
+                // v3.2.0：界面律动那一层的闸（1 个总闸 + 3 个细粒度），同样按声明顺序。
+                "motion_rhythm_enabled",
+                "motion_cover_float",
+                "motion_lyric_pulse",
+                "motion_bar_pulse",
             ),
             SettingsRenderPlan.plannedRowsOf("appearance").map { it.id }
                 .filter { it.startsWith("motion_") || it == "ui_motion_enabled" },

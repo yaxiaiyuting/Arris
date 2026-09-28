@@ -133,6 +133,8 @@ fun SettingsGroupScreen(
     onShowWebLogin: () -> Unit,
     onShowQqLogin: () -> Unit,
     onShowQqPhoneLogin: () -> Unit,
+    /** v3.2.0 · P1：B 站扫码登录浮层（透传给 [SettingsAccountSection]）。 */
+    onShowBiliLogin: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     // 账号组自带一整套覆盖层（账号弹窗 / 二维码登录 / 手机扫码授权），单独一页更清楚。
@@ -143,6 +145,7 @@ fun SettingsGroupScreen(
             onShowWebLogin = onShowWebLogin,
             onShowQqLogin = onShowQqLogin,
             onShowQqPhoneLogin = onShowQqPhoneLogin,
+            onShowBiliLogin = onShowBiliLogin,
             onBack = onBack,
         )
         return
@@ -246,6 +249,11 @@ private fun SettingsPreferenceGroupPage(
     var motionParticles by remember { mutableStateOf(motionSwitches.particles) }
     var motionWaveBands by remember { mutableStateOf(motionSwitches.waveBands) }
     var motionBreathing by remember { mutableStateOf(motionSwitches.breathing) }
+    // v3.2.0：界面律动那一层的闸（总闸 + 三个律动类细粒度开关）。初值同样走 MotionPrefs。
+    var motionRhythm by remember { mutableStateOf(motionSwitches.rhythm) }
+    var motionCoverFloat by remember { mutableStateOf(motionSwitches.coverFloat) }
+    var motionLyricPulse by remember { mutableStateOf(motionSwitches.lyricPulse) }
+    var motionBarPulse by remember { mutableStateOf(motionSwitches.barPulse) }
 
     // ── 存储与缓存 ────────────────────────────────────────────────────────────────
     var offlineCacheMb by remember { mutableIntStateOf(OfflineAudioCache.maxMb(context)) }
@@ -303,6 +311,11 @@ private fun SettingsPreferenceGroupPage(
             "motion_particles" -> motionParticles
             "motion_wave_bands" -> motionWaveBands
             "motion_breathing" -> motionBreathing
+            // v3.2.0：界面律动那一层（总闸 + 三个细粒度开关）——门控要用到它们
+            "motion_rhythm_enabled" -> motionRhythm
+            "motion_cover_float" -> motionCoverFloat
+            "motion_lyric_pulse" -> motionLyricPulse
+            "motion_bar_pulse" -> motionBarPulse
             // v3.1.0 · B：B 站音源开关。读的是 `BiliPrefs` 的进程内镜像（初值来自盘）。
             "bilibili_enabled" -> BiliSourceProvider.isEnabled
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
@@ -335,6 +348,11 @@ private fun SettingsPreferenceGroupPage(
         "motion_particles" -> motionParticles
         "motion_wave_bands" -> motionWaveBands
         "motion_breathing" -> motionBreathing
+        // v3.2.0：界面律动那一层
+        "motion_rhythm_enabled" -> motionRhythm
+        "motion_cover_float" -> motionCoverFloat
+        "motion_lyric_pulse" -> motionLyricPulse
+        "motion_bar_pulse" -> motionBarPulse
         else -> false
     }
 
@@ -433,6 +451,23 @@ private fun SettingsPreferenceGroupPage(
                 motionBreathing = value
                 MotionPrefs.setSwitch(context, MotionPrefs.KEY_BREATHING, value)
             }
+            // v3.2.0：界面律动那一层。写入口同样只有 `MotionPrefs.setSwitch`。
+            "motion_rhythm_enabled" -> {
+                motionRhythm = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_RHYTHM, value)
+            }
+            "motion_cover_float" -> {
+                motionCoverFloat = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_COVER_FLOAT, value)
+            }
+            "motion_lyric_pulse" -> {
+                motionLyricPulse = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_LYRIC_PULSE, value)
+            }
+            "motion_bar_pulse" -> {
+                motionBarPulse = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_BAR_PULSE, value)
+            }
         }
     }
 
@@ -449,8 +484,11 @@ private fun SettingsPreferenceGroupPage(
             rows.forEach { entry ->
                 val availability = SettingsVisibility.availabilityOf(entry, read)
                 when (SettingsRenderPlan.rowKindOf(entry)) {
-                    // 账号两块在 SettingsAccountPage（本页永不渲染它们，分组已在上面分流）
+                    // 账号三块在 SettingsAccountPage（本页永不渲染它们，分组已在上面分流）。
+                    // v3.2.0：加上 B 站那一块（ACCOUNT_BILI）—— 漏掉它编译就会因 `when` 不穷举而红，
+                    // 这正是当初把它做成枚举而不是 `else` 的理由。
                     SettingsRowKind.ACCOUNT_PROFILE, SettingsRowKind.ACCOUNT_QQ,
+                    SettingsRowKind.ACCOUNT_BILI,
                     SettingsRowKind.INTERNAL, SettingsRowKind.HOSTED_ELSEWHERE -> Unit
 
                     SettingsRowKind.SWITCH -> item(key = entry.id) {
@@ -838,6 +876,11 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
     "motion_particles" -> strings.waveform.motionParticlesLabel
     "motion_wave_bands" -> strings.waveform.motionWaveBandsLabel
     "motion_breathing" -> strings.waveform.motionBreathingLabel
+    // v3.2.0：界面律动那一层（律动总闸 + 三个细粒度开关），文案住在 Strings.waveform。
+    "motion_rhythm_enabled" -> strings.waveform.motionRhythmLabel
+    "motion_cover_float" -> strings.waveform.motionCoverFloatLabel
+    "motion_lyric_pulse" -> strings.waveform.motionLyricPulseLabel
+    "motion_bar_pulse" -> strings.waveform.motionBarPulseLabel
     "theme_mode" -> strings.themeModeSectionTitle
     "theme_color_index" -> strings.themeSectionTitle
     "accent_source" -> strings.accentSourceSectionTitle
@@ -873,6 +916,10 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when 
     "motion_particles" -> strings.waveform.motionParticlesDescription
     "motion_wave_bands" -> strings.waveform.motionWaveBandsDescription
     "motion_breathing" -> strings.waveform.motionBreathingDescription
+    "motion_rhythm_enabled" -> strings.waveform.motionRhythmDescription
+    "motion_cover_float" -> strings.waveform.motionCoverFloatDescription
+    "motion_lyric_pulse" -> strings.waveform.motionLyricPulseDescription
+    "motion_bar_pulse" -> strings.waveform.motionBarPulseDescription
     "bilibili_enabled" -> strings.bilibiliEnabledDescription
     else -> null
 }

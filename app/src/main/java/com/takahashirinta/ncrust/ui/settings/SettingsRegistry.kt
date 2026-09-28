@@ -195,6 +195,14 @@ data class SettingsEntry(
      */
     val isNewInV310: Boolean = false,
     /**
+     * v3.2.0「界面律动独立开关」新增项（v3.1.0 的盘上不存在这些键）。
+     *
+     * 与 [isNewInV280] / [isNewInV290] / [isNewInV300] / [isNewInV310] 并列而不是复用：
+     * 那几条断言各自钉住**一个版本**新增了什么，合并成一个「新键」标志会让
+     * 「顺手夹带了无关功能项」不再被机械挡住。
+     */
+    val isNewInV320: Boolean = false,
+    /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
      * 目前只有 `motion_degrade_level` / `motion_degrade_log` 两个：它们属于 v2.9.0 的
@@ -243,6 +251,9 @@ object SettingsRegistry {
         // 探针 §6.1 记录了「派生缓存必须与登录/登出一起清」）。
         add(action("action.account_netease", SettingsGroup.ACCOUNT, "sourceNetease", "loginHint"))
         add(action("action.account_qq", SettingsGroup.ACCOUNT, "sourceQqAccount"))
+        // v3.2.0 · P1：B 站账号块。形状与上面两块**逐块一致**（铁律 23：不新建登录体系）。
+        // 它的「音质说明」走 source 组的 biliQualityNote —— 如实写「是否解锁无损未验证」。
+        add(action("action.account_bili", SettingsGroup.ACCOUNT, "sourceBiliAccount"))
         add(
             pref(
                 key = "user_cookie",
@@ -685,6 +696,66 @@ object SettingsRegistry {
             )
         )
 
+        // ── v3.2.0 新增：界面律动（节拍驱动）那一层的闸（4 键）────────────────────────
+        // 键名与默认值的单一真相仍是 `ui/player/motion/MotionPrefs.kt`；本文件只定义条目。
+        //
+        // 为什么需要这一组（P1 · 铁律 22）：`ui_motion_enabled` 是**总闸**（关掉 =
+        // A/B/C 三层全不挂载、背景回纯色、零帧时钟），而「界面律动」只是其中
+        // **驱动量来自 MotionEnvelope 的节拍/强拍/响度** 的那一类（背景呼吸 / 封面浮动 /
+        // 歌词律动 / 控制条脉冲 / 封面 3D）。总闸粒度太粗：用户只想让画面别跟着鼓点抖，
+        // 但想留着冲击波与粒子时，此前没有任何办法（关总闸会把它们一起关掉）。
+        //
+        // 语义：**有效 = 档位允许 AND 总闸 AND (律动类 ? 律动闸 : true) AND 逐项开关**。
+        // 归类判据是「渲染路径里是否读 `MotionClock.pulse()` / `MotionClock.level()`」，
+        // 逐项表见 `docs/verification/v3.2.0/probe-ui-jitter.md` §5。
+        //
+        // 文案走 `WaveformStrings` 的 8 条新字段（v3.2.0 已补齐 8 种语言）——
+        // 与 `motion_shockwave` / `motion_breathing` 等既有动效开关同一组，不新开文案组。
+        add(
+            pref(
+                key = "motion_rhythm_enabled",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionRhythmLabel",
+                subtitleKey = "waveform.motionRhythmDescription",
+                newInV320 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_cover_float",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionCoverFloatLabel",
+                subtitleKey = "waveform.motionCoverFloatDescription",
+                newInV320 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_lyric_pulse",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionLyricPulseLabel",
+                subtitleKey = "waveform.motionLyricPulseDescription",
+                newInV320 = true,
+            )
+        )
+        add(
+            pref(
+                key = "motion_bar_pulse",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionBarPulseLabel",
+                subtitleKey = "waveform.motionBarPulseDescription",
+                newInV320 = true,
+            )
+        )
+
         // ── 播放与音质 ────────────────────────────────────────────────────────────────
         add(
             pref(
@@ -1011,6 +1082,7 @@ object SettingsRegistry {
         newInV300: Boolean = false,
         legacyV300: Boolean = false,
         newInV310: Boolean = false,
+        newInV320: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1030,6 +1102,7 @@ object SettingsRegistry {
         isNewInV300 = newInV300,
         legacyV300 = legacyV300,
         isNewInV310 = newInV310,
+        isNewInV320 = newInV320,
         isAdvanced = advanced,
         isInternal = internal,
     )

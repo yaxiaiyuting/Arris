@@ -46,9 +46,16 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
  *
  * | 档 | 这一层画什么 |
  * |---|---|
- * | A | 模糊封面 + 呼吸（随 RMS 的 alpha/scale）+ 视差位移 |
+ * | A（简洁档） | **只有**模糊封面 + 可读性遮罩（**静态**：每首歌算一次，零逐帧量） |
+ * | A（精致档起） | 模糊封面 + 呼吸（随 RMS 的 alpha/scale）+ 视差位移 |
  * | B | （背景级波形由 [MotionWaveBackdrop] 单独一层承担，见它的 KDoc） |
  * | C | 强拍光晕 + 定长池粒子（[MotionBackdropState]） |
+ *
+ * ⚠️ v3.2.0：呼吸从「A 档全档」收窄到「精致档起」。理由是 P0-B 的用户报告
+ * （「选了简洁，界面还在抖」）—— 呼吸的 `scaleX/scaleY` 是 ±1% 的**整屏缩放**、
+ * `alpha` 是 ±5% 的明暗，每帧随响度变，正是「抖」的观感来源之一。
+ * 证据与判据：`docs/verification/v3.2.0/probe-ui-jitter.md` §3 / §6。
+ * 简洁档因此是**完全静态的一层**：`blurred` 只算一次，之后一帧都不重绘。
  *
  * ## 三条硬约束（都不是偏好）
  *
@@ -110,6 +117,7 @@ fun MotionBackdrop(
                     .graphicsLayer {
                         // 呼吸：随 RMS 的明暗 + 缩放（幅度见 AppMotion）。
                         // 静态时 level() = 0 ⇒ 倍率恰好是 1f，与「没有呼吸」逐像素一致。
+                        // v3.2.0：本能力位已收窄到精致档起（简洁档这一层是静态的）。
                         if (motion.backgroundBreathing) {
                             MotionClock.generation
                             val level = MotionClock.level()

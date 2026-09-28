@@ -19,6 +19,7 @@ import com.takahashirinta.ncrust.ui.player.WaveformStore
 /**
  * v2.9.0：统一「动效强度」的**全部落盘键**与读写入口（`ncrust_settings`）。
  * v3.0.0：新增五个「每个动效独立开关」的键，并**删除自动降级机制**。
+ * v3.2.0：新增「界面律动总闸」+ 三个律动类细粒度开关，简洁档收窄为静态档（水位 4 → 5）。
  *
  * ## 键名是持久化契约（唯一字面量落点）
  *
@@ -28,27 +29,49 @@ import com.takahashirinta.ncrust.ui.player.WaveformStore
  * | 键 | 类型 | 默认 | 语义 |
  * |---|---|---|---|
  * | `motion_tier` | Int 0..2 | **不写盘**，按设备判据解析 | 动效强度（波形 + 界面动效共用一个档位） |
- * | `ui_motion_enabled` | Bool | `true` | 「界面动效」总开关（关掉 = 界面动效全关，波形不受影响） |
+ * | `ui_motion_enabled` | Bool | `true` | 「界面动效」总闸（关掉 = A/B/C 三层全不挂载，波形不受影响） |
  * | `motion_shockwave` | Bool | `true` | v3.0.0：瞬态冲击波 |
  * | `motion_halo` | Bool | `true` | v3.0.0：瞬态光晕 |
  * | `motion_particles` | Bool | `true` | v3.0.0：中高频粒子 |
  * | `motion_wave_bands` | Bool | `true` | v3.0.0：多频段波形调制 |
- * | `motion_breathing` | Bool | `true` | v3.0.0：背景随 RMS 呼吸 |
+ * | `motion_breathing` | Bool | `true` | v3.0.0：背景随 RMS 呼吸（**律动类**） |
+ * | `motion_rhythm_enabled` | Bool | `true` | **v3.2.0：界面律动总闸**（律动类的那一层闸，不等于总闸） |
+ * | `motion_cover_float` | Bool | `true` | v3.2.0：封面随节拍浮动（律动类） |
+ * | `motion_lyric_pulse` | Bool | `true` | v3.2.0：歌词当前行随节拍缩放（律动类） |
+ * | `motion_bar_pulse` | Bool | `true` | v3.2.0：控制条随节拍脉冲（律动类） |
  * | `motion_degrade_level` | Int 0..3 | `0` | **历史值，不再参与渲染**（见 [MotionDegrade]） |
- * | `motion_degrade_log` | String | `""` | 同上；v3.0.0 迁移会补一条「机制已移除」的说明 |
+ * | `motion_degrade_log` | String | `""` | 同上；迁移会往里补说明 |
  * | `motion_version` | Int | 缺 key 视为 `0` | 迁移水位（`0` = v2.9.0 或更早的盘） |
  *
- * ## v3.0.0 的迁移（水位 3 → 4）
+ * ## `motion_rhythm_enabled` 与 `ui_motion_enabled` 不是一回事（**别混**）
  *
- * 本版**不搬运任何键的值**，只做两件事：
+ * - `ui_motion_enabled`（总闸）：关掉 ⇒ `MotionEffects.anyUiMotion` 为 false ⇒
+ *   背景层与帧时钟**整个不挂载**（背景回纯色、零帧循环）。波形档位完全不受影响。
+ * - `motion_rhythm_enabled`（律动闸）：关掉 ⇒ **只**掐掉「驱动量来自 `MotionEnvelope`
+ *   的节拍 / 强拍 / 响度」那一类（背景呼吸 / 封面浮动 / 歌词律动 / 控制条脉冲 / 封面 3D）。
+ *   冲击波、光晕、粒子、视差、背景级波形、背景模糊、封面阴影**一概不受影响**。
  *
- *  1. 把水位写到 4；
- *  2. **如果这张盘曾经被自动降级过**（`motion_degrade_level > 0`），往
- *     `motion_degrade_log` 追加一条说明 —— 那台设备上的用户会看到画面**多出**
- *     冲击波/光晕/粒子（因为降级不再生效），这是**唯一**能解释「为什么升级后动效变多了」
- *     的东西。用户没被降级过就不写，避免给所有人塞一条噪音日志。
+ * 语义公式（`MotionEffects.of` 里逐项可见，单测逐项断言）：
  *
- * 五个新开关**不需要搬运**：缺 key 的解析结果就是 `true`（[MotionSwitches.ALL_ON]），
+ * ```
+ * 有效 = 档位允许 AND ui_motion_enabled AND (律动类 ? motion_rhythm_enabled : true) AND 逐项开关
+ * ```
+ *
+ * 律动类的归类判据是**可执行的**：渲染路径里是否读 `MotionClock.pulse()` / `MotionClock.level()`
+ * —— 见 `docs/verification/v3.2.0/probe-ui-jitter.md` §5 的逐项表。
+ *
+ * ## v3.2.0 的迁移（水位 4 → 5）
+ *
+ * 与 v3.0.0 同一手法：**不搬运任何键的值**，只做两件事：
+ *
+ *  1. 把水位写到 5；
+ *  2. **如果这张盘升级之后实际渲染在简洁档**（显式选过简洁，或由设备判据解析成简洁），
+ *     往 `motion_degrade_log` 追加一条说明 —— 简洁档在这一版收窄成**静态档**
+ *     （背景呼吸与封面随节拍浮动不再渲染），那台设备上的用户会看到画面**变安静**，
+ *     这是**唯一**能解释「为什么升级后动效变少了」的东西。其余档位的盘不写，
+ *     避免给所有人塞一条噪音日志。
+ *
+ * 四个新开关**不需要搬运**：缺 key 的解析结果就是 `true`（[MotionSwitches.ALL_ON]），
  * 与新装一致；刻意不把默认值写回盘，理由与 `motion_tier` 的「缺 key ≠ 选了默认档」同源
  * —— 一旦写回，「用户没动过这一项」这个信息就永久丢了。
  *
@@ -78,16 +101,25 @@ object MotionPrefs {
     const val KEY_WAVE_BANDS = "motion_wave_bands"
     const val KEY_BREATHING = "motion_breathing"
 
+    // ---- v3.2.0：界面律动（节拍驱动）那一层的闸 ----
+    const val KEY_RHYTHM = "motion_rhythm_enabled"
+    const val KEY_COVER_FLOAT = "motion_cover_float"
+    const val KEY_LYRIC_PULSE = "motion_lyric_pulse"
+    const val KEY_BAR_PULSE = "motion_bar_pulse"
+
     // ---- 默认值 ----
     /** 「界面动效」总开关默认**开**（任务书铁律 22：A 档默认开，但保留总开关）。 */
     const val DEFAULT_UI_MOTION = true
 
     /**
-     * 五个新开关的默认值：**全开**。
+     * 全部独立开关的默认值：**全开**。
      *
      * 为什么默认开而不是默认关：它们的存在是为了让用户**能关掉**某一样，
      * 而不是让用户去发现某一样。默认关会让「升级之后动效没变化」成为默认体验，
      * 而档位表里明明写着精致档包含冲击波/光晕/粒子 —— 那是撒谎。
+     *
+     * v3.2.0 的四个新键沿用同一条理由：缺 key = 与上一版观感一致（律动在精致/炫技档
+     * 本来就开着）；至于**简洁档**本来就不该有它们，那是**档位**的职责，不是开关的。
      */
     const val DEFAULT_SWITCH = true
 
@@ -109,8 +141,11 @@ object MotionPrefs {
     /** v2.9.0 落下的水位（= 那时把 v2.8.0 的盘搬完的值）。 */
     const val VERSION_V290 = 3
 
+    /** v3.0.0 落下的水位（= 自动降级被删除、五个独立开关落地的那一版）。 */
+    const val VERSION_V300 = 4
+
     /** 当前水位。加语义 ⇒ +1 并在 [migrate] 里补一段搬运逻辑。 */
-    const val CURRENT_VERSION = 4
+    const val CURRENT_VERSION = 5
 
     // ------------------------------------------------------------------
     // 纯读（键缺失 / 类型不符都不抛异常 —— 坏数据最坏只是回落默认值）
@@ -151,13 +186,17 @@ object MotionPrefs {
     fun readVersion(prefs: SharedPreferences): Int =
         intOrNull(prefs, KEY_VERSION) ?: VERSION_PRE_V290
 
-    /** v3.0.0：一次读全五个独立开关（缺 key = 开）。 */
+    /** v3.0.0：一次读全独立开关（缺 key = 开）。v3.2.0：加入律动闸与三个律动类细粒度开关。 */
     fun readSwitches(prefs: SharedPreferences): MotionSwitches = MotionSwitches(
         shockwave = bool(prefs, KEY_SHOCKWAVE, DEFAULT_SWITCH),
         halo = bool(prefs, KEY_HALO, DEFAULT_SWITCH),
         particles = bool(prefs, KEY_PARTICLES, DEFAULT_SWITCH),
         waveBands = bool(prefs, KEY_WAVE_BANDS, DEFAULT_SWITCH),
         breathing = bool(prefs, KEY_BREATHING, DEFAULT_SWITCH),
+        rhythm = bool(prefs, KEY_RHYTHM, DEFAULT_SWITCH),
+        coverFloat = bool(prefs, KEY_COVER_FLOAT, DEFAULT_SWITCH),
+        lyricPulse = bool(prefs, KEY_LYRIC_PULSE, DEFAULT_SWITCH),
+        barPulse = bool(prefs, KEY_BAR_PULSE, DEFAULT_SWITCH),
     )
 
     /** 一次读全：设置变化时只重组一次（帧路径里不再读任何 state）。 */
@@ -234,13 +273,16 @@ object MotionPrefs {
     /**
      * 幂等迁移：**不删不改任何既有键**（`visualizer_*` 一律原样）。
      *
-     * v3.0.0（水位 3 → 4）：不搬运任何键的值，只补一条「自动降级已移除」的说明
-     * —— 且**只对真的被降级过的盘补**（那些用户会看到画面多出动效，需要一个解释）。
+     * - v3.0.0（水位 3 → 4）：不搬运任何键的值，只补一条「自动降级已移除」的说明
+     *   —— 且**只对真的被降级过的盘补**（那些用户会看到画面多出动效，需要一个解释）。
+     * - v3.2.0（水位 4 → 5）：同样不搬运任何键的值，只补一条「简洁档已收窄为静态档」的说明
+     *   —— 且**只对实际渲染在简洁档的盘补**（显式选过简洁，或设备判据解析成简洁）。
      *
      * @return 本次是否真的写了盘（单测用；生产路径不关心）。
      */
     fun migrate(prefs: SharedPreferences, deviceDefault: Int): Boolean {
-        if (readVersion(prefs) >= CURRENT_VERSION) return false
+        val version = readVersion(prefs)
+        if (version >= CURRENT_VERSION) return false
         val legacyTier = intOrNull(prefs, LegacyKeys.KEY_TIER)
         val legacyShowcase = bool(prefs, LegacyKeys.KEY_SHOWCASE, false)
         val legacyAutoDowngraded = bool(prefs, LegacyKeys.KEY_AUTO_DOWNGRADED, false)
@@ -249,19 +291,38 @@ object MotionPrefs {
         val legacyLevel = readDegradeLevel(prefs)
         // 只有「盘上真的带着一次降级」才写说明：v2.8.0 的标记或 v2.9.0 的水位都算。
         val wasDegraded = legacyAutoDowngraded || legacyLevel > MotionDegrade.NONE
-        val note = if (wasDegraded) {
-            appendDegradeLog(
-                readDegradeLog(prefs),
+        // v3.2.0：这张盘**显式选过**的档位（含从 v2.8.0 搬过来的那一份）。
+        // 刻意**不**把「设备判据解析出来的简洁档」算进来 —— 那是全新安装的正常结果，
+        // 给他写一条"你的简洁档变安静了"是无中生有的噪音（迁移说明只在盘上真的有变化时写）。
+        val explicitTier = tier
+            ?: intOrNull(prefs, KEY_TIER)?.let { MotionIntensity.sanitize(it, deviceDefault) }
+        val simpleDisk = explicitTier == MotionIntensity.SIMPLE
+
+        var log = readDegradeLog(prefs)
+        if (wasDegraded) {
+            log = appendDegradeLog(
+                log,
                 degradeLogEntry(
                     level = 0,
-                    tierBefore = tier ?: readTier(prefs, deviceDefault),
+                    tierBefore = explicitTier ?: deviceDefault,
                     uiMotionOn = readUiMotionEnabled(prefs),
                     reason = "v3-auto-degrade-removed(was ${MotionDegrade.describeLegacyLevel(legacyLevel)})",
                 ),
             )
-        } else {
-            null
         }
+        // 幂等由水位保证（这里每个盘只会走到一次）⇒ 不需要再判「是不是 v3.0.0 的盘」。
+        if (simpleDisk) {
+            log = appendDegradeLog(
+                log,
+                degradeLogEntry(
+                    level = 0,
+                    tierBefore = MotionIntensity.SIMPLE,
+                    uiMotionOn = readUiMotionEnabled(prefs),
+                    reason = "v3.2-simple-tier-is-static-now(no-breathing,no-cover-float)",
+                ),
+            )
+        }
+
         safeEdit(prefs) {
             if (tier != null) it.putInt(KEY_TIER, tier)
             val level = migratedDegradeLevel(legacyAutoDowngraded)
@@ -269,7 +330,7 @@ object MotionPrefs {
             if (level != MotionDegrade.NONE && intOrNull(prefs, KEY_DEGRADE_LEVEL) == null) {
                 it.putInt(KEY_DEGRADE_LEVEL, level)
             }
-            if (note != null) it.putString(KEY_DEGRADE_LOG, note)
+            if (log.isNotEmpty()) it.putString(KEY_DEGRADE_LOG, log)
             it.putInt(KEY_VERSION, CURRENT_VERSION)
         }
         return true

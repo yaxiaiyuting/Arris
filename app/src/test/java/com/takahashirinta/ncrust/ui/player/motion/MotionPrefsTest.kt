@@ -63,6 +63,23 @@ class MotionPrefsTest {
         assertEquals("motion_particles", MotionPrefs.KEY_PARTICLES)
         assertEquals("motion_wave_bands", MotionPrefs.KEY_WAVE_BANDS)
         assertEquals("motion_breathing", MotionPrefs.KEY_BREATHING)
+        // v3.2.0：界面律动那一层的闸（总闸 + 三个细粒度开关）
+        assertEquals("motion_rhythm_enabled", MotionPrefs.KEY_RHYTHM)
+        assertEquals("motion_cover_float", MotionPrefs.KEY_COVER_FLOAT)
+        assertEquals("motion_lyric_pulse", MotionPrefs.KEY_LYRIC_PULSE)
+        assertEquals("motion_bar_pulse", MotionPrefs.KEY_BAR_PULSE)
+    }
+
+    @Test
+    fun `律动总闸的键名不与界面动效总闸重名`() {
+        // 两个闸语义完全不同（`ui_motion_enabled` = A/B/C 全不挂载；`motion_rhythm_enabled`
+        // = 只掐节拍驱动那一类），键名混用会让"关掉总闸"与"关掉律动"变成同一件事。
+        assertTrue(
+            "两个总闸必须是两个键",
+            MotionPrefs.KEY_RHYTHM != MotionPrefs.KEY_UI_MOTION,
+        )
+        assertEquals("界面动效总闸", "ui_motion_enabled", MotionPrefs.KEY_UI_MOTION)
+        assertEquals("界面律动总闸", "motion_rhythm_enabled", MotionPrefs.KEY_RHYTHM)
     }
 
     @Test
@@ -90,8 +107,12 @@ class MotionPrefsTest {
             MotionPrefs.KEY_PARTICLES,
             MotionPrefs.KEY_WAVE_BANDS,
             MotionPrefs.KEY_BREATHING,
+            MotionPrefs.KEY_RHYTHM,
+            MotionPrefs.KEY_COVER_FLOAT,
+            MotionPrefs.KEY_LYRIC_PULSE,
+            MotionPrefs.KEY_BAR_PULSE,
         )
-        assertEquals("必须正好 10 个键（多一个就是夹带）", 10, fresh.size)
+        assertEquals("必须正好 14 个键（多一个就是夹带）", 14, fresh.size)
         val legacy = setOf(
             VisualizerPrefs.KEY_TIER,
             VisualizerPrefs.KEY_SHOWCASE,
@@ -168,13 +189,14 @@ class MotionPrefsTest {
         assertTrue("脏类型必须回落到「开」，不是「关」", switches.shockwave && switches.halo)
     }
 
-    // ── 3. v3.0.0：五个独立开关 ─────────────────────────────────────────────────────
+    // ── 3. v3.0.0 / v3.2.0：独立开关 ────────────────────────────────────────────────
 
     @Test
-    fun `缺 key 时五个开关都是开的`() {
+    fun `缺 key 时九个开关都是开的`() {
         val prefs = MemoryPrefs()
         val s = MotionPrefs.readSwitches(prefs)
         assertTrue(s.shockwave && s.halo && s.particles && s.waveBands && s.breathing)
+        assertTrue("v3.2.0：律动总闸与三个细粒度开关同样缺 key = 开", s.rhythm && s.coverFloat && s.lyricPulse && s.barPulse)
         assertTrue("默认值常量", MotionPrefs.DEFAULT_SWITCH)
     }
 
@@ -191,6 +213,28 @@ class MotionPrefsTest {
     }
 
     @Test
+    fun `律动闸与三个细粒度开关显式关掉会被读回来`() {
+        val prefs = MemoryPrefs()
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_RHYTHM, false)
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_COVER_FLOAT, false)
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_LYRIC_PULSE, false)
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_BAR_PULSE, false)
+        val s = MotionPrefs.readSwitches(prefs)
+        assertFalse(s.rhythm && s.coverFloat && s.lyricPulse && s.barPulse)
+        assertTrue("没动过的仍然是开", s.shockwave && s.breathing && s.waveBands)
+        assertEquals(
+            "写四个键就只落四个键（不带任何副作用）",
+            setOf(
+                MotionPrefs.KEY_RHYTHM,
+                MotionPrefs.KEY_COVER_FLOAT,
+                MotionPrefs.KEY_LYRIC_PULSE,
+                MotionPrefs.KEY_BAR_PULSE,
+            ),
+            prefs.snapshot().keys,
+        )
+    }
+
+    @Test
     fun `readEffects 把开关一起读进能力位`() {
         val prefs = MemoryPrefs()
         prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SHOWCASE)
@@ -199,6 +243,57 @@ class MotionPrefsTest {
         assertEquals(MotionIntensity.SHOWCASE, e.tier)
         assertFalse("关掉的项不许出现在能力位里", e.haloBloom)
         assertTrue(e.shockwave && e.particles)
+    }
+
+    @Test
+    fun `readEffects 把律动闸也读进能力位`() {
+        val prefs = MemoryPrefs()
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SHOWCASE)
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_RHYTHM, false)
+        MotionPrefs.writeSwitch(prefs, MotionPrefs.KEY_COVER_FLOAT, false)
+        val e = MotionPrefs.readEffects(prefs, modernDefault)
+        assertEquals(MotionIntensity.SHOWCASE, e.tier)
+        assertFalse("律动类一个不剩", e.anyRhythm)
+        assertTrue("非律动类不受影响", e.shockwave && e.haloBloom && e.particles && e.parallax)
+    }
+
+    // ── 3c. 改设置立即生效（不得等重启）────────────────────────────────────────────
+
+    /**
+     * **档位/开关的读路径必须是 Compose State 驱动的**。
+     *
+     * 用户要求「档位切换后立即生效，不得等重启」—— 这件事由**结构**保证而不是靠刷新调用：
+     * `MotionPrefs.effects` 是一个 `State`（`ui/player/motion/MotionPrefs.kt` 的
+     * `effectsStateHolder`），`PlayerCard.kt:287` 在组合期读 `MotionPrefs.effects.value`，
+     * 而每一个写入口（`setTier` / `setUiMotionEnabled` / `setSwitch`）都在返回前同步
+     * `refresh()` 一次 ⇒ 设置页点一下 = 播放页同帧重组。
+     *
+     * 这条用反射钉住两个类型：一旦有人把它换成普通字段 + 手动通知（或加一层缓存），
+     * 「改了要等重启/重进播放页」就会悄悄回来，而这条会立刻变红。
+     */
+    @Test
+    fun `改设置立即生效：读路径是 Compose State`() {
+        val getter = MotionPrefs::class.java.declaredMethods.firstOrNull { it.name == "getEffects" }
+        assertNotNull("MotionPrefs.effects 的读方法不见了", getter)
+        assertEquals(
+            "MotionPrefs.effects 必须返回 androidx.compose.runtime.State",
+            "androidx.compose.runtime.State",
+            getter!!.returnType.name,
+        )
+        val holder = MotionPrefs::class.java.getDeclaredField("effectsStateHolder")
+        assertEquals(
+            "持有者必须是 MutableState —— 写入口在返回前刷新它，读取方（PlayerCard）同帧重组",
+            "androidx.compose.runtime.MutableState",
+            holder.type.name,
+        )
+        // 盘 → 能力位之间**没有**第二层缓存：同一个 prefs 改了，下一次 readEffects 立刻反映。
+        val prefs = MemoryPrefs()
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SIMPLE)
+        assertEquals(MotionIntensity.SIMPLE, MotionPrefs.readEffects(prefs, modernDefault).tier)
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SHOWCASE)
+        assertEquals(MotionIntensity.SHOWCASE, MotionPrefs.readEffects(prefs, modernDefault).tier)
+        prefs.putRaw(MotionPrefs.KEY_RHYTHM, false)
+        assertFalse(MotionPrefs.readEffects(prefs, modernDefault).anyRhythm)
     }
 
     // ── 4. 迁移（v2.8.0 档位 → 统一档位）────────────────────────────────────────────
@@ -314,8 +409,9 @@ class MotionPrefsTest {
     // ── 5. v3.0.0 的纠正迁移：自动降级被删除 ────────────────────────────────────────
 
     @Test
-    fun `v2_9_0 的水位是 3 而当前是 4`() {
-        assertEquals("加语义必须 +1 并在 migrate 里补一段逻辑", 4, MotionPrefs.CURRENT_VERSION)
+    fun `v2_9_0 的水位是 3 而当前是 5`() {
+        assertEquals("加语义必须 +1 并在 migrate 里补一段逻辑", 5, MotionPrefs.CURRENT_VERSION)
+        assertEquals("v3.0.0 落下的水位", 4, MotionPrefs.VERSION_V300)
         assertEquals(3, MotionPrefs.VERSION_V290)
         assertEquals(0, MotionPrefs.VERSION_PRE_V290)
     }
@@ -363,6 +459,118 @@ class MotionPrefsTest {
             MotionDegrade.WAVEFORM_DOWN,
             MotionPrefs.readDegradeLevel(prefs),
         )
+    }
+
+    // ── 5b. v3.2.0：水位 4 → 5（简洁档收窄为静态档）────────────────────────────────
+
+    /** v3.0.0 落下的盘（水位 = 4，即已经搬完 v2.8.0 那一轮）。 */
+    private fun v300Disk(): MemoryPrefs = MemoryPrefs().apply {
+        putRaw(MotionPrefs.KEY_VERSION, MotionPrefs.VERSION_V300)
+    }
+
+    @Test
+    fun `水位 4 到 5 的迁移是幂等的且第二次不写盘`() {
+        val prefs = v300Disk()
+        // 显式选了精致档：观感没变 ⇒ 迁移只写水位一个键。
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.REFINED)
+        assertTrue("水位从 4 补到 5，所以要写一次", MotionPrefs.migrate(prefs, modernDefault))
+        assertEquals(MotionPrefs.CURRENT_VERSION, prefs.getInt(MotionPrefs.KEY_VERSION, -1))
+        val afterFirst = prefs.snapshot()
+        assertFalse("第二次必须是严格 no-op", MotionPrefs.migrate(prefs, modernDefault))
+        assertEquals("盘必须逐键不变", afterFirst, prefs.snapshot())
+    }
+
+    @Test
+    fun `v3_1_0 的老盘逐键不变：迁移不搬运任何键值`() {
+        val prefs = v300Disk()
+        // 一张真实的 v3.1.0 盘：档位 + 五个开关 + 一些无关设置。
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.REFINED)
+        prefs.putRaw(MotionPrefs.KEY_UI_MOTION, true)
+        prefs.putRaw(MotionPrefs.KEY_SHOCKWAVE, false)
+        prefs.putRaw(MotionPrefs.KEY_HALO, true)
+        prefs.putRaw(MotionPrefs.KEY_PARTICLES, false)
+        prefs.putRaw(MotionPrefs.KEY_WAVE_BANDS, true)
+        prefs.putRaw(MotionPrefs.KEY_BREATHING, false)
+        prefs.putRaw("wifi_quality", 3)
+        prefs.putRaw("audio_visualizer", true)
+        val before = prefs.snapshot()
+
+        assertTrue(MotionPrefs.migrate(prefs, modernDefault))
+
+        val after = prefs.snapshot()
+        assertEquals("键集合一个都不许变（水位本来就在盘上，只是值被推进）", before.keys, after.keys)
+        before.forEach { (k, v) ->
+            if (k != MotionPrefs.KEY_VERSION) assertEquals("老键 $k 被改了", v, after[k])
+        }
+        assertEquals(
+            "水位从 v3.0.0 的 4 推进到 5",
+            MotionPrefs.CURRENT_VERSION,
+            after[MotionPrefs.KEY_VERSION],
+        )
+        // 四个新键**刻意不写**：缺 key = 开，写回会丢掉"用户没动过这一项"这个信息。
+        assertFalse(prefs.contains(MotionPrefs.KEY_RHYTHM))
+        assertFalse(prefs.contains(MotionPrefs.KEY_COVER_FLOAT))
+        assertFalse(prefs.contains(MotionPrefs.KEY_LYRIC_PULSE))
+        assertFalse(prefs.contains(MotionPrefs.KEY_BAR_PULSE))
+    }
+
+    @Test
+    fun `显式选过简洁档的盘迁移时补一条可读说明`() {
+        // 简洁档在这一版收窄成静态档（呼吸与封面浮动不再渲染）⇒ 那台设备上的画面会变安静，
+        // 迁移说明是唯一能解释它的东西（与 v3.0.0 的「多出动效」那条同源）。
+        val prefs = v300Disk()
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SIMPLE)
+        assertTrue(MotionPrefs.migrate(prefs, modernDefault))
+        val log = MotionPrefs.readDegradeLog(prefs)
+        assertTrue("必须留下说明：$log", log.contains("v3.2-simple-tier-is-static-now"))
+        assertEquals("档位本身一个字节都不动", MotionIntensity.SIMPLE, MotionPrefs.readTier(prefs, modernDefault))
+    }
+
+    @Test
+    fun `精致与炫技档的盘迁移时不写说明`() {
+        // 这两个档位的观感没有变化（律动类本来就在精致档起）⇒ 不该有噪音日志。
+        for (tier in listOf(MotionIntensity.REFINED, MotionIntensity.SHOWCASE)) {
+            val prefs = v300Disk()
+            prefs.putRaw(MotionPrefs.KEY_TIER, tier)
+            MotionPrefs.migrate(prefs, modernDefault)
+            assertFalse("档位 $tier 不该写日志", prefs.contains(MotionPrefs.KEY_DEGRADE_LOG))
+        }
+    }
+
+    @Test
+    fun `没选过档位的盘迁移时不写说明`() {
+        // 缺 key ⇒ 档位由设备判据解析。那不是「盘上的变化」，给它写日志是无中生有的噪音
+        // （低端机每次全新安装都会命中简洁档）。
+        val prefs = v300Disk()
+        MotionPrefs.migrate(prefs, lowEndDefault)
+        assertFalse("设备判据解析出来的简洁档不写日志", prefs.contains(MotionPrefs.KEY_DEGRADE_LOG))
+        assertEquals("水位照样推进", MotionPrefs.CURRENT_VERSION, prefs.getInt(MotionPrefs.KEY_VERSION, -1))
+    }
+
+    @Test
+    fun `v2_8_0 老盘直接升到 5 时按搬运后的档位判定`() {
+        // 一张 v2.8.0 的盘（水位 0）显式选过简洁档：搬运结果就是简洁 ⇒ 同样要补说明。
+        val prefs = MemoryPrefs()
+        prefs.putRaw(MotionPrefs.LegacyKeys.KEY_TIER, MotionIntensity.SIMPLE)
+        assertTrue(MotionPrefs.migrate(prefs, modernDefault))
+        assertEquals(MotionIntensity.SIMPLE, prefs.getInt(MotionPrefs.KEY_TIER, -1))
+        assertTrue(
+            "搬运后的简洁档也要补说明",
+            MotionPrefs.readDegradeLog(prefs).contains("v3.2-simple-tier-is-static-now"),
+        )
+    }
+
+    @Test
+    fun `被降级过的简洁档盘两条说明都在且日志有界`() {
+        val prefs = v300Disk()
+        prefs.putRaw(MotionPrefs.KEY_TIER, MotionIntensity.SIMPLE)
+        prefs.putRaw(MotionPrefs.KEY_DEGRADE_LEVEL, MotionDegrade.UI_ALL_OFF)
+        MotionPrefs.migrate(prefs, modernDefault)
+        val lines = MotionPrefs.readDegradeLog(prefs).lines().filter { it.isNotBlank() }
+        assertEquals("一条解释降级机制移除、一条解释简洁档收窄", 2, lines.size)
+        assertTrue(lines[0].contains("v3-auto-degrade-removed"))
+        assertTrue(lines[1].contains("v3.2-simple-tier-is-static-now"))
+        assertEquals("历史水位原样保留", MotionDegrade.UI_ALL_OFF, MotionPrefs.readDegradeLevel(prefs))
     }
 
     // ── 6. 写与「没有自动降级」的结构保证 ───────────────────────────────────────────

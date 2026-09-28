@@ -19,7 +19,6 @@ import com.takahashirinta.ncrust.ui.player.WaveformStore
 import com.takahashirinta.ncrust.ui.player.visualizerFrameIntervalMs
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
-import com.takahashirinta.ncrust.ui.player.waveform.VisualizerTier
 import kotlinx.coroutines.delay
 
 /**
@@ -159,7 +158,7 @@ object MotionClock {
 /**
  * v2.9.0：**挂载帧时钟**（在展开态播放器子树里挂**恰好一次**）。
  *
- * ## 挂载条件由调用方给（[enabled]），内部再判一次「有没有东西要动」
+ * ## 挂载条件由调用方给（[enabled] + [waveformMounted]），内部再判一次「有没有东西要动」
  *
  * 关掉「界面动效」总开关、且波形也没挂载时，本组件**不跑任何循环**
  * （`LaunchedEffect` 的 key 里带 `clockNeeded`，为 false 时直接 return）——
@@ -171,14 +170,28 @@ object MotionClock {
  * v3.0.0 删掉了它：**渲染只看用户选的档位**。留下的 `FrameBudgetPolicy` /
  * `VisualizerFrameMonitor` 两个类仅供诊断复用，**没有任何生产调用点**（见它们的 KDoc）。
  *
+ * ## v3.2.0：[waveformMounted] 把「波形的帧推进」与「界面动效的帧推进」解耦
+ *
+ * 上一版的判据是 `motion.needsFrameClock || waveform.tier > SIMPLE || waveform.anyShowcase`，
+ * 而 v2.9.0/v3.0.0 的**简洁档**恰好有一个逐帧的界面动效（背景呼吸）⇒
+ * 简洁档的波形柱一直是**搭着背景呼吸的便车**在推进的。P0-B 把呼吸收窄到精致档之后，
+ * 这条便车没有了：不同时把「波形挂载」显式告诉帧时钟，简洁档的波形会**冻住**
+ * （`AudioVisualizerBars` 自 v2.9.0 起是纯读取方，自己不再推进）。
+ *
+ * 现在的关系是干净的：**波形挂载 ⇒ 要帧；界面动效需要 ⇒ 要帧**，两者取或。
+ *
  * @param activeProvider 播放中且未在缓冲。**用 lambda 而不是布尔参数**：这个值只在帧循环里读，
  *   传布尔会让 `PlayerCard` 订阅 `isPlaying`/`isBuffering` 而整树重组（AGENTS.md「GPU 零重组」）。
  * @param enabled 调用方的挂载判据（展开态 + 有歌）。
+ * @param waveformMounted 波形组件此刻是否挂载（`PlayerLayout.visualizerSlot ||
+ *   motion.fullScreenWaveform`）。它**每一档**都需要帧推进 —— 波形柱跟的是 RMS，
+ *   与「这一档有哪些界面动效」是两件事。
  */
 @Composable
 fun MotionFrameClock(
     activeProvider: () -> Boolean,
     enabled: Boolean,
+    waveformMounted: Boolean,
 ) {
     val context = LocalContext.current
     val currentActive = rememberUpdatedState(activeProvider)
@@ -187,9 +200,7 @@ fun MotionFrameClock(
     val waveform = VisualizerPrefs.effects.value
     val frameIntervalMs = remember(context) { visualizerFrameIntervalMs(context) }
 
-    val clockNeeded = enabled && (
-        motion.needsFrameClock || waveform.tier > VisualizerTier.SIMPLE || waveform.anyShowcase
-        )
+    val clockNeeded = enabled && (motion.needsFrameClock || waveformMounted)
 
     // ---- 唯一的帧循环 ----
     LaunchedEffect(clockNeeded, frameIntervalMs, motion, waveform) {
