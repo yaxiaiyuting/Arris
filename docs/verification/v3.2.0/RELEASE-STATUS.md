@@ -14,8 +14,8 @@
 | 产物 | `dist/Ncrust-v3.2.0-gpl-release.apk` | sha256 `f929968c098dab06be63c1923d4e29f44220a0d9175d594c0c2ad55894b7255f` |
 | 产物的版本号（红线 19：看二进制，不看标题） | `versionCode='55' versionName='3.2.0-gpl'` | `aapt2 dump badging dist/Ncrust-v3.2.0-gpl-release.apk` |
 | 工作区干净 | `git status --porcelain` 输出 **0 行** | 构建**之后**再次执行 |
-| HEAD == 产物源码 | HEAD = `85c4a2d`，最后一次改动 `app/` 的提交在构建之前；`git diff HEAD --stat -- app` 为空 | 构建后执行 |
-| 本地 tag | `v3.2.0-gpl`（附注 tag）指向 `85c4a2d` | `git show v3.2.0-gpl:app/build.gradle.kts` |
+| HEAD == 产物源码 | 最后一次改动 `app/` 的提交在构建**之前**；构建后 `git status --porcelain` 为 0 行、`git diff HEAD --stat -- app` 为空。其后只有**文档**提交（docs/），`app/` 一个字节未变 | 构建后执行 |
+| 本地 tag | `v3.2.0-gpl`（附注 tag）指向**本版交付的最后一个提交**（即含本文件的这个提交） | `git rev-list -n1 v3.2.0-gpl` 与 `git rev-parse HEAD` 逐字相等；`git show v3.2.0-gpl:app/build.gradle.kts \| grep version` ⇒ `55` / `"3.2.0-gpl"` |
 
 ## 2. ⛔ 阻塞：推送与创建 release 无法完成（网络 + 凭据）
 
