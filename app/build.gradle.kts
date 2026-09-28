@@ -367,8 +367,19 @@ android {
         // 刷新率低）一律走新版本 —— 与 v2.1.1/v2.1.2 折进 v2.1.3 是同一处置。
         // 本版范围：三条频带泳道 + 连续滚动（亚格插值）+ 低端机帧间隔 33ms→16ms
         // （铁律 28 的"release 包验证帧时间"）。**仍然没有新增持久化键。**
-        versionCode = 58
-        versionName = "3.2.3-gpl"
+        // v3.2.4：两条实测缺陷 —— P0「B 站歌曲无法播放」+ P1「新设备（高刷新率）音频条抖动」。
+        // **第八次按脚本定号**：冷启动跑 tools/next-version.sh，三源（最近 5 个 tag =
+        // v3.2.3..v3.1.0 的 58/57/56/55/54、已发布 APK 的 aapt2 badging、工作区 58）
+        // 最大值 = 58 ⇒ 本版取 **59**。
+        // 两条根因都来自「探针先行」：
+        //  · P0 = B 站媒体 CDN **同时**校验 Referer 与 User-Agent，v3.1.0 只补了 Referer；
+        //    平台默认 UA（`Dalvik/…Android…`）命中 CDN 的 UA 子串黑名单 ⇒ 403。
+        //    v3.1.0 之所以漏掉，是它的 A/B 里手工写死了合格 UA（详见探针 §7）。
+        //  · P1 = 帧闸门把重绘预算写死 16ms 且从不读刷新率；60Hz 上恰好「每帧都推进」，
+        //    120Hz 上变成「每两帧且随时会变三帧」⇒ 位移 ±49% 的跳变。
+        // 本版不改持久化结构、不改包名、不碰华为卡片、不动 SweepTrack 与预载槽位不变量。
+        versionCode = 59
+        versionName = "3.2.4-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
