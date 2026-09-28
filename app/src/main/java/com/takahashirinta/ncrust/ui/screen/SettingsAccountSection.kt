@@ -83,6 +83,13 @@ internal fun SettingsAccountPage(
     cookieRefreshTrigger: Int,
     onShowWebLogin: () -> Unit,
     onShowQqLogin: () -> Unit,
+    /**
+     * v3.2.0 · P1：打开 B 站扫码登录浮层。
+     *
+     * 浮层本体在 `ui/components/BiliQrLoginDialog.kt`（复用既有 `MetroDialog` 与
+     * `generateQrBitmap`），本页只负责把入口摆在账号区里 —— 与 QQ 那一块同一个形状。
+     */
+    onShowBiliLogin: () -> Unit,
     onShowQqPhoneLogin: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -170,6 +177,19 @@ internal fun SettingsAccountPage(
                                     else -> onShowWebLogin()
                                 }
                             }
+                        )
+                    }
+
+                    SettingsRowKind.ACCOUNT_BILI -> item(key = entry.id) {
+                        com.takahashirinta.ncrust.ui.components.BiliAccountBlock(
+                            accountTitle = strings.sourceBiliAccount,
+                            brand = strings.source.sourceBilibili,
+                            notLoggedInText = strings.notLoggedIn,
+                            loginActionText = strings.biliLoginTitle,
+                            logoutText = strings.biliLogout,
+                            // 如实写「登录后能否无损未验证」——不许承诺本版没验证过的东西。
+                            qualityNote = strings.biliQualityNote,
+                            onLogin = onShowBiliLogin,
                         )
                     }
 

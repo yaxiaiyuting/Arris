@@ -77,6 +77,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.PlaylistEditApi
 import com.takahashirinta.ncrust.network.PlaylistWriteResult
+import com.takahashirinta.ncrust.bili.BiliAuthStore
 import com.takahashirinta.ncrust.bili.BiliPrefs
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
@@ -222,6 +223,11 @@ class MainActivity : ComponentActivity() {
         // v3.1.0 · B：B 站音源的开关镜像（默认关闭）。与 RetrofitClient.init 同处 ——
         // 两者都是「进程级的一次性配置」，分开写会让下一个读代码的人只找到一个。
         BiliPrefs.init(this)
+        // v3.2.0 · P1：B 站登录态的进程内镜像。**必须在这里播种** ——
+        // 网络层的 `BiliApi.get()` 每通请求都读它，没播种就永远匿名
+        // （表现是「扫码成功了但请求还是匿名」）。与 BiliPrefs.init 同一处，
+        // 两者都是「进程级一次性配置」。
+        BiliAuthStore.init(this)
         // v2.1.0 · C：接线 QQ 音乐音源（注册 Provider + 初始化它自己的 HTTP 通道）。
         // 与 RetrofitClient.init 并列，幂等。
         com.takahashirinta.ncrust.qq.QqMusicSourceProvider.install(this)
@@ -2086,6 +2092,8 @@ fun MainScreen(
     var showWebLogin by remember { mutableStateOf(false) }
     // v2.1.0 · C：QQ 音乐登录浮层（与网易云那个**完全独立**：两份 cookie、两条登录路径）。
     var showQqLogin by remember { mutableStateOf(false) }
+    /** v3.2.0 · P1：B 站扫码登录浮层（浮层本体复用 `MetroDialog` + 既有二维码渲染）。 */
+    var showBiliLogin by remember { mutableStateOf(false) }
     // v2.1.0 · C（hotfix 4）：QQ 登录改为「自绘二维码为主、网页登录兜底」。
     var showQqQr by remember { mutableStateOf(false) }
     // v2.1.1：手机号验证码登录。为**微信用户**而加 —— 他们多半没有 QQ 号，
@@ -2158,6 +2166,13 @@ fun MainScreen(
                 showQqLogin = true
             },
             onDismiss = { showQqQr = false },
+        )
+        return
+    }
+    if (showBiliLogin) {
+        com.takahashirinta.ncrust.ui.components.BiliQrLoginDialog(
+            onLoggedIn = { showBiliLogin = false },
+            onDismiss = { showBiliLogin = false },
         )
         return
     }
@@ -2575,6 +2590,8 @@ fun MainScreen(
                             onShowWebLogin = { showWebLogin = true },
                             // 二维码为主入口；网页登录是它内部的兜底按钮。
                             onShowQqLogin = { showQqQr = true },
+                            // v3.2.0 · P1：B 站扫码登录（独立通道，不走 QQ/网易云那两条）。
+                            onShowBiliLogin = { showBiliLogin = true },
                             // v2.1.1：手机号验证码登录（微信用户的可用路径）。
                             onShowQqPhoneLogin = { showQqPhone = true },
                             onOpenAbout = { showAbout = true },

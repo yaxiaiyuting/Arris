@@ -226,8 +226,14 @@ private fun decodeQrImage(dataUrl: String): Bitmap? = runCatching {
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }.getOrNull()
 
-/** zxing 本地生成二维码位图（纯黑白，白底）。失败返回 null。 */
-private fun generateQrBitmap(content: String, sizePx: Int = 512): Bitmap? = runCatching {
+/**
+ * zxing 本地生成二维码位图（纯黑白，白底）。失败返回 null。
+ *
+ * v3.2.0 · P1：可见性从 `private` 放宽到 `internal` —— B 站扫码登录（[BiliQrLoginDialog]）
+ * 复用**同一个**渲染函数，而不是复制第二份（铁律 23：不新建第二套登录体系）。
+ * 行为一个字节未改。
+ */
+internal fun generateQrBitmap(content: String, sizePx: Int = 512): Bitmap? = runCatching {
     val matrix = com.google.zxing.qrcode.QRCodeWriter()
         .encode(content, com.google.zxing.BarcodeFormat.QR_CODE, sizePx, sizePx)
     val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.RGB_565)
