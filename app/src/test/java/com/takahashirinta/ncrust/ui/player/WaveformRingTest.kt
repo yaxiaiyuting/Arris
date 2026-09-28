@@ -252,3 +252,80 @@ class WaveformRingBandWindowTest {
         assertEquals(2, short.size)
     }
 }
+
+/**
+ * v3.2.3：**连续滚动的推进相位**（用户反馈「刷新率好低」的落点）。
+ *
+ * 音频缓冲只有 ~10 Hz，而滚动窗口是按缓冲位移的 —— 没有这一层时三条泳道的形状
+ * 每 100ms 整条跳一格，帧循环再快也看不出是"在流"。相位把这一格之内的时间摊开，
+ * 渲染层据此在**相邻两格之间**插值 ⇒ 形状按帧率连续左移。
+ *
+ * 三条要钉住的：
+ *  1. 相位在 0..1 之间、随帧推进、消费到新柱时归零；
+ *  2. 柱间隔是**测出来的**（滑动平均），不是写死的常量（缓冲粒度是运行时行为）；
+ *  3. **静音时不推进相位**（与动画相位共用同一条空转门槛）—— v1.8.1 的「不空转」契约不变。
+ */
+class WaveformRingScrollTest {
+
+    @Test
+    fun `相位随帧推进 —— 消费到新柱时归零`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f)
+        ring.pump(active = true, dtMs = 16f)
+        val first = ring.scrollPhase01()
+        assertTrue("刚消费完应该接近 0（实际 $first）", first < 0.05f)
+        repeat(4) { ring.pump(active = true, dtMs = 16f) }
+        val later = ring.scrollPhase01()
+        assertTrue("相位应该随帧推进（$first -> $later）", later > first)
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f)
+        ring.pump(active = true, dtMs = 16f)
+        assertTrue("新柱到达后相位归零（实际 ${ring.scrollPhase01()}）", ring.scrollPhase01() < 0.05f)
+    }
+
+    @Test
+    fun `相位恒在 0 到 1 之间 —— 卡顿也不会越界`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f)
+        repeat(200) {
+            ring.pump(active = true, dtMs = 500f)
+            val p = ring.scrollPhase01()
+            assertTrue("相位越界: $p", p in 0f..1f)
+        }
+    }
+
+    @Test
+    fun `柱间隔是测出来的 —— 用十根等间隔柱收敛到 100ms 量级`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        // 模拟 100ms 一根柱、每 16ms 一帧（一帧平均 0.16 根）。
+        var acc = 0f
+        repeat(10) {
+            repeat(6) { ring.pump(active = true, dtMs = 16f) }
+            ring.push(0.5f, 0.5f, 0.5f, 0.5f)
+            ring.pump(active = true, dtMs = 16f)
+            acc += 96f
+        }
+        val interval = ring.barIntervalMs()
+        assertTrue("柱间隔应接近 96ms（实际 $interval）", interval in 60f..140f)
+    }
+
+    @Test
+    fun `静音时不推进相位 —— 不空转`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        // 从未 push ⇒ targets 全零 ⇒ 不排帧、相位不前进。
+        assertFalse(ring.pump(active = true, dtMs = 16f))
+        val p = ring.scrollPhase01()
+        repeat(10) { ring.pump(active = true, dtMs = 16f) }
+        assertEquals("静音时相位不该前进", p, ring.scrollPhase01(), 0f)
+    }
+
+    @Test
+    fun `有信号时滚动要排帧 —— 否则画面会冻住`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        ring.push(0.6f, 0.6f, 0.6f, 0.6f)
+        ring.pump(active = true, dtMs = 16f)
+        // 目标不再变化（同一根柱反复 pump），但滚动仍需重绘。
+        var anyChanged = false
+        repeat(3) { if (ring.pump(active = true, dtMs = 16f)) anyChanged = true }
+        assertTrue("滚动期间必须持续要求重绘", anyChanged)
+    }
+}

@@ -96,6 +96,26 @@ class WaveformRing(
     /** UI 侧已消费到的位置。只有 UI 线程读写。 */
     private var readIndex: Int = 0
 
+    /**
+     * v3.2.3：**两条柱之间的推进相位**（0..1），让画面按帧率连续滚动。
+     *
+     * ## 为什么必须补这一层（用户实测反馈「刷新率好低」）
+     *
+     * 音频缓冲只有 ~10 Hz（真机实测 100ms），而滚动窗口是**按缓冲位移**的：
+     * 每 100ms 整条形状"跳"一格。帧循环哪怕是 60fps，看到的也是**10 Hz 的阶跃**——
+     * 用户读到的就是"刷新率低"。柱高那一层有 22/130ms 的时间常数在抹平，
+     * 而**三条泳道的形状**（历史窗口本身）没有任何抹平：它一格一格跳。
+     *
+     * 所以这里记两个量：距上一根柱过了多久（[sinceBarMs]）与柱间隔的滑动平均
+     * （[barIntervalMs]），渲染层用它们的比值做**相邻两格之间的线性插值**——
+     * 形状因此按帧率连续左移，而数据仍然是 10 Hz 的真实值（没有插值出假数据：
+     * 插的是"两格之间"的位置，不是"未来"的值）。
+     */
+    private var sinceBarMs: Float = 0f
+
+    /** 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。 */
+    private var barIntervalMs: Float = DEFAULT_BAR_INTERVAL_MS
+
     /** 最新数据（阶跃）。UI 线程原地更新，绝不重新分配。 */
     private val targets = FloatArray(barCount)
 
@@ -175,7 +195,26 @@ class WaveformRing(
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects): Boolean {
         var changed = false
         if (active) {
-            changed = consumePending()
+            // v3.2.3：先结算相位（用**上一帧**的间隔），再消费新柱 —— 消费到柱时相位归零。
+            val dtForPhase = dtMs.coerceIn(0f, 200f)
+            val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
+            // 空转门槛与动画相位同一条（`ANIMATION_MIN_SIGNAL`）：**画面最后一格还有内容**时
+            // 才推进相位、才为"滚动"排帧。静音段 / 放完 / 暂停都既不排帧也不推进
+            // —— v1.8.1 的「不空转」契约原样保住（相位冻在那里，下一根柱到达时归零）。
+            if (targets[barCount - 1] > ANIMATION_MIN_SIGNAL) {
+                if (sinceBarMs < interval) changed = true
+                sinceBarMs += dtForPhase
+            }
+            val consumed = consumePending()
+            if (consumed) {
+                // 柱间隔的滑动平均：只用落在合理区间的样本，避免一次卡顿把间隔带飞。
+                val avg = sinceBarMs / pendingConsumed.coerceAtLeast(1)
+                if (avg in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) {
+                    barIntervalMs += (avg - barIntervalMs) * BAR_INTERVAL_EMA
+                }
+                sinceBarMs = 0f
+            }
+            if (consumed) changed = true
         } else if (targets.any { it != 0f }) {
             targets.fill(0f)
             changed = true
@@ -204,10 +243,16 @@ class WaveformRing(
     }
 
     /** 把环形缓冲里 UI 还没消费的柱搬进 [targets]。 */
-    private fun consumePending(): Boolean {
+    private fun consumePending(): Boolean = consumePendingCount() > 0
+
+    /** v3.2.3：消费了多少根柱（相位推进要用它换算平均柱间隔）。 */
+    private var pendingConsumed: Int = 0
+
+    private fun consumePendingCount(): Int {
+        pendingConsumed = 0
         val snapshot = writeIndex
         var pending = snapshot - readIndex
-        if (pending <= 0) return false
+        if (pending <= 0) return 0
         if (pending > capacity) {
             // 溢出：丢掉最旧的，绝不阻塞写者。
             readIndex = snapshot - capacity
@@ -236,7 +281,8 @@ class WaveformRing(
             if (shiftBandIn(highTargets, highValue)) changed = true
             readIndex += 1
         }
-        return changed
+        pendingConsumed = pending
+        return pending
     }
 
     /**
@@ -388,6 +434,19 @@ class WaveformRing(
      */
     fun newestTarget(): Float = targets[barCount - 1]
 
+    /**
+     * v3.2.3：两条柱之间的推进相位（0..1）。渲染层用它把历史窗口**连续左移**一格，
+     * 而不是每 100ms 跳一格。**不产生新数据**：插的是相邻两格之间的位置。
+     */
+    fun scrollPhase01(): Float {
+        val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
+        val p = sinceBarMs / interval
+        return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
+    }
+
+    /** v3.2.3：当前测到的柱间隔（毫秒，滑动平均）。诊断 / 单测用。 */
+    fun barIntervalMs(): Float = barIntervalMs
+
     /** v2.9.0：最新的低频能量（与 [newestTarget] 同一时刻）。 */
     fun newestBass(): Float = bassTarget
 
@@ -452,6 +511,16 @@ class WaveformRing(
          * 但高于"全零后的残余"，所以静音段与暂停态都不会白烧帧。
          */
         const val ANIMATION_MIN_SIGNAL = 0.02f
+
+        /** v3.2.3：柱间隔的初值（毫秒）。真机实测 S6 是 100ms（11 Hz），这里只是起始猜测。 */
+        const val DEFAULT_BAR_INTERVAL_MS = 100f
+
+        /** 柱间隔样本的合法区间：超出就丢弃（卡顿 / 暂停恢复不该污染滑动平均）。 */
+        const val MIN_BAR_INTERVAL_MS = 20f
+        const val MAX_BAR_INTERVAL_MS = 500f
+
+        /** 柱间隔滑动平均的更新系数（每根柱一次）。 */
+        const val BAR_INTERVAL_EMA = 0.15f
 
         /** v3.2.2：频带下标（与 `BandColorRoles` / `BandDominance` 的三色顺序一致）。 */
         const val BAND_LOW = 0

@@ -415,6 +415,12 @@ object WaveformStore {
     fun dominantBand(): Int = band.dominant
 
     /**
+     * v3.2.3：两条柱之间的推进相位（0..1）。渲染层用它把历史窗口**连续左移**一格 ——
+     * 音频缓冲只有 ~10 Hz，没有这一层时三条泳道的形状是"每 100ms 跳一格"（用户反馈"刷新率低"）。
+     */
+    fun scrollPhase01(): Float = ring.scrollPhase01()
+
+    /**
      * v3.2.2：曲线绘制**丢帧计数**（只增不减，UI 线程单写者）。
      *
      * 渲染侧一帧的失败由 [isolateFrame] 吞掉（丢这一帧、不向上抛）。计数留在这里是因为
@@ -509,8 +515,18 @@ const val VISUALIZER_FRAME_INTERVAL_SLOW_MS = 33L
 fun visualizerFrameIntervalMs(context: Context): Long {
     val activityManager =
         context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-    val lowTier = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-        activityManager?.isLowRamDevice == true
+    // v3.2.3：**`SDK_INT < 26` 这条判据被删掉了**（原来是 `SDK_INT < O || isLowRamDevice`）。
+    //
+    // 为什么改（用户实测反馈「刷新率好低」）：S6（Android 7.0）因此被钉在 **33ms = 30fps**，
+    // 而真机 release 实测它在三条泳道下的帧时间是 **p50 19ms / p90 26ms**
+    // （docs/verification/v3.2.2/probe-perf-tier.md）—— 也就是说设备**本来跑得动 ~50fps**，
+    // 30fps 上限纯粹是判据自己加的。v1.8.1 当年选 33ms 的理由是"S6 是流水线式掉帧、
+    // 帧间隔量不出真实压力"，那个理由针对的是**自适应降级**（v3.0.0 已删除），
+    // 不构成"静态判据也按 SDK 一刀切"的依据。
+    //
+    // 保留的是 `isLowRamDevice`：那一条是**真的内存不够**（≤1GB 级），
+    // 与"系统版本老"是两件事 —— 一台 2015 年的 3GB 旗舰和一台 1GB 的入门机不该同一条判据。
+    val lowTier = activityManager?.isLowRamDevice == true
     return if (lowTier) VISUALIZER_FRAME_INTERVAL_SLOW_MS else VISUALIZER_FRAME_INTERVAL_FAST_MS
 }
 
@@ -674,6 +690,10 @@ fun AudioVisualizerBars(
         val heightPx = size.height
         // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
         if (threeLane) {
+            // v3.2.3：**亚格插值**（连续滚动）。音频缓冲 ~10 Hz ⇒ 历史窗口每 100ms 整条跳一格；
+            // 帧循环再快，看到的也是 10 Hz 的阶跃。这里用 `scrollPhase01()` 在**相邻两格之间**
+            // 线性取值，形状因此按帧率连续左移。插的是"两格之间"，不是"未来" —— 没有假数据。
+            val phase = WaveformStore.scrollPhase01()
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 val window = when (lane) {
                     BandLanes.LANE_LOW -> lowWindow
@@ -682,7 +702,11 @@ fun AudioVisualizerBars(
                 }
                 val base = lane * n
                 for (i in 0 until n) {
-                    val half = BandLanes.amplitude(window[i], lane) * heightPx * 0.5f
+                    val a = window[i]
+                    // 最后一格没有"下一格"可插（新柱还没到）—— 保持原值，等同"最新点先站住"。
+                    val b = if (i < n - 1) window[i + 1] else window[n - 1]
+                    val v = a + (b - a) * phase
+                    val half = BandLanes.amplitude(v, lane) * heightPx * 0.5f
                     heights[base + i] = if (half < minBar * 0.5f) minBar * 0.5f else half
                 }
             }

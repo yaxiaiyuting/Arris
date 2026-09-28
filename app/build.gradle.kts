@@ -355,8 +355,20 @@ android {
         // 本版范围：波形条改造为频段曲线（连续曲线 + 主导频段着色 + 平滑/滞回/短过渡防闪 +
         // 档位与开关联动；铁律 28/29/30/31）。**不新增持久化键**：频段着色复用既有的
         // `motion_wave_bands` 开关与档位映射，因此没有新迁移、没有新文案。
-        versionCode = 57
-        versionName = "3.2.2-gpl"
+        // v3.2.3：**第十次按脚本定号**。冷启动跑 `tools/next-version.sh`（**带 fetch**，铁律 9）——
+        //   ① 最近 5 个 tag：v3.2.2=57 / v3.2.1=56 / v3.2.0=55 / v3.1.0=54 / v3.0.0=53；
+        //   ② 已发布 APK 实测：dist 里 Ncrust-v3.2.2-gpl-release.apk=**57**（本轮脚本自带 glob
+        //      只吃到 v2.6.2=50，57 是按同一口径手工补测的）；
+        //   ③ 工作区：57 / 3.2.2-gpl。
+        //   三源最大值 = 57 ⇒ 下一个可用 **58**。
+        // **为什么另起一版而不是改 v3.2.2**：v3.2.2-gpl 的 tag 已经推上去了，而它的 release
+        // 因为本机 api.github.com 被劫持**从未创建**（见 docs/verification/v3.2.2/RELEASE-STATUS.md）。
+        // 按本仓库纪律「不移动已推的 tag」，用户随后的两条实测反馈（默认档看不到频带、
+        // 刷新率低）一律走新版本 —— 与 v2.1.1/v2.1.2 折进 v2.1.3 是同一处置。
+        // 本版范围：三条频带泳道 + 连续滚动（亚格插值）+ 低端机帧间隔 33ms→16ms
+        // （铁律 28 的"release 包验证帧时间"）。**仍然没有新增持久化键。**
+        versionCode = 58
+        versionName = "3.2.3-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
