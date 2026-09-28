@@ -46,6 +46,15 @@ import java.util.concurrent.atomic.AtomicReference
  * `app/build/outputs/androidTest-results/**/logcat-*.txt`。
  *
  * ⚠️ 它**不参与** `assembleRelease`（androidTest 源集），因此不违反「发布产物里没有探针」。
+ *
+ * ## v3.2.0 · P0-C：本文件的 8 处 `BiliApi.x()` 被机械包了一层 `runBlocking { }`
+ *
+ * 这不是「改探针去迁就实现」，而是**签名变更的编译期要求**：v3.2.0 把 `BiliApi` 的对外方法
+ * 从普通函数改成了 `suspend` + 内部 `withContext(Dispatchers.IO)`（修 P0-C 的主线程阻塞），
+ * 非 suspend 的调用点一律编译不过。改动**只有这一层包装**：
+ * 打印的字符串、判定口径、用例名、覆盖范围**一个字都没动**，
+ * 因此本文件此前落盘的结论（`docs/verification/v3.1.0/verification/EVIDENCE-bili-probe.md`）
+ * 仍然逐字可比。
  */
 @RunWith(AndroidJUnit4::class)
 class BiliV310ProbeTest {
@@ -56,7 +65,7 @@ class BiliV310ProbeTest {
     fun probeSearchViaWbi() {
         val keyword = InstrumentationRegistry.getArguments().getString("biliKeyword") ?: "miku"
         println("PROBE-BILI-SEARCH begin keyword=$keyword")
-        val tracks = BiliApi.searchVideos(keyword, 10)
+        val tracks = kotlinx.coroutines.runBlocking { BiliApi.searchVideos(keyword, 10) }
         println("PROBE-BILI-SEARCH n=${tracks.size}")
         tracks.take(5).forEach {
             println("PROBE-BILI-SEARCH item bvid=${it.bvid} aid=${it.aid} dur=${it.durationMs} title=${it.title.take(40)}")
@@ -70,10 +79,10 @@ class BiliV310ProbeTest {
     fun probeAudioZoneInfoAndLyric() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
         println("PROBE-BILI-AUDIO begin auid=$auid")
-        val info = BiliApi.audioInfo(auid)
+        val info = kotlinx.coroutines.runBlocking { BiliApi.audioInfo(auid) }
         println("PROBE-BILI-AUDIO info title=${info?.title} author=${info?.author} dur=${info?.durationMs} cover=${info?.coverUrl?.take(60)}")
         println("PROBE-BILI-AUDIO rawLyricFieldIsUrl=${BiliParse.looksLikeUrl(info?.lyric)} value=${info?.lyric?.take(70)}")
-        val lyric = BiliApi.audioLyric(auid)
+        val lyric = kotlinx.coroutines.runBlocking { BiliApi.audioLyric(auid) }
         println("PROBE-BILI-AUDIO lyricLen=${lyric?.length} head=${lyric?.take(60)?.replace("\n", "\\n")}")
         println("PROBE-BILI-AUDIO isLrc=${lyric != null && !BiliParse.looksLikeUrl(lyric) && lyric.contains("[")}")
     }
@@ -82,7 +91,7 @@ class BiliV310ProbeTest {
     fun probeAudioZoneStreamTtlAndQuality() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
         for (qn in 0..3) {
-            val s = BiliApi.audioStream(auid, qn)
+            val s = kotlinx.coroutines.runBlocking { BiliApi.audioStream(auid, qn) }
             val ttlMin = s?.let { (it.expiresAtMs - System.currentTimeMillis()) / 60000.0 } ?: -1.0
             println(
                 "PROBE-BILI-STREAM qn=$qn label=${s?.qualityLabel} container=${s?.container} br=${s?.br} " +
@@ -101,7 +110,7 @@ class BiliV310ProbeTest {
     @Test
     fun probeExoPlayerCanPlayBiliStream() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
-        val stream = BiliApi.audioStream(auid, 2)
+        val stream = kotlinx.coroutines.runBlocking { BiliApi.audioStream(auid, 2) }
         println("PROBE-BILI-PLAY stream=${stream?.url?.take(90)}")
         if (stream == null) {
             println("PROBE-BILI-PLAY SKIP: 没有拿到直链（网络或下架）")
@@ -211,7 +220,7 @@ class BiliV310ProbeTest {
     @Test
     fun probeRefererVariants() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
-        val stream = BiliApi.audioStream(auid, 2) ?: run {
+        val stream = kotlinx.coroutines.runBlocking { BiliApi.audioStream(auid, 2) } ?: run {
             println("PROBE-BILI-REFERER SKIP: 没有直链")
             return
         }
@@ -258,7 +267,7 @@ class BiliV310ProbeTest {
     @Test
     fun probeRawHttpFromDevice() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
-        val stream = BiliApi.audioStream(auid, 2) ?: run {
+        val stream = kotlinx.coroutines.runBlocking { BiliApi.audioStream(auid, 2) } ?: run {
             println("PROBE-BILI-RAW SKIP: 没有直链")
             return
         }
@@ -299,7 +308,7 @@ class BiliV310ProbeTest {
     @Test
     fun probeHeaderMatrix() {
         val auid = InstrumentationRegistry.getArguments().getString("biliAuid")?.toLongOrNull() ?: 39L
-        val stream = BiliApi.audioStream(auid, 2) ?: run {
+        val stream = kotlinx.coroutines.runBlocking { BiliApi.audioStream(auid, 2) } ?: run {
             println("PROBE-BILI-MATRIX SKIP: 没有直链")
             return
         }

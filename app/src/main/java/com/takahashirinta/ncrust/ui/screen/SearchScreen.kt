@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -53,7 +54,12 @@ import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
 import com.takahashirinta.ncrust.ui.components.AlbumSearchItem
 import com.takahashirinta.ncrust.ui.components.ArtistSearchItem
 import com.takahashirinta.ncrust.source.musicSource
+import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
+import com.takahashirinta.ncrust.ui.components.SearchEmptyKind
+import com.takahashirinta.ncrust.ui.components.SourceCounts
 import com.takahashirinta.ncrust.ui.components.SourceFilter
+import com.takahashirinta.ncrust.ui.components.pullToRefresh
+import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.warmup.ListPrefetch
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
@@ -127,6 +133,17 @@ fun SearchScreen(
     val biliEnabled = BiliSourceProvider.isEnabled
     val visibleSongs = remember(songs, sourceFilter) {
         sourceFilter.filter(songs) { it.musicSource }
+    }
+    // v3.2.0 · P0-D：下拉刷新。**复用**既有组件（`Modifier.pullToRefresh` +
+    // `PullToRefreshIndicator`，v2.3.0 · B），唯一的使用点此前是歌单详情页 ——
+    // 本页从来没接过，所以「没有下拉刷新」不是被跳过，而是从来没有入口。
+    val listState = rememberLazyListState()
+    val pullState = rememberPullToRefreshState()
+    // 刷新何时结束：搜索这一轮跑完（isLoading 落回 false）就把指示器收掉。
+    // 判据必须由**发起刷新的那一层**给（组件自己不知道网络什么时候回来）——
+    // 与 LocalPlaylistDetailScreen 的 `pullState.refreshing = false` 同一个契约。
+    LaunchedEffect(isLoading) {
+        if (!isLoading) pullState.refreshing = false
     }
     // v3.1.0 · P0-C：进入搜索结果就预取前 N 首的封面（N 按网络类型；只封面，不预取 URL）。
     LaunchedEffect(songs) {
@@ -475,119 +492,130 @@ fun SearchScreen(
 
                 when (currentType) {
                     1 -> {
-                        if (visibleSongs.isEmpty() && !isLoading) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                        // ------------------------------------------------------------------
+                        // v3.2.0 · P0-D：筛选档与逐源统计行**移出 `LazyColumn`**，常驻在结果区顶部。
+                        //
+                        // 旧结构把两者画成列表的 item，而整条列表被
+                        // `if (visibleSongs.isEmpty() && !isLoading)` 挡着 ⇒ 用户点「只看 B 站」
+                        // 之后只要这一轮没有 B 站的行，整条列表（连筛选档一起）被换成空态 Box
+                        // ⇒ 筛选档自己消失、没有任何路径点回「双源」⇒ 用户描述为「卡死 / 无法退出」。
+                        //
+                        // 判据抽成纯函数 `SourceFilter.shouldShowFilterRow`（有单测）：
+                        // **只看「有没有可筛的东西」，绝不看筛选后的结果**（因果不能颠倒）。
+                        // 详见 docs/verification/v3.2.0/probe-bili-search.md §3-D1/D6。
+                        // ------------------------------------------------------------------
+                        val filters = remember(biliEnabled) { SourceFilter.visible(biliEnabled) }
+                        if (SourceFilter.shouldShowFilterRow(songs.size, biliEnabled)) {
+                            SearchSourceFilterRow(
+                                filters = filters,
+                                selected = sourceFilter,
+                                onSelect = { sourceFilter = it },
+                            )
+                        }
+                        sourceCounts?.let { counts ->
+                            SearchSourceSummaryRow(
+                                counts = counts,
+                                // 重试 = 「用当前关键词再走一轮」，与 v2.5.5 的 QQ 重试同一个入口，
+                                // 不新加 ViewModel API（重复关键词本来就会重新发一轮请求）。
+                                // v3.2.0 · P0-D：判据从 `qqUnavailable` 扩到 `anyUnavailable` ——
+                                // B 站修好调度之后会**第一次真的**出现 TIMEOUT/ERROR，没有出口就是新死角。
+                                onRetry = { viewModel.onQueryChanged(viewModel.query.value) },
+                            )
+                        }
+                        // 结果区加载态（v3.2.0 · P0-D）：复用既有 `MetroProgressIndicator`，不新建组件。
+                        // 两个来源都算「还有东西没到」：`isLoading`（本轮还没发布过）与
+                        // `sourceCounts.hasPending`（某一源还在飞，含 B 站的 4s 预算）。
+                        // 旧代码只有搜索框里那个 24dp 指示器，而它在**首次发布**后就被置 false
+                        // （`SearchViewModel.kt:366`），于是「B 站还在飞」在结果区完全不可见。
+                        if (isLoading || sourceCounts?.hasPending == true) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                MetroProgressIndicator(sizeDp = 16.dp, color = currentThemeColor)
+                                Spacer(Modifier.width(8.dp))
                                 MetroText(
-                                    text = strings.searchSongsEmpty,
+                                    text = strings.searchSourcePending,
                                     color = LocalMetroColors.current.onSurfaceVariant,
-                                    style = TextStyle(fontSize = 16.sp),
+                                    style = TextStyle(fontSize = 12.sp),
                                 )
                             }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
-                                flingBehavior = rememberMetroFlingBehavior()
-                            ) {
-                                // 音源来源小字（真机反馈：纯网易云的结果在界面上看不出「来自哪里」）。
-                                // 放在列表**第一项**而不是外面套一层 Column —— 后者要动布局结构，
-                                // 而这里只需要一行字。
-                                // v3.1.0 · B：音源筛选行。只在**搜到过东西**时出现 ——
-                                // 空结果时给一排筛选档，用户点下去只会得到另一个空列表。
-                                if (songs.isNotEmpty()) {
-                                    item(key = "source-filter") {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        ) {
-                                            SourceFilter.visible(biliEnabled).forEach { filter ->
-                                                val selected = filter == sourceFilter
-                                                MetroText(
-                                                    text = filter.label(strings),
-                                                    color = if (selected) {
-                                                        LocalMetroColors.current.primary
-                                                    } else {
-                                                        LocalMetroColors.current.onSurfaceVariant
+                        }
+                        // 空态的三分类：不空 / 本次搜索无结果 / 当前筛选下无结果。
+                        // ⚠️ 加载中**不许**说「没有结果」（那是替用户提前下结论）——
+                        // 上面那行「搜索中…」才是此刻的事实。
+                        val emptyKind = SourceFilter.emptyKind(songs.size, visibleSongs.size)
+                        when {
+                            emptyKind == null -> {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        // 下拉刷新：刷新 = 用当前关键词再走一轮。
+                                        // `atTop` 判据与歌单详情页逐字相同（第一项可见且偏移为 0），
+                                        // 不看它会把「往下滚列表」误判成下拉刷新。
+                                        .pullToRefresh(
+                                            state = pullState,
+                                            atTop = {
+                                                listState.firstVisibleItemIndex == 0 &&
+                                                    listState.firstVisibleItemScrollOffset == 0
+                                            },
+                                            onRefresh = { viewModel.onQueryChanged(viewModel.query.value) },
+                                        ),
+                                    contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
+                                    flingBehavior = rememberMetroFlingBehavior()
+                                ) {
+                                    // 指示器是列表的**第一项**（既有用法，见 LocalPlaylistDetailScreen）：
+                                    // 只在真的拉动或刷新中挂载，不做「alpha = 0 常挂载」
+                                    // （AGENTS.md 触摸陷阱第 1 条）。
+                                    item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
+                                    // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed
+                                    // 只为拿到下标，key 显式传同一条（`it.id`）⇒ diff 行为不变。
+                                    itemsIndexed(visibleSongs, key = { _, item -> item.id }) { index, item ->
+                                        SongCard(
+                                            song = item,
+                                            style = SongCardStyle.LIST,
+                                            coverSize = 72.dp,
+                                            modifier = Modifier.listItemAppear(index),
+                                            onClick = {
+                                                SearchHistoryManager.addSong(context, item)
+                                                dismissKeyboard(); onSongClick(item)
+                                            },
+                                            onShowMenu = {
+                                                onShowSongMenu(item, listOf(
+                                                    SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
+                                                        SearchHistoryManager.addSong(context, item)
+                                                        // v2.6.0 · P0：同上，成败由返回值决定。
+                                                        if (LibraryManager.saveSong(context, item).isSuccess) {
+                                                            Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+                                                        }
                                                     },
-                                                    style = TextStyle(fontSize = 12.sp),
-                                                    modifier = Modifier.clickable {
-                                                        sourceFilter = filter
+                                                    SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) {
+                                                        SearchHistoryManager.addSong(context, item)
+                                                        onInsertNext(item)
                                                     },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                sourceCounts?.let { counts ->
-                                    item(key = "source-summary") {
-                                        // v2.5.5 · G：统计行现在能表达「还没回来」。
-                                        // 旧代码在 QQ 未返回时写 0 ⇒ 界面显示「QQ 音乐 0 首」，
-                                        // 而那句话是假的（QQ 只是慢）。现在显示「搜索中…」。
-                                        val summaryModifier = Modifier.padding(
-                                            start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp,
-                                        )
-                                        val summaryText = counts.summary(strings)
-                                        if (counts.qqUnavailable) {
-                                            // 超时：给一条**可点**的重试提示。
-                                            // 不用自动重试 —— 那会在用户已经往下翻的时候
-                                            // 突然往列表里插结果；手动重试把时机交给用户。
-                                            MetroText(
-                                                text = summaryText + "  ·  " + strings.retry,
-                                                color = LocalMetroColors.current.primary,
-                                                style = TextStyle(fontSize = 12.sp),
-                                                modifier = summaryModifier.clickable {
-                                                    viewModel.onQueryChanged(viewModel.query.value)
-                                                },
-                                            )
-                                        } else {
-                                            MetroText(
-                                                text = summaryText,
-                                                color = LocalMetroColors.current.onSurfaceVariant,
-                                                style = TextStyle(fontSize = 12.sp),
-                                                modifier = summaryModifier,
-                                            )
-                                        }
-                                    }
-                                }
-                                // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed
-                                // 只为拿到下标，key 显式传同一条（`it.id`）⇒ diff 行为不变。
-                                itemsIndexed(visibleSongs, key = { _, item -> item.id }) { index, item ->
-                                    SongCard(
-                                        song = item,
-                                        style = SongCardStyle.LIST,
-                                        coverSize = 72.dp,
-                                        modifier = Modifier.listItemAppear(index),
-                                        onClick = {
-                                            SearchHistoryManager.addSong(context, item)
-                                            dismissKeyboard(); onSongClick(item)
-                                        },
-                                        onShowMenu = {
-                                            onShowSongMenu(item, listOf(
-                                                SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
-                                                    SearchHistoryManager.addSong(context, item)
-                                                    // v2.6.0 · P0：同上，成败由返回值决定。
-                                                    if (LibraryManager.saveSong(context, item).isSuccess) {
-                                                        Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+                                                    SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) {
+                                                        SearchHistoryManager.addSong(context, item)
+                                                        onAppendToQueue(item)
                                                     }
-                                                },
-                                                SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) {
-                                                    SearchHistoryManager.addSong(context, item)
-                                                    onInsertNext(item)
-                                                },
-                                                SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) {
-                                                    SearchHistoryManager.addSong(context, item)
-                                                    onAppendToQueue(item)
-                                                }
-                                            ))
-                                        }
-                                    )
+                                                ))
+                                            }
+                                        )
+                                    }
                                 }
                             }
+                            isLoading -> Spacer(Modifier.fillMaxSize())
+                            else -> SearchResultsEmptyState(
+                                // 「本次搜索没有结果」与「当前筛选下没有结果」必须是两句不同的话。
+                                // FILTERED_OUT 的文案由 `SourceFilter.emptyText` 给（临时占位，
+                                // 需要的 i18n key 见 v3.2.0 交付报告），它**指名当前档位**。
+                                text = when (emptyKind!!) {
+                                    SearchEmptyKind.NO_RESULT -> strings.searchSongsEmpty
+                                    SearchEmptyKind.FILTERED_OUT -> sourceFilter.emptyText(strings)
+                                },
+                            )
                         }
                     }
 
@@ -745,6 +773,95 @@ fun SearchScreen(
                 } }
                 }
         }
+    }
+}
+
+/**
+ * v3.2.0 · P0-D：音源筛选档。**常驻在结果区顶部**，不再画进 `LazyColumn`。
+ *
+ * 两个「为什么」：
+ * - **为什么在列表外面**：放进列表就会被「筛选后为空 ⇒ 整条列表换成空态」这条判据带走 ——
+ *   而筛选后为空恰恰是用户最需要它的时候（P0-D 的根因）。可见性判据由
+ *   `SourceFilter.shouldShowFilterRow`（纯函数，有单测）在**调用点**决定。
+ * - **为什么加载中也能点**：切换筛选是纯本地操作（不发请求、不取消任何协程，
+ *   见 `SourceFilter` 的类文档），没有任何理由在加载中禁用它。
+ */
+@Composable
+private fun SearchSourceFilterRow(
+    filters: List<SourceFilter>,
+    selected: SourceFilter,
+    onSelect: (SourceFilter) -> Unit,
+) {
+    val strings = LocalStrings.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        filters.forEach { filter ->
+            val isSelected = filter == selected
+            MetroText(
+                text = filter.label(strings),
+                color = if (isSelected) {
+                    LocalMetroColors.current.primary
+                } else {
+                    LocalMetroColors.current.onSurfaceVariant
+                },
+                style = TextStyle(fontSize = 12.sp),
+                modifier = Modifier.clickable { onSelect(filter) },
+            )
+        }
+    }
+}
+
+/**
+ * v3.2.0 · P0-D：逐源统计行（含「还没回来」的三态）+ 重试入口。**常驻**，理由同筛选档。
+ *
+ * v2.5.5 · G 的语义一个字没改：某一源未返回时显示「搜索中…」/「搜索超时」/「搜索失败」，
+ * 绝不把「还没回来」写成「0 首」。唯一的扩项是判据从 `qqUnavailable` 换成
+ * `anyUnavailable`（= QQ 或 B 站），因为 B 站在修好调度之后**第一次真的**会出现
+ * TIMEOUT/ERROR —— 而 v3.1.0 只给 QQ 留了重试出口。
+ *
+ * 重试是**手动**的：自动重试会在用户已经往下翻的时候突然往列表里插结果（v2.5.5 的既有取舍）。
+ */
+@Composable
+private fun SearchSourceSummaryRow(counts: SourceCounts, onRetry: () -> Unit) {
+    val strings = LocalStrings.current
+    val summaryModifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+    val summaryText = counts.summary(strings)
+    if (counts.anyUnavailable) {
+        MetroText(
+            text = summaryText + "  ·  " + strings.retry,
+            color = LocalMetroColors.current.primary,
+            style = TextStyle(fontSize = 12.sp),
+            modifier = summaryModifier.clickable(onClick = onRetry),
+        )
+    } else {
+        MetroText(
+            text = summaryText,
+            color = LocalMetroColors.current.onSurfaceVariant,
+            style = TextStyle(fontSize = 12.sp),
+            modifier = summaryModifier,
+        )
+    }
+}
+
+/**
+ * v3.2.0 · P0-D：结果区空态。文案由调用点按 `SourceFilter.emptyKind` 分流 ——
+ * 「本次搜索没有结果」与「当前筛选下没有结果」是两句不同的话（后者必须指名当前档位）。
+ */
+@Composable
+private fun SearchResultsEmptyState(text: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        MetroText(
+            text = text,
+            color = LocalMetroColors.current.onSurfaceVariant,
+            style = TextStyle(fontSize = 16.sp),
+        )
     }
 }
 

@@ -241,6 +241,57 @@ class SourceCountsTest {
         assertTrue(line.contains(counts.qqText(strings)))
     }
 
+    // ---------------------------------------------------------------- v3.2.0 · P0-D ----
+
+    /**
+     * B 站的「超时/失败 ⇒ 给一条可点的重试」判据。
+     *
+     * v3.1.0 只给 QQ 做了这件事（[SourceCounts.qqUnavailable]），而 B 站那条腿当时
+     * **恒为 DONE + 0**（P0-C：主线程阻塞 + 异常被吞）—— 于是「加一条重试出口」
+     * 在 B 站上既没有被想到、也没有被触发过。修好调度之后 B 站会第一次真的出现
+     * TIMEOUT/ERROR，这一组就是它的出口守卫。
+     */
+    @Test
+    fun `B 站超时或失败时给重试入口`() {
+        assertTrue(SourceCounts(biliStatus = SourceSearchStatus.TIMEOUT).biliUnavailable)
+        assertTrue(SourceCounts(biliStatus = SourceSearchStatus.ERROR).biliUnavailable)
+        assertFalse(SourceCounts(biliStatus = SourceSearchStatus.PENDING).biliUnavailable)
+        assertFalse(SourceCounts(biliStatus = SourceSearchStatus.DONE).biliUnavailable)
+        // SKIPPED（音源未启用）= 「这一轮没发起」，**不是**失败 —— 不该给重试入口。
+        assertFalse(SourceCounts(biliStatus = SourceSearchStatus.SKIPPED).biliUnavailable)
+    }
+
+    /**
+     * `anyUnavailable` 必须**兼容**既有行为：`qqUnavailable ⇒ anyUnavailable` 恒成立。
+     *
+     * 这条是铁律 27 在 UI 出口上的落点：B 站接入不得改变另外两源的表现 ——
+     * 旧代码在 `qqUnavailable` 时给重试，换成 `anyUnavailable` 之后那条行为一个字不变。
+     */
+    @Test
+    fun `anyUnavailable 覆盖 QQ 且新增 B 站`() {
+        for (status in SourceSearchStatus.values()) {
+            val qqOnly = SourceCounts(qqStatus = status)
+            assertEquals(
+                "Q/\$status 时 anyUnavailable 必须与 qqUnavailable 一致",
+                qqOnly.qqUnavailable,
+                qqOnly.anyUnavailable,
+            )
+            val biliOnly = SourceCounts(biliStatus = status)
+            assertEquals(
+                "B/\$status 时 anyUnavailable 必须与 biliUnavailable 一致",
+                biliOnly.biliUnavailable,
+                biliOnly.anyUnavailable,
+            )
+        }
+        // 两个源同时不可用 ⇒ 仍然只有一个重试入口（判定取「或」）。
+        assertTrue(
+            SourceCounts(
+                qqStatus = SourceSearchStatus.TIMEOUT,
+                biliStatus = SourceSearchStatus.ERROR,
+            ).anyUnavailable,
+        )
+    }
+
     /** 默认值：QQ 是 PENDING（**不是 DONE + 0**）。这是构造这个类型时的安全默认值。 */
     @Test
     fun `默认的 QQ 状态是 PENDING 而不是 DONE`() {

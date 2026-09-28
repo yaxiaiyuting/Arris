@@ -19,6 +19,7 @@ import com.takahashirinta.ncrust.ui.i18n.en
 import com.takahashirinta.ncrust.ui.i18n.zhCN
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -244,5 +245,88 @@ class SourceFilterTest {
         assertEquals("双源", labels[0])
         assertEquals("只看 B 站", labels[3])
         assertEquals("四档文案不该有重复：$labels", 4, labels.toSet().size)
+    }
+
+    // ---------------------------------------------------------------- v3.2.0 · P0-D ----
+    //
+    // 这一组的每一条都对应 P0-D 的一个真实症状（切「只搜 B 站」之后卡死）。
+    // 断言全是**纯逻辑**，不涉及 Compose（本仓库没有 Robolectric）——
+    // 判据从 UI 里抽出来就是为了能被这一组钉住。
+
+    @Test
+    fun `筛选后为空时筛选档仍然挂载 —— P0-D 的回归判据`() {
+        // 用户点了「只看 B 站」，而这一轮 B 站一条都没有：
+        // 总数 30（网易云的 30 首），筛选后 0。
+        // 旧实现的判据是「筛选后的结果」，于是筛选档自己消失、没有任何路径点回「双源」。
+        assertTrue(
+            "筛选后为空时筛选档必须还在（否则用户没有任何路径切回「双源」）",
+            SourceFilter.shouldShowFilterRow(totalSongs = 30, biliEnabled = true),
+        )
+        // B 站关掉时同样成立（那时只剩双源/网易云/QQ 三档，仍然有得选）。
+        assertTrue(SourceFilter.shouldShowFilterRow(totalSongs = 30, biliEnabled = false))
+    }
+
+    @Test
+    fun `一条结果都没有时不画筛选档 —— 点下去只会得到另一个空列表`() {
+        assertFalse(SourceFilter.shouldShowFilterRow(totalSongs = 0, biliEnabled = true))
+        assertFalse(SourceFilter.shouldShowFilterRow(totalSongs = 0, biliEnabled = false))
+    }
+
+    @Test
+    fun `可用档位多于一个才画筛选档`() {
+        // 当前实现下这条恒成立（关掉 B 站仍有双源/网易云/QQ 三档）。
+        // 它守的是**将来**：若某个版本只剩一档，画一排单选档位没有意义。
+        assertTrue(SourceFilter.visible(biliEnabled = false).size > 1)
+        assertTrue(SourceFilter.visible(biliEnabled = true).size > 1)
+    }
+
+    @Test
+    fun `空态分流 —— 本次搜索无结果 vs 当前筛选下无结果`() {
+        assertEquals(SearchEmptyKind.NO_RESULT, SourceFilter.emptyKind(totalSongs = 0, visibleSongs = 0))
+        assertEquals(SearchEmptyKind.FILTERED_OUT, SourceFilter.emptyKind(totalSongs = 30, visibleSongs = 0))
+        // 不空 ⇒ 没有空态。
+        assertEquals(null, SourceFilter.emptyKind(totalSongs = 30, visibleSongs = 30))
+        assertEquals(null, SourceFilter.emptyKind(totalSongs = 30, visibleSongs = 2))
+    }
+
+    @Test
+    fun `筛选为空的文案必须指名当前档位 且与无结果文案不同`() {
+        val filtered = SourceFilter.BILIBILI.emptyText(zhCN)
+        val noResult = zhCN.searchSongsEmpty
+        assertNotEquals("两个空态必须是两句不同的话", noResult, filtered)
+        // 指名档位（v3.2.0 定稿走 `searchFilterEmpty`，档位名由 `SourceFilter.label` 喂进去）。
+        assertTrue("应当含档位名：$filtered", filtered.contains(SourceFilter.BILIBILI.label(zhCN)))
+        // ⚠️ 不再断言「含 0 首」：那是 i18n 归口期间的占位拼接留下的形状，
+        // 而「0 首」读起来像统计行、与空态说明是两件事（见 `SourceFilter.emptyText` 的 KDoc）。
+        // 反过来钉住它**没有**退回统计行的形状。
+        assertTrue(
+            "空态不该退回「统计行」的形状：$filtered",
+            !filtered.contains(zhCN.searchSourceCount(0)),
+        )
+    }
+
+    @Test
+    fun `筛选为空的文案在 8 种语言下都不漏中文`() {
+        val filters = listOf(SourceFilter.ALL, SourceFilter.NETEASE, SourceFilter.QQMUSIC, SourceFilter.BILIBILI)
+        for ((tag, s) in listOf(
+            "zhCN" to zhCN,
+            "en" to en,
+            "deDE" to com.takahashirinta.ncrust.ui.i18n.deDE,
+            "jpJP" to com.takahashirinta.ncrust.ui.i18n.jpJP,
+            "jpMY" to com.takahashirinta.ncrust.ui.i18n.jpMY,
+            "koNK" to com.takahashirinta.ncrust.ui.i18n.koNK,
+            "ruRU" to com.takahashirinta.ncrust.ui.i18n.ruRU,
+            "zhTW" to com.takahashirinta.ncrust.ui.i18n.zhTW,
+        )) {
+            for (f in filters) {
+                val text = f.emptyText(s)
+                assertTrue("$tag/${f.name} 的文案不该为空", text.isNotBlank())
+                // 文案由两个**已本地化**的既有片段拼成 ⇒ 非中文语言下不该出现中文的「首」
+                // （zhTW 与 zhCN 同形，所以排除）。
+                if (tag != "zhCN" && tag != "zhTW") {
+                    assertFalse("$tag/${f.name} 漏了未翻译的中文片段：$text", text.contains("首"))
+                }
+            }
+        }
     }
 }

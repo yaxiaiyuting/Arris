@@ -89,6 +89,29 @@ data class SourceCounts(
         get() = qqStatus == SourceSearchStatus.TIMEOUT || qqStatus == SourceSearchStatus.ERROR
 
     /**
+     * v3.2.0 · P0-D：B 站这一轮超时或失败了。
+     *
+     * ## 为什么必须补这一条
+     *
+     * v3.1.0 只给 QQ 做了「超时/失败 ⇒ 给一条可点的重试」（[qqUnavailable]），
+     * 而 B 站那条腿当时**恒为 0 条**（P0-C：主线程阻塞 + 异常被吞），
+     * 它的 `biliStatus` 是 `DONE + 0` 而不是 `TIMEOUT` —— 于是「加一条重试出口」
+     * 这件事在 B 站上既没有被想到、也没有被触发过。修好 P0-C 之后，
+     * B 站会**第一次真的**出现 TIMEOUT / ERROR，那时候没有出口就是新的死角。
+     */
+    val biliUnavailable: Boolean
+        get() = biliStatus == SourceSearchStatus.TIMEOUT || biliStatus == SourceSearchStatus.ERROR
+
+    /**
+     * v3.2.0 · P0-D：**任何一个**源超时/失败 ⇒ 统计行给一条可点的重试。
+     *
+     * 判据取「或」而不是给 B 站再写一遍 UI 分支：用户对失败源的处置是同一个动作
+     * （点一下重查），文案也已经是逐源分开的（[neteaseText] / [qqText] / [biliText]）。
+     * 既有行为**逐字不变** —— `qqUnavailable ⇒ anyUnavailable` 恒成立。
+     */
+    val anyUnavailable: Boolean get() = qqUnavailable || biliUnavailable
+
+    /**
      * 统计行的文案。
      *
      * **两种形态，一个函数**：

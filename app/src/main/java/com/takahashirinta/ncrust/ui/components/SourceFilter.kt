@@ -77,5 +77,79 @@ enum class SourceFilter {
         /** 当前该显示哪几档（顺序固定 = 声明顺序）。 */
         fun visible(biliEnabled: Boolean): List<SourceFilter> =
             values().filter { it.visibleIn(biliEnabled) }
+
+        // ------------------------------------------------------------------ v3.2.0 · P0-D ----
+
+        /**
+         * 筛选档**该不该挂载**（v3.2.0 · P0-D）。**纯函数**，有单测。
+         *
+         * ## 这条判据修的是什么（P0-D 的根因）
+         *
+         * 旧代码把筛选档画在结果 `LazyColumn` 的**第一个 item** 里
+         * （`SearchScreen.kt` 的 `if (songs.isNotEmpty()) item(key = "source-filter")`），
+         * 而整条 `LazyColumn` 又被 `if (visibleSongs.isEmpty() && !isLoading)` 挡着。
+         * 于是用户点「只看 B 站」之后，只要这一轮没有 B 站的行：
+         * `visibleSongs` 空 ⇒ 整条列表（连筛选档一起）被换成空态 Box
+         * ⇒ **筛选档自己消失，没有任何路径点回「双源」** ⇒ 用户描述为「卡死 / 无法退出」。
+         *
+         * 判据的错在**因果颠倒**：用「筛选后的结果」决定「筛选档自己的可见性」，
+         * 等于让筛选档在它最该出现的那一刻消失。
+         *
+         * ## 正确的判据
+         *
+         * 只有一条：**这一轮有没有可筛的东西**（`totalSongs > 0`）**且**可用档位多于一个。
+         *
+         * - 刻意**不看** `visibleSongs`：筛选后为空 ⇒ 筛选档必须还在（这一条就是本 P0）；
+         * - 刻意**不看** `isLoading`：加载中切筛选是合法的（纯本地操作，不发请求，
+         *   见 [SourceFilter] 的类文档），所以加载中也要能看见它；
+         * - `totalSongs == 0` 时不画：一排点下去只会得到另一个空列表的档位是在误导用户，
+         *   此时由空态文案负责说明（见 [emptyKind] 与 [emptyText]）。
+         *
+         * @param totalSongs 本轮搜索的**总**条数（筛选前）。
+         * @param biliEnabled B 站音源开关（关掉时那一档不出现，见 [visibleIn]）。
+         */
+        fun shouldShowFilterRow(totalSongs: Int, biliEnabled: Boolean): Boolean =
+            totalSongs > 0 && visible(biliEnabled).size > 1
+
+        /**
+         * 空态属于哪一类（v3.2.0 · P0-D）。**纯函数**，`null` = 不空。
+         *
+         * 「本次搜索没有结果」与「当前筛选下没有结果」是两句不同的话 ——
+         * 旧代码两处都渲染 `strings.searchSongsEmpty`，于是被筛选档「坑」了之后，
+         * 用户看到的是一句与他的动作无关的提示（[SourceFilter] 的 KDoc 把 `emptyHint`
+         * 写成过承诺，但那条字符串**从未存在过**；这里先把它变成一个可单测的判据，
+         * 文案的 i18n key 见 v3.2.0 交付报告）。
+         *
+         * @param totalSongs 筛选前的总条数。
+         * @param visibleSongs 筛选后的条数。
+         */
+        fun emptyKind(totalSongs: Int, visibleSongs: Int): SearchEmptyKind? = when {
+            visibleSongs > 0 -> null
+            totalSongs == 0 -> SearchEmptyKind.NO_RESULT
+            else -> SearchEmptyKind.FILTERED_OUT
+        }
     }
+
+    /**
+     * 「筛选后为空」的诚实文案（v3.2.0 · P0-D）。
+     *
+     * v3.2.0 定稿：走 `SourceStrings.searchFilterEmpty`（8 语言逐条写好，
+     * 由 `StringsConstructorBudgetTest` 的组预算与 `StringsMigrationTest` 的组规模守着）。
+     *
+     * ⚠️ 这里**曾经**是「`只看 B 站` · `0 首`」两个既有字符串的拼接 —— 那是 i18n 归口期间的
+     * 临时占位（没有裸中文字面量，所以 8 语言不漏翻）。定稿换掉它的理由是：拼接出来的
+     * 「0 首」读起来像**统计行**，而这一句是**空态说明**，两者在同一屏上会让人以为筛选没生效。
+     */
+    fun emptyText(strings: Strings): String = strings.searchFilterEmpty(label(strings))
+}
+
+/**
+ * 空态的种类（v3.2.0 · P0-D）。判据在 [SourceFilter.emptyKind]，UI 只负责按它画。
+ */
+enum class SearchEmptyKind {
+    /** 这一轮真的什么都没搜到 —— 文案是「搜索歌曲」那一类。 */
+    NO_RESULT,
+
+    /** 搜到了东西，但当前筛选档下没有 —— 文案必须**指名当前档位**，否则用户不知道发生了什么。 */
+    FILTERED_OUT,
 }

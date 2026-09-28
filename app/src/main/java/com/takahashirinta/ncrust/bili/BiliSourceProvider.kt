@@ -62,21 +62,69 @@ object BiliSourceProvider : MusicSourceProvider {
     val isEnabled: Boolean get() = BiliPrefs.isEnabled()
 
     /**
+     * v3.2.0 · P0-C：失败隔离的**唯一**入口（替代原来散落的 `runCatching`）。
+     *
+     * ## 为什么 `runCatching` 在本版不能再用了（两条硬理由）
+     *
+     * 1. **它把 `CancellationException` 当成失败一起吃掉。** v3.1.0 时无所谓 ——
+     *    `BiliApi` 全是同步阻塞调用，整条腿没有挂起点，取消不会在里面发生。
+     *    但本版给 `BiliApi` 加了真挂起点（`withContext(Dispatchers.IO)`），取消从此会在
+     *    **这里**出现，而「取消是控制流不是错误」是本仓库 v2.5.5 就写下的纪律
+     *    （`SearchViewModel` 里那句「取消必须原样抛出，不能落进 `catch (e: Exception)`」）。
+     *    吞掉它的两个具体后果：① 用户每敲一个字（500ms debounce 后的 `searchJob.cancel()`）
+     *    都会打一条 "search failed" 的**假日志**；② 嵌套超时抛出的
+     *    `TimeoutCancellationException`（job 本身没被取消的那种）会被改写成「真的 0 条」——
+     *    那正是 v2.5.5 用一整版修出来的「PENDING/TIMEOUT 不许显示成 DONE+0」的同一件事。
+     * 2. **B 站每一次失败都必须有日志。** v3.1.0 的 P0-C 就是「异常被吞、用户只看到 B站 0 首、
+     *    连一行错误都没有」：`BiliApi.wbiKeys` 的 `runCatching` 把主线程网络异常折叠成了 null。
+     *    这里显式记 `Log.w`，让下一次同类问题在 logcat 里就能定位。
+     *
+     * ⚠️ 如实说明：Kotlin 的 `runCatching` 是 `inline` 的，所以「在 suspend 函数里包一个
+     * suspend 调用」其实**编译得过**（本文件原来就是这么写的）。也就是说第 1 条不是编译问题，
+     * 而是**语义**问题 —— 判据不能建立在「刚好能编译」的形状上。
+     *
+     * 契约不变（[MusicSourceProvider]）：**绝不把异常抛给调用方**（取消除外）。
+     * 每一步也都仍然**有界**：这里的 try/catch 不引入任何重试，
+     * 重试次数只由 `BiliQuality.fallbackLadder`（≤ 4 档）与 `BiliApi.signedGet`
+     * 的「412/-403 只重签一次」决定（铁律 5）。
+     */
+    private suspend inline fun <T : Any> biliOrNull(tag: String, block: () -> T?): T? = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, tag, e)
+        null
+    }
+
+    /** 同 [biliOrNull]，失败时给一张空表（列表类接口专用）。 */
+    private suspend inline fun <T : Any> biliOrEmpty(tag: String, block: () -> List<T>): List<T> = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, tag, e)
+        emptyList()
+    }
+
+    /**
      * 搜索。
      *
      * 两条路径，按**关键词的形状**分派（这是音频区唯一可达的入口）：
      * 1. 关键词是 `au123456` 或含 `bilibili.com/audio/au123456` 的链接 ⇒ 直接按 auid 取详情；
      * 2. 其余 ⇒ Wbi 签名的视频搜索。
+     *
+     * ⚠️ 开关判据**必须是第一行**（铁律 24）：关掉时一个请求都不发 ——
+     * v3.2.0 把调度挪进 `BiliApi` 之后，这条顺序**一个字没动**，
+     * 由 `BiliSourceProviderTest.关掉开关之后一个请求都不发 —— 搜索返回空` 继续守着。
      */
     override suspend fun searchSongs(keyword: String, limit: Int): List<SongItem> {
         if (!isEnabled || keyword.isBlank() || limit <= 0) return emptyList()
         parseAuidKeyword(keyword)?.let { auid ->
-            val track = runCatching { BiliApi.audioInfo(auid) }.getOrNull()
+            val track = biliOrNull("audio info failed: auid=$auid") { BiliApi.audioInfo(auid) }
             return listOfNotNull(track?.toSongItem())
         }
-        return runCatching { BiliApi.searchVideos(keyword, limit) }
-            .onFailure { Log.w(TAG, "search failed: $keyword", it) }
-            .getOrDefault(emptyList())
+        return biliOrEmpty("search failed: $keyword") { BiliApi.searchVideos(keyword, limit) }
             .mapNotNull { it.toSongItem() }
     }
 
@@ -98,7 +146,9 @@ object BiliSourceProvider : MusicSourceProvider {
         if (payload.isAudioZone) {
             val auid = payload.auid!!
             for (qn in ladder) {
-                val stream = runCatching { BiliApi.audioStream(auid, qn.qn) }.getOrNull() ?: continue
+                val stream = biliOrNull("audio stream failed: auid=$auid qn=${qn.qn}") {
+                    BiliApi.audioStream(auid, qn.qn)
+                } ?: continue
                 return stream.toResult(qn)
             }
             Log.w(TAG, "audio zone gave no stream: auid=$auid level=$level")
@@ -106,12 +156,14 @@ object BiliSourceProvider : MusicSourceProvider {
         }
         // 视频音轨：cid 可能已经在载荷里（预载时带下来的），没有就问一次。
         val bvid = payload.bvid ?: return null
-        val cid = payload.cid ?: runCatching { BiliApi.videoCid(bvid) }.getOrNull()
+        val cid = payload.cid ?: biliOrNull("view failed: bvid=$bvid") { BiliApi.videoCid(bvid) }
         if (cid == null || cid <= 0L) {
             Log.w(TAG, "no cid for bvid=$bvid")
             return null
         }
-        val stream = runCatching { BiliApi.videoAudioStream(bvid, cid) }.getOrNull() ?: return null
+        val stream = biliOrNull("playurl failed: bvid=$bvid cid=$cid") {
+            BiliApi.videoAudioStream(bvid, cid)
+        } ?: return null
         return stream.toResult(null)
     }
 
@@ -127,7 +179,7 @@ object BiliSourceProvider : MusicSourceProvider {
         val payload = BiliTrack.parseSourceId(song.sourceId) ?: return null
         if (!payload.isAudioZone) return song
         val auid = payload.auid!!
-        val track = runCatching { BiliApi.audioInfo(auid) }.getOrNull() ?: return null
+        val track = biliOrNull("audio info failed: auid=$auid") { BiliApi.audioInfo(auid) } ?: return null
         return track.toSongItem()
     }
 
@@ -159,7 +211,7 @@ object BiliSourceProvider : MusicSourceProvider {
         // 会解析出 0 行 ⇒ 界面永远「暂无歌词」，而且不报任何错。
         // 证据：`docs/verification/v3.1.0/bili-research/evidence/02-songinfo-au39.txt`
         // 与 `21-lyric-au39.txt`（后者是 `/song/lyric` 的真实正文）。
-        val raw = runCatching { BiliApi.audioLyric(payload.auid!!) }.getOrNull()
+        val raw = biliOrNull("lyric failed: auid=${payload.auid}") { BiliApi.audioLyric(payload.auid!!) }
         if (raw == null) return null
         // 个别曲目服务端在 `data` 里给的是 .lrc 的 URL。**不在取词路径上再发一次网络**：
         // 那会把一次播放变成两次往返，而且失败面还多一个。如实返回 null（没有可解析的正文），

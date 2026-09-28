@@ -11,6 +11,9 @@
 package com.takahashirinta.ncrust.bili
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -62,6 +65,40 @@ import java.util.concurrent.TimeUnit
  * `/x/web-interface/wbi/search/type` 不带签名时返回 **HTTP 412**（实测），
  * 所以签名是必需的，实现在 [BiliWbi]。密钥来自 `nav` 的 `wbi_img`，
  * 服务端每天轮换 ⇒ 本类按 [WBI_KEY_TTL_MS] 缓存，并在 412 / -403 时**强制刷新一次**。
+ *
+ * ## ⚠️ v3.2.0 · P0-C：**每一个对外方法都是 `suspend`，且内部换到 [Dispatchers.IO]**
+ *
+ * 这一条修的是一个**只有真机才暴露**的缺陷（v3.1.0 的 P0-C「B 站搜不到歌」）：
+ *
+ * - v3.1.0 的对外方法全是普通函数，内部 `client.newCall(request).execute()`（同步阻塞）；
+ * - 而它们的调用点有**至少三处落在主线程上**：
+ *   `SearchViewModel.searchByType`（`viewModelScope` = `Dispatchers.Main.immediate` 里的 `async`）、
+ *   `PlayerViewModel.startAuxiliaryLoad`（`viewModelScope.launch`，无 dispatcher）、
+ *   `PlaybackService.onAddMediaItems`（`scope = Dispatchers.Main + SupervisorJob()`）；
+ * - Android 对 `targetSdk >= 11` 的进程在主线程上启用 `StrictMode.enableDeathOnNetwork()` ⇒
+ *   主线程上任何 socket 操作直接抛 `NetworkOnMainThreadException`。
+ *   而 [wbiKeys] 里那句 `runCatching { get(NAV_URL) }.getOrNull()` 会把它**静默吞掉**，
+ *   于是表现为「B站 0 首、无任何错误」——一个不会报错、只会静默失效的实现。
+ *
+ * ### 为什么是「改 suspend + 内部 `withContext(IO)`」，而不是别的三种做法
+ *
+ * | 方案 | 为什么不行 |
+ * |---|---|
+ * | 在**调用点**各自 `withContext(IO)` | 调用点有 9 处以上（见 `probe-bili-search.md` §4 的矩阵），**漏一处就复发**；本 P0 的成因正是「有一个调用点没想到」 |
+ * | 保持普通函数，内部 `runBlocking { withContext(IO) }` | **照样阻塞调用线程**，主线程上还会把事件循环一起卡住（`runBlocking` 在主线程上跑自己的事件循环，但调用它的那一帧仍然被占住）|
+ * | 新加一套 `…Async()` 方法 | 同一个能力有两条路 = 两条路都要维护，且旧的那条永远有人调 |
+ *
+ * 改成 `suspend` 之后有两条**结构性**收益：① 阻塞的那段代码物理上只存在于
+ * `withContext(Dispatchers.IO)` 的块里，任何调用者（包括现在写错的、将来新写的）
+ * 都不可能让它跑在主线程上；② 编译器会把**每一个**调用点都指出来（含 androidTest 探针），
+ * 「忘了改调用点」不可能悄悄通过。
+ *
+ * ### 取消语义（与调度同源的一条）
+ *
+ * 换线程之后，`withContext` 是一个**真的挂起点** ⇒ 调用方（`withTimeoutOrNull(4000)`、
+ * `searchJob.cancel()`）的取消终于能生效。所以每个 `catch` 都必须**原样抛出**
+ * [CancellationException]，否则「超时」会被吞成「真的 0 条」——
+ * 那正是 v2.5.5 花了一整版修出来的「PENDING/TIMEOUT 不能显示成 DONE+0」的同一件事。
  */
 object BiliApi {
 
@@ -131,12 +168,32 @@ object BiliApi {
      * 但**没有** `CookieInterceptor`、**没有** `eventListenerFactory`（B 站的耗时不在本版
      * 的性能结论里，少一个观测点就少一份开销）。
      */
-    private val client: OkHttpClient by lazy {
+    private val realClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
+
+    /**
+     * 只给单测/探针：换掉传输层（默认 `null` = 真的 OkHttp）。
+     *
+     * ## 为什么需要它，而不是「测不动就不测」
+     *
+     * P0-C 的判据是「**阻塞的那段代码不在调用线程上跑**」。这件事只有两种验证方式：
+     * ① 源码扫描（断言 `suspend` + `withContext(Dispatchers.IO)` 的形状）；
+     * ② **行为**验证 —— 注入一个什么都不做的假传输层，记录它被调用时所在的线程名。
+     *
+     * ② 比 ① 强，因为它测的是「真的换线程了」而不是「代码长成那个样子」，
+     * 而且完全离线（假传输层直接返回罐头响应，不发一个字节）。所以留这个口子。
+     *
+     * 与 [clearWbiKeysForTest] / [clearBuvidForTest] 同一类：**只给单测**，
+     * 生产代码里没有任何写入点（`clientForTest` 只在 `app/src/test` 与 `app/src/androidTest` 里被赋值）。
+     */
+    @Volatile
+    internal var clientForTest: OkHttpClient? = null
+
+    private val client: OkHttpClient get() = clientForTest ?: realClient
 
     // ---------------------------------------------------------------- wbi 密钥缓存 ----
 
@@ -157,12 +214,27 @@ object BiliApi {
     /**
      * 拿一份可用的 `(img_url, sub_url)`。
      *
+     * ⚠️ **只能在 `withContext(Dispatchers.IO)` 的块里调用**（v3.2.0 · P0-C）——
+     * 它会走一次真实网络（[get]）。本类的每一个对外方法都已经这样包好了，
+     * 新增调用点时请照抄那七处的形状。
+     *
      * @param force 忽略 TTL 强制刷新（412 / -403 之后调用一次）。
      */
     private fun wbiKeys(force: Boolean = false): Pair<String, String>? {
         val fresh = System.currentTimeMillis() - wbiFetchedAtMs < WBI_KEY_TTL_MS
         if (!force && fresh && hasWbiKeys()) return wbiImgUrl!! to wbiSubUrl!!
-        val body = runCatching { get(NAV_URL) }.getOrNull() ?: return null
+        // ⚠️ v3.2.0 · P0-C：这里的 `runCatching` 是 v3.1.0「B站 0 首」的最后一环 ——
+        // 它把「主线程不允许做网络」的 NetworkOnMainThreadException 与「nav 没给 wbi_img」
+        // 折叠成同一个 null，调用方再也看不出区别。现在调度已经在 [withContext] 里解决，
+        // 这里**保留**兜底（契约是绝不抛），但把异常**打出来**而不是无声吞掉。
+        val body = try {
+            get(NAV_URL)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "nav 请求失败（拿不到 wbi 密钥，本轮搜索不会发出）", e)
+            return null
+        }
         val keys = BiliParse.parseNavWbiKeys(body)
         if (keys == null) {
             Log.w(TAG, "nav 没有返回 wbi_img（响应长度=${body.length}）")
@@ -177,16 +249,33 @@ object BiliApi {
 
     // ---------------------------------------------------------------- 基础请求 ----
 
+    /**
+     * 一次同步 GET。
+     *
+     * ⚠️ **只能在 `withContext(Dispatchers.IO)` 的块里调用**（v3.2.0 · P0-C）：
+     * `execute()` 是**同步阻塞**的，落在主线程上会被 Android 的
+     * `StrictMode.enableDeathOnNetwork()` 直接拒绝（`NetworkOnMainThreadException`）。
+     * 它是 `private` 的，就是为了让「谁在什么线程上调它」在本文件里一眼看完。
+     */
     private fun get(url: String, cookie: String? = null): String {
+        // v3.2.0 · P1：**登录之后每一个 B 站请求都带上 SESSDATA**。
+        // 这是登录唯一有意义的落点 —— 音频区取流按身份给档位（大会员才有 FLAC），
+        // 收藏夹/投币那类端点按身份返回。凭据来自 `BiliAuthStore` 的进程内镜像，
+        // 而镜像为空（未登录 / 未 init）时 `requestCookieHeader()` 返回 null ⇒
+        // 这条链路的**匿名行为与 v3.1.0 逐字一致**（一个 Cookie 都不带）。
+        val cookieHeader = BiliAuthStore.mergeCookieHeaders(
+            BiliAuthStore.requestCookieHeader(),
+            cookie?.takeIf { it.isNotBlank() }?.let { "buvid3=$it" },
+        )
         val builder = Request.Builder()
             .url(url)
             .get()
             .header("User-Agent", UA)
             .header("Referer", REFERER)
             .header("Origin", "https://www.bilibili.com")
-        // 只有旧版 playurl 需要指纹 Cookie（见 [buvid3]）；其余请求一个 Cookie 都不带 ——
-        // B 站音源在本版**没有登录态**，带上一个孤立的指纹只会让指纹在不同接口间不一致。
-        if (!cookie.isNullOrBlank()) builder.header("Cookie", "buvid3=$cookie")
+        // 只有旧版 playurl 需要指纹 Cookie（见 [buvid3]）；匿名时其余请求一个 Cookie 都不带 ——
+        // 带上一个孤立的指纹只会让指纹在不同接口间不一致。
+        if (cookieHeader != null) builder.header("Cookie", cookieHeader)
         val request = builder.build()
         client.newCall(request).execute().use { resp ->
             // 失败也要把正文带出去：B 站的错误是**结构化**的（`code` 字段），
@@ -208,7 +297,58 @@ object BiliApi {
         }
     }
 
-    /** 带 wbi 签名的 GET；遇到 412 / -403 时**强制刷新一次密钥**再试一遍（失败处理有界：只重试一次）。 */
+    // ---------------------------------------------------------------- 原始应答（v3.2.0 · P1） ----
+
+    /**
+     * 一次 GET 的原始应答。**存在的唯一理由：扫码登录要读 `Set-Cookie`。**
+     *
+     * 轮询 `passport.bilibili.com/x/passport-login/web/qrcode/poll` 成功时，凭据在
+     * **响应头**里（`Set-Cookie: SESSDATA=…`），而 [get] 只返回正文 —— 那不是"再解析一次"
+     * 能补上的信息，headers 在 `resp.body.string()` 之后就没了。所以这里把三样一起带出来。
+     */
+    internal data class BiliRawResponse(
+        val httpCode: Int,
+        val body: String,
+        /** 全部 `Set-Cookie` 头的原样文本（**没有**预先拆分/解码，见 `BiliAuthApi.credentialFromSetCookie`）。 */
+        val setCookies: List<String>,
+    )
+
+    /**
+     * 带**完整 Cookie 头**的 GET（v3.2.0 · P1 · 只给 `BiliAuthApi` 的扫码登录用）。
+     *
+     * 与 [get] 的区别只有两点，其余（独立 client / UA / Referer / Origin / 超时）**逐字相同** ——
+     * 复用同一个 `client` 是硬要求：v3.1.0 实测「拿网易云 Referer 请求 B 站 ⇒ 403」，
+     * 再建第二个 client 就是把那条已被证伪的路又铺一遍。
+     *
+     * @param cookieHeader 直接写进 `Cookie` 头的整串文本（`SESSDATA=…; bili_jct=…`）。
+     *   为 null 时**一个 Cookie 都不带**。
+     *
+     * ⚠️ 与 [get] 的一处**有意的**不同：本方法**不注入登录态镜像**。扫码登录自己就是在
+     * 建立一份新身份，把旧的 `SESSDATA` 发给 `passport.bilibili.com` 只会多一个泄露面，
+     * 而且换账号登录时旧身份根本不适用。业务请求（搜索/取流/歌词/详情）走 [get]，那里才注入。
+     */
+    internal suspend fun getRaw(url: String, cookieHeader: String? = null): BiliRawResponse =
+        withContext(Dispatchers.IO) {
+            val builder = Request.Builder()
+                .url(url)
+                .get()
+                .header("User-Agent", UA)
+                .header("Referer", REFERER)
+                .header("Origin", "https://www.bilibili.com")
+            if (!cookieHeader.isNullOrBlank()) builder.header("Cookie", cookieHeader)
+            client.newCall(builder.build()).execute().use { resp ->
+                BiliRawResponse(
+                    httpCode = resp.code,
+                    body = resp.body?.string().orEmpty(),
+                    // 只把 `Set-Cookie` 挑出来：其它头（bili-trace-id 之类）与凭据无关。
+                    setCookies = resp.headers.values("Set-Cookie"),
+                )
+            }
+        }
+
+    /** 带 wbi 签名的 GET；遇到 412 / -403 时**强制刷新一次密钥**再试一遍（失败处理有界：只重试一次）。
+     *
+     * ⚠️ **只能在 `withContext(Dispatchers.IO)` 的块里调用**（同 [get] 的理由）。 */
     private fun signedGet(baseUrl: String, params: Map<String, String>): String {
         fun attempt(force: Boolean): String {
             val keys = wbiKeys(force) ?: return ""
@@ -271,10 +411,24 @@ object BiliApi {
      * @return LRC 正文；服务端没有这份数据时返回 **null**（「没有这个数据源」），
      *   有但为空时返回**空串**（「这首歌确实没有歌词」）—— 这个两义性与
      *   `LyricLoadCoordinator.State` 的 Empty / Error 之分是同一条纪律。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（见类文档）。
+     * 播放链的取词入口（`PlayerViewModel.startAuxiliaryLoad`）就在主线程上，
+     * 这条曾经是 P0-C 的第二个落点。
      */
-    fun audioLyric(auid: Long): String? {
+    suspend fun audioLyric(auid: Long): String? {
         if (auid <= 0L) return null
-        val body = runCatching { get("$AUDIO_LYRIC_URL?sid=$auid") }.getOrNull() ?: return null
+        val body = withContext(Dispatchers.IO) {
+            try {
+                get("$AUDIO_LYRIC_URL?sid=$auid")
+            } catch (e: CancellationException) {
+                // 取消是控制流不是失败：吞掉它会让「超时」显示成「这首歌没有歌词」。
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "lyric failed: $auid", e)
+                null
+            }
+        } ?: return null
         return BiliParse.parseAudioLyric(body)
     }
 
@@ -285,8 +439,13 @@ object BiliApi {
      *
      * @param limit 期望条数。服务端一页最多 20/50，这里按 `page_size` 请求并按 [limit] 截断。
      *   只取**第一页** —— 本应用是「聚合搜索的一个补充源」，翻页不在本版范围内。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]。
+     * 这是 P0-C 的**主犯**：v3.1.0 里它在 `SearchViewModel` 的 `Main.immediate` 作用域里被
+     * **内联启动**，于是 `execute()` 直接在主线程上抛 `NetworkOnMainThreadException`，
+     * 而异常被下面的 catch 吞成 `emptyList()` ⇒ 用户看到「B站 0 首」且没有任何错误。
      */
-    fun searchVideos(keyword: String, limit: Int): List<BiliTrack> {
+    suspend fun searchVideos(keyword: String, limit: Int): List<BiliTrack> {
         if (keyword.isBlank() || limit <= 0) return emptyList()
         val params = mapOf(
             "search_type" to "video",
@@ -294,25 +453,40 @@ object BiliApi {
             "page" to "1",
             "page_size" to limit.coerceIn(1, 50).toString(),
         )
-        return try {
-            val body = signedGet(SEARCH_URL, params)
-            val tracks = BiliParse.parseSearchTracks(body, limit)
-            Log.i(TAG, "search '$keyword' -> ${tracks.size} 条（正文长度=${body.length}）")
-            tracks
-        } catch (e: Exception) {
-            // 契约（MusicSourceProvider）：**绝不抛给调用方**。B 站挂掉不该让聚合搜索失败。
-            Log.w(TAG, "search failed: $keyword", e)
-            emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                val body = signedGet(SEARCH_URL, params)
+                val tracks = BiliParse.parseSearchTracks(body, limit)
+                Log.i(TAG, "search '$keyword' -> ${tracks.size} 条（正文长度=${body.length}）")
+                tracks
+            } catch (e: CancellationException) {
+                // ⚠️ 必须原样抛出：`withTimeoutOrNull(BILI_SEARCH_BUDGET_MS)` 的取消
+                // 一旦被吞成 `emptyList()`，「超时」就会被记成「真的 0 条」——
+                // 那正是 v2.5.5 修掉的「PENDING 被写成 DONE+0」的同一个形状。
+                throw e
+            } catch (e: Exception) {
+                // 契约（MusicSourceProvider）：**绝不抛给调用方**。B 站挂掉不该让聚合搜索失败。
+                Log.w(TAG, "search failed: $keyword", e)
+                emptyList()
+            }
         }
     }
 
     // ---------------------------------------------------------------- 视频音轨 ----
 
-    /** `cid`（`playurl` 必需）。搜索结果里没有这个字段，要单独问一次 `view`。 */
-    fun videoCid(bvid: String): Long? =
-        runCatching { BiliParse.parseCid(get("$VIEW_URL?bvid=$bvid")) }
-            .onFailure { Log.w(TAG, "view failed: $bvid", it) }
-            .getOrNull()
+    /** `cid`（`playurl` 必需）。搜索结果里没有这个字段，要单独问一次 `view`。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（车机点播路径曾在主线程上调它）。 */
+    suspend fun videoCid(bvid: String): Long? = withContext(Dispatchers.IO) {
+        try {
+            BiliParse.parseCid(get("$VIEW_URL?bvid=$bvid"))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "view failed: $bvid", e)
+            null
+        }
+    }
 
     /**
      * 视频的**音频**流（DASH）。只取 `dash.audio[]`，永不取 `dash.video[]`。
@@ -320,27 +494,43 @@ object BiliApi {
      * `fnval=4048` = 请求 DASH + 一组特性位（见 [PLAYURL_FNVAL]，实测过的那个取值）；
      * `fourk=1` 与画质无关（音轨只需要它不拒绝请求）。
      * **还要带匿名指纹**（[buvid3]）：实测这条旧路径不带 `buvid3` 会回 412。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（见类文档的矩阵）。
      */
-    fun videoAudioStream(bvid: String, cid: Long): BiliStream? {
+    suspend fun videoAudioStream(bvid: String, cid: Long): BiliStream? {
         if (bvid.isBlank() || cid <= 0L) return null
         // **普通 GET，不签名**，但要带匿名指纹 —— 见 [PLAYURL_URL] 与 [buvid3] 的实测说明。
-        return try {
-            val body = get(playUrlFor(bvid, cid), cookie = buvid3())
-            BiliParse.parseDashAudio(body)
-        } catch (e: Exception) {
-            Log.w(TAG, "playurl failed: $bvid/$cid", e)
-            null
+        return withContext(Dispatchers.IO) {
+            try {
+                val body = get(playUrlFor(bvid, cid), cookie = buvid3())
+                BiliParse.parseDashAudio(body)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "playurl failed: $bvid/$cid", e)
+                null
+            }
         }
     }
 
     // ---------------------------------------------------------------- 音频区 ----
 
-    /** 音频区曲目详情（含 **LRC 歌词**）。失败/下架返回 null。 */
-    fun audioInfo(auid: Long): BiliTrack? {
+    /** 音频区曲目详情（含 **LRC 歌词**）。失败/下架返回 null。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（`au<auid>` 关键词搜索与
+     * `songDetail` 都会走到它）。 */
+    suspend fun audioInfo(auid: Long): BiliTrack? {
         if (auid <= 0L) return null
-        return runCatching { BiliParse.parseAudioInfo(get("$AUDIO_INFO_URL?sid=$auid")) }
-            .onFailure { Log.w(TAG, "audio info failed: $auid", it) }
-            .getOrNull()
+        return withContext(Dispatchers.IO) {
+            try {
+                BiliParse.parseAudioInfo(get("$AUDIO_INFO_URL?sid=$auid"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "audio info failed: $auid", e)
+                null
+            }
+        }
     }
 
     /**
@@ -354,12 +544,21 @@ object BiliApi {
      * 且 qn=3 会被服务端**静默降级**成 320K —— 这种降级由
      * `SongUrlResult.levelFromFile = true` 如实标出来（角标显示「已降级」），
      * 而不是按请求档位自欺。
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（见类文档的矩阵）。
      */
-    fun audioStream(auid: Long, qn: Int): BiliStream? {
+    suspend fun audioStream(auid: Long, qn: Int): BiliStream? {
         if (auid <= 0L) return null
-        return runCatching { BiliParse.parseAudioStream(get(audioUrlFor(auid, qn))) }
-            .onFailure { Log.w(TAG, "audio url failed: $auid qn=$qn", it) }
-            .getOrNull()
+        return withContext(Dispatchers.IO) {
+            try {
+                BiliParse.parseAudioStream(get(audioUrlFor(auid, qn)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "audio url failed: $auid qn=$qn", e)
+                null
+            }
+        }
     }
 
     /**
@@ -394,12 +593,21 @@ object BiliApi {
      *
      * 取不到时返回 null，请求照发（由服务端回 412）—— 那样失败是**可见的**；
      * 在这里静默放弃只会让「视频音轨放不出来」变成一个没有线索的现象。
+     *
+     * ⚠️ **只能在 `withContext(Dispatchers.IO)` 的块里调用**（v3.2.0 · P0-C，同 [get]）。
      */
     @Volatile private var buvid3: String? = null
 
     private fun buvid3(): String? {
         buvid3?.let { return it }
-        val body = runCatching { get(FINGER_URL) }.getOrNull() ?: return null
+        val body = try {
+            get(FINGER_URL)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "finger failed", e)
+            return null
+        }
         val value = runCatching {
             org.json.JSONObject(body).optJSONObject("data")?.optString("b_3")
         }.getOrNull()?.takeIf { it.isNotBlank() } ?: return null
@@ -413,6 +621,16 @@ object BiliApi {
         buvid3 = null
     }
 
-    /** 只给诊断用：B 站是否可达（一次极轻量的 nav 请求）。**不在任何热路径上。** */
-    fun probeReachable(): Boolean = runCatching { get(NAV_URL).isNotBlank() }.getOrDefault(false)
+    /** 只给诊断用：B 站是否可达（一次极轻量的 nav 请求）。**不在任何热路径上。**
+     *
+     * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]。 */
+    suspend fun probeReachable(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            get(NAV_URL).isNotBlank()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
