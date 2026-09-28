@@ -4883,3 +4883,60 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
   （9092 code unit / 191 寄存器 / 45MB 编译）与 A 项的不变量收紧，不是实验结论。
 - **`MainScreen` 等 4 个仍超阈值的方法未处理**（范围外）。
 - **宽屏两栏 / 大屏模式的真机 A/B 快照**：见 `docs/verification/v3.2.1/EQUIVALENCE.md` 的采集范围与已知限制。
+
+## v3.2.2 新增（本 fork · 波形条改造为频段曲线：连续曲线 + 主导频段着色）
+
+### 4 条新铁律（**本版起是硬约束**）
+
+| # | 铁律 | 为什么是硬的（本版的实测依据） |
+|---|---|---|
+| **28** | **波形是每帧更新的组件，任何改动必须异常隔离，release 包验证帧时间。** | 探针 §2.1 查到这条链路上**只有音频线程那一段有隔离**（`TransparentWaveformSink.handleBuffer` 的 `catch (Throwable)`，三条单测钉住），**渲染/绘制这一段一处兜底都没有**；而 `PlayerCard.kt` 明确写了「@Composable 里不再包 try/catch（会破坏重组语义）」。所以本版把隔离补在**另外两层**：组合期的 HCT 三角色计算（`BandColorRoles.paletteFor` 自带 try/catch，退路是三色合一）、draw 期的一帧绘制（`ui/player/waveform/WaveformIsolation.kt` 的 `isolateFrame` —— **`Canvas { }` 的 lambda 是 draw 阶段执行的普通 lambda，不是 @Composable 作用域**，try/catch 不碰那条禁忌）。失败语义：丢这一帧、不向上抛、不重试、计数留痕（`WaveformStore.droppedCurveFrames()`）。**帧时间只认 release 包**（铁律 16），见 `docs/verification/v3.2.2/probe-perf-tier.md`。 |
+| **29** | **音频特征提取不得新增每帧计算，必须复用 `AudioFeatureExtractor` 现有输出。** | 主导频段的三个输入 `low/mid/high` 本来就是音频线程**每缓冲算一次**的既有产物（探针 §2.2：一阶低通 150Hz/2kHz，真机实测缓冲 100ms / 11.0–11.5 Hz），UI 侧只是读 `WaveformStore` 已发布的 volatile 标量。本版在**音频线程新增的代码是 0 行**：没有第二个环、没有 FFT、没有新增逐样本运算。判定与平滑全部落在 UI 侧，且零分配（标量 + `remember` 的数组）。注意链路的**开关前提**：频带着色开着时 `MotionEffects.needsAudioFeatures` 必须为真，否则特征根本不会被发布（`BandColoringGatingTest` 有守卫）。 |
+| **30** | **颜色切换必须有防闪烁机制（平滑 + 滞回），不得硬切。** | 探针 §2.3 在 5 首真实歌曲（1219 秒）上量过：**裸 `argmax` 的切换频率是 1.258 次/秒**（电子乐 2.009），把缓冲粒度换成现代设备的 23ms 是 **4.260 次/秒** —— 远超「> 3 次/秒 = 不合格」的线，观感就是频闪。三级防闪缺一不可：**EMA τ=300ms**（1.258→0.308）、**滞回 20%**（0.308→0.118）、**静音闸门 0.06**（→0.103，最短驻留 100ms→300ms）、**100ms 颜色过渡**（每帧最大色差 17.58→7.13）。另外两条被实测**否决**的做法也留档在探针里：smoothstep 缓动（8.13→9.33，更差）、过渡期间允许再切换（会制造 ΔE 8.13 的 pop）。 |
+| **31** | **曲线平滑不得过冲，不得出现负高度。** | 探针 §2.5 用 19055 帧真实波形 / 8 250 815 个采样点量了四种插值：**Catmull-Rom 在 224 帧里画出负高度**（4066 个采样点 —— 镜像丝带里「穿进自己的镜像」，视觉上是波形翻了一下）；「中心差分 + 圆条件」的朴素单调三次**仍在 70% 的帧里过冲 1.3%**。只有把**保号切线**与**圆条件**两条一起用上（PCHIP）才得到 0 过冲 / 0 负高度。落点：`ui/player/waveform/WaveformCurve.kt`（纯逻辑，JVM 直测），守卫用例 `WaveformCurveTest`（含 1000 组对抗性随机输入）。 |
+
+### 本版做了什么
+
+| 项 | 内容 |
+|---|---|
+| **P1 · 连续曲线** | 离散柱子（27 段）→ 一条**镜像丝带**：顶部包络 `centerY − h(x)`、底部 `centerY + h(x)`，各 27 段 `cubicTo` 后 `close()` ⇒ **每帧 1 笔 `drawPath` 填充**。`x` 控制点固定在 `1/3`、`2/3` ⇒ 横轴仍是时间且单调。半厚 `h_i = max(1dp, sqrt(柱值)×H)/2` 与 v2.8.0 的柱高**逐值同源**。 |
+| **P1 · 主导频段着色** | 颜色由「这一刻哪个频带主导」驱动，整条曲线一个颜色（不再是逐柱一色）。三级防闪 + 100ms 过渡，见铁律 30。 |
+| **P1 · HCT 三角色** | `ui/player/waveform/BandColorRoles.kt`：**中频 = 主题色本身**（实测中频占 0.66 的时间，把主题色给它，波形大多数时候仍是主题色）、低频 = secondary（hue+240°）、高频 = tertiary（hue+120°），彩度 48、tone 与主题色相同（只换色相与彩度、不换亮度）。实测最小 ΔE **10.1**；Material 的 a1/a2/a3 只有 **5.1**（36 个真实种子里 0 个达到"一眼分辨"）。 |
+| **P1 · 档位适配** | **三档都画曲线**；频段着色只在**精致档及以上**（复用既有 `waveBandMode` 门槛）。简洁档 = 单色曲线 + 时序淡出（水平 alpha 渐变，取代 v2.8.0 的逐柱 alpha 阶梯）。 |
+| **P1 · 界面律动联动** | **总闸（`ui_motion_enabled`）关掉 ⇒ 曲线仍绘制、颜色回落单一主题色**（与 `MotionEffects.of` 的 `refinedPlus` 一致）；**律动闸（`motion_rhythm_enabled`）不影响波形** —— 按仓库既有的可执行判据（是否读 `MotionClock.pulse()/level()`），频段着色的驱动量是三频带能量，不属于律动类。 |
+| **异常隔离** | 见铁律 28。另修掉探针 §2.2 发现的既有缺口：逐柱着色在降级路径（`available=false`）下把"测不到中高频"画成"全是低频"；本版**先读 `available`**，不可信时退回单色。 |
+| **无新增设置** | 零新键 / 零新迁移 / 零新文案（复用 `motion_wave_bands` + 档位）。守卫测试 `BandColoringGatingTest.不新增持久化键` 逐字钉住 `VisualizerPrefs` 的键集合与迁移水位。 |
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 曲线控制点（PCHIP，纯逻辑） | `ui/player/waveform/WaveformCurve.kt` |
+| 主导频段 + 防闪状态机（纯逻辑） | `ui/player/waveform/BandDominance.kt` |
+| HCT 三角色（纯逻辑） | `ui/player/waveform/BandColorRoles.kt` |
+| 渲染侧异常隔离 | `ui/player/waveform/WaveformIsolation.kt` |
+| 曲线绘制 + Brush 缓存 | `ui/player/AudioVisualizer.kt`（`drawWaveformCurve` / `RibbonBrushCache` / `WaveformStore.pump` 里的频段推进） |
+| 探针与证据 | `docs/verification/v3.2.2/`（六份探针 + PROBE-SUMMARY + EVIDENCE + `probe/` 原始 CSV/PNG） |
+| 探针图表渲染器 | `tools/probe-v322/render_charts.py`（只画像素、不算逻辑） |
+
+### 本版的两条**实测否决**（避免下一个人重做）
+
+- **smoothstep / ease-in-out 缓动让颜色过渡更差**：直觉是"起步太快所以闪"，实测 80ms 档的每帧最大色差
+  从 8.13 **涨到** 9.33 —— 缓动只是把斜率峰值从起步搬到中段，而中段恰好是 CAM16 空间里变化最快的区域。
+  真正有效的手段是**加长过渡**（0→40→80→100→120→400ms 对应 17.58→11.99→8.13→7.13→6.44→3.11）。
+- **"质心 / 占比"不是独立方案**：`argmax(low,mid,high)` 与 `argmax(low/S, mid/S, high/S)` 是同一个决策
+  （同一个正分母不改变大小顺序），任务书里的 a/b 两个候选实测**逐首完全相同**。
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **不加"曲线 ↔ 柱子"开关**：任务书的 P1 是**改造**而不是"多一个选项"；加开关会把渲染路径与真机验证矩阵翻倍。
+- **不修主题色本身的对比度**：探针实测有 5/36 个样本（如素白主题 + 浅色底 = 1.12）对比度不足，
+  其中素白浅色下**今天的单色波形同样看不见** —— 那是既有性质，不在本版范围（已在 PROBE-SUMMARY 留档）。
+- **不动华为 / 荣耀媒体卡片**（任务书明令）。
+- **不做 B站 CDN 取流验证、不做 B站 generate 60s 优化**（独立任务）。
+
+### 本版新增的未验证项（与交付报告一致，如实）
+
+- **PCL110（Android 16）未验证**：本轮该设备不在线（`adb devices` 只有 S6 与 API 33 模拟器）。
+  更细缓冲下的鲁棒性有 23ms 对照数据支撑，但没有该机型的观感与帧时间。
+- **三档观感的用户 A/B 数据**：只有真机截图与逐档帧时间，没有用户调研。
