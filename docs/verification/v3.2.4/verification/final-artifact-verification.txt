@@ -1,0 +1,17 @@
+=== v3.2.4-gpl 最终产物验证（2026-09-29T03:43:52+08:00）===
+APK sha256: 5b1061a597dd26970b91215be6f742573b760271645dda073070e2fb61b2f833
+设备: sdk_gphone64_x86_64 / API 33 / 60.000004Hz
+版本:     versionName=3.2.4-gpl
+
+--- PlaybackState（state=3 = PLAYING）---
+      state=PlaybackState {state=3, position=18083, buffered position=94389, speed=1.0, updated=33214710, actions=7339999, custom actions=[], active item id=0, error=null}
+      metadata: size=10, description=9月27日晚Au直播录屏全程, 小u莓烦恼, null
+
+--- logcat: 真实 B 站直链与播放 ---
+09-29 03:43:21.457 I/BiliApi (12078): wbi keys refreshed: mixin=ea1db124…
+09-29 03:43:21.840 I/BiliApi (12078): search 'au39' -> 20 条（正文长度=27532）
+09-29 03:43:32.019 I/BiliApi (12078): buvid3 acquired: 5618BCE0…
+09-29 03:43:32.141 D/PlaybackService(12078): onCreate
+09-29 03:43:32.145 I/PlaybackService(12078): AudioOffload: mp3 supported=false (decision: disabled by design)
+09-29 03:43:32.147 I/PlaybackService(12078): LoadControl profile=low totalMem=1965MB
+09-29 03:43:32.172 D/PlaybackService(12078): Playing: https://cn-zjhz-cm-01-08.bilivideo.com/upgcxcode/53/84/42264168453/42264168453-1-30232.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT
