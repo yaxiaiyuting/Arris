@@ -1,0 +1,23 @@
+$ bash tools/next-version.sh          # v3.2.2 冷启动定号（带 fetch，铁律 9）
+next-version.sh —— versionCode 三源交叉校验
+  仓库: /home/duanjb666/deepseek/Ncrust   (fetch: yes)
+  ① 最近 5 个 tag 指向的 build.gradle.kts:
+       v3.2.1-gpl=56
+       v3.2.0-gpl=55
+       v3.1.0-gpl=54
+       v3.0.0-gpl=53
+       v2.9.0-gpl=52
+  ② 已发布 APK 的 aapt2 dump badging 实测（红线 19：不看 release 标题）:
+       Ncrust-v2.6.2-gpl-release.apk=50      <- 脚本自带的 glob 只吃到这一只
+  ----
+  三源最大值 = 56  ⇒ 下一个可用 versionCode = 57
+
+# 脚本没吃到 dist/ 里的 v3.2.0 / v3.2.1 包（glob 口径问题），本代理按同一口径手工补测：
+$ AAPT=$(ls /home/duanjb666/Android/sdk/build-tools/*/aapt2 | tail -1)
+$ $AAPT dump badging /home/duanjb666/deepseek/dist/Ncrust-v3.2.0-gpl-release.apk | grep -o "versionCode='[0-9]*'"
+  versionCode='55'
+$ $AAPT dump badging /home/duanjb666/deepseek/dist/Ncrust-v3.2.1-gpl-release.apk | grep -o "versionCode='[0-9]*'"
+  versionCode='56'
+
+# ③ 工作区（定号前）：versionCode = 56 / versionName = "3.2.1-gpl"
+# 三源最大值 = 56  ⇒  本版 versionCode = 57，versionName = "3.2.2-gpl"
