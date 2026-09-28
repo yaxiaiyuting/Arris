@@ -118,7 +118,7 @@ val jpJP = Strings(
         visualizerNotSpectrumHint = "波形の明るさは時間の新旧を表し、スペクトラムではありません。本バージョンには周波数データがなく、低域/中域/高域は区別しません。",
         // v2.9.0：モーション強度（統合した段階）+ UI モーションの総スイッチ。
         motionIntensityLabel = "モーション強度",
-        motionIntensityDescription = "1 つの設定で波形と UI モーションの両方を決めます。シンプル：角丸バーとピークホールド、UI モーションは基本項目のみ（ジャケット背景のぼかし、背景の呼吸、ジャケットの浮き上がりと曲送りのフェード）。洗練：さらに波形にグラデーションの流れ、バー頂点の光点と呼吸を、UI モーションに全画面波形、歌詞の律動、ビートパルスと視差を加えます。ショーケース：さらに波形に衝撃波、粒子、3D とタップを、UI モーションに背景の粒子、光の輪の広がりとジャケットの 3D 回転を加えます。低スペック端末（低メモリ / 3 GB 級 / Android 7.x）はシンプルが既定です。",
+        motionIntensityDescription = "1 つの設定が波形と UI の動きの両方を決めます。簡潔：角丸バーとピーク保持、UI の動きは静的項目のみ（背景のぼかし・ジャケットの浮き影・クロスフェード）で、ビートには反応しません。精緻：波形にグラデーションの流れ・頂点の光点・呼吸を追加し、UI に全画面波形・歌詞の脈動・ジャケットの浮動・コントロールバーの脈動・視差を追加。炫技：波形に衝撃波・粒子・3D・タップを、UI に背景粒子・光輪・ジャケット 3D 回転を追加。低スペック端末（低メモリ / 3 GB 級 / Android 7.x）は簡潔から始まります。",
         uiMotionLabel = "UI モーション",
         uiMotionDescription = "再生画面の UI モーション（背景のぼかし、呼吸、歌詞の律動、ビートパルス、粒子など）を制御します。波形の段階には影響しません。オフにすると背景は単色に戻り、毎フレームの動きは一切なくなります（最も軽い状態）。",
         motionShockwaveLabel = "衝撃波（ドラムに反応）",
@@ -130,7 +130,16 @@ val jpJP = Strings(
         motionWaveBandsLabel = "波形の帯域反応",
         motionWaveBandsDescription = "その瞬間に低域／中域／高域のどれが支配的なかで波形の柱を着色し、「ショーケース」段では三本の帯域エネルギー表示を追加します。横軸は時間のままで、スペクトルではありません。",
         motionBreathingLabel = "背景の呼吸",
-        motionBreathingDescription = "背景の明暗と拡縮が全体の音量に追従します。",
+        motionBreathingDescription = "背景の明暗と拡大縮小が全体のラウドネスに追従します。精緻以上でのみ有効で、簡潔は静的です。",
+        // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
+        motionRhythmLabel = "UI リズム（ビート連動）",
+        motionRhythmDescription = "音楽に合わせて動く 4 種類（背景の呼吸・ジャケットの浮動・歌詞の脈動・コントロールバーの脈動）を制御します。衝撃波・光輪・粒子は影響を受けません（炫技のジャケット 3D 回転も止まります）。",
+        motionCoverFloatLabel = "ジャケットの浮動",
+        motionCoverFloatDescription = "ビートごとにジャケットがわずかに浮き上がります（最大 2dp）。精緻以上でのみ有効です。",
+        motionLyricPulseLabel = "歌詞の脈動",
+        motionLyricPulseDescription = "現在の歌詞行がビートごとにわずかに拡大します（最大 3%）。精緻以上でのみ有効です。",
+        motionBarPulseLabel = "コントロールバーの脈動",
+        motionBarPulseDescription = "下部の再生コントロールバーがビートごとにわずかに拡大します（最大 2%）。精緻以上でのみ有効です。",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "前へ",
@@ -235,6 +244,18 @@ val jpJP = Strings(
         sourceQqDeviceLimit = "ログイン端末数の上限に達しました。先に公式アプリで端末を管理してください",
         sourceQqLoginRateLimited = "ログインが多すぎます。しばらくしてからお試しください",
 
+        sourceBiliAccount = "Bilibili アカウント",
+        biliLoginTitle = "QR コードで Bilibili にログイン",
+        biliLoginWaiting = "Bilibili アプリでスキャンしてください",
+        biliLoginScanned = "スキャン済み。スマートフォンで確認してください",
+        biliLoginExpired = "QR コードの有効期限が切れました。更新してください",
+        biliLoginRefresh = "QR コードを更新",
+        biliLoginFailed = "ログインに失敗しました。もう一度お試しください",
+        biliLoginSuccess = { name -> "ログイン済み: " + name },
+        biliLogout = "Bilibili からログアウト",
+        biliLoginRiskNote = "ログイン後はリクエストに Bilibili アカウントの身元が付きます。本アプリは読み取りのみで、投げ銭・お気に入り・いいねは行いません。認証情報は端末内にのみ保存されます。",
+        biliQualityNote = "音質上限：匿名は 320K。ログインで可逆圧縮が得られるかは未検証で、本版は約束しません。",
+        searchFilterEmpty = { label -> label + " の結果はありません" },
         aggFilterBoth = "両ソース",
         aggFilterNetease = "NetEase のみ",
         aggFilterQq = "QQ Music のみ",
@@ -494,5 +515,18 @@ val jpJP = Strings(
         searchSourceSkipped = "未ログイン",
         searchSourceCount = { n -> "$n 曲" },
         searchSourceSummaryWithStatus = { a, b -> "NetEase $a · QQ Music $b" },
+
+
+        playbackFailure = PlaybackFailureStrings(
+            needLogin = "この曲を再生するには%sへのログインが必要です",
+            needVip = "この曲には会員権限が必要です。すでに会員の場合は再ログインしてください",
+            needPurchase = "この曲は単曲購入が必要です",
+            authExpired = "ログインの有効期限が切れました。再ログインしてください",
+            copyrightGone = "この音源には権利がありません。別の音源をお試しください",
+            regionLocked = "権利者により、この地域では再生できません",
+            network = "ネットワークエラーです。しばらくして再試行してください",
+            unknown = "現在この曲を再生できません。しばらくして再試行してください",
+            switchSource = { other -> "%s にはこの曲がありません。切り替え先: " + other },
+        ),
 
 )

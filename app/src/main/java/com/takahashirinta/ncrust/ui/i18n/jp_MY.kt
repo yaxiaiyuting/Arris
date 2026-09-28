@@ -118,7 +118,7 @@ val jpMY = Strings(
         visualizerNotSpectrumHint = "波形 の 明暗 は 時 の 新旧 を 示 す のみ、スペクトル に 非 ず。本 版 に 周波數 の 情報 無 く、低/中/高 を 分 か ず。",
         // v2.9.0：動效 強度（統合 の 段）+ 界面 動效 の 總 スイッチ。
         motionIntensityLabel = "動效 強度 の 段",
-        motionIntensityDescription = "一 の 段 に て 波形 と 界面 動效 を 共 に 定 む。簡素：角丸 柱 と ピーク 保持、界面 動效 は 基本 の 項 のみ（封面 背景 模糊、背景 呼吸、封面 浮 き 上 がり と 切歌 淡入）。精巧：加 漸化 流動、柱頂 光點 と 呼吸、界面 動效 に 加 全畫面 波形、歌詞 律動、拍 パルス と 視差。絢爛：加 衝撃波、粒子、3D と 押、界面 動效 に 加 背景 粒子、光暈 拡散 と 封面 3D 回轉。低端 端末（低 メモリ ／ 3 GB 級 ／ Android 7.x）は 簡素 を 既定 と す。",
+        motionIntensityDescription = "一つの位が波形と界面の動きを兼ね定む。簡潔：角丸の柱と峰の保持、界面は静なるもののみ（背景の暈し・表紙の浮き影・切替の淡入）にして拍子に応ぜず。精緻：波形に流れる漸層・頂の光点・呼吸を加へ、界面に全画面波形・歌詞の律動・表紙の浮動・制御帯の脈動・視差を加ふ。炫技：波形に衝撃波・粒子・3D・点按を、界面に背景粒子・光輪・表紙の 3D 回転を加ふ。賤しき端末（記憶少なき / 3 GB 級 / Android 7.x）は簡潔より始む。",
         uiMotionLabel = "界面 動效",
         uiMotionDescription = "再生 頁 の 界面 動效（背景 模糊、呼吸、歌詞 律動、拍 パルス、粒子 等）を 制 す。波形 の 段 に は 影響 せ ず。閉づれば 背景 は 純色 に 復 し、逐 フレーム の 動效 一切 無 し —— 最も 費 少 な き 選択 な り。",
         motionShockwaveLabel = "衝撃 波（鼓 に 應 ず）",
@@ -130,7 +130,16 @@ val jpMY = Strings(
         motionWaveBandsLabel = "波形 の 帶域 應 答",
         motionWaveBandsDescription = "其 の 瞬 間 に 低域／中域／高域 の 孰 か が 主 な る か に 依 りて 波形 の 柱 を 彩 り、「炫技」の 段 に は 三 本 の 帶域 力 表 示 を 加 ふ。橫 軸 は 時間 の 儘 に て、スペクトル に は 非 ず。",
         motionBreathingLabel = "背景 の 呼吸",
-        motionBreathingDescription = "背景 の 明暗 と 擴縮 は 全體 の 音量 に 隨 ふ。",
+        motionBreathingDescription = "背景の明暗と伸縮、全体の音量に随ふ。精緻以上のみ。簡潔は静かなる位なり。",
+        // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
+        motionRhythmLabel = "界面の律動（拍子に随ふ）",
+        motionRhythmDescription = "音に合わせて動く四つ（背景の呼吸・表紙の浮動・歌詞の律動・制御帯の脈動）を司る。衝撃波・光輪・粒子は関はらず（炫技の表紙 3D 回転も亦止まる）。",
+        motionCoverFloatLabel = "表紙の浮動",
+        motionCoverFloatDescription = "拍子ごとに表紙わづかに浮き上る（最大 2dp）。精緻以上のみ。",
+        motionLyricPulseLabel = "歌詞の律動",
+        motionLyricPulseDescription = "今の歌詞の行、拍子ごとにわづかに拡がる（最大 3%）。精緻以上のみ。",
+        motionBarPulseLabel = "制御帯の脈動",
+        motionBarPulseDescription = "下の制御帯、拍子ごとにわづかに拡がる（最大 2%）。精緻以上のみ。",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "前",
@@ -235,6 +244,18 @@ val jpMY = Strings(
         sourceQqDeviceLimit = "ログイン端末数の上限に達しました。先に公式アプリで端末を管理してください",
         sourceQqLoginRateLimited = "ログインが多すぎます。しばらくしてからお試しください",
 
+        sourceBiliAccount = "Bilibili の帳",
+        biliLoginTitle = "QR 码にて Bilibili に登录せん",
+        biliLoginWaiting = "Bilibili のアプリにて読み取られよ",
+        biliLoginScanned = "既に読み取りたり。手机にて確認されたし",
+        biliLoginExpired = "QR 码の効失せたり。更新されたし",
+        biliLoginRefresh = "QR 码を更新",
+        biliLoginFailed = "登录に敗れたり。再び試されたし",
+        biliLoginSuccess = { name -> "登录済み：" + name },
+        biliLogout = "Bilibili の帳より退出す",
+        biliLoginRiskNote = "登录の後は請求に Bilibili の身元を添ふ。本アプリは読むのみにして、投げ銭・お気に入り・良いねは行はず。証は本機にのみ納む。",
+        biliQualityNote = "音質の上限：匿名は 320K。登录により無損を得らるるや未だ験せず、本版は約するなし。",
+        searchFilterEmpty = { label -> label + " の下に結果なし" },
         aggFilterBoth = "兩源",
         aggFilterNetease = "網易雲のみ",
         aggFilterQq = "QQ音楽のみ",
@@ -493,5 +514,18 @@ val jpMY = Strings(
         searchSourceSkipped = "未登入",
         searchSourceCount = { n -> "$n 曲" },
         searchSourceSummaryWithStatus = { a, b -> "NetEase $a · QQ Music $b" },
+
+
+        playbackFailure = PlaybackFailureStrings(
+            needLogin = "此曲を奏でんには%sに御登录あるべし",
+            needVip = "此曲は会員の権あり。既に会員ならば再登录されたし",
+            needPurchase = "此曲は単曲購入の後にぞ奏でられん",
+            authExpired = "登录の効、既に失せたり。再登录されたし",
+            copyrightGone = "此の音源に権なし。他の音源を試されたし",
+            regionLocked = "権利者により此の地にては奏でられず",
+            network = "網に障りあり。暫し待ちて再び試されたし",
+            unknown = "今しばらく此曲を奏でられず。暫し待ちて再び試されたし",
+            switchSource = { other -> "%s に此曲なし。切替先: " + other },
+        ),
 
 )

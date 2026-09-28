@@ -12,6 +12,8 @@ package com.takahashirinta.ncrust.source
 
 import android.util.Log
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.player.ResolveFailureKind
+import com.takahashirinta.ncrust.player.ResolveOutcome
 import com.takahashirinta.ncrust.player.SongUrlResult
 
 /**
@@ -76,14 +78,66 @@ object SourceRouter {
     }
 
     /**
+     * v3.2.0 · P0：按音源取链，**并带上失败分类**。播放链走这一条。
+     *
+     * 三条前置判断与 [resolveUrl] 完全一致（音源未注册 / 缺 sourceId / Provider 说什么就是什么），
+     * 唯一的差别是失败时不再丢弃原因 —— 那正是铁律 20/21 要求的东西：
+     * 「权限不足」与「无版权」必须能被分开，而分开的唯一办法是**别把原因扔掉**。
+     *
+     * ⚠️ 这两条路径的实现必须**逐分支对齐**：漏掉一条分支的表现是
+     * 「同一首歌从离线兜底走能播、走在线路径说没版权」。有单测钉住两者的一致性。
+     */
+    suspend fun resolveUrlOutcome(song: SongItem, level: String): ResolveOutcome {
+        if (!song.isResolvable) {
+            Log.w(TAG, "unresolvable song source=${song.musicSource.key} id=${song.id} (missing sourceId)")
+            // 结构性失败：与版权/权限无关，是唯一允许跳歌的一类。
+            return ResolveOutcome.failed(ResolveFailureKind.UNRESOLVABLE, song.musicSource)
+        }
+        val provider = providers[song.musicSource]
+        if (provider == null) {
+            Log.w(TAG, "no provider registered for source=${song.musicSource.key}")
+            return ResolveOutcome.failed(ResolveFailureKind.UNRESOLVABLE, song.musicSource)
+        }
+        // Provider 的契约是「绝不抛」，但这里再兜一层：取链在播放的关键路径上，
+        // 一个未捕获的异常会把「取链失败」升级成「播放崩溃」（铁律 4）。
+        return runCatching { provider.resolveUrlOutcome(song, level) }
+            .onFailure { Log.w(TAG, "resolveUrlOutcome failed on ${song.musicSource.key}", it) }
+            .getOrElse {
+                ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, song.musicSource)
+            }
+    }
+
+    /**
      * 按音源搜索。失败 / 未注册一律返回空列表 —— 聚合搜索时一个平台挂掉
      * 不应该把另一个平台的结果也吞掉，这个契约由调用方按返回值判断。
+     *
+     * ## v3.2.0 · P0-C：**取消必须原样抛出**（这一条是本版新加的）
+     *
+     * v3.1.0 时这段用的是 `runCatching { … }.getOrDefault(emptyList())`，而那时
+     * B 站那条腿是**纯同步阻塞**的（`BiliApi` 全是 `execute()`），整条路径上没有挂起点，
+     * 取消根本不会在这里出现，所以吞掉它没有可观测后果。
+     *
+     * 本版把 B 站调用挪进了 `withContext(Dispatchers.IO)`（P0-C 的修复）⇒ 取消从此会在
+     * 这里出现，而「取消是控制流不是错误」是本仓库 v2.5.5 就写下的纪律
+     * （`SearchViewModel` 的注释原话：「取消必须原样抛出，不能落进 `catch (e: Exception)`」）。
+     * 吞掉它有两个具体后果：① 用户每敲一个字（500ms debounce 之后的 `searchJob.cancel()`）
+     * 都会打一条 "search failed on …" 的**假日志**；② 嵌套超时抛出的
+     * `TimeoutCancellationException`（job 本身没被取消的那种）会被改写成「真的 0 条」——
+     * 那正是 v2.5.5 用一整版修出来的「PENDING/TIMEOUT 不许显示成 DONE+0」。
+     *
+     * 契约的其余部分一个字没变：**绝不把异常抛给调用方**（取消除外），
+     * 也**不引入任何重试**（失败处理有界）。
      */
     suspend fun searchSongs(source: MusicSource, keyword: String, limit: Int): List<SongItem> {
         val provider = providers[source] ?: return emptyList()
-        return runCatching { provider.searchSongs(keyword, limit) }
-            .onFailure { Log.w(TAG, "search failed on ${source.key}", it) }
-            .getOrDefault(emptyList())
+        return try {
+            provider.searchSongs(keyword, limit)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "search failed on ${source.key}", e)
+            emptyList()
+        }
     }
 
     private const val TAG = "SourceRouter"

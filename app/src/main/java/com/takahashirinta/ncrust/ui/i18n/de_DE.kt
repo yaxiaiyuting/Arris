@@ -119,7 +119,7 @@ val deDE = Strings(
         visualizerNotSpectrumHint = "Die Helligkeit zeigt die Aktualität, kein Spektrum: Diese Version hat keine Frequenzdaten und trennt keine Tiefen, Mitten oder Höhen.",
         // v2.9.0: Bewegungsintensität (vereinte Stufe) + Hauptschalter für die Oberflächenanimation.
         motionIntensityLabel = "Bewegungsintensität",
-        motionIntensityDescription = "Eine Stufe steuert zugleich die Wellenform und die Oberflächenanimation. Einfach: abgerundete Balken mit Peak-Hold, von der Oberflächenanimation bleibt nur das Grundlegende (unscharfer Cover-Hintergrund, atmender Hintergrund, Anheben des Covers und Überblenden beim Titelwechsel). Verfeinert: zusätzlich fließender Verlauf, Lichtpunkte auf den Balkenspitzen und Atmen in der Wellenform, dazu Vollbild-Wellenform, Liedtext-Puls, Beat-Puls und Parallaxe in der Oberfläche. Showcase: zusätzlich Schockwelle, Partikel, 3D und Tippen in der Wellenform, dazu Hintergrundpartikel, Halo-Ausbreitung und 3D-Drehung des Covers in der Oberfläche. Schwache Geräte (wenig RAM / 3-GB-Klasse / Android 7.x) starten mit Einfach.",
+        motionIntensityDescription = "Eine Stufe steuert sowohl die Wellenform als auch die Interface-Effekte. Schlicht: abgerundete Balken mit Spitzenhalteung, Interface nur statisch (unscharfer Cover-Hintergrund, Cover-Schatten, Überblendung) — nichts bewegt sich zum Beat. Feinschliff: zusätzlich fließender Verlauf, Lichtpunkte und Atmung in der Wellenform sowie Vollbild-Wellenform, Text-Puls, Cover-Schweben, Steuerleisten-Puls und Parallaxe im Interface. Effektvoll: zusätzlich Schockwelle, Partikel, 3D und Tippen in der Wellenform sowie Hintergrundpartikel, Halo und 3D-Coverdrehung im Interface. Schwache Geräte (wenig RAM / 3-GB-Klasse / Android 7.x) starten bei Schlicht.",
         uiMotionLabel = "Oberflächenanimation",
         uiMotionDescription = "Steuert die Oberflächenanimation des Players (Hintergrundunschärfe, Atmen, Liedtext-Puls, Beat-Puls, Partikel und so weiter); die Wellenform-Stufe bleibt davon unberührt. Ausgeschaltet kehrt der Hintergrund zu einer Volltonfarbe zurück und es läuft keine Animation pro Frame – die günstigste Variante.",
         motionShockwaveLabel = "Schockwelle (auf Trommelschläge)",
@@ -131,7 +131,16 @@ val deDE = Strings(
         motionWaveBandsLabel = "Wellenform-Bandreaktion",
         motionWaveBandsDescription = "Färbt die Wellenform-Balken danach, welches der Bänder tief/mittel/hoch gerade dominiert, und zeichnet in der Stufe „Showcase“ drei Bandenergie-Balken. Die Achse bleibt die Zeit, kein Spektrum.",
         motionBreathingLabel = "Hintergrund-Atmen",
-        motionBreathingDescription = "Helligkeit und Skalierung des Hintergrunds folgen der Gesamtlautstärke.",
+        motionBreathingDescription = "Helligkeit und Skalierung des Hintergrunds folgen der Gesamtlautstärke. Nur ab Stufe Feinschliff — Schlicht ist eine statische Stufe.",
+        // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
+        motionRhythmLabel = "Interface-Rhythmus (beatgesteuert)",
+        motionRhythmDescription = "Steuert die vier Effekte, die zur Musik mitgehen: Hintergrund-Atmung, Cover-Schweben, Text-Puls und Steuerleisten-Puls. Schockwelle, Halo und Partikel bleiben unberührt (die 3D-Drehung des Covers in Stufe Effektvoll stoppt ebenfalls).",
+        motionCoverFloatLabel = "Cover-Schweben",
+        motionCoverFloatDescription = "Das Cover hebt sich leicht bei jedem Beat (bis 2dp). Nur ab Stufe Feinschliff.",
+        motionLyricPulseLabel = "Text-Puls",
+        motionLyricPulseDescription = "Die aktuelle Textzeile skaliert leicht bei jedem Beat (bis 3%). Nur ab Stufe Feinschliff.",
+        motionBarPulseLabel = "Steuerleisten-Puls",
+        motionBarPulseDescription = "Die untere Wiedergabeleiste skaliert leicht bei jedem Beat (bis 2%). Nur ab Stufe Feinschliff.",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "Vorheriger",
@@ -236,6 +245,18 @@ val deDE = Strings(
         sourceQqDeviceLimit = "Gerätelimit erreicht – Geräte zuerst in der offiziellen App verwalten",
         sourceQqLoginRateLimited = "Zu viele Anmeldeversuche, später erneut versuchen",
 
+        sourceBiliAccount = "Bilibili-Konto",
+        biliLoginTitle = "Per QR-Code bei Bilibili anmelden",
+        biliLoginWaiting = "Mit der Bilibili-App scannen",
+        biliLoginScanned = "Gescannt — bitte am Telefon bestätigen",
+        biliLoginExpired = "Der QR-Code ist abgelaufen — bitte neu laden",
+        biliLoginRefresh = "QR-Code neu laden",
+        biliLoginFailed = "Anmeldung fehlgeschlagen — bitte erneut versuchen",
+        biliLoginSuccess = { name -> "Angemeldet: " + name },
+        biliLogout = "Von Bilibili abmelden",
+        biliLoginRiskNote = "Nach der Anmeldung tragen Anfragen deine Bilibili-Identität. Diese App liest nur; sie vergibt keine Münzen, favorisiert oder liked nicht. Zugangsdaten bleiben auf diesem Gerät.",
+        biliQualityNote = "Qualitätsgrenze: anonym 320K. Ob eine Anmeldung verlustfrei freischaltet, ist NICHT geprüft — diese Version verspricht es nicht.",
+        searchFilterEmpty = { label -> "Keine Ergebnisse unter " + label },
         aggFilterBoth = "Beide",
         aggFilterNetease = "Nur NetEase",
         aggFilterQq = "Nur QQ Music",
@@ -496,5 +517,18 @@ val deDE = Strings(
         // 没有单位词）—— 带单位会让「两源都返回时新旧路径逐字相同」这条不变量破掉。
         searchSourceCount = { n -> "$n" },
         searchSourceSummaryWithStatus = { a, b -> "NetEase $a · QQ Music $b" },
+
+
+        playbackFailure = PlaybackFailureStrings(
+            needLogin = "Zum Abspielen bei %s anmelden",
+            needVip = "Für diesen Titel ist eine Mitgliedschaft nötig; falls vorhanden, bitte neu anmelden",
+            needPurchase = "Dieser Titel muss einzeln gekauft werden",
+            authExpired = "Die Anmeldung ist abgelaufen — bitte erneut anmelden",
+            copyrightGone = "Diese Quelle hat keine Rechte am Titel — andere Quelle versuchen",
+            regionLocked = "Vom Rechteinhaber für diese Region gesperrt",
+            network = "Netzwerkfehler — bitte später erneut versuchen",
+            unknown = "Dieser Titel kann gerade nicht abgespielt werden — bitte später erneut versuchen",
+            switchSource = { other -> "%s hat diesen Titel nicht — wechseln zu " + other },
+        ),
 
 )

@@ -11,6 +11,8 @@
 package com.takahashirinta.ncrust.source
 
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.player.ResolveFailureKind
+import com.takahashirinta.ncrust.player.ResolveOutcome
 import com.takahashirinta.ncrust.player.SongUrlResult
 
 /**
@@ -65,6 +67,31 @@ interface MusicSourceProvider {
      * HTML 错误页 / 空流的 URL。
      */
     suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult?
+
+    /**
+     * v3.2.0 · P0：[resolveUrl] 的**带分类**版本。播放链应当只调这一个。
+     *
+     * ## 为什么不能继续只返回 null（铁律 20/21 的落点）
+     *
+     * 「拿不到 URL」至少有七种原因，处置两两不同：网络抖动该重试、会员不足该提示、
+     * 结构性缺失才允许跳歌。折叠成一个 `null` 之后播放链只能一律按「这首放不了」处理 ——
+     * 用户看到的就是「VIP 歌曲被说成没有版权，然后被自动跳过」。
+     *
+     * ## 默认实现是**保守**的那一侧
+     *
+     * 没覆写这一条的 Provider 会得到 [ResolveFailureKind.UNKNOWN]，
+     * 而 `UNKNOWN` 的处置是「停下 + 提示、**不跳歌**」。也就是说：
+     * **忘了覆写的代价是「少跳一次歌」，不是「误报版权 + 跳歌」** ——
+     * 保守方向选对了，漏改就不会造成本版要修的那种伤害。
+     */
+    suspend fun resolveUrlOutcome(song: SongItem, level: String): ResolveOutcome {
+        val result = resolveUrl(song, level)
+        return if (result != null) {
+            ResolveOutcome.ok(result)
+        } else {
+            ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, source)
+        }
+    }
 
     /**
      * 补齐元数据（队列里可能只有 id）。失败返回 null，调用方保留原对象即可。

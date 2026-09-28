@@ -72,7 +72,14 @@ import com.takahashirinta.ncrust.player.QualityCeilingMemory
 import com.takahashirinta.ncrust.player.QualityRetryGuard
 import com.takahashirinta.ncrust.player.SourceFallbackHintGate
 import com.takahashirinta.ncrust.player.classifyFailure
+import com.takahashirinta.ncrust.player.ResolveFailure
+import com.takahashirinta.ncrust.player.ResolveFailureAction
+import com.takahashirinta.ncrust.player.ResolveFailureKind
+import com.takahashirinta.ncrust.player.ResolveOutcome
+import com.takahashirinta.ncrust.player.UrlRetryGate
 import com.takahashirinta.ncrust.player.maySkipOnUrlFailure
+import com.takahashirinta.ncrust.player.resolveFailureAction
+import com.takahashirinta.ncrust.player.resolveFailureTextFor
 import com.takahashirinta.ncrust.player.PlaybackStateManager
 import com.takahashirinta.ncrust.player.PreloadCacheEntry
 import com.takahashirinta.ncrust.player.PreloadCachePolicy
@@ -317,34 +324,37 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val sourceFallbackHintGate = SourceFallbackHintGate()
 
     /**
-     * v2.3.0 · C：播放路径取链彻底失败时，提示用户可切到另一个音源。
+     * v3.2.0 · P0：取链**网络失败**的原样重试闸（每首歌最多 2 次、间隔 ≥3s）。
      *
-     * ## 为什么是「提示」而不是「自动切源」
-     *
-     * 自动切源需要：用曲名/艺人去另一个平台再搜一次 → 判定是不是同一首 → 换队列项播放。
-     * 这三点全都不可靠（探针结论：接口里**没有**任何跨源同一性标识，见
-     * `docs/verification/v2.3.0/probe-source-attribution.md` §1），
-     * 而且它会在**失败路径**里插一次网络请求 —— 正是 v2.2.1 那场 P0 级联的形状。
-     *
-     * 所以这里只做一件零风险的事：把「这首歌在这个源放不出来」翻译成用户能行动的建议。
-     * 判定同样只用**结构性事实**：QQ 的 id 带 bit62 标志位（[SourceIds.sourceOfId]），
-     * 不需要读任何可变字段，也不会猜错平台。
+     * 铁律 5（失败处理必须有界）在这一版新增的那个分支上的落点：
+     * 「网络失败 → 重试，不跳歌」如果没有闸，「断网 + 一首放不出来的歌」
+     * 就会变成一个取链空转环（v2.2.1 那次 P0 级联的同形状）。
      */
-    private fun showSourceFallbackHint(songId: Long) {
+    private val urlRetryGate = UrlRetryGate()
+
+    /**
+     * v3.2.0 · P0：**失败分类 → 用户可读文案**。播放路径上唯一的失败提示出口。
+     *
+     * ## v3.1.0 的 `showSourceFallbackHint` 错在哪（本版重写它的理由）
+     *
+     * 旧实现不看失败原因，**一律**说「此源无版权，可切另一源：<另一家>」。
+     * 实测（2026-09-28，真机 + 真 VIP 账号）QQ 对 VIP 歌在匿名态回 `result=104003`
+     * （= 需要登录/会员），与版权**毫无关系**；网络抖动同样会走到这一句。
+     * 于是用户看到的是「这个应用的版权数据是错的」——而真因是「你该登录 / 该开会员 / 网络不好」。
+     *
+     * 现在文案由 [resolveFailureText] 按分类产出（纯函数、JVM 单测覆盖），
+     * **只有服务端显式声明无版权那一档**才会出现「暂无版权」字样（铁律 20）。
+     *
+     * 「可切另一源」的后缀只对三类失败追加（见 `suggestsOtherSource`）——
+     * 对「未登录 / 凭证过期」不给这条后缀，因为那两件事在当前音源登录一下就能解决。
+     */
+    private fun showResolveFailureHint(failure: ResolveFailure) {
         val app = runCatching { getApplication<Application>() }.getOrNull() ?: return
+        // 节流闸对**所有**失败提示生效（提示挂在本来就会连续触发的路径上，铁律 8）。
         if (!sourceFallbackHintGate.shouldHint(System.currentTimeMillis())) return
-        val current = SourceIds.sourceOfId(songId)
-        val other = MusicSource.otherThan(current) ?: return
         val strings = stringsForCode(getSavedLanguageCode(app))
-        val label = when (other) {
-            MusicSource.QQMUSIC -> strings.sourceQqMusic
-            MusicSource.NETEASE -> strings.sourceNetease
-            // 结构上不可达：other 来自 MusicSource.otherThan（只遍历 loginSources，
-            // v3.1.0 起不含 B 站）。显式写出来是为了让「将来把 B 站加进 loginSources」
-            // 时这一处会立刻被想一遍，而不是悄悄显示一个错误的名字。
-            MusicSource.BILIBILI -> strings.source.sourceBilibili
-        }
-        val text = strings.tagSwitchSourceHint + "：" + label
+        val text = resolveFailureTextFor(failure, strings)
+        Log.w("PlayerViewModel", "resolve failure hint: ${failure.diag()} -> $text")
         runCatching { Toast.makeText(app, text, Toast.LENGTH_LONG).show() }
     }
 
@@ -1072,6 +1082,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         qualityCeiling.clear(currentTrack?.toString() ?: "")
         qualityRetryGuard.resetAll()
         autoSkipGuard.onUserAction()
+        // v3.2.0 · P0：用户手动改档位 = 他有权重新试一次 ⇒ 取链网络重试额度一并清零。
+        urlRetryGate.onUserAction()
         val prefs = getApplication<Application>().getSharedPreferences("ncrust_settings", 0)
         prefs.edit()
             .putInt(if (isOnWifi()) "wifi_quality" else "mobile_quality", index)
@@ -1111,11 +1123,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 计数清零条件（写死在这里，别处不许发明）：
         //  · 用户手动点播 / 手动切歌 → 自动跳歌计数清零；
         //  · 用户手动改音质        → 重试额度与「试过的档位」清零（用户有权重新试探）。
+        //  · v3.2.0 新增：**换歌**（不是重试同一首）→ 取链网络重试额度清零。
+        //    注意判据是 `origin != QUALITY_RETRY` 而不是「是不是用户点的」：
+        //    自动接续 / 预载接管同样是**另一首歌**，那首歌该有自己的额度。
         when (origin) {
-            PlayOrigin.USER -> autoSkipGuard.onUserAction()
-            PlayOrigin.QUALITY_SWITCH -> qualityRetryGuard.resetAll()
+            PlayOrigin.USER -> {
+                autoSkipGuard.onUserAction()
+                urlRetryGate.onUserAction()
+            }
+
+            PlayOrigin.QUALITY_SWITCH -> {
+                qualityRetryGuard.resetAll()
+                urlRetryGate.onUserAction()
+            }
+
             else -> Unit
         }
+        if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(currentTrack.toString())
         // 换歌（含用户手点）时忘掉上一首的「最后成功档位」。
         if (origin != PlayOrigin.QUALITY_RETRY) lastGoodLevel = ""
         // v2.1.0 · C：记住当前歌的音源身份 —— 取链、歌词、媒体通知都要用它路由。
@@ -1240,7 +1264,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // v2.0.0 · T3：离线优先取链（见 fetchUrlOfflineFirst）。
                 // 旧顺序是「先把 5~6 档 eapi 全试一遍（每档都要等 connectTimeout）才回落缓存」，
                 // 断网首播要干等数秒；现在明确离线时先离线兜底，命中就一个字节都不发。
-                var result = fetchUrlOfflineFirst(ref, selectedQuality)
+                val outcome = fetchUrlOfflineFirst(ref, selectedQuality)
+                val result = outcome.result
                 if (result == null) {
                     // 该歌在所有音质档位都取不到可播放的 URL（无版权 / 需会员且当前无订阅）。
                     // 前一个版本会兜底喂给 ExoPlayer 一个 404 的 HTML 链接导致无限缓冲"卡住"，
@@ -1250,7 +1275,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     //  · 音质切换 / 降档重试取不到链 —— 那是音质问题，跳歌等于把用户的
                     //    「换一档听听」变成「这首歌被跳过了」，而且会把整条队列一起带走；
                     //  · 自动接续取不到链 —— 才是真的「这首放不了」，而且还要过跳歌熔断。
-                    withContext(Dispatchers.Main) { onUrlUnavailable(songId, selectedQuality, origin) }
+                    // v3.2.0 · P0：把**分类**一起交出去 —— 它是「跳歌 / 重试 / 停下提示」
+                    // 的唯一判据（铁律 20/21）。旧代码在这里丢掉原因，于是三种完全不同的
+                    // 情况在播放链眼里长得一模一样。
+                    withContext(Dispatchers.Main) {
+                        onUrlUnavailable(songId, selectedQuality, origin, outcome.failure)
+                    }
                     return@launch
                 }
                 // 取链期间若有更新的 playSong / 预载接管发生(版本号已前进),
@@ -1349,17 +1379,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 只读一次系统网络状态、不开线程也不注册监听器；[NetworkAvailability] 的异常一律返回
      * true（按在线处理），与本仓库其它调用方（HomeScreen / AppWarmup）同一个判据。
      */
-    private suspend fun fetchUrlOfflineFirst(ref: SongItem, level: String): SongUrlResult? {
+    private suspend fun fetchUrlOfflineFirst(ref: SongItem, level: String): ResolveOutcome {
         val app = getApplication<Application>()
         val songId = ref.id
         if (!NetworkAvailability.isOnline(app)) {
-            recallOfflineCache(songId, level)?.let { return it }
+            recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
         }
         // v2.1.0 · A/C：取链从「直连 SongUrlFetcher」改为按音源路由。
         // 网易云一侧走的就是 NeteaseSourceProvider → SongUrlFetcher.fetch(id, level)，
         // 与 v2.0.2 **逐字节同一条路径**（8 档降级阶梯、FLAC 门控、离线 key 全在里面）。
         // 在线取链失败（典型是取链途中断网）时仍回落离线缓存 —— v1.6.0 · D1 的兜底路径。
-        return SourceRouter.resolveUrl(ref, level) ?: recallOfflineCache(songId, level)
+        //
+        // v3.2.0 · P0：这里从 `SongUrlResult?` 换成 `ResolveOutcome`（**带失败分类**）。
+        // 离线兜底命中时是 Ok；在线取链失败**且离线也没命中**时才把分类交出去 ——
+        // 也就是说「离线缓存救回来了」这件事优先于失败分类（能播就是不失败）。
+        val outcome = SourceRouter.resolveUrlOutcome(ref, level)
+        outcome.result?.let { return outcome }
+        recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
+        return outcome
     }
 
     /**
@@ -1370,10 +1407,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      *  · 用户切一下音质、恰好那一档取不到链 → 这首歌被跳过；
      *  · 整条队列都取不到链 → 5 首/秒 的无限跳歌（用户报的「不关应用就一直切」）。
      */
-    private fun onUrlUnavailable(songId: Long, requested: String, origin: PlayOrigin) {
+    private fun onUrlUnavailable(
+        songId: Long,
+        requested: String,
+        origin: PlayOrigin,
+        /**
+         * v3.2.0 · P0：失败的分类。`null` 只可能来自旧调用点（离线兜底那条路），
+         * 按 [ResolveFailureKind.UNKNOWN] 处理 —— 保守的那一侧（不跳歌）。
+         */
+        failure: ResolveFailure? = null,
+    ) {
+        val effective = failure ?: ResolveFailure(
+            ResolveFailureKind.UNKNOWN,
+            SourceIds.sourceOfId(songId),
+        )
         Log.w(
             "PlayerViewModel",
             "no playable url songId=$songId requested=$requested origin=$origin " +
+                "(${effective.diag()}) " +
                 "(retryAttempts=${qualityRetryGuard.attemptsForCurrentSong()})",
         )
         // 判据抽在 PlaybackGuard.kt 里（纯函数 + 单测），这里只消费它 ——
@@ -1400,21 +1451,70 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     stopForQualityFailure(songId, "请求档位 $requested 取不到可播放链接")
                 }
         } else {
-            // 播放路径：这才是「这首放不了」。仍然要过连续跳歌熔断。
-            // v2.3.0 · C：先给一次**有界**的「可切另一音源」提示，再跳歌。
-            // 提示本身不发网络请求、不重试、不改动跳歌判定 —— 它只解释发生了什么。
-            showSourceFallbackHint(songId)
-            if (autoSkipGuard.requestAutoSkip()) {
+            // ===== v3.2.0 · P0：失败路径**分离**（铁律 21）=====
+            //
+            // v3.1.0 在这里无条件「提示 + 跳歌」，于是「VIP 歌曲权限不足」「登录过期」
+            // 「网络抖了一下」全部被当成「这首歌没有版权」并被跳过。现在按分类分流，
+            // 判据是纯函数 `resolveFailureAction(kind)`（JVM 单测逐条覆盖）。
+            when (resolveFailureAction(effective.kind)) {
+                // ① 结构性取不到（缺 sourceId / 音源没注册 / 音源被关掉）：
+                //    与版权无关，重试一万次也是同一个结果 ⇒ 这才是唯一允许跳歌的一类，
+                //    并且仍然要过连续跳歌熔断。
+                ResolveFailureAction.SKIP_ALLOWED -> {
                     Log.w(
                         "PlayerViewModel",
-                        "auto skip #${autoSkipGuard.consecutiveSkips} for songId=$songId",
+                        "unresolvable track songId=$songId (${effective.diag()}) -> skip",
                     )
-                    onUnplayableCallback?.invoke()
-            } else {
-                stopForQualityFailure(
-                    songId,
-                    "连续自动跳歌已达上限 ${AutoSkipGuard.MAX_CONSECUTIVE_AUTO_SKIPS} 次",
-                )
+                    if (autoSkipGuard.requestAutoSkip()) {
+                        Log.w(
+                            "PlayerViewModel",
+                            "auto skip #${autoSkipGuard.consecutiveSkips} for songId=$songId",
+                        )
+                        onUnplayableCallback?.invoke()
+                    } else {
+                        showResolveFailureHint(effective)
+                        stopForQualityFailure(
+                            songId,
+                            "连续自动跳歌已达上限 ${AutoSkipGuard.MAX_CONSECUTIVE_AUTO_SKIPS} 次",
+                        )
+                    }
+                }
+
+                // ② 网络失败：**有界重试同一个档位**，不跳歌。额度用尽则停下 + 提示。
+                ResolveFailureAction.RETRY -> {
+                    if (urlRetryGate.requestRetry(System.currentTimeMillis())) {
+                        Log.w(
+                            "PlayerViewModel",
+                            "network failure, retry #${UrlRetryGate.MAX_ATTEMPTS_PER_SONG -
+                                urlRetryGate.remaining()} songId=$songId level=$requested",
+                        )
+                        viewModelScope.launch {
+                            delay(UrlRetryGate.MIN_INTERVAL_MS)
+                            playSong(
+                                songId,
+                                title = currentSongName.value ?: "",
+                                artist = currentSongArtist.value ?: "",
+                                artworkUrl = currentSongArtwork.value ?: "",
+                                quality = requested,
+                                startPositionMs = currentPosition.value,
+                                sourceKey = currentSongSourceKey,
+                                sourceId = currentSongSourceId,
+                                mediaId = currentSongMediaId,
+                                origin = PlayOrigin.QUALITY_RETRY,
+                            )
+                        }
+                    } else {
+                        showResolveFailureHint(effective)
+                        stopForQualityFailure(songId, "取链网络失败且重试额度已用尽")
+                    }
+                }
+
+                // ③ 权限 / 版权 / 读不懂：**停下 + 说清楚原因，绝不跳歌**。
+                //    这是本版与 v3.1.0 最大的行为差异，也是用户报的那个 P0 的正面修复。
+                ResolveFailureAction.STOP_AND_INFORM -> {
+                    showResolveFailureHint(effective)
+                    stopForQualityFailure(songId, effective.diag())
+                }
             }
         }
     }
@@ -1704,14 +1804,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val cacheHit = preloadCache[songId]?.takeIf {
                     PreloadCachePolicy.isFresh(it, quality, defaultTtlMs = CACHE_TTL_MS)
                 }
-                val result = cacheHit?.let {
+                // v3.2.0 · P0：预加载这条路**只取成功的那一半** ——
+                // 失败分类在预加载里没有消费者（预载失败什么都不做，等当前歌自然结束），
+                // 但把它显式丢掉而不是让类型自己塌成 `Any`，是为了让下一个人一眼看到
+                // 「预载路径不参与失败分流」这个事实。
+                val result: SongUrlResult? = cacheHit?.let {
                     SongUrlResult(it.url, it.actualLevel, it.br, it.type, it.songMaxLevel)
                 } ?: fetchUrlOfflineFirst(
                     songRefOf(nextTrack.source, songId, sourceId, mediaId),
                     quality,
-                )
+                ).result
                 if (result == null) {
                     // 预加载失败：可能无版权/无订阅，忽略即可，等当前歌结束时由 songEnded 跳歌。
+                    // ⚠️ 这里是**预加载**，不是用户点了播放 —— 不提示、不跳歌、不改任何状态。
                     currentlyPreloadingSongId = -1L
                     return@launch
                 }

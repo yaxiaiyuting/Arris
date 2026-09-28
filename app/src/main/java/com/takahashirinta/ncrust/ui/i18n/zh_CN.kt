@@ -118,7 +118,7 @@ val zhCN = Strings(
         visualizerNotSpectrumHint = "波形亮度表示时间新旧，不是频谱：本版没有频域数据，不区分低/中/高频。",
         // v2.9.0：动效强度（统一档位）+ 界面动效总开关。
         motionIntensityLabel = "动效强度",
-        motionIntensityDescription = "一个档位同时决定波形与界面动效。简洁：圆角柱与峰值保持，界面动效只保留基础项（封面背景模糊、背景呼吸、封面浮起与切歌淡入）；精致：再加渐变流动、柱顶光点与呼吸，界面动效再加全屏波形、歌词律动、节拍脉冲与视差；炫技：再加冲击波、粒子、3D 与点按，界面动效再加背景粒子、光晕扩散与封面 3D 旋转。低端设备（低内存 / 3 GB 级 / Android 7.x）默认简洁档。",
+        motionIntensityDescription = "一个档位同时决定波形与界面动效。简洁：圆角柱与峰值保持，界面动效只保留静态项（封面背景模糊、封面浮起阴影、切歌淡入），不随节拍抖动；精致：再加渐变流动、柱顶光点与呼吸，界面动效再加全屏波形、歌词律动、封面浮动、控制条脉冲与视差；炫技：再加冲击波、粒子、3D 与点按，界面动效再加背景粒子、光晕扩散与封面 3D 旋转。低端设备（低内存 / 3 GB 级 / Android 7.x）默认简洁档。",
         uiMotionLabel = "界面动效",
         uiMotionDescription = "控制播放页的界面动效（背景模糊、呼吸、歌词律动、节拍脉冲、粒子等），不影响波形档位。关闭后背景回纯色、不再有任何逐帧动效，性能最优。",
         motionShockwaveLabel = "冲击波（随鼓点）",
@@ -130,7 +130,16 @@ val zhCN = Strings(
         motionWaveBandsLabel = "波形频带响应",
         motionWaveBandsDescription = "按那一刻低／中／高频哪一带占主导给波形柱子上色，并在「炫技」档多画三条频带能量条。横轴仍是时间，不是频谱。",
         motionBreathingLabel = "背景呼吸",
-        motionBreathingDescription = "背景的明暗与缩放跟随整体响度起伏。",
+        motionBreathingDescription = "背景的明暗与缩放跟随整体响度起伏。只在精致档及以上生效；简洁档是静态档。",
+        // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
+        motionRhythmLabel = "界面律动（随节拍）",
+        motionRhythmDescription = "控制背景呼吸、封面浮动、歌词律动、控制条脉冲这四类「跟着音乐一起动」的效果；关掉后冲击波、光晕、粒子不受影响（炫技档的封面 3D 旋转也随之停用）。",
+        motionCoverFloatLabel = "封面浮动",
+        motionCoverFloatDescription = "封面随鼓点轻微上浮（最多 2dp）。只在精致档及以上生效。",
+        motionLyricPulseLabel = "歌词律动",
+        motionLyricPulseDescription = "当前歌词行随鼓点轻微放大（最多 3%）。只在精致档及以上生效。",
+        motionBarPulseLabel = "控制条脉冲",
+        motionBarPulseDescription = "底部播放控制条随鼓点轻微放大（最多 2%）。只在精致档及以上生效。",
     ),
     playerUi = PlayerUiStrings(
         prevButton = "上一首",
@@ -235,6 +244,18 @@ val zhCN = Strings(
         sourceQqDeviceLimit = "登录设备数已达上限，请先在官方客户端管理设备",
         sourceQqLoginRateLimited = "登录过于频繁，请稍后再试",
 
+        sourceBiliAccount = "B 站账号",
+        biliLoginTitle = "扫码登录 B 站",
+        biliLoginWaiting = "请用哔哩哔哩客户端扫码",
+        biliLoginScanned = "已扫码，请在手机上确认",
+        biliLoginExpired = "二维码已失效，请刷新",
+        biliLoginRefresh = "刷新二维码",
+        biliLoginFailed = "登录失败，请重试",
+        biliLoginSuccess = { name -> "已登录：" + name },
+        biliLogout = "退出 B 站账号",
+        biliLoginRiskNote = "登录后请求会带上你的 B 站账号身份；本应用只读取，不投币、不收藏、不点赞；凭据只保存在本机。",
+        biliQualityNote = "音质上限：匿名 320K；登录后能否获得无损尚未验证，本版不作承诺。",
+        searchFilterEmpty = { label -> "「" + label + "」下没有结果" },
         aggFilterBoth = "双源",
         aggFilterNetease = "只看网易云",
         aggFilterQq = "只看 QQ 音乐",
@@ -494,5 +515,18 @@ val zhCN = Strings(
         searchSourceSkipped = "未登录",
         searchSourceCount = { n -> "$n 首" },
         searchSourceSummaryWithStatus = { a, b -> "网易云 $a · QQ 音乐 $b" },
+
+
+        playbackFailure = PlaybackFailureStrings(
+            needLogin = "需要登录%s才能播放这首歌",
+            needVip = "这首歌需要会员权益，若已开通请重新登录刷新凭证",
+            needPurchase = "这首歌需要单独购买后才能播放",
+            authExpired = "登录状态已过期，请重新登录",
+            copyrightGone = "该音源暂无版权，可换个音源试试",
+            regionLocked = "版权方限制，当前地区无法播放",
+            network = "网络异常，请稍后重试",
+            unknown = "暂时无法播放这首歌，请稍后重试",
+            switchSource = { other -> "%s 没有这首歌，可切到 " + other },
+        ),
 
 )

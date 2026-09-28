@@ -383,6 +383,9 @@ data class Strings(
      * 两源都返回时两条路径必须产出**逐字相同**的文案（`SourceCountsTest` 在 8 种语言上钉住）。
      */
     val searchSourceSummaryWithStatus: (String, String) -> String,
+
+    /** v3.2.0 · P0：取链失败的分类文案（见 [PlaybackFailureStrings]）。 */
+    val playbackFailure: PlaybackFailureStrings,
 ) {
     // ---------- 转发属性（v2.0.0 · HF1）----------
     // 离线 / 缓存那一组（19 条）的构造参数已经挪进 [OfflineStrings]，这里用**成员**转发属性把
@@ -457,6 +460,20 @@ data class Strings(
     val sourceQqAccountRestricted: String get() = source.sourceQqAccountRestricted
     val sourceQqDeviceLimit: String get() = source.sourceQqDeviceLimit
     val sourceQqLoginRateLimited: String get() = source.sourceQqLoginRateLimited
+
+    // ---- v3.2.0：B 站扫码登录 + 筛选空态（转发到 source 组，见那边的 KDoc）----
+    val sourceBiliAccount: String get() = source.sourceBiliAccount
+    val biliLoginTitle: String get() = source.biliLoginTitle
+    val biliLoginWaiting: String get() = source.biliLoginWaiting
+    val biliLoginScanned: String get() = source.biliLoginScanned
+    val biliLoginExpired: String get() = source.biliLoginExpired
+    val biliLoginRefresh: String get() = source.biliLoginRefresh
+    val biliLoginFailed: String get() = source.biliLoginFailed
+    val biliLoginSuccess: (String) -> String get() = source.biliLoginSuccess
+    val biliLogout: String get() = source.biliLogout
+    val biliLoginRiskNote: String get() = source.biliLoginRiskNote
+    val biliQualityNote: String get() = source.biliQualityNote
+    val searchFilterEmpty: (String) -> String get() = source.searchFilterEmpty
     val cacheUsageAudio: String get() = offline.cacheUsageAudio
     val cacheUsageImage: String get() = offline.cacheUsageImage
     val cacheUsageOther: String get() = offline.cacheUsageOther
@@ -655,6 +672,14 @@ data class Strings(
     val motionWaveBandsDescription: String get() = waveform.motionWaveBandsDescription
     val motionBreathingLabel: String get() = waveform.motionBreathingLabel
     val motionBreathingDescription: String get() = waveform.motionBreathingDescription
+    val motionRhythmLabel: String get() = waveform.motionRhythmLabel
+    val motionRhythmDescription: String get() = waveform.motionRhythmDescription
+    val motionCoverFloatLabel: String get() = waveform.motionCoverFloatLabel
+    val motionCoverFloatDescription: String get() = waveform.motionCoverFloatDescription
+    val motionLyricPulseLabel: String get() = waveform.motionLyricPulseLabel
+    val motionLyricPulseDescription: String get() = waveform.motionLyricPulseDescription
+    val motionBarPulseLabel: String get() = waveform.motionBarPulseLabel
+    val motionBarPulseDescription: String get() = waveform.motionBarPulseDescription
 
     // ---------- 转发属性（v2.5.3 · P0）：关于页 → [AboutStrings] ----------
     // 与 v2.0.0 · HF1 的 [OfflineStrings] 同一套做法：搬家不改调用点。
@@ -886,6 +911,25 @@ data class SourceStrings(
     // 再加一个就会在真机上类加载期抛 ClassFormatError。
 
     /** 「双源聚合」口径。 */
+    // ---------- v3.2.0：B 站扫码登录（P1）----------
+    // 归属 `source` 组而不是新开组：这一组本来就是「音源与账号」的文案，
+    // 而 B 站登录的每一条都要拼音源名/账号名（`sourceBiliAccount` 与
+    // `sourceQqAccount` 是同一个语义位置）。主构造器槽位已满，新组会再吃一个参数。
+    /** 账号块的标题（与 [sourceQqAccount] 对称）。 */
+    val sourceBiliAccount: String,
+    val biliLoginTitle: String,
+    val biliLoginWaiting: String,
+    val biliLoginScanned: String,
+    val biliLoginExpired: String,
+    val biliLoginRefresh: String,
+    val biliLoginFailed: String,
+    /** 已登录时的昵称文案：`(昵称) -> "已登录：xxx"`。 */
+    val biliLoginSuccess: (String) -> String,
+    val biliLogout: String,
+    val biliLoginRiskNote: String,
+    val biliQualityNote: String,
+    /** v3.2.0 · P0-D：`(筛选档名) -> "「只看 B 站」下没有结果"`。 */
+    val searchFilterEmpty: (String) -> String,
     val aggFilterBoth: String,
     /** 「只看网易云」口径。 */
     val aggFilterNetease: String,
@@ -1184,6 +1228,48 @@ data class QueueStrings(
  *  - [pageTransitionDescription] 只说**关掉能得到什么**（「关闭可提升低端机流畅度」），
  *    不说「开启会掉帧」—— 默认是开，说明文字不该先劝退用户。
  */
+/**
+ * v3.2.0 · P0：**取链失败的分类文案**。
+ *
+ * ## 为什么必须为每一类失败单独写一句话
+ *
+ * v3.1.0 及以前，所有取链失败共用一句「此源无版权，可切另一源：<另一家>」——
+ * 而那句话在绝大多数情况下是**假话**：实测（2026-09-28）QQ 对同一首 VIP 歌
+ * 在匿名态返回 `result=104003`（需要登录/会员），与「版权」没有任何关系。
+ * 把「需要会员」「登录过期」「网络抖动」全部说成「无版权」，
+ * 用户的第一反应是「这个应用的版权数据是错的」，而不是「我该去开会员」。
+ *
+ * 所以本组的每一条都**只说这一类的用户能验证的事实**，并给出**可执行的动作**
+ * （去登录 / 去开会员 / 去购买 / 稍后重试 / 换个音源）。
+ *
+ * ## 文案纪律（与铁律 20 配套）
+ *
+ * - `noCopyright` 那一条**只有**服务端显式声明无版权时才会被选中
+ *   （网易云的 `noCopyrightRcmd`；QQ 侧没有任何字段能证明这件事）；
+ * - 服务端原始 `tips` **一律不回显** —— 那是外部平台的自由文本，
+ *   既不本地化也不可信（「服务端标签不可信」在客户端对外说的话上同样成立）。
+ */
+data class PlaybackFailureStrings(
+    /** 未登录该音源。 */
+    val needLogin: String,
+    /** 已登录但权益不足（会员专享 / 高音质需会员 / 票据失效 —— 客户端分不开，所以两条出路都给）。 */
+    val needVip: String,
+    /** 数字专辑 / 单曲付费。 */
+    val needPurchase: String,
+    /** 凭证过期（HTTP 401/403）。 */
+    val authExpired: String,
+    /** 服务端**显式声明**无版权（目前只有网易云产出这一档）。 */
+    val copyrightGone: String,
+    /** 地区限制。 */
+    val regionLocked: String,
+    /** 网络 / 超时。 */
+    val network: String,
+    /** 读不懂的失败 —— 不许编原因。 */
+    val unknown: String,
+    /** 「可以换个音源试试」的通用后缀（参数是另一个音源的名字）。 */
+    val switchSource: (String) -> String,
+)
+
 data class MotionStrings(
     /** 设置页开关标题：「页面切换动效」。 */
     val pageTransitionLabel: String,
@@ -1450,6 +1536,26 @@ data class WaveformStrings(
     val motionBreathingLabel: String,
     /** 背景呼吸说明。**必须**写明：跟随整体响度。 */
     val motionBreathingDescription: String,
+
+    // ---------- v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）----------
+    // 归类判据：**驱动量是否来自 `MotionEnvelope` 的节拍 / 强拍 / 响度包络**。
+    // 逐项表与判据出处见 `docs/verification/v3.2.0/probe-ui-jitter.md` §5。
+    /** 律动总闸的标题。 */
+    val motionRhythmLabel: String,
+    /** 律动总闸的说明（必须写明「冲击波/光晕/粒子不受影响」，否则用户不敢关）。 */
+    val motionRhythmDescription: String,
+    /** 封面浮动的标题。 */
+    val motionCoverFloatLabel: String,
+    /** 封面浮动的说明（幅度 + 生效档位，两件都必须写）。 */
+    val motionCoverFloatDescription: String,
+    /** 歌词律动的标题。 */
+    val motionLyricPulseLabel: String,
+    /** 歌词律动的说明。 */
+    val motionLyricPulseDescription: String,
+    /** 控制条脉冲的标题。 */
+    val motionBarPulseLabel: String,
+    /** 控制条脉冲的说明。 */
+    val motionBarPulseDescription: String,
 )
 
 /**

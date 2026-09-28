@@ -14,6 +14,8 @@ import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.player.ResolveFailureKind
+import com.takahashirinta.ncrust.player.ResolveOutcome
 import com.takahashirinta.ncrust.player.SongUrlResult
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.MusicSourceProvider
@@ -79,6 +81,23 @@ object QqMusicSourceProvider : MusicSourceProvider {
         runCatching { QqApi.fetchPlayUrl(song, level) }
             .onFailure { Log.w(TAG, "resolveUrl failed for id=${song.id}", it) }
             .getOrNull()
+
+    /**
+     * v3.2.0 · P0：**带失败分类**的取链。播放链走这一条。
+     *
+     * 分类规则的唯一实现在 `qq/QqRejection.kt`（纯逻辑 + 单测），这里只做转发 ——
+     * 把判据抄一份到这里，两份真相必然漂移（v2.1.5 / v2.6.0 各栽过一次同形状的坑）。
+     *
+     * ⚠️ 异常也走分类：`QqApi.resolveOutcome` 内部不抛，但 provider 的契约是「绝不抛」，
+     * 所以外面再兜一层 —— 兜住之后归 [ResolveFailureKind.UNKNOWN]（不跳歌），
+     * 绝不归 [ResolveFailureKind.UNRESOLVABLE]（会跳歌）。
+     */
+    override suspend fun resolveUrlOutcome(song: SongItem, level: String): ResolveOutcome =
+        runCatching { QqApi.resolveOutcome(song, level) }
+            .onFailure { Log.w(TAG, "resolveUrlOutcome failed for id=${song.id}", it) }
+            .getOrElse {
+                ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, MusicSource.QQMUSIC)
+            }
 
     /**
      * 元数据补全：QQ 侧没有「按 id 批量取详情」的轻量端点（取详情要走完整曲库接口），

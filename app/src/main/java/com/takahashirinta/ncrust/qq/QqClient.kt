@@ -71,6 +71,25 @@ object QqClient {
     private var appContext: Context? = null
 
     /**
+     * v3.2.0 · P0：最近一次 [musicu] 的传输层结果。
+     *
+     * 为什么必须有它：`104003`（需要登录/会员）与「HTTP 401/403（凭证过期）」在
+     * 业务码层面**都是失败**，但处置不同 —— 前者要开通会员/登录，后者只要重新登录。
+     * v3.1.0 的 `musicu` 把两者都变成 `null`，调用方无从区分。
+     *
+     * 只写不读的地方没有：唯一消费者是 [QqApi] 的失败分类（[QqRejectionInput.httpStatus]）。
+     * `@Volatile` 是因为它在 IO 线程写、在调用方线程读。
+     */
+    @Volatile
+    var lastHttpStatus: Int? = null
+        private set
+
+    /** 最近一次 [musicu] 的失败原因（异常类名 + 消息，**只进日志**）。 */
+    @Volatile
+    var lastTransportError: String? = null
+        private set
+
+    /**
      * 搜索专用通道（v2.1.0 · hotfix 3）：**超时收紧到秒级**。
      *
      * 原因：搜索是交互式的，而取链/歌词不是。共用那条 15/20 秒的客户端时，
@@ -247,15 +266,32 @@ object QqClient {
 
             http.newCall(httpRequest).execute().use { response ->
                 val text = response.body?.string()
+                // v3.2.0 · P0：把传输层事实记下来，供失败分类使用（401/403 = 凭证问题）。
+                lastHttpStatus = response.code
+                lastTransportError = null
                 if (BuildConfig.DEBUG) {
                     Log.d(TAG, "musicu $module http=${response.code} len=${text?.length ?: 0}")
                 }
-                if (!response.isSuccessful || text.isNullOrEmpty()) return@use null
-                val json = JSONObject(text)
+                if (response.code == 401 || response.code == 403) {
+                    // 凭证被服务端拒绝：状态码记下来，正文不解析（多数是 HTML/空壳）。
+                    lastTransportError = "http=${response.code}"
+                    return@use null
+                }
+                if (!response.isSuccessful || text.isNullOrEmpty()) {
+                    lastTransportError = "http=${response.code} bodyLen=${text?.length ?: 0}"
+                    return@use null
+                }
+                val json = runCatching { JSONObject(text) }.getOrElse {
+                    lastTransportError = "malformed json (len=${text.length})"
+                    return@use null
+                }
                 // 信封 key 可能是 "req"，也可能是 module 名本身；两者都认。
                 json.optJSONObject("req") ?: json.optJSONObject(module)
             }
         } catch (e: Exception) {
+            // v3.2.0：异常也记账 —— 否则「连不上」在分类里会退化成「读不懂的拒绝」。
+            lastHttpStatus = null
+            lastTransportError = e::class.java.simpleName + ": " + (e.message ?: "")
             Log.w(TAG, "musicu failed: $module", e)
             null
         }

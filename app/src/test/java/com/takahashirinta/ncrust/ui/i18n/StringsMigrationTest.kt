@@ -214,7 +214,9 @@ class StringsMigrationTest {
         // v3.0.0：waveform 20 → 30（五个独立开关 × 标题/说明；同样按纪律进 WaveformStrings，
         // 外层 `Strings` 一个参数都没加）。
         // v3.1.0：settings 78 → 80（B 站音源开关的标题 + 说明；waveform 一个参数都没加）。
-        val expectedSizes = mapOf("settings" to 80, "about" to 25, "playerUi" to 31, "waveform" to 30)
+        // v3.2.0：waveform 30 → 38（界面律动的 1 个总闸 + 3 个细粒度开关 × 标题/说明；
+        //         按纪律进 WaveformStrings，外层 `Strings` 只为**组参数** +1）。
+        val expectedSizes = mapOf("settings" to 80, "about" to 25, "playerUi" to 31, "waveform" to 38)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

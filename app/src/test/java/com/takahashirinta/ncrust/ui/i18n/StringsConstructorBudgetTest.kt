@@ -176,16 +176,87 @@ class StringsConstructorBudgetTest {
      * 而后者会留下一条可追溯的提交记录。范围断言做不到这一点。
      */
     @Test
-    fun `v2_8_0 之后 Strings 主构造器稳定在 136`() {
+    fun `v2_8_0 之后 Strings 主构造器只涨组参数（v3_2_0 起 137）`() {
         val clazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")
         assertEquals(
             "Strings 主构造器参数数变了。若是有意加文案，请把新文案放进嵌套组" +
-                "（外层一个都不要加），然后同步改这条断言并在提交信息里说明。",
-            136, primaryParams(clazz),
+                "（外层一个都不要加），然后同步改这条断言并在提交信息里说明。" +
+                "（v3.2.0 的唯一变化是 +1 个**组参数** `playbackFailure`，不是往外层加文案。）",
+            137, primaryParams(clazz),
         )
-        // 余量：136 ⇒ 1(this) + 136 + ceil(136/32)=5(mask) + 1(marker) = 143 槽，距 255 还有 112。
-        assertEquals(143, dexSlots(136, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(136, true) >= 100)
+        // 余量：137 ⇒ 1(this) + 137 + ceil(137/32)=5(mask) + 1(marker) = 144 槽，距 255 还有 111。
+        assertEquals(144, dexSlots(137, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(137, true) >= 100)
+    }
+
+    /**
+     * v3.2.0 · P0：**取链失败的分类文案落在独立分组 [PlaybackFailureStrings]**。
+     *
+     * 这是分组机制的正向用法，与前几版同一形状：9 条全部进组，外层**只为组**加了 1 个参数
+     * （136 → 137），组本身 `1(this) + 9 = 10` 个 dex 槽。
+     *
+     * ## 为什么必须单开一组而不是塞进 PlayerUiStrings
+     *
+     * `PlayerUiStrings` 是「播放器界面的控件文案」（按钮 / 面板 / 队列），
+     * 而这一组是**失败语义**：每一句都对应一个可判定的服务端事实，
+     * 并且它们与铁律 20/21 的可执行定义一一对应（哪一类失败该说哪一句话）。
+     * 把它们混进控件文案组，下一个人就无法从「组里有什么」看出这条纪律。
+     *
+     * ## 三条机械防线
+     *
+     * 1. **八种语言都非空**（字段加了、某个语言忘了填 —— 具名实参 + 默认值会让它静默）；
+     * 2. **同一语言内 9 条互不撞词** —— 两条失败说同一句话，用户就无法据此决定
+     *    「去登录」还是「去开会员」（v2.1.3 规则 10 的同一形状）；
+     * 3. **`needLogin` 必须带占位符 `%s`**（它要拼音源名）—— 少了它，
+     *    8 种语言里都会出现一句没有主语的话（「需要登录才能播放」而不说登哪一家）。
+     */
+    @Test
+    fun `v3_2_0 的 9 条取链失败文案进了 PlaybackFailureStrings 且八种语言都可用`() {
+        assertEquals(
+            "v3.2.0 只该为新的失败文案组加**一个**外层参数（136 → 137）",
+            137,
+            primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
+        )
+        val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaybackFailureStrings")
+        assertEquals(
+            "PlaybackFailureStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
+            9,
+            primaryParams(groupClazz),
+        )
+        // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
+        assertEquals(10, dexSlots(9, false))
+
+        val presets = listOf(
+            "zh-CN" to zhCN, "zh-TW" to zhTW, "en-US" to en, "ja-JP" to jpJP,
+            "ja-MY" to jpMY, "ko-KP" to koNK, "de-DE" to deDE, "ru-RU" to ruRU,
+        )
+        val seenPerLanguage = HashMap<String, MutableSet<String>>()
+        for ((code, strings) in presets) {
+            val g = strings.playbackFailure
+            val texts = listOf(
+                g.needLogin, g.needVip, g.needPurchase, g.authExpired,
+                g.copyrightGone, g.regionLocked, g.network, g.unknown,
+            )
+            for ((i, t) in texts.withIndex()) {
+                assertTrue("$code 的第 $i 条失败文案为空", t.isNotBlank())
+            }
+            // ③ needLogin 必须能拼音源名。
+            assertTrue(
+                "$code 的 needLogin 必须含 %s 占位符（要拼音源名）",
+                g.needLogin.contains("%s"),
+            )
+            // ② 同一语言内互不撞词。
+            assertEquals("$code 的 8 条失败文案有重复", 8, texts.toSet().size)
+            // switchSource 是 lambda，单独判非空。
+            assertTrue("$code 的 switchSource 为空", g.switchSource("X").isNotBlank())
+            seenPerLanguage[code] = (texts + listOf(g.switchSource("X"))).toMutableSet()
+        }
+        // 每种语言至少有 2 种取值（防止整块文案只改了文件名没改内容）。
+        val zhOnly = seenPerLanguage.getValue("zh-CN")
+        assertTrue(
+            "八种语言应当是各自翻译的，不是同一份内容",
+            seenPerLanguage.values.count { it != zhOnly } >= 6,
+        )
     }
 
     /**
@@ -440,7 +511,8 @@ class StringsConstructorBudgetTest {
     fun `v2_6_0 没有往 Strings 主构造器加任何参数`() {
         assertEquals("v2.5.5 是 135；v2.6.0 的新文案进了 PlaylistsStrings，外层应当一点没动", 135, 135)
         // v2.8.0：外层唯一的变化是 +1 个**组参数**（`waveform`），不是往外层加文案。
-        assertEquals(136, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        // v3.2.0：同样只 +1 个**组参数**（`playbackFailure`）⇒ 137。
+        assertEquals(137, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -467,8 +539,9 @@ class StringsConstructorBudgetTest {
     @Test
     fun `v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用`() {
         assertEquals(
-            "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数",
-            136,
+            "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数" +
+                "（v3.2.0 又只为失败文案组加了一个 ⇒ 137）",
+            137,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
@@ -559,19 +632,21 @@ class StringsConstructorBudgetTest {
     @Test
     fun `v2_8_0 的 16 条 + v2_9_0 的 4 条 + v3_0_0 的 10 条动效文案都在 WaveformStrings 且八种语言都可用`() {
         assertEquals(
-            "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136",
-            136,
+            "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136；" +
+                "v3.2.0 再 +1 个组参数（失败文案组）⇒ 137",
+            137,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
             "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言。" +
-                "（v2.8.0 = 16，v2.9.0 加 4 条 ⇒ 20；v3.0.0 加 5 个独立开关 × 2 条 ⇒ 30。" +
+                "（v2.8.0 = 16，v2.9.0 加 4 条 ⇒ 20；v3.0.0 加 5 个独立开关 × 2 条 ⇒ 30；" +
+                "v3.2.0 加界面律动 1 个闸 + 3 个细粒度开关 × 2 条 ⇒ 38。" +
                 "组预算 120 还很宽，不必再拆组。）",
-            30,
+            38,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.WaveformStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
-        assertEquals(31, dexSlots(30, false))
+        assertEquals(39, dexSlots(38, false))
 
         val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
             "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },
