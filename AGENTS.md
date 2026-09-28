@@ -4823,3 +4823,63 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
 - **B站登录后的 FLAC / 收藏夹同步**：取决于是否有大会员账号，见
   [`probe-bili-login.md`](docs/verification/v3.2.0/probe-bili-login.md) 的未验证清单。
 - **`pneedbuy` / `isbuy` 非零时服务端的确切回答未验证**（分类里有防御分支）。
+
+## v3.2.1 新增（本 fork · PlayerCard 巨型 composable 拆分 + B站扫码登录「打开即失效」）
+
+### 4 条新铁律（**本版起是硬约束，写进开头的铁律清单**）
+
+| # | 铁律 | 为什么是硬的（本版的实测依据） |
+|---|---|---|
+| **24** | **巨型 composable（> 2000 code unit）必须拆分，且必须被监控。** | v3.2.0 的 `PlayerCard` 是**一个 9092 code unit / 191 寄存器**的方法，真机上 ART 为它分配 **45MB** 编译、JIT 完成后 8.2 秒出现 `invalid weight 0.0` 崩溃。源码层面完全看不出来（2290 行的"长文件"而已）。监控落点：`tools/method-size/method_size.py`（读 DEX `code_item.insns_size`，与 `dexdump` 交叉验证过同一个数），阈值 2000 / 预警 1200，退出码 1 可直接当门禁。 |
+| **25** | **拆分核心 UI 必须保持行为逐字节等价，回归测试必须覆盖。** | 拆分的正确维度是「布局分支 / 叠加层 / 状态-几何-副作用」，**不是**「按状态域」——后者必然把 `remember` 搬进子组件，生存期跟着挂载条件走，行为就变了。可执行的等价定义：① 节点顺序、`Modifier` 链、`weight` 实参、回调顺序、`contentDescription` 一字不改；② 状态零搬移（生存期与**读取位置**都不变，派生状态仍读同一个 `progress.value`）；③ 副作用零重排（`LaunchedEffect` 的 key 逐条对照）；④ 真机同设备同形态下，卡片语义节点的集合与每个节点的 `bounds` 完全相同。 |
+| **26** | **对称位置的保护必须对称（左栏/右栏都要有）。** | v3.2.0 的 `PlayerCard` 只有一处动态权重 `wideLeftFraction`，而**只有右栏**有 `coerceAtLeast(0.0001f)`、左栏裸传。`Modifier.weight` 内部是 `require(w > 0.0)` —— 异常值不是"宽度趋 0"而是**抛异常崩 App**。本版把下限收敛成 `PlayerLayout.MIN_SPLIT_FRACTION` 一个常量，左右两侧各走一个出口函数，并**显式挡 NaN**（`Float.NaN.coerceIn/coerceAtLeast` 都返回 NaN，即"加了 coerce 还是会崩"）。 |
+| **27** | **崩溃分析必须保留 `mapping.txt`。** | v3.2.0 那次崩溃里，`R4.b1.c` / `D5.o.k` / `a.a.h` 能还原成 `PlayerCard` / `PlayerCardOverlay` / `MainScreen` **只因为** `app/build/outputs/mapping/release/mapping.txt` 还在。它随每次 release 构建变化，**丢了就无法 retrace**；而 `/data/system/dropbox` 里同一异常从 v2.0.0 到 v3.2.0 一直都有记录 —— 也就是说历史崩溃随时可能被翻出来复盘，届时没有 mapping 就只能猜。归档要求：每次 release 把 mapping 复制到 `docs/verification/<版本>/mapping-<版本>.txt`（本轮从 v3.2.0 的构建产物补齐了 `mapping-v3.2.0.txt`）。 |
+
+### 本版做了什么
+
+| 项 | 内容 |
+|---|---|
+| **P0 · PlayerCard 拆分** | 单方法 **9092 → 1972** code unit（−78%），寄存器 191 → 99。拆成 15 个 composable，全部 < 2000：`PlayerCardLayouts.kt`（三个互斥分支）、`PlayerCardTray.kt`、`PlayerCardOverlays.kt`、`PlayerCardBackdrop.kt`、`PlayerCardExpanded.kt`、`PlayerCardState.kt`（状态持有者 + 纯几何 + 回调打包）、`PlayerCardEffects.kt`。 |
+| **P0-A · 对称保护** | `wideLeftFraction` 出口加正下限 + 调用点对称加保护 + 新增对称出口 `wideRightFraction`；单测覆盖 0/0.5/1/负数/超 1/±Inf/**NaN**。 |
+| **P0 · B站扫码登录「打开即失效」** | 根因：界面把「申请二维码」「轮询到终态」串成一次阻塞调用（`state = login.start { … }` 之后才 `generateQrBitmap`），而 `start()` 只在终态返回 ⇒ 位图 180 秒内不可能出现；二维码区又把「非 LOADING 且无位图」一律显示成「二维码已失效，请刷新」（首帧 `IDLE` 就命中）。修法：状态机新增 `poll(onState)`，界面改成 **prepare → 渲染 → poll**；`renderFailed` 独立成档显示「二维码获取失败，请重试」；新增纯函数 `biliQrPanel(state, hasBitmap, renderFailed)` 三档可断言。 |
+| **C · JIT 对照实验** | 见 `docs/verification/v3.2.1/jit-experiment.md`（含**未能复现**的如实记录）。 |
+| **方法大小监控** | `tools/method-size/method_size.py` + `method-size-report.md`（基线、阈值、报警、集成方式）。 |
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 播放器卡片的七个文件（拆分后） | `ui/player/PlayerCard.kt`（入口）/ `PlayerCardExpanded.kt` / `PlayerCardLayouts.kt` / `PlayerCardTray.kt` / `PlayerCardOverlays.kt` / `PlayerCardBackdrop.kt` / `PlayerCardEffects.kt` / `PlayerCardState.kt` |
+| 分栏比例的唯一下限 | `ui/player/PlayerLayout.kt` 的 `MIN_SPLIT_FRACTION` / `wideLeftFraction` / `wideRightFraction` |
+| 封面落点与分栏几何（纯函数，可单测） | `ui/player/PlayerCardState.kt` 的 `playerCardGeometry(...)` / `PlayerCardGeometry` |
+| B站扫码登录的顺序修正 | `bili/BiliQrLogin.kt` 的 `poll(onState)`、`ui/components/BiliQrLoginDialog.kt` 的 `biliQrPanel(...)` / `BiliQrPanel` |
+| 方法大小监控 | `tools/method-size/method_size.py`（`--mapping` / `--only` / `--json` / `--baseline`，退出码 0/1/2） |
+
+### 拆分的方法体预算（实测数字，下一个拆巨型 composable 的人直接用）
+
+同一次构建、同形状空实现的 debug dex 实测：
+
+| 形状 | code unit |
+|---|---|
+| 25 个形参 + 20 个默认值 | **1366** |
+| 25 个形参、无默认值 | 426 |
+| 11 个形参（回调打成一包）+ 6 个默认值 | 595 |
+
+⇒ **光签名就可能吃掉一个 composable 的全部预算**。所以「拆巨型 composable」这件事包含两半：
+拆树（本版拆了 15 块）**和**治签名（15 个回调打成 `PlayerCardCallbacks`、去掉 6 个从未生效的默认值）。
+这与 v2.0.0 · HF1（dex 参数寄存器上限）是同一条教训的两个面。
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **不拆 `MainActivityKt.MainScreen`（7317）、`SettingsRegistry.<init>`（3026）、`FullPlayerControls`（2795）、`LyricsView`（2744）**：它们同样超阈值，但不在本版范围（任务书只点名 `PlayerCard`）。方法大小报告会**每次都把它们报出来**，下一版要做时不需要重新发现。
+- **不动华为 / 荣耀媒体卡片**（任务书明令）。
+- **不做 B站 CDN 取流验证**（独立任务）。
+- **不改 `PlayerCardOverlay` 的公开签名**：只把 15 个回调在它内部打包，`MainActivity` 一行未改。
+
+### 本版新增的未验证项（与交付报告一致，如实）
+
+- **`invalid weight 0.0` 的 JIT 对照实验本轮未能复现**（正常 JIT 下 6 次冷启动全绿），
+  因此「它是不是 JIT 代码生成问题」**没有结论**；本版的拆分依据是静态证据
+  （9092 code unit / 191 寄存器 / 45MB 编译）与 A 项的不变量收紧，不是实验结论。
+- **`MainScreen` 等 4 个仍超阈值的方法未处理**（范围外）。
+- **宽屏两栏 / 大屏模式的真机 A/B 快照**：见 `docs/verification/v3.2.1/EQUIVALENCE.md` 的采集范围与已知限制。

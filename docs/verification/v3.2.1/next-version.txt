@@ -1,0 +1,13 @@
+next-version.sh —— versionCode 三源交叉校验
+  仓库: /home/duanjb666/deepseek/Ncrust   (fetch: yes)
+  ① 最近 5 个 tag 指向的 build.gradle.kts:
+       v3.2.0-gpl=55
+       v3.1.0-gpl=54
+       v3.0.0-gpl=53
+       v2.9.0-gpl=52
+       v2.8.0-gpl=51
+  ② 已发布 APK 的 aapt2 dump badging 实测（红线 19：不看 release 标题）:
+       Ncrust-v2.6.2-gpl-release.apk=50
+  ③ 工作区 build.gradle.kts: versionCode=56 versionName=3.2.1-gpl
+  ----
+  三源最大值 = 56  ⇒ 下一个可用 versionCode = 57

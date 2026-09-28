@@ -327,8 +327,22 @@ android {
         // 本版范围：QQ VIP 版权误判 P0（铁律 20/21）、界面律动独立开关 P1（铁律 22）、
         // B站扫码登录 P1（铁律 23）、歌词全屏迷你封面错位 P0-A、简洁档仍抖动 P0-B、
         // B站搜索恒 0 条与「只搜B站」卡死 P0-C/P0-D。
-        versionCode = 55
-        versionName = "3.2.0-gpl"
+        // v3.2.1：**第八次按脚本定号**。冷启动跑 `tools/next-version.sh`（**带 fetch**）——
+        //   ① 最近 5 个 tag 指向的 build.gradle.kts：v3.2.0=55 / v3.1.0=54 / v3.0.0=53 /
+        //      v2.9.0=52 / v2.8.0=51；
+        //   ② 已发布 APK 的 `aapt2 dump badging` 实测（唯一可信的「这个号已经发布出去了」
+        //      来源，红线 19：不看 release 标题）：本轮脚本只扫到本地 dist/ 里的一只
+        //      （Ncrust-v2.6.2-gpl-release.apk=50）；v3.2.0 的包在仓库外的 dist/ 且脚本
+        //      的 glob 没吃到 —— 但 ① 的 tag v3.2.0-gpl=55 已经把它钉住了；
+        //   ③ 工作区：55 / 3.2.0-gpl。
+        //   三源最大值 = 55 ⇒ 下一个可用 **56**。
+        //   实测记录：docs/verification/v3.2.1/next-version.txt
+        //   （打 tag 前会用 `git show v3.2.1-gpl:app/build.gradle.kts | grep version` 自证一次。）
+        // 本版范围：PlayerCard 巨型 composable 拆分 P0（铁律 24/25）、
+        // wideLeftFraction 对称正下限 P0-A（铁律 26）、B站扫码登录「打开即失效」P0、
+        // JIT 对照实验 C、方法大小监控机制（铁律 24 的门禁）。
+        versionCode = 56
+        versionName = "3.2.1-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

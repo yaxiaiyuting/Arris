@@ -1,0 +1,628 @@
+{
+  "source": "/home/duanjb666/deepseek/Ncrust/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 6347,
+  "violations": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.AboutStrings.getAboutSectionCredits (+107 inline/overload)",
+      "obfuscated": "R4.n1.invoke",
+      "class": "R4.n1",
+      "codeUnits": 3362,
+      "registers": 68,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsRegistry.<init> (+8 inline/overload)",
+      "obfuscated": "V4.f.<clinit>",
+      "class": "V4.f",
+      "codeUnits": 3026,
+      "registers": 359,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getSource (+54 inline/overload)",
+      "obfuscated": "O4.L0.invoke",
+      "class": "O4.L0",
+      "codeUnits": 2286,
+      "registers": 63,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.theme.color.HctSolver.Y_FROM_LINRGB (+45 inline/overload)",
+      "obfuscated": "X4.a.g",
+      "class": "X4.a",
+      "codeUnits": 2238,
+      "registers": 36,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "io.github.takahashirinta.kanesumi.core.theme.MetroThemeKt.getLocalMetroColors (+46 inline/overload)",
+      "obfuscated": "O4.Q0.invoke",
+      "class": "O4.Q0",
+      "codeUnits": 2164,
+      "registers": 58,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+52 inline/overload)",
+      "obfuscated": "S4.i.a",
+      "class": "S4.i",
+      "codeUnits": 2160,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.romanizedLyrics (+13 inline/overload)",
+      "obfuscated": "Y4.S.j",
+      "class": "Y4.S",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    }
+  ],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.PlayerCardKt.PlayerCard (+62 inline/overload)",
+      "obfuscated": "R4.Z0.c",
+      "class": "R4.Z0",
+      "codeUnits": 1972,
+      "registers": 99,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SearchScreenKt$SearchScreen$15$1$2$1.invoke (+53 inline/overload)",
+      "obfuscated": "U4.C2.e",
+      "class": "U4.C2",
+      "codeUnits": 1950,
+      "registers": 61,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.LanguageManagerKt.getLanguagePresets (+79 inline/overload)",
+      "obfuscated": "O4.n1.e",
+      "class": "O4.n1",
+      "codeUnits": 1948,
+      "registers": 34,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.FullPlayerControlsKt$FullPlayerControls$9$2.invoke (+36 inline/overload)",
+      "obfuscated": "R4.o.e",
+      "class": "R4.o",
+      "codeUnits": 1923,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SearchScreenKt.SearchScreen (+62 inline/overload)",
+      "obfuscated": "U4.H2.a",
+      "class": "U4.H2",
+      "codeUnits": 1791,
+      "registers": 87,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.QueueViewKt$QueueView$5$1$2$2$1.invoke (+53 inline/overload)",
+      "obfuscated": "R4.F1.invoke",
+      "class": "R4.F1",
+      "codeUnits": 1656,
+      "registers": 22,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsEntry.getId (+59 inline/overload)",
+      "obfuscated": "O4.P.e",
+      "class": "O4.P",
+      "codeUnits": 1628,
+      "registers": 62,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.AddToPlaylistSheetKt$LocalPlaylistPickerDialog$1.invoke (+28 inline/overload)",
+      "obfuscated": "O4.o.e",
+      "class": "O4.o",
+      "codeUnits": 1547,
+      "registers": 69,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getTabUser (+40 inline/overload)",
+      "obfuscated": "U4.h.e",
+      "class": "U4.h",
+      "codeUnits": 1540,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+40 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1536,
+      "registers": 45,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "io.github.takahashirinta.kanesumi.core.theme.MetroColors.getOnBackground-0d7_KjU (+34 inline/overload)",
+      "obfuscated": "O4.d0.e",
+      "class": "O4.d0",
+      "codeUnits": 1528,
+      "registers": 51,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.EditPlaylistDialogKt$EditPlaylistDialog$2.invoke (+37 inline/overload)",
+      "obfuscated": "O4.i0.e",
+      "class": "O4.i0",
+      "codeUnits": 1524,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.equals",
+      "obfuscated": "P4.D.equals",
+      "class": "P4.D",
+      "codeUnits": 1520,
+      "registers": 6,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+14 inline/overload)",
+      "obfuscated": "Y4.f0.invokeSuspend",
+      "class": "Y4.f0",
+      "codeUnits": 1507,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.PlaylistDetailScreenKt.PlaylistDetailScreen (+22 inline/overload)",
+      "obfuscated": "U4.T1.a",
+      "class": "U4.T1",
+      "codeUnits": 1470,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsGroup.getIconName (+24 inline/overload)",
+      "obfuscated": "U4.h3.e",
+      "class": "U4.h3",
+      "codeUnits": 1460,
+      "registers": 39,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.theme.color.Cam16.<clinit> (+2 inline/overload)",
+      "obfuscated": "X4.a.<clinit>",
+      "class": "X4.a",
+      "codeUnits": 1426,
+      "registers": 4,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqDes.<clinit>",
+      "obfuscated": "J4.I.<clinit>",
+      "class": "J4.I",
+      "codeUnits": 1410,
+      "registers": 9,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.PlayAllDialogKt$PlayAllDialog$1.invoke (+21 inline/overload)",
+      "obfuscated": "O4.m0.e",
+      "class": "O4.m0",
+      "codeUnits": 1405,
+      "registers": 86,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.OfflineCacheOverlayKt$OfflineCacheManagerDialog$2.invoke (+36 inline/overload)",
+      "obfuscated": "U4.A1.invoke",
+      "class": "U4.A1",
+      "codeUnits": 1384,
+      "registers": 74,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.toString",
+      "obfuscated": "P4.D.toString",
+      "class": "P4.D",
+      "codeUnits": 1382,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.ArtistDetailScreenKt.ArtistDetailScreen (+16 inline/overload)",
+      "obfuscated": "U4.B.a",
+      "class": "U4.B",
+      "codeUnits": 1296,
+      "registers": 58,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.LibraryScreenKt.LibraryScreen (+32 inline/overload)",
+      "obfuscated": "U4.m1.b",
+      "class": "U4.m1",
+      "codeUnits": 1286,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsGroupScreenKt$SettingsPreferenceGroupPage$3$2$1$1.invoke (+56 inline/overload)",
+      "obfuscated": "U4.e3.e",
+      "class": "U4.e3",
+      "codeUnits": 1282,
+      "registers": 44,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.CreatePlaylistDialogKt$CreatePlaylistDialog$2.invoke (+33 inline/overload)",
+      "obfuscated": "O4.Y.e",
+      "class": "O4.Y",
+      "codeUnits": 1276,
+      "registers": 61,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.AddToPlaylistSheetKt$AddToPlaylistSheet$2.invoke (+46 inline/overload)",
+      "obfuscated": "O4.c.invoke",
+      "class": "O4.c",
+      "codeUnits": 1270,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+56 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.h",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1264,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsAccountSectionKt.QqAccountBlock (+29 inline/overload)",
+      "obfuscated": "U4.Y2.e",
+      "class": "U4.Y2",
+      "codeUnits": 1255,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.LocalPlaylistDetailScreenKt$LocalPlaylistDetailScreen$12.invoke (+30 inline/overload)",
+      "obfuscated": "U4.q1.invoke",
+      "class": "U4.q1",
+      "codeUnits": 1229,
+      "registers": 66,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getSource (+32 inline/overload)",
+      "obfuscated": "U4.m.i",
+      "class": "U4.m",
+      "codeUnits": 1224,
+      "registers": 31,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.AboutStrings.getAboutSectionCredits (+107 inline/overload)",
+      "obfuscated": "R4.n1.invoke",
+      "class": "R4.n1",
+      "codeUnits": 3362,
+      "registers": 68,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsRegistry.<init> (+8 inline/overload)",
+      "obfuscated": "V4.f.<clinit>",
+      "class": "V4.f",
+      "codeUnits": 3026,
+      "registers": 359,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getSource (+54 inline/overload)",
+      "obfuscated": "O4.L0.invoke",
+      "class": "O4.L0",
+      "codeUnits": 2286,
+      "registers": 63,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.theme.color.HctSolver.Y_FROM_LINRGB (+45 inline/overload)",
+      "obfuscated": "X4.a.g",
+      "class": "X4.a",
+      "codeUnits": 2238,
+      "registers": 36,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "io.github.takahashirinta.kanesumi.core.theme.MetroThemeKt.getLocalMetroColors (+46 inline/overload)",
+      "obfuscated": "O4.Q0.invoke",
+      "class": "O4.Q0",
+      "codeUnits": 2164,
+      "registers": 58,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+52 inline/overload)",
+      "obfuscated": "S4.i.a",
+      "class": "S4.i",
+      "codeUnits": 2160,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.romanizedLyrics (+13 inline/overload)",
+      "obfuscated": "Y4.S.j",
+      "class": "Y4.S",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.PlayerCardKt.PlayerCard (+62 inline/overload)",
+      "obfuscated": "R4.Z0.c",
+      "class": "R4.Z0",
+      "codeUnits": 1972,
+      "registers": 99,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SearchScreenKt$SearchScreen$15$1$2$1.invoke (+53 inline/overload)",
+      "obfuscated": "U4.C2.e",
+      "class": "U4.C2",
+      "codeUnits": 1950,
+      "registers": 61,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.LanguageManagerKt.getLanguagePresets (+79 inline/overload)",
+      "obfuscated": "O4.n1.e",
+      "class": "O4.n1",
+      "codeUnits": 1948,
+      "registers": 34,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.FullPlayerControlsKt$FullPlayerControls$9$2.invoke (+36 inline/overload)",
+      "obfuscated": "R4.o.e",
+      "class": "R4.o",
+      "codeUnits": 1923,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SearchScreenKt.SearchScreen (+62 inline/overload)",
+      "obfuscated": "U4.H2.a",
+      "class": "U4.H2",
+      "codeUnits": 1791,
+      "registers": 87,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.QueueViewKt$QueueView$5$1$2$2$1.invoke (+53 inline/overload)",
+      "obfuscated": "R4.F1.invoke",
+      "class": "R4.F1",
+      "codeUnits": 1656,
+      "registers": 22,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsEntry.getId (+59 inline/overload)",
+      "obfuscated": "O4.P.e",
+      "class": "O4.P",
+      "codeUnits": 1628,
+      "registers": 62,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.AddToPlaylistSheetKt$LocalPlaylistPickerDialog$1.invoke (+28 inline/overload)",
+      "obfuscated": "O4.o.e",
+      "class": "O4.o",
+      "codeUnits": 1547,
+      "registers": 69,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getTabUser (+40 inline/overload)",
+      "obfuscated": "U4.h.e",
+      "class": "U4.h",
+      "codeUnits": 1540,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+40 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1536,
+      "registers": 45,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "io.github.takahashirinta.kanesumi.core.theme.MetroColors.getOnBackground-0d7_KjU (+34 inline/overload)",
+      "obfuscated": "O4.d0.e",
+      "class": "O4.d0",
+      "codeUnits": 1528,
+      "registers": 51,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.EditPlaylistDialogKt$EditPlaylistDialog$2.invoke (+37 inline/overload)",
+      "obfuscated": "O4.i0.e",
+      "class": "O4.i0",
+      "codeUnits": 1524,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.equals",
+      "obfuscated": "P4.D.equals",
+      "class": "P4.D",
+      "codeUnits": 1520,
+      "registers": 6,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+14 inline/overload)",
+      "obfuscated": "Y4.f0.invokeSuspend",
+      "class": "Y4.f0",
+      "codeUnits": 1507,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.PlaylistDetailScreenKt.PlaylistDetailScreen (+22 inline/overload)",
+      "obfuscated": "U4.T1.a",
+      "class": "U4.T1",
+      "codeUnits": 1470,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.settings.SettingsGroup.getIconName (+24 inline/overload)",
+      "obfuscated": "U4.h3.e",
+      "class": "U4.h3",
+      "codeUnits": 1460,
+      "registers": 39,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.theme.color.Cam16.<clinit> (+2 inline/overload)",
+      "obfuscated": "X4.a.<clinit>",
+      "class": "X4.a",
+      "codeUnits": 1426,
+      "registers": 4,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqDes.<clinit>",
+      "obfuscated": "J4.I.<clinit>",
+      "class": "J4.I",
+      "codeUnits": 1410,
+      "registers": 9,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.PlayAllDialogKt$PlayAllDialog$1.invoke (+21 inline/overload)",
+      "obfuscated": "O4.m0.e",
+      "class": "O4.m0",
+      "codeUnits": 1405,
+      "registers": 86,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.OfflineCacheOverlayKt$OfflineCacheManagerDialog$2.invoke (+36 inline/overload)",
+      "obfuscated": "U4.A1.invoke",
+      "class": "U4.A1",
+      "codeUnits": 1384,
+      "registers": 74,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.toString",
+      "obfuscated": "P4.D.toString",
+      "class": "P4.D",
+      "codeUnits": 1382,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.ArtistDetailScreenKt.ArtistDetailScreen (+16 inline/overload)",
+      "obfuscated": "U4.B.a",
+      "class": "U4.B",
+      "codeUnits": 1296,
+      "registers": 58,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.LibraryScreenKt.LibraryScreen (+32 inline/overload)",
+      "obfuscated": "U4.m1.b",
+      "class": "U4.m1",
+      "codeUnits": 1286,
+      "registers": 64,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsGroupScreenKt$SettingsPreferenceGroupPage$3$2$1$1.invoke (+56 inline/overload)",
+      "obfuscated": "U4.e3.e",
+      "class": "U4.e3",
+      "codeUnits": 1282,
+      "registers": 44,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.CreatePlaylistDialogKt$CreatePlaylistDialog$2.invoke (+33 inline/overload)",
+      "obfuscated": "O4.Y.e",
+      "class": "O4.Y",
+      "codeUnits": 1276,
+      "registers": 61,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.AddToPlaylistSheetKt$AddToPlaylistSheet$2.invoke (+46 inline/overload)",
+      "obfuscated": "O4.c.invoke",
+      "class": "O4.c",
+      "codeUnits": 1270,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+56 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.h",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1264,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsAccountSectionKt.QqAccountBlock (+29 inline/overload)",
+      "obfuscated": "U4.Y2.e",
+      "class": "U4.Y2",
+      "codeUnits": 1255,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.LocalPlaylistDetailScreenKt$LocalPlaylistDetailScreen$12.invoke (+30 inline/overload)",
+      "obfuscated": "U4.q1.invoke",
+      "class": "U4.q1",
+      "codeUnits": 1229,
+      "registers": 66,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.i18n.Strings.getSource (+32 inline/overload)",
+      "obfuscated": "U4.m.i",
+      "class": "U4.m",
+      "codeUnits": 1224,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.theme.NcrustColorsKt.getLocalNcrustColors (+33 inline/overload)",
+      "obfuscated": "O4.H.invoke",
+      "class": "O4.H",
+      "codeUnits": 1184,
+      "registers": 56,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.SongMenuAction.getOnClick (+94 inline/overload)",
+      "obfuscated": "D4.k.invoke",
+      "class": "D4.k",
+      "codeUnits": 1180,
+      "registers": 14,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.searchCounter (+35 inline/overload)",
+      "obfuscated": "J4.r.d",
+      "class": "J4.r",
+      "codeUnits": 1176,
+      "registers": 37,
+      "dex": "classes.dex"
+    }
+  ]
+}
