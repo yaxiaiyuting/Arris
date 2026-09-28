@@ -1,0 +1,8 @@
+
+### DASH 视频音轨直链的 header A/B（upos-sz-mirrorhw.bilivideo.com）
+请求头组合                                HTTP 字节 类型
+① 无 UA 无 Referer                         403 322 text/html
+② 浏览器 UA + Referer                     206 1024 application/octet-stream
+③ ExoPlayer UA + Referer                     403 322 text/html
+④ ExoPlayer UA 无 Referer                   403 321 text/html
+⑤ 浏览器 UA 无 Referer                   403 322 text/html

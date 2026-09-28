@@ -1,0 +1,21 @@
+### 黑名单字样扫描（带 Referer，UA 逐条测试）
+User-Agent                                     HTTP
+curl/8.5.0                                     403
+curlx/1.0                                      403
+mycurl/1.0                                     403
+CURL/1.0                                       403
+wget/1.21                                      206
+python-requests/2.31                           403
+python/3.11                                    403
+Java/17.0.1                                    206
+okhttp/4.12.0                                  206
+Googlebot/2.1                                  206
+spider/1.0                                     206
+bot/1.0                                        206
+Dalvik/2.1.0                                   403
+Dart/3.0 (dart:io)                             206
+libmpv                                         206
+VLC/3.0.20 LibVLC/3.0.20                       403
+stagefright/1.2 (Linux;Android 13)             403
+NSPlayer/12.0                                  206
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 206

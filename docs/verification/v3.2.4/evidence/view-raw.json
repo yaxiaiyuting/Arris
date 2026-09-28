@@ -1,0 +1,493 @@
+{
+ "code": 0,
+ "message": "OK",
+ "ttl": 1,
+ "data": {
+  "bvid": "BV1eT4y1178r",
+  "aid": 935664341,
+  "videos": 1,
+  "tid": 193,
+  "tid_v2": 2017,
+  "tname": "",
+  "tname_v2": "",
+  "copyright": 2,
+  "pic": "http://i0.hdslb.com/bfs/archive/eb4d3fa37064a0deb416fa35ecf4328cb4688f68.jpg",
+  "title": "【4K60FPS】赵雷《成都》经典神作！每个人心里都有一个成都",
+  "pubdate": 1642157445,
+  "ctime": 1642157445,
+  "desc": "官方MV\n原文档提取制作，进行了重新制作\n好吧，很多人提到的一个歌手，赵雷\n我在2017年的时候，很喜欢很喜欢这首《成都》\n因为这首歌真的很美，也是火遍大街小巷的一首歌\n因为一个人爱上一座城，其实每个人心里都有自己的“成都”\n祝大家都能在故事里找到自己",
+  "desc_v2": [
+   {
+    "raw_text": "官方MV\n原文档提取制作，进行了重新制作\n好吧，很多人提到的一个歌手，赵雷\n我在2017年的时候，很喜欢很喜欢这首《成都》\n因为这首歌真的很美，也是火遍大街小巷的一首歌\n因为一个人爱上一座城，其实每个人心里都有自己的“成都”\n祝大家都能在故事里找到自己",
+    "type": 1,
+    "biz_id": 0
+   }
+  ],
+  "state": 0,
+  "duration": 357,
+  "rights": {
+   "bp": 0,
+   "elec": 0,
+   "download": 1,
+   "movie": 0,
+   "pay": 0,
+   "hd5": 0,
+   "no_reprint": 0,
+   "autoplay": 1,
+   "ugc_pay": 0,
+   "is_cooperation": 0,
+   "ugc_pay_preview": 0,
+   "no_background": 0,
+   "clean_mode": 0,
+   "is_stein_gate": 0,
+   "is_360": 0,
+   "no_share": 0,
+   "arc_pay": 0,
+   "free_watch": 0
+  },
+  "owner": {
+   "mid": 229733301,
+   "name": "音乐私藏馆",
+   "face": "https://i0.hdslb.com/bfs/face/91a6526445f61e2d491523242b532d5e76f0435a.jpg"
+  },
+  "stat": {
+   "aid": 935664341,
+   "view": 6980566,
+   "danmaku": 5696,
+   "reply": 8312,
+   "favorite": 103787,
+   "coin": 26970,
+   "share": 18635,
+   "now_rank": 0,
+   "his_rank": 0,
+   "like": 147928,
+   "dislike": 0,
+   "evaluation": "",
+   "vt": 0
+  },
+  "argue_info": {
+   "argue_msg": "",
+   "argue_type": 0,
+   "argue_link": ""
+  },
+  "dynamic": "",
+  "cid": 484193211,
+  "dimension": {
+   "width": 3840,
+   "height": 2160,
+   "rotate": 0
+  },
+  "season_id": 1635426,
+  "premiere": null,
+  "teenage_mode": 0,
+  "is_chargeable_season": false,
+  "is_story": false,
+  "is_upower_exclusive": false,
+  "is_upower_play": false,
+  "is_upower_preview": false,
+  "enable_vt": 0,
+  "vt_display": "",
+  "is_upower_exclusive_with_qa": false,
+  "is_hua_sheng": false,
+  "no_cache": false,
+  "pages": [
+   {
+    "cid": 484193211,
+    "page": 1,
+    "from": "vupload",
+    "part": "赵雷 - 成都 4K修复版",
+    "duration": 357,
+    "vid": "",
+    "weblink": "",
+    "dimension": {
+     "width": 3840,
+     "height": 2160,
+     "rotate": 0
+    },
+    "first_frame": "http://i0.hdslb.com/bfs/storyff/n220114qn3qc0p9kdppj1a3lyk5yr3o3_firsti.jpg",
+    "ctime": 1642157445
+   }
+  ],
+  "subtitle": {
+   "allow_submit": false,
+   "list": []
+  },
+  "ugc_season": {
+   "id": 1635426,
+   "title": "赵雷",
+   "cover": "https://archive.biliimg.com/bfs/archive/341ef4ebf5be5e6c202165d67eb1dc8625cb719e.jpg",
+   "mid": 229733301,
+   "intro": "赵雷",
+   "sign_state": 0,
+   "attribute": 140,
+   "stat": {
+    "season_id": 1635426,
+    "view": 19687370,
+    "danmaku": 15768,
+    "reply": 20636,
+    "fav": 285841,
+    "coin": 120372,
+    "share": 67479,
+    "now_rank": 0,
+    "his_rank": 0,
+    "like": 503179,
+    "vt": 0,
+    "vv": 0
+   },
+   "ep_count": 3,
+   "season_type": 1,
+   "is_pay_season": false,
+   "enable_vt": 0,
+   "sections": [
+    {
+     "season_id": 1635426,
+     "id": 1878264,
+     "title": "正片",
+     "type": 1,
+     "episodes": [
+      {
+       "season_id": 1635426,
+       "section_id": 1878264,
+       "id": 37046780,
+       "aid": 996241381,
+       "cid": 1129415064,
+       "title": "【私藏馆】赵雷《我记得》献给母亲的神曲！祝天下母亲节日快乐",
+       "attribute": 0,
+       "arc": {
+        "aid": 996241381,
+        "videos": 0,
+        "type_id": 0,
+        "type_name": "",
+        "copyright": 0,
+        "pic": "http://i1.hdslb.com/bfs/archive/003e9c9ec675e2d1065259b1584ba4247dc682a7.jpg",
+        "title": "【私藏馆】赵雷《我记得》献给母亲的神曲！祝天下母亲节日快乐",
+        "pubdate": 1684057993,
+        "ctime": 1684057993,
+        "desc": "",
+        "state": 0,
+        "duration": 327,
+        "rights": {
+         "bp": 0,
+         "elec": 0,
+         "download": 0,
+         "movie": 0,
+         "pay": 0,
+         "hd5": 0,
+         "no_reprint": 0,
+         "autoplay": 0,
+         "ugc_pay": 0,
+         "is_cooperation": 0,
+         "ugc_pay_preview": 0,
+         "arc_pay": 0,
+         "free_watch": 0
+        },
+        "author": {
+         "mid": 229733301,
+         "name": "音乐私藏馆",
+         "face": "https://i0.hdslb.com/bfs/face/91a6526445f61e2d491523242b532d5e76f0435a.jpg"
+        },
+        "stat": {
+         "aid": 996241381,
+         "view": 8002081,
+         "danmaku": 6816,
+         "reply": 9297,
+         "fav": 134988,
+         "coin": 68095,
+         "share": 34035,
+         "now_rank": 0,
+         "his_rank": 31,
+         "like": 250093,
+         "dislike": 0,
+         "evaluation": "",
+         "argue_msg": "",
+         "vt": 0,
+         "vv": 8002081
+        },
+        "dynamic": "",
+        "dimension": {
+         "width": 0,
+         "height": 0,
+         "rotate": 0
+        },
+        "desc_v2": null,
+        "is_chargeable_season": false,
+        "is_blooper": false,
+        "enable_vt": 0,
+        "vt_display": "",
+        "type_id_v2": 0,
+        "type_name_v2": "",
+        "is_lesson_video": 0
+       },
+       "page": {
+        "cid": 1129415064,
+        "page": 1,
+        "from": "vupload",
+        "part": "【私藏馆】赵雷《我记得》献给母亲的神曲！祝天下母亲节日快乐",
+        "duration": 327,
+        "vid": "",
+        "weblink": "",
+        "dimension": {
+         "width": 3840,
+         "height": 2160,
+         "rotate": 0
+        }
+       },
+       "bvid": "BV1os4y1B79E",
+       "pages": [
+        {
+         "cid": 1129415064,
+         "page": 1,
+         "from": "vupload",
+         "part": "【私藏馆】赵雷《我记得》献给母亲的神曲！祝天下母亲节日快乐",
+         "duration": 327,
+         "vid": "",
+         "weblink": "",
+         "dimension": {
+          "width": 3840,
+          "height": 2160,
+          "rotate": 0
+         }
+        }
+       ]
+      },
+      {
+       "season_id": 1635426,
+       "section_id": 1878264,
+       "id": 37046781,
+       "aid": 692332871,
+       "cid": 950939214,
+       "title": "【4K60FPS】赵雷《南方姑娘》万人大合唱现场！笛子直接封神",
+       "attribute": 0,
+       "arc": {
+        "aid": 692332871,
+        "videos": 0,
+        "type_id": 0,
+        "type_name": "",
+        "copyright": 0,
+        "pic": "http://i0.hdslb.com/bfs/archive/887ee7e68bbc13460cfdafc9bd5a03f8ec4682ef.jpg",
+        "title": "【4K60FPS】赵雷《南方姑娘》万人大合唱现场！笛子直接封神",
+        "pubdate": 1672828746,
+        "ctime": 1672828746,
+        "desc": "",
+        "state": 0,
+        "duration": 387,
+        "rights": {
+         "bp": 0,
+         "elec": 0,
+         "download": 0,
+         "movie": 0,
+         "pay": 0,
+         "hd5": 0,
+         "no_reprint": 0,
+         "autoplay": 0,
+         "ugc_pay": 0,
+         "is_cooperation": 0,
+         "ugc_pay_preview": 0,
+         "arc_pay": 0,
+         "free_watch": 0
+        },
+        "author": {
+         "mid": 229733301,
+         "name": "音乐私藏馆",
+         "face": "https://i0.hdslb.com/bfs/face/91a6526445f61e2d491523242b532d5e76f0435a.jpg"
+        },
+        "stat": {
+         "aid": 692332871,
+         "view": 4704725,
+         "danmaku": 3256,
+         "reply": 3027,
+         "fav": 47066,
+         "coin": 25307,
+         "share": 14809,
+         "now_rank": 0,
+         "his_rank": 0,
+         "like": 105159,
+         "dislike": 0,
+         "evaluation": "",
+         "argue_msg": "",
+         "vt": 0,
+         "vv": 4704725
+        },
+        "dynamic": "",
+        "dimension": {
+         "width": 0,
+         "height": 0,
+         "rotate": 0
+        },
+        "desc_v2": null,
+        "is_chargeable_season": false,
+        "is_blooper": false,
+        "enable_vt": 0,
+        "vt_display": "",
+        "type_id_v2": 0,
+        "type_name_v2": "",
+        "is_lesson_video": 0
+       },
+       "page": {
+        "cid": 950939214,
+        "page": 1,
+        "from": "vupload",
+        "part": "【4K60FPS】赵雷《南方姑娘》万人大合唱现场！笛子直接封神",
+        "duration": 387,
+        "vid": "",
+        "weblink": "",
+        "dimension": {
+         "width": 3840,
+         "height": 2160,
+         "rotate": 0
+        }
+       },
+       "bvid": "BV1d24y1Y79G",
+       "pages": [
+        {
+         "cid": 950939214,
+         "page": 1,
+         "from": "vupload",
+         "part": "【4K60FPS】赵雷《南方姑娘》万人大合唱现场！笛子直接封神",
+         "duration": 387,
+         "vid": "",
+         "weblink": "",
+         "dimension": {
+          "width": 3840,
+          "height": 2160,
+          "rotate": 0
+         }
+        }
+       ]
+      },
+      {
+       "season_id": 1635426,
+       "section_id": 1878264,
+       "id": 37046782,
+       "aid": 935664341,
+       "cid": 484193211,
+       "title": "【4K60FPS】赵雷《成都》经典神作！每个人心里都有一个成都",
+       "attribute": 0,
+       "arc": {
+        "aid": 935664341,
+        "videos": 0,
+        "type_id": 0,
+        "type_name": "",
+        "copyright": 0,
+        "pic": "http://i0.hdslb.com/bfs/archive/eb4d3fa37064a0deb416fa35ecf4328cb4688f68.jpg",
+        "title": "【4K60FPS】赵雷《成都》经典神作！每个人心里都有一个成都",
+        "pubdate": 1642157445,
+        "ctime": 1642157445,
+        "desc": "",
+        "state": 0,
+        "duration": 357,
+        "rights": {
+         "bp": 0,
+         "elec": 0,
+         "download": 0,
+         "movie": 0,
+         "pay": 0,
+         "hd5": 0,
+         "no_reprint": 0,
+         "autoplay": 0,
+         "ugc_pay": 0,
+         "is_cooperation": 0,
+         "ugc_pay_preview": 0,
+         "arc_pay": 0,
+         "free_watch": 0
+        },
+        "author": {
+         "mid": 229733301,
+         "name": "音乐私藏馆",
+         "face": "https://i0.hdslb.com/bfs/face/91a6526445f61e2d491523242b532d5e76f0435a.jpg"
+        },
+        "stat": {
+         "aid": 935664341,
+         "view": 6980566,
+         "danmaku": 5696,
+         "reply": 8312,
+         "fav": 103787,
+         "coin": 26970,
+         "share": 18635,
+         "now_rank": 0,
+         "his_rank": 0,
+         "like": 147928,
+         "dislike": 0,
+         "evaluation": "",
+         "argue_msg": "",
+         "vt": 0,
+         "vv": 6980566
+        },
+        "dynamic": "",
+        "dimension": {
+         "width": 0,
+         "height": 0,
+         "rotate": 0
+        },
+        "desc_v2": null,
+        "is_chargeable_season": false,
+        "is_blooper": false,
+        "enable_vt": 0,
+        "vt_display": "",
+        "type_id_v2": 0,
+        "type_name_v2": "",
+        "is_lesson_video": 0
+       },
+       "page": {
+        "cid": 484193211,
+        "page": 1,
+        "from": "vupload",
+        "part": "赵雷 - 成都 4K修复版",
+        "duration": 357,
+        "vid": "",
+        "weblink": "",
+        "dimension": {
+         "width": 3840,
+         "height": 2160,
+         "rotate": 0
+        }
+       },
+       "bvid": "BV1eT4y1178r",
+       "pages": [
+        {
+         "cid": 484193211,
+         "page": 1,
+         "from": "vupload",
+         "part": "赵雷 - 成都 4K修复版",
+         "duration": 357,
+         "vid": "",
+         "weblink": "",
+         "dimension": {
+          "width": 3840,
+          "height": 2160,
+          "rotate": 0
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "is_season_display": true,
+  "user_garb": {
+   "url_image_ani_cut": ""
+  },
+  "honor_reply": {
+   "honor": [
+    {
+     "aid": 935664341,
+     "type": 4,
+     "desc": "热门",
+     "weekly_recommend_num": 0
+    },
+    {
+     "aid": 935664341,
+     "type": 7,
+     "desc": "热门收录",
+     "weekly_recommend_num": 0
+    }
+   ]
+  },
+  "like_icon": "",
+  "need_jump_bv": false,
+  "disable_show_up_info": false,
+  "is_story_play": 1,
+  "is_view_self": false
+ }
+}

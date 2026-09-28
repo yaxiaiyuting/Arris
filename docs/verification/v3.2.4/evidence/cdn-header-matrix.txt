@@ -1,0 +1,16 @@
+### 矩阵：B站音频直链 (upos-sz-mirrorhw.bilivideo.com) 的 header A/B 对照
+### 时间: 2026-09-29T03:14:38+08:00
+### URL: https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a?e=ig8euxZM2rNcNbdlhoNvNC8BqJIz...
+
+请求头组合                                HTTP       字节/类型
+---------------------------------------------- ---------- ----------
+① 无 UA 无 Referer (curl 默认)           403 322 text/html
+② 只 Referer（curl 默认 UA）            403 321 text/html
+③ 浏览器 UA，无 Referer                 403 322 text/html
+④ 浏览器 UA + Referer                     206 1024 application/octet-stream
+⑤ ExoPlayer UA，无 Referer                 403 321 text/html
+⑥ ExoPlayer UA + Referer                     403 321 text/html
+⑦ BiliDroid APP UA + Referer                 403 321 text/html
+⑧ 浏览器 UA + Referer(bili 无斜杠)     206 1024 application/octet-stream
+⑨ 浏览器 UA + Referer(视频页)          206 1024 application/octet-stream
+⑩ 浏览器 UA + Referer + Origin            206 1024 application/octet-stream

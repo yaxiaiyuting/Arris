@@ -1,0 +1,30 @@
+### 探针 P0 · 取链接口参数矩阵（音频区 au39）
+### 2026-09-29T03:16:20+08:00
+
+--- query: songid=39&quality=2&privilege=2&mid=0&platform=pc
+    code= 0 msg= success type= 2 timeout= 10800
+    host= upos-sz-mirrorhw.bilivideo.com file= ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a
+    qualities= [(2, '320kbit/s'), (1, '192kbit/s'), (0, '128kbit/s')]
+--- query: sid=39&quality=2&platform=pc
+    code= 72000000 msg= param missing error: mid type= None timeout= None
+    qualities= []
+--- query: songid=39&quality=3&privilege=2&mid=0&platform=pc
+    code= 0 msg= success type= 2 timeout= 10800
+    host= upos-sz-mirrorhw.bilivideo.com file= ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a
+    qualities= [(2, '320kbit/s'), (1, '192kbit/s'), (0, '128kbit/s')]
+--- query: songid=39&quality=0&privilege=2&mid=0&platform=pc
+    code= 0 msg= success type= 0 timeout= 10800
+    host= upos-sz-mirrorhw.bilivideo.com file= ef0083e1cd13e73dcd20bfe3e672c21a-128k.m4a
+    qualities= [(2, '320kbit/s'), (1, '192kbit/s'), (0, '128kbit/s')]
+--- query: songid=39&quality=2&privilege=2&mid=0
+    code= 72000000 msg= None type= None timeout= None
+    qualities= []
+--- query: songid=39&quality=2&privilege=2&mid=0&platform=android
+    code= 0 msg= success type= 2 timeout= 10800
+    host= upos-sz-mirrorhw.bilivideo.com file= ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a
+    qualities= [(2, '320kbit/s'), (1, '192kbit/s'), (0, '128kbit/s')]
+
+### 篡改 deadline（模拟过期 URL）
+原 URL（有效）                      206
+篡改 deadline（签名不匹配）     403
+篡改 upsig（签名不匹配）        403

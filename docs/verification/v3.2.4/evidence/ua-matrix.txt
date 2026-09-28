@@ -1,0 +1,8 @@
+### Android HttpURLConnection 默认 UA（media3 不设 UA 时实际发出去的那个）A/B
+UA 组合（全部带 Referer）                           HTTP
+Dalvik/2.1.0 (Linux; U; Android 13; sdk_gphone64_x86_64 ...) 403
+ExoPlayerLib/1.5.0                                         206
+okhttp/4.12.0                                              206
+Mozilla/5.0 (Linux; Android 13; Pixel) ... Chrome/120 Mobile 403
+Mozilla/5.0 ... Chrome/120 (桌面，BiliApi 用的那个) 206
+空 UA（-H 'User-Agent;'）                               403

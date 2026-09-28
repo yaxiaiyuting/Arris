@@ -1,0 +1,13 @@
+### 复现性检验：同一 UA 连测 5 次（每次都带 Referer）
+ExoPlayerLib/1.2.1 (Linux;Android 13)                          403 403 403 403 403
+ExoPlayerLib/1.5.0                                             206 206 206 206 206
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36   206 206 206 206 206
+Dalvik/2.1.0 (Linux; U; Android 13; sdk_gphone64_x86_64 Buil   403 403 403 403 403
+
+### 同一 UA 连测 5 次（不带 Referer）
+ExoPlayerLib/1.5.0                                             403 403 403 403 403
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36   403 403 403 403 403
+
+### 换一条全新直链（重新取链）后重测，排除 URL 维度的限流
+ExoPlayerLib/1.2.1 (Linux;Android 13)                          403 403 403
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36   206 206 206

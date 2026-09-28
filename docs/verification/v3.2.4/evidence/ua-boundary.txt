@@ -1,0 +1,18 @@
+### 边界收敛：UA 必须满足什么？（全部带 Referer）
+User-Agent                               HTTP
+curl/8.5.0                               403
+foo/1.0                                  206
+MyApp/2.0                                206
+a                                        206
+ExoPlayerLib                             206
+ExoPlayerLib/1.5.0                       206
+
+### 完全不发 User-Agent 头（curl -H 'User-Agent:' 会移除该头）
+--header 'User-Agent:'                   403
+curl 默认（不带 -H UA）            403
+
+### Referer 是否仍然必需（UA = okhttp/4.12.0）
+okhttp UA + Referer                      206
+okhttp UA + Referer(music.163.com)       403
+okhttp UA 无 Referer                    403
+okhttp UA + Origin(无 Referer)          403

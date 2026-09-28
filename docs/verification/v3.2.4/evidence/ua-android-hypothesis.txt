@@ -1,0 +1,17 @@
+### 假设检验：B站媒体 CDN 是否按 UA 里的 "Android" 字样拒绝？
+### 全部请求都带 Referer: https://www.bilibili.com/
+User-Agent                                                       HTTP
+ExoPlayerLib/1.5.0                                               206
+ExoPlayerLib/1.5.0 (Linux;Android 13)                            403
+ExoPlayerLib/1.5.0 (Linux; Android 13; Pixel 7) ExoPlayerLib/1.5.0 403
+Android                                                          403
+myandroidapp/1.0                                                 403
+ANDROID                                                          403
+Dalvik/2.1.0                                                     403
+Dalvik/2.1.0 (Linux; U; Android 13; sdk_gphone64_x86_64 Build/TQ2A.230505.002) 403
+Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 403
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 206
+Mozilla/5.0 BiliDroid/7.63.0 (bbcallen@gmail.com) os/android model/Pixel updater/7630300 osver/13 sdk/33 403
+Mozilla/5.0 BiliDroid/7.63.0 (bbcallen@gmail.com) os/ios model/iPhone15 updater/7630300 osver/17 sdk/17 206
+Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 206
+Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 206
