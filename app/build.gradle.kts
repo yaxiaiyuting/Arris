@@ -341,8 +341,22 @@ android {
         // 本版范围：PlayerCard 巨型 composable 拆分 P0（铁律 24/25）、
         // wideLeftFraction 对称正下限 P0-A（铁律 26）、B站扫码登录「打开即失效」P0、
         // JIT 对照实验 C、方法大小监控机制（铁律 24 的门禁）。
-        versionCode = 56
-        versionName = "3.2.1-gpl"
+        // v3.2.2：**第九次按脚本定号**。冷启动跑 `tools/next-version.sh`（**带 fetch**，铁律 9）——
+        //   ① 最近 5 个 tag 指向的 build.gradle.kts：v3.2.1=56 / v3.2.0=55 / v3.1.0=54 /
+        //      v3.0.0=53 / v2.9.0=52；
+        //   ② 已发布 APK 的 `aapt2 dump badging` 实测：dist/ 里
+        //      Ncrust-v3.2.1-gpl-release.apk=**56**、Ncrust-v3.2.0-gpl-release.apk=55
+        //      （本轮脚本自己只扫到 v2.6.2=50，56/55 是本代理手工补测的 —— 口径与脚本一致，
+        //      都是「包的 versionCode 实测值」，不看 release 标题）；
+        //   ③ 工作区：56 / 3.2.1-gpl。
+        //   三源最大值 = 56 ⇒ 下一个可用 **57**。
+        //   实测记录：docs/verification/v3.2.2/next-version.txt
+        //   （打 tag 前会用 `git show v3.2.2-gpl:app/build.gradle.kts | grep version` 自证一次。）
+        // 本版范围：波形条改造为频段曲线（连续曲线 + 主导频段着色 + 平滑/滞回/短过渡防闪 +
+        // 档位与开关联动；铁律 28/29/30/31）。**不新增持久化键**：频段着色复用既有的
+        // `motion_wave_bands` 开关与档位映射，因此没有新迁移、没有新文案。
+        versionCode = 57
+        versionName = "3.2.2-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
