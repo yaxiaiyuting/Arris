@@ -237,17 +237,28 @@ object BiliSourceProvider : MusicSourceProvider {
     }
 
     /** [BiliStream] → [SongUrlResult]。`expiresAtMs` 在这里被带出去（铁律 26）。 */
-    private fun BiliStream.toResult(requested: BiliQn?): SongUrlResult = SongUrlResult(
-        url = url,
-        actualLevel = requested?.name ?: "bili-dash",
-        br = br,
-        type = container,
-        songMaxLevel = null,
-        // ★ 实际档位来自**文件后缀/编码**（`-192k.m4a` / DASH 的 bandwidth），
-        //   不是我们请求的那个 qn。匿名请求 qn=3 也只会拿到 192K ——
-        //   把 levelFromFile 标成 true，QualityAssessment 才会如实显示「已降级」。
-        levelFromFile = true,
-        fallbackFromLevel = requested?.name?.takeIf { it != qualityLabel },
-        expiresAtMs = expiresAtMs,
-    )
+    private fun BiliStream.toResult(requested: BiliQn?): SongUrlResult {
+        // v3.2.4 · P0：把「这条流是 B 站刚发给我们的」记进 BiliCdn 的有界集合。
+        //
+        // 为什么必须在这里记：B 站的 CDN 会落到**与 bilibili 无关的第三方 PCDN 域名**
+        // （v3.1.0 实测抓到 `b-…edge.mountaintoys.cn`），只按域名后缀判断会漏掉它们，
+        // 于是那些歌连 Referer/UA 都拿不到 ⇒ 403。而「出处」是比域名更可靠的事实。
+        //
+        // 这是 markStream 的**唯一**生产调用点，所以集合里的每个 host 都可追溯到
+        // 一次真实的 B 站取链响应；UI / 队列 / 持久化里的 host 进不来。
+        BiliCdn.markStream(url)
+        return SongUrlResult(
+            url = url,
+            actualLevel = requested?.name ?: "bili-dash",
+            br = br,
+            type = container,
+            songMaxLevel = null,
+            // ★ 实际档位来自**文件后缀/编码**（`-192k.m4a` / DASH 的 bandwidth），
+            //   不是我们请求的那个 qn。匿名请求 qn=3 也只会拿到 192K ——
+            //   把 levelFromFile 标成 true，QualityAssessment 才会如实显示「已降级」。
+            levelFromFile = true,
+            fallbackFromLevel = requested?.name?.takeIf { it != qualityLabel },
+            expiresAtMs = expiresAtMs,
+        )
+    }
 }

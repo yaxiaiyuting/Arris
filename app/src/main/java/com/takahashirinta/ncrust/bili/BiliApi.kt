@@ -150,12 +150,19 @@ object BiliApi {
     private const val FINGER_URL = "https://api.bilibili.com/x/frontend/finger/spi"
     private const val AUDIO_LYRIC_URL = "https://www.bilibili.com/audio/music-service-c/web/song/lyric"
 
-    /** 手机端 Web UA。用 PC 的桌面 UA 会被某些风控策略区别对待（实测 nav 无差别，取保守值）。 */
-    private const val UA =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    /**
+     * 手机端 Web UA。用 PC 的桌面 UA 会被某些风控策略区别对待（实测 nav 无差别，取保守值）。
+     *
+     * ⚠️ v3.2.4：**取值本身搬到了 [BiliCdn.USER_AGENT]**，这里只做一次转发。
+     * 理由是取链（本类）与取流（[BiliCdn]）必须是**同一个身份**：
+     * 媒体 CDN 对 UA 有子串黑名单（`android` / `dalvik` / …，实测见
+     * `docs/verification/v3.2.4/probe-bili-playback.md` §2.2），
+     * 两处各写一份字符串，就一定会有一天漂移成两个身份。
+     */
+    private const val UA = BiliCdn.USER_AGENT
 
     /** B 站自己的 Referer。**绝不能是网易云那个** —— 见类文档的 A/B 对照。 */
-    private const val REFERER = "https://www.bilibili.com/"
+    private const val REFERER = BiliCdn.REFERER
 
     /** wbi 密钥的缓存时长。服务端每天轮换，取 6 小时（一天内至少刷新一次，且不会每通请求都问）。 */
     private const val WBI_KEY_TTL_MS = 6 * 60 * 60 * 1000L

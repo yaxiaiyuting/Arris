@@ -14,7 +14,7 @@ import androidx.annotation.OptIn
 import com.takahashirinta.ncrust.bili.BiliCdn
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
@@ -120,31 +120,52 @@ object OfflineAudioCache {
     /**
      * 给 ExoPlayer 用的数据源工厂：命中本地的片段不再走网络。
      *
-     * ## v3.1.0 · B：两处**按 host 限定**的改动（铁律 27：不得破坏现有音源）
+     * ## v3.1.0 · B：按 host 限定的两处改动（铁律 27：不得破坏现有音源）
      *
-     * 1. **上游挂一层 [ResolvingDataSource]**，只对 B 站 CDN 的 host 补
-     *    `Referer: https://www.bilibili.com/`。实测：B 站媒体 CDN 不带 Referer
-     *    一律 **403**（连带 ExoPlayer 指纹的 UA 也 403），而带上就是 206。
+     * 1. **只对 B 站媒体补 `Referer: https://www.bilibili.com/`**。实测：B 站媒体 CDN
+     *    不带 Referer 一律 **403**（连带 ExoPlayer 指纹的 UA 也 403），而带上就是 206。
      *    反过来，给网易云/QQ 的请求加 B 站 Referer 也会把它们打死 ——
-     *    所以判据是 host 白名单（[BiliCdn.needsReferer]），不是全局默认头。
+     *    所以判据是白名单（[BiliCdn.needsReferer]），不是全局默认头。
      *    网易云与 QQ 的请求在这里**一个字节都不变**。
      * 2. **B 站 CDN 用内容寻址的稳定缓存键**：它的直链两小时后会换一条（query 全变），
      *    但路径里的内容哈希不变，所以键取文件名（[BiliCdn.cacheKeyFor]）。
      *    非 B 站 CDN 的键**逐字不变**。
      *
-     * `ResolvingDataSource` 是 media3 自带的、专门用来在**打开数据源之前**
-     * 改写 `DataSpec` 的那一层（`DataSpec.withRequestHeaders`），
-     * 因此不需要自定义 `DataSource`，也不影响缓存写入路径。
+     * ## v3.2.4 · P0：Referer 只是**第一道闸**，UA 是第二道
+     *
+     * v3.1.0 的 `ResolvingDataSource` 只补了 Referer，而 CDN **同时**校验 UA：
+     * UA 缺失、或含 `android` / `dalvik` / `curl` / `python` / `vlc` 之类的子串 → **403**。
+     *
+     * 而 media3 那条默认路径发出去的恰恰是 `Dalvik/2.1.0 (Linux; U; Android …)`：
+     * `DefaultDataSource.Factory(Context)` 造的是裸 `DefaultHttpDataSource.Factory()`
+     * （`userAgent == null`），于是 UA 交给 `HttpURLConnection` 的默认值。
+     * 实测（`docs/verification/v3.2.4/probe-bili-playback.md` §2）：
+     * 生产链 `as_is` → **403**；**只加一个 UA**、其余逐字不变 → **206 + 字节**。
+     *
+     * ⚠️ 所以 UA **不能**塞进 `DataSpec.withRequestHeaders`：`DefaultHttpDataSource` 的
+     * `userAgent` 字段是 `final`，而且在 `makeConnection` 里**最后**才写，会把
+     * `DataSpec` 里的同名字段覆盖掉。只能由**工厂**给（[DefaultHttpDataSource.Factory.setUserAgent]）。
+     *
+     * 于是本版把上游拆成**两个数据源**，按 URI 逐次选（[SourceRoutingDataSource]）：
+     *
+     * | URI | 走哪个 | 与 v3.2.3 的差别 |
+     * |---|---|---|
+     * | B 站媒体（[BiliCdn.isBiliMedia]） | `DefaultDataSource` + **B 站 UA** | 多一个 UA + 多一批被判定的 host |
+     * | 其余（网易云 / QQ / 本地 / 未知） | `DefaultDataSource` + **media3 默认** | **零差别**（同一个裸工厂） |
+     *
+     * 判据只有一处（[BiliCdn.isBiliMedia]），选源与加头都问它 —— 铁律 26：对称位置的保护必须对称。
      */
     fun dataSourceFactory(context: Context): DataSource.Factory {
         val app = context.applicationContext
         val c = get(app)
-        val upstream: DataSource.Factory = ResolvingDataSource.Factory(
-            DefaultDataSource.Factory(app),
-        ) { spec ->
-            val host = spec.uri.host
-            if (BiliCdn.needsReferer(host)) spec.withRequestHeaders(BiliCdn.requestHeaders()) else spec
-        }
+        val upstream: DataSource.Factory = SourceRoutingDataSource.Factory(
+            plain = DefaultDataSource.Factory(app),
+            bili = DefaultDataSource.Factory(
+                app,
+                // ★ 唯一的 UA 注入点。@OptIn 见文件头。
+                DefaultHttpDataSource.Factory().setUserAgent(BiliCdn.USER_AGENT),
+            ),
+        )
         return CacheDataSource.Factory()
             .setCache(c)
             .setUpstreamDataSourceFactory(upstream)
@@ -155,6 +176,7 @@ object OfflineAudioCache {
                 // v3.1.0 · B：B 站 CDN 用**稳定键**（路径里的内容哈希 + 档位后缀），
                 // 因为它的 query（签名与 deadline）每次取链都不同 —— 按完整 URL 做 key
                 // 只会堆一批永远命中不了的片段。非 B 站 CDN 走既有规则，逐字不变。
+                // v3.2.4：判据换成 isBiliMedia（PCDN 第三方域名同样内容寻址）。
                 BiliCdn.cacheKeyFor(spec.uri.toString(), spec.uri.host)
                     ?: OfflineKeys.keyOf(spec.uri.toString())
                     ?: spec.uri.toString()
