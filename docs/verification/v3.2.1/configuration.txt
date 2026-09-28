@@ -1,0 +1,1072 @@
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/Ncrust/app/build/intermediates/default_proguard_files/global/proguard-android-optimize.txt-8.5.0
+# This is a configuration file for ProGuard.
+# http://proguard.sourceforge.net/index.html#manual/usage.html
+#
+# Starting with version 2.2 of the Android plugin for Gradle, this file is distributed together with
+# the plugin and unpacked at build-time. The files in $ANDROID_HOME are no longer maintained and
+# will be ignored by new version of the Android plugin for Gradle.
+
+# Optimizations: If you don't want to optimize, use the proguard-android.txt configuration file
+# instead of this one, which turns off the optimization flags.
+-allowaccessmodification
+
+# Preserve some attributes that may be required for reflection.
+-keepattributes AnnotationDefault,
+                EnclosingMethod,
+                InnerClasses,
+                RuntimeVisibleAnnotations,
+                RuntimeVisibleParameterAnnotations,
+                RuntimeVisibleTypeAnnotations,
+                Signature
+
+-keep public class com.google.vending.licensing.ILicensingService
+-keep public class com.android.vending.licensing.ILicensingService
+-keep public class com.google.android.vending.licensing.ILicensingService
+-dontnote com.android.vending.licensing.ILicensingService
+-dontnote com.google.vending.licensing.ILicensingService
+-dontnote com.google.android.vending.licensing.ILicensingService
+
+# For native methods, see https://www.guardsquare.com/manual/configuration/examples#native
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+
+# Keep setters in Views so that animations can still work.
+-keepclassmembers public class * extends android.view.View {
+    void set*(***);
+    *** get*();
+}
+
+# We want to keep methods in Activity that could be used in the XML attribute onClick.
+-keepclassmembers class * extends android.app.Activity {
+    public void *(android.view.View);
+}
+
+# For enumeration classes, see https://www.guardsquare.com/manual/configuration/examples#enumerations
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final ** CREATOR;
+}
+
+# Preserve annotated Javascript interface methods.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# The support libraries contains references to newer platform versions.
+# Don't warn about those in case this app is linking against an older
+# platform version. We know about them, and they are safe.
+-dontnote android.support.**
+-dontnote androidx.**
+-dontwarn android.support.**
+-dontwarn androidx.**
+
+# Understand the @Keep support annotation.
+-keep class android.support.annotation.Keep
+
+-keep @android.support.annotation.Keep class * {*;}
+
+-keepclasseswithmembers class * {
+    @android.support.annotation.Keep <methods>;
+}
+
+-keepclasseswithmembers class * {
+    @android.support.annotation.Keep <fields>;
+}
+
+-keepclasseswithmembers class * {
+    @android.support.annotation.Keep <init>(...);
+}
+
+# These classes are duplicated between android.jar and org.apache.http.legacy.jar.
+-dontnote org.apache.http.**
+-dontnote android.net.http.**
+
+# These classes are duplicated between android.jar and core-lambda-stubs.jar.
+-dontnote java.lang.invoke.**
+
+# End of content from /home/duanjb666/deepseek/Ncrust/app/build/intermediates/default_proguard_files/global/proguard-android-optimize.txt-8.5.0
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/Ncrust/app/proguard-rules.pro
+# =============================================================================
+# Ncrust ProGuard / R8 rules
+# =============================================================================
+# 目标：release 构建启用 R8 minify + resource shrink，DEX 更小、冷启动更快。
+# 保留的都是运行时反射依赖：Gson 反序列化 model、Retrofit interface、
+# Kotlin 元数据。
+
+# --- 调试栈跟踪（release 崩溃日志能定位到源码行） ---
+-keepattributes SourceFile, LineNumberTable
+-renamesourcefileattribute SourceFile
+
+# =============================================================================
+# Gson —— 反射构造 data class 需要保留 fields 与无参构造
+# =============================================================================
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+
+# 保留所有带 @SerializedName 的 field，防止字段名被混淆
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Gson 内部类和 TypeAdapter
+-keep class com.google.gson.stream.** { *; }
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+
+# Ncrust 网络模型 —— 全部 keep，Gson 反射用
+-keep class com.takahashirinta.ncrust.network.** { *; }
+-keep class com.takahashirinta.ncrust.network.model.** { *; }
+-keep class com.takahashirinta.ncrust.lyric.** { *; }
+# v2.2.0：歌单缓存 DTO 与编解码。**这一条是真的踩过坑才加的** ——
+# playlist.** 在没有 keep 时，R8 会丢掉 DTO 字段的泛型签名 attribute，
+# 导致 Gson 把 List<PlaylistDto> 当成裸 List、元素反序列化成 LinkedTreeMap，
+# release 真机上表现为 ClassCastException 崩溃（debug 完全正常）。
+# 代码侧已经改成用 TypeToken 解析（见 PlaylistCacheCodec.ListEnvelope 的 KDoc），
+# 这里是第二道防线：万一将来有人又写了依赖字段泛型签名的持久化结构。
+-keep class com.takahashirinta.ncrust.playlist.** { *; }
+# v2.3.0：本地歌单的 DTO 与编解码。**这一条同样是真的踩过坑才加的** ——
+# 第一次 release 真机验证时读回 ncrust_local_playlists.xml，发现落盘的 JSON 是
+# {"a":"netease","b":"local:...","c":"anonymous","d":"v230test","e":...,"f":...}
+# —— R8 把 DTO 的字段名整体混淆成了单字母。同一个 APK 内读写自洽，所以**不崩**，
+# 但持久化结构的字段名变成了「构建的副产物」：下一次构建的混淆映射一变，
+# 老数据就一条都读不出来 ⇒ 用户的本地歌单在升级时**静默消失**。
+# 这与 v2.2.0 那次「R8 丢掉泛型签名 ⇒ Gson 产出 LinkedTreeMap」是同一类问题的两个面：
+# **凡是落盘/落网的结构，字段名与泛型签名都是对外契约，不能交给 R8 决定。**
+# 回归保护：LocalPlaylistCodecTest 里断言了编解码产物的**确切 key 名**
+# （字段改名会让那个用例变红，而不是让用户的数据消失）。
+-keep class com.takahashirinta.ncrust.local.** { *; }
+
+# v2.3.0：单曲标签（版权可用性 / 原唱翻唱）。它**不落盘**，keep 的理由与上面不同：
+# 它是 Compose 的稳定性判据来源（@Immutable data class），混淆不会破坏正确性。
+# 这里不 keep 它 —— 列出来只为说明「为什么 local 要 keep 而 search 不要」。
+
+# =============================================================================
+# Retrofit / OkHttp —— 保留 interface 上的 HTTP 注解
+# =============================================================================
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+-keepattributes AnnotationDefault
+
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+
+# Retrofit 2 & OkHttp —— platform 自带，防误删
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+-dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+-dontwarn javax.annotation.**
+-dontwarn kotlin.Unit
+-dontwarn retrofit2.KotlinExtensions
+-dontwarn retrofit2.KotlinExtensions$*
+
+# =============================================================================
+# Kotlin
+# =============================================================================
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class kotlin.reflect.jvm.internal.impl.builtins.BuiltInsLoaderImpl { *; }
+
+# 协程
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+
+# =============================================================================
+# Compose —— compiler + runtime 自带 consumer rules，无需额外
+# =============================================================================
+
+# =============================================================================
+# Media3 / ExoPlayer —— consumer rules 自带
+# =============================================================================
+
+# =============================================================================
+# 反射直接命中的常量（BuildConfig）
+# =============================================================================
+-keep class com.takahashirinta.ncrust.BuildConfig { *; }
+
+# =============================================================================
+# WebView JS 接口（登录页用 WebView，未来若加 JS bridge 需在此声明）
+# =============================================================================
+
+# v2.4.0：跨源匹配缓存（`crosssource.**`）的 DTO 与编解码。**与 local/playlist 同一类问题** ——
+# `ncrust_match_cache.xml` 里存的是 `{"schemaVersion":1,"algorithmVersion":1,…,"aliasesJson":"…"}`，
+# 字段名就是跨版本契约。R8 把字段名混淆成单字母时同一 APK 内读写自洽、**不崩**，
+# 但下一次构建的映射一变，老数据一条都读不出来 ⇒ 缓存静默失效
+# （表现是「每次进页面都重新匹配一次」，用户感知为「变慢了」而不是「坏了」——
+#  正因为它不崩，这类问题更难被发现，所以 keep + 断言 key 名的单测两条都要）。
+-keep class com.takahashirinta.ncrust.crosssource.** { *; }
+
+# End of content from /home/duanjb666/deepseek/Ncrust/app/proguard-rules.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/8e19a6ee7f940a7b72e109ed11d00551/transformed/navigation-common-2.8.5/proguard.txt
+# Copyright (C) 2019 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# NavArgsLazy creates NavArgs instances using reflection
+-if public class ** implements androidx.navigation.NavArgs
+-keepclassmembers public class <1> {
+    ** fromBundle(android.os.Bundle);
+}
+
+# Retain the @Navigator.Name annotation on each subclass of Navigator.
+# R8 full mode only retains annotations on items matched by a -keep rule,
+# hence the extra -keep rule for the subclasses of Navigator.
+#
+# A -keep rule for the Navigator.Name annotation class is not required
+# since the annotation is referenced from the code.
+-keepattributes RuntimeVisibleAnnotations
+-keep,allowobfuscation,allowshrinking class * extends androidx.navigation.Navigator
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/8e19a6ee7f940a7b72e109ed11d00551/transformed/navigation-common-2.8.5/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f856782fc1803e625d4e6cba32740b2a/transformed/camera-camera2-1.4.1/proguard.txt
+# Copyright (C) 2020 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is necessary for default initialization using Camera2Config
+-keep public class androidx.camera.camera2.Camera2Config$DefaultProvider { *; }
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f856782fc1803e625d4e6cba32740b2a/transformed/camera-camera2-1.4.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/53f0f47e42dc003c9bb2fec66ffcaf9c/transformed/camera-core-1.4.1/proguard.txt
+# Copyright (C) 2023 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Keeps the quirk classes to prevent them from being merged incorrectly. For more information,
+# please see b/278818703. Preserve Quirk subclasses and their names for correct name mapping in
+# QuirkSettings.
+-keep,allowshrinking class ** extends androidx.camera.core.impl.Quirk
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/53f0f47e42dc003c9bb2fec66ffcaf9c/transformed/camera-core-1.4.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f0941d367c743048b86fd3c48bbf5c8c/transformed/appcompat-1.6.1/proguard.txt
+# Copyright (C) 2018 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# aapt is not able to read app::actionViewClass and app:actionProviderClass to produce proguard
+# keep rules. Add a commonly used SearchView to the keep list until b/109831488 is resolved.
+-keep class androidx.appcompat.widget.SearchView { <init>(...); }
+
+# Never inline methods, but allow shrinking and obfuscation.
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.appcompat.widget.AppCompatTextViewAutoSizeHelper$Impl* {
+  <methods>;
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f0941d367c743048b86fd3c48bbf5c8c/transformed/appcompat-1.6.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/40302c5f2d6bd8568473b426d1ed404f/transformed/fragment-1.3.6/proguard.txt
+# Copyright (C) 2020 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The default FragmentFactory creates Fragment instances using reflection
+-if public class ** extends androidx.fragment.app.Fragment
+-keepclasseswithmembers,allowobfuscation public class <1> {
+    public <init>();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/40302c5f2d6bd8568473b426d1ed404f/transformed/fragment-1.3.6/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/26d7a6ff4a59b6a855e98760d4794338/transformed/savedstate-1.2.1/proguard.txt
+# Copyright (C) 2019 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+-keepclassmembers,allowobfuscation class * implements androidx.savedstate.SavedStateRegistry$AutoRecreated {
+    <init>();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/26d7a6ff4a59b6a855e98760d4794338/transformed/savedstate-1.2.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/2ac205cf838b0fea0102b281672bfb15/transformed/lifecycle-process-2.8.3/proguard.txt
+# this rule is need to work properly when app is compiled with api 28, see b/142778206
+-keepclassmembers class * extends androidx.lifecycle.EmptyActivityLifecycleCallbacks { *; }
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/2ac205cf838b0fea0102b281672bfb15/transformed/lifecycle-process-2.8.3/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/5dccde713ecec05f82006bdc221896bd/transformed/media3-ffmpeg-decoder-1.5.0+1/proguard.txt
+# Proguard rules specific to the FFmpeg extension.
+
+# This prevents the names of native methods from being obfuscated.
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# This method is called from native code
+-keep, includedescriptorclasses class androidx.media3.decoder.ffmpeg.FfmpegAudioDecoder {
+  private java.nio.ByteBuffer growOutputBuffer(androidx.media3.decoder.SimpleDecoderOutputBuffer, int);
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/5dccde713ecec05f82006bdc221896bd/transformed/media3-ffmpeg-decoder-1.5.0+1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/a8ab4b73d334bb10784895ff11ad2797/transformed/media3-datasource-1.5.0/proguard.txt
+# Proguard rules specific to the DataSource module.
+
+# Constant folding for resource integers may mean that a resource passed to this method appears to be unused. Keep the method to prevent this from happening.
+-keepclassmembers class androidx.media3.datasource.RawResourceDataSource {
+  public static android.net.Uri buildRawResourceUri(int);
+}
+
+# Constructors accessed via reflection in DefaultDataSource
+-dontnote androidx.media3.datasource.rtmp.RtmpDataSource
+-keepclassmembers class androidx.media3.datasource.rtmp.RtmpDataSource {
+  <init>();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/a8ab4b73d334bb10784895ff11ad2797/transformed/media3-datasource-1.5.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4fe3a18306a0fc396cb2a89871f2f329/transformed/media3-ui-1.5.0/proguard.txt
+# Proguard rules specific to the UI module.
+
+# Constructor method and classes accessed via reflection in PlayerView
+-dontnote androidx.media3.exoplayer.video.spherical.SphericalGLSurfaceView
+-keepclassmembers class androidx.media3.exoplayer.video.spherical.SphericalGLSurfaceView {
+  <init>(android.content.Context);
+}
+-dontnote androidx.media3.exoplayer.video.VideoDecoderGLSurfaceView
+-keepclassmembers class androidx.media3.exoplayer.video.VideoDecoderGLSurfaceView {
+  <init>(android.content.Context);
+}
+-keepnames class androidx.media3.exoplayer.ExoPlayer {}
+-keepclassmembers class androidx.media3.exoplayer.ExoPlayer {
+  void setImageOutput(androidx.media3.exoplayer.image.ImageOutput);
+}
+-keepclasseswithmembers class androidx.media3.exoplayer.image.ImageOutput {
+  void onImageAvailable(long, android.graphics.Bitmap);
+}
+
+# Constructor method accessed via reflection in TrackSelectionDialogBuilder
+-dontnote androidx.appcompat.app.AlertDialog.Builder
+-keepclassmembers class androidx.appcompat.app.AlertDialog$Builder {
+  <init>(android.content.Context, int);
+  public android.content.Context getContext();
+  public androidx.appcompat.app.AlertDialog$Builder setTitle(java.lang.CharSequence);
+  public androidx.appcompat.app.AlertDialog$Builder setView(android.view.View);
+  public androidx.appcompat.app.AlertDialog$Builder setPositiveButton(int, android.content.DialogInterface$OnClickListener);
+  public androidx.appcompat.app.AlertDialog$Builder setNegativeButton(int, android.content.DialogInterface$OnClickListener);
+  public androidx.appcompat.app.AlertDialog create();
+}
+# Equivalent methods needed when the library is de-jetified.
+-dontnote android.support.v7.app.AlertDialog.Builder
+-keepclassmembers class android.support.v7.app.AlertDialog$Builder {
+  <init>(android.content.Context, int);
+  public android.content.Context getContext();
+  public android.support.v7.app.AlertDialog$Builder setTitle(java.lang.CharSequence);
+  public android.support.v7.app.AlertDialog$Builder setView(android.view.View);
+  public android.support.v7.app.AlertDialog$Builder setPositiveButton(int, android.content.DialogInterface$OnClickListener);
+  public android.support.v7.app.AlertDialog$Builder setNegativeButton(int, android.content.DialogInterface$OnClickListener);
+  public android.support.v7.app.AlertDialog create();
+}
+
+# Don't warn about checkerframework and Kotlin annotations
+-dontwarn org.checkerframework.**
+-dontwarn kotlin.annotations.jvm.**
+-dontwarn javax.annotation.**
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4fe3a18306a0fc396cb2a89871f2f329/transformed/media3-ui-1.5.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f25c115ce626f1c59dea4a4c66de2c87/transformed/media3-extractor-1.5.0/proguard.txt
+# Proguard rules specific to the extractor module.
+
+# Methods accessed via reflection in DefaultExtractorsFactory
+-dontnote androidx.media3.decoder.flac.FlacExtractor
+-keepclassmembers class androidx.media3.decoder.flac.FlacExtractor {
+  <init>(int);
+}
+-dontnote androidx.media3.decoder.flac.FlacLibrary
+-keepclassmembers class androidx.media3.decoder.flac.FlacLibrary {
+  public static boolean isAvailable();
+}
+-dontnote androidx.media3.decoder.midi.MidiExtractor
+-keepclassmembers class androidx.media3.decoder.midi.MidiExtractor {
+  <init>();
+}
+
+# Don't warn about checkerframework and Kotlin annotations
+-dontwarn org.checkerframework.**
+-dontwarn kotlin.annotations.jvm.**
+-dontwarn javax.annotation.**
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f25c115ce626f1c59dea4a4c66de2c87/transformed/media3-extractor-1.5.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/95991ea4d8b3fd339365325fa877a713/transformed/media3-common-1.5.0/proguard.txt
+# Proguard rules specific to the common module.
+
+# Don't warn about checkerframework and Kotlin annotations
+-dontwarn org.checkerframework.**
+-dontwarn kotlin.annotations.jvm.**
+-dontwarn javax.annotation.**
+
+# From https://github.com/google/guava/wiki/UsingProGuardWithGuava
+-dontwarn java.lang.ClassValue
+-dontwarn java.lang.SafeVarargs
+-dontwarn javax.lang.model.element.Modifier
+-dontwarn sun.misc.Unsafe
+
+# Don't warn about Guava's compile-only dependencies.
+# These lines are needed for ProGuard but not R8.
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn com.google.j2objc.annotations.**
+-dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+
+# Workaround for https://issuetracker.google.com/issues/112297269
+# This is needed for ProGuard but not R8.
+-keepclassmembernames class com.google.common.base.Function { *; }
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/95991ea4d8b3fd339365325fa877a713/transformed/media3-common-1.5.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/8ae155034da3390b59784925345ee76f/transformed/media3-exoplayer-1.5.0/proguard.txt
+# Proguard rules specific to the core module.
+
+# Constructors accessed via reflection in DefaultRenderersFactory
+-dontnote androidx.media3.decoder.vp9.LibvpxVideoRenderer
+-keepclassmembers class androidx.media3.decoder.vp9.LibvpxVideoRenderer {
+  <init>(long, android.os.Handler, androidx.media3.exoplayer.video.VideoRendererEventListener, int);
+}
+-dontnote androidx.media3.decoder.av1.Libgav1VideoRenderer
+-keepclassmembers class androidx.media3.decoder.av1.Libgav1VideoRenderer {
+  <init>(long, android.os.Handler, androidx.media3.exoplayer.video.VideoRendererEventListener, int);
+}
+-dontnote androidx.media3.decoder.ffmpeg.ExperimentalFfmpegVideoRenderer
+-keepclassmembers class androidx.media3.decoder.ffmpeg.ExperimentalFfmpegVideoRenderer {
+  <init>(long, android.os.Handler, androidx.media3.exoplayer.video.VideoRendererEventListener, int);
+}
+-dontnote androidx.media3.decoder.opus.LibopusAudioRenderer
+-keepclassmembers class androidx.media3.decoder.opus.LibopusAudioRenderer {
+  <init>(android.os.Handler, androidx.media3.exoplayer.audio.AudioRendererEventListener, androidx.media3.exoplayer.audio.AudioSink);
+}
+-dontnote androidx.media3.decoder.flac.LibflacAudioRenderer
+-keepclassmembers class androidx.media3.decoder.flac.LibflacAudioRenderer {
+  <init>(android.os.Handler, androidx.media3.exoplayer.audio.AudioRendererEventListener, androidx.media3.exoplayer.audio.AudioSink);
+}
+-dontnote androidx.media3.decoder.iamf.LibiamfAudioRenderer
+-keepclassmembers class androidx.media3.decoder.iamf.LibiamfAudioRenderer {
+  <init>(android.content.Context, android.os.Handler, androidx.media3.exoplayer.audio.AudioRendererEventListener, androidx.media3.exoplayer.audio.AudioSink);
+}
+-dontnote androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
+-keepclassmembers class androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer {
+  <init>(android.os.Handler, androidx.media3.exoplayer.audio.AudioRendererEventListener, androidx.media3.exoplayer.audio.AudioSink);
+}
+-dontnote androidx.media3.decoder.midi.MidiRenderer
+-keepclassmembers class androidx.media3.decoder.midi.MidiRenderer {
+  <init>(android.content.Context);
+}
+
+# Constructors accessed via reflection in DefaultDownloaderFactory
+-dontnote androidx.media3.exoplayer.dash.offline.DashDownloader
+-keepclassmembers class androidx.media3.exoplayer.dash.offline.DashDownloader {
+  <init>(androidx.media3.common.MediaItem, androidx.media3.datasource.cache.CacheDataSource$Factory, java.util.concurrent.Executor);
+}
+-dontnote androidx.media3.exoplayer.hls.offline.HlsDownloader
+-keepclassmembers class androidx.media3.exoplayer.hls.offline.HlsDownloader {
+  <init>(androidx.media3.common.MediaItem, androidx.media3.datasource.cache.CacheDataSource$Factory, java.util.concurrent.Executor);
+}
+-dontnote androidx.media3.exoplayer.smoothstreaming.offline.SsDownloader
+-keepclassmembers class androidx.media3.exoplayer.smoothstreaming.offline.SsDownloader {
+  <init>(androidx.media3.common.MediaItem, androidx.media3.datasource.cache.CacheDataSource$Factory, java.util.concurrent.Executor);
+}
+
+# Constructors accessed via reflection in DefaultMediaSourceFactory
+-dontnote androidx.media3.exoplayer.dash.DashMediaSource$Factory
+-keepclasseswithmembers class androidx.media3.exoplayer.dash.DashMediaSource$Factory {
+  <init>(androidx.media3.datasource.DataSource$Factory);
+}
+-dontnote androidx.media3.exoplayer.hls.HlsMediaSource$Factory
+-keepclasseswithmembers class androidx.media3.exoplayer.hls.HlsMediaSource$Factory {
+  <init>(androidx.media3.datasource.DataSource$Factory);
+}
+-dontnote androidx.media3.exoplayer.smoothstreaming.SsMediaSource$Factory
+-keepclasseswithmembers class androidx.media3.exoplayer.smoothstreaming.SsMediaSource$Factory {
+  <init>(androidx.media3.datasource.DataSource$Factory);
+}
+-dontnote androidx.media3.exoplayer.rtsp.RtspMediaSource$Factory
+-keepclasseswithmembers class androidx.media3.exoplayer.rtsp.RtspMediaSource$Factory {
+  <init>();
+}
+
+# Constructors and methods accessed via reflection in PlaybackVideoGraphWrapper
+-dontnote androidx.media3.effect.PreviewingSingleInputVideoGraph$Factory
+-keepclasseswithmembers class androidx.media3.effect.PreviewingSingleInputVideoGraph$Factory {
+  <init>(androidx.media3.common.VideoFrameProcessor$Factory);
+}
+-dontnote androidx.media3.effect.DefaultVideoFrameProcessor$Factory$Builder
+-keepclasseswithmembers class androidx.media3.effect.DefaultVideoFrameProcessor$Factory$Builder {
+  androidx.media3.effect.DefaultVideoFrameProcessor$Factory build();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/8ae155034da3390b59784925345ee76f/transformed/media3-exoplayer-1.5.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4e922cd271c65405ca2efff73172e310/transformed/media-1.7.0/proguard.txt
+# Copyright (C) 2017 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Prevent Parcelable objects from being removed or renamed.
+-keep class android.support.v4.media.** implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+
+# Prevent Parcelable objects from being removed or renamed.
+-keep class androidx.media.** implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4e922cd271c65405ca2efff73172e310/transformed/media-1.7.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/11ce9606b0157ab736ef0858218ba189/transformed/recyclerview-1.3.0/proguard.txt
+# Copyright (C) 2015 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# When layoutManager xml attribute is used, RecyclerView inflates
+#LayoutManagers' constructors using reflection.
+-keep public class * extends androidx.recyclerview.widget.RecyclerView$LayoutManager {
+    public <init>(android.content.Context, android.util.AttributeSet, int, int);
+    public <init>();
+}
+
+-keepclassmembers class androidx.recyclerview.widget.RecyclerView {
+    public void suppressLayout(boolean);
+    public boolean isLayoutSuppressed();
+}
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/11ce9606b0157ab736ef0858218ba189/transformed/recyclerview-1.3.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/360f646d3cdb5e8b38e373c44a44bc22/transformed/coordinatorlayout-1.0.0/proguard.txt
+# Copyright (C) 2016 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# CoordinatorLayout resolves the behaviors of its child components with reflection.
+-keep public class * extends androidx.coordinatorlayout.widget.CoordinatorLayout$Behavior {
+    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>();
+}
+
+# Make sure we keep annotations for CoordinatorLayout's DefaultBehavior and ViewPager's DecorView
+-keepattributes *Annotation*
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/360f646d3cdb5e8b38e373c44a44bc22/transformed/coordinatorlayout-1.0.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4e955568c2a7992e11358ba693071c35/transformed/graphics-path-1.0.1/proguard.txt
+-keepclasseswithmembers class androidx.graphics.path.** {
+    native <methods>;
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/4e955568c2a7992e11358ba693071c35/transformed/graphics-path-1.0.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/ab5dffbabac2a7afa624e900496cafe8/transformed/vectordrawable-animated-1.1.0/proguard.txt
+# Copyright (C) 2016 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# keep setters in VectorDrawables so that animations can still work.
+-keepclassmembers class androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$* {
+   void set*(***);
+   *** get*();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/ab5dffbabac2a7afa624e900496cafe8/transformed/vectordrawable-animated-1.1.0/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/51a710d6999d54ac6be810f5fe938f81/transformed/core-1.13.1/proguard.txt
+# Never inline methods, but allow shrinking and obfuscation.
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.ViewCompat$Api* {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.WindowInsetsCompat$*Impl* {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.app.NotificationCompat$*$Api*Impl {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.os.UserHandleCompat$Api*Impl {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.widget.EdgeEffectCompat$Api*Impl {
+  <methods>;
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/51a710d6999d54ac6be810f5fe938f81/transformed/core-1.13.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/b526574eef2a057363872d9d8666786b/transformed/lifecycle-runtime-release/proguard.txt
+-keepattributes AnnotationDefault,
+                RuntimeVisibleAnnotations,
+                RuntimeVisibleParameterAnnotations,
+                RuntimeVisibleTypeAnnotations
+
+-keepclassmembers enum androidx.lifecycle.Lifecycle$Event {
+    <fields>;
+}
+
+-keep class * implements androidx.lifecycle.GeneratedAdapter {
+    <init>(...);
+}
+
+-keepclassmembers class ** {
+    @androidx.lifecycle.OnLifecycleEvent *;
+}
+
+# this rule is need to work properly when app is compiled with api 28, see b/142778206
+# Also this rule prevents registerIn from being inlined.
+-keepclassmembers class androidx.lifecycle.ReportFragment$LifecycleCallbacks { *; }
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/b526574eef2a057363872d9d8666786b/transformed/lifecycle-runtime-release/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/e1e03dbac126a82a74bf66f2a9c81ca1/transformed/lifecycle-viewmodel-release/proguard.txt
+-keepclassmembers,allowobfuscation class * extends androidx.lifecycle.ViewModel {
+    <init>();
+}
+
+-keepclassmembers,allowobfuscation class * extends androidx.lifecycle.AndroidViewModel {
+    <init>(android.app.Application);
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/e1e03dbac126a82a74bf66f2a9c81ca1/transformed/lifecycle-viewmodel-release/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/83160063a44880de2cfa164d01301f3b/transformed/lifecycle-runtime-compose-release/proguard.txt
+# Workaround for https://issuetracker.google.com/issues/346808608
+#
+# `androidx.lifecycle.compose.LocalLifecycleOwner` will reflectively lookup for
+# `androidx.compose.ui.platform.LocalLifecycleOwner` to ensure backward compatibility
+# when using Lifecycle 2.8+ with Compose 1.6.
+#
+# We need to keep the getter if the code using this is included.
+#
+# We need to suppress `ShrinkerUnresolvedReference` because the `LocalComposition` is in a
+# different module.
+#
+#noinspection ShrinkerUnresolvedReference
+-if public class androidx.compose.ui.platform.AndroidCompositionLocals_androidKt {
+    public static *** getLocalLifecycleOwner();
+}
+-keep public class androidx.compose.ui.platform.AndroidCompositionLocals_androidKt {
+    public static *** getLocalLifecycleOwner();
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/83160063a44880de2cfa164d01301f3b/transformed/lifecycle-runtime-compose-release/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/d25a1e62345951534355e37a6d53f928/transformed/lifecycle-viewmodel-savedstate-2.8.3/proguard.txt
+-keepclassmembers,allowobfuscation class * extends androidx.lifecycle.ViewModel {
+    <init>(androidx.lifecycle.SavedStateHandle);
+}
+
+-keepclassmembers,allowobfuscation class * extends androidx.lifecycle.AndroidViewModel {
+    <init>(android.app.Application,androidx.lifecycle.SavedStateHandle);
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/d25a1e62345951534355e37a6d53f928/transformed/lifecycle-viewmodel-savedstate-2.8.3/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/e19776c75a50b4af25acf818ea7f84a7/transformed/ui-release/proguard.txt
+# Copyright (C) 2020 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# We supply these as stubs and are able to link to them at runtime
+# because they are hidden public classes in Android. We don't want
+# R8 to complain about them not being there during optimization.
+-dontwarn android.view.RenderNode
+-dontwarn android.view.DisplayListCanvas
+-dontwarn android.view.HardwareCanvas
+
+-keepclassmembers class androidx.compose.ui.platform.ViewLayerContainer {
+    protected void dispatchGetDisplayList();
+}
+
+-keepclassmembers class androidx.compose.ui.platform.AndroidComposeView {
+    android.view.View findViewByAccessibilityIdTraversal(int);
+}
+
+# Users can create Modifier.Node instances that implement multiple Modifier.Node interfaces,
+# so we cannot tell whether two modifier.node instances are of the same type without using
+# reflection to determine the class type. See b/265188224 for more context.
+-keep,allowshrinking class * extends androidx.compose.ui.node.ModifierNodeElement
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/e19776c75a50b4af25acf818ea7f84a7/transformed/ui-release/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f55e172ae3b60053a77e03d256c117ef/transformed/runtime-release/proguard.txt
+-assumenosideeffects public class androidx.compose.runtime.ComposerKt {
+    void sourceInformation(androidx.compose.runtime.Composer,java.lang.String);
+    void sourceInformationMarkerStart(androidx.compose.runtime.Composer,int,java.lang.String);
+    void sourceInformationMarkerEnd(androidx.compose.runtime.Composer);
+}
+
+# Composer's class initializer doesn't do anything but create an EMPTY object. Marking the
+# initializers as having no side effects can help encourage shrinkers to merge/devirtualize Composer
+# with ComposerImpl.
+-assumenosideeffects public class androidx.compose.runtime.Composer {
+    void <clinit>();
+}
+-assumenosideeffects public class androidx.compose.runtime.ComposerImpl {
+    void <clinit>();
+}
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/f55e172ae3b60053a77e03d256c117ef/transformed/runtime-release/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/ede336c7cbd0c8647f6bbb25f0479711/transformed/startup-runtime-1.1.1/proguard.txt
+# It's important that we preserve initializer names, given they are used in the AndroidManifest.xml.
+-keepnames class * extends androidx.startup.Initializer
+
+# These Proguard rules ensures that ComponentInitializers are are neither shrunk nor obfuscated,
+# and are a part of the primary dex file. This is because they are discovered and instantiated
+# during application startup.
+-keep class * extends androidx.startup.Initializer {
+    # Keep the public no-argument constructor while allowing other methods to be optimized.
+    <init>();
+}
+
+-assumenosideeffects class androidx.startup.StartupLogger { public static <methods>; }
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/ede336c7cbd0c8647f6bbb25f0479711/transformed/startup-runtime-1.1.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c3561288790d10794c5394fb755d0c0e/transformed/rules/lib/META-INF/com.android.tools/r8/kotlinx-serialization-common.pro
+# Keep `Companion` object fields of serializable classes.
+# This avoids serializer lookup through `getDeclaredClasses` as done for named companion objects.
+-if @kotlinx.serialization.Serializable class **
+-keepclassmembers class <1> {
+    static <1>$Companion Companion;
+}
+
+# Keep `serializer()` on companion objects (both default and named) of serializable classes.
+-if @kotlinx.serialization.Serializable class ** {
+    static **$* *;
+}
+-keepclassmembers class <2>$<3> {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Keep `INSTANCE.serializer()` of serializable objects.
+-if @kotlinx.serialization.Serializable class ** {
+    public static ** INSTANCE;
+}
+-keepclassmembers class <1> {
+    public static <1> INSTANCE;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# @Serializable and @Polymorphic are used at runtime for polymorphic serialization.
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+
+# Don't print notes about potential mistakes or omissions in the configuration for kotlinx-serialization classes
+# See also https://github.com/Kotlin/kotlinx.serialization/issues/1900
+-dontnote kotlinx.serialization.**
+
+# Serialization core uses `java.lang.ClassValue` for caching inside these specified classes.
+# If there is no `java.lang.ClassValue` (for example, in Android), then R8/ProGuard will print a warning.
+# However, since in this case they will not be used, we can disable these warnings
+-dontwarn kotlinx.serialization.internal.ClassValueReferences
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c3561288790d10794c5394fb755d0c0e/transformed/rules/lib/META-INF/com.android.tools/r8/kotlinx-serialization-common.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c3561288790d10794c5394fb755d0c0e/transformed/rules/lib/META-INF/com.android.tools/r8/kotlinx-serialization-r8.pro
+# Rule to save runtime annotations on serializable class.
+# If the R8 full mode is used, annotations are removed from classes-files.
+#
+# For the annotation serializer, it is necessary to read the `Serializable` annotation inside the serializer<T>() function - if it is present,
+# then `SealedClassSerializer` is used, if absent, then `PolymorphicSerializer'.
+#
+# When using R8 full mode, all interfaces will be serialized using `PolymorphicSerializer`.
+#
+# see https://github.com/Kotlin/kotlinx.serialization/issues/2050
+
+ -if @kotlinx.serialization.Serializable class **
+ -keep, allowshrinking, allowoptimization, allowobfuscation, allowaccessmodification class <1>
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c3561288790d10794c5394fb755d0c0e/transformed/rules/lib/META-INF/com.android.tools/r8/kotlinx-serialization-r8.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/6eb164acea46e7e1c1e886fbc88dca88/transformed/versionedparcelable-1.1.1/proguard.txt
+-keep class * implements androidx.versionedparcelable.VersionedParcelable
+-keep public class android.support.**Parcelizer { *; }
+-keep public class androidx.**Parcelizer { *; }
+-keep public class androidx.versionedparcelable.ParcelImpl
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/6eb164acea46e7e1c1e886fbc88dca88/transformed/versionedparcelable-1.1.1/proguard.txt
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c2b919857f60038aeed7123ea001aeb6/transformed/rules/lib/META-INF/proguard/androidx-annotations.pro
+-keep,allowobfuscation @interface androidx.annotation.Keep
+-keep @androidx.annotation.Keep class * {*;}
+
+-keepclasseswithmembers class * {
+    @androidx.annotation.Keep <methods>;
+}
+
+-keepclasseswithmembers class * {
+    @androidx.annotation.Keep <fields>;
+}
+
+-keepclasseswithmembers class * {
+    @androidx.annotation.Keep <init>(...);
+}
+
+-keepclassmembers,allowobfuscation class * {
+  @androidx.annotation.DoNotInline <methods>;
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/c2b919857f60038aeed7123ea001aeb6/transformed/rules/lib/META-INF/proguard/androidx-annotations.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/75c4b969935f1c32cf58d0c78d5ad2ff/transformed/rules/lib/META-INF/proguard/retrofit2.pro
+# Retrofit does reflection on generic parameters. InnerClasses is required to use Signature and
+# EnclosingMethod is required to use InnerClasses.
+-keepattributes Signature, InnerClasses, EnclosingMethod
+
+# Retrofit does reflection on method and parameter annotations.
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+
+# Keep annotation default values (e.g., retrofit2.http.Field.encoded).
+-keepattributes AnnotationDefault
+
+# Retain service method parameters when optimizing.
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+
+# Ignore annotation used for build tooling.
+-dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+
+# Ignore JSR 305 annotations for embedding nullability information.
+-dontwarn javax.annotation.**
+
+# Guarded by a NoClassDefFoundError try/catch and only used when on the classpath.
+-dontwarn kotlin.Unit
+
+# Top-level functions that can only be used by Kotlin.
+-dontwarn retrofit2.KotlinExtensions
+-dontwarn retrofit2.KotlinExtensions$*
+
+# With R8 full mode, it sees no subtypes of Retrofit interfaces since they are created with a Proxy
+# and replaces all potential values with null. Explicitly keeping the interfaces prevents this.
+-if interface * { @retrofit2.http.* <methods>; }
+-keep,allowobfuscation interface <1>
+
+# Keep inherited services.
+-if interface * { @retrofit2.http.* <methods>; }
+-keep,allowobfuscation interface * extends <1>
+
+# With R8 full mode generic signatures are stripped for classes that are not
+# kept. Suspend functions are wrapped in continuations where the type argument
+# is used.
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+
+# R8 full mode strips generic signatures from return types if not kept.
+-if interface * { @retrofit2.http.* public *** *(...); }
+-keep,allowoptimization,allowshrinking,allowobfuscation class <3>
+
+# With R8 full mode generic signatures are stripped for classes that are not kept.
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/75c4b969935f1c32cf58d0c78d5ad2ff/transformed/rules/lib/META-INF/proguard/retrofit2.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/398cd28e71544a2c9d2318c6ca448665/transformed/rules/lib/META-INF/proguard/okhttp3.pro
+# JSR 305 annotations are for embedding nullability information.
+-dontwarn javax.annotation.**
+
+# A resource is loaded with a relative path so the package of this class must be preserved.
+-keepnames class okhttp3.internal.publicsuffix.PublicSuffixDatabase
+
+# Animal Sniffer compileOnly dependency to ensure APIs are compatible with older versions of Java.
+-dontwarn org.codehaus.mojo.animal_sniffer.*
+
+# OkHttp platform used only on JVM and when Conscrypt and other security providers are available.
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/398cd28e71544a2c9d2318c6ca448665/transformed/rules/lib/META-INF/proguard/okhttp3.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/3b6d8ccec986370194b34a2bcd3c8314/transformed/rules/lib/META-INF/com.android.tools/r8/coroutines.pro
+# When editing this file, update the following files as well:
+# - META-INF/proguard/coroutines.pro
+# - META-INF/com.android.tools/proguard/coroutines.pro
+
+# Most of volatile fields are updated with AFU and should not be mangled
+-keepclassmembers class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+
+# Same story for the standard library's SafeContinuation that also uses AtomicReferenceFieldUpdater
+-keepclassmembers class kotlin.coroutines.SafeContinuation {
+    volatile <fields>;
+}
+
+# These classes are only required by kotlinx.coroutines.debug.AgentPremain, which is only loaded when
+# kotlinx-coroutines-core is used as a Java agent, so these are not needed in contexts where ProGuard is used.
+-dontwarn java.lang.instrument.ClassFileTransformer
+-dontwarn sun.misc.SignalHandler
+-dontwarn java.lang.instrument.Instrumentation
+-dontwarn sun.misc.Signal
+
+# Only used in `kotlinx.coroutines.internal.ExceptionsConstructor`.
+# The case when it is not available is hidden in a `try`-`catch`, as well as a check for Android.
+-dontwarn java.lang.ClassValue
+
+# An annotation used for build tooling, won't be directly accessed.
+-dontwarn org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/3b6d8ccec986370194b34a2bcd3c8314/transformed/rules/lib/META-INF/com.android.tools/r8/coroutines.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/37f8834cc03d108606c1a63bfed9745f/transformed/rules/lib/META-INF/com.android.tools/r8-from-1.6.0/coroutines.pro
+# Allow R8 to optimize away the FastServiceLoader.
+# Together with ServiceLoader optimization in R8
+# this results in direct instantiation when loading Dispatchers.Main
+-assumenosideeffects class kotlinx.coroutines.internal.MainDispatcherLoader {
+    boolean FAST_SERVICE_LOADER_ENABLED return false;
+}
+
+-assumenosideeffects class kotlinx.coroutines.internal.FastServiceLoaderKt {
+    boolean ANDROID_DETECTED return true;
+}
+
+# Disable support for "Missing Main Dispatcher", since we always have Android main dispatcher
+-assumenosideeffects class kotlinx.coroutines.internal.MainDispatchersKt {
+    boolean SUPPORT_MISSING return false;
+}
+
+# Statically turn off all debugging facilities and assertions
+-assumenosideeffects class kotlinx.coroutines.DebugKt {
+    boolean getASSERTIONS_ENABLED() return false;
+    boolean getDEBUG() return false;
+    boolean getRECOVER_STACK_TRACES() return false;
+}
+
+# End of content from /home/duanjb666/deepseek/.gradle-home/caches/9.3.1/transforms/37f8834cc03d108606c1a63bfed9745f/transformed/rules/lib/META-INF/com.android.tools/r8-from-1.6.0/coroutines.pro
+# The proguard configuration file for the following section is /home/duanjb666/deepseek/Ncrust/app/build/intermediates/aapt_proguard_file/release/processReleaseResources/aapt_rules.txt
+-keep class androidx.camera.core.impl.MetadataHolderService { <init>(); }
+-keep class androidx.core.app.CoreComponentFactory { <init>(); }
+-keep class androidx.media3.session.MediaButtonReceiver { <init>(); }
+-keep class androidx.profileinstaller.ProfileInstallReceiver { <init>(); }
+-keep class androidx.startup.InitializationProvider { <init>(); }
+-keep class com.takahashirinta.ncrust.MainActivity { <init>(); }
+-keep class com.takahashirinta.ncrust.NcrustApplication { <init>(); }
+-keep class com.takahashirinta.ncrust.player.PlaybackService { <init>(); }
+-keep class android.widget.Space { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.app.AlertController$RecycleListView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.view.menu.ActionMenuItemView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.view.menu.ExpandedMenuView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.view.menu.ListMenuItemView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ActionBarContainer { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ActionBarContextView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ActionBarOverlayLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ActionMenuView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ActivityChooserView$InnerLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.AlertDialogLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ButtonBarLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ContentFrameLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.DialogTitle { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.FitWindowsFrameLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.FitWindowsLinearLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.SearchView$SearchAutoComplete { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.Toolbar { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.appcompat.widget.ViewStubCompat { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.core.widget.NestedScrollView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.media3.ui.AspectRatioFrameLayout { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.media3.ui.SubtitleView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.media3.ui.TrackSelectionView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class androidx.recyclerview.widget.RecyclerView { <init>(android.content.Context, android.util.AttributeSet); }
+
+
+# End of content from /home/duanjb666/deepseek/Ncrust/app/build/intermediates/aapt_proguard_file/release/processReleaseResources/aapt_rules.txt
+# The proguard configuration file for the following section is <unknown>
+
+# End of content from <unknown>
