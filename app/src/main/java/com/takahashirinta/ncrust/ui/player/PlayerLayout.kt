@@ -210,11 +210,60 @@ object PlayerLayout {
         requested && orientationLandscape
 
     /**
+     * v3.2.1 · A（铁律 26）：分栏比例的**正下限** —— 左右两栏共用同一个下限。
+     *
+     * ## 为什么是「正下限」而不是 0
+     *
+     * `Modifier.weight(w)` 的内部实现是 `require(w > 0.0) { "invalid weight $w; must be
+     * greater than zero" }`。所以任何一次把 `0f` 传进 `weight()` 的调用都会**直接崩掉整个 App**
+     * （不是布局变形，是 `IllegalArgumentException` 冒泡到 `AndroidRuntime`）。
+     * 下限取一个极小数而不是 0：宽度在视觉上等价于 0（< 0.03px），但语义上永远是合法的权重。
+     *
+     * ## 为什么必须有这一条（v3.2.0 的真机崩溃）
+     *
+     * v3.2.0 的 `invalid weight 0.0` 崩溃里，`PlayerCard` 只有**一处**动态权重
+     * （`wideLeftFraction`），而它**只有右栏**有 `coerceAtLeast(0.0001f)`、
+     * **左栏没有** —— 这个不对称本身就是隐患：一旦上限保护被加到一侧而另一侧忘了，
+     * 结果就是「宽度异常 → 崩 App」而不是「宽度趋 0」。
+     * 铁律 26：**对称位置的保护必须对称**。本轮把下限收敛到这一个常量，
+     * 左栏 [wideLeftFraction] 与右栏 [wideRightFraction] 都必须经过它。
+     */
+    const val MIN_SPLIT_FRACTION = 0.0001f
+
+    /**
      * 宽屏左栏占整宽的比例：随 wideSplit 在 100%（单栏）与 44%（两栏）之间过渡。
      * 窄屏恒为 1（[isWidePlayer] = false 时不读 wideSplit）。
+     *
+     * ## v3.2.1 · A：出口处加正下限（对称保护的一半）
+     *
+     * 返回值恒 `>= [MIN_SPLIT_FRACTION]`，且**恒不是 NaN**。调用点因此不可能把 `0f`
+     * 交给 `Modifier.weight`，即使将来 [WIDE_RIGHT_FRACTION] 被改大、或 `wideSplit`
+     * 被换成别的来源。
+     *
+     * ⚠️ **NaN 必须显式挡掉**：`Float.NaN.coerceIn(0f, 1f)` 返回 NaN、
+     * `NaN.coerceAtLeast(x)` 也返回 NaN（两次比较都是 false）——
+     * 也就是「加了 coerce 还是会崩」。这一条是 v3.2.1 补的，写进单测
+     * （`PlayerLayoutTest.wideLeftFraction 恒为合法权重`）。
      */
-    fun wideLeftFraction(isWidePlayer: Boolean, wideSplit: Float): Float =
-        if (isWidePlayer) 1f - WIDE_RIGHT_FRACTION * wideSplit.coerceIn(0f, 1f) else 1f
+    fun wideLeftFraction(isWidePlayer: Boolean, wideSplit: Float): Float {
+        if (!isWidePlayer) return 1f
+        val split = if (wideSplit.isNaN()) 0f else wideSplit.coerceIn(0f, 1f)
+        return (1f - WIDE_RIGHT_FRACTION * split).coerceAtLeast(MIN_SPLIT_FRACTION)
+    }
+
+    /**
+     * v3.2.1 · A：与 [wideLeftFraction] **对称**的右栏占比（对称保护的另一半）。
+     *
+     * 旧实现写的是 `(1f - wideLeftFraction).coerceAtLeast(0.0001f)` —— 保护是对的，
+     * 但它把「下限」这个事实**又写了一遍**（另一处写 `0.0001f` 字面量的地方就是漂移的起点）。
+     * 现在左右两侧共用 [MIN_SPLIT_FRACTION] 与同一个 NaN 判据，
+     * `PlayerLayoutTest` 用「对称性」断言把它钉住：对定义域里的任何输入，
+     * 两个返回值都 `> 0` 且 `左 + 右` 落在 `[1, 1 + MIN_SPLIT_FRACTION]` 内。
+     */
+    fun wideRightFraction(wideLeftFraction: Float): Float {
+        if (wideLeftFraction.isNaN()) return 1f - MIN_SPLIT_FRACTION
+        return (1f - wideLeftFraction).coerceAtLeast(MIN_SPLIT_FRACTION)
+    }
 
     /**
      * 宽屏**分栏语义边界**（px）：左边是封面/信息区，右边是歌词·队列面板。

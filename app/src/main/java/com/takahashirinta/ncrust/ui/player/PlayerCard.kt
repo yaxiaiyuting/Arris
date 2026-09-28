@@ -1248,7 +1248,11 @@ fun PlayerCard(
                     Row(modifier = Modifier.fillMaxSize()) {
                         Column(
                             modifier = Modifier
-                                .weight(wideLeftFraction)
+                                // v3.2.1 · A（铁律 26）：与右栏**对称**的正下限。
+                                // 出口处（PlayerLayout.wideLeftFraction）已经夹过一次，
+                                // 这里再夹一次是防「将来新增调用点绕过那个出口」——
+                                // 两次都走同一个常量 MIN_SPLIT_FRACTION，不存在漂移。
+                                .weight(wideLeftFraction.coerceAtLeast(PlayerLayout.MIN_SPLIT_FRACTION))
                                 .fillMaxHeight()
                         ) {
                             // 封面区：只作为"唯一封面 overlay"在宽屏的落点参考——实测其中心与
@@ -1323,7 +1327,9 @@ fun PlayerCard(
                         // 避免开关歌词时面板反复 mount/unmount 导致歌词状态丢失/不再重绘。
                         Box(
                             modifier = Modifier
-                                .weight((1f - wideLeftFraction).coerceAtLeast(0.0001f))
+                                // v3.2.1 · A（铁律 26）：左栏 1251 处已对称补上下限，
+                                // 这里改为走同一个出口函数，两侧共用 MIN_SPLIT_FRACTION。
+                                .weight(PlayerLayout.wideRightFraction(wideLeftFraction))
                                 .fillMaxHeight()
                         ) {
                             playerPanels(

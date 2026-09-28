@@ -76,6 +76,74 @@ class PlayerLayoutTest {
         assertFalse("legacy predicate would have called it cover area", bandPoint > legacy)
     }
 
+    // ---------- v3.2.1 · A：分栏比例的对称正下限（铁律 26） ----------
+    //
+    // 崩溃面：`Modifier.weight(w)` 内部是 `require(w > 0.0)` —— 收到 0 或 NaN 会直接抛
+    // `IllegalArgumentException` 崩掉 App（v3.2.0 真机 `invalid weight 0.0`）。
+    // 这一组用例把「左右两个出口都只产出合法权重」变成可执行断言。
+
+    @Test
+    fun `wide left fraction is always a legal weight`() {
+        val inputs = listOf(
+            0f, 0.5f, 1f,                      // 定义域
+            -1f, 2f, 1e9f, -1e9f,              // 越界
+            Float.NaN,                          // ⚠️ coerceIn/coerceAtLeast 都挡不住 NaN
+            Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY,
+        )
+        for (split in inputs) {
+            val left = PlayerLayout.wideLeftFraction(isWidePlayer = true, wideSplit = split)
+            assertFalse("left fraction 不能是 NaN（wideSplit=$split）", left.isNaN())
+            assertTrue("left fraction 必须 > 0（wideSplit=$split，实际 $left）",
+                left > 0f)
+            assertTrue("left fraction 不能超过 100%（wideSplit=$split）", left <= 1f)
+        }
+    }
+
+    @Test
+    fun `wide right fraction is always a legal weight and symmetric with the left`() {
+        val inputs = listOf(
+            0f, 0.3f, 0.44f, 1f,
+            -1f, 2f, Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY,
+        )
+        for (split in inputs) {
+            val left = PlayerLayout.wideLeftFraction(isWidePlayer = true, wideSplit = split)
+            val right = PlayerLayout.wideRightFraction(left)
+            assertFalse("right fraction 不能是 NaN（wideSplit=$split）", right.isNaN())
+            assertTrue("right fraction 必须 > 0（wideSplit=$split，实际 $right）", right > 0f)
+            assertTrue("right fraction 不能超过 100%", right <= 1f)
+            // 对称性：单栏稳定态（left = 1）下右栏拿到的正是下限本身
+            if (split == 0f) {
+                assertEquals(PlayerLayout.MIN_SPLIT_FRACTION, right, 1e-9f)
+            }
+        }
+    }
+
+    @Test
+    fun `narrow player is unaffected by the clamp`() {
+        // 窄屏不读 wideSplit ⇒ 恒为 1，加下限前后逐值相同（不引入行为差异）
+        for (split in listOf(0f, 0.5f, 1f, Float.NaN)) {
+            assertEquals(1f, PlayerLayout.wideLeftFraction(isWidePlayer = false, wideSplit = split))
+        }
+    }
+
+    @Test
+    fun `fraction clamp keeps the documented 44 to 100 percent range`() {
+        // 加下限不能把正常取值夹坏：两栏稳定态仍是 0.44、单栏仍是 1
+        assertEquals(0.44f, PlayerLayout.wideLeftFraction(true, 1f), 1e-6f)
+        assertEquals(1f, PlayerLayout.wideLeftFraction(true, 0f), 1e-6f)
+        assertEquals(0.56f, PlayerLayout.wideRightFraction(0.44f), 1e-6f)
+    }
+
+    @Test
+    fun `split boundary stays finite for abnormal inputs`() {
+        // 命中测试用的是 splitBoundaryPx，NaN 会让「点是否落在面板上」恒为 false ⇒ 手势全被整卡拖拽抢走
+        for (split in listOf(Float.NaN, -5f, 5f, Float.POSITIVE_INFINITY)) {
+            val px = PlayerLayout.splitBoundaryPx(2800f, isWidePlayer = true, wideSplit = split)
+            assertFalse("boundary 不能是 NaN（wideSplit=$split）", px.isNaN())
+            assertTrue("boundary 必须落在 [0, 屏宽]", px in 0f..2800f)
+        }
+    }
+
     @Test
     fun `big screen left boundary is fixed at 44 percent`() {
         assertEquals(1232f, PlayerLayout.bigScreenLeftBoundaryPx(2800f), 1e-3f)
