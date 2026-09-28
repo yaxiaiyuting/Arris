@@ -19,10 +19,10 @@ import org.junit.Test
 /**
  * v3.2.2：**档位适配与开关联动**的单测（任务书 §3.4）。
  *
- * ## 本版的核心决定：**不新增任何设置项**
+ * ## 本版的核心决定 ①：**不新增任何设置项**
  *
  * 主导频段着色挂的是既有能力位 `waveBandMode`，而它由**既有的** `motion_wave_bands`
- * 开关 + 档位 ≥ 精致共同决定。理由：
+ * 开关决定（v3.2.2 起与档位解耦，见下）。理由：
  *  - 它就是 v3.0.0「多频段波形调制」这条功能的**新表达**（逐柱 tint → 整条曲线一个色），
  *    不是第二件事，再加一个开关会变成"两个开关管同一件事"；
  *  - 仓库纪律「能不加字段就不加」（v1.9.3 固化）：没有新键 ⇒ 没有新迁移 ⇒ 没有新文案 ⇒
@@ -45,12 +45,23 @@ class BandColoringGatingTest {
     ).waveform
 
     @Test
-    fun `简洁档 —— 关闭频段着色 曲线回落单一 RMS 色`() {
+    fun `简洁档 —— 也开频段着色（本版起与档位解耦）`() {
+        // 这条是**用户实测反馈**的直接落点：低端机的默认档就是简洁档，
+        // 按档位收窄的后果是"默认体验是一条单色曲线"，用户报「没有做出
+        // 左中右分别代表低中高频率的感觉」。着色是波形自己的属性 ⇒ 三档都开。
         val w = waveformOf(MotionIntensity.SIMPLE)
-        assertFalse("简洁档不开频段着色", w.waveBandOn)
-        assertEquals(VisualizerEffects.MODE_WAVE_BAND_OFF, w.waveBandMode)
-        // 但波形本身仍然要画：曲线是 v3.2.2 的基础渲染，与档位无关。
-        assertTrue("简洁档仍然要推进波形帧", w.tier == MotionIntensity.SIMPLE)
+        assertTrue("简洁档也要按频带着色", w.waveBandOn)
+        assertEquals(VisualizerEffects.MODE_WAVE_BAND_TINT, w.waveBandMode)
+        assertFalse("频带能量条仍然是炫技档的", w.waveBandLanes)
+    }
+
+    @Test
+    fun `三档都开频带着色 —— 档位只决定别的效果`() {
+        for (tier in MotionIntensity.SIMPLE..MotionIntensity.SHOWCASE) {
+            assertTrue("tier=$tier 必须着色", waveformOf(tier).waveBandOn)
+        }
+        assertTrue("只有炫技档画频带能量条", waveformOf(MotionIntensity.SHOWCASE).waveBandLanes)
+        assertFalse(waveformOf(MotionIntensity.REFINED).waveBandLanes)
     }
 
     @Test
@@ -77,19 +88,24 @@ class BandColoringGatingTest {
     }
 
     @Test
-    fun `界面动效总闸关掉 —— 曲线仍绘制 但回落单色`() {
+    fun `界面动效总闸关掉 —— 波形照旧（含着色），它只管界面动效`() {
+        // 波形的开关是 `audio_visualizer` + `motion_wave_bands` 两个；
+        // `ui_motion_enabled` 管的是背景/粒子/歌词律动那一层。
         val w = waveformOf(MotionIntensity.SHOWCASE, uiMotionEnabled = false)
-        assertFalse("总闸关掉 ⇒ 频段着色关闭（回落单色曲线）", w.waveBandOn)
+        assertTrue("总闸关掉不影响波形的频带着色", w.waveBandOn)
+        assertFalse("但炫技档的频带能量条随总闸一起关（它属于界面动效那一层）", w.waveBandLanes)
     }
 
     @Test
     fun `界面律动闸不影响频段着色 —— 它不读 pulse 或 level`() {
         // 律动闸（motion_rhythm_enabled）的判据是"渲染路径是否读 MotionClock.pulse()/level()"。
         // 主导频段着色的驱动量是 low/mid/high 三个频带能量，**不经过包络** ⇒ 不属于律动类。
-        val on = waveformOf(MotionIntensity.REFINED, rhythm = true)
-        val off = waveformOf(MotionIntensity.REFINED, rhythm = false)
-        assertEquals(on.waveBandMode, off.waveBandMode)
-        assertTrue(off.waveBandOn)
+        for (tier in MotionIntensity.SIMPLE..MotionIntensity.SHOWCASE) {
+            val on = waveformOf(tier, rhythm = true)
+            val off = waveformOf(tier, rhythm = false)
+            assertEquals("tier=$tier", on.waveBandMode, off.waveBandMode)
+            assertTrue(off.waveBandOn)
+        }
     }
 
     @Test
@@ -123,6 +139,29 @@ class BandColoringGatingTest {
             ),
         )
         assertFalse(effects.needsAudioFeatures)
+    }
+
+    @Test
+    fun `简洁档 + 界面动效全关时 特征链路仍然要跑 —— 因为波形要着色`() {
+        // v3.2.2 的连带代价：低端机（默认简洁档）现在也要算三频带。
+        // 这正是"着色必须复用既有特征、不得新增每帧计算"（铁律 29）的前提 ——
+        // 链路一旦不开，画面上就会退回单色，而用户看到的是"开关没生效"。
+        val effects = MotionEffects.of(
+            tier = MotionIntensity.SIMPLE,
+            uiMotionEnabled = false,
+            switches = MotionSwitches(
+                shockwave = false,
+                halo = false,
+                particles = false,
+                waveBands = true,
+                breathing = false,
+                coverFloat = false,
+                barPulse = false,
+                lyricPulse = false,
+            ),
+        )
+        assertTrue(effects.waveform.waveBandOn)
+        assertTrue("波形要着色 ⇒ 音频线程必须发布三频带", effects.needsAudioFeatures)
     }
 
     @Test

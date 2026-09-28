@@ -68,23 +68,21 @@ class WaveformRing(
     private val ring = FloatArray(capacity)
 
     /**
-     * v2.9.0：与 [ring] **逐槽对齐**的低频（鼓 / 贝斯）能量环形缓冲。
+     * v2.9.0 / v3.2.2：与 [ring] **逐槽对齐**的三个频带环形缓冲（低 / 中 / 高）。
      *
-     * 为什么是平行的第二个环而不是"再算一遍"：两个值来自**同一次**音频线程遍历
-     * （`PcmRms.analyze`），到 UI 侧也必须逐槽对齐 —— 否则节拍判据用的低频值与
-     * 柱状图画的全带值会来自不同的时刻，onset 会与画面错帧。
-     */
-    private val bassRing = FloatArray(capacity)
-
-    /**
-     * v3.0.0：与 [ring] **逐槽对齐**的「明亮度占比」环形缓冲（0 = 能量全在低频带，
-     * 1 = 全在中高频带，见 `AudioFeatureExtractor.bandMix`）。
+     * 为什么是平行的三个环而不是"再算一遍"：四个值来自**同一次**音频线程遍历
+     * （`AudioFeatureExtractor.process` 里的两个一阶低通），到 UI 侧也必须逐槽对齐 ——
+     * 否则三个泳道画的是不同时刻的曲线，接缝处的时间轴会错开。
      *
-     * 它只用于**逐柱着色**：柱子仍然按**时间**排列（左旧右新），
-     * `mix` 决定这一根柱子偏「低沉色」还是「明亮色」。**这不是频谱** ——
-     * 横轴是时间不是频率，`VisualizerEffects.spectrumColoring` 仍然恒为 false。
+     * v3.2.2 之前这里只有低频一个环（v2.9.0 的节拍判据用）+ 一个「明亮度占比」环
+     * （v3.0.0 的逐柱 tint 用）。本版要画**三条各自滚动的频带泳道**（左低 / 中中 / 右高），
+     * 于是中频与高频也需要各自的**历史窗口** —— 占比是把三者揉成一个数，
+     * 揉完就回不去了（`(mid+high)/(low+mid+high)` 无法反解出 mid 与 high）。
+     * 音频线程的代价是**传两个已经算好的 float**，没有任何新增逐样本计算（铁律 29）。
      */
-    private val mixRing = FloatArray(capacity)
+    private val lowRing = FloatArray(capacity)
+    private val midRing = FloatArray(capacity)
+    private val highRing = FloatArray(capacity)
 
     /**
      * 写入游标 = 累计写入的柱数（不是下标）。
@@ -104,17 +102,16 @@ class WaveformRing(
     /** v2.9.0：与 [targets] 对齐的**低频**最新值（节拍判据用）。 */
     private var bassTarget = 0f
 
-    /** v3.0.0：与 [targets] 对齐的**明亮度占比**最新值（逐柱着色用）。 */
-    private var mixTarget = 0f
+    /** v3.2.2：与 [targets] 对齐的三条**频带历史窗口**（三条泳道的画面值来源）。 */
+    private val lowTargets = FloatArray(barCount)
+    private val midTargets = FloatArray(barCount)
+    private val highTargets = FloatArray(barCount)
 
     /** 画面上的柱子高度（0..1）= 平滑后的值。UI 线程原地更新。 */
     private val bars = FloatArray(barCount)
 
     /** A 档：峰值（0..1）。独立数组，每帧原地更新 —— 绝不每帧分配。 */
     private val peaks = FloatArray(barCount)
-
-    /** v3.0.0：与 [bars] 逐槽对齐的明亮度占比（0..1），逐柱着色的输入。 */
-    private val mixTargets = FloatArray(barCount)
 
     /** 每个柱的峰值保持剩余时间（毫秒）。到 0 之后峰值才按 [PEAK_FALL_PER_SECOND] 下落。 */
     private val peakHoldMs = FloatArray(barCount)
@@ -135,13 +132,14 @@ class WaveformRing(
      * 所以「柱高、低频、明亮度」三者永远来自**同一个音频缓冲**，不会错帧。
      * 老调用点（只给 RMS，或给 RMS + 低频）继续可用：默认 `bass = value`、`mix = 0`。
      */
-    fun push(value: Float, bass: Float = value, mix: Float = 0f) {
+    fun push(value: Float, low: Float = value, mid: Float = 0f, high: Float = 0f) {
         // NaN / Inf 防御：环形缓冲的边界读在和写者赛跑时理论上可能读到半个值
         // （见 pump 的注释）。宁可画成静音，也不要让 NaN 传染给整块画布。
         val slot = writeIndex % capacity
         ring[slot] = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
-        bassRing[slot] = if (bass.isFinite()) bass.coerceIn(0f, 1f) else 0f
-        mixRing[slot] = if (mix.isFinite()) mix.coerceIn(0f, 1f) else 0f
+        lowRing[slot] = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
+        midRing[slot] = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
+        highRing[slot] = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
         writeIndex += 1
     }
 
@@ -151,7 +149,9 @@ class WaveformRing(
         bars.fill(0f)
         targets.fill(0f)
         bassTarget = 0f
-        mixTarget = 0f
+        lowTargets.fill(0f)
+        midTargets.fill(0f)
+        highTargets.fill(0f)
         peaks.fill(0f)
         peakHoldMs.fill(0f)
         flowPhase = 0f
@@ -219,32 +219,44 @@ class WaveformRing(
             // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
             val slot = readIndex % capacity
             if (shiftIn(ring[slot])) changed = true
-            // v2.9.0：低频通道只保留"最新一根"，不参与柱状图的滚动窗口 ——
-            // 节拍判据要的是**当下**这一刻的低频能量，不是历史窗口。
-            val bass = bassRing[slot]
-            if (bass.isFinite()) bassTarget = bass.coerceIn(0f, 1f)
-            // v3.0.0：明亮度占比**要**进滚动窗口（逐柱着色读的是每一根柱子各自的占比），
-            // 所以它既更新 target 数组（见 shiftMixIn）也保留最新值。
-            val mix = mixRing[slot]
-            val mixValue = if (mix.isFinite()) mix.coerceIn(0f, 1f) else 0f
-            mixTarget = mixValue
-            shiftMixIn(mixValue)
+            // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
+            // 它要的是"当下这一刻"的低频能量，不是历史窗口。
+            val low = lowRing[slot]
+            val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
+            bassTarget = lowValue
+            val mid = midRing[slot]
+            val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
+            val high = highRing[slot]
+            val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
+            // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
+            // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
+            // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
+            if (shiftBandIn(lowTargets, lowValue)) changed = true
+            if (shiftBandIn(midTargets, midValue)) changed = true
+            if (shiftBandIn(highTargets, highValue)) changed = true
             readIndex += 1
         }
         return changed
     }
 
     /**
-     * 把明亮度占比搬进 [mixTargets] 的滚动窗口（与 [shiftIn] 同构，只是不进重绘判据）。
+     * 把一条频带值搬进它自己的滚动窗口（与 [shiftIn] 同构）。
      *
-     * 为什么不并进 [shiftIn] 的返回值：颜色变化本身**不产生新的绘制几何**，
-     * 而 `pump` 的返回值决定「要不要排下一帧」。把颜色算进判据会让一首歌在
-     * 柱子完全静止时仍然每帧重绘（占比每根都在动）—— 那是白烧 GPU。
-     * 颜色跟着柱子一起更新就够了。
+     * @return 这一格是否真的改变了窗口内容（全等值时不必重绘）。
      */
-    private fun shiftMixIn(value: Float) {
-        for (i in 0 until barCount - 1) mixTargets[i] = mixTargets[i + 1]
-        mixTargets[barCount - 1] = value
+    private fun shiftBandIn(window: FloatArray, value: Float): Boolean {
+        var changed = false
+        for (i in 0 until barCount - 1) {
+            if (window[i] != window[i + 1]) {
+                window[i] = window[i + 1]
+                changed = true
+            }
+        }
+        if (window[barCount - 1] != value) {
+            window[barCount - 1] = value
+            changed = true
+        }
+        return changed
     }
 
     /** @return 这一根新柱是否真的改变了窗口内容（全等值时不必重绘）。 */
@@ -344,14 +356,17 @@ class WaveformRing(
     }
 
     /**
-     * v3.0.0：把滚动窗口 / 峰值 / **明亮度占比**一起拷进调用方复用的三个数组（零分配）。
+     * v3.2.2：把**三条频带**的滚动窗口拷进调用方复用的三个数组（零分配）。
      *
      * 三个数组长度都按 `barCount` 截断 —— 调用方传大数组也不会越界。
      */
-    fun copyInto(barsDestination: FloatArray, peaksDestination: FloatArray, mixDestination: FloatArray) {
-        copyInto(barsDestination, peaksDestination)
-        val n = minOf(mixDestination.size, barCount)
-        for (i in 0 until n) mixDestination[i] = mixTargets[i]
+    fun copyBandsInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
+        val n = minOf(lowDestination.size, barCount)
+        for (i in 0 until n) lowDestination[i] = lowTargets[i]
+        val m = minOf(midDestination.size, barCount)
+        for (i in 0 until m) midDestination[i] = midTargets[i]
+        val h = minOf(highDestination.size, barCount)
+        for (i in 0 until h) highDestination[i] = highTargets[i]
     }
 
     /** B 档：呼吸亮度倍率（[1-BREATHE_DEPTH] .. 1）。draw 阶段直接读，不触发重组。 */
@@ -376,11 +391,16 @@ class WaveformRing(
     /** v2.9.0：最新的低频能量（与 [newestTarget] 同一时刻）。 */
     fun newestBass(): Float = bassTarget
 
-    /** v3.0.0：最新的明亮度占比（与 [newestTarget] 同一时刻）。 */
-    fun newestMix(): Float = mixTarget
-
-    /** 单测用：某一根柱子的明亮度占比（逐柱着色的输入）。 */
-    fun mixAt(index: Int): Float = if (index in 0 until barCount) mixTargets[index] else 0f
+    /** 单测用：某一条频带窗口里的第 `index` 格。 */
+    fun bandAt(band: Int, index: Int): Float {
+        if (index !in 0 until barCount) return 0f
+        return when (band) {
+            BAND_LOW -> lowTargets[index]
+            BAND_MID -> midTargets[index]
+            BAND_HIGH -> highTargets[index]
+            else -> 0f
+        }
+    }
 
     /** 单测用：画面值（平滑后）。 */
     fun barAt(index: Int): Float = bars[index]
@@ -432,6 +452,11 @@ class WaveformRing(
          * 但高于"全零后的残余"，所以静音段与暂停态都不会白烧帧。
          */
         const val ANIMATION_MIN_SIGNAL = 0.02f
+
+        /** v3.2.2：频带下标（与 `BandColorRoles` / `BandDominance` 的三色顺序一致）。 */
+        const val BAND_LOW = 0
+        const val BAND_MID = 1
+        const val BAND_HIGH = 2
 
         private const val TWO_PI = 6.2831855f
     }

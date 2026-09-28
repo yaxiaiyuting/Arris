@@ -283,15 +283,28 @@ class VisualizerTierTest {
         assertTrue(lanes.waveBandLanes)
     }
 
+    /**
+     * v3.2.2：多频段调制**与档位解耦** —— `VisualizerEffects.of` 原样透传 `waveBandMode`。
+     *
+     * 上一版的断言是「简洁档一律关掉」（`if (refined) mode else OFF`），
+     * 而低端机的默认档就是简洁档 ⇒ 默认体验是一条单色曲线 —— 用户实测反馈
+     * 「没有做出左中右分别代表低中高频率的感觉」。着色是**波形自己的**属性，
+     * 门槛在 `motion_wave_bands` 那个开关上（见 `MotionEffects.of`）。
+     */
     @Test
-    fun `简洁档一律关掉多频段调制`() {
-        // 简洁档的契约是「波形基础 + 背景美化」，多频段是精致档起才有的那一层。
-        val simple = VisualizerEffects.of(
-            tier = VisualizerTier.SIMPLE, showcase = true, shockwave = true,
-            particles = true, perspective = true, tapInteraction = true,
-            waveBandMode = VisualizerEffects.MODE_WAVE_BAND_LANES,
-        )
-        assertEquals(VisualizerEffects.MODE_WAVE_BAND_OFF, simple.waveBandMode)
+    fun `多频段调制与档位解耦 —— 三档都原样透传`() {
+        for (tier in VisualizerTier.RANGE) {
+            val e = VisualizerEffects.of(
+                tier = tier, showcase = true, shockwave = true,
+                particles = true, perspective = true, tapInteraction = true,
+                waveBandMode = VisualizerEffects.MODE_WAVE_BAND_TINT,
+            )
+            assertEquals(
+                "tier=$tier 必须原样透传（开关由 motion_wave_bands 管）",
+                VisualizerEffects.MODE_WAVE_BAND_TINT,
+                e.waveBandMode,
+            )
+        }
     }
 
     /** **真频谱着色的能力位仍然恒为 false**（铁律 28：不做真 FFT 的翻案）。 */

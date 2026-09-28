@@ -296,14 +296,16 @@ class MotionEffects(
         get() = fullScreenWaveform || lyricPulse || beatPulse || parallax
 
     /**
-     * v3.0.0：**音频驱动的新动效**是否有任意一项开着。
+     * v3.0.0：**音频驱动的界面动效**是否有任意一项开着（**不含波形**）。
      *
-     * v3.2.0 起口径是「驱动量来自音频特征的全部界面能力位」（含律动类五项），
-     * 这样它才是「界面动效要不要音频特征」的如实声明 —— 与 [needsAudioFeatures] 一致。
+     * v3.2.2 起把 `waveform.waveBandOn` 从这里移出去了：波形的频带着色由它自己的开关
+     * （`motion_wave_bands`）管，与界面动效总闸无关 —— 留在里面会让
+     * 「总闸关掉 ⇒ anyAudioBinding == false」这条语义变成假的（关掉总闸后波形照样着色）。
+     * **音频线程要不要跑特征，唯一口径是 [needsAudioFeatures]**（它仍然包含波形那一路）。
      */
     val anyAudioBinding: Boolean
         get() = shockwave || haloBloom || particles || backgroundBreathing || coverFloat ||
-            lyricPulse || beatPulse || cover3d || waveform.waveBandOn
+            lyricPulse || beatPulse || cover3d
 
     /** C 档是否有任意一项开着。 */
     val anyShowcase: Boolean get() = particles || haloBloom || cover3d
@@ -402,9 +404,24 @@ class MotionEffects(
                     particles = waveformShowcaseEnabled,
                     perspective = waveformShowcaseEnabled,
                     tapInteraction = waveformShowcaseEnabled,
-                    // v3.0.0：多频段调制。条件是「精致档及以上」+「用户没关这个开关」；
-                    // 炫技档多画一条三频带能量条。
-                    waveBandMode = if (refinedPlus && switches.waveBands) {
+                    // v3.2.2：多频段调制（主导频带着色）**与档位解耦**，只受它自己的开关管。
+                    //
+                    // 为什么改（用户实测反馈）：原先门槛是 `refinedPlus`（= 界面动效总闸开
+                    // **且** 档位 ≥ 精致），而**低端机的默认档就是简洁档** —— 于是 S6 这类设备的
+                    // 默认体验是"一条单色曲线"，用户反馈「没有做出左中右分别代表低中高频率的感觉」。
+                    // 着色本来就是**波形自己的**属性（`motion_wave_bands` 是波形侧的开关），
+                    // 与"界面动效开不开""档位高不高"是两件事：
+                    //
+                    //   `audio_visualizer`  → 波形挂不挂载
+                    //   `motion_wave_bands` → 波形按不按频带着色   ← 只有这一个开关管它
+                    //   `ui_motion_enabled` → 界面动效（背景/粒子/歌词律动…），与波形无关
+                    //
+                    // 代价是**音频线程的合成要开**（着色必须有 low/mid/high，见 needsAudioFeatures）：
+                    // 低端机因此从"只算 RMS"变成"算 RMS + 三频带"。该链路的既有实测代价是
+                    // **574 µs / 缓冲、约 162× 实时**（docs/verification/v3.0.0/probe/EVIDENCE.md），
+                    // 帧时间在 S6 简洁档上复测过（docs/verification/v3.2.2/probe-perf-tier.md）。
+                    // 炫技档仍然多画一条三频带能量条（那一条才需要 `showcase`）。
+                    waveBandMode = if (switches.waveBands) {
                         if (showcase) {
                             VisualizerEffects.MODE_WAVE_BAND_LANES
                         } else {

@@ -136,13 +136,16 @@ class VisualizerEffects(
      */
     val spectrumColoring: Boolean = false,
     /**
-     * v3.0.0：**多频段能量对波形的调制档**（0 关 / 1 逐柱着色 / 2 逐柱着色 + 三频带能量条）。
+     * v3.0.0：**多频段能量对波形的调制档**（0 关 / 1 主导频带着色 / 2 着色 + 三频带能量条）。
+     *
+     * v3.2.2：**与档位解耦** —— 它由 `motion_wave_bands` 一个开关决定（默认开），
+     * 三档都生效；只有 [MODE_WAVE_BAND_LANES] 那一档还要求炫技档。
      *
      * ## 它不是频谱（写在这里，防止下一个人误读）
      *
-     * 柱子的横轴仍然是**时间**（左旧右新），`mix` 只决定这一根柱子偏「低沉色」还是
-     * 「明亮色」；能量条只显示三个频带各自的**当前能量**，没有频率轴、没有分帧、
-     * 没有窗函数。[spectrumColoring] 仍然恒为 `false`。
+     * 曲线/柱子的横轴仍然是**时间**（左旧右新）：颜色表达的是"**这一刻**哪个频带占主导"，
+     * 不是"这一段频率是多少"；能量条只显示三个频带各自的**当前能量**，
+     * 没有频率轴、没有分帧、没有窗函数。[spectrumColoring] 仍然恒为 `false`。
      *
      * 数据源是 `AudioFeatureExtractor` 的**两个一阶低通**（150 Hz / 2 kHz），
      * 频带之间泄漏很大 —— 它足以支撑「画面上看得出来哪一带在动」，
@@ -245,9 +248,13 @@ class VisualizerEffects(
                 particles = showcaseOn && particles,
                 perspective = showcaseOn && perspective,
                 tapInteraction = showcaseOn && tapInteraction,
-                // 低于精致档一律关：简洁档的契约是「波形基础 + 背景呼吸」，
-                // 多频段调制是精致档及以上才有的那一层。
-                waveBandMode = if (refined) waveBandMode else MODE_WAVE_BAND_OFF,
+                // v3.2.2：`waveBandMode` **不再按档位收窄**（v3.0.0 起这里写的是
+                // `if (refined) waveBandMode else OFF`）。理由见 `MotionEffects.of` 的注释：
+                // 频带着色是**波形自己的**属性，由它自己的开关（`motion_wave_bands`）管；
+                // 按档位收窄的后果是「低端机默认档 = 简洁档 ⇒ 默认体验是一条单色曲线」，
+                // 而那正是用户报的问题（「没有做出左中右分别代表低中高频率的感觉」）。
+                // 档位仍然决定**别的**东西：渐变流动 / 光点 / 呼吸 / 冲击波 / 粒子 / 频带能量条。
+                waveBandMode = waveBandMode,
             )
         }
     }

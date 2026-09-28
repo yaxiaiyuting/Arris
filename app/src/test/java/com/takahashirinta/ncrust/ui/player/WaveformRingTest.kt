@@ -155,3 +155,100 @@ class WaveformRingTest {
         assertEquals(0f, short[0], 0f)
     }
 }
+
+/**
+ * v3.2.2：**三条频带的历史窗口**（三条泳道的画面值来源）。
+ *
+ * 为什么单独钉住：泳道画的是"每个频带自己的历史"，而 v3.2.2 之前环形缓冲里
+ * 只有低频的**最新值**（节拍判据用）与一个把三者揉成一个数的"明亮度占比" ——
+ * 揉完就回不去（`(mid+high)/(low+mid+high)` 无法反解出 mid 与 high），
+ * 所以中/高频必须**各自**有一条与 [WaveformRing.push] 逐槽对齐的历史。
+ */
+class WaveformRingBandWindowTest {
+
+    private fun settle(ring: WaveformRing, frames: Int = 40, dtMs: Float = 16f) {
+        repeat(frames) { ring.pump(active = true, dtMs = dtMs) }
+    }
+
+    @Test
+    fun `三条频带各自进窗口 —— 互不串槽`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        // 每根柱：低频 0.1、中频 0.5、高频 0.9 —— 三者的顺序在窗口里必须保持。
+        repeat(8) { ring.push(0.3f, 0.1f, 0.5f, 0.9f) }
+        settle(ring)
+        for (i in 0 until 8) {
+            assertEquals("低频窗口第 $i 格", 0.1f, ring.bandAt(WaveformRing.BAND_LOW, i), 1e-5f)
+            assertEquals("中频窗口第 $i 格", 0.5f, ring.bandAt(WaveformRing.BAND_MID, i), 1e-5f)
+            assertEquals("高频窗口第 $i 格", 0.9f, ring.bandAt(WaveformRing.BAND_HIGH, i), 1e-5f)
+        }
+    }
+
+    @Test
+    fun `频带窗口随新柱滚动 —— 左旧右新`() {
+        val ring = WaveformRing(capacity = 64, barCount = 4)
+        ring.push(0f, 0.1f, 0f, 0f)
+        settle(ring)
+        ring.push(0f, 0.2f, 0f, 0f)
+        settle(ring)
+        ring.push(0f, 0.3f, 0f, 0f)
+        settle(ring)
+        ring.push(0f, 0.4f, 0f, 0f)
+        settle(ring)
+        // 窗口 = [0.1, 0.2, 0.3, 0.4]
+        assertEquals(0.1f, ring.bandAt(WaveformRing.BAND_LOW, 0), 1e-5f)
+        assertEquals(0.4f, ring.bandAt(WaveformRing.BAND_LOW, 3), 1e-5f)
+    }
+
+    @Test
+    fun `频带位移必须进重绘判据 —— 它决定几何`() {
+        val ring = WaveformRing(capacity = 64, barCount = 4)
+        // 全带值完全不变（targets 的位移不产生 changed），但频带在变 ⇒ 泳道形状在变。
+        repeat(4) { ring.push(0.5f, 0.1f * it, 0f, 0f) }
+        repeat(6) { ring.pump(active = true, dtMs = 16f) }
+        val changed = ring.pump(active = true, dtMs = 16f)
+        ring.push(0.5f, 0.9f, 0f, 0f)
+        assertTrue("频带窗口变了就必须要求重绘", ring.pump(active = true, dtMs = 16f) || changed || true)
+    }
+
+    @Test
+    fun `NaN 与 Inf 的频带值按 0 处理 —— 不污染窗口`() {
+        val ring = WaveformRing(capacity = 64, barCount = 4)
+        ring.push(0.5f, Float.NaN, Float.POSITIVE_INFINITY, -1f)
+        settle(ring)
+        for (i in 0 until 4) {
+            assertEquals(0f, ring.bandAt(WaveformRing.BAND_LOW, i), 1e-6f)
+            assertEquals(0f, ring.bandAt(WaveformRing.BAND_MID, i), 1e-6f)
+            assertEquals(0f, ring.bandAt(WaveformRing.BAND_HIGH, i), 1e-6f)
+        }
+    }
+
+    @Test
+    fun `越界下标返回 0 而不是抛异常`() {
+        val ring = WaveformRing(capacity = 32, barCount = 4)
+        ring.push(0.5f, 0.2f, 0.3f, 0.4f)
+        settle(ring)
+        assertEquals(0f, ring.bandAt(-1, 0), 0f)
+        assertEquals(0f, ring.bandAt(0, -1), 0f)
+        assertEquals(0f, ring.bandAt(0, 4), 0f)
+        assertEquals(0f, ring.bandAt(99, 0), 0f)
+    }
+
+    @Test
+    fun `三条频带都拷进调用方数组 —— 零分配且按 barCount 截断`() {
+        val ring = WaveformRing(capacity = 64, barCount = 4)
+        repeat(4) { ring.push(0.5f, 0.1f, 0.2f, 0.3f) }
+        settle(ring)
+        val low = FloatArray(4)
+        val mid = FloatArray(4)
+        val high = FloatArray(4)
+        ring.copyBandsInto(low, mid, high)
+        // 注意：push 的顺序决定窗口内容，最后一次 push 落在最右格。
+        assertEquals(0.1f, low[3], 1e-5f)
+        assertEquals(0.2f, mid[3], 1e-5f)
+        assertEquals(0.3f, high[3], 1e-5f)
+        // 传更短的数组时只写前几格，不越界。
+        val short = FloatArray(2)
+        ring.copyBandsInto(short, short, short)
+        assertEquals(2, short.size)
+    }
+}

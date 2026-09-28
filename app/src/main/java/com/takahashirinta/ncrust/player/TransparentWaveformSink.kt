@@ -117,7 +117,7 @@ import kotlin.math.sqrt
 class TransparentWaveformSink(
     private val enabled: () -> Boolean = { WaveformStore.enabled },
     private val featuresEnabled: () -> Boolean = { WaveformStore.motionFeaturesEnabled },
-    private val onBar: (Double, Double, Double) -> Unit = WaveformStore::onBar,
+    private val onBar: (Double, Double, Double, Double) -> Unit = WaveformStore::onBar,
     private val onFeatures: (Double, Double, Double, Double, Double, Boolean) -> Unit =
         WaveformStore::onFeatures,
     private val onTransient: (Int, Float) -> Unit = WaveformStore::onTransient,
@@ -191,11 +191,13 @@ class TransparentWaveformSink(
             // 多出来的只有每样本两次乘加 —— 与"每加一个特征再走一遍全部样本"差一个数量级。
             if (extractor.process(buffer, encoding)) {
                 if (wantBars) {
+                    // v3.2.2：**三个频带各自的历史**（三条泳道）—— 传的是提取器已经算好的
+                    // 三个字段，音频线程没有新增任何逐样本计算（铁律 29）。
                     onBar(
                         extractor.rms.toDouble(),
                         extractor.low.toDouble(),
-                        AudioFeatureExtractor.bandMix(extractor.low, extractor.mid, extractor.high)
-                            .toDouble(),
+                        extractor.mid.toDouble(),
+                        extractor.high.toDouble(),
                     )
                 }
                 if (wantFeatures) {
@@ -224,7 +226,7 @@ class TransparentWaveformSink(
                 )
                 val full = PcmRms.fullOf(packed).toDouble()
                 val bass = PcmRms.bassOf(packed).toDouble()
-                if (wantBars) onBar(full, bass, 0.0)
+                if (wantBars) onBar(full, bass, 0.0, 0.0)
                 if (wantFeatures) {
                     // available = false：消费方据此回落到**自己的**内置判据（v2.9.0 的包络），
                     // 而不是把「没有中高频」误当成「中高频能量为零」。

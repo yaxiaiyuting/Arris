@@ -65,16 +65,19 @@ class MotionEffectsTest {
         assertTrue("背景模糊", e.backgroundBlur)
         assertTrue("封面浮起阴影（静态）", e.coverElevation)
         assertTrue("切歌淡入", e.coverTransition)
-        // 零逐帧是最强的那条结论：不挂帧循环、音频线程也不跑特征。
-        assertFalse("简洁档不得有任何逐帧界面动效", e.needsFrameClock)
-        assertFalse("简洁档不需要音频特征", e.needsAudioFeatures)
+        // 零逐帧是**界面动效**那一层的最强结论。
+        assertFalse("简洁档没有任何逐帧界面动效", e.needsFrameClock)
+        // v3.2.2：**波形例外** —— 三频带泳道要读 low/mid/high，所以音频线程要跑特征。
+        // 这是用户反馈（默认简洁档的机器上"没有低中高的感觉"）的直接连带代价，
+        // 代价本身有实测：特征链路 574 µs/缓冲、约 162× 实时（v3.0.0 探针）。
+        assertTrue("简洁档也要跑音频特征（波形要画三条频带泳道）", e.needsAudioFeatures)
         assertFalse("B 档必须关", e.anyAdvanced)
         assertFalse("C 档必须关", e.anyShowcase)
         assertFalse("音频驱动的动效是精致档起才有的", e.shockwave || e.haloBloom || e.particles)
         assertEquals("波形仍是 v2.8.0 的简洁档", VisualizerTier.SIMPLE, e.effectiveWaveformTier)
         assertEquals(
-            "多频段调制也是精致档起",
-            VisualizerEffects.MODE_WAVE_BAND_OFF,
+            "v3.2.2：多频段调制与档位解耦，简洁档也开（用户反馈）",
+            VisualizerEffects.MODE_WAVE_BAND_TINT,
             e.waveform.waveBandMode,
         )
     }
@@ -166,8 +169,10 @@ class MotionEffectsTest {
             assertFalse("档位 $tier：总闸关 ⇒ 界面动效整个不挂载", e.anyUiMotion)
             assertFalse(e.anyBasic || e.anyAdvanced || e.anyShowcase)
             assertFalse(e.anyAudioBinding)
-            assertFalse("总闸关 ⇒ 零逐帧", e.needsFrameClock)
-            assertFalse("总闸关 ⇒ 不跑音频特征", e.needsAudioFeatures)
+            assertFalse("总闸关 ⇒ 零逐帧界面动效", e.needsFrameClock)
+            // v3.2.2：波形有自己的开关（`audio_visualizer` / `motion_wave_bands`），
+            // 不受界面动效总闸影响 —— 所以特征链路仍然要跑（波形要画三条频带泳道）。
+            assertTrue("总闸关不影响波形的频带数据", e.needsAudioFeatures)
         }
         // 开关**本身**的默认值仍然是开（缺 key = 与档位表一致）—— 总闸不去改写它们。
         assertTrue(MotionPrefs.DEFAULT_UI_MOTION)
@@ -454,11 +459,18 @@ class MotionEffectsTest {
         val all = effects(MotionIntensity.SHOWCASE)
         assertTrue(all.needsAudioFeatures)
 
+        // v3.2.2：只要波形的频带着色还开着（默认开），特征就必须跑 ——
+        // 关掉**它**才是"真的不需要特征"的那条路。
         val onlyBlur = effects(
             MotionIntensity.SIMPLE,
             switches = MotionSwitches(breathing = false),
         )
-        assertFalse("简洁档只剩背景模糊（静态）时不需要音频特征", onlyBlur.needsAudioFeatures)
+        assertTrue("简洁档只剩背景模糊，但波形仍要着色 ⇒ 仍需要特征", onlyBlur.needsAudioFeatures)
+        val noWaveformBands = effects(
+            MotionIntensity.SIMPLE,
+            switches = MotionSwitches(breathing = false, waveBands = false),
+        )
+        assertFalse("连波形频带着色都关掉之后，才不需要音频特征", noWaveformBands.needsAudioFeatures)
 
         // 波形频带响应单独存在时仍然需要特征（它读的是三频段能量）。
         val onlyBands = effects(

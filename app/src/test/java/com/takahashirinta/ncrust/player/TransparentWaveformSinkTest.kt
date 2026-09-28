@@ -213,8 +213,8 @@ class TransparentWaveformSinkTest {
         var calls = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            // v3.0.0：onBar 收三个参数（全带 RMS + 低频通道 + 明亮度占比）。
-            onBar = { _, _, _ ->
+            // v3.2.2：onBar 收四个参数（全带 RMS + 低 / 中 / 高三个频带）。
+            onBar = { _, _, _, _ ->
                 calls++
                 throw IllegalStateException("模拟 push() 里将来加了会抛的代码")
             },
@@ -250,7 +250,7 @@ class TransparentWaveformSinkTest {
         var consumed = 0
         val sink = TransparentWaveformSink(
             enabled = { true },
-            onBar = { _, _, _ -> consumed++ },
+            onBar = { _, _, _, _ -> consumed++ },
             extractor = ThrowingExtractor(),
         )
         sink.flush(44_100, 6, C.ENCODING_PCM_16BIT)
@@ -267,7 +267,7 @@ class TransparentWaveformSinkTest {
         val sink = TransparentWaveformSink(
             enabled = { false },
             featuresEnabled = { false },
-            onBar = { _, _, _ -> consumed++ },
+            onBar = { _, _, _, _ -> consumed++ },
             extractor = extractor,
         )
         sink.flush(44_100, 2, C.ENCODING_PCM_16BIT)
@@ -292,7 +292,7 @@ class TransparentWaveformSinkTest {
         val sink = TransparentWaveformSink(
             enabled = { false },
             featuresEnabled = { true },
-            onBar = { _, _, _ -> bars++ },
+            onBar = { _, _, _, _ -> bars++ },
             onFeatures = { _, _, _, _, _, _ -> features++ },
             extractor = extractor,
         )
@@ -338,7 +338,7 @@ class TransparentWaveformSinkTest {
         val sink = TransparentWaveformSink(
             enabled = { true },
             featuresEnabled = { true },
-            onBar = { _, _, _ -> bars++ },
+            onBar = { _, _, _, _ -> bars++ },
             onFeatures = { _, _, mid, _, _, available ->
                 lastMid = mid
                 lastAvailable = available

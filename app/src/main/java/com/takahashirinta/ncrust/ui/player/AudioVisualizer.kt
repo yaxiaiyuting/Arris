@@ -39,6 +39,7 @@ import com.takahashirinta.ncrust.player.AudioFeatureExtractor
 import com.takahashirinta.ncrust.ui.player.motion.MotionBindings
 import com.takahashirinta.ncrust.ui.player.waveform.BandColorRoles
 import com.takahashirinta.ncrust.ui.player.waveform.BandDominance
+import com.takahashirinta.ncrust.ui.player.waveform.BandLanes
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import com.takahashirinta.ncrust.ui.player.waveform.WaveformCurve
@@ -239,8 +240,10 @@ object WaveformStore {
      * 它的唯一消费方是节拍判据：底鼓/贝斯落在这一带，人声与旋律重音不在 ——
      * 于是「鼓声触发冲击波」成立，而「一句高音也炸一圈涟漪」消失。
      */
-    fun onBar(rootMeanSquare: Double, bass: Double, mix: Double) {
-        if (enabled) ring.push(rootMeanSquare.toFloat(), bass.toFloat(), mix.toFloat())
+    fun onBar(rootMeanSquare: Double, low: Double, mid: Double, high: Double) {
+        if (enabled) {
+            ring.push(rootMeanSquare.toFloat(), low.toFloat(), mid.toFloat(), high.toFloat())
+        }
     }
 
     /**
@@ -316,11 +319,11 @@ object WaveformStore {
     /** 最近一次瞬态的强度（0..1）。 */
     fun transientStrength(): Float = featTransientStrength
 
-    /** 只有全带值的重载（老调用点与单测用）：低频通道取同一个值。 */
-    fun onBar(rootMeanSquare: Double) = onBar(rootMeanSquare, rootMeanSquare, 0.0)
+    /** 只有全带值的重载（老调用点与单测用）：低频带取同一个值，中/高频段无数据。 */
+    fun onBar(rootMeanSquare: Double) = onBar(rootMeanSquare, rootMeanSquare, 0.0, 0.0)
 
-    /** 全带 + 低频的重载（v2.9.0 的调用点与单测用）：明亮度占比取 0（= 全部低沉）。 */
-    fun onBar(rootMeanSquare: Double, bass: Double) = onBar(rootMeanSquare, bass, 0.0)
+    /** 全带 + 低频的重载（v2.9.0 的调用点与单测用）：中/高频段无数据。 */
+    fun onBar(rootMeanSquare: Double, bass: Double) = onBar(rootMeanSquare, bass, 0.0, 0.0)
 
     /**
      * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸/C 档特效尚未收敛）时才让画面失效。
@@ -330,7 +333,7 @@ object WaveformStore {
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
         var changed = ring.pump(active, dtMs, effects)
         // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
-        // 关掉（简洁档 / 用户关了多频段开关）时音频线程根本不发布特征值，
+        // 关掉（用户关了多频段开关）时音频线程根本不发布特征值，
         // 此时若还去读 `featureLow()` 会把「上一首残留的」或初值 0 当数据用。
         // 这一步零分配、只写标量；返回值并入 changed ⇒ 80ms 的颜色过渡不会被冻住。
         if (band.update(
@@ -368,9 +371,14 @@ object WaveformStore {
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
     fun snapshot(bars: FloatArray, peaks: FloatArray) = ring.copyInto(bars, peaks)
 
-    /** v3.0.0：连带**明亮度占比**一起拷（逐柱着色用；三个数组都是 `remember` 的，零分配）。 */
-    fun snapshot(bars: FloatArray, peaks: FloatArray, mixes: FloatArray) =
-        ring.copyInto(bars, peaks, mixes)
+    /**
+     * v3.2.2：把**三条频带**的历史窗口拷进调用方复用的三个数组（三条泳道用；零分配）。
+     *
+     * 调用前必须确认 [featuresAvailable] —— 降级路径下中/高频段没有数据，
+     * 画出来会是两条贴着中线的直线，那是"编造"而不是"没测到"。
+     */
+    fun snapshotBands(low: FloatArray, mid: FloatArray, high: FloatArray) =
+        ring.copyBandsInto(low, mid, high)
 
     /**
      * v2.9.0：最新的**未平滑**柱值（0..1）。
@@ -390,15 +398,6 @@ object WaveformStore {
      * 全带 RMS 对"一句高音"与"一下底鼓"给出同样的响应，那是「乱触发」的根源。
      */
     fun newestBass(): Float = ring.newestBass()
-
-    /**
-     * v3.0.0：最新的**明亮度占比**（0..1；0 = 能量全在低频带，1 = 全在中高频带）。
-     *
-     * 波形逐柱着色（`AudioVisualizerBars`）与三频带能量条共用它。逐柱那一份读的是
-     * `snapshot(bars, peaks, mixes)` 里的历史窗口（每根柱子各自的占比），
-     * 这个函数给的是**最新一根**的值（能量条用）。
-     */
-    fun newestMix(): Float = ring.newestMix()
 
     /**
      * v3.2.2：本帧的三个频段颜色权重（低 / 中 / 高，和为 1）。
@@ -536,7 +535,7 @@ fun visualizerFrameIntervalMs(context: Context): Long {
  *
  * | 档 | 这一档画什么 | 每帧增量（相对现状 28 笔） |
  * |---|---|---|
- * | 简洁 | 圆角柱（`drawRoundRect`）+ 峰值保持（每柱一笔细横条）+ 按时序着色（现状的 alpha 阶梯）+ 间距（现状已有） | +≤28 笔（峰值只在高于柱顶 1.5dp 时才画） |
+ * | 简洁 | 圆角柱 + 峰值保持 + **频带着色** + 越旧越淡（水平 alpha 渐变） | +≤28 笔（峰值只在高出曲线 1.5dp 时才画） |
  * | 精致 | 简洁 + 渐变流动（**缓存 1 个 Brush + TileMode.Repeated + 每帧只改平移相位**）+ 柱顶光点（纯色小圆）+ 呼吸（只乘 alpha） | +≤28 笔（光点） |
  *
  * 三条「零分配 / 零重组」的实现要点，改这里之前先读：
@@ -582,14 +581,19 @@ fun AudioVisualizerBars(
     val barColor = LocalMetroColors.current.primary
     val bars = remember(barCount) { FloatArray(barCount) }
     val peaks = remember(barCount) { FloatArray(barCount) }
-    // v3.0.0：逐柱的「明亮度占比」窗口（多频段调制用；关掉时根本不快照它）。
-    val mixes = remember(barCount) { FloatArray(barCount) }
+    // v3.2.2：三条频带的历史窗口（低 / 中 / 高）。**降级路径下不读它们** ——
+    // 中/高频没有数据时画出来是两条贴着中线的直线，那是编造而不是"没测到"。
+    val lowWindow = remember(barCount) { FloatArray(barCount) }
+    val midWindow = remember(barCount) { FloatArray(barCount) }
+    val highWindow = remember(barCount) { FloatArray(barCount) }
     // v3.2.2：曲线几何的复用缓冲（**跨帧复用 = 帧路径零分配**，见 WaveformCurve 的 KDoc）。
-    //  `heights` = 每点的**半厚**（振幅域），`tangents` = 保单调切线，`path` = 复用的曲线路径。
-    val heights = remember(barCount) { FloatArray(barCount) }
-    val tangents = remember(barCount) { FloatArray(barCount) }
+    //  三频带模式下点序列是三条泳道**拼起来**的，所以缓冲要 3 倍长。
+    val pointCount = barCount * BandLanes.LANE_COUNT
+    val heights = remember(pointCount) { FloatArray(pointCount) }
+    val tangents = remember(pointCount) { FloatArray(pointCount) }
     val path = remember { Path() }
     val bandWeights = remember { FloatArray(3) }
+    val laneEmphasis = remember { FloatArray(BandLanes.LANE_COUNT) }
     val palette = remember { IntArray(3) }
     // 分级：**组合期读一次**（改设置时才会重组一次）。
     // draw 只用这个捕获值 —— 帧路径里零 state 读（除了下面 draw 里的 generation）。
@@ -642,12 +646,12 @@ fun AudioVisualizerBars(
     Canvas(modifier.then(clipModifier).then(perspectiveModifier).then(tapModifier)) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
         WaveformStore.generation
-        // v3.0.0：多频段调制开着时**多拷一个数组**（零分配：数组是 remember 出来的）；
-        // 关掉时连拷都不拷（「关掉开关 = 零开销」在快照这一层也成立）。
-        if (effects.waveBandOn) {
-            WaveformStore.snapshot(bars, peaks, mixes)
-        } else {
-            WaveformStore.snapshot(bars, peaks)
+        WaveformStore.snapshot(bars, peaks)
+        // v3.2.2：三频带泳道模式 = 用户开着多频段着色 **且** 特征链路真的可用 **且**
+        // 三角色算出来了。任一不满足 ⇒ 退回 v3.2.1 的单条曲线（如实降级，见铁律 28）。
+        val threeLane = effects.waveBandOn && WaveformStore.featuresAvailable() && paletteReady
+        if (threeLane) {
+            WaveformStore.snapshotBands(lowWindow, midWindow, highWindow)
         }
         val n = bars.size
         // v3.2.2：曲线至少要有两个点才谈得上"相邻两点连接"。
@@ -661,61 +665,109 @@ fun AudioVisualizerBars(
         if (effects.shockwave) {
             drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
         }
-        // ── v3.2.2：频段色 ────────────────────────────────────────────────────
-        // 权重来自 `BandDominance`（平滑 300ms + 滞回 20% + 静音闸门 + 80ms 过渡），
-        // 在 `pump` 里推进。不可信时**退回单一主题色** —— 这是降级路径的如实表达。
-        val bandReliable = paletteReady &&
-            effects.waveBandOn &&
-            WaveformStore.snapshotBand(bandWeights)
-        val ribbonColor = Color(
-            BandColorRoles.resolve(palette, bandWeights, bandReliable, barColor.toArgb())
-        )
-        // v3.2.2：曲线几何。`heights` 是**半厚**（振幅域 = sqrt(柱值)），
-        // 与 v2.8.0 的柱高逐值同源：`半厚 = max(1dp, sqrt(柱值) × H) / 2`。
-        // 用半厚而不是全高做插值，是因为 PCHIP 的"不过冲"保证作用在被插值的量上
-        // （探针 §2.5 量的就是振幅域序列）。
+        // ── v3.2.2：颜色与几何 ────────────────────────────────────────────────
+        // 主导频段权重来自 `BandDominance`（平滑 300ms + 滞回 20% + 静音闸门 + 100ms 过渡），
+        // 在 `pump` 里推进。它的用途在三条泳道布局下变成**泳道强调**：
+        // 主导的那条拉到满亮度、另外两条压到 [LANE_DIM] —— 这是"这一刻谁在主导"的读法，
+        // 而**不是**把整条曲线换成一个颜色（那样会把"左低中中右高"的空间语义抹掉）。
+        val bandReliable = paletteReady && effects.waveBandOn && WaveformStore.snapshotBand(bandWeights)
         val heightPx = size.height
-        for (i in 0 until n) {
-            heights[i] = sqrt(bars[i].coerceIn(0f, 1f)) * heightPx
-            if (heights[i] < minBar) heights[i] = minBar
-            heights[i] *= 0.5f
-        }
-        // 点等距铺满整宽（曲线没有"柱宽 / 间距"的概念，时间轴就是 x 轴）。
-        val step = size.width / (n - 1)
-        WaveformCurve.computeTangents(heights, n, step, tangents)
-        val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
-        val ageBrush = if (!flow && effects.timeOrderedTint) {
-            brushCache.age(size.width, ribbonColor.toArgb())
+        // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
+        if (threeLane) {
+            for (lane in 0 until BandLanes.LANE_COUNT) {
+                val window = when (lane) {
+                    BandLanes.LANE_LOW -> lowWindow
+                    BandLanes.LANE_MID -> midWindow
+                    else -> highWindow
+                }
+                val base = lane * n
+                for (i in 0 until n) {
+                    val half = BandLanes.amplitude(window[i], lane) * heightPx * 0.5f
+                    heights[base + i] = if (half < minBar * 0.5f) minBar * 0.5f else half
+                }
+            }
+            val total = n * BandLanes.LANE_COUNT
+            // **点距在整条拼接序列上恒定** —— 这是"无缝"的几何含义：
+            // 接缝两侧的点距与段内完全一样，曲线在接缝处不会"折一下"。
+            // 三段各自的高度只由**自己那个频带**决定，不做跨频带的插值平均，
+            // 所以"低音 / 中音 / 高音"的差距不会被抹平（用户明确要求）。
+            val step = size.width / (total - 1)
+            WaveformCurve.computeTangents(heights, total, step, tangents)
+            for (lane in 0 until BandLanes.LANE_COUNT) {
+                laneEmphasis[lane] = if (bandReliable) {
+                    LANE_DIM + (1f - LANE_DIM) * bandWeights[BandLanes.LANE_ROLE[lane]]
+                } else {
+                    1f
+                }
+            }
+            val laneBrush = brushCache.lanes(size.width, palette, laneEmphasis)
+            // v3.2.2（铁律 28）：一帧的绘制整段隔离 —— 失败丢这一帧，不向上抛、不重试。
+            isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
+                drawWaveformCurve(
+                    heights, peaks, total, tangents, path, barColor, laneBrush, effects,
+                    xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
+                    minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
+                    breath = breath, markerStride = LANE_MARKER_STRIDE,
+                )
+                // 渐变流动（精致档）：**叠一层**同路径的移动 alpha 波，而不是把色带推到泳道上 ——
+                // 泳道色带按横轴固定在"低/中/高"三段上，推着走会与那个空间语义打架。
+                if (flow) {
+                    val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
+                    val sheen = brushCache.flow(size.width, palette[BandColorRoles.MID])
+                    if (sheen != null) {
+                        translate(left = -phasePx) {
+                            drawCurveSheen(
+                                heights, total, tangents, path, sheen, effects,
+                                xShift = phasePx, step = step, heightPx = heightPx,
+                                breath = breath,
+                            )
+                        }
+                    }
+                }
+            }
         } else {
-            null
-        }
-        // v3.2.2（铁律 28）：**一帧的曲线绘制整段隔离**。`Canvas { }` 的 lambda 是
-        // draw 阶段执行的普通 lambda，不是 @Composable 作用域，所以这里 try/catch 不会碰到
-        // 「重组语义」那条禁忌（`PlayerCard.kt` 的告诫针对的是组合期）。失败语义：丢这一帧、
-        // 不向上抛、下一帧照常重来（有界，无重试队列）。
-        isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
-            if (flowBrush != null) {
-                val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
-                // 画布整体左移 phase，曲线再整体右移 phase 抵消：曲线不动、色带在流。
-                translate(left = -phasePx) {
+            // ── 降级 / 单条曲线（v3.2.1 的形态）：特征不可用、或用户关掉了多频段着色 ──
+            val ribbonColor = Color(
+                BandColorRoles.resolve(palette, bandWeights, bandReliable, barColor.toArgb())
+            )
+            for (i in 0 until n) {
+                heights[i] = sqrt(bars[i].coerceIn(0f, 1f)) * heightPx
+                if (heights[i] < minBar) heights[i] = minBar
+                heights[i] *= 0.5f
+            }
+            val step = size.width / (n - 1)
+            WaveformCurve.computeTangents(heights, n, step, tangents)
+            val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
+            val ageBrush = if (!flow && effects.timeOrderedTint) {
+                brushCache.age(size.width, ribbonColor.toArgb())
+            } else {
+                null
+            }
+            isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
+                if (flowBrush != null) {
+                    val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
+                    translate(left = -phasePx) {
+                        drawWaveformCurve(
+                            heights, peaks, n, tangents, path, ribbonColor, flowBrush, effects,
+                            xShift = phasePx, step = step, firstX = 0f, heightPx = heightPx,
+                            minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
+                            breath = breath,
+                        )
+                    }
+                } else {
                     drawWaveformCurve(
-                        heights, peaks, n, tangents, path, ribbonColor, flowBrush, effects,
-                        xShift = phasePx, step = step, firstX = 0f, heightPx = heightPx,
+                        heights, peaks, n, tangents, path, ribbonColor, ageBrush, effects,
+                        xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
                         minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                         breath = breath,
                     )
                 }
-            } else {
-                drawWaveformCurve(
-                    heights, peaks, n, tangents, path, ribbonColor, ageBrush, effects,
-                    xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
-                    minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
-                    breath = breath,
-                )
             }
         }
         if (effects.particles) {
-            drawParticles(WaveformStore.showcase, ribbonColor, particleRadiusPx, breath)
+            // 粒子用**中频泳道**的颜色（= 主题色）：它与 v3.2.1 的粒子同色，
+            // 又在三频带模式下有明确归属（中频段就是主题色那条）。
+            drawParticles(WaveformStore.showcase, Color(palette[BandColorRoles.MID]), particleRadiusPx, breath)
         }
         // v3.0.0：炫技档的三频带能量条（3 笔 drawRect，画在柱子之上）。
         // 它显示的是**当下**三个频带各自的能量，不是频谱（横轴没有频率含义）。
@@ -759,6 +811,23 @@ private const val FLOW_TILE_FRACTION = 0.55f
 /** 色带两端与中间的不透明度：两端一样暗 ⇒ `TileMode.Repeated` 的接缝不可见（不然会看到硬边）。 */
 private const val FLOW_DIM_ALPHA = 0.55f
 private const val FLOW_BRIGHT_ALPHA = 1.00f
+
+/**
+ * v3.2.2：非主导泳道的亮度系数（主导泳道为 1）。
+ *
+ * 0.78 的依据：再低（<0.6）会让两条泳道看起来像"没画"，再高（>0.9）就分不出谁在主导。
+ * 强调量的过渡由 `BandDominance` 的 100ms 负责（铁律 30：不得硬切）。
+ */
+private const val LANE_DIM = 0.78f
+
+/**
+ * v3.2.2：三频带模式下光点 / 峰值标记的**采样步长**。
+ *
+ * 三频带模式有 84 个点，逐点画光点就是 84 个圆 + 84 个峰值条 ——
+ * 一半是纯浪费：曲线本身已经把形状说清楚了，点太密反而糊成一条线。
+ * 2 表示隔一个点画一个（42 个），与 v3.2.1 的 28 个同一量级。
+ */
+private const val LANE_MARKER_STRIDE = 2
 
 /** 柱顶光点半径（dp）。细到能读出"这是柱顶"，又不会盖住柱子本身。 */
 private const val BAR_DOT_RADIUS_DP = 1.2f
@@ -839,6 +908,8 @@ private fun DrawScope.drawWaveformCurve(
     dotRadiusPx: Float,
     peakCapPx: Float,
     breath: Float,
+    /** v3.2.2：光点 / 峰值标记的采样步长（三频带模式用 2，单带模式用 1）。 */
+    markerStride: Int = 1,
 ) {
     val n = minOf(count, heights.size, tangents.size)
     if (n < 2 || step <= 0f || heightPx <= 0f) return
@@ -873,18 +944,24 @@ private fun DrawScope.drawWaveformCurve(
     // 只在明显高于曲线时才画。位置跟着曲线走（峰值的半厚 → y）。
     val dotThreshold = minBar * DOT_MIN_BAR_MULTIPLE
     val peakVisibleDelta = peakCapPx / 2f
-    val markerWidth = (step * 0.6f).coerceAtLeast(1f)
-    for (i in 0 until n) {
+    val stride = if (markerStride < 1) 1 else markerStride
+    val markerWidth = (step * 0.6f * stride).coerceAtLeast(1f)
+    var i = 0
+    while (i < n) {
         val x = firstX + i * step + xShift
         if (effects.peaks) {
             val peakHalf = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx * 0.5f
             if (peakHalf > heights[i] + peakVisibleDelta) {
-                drawRect(
-                    color = color,
-                    topLeft = Offset(x - markerWidth / 2f, centerY - peakHalf - peakCapPx),
-                    size = Size(markerWidth, peakCapPx),
-                    alpha = 0.9f * breath,
-                )
+                val topLeft = Offset(x - markerWidth / 2f, centerY - peakHalf - peakCapPx)
+                val size = Size(markerWidth, peakCapPx)
+                // v3.2.2：三频带模式下峰值标记**跟着它所在泳道的颜色**（同一个渐变笔刷在
+                // 那个 x 处采样出来的就是那一段的颜色）—— 否则会变成一条横穿三条泳道的
+                // 主题色虚线，看起来像渲染错误。
+                if (brush != null) {
+                    drawRect(brush = brush, topLeft = topLeft, size = size, alpha = 0.9f * breath)
+                } else {
+                    drawRect(color = color, topLeft = topLeft, size = size, alpha = 0.9f * breath)
+                }
             }
         }
         if (effects.dots && heights[i] * 2f > dotThreshold) {
@@ -895,8 +972,59 @@ private fun DrawScope.drawWaveformCurve(
                 alpha = breath,
             )
         }
+        i += stride
     }
 }
+
+/**
+ * v3.2.2：**渐变流动的叠加层**（只在三频带模式 + 精致档用）。
+ *
+ * 三频带模式下，沿着横轴的色带被**泳道**占用了（左低 / 中中 / 右高）——
+ * v2.8.0 的"整条色带推着走"会把三个频段的色区在横轴上搬来搬去，与那个空间语义直接打架。
+ * 所以流动改成**叠一层**：同一条路径再填一次，笔刷是一条移动的 alpha 波（色相不变），
+ * 观感仍然是"有东西在流"，而泳道的颜色归属不动。
+ *
+ * 成本：**多一次 `drawPath`**（与 v3.2.1 的 28 次带 shader 绘制相比仍然少得多）。
+ */
+private fun DrawScope.drawCurveSheen(
+    heights: FloatArray,
+    count: Int,
+    tangents: FloatArray,
+    path: Path,
+    brush: Brush,
+    effects: VisualizerEffects,
+    xShift: Float,
+    step: Float,
+    heightPx: Float,
+    breath: Float,
+) {
+    val n = minOf(count, heights.size, tangents.size)
+    if (n < 2 || step <= 0f || heightPx <= 0f) return
+    val centerY = heightPx / 2f
+    val third = step / 3f
+    path.reset()
+    path.moveTo(xShift, centerY - heights[0])
+    for (i in 0 until n - 1) {
+        val xa = i * step + xShift
+        val xb = xa + step
+        val c1 = centerY - WaveformCurve.controlY1(heights[i], tangents[i], step)
+        val c2 = centerY - WaveformCurve.controlY2(heights[i + 1], tangents[i + 1], step)
+        path.cubicTo(xa + third, c1, xb - third, c2, xb, centerY - heights[i + 1])
+    }
+    path.lineTo((n - 1) * step + xShift, centerY + heights[n - 1])
+    for (i in n - 2 downTo 0) {
+        val xa = i * step + xShift
+        val xb = xa + step
+        val c2 = centerY + WaveformCurve.controlY2(heights[i + 1], tangents[i + 1], step)
+        val c1 = centerY + WaveformCurve.controlY1(heights[i], tangents[i], step)
+        path.cubicTo(xb - third, c2, xa + third, c1, xa, centerY + heights[i])
+    }
+    path.close()
+    drawPath(path = path, brush = brush, alpha = SHEEN_ALPHA * breath)
+}
+
+/** 渐变流动叠加层的整体不透明度。0.45 看得出在流，又不会把泳道颜色洗白。 */
+private const val SHEEN_ALPHA = 0.45f
 
 /**
  * v3.0.0：**三频带能量条**（炫技档；画在波形柱子之上、条带底部）。
@@ -979,6 +1107,8 @@ private class RibbonBrushCache {
     private var cachedKey = Int.MIN_VALUE
     private var cachedFlow: Brush? = null
     private var cachedAge: Brush? = null
+    private var cachedLaneKey = Int.MIN_VALUE
+    private var cachedLanes: Brush? = null
 
     /** 颜色量化键：每通道 5 bit（alpha 不参与 —— 它由 `drawPath` 的 `alpha=` 单独乘）。 */
     private fun keyOf(argb: Int): Int =
@@ -994,7 +1124,54 @@ private class RibbonBrushCache {
         cachedAge = null
     }
 
-    /** 渐变流动的色带（`TileMode.Repeated` + 两端同暗）。 */
+    /**
+     * v3.2.2：**三条泳道的横向渐变**（左低 / 中中 / 右高，接缝处渐变过渡）。
+     *
+     * 渐变的 stop 按**宽度比例**固定在 `1/3`、`2/3` 两侧各 ±[BandLanes.SEAM_FRACTION]：
+     *  - 每个频段在自己的那一段里是**纯色**（读得出"这一段是低频"）；
+     *  - 两段之间留出过渡带做颜色混合（"中间连接用渐变色"）。
+     *
+     * 缓存键 = 宽度 + 三个量化色 + 三个量化强调量。强调量由主导频段决定（约 0.1 次/秒切换
+     * + 100ms 过渡），量化到 1/16 ⇒ 稳定态零重建、过渡期最多几次重建（与 `flow` 同一套口径）。
+     */
+    fun lanes(widthPx: Float, palette: IntArray, emphasis: FloatArray): Brush {
+        val width = if (widthPx > 0f) widthPx else 1f
+        var key = 17
+        for (i in 0 until minOf(3, palette.size)) key = key * 31 + keyOf(palette[i])
+        for (i in 0 until minOf(3, emphasis.size)) {
+            key = key * 31 + ((emphasis[i].coerceIn(0f, 1f) * 16f).toInt())
+        }
+        if (cachedWidth == width && cachedLaneKey == key) {
+            cachedLanes?.let { return it }
+        }
+        cachedWidth = width
+        cachedLaneKey = key
+        val seam = BandLanes.SEAM_FRACTION
+        val oneThird = 1f / 3f
+        val twoThirds = 2f / 3f
+        fun lane(i: Int): Color {
+            val argb = if (i < palette.size) palette[i] else palette[0]
+            val a = if (i < emphasis.size) emphasis[i].coerceIn(0f, 1f) else 1f
+            return Color(argb).copy(alpha = a)
+        }
+        val c0 = lane(BandLanes.LANE_LOW)
+        val c1 = lane(BandLanes.LANE_MID)
+        val c2 = lane(BandLanes.LANE_HIGH)
+        val brush = Brush.horizontalGradient(
+            0.00f to c0,
+            (oneThird - seam).coerceAtLeast(0f) to c0,
+            (oneThird + seam).coerceAtMost(1f) to c1,
+            (twoThirds - seam).coerceAtLeast(0f) to c1,
+            (twoThirds + seam).coerceAtMost(1f) to c2,
+            1.00f to c2,
+            startX = 0f,
+            endX = width,
+        )
+        cachedLanes = brush
+        return brush
+    }
+
+    /** 渐变流动的色带（`TileMode.Repeated` + 两端同暗）。同时用作三频带模式的叠加流光。 */
     fun flow(widthPx: Float, argb: Int): Brush {
         invalidateIfNeeded(widthPx, argb)
         cachedFlow?.let { return it }

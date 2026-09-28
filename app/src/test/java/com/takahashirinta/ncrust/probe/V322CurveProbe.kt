@@ -9,7 +9,6 @@
 package com.takahashirinta.ncrust.probe
 
 import androidx.media3.common.util.UnstableApi
-import com.takahashirinta.ncrust.player.AudioFeatureExtractor
 import com.takahashirinta.ncrust.ui.player.WaveformRing
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -264,7 +263,6 @@ class V322CurveProbe {
             val ring = WaveformRing(capacity = RING_CAPACITY, barCount = BAR_COUNT)
             val bars = FloatArray(BAR_COUNT)
             val peaks = FloatArray(BAR_COUNT)
-            val mixes = FloatArray(BAR_COUNT)
             var pushed = 0
             var frameIndex = 0
             // 每 100ms 到达一根柱；帧循环按 16ms 推进 ⇒ 与真机同构（一帧 0~1 根柱）。
@@ -274,17 +272,13 @@ class V322CurveProbe {
                 val nowMs = frameIndex * FRAME_MS.toInt()
                 while (nextPushMs <= nowMs && pushed < featureFrames.size) {
                     val f = featureFrames[pushed]
-                    ring.push(
-                        f.rms,
-                        f.low,
-                        AudioFeatureExtractor.bandMix(f.low, f.mid, f.high),
-                    )
+                    ring.push(f.rms, f.low, f.mid, f.high)
                     pushed++
                     nextPushMs = f.tMs.toInt()
                 }
                 ring.pump(active = true, dtMs = FRAME_MS)
                 if (frameIndex % 4 == 0) {
-                    ring.copyInto(bars, peaks, mixes)
+                    ring.copyInto(bars, peaks)
                     // 渲染层的真实映射：柱高 = sqrt(柱值)，两者都作用在「高度」上。
                     val heights = FloatArray(BAR_COUNT) { sqrt(bars[it].coerceIn(0f, 1f)) }
                     if (heights.max() > peakBarValue) peakBarValue = heights.max()
