@@ -5,6 +5,7 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.network.SongItem
@@ -43,6 +44,33 @@ fun PlayerCardOverlay(
     autoRotate: Boolean = false,
     onToggleAutoRotate: () -> Unit = {}
 ) {
+    // v3.2.1 · P0：15 个回调打成一包再转交（`PlayerCard` 的签名实测占 1366 code unit）。
+    // 这里用 `remember(15 个回调)` 缓存 —— 保证「回调没变时对象是同一个」，
+    // `PlayerCard` 因此仍然可以跳过不必要的重组（与拆分前逐帧相同的跳过语义）。
+    val callbacks = remember(
+        onPlayPause, onDismiss, onPlayPrevious, onPlayNext, onRemoveFromQueue,
+        onPlayFromQueue, onMoveInQueue, onTogglePlayMode, onPlayNothing, onSongInfoClick,
+        onArtistClick, onClearQueue, onSavePlaylist, onToggleBigScreen, onToggleAutoRotate,
+    ) {
+        PlayerCardCallbacks(
+            onPlayPause = onPlayPause,
+            onDismiss = onDismiss,
+            onPlayPrevious = onPlayPrevious,
+            onPlayNext = onPlayNext,
+            onRemoveFromQueue = onRemoveFromQueue,
+            onPlayFromQueue = onPlayFromQueue,
+            onMoveInQueue = onMoveInQueue,
+            onTogglePlayMode = onTogglePlayMode,
+            onPlayNothing = onPlayNothing,
+            onSongInfoClick = onSongInfoClick,
+            onArtistClick = onArtistClick,
+            onClearQueue = onClearQueue,
+            onSavePlaylist = onSavePlaylist,
+            onToggleBigScreen = onToggleBigScreen,
+            onToggleAutoRotate = onToggleAutoRotate,
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -59,23 +87,9 @@ fun PlayerCardOverlay(
             playbackQueue = playbackQueue,
             currentQueueIndex = currentQueueIndex,
             playMode = playMode,
-            onPlayPause = onPlayPause,
-            onDismiss = onDismiss,
-            onPlayPrevious = onPlayPrevious,
-            onPlayNext = onPlayNext,
-            onRemoveFromQueue = onRemoveFromQueue,
-            onPlayFromQueue = onPlayFromQueue,
-            onMoveInQueue = onMoveInQueue,
-            onTogglePlayMode = onTogglePlayMode,
-            onPlayNothing = onPlayNothing,
-            onSongInfoClick = onSongInfoClick,
-            onArtistClick = onArtistClick,
-            onClearQueue = onClearQueue,
-            onSavePlaylist = onSavePlaylist,
+            callbacks = callbacks,
             bigScreen = bigScreen,
-            onToggleBigScreen = onToggleBigScreen,
             autoRotate = autoRotate,
-            onToggleAutoRotate = onToggleAutoRotate
         )
     }
 }

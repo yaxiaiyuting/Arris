@@ -105,24 +105,32 @@ class TrayLayoutTest {
      */
     @Test
     fun `v3_2_0 PlayerCard 不再写死顶栏高度与封面起始位的字面量`() {
-        val src = java.io.File(
-            "src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt",
-        ).readText()
-        assertTrue("PlayerCard.kt 找不到", src.isNotEmpty())
+        // v3.2.1 · P0：`PlayerCard` 被拆成同包的多个文件（布局分支 / 托盘 / 叠加层 /
+        // 状态与几何 / 副作用 / 背景层）。这条用例守的是「托盘几何只有 TrayLayout 一个
+        // 事实来源」这条**不变量**，与它落在哪个文件无关 —— 所以改成扫描整个文件族，
+        // 并断言「字面量在**任何**一个文件里都不许出现」。
+        val files = listOf(
+            "PlayerCard.kt", "PlayerCardLayouts.kt", "PlayerCardTray.kt",
+            "PlayerCardOverlays.kt", "PlayerCardState.kt", "PlayerCardEffects.kt",
+            "PlayerCardBackdrop.kt",
+        ).map { java.io.File("src/main/java/com/takahashirinta/ncrust/ui/player/$it") }
+        assertTrue("播放器卡片文件族一个都没找到", files.any { it.exists() })
+        val srcs = files.filter { it.exists() }.map { it.readText() }
+        val all = srcs.joinToString("\n")
         // 顶栏/收起键的高度必须引用 token。
         assertTrue(
             "顶栏高度必须是 TrayLayout.TOP_BAR_HEIGHT_DP",
-            src.contains("height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)"),
+            srcs.any { it.contains("height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)") },
         )
         // 旧的封面文字起始位字面量必须消失。
         assertTrue(
             "不许再有 padding(start = 68.dp, …) —— 它必须由 TrayLayout.topBarTextStartDp() 派生",
-            !src.contains("padding(start = 68.dp"),
+            !all.contains("padding(start = 68.dp"),
         )
         // overlay 的中心 X 必须引用 token。
         assertTrue(
             "封面中心 X 必须引用 TrayLayout.coverCenterXDp()",
-            src.contains("TrayLayout.coverCenterXDp()"),
+            srcs.any { it.contains("TrayLayout.coverCenterXDp()") },
         )
     }
 
