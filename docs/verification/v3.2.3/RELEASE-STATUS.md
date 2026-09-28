@@ -37,3 +37,17 @@ Post "https://api.github.com/graphql": dial tcp 66.220.148.145:443: i/o timeout
 3. 修好本机 DNS/代理后再跑第 1 条。
 
 > 纪律提醒（铁律 7）：`v3.2.3-gpl` 一旦推上去就**绝不移动**；要改代码另起 v3.2.4-gpl。
+
+## 真机最终状态（v3.2.3 装好后）
+
+| 项 | 值 |
+|---|---|
+| 设备上跑的包 | `Ncrust-v3.2.3-gpl-release.apk`，**与 `dist/` 里的发布产物逐字节一致**（sha256 `8f27ddb1…1699`，从 `/data/app/.../base.apk` 拉回来比对过） |
+| 系统里的版本 | `versionCode=58` / `versionName=3.2.3-gpl` |
+| 截图 | `verification/frame-v323-final-{1,2,3}.png`（这一组是**炫技档**，`motion_tier=2`：能看到光点、峰值虚线、三频带能量条与流光叠加层） |
+| 帧时间（同一次会话） | p50 28ms / p95 42ms（炫技档，含流光 + 粒子 + 3D 透视；**简洁档的修前/修后对照见 `probe-refresh.md`**） |
+
+> 采样期的档位记录：`probe-refresh.md` 里那组「修前 1227 帧 / 修后 1784 帧」是在**简洁档**
+> （删掉 `motion_tier` 键、由设备判据解析成简洁）下测的；最终截图那一组是炫技档 —— 两者不是同一档，
+> 不要混着读。档位在盘上会由 `MotionPrefs.migrate` 的**一次性**水位搬运写回（水位 < 5 时按
+> 旧的 `visualizer_tier` 落一次），本版没有改这套机制。

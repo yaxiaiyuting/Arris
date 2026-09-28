@@ -1,0 +1,8 @@
+[v323-final-setup] position text="3:06" -> text="3:14"
+[v323-final-setup] ✓ screen=2560x1440 mWakefulness=Awake mStayOn=true （播放推进、横屏、波形应挂载）
+[v323-final-setup] Total frames rendered: 1741
+[v323-final-setup] Janky frames: 1740 (99.94%)
+[v323-final-setup] 50th percentile: 28ms
+[v323-final-setup] 90th percentile: 38ms
+[v323-final-setup] 95th percentile: 42ms
+[v323-final-setup] 99th percentile: 48ms
