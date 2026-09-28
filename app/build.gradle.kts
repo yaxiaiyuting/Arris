@@ -321,8 +321,14 @@ android {
         //      （v2.8.0 / v2.9.0 / v3.0.0 的本地包在仓库外的 dist/ —— 红线 19：不看 release 标题）
         //   ③ 工作区：53 / 3.0.0-gpl
         //   三源最大值 = 53 ⇒ 下一个可用 **54**。
-        versionCode = 54
-        versionName = "3.1.0-gpl"
+        // v3.2.0：**第七次按脚本定号**。冷启动跑 tools/next-version.sh（fetch 后），
+        // 三源（最近 5 个 tag 指向的 build.gradle：54/53/52/51/50；dist/*.apk 的
+        // aapt2 badging 实测最大值 50；仓库当前 54）最大值 = 54 ⇒ 本版取 **55**。
+        // 本版范围：QQ VIP 版权误判 P0（铁律 20/21）、界面律动独立开关 P1（铁律 22）、
+        // B站扫码登录 P1（铁律 23）、歌词全屏迷你封面错位 P0-A、简洁档仍抖动 P0-B、
+        // B站搜索恒 0 条与「只搜B站」卡死 P0-C/P0-D。
+        versionCode = 55
+        versionName = "3.2.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
