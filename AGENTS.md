@@ -4986,3 +4986,65 @@ S6 简洁档的帧时间复测过（`docs/verification/v3.2.2/probe-perf-tier.md
 
 本轮采样跨越约 1.5 小时，**同一配置相隔 10 分钟就能差 7ms**（有同配置 on/off 对照为证）。
 ⇒ 帧时间结论**只采信时间相邻的配对**；跨小时的对比必须给出漂移证据，否则会把热漂移读成功能代价。
+
+## v3.2.4 新增（本 fork · P0 B站歌曲无法播放 + P1 新设备音频条抖动）
+
+### 2 条新铁律（**本版起是硬约束，写进开头的铁律清单**）
+
+| # | 铁律 | 为什么是硬的（本版的实测依据） |
+|---|---|---|
+| **32** | **音频流请求必须携带平台所需的 header（Referer / User-Agent），不得假设默认 header 可用。** | P0 的根因就是「默认 UA 恰好被平台封了」。B 站媒体 CDN 对 `User-Agent` 做**子串黑名单**（`android` / `dalvik` / `curl` / `python` / `vlc`，大小写不敏感）**且要求 UA 存在**；media3 的 `DefaultDataSource.Factory(Context)` 造的是裸 `DefaultHttpDataSource.Factory()`（`userAgent == null`），实际发出去的是 `Dalvik/2.1.0 (Linux; U; Android 13; …)` ⇒ **403**。更硬的一点：**`DefaultHttpDataSource.userAgent` 是 `final` 字段且在 `makeConnection` 里最后写入，会覆盖 `DataSpec.httpRequestHeaders` 里的同名头** —— 「把 UA 塞进 DataSpec」这条路在 media3 上是**死的**，只能从**工厂**给（`DefaultHttpDataSource.Factory().setUserAgent(...)`，并按 URI 换数据源）。 |
+| **33** | **帧率适配必须显式处理设备刷新率（60 / 90 / 120Hz），不得假设固定帧率。** | P1 的根因是一个**写死的 16ms 预算**。同一个 16ms 在不同面板上语义完全不同：60Hz 的 vsync 是 16.667ms ⇒ 闸门「每帧都推进」（**没有量化**，所以 S6 平滑）；120Hz 的 vsync 是 8.333ms ⇒ 闸门「每两帧推进一次」，而 16ms 与 16.667ms 只差 **0.667ms**，frame pacing 一抖就变成「三帧」= 25ms ⇒ **单帧位移跳变 +49%**（仿真 `Δφ_CV` 0.021 → 0.125，6 倍）。修法是「**数帧**不数时间」+ 读真实刷新率，见下。 |
+
+### 本版做了什么
+
+| 项 | 内容 |
+|---|---|
+| **P0 · B站播放** | `BiliCdn.USER_AGENT`（桌面 Chrome UA，与取链身份同一个常量）+ `requestHeaders()` 带上 UA；`OfflineAudioCache.dataSourceFactory` 的上游换成 `SourceRoutingDataSource`（**按 URI 逐次选数据源**：B 站媒体用 `DefaultHttpDataSource.Factory().setUserAgent(BiliCdn.USER_AGENT)`，其余用 media3 默认的裸工厂 —— 网易云/QQ **逐字节不变**）；判据从「host 后缀白名单」扩成「白名单 ∪ **取链见过的 host**」（`BiliCdn.markStream`，有界 LRU 64，唯一调用点是 `BiliSourceProvider.toResult`）。 |
+| **P1 · 帧率适配** | 新增 `ui/player/motion/DisplayRefresh.kt`：`sanitizeHz` / `frameIntervalMs` / `strideFor`（非低内存 = **1**，低内存 = `ceil(33ms / 帧间隔)`）/ `FrameStride`（数帧计数器）/ `rememberDisplayRefreshRate()`（读 `View.display.refreshRate` + `DisplayManager.DisplayListener` 跟随面板切换与 LTPO 变频）。`MotionFrameClock` 的闸门从「时间阈值」改成「帧步长」，`dtMs` 仍取真实帧时间戳之差。 |
+
+### 关键实现落点
+
+| 文件 | 角色 |
+|---|---|
+| `bili/BiliCdn.kt` | 取流约束的唯一落点：`USER_AGENT` / `REFERER` / `requestHeaders()` / `needsReferer()`（纯 host 白名单，语义未变）/ `markStream()` / `isBiliMedia()` / `cacheKeyFor()` |
+| `cache/SourceRoutingDataSource.kt` | **新增**。按 URI 选数据源 + 加头；`addTransferListener` 对两个上游各挂一次；`open` 之外一律转发给上次选中的那个 |
+| `cache/OfflineAudioCache.kt` | 上游装配（两个 `DefaultDataSource`，唯一差别是内层 http 工厂的 UA）+ 稳定缓存键 |
+| `bili/BiliApi.kt` | `UA` / `REFERER` 两个常量改为**转发** `BiliCdn` 的值（取链与取流必须是同一个身份） |
+| `ui/player/motion/DisplayRefresh.kt` | **新增**。刷新率 → 帧步长（纯逻辑）+ `rememberDisplayRefreshRate()` |
+| `ui/player/motion/MotionClock.kt` | 帧循环：`FrameStride` 数帧；`LaunchedEffect` 的 key 带 `stride` 与 `frameIntervalMs`（换面板会重起循环） |
+| `ui/player/AudioVisualizer.kt` | `visualizerFrameStride(context, refreshRateHz)`（新判据）；`visualizerFrameIntervalMs()` **保留但已无生产调用点**（历史口径的可读落点） |
+
+### 本版的四条**实测否决**（避免下一个人重做）
+
+1. **「B站播放失败是 Referer 没加」——错。** v3.1.0 已经加了 Referer，本版实测「有 Referer + 平台默认 UA」照样 403。
+   v3.1.0 的探针在裸 `HttpURLConnection` 那一臂**手工写死了 `User-Agent: ExoPlayerLib/1.5.0`**（合格 UA），
+   却把生产链路的 403 归因成「出口风控/限流」（`docs/verification/v3.1.0/verification/EVIDENCE-bili-probe.md:26-32`）。
+   **一个 A/B 里混进第二个变量，结论会整体反过来** —— 这就是铁律 32 的由来。
+2. **「音频流请求要带 Cookie」——不需要。** 媒体 CDN 不认登录态，匿名即可拿 320K；
+   多带一次凭据是隐私面的净损失。`requestHeaders()` 明确**不含** `Cookie`，有单测钉住。
+3. **「必须换 phone UA / BiliDroid UA」——错，而且是 403。** 实测
+   `Mozilla/5.0 (Linux; Android 13; Pixel 7) … Mobile Safari/537.36` **403**、
+   `Mozilla/5.0 BiliDroid/7.63.0 … os/android …` **403**，而**同一串 BiliDroid 把 `os/android` 换成 `os/ios` 就是 206**。
+   ⇒ 判据是 UA 里的 `android` 字样。桌面 Chrome UA（取链已经在用的那一个）才是对的选择。
+4. **「抖动是插值不够 / 音频缓冲太粗」——都不是。** 插值本来就按真实 `dt` 推进（`1 - exp(-dt/tau)`、`sinceBarMs += dt`），
+   高刷下相位分辨率只会**更细**；音频缓冲实测 100.00ms / 11Hz，而插值层存在的意义就是补它。
+   抖动**全部**来自帧闸门把 `dt` 量化成整数个 vsync。改音频链路（铁律 29 禁区）或加插值精度都不解决问题。
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **不碰华为 / 荣耀媒体卡片**（任务书明令）。
+- **不做网易云歌单同步、不做主题色对比度（v3.2.3 遗留）、不做功耗测试**（任务书列为独立范围）。
+- **不改 B 站取链参数**（`songid`/`quality`/`privilege`/`mid`/`platform` 与实测逐字一致，见探针 §7）、
+  **不改 TTL 口径**（`deadline` 优先已经是正确实现，实测 7166s vs `timeout` 10800s）。
+- **不给高刷设备加「帧率上限」这种新旋钮**：`stride` 只由 `isLowRamDevice` 决定，
+  非低内存设备一律每帧推进（面板刷新率就是上限）。
+
+### 本版新增的未验证项（与交付报告一致，如实）
+
+- **高刷真机（90 / 120Hz）未验证**：本环境只有 60.000004Hz 的模拟器（`dumpsys display` 的
+  `supportedModes` 只有一个模式），**没有 120Hz 设备**。代偿是四档刷新率的确定性单测
+  （`WaveformFrameRateTest` / `DisplayRefreshTest`）+ 60Hz release 包的不回归测量。
+- **S6（SM-G9209 / Android 7.0）未验证**：本轮该设备不在线（`adb devices` 只有两台 API 33 模拟器）。
+- **B 站登录态播放未验证**（无账号；B 站不在登录音源列表里）。
+- **PCDN 第三方域名**本轮没抓到实流（取到的都是 `*.bilivideo.com`），判据由单测钉住。
