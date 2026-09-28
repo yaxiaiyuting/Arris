@@ -41,7 +41,7 @@
 
 ### B（拆分，核心）
 见 [probe-split-plan.md](probe-split-plan.md) 与 §4 的对比表。行为等价三层证据见 [EQUIVALENCE.md](EQUIVALENCE.md)：
-**真机 7/7 形态逐节点完全一致** + 2127 个 JVM 用例全绿。
+**真机 7/7 形态逐节点完全一致** + 2126 个 JVM 用例全绿。
 
 ### C（JIT 对照实验）
 见 [jit-experiment.md](jit-experiment.md)。**结论：未能复现，实验不成立**；B/C/D 三步未执行，
@@ -85,7 +85,7 @@
 
 | 证据 | 路径 |
 |---|---|
-| JVM 单测（2127 用例） | `app/build/reports/tests/testDebugUnitTest/`（本轮日志 `.scratch/v321/final-test-lint.log`） |
+| JVM 单测（2126 用例） | `app/build/reports/tests/testDebugUnitTest/`（本轮日志 `.scratch/v321/final-test-lint.log`） |
 | lint | `app/build/reports/lint-results-debug.html` |
 | 真机 10 次冷启动 | `.scratch/v321/coldstart/summary.txt` + `run1..10.txt` |
 | B站二维码真机截图/日志 | `.scratch/v321/bili-qr-after.png` + [REAL-DEVICE.md](REAL-DEVICE.md) §1 |

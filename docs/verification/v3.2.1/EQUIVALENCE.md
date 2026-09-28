@@ -50,7 +50,7 @@
 | `TrayLayoutTest`（**本轮改造**） | 1 改 | 「托盘几何只有 TrayLayout 一个事实来源」从「扫描 `PlayerCard.kt`」改成「扫描播放器卡片**文件族**」—— 不变量与它落在哪个文件无关 |
 | `PlayerDragSnapTest` / `TrayLyricTest` / `MotionPrefsTest` … | 既有 | 拆分**没有**改动这些纯函数，全部保持原样通过 |
 
-**全量 JVM 单测：2127 个用例全绿**（`./gradlew testDebugUnitTest`）。
+**全量 JVM 单测：2126 个用例全绿**（`./gradlew testDebugUnitTest`）。
 
 ## 3. 不能被自动化覆盖、只能靠人工/真机的一条
 
