@@ -313,8 +313,17 @@ fun PlayerCard(
     val miniScale = miniCoverHalfPx * 2f / coverSizePx
     val statusBarPx = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         .let { with(density) { it.toPx() } }
-    val miniCoverCenterX = miniCoverHalfPx
+    // v3.2.0 · P0-A：落点中心 X 由 TrayLayout 唯一决定（左边距 16dp + 半个封面）。
+    // 旧写法 `miniCoverHalfPx` = 28dp ⇒ 封面左边缘压在屏幕 x=0 上（真机可见的贴边）。
+    val miniCoverCenterX = with(density) { TrayLayout.coverCenterXDp().dp.toPx() }
+    // v3.2.0 · P0-A：**两个中心 Y，不是一个**。
+    //  · 收起态的目标容器是托盘（HEIGHT_DP = 80dp）⇒ 中心 statusBar + 40dp；
+    //  · 展开态（歌词全屏）的目标容器是窄屏顶栏（TOP_BAR_HEIGHT_DP = 56dp）
+    //    ⇒ 中心 statusBar + 28dp。
+    // v3.1.0 两种状态都用 40dp，于是歌词全屏下封面比顶栏低 12dp（真机实测差 45px）。
     val miniCoverCenterY = statusBarPx + with(density) { TrayLayout.coverCenterOffsetDp().dp.toPx() }
+    val topBarCoverCenterY =
+        statusBarPx + with(density) { TrayLayout.topBarCoverCenterOffsetDp().dp.toPx() }
     val largeCoverCenterX = if (usesSideCover) wideCoverCenter.x else screenWidthPx / 2f
     val largeCoverCenterY = if (usesSideCover) wideCoverCenter.y else screenHeightPx * 0.3f + dp24px
     val boundsCenter = coverSizePx / 2f
@@ -543,7 +552,7 @@ fun PlayerCard(
     // 歌词/队列面板可交互(展开 + 面板在前台)时,面板区域内的纵向手势归内部列表滚动。
     // 根节点的整卡拖拽与兜底消费器都不得抢手势——否则在面板上一滑,整卡被拖走、
     // 列表几乎滚不动(issue #23)。面板外的封面/顶栏/大封面模式仍驱动整卡。
-    val topBarBottomPx = statusBarPx + with(density) { 56.dp.toPx() }
+    val topBarBottomPx = statusBarPx + with(density) { TrayLayout.TOP_BAR_HEIGHT_DP.dp.toPx() }
     val isPanelInteractive by remember {
         derivedStateOf {
             (lyricsEnabled || queueSlideProgress.value > 0.5f) && progress.value > 0.7f
@@ -771,9 +780,14 @@ fun PlayerCard(
         // 为什么必须挂在这里：竖屏手机上波形组件根本不挂载（`visualizerSlot` 恒 false），
         // 而背景呼吸/节拍脉冲/粒子在竖屏也要跑。两处各起一条循环会让动画相位每帧前进两次。
         // 详见 `ui/player/motion/MotionClock.kt` 的 KDoc。它不产生任何 UI 节点。
+        //
+        // v3.2.0：`waveformMounted` 是**必须**显式传的。简化档（简洁档）现在没有任何逐帧的
+        // 界面动效，而波形柱是**每一档**都随 RMS 推进的（v2.8.0 的帧循环本来就长在它里面）
+        // —— 不把「波形挂载」单独告诉帧时钟，简洁档的波形会冻住（探针 §2 的连带发现）。
         MotionFrameClock(
             activeProvider = { isPlaying && !playerViewModel.isBuffering.value },
             enabled = hasSong && expandedMounted,
+            waveformMounted = visualizerSlot || motion.fullScreenWaveform,
         )
 
         // ── v2.9.0 · B 档：**背景级波形**（横屏铺满底部横跨全屏 / 竖屏在歌词后面流动）──
@@ -1325,9 +1339,11 @@ fun PlayerCard(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            // v3.2.0 · P0-A：高度与文字起始位都走 TrayLayout 的唯一来源 ——
+                            // 封面 overlay 的落点就是用这两个数算出来的，写死字面量必然漂移。
+                            .height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)
                             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
-                            .padding(start = 68.dp, end = 56.dp),
+                            .padding(start = TrayLayout.topBarTextStartDp().dp, end = 56.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Column(
@@ -1558,6 +1574,9 @@ fun PlayerCard(
                     // 中心点与 miniCoverCenterY = statusBar + HEIGHT/2 逐像素一致。
                     // 若仍用 fillMaxHeight().aspectRatio(1f)，封面会变成 80dp，
                     // 在 360dp 窄屏上把文本列再挤掉 24dp（136 → 112dp），而封面并不需要它。
+                    // v3.2.0 · P0-A：封面的左边距。**必须与 overlay 的 miniCoverCenterX 同源**
+                    // （都由 TrayLayout 派生），否则「占位在这里、封面画在那里」会错位。
+                    Spacer(modifier = Modifier.width(TrayLayout.COVER_START_DP.dp))
                     Spacer(modifier = Modifier.size(TrayLayout.COVER_SIZE_DP.dp))
                     Column(
                         modifier = Modifier
@@ -1794,10 +1813,12 @@ fun PlayerCard(
                         // （`MotionClock.generation` 是一个 Compose 状态，读它只让这一层失效，
                         // 不触发任何重组 —— 与播放器整体「GPU 零重组」的原则一致）。
                         // 静态时 pulse() == 0f ⇒ 下面三项都恰好是"没有效果"的值。
-                        // A 档的「封面随节拍微微浮动」也读它 —— 帧时钟在 A 档本来就要跑
-                        // （背景呼吸是逐帧的），所以这里不新增任何成本。
+                        // v3.2.0：A 档的「封面随节拍浮动」改用**自己的**能力位 `coverFloat`
+                        // （它已经被收窄到精致档）。上一版这里读的是 `coverElevation`,
+                        // 而那个位在简洁档恒为真 ⇒ 简洁档封面照样跟着鼓点上下浮 2dp
+                        // （P0-B 的根因，证据见 docs/verification/v3.2.0/probe-ui-jitter.md §6）。
                         val beatPulse = if (
-                            motion.coverElevation || motion.beatPulse || motion.cover3d
+                            motion.coverFloat || motion.beatPulse || motion.cover3d
                         ) {
                             MotionClock.generation
                             MotionClock.pulse()
@@ -1807,7 +1828,11 @@ fun PlayerCard(
                         val lyricAnimValue = if (usesSideCover) 0f else lyricAnimProgress.value
 
                         val targetCenterX = largeCoverCenterX + lyricAnimValue * (miniCoverCenterX - largeCoverCenterX)
-                        val targetCenterY = largeCoverCenterY + lyricAnimValue * (miniCoverCenterY - largeCoverCenterY)
+                        // v3.2.0 · P0-A：歌词全屏时封面缩到的是**顶栏**的中心（56dp 容器），
+                        // 不是托盘的中心（80dp 容器）。两者在展开态相差 12dp ——
+                        // 用错的那一个会让封面挂在顶栏下沿之外（真机截图可见）。
+                        val shrinkCenterY = topBarCoverCenterY
+                        val targetCenterY = largeCoverCenterY + lyricAnimValue * (shrinkCenterY - largeCoverCenterY)
                         val targetScale = miniScale + (1f - lyricAnimValue) * (1f - miniScale)
 
                         val currentCenterX = miniCoverCenterX + normalizedP * (targetCenterX - miniCoverCenterX)
@@ -1817,9 +1842,9 @@ fun PlayerCard(
                         scaleX = currentBaseScale
                         scaleY = currentBaseScale
                         translationX = currentCenterX - boundsCenter
-                        // A 档：随节拍**上浮**最多 ±2dp（任务书 §4.3）。用位移而不是缩放：
+                        // A 档（精致起）：随节拍**上浮**最多 ±2dp（任务书 §4.3）。用位移而不是缩放：
                         // 缩放会与上面那条展开/收起动画的 scale 叠加，出问题时无法归因。
-                        val floatPx = if (motion.coverElevation) {
+                        val floatPx = if (motion.coverFloat) {
                             beatPulse * coverFloatPx
                         } else 0f
                         translationY = currentCenterY - boundsCenter - floatPx
@@ -1855,7 +1880,10 @@ fun PlayerCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .height(56.dp)
+                    // v3.2.0 · P0-A：与顶栏同高 —— 收起键的垂直中心因此与封面、
+                    // 与歌名文字块三者在同一条水平线上（此前它是 56dp 的字面量，
+                    // 与顶栏的 56dp 是两份定义，改了任何一处都会错开）。
+                    .height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)
                     .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
                     .padding(end = 8.dp),
                 contentAlignment = Alignment.CenterEnd

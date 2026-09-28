@@ -94,6 +94,76 @@ object TrayLayout {
     fun coverHalfDp(): Float = COVER_SIZE_DP / 2f
 
     /**
+     * v3.2.0 · P0-A：封面的**左边距**（dp）。
+     *
+     * ## 这个常量是为一次真机可见的错位而存在的
+     *
+     * v3.1.0 及以前，唯一封面 overlay 的落点中心是
+     * `miniCoverCenterX = coverHalfDp()`，即**左边缘正好压在屏幕 x=0 上**。
+     * 收起态（托盘）里那只是一个贴边的封面，看不出问题；但**歌词全屏模式**下，
+     * 顶栏的文字块从 [topBarTextStartDp] 开始（右侧 68dp 起），
+     * 于是「一个紧贴左边缘、且比文字块低 12dp 的封面」在左上角孤零零地吊着 ——
+     * 真机截图证据见 `docs/verification/v3.2.0/probe-mini-cover.md`。
+     *
+     * 取 16dp 而不是托盘内部那个 12dp 的间隙，是因为这里要对齐的是
+     * **应用级的内容边距**（`ResponsiveContent` / 搜索框 / 设置行都是 16dp），
+     * 而不是组件内部两个元素之间的间隙。判据：这个值改小会让封面与
+     * 页面其它内容的左边缘对不上，而 12 正是「封面与文字之间」的间距语义。
+     */
+    const val COVER_START_DP = 16
+
+    /**
+     * 封面与右侧文字之间的水平间隙（dp）。
+     *
+     * 与 `TrayLayout` 的文本列 `padding(horizontal = 12.dp)` 是**同一个数**，
+     * 但语义不同：那一个是文字列自身的内边距，这一个专指「封面右边 → 文字左边」。
+     * 两个数偶然相等，所以曾经被写成同一个字面量 —— 而它们一旦分头改，
+     * 表现就是「托盘里的文字与全屏顶栏的文字差几 dp」，属于最难查的一类错位。
+     */
+    const val COVER_TEXT_GAP_DP = 12
+
+    /**
+     * v3.2.0 · P0-A：**全屏（歌词模式）顶栏的高度**（dp）。
+     *
+     * 这是本版新增的**第二个**几何事实，它的必要性来自一次实测错位：
+     *
+     * | 状态 | 顶栏容器 | 高度 | 封面应有的中心 Y |
+     * |---|---|---|---|
+     * | 收起（托盘） | mini bar | [HEIGHT_DP] = 80dp | `statusBar + 40dp` |
+     * | 展开（歌词全屏） | 窄屏顶栏 | **56dp** | `statusBar + 28dp` |
+     *
+     * 而 v3.1.0 在**两种状态下都用 40dp**（`coverCenterOffsetDp()`）——
+     * 于是歌词全屏模式下封面比它所在的顶栏低了整整 **12dp**：
+     * 上沿在状态栏下方 12dp、下沿溢出顶栏 12dp，看起来就是「贴在状态栏左下的一个孤块」。
+     * 真机实测（SM-G9209 / 1440×2560 / density 4）：
+     * 顶栏 96..320px（中心 208），封面实际 142..365px（中心 253）——**差 45px ≈ 11.6dp**。
+     *
+     * 56 这个数原本是**三处字面量**（`PlayerCard` 的顶栏 `.height(56.dp)`、
+     * `topBarBottomPx`、收起按钮叠加层），本版让它们统一引用这里 ——
+     * 「顶栏多高」从此只有一个定义处。
+     */
+    const val TOP_BAR_HEIGHT_DP = 56
+
+    /** 全屏顶栏内封面的中心偏移（相对状态栏下沿，dp）。 */
+    fun topBarCoverCenterOffsetDp(): Float = TOP_BAR_HEIGHT_DP / 2f
+
+    /**
+     * 封面落点中心 X（dp）：左边距 + 半个封面。
+     *
+     * **这是 overlay 唯一的计算入口**（`PlayerCard` 不再自己写 `coverHalfDp()`），
+     * 所以「加了左边距但忘了改 overlay」在结构上不可能发生。
+     */
+    fun coverCenterXDp(): Float = COVER_START_DP + COVER_SIZE_DP / 2f
+
+    /**
+     * 顶栏/托盘里**文字块的起始 x**（dp）= 左边距 + 封面宽 + 间隙。
+     *
+     * 托盘的行首占位（`Spacer(COVER_SIZE_DP)`）与窄屏顶栏的 `padding(start = …)`
+     * 都必须用它，否则「封面移动了、文字没动」会表现为两者错位。
+     */
+    fun topBarTextStartDp(): Int = COVER_START_DP + COVER_SIZE_DP + COVER_TEXT_GAP_DP
+
+    /**
      * 收起态唯一封面 overlay 的**落点中心**（相对托盘上沿，dp；托盘上沿已含状态栏 padding）。
      *
      * 旧实现是 `miniCoverCenterY = statusBarPx + miniCoverHalfPx`，因为那时

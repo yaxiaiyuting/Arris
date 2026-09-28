@@ -33,6 +33,99 @@ import org.junit.Test
  */
 class TrayLayoutTest {
 
+    // ------------------------------------------------------------ 0. v3.2.0 · P0-A 封面几何
+
+    /**
+     * v3.2.0 · P0-A 的回归网：**封面落点中心必须由两个容器各自的几何算出来**。
+     *
+     * 真机实测（SM-G9209 / 1440×2560 / density 4，2026-09-28）：
+     *
+     * | 量 | 实测 |
+     * |---|---|
+     * | 窄屏顶栏（歌词全屏） | y 96..320px ⇒ 中心 208px |
+     * | 封面实际渲染 | y 142..365px ⇒ 中心 253px |
+     * | 差 | **45px ≈ 11.6dp** |
+     *
+     * 根因：v3.1.0 在**两种状态下都用托盘的中心**（`HEIGHT_DP/2 = 40dp`），
+     * 而展开态的顶栏只有 56dp（中心 28dp）。这条测试把「两个中心不同」写死。
+     */
+    @Test
+    fun `v3_2_0 封面在托盘与顶栏里的中心不同 —— 差 12dp`() {
+        assertEquals(80, TrayLayout.HEIGHT_DP)
+        assertEquals(56, TrayLayout.TOP_BAR_HEIGHT_DP)
+        assertEquals(40f, TrayLayout.coverCenterOffsetDp(), 0.001f)
+        assertEquals(28f, TrayLayout.topBarCoverCenterOffsetDp(), 0.001f)
+        // 差距正好是半个托盘高度差 —— 写死这个关系而不是写死 12，
+        // 这样将来改任一个高度时这条断言会跟着算，不会变成一句过期的注释。
+        assertEquals(
+            (TrayLayout.HEIGHT_DP - TrayLayout.TOP_BAR_HEIGHT_DP) / 2f,
+            TrayLayout.coverCenterOffsetDp() - TrayLayout.topBarCoverCenterOffsetDp(),
+            0.001f,
+        )
+    }
+
+    /**
+     * 封面不再贴屏幕左边缘：中心 X = 左边距 + 半个封面。
+     *
+     * 旧实现是 `coverHalfDp()`（= 28dp）⇒ 左边缘在 x = 0，
+     * 而应用级内容边距是 16dp（`ResponsiveContent` / 搜索框 / 设置行）。
+     */
+    @Test
+    fun `v3_2_0 封面左边距是 16dp 且中心 X 由它派生`() {
+        assertEquals(16, TrayLayout.COVER_START_DP)
+        assertEquals(16f + 56f / 2f, TrayLayout.coverCenterXDp(), 0.001f)
+        // 左边距不能是 0 —— 那正是本 P0 的旧值。
+        assertNotEquals(0, TrayLayout.COVER_START_DP)
+        // 中心 X 必须 > 半个封面，等价于「左边距 > 0」。
+        assertTrue(TrayLayout.coverCenterXDp() > TrayLayout.coverHalfDp())
+    }
+
+    /**
+     * 文字起始位 = 左边距 + 封面宽 + 间隙。**封面动而文字不动**是这类错位最典型的形状，
+     * 所以两者必须来自同一组常量。
+     */
+    @Test
+    fun `v3_2_0 顶栏文字起始位与封面几何自洽`() {
+        assertEquals(
+            TrayLayout.COVER_START_DP + TrayLayout.COVER_SIZE_DP + TrayLayout.COVER_TEXT_GAP_DP,
+            TrayLayout.topBarTextStartDp(),
+        )
+        assertEquals(84, TrayLayout.topBarTextStartDp())
+        // 文字必须排在封面右边（否则会压在封面上）。
+        assertTrue(TrayLayout.topBarTextStartDp() > TrayLayout.COVER_START_DP + TrayLayout.COVER_SIZE_DP)
+    }
+
+    /**
+     * 源码扫描守卫：`PlayerCard` **不许**再出现顶栏高度与封面落点的字面量。
+     *
+     * 这条与仓库里既有的几处「源码扫描守卫」（`ArtistRouteContractTest` /
+     * `PersistenceFieldNameContractTest`）同一手法 —— 因为
+     * 「改了 TrayLayout 但某一处仍写着 56.dp / 68.dp」在编译期完全看不出来，
+     * 只在真机上表现为一次说不清来路的错位。
+     */
+    @Test
+    fun `v3_2_0 PlayerCard 不再写死顶栏高度与封面起始位的字面量`() {
+        val src = java.io.File(
+            "src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt",
+        ).readText()
+        assertTrue("PlayerCard.kt 找不到", src.isNotEmpty())
+        // 顶栏/收起键的高度必须引用 token。
+        assertTrue(
+            "顶栏高度必须是 TrayLayout.TOP_BAR_HEIGHT_DP",
+            src.contains("height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)"),
+        )
+        // 旧的封面文字起始位字面量必须消失。
+        assertTrue(
+            "不许再有 padding(start = 68.dp, …) —— 它必须由 TrayLayout.topBarTextStartDp() 派生",
+            !src.contains("padding(start = 68.dp"),
+        )
+        // overlay 的中心 X 必须引用 token。
+        assertTrue(
+            "封面中心 X 必须引用 TrayLayout.coverCenterXDp()",
+            src.contains("TrayLayout.coverCenterXDp()"),
+        )
+    }
+
     // ------------------------------------------------------------ 1. 高度与派生量
 
     /**
