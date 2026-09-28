@@ -72,16 +72,26 @@ class AggregateStringsTest {
     }
 
     @Test
-    fun `SourceStrings 仍在 dex 单方法预算内 嵌套组上限 66`() {
+    fun `SourceStrings 仍在 dex 单方法预算内 嵌套组上限 78`() {
         val clazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.SourceStrings")
         val widest = clazz.declaredConstructors.maxOf { it.parameterCount }
         // v3.1.0 · B：+3 条（`sourceBilibili` / `sourceSummaryBili` / `aggFilterBili`）⇒ 62。
-        // 上限抬到 **66** 而不是贴着 62：留 4 个槽位的余量，让「下一次加文案」先看到这条断言，
-        // 而不是先撞上 dex 的 254。真要再加就该拆新组了（本组已是 62 个参数）。
+        // 上限抬到 **66** 而不是贴着 62：留 4 个槽位的余量。
+        // v3.2.0 · P1：+12 条（B 站扫码登录 11 条 + 筛选空态 1 条）⇒ 74。
+        //
+        // ⚠️ 为什么**再一次抬上限**而不是拆新组（这个决定必须留痕，否则下一个人只会看到
+        //    「上限又被抬了」）：
+        //  · dex 的硬上限是单方法 255 个参数寄存器，本组 74 个连零头都用不到；
+        //  · 本仓库自己的**组预警线是 80**（`StringsConstructorBudgetTest`），74 仍在线上；
+        //  · 拆一个新组要吃 `Strings` 主构造器**一个**槽位（现在 137），而新组的 12 条
+        //    与 `source` 组是同一条业务线（账号与音源），拆出去只会让「B 站登录的文案在
+        //    哪个组」变成一个需要 grep 才知道的事实。
+        //  真正该拆的信号是「本组越过 80」或「主构造器逼近 150」——两者都还没到。
         assertTrue(
-            "SourceStrings 构造参数 $widest 超过 66 —— v2.4.0 加了 20 条聚合文案、" +
-                "v3.1.0 又加了 3 条 B 站文案，再加就该拆新组了（拆组前必须先给 Strings 主构造器腾出槽位）。",
-            widest <= 66,
+            "SourceStrings 构造参数 $widest 超过 78 —— v2.4.0 加了 20 条聚合文案、" +
+                "v3.1.0 加了 3 条 B 站文案、v3.2.0 加了 12 条 B 站登录与筛选空态文案。" +
+                "再加就该拆新组了（拆组前必须先给 Strings 主构造器腾出槽位）。",
+            widest <= 78,
         )
     }
 
