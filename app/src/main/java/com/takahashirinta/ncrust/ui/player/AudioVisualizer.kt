@@ -36,6 +36,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.player.AudioFeatureExtractor
+import com.takahashirinta.ncrust.ui.player.motion.DisplayRefresh
 import com.takahashirinta.ncrust.ui.player.motion.MotionBindings
 import com.takahashirinta.ncrust.ui.player.waveform.BandColorRoles
 import com.takahashirinta.ncrust.ui.player.waveform.BandDominance
@@ -511,6 +512,17 @@ const val VISUALIZER_FRAME_INTERVAL_SLOW_MS = 33L
  *
  * 注意：平滑是**时间常数**形式（`1 - exp(-dt/tau)`），所以 30fps 与 60fps 画出来的是
  * 同一条运动曲线，降帧率只损失顺滑度、不改变幅度与节奏。
+ *
+ * ## ⚠️ v3.2.4 · P1：这个函数**不再有生产调用点**，判据已换成「帧步长 + 真实刷新率」
+ *
+ * 它的问题是把「重绘预算」写死成**时间阈值**，而阈值只能落在整数个 vsync 上：
+ * 16ms 在 60Hz 面板上是「每帧」（无量化、平滑），在 120Hz 面板上是「每两帧、且余量只有
+ * 0.667ms」（一抖就变三帧 ⇒ 位移 ±49% ⇒ 用户报的「抖」）。根因、仿真与四档对照见
+ * `docs/verification/v3.2.4/probe-waveform-jitter-hfr.md`。
+ *
+ * 现在生产路径走 [visualizerFrameStride]（数帧，不数时间）+ [DisplayRefresh]（读真实刷新率）。
+ * 本函数**保留**是为了让「低端机 33ms / 现代机 16ms」这个历史口径有一个可读的落点，
+ * 并由 `DisplayRefreshTest` 钉住它与新判据的一致性（低内存 ⇒ 33ms 档，否则 ⇒ 每帧）。
  */
 fun visualizerFrameIntervalMs(context: Context): Long {
     val activityManager =
@@ -528,6 +540,24 @@ fun visualizerFrameIntervalMs(context: Context): Long {
     // 与"系统版本老"是两件事 —— 一台 2015 年的 3GB 旗舰和一台 1GB 的入门机不该同一条判据。
     val lowTier = activityManager?.isLowRamDevice == true
     return if (lowTier) VISUALIZER_FRAME_INTERVAL_SLOW_MS else VISUALIZER_FRAME_INTERVAL_FAST_MS
+}
+
+/**
+ * v3.2.4 · P1：当前设备上可视化的**帧步长** —— 每几帧推进一次（铁律 33）。
+ *
+ * - 非低内存设备：**1**（`withFrameNanos` 回调一次推进一次 ⇒ 恰好等于面板刷新率）；
+ * - 低内存设备：`ceil(33ms / 帧间隔)` ⇒ 60Hz 上 2、90Hz 上 3、120Hz 上 4，**始终约 30fps**。
+ *
+ * 判据只吃 `isLowRamDevice` 与**读出来的刷新率**，不看系统版本
+ * （v3.2.3 已实测推翻了「Android 7 就该 30fps」这条假设）。
+ *
+ * @param refreshRateHz 当前显示的刷新率（一般来自 `rememberDisplayRefreshRate()`）。
+ */
+fun visualizerFrameStride(context: Context, refreshRateHz: Float): Int {
+    val activityManager =
+        context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    val lowTier = activityManager?.isLowRamDevice == true
+    return DisplayRefresh.strideFor(refreshRateHz, lowTier)
 }
 
 /**

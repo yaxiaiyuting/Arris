@@ -16,7 +16,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalContext
 import com.takahashirinta.ncrust.ui.player.WaveformStore
-import com.takahashirinta.ncrust.ui.player.visualizerFrameIntervalMs
+import com.takahashirinta.ncrust.ui.player.visualizerFrameStride
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import kotlinx.coroutines.delay
@@ -180,6 +180,21 @@ object MotionClock {
  *
  * 现在的关系是干净的：**波形挂载 ⇒ 要帧；界面动效需要 ⇒ 要帧**，两者取或。
  *
+ * ## v3.2.4 · P1：节拍从「时间阈值」改成「**帧步长**」，并显式读设备刷新率
+ *
+ * 上一版的循环是 `if (now - 上次推进 >= 16ms)`。这个判据只能落在**整数个 vsync** 上，
+ * 而 16ms 在不同面板上的含义完全不同：60Hz 面板上 1 个 vsync = 16.667ms（**每帧都推进**，
+ * 没有量化 ⇒ 平滑），120Hz 面板上 2 个 vsync = 16.667ms（**每两帧推进一次，余量只有
+ * 0.667ms**，frame pacing 一抖就变成 3 个 vsync = 25ms）——**同一份代码，60Hz 平滑、
+ * 120Hz 抖**，这就是 v3.2.4 的 P1。根因、仿真与判据见
+ * `docs/verification/v3.2.4/probe-waveform-jitter-hfr.md`。
+ *
+ * 现在：
+ * - **刷新率是读出来的**（[rememberDisplayRefreshRate]，跟随面板切换与 LTPO 变频）；
+ * - **步长是数出来的**（[DisplayRefresh.strideFor]）：非低内存设备 = **1**（每帧都推进 ⇒
+ *   与面板同频），低内存设备 = `ceil(33ms / 帧间隔)`（仍然约 30fps，且不受抖动影响）；
+ * - `dtMs` 依旧取**真实帧时间戳之差**，所以插值的时间基准与刷新率无关（这一条没改）。
+ *
  * @param activeProvider 播放中且未在缓冲。**用 lambda 而不是布尔参数**：这个值只在帧循环里读，
  *   传布尔会让 `PlayerCard` 订阅 `isPlaying`/`isBuffering` 而整树重组（AGENTS.md「GPU 零重组」）。
  * @param enabled 调用方的挂载判据（展开态 + 有歌）。
@@ -195,22 +210,25 @@ fun MotionFrameClock(
 ) {
     val context = LocalContext.current
     val currentActive = rememberUpdatedState(activeProvider)
-    // 组合期读一次（改设置时才会重组一次）。帧路径里零 state 读。
+    // 组合期读一次（改设置 / 换面板刷新率时才会重组一次）。帧路径里零 state 读。
     val motion = MotionPrefs.effects.value
     val waveform = VisualizerPrefs.effects.value
-    val frameIntervalMs = remember(context) { visualizerFrameIntervalMs(context) }
+    val refreshHz = rememberDisplayRefreshRate()
+    val stride = remember(context, refreshHz) { visualizerFrameStride(context, refreshHz) }
+    val frameIntervalMs = remember(refreshHz) { DisplayRefresh.frameIntervalMs(refreshHz) }
 
     val clockNeeded = enabled && (motion.needsFrameClock || waveformMounted)
 
     // ---- 唯一的帧循环 ----
-    LaunchedEffect(clockNeeded, frameIntervalMs, motion, waveform) {
+    LaunchedEffect(clockNeeded, stride, frameIntervalMs, motion, waveform) {
         if (!clockNeeded) return@LaunchedEffect
-        val budgetNs = frameIntervalMs * 1_000_000L
         // 帧时钟状态放进**循环外**的复用数组，回调也提升到循环外（v2.8.0 的零分配写法）。
         val clock = LongArray(2)
+        val pacer = FrameStride(stride)
         val onFrame: (Long) -> Unit = { now ->
-            if (clock[0] == 0L || now - clock[0] >= budgetNs) {
-                val dtMs = if (clock[1] == 0L) frameIntervalMs.toFloat()
+            // ★ 数帧，不数时间：stride=1 时每帧都推进，节拍器就是 vsync 本身。
+            if (pacer.shouldAdvance()) {
+                val dtMs = if (clock[1] == 0L) frameIntervalMs
                 else ((now - clock[1]) / 1_000_000f).coerceIn(1f, 100f)
                 clock[0] = now
                 clock[1] = now
@@ -221,12 +239,13 @@ fun MotionFrameClock(
             if (currentActive.value()) {
                 withFrameNanos(onFrame)
             } else {
-                delay(frameIntervalMs)
+                delay(frameIntervalMs.toLong().coerceAtLeast(1L))
                 clock[0] = 0L
                 clock[1] = 0L
+                pacer.reset()
                 MotionClock.frame(
                     active = false,
-                    dtMs = frameIntervalMs.toFloat(),
+                    dtMs = frameIntervalMs,
                     waveform = waveform,
                     motion = motion,
                 )
