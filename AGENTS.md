@@ -4714,3 +4714,112 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
   记录如实保留在 `docs/verification/v3.1.0/verification/ui-automation-attempt/`，**没有被包装成「通过」**；
   替代方案是仪器化探针 + release 冒烟。
 - **`/x/player/wbi/playurl` 的 412 是出口相关的**：本机出口四种组合全 412，不代表所有出口都 412。
+
+## v3.2.0 新增（本 fork · QQ VIP 版权误判修复 + 界面律动开关 + B站登录 + 三处 P0）
+
+版本：`versionName = "3.2.0-gpl"` / `versionCode = 55`（`tools/next-version.sh` 三源交叉验证 ⇒ 见交付报告）。
+
+### 4 条新纪律（先读这 4 条，再看细节）
+
+1. **版权判定不得把「权限不足」误判为「无版权」。**
+   - 可执行判据（不是口号）：`ResolveFailureTest` 的**穷举**用例
+     `★ 穷举分类器输入空间 —— QQ 永远产不出无版权与地区限制`
+     （10 个业务码 × 2 种登录态 × 3×3 购买字段 × 3 试听 × 2 传输 × 7 个 HTTP 码 × 2 purl
+     = **15,120 组**输入，断言没有任何一组能让 QQ 的失败映射成
+     `COPYRIGHT_GONE` / `REGION_LOCKED`）。
+   - **只有音源显式声明时**才允许产出 `COPYRIGHT_GONE`。全仓库唯一满足这一条的信号是
+     网易云的 `noCopyrightRcmd != null`（v2.3.0 探针：591 条样本里 2 条，零假阳性）。
+     **QQ 侧没有任何字段能证明这件事**，所以 `QqRejection.toResolveFailureKind()`
+     的映射表里**没有一行**产出它。
+   - 触发这次修复的实测（2026-09-28，真机 + 真 VIP 账号）：QQ 取链在**匿名态**
+     8/8 档返回 `result=104003` + 空 purl，而 `104003` 的语义是「需要登录 / 需要会员」，
+     与版权**毫无关系**；登录态同一首歌 8/8 档 `result=0` + 非空 purl。
+     证据：[`probe-qq-copyright.md`](docs/verification/v3.2.0/probe-qq-copyright.md)。
+   - ⚠️ 服务端的 `tips` 文案**一律不回显**（外部自由文本，既不本地化也不可信），只进日志。
+
+2. **版权判定失败不得触发自动跳歌，必须走独立失败路径。**
+   - 可执行判据：`ResolveFailureTest.铁律 21 —— 只有结构性缺失允许自动跳歌 其余一律不跳`
+     （对 `ResolveFailureKind.values()` 做**过滤断言**：`SKIP_ALLOWED` 的集合必须**恰好等于**
+     `[UNRESOLVABLE]`，`RETRY` 的集合必须**恰好等于** `[NETWORK]`）。
+   - 三态表在 `player/ResolveFailure.kt` 的 `resolveFailureAction(kind)`，**纯函数**：
+     `UNRESOLVABLE → SKIP_ALLOWED`（与版权无关，重试无意义）；
+     `NETWORK → RETRY`（有界，`UrlRetryGate` 每首歌 2 次、间隔 ≥3s）；
+     其余（`NEED_LOGIN` / `NEED_VIP` / `NEED_PURCHASE` / `AUTH_EXPIRED` /
+     `COPYRIGHT_GONE` / `REGION_LOCKED` / `UNKNOWN`）→ `STOP_AND_INFORM`（停下 + 说清原因）。
+   - **v3.1.0 的形状（必须记住，别再走回去）**：
+     `QqApi.fetchPlayUrl` 把五种失败折叠成一个 `null` → `PlayerViewModel.onUrlUnavailable`
+     无条件弹「此源无版权，可切另一源」+ `autoSkipGuard.requestAutoSkip()`。
+     `lastUrlFailure` 里的 `resultCode` **全仓库零个读取方**。
+   - 失败分类现在是**逐档位**收集再收敛（`classifyQqBatch`）：实测同一首歌的不同档位权限不同
+     （《Hotel California》`AI00` 回 `104003` 而 `Q000` 回 `0` + purl），取第一条会得出错误结论。
+
+3. **界面律动类动效必须有独立开关。**
+   - 归类判据（可执行）：**驱动量是否来自 `MotionEnvelope` 的节拍 / 强拍 / 响度包络**。
+     落点是渲染路径里是否读 `MotionClock.pulse()` / `MotionClock.level()`。
+     逐项表见 [`probe-ui-jitter.md`](docs/verification/v3.2.0/probe-ui-jitter.md) §5。
+   - 语义：**有效 = 档位允许 AND `ui_motion_enabled`（总闸）AND
+     `motion_rhythm_enabled`（律动闸，仅律动类）AND 逐项开关**。
+     总闸关 ⇒ A/B/C 三层一个都不挂载；律动闸关 ⇒ **只**掐律动类，
+     冲击波 / 光晕 / 粒子 / 视差 / 背景级波形一概不受影响（有单测逐项证伪）。
+   - 新增键：`motion_rhythm_enabled` / `motion_cover_float` / `motion_lyric_pulse` /
+     `motion_bar_pulse`（默认**全开**，缺 key = 开，与 v3.0.0 的五个开关同一取舍）。
+     `motion_breathing`（已有的那个）**就是背景呼吸**，不要重复造同义键。
+   - ⚠️ 文案进 `WaveformStrings`（不新开文案组），8 种语言逐条补齐；
+     `waveform.motionIntensityDescription` 与 `motionBreathingDescription` 的旧描述
+     在简洁档收窄成静态档之后**已经变成错的**，本版一并改正。
+
+4. **B站登录必须复用现有扫码登录框架，不新建登录体系。**
+   - 落点：`bili/BiliQrLogin.kt` 的状态机与 `qq/QqQrLogin.kt` **同构**
+     （同样的状态语义、同样的有界轮询、同样的「取消不是失败」、同样的错误分类），
+     复用 `ui/components/QrLoginDialog` 那一套 UI 外壳；**不新增第二个二维码渲染器、
+     不新增第二套登录弹窗**。
+   - 凭据放 `bili/BiliAuthStore`（独立 SharedPreferences，字段名显式声明，铁律 17），
+     与 `ncrust_qq_prefs` / `ncrust_prefs` 互不影响。
+   - ⚠️ B站登录**不改变**「音源必须能被独立关闭」这条：`bilibili_enabled` 仍是唯一开关，
+     未登录时行为与 v3.1.0 逐字相同（匿名可用）。
+
+### 本版另外三处 P0（都来自用户报告，都不是自查发现的）
+
+| P0 | 症状 | 根因（指名到行） | 落点 |
+|---|---|---|---|
+| A | 歌词全屏模式左上角迷你封面「贴着状态栏左下」 | 封面 overlay 的中心按**收起态托盘**（80dp）算，而全屏顶栏只有 **56dp** ⇒ 低 12dp；且左边距为 0。真机实测差 **45px ≈ 11.6dp** | `TrayLayout` 新增 `COVER_START_DP` / `COVER_TEXT_GAP_DP` / `TOP_BAR_HEIGHT_DP` / `coverCenterXDp()` / `topBarCoverCenterOffsetDp()` / `topBarTextStartDp()`；`PlayerCard` 全部改用它们 |
+| B | 选了「简洁」档界面仍然抖 | ① 封面的 `translationY` 门控是 `coverElevation`，而它在简洁档恒真（`MotionEffects.kt:352`）；② 背景呼吸在简洁档也为真（`:351`）。连带 `MotionClock` 的波形推进**搭了背景呼吸的便车**（`:190-192`），只砍呼吸会把简洁档波形冻住 | `MotionEffects` 拆出 `coverFloat` 能力位、`backgroundBreathing` 收窄到 `refinedPlus`、`MotionFrameClock` 新增 `waveformMounted` 参数解耦 |
+| C/D | B站搜不到歌 / 切「只搜 B站」卡死 | ① `BiliApi` 的**同步阻塞**网络调用被 `async` 在 `Main.immediate` 上内联启动 ⇒ 主线程 socket IO ⇒ `NetworkOnMainThreadException` 被 `runCatching` 吞掉 ⇒ **恒 0 条**；② 筛选档与逐源统计行画在 `LazyColumn` 内部，而列表被「筛选后为空」的判据整条换掉 ⇒ 筛选档自己消失、无路可退 | `BiliApi` 7 个对外方法改 `suspend` + `withContext(Dispatchers.IO)`；`BiliSourceProvider` 放行 `CancellationException`；`SearchScreen` 把筛选档/统计行移出 `LazyColumn` + 纯函数 `shouldShowFilterRow` / `emptyKind` |
+
+### 关键实现落点
+
+| 主题 | 文件 |
+|---|---|
+| 失败分类（跨音源，纯逻辑） | `player/ResolveFailure.kt`（`ResolveFailureKind` / `resolveFailureAction` / `suggestsOtherSource` / `UrlRetryGate`） |
+| 失败文案（纯函数，不回显服务端文案） | `player/ResolveFailureText.kt` |
+| QQ 取链失败的分类（纯逻辑） | `qq/QqRejection.kt` |
+| 带分类的取链出口 | `MusicSourceProvider.resolveUrlOutcome`（默认实现保守）、`SourceRouter.resolveUrlOutcome`、`QqApi.resolveOutcome` |
+| 播放链的失败分流 | `ui/viewmodel/PlayerViewModel.kt`（`onUrlUnavailable` 的三态分支） |
+| 封面/顶栏几何的唯一来源 | `ui/player/TrayLayout.kt` |
+| 界面律动的能力位与闸 | `ui/player/motion/MotionEffects.kt`、`MotionPrefs.kt`、`MotionClock.kt` |
+| B站登录（认证核心） | `bili/BiliAuthApi.kt` / `BiliAuthStore.kt` / `BiliQrLogin.kt` |
+| B站搜索的调度修复 | `bili/BiliApi.kt` |
+| 搜索页筛选与加载态 | `ui/screen/SearchScreen.kt`、`ui/components/SourceFilter.kt`、`SourceCounts.kt` |
+| 文案 | `ui/i18n/Strings.kt` 的 `PlaybackFailureStrings`（新组，9 条）+ `WaveformStrings`（+8 条） |
+
+### 本版明确**不做**（避免下一个人重复调研）
+
+- **取链后「探一次字节」的二次校验**：那会给每次播放加一个 RTT，而实测的坏链只是偶发
+  （12 首样本里 1 首的 1 个高档位）⇒ 用「失败分类 + 有界降档重试」把代价限制在「多试一档」。
+- **把 `tagSwitchSourceHint`（「此源无版权，可切另一源」）删掉**：它现在只对
+  `COPYRIGHT_GONE` / `REGION_LOCKED` / 权益类失败追加，仍然有用；删它要动 8 个语言文件。
+- **真 FFT**：v3.0.0 的判决未被推翻，本版不翻案。
+- **华为 / 荣耀媒体卡片**：本版一个字都没碰（任务书明令）。
+
+### 本版新增的未验证项（与交付报告的诚实清单一致）
+
+- **QQ VIP 歌曲「被误判无版权 + 自动跳歌」在真机上未能稳定复现**：用有效 VIP 票据
+  12 首 × 8 档 = 96 次取链，**零次**出现无 purl。缺陷由源码链路的四条事实（D1–D4）证明，
+  触发条件是概率的。匿名态的 `104003` 是稳定可复现的入口。
+- **修复后的真机截图未采集**（P0-A）：设备上装的是 v3.1.0 release 包，debug 包签名不同、
+  强装会清掉已登录的 QQ 会员账号 ⇒ 本版只声称「修复前的偏差已实测、修复后的目标值与
+  顶栏中心在算术上逐像素一致」。
+- **界面律动关闭后的帧时间未采集**（无 release 包真机对照）。
+- **B站登录后的 FLAC / 收藏夹同步**：取决于是否有大会员账号，见
+  [`probe-bili-login.md`](docs/verification/v3.2.0/probe-bili-login.md) 的未验证清单。
+- **`pneedbuy` / `isbuy` 非零时服务端的确切回答未验证**（分类里有防御分支）。
