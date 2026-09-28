@@ -1132,9 +1132,9 @@
         errorLine1="                            ) { _ ->"
         errorLine2="                                ~">
         <location
-            file="src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt"
-            line="788"
-            column="33"/>
+            file="src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt"
+            line="313"
+            column="29"/>
     </issue>
 
     <issue
