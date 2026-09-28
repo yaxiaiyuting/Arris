@@ -1,0 +1,40 @@
+09-29 03:24:27.678 10437 10454 I TestRunner: started: probeRawUaMatrixFromDevice(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
+09-29 03:24:27.716   311 10466 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10180 0}
+09-29 03:24:27.717   311 10467 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:24:27.717   311 10468 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:24:27.794   311 10468 I resolv  : res_nsend: used send_dg 205 terrno: 0
+09-29 03:24:27.794   311 10467 I resolv  : res_nsend: used send_dg 229 terrno: 0
+09-29 03:24:27.794   311 10468 I resolv  : doQuery: rcode=0, ancount=10, return value=205
+09-29 03:24:27.794   311 10467 I resolv  : doQuery: rcode=0, ancount=7, return value=229
+09-29 03:24:27.796 10437 10464 D TrafficStats: tagSocket(79) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:28.924   311 10474 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10180 0}
+09-29 03:24:28.924   311 10476 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:24:28.925   311 10475 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:24:29.419   311 10475 I resolv  : res_nsend: used send_dg 264 terrno: 0
+09-29 03:24:29.419   311 10476 I resolv  : res_nsend: used send_dg 184 terrno: 0
+09-29 03:24:29.419   311 10476 I resolv  : doQuery: rcode=0, ancount=4, return value=184
+09-29 03:24:29.419   311 10475 I resolv  : doQuery: rcode=0, ancount=6, return value=264
+09-29 03:24:29.420 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:30.239   794   794 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS
+09-29 03:24:30.443 10437 10454 I System.out: PROBE-V324-RAW variant=A_no_ua_header_bili_referer -> http=403
+09-29 03:24:30.444 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:30.972 10437 10454 I System.out: PROBE-V324-RAW variant=B_dalvik_ua_bili_referer -> http=403
+09-29 03:24:30.973 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:31.509 10437 10454 I System.out: PROBE-V324-RAW variant=C_desktop_ua_bili_referer -> http=206
+09-29 03:24:31.510   311 10477 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10180 0}
+09-29 03:24:31.511   311 10479 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:24:31.511   311 10478 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:24:31.511   311 10479 I resolv  : resolv_cache_lookup: FOUND IN CACHE entry=0x703f63aab9d0
+09-29 03:24:31.511   311 10479 I resolv  : doQuery: rcode=0, ancount=4, return value=184
+09-29 03:24:31.511   311 10478 I resolv  : resolv_cache_lookup: FOUND IN CACHE entry=0x703f73aaa0d0
+09-29 03:24:31.511   311 10478 I resolv  : doQuery: rcode=0, ancount=6, return value=264
+09-29 03:24:31.511 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:32.046 10437 10454 I System.out: PROBE-V324-RAW variant=D_desktop_ua_no_referer -> http=403
+09-29 03:24:32.047 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:32.443  1008  1320 D BtGatt.ScanManager: uid 10120 isForeground true scanMode -1
+09-29 03:24:32.443  1008  1320 D BtGatt.ScanManager: uid 10120 isForeground true scanMode -1
+09-29 03:24:32.583 10437 10454 I System.out: PROBE-V324-RAW variant=E_exoplayer_1_5_ua_bili_referer -> http=206
+09-29 03:24:32.584 10437 10454 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:24:33.094   800   854 D EGL_emulation: app_time_stats: avg=33078.71ms min=33078.71ms max=33078.71ms count=1
+09-29 03:24:33.116 10437 10454 I System.out: PROBE-V324-RAW variant=F_android_word_only_ua -> http=403
+09-29 03:24:33.117 10437 10454 I TestRunner: finished: probeRawUaMatrixFromDevice(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)

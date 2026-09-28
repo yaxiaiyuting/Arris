@@ -1,0 +1,16 @@
+09-29 03:18:58.210  9941  9958 I TestRunner: started: probeDefaultRequestHeaders(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
+09-29 03:18:58.214  9941  9958 D TrafficStats: tagSocket(79) with statsTag=0xffffffff, statsUid=-1
+09-29 03:18:58.248  9941  9958 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+09-29 03:18:58.249  9941  9963 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:18:58.251  9941  9958 I System.out: PROBE-V324-HEADERS-BEGIN
+09-29 03:18:58.251  9941  9958 I System.out: PROBE-V324-HEADERS| GET /probe.m4a HTTP/1.1
+09-29 03:18:58.251  9941  9958 I System.out: PROBE-V324-HEADERS| Range: bytes=0-1023
+09-29 03:18:58.251  9941  9958 I System.out: PROBE-V324-HEADERS| Accept-Encoding: identity
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS| User-Agent: Dalvik/2.1.0 (Linux; U; Android 13; sdk_gphone64_x86_64 Build/TE1A.240213.009)
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS| Host: 127.0.0.1:44101
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS| Connection: Keep-Alive
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS-END
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS ua_line=User-Agent: Dalvik/2.1.0 (Linux; U; Android 13; sdk_gphone64_x86_64 Build/TE1A.240213.009)
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS ua_contains_android=true
+09-29 03:18:58.252  9941  9958 I System.out: PROBE-V324-HEADERS referer_line=(none)
+09-29 03:18:58.252  9941  9958 I TestRunner: finished: probeDefaultRequestHeaders(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)

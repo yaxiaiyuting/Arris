@@ -1,0 +1,11 @@
+09-29 03:19:09.798  9941  9958 I TestRunner: started: probeProductionChainAgainstRealCdn(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
+09-29 03:19:09.901  9941  9958 I System.out: PROBE-V324-CDN url=https://upos-sz-mirrorhw.bilivideo.com/ugaxcode/ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a?e=ig8euxZM2rNcNbdlho
+09-29 03:19:09.901  9941  9958 I System.out: PROBE-V324-CDN host=upos-sz-mirrorhw.bilivideo.com needsReferer=true cacheKey=bili:ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a
+09-29 03:19:09.902  9941  9958 I System.out: PROBE-V324-CDN requestHeaders={Referer=https://www.bilibili.com/}
+09-29 03:19:09.902  9941  9958 I System.out: PROBE-V324-CDN probe_desktop_ua=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
+09-29 03:19:09.903  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:10.239   794   794 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS
+09-29 03:19:10.923  9941  9958 I System.out: PROBE-V324-CDN variant=A_production_as_is -> FAIL InvalidResponseCodeException http=403 msg=Response code: 403
+09-29 03:19:10.977  9941  9958 I System.out: PROBE-V324-CDN variant=B_probe_manual_ua -> OK opened=100000 firstRead=4096
+09-29 03:19:10.991  9941  9958 I System.out: PROBE-V324-CDN variant=C_probe_manual_ua_no_referer -> FAIL InvalidResponseCodeException http=403 msg=Response code: 403
+09-29 03:19:10.991  9941  9958 I TestRunner: finished: probeProductionChainAgainstRealCdn(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)

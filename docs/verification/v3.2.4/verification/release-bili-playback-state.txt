@@ -1,0 +1,4 @@
+      state=PlaybackState {state=3, position=21095, buffered position=94389, speed=1.0, updated=32364283, actions=7339999, custom actions=[], active item id=0, error=null}
+      metadata: size=10, description=9月27日晚Au直播录屏全程, 小u莓烦恼, null
+      state=PlaybackState {state=7, position=0, buffered position=0, speed=0.0, updated=22109, actions=0, custom actions=[], active item id=-1, error=Bluetooth audio disconnected}
+      state=PlaybackState {state=7, position=0, buffered position=0, speed=0.0, updated=22126, actions=0, custom actions=[], active item id=-1, error=Bluetooth audio disconnected}

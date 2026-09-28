@@ -1,0 +1,68 @@
+09-28 18:30:35.701 D/SystemServerTiming(  511): StartMediaSessionService
+09-28 18:30:35.701 I/SystemServiceManager(  511): Starting com.android.server.media.MediaSessionService
+09-28 18:30:35.702 V/SystemServerTiming(  511): StartMediaSessionService took to complete: 0ms
+09-28 18:30:35.746 D/SystemServerTiming(  511): OnBootPhase_480_com.android.server.media.MediaSessionService
+09-28 18:30:35.746 V/SystemServerTiming(  511): OnBootPhase_480_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:35.789 D/SystemServerTiming(  511): OnBootPhase_500_com.android.server.media.MediaSessionService
+09-28 18:30:35.789 V/SystemServerTiming(  511): OnBootPhase_500_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:35.872 D/SystemServerTiming(  511): OnBootPhase_520_com.android.server.media.MediaSessionService
+09-28 18:30:35.872 V/SystemServerTiming(  511): OnBootPhase_520_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:35.933 D/SystemServerTiming(  511): OnBootPhase_550_com.android.server.media.MediaSessionService
+09-28 18:30:35.933 V/SystemServerTiming(  511): OnBootPhase_550_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:36.258 D/SystemServerTiming(  511): OnBootPhase_600_com.android.server.media.MediaSessionService
+09-28 18:30:36.258 V/SystemServerTiming(  511): OnBootPhase_600_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:36.372 D/SystemServerTiming(  511): ssm.onStartUser-0_com.android.server.media.MediaSessionService
+09-28 18:30:36.372 V/SystemServerTiming(  511): ssm.onStartUser-0_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:36.754 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.android.server.telecom/HeadsetMediaButton (userId=0)
+09-28 18:30:36.754 D/MediaSessionService(  511): Global priority session is changed from null to com.android.server.telecom/HeadsetMediaButton (userId=0)
+09-28 18:30:36.754 I/MediaSessionStack(  511): removeSession | record: com.android.server.telecom/HeadsetMediaButton (userId=0)
+09-28 18:30:36.885 D/MediaSessionService(  511): The MediaKeyEventSessionChangedListener (android.os.BinderProxy@d043e34) is added by com.google.android.bluetooth
+09-28 18:30:37.924 D/ActivityManagerTiming(  511): OnBootPhase_1000_com.android.server.media.MediaSessionService
+09-28 18:30:37.925 V/ActivityManagerTiming(  511): OnBootPhase_1000_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:38.233 D/SystemServerTimingAsync(  511): ssm.onUnlockingUser-0_com.android.server.media.MediaSessionService
+09-28 18:30:38.233 V/SystemServerTimingAsync(  511): ssm.onUnlockingUser-0_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:38.355 W/MediaSessionCompat( 1008): Couldn't find a unique registered media button receiver in the given context.
+09-28 18:30:38.355 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.google.android.bluetooth/BluetoothMediaBrowserService (userId=0)
+09-28 18:30:38.371 W/MediaSessionCompat( 1008): Couldn't find a unique registered media button receiver in the given context.
+09-28 18:30:38.371 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.google.android.bluetooth/BluetoothMediaBrowserService (userId=0)
+09-28 18:30:38.838 W/YTPL.mediasession( 1791): MediaSession created
+09-28 18:30:38.840 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.google.android.youtube/YouTube playerlib (userId=0)
+09-28 18:30:41.433 I/PodcastAudioPlayer( 1778): getOrCreateMediaSessionToken
+09-28 18:30:41.526 W/YTPL.mediasession( 1766): MediaSession created
+09-28 18:30:41.539 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.google.android.apps.youtube.music/YouTube playerlib (userId=0)
+09-28 18:30:41.734 I/ExoPlayerImpl( 1778): Init c8c141b [AndroidXMedia3/1.0.0-alpha03] [emu64x, sdk_gphone64_x86_64, Google, 33]
+09-28 18:30:41.791 W/MediaSessionCompat( 1778): Couldn't find a unique registered media button receiver in the given context.
+09-28 18:30:41.791 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.google.android.googlequicksearchbox/PodcastPlayer (userId=0)
+09-28 18:30:47.940 D/SystemServerTimingAsync(  511): ssm.onUnlockedUser-0_com.android.server.media.MediaSessionService
+09-28 18:30:47.940 V/SystemServerTimingAsync(  511): ssm.onUnlockedUser-0_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:30:52.969 D/SystemServerTimingAsync(  511): ssm.onCompletedEventUser-0_{|Unlocked|}_com.android.server.media.MediaSessionService
+09-28 18:30:52.969 V/SystemServerTimingAsync(  511): ssm.onCompletedEventUser-0_{|Unlocked|}_com.android.server.media.MediaSessionService took to complete: 0ms
+09-28 18:40:38.885 I/MediaSessionStack(  511): removeSession | record: com.google.android.youtube/YouTube playerlib (userId=0)
+09-28 18:40:38.962 I/MediaSessionStack(  511): removeSession | record: com.google.android.apps.youtube.music/YouTube playerlib (userId=0)
+09-28 18:50:58.140 I/BiliApi ( 6056): wbi keys refreshed: mixin=ea1db124…
+09-28 18:50:58.579 I/BiliApi ( 6056): search 'miku' -> 5 条（正文长度=7363）
+09-28 18:50:59.014 I/BiliApi ( 6056): search 'miku' -> 20 条（正文长度=28765）
+09-28 18:51:00.114 I/BiliApi ( 6056): search 'miku' -> 5 条（正文长度=7364）
+09-28 18:51:00.588 I/BiliApi ( 6056): search 'miku' -> 5 条（正文长度=7363）
+09-28 18:51:49.015 I/BiliApi ( 6528): wbi keys refreshed: mixin=ea1db124…
+09-28 18:51:49.416 I/BiliApi ( 6528): search 'miku' -> 5 条（正文长度=7364）
+09-28 18:51:49.850 I/BiliApi ( 6528): search 'miku' -> 20 条（正文长度=28765）
+09-28 18:51:50.942 I/BiliApi ( 6528): search 'miku' -> 5 条（正文长度=7364）
+09-28 18:51:51.356 I/BiliApi ( 6528): search 'miku' -> 5 条（正文长度=7363）
+09-29 03:29:00.351 I/BiliApi (10821): wbi keys refreshed: mixin=ea1db124…
+09-29 03:29:00.755 I/BiliApi (10821): search 'au39' -> 20 条（正文长度=27532）
+09-29 03:29:18.517 I/BiliApi (10821): buvid3 acquired: 459EE280…
+09-29 03:29:18.681 D/PlaybackService(10821): onCreate
+09-29 03:29:18.683 I/PlaybackService(10821): AudioOffload: mp3 supported=false (decision: disabled by design)
+09-29 03:29:18.685 I/PlaybackService(10821): LoadControl profile=low totalMem=1965MB
+09-29 03:29:18.687 I/ExoPlayerImpl(10821): Init e00702 [AndroidXMedia3/1.5.0] [emu64x, sdk_gphone64_x86_64, Google, 33]
+09-29 03:29:18.706 I/MediaSessionImpl(10821): Init 118268b [AndroidXMedia3/1.5.0] [emu64x, sdk_gphone64_x86_64, Google, 33]
+09-29 03:29:18.709 I/MediaSessionStack(  511): addSession to bottom of stack | record: com.takahashirinta.ncrust/androidx.media3.session.id. (userId=0)
+09-29 03:29:18.726 D/PlaybackService(10821): onStartCommand action=null
+09-29 03:29:18.727 D/PlaybackService(10821): Playing: https://cn-zjhz-cm-01-08.bilivideo.com/upgcxcode/53/84/42264168453/42264168453-1-30232.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&trid=0000fc0f23f297134888aea00d8fb0eabc5u&uipk=5&gen=playurlv3&os=bcache&mid=0&nbs=1&og=hw&deadline=1790630958&platform=pc&oi=3748942079&upsig=68e7037dca06ac40e62c6015aa0b6353&uparams=e,trid,uipk,gen,os,mid,nbs,og,deadline,platform,oi&cdnid=5163&bvc=vod&nettype=0&bw=71894&lrs=2&build=0&dl=0&f=u_0_0&qn_dyeid=09b4eeb4380a5d76000553806abac00e&agrr=1&buvid=459EE280-C3F5-6D26-7430-B7158231CC7257986infoc&orderid=0,3 startPositionMs=0
+09-29 03:29:18.749 I/MediaSessionStack(  511): onPlaybackStateChanged - Pushing session to top | record: com.takahashirinta.ncrust/androidx.media3.session.id. (userId=0)
+09-29 03:29:19.334 D/MediaSessionService(  511): Media button session is changed to com.takahashirinta.ncrust/androidx.media3.session.id. (userId=0)
+09-29 03:29:19.353 D/MediaResumeListener(  800): Testing if we can connect to ComponentInfo{com.takahashirinta.ncrust/com.takahashirinta.ncrust.player.PlaybackService}
+09-29 03:29:19.518 D/ResumeMediaBrowser(  800): Service connected for ComponentInfo{com.takahashirinta.ncrust/com.takahashirinta.ncrust.player.PlaybackService}
+09-29 03:29:19.518 D/MediaResumeListener(  800): Connected to ComponentInfo{com.takahashirinta.ncrust/com.takahashirinta.ncrust.player.PlaybackService}
+09-29 03:29:19.520 D/MediaResumeListener(  800): Can get resumable media for 0 from ComponentInfo{com.takahashirinta.ncrust/com.takahashirinta.ncrust.player.PlaybackService}

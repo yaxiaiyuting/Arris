@@ -1,0 +1,17 @@
+=== v3.2.4 帧时间 · v324-bigscreen · emulator-5554 · 2026-09-29T03:30:53+08:00 ===
+--- 设备 ---
+sdk_gphone64_x86_64
+33
+fps=60.000004
+--- 屏幕尺寸（应为本轮配置）---
+Physical size: 1080x2340
+Physical density: 440
+--- 播放状态（自检 1：必须在播）---
+      state=PlaybackState {state=3, position=94559, buffered position=195419, speed=1.0, updated=32437743, actions=7339999, custom actions=[], active item id=0, error=null}
+--- 版本（自检 2：必须是 release 产物）---
+    versionCode=59 minSdk=24 targetSdk=36
+    versionName=3.2.4-gpl
+sample 1 -> /home/duanjb666/deepseek/Ncrust/docs/verification/v3.2.4/verification/gfx-v324-bigscreen-1.txt (40289 bytes)
+sample 2 -> /home/duanjb666/deepseek/Ncrust/docs/verification/v3.2.4/verification/gfx-v324-bigscreen-2.txt (40280 bytes)
+sample 3 -> /home/duanjb666/deepseek/Ncrust/docs/verification/v3.2.4/verification/gfx-v324-bigscreen-3.txt (40270 bytes)
+sample 4 -> /home/duanjb666/deepseek/Ncrust/docs/verification/v3.2.4/verification/gfx-v324-bigscreen-4.txt (40238 bytes)

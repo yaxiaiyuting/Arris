@@ -1,0 +1,46 @@
+09-29 03:18:58.253  9941  9958 I TestRunner: started: probeRawUaMatrixFromDevice(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
+09-29 03:18:58.295   311  9970 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10178 0}
+09-29 03:18:58.296   311  9972 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:18:58.296   311  9971 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:18:58.458   311  9972 I resolv  : res_nsend: used send_dg 205 terrno: 0
+09-29 03:18:58.458   311  9971 I resolv  : res_nsend: used send_dg 229 terrno: 0
+09-29 03:18:58.458   311  9972 I resolv  : doQuery: rcode=0, ancount=10, return value=205
+09-29 03:18:58.458   311  9971 I resolv  : doQuery: rcode=0, ancount=7, return value=229
+09-29 03:18:58.460  9941  9967 D TrafficStats: tagSocket(79) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:00.002  1671  2062 I AiAiEcho: Predicting[0]:
+09-29 03:19:00.002  1671  2062 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata:
+09-29 03:19:00.002  1671  2062 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0
+09-29 03:19:00.002  1671  2062 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0
+09-29 03:19:00.017   800   854 D EGL_emulation: app_time_stats: avg=26939.45ms min=26939.45ms max=26939.45ms count=1
+09-29 03:19:02.112   511  2408 D WifiNl80211Manager: Scan result ready event
+09-29 03:19:02.112   511  2408 D WifiNative: Scan result ready event
+09-29 03:19:03.154  1008  1320 D BtGatt.ScanManager: uid 10120 isForeground true scanMode -1
+09-29 03:19:03.154  1008  1320 D BtGatt.ScanManager: uid 10120 isForeground true scanMode -1
+09-29 03:19:03.341  9941  9973 D ProfileInstaller: Installing profile for com.takahashirinta.ncrust
+09-29 03:19:05.611   311  9979 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10178 0}
+09-29 03:19:05.611   311  9981 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:19:05.611   311  9980 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:19:06.105   311  9981 I resolv  : res_nsend: used send_dg 184 terrno: 0
+09-29 03:19:06.105   311  9980 I resolv  : res_nsend: used send_dg 264 terrno: 0
+09-29 03:19:06.105   311  9981 I resolv  : doQuery: rcode=0, ancount=4, return value=184
+09-29 03:19:06.105   311  9980 I resolv  : doQuery: rcode=0, ancount=6, return value=264
+09-29 03:19:06.106  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:07.132  9941  9958 I System.out: PROBE-V324-RAW variant=A_no_ua_header_bili_referer -> http=403
+09-29 03:19:07.133  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:07.661  9941  9958 I System.out: PROBE-V324-RAW variant=B_dalvik_ua_bili_referer -> http=403
+09-29 03:19:07.662  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:08.196  9941  9958 I System.out: PROBE-V324-RAW variant=C_desktop_ua_bili_referer -> http=206
+09-29 03:19:08.197   311  9983 I resolv  : GetAddrInfoHandler::run: {100 100 100 983140 10178 0}
+09-29 03:19:08.197   311  9985 I resolv  : res_nmkquery: (QUERY, IN, A)
+09-29 03:19:08.197   311  9984 I resolv  : res_nmkquery: (QUERY, IN, AAAA)
+09-29 03:19:08.197   311  9984 I resolv  : resolv_cache_lookup: FOUND IN CACHE entry=0x703f73aaa0d0
+09-29 03:19:08.197   311  9984 I resolv  : doQuery: rcode=0, ancount=6, return value=264
+09-29 03:19:08.198   311  9985 I resolv  : resolv_cache_lookup: FOUND IN CACHE entry=0x703f63aab9d0
+09-29 03:19:08.198   311  9985 I resolv  : doQuery: rcode=0, ancount=4, return value=184
+09-29 03:19:08.198  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:08.733  9941  9958 I System.out: PROBE-V324-RAW variant=D_desktop_ua_no_referer -> http=403
+09-29 03:19:08.734  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:09.267  9941  9958 I System.out: PROBE-V324-RAW variant=E_exoplayer_1_5_ua_bili_referer -> http=206
+09-29 03:19:09.268  9941  9958 D TrafficStats: tagSocket(85) with statsTag=0xffffffff, statsUid=-1
+09-29 03:19:09.797  9941  9958 I System.out: PROBE-V324-RAW variant=F_android_word_only_ua -> http=403
+09-29 03:19:09.797  9941  9958 I TestRunner: finished: probeRawUaMatrixFromDevice(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)

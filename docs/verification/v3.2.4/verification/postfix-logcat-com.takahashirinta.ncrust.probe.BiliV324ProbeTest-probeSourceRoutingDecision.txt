@@ -1,0 +1,9 @@
+09-29 03:24:27.638 10437 10454 I TestRunner: started: probeSourceRoutingDecision(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
+09-29 03:24:27.643 10437 10454 I System.out: PROBE-V324-ROUTE case=bili_whitelist_host plain=0 bili=1
+09-29 03:24:27.643 10437 10454 I System.out: PROBE-V324-ROUTE case=netease plain=1 bili=1
+09-29 03:24:27.643 10437 10454 I System.out: PROBE-V324-ROUTE case=qq plain=2 bili=1
+09-29 03:24:27.643 10437 10454 I System.out: PROBE-V324-ROUTE case=pcdn_before_mark plain=3 bili=1
+09-29 03:24:27.644 10437 10454 I System.out: PROBE-V324-ROUTE case=pcdn_after_mark plain=3 bili=2
+09-29 03:24:27.644 10437 10454 I System.out: PROBE-V324-ROUTE bili_saw_referer=true bili_saw_ua=true
+09-29 03:24:27.644 10437 10454 I System.out: PROBE-V324-ROUTE plain_saw_referer=false plain_saw_ua=false
+09-29 03:24:27.644 10437 10454 I TestRunner: finished: probeSourceRoutingDecision(com.takahashirinta.ncrust.probe.BiliV324ProbeTest)
