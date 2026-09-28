@@ -21,25 +21,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.player.AudioFeatureExtractor
 import com.takahashirinta.ncrust.ui.player.motion.MotionBindings
+import com.takahashirinta.ncrust.ui.player.waveform.BandColorRoles
+import com.takahashirinta.ncrust.ui.player.waveform.BandDominance
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
+import com.takahashirinta.ncrust.ui.player.waveform.WaveformCurve
 import com.takahashirinta.ncrust.ui.player.waveform.WaveformEffectsState
+import com.takahashirinta.ncrust.ui.player.waveform.isolateFrame
+import com.takahashirinta.ncrust.ui.theme.relativeLuminance
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
 import kotlin.math.sqrt
@@ -214,6 +219,15 @@ object WaveformStore {
 
     private val generationState = mutableIntStateOf(0)
 
+    /**
+     * v3.2.2：**主导频段判定 + 颜色过渡**（纯逻辑，见 `BandDominance`）。
+     *
+     * 它放在这里而不是渲染组件里，理由与环形缓冲、C 档状态机完全相同：
+     * 它必须并进 [pump] 的「要不要重绘」判据 —— 颜色过渡是一段 80ms 的逐帧动画，
+     * 不并入判据就会出现「颜色走到一半停住」（v2.8.0 的峰值保持踩过同形状的坑）。
+     */
+    private val band = BandDominance()
+
     /** 只应在 draw 阶段读（在组合阶段读会变成每帧重组）。 */
     val generation: Int get() = generationState.intValue
 
@@ -315,6 +329,20 @@ object WaveformStore {
      */
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
         var changed = ring.pump(active, dtMs, effects)
+        // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
+        // 关掉（简洁档 / 用户关了多频段开关）时音频线程根本不发布特征值，
+        // 此时若还去读 `featureLow()` 会把「上一首残留的」或初值 0 当数据用。
+        // 这一步零分配、只写标量；返回值并入 changed ⇒ 80ms 的颜色过渡不会被冻住。
+        if (band.update(
+                low = if (effects.waveBandOn) featureLow() else 0f,
+                mid = if (effects.waveBandOn) featureMid() else 0f,
+                high = if (effects.waveBandOn) featureHigh() else 0f,
+                available = effects.waveBandOn && featAvailable,
+                dtMs = dtMs,
+            ) && !changed
+        ) {
+            changed = true
+        }
         // v2.9.0：低频通道跟着泵一次（判据用最新一根，所以只在这里读一次）。
         // C 档：只有真的开着才推进（关掉时连函数都不进 ⇒ 零成本）。
         if (effects.shockwave || effects.particles) {
@@ -372,6 +400,38 @@ object WaveformStore {
      */
     fun newestMix(): Float = ring.newestMix()
 
+    /**
+     * v3.2.2：本帧的三个频段颜色权重（低 / 中 / 高，和为 1）。
+     *
+     * @return 权重是否可用。**false 是"测不到"的如实表达**：特征链路不可用（降级路径）
+     *   或还没得出结论时，调用方必须退回单一 RMS 颜色 ——
+     *   而不是把「没有中高频」画成「中高频能量为零」（那正是降级路径 `mix=0.0` 的既有缺口）。
+     */
+    fun snapshotBand(out: FloatArray): Boolean = band.weights(out)
+
+    /** v3.2.2：主导频段判定是否可信（诊断 / 单测）。 */
+    fun bandReliable(): Boolean = band.isReliable()
+
+    /** v3.2.2：当前主导频段（诊断 / 单测）。 */
+    fun dominantBand(): Int = band.dominant
+
+    /**
+     * v3.2.2：曲线绘制**丢帧计数**（只增不减，UI 线程单写者）。
+     *
+     * 渲染侧一帧的失败由 [isolateFrame] 吞掉（丢这一帧、不向上抛）。计数留在这里是因为
+     * 「静默降级」和「正常」在画面上长得一样 —— 真出问题时必须有个地方能问
+     * "到底丢了多少帧"。**不在这里打日志**：失败可能连续发生，每帧一条日志本身就是雪崩。
+     */
+    @Volatile
+    private var curveDroppedFrames: Int = 0
+
+    fun noteCurveFailure() {
+        curveDroppedFrames += 1
+    }
+
+    /** 诊断：曲线绘制累计丢帧数。 */
+    fun droppedCurveFrames(): Int = curveDroppedFrames
+
     /** B 档：呼吸亮度倍率。draw 阶段直接读（不是 Compose state ⇒ 不触发重组）。 */
     fun breatheScale(): Float = ring.breatheScale()
 
@@ -399,6 +459,8 @@ object WaveformStore {
     internal fun resetForTest() {
         ring.clear()
         showcaseState.clear()
+        band.reset()
+        curveDroppedFrames = 0
         coloringInverted = false
         enabled = VisualizerSetting.DEFAULT_ENABLED
         motionFeaturesEnabled = false
@@ -522,14 +584,26 @@ fun AudioVisualizerBars(
     val peaks = remember(barCount) { FloatArray(barCount) }
     // v3.0.0：逐柱的「明亮度占比」窗口（多频段调制用；关掉时根本不快照它）。
     val mixes = remember(barCount) { FloatArray(barCount) }
+    // v3.2.2：曲线几何的复用缓冲（**跨帧复用 = 帧路径零分配**，见 WaveformCurve 的 KDoc）。
+    //  `heights` = 每点的**半厚**（振幅域），`tangents` = 保单调切线，`path` = 复用的曲线路径。
+    val heights = remember(barCount) { FloatArray(barCount) }
+    val tangents = remember(barCount) { FloatArray(barCount) }
+    val path = remember { Path() }
+    val bandWeights = remember { FloatArray(3) }
+    val palette = remember { IntArray(3) }
     // 分级：**组合期读一次**（改设置时才会重组一次）。
     // draw 只用这个捕获值 —— 帧路径里零 state 读（除了下面 draw 里的 generation）。
     val effects = VisualizerPrefs.effects.value
-    val flowBrushCache = remember(barColor) { FlowBrushCache(barColor) }
+    // v3.2.2：HCT 三角色（低 / 中 / 高）。**只在主题色或明暗变化时算一次** ——
+    // 两次 CAM16 求解绝不能进帧路径（见 BandColorRoles 的调用纪律）。
+    val background = LocalMetroColors.current.background
+    val isDarkTheme = remember(background) { relativeLuminance(background.toArgb()) < 0.5 }
+    val paletteReady = remember(barColor, isDarkTheme) {
+        BandColorRoles.paletteFor(barColor.toArgb(), isDarkTheme, palette)
+    }
+    val brushCache = remember { RibbonBrushCache() }
     // v3.0.0：明亮端的颜色（高频占主导的柱子用它）。`Color` 是 value class ⇒ 这个 lerp 不分配。
-    val brightColor = remember(barColor) { lerp(barColor, Color.White, BAND_TINT_WHITE_MIX) }
     val density = LocalDensity.current
-    val cornerRadiusPx = with(density) { BAR_CORNER_RADIUS_DP.dp.toPx() }
     val dotRadiusPx = with(density) { BAR_DOT_RADIUS_DP.dp.toPx() }
     val peakCapPx = with(density) { BAR_PEAK_CAP_DP.dp.toPx() }
     val rippleStroke = remember(density) { Stroke(width = with(density) { RIPPLE_STROKE_DP.dp.toPx() }) }
@@ -576,41 +650,72 @@ fun AudioVisualizerBars(
             WaveformStore.snapshot(bars, peaks)
         }
         val n = bars.size
-        if (n == 0 || size.width <= 0f || size.height <= 0f) return@Canvas
-        val gap = size.width * 0.28f / n
-        val barWidth = ((size.width - gap * (n - 1)) / n).coerceAtLeast(1f)
+        // v3.2.2：曲线至少要有两个点才谈得上"相邻两点连接"。
+        if (n < 2 || size.width <= 0f || size.height <= 0f) return@Canvas
         val minBar = 1.dp.toPx()
         // 呼吸：只在 B 档读；不是 Compose state ⇒ 不触发重组，只是一次字段读。
         val breath = if (effects.breathe) WaveformStore.breatheScale() else 1f
         // 点按交互翻转着色模式：普通字段读 + 点按时手动失效一次（见 WaveformStore.toggleColoringMode）。
         val flow = effects.flow != WaveformStore.isColoringInverted()
-        // C 档：涟漪画在柱子**下面**（背景层），粒子画在柱子**上面**（前景层）。
+        // C 档：涟漪画在曲线**下面**（背景层），粒子画在曲线**上面**（前景层）。
         if (effects.shockwave) {
             drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
         }
-        val flowBrush = if (flow) flowBrushCache.obtain(size.width) else null
-        val barMixes = if (effects.waveBandOn) mixes else null
-        if (flowBrush != null) {
-            val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
-            // 画布整体左移 phase，每根柱再右移 phase 抵消：柱子不动、色带在流。
-            translate(left = -phasePx) {
-                drawWaveformBars(
-                    bars, peaks, barColor, brightColor, flowBrush, effects, barMixes,
-                    xShift = phasePx, barWidth = barWidth, gap = gap, minBar = minBar,
-                    cornerRadiusPx = cornerRadiusPx, dotRadiusPx = dotRadiusPx,
-                    peakCapPx = peakCapPx, breath = breath,
+        // ── v3.2.2：频段色 ────────────────────────────────────────────────────
+        // 权重来自 `BandDominance`（平滑 300ms + 滞回 20% + 静音闸门 + 80ms 过渡），
+        // 在 `pump` 里推进。不可信时**退回单一主题色** —— 这是降级路径的如实表达。
+        val bandReliable = paletteReady &&
+            effects.waveBandOn &&
+            WaveformStore.snapshotBand(bandWeights)
+        val ribbonColor = Color(
+            BandColorRoles.resolve(palette, bandWeights, bandReliable, barColor.toArgb())
+        )
+        // v3.2.2：曲线几何。`heights` 是**半厚**（振幅域 = sqrt(柱值)），
+        // 与 v2.8.0 的柱高逐值同源：`半厚 = max(1dp, sqrt(柱值) × H) / 2`。
+        // 用半厚而不是全高做插值，是因为 PCHIP 的"不过冲"保证作用在被插值的量上
+        // （探针 §2.5 量的就是振幅域序列）。
+        val heightPx = size.height
+        for (i in 0 until n) {
+            heights[i] = sqrt(bars[i].coerceIn(0f, 1f)) * heightPx
+            if (heights[i] < minBar) heights[i] = minBar
+            heights[i] *= 0.5f
+        }
+        // 点等距铺满整宽（曲线没有"柱宽 / 间距"的概念，时间轴就是 x 轴）。
+        val step = size.width / (n - 1)
+        WaveformCurve.computeTangents(heights, n, step, tangents)
+        val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
+        val ageBrush = if (!flow && effects.timeOrderedTint) {
+            brushCache.age(size.width, ribbonColor.toArgb())
+        } else {
+            null
+        }
+        // v3.2.2（铁律 28）：**一帧的曲线绘制整段隔离**。`Canvas { }` 的 lambda 是
+        // draw 阶段执行的普通 lambda，不是 @Composable 作用域，所以这里 try/catch 不会碰到
+        // 「重组语义」那条禁忌（`PlayerCard.kt` 的告诫针对的是组合期）。失败语义：丢这一帧、
+        // 不向上抛、下一帧照常重来（有界，无重试队列）。
+        isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
+            if (flowBrush != null) {
+                val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
+                // 画布整体左移 phase，曲线再整体右移 phase 抵消：曲线不动、色带在流。
+                translate(left = -phasePx) {
+                    drawWaveformCurve(
+                        heights, peaks, n, tangents, path, ribbonColor, flowBrush, effects,
+                        xShift = phasePx, step = step, firstX = 0f, heightPx = heightPx,
+                        minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
+                        breath = breath,
+                    )
+                }
+            } else {
+                drawWaveformCurve(
+                    heights, peaks, n, tangents, path, ribbonColor, ageBrush, effects,
+                    xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
+                    minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
+                    breath = breath,
                 )
             }
-        } else {
-            drawWaveformBars(
-                bars, peaks, barColor, brightColor, null, effects, barMixes,
-                xShift = 0f, barWidth = barWidth, gap = gap, minBar = minBar,
-                cornerRadiusPx = cornerRadiusPx, dotRadiusPx = dotRadiusPx,
-                peakCapPx = peakCapPx, breath = breath,
-            )
         }
         if (effects.particles) {
-            drawParticles(WaveformStore.showcase, barColor, particleRadiusPx, breath)
+            drawParticles(WaveformStore.showcase, ribbonColor, particleRadiusPx, breath)
         }
         // v3.0.0：炫技档的三频带能量条（3 笔 drawRect，画在柱子之上）。
         // 它显示的是**当下**三个频带各自的能量，不是频谱（横轴没有频率含义）。
@@ -628,31 +733,16 @@ fun AudioVisualizerBars(
     }
 }
 
-/** 简洁档的按时序着色：越靠左（越旧）越淡。**这不是频谱**，见 [VisualizerEffects.spectrumColoring]。 */
-private const val TIME_TINT_MIN_ALPHA = 0.30f
-private const val TIME_TINT_ALPHA_SPAN = 0.70f
-
 // ---- v3.0.0：多频段调制（逐柱着色 + 三频带能量条）的三组数字 ----
 
 /**
- * 明亮端颜色 = 主题色与白色的混合比例。
+ * v3.2.2：简洁档「越旧越淡」的左端不透明度。
  *
- * 0.45 的依据：太浅（>0.6）会在深色主题下丢失主题色、看起来像"所有柱子都变白了"；
- * 太深（<0.3）则与低沉端分不出来。0.45 在 OLED 黑底上"一眼能看出这批柱子在发光"。
+ * v2.8.0 的逐柱 alpha 阶梯（`0.30 + 0.70 × (i+1)/n`）在连续曲线上没有对应物 ——
+ * 曲线上没有"每根柱子各自的 alpha"。这里把它换成一条**水平 alpha 渐变**
+ * （左端 0.30 → 右端 1.0），读法不变：左边是历史、右边是此刻。
  */
-private const val BAND_TINT_WHITE_MIX = 0.45f
-
-/**
- * 占比高于它才用「流动 Brush」画这根柱子（低于它用实心低沉色）。
- *
- * 0.5 是刻意的中点：音乐的中高频占比长期在 0.3~0.6（见 `MotionBindings.tintMix` 的说明），
- * 以 0.5 为界能让两种画法在同一帧里同时出现 —— 那正是"低频段柱子 / 高频段柱子"
- * 这句话在视觉上的样子。
- */
-private const val BAND_TINT_BRUSH_THRESHOLD = 0.5f
-
-/** 低沉端保留的 alpha 比例（明亮端为 1.0）。0.8 让两种柱子的明暗差别可辨但不夸张。 */
-private const val BAND_TINT_ALPHA_MIN = 0.8f
+private const val TIME_TINT_MIN_ALPHA = 0.30f
 
 /** 频带能量条的高度（dp）。2dp：在 32~56dp 高的条带里刚好读得出三段。 */
 private const val BAND_LANE_HEIGHT_DP = 2f
@@ -669,18 +759,6 @@ private const val FLOW_TILE_FRACTION = 0.55f
 /** 色带两端与中间的不透明度：两端一样暗 ⇒ `TileMode.Repeated` 的接缝不可见（不然会看到硬边）。 */
 private const val FLOW_DIM_ALPHA = 0.55f
 private const val FLOW_BRIGHT_ALPHA = 1.00f
-
-/**
- * 圆角半径（dp）。
- *
- * 为什么不从 `ui/theme/AppShapes` 取：`AppShapes` 提供的是 `Shape`（给 `Modifier.clip` 用），
- * 而 `drawRoundRect` 要的是 `CornerRadius`（dp 数值），两者不能互转 —— 本仓库目前只有
- * `RoundedCornerShape` 一个落点，还没有 dp 半径 token。本版不动 `AppShapes.kt`
- * （不在本次改动范围内），所以半径常量在 draw 侧本地声明；
- * **遗留项**：把 `CornerRadius` 半径收敛进 `AppShapes`，并把 `CornerRadius(` 加进
- * `AppShapesSingleSourceTest` 的 forbidden 列表（探针 §1「圆角柱」一栏的建议）。
- */
-private const val BAR_CORNER_RADIUS_DP = 2f
 
 /** 柱顶光点半径（dp）。细到能读出"这是柱顶"，又不会盖住柱子本身。 */
 private const val BAR_DOT_RADIUS_DP = 1.2f
@@ -712,124 +790,110 @@ private fun Modifier.visualizerPerspective(density: Float): Modifier = graphicsL
 }
 
 /**
- * 一帧的柱状绘制（**顶层私有函数**，不是 draw lambda 里的局部函数）。
+ * v3.2.2：一帧的**连续曲线**绘制（顶层私有函数，不是 draw lambda 里的局部函数）。
  *
  * 为什么抽出来：需要它的有两个调用点（流动 / 不流动），而局部函数或 lambda 会带来
- * 捕获与分配的不确定性。这里全部参数都是基本类型或已存在的对象 ⇒ 调用本身**零分配**。
+ * 捕获与分配的不确定性。这里全部参数都是基本类型或**调用方复用**的对象
+ * （`heights` / `tangents` / `path` 都是 `remember` 出来的）⇒ 调用本身**零分配**。
  *
- * ## v3.0.0：多频段调制（`mixes != null` 时生效）
+ * ## 几何：一条镜像丝带
  *
- * 每根柱子按**它自己那一刻**的「明亮度占比」决定怎么画：
+ * 每个采样点的**半厚** `h_i` 由柱值决定（`h_i = max(1dp, sqrt(柱值) × H) / 2`，
+ * 与 v2.8.0 的柱高逐值同源），顶部包络是 `centerY − h_i`、底部是 `centerY + h_i`，
+ * 两条包络各用 27 段 `cubicTo` 连起来再 `close()` ⇒ **一笔填充**画出整条带子。
+ * 相邻段共享端点与切线 ⇒ C1 连续，肉眼看不到"接缝"。
  *
- *  - 占比低（那一刻能量主要在低频带：鼓 / 贝斯）⇒ **实心低沉色**（`barColor`）；
- *  - 占比高（那一刻能量主要在中高频带：人声 / 弦乐 / 镲片）⇒ **流动明亮色**
- *    （有渐变流动时用同一个 `flowBrush`，否则用 `brightColor`）。
+ * 曲线用 [WaveformCurve] 的**保单调（PCHIP）切线**：探针 §2.5 在 19055 帧真实波形上
+ * 量过，Catmull-Rom 会在 74% 的帧里冲出数据范围、其中 224 帧**画出负高度**
+ * （曲线穿进自己的镜像里）。PCHIP 的过冲与负高度都是 **0**（铁律 31）。
  *
- * 三条性质让这个做法站得住：
+ * ## 颜色：一条带子一个颜色（不再是逐根柱子一个颜色）
  *
- *  1. **横轴仍然是时间**（左旧右新）—— 这不是频谱，`spectrumColoring` 仍恒为 false；
- *  2. **零新增绘制**：每根柱子仍然是**一笔**，只是那一笔的着色来源跟着音频走；
- *  3. **不牺牲渐变流动**：流动色带没有关掉，只是**出现在高频占主导的那些柱子上** ——
- *     音乐一亮，波形就"流动"起来，这比"整条一直在流"更能读出音乐。
+ * 颜色由 `BandDominance` 给出的**三频段权重**混合而成（见 `AudioVisualizerBars`），
+ * 所以「这一刻是哪个频带主导」是**整条曲线**的属性，而不是某几根柱子的属性。
+ * 这是 v3.2.2 相对 v3.0.0 逐柱着色的**有意替换**：逐柱着色每根柱子都在变，
+ * 而主导频段是平滑 + 滞回之后的结论（探针实测 0.103 次/秒），读起来是"颜色跟着音乐走"，
+ * 不是"颜色在抖"。既有的**渐变流动**没有丢：它现在作用在整条带子上。
  *
- * @param xShift 只有流动模式非 0：画布已整体左移 `xShift`，这里给每根柱补回去。
- * @param flowBrush 非 null 时用 `brush=`（渐变流动），否则用 `color=`（按时序着色）——
+ * `effects.rounded`（圆角柱）在曲线上**没有几何可作用**（连续的带子没有角），
+ * 这一位保留是为了 API 稳定与档位表可读，曲线路径不再读它。
+ *
+ * @param xShift 只有流动模式非 0：画布已整体左移 `xShift`，这里给每个 x 补回去。
+ * @param brush 非 null 时用 `brush=`（渐变流动 / 时序淡出），否则用 `color=` ——
  *   两者是 API 层的二选一，[VisualizerEffects.colorChannelMode] 是这条规则的唯一读法。
- * @param brightColor 多频段调制的明亮端颜色（只在没有流动 Brush 时用到）。
- * @param mixes 逐柱明亮度占比（0..1）；`null` = 多频段调制关着，走 v2.8.0 的逐字路径。
  */
-private fun DrawScope.drawWaveformBars(
-    bars: FloatArray,
+private fun DrawScope.drawWaveformCurve(
+    heights: FloatArray,
     peaks: FloatArray,
-    barColor: Color,
-    brightColor: Color,
-    flowBrush: Brush?,
+    count: Int,
+    tangents: FloatArray,
+    path: Path,
+    color: Color,
+    brush: Brush?,
     effects: VisualizerEffects,
-    mixes: FloatArray?,
     xShift: Float,
-    barWidth: Float,
-    gap: Float,
+    step: Float,
+    firstX: Float,
+    heightPx: Float,
     minBar: Float,
-    cornerRadiusPx: Float,
     dotRadiusPx: Float,
     peakCapPx: Float,
     breath: Float,
 ) {
-    val n = bars.size
-    val half = size.height / 2f
-    val heightPx = size.height
-    val cornerRadius = CornerRadius(cornerRadiusPx)
+    val n = minOf(count, heights.size, tangents.size)
+    if (n < 2 || step <= 0f || heightPx <= 0f) return
+    val centerY = heightPx / 2f
+    val third = step / 3f
+    // 顶部包络（左→右），再底部包络（右→左）闭合。**只读写复用的 path**。
+    path.reset()
+    path.moveTo(firstX + xShift, centerY - heights[0])
+    for (i in 0 until n - 1) {
+        val xa = firstX + i * step + xShift
+        val xb = xa + step
+        val c1 = centerY - WaveformCurve.controlY1(heights[i], tangents[i], step)
+        val c2 = centerY - WaveformCurve.controlY2(heights[i + 1], tangents[i + 1], step)
+        path.cubicTo(xa + third, c1, xb - third, c2, xb, centerY - heights[i + 1])
+    }
+    val lastX = firstX + (n - 1) * step + xShift
+    path.lineTo(lastX, centerY + heights[n - 1])
+    for (i in n - 2 downTo 0) {
+        val xa = firstX + i * step + xShift
+        val xb = xa + step
+        val c2 = centerY + WaveformCurve.controlY2(heights[i + 1], tangents[i + 1], step)
+        val c1 = centerY + WaveformCurve.controlY1(heights[i], tangents[i], step)
+        path.cubicTo(xb - third, c2, xa + third, c1, xa, centerY + heights[i])
+    }
+    path.close()
+    if (brush != null) {
+        drawPath(path = path, brush = brush, alpha = breath)
+    } else {
+        drawPath(path = path, color = color, alpha = breath)
+    }
+    // 峰值保持：与 v2.8.0 **逐值同构**的短横条（同一个 sqrt 映射，否则峰值会看起来比曲线还矮），
+    // 只在明显高于曲线时才画。位置跟着曲线走（峰值的半厚 → y）。
     val dotThreshold = minBar * DOT_MIN_BAR_MULTIPLE
-    val peakVisibleDelta = peakCapPx
+    val peakVisibleDelta = peakCapPx / 2f
+    val markerWidth = (step * 0.6f).coerceAtLeast(1f)
     for (i in 0 until n) {
-        // 幅度用**平方根**映射到高度，而不是线性。
-        // 音乐（尤其母带压缩过的流行乐）的 RMS 通常落在 0.05~0.3，线性映射只能画出
-        // 带宽 5%~30% 的一排小方块，肉眼像"没在动"；sqrt 把 0.09→0.3、0.25→0.5，
-        // 既保留相对强弱，又让整条带子用得上高度。一次 sqrt/柱/帧（28 次）可忽略。
-        val amplitude = sqrt(bars[i].coerceIn(0f, 1f))
-        val barHeight = (amplitude * heightPx).coerceAtLeast(minBar)
-        val left = i * (barWidth + gap) + xShift
-        val top = half - barHeight / 2f
-        // 越靠左（越旧）越淡 —— 不用渐变对象，一次 alpha 计算换来"余韵"观感。
-        // 流动模式下这条色带让给 Brush（同一笔绘制要么 color 要么 brush），alpha 只剩呼吸。
-        val timeAlpha = if (flowBrush == null) {
-            (TIME_TINT_MIN_ALPHA + TIME_TINT_ALPHA_SPAN * (i + 1).toFloat() / n) * breath
-        } else {
-            breath
-        }
-        // v3.0.0：这一根柱子的频带归属（null = 关着，走原来的单一着色路径）。
-        var useBrush = flowBrush != null
-        var solidColor = barColor
-        var alpha = timeAlpha
-        if (mixes != null) {
-            val tint = MotionBindings.tintMix(mixes[i])
-            useBrush = tint >= BAND_TINT_BRUSH_THRESHOLD && flowBrush != null
-            solidColor = lerp(barColor, brightColor, tint)
-            // 明亮端稍亮一点（alpha 高 20%）：低沉的柱子更"沉"，明亮的更"跳"。
-            alpha = timeAlpha * (BAND_TINT_ALPHA_MIN + (1f - BAND_TINT_ALPHA_MIN) * tint)
-        }
-        if (effects.rounded) {
-            if (useBrush) {
-                drawRoundRect(
-                    brush = flowBrush!!,
-                    topLeft = Offset(left, top),
-                    size = Size(barWidth, barHeight),
-                    cornerRadius = cornerRadius,
-                    alpha = alpha,
-                )
-            } else {
-                drawRoundRect(
-                    color = solidColor,
-                    topLeft = Offset(left, top),
-                    size = Size(barWidth, barHeight),
-                    cornerRadius = cornerRadius,
-                    alpha = alpha,
-                )
-            }
-        } else if (useBrush) {
-            drawRect(brush = flowBrush!!, topLeft = Offset(left, top), size = Size(barWidth, barHeight), alpha = alpha)
-        } else {
-            drawRect(color = solidColor, topLeft = Offset(left, top), size = Size(barWidth, barHeight), alpha = alpha)
-        }
-        if (effects.dots && barHeight > dotThreshold) {
-            drawCircle(
-                color = solidColor,
-                radius = dotRadiusPx,
-                center = Offset(left + barWidth / 2f, top - dotRadiusPx),
-                alpha = breath,
-            )
-        }
+        val x = firstX + i * step + xShift
         if (effects.peaks) {
-            // 峰值用与柱子**同一个** sqrt 映射，否则两者不可比（峰值会看起来比柱子还矮）。
-            val peakHeight = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx
-            if (peakHeight > barHeight + peakVisibleDelta) {
+            val peakHalf = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx * 0.5f
+            if (peakHalf > heights[i] + peakVisibleDelta) {
                 drawRect(
-                    color = solidColor,
-                    topLeft = Offset(left, half - peakHeight / 2f - peakCapPx),
-                    size = Size(barWidth, peakCapPx),
+                    color = color,
+                    topLeft = Offset(x - markerWidth / 2f, centerY - peakHalf - peakCapPx),
+                    size = Size(markerWidth, peakCapPx),
                     alpha = 0.9f * breath,
                 )
             }
+        }
+        if (effects.dots && heights[i] * 2f > dotThreshold) {
+            drawCircle(
+                color = color,
+                radius = dotRadiusPx,
+                center = Offset(x, centerY - heights[i] - dotRadiusPx),
+                alpha = breath,
+            )
         }
     }
 }
@@ -888,20 +952,54 @@ private fun DrawScope.drawBandLane(
 }
 
 /**
- * 渐变流动的 Brush 缓存：**只在宽度变化时重建**（旋转 / 进出大屏 / 平板分栏）。
+ * v3.2.2：曲线用的 **Brush 缓存**（渐变流动 / 时序淡出各一份）。
  *
- * 关键点是 `TileMode.Repeated` + 两端同色的色带：让一个周期在任意宽度下都能无缝循环，
- * 于是"流动"只需要改一个平移量，不需要每帧构造 shader。
+ * ## 为什么键里多了**颜色**
+ *
+ * v2.8.0 的 `FlowBrushCache` 只在**尺寸变化**时重建，因为那时整条波形只有一个颜色
+ * （`LocalMetroColors.current.primary`）。v3.2.2 的颜色由主导频段驱动，切换时有一段
+ * 80ms 的过渡 —— 颜色**逐帧在变**。若按"颜色变了就重建"，过渡期间每帧都会 new 一个
+ * `LinearGradient`（1 个 Brush + 1 个 colors List + 1 个 native SkShader），
+ * 直接违反零分配（`AudioVisualizerBars` 的契约第 1 条）。
+ *
+ * 所以键是 **颜色量化到每通道 5 bit**：过渡的 80ms 里最多重建 2~6 次（每次切换约
+ * 0.1 次/秒 ⇒ 每秒不到一次），**稳定态零重建**。量化带来的色阶差
+ * （每通道 8 级）在一条 alpha 渐变的色带上不可见。
+ *
+ * ## 两个 Brush 的语义
+ *
+ *  - [flow]：B 档（精致起）的「渐变流动」。三个 stop 是**同一个颜色**的三个 alpha，
+ *    两端一样暗 ⇒ `TileMode.Repeated` 的接缝不可见，流动只需改一个平移量。
+ *  - [age]：简洁档的「越旧越淡」—— 把 v2.8.0 的逐柱 alpha 阶梯换成一条水平 alpha 渐变
+ *    （连续曲线上没有"每根柱子各自的 alpha"这回事了，但"左边是历史"这个读法要留住）。
  */
-private class FlowBrushCache(private val color: Color) {
-    private var cachedWidth = Float.NaN
-    private var cached: Brush? = null
+private class RibbonBrushCache {
 
-    fun obtain(widthPx: Float): Brush {
+    private var cachedWidth = Float.NaN
+    private var cachedKey = Int.MIN_VALUE
+    private var cachedFlow: Brush? = null
+    private var cachedAge: Brush? = null
+
+    /** 颜色量化键：每通道 5 bit（alpha 不参与 —— 它由 `drawPath` 的 `alpha=` 单独乘）。 */
+    private fun keyOf(argb: Int): Int =
+        (((argb shr 19) and 0x1F) shl 10) or (((argb shr 11) and 0x1F) shl 5) or ((argb shr 3) and 0x1F)
+
+    private fun invalidateIfNeeded(widthPx: Float, argb: Int) {
         val width = if (widthPx > 0f) widthPx else 1f
-        val existing = cached
-        if (existing != null && cachedWidth == width) return existing
-        val tile = (width * FLOW_TILE_FRACTION).coerceAtLeast(1f)
+        val key = keyOf(argb)
+        if (cachedWidth == width && cachedKey == key) return
+        cachedWidth = width
+        cachedKey = key
+        cachedFlow = null
+        cachedAge = null
+    }
+
+    /** 渐变流动的色带（`TileMode.Repeated` + 两端同暗）。 */
+    fun flow(widthPx: Float, argb: Int): Brush {
+        invalidateIfNeeded(widthPx, argb)
+        cachedFlow?.let { return it }
+        val color = Color(argb)
+        val tile = (cachedWidth * FLOW_TILE_FRACTION).coerceAtLeast(1f)
         val colors = listOf(
             color.copy(alpha = FLOW_DIM_ALPHA),
             color.copy(alpha = FLOW_BRIGHT_ALPHA),
@@ -913,8 +1011,24 @@ private class FlowBrushCache(private val color: Color) {
             end = Offset(tile, 0f),
             tileMode = TileMode.Repeated,
         )
-        cachedWidth = width
-        cached = brush
+        cachedFlow = brush
+        return brush
+    }
+
+    /** 时序淡出（左旧右新）：一条水平 alpha 渐变。 */
+    fun age(widthPx: Float, argb: Int): Brush {
+        invalidateIfNeeded(widthPx, argb)
+        cachedAge?.let { return it }
+        val color = Color(argb)
+        val brush = Brush.horizontalGradient(
+            colors = listOf(
+                color.copy(alpha = TIME_TINT_MIN_ALPHA),
+                color.copy(alpha = 1f),
+            ),
+            startX = 0f,
+            endX = cachedWidth,
+        )
+        cachedAge = brush
         return brush
     }
 }

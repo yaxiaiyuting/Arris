@@ -94,8 +94,14 @@ internal fun hsvToArgb(h: Float, s: Float, v: Float): Int {
     return (0xFF shl 24) or (channel(r1) shl 16) or (channel(g1) shl 8) or channel(b1)
 }
 
-/** WCAG 2.1 相对亮度。 */
-private fun relativeLuminance(argb: Int): Double {
+/**
+ * WCAG 2.1 相对亮度。
+ *
+ * v3.2.2：由 `private` 放宽到 `internal` —— 波形曲线上要判「当前是深色还是浅色主题」
+ * （决定 HCT 三角色的 tone 区间），而判据必须是**同一个**亮度函数，
+ * 不能在渲染层再抄一遍 WCAG 公式（两份公式必然分叉）。
+ */
+internal fun relativeLuminance(argb: Int): Double {
     fun channel(value: Int): Double {
         val s = value / 255.0
         return if (s <= 0.03928) s / 12.92 else Math.pow((s + 0.055) / 1.055, 2.4)
