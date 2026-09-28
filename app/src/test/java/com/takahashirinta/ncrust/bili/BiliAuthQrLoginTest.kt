@@ -324,4 +324,82 @@ class BiliAuthQrLoginTest {
         assertEquals(BiliQrLogin.State.CONFIRMED, target.prepare())
         assertEquals(gens, api.generateCalls)
     }
+    // ------------------------------------------------ v3.2.1 · P0：prepare / poll 分离
+    //
+    // 真机 P0「B站登录打开即失效」的根因是界面把 `start()`（= prepare + 轮询到终态）
+    // 当成一次短调用，位图被排到它之后 ⇒ 180 秒内二维码区永远是空的。
+    // 修法是状态机暴露 `poll()`，界面按「prepare → 渲染 → poll」串。
+    // 下面四条把 `poll()` 的契约钉死（顺序、幂等、空操作、次数）。
+
+    @Test
+    fun `poll 不重复申请二维码 —— generate 只发一次`() = runBlocking {
+        val api = FakeApi().apply {
+            queue.addAll(listOf(BiliQrPoll.Pending, BiliQrPoll.Success(CRED, 1_662_363_009_601L)))
+        }
+        val c = FakeClock()
+        val target = login(api, c)
+        val seen = mutableListOf<BiliQrLogin.State>()
+
+        assertEquals(BiliQrLogin.State.WAITING, target.prepare { seen += it })
+        assertEquals("prepare 之后就已经有码可渲染", true, target.qrCode != null)
+        assertEquals(BiliQrLogin.State.CONFIRMED, target.poll { seen += it })
+
+        assertEquals("generate 只能发一次", 1, api.generateCalls)
+        assertEquals(
+            "prepare + poll 的前两帧仍是 LOADING → WAITING（UI 靠它先渲染二维码）",
+            listOf(BiliQrLogin.State.LOADING, BiliQrLogin.State.WAITING),
+            seen.take(2),
+        )
+        assertEquals(2, target.pollCount)
+        assertEquals(2, api.pollCalls)
+    }
+
+    @Test
+    fun `start 与 prepare 加 poll 的状态序列逐项相同`() = runBlocking {
+        fun script() = listOf(BiliQrPoll.Pending, BiliQrPoll.Scanned, BiliQrPoll.Success(CRED, 1L))
+        val apiA = FakeApi().apply { queue.addAll(script()) }
+        val apiB = FakeApi().apply { queue.addAll(script()) }
+        val seenA = mutableListOf<BiliQrLogin.State>()
+        val seenB = mutableListOf<BiliQrLogin.State>()
+
+        login(apiA, FakeClock()).start { seenA += it }
+        val target = login(apiB, FakeClock())
+        target.prepare { seenB += it }
+        target.poll { seenB += it }
+
+        assertEquals("拆开之后状态序列必须逐项相同", seenA, seenB)
+        assertEquals(apiA.pollCalls, apiB.pollCalls)
+    }
+
+    @Test
+    fun `没有二维码时 poll 是空操作 —— 一个请求都不发`() = runBlocking {
+        val api = FakeApi()
+        val target = login(api, FakeClock())
+        // 初始就是 IDLE；没有二维码时 poll 必须**原样返回**，既不申请也不轮询。
+        assertEquals(BiliQrLogin.State.IDLE, target.poll())
+        assertEquals(0, api.pollCalls)
+        assertEquals(0, api.generateCalls)
+    }
+
+    @Test
+    fun `申请失败时 poll 不会把 FAILED 变成别的状态`() = runBlocking {
+        val api = FakeApi(generateThrows = RuntimeException("boom"))
+        val target = login(api, FakeClock())
+        assertEquals(BiliQrLogin.State.FAILED, target.prepare())
+        assertEquals("失败之后 poll 不得发请求、也不得改状态", BiliQrLogin.State.FAILED, target.poll())
+        assertEquals(0, api.pollCalls)
+    }
+
+    @Test
+    fun `已是终态时 poll 幂等 —— 不再发请求`() = runBlocking {
+        val api = FakeApi()
+        val target = login(api, FakeClock())
+        target.prepare()
+        api.queue.addLast(BiliQrPoll.Expired)
+        assertEquals(BiliQrLogin.State.EXPIRED, target.poll())
+        val callsAfterExpire = api.pollCalls
+        assertEquals(BiliQrLogin.State.EXPIRED, target.poll())
+        assertEquals("终态之后一次都不再轮询", callsAfterExpire, api.pollCalls)
+    }
+
 }

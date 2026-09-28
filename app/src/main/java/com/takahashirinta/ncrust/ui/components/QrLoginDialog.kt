@@ -243,4 +243,13 @@ internal fun generateQrBitmap(content: String, sizePx: Int = 512): Bitmap? = run
         }
     }
     bmp
+}.onFailure {
+    // v3.2.1 · P0：以前这里是**完全静默**的 —— B站登录"打开即失效"那次排查里，
+    // 「位图到底生成了没有」在日志里查不到任何痕迹（见 probe-bili-qr-broken.md §7）。
+    // 行为不变（仍然返回 null 表示失败），只补一条可查的证据。
+    android.util.Log.w(
+        "QrBitmap",
+        "二维码位图生成失败：内容长度=${'$'}{content.length} 边长=${'$'}sizePx",
+        it,
+    )
 }.getOrNull()

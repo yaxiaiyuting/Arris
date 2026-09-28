@@ -145,10 +145,14 @@ class BiliQrLogin(
             null
         }
         if (code == null) {
+            // v3.2.1 · P0：失败**必须**留下痕迹，且与「已失效」分开 ——
+            // 界面上它是「二维码获取失败，请重试」而不是「已失效」。
+            Log.w(TAG, "prepare: 二维码申请失败 ⇒ FAILED（不发轮询）")
             emit(State.FAILED, onState)
             return State.FAILED
         }
         qrCode = code
+        Log.i(TAG, "prepare: 二维码已申请（url 长度=${code.url.length}，key 长度=${code.qrcodeKey.length}）")
         emit(State.WAITING, onState)
         return State.WAITING
     }
@@ -169,7 +173,42 @@ class BiliQrLogin(
      */
     suspend fun start(onState: ((State) -> Unit)? = null): State {
         if (prepare(onState) != State.WAITING) return state
+        return poll(onState)
+    }
+
+    /**
+     * v3.2.1 · P0：**只跑有界轮询**（不申请二维码）。
+     *
+     * ## 为什么必须把这两步分开（真机 P0：B站登录「打开即失效」）
+     *
+     * v3.2.0 的界面是这么写的：
+     *
+     * ```kotlin
+     * state = login.start { state = it }                          // 阻塞到终态（最长 180s）
+     * login.qrCode?.url?.let { qrBitmap = generateQrBitmap(it) }  // 终态之后才画二维码
+     * ```
+     *
+     * `start()` 要到 `CONFIRMED/EXPIRED/FAILED/CANCELLED` 才返回 ⇒
+     * **二维码位图在整轮登录结束之前永远不会被生成**，界面只能一直显示
+     * 「二维码已失效，请刷新」。根因与证据：
+     * `docs/verification/v3.2.1/probe-bili-qr-broken.md`。
+     *
+     * 拆开之后调用方可以做到正确顺序：**申请 → 渲染 → 再轮询**
+     * （`QqQrLoginDialog` 用两个 `LaunchedEffect` 达到同样的形状，见探针 §9）。
+     *
+     * 循环体与 v3.2.0 的 [start] **逐行相同**：三条上限（总时长 / 次数 / 连续失败）、
+     * 取消不是失败、`CancellationException` 原样抛。
+     *
+     * @return 终态；**没有二维码**（没 [prepare] 过）或已在终态时是空操作 ——
+     *   原样返回当前状态、一个请求都不发。
+     */
+    suspend fun poll(onState: ((State) -> Unit)? = null): State {
         val code = qrCode ?: return state
+        if (isTerminal(state)) return state
+        Log.i(
+            TAG,
+            "poll: 开始有界轮询（间隔 ${POLL_INTERVAL_MS}ms / 上限 $MAX_POLLS 次 / TTL ${QR_TTL_SECONDS}s）"
+        )
 
         val deadline = clock() + QR_TTL_MS
         var unavailableStreak = 0
@@ -179,6 +218,7 @@ class BiliQrLogin(
             if (cancelled) return emitTerminal(State.CANCELLED, onState)
             // 三个上限，任一先到就停（有界轮询）。
             if (pollCount >= MAX_POLLS || clock() >= deadline) {
+                Log.i(TAG, "poll: 本地上限先到（pollCount=$pollCount）⇒ EXPIRED")
                 return emitTerminal(State.EXPIRED, onState)
             }
             // `sleep` 被取消时异常穿透出去 —— 取消不在这里被翻译成失败。
@@ -323,6 +363,9 @@ class BiliQrLogin(
         s == State.CONFIRMED || s == State.EXPIRED || s == State.FAILED || s == State.CANCELLED
 
     private fun emit(next: State, onState: ((State) -> Unit)?) {
+        // v3.2.1 · P0：每次状态迁移都留一条日志 —— 「打开即失效」那次没有任何日志可查，
+        // 只能靠读代码推演（见探针 §7）。状态名不含任何凭据。
+        Log.i(TAG, "state: $state -> $next")
         state = next
         onState?.invoke(next)
     }
