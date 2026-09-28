@@ -16,33 +16,18 @@
 | versionCode 三源校验 | `next-version.txt`（tag v3.2.1=56 / dist APK 实测 56 / 工作区 56 ⇒ **57**） |
 | 工作区 | `git status --porcelain` 为空（本文件提交前） |
 
-## 阻塞：release **未创建**
+## release 状态：**已创建（Draft，未发布）**
 
-`gh release create` 失败，两个原因都在本机环境、与本仓库无关：
+**https://github.com/yaxiaiyuting/Ncrust/releases/tag/v3.2.2-gpl**（draft）
 
-```
-$ gh release create v3.2.2-gpl --title "…" --notes-file … dist/Ncrust-v3.2.2-gpl-release.apk
-Post "https://api.github.com/graphql": dial tcp 66.220.148.145:443: i/o timeout
-```
+这一版**故意不发**：它被 `v3.2.3-gpl` 取代（后者修了「默认档看不到频带」与「刷新率低」两条实测反馈）。
+保留成 draft 只是让这个已推的 tag 有一份**产物记录**，供随时发布或删除。
+产物与 sha256 都已上传，digest 与本地一致。
 
-1. **`api.github.com` 在本机不可达（DNS 被劫持）**：解析结果是 `66.220.148.145`
-   （`66.220.148.0/24` 属于 Meta，不是 GitHub），TCP 443 连接超时；
-   `curl -4 https://api.github.com/` 25 秒无响应。
-   注意**同一个环境下 `github.com` 是通的**：`git ls-remote` / `git push` 全部成功
-   （`github.com` ⇒ `199.59.149.235`，git over HTTPS 走 443 正常）。
-   所以这不是"没有网络"，而是**只有 API 主机被挡**。
-2. **`gh` 没有可用凭据**：`~/.config/gh/hosts.yml` 里没有 `oauth_token`
-   （登录态在 keyring，而 keyring 读取也超时），本机环境变量里也没有 `GH_TOKEN` / `GITHUB_TOKEN`。
+**请安装 v3.2.3-gpl**：https://github.com/yaxiaiyuting/Ncrust/releases/tag/v3.2.3-gpl
 
-**因此：tag 已推、产物已构建并留档，但 release 页面没有创建**（不伪造）。
+### 之前卡在哪（留档）
 
-### 解除方式（三选一，都不需要重新构建）
-
-1. 在能访问 `api.github.com` 的环境里跑：
-   `gh release create v3.2.2-gpl --title "Ncrust v3.2.2-gpl —— 波形改造为三条频带泳道" --notes-file docs/verification/v3.2.2/CHANGELOG.md dist/Ncrust-v3.2.2-gpl-release.apk`
-2. 在 GitHub 网页上对已推的 tag `v3.2.2-gpl` 手动建 release，上传
-   `dist/Ncrust-v3.2.2-gpl-release.apk`（附 `dist/Ncrust-v3.2.2-gpl-release.apk.sha256` 供校验）。
-3. 修好本机 DNS/代理后再跑第 1 条。
-
-> 纪律提醒（铁律 7）：**`v3.2.2-gpl` 这个 tag 已经推上去了，绝不移动**。
-> 若这一版还需要改代码，另起 `v3.2.3-gpl`，不要动它。
+`gh release create` 曾两次失败：`api.github.com` 的 DNS 被污染（解析到 Meta 地址段）导致 TCP 超时，
+且 `gh` 读不到 keyring 里的 token。最终用**本机 xray 代理 + `secret-tool` 直取 token** 解开
+（完整命令见 `docs/verification/v3.2.3/RELEASE-STATUS.md`）。

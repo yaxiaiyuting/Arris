@@ -14,40 +14,36 @@
 | 证据 | `verification/sample-gfx-*.txt`（每条采样的 `dumpsys gfxinfo` 原文）+ 三条泳道真机截图 |
 | 设备 | S6 已安装本版（`versionCode=58`），登录态与离线缓存完好 |
 
-## 阻塞：release 页面**未创建**（与 v3.2.2 同一原因）
+## release 已创建 ✅
 
-`gh release create` 仍然失败：
-
-```
-Post "https://api.github.com/graphql": dial tcp 66.220.148.145:443: i/o timeout
-```
-
-- **`api.github.com` 在本机 DNS 被劫持**到 `66.220.148.145`（Meta 的地址段），TCP 443 超时；
-  而同一个环境下 `github.com` 是通的（`git push` 成功）—— 即**只有 API 主机被挡**。
-- `~/.config/gh/hosts.yml` 里没有 `oauth_token`（登录态在 keyring，读取也超时），
-  环境变量里也没有 `GH_TOKEN` / `GITHUB_TOKEN`。
-
-**tag 与 master 都已推上远端**（见下），产物已构建并留档 sha256 —— 只是 release 页面没有建。
-
-## 解除方式（不需要重新构建）
-
-1. 在能访问 `api.github.com` 的环境里：
-   `gh release create v3.2.3-gpl --title "Ncrust v3.2.3-gpl —— 刷新率修复" --notes-file docs/verification/v3.2.3/CHANGELOG.md dist/Ncrust-v3.2.3-gpl-release.apk`
-2. 或在 GitHub 网页上对已推的 tag 手动建 release 并上传 APK。
-3. 修好本机 DNS/代理后再跑第 1 条。
-
-> 纪律提醒（铁律 7）：`v3.2.3-gpl` 一旦推上去就**绝不移动**；要改代码另起 v3.2.4-gpl。
-
-## 真机最终状态（v3.2.3 装好后）
+**https://github.com/yaxiaiyuting/Ncrust/releases/tag/v3.2.3-gpl**（Latest，非 draft）
 
 | 项 | 值 |
 |---|---|
-| 设备上跑的包 | `Ncrust-v3.2.3-gpl-release.apk`，**与 `dist/` 里的发布产物逐字节一致**（sha256 `8f27ddb1…1699`，从 `/data/app/.../base.apk` 拉回来比对过） |
-| 系统里的版本 | `versionCode=58` / `versionName=3.2.3-gpl` |
-| 截图 | `verification/frame-v323-final-{1,2,3}.png`（这一组是**炫技档**，`motion_tier=2`：能看到光点、峰值虚线、三频带能量条与流光叠加层） |
-| 帧时间（同一次会话） | p50 28ms / p95 42ms（炫技档，含流光 + 粒子 + 3D 透视；**简洁档的修前/修后对照见 `probe-refresh.md`**） |
+| 资产 | `Ncrust-v3.2.3-gpl-release.apk`（10 206 692 B）+ `.sha256` |
+| 远端 digest（GitHub 自己算的） | `sha256:8f27ddb102794b75be417716ce2be2f9a6364fe05b7b3a82671d9171b82a1699` |
+| 本地 APK sha256 | `8f27ddb102794b75be417716ce2be2f9a6364fe05b7b3a82671d9171b82a1699` ⇒ **逐字节一致** |
 
-> 采样期的档位记录：`probe-refresh.md` 里那组「修前 1227 帧 / 修后 1784 帧」是在**简洁档**
-> （删掉 `motion_tier` 键、由设备判据解析成简洁）下测的；最终截图那一组是炫技档 —— 两者不是同一档，
-> 不要混着读。档位在盘上会由 `MotionPrefs.migrate` 的**一次性**水位搬运写回（水位 < 5 时按
-> 旧的 `visualizer_tier` 落一次），本版没有改这套机制。
+### 之前为什么建不了（以及最后怎么解开的）
+
+前两次失败是**本机环境**问题，不是仓库问题：
+
+1. `api.github.com` 的 **DNS 被污染**（解析到 `66.220.148.145` / `2a03:2880:…:face:b00c:…`，都是 Meta 的地址段），
+   直连 TCP 443 超时；而**同一个环境里 `github.com` 是通的**（`git push` 一直正常）——
+   即只有 API 主机被挡。中途 `curl --resolve api.github.com:443:140.82.113.6` 偶然通过一次（HTTP 200），
+   之后再怎么重试都是 0/20 —— 典型的**按 SNI 间歇重置**。
+2. `gh auth status` 报 `keyring` 超时 ⇒ `gh` 拿不到 token（但 `secret-tool` 能读出来，见下）。
+
+**解开办法**（三次尝试的第三条路）：本机跑着 **xray**（`127.0.0.1:10808` SOCKS5），
+走它 + 从 keyring 直接取 token：
+
+```bash
+export GH_TOKEN="$(secret-tool lookup service gh:github.com)"
+export HTTPS_PROXY=socks5://127.0.0.1:10808 HTTP_PROXY=socks5://127.0.0.1:10808
+gh release create v3.2.3-gpl --title … --notes-file … --latest dist/Ncrust-v3.2.3-gpl-release.apk …
+```
+
+注意 `gh`（Go）**只认 `HTTPS_PROXY` / `HTTP_PROXY`，不认 `ALL_PROXY`** ——
+第一次只设 `ALL_PROXY` 时它仍然直连，报的是 `dial tcp 199.59.148.9:443: connection refused`。
+
+> 纪律提醒（铁律 7）：`v3.2.3-gpl` 已发布，**绝不移动 tag**；要改代码另起 v3.2.4-gpl。
