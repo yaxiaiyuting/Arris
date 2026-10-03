@@ -9,6 +9,10 @@
 package com.takahashirinta.ncrust.cache
 
 import android.content.Context
+import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.network.model.AlbumItem
+import com.takahashirinta.ncrust.network.model.ArtistItem
+import com.takahashirinta.ncrust.source.SourceIds
 
 /**
  * 离线曲目索引的一条记录（v2.0.0 · T3 · 离线缓存 Phase 2）。**纯数据**，JVM 可单测。
@@ -54,7 +58,49 @@ internal data class OfflineTrack(
     val approxBytes: Long? = null,
     /** 首次可离线播放的时刻（epoch ms）。重播**不刷新**它，见 [OfflineLibraryIndex.upsert]。 */
     val completedAt: Long? = null,
-)
+) {
+    /**
+     * v3.3.0 · 用户建议：**离线列表里的行要能直接点播**。
+     *
+     * 把这条索引记录还原成一个可以进队列的 [SongItem]。
+     *
+     * ## 音源从 id 反推，**不加新的落盘字段**
+     *
+     * 直觉做法是给 [OfflineTrack] 加一个 `source: String?` 字段。**不需要** ——
+     * 本仓库的数字 id 自带音源标志位（QQ 用位 62、B 站用位 61，见 [SourceIds]），
+     * 而 [SourceIds.sourceOfId] 就是为「id 单独存在时也能反推音源」而存在的
+     * （v3.1.0 的 KDoc 明确写了「id 自带的标志位不会丢」）。
+     *
+     * 少加一个字段 = 少一次迁移逻辑 = 少一处会在老条目上变成 null 的地方 ——
+     * 这正是 v1.9.3 固化的那条契约（「能不加字段就不加」）。
+     *
+     * ## 为什么 `level` 不参与
+     *
+     * 档位不进 `SongItem`：它由**取链**决定，而离线兜底
+     * （`PlayerViewModel.recallOfflineCache`）本来就会退化成「这首歌的任意档位」。
+     * 把某一档写进 `SongItem` 反而会在换档之后变成谎报。
+     *
+     * @return 可直接交给播放链路的 [SongItem]；[songId] 非法时返回 null（不猜）。
+     */
+    fun toSongItem(): SongItem? {
+        if (songId <= 0L) return null
+        val source = SourceIds.sourceOfId(songId)
+        return SongItem(
+            id = songId,
+            // 歌名缺失时给一个可读占位：`SongItem.name` 是非空类型，
+            // 而离线索引允许它为 null（老条目 / 元数据没补上）。
+            name = name?.takeIf { it.isNotBlank() } ?: "",
+            artists = artist?.takeIf { it.isNotBlank() }
+                ?.let { listOf(ArtistItem(id = null, name = it)) },
+            album = albumPicUrl?.takeIf { it.isNotBlank() }
+                ?.let { AlbumItem(id = null, name = null, picUrl = it) },
+            duration = durationMs?.takeIf { it > 0L },
+            // 显式写音源 key（而不是留 null）：留 null 的语义是「v2.1.0 之前的老数据 ⇒ 网易云」，
+            // 对 QQ / B 站曲目是错的，会让取链走错源。
+            source = source.key,
+        )
+    }
+}
 
 /**
  * 离线曲目索引（纯逻辑）。有界 + LRU：重播会把条目移到队尾，超过上限时淘汰最久未 upsert 的一条。

@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
+import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineLibrary
 import com.takahashirinta.ncrust.cache.OfflineTrack
@@ -64,6 +66,7 @@ import com.takahashirinta.ncrust.ui.i18n.formatCacheBytes
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
+import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
 import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
@@ -107,6 +110,17 @@ import kotlinx.coroutines.withContext
 internal fun OfflineCacheManagerDialog(
     onDismiss: () -> Unit,
     currentSongId: Long,
+    /**
+     * v3.3.0 · 用户建议：**点一行就播这首**。
+     *
+     * 参数可为 null（[OfflineTrack.toSongItem] 在 id 非法时返回 null）——
+     * 那种条目本来就不该在列表里，如实往下传由调用方忽略，而不是在这一层崩。
+     *
+     * 为什么不做成「在这里直接起播」：播放要动队列、`currentQueueIndex`、
+     * `PlaybackStateManager` 与播放器卡片，那些都归 `MainScreen` 所有
+     * （见 AGENTS.md「队列管理」）。这一层只负责**表达意图**。
+     */
+    onPlayTrack: (SongItem?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -275,6 +289,14 @@ internal fun OfflineCacheManagerDialog(
                         bytes = bytesOf[track.songId],
                         playing = currentSongId > 0L && currentSongId == track.songId,
                         onDelete = { deleteTarget = track },
+                        // v3.3.0 · 用户建议：**行可直接点播**。
+                        // 旧版这一行只有删除入口，而它的标题却是「离线缓存管理」——
+                        // 一个管着「能离线听的歌」的界面里，行点不动是明显不合理的。
+                        // 点播后**关闭本弹窗**：它是全屏 overlay，留着会挡住刚打开的播放器卡片。
+                        onPlay = {
+                            onPlayTrack(track.toSongItem())
+                            onDismiss()
+                        },
                     )
                 }
                 item {
@@ -308,13 +330,14 @@ internal fun OfflineCacheManagerDialog(
     }
 }
 
-/** 单行：封面色块 + 标题 / 歌手 · 档位 · 占用 + 删除入口。 */
+/** 单行：封面色块 + 标题 / 歌手 · 档位 · 占用 + **点播** + 删除入口。 */
 @Composable
 private fun OfflineTrackRow(
     track: OfflineTrack,
     bytes: Long?,
     playing: Boolean,
     onDelete: () -> Unit,
+    onPlay: () -> Unit,
 ) {
     val strings = LocalStrings.current
     val metro = LocalMetroColors.current
@@ -324,6 +347,10 @@ private fun OfflineTrackRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // v3.3.0：整行可点 = 播放这一首。删除键是行内**后声明**的 48dp 命中盒，
+            // 在 Compose 里后声明的子节点优先拿到事件 ⇒ 点删除不会误触发播放
+            // （「后声明的赢命中测试」是仓库已记录的实测行为，见 v2.5.6 的平板控制条）。
+            .clickable(onClick = onPlay)
             .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -472,3 +499,111 @@ private fun coverPlaceholder(songId: Long): Color {
 
 /** 上限候选（MB）。合法区间 64..8192，与 [OfflineAudioCache.maxBytes] 的夹取范围一致。 */
 private val OFFLINE_CACHE_LIMIT_MB = listOf(64, 128, 256, 384, 512, 768, 1024, 2048, 4096, 8192)
+
+/**
+ * v3.3.0 · 用户建议：**库页的「离线」tab**。
+ *
+ * ## 为什么与 [OfflineCacheManagerDialog] 并存而不是替换它
+ *
+ * 两个宿主服务两个意图，缺一不可：
+ * - **库页 tab**（本函数）：日常入口 —— 「我缓存了哪些歌，点一首听」；
+ * - **设置页弹窗**：管理入口 —— 「占了多少、上限多少、删掉某几首」。
+ *
+ * 它们读的是**同一张表**（[OfflineLibrary]）、走**同一个对账**
+ * （[OfflineAudioCache.reconcileLibrary]）、点播走**同一个** `toSongItem()`。
+ * 唯一的差别是本函数不做上限调整那一块（那是管理动作，属于设置页）。
+ *
+ * ## 与设置页弹窗的口径一致性（这是本函数存在的风险点）
+ *
+ * 抄一份列表最容易漂移的地方是「对账」与「占用量的量法」。所以这里**复用同一组
+ * 纯逻辑**：`OfflineLibrary.list` + `OfflineAudioCache.bytesForSong`，
+ * 并在进入时跑一次 `reconcileLibrary`（把「索引里有、缓存里没有」的谎报条目清掉）。
+ * 不复制任何一段判断。
+ */
+@Composable
+internal fun OfflineLibraryTab(
+    currentSongId: Long,
+    onPlayTrack: (SongItem?) -> Unit,
+) {
+    val context = LocalContext.current
+    val strings = LocalStrings.current
+    val metro = LocalMetroColors.current
+
+    var reload by remember { mutableStateOf(0) }
+    var loaded by remember { mutableStateOf(false) }
+    var tracks by remember { mutableStateOf<List<OfflineTrack>>(emptyList()) }
+    var bytesOf by remember { mutableStateOf<Map<Long, Long?>>(emptyMap()) }
+    var deleteTarget by remember { mutableStateOf<OfflineTrack?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // 读盘 + 对账都要动 SimpleCache 与文件系统 ⇒ 放 IO；组合期不阻塞。
+    LaunchedEffect(reload) {
+        val snapshot = withContext(Dispatchers.IO) {
+            runCatching { OfflineAudioCache.reconcileLibrary(context) }
+            val list = OfflineLibrary.list(context)
+            list to list.associate { it.songId to OfflineAudioCache.bytesForSong(context, it.songId) }
+        }
+        tracks = snapshot.first
+        bytesOf = snapshot.second
+        loaded = true
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (!loaded) {
+            // 读盘完成前不渲染空态：否则会闪一帧「还没有离线歌曲」的假结论
+            // （与统计页「读盘完成前不渲染」同一条纪律）。
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                MetroProgressIndicator()
+            }
+        } else if (tracks.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                MetroText(
+                    strings.offlineCacheEmpty,
+                    color = metro.onSurfaceVariant,
+                    style = LocalMetroTypography.current.bodyLarge,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                // 底部留出播放器卡片 + 导航栏的高度（仓库硬约定：不许手加尾部 Spacer）。
+                contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
+            ) {
+                items(tracks, key = { it.songId }) { track ->
+                    OfflineTrackRow(
+                        track = track,
+                        bytes = bytesOf[track.songId],
+                        playing = currentSongId > 0L && currentSongId == track.songId,
+                        onDelete = { deleteTarget = track },
+                        onPlay = { onPlayTrack(track.toSongItem()) },
+                    )
+                }
+                item {
+                    MetroText(
+                        strings.offlineCacheFragmentNotice,
+                        color = metro.onSurfaceVariant,
+                        style = TextStyle(fontSize = 12.sp),
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    deleteTarget?.let { target ->
+        DeleteOfflineTrackDialog(
+            name = target.name?.takeIf { it.isNotBlank() } ?: strings.offlineCachePartial,
+            onDismiss = { deleteTarget = null },
+            onConfirm = {
+                deleteTarget = null
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        runCatching { OfflineAudioCache.removeSong(context, target.songId) }
+                    }
+                    Toast.makeText(context, strings.offlineCacheDeleted, Toast.LENGTH_SHORT).show()
+                    reload++
+                }
+            },
+        )
+    }
+}

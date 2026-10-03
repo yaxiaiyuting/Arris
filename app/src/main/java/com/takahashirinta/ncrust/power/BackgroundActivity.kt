@@ -36,4 +36,19 @@ object BackgroundActivity {
     fun appDetailsIntent(context: Context): Intent =
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             .setData(Uri.parse("package:${context.packageName}"))
+
+    /**
+     * v3.3.0：系统**电池优化列表页**。
+     *
+     * 为什么需要第三个入口：应用**已经在白名单里**时，
+     * [requestIntent] 那个直达弹窗启动后会**立刻 finish**（系统认为无需再问），
+     * 于是屏幕上什么都不会发生。实测证据（emulator API 33 / v3.2.4-gpl）：
+     * 已在白名单时点设置页那一行 → `START …IGNORE_BATTERY…` 有，
+     * 但 **没有** `Displayed …`，`ResumedActivity` 仍是 MainActivity，截图零变化。
+     *
+     * 而列表页**一定有界面**，所以它是「已授权」状态下的正确去处 ——
+     * 用户在那里能看到本应用确实在「不优化」名单里（这本身就是他要的确认）。
+     */
+    fun settingsListIntent(): Intent =
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
 }

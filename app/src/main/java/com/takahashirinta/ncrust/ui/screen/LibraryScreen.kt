@@ -97,7 +97,13 @@ fun LibraryScreen(
     onQqPlaylistClick: (com.takahashirinta.ncrust.source.Playlist) -> Unit = {},
     // v2.3.0 · B：进入某个本地歌单（可编辑）。
     onLocalPlaylistClick: (com.takahashirinta.ncrust.source.PlaylistKey) -> Unit = {},
-    refreshTrigger: Int = 0
+    refreshTrigger: Int = 0,
+    /**
+     * v3.3.0 · 用户建议：离线 tab 要知道「哪一首正在播」—— 那一行会锁住删除
+     * （删掉正在读的 span 会让 CacheDataSource 回源，断网即播放错误）。
+     * 默认 -1 = 没有在播，既有调用点因此零改动即可编译。
+     */
+    currentSongId: Long = -1L,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -112,7 +118,17 @@ fun LibraryScreen(
     // v2.2.1 及以前是 单曲 / 专辑 / 歌单。改顺序不是「换个 position」那么简单：
     // 下面所有 `selectedCategory == N` 的判定都必须跟着换（本版一次性改完，
     // 并在 LibraryPlaylistsTab 的 KDoc 里记下三个下标）。
-    val categories = listOf(strings.categoryTracks, strings.categoryPlaylists, strings.categoryAlbums)
+    // v3.3.0 · 用户建议：**离线**作为库页的一等 tab。
+    //
+    // 追加在末尾（不插队）是有意的：所有 `selectedCategory == N` 的判定都按
+    // 「0=单曲 / 1=歌单 / 2=专辑」写死，插队会让它们**静默指错页**
+    // （与统计页追加成第 5 个 tab 同一条理由）。
+    val categories = listOf(
+        strings.categoryTracks,
+        strings.categoryPlaylists,
+        strings.categoryAlbums,
+        strings.categoryOffline,
+    )
 
     var playlists by remember { mutableStateOf<List<PlaylistApi.PlaylistInfo>>(emptyList()) }
     var isLoadingPlaylists by remember { mutableStateOf(false) }
@@ -421,6 +437,15 @@ fun LibraryScreen(
                         }
                     }
                 }
+                // v3.3.0 · 用户建议：**离线歌直接在库里点播**。
+                //
+                // 复用与设置页弹窗**同一份**读取 / 对账 / 点播语义（OfflineLibraryTab），
+                // 抄一份列表必然漂移 —— 漂移方向是「库里能播、设置里不能删」这类
+                // 用户无法理解的差异。写成单表达式分支，避免再动 when 的括号结构。
+                3 -> OfflineLibraryTab(
+                    currentSongId = currentSongId,
+                    onPlayTrack = { song -> song?.let(onSongClick) },
+                )
             } }   // when (category) + AnimatedContent 的 lambda
         }
     }
