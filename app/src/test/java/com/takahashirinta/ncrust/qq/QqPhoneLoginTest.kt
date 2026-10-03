@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * v2.1.1：QQ 音乐手机号验证码登录的纯逻辑单测。
+ * v2.1.1：qm 手机号验证码登录的纯逻辑单测。
  *
  * 这一层的每个函数都对应一条**实测出来的协议约束**（2026-09，`tools/probe-qq-phone-login.py`），
  * 而不是我的推测。写错任何一条的表现都是「用户点了发送/登录，界面报一个看不懂的错」，

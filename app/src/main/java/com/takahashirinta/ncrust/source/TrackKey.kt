@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -25,10 +25,10 @@ import com.takahashirinta.ncrust.network.SongItem
  * 那条路只更新了 `currentSongId`，三个音源字段全部留在**上一首**的取值上。
  *
  * 后果不是「显示旧歌词」这么轻：`fetchLyrics(songId)` 当时是按
- * `currentSongSourceKey` 这个**全局字段**决定走哪个平台的取词接口的。QQ 播完自动切到网易云时，
+ * `currentSongSourceKey` 这个**全局字段**决定走哪个平台的取词接口的。QQ 播完自动切到 ncm 时，
  * 它仍然以为在放 QQ，于是拿着**上一首 QQ 曲目的 songmid** 去问 QQ 要歌词 ——
  * 拿回来的是上一首的 QRC，而且因为「请求确实是当前代」而通过了所有闸门，
- * 最终以**新歌的 songId** 落进歌词状态。用户看到的就是「音频已经是网易云，歌词还是 QQ 那首」。
+ * 最终以**新歌的 songId** 落进歌词状态。用户看到的就是「音频已经是 ncm，歌词还是 QQ 那首」。
  *
  * 把身份收成一个不可变值之后，「这一份歌词属于哪首歌」与「播放器现在在哪首歌」的比较
  * 就只有一个答案，不会再出现「id 换了、音源没换」这种半更新状态。
@@ -37,7 +37,7 @@ import com.takahashirinta.ncrust.network.SongItem
  *
  * 这两条是有意的：
  *
- * 1. **必须含 `source`**：网易云的 songId 与 QQ 音乐的 songid 各自独立编号，
+ * 1. **必须含 `source`**：ncm 的 songId 与 qm 的 songid 各自独立编号，
  *    撞号是迟早的事。`TrackKey(NETEASE, 123)` 与 `TrackKey(QQMUSIC, 123)` 必须是两首歌
  *    —— 这正是本版要修的跨源串台。
  * 2. **不能含 `sourceId` / `mediaId`**：它们是**取链用的载荷**（QQ 的 songmid / media_mid），
@@ -51,10 +51,10 @@ import com.takahashirinta.ncrust.network.SongItem
  *
  * @property source 音源。未知取值一律回落 [MusicSource.DEFAULT]（见 [MusicSource.fromKey]）。
  * @property id 该音源内部的数字 id。[SourceIds.qqId] 造出来的 QQ id 带 bit62 标志位，
- *   与网易云的 id 空间结构性隔离。
- * @property sourceId 音源内部标识：QQ 音乐是 **songmid**（取链与取词都必须带）。
- *   网易云恒为 null。
- * @property mediaId QQ 音乐的 **media_mid**（部分取链参数用）。网易云恒为 null。
+ *   与 ncm 的 id 空间结构性隔离。
+ * @property sourceId 音源内部标识：qm 是 **songmid**（取链与取词都必须带）。
+ *   ncm 恒为 null。
+ * @property mediaId qm 的 **media_mid**（部分取链参数用）。ncm 恒为 null。
  */
 data class TrackKey(
     val source: MusicSource,
@@ -89,7 +89,7 @@ data class TrackKey(
         /**
          * 从「音源字符串 + id + 载荷」构造。
          *
-         * `sourceKey` 为 null / 空串时**不直接回落网易云**，而是先看 id 有没有 QQ 的标志位
+         * `sourceKey` 为 null / 空串时**不直接回落 ncm**，而是先看 id 有没有 QQ 的标志位
          * （[SourceIds.sourceOfId]）：只存得下裸 id 的持久化路径（续播状态、离线索引恢复）
          * 恢复出来的曲目因此不会被拿去问错平台。标志位不存在时才回落
          * [MusicSource.DEFAULT]，那正是 v2.1.0 之前持久化数据的正确解释。
@@ -114,10 +114,10 @@ data class TrackKey(
          * 从队列里的 [SongItem] 取身份（播放/预载两条路都用它，保证同源）。
          *
          * ⚠️ **新代码请优先用 [ofSong]**：本函数信 [`SongItem.musicSource`]（那个
-         * **字符串**字段），字符串缺失时一律回落网易云。而队列条目确实存在
+         * **字符串**字段），字符串缺失时一律回落 ncm。而队列条目确实存在
          * 「id 带 QQ 标志位、source 字符串丢了」的形态（搜索结果进历史记录那条路
          * 只存得下 id，见 `SearchHistoryManager.HistoryItem`），此时本函数会把一首
-         * QQ 曲目认成网易云。v2.1.5 之前它只用在「取词/取链」上，认错会明确失败；
+         * QQ 曲目认成 ncm。v2.1.5 之前它只用在「取词/取链」上，认错会明确失败；
          * v2.5.3 起队列**判重**也要用身份，认错音源就是认错歌，所以改了默认选择。
          *
          * 保留它是因为它的语义（只看显式声明）本身没有错，
@@ -133,7 +133,7 @@ data class TrackKey(
          * 与 [fromSong] 的唯一区别在音源怎么定：这里走 [of]，
          * 于是 `source` 字符串为空时会先看 id 有没有 QQ 的 bit62 标志位
          * （[SourceIds.sourceOfId]）—— **只存得下裸 id 的持久化路径恢复出来的曲目，
-         * 因此不会被当成网易云的同号歌曲**。
+         * 因此不会被当成 ncm 的同号歌曲**。
          *
          * 三条理由，按重要性：
          *  1. **结构性优先于声明性**：bit62 是 id 自带的、不会在序列化里丢；
@@ -143,7 +143,7 @@ data class TrackKey(
          *     （`PlaybackStateManager` 的续播恢复走的正是它）。队列判重跟上它之后，
          *     整条链路只剩**一套**身份规则。
          *  3. **不改变正常路径的行为**：`source` 有值时 [of] 以它为准，
-         *     所以网易云曲目、以及任何显式标了音源的 QQ 曲目，取值与 [fromSong] 完全相同。
+         *     所以 ncm 曲目、以及任何显式标了音源的 QQ 曲目，取值与 [fromSong] 完全相同。
          */
         fun ofSong(song: SongItem): TrackKey =
             of(song.source, song.id, song.sourceId, song.mediaId)
@@ -157,7 +157,7 @@ data class TrackKey(
          * 而 mediaId 跟着 item 走（v1.5.2 的既有结论）。
          *
          * 解析失败（老形状 `song:abc`、未知音源前缀、null）返回 null，
-         * 由调用方自己决定兜底策略：**绝不猜成网易云**，猜错就是拿别人的歌去取词。
+         * 由调用方自己决定兜底策略：**绝不猜成 ncm**，猜错就是拿别人的歌去取词。
          */
         fun fromMediaId(mediaId: String?): TrackKey? =
             SourceIds.parseMediaId(mediaId)?.let { (source, id) -> TrackKey(source, id) }

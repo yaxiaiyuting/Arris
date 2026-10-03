@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.4.0 · A/B/D：QQ 音乐目录接口与**批量可播放性预检**的 IO 层。
+ * v2.4.0 · A/B/D：qm 目录接口与**批量可播放性预检**的 IO 层。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * QQ 音乐的目录查询（v2.4.0 · A/B）。
+ * qm 的目录查询（v2.4.0 · A/B）。
  *
  * ## 契约（与 `MusicSourceProvider` 同一套，铁律 5）
  *
@@ -32,7 +32,7 @@ import org.json.JSONObject
  *
  * 那个接口的注释写得很清楚：它只抽「两个音源**都有、且语义一致**」的能力，
  * 目的是让「一首歌能放出来」这条链路可路由。艺人与专辑的**目录**查询在
- * 网易云是 Retrofit REST、在 QQ 是 `musicu` + 旧版 CGI，
+ * ncm 是 Retrofit REST、在 QQ 是 `musicu` + 旧版 CGI，
  * 请求形状与错误语义都不同；硬塞进同一个接口只会得到一个「每个方法都要判音源」的空壳。
  * 跨源聚合的编排放在 `crosssource` 包里，由它按音源分派到各自的门面。
  */

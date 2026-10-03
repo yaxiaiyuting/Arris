@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -139,7 +139,7 @@ class LocalPlaylistCodecTest {
     }
 
     @Test
-    fun `缺 source 时用 id 的标志位反推音源 不猜成网易云`() {
+    fun `缺 source 时用 id 的标志位反推音源 不猜成ncm`() {
         val qqId = com.takahashirinta.ncrust.source.SourceIds.qqId(123L, "mid")
         val json = """[{"trackId":$qqId}]"""
         val back = LocalPlaylistCodec.decodeTracks(json).single()

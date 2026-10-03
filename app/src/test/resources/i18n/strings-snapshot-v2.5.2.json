@@ -6,7 +6,7 @@
   "zh-CN": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "网易云音乐第三方客户端"
+      "v": "ncm 第三方客户端"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -1202,11 +1202,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ 音乐登录已过期"
+      "v": "qm 登录已过期"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "登录 QQ 音乐后可查看歌单"
+      "v": "登录 qm 后可查看歌单"
     },
     "playlistNameHint": {
       "t": "s",
@@ -1302,7 +1302,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "来自 QQ 音乐账号"
+      "v": "来自 qm 账号"
     },
     "playlists.favorite": {
       "t": "s",
@@ -1314,11 +1314,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ 音乐登录已过期"
+      "v": "qm 登录已过期"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "登录 QQ 音乐后可查看歌单"
+      "v": "登录 qm 后可查看歌单"
     },
     "playlists.notFound": {
       "t": "s",
@@ -1330,7 +1330,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ 音乐歌单"
+      "v": "qm 歌单"
     },
     "playlists.refresh": {
       "t": "s",
@@ -1366,7 +1366,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "来自 QQ 音乐账号"
+      "v": "来自 qm 账号"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -1382,7 +1382,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ 音乐歌单"
+      "v": "qm 歌单"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -1402,7 +1402,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "使用网易云 App 扫码登录"
+      "v": "使用 ncm App 扫码登录"
     },
     "qrScannedHint": {
       "t": "s",
@@ -1671,11 +1671,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "只看网易云"
+      "v": "只看 ncm"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "只看 QQ 音乐"
+      "v": "只看 qm"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -1727,11 +1727,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "网易云"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ 音乐账号"
+      "v": "qm 账号"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -1771,7 +1771,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "登录 QQ 音乐"
+      "v": "登录 qm"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -1783,7 +1783,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ 音乐"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -1872,7 +1872,7 @@
         "4242",
         "4243"
       ],
-      "v": "网易云 4242 首 · QQ 音乐 4243 首"
+      "v": "ncm 4242 首 · qm 4243 首"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -1880,11 +1880,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "网易云"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ 音乐账号"
+      "v": "qm 账号"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -1924,7 +1924,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "登录 QQ 音乐"
+      "v": "登录 qm"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -1936,7 +1936,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ 音乐"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -2025,7 +2025,7 @@
         "4242",
         "4243"
       ],
-      "v": "网易云 4242 首 · QQ 音乐 4243 首"
+      "v": "ncm 4242 首 · qm 4243 首"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -2208,7 +2208,7 @@
   "zh-TW": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "網易雲音樂第三方客戶端"
+      "v": "ncm 第三方客戶端"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -3404,11 +3404,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ 音樂登入已過期"
+      "v": "qm 登入已過期"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "登入 QQ 音樂後可查看歌單"
+      "v": "登入 qm 後可查看歌單"
     },
     "playlistNameHint": {
       "t": "s",
@@ -3504,7 +3504,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "來自 QQ 音樂帳號"
+      "v": "來自 qm 帳號"
     },
     "playlists.favorite": {
       "t": "s",
@@ -3516,11 +3516,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ 音樂登入已過期"
+      "v": "qm 登入已過期"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "登入 QQ 音樂後可查看歌單"
+      "v": "登入 qm 後可查看歌單"
     },
     "playlists.notFound": {
       "t": "s",
@@ -3532,7 +3532,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ 音樂歌單"
+      "v": "qm 歌單"
     },
     "playlists.refresh": {
       "t": "s",
@@ -3568,7 +3568,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "來自 QQ 音樂帳號"
+      "v": "來自 qm 帳號"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -3584,7 +3584,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ 音樂歌單"
+      "v": "qm 歌單"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -3604,7 +3604,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "使用網易雲 App 掃碼登入"
+      "v": "使用 ncm App 掃碼登入"
     },
     "qrScannedHint": {
       "t": "s",
@@ -3873,11 +3873,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "只看網易雲"
+      "v": "只看 ncm"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "只看 QQ 音樂"
+      "v": "只看 qm"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -3929,11 +3929,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "網易雲"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ 音樂帳號"
+      "v": "qm 帳號"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -3973,7 +3973,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "登入 QQ 音樂"
+      "v": "登入 qm"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -3985,7 +3985,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ 音樂"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -4074,7 +4074,7 @@
         "4242",
         "4243"
       ],
-      "v": "網易雲 4242 首 · QQ 音樂 4243 首"
+      "v": "ncm 4242 首 · qm 4243 首"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -4082,11 +4082,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "網易雲"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ 音樂帳號"
+      "v": "qm 帳號"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -4126,7 +4126,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "登入 QQ 音樂"
+      "v": "登入 qm"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -4138,7 +4138,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ 音樂"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -4227,7 +4227,7 @@
         "4242",
         "4243"
       ],
-      "v": "網易雲 4242 首 · QQ 音樂 4243 首"
+      "v": "ncm 4242 首 · qm 4243 首"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -4410,7 +4410,7 @@
   "en-US": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "Unofficial NetEase Cloud Music client"
+      "v": "Unofficial ncm client"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -5606,11 +5606,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ Music session expired"
+      "v": "qm session expired"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "Sign in to QQ Music to see playlists"
+      "v": "Sign in to qm to see playlists"
     },
     "playlistNameHint": {
       "t": "s",
@@ -5706,7 +5706,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "From your QQ Music account"
+      "v": "From your qm account"
     },
     "playlists.favorite": {
       "t": "s",
@@ -5718,11 +5718,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ Music session expired"
+      "v": "qm session expired"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "Sign in to QQ Music to see playlists"
+      "v": "Sign in to qm to see playlists"
     },
     "playlists.notFound": {
       "t": "s",
@@ -5734,7 +5734,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music Playlists"
+      "v": "qm Playlists"
     },
     "playlists.refresh": {
       "t": "s",
@@ -5770,7 +5770,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "From your QQ Music account"
+      "v": "From your qm account"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -5786,7 +5786,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music Playlists"
+      "v": "qm Playlists"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -5806,7 +5806,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "Scan with the NetEase Cloud Music app"
+      "v": "Scan with the ncm app"
     },
     "qrScannedHint": {
       "t": "s",
@@ -6075,11 +6075,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "NetEase only"
+      "v": "ncm only"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "QQ Music only"
+      "v": "qm only"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -6131,11 +6131,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music account"
+      "v": "qm account"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -6175,7 +6175,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "Sign in to QQ Music"
+      "v": "Sign in to qm"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -6187,7 +6187,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -6276,7 +6276,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -6284,11 +6284,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music account"
+      "v": "qm account"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -6328,7 +6328,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "Sign in to QQ Music"
+      "v": "Sign in to qm"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -6340,7 +6340,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -6429,7 +6429,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -6612,7 +6612,7 @@
   "ja-JP": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "NetEase Cloud Music 非公式クライアント"
+      "v": "ncm 非公式クライアント"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -7808,11 +7808,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ Music のログインが期限切れ"
+      "v": "qm のログインが期限切れ"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "QQ Music にログインするとプレイリストを表示できます"
+      "v": "qm にログインするとプレイリストを表示できます"
     },
     "playlistNameHint": {
       "t": "s",
@@ -7908,7 +7908,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "QQ Music アカウントより"
+      "v": "qm アカウントより"
     },
     "playlists.favorite": {
       "t": "s",
@@ -7920,11 +7920,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ Music のログインが期限切れ"
+      "v": "qm のログインが期限切れ"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "QQ Music にログインするとプレイリストを表示できます"
+      "v": "qm にログインするとプレイリストを表示できます"
     },
     "playlists.notFound": {
       "t": "s",
@@ -7936,7 +7936,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music プレイリスト"
+      "v": "qm プレイリスト"
     },
     "playlists.refresh": {
       "t": "s",
@@ -7972,7 +7972,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "QQ Music アカウントより"
+      "v": "qm アカウントより"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -7988,7 +7988,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music プレイリスト"
+      "v": "qm プレイリスト"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -8008,7 +8008,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "NetEase Cloud Music アプリでスキャン"
+      "v": "ncm アプリでスキャン"
     },
     "qrScannedHint": {
       "t": "s",
@@ -8277,11 +8277,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "NetEase のみ"
+      "v": "ncm のみ"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "QQ Music のみ"
+      "v": "qm のみ"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -8333,11 +8333,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music アカウント"
+      "v": "qm アカウント"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -8377,7 +8377,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music にログイン"
+      "v": "qm にログイン"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -8389,7 +8389,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -8478,7 +8478,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 曲 · QQ Music 4243 曲"
+      "v": "ncm 4242 曲 · qm 4243 曲"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -8486,11 +8486,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music アカウント"
+      "v": "qm アカウント"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -8530,7 +8530,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music にログイン"
+      "v": "qm にログイン"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -8542,7 +8542,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -8631,7 +8631,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 曲 · QQ Music 4243 曲"
+      "v": "ncm 4242 曲 · qm 4243 曲"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -10010,11 +10010,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ Music 之登入已過"
+      "v": "qm 之登入已過"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "登 QQ Music 則可見帳"
+      "v": "登 qm 則可見帳"
     },
     "playlistNameHint": {
       "t": "s",
@@ -10110,7 +10110,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "自 QQ Music 之戶"
+      "v": "自 qm 之戶"
     },
     "playlists.favorite": {
       "t": "s",
@@ -10122,11 +10122,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ Music 之登入已過"
+      "v": "qm 之登入已過"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "登 QQ Music 則可見帳"
+      "v": "登 qm 則可見帳"
     },
     "playlists.notFound": {
       "t": "s",
@@ -10138,7 +10138,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music 曲之帳"
+      "v": "qm 曲之帳"
     },
     "playlists.refresh": {
       "t": "s",
@@ -10174,7 +10174,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "自 QQ Music 之戶"
+      "v": "自 qm 之戶"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -10190,7 +10190,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music 曲之帳"
+      "v": "qm 曲之帳"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -10210,7 +10210,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "網易雲 App 掃 入"
+      "v": "ncm App 掃 入"
     },
     "qrScannedHint": {
       "t": "s",
@@ -10479,7 +10479,7 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "網易雲のみ"
+      "v": "ncmのみ"
     },
     "source.aggFilterQq": {
       "t": "s",
@@ -10535,11 +10535,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music アカウント"
+      "v": "qm アカウント"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -10579,7 +10579,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music にログイン"
+      "v": "qm にログイン"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -10591,7 +10591,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -10680,7 +10680,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 曲 · QQ Music 4243 曲"
+      "v": "ncm 4242 曲 · qm 4243 曲"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -10688,11 +10688,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music アカウント"
+      "v": "qm アカウント"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -10732,7 +10732,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music にログイン"
+      "v": "qm にログイン"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -10744,7 +10744,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -10833,7 +10833,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 曲 · QQ Music 4243 曲"
+      "v": "ncm 4242 曲 · qm 4243 曲"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -11016,7 +11016,7 @@
   "ko-KP": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "넷이즈 클라우드 음악 비공식 클라이언트"
+      "v": "ncm 비공식 클라이언트"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -12212,11 +12212,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ Music 로그인이 만료되였습니다"
+      "v": "qm 로그인이 만료되였습니다"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "QQ Music에 로그인하면 목록을 볼수 있습니다"
+      "v": "qm에 로그인하면 목록을 볼수 있습니다"
     },
     "playlistNameHint": {
       "t": "s",
@@ -12312,7 +12312,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "QQ Music 계정에서"
+      "v": "qm 계정에서"
     },
     "playlists.favorite": {
       "t": "s",
@@ -12324,11 +12324,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ Music 로그인이 만료되였습니다"
+      "v": "qm 로그인이 만료되였습니다"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "QQ Music에 로그인하면 목록을 볼수 있습니다"
+      "v": "qm에 로그인하면 목록을 볼수 있습니다"
     },
     "playlists.notFound": {
       "t": "s",
@@ -12340,7 +12340,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music 재생목록"
+      "v": "qm 재생목록"
     },
     "playlists.refresh": {
       "t": "s",
@@ -12376,7 +12376,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "QQ Music 계정에서"
+      "v": "qm 계정에서"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -12392,7 +12392,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music 재생목록"
+      "v": "qm 재생목록"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -12412,7 +12412,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "NetEase Cloud Music 앱으로 스캔"
+      "v": "ncm 앱으로 스캔"
     },
     "qrScannedHint": {
       "t": "s",
@@ -12681,11 +12681,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "NetEase만"
+      "v": "ncm만"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "QQ Music만"
+      "v": "qm만"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -12737,11 +12737,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music 계정"
+      "v": "qm 계정"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -12781,7 +12781,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music 로그인"
+      "v": "qm 로그인"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -12793,7 +12793,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -12882,7 +12882,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 곡 · QQ Music 4243 곡"
+      "v": "ncm 4242 곡 · qm 4243 곡"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -12890,11 +12890,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ Music 계정"
+      "v": "qm 계정"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -12934,7 +12934,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "QQ Music 로그인"
+      "v": "qm 로그인"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -12946,7 +12946,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -13035,7 +13035,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 곡 · QQ Music 4243 곡"
+      "v": "ncm 4242 곡 · qm 4243 곡"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -13218,7 +13218,7 @@
   "de-DE": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "Inoffizieller NetEase Cloud Music Client"
+      "v": "Inoffizieller ncm Client"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -14414,11 +14414,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "QQ Music-Sitzung abgelaufen"
+      "v": "qm-Sitzung abgelaufen"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "Bei QQ Music anmelden, um Playlists zu sehen"
+      "v": "Bei qm anmelden, um Playlists zu sehen"
     },
     "playlistNameHint": {
       "t": "s",
@@ -14514,7 +14514,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "Aus deinem QQ Music-Konto"
+      "v": "Aus deinem qm-Konto"
     },
     "playlists.favorite": {
       "t": "s",
@@ -14526,11 +14526,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "QQ Music-Sitzung abgelaufen"
+      "v": "qm-Sitzung abgelaufen"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "Bei QQ Music anmelden, um Playlists zu sehen"
+      "v": "Bei qm anmelden, um Playlists zu sehen"
     },
     "playlists.notFound": {
       "t": "s",
@@ -14542,7 +14542,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music Playlists"
+      "v": "qm Playlists"
     },
     "playlists.refresh": {
       "t": "s",
@@ -14578,7 +14578,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "Aus deinem QQ Music-Konto"
+      "v": "Aus deinem qm-Konto"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -14594,7 +14594,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "QQ Music Playlists"
+      "v": "qm Playlists"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -14614,7 +14614,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "Mit der NetEase Cloud Music App scannen"
+      "v": "Mit der ncm App scannen"
     },
     "qrScannedHint": {
       "t": "s",
@@ -14883,11 +14883,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "Nur NetEase"
+      "v": "Nur ncm"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "Nur QQ Music"
+      "v": "Nur qm"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -14939,11 +14939,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "QQ-Music-Konto"
+      "v": "qm-Konto"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -14983,7 +14983,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "Bei QQ Music anmelden"
+      "v": "Bei qm anmelden"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -14995,7 +14995,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -15084,7 +15084,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -15092,11 +15092,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "QQ-Music-Konto"
+      "v": "qm-Konto"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -15136,7 +15136,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "Bei QQ Music anmelden"
+      "v": "Bei qm anmelden"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -15148,7 +15148,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -15237,7 +15237,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "sourceWebLogin": {
       "t": "s",
@@ -15420,7 +15420,7 @@
   "ru-RU": {
     "aboutAppSubtitle": {
       "t": "s",
-      "v": "Неофициальный клиент NetEase Cloud Music"
+      "v": "Неофициальный клиент ncm"
     },
     "aboutAudioEngineLabel": {
       "t": "s",
@@ -16616,11 +16616,11 @@
     },
     "playlistLoginExpired": {
       "t": "s",
-      "v": "Сессия QQ Music истекла"
+      "v": "Сессия qm истекла"
     },
     "playlistLoginRequired": {
       "t": "s",
-      "v": "Войдите в QQ Music, чтобы увидеть плейлисты"
+      "v": "Войдите в qm, чтобы увидеть плейлисты"
     },
     "playlistNameHint": {
       "t": "s",
@@ -16716,7 +16716,7 @@
     },
     "playlists.entryHint": {
       "t": "s",
-      "v": "Из вашей учётной записи QQ Music"
+      "v": "Из вашей учётной записи qm"
     },
     "playlists.favorite": {
       "t": "s",
@@ -16728,11 +16728,11 @@
     },
     "playlists.loginExpired": {
       "t": "s",
-      "v": "Сессия QQ Music истекла"
+      "v": "Сессия qm истекла"
     },
     "playlists.loginRequired": {
       "t": "s",
-      "v": "Войдите в QQ Music, чтобы увидеть плейлисты"
+      "v": "Войдите в qm, чтобы увидеть плейлисты"
     },
     "playlists.notFound": {
       "t": "s",
@@ -16744,7 +16744,7 @@
     },
     "playlists.qqPlaylistsTitle": {
       "t": "s",
-      "v": "Плейлисты QQ Music"
+      "v": "Плейлисты qm"
     },
     "playlists.refresh": {
       "t": "s",
@@ -16780,7 +16780,7 @@
     },
     "playlistsEntryHint": {
       "t": "s",
-      "v": "Из вашей учётной записи QQ Music"
+      "v": "Из вашей учётной записи qm"
     },
     "playlistsSectionFav": {
       "t": "s",
@@ -16796,7 +16796,7 @@
     },
     "qqPlaylistsTitle": {
       "t": "s",
-      "v": "Плейлисты QQ Music"
+      "v": "Плейлисты qm"
     },
     "qrExpiredHint": {
       "t": "s",
@@ -16816,7 +16816,7 @@
     },
     "qrScanHint": {
       "t": "s",
-      "v": "Отсканируйте в приложении NetEase Cloud Music"
+      "v": "Отсканируйте в приложении ncm"
     },
     "qrScannedHint": {
       "t": "s",
@@ -17085,11 +17085,11 @@
     },
     "source.aggFilterNetease": {
       "t": "s",
-      "v": "Только NetEase"
+      "v": "Только ncm"
     },
     "source.aggFilterQq": {
       "t": "s",
-      "v": "Только QQ Music"
+      "v": "Только qm"
     },
     "source.aggMatchReason": {
       "t": "fn",
@@ -17141,11 +17141,11 @@
     },
     "source.sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "source.sourceQqAccount": {
       "t": "s",
-      "v": "Аккаунт QQ Music"
+      "v": "Аккаунт qm"
     },
     "source.sourceQqAccountRestricted": {
       "t": "s",
@@ -17185,7 +17185,7 @@
     },
     "source.sourceQqLoginAction": {
       "t": "s",
-      "v": "Войти в QQ Music"
+      "v": "Войти в qm"
     },
     "source.sourceQqLoginFailed": {
       "t": "s",
@@ -17197,7 +17197,7 @@
     },
     "source.sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "source.sourceQqPhoneBadNumber": {
       "t": "s",
@@ -17286,7 +17286,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "source.sourceWebLogin": {
       "t": "s",
@@ -17294,11 +17294,11 @@
     },
     "sourceNetease": {
       "t": "s",
-      "v": "NetEase"
+      "v": "ncm"
     },
     "sourceQqAccount": {
       "t": "s",
-      "v": "Аккаунт QQ Music"
+      "v": "Аккаунт qm"
     },
     "sourceQqAccountRestricted": {
       "t": "s",
@@ -17338,7 +17338,7 @@
     },
     "sourceQqLoginAction": {
       "t": "s",
-      "v": "Войти в QQ Music"
+      "v": "Войти в qm"
     },
     "sourceQqLoginFailed": {
       "t": "s",
@@ -17350,7 +17350,7 @@
     },
     "sourceQqMusic": {
       "t": "s",
-      "v": "QQ Music"
+      "v": "qm"
     },
     "sourceQqPhoneBadNumber": {
       "t": "s",
@@ -17439,7 +17439,7 @@
         "4242",
         "4243"
       ],
-      "v": "NetEase 4242 · QQ Music 4243"
+      "v": "ncm 4242 · qm 4243"
     },
     "sourceWebLogin": {
       "t": "s",

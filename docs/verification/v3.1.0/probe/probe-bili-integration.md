@@ -29,14 +29,14 @@
 
 ## 2. `TrackKey` 的 id：为什么必须用 `BILI_ID_FLAG`（位 61）
 
-### 2.1 auid 与网易云 id **值域重叠**（这是前提，不是猜测）
+### 2.1 auid 与 ncm id **值域重叠**（这是前提，不是猜测）
 
 - 实测样本：`auid = 22760301`（约 **2.3×10⁷**）—— 见 `net-research/EVIDENCE-S6.md:62`
   的 `bili.audio.info`（探针请求的 URL 就是 `song/info?sid=22760301`，`NetTimingProbeTest.kt:247`）。
 - 采样分布（`bili-research/bili-audio-api.md` §2.2）：`1–200`、`1e4–3e4`、`1e5–3e5`、
-  `1e6–3e6`、`4e6–5e6` 全部命中真实音频 ⇒ auid 与网易云 songId（百万~十亿）**同一量级**。
+  `1e6–3e6`、`4e6–5e6` 全部命中真实音频 ⇒ auid 与 ncm songId（百万~十亿）**同一量级**。
 - 代码里也把这条写死了：`SourceIdDomain.kt:104-113`（B 站分支的 KDoc）明确说
-  「它与网易云的值域重叠 …… 值域在这里**结构性地不可用**」。
+  「它与 ncm 的值域重叠 …… 值域在这里**结构性地不可用**」。
 
 ⇒ 裸 `Long` id 无法区分 `TrackKey(BILIBILI, 22760301)` 与 `TrackKey(NETEASE, 22760301)`，
 而本应用有 10+ 处以裸 `Long` 为键的跨版本持久化结构（队列、续播进度、离线缓存 key、歌词缓存 key…，
@@ -69,7 +69,7 @@ fun sourceOfId(id: Long): MusicSource = when {  // :263-269
 - 具体后果：`QQ_ID_FLAG - 1 = 2^62 - 1` 这个数**位 61 是 1**。若先判位 61，它会被解释成 B 站。
   顺序固定之后这个边界是**可断言**的：`TrackKeyTest.kt:186-187` 写明
   `sourceOfId(QQ_ID_FLAG - 1) == BILIBILI`、`sourceOfId(QQ_ID_FLAG) == QQMUSIC`，
-  而网易云的真实 id（含 `9_999_999_999L` 与 `BILI_ID_FLAG - 1`）依旧全部判成 NETEASE（:170-188）。
+  而 ncm 的真实 id（含 `9_999_999_999L` 与 `BILI_ID_FLAG - 1`）依旧全部判成 NETEASE（:170-188）。
 
 ### 2.3 载荷形状（两条腿靠它分派，不靠 id）
 
@@ -98,7 +98,7 @@ fun sourceOfId(id: Long): MusicSource = when {  // :263-269
   （`BiliSourceProvider.kt:162-165`）。理由写在注释里：取词路径上再发一次网络会把一次播放变成两次往返。
 - 「诚实降级」的含义（`PlayerViewModel.kt:1927-1930`）：重试一百次也不会有歌词，
   把它标成可重试的错误只会让界面白转圈。
-- B 站曲目**不进 `LyricsCache`**（:1932-1935）：那张表存的是网易云的字段形状
+- B 站曲目**不进 `LyricsCache`**（:1932-1935）：那张表存的是 ncm 的字段形状
   （lrc/tlyric/yrc/romalrc/ttml），塞进去要么加字段 + 迁移逻辑（v1.9.3 的教训），
   要么污染字段语义。代价是每次播放现取一次。
 - ⚠️ `fetchLyric` 的 KDoc（`BiliSourceProvider.kt:139-147`）仍写着「音频区那条路的歌词是
@@ -331,9 +331,9 @@ fun fallbackLadder(level: String): List<BiliQn> {      // :78-81
    搜索侧再包一层硬预算（`withTimeoutOrNull(BILI_SEARCH_BUDGET_MS)`，`SearchViewModel.kt:269`）
    与 `catch (e: Exception)`（:276-279），失败只记 `BiliOutcome(failed = true)`。
 3. **取链绝不回落**：`SourceRouter.resolveUrl`（:65-76）在「没注册 / 不可解析」时返回 null，
-   **绝不退回网易云**（:61-62 注释；`BiliSourceProviderTest.kt:73-84` 钉住）。
+   **绝不退回 ncm**（:61-62 注释；`BiliSourceProviderTest.kt:73-84` 钉住）。
 4. **独立 OkHttp 客户端，不共享任何请求头**（`BiliApi.kt:116-121`）：
-   没有 `CookieInterceptor`（网易云的 UA/Referer/Cookie 一个都不带）。这是实测逼出来的 ——
+   没有 `CookieInterceptor`（ncm 的 UA/Referer/Cookie 一个都不带）。这是实测逼出来的 ——
    `net-research/EVIDENCE-S6.md:104-106` 的 A/B 对照：
 
    ```
@@ -342,8 +342,8 @@ fun fallbackLadder(level: String): List<BiliQn> {      // :78-81
    variant=C_no_referer       （不带 Referer）                     http=200  body={"code":-101,...}
    ```
 
-   顺带买到两件事（`BiliApi.kt:38-42`）：B 站收不到网易云的 Cookie（隐私），
-   B 站的 412 / -352 风控不会影响网易云那条链路（铁律 27）。
+   顺带买到两件事（`BiliApi.kt:38-42`）：B 站收不到 ncm 的 Cookie（隐私），
+   B 站的 412 / -352 风控不会影响 ncm 那条链路（铁律 27）。
 
 Wbi 签名侧（`bili/BiliWbi.kt`）是纯逻辑、可单测：乱序表 :59-64、`mixinKey` :91-99、
 `signedQuery` :111-132（敏感字符先剔再编码 :120-125）、`wts` 是**秒**（:44-45、:118）、
@@ -393,7 +393,7 @@ Wbi 签名侧（`bili/BiliWbi.kt`）是纯逻辑、可单测：乱序表 :59-64�
 > 新增 `app/src/main/java/com/takahashirinta/ncrust/bili/BiliCdn.kt`（100 行，host 白名单 + 兜底判据），
 > 并修改 `bili/BiliApi.kt` 与 `cache/OfflineAudioCache.kt`
 > （`git diff --stat -- app/src` = `2 files changed, 109 insertions(+), 14 deletions(-)`）。
-> **本节的结论只对 HEAD `0b4ed2c` 成立**；草稿的 host 判据是否正确、对网易云/QQ 有没有副作用，
+> **本节的结论只对 HEAD `0b4ed2c` 成立**；草稿的 host 判据是否正确、对 ncm/QQ 有没有副作用，
 > 本探针**没有审计**（它还在飞行中、随时可能变）。落地后必须重跑单测**并补真机播放验证** ——
 > 「单测全绿」不能证明 CDN 不再 403（这正是 §10.4 这条缺陷最初能溜过 1940 个用例的原因）。
 
@@ -404,7 +404,7 @@ Wbi 签名侧（`bili/BiliWbi.kt`）是纯逻辑、可单测：乱序表 :59-64�
 | **源码审计** | ExoPlayer 的数据源是 `OfflineAudioCache.dataSourceFactory`（`cache/OfflineAudioCache.kt:111-122`）→ `DefaultDataSource.Factory(app)`，**没有任何 `defaultRequestProperties`**；装配点 `PlaybackService.kt:392`。全仓 `Referer` 只出现在 4 个文件：`network/RetrofitClient.kt`、`qq/QqClient.kt`、`qq/QqQrClient.kt`、`bili/BiliApi.kt` —— **媒体播放路径一个都没有**。另外 `SongUrlResult`（`SongUrlFetcher.kt:34-75`）**没有 headers 字段** ⇒ 即便 Provider 知道要带 Referer，取链结果也无处携带 |
 | **推断（后果）** | 即使 §10.1/§10.2 都修好、URL 也取到了，ExoPlayer 拉流仍会 403 ⇒ `onPlayerError` ⇒ 降档重试 ⇒ 最终跳歌。**这是当前唯一能单独让「B 站放不出声」的原因** |
 | **未闭环** | 没有在真机上端到端播放过 B 站曲目；CDN 行为是否对所有 B 站 CDN 域名一致（`*.bilivideo.com` / `*.hdslb.com` / `*.mountaintoys.cn`）**未穷举**；`CacheDataSource` 是否会把 403 响应体写进 `SimpleCache`（`FLAG_IGNORE_CACHE_ON_ERROR` 已设）**未实测** |
-| **修法（来自 `bili-research/RECOMMENDATIONS.md`，该文件与本探针并发产出）** | A. 给 `SongUrlResult` 加 `headers`，由 `BiliSourceProvider` 填 `Referer: https://www.bilibili.com/`，PlaybackService 建 `MediaItem` 时落到一个**按 host 判定**的 `DataSource.Factory`；B. 在 `OfflineAudioCache.dataSourceFactory` 上挂 `setDefaultRequestProperties`，但**必须按 host 限定**（只对 B 站 CDN 加），否则会把 B 站 Referer 带到网易云/QQ 请求上（本项目已实测「网易云 Referer 请求 B 站 → 403」，反向同理有风险）；C. 让 Provider 把 Referer 需求编码进结果、由 PlaybackService 落实。**三选一都必须做 host 限定** |
+| **修法（来自 `bili-research/RECOMMENDATIONS.md`，该文件与本探针并发产出）** | A. 给 `SongUrlResult` 加 `headers`，由 `BiliSourceProvider` 填 `Referer: https://www.bilibili.com/`，PlaybackService 建 `MediaItem` 时落到一个**按 host 判定**的 `DataSource.Factory`；B. 在 `OfflineAudioCache.dataSourceFactory` 上挂 `setDefaultRequestProperties`，但**必须按 host 限定**（只对 B 站 CDN 加），否则会把 B 站 Referer 带到 ncm/QQ 请求上（本项目已实测「ncm Referer 请求 B 站 → 403」，反向同理有风险）；C. 让 Provider 把 Referer 需求编码进结果、由 PlaybackService 落实。**三选一都必须做 host 限定** |
 | **复现** | `curl -sI -r 0-1023 '<CDN 直链>'`（带 / 不带 Referer 各一次）；或直接跑 `evidence/96` 的采集脚本 |
 
 ### 10.5 过期注释清单（不影响行为，但会误导下一个接手的人）
@@ -439,11 +439,11 @@ Wbi 签名侧（`bili/BiliWbi.kt`）是纯逻辑、可单测：乱序表 :59-64�
 | 文件 | 用例数 | 覆盖 |
 |---|---|---|
 | `bili/BiliWbiTest.kt` | 11（+`BiliQualityTest` 3） | `fileStem` / `mixinKey`（与实测值一致 :54）/ 4 条签名向量（含中文空格 :70、取播放地址 :88、空格→`+` :113、敏感字符剔除 :133）/ `wts` 是秒 :151 / 空 key 返回未签名 query :163 / md5 向量 :172 / 乱序表 :178；档位映射逐条 :192、阶梯有序去重 :207、qn 取值 :220 |
-| `bili/BiliParseTest.kt` | 25（+`BiliTrackMappingTest` 5） | 搜索只认 `video` 且去 `<em>` :49、封面补全/抬 https :59、duration 两形状 :66、limit 截断 :79、坏响应不抛 :85、title 清洗 :94、cid 单P/多P :104、DASH 只取 audio 且最高带宽 :117、baseUrl 缺失退 backup :137、无 audio 返回 null :149、音频区逐字段 :167、下架 :185、**歌词正文走 song/lyric** :199、**song/lyric 两义性** :207、**looksLikeUrl 三种形状** :216、author 优先 uname :226、**`song/info` 的 lyric 两义性** :232、音频流解析 :254、**TTL 按 deadline 而非 timeout** :263、deadline 缺失退 timeout :277、deadline 已过返回已过期时刻 :285、转义 query :293、空 cdns :302、nav 解析 :311/:323；id 带标志位且不撞网易云 :336、载荷形状 :349、往返 :358、造不出 id 就丢 :375、SongItem 带音源与时长 :382 |
+| `bili/BiliParseTest.kt` | 25（+`BiliTrackMappingTest` 5） | 搜索只认 `video` 且去 `<em>` :49、封面补全/抬 https :59、duration 两形状 :66、limit 截断 :79、坏响应不抛 :85、title 清洗 :94、cid 单P/多P :104、DASH 只取 audio 且最高带宽 :117、baseUrl 缺失退 backup :137、无 audio 返回 null :149、音频区逐字段 :167、下架 :185、**歌词正文走 song/lyric** :199、**song/lyric 两义性** :207、**looksLikeUrl 三种形状** :216、author 优先 uname :226、**`song/info` 的 lyric 两义性** :232、音频流解析 :254、**TTL 按 deadline 而非 timeout** :263、deadline 缺失退 timeout :277、deadline 已过返回已过期时刻 :285、转义 query :293、空 cdns :302、nav 解析 :311/:323；id 带标志位且不撞 ncm :336、载荷形状 :349、往返 :358、造不出 id 就丢 :375、SongItem 带音源与时长 :382 |
 | `bili/BiliSourceProviderTest.kt` | 11（+`BiliSignatureRejectionTest` 3） | 默认关闭 :41、关闭时零请求 :49/:60、缺载荷不回落 :73、非可登录音源 :86、key 稳定 :99、注册 :107、`requiresSourceId` :112、prefs 键一致 :118、**播放地址走旧路径** :136、auid 关键词形状 :147；412 HTML 算被拒 :175、**`-352`/`-403`/`-1200` 算被拒** :182、正常响应不算 :191 |
 | `ui/components/SourceCountsBiliTest.kt` | 7（+`SearchRankingThreeSourceTest` 4 + `SourceFilterTest` 4） | 关闭时统计行逐字不变 :34、启用后第三段 :46、PENDING 不显示 0 :56、三态文案 :66、8 语言 :85、isDone 三源 :99、英文不漏中文 :111；追加最后 :154、不参与交错 :166、内部顺序稳定 :179；ALL/各取一源 :192、过滤保序与同一实例 :206、B 站档只在启用时出现 :229、四档文案 :241 |
 | `source/TrackKeyTest.kt` | 16 | 含 §2 的边界断言 :170-188 |
-| `source/SourceIdDomainTest.kt` | 10 | 值域闸门（含 QQ 拒绝网易云值域纯数字 :79、拒绝 pmid :89） |
+| `source/SourceIdDomainTest.kt` | 10 | 值域闸门（含 QQ 拒绝 ncm 值域纯数字 :79、拒绝 pmid :89） |
 | `crosssource/AggregateStringsTest.kt` | 5 | 8 语言聚合文案非空 :35、带参数文案 :56、原样透传 :66、dex 单方法预算 :75、主构造器预算 :89 |
 
 单测执行证据见 [EVIDENCE.md](EVIDENCE.md)（`0b4ed2c` 实测：141 suite / 1940 用例全绿）。

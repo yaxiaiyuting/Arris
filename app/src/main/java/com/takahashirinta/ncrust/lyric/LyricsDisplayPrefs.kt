@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -79,7 +79,7 @@ object LyricsDisplayPrefs {
     /** v1.9.0：AMLL TTML 歌词源总开关。关掉 = 一个 TTML 请求都不发，行为与 v1.8.1 完全一致。 */
     const val KEY_TTML_ENABLED = "lyrics_ttml_enabled"
 
-    /** v1.9.0：TTML 与网易云歌词都能用时，是否优先用 TTML。 */
+    /** v1.9.0：TTML 与 ncm 歌词都能用时，是否优先用 TTML。 */
     const val KEY_TTML_FIRST = "lyrics_ttml_first"
 
     /**

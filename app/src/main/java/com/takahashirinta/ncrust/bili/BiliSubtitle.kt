@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -280,7 +280,7 @@ object BiliSubtitle {
     /**
      * 毫秒 → `[mm:ss.xx]`。
      *
-     * 用**两位**厘秒与既有 LRC 源（网易云/QQ）一致 —— `LrcParser` 对 2 位与 3 位都认，
+     * 用**两位**厘秒与既有 LRC 源（ncm/QQ）一致 —— `LrcParser` 对 2 位与 3 位都认，
      * 但保持同一形状能让「同一首歌两个来源的 LRC 做 diff」这类排查少一个变量。
      * 分钟数**不截断到 2 位**：现场曲目会超过 99 分钟（`[78:30.00]` 是合法输入，
      * `LrcParser` 也按两位读，见它的单测）。

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -70,7 +70,7 @@ import com.takahashirinta.ncrust.source.TrackKey
  *
  * 探针结论（`docs/verification/v2.5.3/probe-queue-dedup.md`）：跨源裸 id 撞号的
  * **实际发生率是 0** —— 全部 QQ id 都经 `SourceIds.qqId()` 产出、bit62 恒置位，
- * 与网易云的 id 区间结构性不相交。所以这次改造**不修任何线上 bug**，
+ * 与 ncm 的 id 区间结构性不相交。所以这次改造**不修任何线上 bug**，
  * 它买到的是「那个 0 不再依赖调用点的纪律，而由类型承载」。
  */
 object QueueInsert {
@@ -144,7 +144,7 @@ object QueueInsert {
      *
      * 旧签名是 `plan(queueIds: List<Long>, currentIndex: Int, newId: Long)`，
      * 与当时 `MainActivity` 里另外三处队列写入用同一把尺子（裸 `song.id`）。
-     * 探针确认跨源撞号的实际发生率是 **0**（QQ 的 id 带 bit62 标志位，与网易云的
+     * 探针确认跨源撞号的实际发生率是 **0**（QQ 的 id 带 bit62 标志位，与 ncm 的
      * id 区间结构性不相交），但那 0 依赖「每个 id 生产者都记得走 `SourceIds.qqId`」
      * 这条**纪律**；换成 [TrackKey] 之后判重语义由类型承载，且与待播槽位、
      * 歌词闸门、续播恢复**只剩一套**身份规则。

@@ -94,15 +94,15 @@ dump xmltree [options] --file arg files...
 | 量 | P50 | min–max |
 |---|---|---|
 | QQ 腿（派发 → 状态写入） | 2923ms | 1619–3969 |
-| 派发 → 首条结果上屏（网易云先到） | 616ms | 519–718 |
+| 派发 → 首条结果上屏（ncm 先到） | 616ms | 519–718 |
 | **状态写入 → QQ 计数上屏（渲染段）** | **41.5ms** | 36–50 |
 | 渲染段占比 | **1.4%** | 0.9–2.5% |
 
 宿主机同网段对照：QQ legacy `client_search_cp` TTFB P50 **2905ms** / total 3055ms / 响应体 55.5KB；
-`musicu.fcg` TTFB P50 **378ms** / 2.2KB；网易云搜索 total P50 743ms。
+`musicu.fcg` TTFB P50 **378ms** / 2.2KB；ncm 搜索 total P50 743ms。
 设备 QQ 腿只比宿主机 TTFB 高 **18ms**（宿主机光传响应体就要 150ms）。
 
-**首帧被网易云硬阻塞的真机证据**：`elapsed=30006ms netease=0 qq=30 qqTimedOut=false`；
+**首帧被 ncm 硬阻塞的真机证据**：`elapsed=30006ms netease=0 qq=30 qqTimedOut=false`；
 录像某一帧（19:37:02.333，派发 +9.5s）**搜索框在转圈、结果区全空**，而 QQ 数据 ≤5s 已到手。
 
 ### 3.2 埋点审计（改动前）
@@ -132,31 +132,31 @@ dump xmltree [options] --file arg files...
 
 原始数据：`verification/search-latency-v256.txt`（含 `NcrustHttpTiming` 与 `NcrustSearchLatency` 两类行）。
 
-| query | 网易云腿 | QQ 腿 | **`ttfr`（派发→第一次上屏）** | 首帧来源 |
+| query | ncm 腿 | QQ 腿 | **`ttfr`（派发→第一次上屏）** | 首帧来源 |
 |---|---|---|---|---|
-| `love` | 886ms | 2739ms | **888ms** | 网易云 |
-| `jay` | 428ms | 3089ms | **429ms** | 网易云 |
-| `piano` | 615ms | 1549ms | **616ms** | 网易云 |
-| `hello` | 676ms | 4159ms | **677ms** | 网易云 |
+| `love` | 886ms | 2739ms | **888ms** | ncm |
+| `jay` | 428ms | 3089ms | **429ms** | ncm |
+| `piano` | 615ms | 1549ms | **616ms** | ncm |
+| `hello` | 676ms | 4159ms | **677ms** | ncm |
 
 - `ttfr` **P50 ≈ 646ms**（n=4，429–888ms）—— 这是「点击搜索之后多久看到第一屏结果」的直读值，
   旧实现只能给「总耗时」，本版第一次把它拆出来；
-- 网易云腿 **4/4 先到**，与探针的 6/6 一致 ⇒ 这条主路径的 `ttfr` 与 v2.5.5 **按构造相同**
-  （`publish` 仍在网易云到手时发生）；
+- ncm 腿 **4/4 先到**，与探针的 6/6 一致 ⇒ 这条主路径的 `ttfr` 与 v2.5.5 **按构造相同**
+  （`publish` 仍在 ncm 到手时发生）；
 - `cloudsearch/pc` 的 `ttfb=661ms / body=9ms / total=877ms` ⇒ 健康态下首字节之后只有 ~216ms
   是传输+解析，与探针结论（客户端段占比个位数百分比）一致。
 
-**诚实标注**：这 4 个样本里网易云都是先到的，所以**它们不能证明「先到先发布」带来了提速** ——
-该优化的收益只出现在「网易云慢」这条异常路径上。异常路径的证据是：
+**诚实标注**：这 4 个样本里 ncm 都是先到的，所以**它们不能证明「先到先发布」带来了提速** ——
+该优化的收益只出现在「ncm 慢」这条异常路径上。异常路径的证据是：
 ① 探针抓到的真机 `elapsed=30006ms netease=0 qq=30`（30s 空屏）；
-② 本版在回归复现时抓到的界面状态 `网易云 搜索中… · QQ 音乐 30 首` ——
-   QQ 的 30 条已经在屏幕上，而网易云仍在途中（旧实现在这一刻是**一片空白**）。
+② 本版在回归复现时抓到的界面状态 `ncm 搜索中… · qm 30 首` ——
+   QQ 的 30 条已经在屏幕上，而 ncm 仍在途中（旧实现在这一刻是**一片空白**）。
 ③ 本版**主动记录一次自己造成的回归**（见 §3.5）—— 那次的真机数据恰好是
-   「网易云腿被打断时 QQ 结果照样在屏」的端到端演示。
+   「ncm 腿被打断时 QQ 结果照样在屏」的端到端演示。
 
 ### 3.5 ⚠️ 本版自己造成并已修复的一次回归（必须留档）
 
-**症状（用户报告）**：v2.5.6 装机后「网易云搜索搜不出歌」。
+**症状（用户报告）**：v2.5.6 装机后「ncm 搜索搜不出歌」。
 
 **真机定位**（PLC110，用的正是本版新加的埋点 —— 这是埋点第一次回本）：
 
@@ -165,7 +165,7 @@ NcrustHttpTiming: path=/api/cloudsearch/pc ttfb=-1ms body=-1ms total=20002ms fai
 SearchViewModel:  Caused by: java.io.IOException: Canceled
 SearchViewModel:  aggregate query='love' netease=0 qq=30 qqTimedOut=false elapsed=20012ms
 NcrustSearchLatency: dispatch->netease_done=20009ms dispatch->qq_done=3493ms
-UI: 网易云 0 首 · QQ 音乐 30 首
+UI: ncm 0 首 · qm 30 首
 ```
 
 `ttfb=-1` ⇒ **请求头一个字节都没发出去**，却在 **20002ms**（正好是新加的 `callTimeout`）被杀。
@@ -177,15 +177,15 @@ UI: 网易云 0 首 · QQ 音乐 30 首
 而是本来会成功的请求。**
 
 **修法**：删掉 `searchApi` / `callTimeout`，回到共用的 `api`（`RetrofitClient` 里留有
-一段「撤销注释」，写明为什么不要顺手加超时）。用户可见的收益（首帧不等网易云）
+一段「撤销注释」，写明为什么不要顺手加超时）。用户可见的收益（首帧不等 ncm）
 完全来自「先到先发布」，与超时无关 —— 那个改动保留。
 
 **修复后复测**（同一台设备、同一会话、v2.5.5 与 v2.5.6 背靠背）：
 
 | 版本 | 界面 | `cloudsearch/pc` |
 |---|---|---|
-| v2.5.5（对照） | `网易云 30 首 · QQ 音乐 30 首` | （无埋点） |
-| **v2.5.6（修复后）** | `网易云 30 首 · QQ 音乐 30 首` ✅ | `ttfb=661ms body=9ms total=877ms` |
+| v2.5.5（对照） | `ncm 30 首 · qm 30 首` | （无埋点） |
+| **v2.5.6（修复后）** | `ncm 30 首 · qm 30 首` ✅ | `ttfb=661ms body=9ms total=877ms` |
 
 **教训（已写进 `AGENTS.md` 铁律 22 的配套条款）**：
 `callTimeout` 覆盖**整通**请求（含连接建立与排队），而 `connectTimeout`/`readTimeout`

@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B：QQ 音乐业务接口（搜索 / 取链 / 歌词 / 资料）。
+ * v2.1.0 · B：qm 业务接口（搜索 / 取链 / 歌词 / 资料）。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -23,7 +23,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * QQ 音乐的业务接口（v2.1.0 · B）。
+ * qm 的业务接口（v2.1.0 · B）。
  *
  * 全部端点的请求形状都是**实测**得到的（2026-09，`musicu.fcg` 客户端协议），
  * 不是从文档推断：搜索用 web 身份、取链与歌词用客户端身份，两套身份各自在自己的
@@ -31,7 +31,7 @@ import org.json.JSONObject
  *
  * ## 一条硬纪律：取不到 URL 就返回 null，**绝不返回坏链接**
  *
- * 这是从网易云侧继承的铁律（见 `SongUrlFetcher` 的 KDoc）：拿一个 HTML 错误页或
+ * 这是从 ncm 侧继承的铁律（见 `SongUrlFetcher` 的 KDoc）：拿一个 HTML 错误页或
  * 空流给 ExoPlayer，表现是**无限缓冲**（用户看到的是「卡住」而不是「跳过」）。
  * QQ 侧还有一个类似的坑：无权限时服务端会给 30 秒试听片段 ——
  * 本实现**只接受服务端明确返回的 purl**，不做任何「猜一个 URL 试试」的兜底。
@@ -239,7 +239,7 @@ object QqApi {
             Log.i(TAG, "vkey ok: requested=$level actual=$actualLevel prefix=${fileType.prefix} mid=$mediaMid")
             lastUrlFailure = null
             lastRejection = QqRejection.NONE
-            // 与网易云侧同一个离线缓存 key 机制：挂上它，media3 的 SimpleCache
+            // 与 ncm 侧同一个离线缓存 key 机制：挂上它，media3 的 SimpleCache
             // 才能把「同一首歌 + 同一档位」的轮换 URL 认成同一份缓存。
             return SongUrlResult(
                 url = OfflineKeys.withKey(url, song.id, actualLevel),
@@ -522,7 +522,7 @@ object QqApi {
      *
      * 为什么必须打完整：匿名态实测「所有档位都 104003」是**预期**行为
      * （见仓库外 `PHASE0-QQMUSIC-API.md` §7.2/§8），所以「取不到母带」这件事只有在
-     * **登录态**下才有区分度。而登录态只有用户有 —— 开发侧没有 QQ 音乐账号。
+     * **登录态**下才有区分度。而登录态只有用户有 —— 开发侧没有 qm 账号。
      * 把逐档位的 `result` 与 `tips` 打全，用户贴一次日志就能定位是
      * 「所有付费档都被拒（登录态/权限）」还是「只有母带档被拒（档位前缀）」。
      *
@@ -578,7 +578,7 @@ object QqApi {
      *
      * @property authoritative 服务端**明确**回答了这首歌的歌词情况（哪怕是「没有歌词」）。
      *   与「这次请求失败」必须分开：前者可以缓存、可以让 UI 显示「暂无歌词」，
-     *   后者只能当作暂时拿不到、下次还要再试。这与网易云侧靠 `code == 200` 区分
+     *   后者只能当作暂时拿不到、下次还要再试。这与 ncm 侧靠 `code == 200` 区分
      *   「权威空结果」是同一个道理（见 `PlayerViewModel` 里「只缓存 code==200 的结果」）。
      */
     data class LyricPack(
@@ -641,7 +641,7 @@ object QqApi {
      * ## 验证程度（如实标注）
      *
      * 匿名态的**结构**已实测；**登录态下 vip=1 的具体取值没有验证过**（本仓库没有
-     * QQ 音乐账号）。因此本方法的结果**只用于界面显示与降级提示**，
+     * qm 账号）。因此本方法的结果**只用于界面显示与降级提示**，
      * 绝不参与「这首歌能不能放」的判断 —— 那个判断永远由服务端返回的 purl 决定
      * （见 [fetchPlayUrl]）。判断错了最坏是界面上的一个角标不对，不会凭空给或夺走播放权限。
      */

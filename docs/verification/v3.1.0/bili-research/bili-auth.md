@@ -17,19 +17,19 @@
 | 登录能换来什么？ | **文档推断**：FLAC 无损（大会员）、收藏夹同步、投币。**均未实测** | §4 |
 | Ncrust 必须做 B站登录吗？ | ❌ **本版不必**。匿名已覆盖"搜索→播放→歌词"全链路 | §5 |
 | 如果要做，流程难吗？ | 常规扫码：`qrcode/generate` → `qrcode/poll`，两跳，**已实测可达** | §3 |
-| 可以复用网易云/QQ 的登录吗？ | ❌ 完全独立的账号体系，Cookie 不通用 | §1 |
-| Cookie 该怎么存？ | 沿用 `CookieManager` 的 `ncrust_prefs` 分桶，但**必须与网易云/QQ 分开存** | §5.2 |
+| 可以复用 ncm/QQ 的登录吗？ | ❌ 完全独立的账号体系，Cookie 不通用 | §1 |
+| Cookie 该怎么存？ | 沿用 `CookieManager` 的 `ncrust_prefs` 分桶，但**必须与 ncm/QQ 分开存** | §5.2 |
 
 ---
 
 ## 1. 账号体系：与现有两个音源**完全无关**
 
-B站、网易云、QQ 音乐是**三套独立的账号体系**，Cookie 名字、格式、域名、认证后端全不相同：
+B站、ncm、qm 是**三套独立的账号体系**，Cookie 名字、格式、域名、认证后端全不相同：
 
 | 音源 | 认证载体 | Cookie 关键字段 | 登录后端点前缀 |
 |---|---|---|---|
-| 网易云（现有） | `MUSIC_U` | `MUSIC_U` | `music.163.com` |
-| QQ 音乐（现有） | `uin` / `qqmusic_key` | — | `u.y.qq.com` |
+| ncm（现有） | `MUSIC_U` | `MUSIC_U` | `music.163.com` |
+| qm（现有） | `uin` / `qqmusic_key` | — | `u.y.qq.com` |
 | **B站（新增）** | **`SESSDATA`** | `SESSDATA` / `bili_jct` / `DedeUserID` / `DedeUserID__ckMd5` / `sid` | `passport.bilibili.com`、`api.bilibili.com` |
 
 ⇒ **绝不能复用 `CookieManager` 里那份字符串**。必须新增一个独立槽位（例如 `ncrust_prefs` 里加 `bili_cookie`），否则切换音源时会互相覆盖。
@@ -172,7 +172,7 @@ GET https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=<k
 
 ### 3.3 与 Ncrust 现有登录架构的差异
 
-| 维度 | 网易云（现有） | **B站（新增）** |
+| 维度 | ncm（现有） | **B站（新增）** |
 |---|---|---|
 | 二维码生成 | weapi `/api/login/qrcode/unikey`（需加密） | **明文 GET**，无加密 |
 | 轮询 | `/api/login/qrcode/client/login`，业务码 800/802/803 | `qrcode/poll`，业务码 86101/86090/86038/0 |
@@ -217,8 +217,8 @@ GET https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=<k
 
 ```
 ncrust_prefs
-├── user_cookie        ← 网易云（现有，不动）
-├── qq_cookie          ← QQ 音乐（现有，不动）
+├── user_cookie        ← ncm（现有，不动）
+├── qq_cookie          ← qm（现有，不动）
 └── bili_cookie        ← 【新增】B站，独立键
 ```
 

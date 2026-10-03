@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -28,12 +28,12 @@ import org.junit.Test
  *
  * | 场景 | 修复前的真实表现 | 本文件的用例 |
  * |---|---|---|
- * | QQ 曲目**新鲜**加载（`singer.id=4558`，无 mid） | 跳到网易云的**马洪波** | [QQ 曲目只有数字 singerID 时跳搜索而不是猜一个艺人] |
+ * | QQ 曲目**新鲜**加载（`singer.id=4558`，无 mid） | 跳到 ncm 的**马洪波** | [QQ 曲目只有数字 singerID 时跳搜索而不是猜一个艺人] |
  * | QQ 曲目**冷启动恢复**（`id=null`，只有名字） | **毫无反应**（静默失败） | [冷启动恢复的 QQ 曲目只有名字时跳搜索] |
  *
  * 夹具里的数字全部来自 2026-09 的真实接口响应（匿名可复现）：
  * QQ `singer` = `{id:4558, mid:"0025NhlN2yWrP4", name:"周杰伦"}`；
- * 网易云 `api/artist/4558` = 马洪波、`api/artist/6452` = 周杰伦。
+ * ncm `api/artist/4558` = 马洪波、`api/artist/6452` = 周杰伦。
  */
 class ArtistNavigatorTest {
 
@@ -73,7 +73,7 @@ class ArtistNavigatorTest {
     }
 
     @Test
-    fun `网易云曲目带十进制 id 时直接进网易云艺人页`() {
+    fun `ncm曲目带十进制 id 时直接进ncm艺人页`() {
         val nav = ArtistNavigator.resolve(song(MusicSource.NETEASE, neArtist))
         assertEquals(ArtistNav.Direct(MusicSource.NETEASE, "6452", "周杰伦"), nav)
     }
@@ -85,7 +85,7 @@ class ArtistNavigatorTest {
         val nav = ArtistNavigator.resolve(song(MusicSource.QQMUSIC, qqArtistNumericOnly))
         assertEquals(
             "只有 QQ 的数字 singerID（4558）时必须降级为搜索 —— "
-                + "拿它当网易云 id 查会得到马洪波，这正是 v2.6.1 的 P0",
+                + "拿它当 ncm id 查会得到马洪波，这正是 v2.6.1 的 P0",
             ArtistNav.Search("周杰伦", ArtistNavReason.AMBIGUOUS_NUMERIC_ID),
             nav,
         )
@@ -110,8 +110,8 @@ class ArtistNavigatorTest {
     }
 
     @Test
-    fun `QQ 的 mid 被塞进网易云值域时同样不跳`() {
-        // 损坏数据的形状：source 说网易云，artist 却是 base62 的 QQ mid。
+    fun `QQ 的 mid 被塞进ncm值域时同样不跳`() {
+        // 损坏数据的形状：source 说 ncm，artist 却是 base62 的 QQ mid。
         val broken = SongItem(
             id = 186016L,
             name = "晴天",
@@ -135,7 +135,7 @@ class ArtistNavigatorTest {
     }
 
     @Test
-    fun `冷启动恢复的网易云曲目只有名字时跳搜索`() {
+    fun `冷启动恢复的ncm曲目只有名字时跳搜索`() {
         val nav = ArtistNavigator.resolve(song(MusicSource.NETEASE, ArtistItem(name = "周杰伦")))
         assertEquals(ArtistNav.Search("周杰伦", ArtistNavReason.MISSING_ID), nav)
     }
@@ -189,19 +189,19 @@ class ArtistNavigatorTest {
     // -------------------------------------------------- 5. 值域闸门（纯函数）
 
     @Test
-    fun `网易云值域只吃十进制且小于 2 的 40 次方`() {
+    fun `ncm值域只吃十进制且小于 2 的 40 次方`() {
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "6452"))
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "1"))
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.NETEASE, " 6452 "))
         assertFalse("0 不是合法艺人 id", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "0"))
         assertFalse("负数", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "-1"))
-        assertFalse("QQ 的 singerMID 不是网易云 id", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "0025NhlN2yWrP4"))
+        assertFalse("QQ 的 singerMID 不是 ncm id", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, "0025NhlN2yWrP4"))
         assertFalse("空", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, ""))
         assertFalse("null", ArtistNavigator.idDomainMatches(MusicSource.NETEASE, null))
     }
 
     @Test
-    fun `QQ 值域只吃 base62 且拒绝网易云值域内的纯数字`() {
+    fun `QQ 值域只吃 base62 且拒绝ncm值域内的纯数字`() {
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.QQMUSIC, "0025NhlN2yWrP4"))
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.QQMUSIC, "001BLpXF2DyJe2"))
         assertTrue(ArtistNavigator.idDomainMatches(MusicSource.QQMUSIC, "003Nz2So3XXYek"))
@@ -216,7 +216,7 @@ class ArtistNavigatorTest {
     }
 
     @Test
-    fun `QQ 合成 id 的十进制形态落在网易云值域之外`() {
+    fun `QQ 合成 id 的十进制形态落在ncm值域之外`() {
         // SourceIds.qqId 造的 id 带 bit62；把它当艺人 id 用必须被值域闸门拦下。
         val synthetic = SourceIds.qqId(97773L, "0039MnYb0qxYhV").toString()
         assertFalse(ArtistNavigator.idDomainMatches(MusicSource.NETEASE, synthetic))

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -65,13 +65,13 @@ class PlaylistLoadCoordinator {
      * [NeedLogin] 要给「去登录」入口，[Network] 要给「重试」，[NotFound] 只能回退。
      */
     enum class Reason {
-        /** 登录态已失效（QQ 音乐实测：`GetLoginUserInfo` 返回 `code=1000`）。 */
+        /** 登录态已失效（qm 实测：`GetLoginUserInfo` 返回 `code=1000`）。 */
         NEED_LOGIN,
 
         /** 网络失败 / 服务端返回了非 0 的业务码。可重试。 */
         NETWORK,
 
-        /** 歌单不存在或不属于当前账号（QQ 音乐实测：`code=10004`）。**重试没有意义**。 */
+        /** 歌单不存在或不属于当前账号（qm 实测：`code=10004`）。**重试没有意义**。 */
         NOT_FOUND,
 
         /** 登录态有效，但这个歌单确实一首歌都没有。**不是错误**，但详情页要能区分它与「还没加载」。 */

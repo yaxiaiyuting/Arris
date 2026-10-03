@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -38,7 +38,7 @@ class SourceCountsBiliTest {
             qqCount = 12, qqStatus = SourceSearchStatus.DONE,
         )
         // 默认 biliStatus = SKIPPED ⇒ 走两源模板，连一次多余拼接都不做。
-        assertEquals("网易云 30 首 · QQ 音乐 12 首", counts.summary(zhCN))
+        assertEquals("ncm 30 首 · qm 12 首", counts.summary(zhCN))
         assertEquals(counts.summary(zhCN), counts.summary(zhCN))
         assertFalse(counts.hasPending)
     }
@@ -50,7 +50,7 @@ class SourceCountsBiliTest {
             qqCount = 0, qqStatus = SourceSearchStatus.DONE,
             biliCount = 5, biliStatus = SourceSearchStatus.DONE,
         )
-        assertEquals("网易云 30 首 · QQ 音乐 0 首 · B站 5 首", counts.summary(zhCN))
+        assertEquals("ncm 30 首 · qm 0 首 · B站 5 首", counts.summary(zhCN))
     }
 
     @Test
@@ -72,14 +72,14 @@ class SourceCountsBiliTest {
             qqStatus = SourceSearchStatus.DONE,
             biliStatus = status,
         )
-        assertEquals("网易云 0 首 · QQ 音乐 0 首 · B站 搜索超时", counts(SourceSearchStatus.TIMEOUT).summary(zhCN))
-        assertEquals("网易云 0 首 · QQ 音乐 0 首 · B站 搜索失败", counts(SourceSearchStatus.ERROR).summary(zhCN))
+        assertEquals("ncm 0 首 · qm 0 首 · B站 搜索超时", counts(SourceSearchStatus.TIMEOUT).summary(zhCN))
+        assertEquals("ncm 0 首 · qm 0 首 · B站 搜索失败", counts(SourceSearchStatus.ERROR).summary(zhCN))
         // ★ SKIPPED 是**唯一**不产生第三段的取值：B 站没启用时统计行必须与 v3.0.0
         // 逐字相同（铁律 27）。所以「未启用」这句文案**不会**出现在统计行上 ——
         // `searchSourceSkipped` 仍被 `sideText` 用着（`biliText` 可单独取用），
         // 只是 `summary` 在 SKIPPED 时短路了。
-        assertEquals("网易云 0 首 · QQ 音乐 0 首", counts(SourceSearchStatus.SKIPPED).summary(zhCN))
-        assertEquals("网易云 0 首 · QQ 音乐 0 首 · B站 搜索中…", counts(SourceSearchStatus.PENDING).summary(zhCN))
+        assertEquals("ncm 0 首 · qm 0 首", counts(SourceSearchStatus.SKIPPED).summary(zhCN))
+        assertEquals("ncm 0 首 · qm 0 首 · B站 搜索中…", counts(SourceSearchStatus.PENDING).summary(zhCN))
     }
 
     @Test
@@ -256,13 +256,13 @@ class SourceFilterTest {
     @Test
     fun `筛选后为空时筛选档仍然挂载 —— P0-D 的回归判据`() {
         // 用户点了「只看 B 站」，而这一轮 B 站一条都没有：
-        // 总数 30（网易云的 30 首），筛选后 0。
+        // 总数 30（ncm 的 30 首），筛选后 0。
         // 旧实现的判据是「筛选后的结果」，于是筛选档自己消失、没有任何路径点回「双源」。
         assertTrue(
             "筛选后为空时筛选档必须还在（否则用户没有任何路径切回「双源」）",
             SourceFilter.shouldShowFilterRow(totalSongs = 30, biliEnabled = true),
         )
-        // B 站关掉时同样成立（那时只剩双源/网易云/QQ 三档，仍然有得选）。
+        // B 站关掉时同样成立（那时只剩双源/ncm/QQ 三档，仍然有得选）。
         assertTrue(SourceFilter.shouldShowFilterRow(totalSongs = 30, biliEnabled = false))
     }
 
@@ -274,7 +274,7 @@ class SourceFilterTest {
 
     @Test
     fun `可用档位多于一个才画筛选档`() {
-        // 当前实现下这条恒成立（关掉 B 站仍有双源/网易云/QQ 三档）。
+        // 当前实现下这条恒成立（关掉 B 站仍有双源/ncm/QQ 三档）。
         // 它守的是**将来**：若某个版本只剩一档，画一排单选档位没有意义。
         assertTrue(SourceFilter.visible(biliEnabled = false).size > 1)
         assertTrue(SourceFilter.visible(biliEnabled = true).size > 1)

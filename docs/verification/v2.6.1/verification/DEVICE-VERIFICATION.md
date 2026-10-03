@@ -10,11 +10,11 @@
 
 | # | 入口 | 设备 | 期望 | 实测 | 证据 |
 |---|---|---|---|---|---|
-| V1 | 二级菜单「转到歌手」（QQ 曲目，搜索结果长按） | WGR-W09 | 进 **QQ 源的周杰伦** | ✅ 标题「周杰伦」，专辑 43 / 单曲 30，专辑行全标 **QQ 音乐** | `after-wgr-02-qq-artist-page.png` / `-tree.txt` |
+| V1 | 二级菜单「转到歌手」（QQ 曲目，搜索结果长按） | WGR-W09 | 进 **QQ 源的周杰伦** | ✅ 标题「周杰伦」，专辑 43 / 单曲 30，专辑行全标 **qm** | `after-wgr-02-qq-artist-page.png` / `-tree.txt` |
 | V2 | 同上 | PCL110 | 同上 | ✅ 标题「周杰伦」，专辑 43 / 单曲 30 | `after-pcl-01-qq-artist-page.png` |
-| V3 | 二级菜单「转到歌手」（**网易云**曲目，回归） | WGR-W09 | 进网易云周杰伦，**无回归** | ✅ 标题「周杰伦」，专辑 54 / 单曲 60（双源聚合） | `after-wgr-03-netease-artist-tree.txt` |
-| V4 | 专辑页副标题（网易云） | WGR-W09 | 进网易云周杰伦 | ✅ 专辑 54 / 单曲 60 | `after-wgr-06-album-page-artist-tree.txt` |
-| V5 | **播放页托盘作者名**（QQ 曲目，新鲜加载） | PCL110 | 进 QQ 源的这位歌手 | ✅ 「草东没有派对」专辑 3 / 单曲 30，专辑行全标 QQ 音乐 | `after-pcl-03-qq-artist-from-tray.png` |
+| V3 | 二级菜单「转到歌手」（**ncm**曲目，回归） | WGR-W09 | 进 ncm 周杰伦，**无回归** | ✅ 标题「周杰伦」，专辑 54 / 单曲 60（双源聚合） | `after-wgr-03-netease-artist-tree.txt` |
+| V4 | 专辑页副标题（ncm） | WGR-W09 | 进 ncm 周杰伦 | ✅ 专辑 54 / 单曲 60 | `after-wgr-06-album-page-artist-tree.txt` |
+| V5 | **播放页托盘作者名**（QQ 曲目，新鲜加载） | PCL110 | 进 QQ 源的这位歌手 | ✅ 「草东没有派对」专辑 3 / 单曲 30，专辑行全标 qm | `after-pcl-03-qq-artist-from-tray.png` |
 | V6 | 二级菜单/托盘（**冷启动恢复**的歌，只有名字） | WGR-W09 | **跳搜索 + 提示**（不是静默失败） | ✅ 切到搜索 tab、预填「伍佰 & China Blue」、提示「未找到该歌手的准确身份，已为你搜索」 | `after-wgr-04-search-fallback*.png` / `after-wgr-05-search-fallback-snackbar.png` |
 | V7 | 同上 | PCL110 | 同上 | ✅ 预填「草东没有派对」+ 同一条提示 | `after-pcl-02-search-fallback.png` |
 
@@ -88,7 +88,7 @@ $U $S dump                                   # ⇒ 528 277 周杰伦
 
 | 未验证 | 说明 |
 |---|---|
-| 搜索页「艺人」tab → 艺人页 | 该 tab 至今只由网易云的 `cloudsearch/pc type=100` 填充（探针已证），本版把它改成**显式**带 `MusicSource.NETEASE`，行为与修复前逐字节相同；未单独做真机点击。守卫是 `ArtistRouteContractTest` 的源码扫描 |
+| 搜索页「艺人」tab → 艺人页 | 该 tab 至今只由 ncm 的 `cloudsearch/pc type=100` 填充（探针已证），本版把它改成**显式**带 `MusicSource.NETEASE`，行为与修复前逐字节相同；未单独做真机点击。守卫是 `ArtistRouteContractTest` 的源码扫描 |
 | 「单曲信息」页 → 艺人 | 该页**没有**艺人入口（`SongDetailScreen` 里艺人是纯文本），所以没有可验的路径 |
 | QQ 歌单详情 / 本地歌单 / 收藏页 长按 → 转到歌手 | 与已验证的「搜索结果长按」走**同一个** `SongMenuSheet` → 同一个 `navigateToArtist`，代码路径唯一；但确实没有逐个页面点过 |
 | S6（Android 7.0） | 该机上长按歌曲行被播放器拖拽层吃掉，取不到二级菜单；本版**未**在 S6 上复测 |

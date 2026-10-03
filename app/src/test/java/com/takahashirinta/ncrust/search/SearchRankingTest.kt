@@ -6,7 +6,7 @@ import org.junit.Test
 /**
  * v2.1.4 聚合搜索排序的回归测试。
  *
- * 规则来自用户原话：「如果用户有 vip，如果有网易云就优先给出网易云的会员专享歌曲，
+ * 规则来自用户原话：「如果用户有 vip，如果有 ncm 就优先给出 ncm 的会员专享歌曲，
  * qq 绿钻就给 qq 的曲库，如果两个都有，就同时给出来」。
  *
  * 这里的用例把三件事钉住：
@@ -24,7 +24,7 @@ class SearchRankingTest {
     // ---------- 都没有会员：保持历史行为 ----------
 
     @Test
-    fun `两家都没会员时顺序完全不变——网易云在前`() {
+    fun `两家都没会员时顺序完全不变——ncm在前`() {
         val netease = listOf(n("1", TrackAccess.MEMBER_ONLY), n("2", TrackAccess.FREE))
         val qq = listOf(q("1", TrackAccess.MEMBER_ONLY), q("2", TrackAccess.FREE))
         val out = SearchRanking.rank(netease, qq, neteaseVip = false, qqVip = false)
@@ -41,7 +41,7 @@ class SearchRankingTest {
     // ---------- 只有一家有会员 ----------
 
     @Test
-    fun `只有网易云有会员——网易云的会员专享排最前，其余按原序，QQ 整块在后`() {
+    fun `只有ncm有会员——ncm的会员专享排最前，其余按原序，QQ 整块在后`() {
         val netease = listOf(
             n("a", TrackAccess.FREE),
             n("b", TrackAccess.MEMBER_ONLY),
@@ -54,7 +54,7 @@ class SearchRankingTest {
     }
 
     @Test
-    fun `只有 QQ 有会员——QQ 的会员专享排最前，网易云整块在后`() {
+    fun `只有 QQ 有会员——QQ 的会员专享排最前，ncm整块在后`() {
         val netease = listOf(n("a", TrackAccess.MEMBER_ONLY), n("b", TrackAccess.FREE))
         val qq = listOf(q("x", TrackAccess.FREE), q("y", TrackAccess.MEMBER_ONLY), q("z", TrackAccess.MEMBER_ONLY))
         val out = SearchRanking.rank(netease, qq, neteaseVip = false, qqVip = true)
@@ -72,7 +72,7 @@ class SearchRankingTest {
         val netease = listOf(n("a", TrackAccess.FREE), n("b", TrackAccess.MEMBER_ONLY))
         val qq = listOf(q("x", TrackAccess.MEMBER_ONLY), q("y", TrackAccess.FREE))
         val out = SearchRanking.rank(netease, qq, neteaseVip = false, qqVip = true)
-        // QQ 的 x 被提前，网易云的 b 仍然留在它原来的位置（第 3 位）
+        // QQ 的 x 被提前，ncm 的 b 仍然留在它原来的位置（第 3 位）
         assertEquals(listOf("qx", "qy", "na", "nb"), out.keys())
     }
 
@@ -134,7 +134,7 @@ class SearchRankingTest {
     // ---------- fee 语义 ----------
 
     @Test
-    fun `网易云 fee 的映射——8 是免费播放而不是会员专享`() {
+    fun `ncm fee 的映射——8 是免费播放而不是会员专享`() {
         assertEquals(TrackAccess.FREE, TrackAccess.ofNeteaseFee(0))
         // 最容易误判的一条：fee=8 带「付费」字样，实际是「播放免费 + 高音质需会员」。
         // 实测《稻香(深情版)》就是 fee=8。把它当会员专享会让排序去推一首谁都能放的歌。

@@ -235,7 +235,7 @@ enum class AddToPlaylistResult { SUCCESS, DUPLICATE, FAILED }
  *
  * ## 为什么与 [AddToPlaylistSheet] 分开而不是加一个参数
  *
- * 两者的**幂等语义不同**：网易云的加歌由服务端 502 兜底（重复添加返回 502，
+ * 两者的**幂等语义不同**：ncm 的加歌由服务端 502 兜底（重复添加返回 502，
  * 客户端按幂等成功提示）；本地歌单的重复添加是**明确的规则 7**
  * （清除 tombstone + origin 改 LOCAL，见 `LocalPlaylistSync.addManual`）。
  * 把两种语义塞进同一个 sheet，迟早会有人把「502 幂等」套到本地路径上。

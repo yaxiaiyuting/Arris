@@ -31,10 +31,10 @@
 | `MEDIA_ID_PREFIX = "song:"` | `:33` | 预载项 mediaId 的前缀常量 |
 | `enum Decision { APPEND, REPLACE, IGNORE }` | `:36-45` | 一次 preload 请求相对槽位的取舍：空槽追加 / 换歌或换 URL 先删后加 / 完全相同则幂等忽略 |
 | `mediaIdFor(source, songId, url)` / `mediaIdFor(songId, url)` | `:60-61` / `:64-65` | 构造 mediaId；**带音源**（v2.1.5）。`songId <= 0` 时退回 URL 当 id（`:61`） |
-| `identityFromMediaId(mediaId)` / `songIdFromMediaId(mediaId)` | `:71-72` / `:74` | 从 mediaId 反解 `(音源, id)`；**解析不出音源返回 null，不猜成网易云**（`:68-69`） |
+| `identityFromMediaId(mediaId)` / `songIdFromMediaId(mediaId)` | `:71-72` / `:74` | 从 mediaId 反解 `(音源, id)`；**解析不出音源返回 null，不猜成 ncm**（`:68-69`） |
 | `decide(pendingSongId, pendingUrl, incomingSongId, incomingUrl)` | `:80-93` | 槽位占用**只看 `pendingUrl == null`**（`:78-79`、`:86`）；两侧都有 id 时按 `(id, url)` 全等判 IGNORE（`:87-88`），否则退化成只比 URL（`:89-91`） |
 | `transitionMatches(pendingSource, pendingSongId, pendingUrl, itemSource, itemSongId, itemUrl)` | `:105-119` | 自动过渡守卫：槽位带 id 时**只认 `(音源, id)`**，起播项没 id 一律拒绝（`:114-116`）；老路径才退回 URL 比对（`:117-118`） |
-| `transitionMatches(pendingSongId, pendingUrl, itemSongId, itemUrl)`（网易云重载） | `:125-133` | 仅为不破坏既有单测保留；生产代码走带音源的版本（`:122-123`） |
+| `transitionMatches(pendingSongId, pendingUrl, itemSongId, itemUrl)`（ncm 重载） | `:125-133` | 仅为不破坏既有单测保留；生产代码走带音源的版本（`:122-123`） |
 
 `decide` 的判据细节：`pendingUrl == null` ⇒ `APPEND`（`:86`）；两侧 id 都 > 0 时 `same = (id 相等 && url 相等)`（`:87-88`），否则 `same = (url 相等)`（`:89-91`）；`same ⇒ IGNORE`，否则 `REPLACE`（`:92`）。
 
@@ -58,7 +58,7 @@
 
 | 步骤 | 行 |
 |---|---|
-| 判定键换成 `TrackKey`（避免「网易云 123」与「QQ 123」互吞） | `:1559` |
+| 判定键换成 `TrackKey`（避免「ncm 123」与「QQ 123」互吞） | `:1559` |
 | 幂等闸门 1：同一首正在取 → return | `:1560` |
 | 幂等闸门 2：要预载的就是当前正在播的歌 → return（`allowCurrent` 显式放行单曲循环） | `:1563` |
 | 幂等闸门 3（v1.5.2 串台修复）：这一首**已经在待播槽位里** → return，绝不重复 `preload_next` | `:1569` |
@@ -163,7 +163,7 @@ if (!pendingNextArtwork.isNullOrEmpty()) {
 | `transition_rejected_when_slot_empty` | `:148` | 空槽 ⇒ 拒绝 |
 | `transition_url_fallback_without_ids` | `:153` | 无 id 时 URL 兜底 |
 | `media_id_round_trip` | `:162` | mediaId 往返 |
-| `netease_media_id_shape_is_unchanged` | `:176` | 网易云形状逐字节不变（`song:123`） |
+| `netease_media_id_shape_is_unchanged` | `:176` | ncm 形状逐字节不变（`song:123`） |
 | `qq_media_id_carries_the_source` | `:192` | QQ 形状带音源 |
 | `transition_rejects_same_number_on_other_source` | `:209` | 跨源同号 ⇒ 拒绝 |
 | `cross_source_transition_is_accepted_when_it_matches` | `:234` | 跨源匹配 ⇒ 放行 |

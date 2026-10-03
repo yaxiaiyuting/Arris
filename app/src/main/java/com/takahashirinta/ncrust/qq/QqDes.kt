@@ -1,16 +1,16 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · D：QQ 音乐 QRC 专用的 TripleDES 变体实现。
+ * v2.1.0 · D：qm QRC 专用的 TripleDES 变体实现。
  *
  * ---------------------------------------------------------------------------
  * 这是本仓库里唯一一段「照着参考实现移植、而非自己写」的算法，理由必须写清楚：
  *
- * **QQ 音乐用的不是标准 3DES。** 实测（2026-09）：
+ * **qm 用的不是标准 3DES。** 实测（2026-09）：
  *   - `javax.crypto` 的 `DESede/ECB/NoPadding` 配同一个 24 字节密钥，
  *     解真实 QRC 密文得到的第一块是 `ee186317`，**不是 zlib 流头**（标准 DES 走不通）；
  *   - 参考实现 `luren-dc/QQMusicApi` 的纯 Python DES **同样通不过标准测试向量**

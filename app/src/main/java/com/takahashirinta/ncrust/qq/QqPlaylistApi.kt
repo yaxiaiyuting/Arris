@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.2.0：QQ 音乐用户歌单的**只读**接口层。
+ * v2.2.0：qm 用户歌单的**只读**接口层。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -16,7 +16,7 @@ import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.source.PlaylistTrack
 
 /**
- * QQ 音乐用户歌单的只读接口（v2.2.0）。
+ * qm 用户歌单的只读接口（v2.2.0）。
  *
  * ## 纪律：**本文件里只有读接口**
  *

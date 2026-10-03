@@ -90,7 +90,7 @@ Kotlin 源文件或 Flutter 工程文件。**SPlayer-Next 不可能是 Android �
 |---|---|
 | 版本 | `3.0.0-rc.4` |
 | 描述 | "Android-first SPlayer build with Capacitor and embedded local API" |
-| 技术栈 | Vue 3 + **Capacitor 8**（`@capacitor/android@^8.4.0`）+ `nodejs-mobile-cordova` 内嵌网易云 API |
+| 技术栈 | Vue 3 + **Capacitor 8**（`@capacitor/android@^8.4.0`）+ `nodejs-mobile-cordova` 内嵌 ncm API |
 | 最低系统 | **Android 10（API 29）** |
 | 许可证 | AGPL-3.0 |
 | 播放引擎 | 原生 **ExoPlayer** + WebView 双引擎 |

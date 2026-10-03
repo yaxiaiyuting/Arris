@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -124,9 +124,9 @@ object OfflineAudioCache {
      *
      * 1. **只对 B 站媒体补 `Referer: https://www.bilibili.com/`**。实测：B 站媒体 CDN
      *    不带 Referer 一律 **403**（连带 ExoPlayer 指纹的 UA 也 403），而带上就是 206。
-     *    反过来，给网易云/QQ 的请求加 B 站 Referer 也会把它们打死 ——
+     *    反过来，给 ncm/QQ 的请求加 B 站 Referer 也会把它们打死 ——
      *    所以判据是白名单（[BiliCdn.needsReferer]），不是全局默认头。
-     *    网易云与 QQ 的请求在这里**一个字节都不变**。
+     *    ncm 与 QQ 的请求在这里**一个字节都不变**。
      * 2. **B 站 CDN 用内容寻址的稳定缓存键**：它的直链两小时后会换一条（query 全变），
      *    但路径里的内容哈希不变，所以键取文件名（[BiliCdn.cacheKeyFor]）。
      *    非 B 站 CDN 的键**逐字不变**。
@@ -151,7 +151,7 @@ object OfflineAudioCache {
      * | URI | 走哪个 | 与 v3.2.3 的差别 |
      * |---|---|---|
      * | B 站媒体（[BiliCdn.isBiliMedia]） | `DefaultDataSource` + **B 站 UA** | 多一个 UA + 多一批被判定的 host |
-     * | 其余（网易云 / QQ / 本地 / 未知） | `DefaultDataSource` + **media3 默认** | **零差别**（同一个裸工厂） |
+     * | 其余（ncm / QQ / 本地 / 未知） | `DefaultDataSource` + **media3 默认** | **零差别**（同一个裸工厂） |
      *
      * 判据只有一处（[BiliCdn.isBiliMedia]），选源与加头都问它 —— 铁律 26：对称位置的保护必须对称。
      */

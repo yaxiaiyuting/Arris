@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -32,8 +32,8 @@ object PlaybackStateManager {
     private const val KEY_SONG_NAME = "song_name"
     private const val KEY_SONG_ARTIST = "song_artist"
     private const val KEY_SONG_ARTWORK = "song_artwork"
-    // v2.1.0 · C：音源身份要一起落盘，否则冷启动恢复出来的 QQ 曲目会被当成网易云同号歌曲。
-    // 可空 + 默认 null：v2.1.0 之前写入的状态里没有这几个 key，读到就是 null ⇒ 网易云。
+    // v2.1.0 · C：音源身份要一起落盘，否则冷启动恢复出来的 QQ 曲目会被当成 ncm 同号歌曲。
+    // 可空 + 默认 null：v2.1.0 之前写入的状态里没有这几个 key，读到就是 null ⇒ ncm。
     private const val KEY_SONG_SOURCE = "song_source"
     private const val KEY_SONG_SOURCE_ID = "song_source_id"
     private const val KEY_SONG_MEDIA_ID = "song_media_id"
@@ -96,7 +96,7 @@ object PlaybackStateManager {
             .apply()
     }
 
-    /** v2.1.0 · C：上次播放曲目的音源身份（无记录时为 null ⇒ 网易云）。 */
+    /** v2.1.0 · C：上次播放曲目的音源身份（无记录时为 null ⇒ ncm）。 */
     fun getSourceKey(context: Context): String? = getPrefs(context).getString(KEY_SONG_SOURCE, null)
     fun getSourceId(context: Context): String? = getPrefs(context).getString(KEY_SONG_SOURCE_ID, null)
     fun getMediaId(context: Context): String? = getPrefs(context).getString(KEY_SONG_MEDIA_ID, null)

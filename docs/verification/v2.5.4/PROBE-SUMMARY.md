@@ -14,7 +14,7 @@
 | # | 任务书的初步判断 | 探针结论 | 是否被推翻 |
 |---|---|---|---|
 | A | 「231 条转发属性可能有运行期开销」 | 转发属性是**计算型 getter**，零分配，且在 release 产物里**已被 R8 全部内联**（120 条中 0 条留方法体、65 条留内联帧）。开销上界 = 每次访问 2 条 `iget`。**没有任何 release 性能基线**，v2.5.4 建立第一条 | 未推翻，但**「是否需要优化」的答案提前变成「不需要」**——量化仍需真机数据兜底 |
-| B | 「搜索历史只存 id，导致 QQ 被认成网易云」 | **半对**。写读两侧确实都丢音源，但「被当成网易云」只在**字符串口径**成立；播放路径 `TrackKey.of(null,id)` 用 bit62 **认得出 QQ**，真正的用户可见故障是「认得出是 QQ、songmid 丢了 ⇒ 取不到链」。**并且探针漏掉了第三个事实：落盘字段名由 R8 决定**（真机 XML 是 `{"a":…,"e":…}`） | **是**（症状定性 + 发现第三个 bug） |
+| B | 「搜索历史只存 id，导致 QQ 被认成 ncm」 | **半对**。写读两侧确实都丢音源，但「被当成 ncm」只在**字符串口径**成立；播放路径 `TrackKey.of(null,id)` 用 bit62 **认得出 QQ**，真正的用户可见故障是「认得出是 QQ、songmid 丢了 ⇒ 取不到链」。**并且探针漏掉了第三个事实：落盘字段名由 R8 决定**（真机 XML 是 `{"a":…,"e":…}`） | **是**（症状定性 + 发现第三个 bug） |
 | C | 「QQ 无 songid 兜底**路径**」（读作取链时兜底） | **取链根本不读 songid**：`QqApi.kt:134` 是 `song.sourceId ?: return null` —— songmid 缺失是硬失败，无兜底无重试。真正的兜底在**解析期**（`SourceIds.qqId` 在 `rawSongId<=0` 时用 songmid 的 FNV-1a 散列造 id），只影响**身份**，有实现、有单测、**零计数器零日志** | **是** |
 | D | 怀疑「sw600dp 未覆盖横屏平板」 | **反了**：`screenWidthDp >= 600` 恰恰**满足**（平板横竖都满足），正因为满足才走**宽屏两栏**分支，而可视化只挂在 `bigScreenActive`（用户点 ⤢）那一支里。更硬的一条：平板上**没有 ⤢ 入口**（它只在竖屏控制条变体里）⇒ 该功能在平板上**结构性不可达** | **是**（谓词满足才是根因） |
 | E | 「托盘要改成 实时歌词 / 歌名·作者·音源」 | 托盘不是独立组件，是 `PlayerCard` 里的一段 56dp `Box`，**已经是两行**；改版是**内容替换而不是高度变化**（`collapsedOffsetY` / `BottomOverlayInsetDp` / `miniCoverHalfPx` 全部不用动）。行级歌词的正确数据源是 `lyrics + currentPosition` + **既有的** `currentLineIndex`，**不是**通知栏那条（被默认关闭的开关挡着，且不可观察） | 未推翻，但**高度假设与「复用通知栏歌词」被否掉** |
@@ -51,8 +51,8 @@
 |---|---|
 | 存了哪些字段 | 五段：`id / title / coverUrl / subtitle / timestamp`。prefs 文件 `search_history`，三段 key `songs` / `albums` / `artists`，每段 ≤10 条，TTL 14 天 |
 | 只存 id 的证据 | 写：`SearchHistoryManager.kt:27-35` 的 `addSong` **一次都没读** `song.source` / `song.sourceId` / `song.mediaId`；读：`SearchScreen.kt:749-755` 的 `toSongItem()` 只填 5 个字段，音源三件套落在声明默认值 `null` |
-| 读取时怎么恢复 source | **今天根本不恢复**。`SongItem.musicSource` 读那个 `String?` 字段，`null` ⇒ 网易云（`MusicSource.fromKey`） |
-| 唯一可证明的推断 | **bit62**：`SourceIds.isQqId(id)` = `(id and (1L shl 62)) != 0`。「带标志位 ⇒ QQ」是**结构性结论**（全部 QQ id 都由 `qqId()` 产出、标志位恒置位；网易云 id 是十进制的百万~十亿量级）。**id 区间启发式必须放弃** —— QQ 的裸 songid 同样是 9~10 位十进制，两个区间重叠 |
+| 读取时怎么恢复 source | **今天根本不恢复**。`SongItem.musicSource` 读那个 `String?` 字段，`null` ⇒ ncm（`MusicSource.fromKey`） |
+| 唯一可证明的推断 | **bit62**：`SourceIds.isQqId(id)` = `(id and (1L shl 62)) != 0`。「带标志位 ⇒ QQ」是**结构性结论**（全部 QQ id 都由 `qqId()` 产出、标志位恒置位；ncm id 是十进制的百万~十亿量级）。**id 区间启发式必须放弃** —— QQ 的裸 songid 同样是 9~10 位十进制，两个区间重叠 |
 | 推不出什么 | **songmid / media_mid**。兜底 id 是 songmid 的 FNV-1a 散列，**不可逆** |
 | 迁移代价 | 每段 ≤10 条、TTL 14 天 ⇒ 「读时推断、不刷盘、等自然过期」是一个**有界**策略，不需要破坏性迁移 |
 
@@ -106,7 +106,7 @@ com.takahashirinta.ncrust.library.SearchHistoryManager$HistoryItem -> G4.k:
 | 取链时有没有兜底 | **没有**。`QqApi.kt:134` 是 `song.sourceId ?: return null`；另有一条**取链侧**的次要兜底：`media_mid` 缺失时回落 songmid（`:136`），且刻意**不**反向重试（`:126-131`，用错 mid 会拿到一条到 CDN 才 404 的坏链） |
 | 有界吗 | 音质阶梯 ≤6 种文件类型在**一次** HTTP 请求里问完（`QqQuality.attemptsFor` → `QqApi.kt:138-139`），`:143` 的循环是纯内存挑档 ⇒ **容量有界**，不是熔断器。上层另有 `QualityRetryGuard.MAX_ATTEMPTS_PER_SONG = 3` 与 `AutoSkipGuard.MAX_CONSECUTIVE_AUTO_SKIPS = 5` |
 | 现在能测到什么 | **零**。QQ 取链/解析路径上没有任何计数器、没有能区分兜底的日志 |
-| 会上报吗 | **没有 QQ 专用上报**，但探针发现一条**跨音源泄漏**：`PlayReporter`（网易云 webLog）没有音源闸门，QQ 曲目的 2^62 合成 id 会被 POST 给 `clientlogusf.music.163.com`（`PlayerViewModel.kt:549-554`、`PlayReporter.kt:47-48`），与 `QqMusicSourceProvider.kt:40` 的 KDoc 承诺矛盾。**服务端效果未验证**；本版**不动它**（见 §6） |
+| 会上报吗 | **没有 QQ 专用上报**，但探针发现一条**跨音源泄漏**：`PlayReporter`（ncm webLog）没有音源闸门，QQ 曲目的 2^62 合成 id 会被 POST 给 `clientlogusf.music.163.com`（`PlayerViewModel.kt:549-554`、`PlayReporter.kt:47-48`），与 `QqMusicSourceProvider.kt:40` 的 KDoc 承诺矛盾。**服务端效果未验证**；本版**不动它**（见 §6） |
 
 **因此本版要做的事**：新增 `QqFallbackCounter`（纯 JVM，`AtomicLong`）+ `QqProbeCounters`
 （唯一埋点入口）+ `QqProbeStore`（落 `ncrust_qq_probe`/`stats`，**不上报**），

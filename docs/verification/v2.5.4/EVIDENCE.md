@@ -42,27 +42,27 @@
 | 步骤 | 事实 | 证据文件 |
 |---|---|---|
 | 升级后冷启 | 旧形状的历史**一条没丢**（`search_history.xml` 仍是 `{"a":…,"e":…}`，App 正常读取并渲染出两条） | 本地取证（见 §5 的 XML 原文） |
-| 打开搜索页 | 两条同名历史都在（一条 QQ 一条网易云 —— 这正是原 bug 的现场） | `s6-search-history-list.png` |
+| 打开搜索页 | 两条同名历史都在（一条 QQ 一条 ncm —— 这正是原 bug 的现场） | `s6-search-history-list.png` |
 | **点第一条（QQ 那条）** | 弹出 `这条记录来自旧版本，缺少音源标识，已为你重新搜索`，并把标题填回搜索框重搜 | `s6-search-history-legacy-qq-toast.png` |
 
 **这为什么能证明音源被正确恢复了**：`isIncomplete(item)` 为真**当且仅当**
 `effectiveSource(item) == QQMUSIC && sourceId == null`。而老条目里 `source` 是 `null`，
-所以它只能来自 **bit62 推断**。若推断没生效（`source` 缺失被当成网易云），
+所以它只能来自 **bit62 推断**。若推断没生效（`source` 缺失被当成 ncm），
 `isIncomplete` 会是 false，点击就会走 `onSongClick` 直接入队播放 —— 观察到的是弹窗，
 所以推断确实生效了。这是**行为级**的证据，不是「看角标」那种主观证据。
 
 > **已知不足（如实记录）**：`SearchHistoryItemCard` **不显示音源角标**，
-> 所以用户在列表里仍然分不出哪条是 QQ、哪条是网易云。本版修的是「恢复正确 + 不静默失败」，
+> 所以用户在列表里仍然分不出哪条是 QQ、哪条是 ncm。本版修的是「恢复正确 + 不静默失败」，
 > 没有改历史列表的视觉。列在 §6 的未验证/未做里。
 
 ### 2.2 竖屏托盘改版（特性 E）
 
-播放《残酷な天使のテーゼ》（网易云，有逐行歌词），收起播放器，间隔 12 秒取两张：
+播放《残酷な天使のテーゼ》（ncm，有逐行歌词），收起播放器，间隔 12 秒取两张：
 
 | 观察点 | 结果 |
 |---|---|
 | 第一行 = 实时歌词 | 12 秒后从 `残酷な天使のように 少年よ神話に…` 变成 `蒼い風がいま 胸のドアを叩いても` —— **跟随播放按行变化** |
-| 第二行 = 歌名 + 作者 + 音源 | `残酷な天…`（歌名，主视觉、省略）`高橋洋子`（作者）`网易云`（角标） |
+| 第二行 = 歌名 + 作者 + 音源 | `残酷な天…`（歌名，主视觉、省略）`高橋洋子`（作者）`ncm`（角标） |
 | 长歌词 | `maxLines = 1 + Ellipsis`（截图里两行都带省略号） |
 | 无歌词降级 | 见 §2.3：只有一行（歌名+作者+角标），不显示空行 |
 
@@ -272,10 +272,10 @@ com.takahashirinta.ncrust.cache.OfflineTrack -> F4.h:      ← 与本版无关�
 | # | 缺陷 | 证据 |
 |---|---|---|
 | 1 | **平板上进不了「大屏幕模式」**（⤢ 入口只存在于竖屏控制条变体） | `probe-waveform-tablet.md` §4；UI dump 里控制条只有 歌词/队列/加入库/上一首/播放/下一首/音质偏好 |
-| 2 | **`PlayReporter` 没有音源闸门** —— QQ 曲目的 2^62 合成 id 会被 POST 给网易云 webLog | `probe-qq-fallback.md` §6.3 |
+| 2 | **`PlayReporter` 没有音源闸门** —— QQ 曲目的 2^62 合成 id 会被 POST 给 ncm webLog | `probe-qq-fallback.md` §6.3 |
 | 3 | **`cache.**` 的 `ncrust_offline/tracks` 仍是 R8 单字母 key**（`a`~`i`） | §5 的真机 XML 与 mapping |
-| 4 | `library/LibraryManager` 的收藏/点赞用裸 id，QQ 的合成 id 会被发给网易云的 like 接口 | `probe-search-history.md` §10.2 |
-| 5 | `SearchHistoryItemCard` 不显示音源角标（用户仍分不出 QQ / 网易云两条同名历史） | §2.1 的截图 |
+| 4 | `library/LibraryManager` 的收藏/点赞用裸 id，QQ 的合成 id 会被发给 ncm 的 like 接口 | `probe-search-history.md` §10.2 |
+| 5 | `SearchHistoryItemCard` 不显示音源角标（用户仍分不出 QQ / ncm 两条同名历史） | §2.1 的截图 |
 
 ---
 
@@ -321,7 +321,7 @@ com.takahashirinta.ncrust.cache.OfflineTrack -> F4.h:      ← 与本版无关�
 | 设备 | 改动 | 是否已复原 |
 |---|---|---|
 | S6 `SM-G9209` | 覆盖安装 `v2.5.2(43)` → `v2.5.4(45)`；触发了一次 `Activity.onStop` 落盘（`ncrust_qq_probe.xml`）；用搜索/播放做了功能验证 | 「安装新版本」是本任务的目的，**不回滚**；其余都是正常使用行为 |
-| Cuttlefish `127.0.0.1:6524` | 显示改成 `2560x1600 @320dpi`（当平板用）；装了 v2.5.4 / v2.5.3；`adb root`；写入过宿主机的 `ncrust_prefs.xml` / `ncrust_playback_state.xml`（含 S6 的网易云 cookie） | **已复原显示**（`wm size reset` / `wm density reset`）。它是测试用模拟器，其余改动不影响任何人 |
+| Cuttlefish `127.0.0.1:6524` | 显示改成 `2560x1600 @320dpi`（当平板用）；装了 v2.5.4 / v2.5.3；`adb root`；写入过宿主机的 `ncrust_prefs.xml` / `ncrust_playback_state.xml`（含 S6 的 ncm cookie） | **已复原显示**（`wm size reset` / `wm density reset`）。它是测试用模拟器，其余改动不影响任何人 |
 | WGR-W09 平板 | 覆盖安装 `v2.5.2(43)` → `v2.5.4(45)`；**`settings put system user_rotation 1 → 0`**（为了取竖屏截图）；短暂 `svc power stayon true` | ⚠️ **`user_rotation` 没有还原**：平板在收尾前掉线（`adb devices` 里已不存在），无法再写回。它的原值是 `1`（横屏），我改成了 `0`（竖屏）。`accelerometer_rotation` 全程未动（原值就是 `0`）。**请手动把屏幕转回横屏**，或 `adb shell settings put system user_rotation 1`。`svc power stayon` 已还原为 `false` |
 
 > 这条写在这里而不是省略：它是本版执行过程中**唯一一处没有完全复原的用户设备状态**。

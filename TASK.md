@@ -785,8 +785,8 @@ S6（慢设备 + debug 包）上一次拖动结束时 Animatable 还没追上手
 # 16. v1.9.2（2026-09-23 · 分支 `feature/v1.9.2-lyrics-track-merge`）—— 译文 / 音译分轨合并
 
 **一句话**：v1.9.0 的 `applyTtmlLyrics()` 在 TTML 胜出时整体覆盖译文轨，TTML 没有 `x-translation` 的歌
-会把网易云 tlyric 整轨清空（实测 `22704409`）。本版把译文 / 音译做成**独立回退的轨道**：
-TTML 行优先，缺口按文本 / 行序（LCS）回退网易云 `tlyric` / `romalrc`，对不上的逐行丢弃。
+会把 ncm tlyric 整轨清空（实测 `22704409`）。本版把译文 / 音译做成**独立回退的轨道**：
+TTML 行优先，缺口按文本 / 行序（LCS）回退 ncm `tlyric` / `romalrc`，对不上的逐行丢弃。
 
 - **版本**：任务书写「本版 v1.9.1」，但 v1.9.1-gpl 早已发布（versionCode 24，镜象回退 hotfix）
   ⇒ 本版 **v1.9.2-gpl / versionCode 25**（第三次撞号，动版本号前必须实测 `dist/` 里的最新包）。
@@ -902,7 +902,7 @@ prefs 读 + Gson 反序列化，200 条规模）导致的"点击已注册但状�
   没有 `swap(i, random(0,n))` 式有偏写法、没有固定/秒级种子、没有按语种/专辑分池。
 - **统计事实**：均匀随机排列下，池里同类占 k/n 时期望相邻同类对 = k(k-1)/n。
   n=50、日语占 70% 时 P(出现 ≥10 连) ≈ **27.8%** —— 用户"十首日语连播"在日语为主的库里是正常统计现象，
-  算法层面无法"修正"分布。**按用户既有红线，不做语种均衡**（语言是伪概念，网易云没有语言字段）。
+  算法层面无法"修正"分布。**按用户既有红线，不做语种均衡**（语言是伪概念，ncm 没有语言字段）。
 - 但审计出**三处真缺陷**，它们才会造成"真·连播"：见下表。
 
 | # | 缺陷 | 后果 | 修法 |
@@ -1160,7 +1160,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 ## 已知问题 / 系统限制（应用层无法解决）
 
 1. **华为「播控中心」不会出现本应用卡片、也不显示歌词**：它是独立的系统卡片（华为官方称
-   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/网易云/QQ/酷狗/酷我/
+   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/ncm/QQ/酷狗/酷我/
    咪咕/波点/Apple Music/Spotify/TIDAL 等，不含第三方小众客户端）——需要厂商白名单/商业合作，
    没有 API 可申请。
 2. **无法阻止 ROM 再画一张系统卡片**（系统侧行为）；本版能做的是不再自己多发一条。
@@ -1182,7 +1182,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 
 ---
 
-# v2.1.0-gpl（QQ 音乐音源 + 双账号）：本次会话的真机与探针验证记录
+# v2.1.0-gpl（qm 音源 + 双账号）：本次会话的真机与探针验证记录
 
 > 本节只记录**实际执行过**的验证，并明确区分「已验证 / 未验证 / 因工具限制未覆盖」。
 > 设计决策与偏离记录见 `AGENTS.md` 的 v2.1.0 节；调研数据见仓库外
@@ -1200,7 +1200,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 | 签名 | `apksigner verify --print-certs`：`e75af3ffbcf76a36a567188d88d132adf3c7484c53c20a3a083cb1d222025511` |
 | `applicationId` | `com.takahashirinta.ncrust`（未改动） |
 
-## 2. 打真实 QQ 音乐服务端的探针测试（`QqLiveProbeTest`，JVM）
+## 2. 打真实 qm 服务端的探针测试（`QqLiveProbeTest`，JVM）
 
 这五个用例真的发 HTTP 请求。无网络时 `assumeTrue` 跳过而不是失败。
 
@@ -1232,7 +1232,7 @@ Kotlin 侧**逐字节一致**。这一条同时钉住了密钥、ECB/NoPadding�
 | v2.0.2 → v2.1.0 覆盖安装 | ✅ `adb install -r` Success（签名与线上包兼容） |
 | 冷启动 | ✅ 进程存活、**无 FATAL / AndroidRuntime** |
 | UI 渲染 | ✅ 首页（榜单 / 每日推荐）、搜索页（历史记录）、mini 播放器、底部导航均正常（截图复核） |
-| 网易云歌词链（回归） | ✅ logcat：`PlayerViewModel: fetchLyrics cache hit id=346075 lrc=1302` → `歌词源 songId=346075 phase=1 picked=YRC lines=59 words=true` |
+| ncm 歌词链（回归） | ✅ logcat：`PlayerViewModel: fetchLyrics cache hit id=346075 lrc=1302` → `歌词源 songId=346075 phase=1 picked=YRC lines=59 words=true` |
 
 ### 未覆盖：UI 文本注入（工具限制，非本版问题）
 
@@ -1252,11 +1252,11 @@ Kotlin 侧**逐字节一致**。这一条同时钉住了密钥、ECB/NoPadding�
 
 ## 5. 本版未验证项（与 release notes 的「未验证项」一致）
 
-1. 登录态下的 QQ 取链 / 歌词 / 会员取值（本仓库没有 QQ 音乐账号）；
+1. 登录态下的 QQ 取链 / 歌词 / 会员取值（本仓库没有 qm 账号）；
 2. QQ 登录链路端到端（WebView 登录本身是既有机制，但未真人验证 cookie 一定含 `qqmusic_key`）；
 3. QQ 曲目断网时无歌词（本版不做 QQ 歌词缓存）；
 4. 音质角标对 QQ 曲目不细分档位（QQ 不返回码率字段）；
-5. QQ 曲目不进网易云歌单/收藏；
+5. QQ 曲目不进 ncm 歌单/收藏；
 6. 会员档前缀 `AI00`/`Q000`/`Q001` 能否真的取到文件（只见于社区实现）；
 7. API 24（S6）与华为平板上的回归；
 8. v2.0.x 遗留未验证项（PCL110/S6 真机回归、动态字号视觉验收）状态不变。
@@ -1336,7 +1336,7 @@ cookie store。少了这两步，用户看到的是「验证完了还要再验�
 | 三台设备覆盖升级 | PCL110（release 30→32）、WGR-W09（release 30→32）、S6（**debug** 30→32，该机历史装的就是 debug 包） |
 | 冷启动冒烟 | 三台均无 `FATAL EXCEPTION`，进程存活 |
 | **`ptqrlogin` 真机实测** | ✅ **S6 上打开扫码浮层，连续 9 次 `ptqrlogin http=200 body=ptuiCB('66','0','','0','二维码未失效。', '')`**，界面稳定显示「请用手机 QQ 扫码」（修复前是连续 `403` + 「网络不稳定」） |
-| 音源角标 | ✅ S6 的 UI 层级里读到 `江语晨` + `· 网易云`（mini bar） |
+| 音源角标 | ✅ S6 的 UI 层级里读到 `江语晨` + `· ncm`（mini bar） |
 | 设置页新元素 | ✅ `手机号登录` 入口与可用性说明都渲染出来 |
 | 签名 / 权限 | 证书 `e75af3ff…5511` 与 v2.1.0 逐字节相同；权限 11 条逐条 `diff` 一致 |
 | 单测 | 528 全绿（`QqPhoneLoginTest` 17 个，含 3 个新增的 `securityURL` 提取用例） |
@@ -1393,7 +1393,7 @@ cookie store。少了这两步，用户看到的是「验证完了还要再验�
 
 ## 仍未验证
 
-`20274` 据参考实现码表是「绑定异常/绑定缺失」（即该号码可能没绑定 QQ 音乐账号），
+`20274` 据参考实现码表是「绑定异常/绑定缺失」（即该号码可能没绑定 qm 账号），
 但**这一条没有验证过**，代码里没有据此下任何结论（只归到中性的「登录失败」）。
 
 ---
@@ -1453,7 +1453,7 @@ identity.btn_msg = "续费绿钻"      identity.overdate = 2026-10-02
 | `ct/cv` 硬约束 | 同机矩阵：正确 comm 与 Web comm 结果相同；`cv=0` → `101404` |
 | 登录态是否被认 | `GetLoginUserInfo` 带 cookie `req.code=0`（昵称 `stabbi`）、无 cookie `1000` ⇒ **登录态是真的** |
 | 搜索排序 | 日志 `vip(netease=true qq=true)`；列表交错（D → D(Half Moon) → IF YOU(QQ) → L'armée rouge → Dear John(QQ)） |
-| 网易云会员接口 | `code=200` + `redVipLevel=7`；⚠️ 同路径走 `/eapi/` 返回 404（已写进注释） |
+| ncm 会员接口 | `code=200` + `redVipLevel=7`；⚠️ 同路径走 `/eapi/` 返回 404（已写进注释） |
 | JVM 单测 | **550 全绿**（新增 20） |
 | 构建 / 签名 / 权限 | release + debug 均成功；签名 `e75af3ff…5511` 与 v2.1.3 **逐字节相同**；权限 11 条逐条 diff 为空 |
 
@@ -1470,7 +1470,7 @@ identity.btn_msg = "续费绿钻"      identity.overdate = 2026-10-02
 2. `comm.authst` 的必要性**未被本机行为差异证明**，依据是报告 §2.3 的协议描述。
 3. `identity.HugeVip` / `music_lev_*` **仍未接入 UI**：用户页角标只显示「VIP」，
    不显示超级会员，也不显示「你的账号能开到哪一档」。有意为之。
-4. **网易云侧未做回归**。`QualityAssessment` 的展示规则变化影响所有音源，
+4. **ncm 侧未做回归**。`QualityAssessment` 的展示规则变化影响所有音源，
    本版只对 QQ 与排序路径做了真机复核。
 
 ## 五、发布流程（吸取 v2.1.0 / v2.1.3 教训）

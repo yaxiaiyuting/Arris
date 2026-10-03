@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -108,7 +108,7 @@ class CatalogAggregatorTest {
         assertEquals(listOf("netease:1"), rows[0].mergedKeys.map { it.tag })
         assertEquals(1, playable[qq])
         assertEquals(0, playable[ne] ?: 0)
-        // 合并后这一行归属 QQ，所以按源的计数里没有网易云 —— 它只是被合并掉了。
+        // 合并后这一行归属 QQ，所以按源的计数里没有 ncm —— 它只是被合并掉了。
         assertEquals(1, totals[qq])
         assertEquals(null, totals[ne])
     }
@@ -254,7 +254,7 @@ class CatalogAggregatorTest {
     // ---------------------------------------------------------------- 转换 ----
 
     @Test
-    fun `候选转 SongItem 时保留音源与载荷（别让下游把它当网易云）`() {
+    fun `候选转 SongItem 时保留音源与载荷（别让下游把它当ncm）`() {
         val candidate = CrossSourceMatcher.TrackCandidate(
             key = TrackKey(qq, 97773, "0039MnYb0qxYhV", "003Qui1q2u1Zho"),
             name = "晴天",
@@ -276,8 +276,8 @@ class CatalogAggregatorTest {
     }
 
     @Test
-    fun `毫秒时间戳转年份（网易云是毫秒 QQ 是字符串 两源不能直接比）`() {
-        // 探针实测：叶惠美 网易云 publishTime = 1059580800000（毫秒），QQ pubTime = "2003-07-31"。
+    fun `毫秒时间戳转年份（ncm是毫秒 QQ 是字符串 两源不能直接比）`() {
+        // 探针实测：叶惠美 ncm publishTime = 1059580800000（毫秒），QQ pubTime = "2003-07-31"。
         assertEquals("2003", CatalogAggregator.yearOf(1_059_580_800_000L))
         assertNull(CatalogAggregator.yearOf(0L))
         assertNull(CatalogAggregator.yearOf(-1L))

@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * v2.1.0 · C：QQ 音乐 cookie 纯逻辑单测。
+ * v2.1.0 · C：qm cookie 纯逻辑单测。
  *
  * 这些用例守的是「登录成功了但一取链就说没权限」这一类只在真机上出现的故障：
  * 票据字段名不止一个、微信登录的 uin 带 `o` 前缀、登录流程拿到的是增量字段集。
@@ -140,7 +140,7 @@ class QqCookieTest {
         assertEquals("o0123456789", map["uin"])
         assertEquals("ABC123def456", map["qqmusic_key"])
         assertEquals("UU1", map["psrf_qqunionid"])
-        // 与本应用无关的第三方 cookie 不该被带到 QQ 音乐的请求里
+        // 与本应用无关的第三方 cookie 不该被带到 qm 的请求里
         assertFalse(map.containsKey("ptcz"))
         assertFalse(map.containsKey("RK"))
     }

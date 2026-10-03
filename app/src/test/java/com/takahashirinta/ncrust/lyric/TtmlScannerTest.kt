@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -49,7 +49,7 @@ class TtmlScannerTest {
         val first = doc.lines.first()
         assertEquals(22402L, first.timeMs)
         assertEquals(26962L, first.endMs)
-        // 规则 1：网易云自己的 LRC 就是「都 是勇敢的」（带空格），吞掉它逐字高亮就会错帧
+        // 规则 1：ncm 自己的 LRC 就是「都 是勇敢的」（带空格），吞掉它逐字高亮就会错帧
         assertEquals("都 是勇敢的", first.text)
         assertEquals(4, first.words.size)
 
@@ -137,7 +137,7 @@ class TtmlScannerTest {
         val doc = TtmlParser.parse(fixture("1974443814.ttml"))!!
         assertEquals(45, doc.lines.size)
         assertEquals("1974443814", doc.meta.ncmMusicId)
-        // begin="28.571" ⇒ 28571 ms（网易云 LRC 同一句是 [00:28.15]）
+        // begin="28.571" ⇒ 28571 ms（ncm LRC 同一句是 [00:28.15]）
         assertEquals(28571L, doc.lines.first().timeMs)
         assertEquals("我带着比身体重的行李", doc.lines.first().text)
         assertEquals(31280L, doc.lines.first().endMs)

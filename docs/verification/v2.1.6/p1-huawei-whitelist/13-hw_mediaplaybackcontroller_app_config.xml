@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <whiteapp name="音乐" package="com.huawei.music" version="12.11.10.366"/>
-  <whiteapp name="网易云音乐" package="com.netease.cloudmusic" version="7.3.28"/>
+  <whiteapp name="ncm" package="com.netease.cloudmusic" version="7.3.28"/>
   <whiteapp name="酷狗音乐" package="com.kugou.android" version="10.3.5"/>
   <whiteapp name="酷我音乐" package="cn.kuwo.player" version="9.3.6.1"/>
   <whiteapp name="喜马拉雅" package="com.ximalaya.ting.android" version="6.6.48.3"/>
@@ -9,13 +9,13 @@
   <whiteapp name="荔枝" package="com.yibasan.lizhifm" version="5.13.1"/>
   <whiteapp name="企鹅FM" package="com.tencent.radio" version="7.5.2.56"/>
   <whiteapp name="音乐" package="com.android.mediacenter" version="12.11.10.333"/>
-  <whiteapp name="QQ音乐" package="com.tencent.qqmusic" version="10.11.0.8"/>
+  <whiteapp name="qm" package="com.tencent.qqmusic" version="10.11.0.8"/>
   <whiteapp name="微信读书" package="com.tencent.weread" version="5.3.4"/>
   <whiteapp name="得到" package="com.luojilab.player" version="8.12.6"/>
   <whiteapp name="咪咕音乐" package="cmccwm.mobilemusic" version="7.1.5"/>
-  <whiteapp name="QQ音乐" package="com.tencent.qqmusic" version="0"/>
+  <whiteapp name="qm" package="com.tencent.qqmusic" version="0"/>
   <whiteapp name="得到" package="com.luojilab.player" version="0"/>
-  <whiteapp name="网易云音乐" package="com.netease.cloudmusic" version="0"/>
+  <whiteapp name="ncm" package="com.netease.cloudmusic" version="0"/>
   <whiteapp name="酷狗音乐" package="com.kugou.android" version="0"/>
   <whiteapp name="酷我音乐" package="cn.kuwo.player" version="0"/>
   <whiteapp name="喜马拉雅" package="com.ximalaya.ting.android" version="0"/>

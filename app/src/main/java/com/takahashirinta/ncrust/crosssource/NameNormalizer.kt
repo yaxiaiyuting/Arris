@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -19,7 +19,7 @@ package com.takahashirinta.ncrust.crosssource
  * 好让下一步的**结构判据**（专辑列表重合、曲目名集合重合、时长差）去做判定。
  *
  * 这条分工是探针逼出来的，不是设计偏好：`probe-artist-mapping.md` 的 P6 里，
- * 网易云的仿冒号 `邓紫棋`(62017015, 1 张专辑) 与真身 `G.E.M.邓紫棋`(7763, 58 张)
+ * ncm 的仿冒号 `邓紫棋`(62017015, 1 张专辑) 与真身 `G.E.M.邓紫棋`(7763, 58 张)
  * 在**名字层面无法区分**（一个是另一个的子串），而专辑列表重合度一眼分开（0 张 vs 54 张）。
  * 所以本文件里所有函数都只做「归一」，**没有任何一个函数返回「它们是不是同一个」**。
  *

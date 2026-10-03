@@ -295,7 +295,7 @@ bash docs/verification/v2.6.0/verification/ui-drive.sh <serial> prefs ncrust_set
 
 S6 上安装的是 `v2.6.0-gpl / versionCode 48`（release，项目签名）；
 探针注入的条目已删除并回读确认（`saved_songs entries = 147, probe entry present = False`）；
-登录态（网易云 + QQ）全程未动；原 prefs 备份仍在 `/data/local/tmp/ncrust_library.bak`。
+登录态（ncm + QQ）全程未动；原 prefs 备份仍在 `/data/local/tmp/ncrust_library.bak`。
 
 ---
 

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -20,8 +20,8 @@ import com.takahashirinta.ncrust.player.SongUrlResult
  *
  * ## 为什么是这五个
  *
- * 只抽「两个音源**都有、且语义一致**」的能力。网易云与本应用耦合很深（云歌单、收藏、
- * 播放上报、艺人/专辑详情……），那些能力 QQ 音乐要么没有、要么语义不同，硬抽成接口
+ * 只抽「两个音源**都有、且语义一致**」的能力。ncm 与本应用耦合很深（云歌单、收藏、
+ * 播放上报、艺人/专辑详情……），那些能力 qm 要么没有、要么语义不同，硬抽成接口
  * 只会得到一个「每个方法都要 `TODO()`」的空壳。所以本接口只覆盖**让一首歌能放出来**
  * 这条链路上必须分叉的部分：
  *
@@ -36,7 +36,7 @@ import com.takahashirinta.ncrust.player.SongUrlResult
  *
  * 1. **绝不抛异常给出调用方**：网络失败一律返回 null / 空列表。取链失败是常态
  *    （无版权、无 VIP、下架），调用方靠 null 决定「跳歌」还是「提示」。
- * 2. **导出的 [SongItem] 必须带上 [MusicSource] 与 QQ 音乐的 sourceId**：
+ * 2. **导出的 [SongItem] 必须带上 [MusicSource] 与 qm 的 sourceId**：
  *    下游（队列持久化、离线缓存、歌词请求）全靠这两个字段路由，漏了就串台。
  * 3. **不要把平台内部标识（如 QQ 的 songmid）当 [SongItem.id]**：id 是数字型的对外身份，
  *    QQ 的 mid 放 [SongItem.sourceId]。

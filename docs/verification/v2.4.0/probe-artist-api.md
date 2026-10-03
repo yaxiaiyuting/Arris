@@ -1,17 +1,17 @@
-# 探针 · 艺人主页接口（网易云 ↔ QQ 音乐）
+# 探针 · 艺人主页接口（ncm ↔ qm）
 
 > 生成：`docs/verification/v2.4.0/probe-catalog-api.py`（**匿名只读**）。字段表是**从真实响应递归扫出来的**。原始响应：`probe-raw/catalog-api.json`。
 
 ## 端点对照
 
-| 能力 | 网易云 | QQ 音乐 |
+| 能力 | ncm | qm |
 |---|---|---|
 | 艺人搜索结果 | `POST /api/cloudsearch/pc` `type=100` | `GET c.y.qq.com/soso/fcgi-bin/client_search_cp?t=9` |
 | 艺人专辑列表 | `GET /api/artist/albums/{id}?limit&offset` | `GET c.y.qq.com/v8/fcg-bin/fcg_v8_singer_album.fcg?singermid&num&begin&order` |
 | 艺人热门曲 | `GET /api/v1/artist/{id}`（`hotSongs[]`） | `musicu.fcg` → `music.web_singer_info_svr/get_singer_detail_info`（`songlist[]`） |
 | 艺人详情 | `GET /api/artist/detail/{id}` → **实测 404** | 无独立端点（艺人信息在搜索/专辑列表里） |
 
-## 网易云返回的字段（`/api/artist/albums/{id}`）
+## ncm 返回的字段（`/api/artist/albums/{id}`）
 
 ```
 code = int
@@ -96,7 +96,7 @@ subcode = int
 
 | 源 | 参数 | 语义 | 实测上限 |
 |---|---|---|---|
-| 网易云 | `limit` + `offset` | 偏移分页 | 周杰伦 `limit=100` 一次回 44 张，够用 |
+| ncm | `limit` + `offset` | 偏移分页 | 周杰伦 `limit=100` 一次回 44 张，够用 |
 | QQ | `num` + `begin` | 偏移分页 | 周杰伦 `num=100` 一次回 43 张，够用 |
 
 ⇒ **形状不同但语义一致**（都是 offset/limit），聚合层可以用同一个「拉一页 100 条」的策略。

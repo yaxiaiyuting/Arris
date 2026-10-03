@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -92,7 +92,7 @@ internal object SavedAlbumCodec {
      *
      * ## `albumMid`（v2.6.2 · P0）
      *
-     * 音源内的**字符串**身份：QQ 音乐的 `albumMID`（`000MkMni19ClKG`），网易云恒为 `null`
+     * 音源内的**字符串**身份：qm 的 `albumMID`（`000MkMni19ClKG`），ncm 恒为 `null`
      * （它的十进制 `albumId` 就是身份）。加它的理由与 `AlbumItem.mid` 完全相同 ——
      * 这张表里的专辑将来要被「转到专辑」直接打开，而**数字 id 不是跨源可用的身份**。
      *

@@ -1,7 +1,7 @@
 //! 播放行为上报。
 //!
 //! 复刻官方 web 播放器的 webLog 上报:当一首歌被"听完"(自然结束或进度 ≥80%)时,
-//! 向网易云端上报一条 play 行为,使本地收听能够反馈给推荐/指数体系。
+//! 向 ncm 端上报一条 play 行为,使本地收听能够反馈给推荐/指数体系。
 //!
 //! 链路(从 music.163.com web 播放器 JS 静态还原):
 //!   POST https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<csrf>

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -96,7 +96,7 @@ class LyricSubtitleTextTest {
      * 夹具里只有一个 `ttml` 槽：它装的是**这次要测的那条副文本轨**——
      * 1959528822 装的是 16 行 x-roman（note 里写明），其余三首装的是译文。
      * 所以要复现「渲染层拿到的音译轨」，只有这一首该把 ttml 槽当音译传进去；
-     * 另三首的 TTML 没有音译数据，音译轨只能来自网易云 romalrc（Faded / Numb 连这个 key 都没有）。
+     * 另三首的 TTML 没有音译数据，音译轨只能来自 ncm romalrc（Faded / Numb 连这个 key 都没有）。
      */
     private fun ttmlRomanTrackFor(songId: Long): List<Row> =
         if (songId == 1959528822L) load(songId).ttml else emptyList()
@@ -120,7 +120,7 @@ class LyricSubtitleTextTest {
     @Test
     fun `真实——1959528822 紫荆花盛开：开启后 29 行粤拼全部可见，关闭后 0 行`() {
         val (main, roman) = romanByTime(1959528822L)
-        assertEquals("夹具前提：合并后音译轨 29 行（TTML 16 + 网易云补 13）", 29, roman.size)
+        assertEquals("夹具前提：合并后音译轨 29 行（TTML 16 + ncm 补 13）", 29, roman.size)
         assertEquals("29 行粤拼都不与中文原文相同，全部可见", 29, visibleCount(main, roman))
         assertEquals("关掉开关必须一行都不多", 0, visibleCount(main, roman, show = false))
     }

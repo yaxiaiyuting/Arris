@@ -11,7 +11,7 @@
 
 | # | 问题 | 结论一句话 | 关键证据 |
 |---|---|---|---|
-| Q1 | 当前布局结构 | **一个** `LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 160.dp))`；区块标题 / QQ 行 / 空态 / 加载态用 `GridItemSpan(maxLineSpan)` 占满整行，**卡片格子**只有本地歌单、网易云歌单、两个「＋」入口 | `LibraryPlaylistsTab.kt:148-155`；逐项对照见 §3 |
+| Q1 | 当前布局结构 | **一个** `LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 160.dp))`；区块标题 / QQ 行 / 空态 / 加载态用 `GridItemSpan(maxLineSpan)` 占满整行，**卡片格子**只有本地歌单、ncm 歌单、两个「＋」入口 | `LibraryPlaylistsTab.kt:148-155`；逐项对照见 §3 |
 | Q2 | 切换按钮放哪 | **这一页没有工具栏、也没有页头**（全文 0 处 `TopAppBar`/`Bar`/`Toolbar`；第一个 item 就是「本地歌单」区块标题）。页头在 `LibraryScreen.kt:246-257`、分类 tab 在 `LibraryScreen.kt:259-263`。最佳落点是**在 `LibraryPlaylistsTab` 的 grid 顶部新加一个 `maxLineSpan` 的头部行**，形制直接抄**同文件** QQ 区块标题那一行（`LibraryPlaylistsTab.kt:235-258`） | §4 |
 | Q2b | 既有「页头两态图标开关」 | **无**（`SegmentedButton` / `IconToggleButton` 均 0 命中，退出码 1）。最近的三类先例：① `RotationToggleButton`（同槽位换图标 + 换染色，**播放器控制栏**，不是页头）；② QQ 区块标题右侧刷新图标（**是页头行，但单态**）；③ `MetroTabRow` / `AccentSourceSelector` / `ThemeModeSelector`（分段选择器，**设置项**形态） | §4.3 |
 | Q3 | 持久化 | 唯一落点 `ncrust_settings`；键名全小写 `snake_case`；「枚举索引存 Int + `normalize` 回落」已有 **3 个**先例；一次性迁移先例 = `QualityLadder.migrate`（版本键 + 幂等 + 在 `NcrustApplication.onCreate` 调用）。**推荐**：新建 `object PlaylistLayoutSetting`，`PREFS="ncrust_settings"` / `KEY="library_playlist_layout"`(Int) / 默认 `CARD`，配纯函数 `normalize` + `PlaylistLayoutSettingTest` | §5 |
@@ -26,8 +26,8 @@
 
 **两处与任务前提不符的地方**（详见 §11.3）：
 
-1. 任务说「卡片式/列表式应用到**两个源**」——实际上这一页有**三个**按源分区：`本地歌单` / `网易云` / `QQ 音乐`（`LibraryPlaylistsTab.kt:66-70`、`:156-301`）。**本地歌单那一段也是网格格子**，只改两个源会留下一个「半切换」的页面。
-2. 任务隐含「切换是纯增量」——但今天的默认形态**本身就是混合的**（网易云/本地是卡片、QQ 是整行），所以**不存在一个"两源都零行为变化"的默认值**，默认值必须由产品拍板（§5.5 给了两个选项与后果）。
+1. 任务说「卡片式/列表式应用到**两个源**」——实际上这一页有**三个**按源分区：`本地歌单` / `ncm` / `qm`（`LibraryPlaylistsTab.kt:66-70`、`:156-301`）。**本地歌单那一段也是网格格子**，只改两个源会留下一个「半切换」的页面。
+2. 任务隐含「切换是纯增量」——但今天的默认形态**本身就是混合的**（ncm/本地是卡片、QQ 是整行），所以**不存在一个"两源都零行为变化"的默认值**，默认值必须由产品拍板（§5.5 给了两个选项与后果）。
 
 ---
 
@@ -183,7 +183,7 @@ LazyVerticalGrid(
 | 15 | `"qq-empty"`（条件） | `maxLineSpan` | `SectionHint(loadFailed / playlistEmpty)` | 整行小字 | `:288-294` |
 | 16 | `"qq-" + it.key.tag` | **`GridItemSpan(maxLineSpan)`** | `QqPlaylistInlineRow` | **整行条目** | `:297-299` |
 
-**关键结论**（三个"不同宽度共存于一个网格"的机制）：网格格子 = 默认 span（1 格），整行 = `GridItemSpan(maxLineSpan)`。**QQ 是唯一给 `items(...)` 传 `span` 的一段**（`:297`）—— 这就是「网易云是卡片、QQ 是整行」的全部实现。
+**关键结论**（三个"不同宽度共存于一个网格"的机制）：网格格子 = 默认 span（1 格），整行 = `GridItemSpan(maxLineSpan)`。**QQ 是唯一给 `items(...)` 传 `span` 的一段**（`:297`）—— 这就是「ncm 是卡片、QQ 是整行」的全部实现。
 
 ### 3.3 四个 item composable 的定义位置
 
@@ -449,8 +449,8 @@ object PlaylistLayoutSetting {
 
 | 默认 | 谁零变化 | 谁变了 | 代价 |
 |---|---|---|---|
-| **`CARD = 0`（本报告推荐）** | 本地歌单段、网易云段（面积最大、卡片数最多的一段） | **QQ 段由整行变卡片** | v2.3.0 为 QQ 行写过一段设计理由（`LibraryPlaylistsTab.kt:328-334`：「用整行而不是格子…让『这是 QQ 那一段』与上下两段在视觉上一眼可分」）—— 默认改卡片会**推翻这条既有设计决策**，必须显式记账 |
-| `LIST = 1` | QQ 段 | 本地段 + 网易云段（含「＋」入口）全部从卡片变行 | 本页视觉变化面积最大；且 `NewPlaylistGridItem` 的三处复用点里有两处在本页 |
+| **`CARD = 0`（本报告推荐）** | 本地歌单段、ncm 段（面积最大、卡片数最多的一段） | **QQ 段由整行变卡片** | v2.3.0 为 QQ 行写过一段设计理由（`LibraryPlaylistsTab.kt:328-334`：「用整行而不是格子…让『这是 QQ 那一段』与上下两段在视觉上一眼可分」）—— 默认改卡片会**推翻这条既有设计决策**，必须显式记账 |
+| `LIST = 1` | QQ 段 | 本地段 + ncm 段（含「＋」入口）全部从卡片变行 | 本页视觉变化面积最大；且 `NewPlaylistGridItem` 的三处复用点里有两处在本页 |
 
 **单测落点**：`app/src/test/java/com/takahashirinta/ncrust/ui/screen/PlaylistLayoutSettingTest.kt`（该目录已存在，见 `CacheUsageTest.kt`）。用例照 `ui/theme/PageTransitionSettingTest.kt:48-138` 的六条：① 键名/默认值是持久化契约（`assertEquals("ncrust_settings", PREFS)` / `assertEquals("library_playlist_layout", KEY)`）；② 键不存在 ⇒ 默认；③ 写读往返；④ 越界值 `normalize`；⑤ **脏键（同键塞 String）回落默认、不抛**（照抄 `FakePrefs.putRaw`，`PageTransitionSettingTest.kt:99-115 / 150-191`）；⑥ 读函数无副作用（重复读 N 次不覆盖用户选择）。
 
@@ -524,9 +524,9 @@ Row(
 
 | # | 差异 | 证据 | 影响 |
 |---|---|---|---|
-| 1 | **网易云/本地格子有「播放全部」▶，QQ 行没有** | `LibraryScreen.kt:468-471`（`PlayAllButton` 覆盖封面右下，`padding(6.dp)`，直径 36dp 默认 —— `SongCard.kt:291`）；`QqPlaylistInlineRow` 全文无 ▶（`:336-386`） | 列表式下若保留 ▶，需要一个右侧 actions 槽（宽 36dp + 间距）；若不保留，网易云/本地就**丢了一个既有入口**（功能回退，铁律 19 类问题）。**必须产品决策** |
+| 1 | **ncm/本地格子有「播放全部」▶，QQ 行没有** | `LibraryScreen.kt:468-471`（`PlayAllButton` 覆盖封面右下，`padding(6.dp)`，直径 36dp 默认 —— `SongCard.kt:291`）；`QqPlaylistInlineRow` 全文无 ▶（`:336-386`） | 列表式下若保留 ▶，需要一个右侧 actions 槽（宽 36dp + 间距）；若不保留，ncm/本地就**丢了一个既有入口**（功能回退，铁律 19 类问题）。**必须产品决策** |
 | 2 | **本地歌单没有封面、也没有曲目数** | `LocalPlaylist` 字段：`key/name/createdAt/updatedAt/lastSyncedAt/dirId` + `hasRemoteSource`（`LocalPlaylistModels.kt:49-65`）—— 无 `cover`、无 `trackCount`；KDoc 明确「曲目数**不在这里读 prefs** —— 列表渲染时对每个格子做一次 SharedPreferences 读会让滚动带上 IO」（`LibraryPlaylistsTab.kt:389-392`） | 列表式下本地行必须沿用 **48dp 占位色块 + 居中图标**（`Icons.Default.PlaylistPlay`，`sizeDp = 32.dp`，`tint = primary@45%`，`LibraryPlaylistsTab.kt:404-420`），副标题只能是徽标 `localPlaylistSync / localPlaylistLocalBadge`（`:430-436`） |
-| 3 | **两个源的曲目数文案是两条不同的 i18n 条目，中文下差一个空格** | 网易云：`strings.trackCount` → zh `"${it}首"`（`zh_CN.kt:227`）；QQ：`strings.playlistTrackCount` = `playlists.trackCount` → zh `"$n 首"`（`zh_CN.kt:375`） | 统一列表式后两源并排显示会出现「12首」与「12 首」。**必须二选一**（推荐统一用 `playlists.trackCount`，因为它已是 QQ 行的既有取值，且带空格更符合中文排版） |
+| 3 | **两个源的曲目数文案是两条不同的 i18n 条目，中文下差一个空格** | ncm：`strings.trackCount` → zh `"${it}首"`（`zh_CN.kt:227`）；QQ：`strings.playlistTrackCount` = `playlists.trackCount` → zh `"$n 首"`（`zh_CN.kt:375`） | 统一列表式后两源并排显示会出现「12首」与「12 首」。**必须二选一**（推荐统一用 `playlists.trackCount`，因为它已是 QQ 行的既有取值，且带空格更符合中文排版） |
 
 ---
 
@@ -584,7 +584,7 @@ fun PlaylistGridItem(
 | 副标题 | `bodySmall`、`onSurfaceVariant`、`strings.trackCount(trackCount)`、左右 6dp | `LibraryScreen.kt:475` |
 | 格间距 | `horizontalArrangement = spacedBy(2.dp)`、`verticalArrangement = spacedBy(2.dp)` | `LibraryPlaylistsTab.kt:151-152` |
 | 按压反馈 | `Modifier.appPressScale()`（1.05×，`AppMotion.pressScale` 弹簧 0.45/900） | `LibraryScreen.kt:456`；`AppVisualModifiers.kt:100-103`；`AppMotion.kt:148-151` |
-| 入场/移动动画 | `animateItem(fadeIn = tween(150, MetroDefault), placement = tween(220, MetroDefault), fadeOut = tween(120, MetroDefault))`（本地歌单与「＋」有；网易云 `PlaylistGridItem` **没有**） | `LibraryPlaylistsTab.kt:167-171 / 179-183`；网易云侧 `:217-230` 无 `animateItem` |
+| 入场/移动动画 | `animateItem(fadeIn = tween(150, MetroDefault), placement = tween(220, MetroDefault), fadeOut = tween(120, MetroDefault))`（本地歌单与「＋」有；ncm `PlaylistGridItem` **没有**） | `LibraryPlaylistsTab.kt:167-171 / 179-183`；ncm 侧 `:217-230` 无 `animateItem` |
 | 「＋」格子 | 同形：`aspectRatio(1f)` + `AppShapes.large` + `surfaceVariant` 底 + 居中 `Icons.Default.Add`(`sizeDp = 40.dp`, `tint = primary`) + 标题、**无副标题** | `LibraryScreen.kt:409-446` |
 | 本地歌单格子 | 无封面 ⇒ `aspectRatio(1f)` + `AppShapes.large` + `surfaceVariant` + 居中 `Icons.Default.PlaylistPlay`(`sizeDp = 32.dp`, `tint = primary@45%`)；标题 `bodyMedium`；副标题 = `localPlaylistSync` / `localPlaylistLocalBadge`（`bodySmall`） | `LibraryPlaylistsTab.kt:394-439` |
 | 标题/副标题字色 | 卡片标题 `onBackground`（行式标题是 `onSurface`） | `LibraryScreen.kt:474` vs `LibraryPlaylistsTab.kt:371` |
@@ -597,7 +597,7 @@ fun PlaylistGridItem(
 
 | 数据 | 持有者 | 初始化 | 刷新触发键 |
 |---|---|---|---|
-| 网易云歌单 `playlists` | `LibraryScreen` | `remember { mutableStateOf(emptyList()) }`（`:117`） | `LaunchedEffect(selectedCategory)`（`:155-161`）内 `loadPlaylists()`；`LaunchedEffect(refreshTrigger)`（`:171-176`） |
+| ncm 歌单 `playlists` | `LibraryScreen` | `remember { mutableStateOf(emptyList()) }`（`:117`） | `LaunchedEffect(selectedCategory)`（`:155-161`）内 `loadPlaylists()`；`LaunchedEffect(refreshTrigger)`（`:171-176`） |
 | 本地歌单 `localPlaylists` | `LibraryScreen` | `LocalPlaylistStore.readPlaylists(context)`（`:122`） | `LaunchedEffect(selectedCategory)`（`:155`）/ `LaunchedEffect(localPlaylistsTick)`（`:181-183`） |
 | QQ 歌单 `qqPlaylists` + 加载闸门 | **`LibraryPlaylistsTab` 自己** | `remember { mutableStateOf(emptyList()) }`（`:107`） | `LaunchedEffect(ownerId, qqReloadTick)`（`:115-139`），网络调用 `QqPlaylistRepository.loadList(forceRefresh = qqReloadTick > 0)`（`:120`） |
 
@@ -870,9 +870,9 @@ SettingSwitchRow(
 
 | # | 任务原文 | 实际情况 | 影响 |
 |---|---|---|---|
-| 1 | 「the choice applies to **both sources** uniformly」/「QQ 音乐 与 网易云」 | 这一页是**三个**按源分区：`本地歌单`（`:157-186`）、`网易云`（`:189-232`）、`QQ 音乐`（`:235-301`）；KDoc 三行表也写明三块（`:64-70`）。**本地歌单段同样是网格格子**（`LocalPlaylistGridItem`） | 「两源统一」若照字面实现，会出现「本地卡片 + 两源列表」的**半切换**页面。建议改成**三源统一**（切换对象 = 本页所有条目） |
-| 2 | 隐含「切换是纯增量、默认可以零行为变化」 | 今天的形态**本身就是混合的**（卡片 + QQ 整行同时存在）⇒ **不存在**"两源都零行为变化"的默认值。默认 `CARD` 会改 QQ（推翻 `:328-334` 为 QQ 行写下的设计理由）；默认 `LIST` 会改本地 + 网易云（面积最大） | 默认值必须由产品拍板，并记账（见 §5.5 表）。**不能**用「与今天一致」当理由绕过 |
-| （附） | 「Today the tab is a single `LazyVerticalGrid` where the NetEase playlist section renders cards and the QQ playlist section renders full-width rows」 | ✅ **完全准确** | 无需更正 |
+| 1 | 「the choice applies to **both sources** uniformly」/「qm 与 ncm」 | 这一页是**三个**按源分区：`本地歌单`（`:157-186`）、`ncm`（`:189-232`）、`qm`（`:235-301`）；KDoc 三行表也写明三块（`:64-70`）。**本地歌单段同样是网格格子**（`LocalPlaylistGridItem`） | 「两源统一」若照字面实现，会出现「本地卡片 + 两源列表」的**半切换**页面。建议改成**三源统一**（切换对象 = 本页所有条目） |
+| 2 | 隐含「切换是纯增量、默认可以零行为变化」 | 今天的形态**本身就是混合的**（卡片 + QQ 整行同时存在）⇒ **不存在**"两源都零行为变化"的默认值。默认 `CARD` 会改 QQ（推翻 `:328-334` 为 QQ 行写下的设计理由）；默认 `LIST` 会改本地 + ncm（面积最大） | 默认值必须由产品拍板，并记账（见 §5.5 表）。**不能**用「与今天一致」当理由绕过 |
+| （附） | 「Today the tab is a single `LazyVerticalGrid` where the ncm playlist section renders cards and the QQ playlist section renders full-width rows」 | ✅ **完全准确** | 无需更正 |
 | （附） | 「the page header lives in `LibraryScreen.kt`」 | ✅ 准确；且这一页**连页头都没有**（`:157` 就是第一个 item） | 无需更正，但据此才能定位切换按钮落点 |
 | （附） | 「`PlaylistGridItem` … it may be in `LibraryScreen.kt` or another file」 | ✅ 在 **`LibraryScreen.kt:448-478`**（`NewPlaylistGridItem` 也在同一文件 `:409-446`） | 施工需同时改两个文件 |
 

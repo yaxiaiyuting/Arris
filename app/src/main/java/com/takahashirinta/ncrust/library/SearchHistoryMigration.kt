@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -25,7 +25,7 @@ import com.takahashirinta.ncrust.source.trackKeyOf
  * 老条目只有裸 id。唯一**可证明**的推断是 bit62（[SourceIds.sourceOfId]）：
  *
  * - 它是**结构性**的，不是启发式 —— 全部 QQ 曲目的 id 都由 [SourceIds.qqId] 产出、
- *   `1L shl 62` 恒置位，而网易云 id 是十进制的百万~十亿量级（`< 2^40`），
+ *   `1L shl 62` 恒置位，而 ncm id 是十进制的百万~十亿量级（`< 2^40`），
  *   两者在 64 位整数上不可能相交（`MusicSource.kt:147-163` 的完整论证）；
  * - **id 区间启发式必须放弃**：仓库里那句「1e6~3e9」只是量级声明，而 QQ 的
  *   **裸 songid 同样是 9~10 位十进制**，两个区间是重叠的 —— 拿它判音源会误判。
@@ -88,7 +88,7 @@ object SearchHistoryMigration {
      * 够得着而搬到这里；**没有 **`@Composable`，纯函数）。
      *
      * 音源侧的两个约定：
-     * 1. 网易云一侧 `source` 刻意写 `null`（与 `songRefOf` 同一条约定，
+     * 1. ncm 一侧 `source` 刻意写 `null`（与 `songRefOf` 同一条约定，
      *    `SongSourceExt.kt:96-98`）—— 这样它与 v2.1.0 之前持久化的条目在 data class
      *    意义上仍然相等，队列判重 / 收藏命中 / 离线命中都不受影响；
      * 2. `sourceId` / `mediaId` **绝不猜**：老 QQ 条目缺 songmid 就是 `null`，

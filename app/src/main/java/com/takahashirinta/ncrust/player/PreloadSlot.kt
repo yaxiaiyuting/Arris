@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -47,26 +47,26 @@ object PreloadSlot {
     /**
      * 预载项的 mediaId（v2.1.5：**带音源**）。
      *
-     * v2.1.4 及更早这里恒为 `song:<id>`。对 QQ 音乐来说那是一个**错的**编码：
+     * v2.1.4 及更早这里恒为 `song:<id>`。对 qm 来说那是一个**错的**编码：
      * QQ 的 id 带 `1L shl 62` 标志位，`song:4611686018427…` 会被
-     * [SourceIds.parseMediaId] 解析成「网易云的一首巨大 id 的歌」。后果有两级：
-     * 轻的是车机 / 通知路径按网易云去取链（404 → 跳歌）；
+     * [SourceIds.parseMediaId] 解析成「ncm 的一首巨大 id 的歌」。后果有两级：
+     * 轻的是车机 / 通知路径按 ncm 去取链（404 → 跳歌）；
      * 重的是自动接续时**无法从 item 本身回答「这是哪个音源的歌」**，
      * 只能退回信任旁路变量 —— 而那正是 v2.1.5 要修的串台源头。
      *
-     * 网易云一侧的形状**逐字节不变**（`song:123`），所以老媒体项、车机 browse tree、
+     * ncm 一侧的形状**逐字节不变**（`song:123`），所以老媒体项、车机 browse tree、
      * 以及所有既有持久化数据都不受影响。
      */
     fun mediaIdFor(source: MusicSource, songId: Long, url: String): String =
         if (songId > 0) (SourceIds.mediaId(source, songId) ?: url) else url
 
-    /** 网易云专用重载，保持 v2.1.0 之前的行为（既有调用点与单测零改动）。 */
+    /** ncm 专用重载，保持 v2.1.0 之前的行为（既有调用点与单测零改动）。 */
     fun mediaIdFor(songId: Long, url: String): String =
         mediaIdFor(MusicSource.NETEASE, songId, url)
 
     /**
      * 从 mediaId 反解 `(音源, 歌曲 id)`。解析不出音源返回 null ——
-     * **不猜成网易云**，用错音源取链会拿到 404 或别人的歌。
+     * **不猜成 ncm**，用错音源取链会拿到 404 或别人的歌。
      */
     fun identityFromMediaId(mediaId: String?): Pair<MusicSource, Long>? =
         SourceIds.parseMediaId(mediaId)
@@ -97,7 +97,7 @@ object PreloadSlot {
      * 只有 true 才允许把 pendingNext* 写进通知栏 / 歌词 / ViewModel。
      *
      * v2.1.5 起**音源也参与判定**：`(source, id)` 两件套都对上才算同一首。
-     * 网易云的 `123` 与 QQ 的 `123` 是不同的歌，只比 id 会把它们判成同一首 ——
+     * ncm 的 `123` 与 QQ 的 `123` 是不同的歌，只比 id 会把它们判成同一首 ——
      * 那正是「跨源切歌后元数据/歌词留在上一首」的另一半原因。
      *
      * @param itemSource 起播项的 mediaId 反解出的音源；反解不出（老形状 / 无 id 项）传 null
@@ -119,7 +119,7 @@ object PreloadSlot {
     }
 
     /**
-     * 网易云默认重载（v1.5.2 起的既有形状）。**只为不破坏既有单测**：
+     * ncm 默认重载（v1.5.2 起的既有形状）。**只为不破坏既有单测**：
      * 生产代码一律走上面那个带音源的版本。
      */
     fun transitionMatches(

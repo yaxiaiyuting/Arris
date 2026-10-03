@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -21,7 +21,7 @@ import com.takahashirinta.ncrust.source.musicSource
  * ## 这个枚举只回答「服务端有没有**明确**告诉我」，不回答「我猜它能不能播」
  *
  * v2.3.0 的探针（`docs/verification/v2.3.0/probe-copyright.md`）把这件事量化了：
- * 网易云**没有**一个「可播放」的布尔字段，只有两个整数（`privilege.pl` / `privilege.st`），
+ * ncm**没有**一个「可播放」的布尔字段，只有两个整数（`privilege.pl` / `privilege.st`），
  * 而它们的可信度**不一样**：
  *
  * | 分层 | 预检 30 首的实测 | 能否用作判据 |
@@ -53,7 +53,7 @@ enum class TrackAvailability {
     /**
      * 服务端确认**当前身份**能取到播放链。
      *
-     * 判据：网易云 `privilege.pl > 0`。实测 30/30，**假阳性 0**。
+     * 判据：ncm `privilege.pl > 0`。实测 30/30，**假阳性 0**。
      * 注意它带 Cookie 时反映的是**这个账号自己的权益**，所以文案是「可播放」而不是「有版权」。
      */
     PLAYABLE,
@@ -89,7 +89,7 @@ enum class TrackAvailability {
     companion object {
 
         /**
-         * 网易云：由逐曲 `privilege` + `fee` 判定。**判据只此一处。**
+         * ncm：由逐曲 `privilege` + `fee` 判定。**判据只此一处。**
          *
          * 判定顺序是有意的 —— `NO_COPYRIGHT` 优先于 `PLAYABLE`：
          * 实测有一条 `st == -200` 且 `noCopyrightRcmd != null` 的样本（`晴天 (钢琴版)`），
@@ -99,7 +99,7 @@ enum class TrackAvailability {
          * @param privilegeSt  `privilege.st`；null = 字段缺失
          * @param playableBr   `privilege.pl`；null = 字段缺失
          * @param noCopyright  `noCopyrightRcmd != null`；null = 未声明
-         * @param fee          网易云的 `fee`（`1`/`4` = 会员或数字专辑）
+         * @param fee          ncm 的 `fee`（`1`/`4` = 会员或数字专辑）
          */
         fun ofNetease(
             privilegeSt: Int?,
@@ -125,7 +125,7 @@ enum class TrackAvailability {
         }
 
         /**
-         * QQ 音乐：只有 `pay.pay_play` 一个可用判据（v2.1.4）。
+         * qm：只有 `pay.pay_play` 一个可用判据（v2.1.4）。
          *
          * **刻意不做的事**：`pay_play == 0` **不**返回 [PLAYABLE]。
          * 它的字面语义是「不需要付费」，不是「有版权、能取到链」——
@@ -152,10 +152,10 @@ enum class TrackAvailability {
             )
         }
 
-        /** 网易云 `privilege.st` 的「正常」取值。 */
+        /** ncm `privilege.st` 的「正常」取值。 */
         const val NORMAL_ST = 0
 
-        /** 网易云 `privilege.st` 的「下架 / 无版权」取值。 */
+        /** ncm `privilege.st` 的「下架 / 无版权」取值。 */
         const val NO_COPYRIGHT_ST = -200
 
         /** 「播放本身被会员墙挡住」的 `fee` 取值（与 [TrackAccess] 一致，但用途不同）。 */
@@ -176,7 +176,7 @@ enum class TrackAvailability {
  *
  * ## 为什么敢做，而「官方音源」不敢做
  *
- * 网易云在单曲级下发 `originCoverType`（整数枚举）与 `originSongSimpleData`（指向原曲的**结构化引用**，
+ * ncm 在单曲级下发 `originCoverType`（整数枚举）与 `originSongSimpleData`（指向原曲的**结构化引用**，
  * 带 `songId` 可精确回查）。两者都不是字符串启发式，所以可用：
  *
  * - 自洽性检验：对 60 条「翻唱」，回头查它声称的原曲，**58 条（96.7%）** 的 `originCoverType == 1`，
@@ -209,7 +209,7 @@ enum class TrackVersionTag {
     val hasBadge: Boolean get() = this != UNKNOWN
 
     companion object {
-        /** 网易云 `originCoverType` → 标签。**判据只此一处。** */
+        /** ncm `originCoverType` → 标签。**判据只此一处。** */
         fun ofOriginCoverType(value: Int?): TrackVersionTag = when (value) {
             ORIGINAL_CT -> ORIGINAL
             COVER_CT -> COVER
@@ -224,10 +224,10 @@ enum class TrackVersionTag {
             MusicSource.BILIBILI -> UNKNOWN
         }
 
-        /** 网易云 `originCoverType`：原唱。 */
+        /** ncm `originCoverType`：原唱。 */
         const val ORIGINAL_CT = 1
 
-        /** 网易云 `originCoverType`：翻唱。 */
+        /** ncm `originCoverType`：翻唱。 */
         const val COVER_CT = 2
     }
 }

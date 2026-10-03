@@ -64,7 +64,7 @@ PROBE-V324-CDN variant=C_probe_manual_ua_no_referer -> FAIL InvalidResponseCodeE
 
 ```
 PROBE-V324-ROUTE case=bili_whitelist_host plain=0 bili=1     ← 白名单 host 走 B 站分支
-PROBE-V324-ROUTE case=netease            plain=1 bili=1     ← 网易云走普通分支
+PROBE-V324-ROUTE case=netease            plain=1 bili=1     ← ncm走普通分支
 PROBE-V324-ROUTE case=qq                 plain=2 bili=1     ← QQ 走普通分支
 PROBE-V324-ROUTE case=pcdn_before_mark   plain=3 bili=1     ← 未标记的第三方域名：普通分支
 PROBE-V324-ROUTE case=pcdn_after_mark    plain=3 bili=2     ← markStream 之后：B 站分支

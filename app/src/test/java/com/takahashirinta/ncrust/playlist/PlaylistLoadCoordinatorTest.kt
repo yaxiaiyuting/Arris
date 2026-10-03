@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -92,7 +92,7 @@ class PlaylistLoadCoordinatorTest {
 
     /**
      * **同一个歌单 id、不同账号**必须判不等 —— 这是 [PlaylistKey] 带 ownerId 的全部意义。
-     * QQ 音乐的 dirId 是账号内编号，`dirId=1` 在两个账号下是两个不同的歌单。
+     * qm 的 dirId 是账号内编号，`dirId=1` 在两个账号下是两个不同的歌单。
      */
     @Test
     fun `同一个 playlistId 在不同账号下是两个不同的主体`() {

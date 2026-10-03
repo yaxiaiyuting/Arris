@@ -3,21 +3,21 @@
 > 修复前版本：**S6 = `v2.6.0-gpl`（versionCode 48）**，**PCL110 = `v2.6.1-gpl`（versionCode 49）**，
 > **WGR-W09 = `v2.6.1-gpl`**。
 > 两台设备各自独立复现，**页面上看到的错专辑不是同一张** —— 说明这不是"某个固定 fallback 值"，
-> 而是"QQ 的数字 id 恰好命中了网易云的哪张专辑"。
+> 而是"QQ 的数字 id 恰好命中了 ncm 的哪张专辑"。
 > 方法：`adb shell input` 驱动 + `uiautomator dump` 读语义树（坐标由当刻布局算出，不写死）。
 
 ---
 
 ## 1. 最短复现路径
 
-> 搜索 `Eason Chan`（或中文 `富士山下`）→ 结果里**同时**出现网易云与 QQ 音乐两条同名曲目 →
+> 搜索 `Eason Chan`（或中文 `富士山下`）→ 结果里**同时**出现 ncm 与 qm 两条同名曲目 →
 > **长按 QQ 那一行** → 二级菜单 → 点「转到专辑」→ 落地页是一张**毫不相干的**专辑。
 
 ### 1.1 PCL110（OPPO / Android 16 / `v2.6.1-gpl` / versionCode 49）
 
 | 项 | 值 |
 |---|---|
-| 曲目 | 《葡萄成熟时》/ 陈奕迅 / **QQ 音乐** / 专辑 `U 87` |
+| 曲目 | 《葡萄成熟时》/ 陈奕迅 / **qm** / 专辑 `U 87` |
 | QQ `album.id` | `7879` |
 | 落地页 | **《爱的供养》/ 邓杰**（发行 2011-05-20，13 首歌曲） |
 | 稳定性 | **2/2** |
@@ -34,14 +34,14 @@ I NcrustHttpTiming: path=/api/v1/album/7879 ttfb=201ms body=3ms total=205ms
 I NcrustHttpTiming: path=/api/v1/album/7879 ttfb=295ms body=5ms total=302ms
 ```
 
-`7879` 是 **QQ 的 `album.id`**，而 `/api/v1/album/` 是**网易云**的接口 —— 一行日志同时坐实了
-根因的 ②③ 两环（不看 source、老路由写死网易云）。
+`7879` 是 **QQ 的 `album.id`**，而 `/api/v1/album/` 是**ncm**的接口 —— 一行日志同时坐实了
+根因的 ②③ 两环（不看 source、老路由写死 ncm）。
 
 ### 1.2 S6（三星 G9209 / Android 7.0 / `v2.6.0-gpl` / versionCode 48）
 
 | 项 | 值 |
 |---|---|
-| 曲目 | 《富士山下》/ 陈奕迅 / **QQ 音乐** / 专辑 `What's Going On...?` |
+| 曲目 | 《富士山下》/ 陈奕迅 / **qm** / 专辑 `What's Going On...?` |
 | QQ `album.id` | `22276` |
 | 落地页 | **《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云**（发行 2010-01-03，13 首歌曲） |
 | 稳定性 | **2/2** |
@@ -64,7 +64,7 @@ I NcrustHttpTiming: path=/api/v1/album/7879 ttfb=295ms body=5ms total=302ms
 
 | 让 QQ《稻香》成为当前曲目的方式 | `song.album` 的形状 | 结果 |
 |---|---|---|
-| 在搜索结果里点一下那一行（新鲜加载） | `{"id":36062,"mid":"002Neh8l0uciQZ","name":"稻香"}` | 走网易云 ⇒ `404`（错页面） |
+| 在搜索结果里点一下那一行（新鲜加载） | `{"id":36062,"mid":"002Neh8l0uciQZ","name":"稻香"}` | 走 ncm ⇒ `404`（错页面） |
 | **冷启动从 `ncrust_playback_state` 恢复** | `{"picUrl":"…T002R500x500M000002Neh8l0uciQZ_3.jpg"}` | **静默无反应**（`albumId == null`） |
 
 第二行的形状**不是我构造的**：它是 S6 真机上**真实存在**的队列第 847 项，
@@ -83,7 +83,7 @@ I NcrustHttpTiming: path=/api/v1/album/7879 ttfb=295ms body=5ms total=302ms
 ```
 
 `al` 的 key 集合是 **`{picUrl}`** —— 没有 `id`，没有 `name`。
-把它放回 `ncrust_playback_state` / 冷启动，mini bar 正常显示「稻香 / 周杰伦 / QQ 音乐」，
+把它放回 `ncrust_playback_state` / 冷启动，mini bar 正常显示「稻香 / 周杰伦 / qm」，
 点菜单里的「转到专辑」**页面完全不变、Toast 也没有、logcat 一条不留**。
 
 > **这一档比"跳错专辑"更难被发现**：没有任何网络请求，所以连 `NcrustHttpTiming` 都没有。
@@ -110,11 +110,11 @@ I NcrustHttpTiming: path=/api/v1/album/7879 ttfb=295ms body=5ms total=302ms
 
 | 点的是哪一行 | 曲目头（菜单里） | 落地页 | 判定 |
 |---|---|---|---|
-| **QQ 音乐**《富士山下》 | `陈奕迅 / What's Going On...?` | 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云 | ✗ **错专辑** |
-| **网易云**《富士山下》 | `陈奕迅 / What's Going On…?` | 《What's Going On…?》/ 陈奕迅（17 首，默认播放源：网易云） | ✓ **正确，无回归** |
+| **qm**《富士山下》 | `陈奕迅 / What's Going On...?` | 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云 | ✗ **错专辑** |
+| **ncm**《富士山下》 | `陈奕迅 / What's Going On…?` | 《What's Going On…?》/ 陈奕迅（17 首，默认播放源：ncm） | ✓ **正确，无回归** |
 
 证据：`screenshots/before-s6-02-goto-album-result.png`（QQ 行 ⇒ 陈小云）
-与 `screenshots/before-s6-03-netease-album-ok.png` + `probe-raw/s6-before-netease-album-tree.txt`（网易云行 ⇒ 正确）。
+与 `screenshots/before-s6-03-netease-album-ok.png` + `probe-raw/s6-before-netease-album-tree.txt`（ncm 行 ⇒ 正确）。
 
 这与 v2.6.1 的艺人 P0 是**同一个方法论**：一轮之内只改一个变量，排除了"平台差异/偶发"。
 

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -399,14 +399,48 @@ class StringsMigrationTest {
         val reference = now.values.first()
         val unexplained = (sameNow - sameGolden).filterNot { path ->
             val value = reference.getValue(path)
-            // ① 组标记；② 扁平名在 v2.5.2 就已经全同（搬家不改变这件事）。
-            value.startsWith("group(") || path.substringAfterLast('.') in sameGolden
+            // ① 组标记；② 扁平名在 v2.5.2 就已经全同（搬家不改变这件事）；
+            // ③ v3.3.2 的**品牌改名**（见下）。
+            value.startsWith("group(") ||
+                path.substringAfterLast('.') in sameGolden ||
+                path in BRAND_RENAMED_IDENTICAL
         }
         assertTrue(
             "以下路径新变成「跨语言全同」，但既不是组标记、也不对应一条本来就全同的旧文案 —— " +
                 "疑似有语言的文案被回落到同一个串：\n" +
                 unexplained.take(20).map { "  $it = ${reference[it]}" }.joinToString("\n"),
             unexplained.isEmpty(),
+        )
+    }
+
+    private companion object {
+        /**
+         * v3.3.2：**品牌改名**（网易云 / NetEase → `ncm`，QQ 音乐 / QQ Music → `qm`）
+         * 导致的「跨语言全同」新增路径。分两类，都只与品牌串有关：
+         *
+         * 1. `sourceQqMusic` / `source.sourceQqMusic` —— v2.5.2 时代就有的两条。
+         *    改名前 8 个语言用的是各自习惯的品牌写法（`QQ Music` / `QQ 音乐` / `QQ 音樂`），
+         *    统一成 `qm` 之后必然逐字节相同。快照里的品牌串本次一并更新，所以它们其实
+         *    已经被「扁平名本来就在 `sameGolden`」这条规则放行；白名单在这里是**第二道、
+         *    显式的保险** —— 将来有人重建快照，这两条仍会被认作「预期内」。
+         *
+         * 2. `searchSourceSummaryWithStatus`（v2.5.5 新增）与 `stats.sourceQq`（stats 组新增）
+         *    —— 它们**晚于 v2.5.2**，黄金快照里根本没有这两条路径，所以
+         *    「扁平名本来就在 `sameGolden`」那条规则对它们不成立，必须显式列出。
+         *    两者的值分别是「`ncm $a · qm $b` 模板」与纯品牌串 `qm`，
+         *    各语言取值在改名后必然收敛，同样是**改名的目标**而非误回落。
+         *
+         * ## 为什么用白名单而不是放宽判据
+         *
+         * 放宽成「不检查新增」会让这条用例失去价值 —— 它抓的正是「某语言的文案被误改成
+         * 与别国相同」。用**显式白名单**可以保持严格：将来再有路径变成全同，
+         * 仍然会红，而且必须像这里一样写清理由才能加进来。
+         */
+        val BRAND_RENAMED_IDENTICAL = setOf(
+            "source.sourceQqMusic",
+            "sourceQqMusic",
+            "searchSourceSummaryWithStatus",
+            "stats.sourceQq",
         )
     }
 }

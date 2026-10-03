@@ -1,6 +1,6 @@
-# 探针：聚合搜索 «晴天» 的 QQ 音乐链路延迟（v2.5.5）
+# 探针：聚合搜索 «晴天» 的 qm 链路延迟（v2.5.5）
 
-- 设备：`PLC110`（`3B15CD00GB700000`，Android 16，KernelSU root，**已登录网易云 + QQ**）
+- 设备：`PLC110`（`3B15CD00GB700000`，Android 16，KernelSU root，**已登录 ncm + QQ**）
   、`SM-G9209`（`0715f763f54c023a`，Android 7.0，Magisk root，已登录，**锁屏带 PIN，无法解锁 ⇒ 未参与 UI 实测**）
 - 被测包：**v2.5.4-gpl / versionCode 45**（`dumpsys package` 实测，非 release 包重编译）
 - 读的源码：**`10e9df9`**（v2.5.4 之后、v2.5.5 修复**之前**的状态）。
@@ -18,26 +18,26 @@
 
 | # | 归因 | 结论 | 证据 |
 |---|---|---|---|
-| 1 | **串行编排（结构性）** | ✅ **成立，是「看到 0 首」的直接原因**：网易云与 QQ **不是并发**，先 `await` 网易云并**立即发布**，再发 QQ。整体可见延迟是 **sum**（netease + qq），不是 max | `SearchViewModel.kt:131-136`（await 网易云）→ `:167-171`（发布 + 关 loading）→ `:175-188`（才发 QQ） |
+| 1 | **串行编排（结构性）** | ✅ **成立，是「看到 0 首」的直接原因**：ncm 与 QQ **不是并发**，先 `await` ncm 并**立即发布**，再发 QQ。整体可见延迟是 **sum**（netease + qq），不是 max | `SearchViewModel.kt:131-136`（await ncm）→ `:167-171`（发布 + 关 loading）→ `:175-188`（才发 QQ） |
 | 2 | **接口本身慢（主因）** | ✅ legacy 通道 `client_search_cp` **TTFB P50 1.72s / P95 2.99s**（n=30，同网段直连），DNS 6ms、TLS 213ms ⇒ **耗时几乎全在服务端**，不是本地处理 | 见 §2.1 原始数据 |
 | 3 | **首次初始化** | ❌ **不成立**。搜索路径**完全没有** token/签名初始化：`ptqrtoken`/`hash33`/`g_tk` 只出现在**扫码登录**（`QqQrLogin.kt:224`），搜索链路一次都不用；冷启首搜 3 次 = 2117 / 4363 / 2295ms，热态 5 次 = 2034…2864ms，**分布重叠、无系统性差异** | §2.2 |
 | 4 | **重试** | ⚠️ **没有重试，但有「第二条通道」**：`legacy` 拿不到/0 条时**再发一次** `musicu.fcg`（`QqApi.kt:68-81`）。两条都跑 ⇒ 串行两次 RTT。本次 15 次实测**全部第一条就成功**（宿主机 30/30 也是），所以**本次未观测到**这条路径贡献延迟 | `QqClient.kt:122-127`（不重试）、`QqApi.kt:68-81` |
 | 5 | **映射/解析** | ❌ 不是瓶颈。`QqSongMapper` 是纯 `JSONObject` 遍历（30 条、无正则/无 IO），**上界 = QQ leg 实测 − 接口 TTFB ≤ ~0.3s**（未单独基准，见 §4） | `QqSongMapper.kt:52-142` |
-| 6 | **超时预算把慢请求变成「永久 0 首」** | ⚠️ 硬预算 5s（`QQ_SEARCH_BUDGET_MS`）：QQ leg >5s 时**结果被整包丢弃**，UI 永远停在「QQ 音乐 0 首」，**没有任何提示** | `SearchViewModel.kt:83, 179-181, 195` |
+| 6 | **超时预算把慢请求变成「永久 0 首」** | ⚠️ 硬预算 5s（`QQ_SEARCH_BUDGET_MS`）：QQ leg >5s 时**结果被整包丢弃**，UI 永远停在「qm 0 首」，**没有任何提示** | `SearchViewModel.kt:83, 179-181, 195` |
 
-**一句话**：5s 不是某一次「慢」凑出来的，而是**「网易云 leg（~1s）+ QQ legacy leg（1.7~3.0s，服务端慢）串行相加」**，
+**一句话**：5s 不是某一次「慢」凑出来的，而是**「ncm leg（~1s）+ QQ legacy leg（1.7~3.0s，服务端慢）串行相加」**，
 最慢一次实测 4363ms（P95 4147ms），再叠加冷启/弱网就会顶到 5s 预算上限；顶到上限时**结果被丢掉**，
-用户看到的是「QQ 音乐 0 首」这个**假事实**。
+用户看到的是「qm 0 首」这个**假事实**。
 
 ### 0.2 加载态现状：**QQ leg 没有任何加载态**
 
-- `_isLoading.value = false` 在**网易云到手那一刻**就执行（`SearchViewModel.kt:171`）；
+- `_isLoading.value = false` 在**ncm 到手那一刻**就执行（`SearchViewModel.kt:171`）；
   唯一的转圈是搜索框里那个 `MetroProgressIndicator`，由 `isLoading` 驱动（`SearchScreen.kt:201-204`）⇒ **QQ 还在路上时，界面已经完全没有「正在加载」的信号**。
 - 更糟的一条：`songs.isEmpty() && !isLoading` ⇒ 显示「没有找到歌曲」（`SearchScreen.kt:428`）。
-  即 **网易云 0 条 + QQ 未回** 时，界面会直接判「没有找到」——一个比「0 首」更硬的错误结论。
-- QQ 超时/失败时**既不报错也不重试**：只有「两个源都空**且网易云报过错**」才写 `_error`（`:198-200`）。
+  即 **ncm 0 条 + QQ 未回** 时，界面会直接判「没有找到」——一个比「0 首」更硬的错误结论。
+- QQ 超时/失败时**既不报错也不重试**：只有「两个源都空**且 ncm 报过错**」才写 `_error`（`:198-200`）。
 
-### 0.3 结果合并方式：**在网易云结果之上整体「重排 + 替换」，不是追加**
+### 0.3 结果合并方式：**在 ncm 结果之上整体「重排 + 替换」，不是追加**
 
 `publish(netease, qq)` = `SearchRanking.order(...).map{value}.distinctBy { it.trackKey }`（`:143-165`）：
 QQ 到达后**整表重算**（会员墙分组 + 拉链交错），再 `distinctBy` 去重。
@@ -110,7 +110,7 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
   delay(500)                                 // :89  防抖
   searchByType(type)                         // :108
     _isLoading = true                        // :109
-    RetrofitClient.api.search(...)  ←─ 挂起等待网易云   // :131-136  (runCatching)
+    RetrofitClient.api.search(...)  ←─ 挂起等待ncm   // :131-136  (runCatching)
     publish(netease, emptyList()); _sourceCounts = (n, 0) ←─ 先发布  // :167-171
     withTimeoutOrNull(5_000) { SourceRouter.searchSongs(QQMUSIC, ...) } ←─ 才发 QQ  // :179-181
     if (qq.isNotEmpty() && query == keyword) publish(netease, qq)     // :192-194
@@ -118,7 +118,7 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
 }
 ```
 **没有 `async`/`awaitAll`/`coroutineScope`**，两个源在同一个协程里一前一后 ⇒ **整体 = sum**。
-（网易云 leg 真机约 1.2–1.8s：见 §2.5；QQ leg = 总耗时 − 网易云 leg。）
+（ncm leg 真机约 1.2–1.8s：见 §2.5；QQ leg = 总耗时 − ncm leg。）
 
 ### 2.4 Q4 — QQ 搜索请求链路：ptqrtoken / 签名 / 必填字段
 
@@ -129,7 +129,7 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
   + UA=桌面 Chrome + `Referer: https://y.qq.com/` + cookie（`QqRequests.kt:99-105`、`QqClient.kt:275-297`）。
 - 兜底通道：`POST musicu.fcg`，信封 key = **module 名**且**不带 `comm`**（带了会被判通道不匹配）
   （`QqRequests.kt:90-97`、`QqApi.kt:84-95`）。
-- **与主页路径是否一致**：主页/详情走的是 `RetrofitClient`（网易云）与 QQ 的歌单页 `QqPlaylistApi`，
+- **与主页路径是否一致**：主页/详情走的是 `RetrofitClient`（ncm）与 QQ 的歌单页 `QqPlaylistApi`，
   **搜索这两条通道是搜索独有的**；同一个 `QqClient.searchHttp` 只服务搜索。未逐字段比对主页路径（§4）。
 
 ### 2.5 Q5 — 会不会静默重试累加成 5s
@@ -148,14 +148,14 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
 
 ### 2.7 Q7 — 有无加载态？「0 首」是真没有还是还没回来？
 
-**没有任何加载态，且两种语义在 UI 上完全同形。**「QQ 音乐 0 首」有**三个**不同来源，界面无法区分：
+**没有任何加载态，且两种语义在 UI 上完全同形。**「qm 0 首」有**三个**不同来源，界面无法区分：
 
 1. `_sourceCounts.value = netease.size to 0` —— **QQ 还没发出去**就先写死 0（`SearchViewModel.kt:170`）；
 2. QQ leg 超 5s 被 `withTimeoutOrNull` 放弃 ⇒ `qq = emptyList()` ⇒ `:195` 写 `(n, 0)`，**且此后再无更新**；
 3. QQ 真的返回 0 条。
 
 文案由 `strings.sourceSummary(a, b)` 生成（`SearchScreen.kt:448-459`，`zh_CN.kt:150` =
-`"网易云 $a 首 · QQ 音乐 $b 首"`）；`b` 直接来自 `_sourceCounts.second`，**不含任何 loading/unknown 维**。
+`"ncm $a 首 · qm $b 首"`）；`b` 直接来自 `_sourceCounts.second`，**不含任何 loading/unknown 维**。
 
 ### 2.8 Q8 — 统计数字是定格还是动态更新
 
@@ -177,7 +177,7 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
 |---|---|---|
 | QQ 搜索（ViewModel） | **5000ms** `withTimeoutOrNull`（`SearchViewModel.kt:83, 179`） | 返回 null ⇒ 当成空列表 ⇒ 计数 `(n, 0)`、**无错误、无提示、不重试** |
 | QQ search OkHttp | connect 4s / read 6s / write 6s / **callTimeout 8s**（`QqClient.kt:81-88`） | 抛异常 → `SourceRouter`/Provider 的 `runCatching` 吞掉 → 空列表（`SourceRouter.kt:77-82`） |
-| 网易云 OkHttp | connect/read **30s**，**无 callTimeout**（`RetrofitClient.kt:36-54`） | 网易云 leg 单独就能挂 30s；实测曾出现 `elapsed=22868ms / 15742ms` 后被用户清空取消 |
+| ncm OkHttp | connect/read **30s**，**无 callTimeout**（`RetrofitClient.kt:36-54`） | ncm leg 单独就能挂 30s；实测曾出现 `elapsed=22868ms / 15742ms` 后被用户清空取消 |
 
 **重要**：`withTimeoutOrNull` **取消不了**阻塞中的 `execute()`（`QqClient.kt:73-80` 的 KDoc 已写明）
 ⇒ 5s 后 UI 放弃，底层请求仍在跑、结果被丢弃。
@@ -187,8 +187,8 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
 **有，而且是默认行为。** 三层 `runCatching` 全部把异常变成空列表：
 `QqMusicSourceProvider.searchSongs`（`:50-53`）、`SourceRouter.searchSongs`（`:77-82`）、
 `SearchViewModel` 的 `try/catch`（`:182-185`）。
-只有「网易云也空 **且** 网易云报过错」才写 `_error`（`:198-200`）⇒
-**QQ 单独失败时用户看到的就是「QQ 音乐 0 首」，没有任何提示**。
+只有「ncm 也空 **且** ncm 报过错」才写 `_error`（`:198-200`）⇒
+**QQ 单独失败时用户看到的就是「qm 0 首」，没有任何提示**。
 
 ---
 
@@ -199,7 +199,7 @@ viewModelScope.launch {                      // SearchViewModel.kt:88 / :102
 | 方案 | 对应根因 | 成本 | 回归面 |
 |---|---|---|---|
 | **A. 加载态（必做）** | §0.2 / §2.7 | 小：把 `sourceCounts: Pair<Int,Int>?` 换成三态（`Loading / Loaded(n,m) / Failed(reason)`），文案区分「未回」与「0 条」 | `Strings.kt` + 8 个语言文件各加 1–2 个属性；`SearchScreen` 小字那一处 |
-| **B. 并发（推荐）** | §2.3 串行 sum | 中：`coroutineScope { async 网易云; async QQ }`，网易云到手先 publish，QQ 到手再 publish | **主源先发布的语义必须保住**（否则回到 v2.1.0 hotfix 3 的「一直转圈」）；两条 leg 的错误处理与 `_isLoading` 时序要一并改 |
+| **B. 并发（推荐）** | §2.3 串行 sum | 中：`coroutineScope { async ncm; async QQ }`，ncm 到手先 publish，QQ 到手再 publish | **主源先发布的语义必须保住**（否则回到 v2.1.0 hotfix 3 的「一直转圈」）；两条 leg 的错误处理与 `_isLoading` 时序要一并改 |
 | **C. 换主通道（推荐，本次最大发现）** | §2.1：legacy P50 1857ms vs **musicu P50 376ms** | 小：把 `QqApi.searchSongs` 的两条通道**调换优先级**（musicu 先、legacy 兜底） | 与 `QqApi.kt:55-62` 的注释结论相反 —— 该注释称 musicu「连续 6 次只成功 1 次（code 2001）」，但**本次 15/15 成功且快 5 倍**；服务端行为可能已变，需再采一轮 n≥30 才能翻案 |
 | **D. 缓存** | 同词重复搜索 | 中：按 `(keyword, source)` 短 TTL 缓存 | 结果时效性与「搜 A 显示 B」的既有守卫（`:192`）要一起考虑 |
 | **E. 降级** | §2.10 超时丢结果 | 小：超时**不清空**上一次 QQ 结果、或延长到 8s 并与 `callTimeout` 对齐 | 与「结果过期」语义冲突，需要版本号/关键词守卫 |
@@ -220,7 +220,7 @@ B 把可见延迟从 sum 拉到 max；C 若成立直接把 QQ leg 从 ~1.9s 压�
 
 1. **S6（Android 7.0）未参与 UI 实测** —— 设备处于**带 PIN 的锁屏**（截图 `s6-lockscreen.png`），
    `input swipe` 无法解锁，无 PIN 不可绕过。其登录态已由 root 读 `ncrust_prefs.xml` / `ncrust_qq_prefs.xml`
-   确认为「网易云 + QQ 双登录」，但**没有任何一台 Android 7 的耗时数据**。
+   确认为「ncm + QQ 双登录」，但**没有任何一台 Android 7 的耗时数据**。
 2. **映射层没有独立基准**：§2.6 的「<0.3s」是「QQ leg 实测 − 接口 TTFB」的**上界**，不是 JVM 基准测试。
 3. **`legacy → musicu` 兜底路径未被真实触发**（15+30 次里第一条通道 100% 成功）⇒ 「两次串行 RTT 会不会
    凑成 5s」只有代码推断（§2.5），**没有实测**。
@@ -237,7 +237,7 @@ PLC110 上最初 4 次搜索**全部卡死**（`elapsed=10269/15742/22868ms`，`
 根因定位：**该 WiFi 下到 `*.music.163.com` 的 IPv6 被黑洞**
 （`/proc/net/tcp6` 显示 app 到 `2409:8c70:3a08:6:8000:0:d00:12:443` 的两条连接停在 `SYN_SENT`；
 `nc -z <IPv6> 443` `exit=1`，`nc -z 111.19.176.86 443` `exit=0` 且 80ms），
-而 `RetrofitClient` 的网易云通道是 30s connect / 30s read、**无 callTimeout** ⇒ 网易云 leg 单独挂 30s。
+而 `RetrofitClient` 的 ncm 通道是 30s connect / 30s read、**无 callTimeout** ⇒ ncm leg 单独挂 30s。
 **处置**：`su -c 'echo 1 > /proc/sys/net/ipv6/conf/wlan0/disable_ipv6'` 临时关掉 wlan0 的 IPv6，
 搜索立即恢复正常（此后 15 次全部成功）；**收尾已还原为 `0`**。
 ⇒ §2 的所有真机数字都是**在关掉该接口 IPv6 之后**取的（QQ 侧只走 IPv4，不受影响）。
@@ -265,7 +265,7 @@ PLC110 上最初 4 次搜索**全部卡死**（`elapsed=10269/15742/22868ms`，`
 | `plc110-cold-warm.txt` | IPv6 修复前的失败样本（卡死 ≥9s 后被取消） |
 | `logcat-coldsearch-full.txt` | 卡死现场的全量 logcat（含 `elapsed=15742ms` 等） |
 | `timeline/ui1..ui4/` | 每次：`timeline.json`（**逐帧时刻 + app 日志原文**）+ `summary-strip2.png` + 1 张代表帧。⚠️ 为控制体积，其余帧已删除；`timeline.json` 里仍保留每帧的文件名与时刻，需要时可用同一条命令重跑复现 |
-| `timeline/ui2/summary-strip2.png`、`timeline/ui3/summary-strip2.png` | **「网易云 30 首 · QQ 音乐 0 首」→「QQ 音乐 30 首」逐帧证据**（§0 的关键截图） |
+| `timeline/ui2/summary-strip2.png`、`timeline/ui3/summary-strip2.png` | **「ncm 30 首 · qm 0 首」→「qm 30 首」逐帧证据**（§0 的关键截图） |
 | `plc110-searchtab.png` / `plc110-precheck.png` | 搜索页初始态与前置校验帧（脚本每次点击前都会留 `pre.png` 供事后核对） |
 | `s6-lockscreen.png` | S6 带 PIN 锁屏（§4.1 第 1 条的卡点证据） |
 
@@ -273,15 +273,15 @@ PLC110 上最初 4 次搜索**全部卡死**（`elapsed=10269/15742/22868ms`，`
 
 ## §7 对并行落地的修复的复核（`c74c6d8`）
 
-探针期间父任务已把修复提交为 **`c74c6d8 fix(search): 聚合搜索的「QQ 音乐 0 首」假话 + 两个源改成并发发起**。
+探针期间父任务已把修复提交为 **`c74c6d8 fix(search): 聚合搜索的「qm 0 首」假话 + 两个源改成并发发起**。
 本节是对该提交的**代码级复核**（不涉及重新实测，被测 APK 仍是 v2.5.4）。
 
 | 复核项 | 结论 |
 |---|---|
-| 两条判断是否成立 | ✅ **都成立**：① 旧实现确实 `await 网易云 → 再发 QQ`（sum 而非 max，`10e9df9:131-188`）；② 「QQ 音乐 0 首」确实来自 `_sourceCounts.value = netease.size to 0`（`10e9df9:170`） |
+| 两条判断是否成立 | ✅ **都成立**：① 旧实现确实 `await ncm → 再发 QQ`（sum 而非 max，`10e9df9:131-188`）；② 「qm 0 首」确实来自 `_sourceCounts.value = netease.size to 0`（`10e9df9:170`） |
 | 并发是否保住了「主源先发布」 | ✅ 保住：`async` 只让**请求**重叠，`neteaseDeferred.await()` 之后才 `publish(netease, emptyList())` 与关 loading，顺序契约未动 |
 | 三态是否覆盖了 §2.7 的三种「0 首」 | ✅ 覆盖：`PENDING`（还没回）/ `TIMEOUT`（超预算）/ `DONE + 0`（真的 0 条）+ `SKIPPED`（未登录且不允许匿名） |
 | 计数写入是否补了 query 守卫 | ✅ 补了（`if (_query.value == keyword)`），修掉了 `10e9df9:195` 的陈旧写回 |
 | `withTimeoutOrNull` 的 null 语义 | ✅ 现在区分了 `null ⇒ TIMEOUT` 与 `emptyList ⇒ DONE/0`；**但**通用异常也走 `timedOut = true`（网络错误会被显示成「超时」），语义上建议拆成 `TIMEOUT` / `ERROR` 两态 |
 | 遗留（非本次修复引入） | ⚠️ 外层 `catch (e: Exception)` **仍吞 `CancellationException`**：用户改词会 cancel，此时仍会写 `_error` 并可能在「一条结果都没有」时 `clearResults()`。建议 `if (e is CancellationException) throw e`。本次实测多次复现（`W SearchViewModel: … u0 was cancelled` 之后照常走完并打日志） |
-| 遗留 | ⚠️ `withTimeoutOrNull` 取消不了阻塞中的 `execute()`（`QqClient.kt:73-80` 已写明）：5s 后 UI 放弃，底层请求仍在跑。并发化之后 QQ 请求**总是**会发出去，这一点的影响面比之前更大（以前 QQ 至少排在网易云之后） |
+| 遗留 | ⚠️ `withTimeoutOrNull` 取消不了阻塞中的 `execute()`（`QqClient.kt:73-80` 已写明）：5s 后 UI 放弃，底层请求仍在跑。并发化之后 QQ 请求**总是**会发出去，这一点的影响面比之前更大（以前 QQ 至少排在 ncm 之后） |

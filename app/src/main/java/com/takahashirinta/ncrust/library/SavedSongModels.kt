@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -61,7 +61,7 @@ enum class SavedSongOrigin {
     /** 由云端红心歌单同步而来。同步时可以继续追加新的，但**永远不会因为「云端没有」而被删掉**。 */
     REMOTE,
 
-    /** 用户手动「加入库」进来的（含 QQ 音乐曲目）。同步时**永远保留**。 */
+    /** 用户手动「加入库」进来的（含 qm 曲目）。同步时**永远保留**。 */
     LOCAL,
 }
 
@@ -186,7 +186,7 @@ object SavedSongSync {
         }
 
         // ③ 云端没有、但本地有（可见）：只加不减（规则 3）。
-        //    ⚠️ `remoteIds`（云端红心歌单）**只描述网易云那一侧**，所以「云端有没有」
+        //    ⚠️ `remoteIds`（云端红心歌单）**只描述 ncm 那一侧**，所以「云端有没有」
         //    这个判据对 QQ 条目恒不成立 —— QQ 条目一律走只加不减。
         //    `origin = LOCAL` 的条目在①已经进 out，LinkedHashMap 对已有 key 的
         //    重新赋值**不改变插入顺序**，所以它们仍然排在最前。
@@ -323,16 +323,16 @@ object SavedSongSync {
     // ------------------------------------------------------------------ 闸门 ----
 
     /**
-     * 这个 id 能不能发给网易云的**写接口**（`/api/radio/like`、`/api/album/sub`）。
+     * 这个 id 能不能发给 ncm 的**写接口**（`/api/radio/like`、`/api/album/sub`）。
      *
      * ## 为什么需要它（不是一个假想的风险）
      *
-     * QQ 音乐的 id 由 [SourceIds.qqId] 合成（`bit62` 恒置位，是**正数**），
+     * qm 的 id 由 [SourceIds.qqId] 合成（`bit62` 恒置位，是**正数**），
      * 所以「`id > 0`」这条既有的卫语句在数学上不可能拦住它 —— 与 v2.5.5 修掉的
      * `PlayReporter` 跨源上报是**同一个形状**（`ReportGate` 的 KDoc 记了完整根因链）。
      *
      * 判据只能是 `bit62`（[SourceIds.isQqId]）。**不许用 id 区间启发式** ——
-     * QQ 的裸 songid 与网易云的 id 同样是 9~10 位十进制，区间完全重叠。
+     * QQ 的裸 songid 与 ncm 的 id 同样是 9~10 位十进制，区间完全重叠。
      *
      * ## 为什么单独一个函数，而不是复用 `ReportGate` 的枚举
      *

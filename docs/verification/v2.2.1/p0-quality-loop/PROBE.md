@@ -4,7 +4,7 @@
 - **日期**：2026-09-25
 - **设备**：PCL110（OnePlus / Android 16 / API 36 / **已 root（KernelSU）**，可读应用私有目录与注入故障）
   对照设备：WGR-W09（华为平板 / Android 12 / API 31，未 root）
-- **账号**：设备上已登录 QQ 音乐（`ncrust_qq_prefs.xml` 有 `qq_cookie` / `qm_keyst`，`qq_vip_type=1`）
+- **账号**：设备上已登录 qm（`ncrust_qq_prefs.xml` 有 `qq_cookie` / `qm_keyst`，`qq_vip_type=1`）
 - **证据目录**：本目录（`logcat/`、`screenshots/`、`EVIDENCE.md`）
 
 > **一句话结论**：这不是「降级逻辑写错」这么轻。根因是**可视化用的音频 tee 把输出声明成单声道**，
@@ -19,7 +19,7 @@
 
 | 项 | 结论 | 证据 |
 |---|---|---|
-| 音源 | **只在 QQ 音源**（网易云侧没有 6 声道臻品档） | `logcat/04-qq-vkey-tiers.txt` |
+| 音源 | **只在 QQ 音源**（ncm 侧没有 6 声道臻品档） | `logcat/04-qq-vkey-tiers.txt` |
 | 触发操作 | QQ 曲目播放中，音质从 **Hi-Res（或无损）切到「杜比全景声」** | 用户 2026-09-25 复现 + 本报告 §3 |
 | 是否需 SVIP | **不需要**。决定因素是「服务端给不给臻品档的 purl」，与账号等级只是相关 | `probe-qq-vkey-auth.py` 矩阵 |
 | 特定歌曲 | 任意一首服务端**给得出** 6 声道臻品档（Q001）的曲目；实测《稻香》《晴天》《One Last Kiss》均可 | `probe-channels.py`（见 §2.3） |

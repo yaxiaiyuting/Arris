@@ -11,7 +11,7 @@
 
 ### 1.1 最短复现路径（用户报告的路径）
 
-> 搜索 `Jay Chou` → 结果里出现 QQ 音乐《晴天 / 周杰伦》→ **长按该行** →
+> 搜索 `Jay Chou` → 结果里出现 qm《晴天 / 周杰伦》→ **长按该行** →
 > 二级菜单 → 点 **「转到歌手」** → 落地页是 **马洪波**
 
 | 设备 | Android | 结果 | 稳定性 |
@@ -21,7 +21,7 @@
 
 原始证据：`screenshots/before-wgr-02-wrong-artist-mahongbo.png` +
 `probe-raw/wgr-before-wrong-artist-tree.txt`（语义树：`528 277 马洪波`，
-同时底部托盘是 `稻香 / 周杰伦 / QQ 音乐`）。
+同时底部托盘是 `稻香 / 周杰伦 / qm`）。
 
 ### 1.2 第二种症状：**点了没反应**
 
@@ -49,7 +49,7 @@
 | 任务书 §2 / §3 的假设 | 实测 | 证据 |
 |---|---|---|
 | 「走了 v2.4.0 跨源匹配，置信度不足」 | **完全没走匹配**。这条路径上一次都没调用 `CrossSourceMatcher` / `MatchCacheStore` / `MatchConfidence` | `probe-artist-jump-static.md` §2.1 |
-| 「存在 fallback 跳到某个默认艺人」 | **不存在**。fallback 是「补一次**网易云** `song/detail`」，QQ 的 bit62 合成 id 在那里必然查空 ⇒ 静默放弃 | `MainActivity.kt:1845-1847`（v2.6.0） |
+| 「存在 fallback 跳到某个默认艺人」 | **不存在**。fallback 是「补一次**ncm** `song/detail`」，QQ 的 bit62 合成 id 在那里必然查空 ⇒ 静默放弃 | `MainActivity.kt:1845-1847`（v2.6.0） |
 | 「匹配缓存被污染」 | **没污染，而且存的是正确答案** | §3.3 |
 | 「只有 QQ / 只有二级菜单 / 只有周杰伦」 | 只有 QQ ✔；**不止二级菜单**（播放页托盘同一错法）✘；**不止周杰伦**（林俊杰/陈奕迅同样错，只是看起来不同）✘ | §4 |
 
@@ -59,18 +59,18 @@
 
 ### 3.1 他是谁
 
-**网易云的艺人 `4558`**，真名「马洪波」，`albumSize=1`、`musicSize=32`。
+**ncm 的艺人 `4558`**，真名「马洪波」，`albumSize=1`、`musicSize=32`。
 `GET https://music.163.com/api/artist/4558` → `{"code":200,"id":4558,"name":"马洪波",...}`。
 
 ### 3.2 两个源的艺人 ID
 
-| | QQ 音乐 | 网易云 |
+| | qm | ncm |
 |---|---|---|
 | 周杰伦 **数字** id | `4558`（`singer.id`） | `6452` |
 | 周杰伦 **字符串** id | `0025NhlN2yWrP4`（`singer.mid` = singerMID） | 无此概念（十进制就是身份） |
 | 马洪波 | — | `4558` |
 
-**结论：`4558` 是 QQ 域的数字 id，被当成网易云 id 查，撞上了真实存在的马洪波。**
+**结论：`4558` 是 QQ 域的数字 id，被当成 ncm id 查，撞上了真实存在的马洪波。**
 
 ### 3.3 他的 id 是不是某个 fallback 值（0 / -1 / null）？
 
@@ -86,7 +86,7 @@
 
 从**没有**任何地方「搜出」马洪波。他是 `NavRoutes.artist(artistId: Long)` 这条老路由
 （composable 里 `sourceKey = MusicSource.NETEASE.key` 写死）把 QQ 的 `4558` 交给
-网易云 `api/artist/albums/4558` 之后，服务端**正确地**返回的那个人。
+ncm `api/artist/albums/4558` 之后，服务端**正确地**返回的那个人。
 
 ### 3.6 匹配缓存有没有被污染？
 
@@ -100,7 +100,7 @@
 }
 ```
 
-应用**早就知道**「网易云 6452 ↔ QQ `0025NhlN2yWrP4` 是同一个人，EXACT」，
+应用**早就知道**「ncm 6452 ↔ QQ `0025NhlN2yWrP4` 是同一个人，EXACT」，
 只是这条跳转路径从来没问过这张表（它的键是 `(netease, 6452)`，而用户手上只有 `4558`）。
 
 ---
@@ -115,20 +115,20 @@
    `ArtistItem` 当时也没有字段能装它。
 2. `MainActivity.resolveAndNavigate` 只读 `artists[0].id` 就跳，**从不读 `song.musicSource`**。
 3. 老路由 `artist/{artistId}` 的 composable 把 `sourceKey` **写死**成 `MediaSource.NETEASE`
-   —— QQ 的数字 id 于是被拿去查网易云。
+   —— QQ 的数字 id 于是被拿去查 ncm。
 
 > 附带纠正一条**写进代码注释的错误结论**：`AlbumDetailScreen.kt:170-172` 说
 > 「QQ 一侧拿不到 `singerMID`」。实测 QQ `singer[]` 的字段集是
 > `{id, mid, name, pmid, title, title_highlight, type, uin}` —— **`mid` 一直在**。
 > 那句话对**专辑接口**成立，对**搜索接口**不成立。
 
-### 根因 B（没反应）：补 id 的回落是网易云的，QQ 的合成 id 在那里必然落空
+### 根因 B（没反应）：补 id 的回落是 ncm 的，QQ 的合成 id 在那里必然落空
 
 ```kotlin
 // MainActivity.kt:1841-1848（v2.6.0）
 val idMissing = target.artists?.firstOrNull()?.id == null
 if (idMissing) {
-    target = runCatching { PlaylistApi.getSongsByIds(listOf(song.id)) }   // ← 网易云 /eapi/v3/song/detail
+    target = runCatching { PlaylistApi.getSongsByIds(listOf(song.id)) }   // ← ncm /eapi/v3/song/detail
         .getOrDefault(emptyList()).firstOrNull() ?: song
 }
 ...
@@ -140,7 +140,7 @@ when {
 ```
 
 冷启动恢复的曲目 `artists[0].id` **恒为 null**（`MainActivity.kt:920` 只存了艺人名字），
-而 `song.id` 是 `SourceIds.qqId` 合成的（bit62），问网易云必然返回空 ⇒ **静默无反应**。
+而 `song.id` 是 `SourceIds.qqId` 合成的（bit62），问 ncm 必然返回空 ⇒ **静默无反应**。
 
 ### 明确排除的三项
 
@@ -148,7 +148,7 @@ when {
 |---|---|
 | 跨源匹配错误 | 路径上零次匹配调用 |
 | 缓存污染 | 缓存内容正确且未被读取 |
-| fallback 跳默认艺人 | 不存在这种 fallback；存在的是「补一次网易云 detail」 |
+| fallback 跳默认艺人 | 不存在这种 fallback；存在的是「补一次 ncm detail」 |
 
 ---
 
@@ -156,7 +156,7 @@ when {
 
 | 问题 | 答案 |
 |---|---|
-| 只有 QQ？ | **是。** 网易云曲目的 `artists[0].id` 就是网易云艺人 id，老路由写死的源恰好正确（已做 A/B 回归，无回归） |
+| 只有 QQ？ | **是。** ncm 曲目的 `artists[0].id` 就是 ncm 艺人 id，老路由写死的源恰好正确（已做 A/B 回归，无回归） |
 | 只有二级菜单？ | **否。** 二级菜单 + **播放页竖屏托盘作者名**是两个独立入口、同一个错法。而二级菜单本身挂在 **9 个宿主页面**上（首页/搜索/收藏/歌单/QQ 歌单/本地歌单/专辑/艺人/播放器） |
 | 只有周杰伦？ | **否。** 周杰伦只是唯一一个「撞到有内容的真人」的样本：<br>· 周杰伦 `4558` → 马洪波（专辑 1 / 单曲 32，**页面看起来完全正常**）<br>· 林俊杰 `4286` → 刘子译（0 / 0，空页面）<br>· 陈奕迅 `143` → 404（报错） |
 | 严重度排序 | **周杰伦这一档最严重**：页面正常 ⇒ 用户会以为「应用的艺人数据整体是错的」（铁律 21 的原话） |
@@ -171,7 +171,7 @@ when {
 2. **身份判定收成一个纯函数**：新增 `source/ArtistNavigator.kt`，
    产出 `Direct(source, id)` / `Search(keyword, reason)` / `Unavailable` 三态；
    **类型上就不存在「跳到另一个源」**。
-3. **值域闸门**：`idDomainMatches(source, id)` —— 网易云吃十进制、QQ 吃 base62 的 mid，
+3. **值域闸门**：`idDomainMatches(source, id)` —— ncm 吃十进制、QQ 吃 base62 的 mid，
    **纯数字的 QQ `singerID` 在 QQ 域不是合法身份**，所以在闸门上就被拦下。
 4. **置信度闸门**：`crossSourceJump(confidence, targetSource, targetId)` 要求
    `MatchConfidence.mergeable`（全应用唯一阈值）**且**目标值域合法；任一不满足 ⇒ 跳搜索。
@@ -187,7 +187,7 @@ when {
 | 文件 | 内容 |
 |---|---|
 | `probe-artist-jump-static.md` | 静态审计：全部入口、路由、参数链路、逐条回答 §2.3 八问 |
-| `probe-artist-id-collision.sh` / `.out.txt` | 接口取证：QQ `singer.id`/`mid` ↔ 网易云 artist id 的撞号矩阵 |
+| `probe-artist-id-collision.sh` / `.out.txt` | 接口取证：QQ `singer.id`/`mid` ↔ ncm artist id 的撞号矩阵 |
 | `probe-raw/qq-search-*.json` | 三首真实 QQ 搜索响应原文（稻香 / 林俊杰 / 陈奕迅） |
 | `probe-artist-jump.md` | 真机复现步骤、交叉 A/B、环境问题如实记录 |
 | `probe-logcat.md` | 「修复前这条路径零日志」的取证与可重跑命令 |

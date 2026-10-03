@@ -3,7 +3,7 @@
 #
 # 为什么单独写一个脚本，而不是只用 regression/capture.sh 的 S6：
 #   WGR-W09 的 ROM 会把「历史媒体应用」（华为白名单里的那批）**自己拉起来播放**，
-#   于是 capture.sh 跑到 S6 时，卡片显示的可能是网易云而不是被测应用。
+#   于是 capture.sh 跑到 S6 时，卡片显示的可能是 ncm 而不是被测应用。
 #   实测踩过两次：一次卡片是 `Dangerous Michael Jackson`、一次是 `The Final Countdown`，
 #   而当时 Ncrust 才是在播的那个。这不是脚本 bug，是这台设备的行为，必须显式隔离。
 #
@@ -82,8 +82,8 @@ nc_playing() {
   # ⚠️ 真机踩到的两个坑，都记在这里，因为它们直接决定了这个脚本长什么样：
   #
   # 坑 1（ROM 抢焦点）：WGR-W09 的 ROM 有 `startHistoryMediaApp` 行为 —— 一旦没有白名单
-  #   内的应用在播，它就把历史媒体应用（这台机器上恒是网易云）拉起来播。实测：只要把
-  #   被测应用 force-stop 掉，随后的媒体键**必然**被网易云接走
+  #   内的应用在播，它就把历史媒体应用（这台机器上恒是 ncm）拉起来播。实测：只要把
+  #   被测应用 force-stop 掉，随后的媒体键**必然**被 ncm 接走
   #   （连续两次采到的都是 `Dangerous Michael Jackson`）。
   #   ⇒ 所以本脚本**不 force-stop 被测应用**，只隔离别的应用。代价：拿不到「应用冷启时的
   #     白名单判定日志」——那一条改用第 5 步的 pause/play 重新触发（实测会重新打）。
@@ -208,7 +208,7 @@ except Exception:
   $ADB -s "$S" logcat -d 2>/dev/null | grep -iE "media white list" | head -10 || true
   echo '```'
   echo
-  echo "对照：官方网易云 / 抖音（都在 ROM 名单内）在同一台设备上**不会**出现这行。"
+  echo "对照：官方 ncm / 抖音（都在 ROM 名单内）在同一台设备上**不会**出现这行。"
   $ADB -s "$S" shell input keyevent 4 >/dev/null 2>&1
 } >"$F" 2>&1
 echo "wrote $F"

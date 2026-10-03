@@ -89,7 +89,7 @@
             （三行分别是：应用 / 清单里是否声明 MEDIA_BUTTON / ROM 的 media_button_receiver
             注册表里在不在 / 控制中心卡片）：
 
-                官方网易云     声明（MediaButtonEventReceiver，priority MAX）  在    正常显示歌名艺人
+                官方 ncm     声明（MediaButtonEventReceiver，priority MAX）  在    正常显示歌名艺人
                 华为音乐       声明（MediaButtonIntentReceiver）              在    正常显示
                 Ncrust 修复前  未声明（清单里一个 receiver 都没有）             不在  未在播放
 

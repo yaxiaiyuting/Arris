@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -15,7 +15,7 @@ package com.takahashirinta.ncrust.stats
  *
  * 键是 `TrackKey.tag`（`netease:123` / `qqmusic:456`），**不是裸 songId** ——
  * 两个平台的数字 id 完全可能撞号（`source/SourceIds` 的 KDoc 里已经写明这条），
- * 用裸 id 当键会把 QQ 的《晴天》合并进网易云的《晴天》。
+ * 用裸 id 当键会把 QQ 的《晴天》合并进 ncm 的《晴天》。
  *
  * ## 为什么这里的字段是**非空**的（而落盘 DTO 是可空的）
  *

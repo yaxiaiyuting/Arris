@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -104,9 +104,9 @@ class SearchHistoryCodecTest {
     }
 
     @Test
-    fun `真机 v1 形状读出来的条目 source 是缺失而不是网易云`() {
+    fun `真机 v1 形状读出来的条目 source 是缺失而不是ncm`() {
         // 关键区分：`null` 的语义是「v2.5.4 之前写入的老条目」，
-        // 不是「网易云」。判音源由 SearchHistoryMigration 负责（走 bit62）。
+        // 不是「ncm」。判音源由 SearchHistoryMigration 负责（走 bit62）。
         val back = SearchHistoryCodec.decode(realDeviceV1)
         assertNull(back[0].source)
         assertNull(back[0].sourceId)

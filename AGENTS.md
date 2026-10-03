@@ -47,7 +47,7 @@ Ncrust/
 
 - **`app/`** — everything documented below.
 - **`benchmark/`** — `StartupBenchmark` (cold start, 8 iters), `HomeScrollBenchmark` (frame timing, 6 iters), `ExpandPlayerBenchmark` (player expand/collapse, 6 iters, HOT start). Results land in `benchmark/output/<device>/` (gitignored) as `*-benchmarkData.json` + Perfetto traces. `benchmark/cookie.secret` (gitignored) injects a login cookie for realistic runs; `cookie.secret.example` documents it.
-- **`ncrust-api/`** — a self-contained Go 1.21 service (stdlib only) that reverse-proxies NetEase with eapi encryption and TTL caching. It includes a checked-in 9.75 MB binary. **The Android app never calls it** — the app talks directly to `music.163.com` / `interface*.music.163.com`. Treat it as an unused side artifact / future scaffold; do not assume it is part of the runtime.
+- **`ncrust-api/`** — a self-contained Go 1.21 service (stdlib only) that reverse-proxies ncm with eapi encryption and TTL caching. It includes a checked-in 9.75 MB binary. **The Android app never calls it** — the app talks directly to `music.163.com` / `interface*.music.163.com`. Treat it as an unused side artifact / future scaffold; do not assume it is part of the runtime.
 
 ## Versioning & Release
 
@@ -105,8 +105,8 @@ Conventional Commits, lowercase type prefix, Chinese subject:
 
 ## What This App Is
 
-Ncrust is a third-party Android client for **two** music sources — NetEase Cloud Music (网易云音乐) and
-QQ Music (QQ 音乐) — each with its own independent login. It is built around three design priorities:
+Ncrust is a third-party Android client for **two** music sources — ncm (ncm) and
+qm (qm) — each with its own independent login. It is built around three design priorities:
 
 1. **Kanesumi Design** — right-angle cuts, no curves, no rounded corners, information-first.
 2. **GPU zero-recomposition** — animations driven by a single `progress: Float` through `graphicsLayer`, not state-driven recomposition.
@@ -357,7 +357,7 @@ Defaults: Wi-Fi = 3 (lossless), Mobile = 1 (higher). The selected label shows as
 
 #### Playback reporting (webLog)
 
-`PlayReporter` replays the official web player's `webLog` so local listening feeds NetEase recommendations. On natural end **or** progress ≥ 80%, it POSTs a form `logs=JSON([{action:"play", json:{type:"song", wifi:0|1, download:0, id, time, end:"playend", mainsite:"1", mainsiteWeb:"1"}}])` to `https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<csrf>`. **No eapi/weapi encryption.** Fire-and-forget on a `ncrust-weblog` thread, deduped per song, never blocks playback.
+`PlayReporter` replays the official web player's `webLog` so local listening feeds ncm recommendations. On natural end **or** progress ≥ 80%, it POSTs a form `logs=JSON([{action:"play", json:{type:"song", wifi:0|1, download:0, id, time, end:"playend", mainsite:"1", mainsiteWeb:"1"}}])` to `https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<csrf>`. **No eapi/weapi encryption.** Fire-and-forget on a `ncrust-weblog` thread, deduped per song, never blocks playback.
 
 ### Queue Management
 
@@ -406,7 +406,7 @@ SharedPreferences files:
 | 版本 | 新字段 | 踩到的坑 |
 |---|---|---|
 | v1.9.0 | `ttml: String?` + `ttmlAt: Long = 0` | Gson 走 Unsafe 反序列化、不调用构造函数 ⇒ 老条目缺 key 时字段是 null。必须**可空 + 有默认值**，否则读的地方 NPE 或把「没有 TTML」误判成新鲜缓存 |
-| v1.9.2 | `romalrc: String?` | 老条目该字段为 null，语义是「**字段缺失**」而不是「这首歌没有音译」。PCL110 实测 64 条里 **63 条**是老条目，`1959528822` 因此只拿到 TTML 的 16 行音译、网易云那 41 行 romalrc 明明在服务端却用不上。修法 `LyricsCache.needsRomalrcRefetch(entry)`：缺失按 miss 重取一次（一次性、自愈），网络失败回落老缓存（`degraded()`） |
+| v1.9.2 | `romalrc: String?` | 老条目该字段为 null，语义是「**字段缺失**」而不是「这首歌没有音译」。PCL110 实测 64 条里 **63 条**是老条目，`1959528822` 因此只拿到 TTML 的 16 行音译、ncm 那 41 行 romalrc 明明在服务端却用不上。修法 `LyricsCache.needsRomalrcRefetch(entry)`：缺失按 miss 重取一次（一次性、自愈），网络失败回落老缓存（`degraded()`） |
 
 **通用规则**（下一个加字段的人照着做）：
 
@@ -1237,7 +1237,7 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
   「有内容」的候选；再没有 → 无歌词。** 语义要点：LRC 是整行，只要还有任何逐字候选可用，就不该退到 LRC
   （哪怕它排在更前面 —— 比如 TTML 只有整句、YRC 有逐字时选 YRC）。
 - `hasWordLevel` **必须由解析器判「有没有词」**（`TtmlParser.hasWordLevel`），不能拿「解析成功」冒充 ——
-  AMLL DB 里有只有 `<p>` 没有 `<span>` 的逐句投稿，用它替换 LRC 只会白丢网易云的行级数据。
+  AMLL DB 里有只有 `<p>` 没有 `<span>` 的逐句投稿，用它替换 LRC 只会白丢 ncm 的行级数据。
 - **关掉总开关时 TTML 根本不进 `order`**，不是「排在最后」：用户关掉的源一个字节都不该拉。
 - 不做的事：不删改既有 YRC / LRC 路径；TTML 取不到 / 解析失败 / 没有逐字一律**静默回退**，不弹错、不新增 Toast。
 
@@ -1247,8 +1247,8 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 |---|---|
 | 数据源 | [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)（社区维护的公开静态文件仓库） |
 | 许可 | **CC0-1.0**，明确允许音乐播放器使用；**不引入任何新的运行时依赖** |
-| 取数方式 | 按网易云 `songId` 直接 GET `ncm-lyrics/<id>.ttml`（只读公开静态文件） |
-| 红线 | **不爬虫、不模拟登录、不绕过任何保护**；不发网易云请求、不碰 cookie / 用户凭据 |
+| 取数方式 | 按 ncm `songId` 直接 GET `ncm-lyrics/<id>.ttml`（只读公开静态文件） |
+| 红线 | **不爬虫、不模拟登录、不绕过任何保护**；不发 ncm 请求、不碰 cookie / 用户凭据 |
 | 超时 | 自建 OkHttp（连接 5s / 读 10s），不复用 `RetrofitClient` 的 30s/30s —— 补充源拿不到必须立刻回退 |
 
 ### 镜像表与 HTTP 语义（2026-09 curl 实测）
@@ -1273,8 +1273,8 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 
 | 目录 | 文件数 | 说明 |
 |---|---|---|
-| `ncm-lyrics/` | **20,326** | 按**网易云 ID** 命名的派生产物，每 ID 最多 6 种格式 |
-| `qq-lyrics/` | 16,833 | QQ 音乐 ID |
+| `ncm-lyrics/` | **20,326** | 按**ncm ID** 命名的派生产物，每 ID 最多 6 种格式 |
+| `qq-lyrics/` | 16,833 | qm ID |
 | `am-lyrics/` | 14,906 | Apple Music ID |
 | `spotify-lyrics/` | 14,121 | Spotify ID |
 | `raw-lyrics/` | 3,291 | 社区原始投稿（文件名 = 时间戳-作者ID-哈希.ttml） |
@@ -1282,7 +1282,7 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 
 - `ncm-lyrics/` 的 20,326 个文件里，**`.ttml` 只有 3,544 个唯一数字 ID**（其余是同一批 ID 的
   `.yrc` / `.qrc` / `.lys` / `.lrc` / `.eslrc` 派生物）
-  ⇒ **能按网易云 `songId` 直接拉取的 TTML 上限 = 3,544 首**。
+  ⇒ **能按 ncm `songId` 直接拉取的 TTML 上限 = 3,544 首**。
 - ⚠️ **别误读 `/api/lyrics-status` 的 `ttmlFilesCount: 3288`**：那个计数**只数了 `raw-lyrics/` 那一层**
   （3,291 条投稿），**不是** `ncm-lyrics/` 的规模，更不是全库规模 —— 这两个数必须分开说，否则覆盖率会算错一个数量级。
 
@@ -1339,8 +1339,8 @@ at `PlayerViewModel.<init>` → `fetchLyrics`。老代码里 `lyricsFetchingSong
 | 暂存 | 预取下一首时往往还没有 LRC 正式条目；**绝不为了存 TTML 建 `lrc=""` 的正式条目**（那是「确无歌词」的权威标记），先落在 `ttml:<songId>` 暂存键，写正式条目时合并 |
 | 预取 | 复用既有预载时机预取**下一首**（`AmllTtmlClient.prefetch`，单独 `launch`，不挤占取链）；已新鲜则幂等跳过，同一首一轮播放被调多次也只打一次网络 |
 | 竞态 | `LyricRequestGate`（`AtomicLong`）：每次 `fetchLyrics` 先 `begin()` 领号，每个挂起点之后校验 `isCurrent(seq)`，不匹配整包丢弃。**去重（同歌在途）与闸门（旧歌响应盖新歌）是两件事**，且去重必须排在 `begin()` **之前** |
-| 两相落地 | 第一相只用网易云候选（YRC / LRC）决策、**选中立刻显示**（时机与 v1.8.1 一致）；第二相才拉 TTML，连同第一相候选重新 `pick`，TTML 赢了才替换。**绝不把 TTML 放在第一相之前** —— 最坏 4 面镜子 × 5s 连接会把「本来有歌词」变成「一直转圈」 |
-| 译文 | TTML 的 `x-translation` 是独立行级轨道，按 `timeMs` 与正文行精确配对，对不上的丢弃；**TTML 译文与网易云 `tlyric` 不会同时显示**（TTML 赢了就只有 TTML 的译文） |
+| 两相落地 | 第一相只用 ncm 候选（YRC / LRC）决策、**选中立刻显示**（时机与 v1.8.1 一致）；第二相才拉 TTML，连同第一相候选重新 `pick`，TTML 赢了才替换。**绝不把 TTML 放在第一相之前** —— 最坏 4 面镜子 × 5s 连接会把「本来有歌词」变成「一直转圈」 |
+| 译文 | TTML 的 `x-translation` 是独立行级轨道，按 `timeMs` 与正文行精确配对，对不上的丢弃；**TTML 译文与 ncm `tlyric` 不会同时显示**（TTML 赢了就只有 TTML 的译文） |
 
 ### 设置项（`ncrust_settings`）
 
@@ -1387,7 +1387,7 @@ v1.9.0 新增 **66 个**：
 2. **TTML 逐字渐变的帧率未与 YRC 对比**：渲染层零改动意味着它走同一条 `SweepTrack` 路径，但 TTML 的词密度普遍高于 yrc，帧率没有实测对照。
 3. **离线飞行模式未实测**：`getTtmlStale` 的离线兜底路径只有单测覆盖，没有真机飞行模式验证。
 4. **`x-bg` 背景人声不单独建模**：与主唱混在同一行，时间倒退的词被丢弃（有意取舍，不是 bug）。
-5. **TTML 译文与网易云 `tlyric` 不会同时显示**：TTML 赢了就只有 TTML 的 `x-translation`；双源译文合并没有实现。
+5. **TTML 译文与 ncm `tlyric` 不会同时显示**：TTML 赢了就只有 TTML 的 `x-translation`；双源译文合并没有实现。
 6. 未做「按歌名 / 歌手模糊匹配」的兜底（有意不做，不是遗漏）。
 
 
@@ -1473,9 +1473,9 @@ v1.9.0 的 `PlayerViewModel.applyTtmlLyrics()` 在 TTML 胜出时**整体覆盖*
 translatedLyrics.value = doc.translations.filter { it.timeMs in lineTimes }
 `@
 
-TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚从网易云拿到的 `tlyric` 被**整轨清空**。
+TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚从 ncm 拿到的 `tlyric` 被**整轨清空**。
 调研实测（667 首候选池 + 42 份 TTML 缓存）：该判据命中 **1 首** = `22704409 DAY BY DAY`
-（TTML 79 行逐字、0 翻译；网易云 tlyric 79 行）—— 与 `RESEARCH-ttml-vs-netease.md` §3.4 一致。
+（TTML 79 行逐字、0 翻译；ncm tlyric 79 行）—— 与 `RESEARCH-ttml-vs-netease.md` §3.4 一致。
 
 ### 音译轨的真相：v1.9.0/v1.9.1 **从来没有渲染过音译**
 
@@ -1495,9 +1495,9 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 
 | | |
 |---|---|
-| 任务书原文 | TTML 与网易云两条副文本轨按「**整轨二选一**」取用（TTML 有就用 TTML 那一整轨，没有就整轨用网易云） |
-| 实际实现 | **逐行合并**：TTML 里能落到主轨时间轴上的行原样保留；主轨里没有任何 TTML 副文本的行算缺口，缺口按文本/行序逐行回退到网易云 |
-| 偏离理由 | 实测 `1959528822` 紫荆花盛开：TTML 有 **16 行 `x-roman`**，网易云有 **41 行 `romalrc`**，且 TTML 那 16 行与网易云**逐字相同**（是子集）。轨级规则取 16 行 ⇒ **丢掉 13 行明明能对上的音译** |
+| 任务书原文 | TTML 与 ncm 两条副文本轨按「**整轨二选一**」取用（TTML 有就用 TTML 那一整轨，没有就整轨用 ncm） |
+| 实际实现 | **逐行合并**：TTML 里能落到主轨时间轴上的行原样保留；主轨里没有任何 TTML 副文本的行算缺口，缺口按文本/行序逐行回退到 ncm |
+| 偏离理由 | 实测 `1959528822` 紫荆花盛开：TTML 有 **16 行 `x-roman`**，ncm 有 **41 行 `romalrc`**，且 TTML 那 16 行与 ncm**逐字相同**（是子集）。轨级规则取 16 行 ⇒ **丢掉 13 行明明能对上的音译** |
 | 偏离代价 | 合并从「选一条轨」变成「逐行配对」，需要 `YrcAligner.lcsPairs` 的 LCS 文本配对（复用 v1.6.0 逐字对齐那一份实现），并新增 `LyricTrackSource.MIXED` 这个来源标记 |
 | 影响面 | **严格不劣**：覆盖满时一行不多一行不少（单测直接与 v1.9.0 的老表达式逐行比对）；只有缺口才补，补不上就丢这一行，不猜不过桥 |
 | 审计证据 | `LyricTrackMergeTest` 13 例（4 首真实样本夹具 + 合成用例）；期望值另由仓库外 `tools/expected-merge.py` 独立复算 |
@@ -1509,10 +1509,10 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 2. **缺口按文本/行序回退**：主轨里没有任何 TTML 副文本的行才算缺口；用 `YrcAligner.lcsPairs`
    （归一化去空白 + LCS 保序，与 v1.6.0 逐字对齐**同一份实现**）在两源**主轨文本**上配对，
    配对成功才补一行，并把时间戳改写成**主轨那一行**的（副文本轨自己的时间戳一律不用）；
-3. **逐行丢弃**：文本对不上、或网易云那一行没有内容 ⇒ 这一行没有副文本，不猜、不过桥、不硬塞。
+3. **逐行丢弃**：文本对不上、或 ncm 那一行没有内容 ⇒ 这一行没有副文本，不猜、不过桥、不硬塞。
 
 **为什么是逐行而不是「整轨二选一」**：轨级规则在实测数据上会丢东西 —— `1959528822 紫荆花盛开`
-的 TTML 有 **16 行 `x-roman`**、网易云有 **41 行 romalrc**（且 TTML 那 16 行文本与网易云**逐字相同**，
+的 TTML 有 **16 行 `x-roman`**、ncm 有 **41 行 romalrc**（且 TTML 那 16 行文本与 ncm**逐字相同**，
 是子集），轨级规则取 16 行、丢掉 13 行能对上的。逐行合并严格不劣：覆盖满时一行不多一行不少。
 
 > ⚠️ **数据勘误**：`RESEARCH-ttml-vs-netease.md` R311 写「紫荆花盛开 TTML 只有 1 处 `x-roman`」是错的
@@ -1524,13 +1524,13 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 | songId | 主轨 | 译文轨 | 音译轨 | 说明 |
 |---|---|---|---|---|
 | 22704409 DAY BY DAY | TTML/79 words=true | **NETEASE/64** | **NETEASE/52** | v1.9.0 是 **0 行**；直接修复 |
-| 1959528822 紫荆花盛开 | TTML/57 words=true | none/0 | TTML/16 → 修缓存后 **MIXED/29** | 网易云 tlyric 本就为 0 |
+| 1959528822 紫荆花盛开 | TTML/57 words=true | none/0 | TTML/16 → 修缓存后 **MIXED/29** | ncm tlyric 本就为 0 |
 | 36990266 Faded | TTML/54 | TTML/54 | none/0 | 两源译文 54/54 相同，不重复 |
 | 16686599 Numb | TTML/47 | TTML/49 | none/0 | 两源行数不等（47/35）不崩 |
 | 2645500113 跳楼机 | TTML/57 | none/0 | none/0 | 两源都无译文 ⇒ **不产生空轨** |
 
-42 份 TTML 缓存的统计：TTML 无译文但有网易云 tlyric = **1 首**（22704409）；两源都有译文 = 21 首
-（其中 8 首 TTML 覆盖行数少于网易云）；TTML 有可用音译 = 4 首；**网易云有 romalrc 而 TTML 无音译 = 1 首
+42 份 TTML 缓存的统计：TTML 无译文但有 ncm tlyric = **1 首**（22704409）；两源都有译文 = 21 首
+（其中 8 首 TTML 覆盖行数少于 ncm）；TTML 有可用音译 = 4 首；**ncm 有 romalrc 而 TTML 无音译 = 1 首
 （22704409，53 行）** —— 这才是音译回退最干净的验证样本。
 
 ### 缓存：新字段与**升级迁移**（本版真机发现的第二个 bug）
@@ -1541,14 +1541,14 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 
 真机发现的坑：**LRC 条目没有 TTL**（只有 200 条的 LRU 上限），所以 v1.9.1 及更早写下的条目
 `romalrc` 永远是 null。PCL110 实测 **64 条里 63 条是老条目**，`1959528822` 因此只拿到 TTML 的 16 行音译、
-网易云那 41 行 romalrc 明明在服务端却用不上。修法：`LyricsCache.needsRomalrcRefetch(entry)`
+ncm 那 41 行 romalrc 明明在服务端却用不上。修法：`LyricsCache.needsRomalrcRefetch(entry)`
 （纯函数，判「字段缺失」而不是「字段为空」—— 空串是「确实没有音译」的权威结论）为 true 的条目
 **按 miss 处理重取一次**，补完即恢复缓存命中；**网络失败时回落到这份老缓存**（`degraded()`），
 不让离线用户从「有歌词」变成「没歌词」。代价：升级后每首老歌第一次播放多一次歌词请求（一次性、自愈）。
 
 ### 与序列号闸门 / 渲染层的约束
 
-- 网易云三条轨（主轨 + tlyric + romalrc）在**同一次** `withContext(Dispatchers.Default)` 里解析完，
+- ncm 三条轨（主轨 + tlyric + romalrc）在**同一次** `withContext(Dispatchers.Default)` 里解析完，
   第一相与第二相共用 ⇒ 合并只发生在**一次 fetch 内部**，不存在「A 歌的译文配 B 歌的主轨」；
 - 合并结果在 `withContext` 之后**复查** `lyricReqGate.isCurrent(seq)` 与 `currentSongId` 再落地；
 - 产出的每一行 `timeMs` 都取自主轨 ⇒ `LyricsView` 的 `translatedLyrics.associateBy { timeMs }`
@@ -1557,7 +1557,7 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
   （实测 `rv=0` 与 `rv=-1` 对同一首歌返回**逐字节相同**的 body，4/4 首 sha256 一致），
   所以本版**没动请求参数**，只是把此前没解析的字段接上。
 
-### 附带发现：AMLL DB 的 `.yrc` **不能**替代网易云的 yrc
+### 附带发现：AMLL DB 的 `.yrc` **不能**替代 ncm 的 yrc
 
 AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lrc/eslrc sidecar，容易被当成
 「yrc 服务端开关抖动时的补充路径」。调研已验证**不可替代**（`PHASE0-REPORT-v1.9.0.md` §10）：
@@ -1568,7 +1568,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 数据源：`RESEARCH-ttml-vs-netease.md` §2.2 / §3.5（100 首收藏样本 + 667 首池）。
 
-| 语种 | 网易云 YRC | 逐字并集（YRC ∪ TTML） | tlyric |
+| 语种 | ncm YRC | 逐字并集（YRC ∪ TTML） | tlyric |
 |---|---|---|---|
 | 中文 | 16/30 = **53.3%** | 66.7% | 池内 232 首只有 4 首（2%） |
 | 英文 | 24/30 = **80.0%** | 83.3% | 池内 274 首 248 首（91%） |
@@ -1578,7 +1578,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 ⇒ TTML 的定位是「**英文歌的逐字 + 翻译源**」，覆盖率上限只有 10.2%（与热度强相关），
 **不是覆盖率主力，也不能宣传成「大幅提升逐字覆盖率」**（真实增量 +5.1pp）。
 日韩用户拿不到逐字（TTML 在日韩基本 0 命中、YRC 也是 0–5%），但译文与音译接近 100% ——
-译文质量的天花板在网易云。**不做按语言分流**（§6.1 数据不支持：语言维度相关的是覆盖率，不是「哪个源更好」），
+译文质量的天花板在 ncm。**不做按语言分流**（§6.1 数据不支持：语言维度相关的是覆盖率，不是「哪个源更好」），
 **不做语言检测**（脚本判定本身就会误判），**不做同名异版模糊匹配**（会导致逐字错位）。
 
 ### v1.9.2 的测试与实测
@@ -1587,7 +1587,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 |---|---|
 | JVM 单测 | **276 个全绿**（v1.9.1 = 255，本版 +21：`LyricTrackMergeTest` 13 + `LyricsCacheModelTest` 16−9+8） |
 | 合并单测的样本 | 4 首真实样本夹具（`app/src/test/resources/lyric-tracks/`，由 `tools/gen-merge-fixtures.py` 从调研原始响应生成）；期望值另由 `tools/expected-merge.py` 独立复算 |
-| 合并单测的关键断言 | 22704409 译文 64 / 音译 52；1959528822 音译 29 = TTML 16 + 网易云补 13；Faded 与 v1.9.0 逐行相同；Numb 行数不等不崩 |
+| 合并单测的关键断言 | 22704409 译文 64 / 音译 52；1959528822 音译 29 = TTML 16 + ncm 补 13；Faded 与 v1.9.0 逐行相同；Numb 行数不等不崩 |
 | PCL110 真机 | `轨道 translation=NETEASE/64 roman=NETEASE/52`（22704409）；翻译渲染截图复核（韩文逐字行下方出现中文译文） |
 | 渲染层 | `SweepTrack` / `LyricsView` / `NcrustLyricsPanel` `git diff` **为空** |
 
@@ -1595,7 +1595,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 - **音译轨没有 UI**（见上）：本版的音译回退只能在单测与日志层验证，**没有任何截图能证明它显示出来**；
 - **P1 时间轴对拍未做**：环境无播放/录音能力（`RESEARCH` §1.4 已声明），只做了跨源对照，
-  **不能证明 TTML 与网易云谁更准**；
+  **不能证明 TTML 与 ncm 谁更准**；
 - **1959528822 的 MIXED/29 只在单测夹具上复算过**：真机第一次跑的是 v1.9.1 老缓存（得到 TTML/16），
   修掉缓存迁移后需要再看一次真机日志才算端到端确认；
 - **S6（API 24）未跑本版**：本版只装了 PCL110；
@@ -1605,14 +1605,14 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 ### 做了什么
 
-v1.9.2 把音译轨做进了数据层（TTML `x-roman` + 网易云 `romalrc`，缺口按文本逐行回退），
+v1.9.2 把音译轨做进了数据层（TTML `x-roman` + ncm `romalrc`，缺口按文本逐行回退），
 但当时的硬约束是「渲染层 diff 必须为空」，于是数据只躺在缓存与日志里。本版**解禁音译行渲染**：
 原文 → 译文 → 音译，三行同在一个 LazyColumn item 内，跟着主行一起滚动 / 缩放 / 变色。
 
 | 项 | 决策 |
 |---|---|
 | 显示位置 | **原文下方小字，不替换原文**（PHASE0-REPORT-v1.9.3.md §2 逐条核对：逐字高亮的几何来自**原文那一个 BasicText** 的 TextLayoutResult，替换原文等于让 v1.5.2 的成果失去几何来源） |
-| 副文本顺序 | 原文 → **译文 → 音译**（与网易云官方客户端三层顺序一致） |
+| 副文本顺序 | 原文 → **译文 → 音译**（与 ncm 官方客户端三层顺序一致） |
 | 开关 | `lyrics_romanization`，**默认关**：默认关时副文本槽条件挂载、连 Map 都不建，渲染路径与 v1.9.2 逐字节一致 |
 | 字号 | 音译 18sp / 行高 24sp（译文 20/26、原文 32/42），三者同乘 v1.5.1 的 fontScale ⇒ A- / A+ 一起缩放 |
 | 可点性 | 音译行**不新增任何 pointerInput**：它落在主行 Box 的 detectTapGestures 内，点它 == 点主行 |
@@ -1733,7 +1733,7 @@ Gson 反序列化）、或点击落在 `graphicsLayer` 过渡期的命中期（�
   无固定/秒级种子、无按语种/专辑分池。
 - **统计事实**：均匀随机排列下同类占比 k/n 时期望相邻同类对 = k(k-1)/n；n=50、日语 70% 时
   P(≥10 连) ≈ **27.8%** ⇒ 在日语为主的库里是**正常统计现象**，算法层面无法"修正"分布。
-  **本 fork 不做「按语种均衡」**（语言是伪概念，网易云没有语言字段）。
+  **本 fork 不做「按语种均衡」**（语言是伪概念，ncm 没有语言字段）。
 - **但有三处真缺陷**（它们才会造成"真·连播"）：
 
 | # | 缺陷 | 后果 | 修法 |
@@ -2141,7 +2141,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 ### v2.0.2 的已知问题 / 系统限制（应用层无法解决）
 
 1. **华为「播控中心」不会出现本应用卡片、也不显示歌词**：它是独立的系统卡片（华为官方称
-   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/网易云/QQ/酷狗/酷我/
+   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/ncm/QQ/酷狗/酷我/
    咪咕/波点/Apple Music/Spotify/TIDAL 等，不含第三方小众客户端），需要厂商白名单/商业合作，
    **没有 API 可申请**。
 2. **无法阻止 ROM 再画一张系统卡片**（系统侧行为）。本版能做的是**不再自己多发一条**。
@@ -2166,7 +2166,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
    并把限流从「丢弃」改成「延后重试」。
 3. 任务书说 versionCode 由 `tools/next-version.sh` 决定 —— 一致，三源最大值 28 ⇒ **29**。
 
-## v2.1.0 新增（本 fork · QQ 音乐音源 + 双账号体系）
+## v2.1.0 新增（本 fork · qm 音源 + 双账号体系）
 
 > **版本**：`2.1.0-gpl` / versionCode **30**（`tools/next-version.sh` 三源交叉验证：
 > 最近 5 个 tag / dist 44 个 APK 的 aapt2 badging / 仓库当前 build.gradle 最大值都是 29）。
@@ -2187,8 +2187,8 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 `PlaybackStateManager` / `OfflineLibrary` / `LibraryManager` 五个文件里各做一次
 「key 带音源 + 老 key 兼容读」。**本版采用了更小的替代方案并在此记录偏离**：
 
-QQ 音乐的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）。
-网易云的 id 是十进制百万~十亿量级，永远触不到 2^62，于是：
+qm 的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）。
+ncm 的 id 是十进制百万~十亿量级，永远触不到 2^62，于是：
 
 - 撞号从「每个调用点都要记得带音源」变成**结构上不可能**；
 - **既有结构一个字节都不用改**，不需要任何数据迁移；
@@ -2196,7 +2196,7 @@ QQ 音乐的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）�
 
 `qqRawId` 用掩码无损反解（真实 songid 是 9~10 位十进制数，不可能占到 bit 62；
 真占了就退回 FNV-1a 62 位散列兜底）。它对**非 QQ id 返回 null 而不是原样返回**：
-调用方拿到 null 说明「这不是 QQ 音乐的 id」，静默通过只会让它跑到取链那一步才炸。
+调用方拿到 null 说明「这不是 qm 的 id」，静默通过只会让它跑到取链那一步才炸。
 
 ### 决策 2：**QQ 用的不是标准 3DES**（本版最反直觉的一条）
 
@@ -2252,9 +2252,9 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 ### 决策 6：QQ 歌词**不经过** `LyricsCache`，也不走 TTML 那一相
 
-- **不走 TTML**：TTML DB 是按网易云 id 索引的，拿 QQ 的 id 去查只会 404，
+- **不走 TTML**：TTML DB 是按 ncm id 索引的，拿 QQ 的 id 去查只会 404，
   极小概率还会命中一首**完全无关**的歌的 TTML。
-- **不进 `LyricsCache`**：那张表存的是网易云的字段形状（lrc/tlyric/yrc/romalrc/ttml），
+- **不进 `LyricsCache`**：那张表存的是 ncm 的字段形状（lrc/tlyric/yrc/romalrc/ttml），
   塞 QQ 数据要么加字段 + 迁移逻辑、要么污染字段语义。取舍是每次播放现取一次，
   **代价是断网时 QQ 曲目没有歌词** —— 已进 release notes 的已知问题。
 
@@ -2264,7 +2264,7 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 | 路线 | 最后一跳 | 采纳 |
 |---|---|---|
-| QQ 音乐客户端扫码（`CreateQRCode` + `GetQRCodeStatus`） | **只能是 MQTT**（扫码方确认后由服务端推送；HTTP 侧穷举 48 个候选方法后确认没有「把登录态交给发起方」的接口） | ❌ 要自己实现 MQTT 5.0 over WSS，成本远超范围 |
+| qm 客户端扫码（`CreateQRCode` + `GetQRCodeStatus`） | **只能是 MQTT**（扫码方确认后由服务端推送；HTTP 侧穷举 48 个候选方法后确认没有「把登录态交给发起方」的接口） | ❌ 要自己实现 MQTT 5.0 over WSS，成本远超范围 |
 | **QQ 互联扫码**（`ptqrshow` + `ptqrlogin`） | 纯 HTTP 长轮询，官方 Web 端现役；**手机 QQ** 扫 | ✅ 本版实现 |
 
 **实现**：`QqQrLogin`（纯逻辑：`hash33` token、`ptuiCB` 解析、状态映射）+ `QqQrClient`（HTTP：
@@ -2303,16 +2303,16 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 - QQ 互联的扫码轮询端点在本机出口 IP 上被 WAF **恒定 403**（调研期 8 种以上参数 /
   Header / TLS 指纹变体全部失败）；
-- QQ 音乐客户端自己的扫码链路（`CreateQRCode` + MQTT over WSS）实测可达，
+- qm 客户端自己的扫码链路（`CreateQRCode` + MQTT over WSS）实测可达，
   但要自己实现 MQTT 5.0 握手与订阅，协议栈成本远超本版范围；
-- WebView 与网易云那条已经用了很久的登录路径**同一套机制**，覆盖 QQ / 微信 / 手机号
+- WebView 与 ncm 那条已经用了很久的登录路径**同一套机制**，覆盖 QQ / 微信 / 手机号
   三种方式，且**全程不采集密码**（用户在腾讯自己的页面输入）。
 
 ### 决策 8：会员状态**只用于显示**，不参与播放决策
 
 `VipLogin.VipLoginInter / vip_login_base` 匿名也能调（实测 `code=0`），返回
 `identity.vip/svip/overdate` 与音质权益。但**登录态下的取值没有实测过**
-（本仓库没有 QQ 音乐账号），所以它只驱动设置页的一个角标；
+（本仓库没有 qm 账号），所以它只驱动设置页的一个角标；
 「这首歌能不能放」永远由服务端返回的 purl 决定（见 `QqApi.fetchPlayUrl`）。
 判断错了最坏是界面上的一个角标不对，不会凭空给或夺走播放权限。
 
@@ -2331,10 +2331,10 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 ### 双账号
 
-| | 网易云 | QQ 音乐 |
+| | ncm | qm |
 |---|---|---|
 | cookie | `ncrust_prefs`/`user_cookie` | **`ncrust_qq_prefs`/`qq_cookie`** |
-| 登出 | 只清网易云 | **只清 QQ 音乐** |
+| 登出 | 只清 ncm | **只清 qm** |
 
 登录判据 = **uin 与票据同时存在**（只看票据会在票据过期但仍留在 cookie 里时误判成已登录，
 表现是「设置页显示已登录、一播放就跳歌」，比干脆显示未登录更难排查）。
@@ -2350,12 +2350,12 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
   会员接口匿名可调；
 - **跨实现黄金样本**：真实《晴天》QRC 的解密结果与另一份独立实现逐字节一致；
 - 真机（PCL110 / Android 16 / API 36）：v2.0.2 → v2.1.0 **覆盖安装成功**（签名兼容）、
-  启动无 FATAL、UI 正常渲染、网易云歌词链（缓存命中 → YRC 逐字 59 行）正常；
+  启动无 FATAL、UI 正常渲染、ncm 歌词链（缓存命中 → YRC 逐字 59 行）正常；
 - 权限 11 条与 v2.0.2 **逐条 diff 为空**；签名指纹 `e75af3ff…5511`。
 
 **未验证（写进 release notes）**：登录态的 QQ 取链/歌词/会员取值；
 QQ 登录链路端到端（无账号）；QQ 曲目断网无歌词；音源角标对 QQ 曲目不细分档位；
-QQ 曲目不进网易云歌单。
+QQ 曲目不进 ncm 歌单。
 
 **真机 UI 自动化的限制**（沿用 v1.7.0 的记录）：本轮 adb 注入文本到 Compose 输入框
 **完全不生效**（设备无可用 IME，`input text` 与 `input keyevent` 均无效），
@@ -2547,7 +2547,7 @@ v2.1.0 把 HTTP 403、空 body、解析失败、`IOException` **四类失败归�
 ### 8. 播放页音源角标（v2.1.1）
 
 播放页是用户唯一能确认「现在放的是哪家」的地方，所以**两个音源都标**
-（`歌手 · 网易云` / `歌手 · QQ 音乐`），与列表页「只标非网易云」的降噪策略不同。
+（`歌手 · ncm` / `歌手 · qm`），与列表页「只标非 ncm」的降噪策略不同。
 落点五处共用 `PlayerCard.ArtistLineWithSource`。三个取舍：角标与歌手**同一行**
 （窄屏顶栏是固定 56dp 的 Box，多一行会被裁）；`weight(1f, fill = false)` 只给歌手，
 **角标永远完整可见**；`alignByBaseline()` 让 12sp 与 14/16sp 基线对齐。
@@ -2628,20 +2628,20 @@ PHASE0 报告 §2.3：「**已登录时追加** `comm.uin=<musicid>`、`comm.aut
 
 | 用户有会员的音源 | 结果顺序 |
 |---|---|
-| 只有 QQ | QQ 会员专享 → QQ 其余 → 网易云（原序） |
-| 只有网易云 | 网易云会员专享 → 网易云其余 → QQ（原序） |
+| 只有 QQ | QQ 会员专享 → QQ 其余 → ncm（原序） |
+| 只有 ncm | ncm 会员专享 → ncm 其余 → QQ（原序） |
 | 两家都有 | **交错**：两家会员专享轮流在前，然后两家的其余交错 |
-| 都没有 / 未登录 | **一个字节都不改**（网易云在前，与 v2.1.3 完全一致） |
+| 都没有 / 未登录 | **一个字节都不改**（ncm 在前，与 v2.1.3 完全一致） |
 
 - 规则在 `search/SearchRanking.kt`（纯逻辑，泛型 `RankedSong<T>`，13 个单测）。
   两条不变量：只在同一档内重排（保留服务端相关性顺序）；两家都没会员时保持历史行为。
 - 「两家都有」选**交错**而不是堆在前面：堆起来会让排最前的那一家永远占满首屏。
-- `SongItem` 新增两个**可空 + 默认值**字段：`fee`（网易云原始付费类型）与 `memberOnly`
+- `SongItem` 新增两个**可空 + 默认值**字段：`fee`（ncm 原始付费类型）与 `memberOnly`
   （QQ 的 `pay.pay_play`）。都会跟着 Gson 进队列持久化，老队列读到 null = **「不知道」而不是「免费」**
   （见「歌词缓存字段迁移策略」同一套规则）。
 - **`fee` 语义（实测，最容易踩）**：`0` 免费、**`8` 免费播放但高音质需会员**、`1` VIP 专享、`4` 数字专辑。
   把 `fee == 8` 当会员专享会让排序去推一首谁都能放的歌。
-- 顺带补上了 `auth/NeteaseVipStore.kt`：此前**全仓库没有任何「网易云会员」概念**。
+- 顺带补上了 `auth/NeteaseVipStore.kt`：此前**全仓库没有任何「ncm 会员」概念**。
   判据走 `/api/music-vip-membership/front/vip/info` 的 `redVipLevel > 0`（实测 = 7）。
   ⚠️ **同路径走 `/eapi/` 到 `interface.music.163.com` 返回 404**，必须用明文 GET ——
   这条差异写在 KDoc 里，换路径时会踩。
@@ -2654,12 +2654,12 @@ PHASE0 报告 §2.3：「**已登录时追加** `comm.uin=<musicid>`、`comm.aut
 2. `comm.authst` 的效果未被本机行为差异证明（见第 2 条）。
 3. `identity.HugeVip` / `music_lev_*` **仍未接入 UI** —— 用户页角标只显示「VIP」，
    不显示超级会员，也不显示「你的账号能开到哪一档」。有意为之（宁可不显示，也不写一张可能撒谎的权益表）。
-4. 网易云侧未做回归测试。`QualityAssessment` 的展示规则变化影响所有音源，
+4. ncm 侧未做回归测试。`QualityAssessment` 的展示规则变化影响所有音源，
    本版只对 QQ 与排序路径做了真机复核。
 
 ## v2.1.5 新增（本 fork · 跨源切歌歌词串台专项）
 
-**一句话**：报障是「QQ 播完自动切到网易云，音频已变但歌词还是 QQ 那首」。
+**一句话**：报障是「QQ 播完自动切到 ncm，音频已变但歌词还是 QQ 那首」。
 根因不是"旧歌词没清"，而是**取词问错了平台**：自动接续那条路只更新了 `songId`，
 「当前歌属于哪个音源」还停在上一首，于是应用拿着**上一首 QQ 曲目的 songmid** 去问 QQ，
 拿回来的自然是上一首的词 —— 而且它通过了当时**所有**防串台闸门，因为那确实是"当前代"的响应。
@@ -2676,15 +2676,15 @@ PHASE0 报告 §2.3：「**已登录时追加** `comm.uin=<musicid>`、`comm.aut
    （`if (currentSongSourceKey == "qqmusic")`），于是"这次请求为谁发的"取决于调用顺序。
    改成 `fetchLyrics(track: TrackKey)` 之后，问错平台在物理上不可能。
 3. **只比 id 的判据在双音源下是错的。** `TrackKey` 的相等性**只看 `(source, id)`**：
-   必须含音源（网易云 123 ≠ QQ 123），**不能**含 `sourceId` / `mediaId`
+   必须含音源（ncm 123 ≠ QQ 123），**不能**含 `sourceId` / `mediaId`
    —— 那两个是**取链载荷**不是身份，算进去会让同一首歌在不同路径上被判成"切歌了"，
    反过来把本该显示的歌词整包丢弃。
 4. **`songIdFromMediaId("song:qqmusic:…")` 返回 null。** v1.5.2 的 transition 守卫只比裸 id，
    所以 QQ 的预载项**永远过不了守卫**（gapless 静默失效）。媒体项的 mediaId 必须过
-   `SourceIds.mediaId(source, id)`；网易云一侧形状逐字节不变（`song:123`），老数据不受影响。
+   `SourceIds.mediaId(source, id)`；ncm 一侧形状逐字节不变（`song:123`），老数据不受影响。
 5. **续播状态只存得下裸 id，但 QQ 的 id 带 `1L shl 62` 标志位** ——
-   所以"带标志位 ⇒ QQ 音乐"是**结构性**结论（`SourceIds.sourceOfId`）。
-   旧逻辑按「null ⇒ 网易云」处理，会拿一个 `2^62` 量级的 id 去问网易云的歌词接口。
+   所以"带标志位 ⇒ qm"是**结构性**结论（`SourceIds.sourceOfId`）。
+   旧逻辑按「null ⇒ ncm」处理，会拿一个 `2^62` 量级的 id 去问 ncm 的歌词接口。
 
 ### 真机才暴露的两个坑（单测抓不到）
 
@@ -2737,14 +2737,14 @@ PHASE0 报告 §2.3：「**已登录时追加** `comm.uin=<musicid>`、`comm.aut
 | `NcrustTrack`（logcat tag） | 切歌 → 取词 → 渲染整条链，每行都带 `音源:id`。**旧日志只打 `songId`，出问题的维度根本没被记下来** |
 | `QqMusicSource`（debug 日志） | 打印 QQ 搜索结果的 `(id, mid, media_mid)` —— 构造跨源队列必须有三件套，而界面不显示 songmid |
 | `tools/seed-cross-source.py` | 生成混合队列的 `ncrust_playback_state.xml`。**字段名必须是 Gson 的 `mid` / `media_id`**，不是 Kotlin 属性名（写错的表现是 `unresolvable song ... missing sourceId`，看起来像取链故障） |
-| `tools/verify-cross-source-lyrics.sh` | 一键重跑跨源场景并自动判定（有 `qq lyric songId=<网易云 id>` 即串台） |
+| `tools/verify-cross-source-lyrics.sh` | 一键重跑跨源场景并自动判定（有 `qq lyric songId=<ncm id>` 即串台） |
 
 ### 本版的未验证项（与 release notes 保持一致）
 
 1. 华为控制中心的**屏幕侧**结论（见上）。
 2. **真机跨源连切 20 次**没跑成：单测有 20 轮确定性覆盖，真机完成的是一次完整的
-   QQ → 网易云自然完播接续（A/B 各一次）。原因是构造任意两首混合队列仍需手工取 songmid。
-3. **反向（网易云 → QQ）真机 A/B** 未做，只有单测。
+   QQ → ncm 自然完播接续（A/B 各一次）。原因是构造任意两首混合队列仍需手工取 songmid。
+3. **反向（ncm → QQ）真机 A/B** 未做，只有单测。
 4. API 24 上 `dumpsys media_session` 里没有 Ncrust 会话（测量缺口，非负面结论）。
 5. **release 包没有在 Android 7.0 / API 24 上装过**（该机装的是 debug 构建，换装要卸载、
    会清数据）。dex 指标已静态覆盖，但冷启未验。
@@ -2752,7 +2752,7 @@ PHASE0 报告 §2.3：「**已登录时追加** `comm.uin=<musicid>`、`comm.aut
    留档 `docs/verification/v2.1.5/lint-report-HEAD-unmodified.txt`）。本版引入
    `app/lint-baseline.xml` 让它通过；基线里**没有**本次新增的文件，所以新引入的问题仍会被拦下。
 
-## v2.2.0 新增（本 fork · QQ 音乐歌单与用户信息同步，**只读**）
+## v2.2.0 新增（本 fork · qm 歌单与用户信息同步，**只读**）
 
 **基线 = v2.1.6**（不是 v2.1.5）。`versionCode = 37`，`versionName = "2.2.0-gpl"`。
 决策与自证见 `docs/verification/v2.2.0/VERSION-DECISION.md`。
@@ -2793,7 +2793,7 @@ MediaSession 合并等修复**静默回退** —— 5 个功能提交因此 `git
 2. **登录过期永远不会出现**：只有 `GetLoginUserInfo` 能判失效，而原实现只映射
    `fetchOwnedPlaylists` 的 `1000`（那条分支永远走不到）。现在**联网前先验一次登录态**；
    缓存新鲜时仍不发请求。
-3. **QQ 入口被网易云加载状态绑架**（入口原本是网易云网格第一格）⇒ 提到 `when` 之外。
+3. **QQ 入口被 ncm 加载状态绑架**（入口原本是 ncm 网格第一格）⇒ 提到 `when` 之外。
    顺带修了 `DetailScaffold(title=...)` 的坑：**该参数已弃用**，标题要由 header 自己渲染，
    并用 `top = 56.dp` 让开顶部 scrim，否则会被返回箭头压住。
 
@@ -2985,8 +2985,8 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 
 1. **匹配不准时宁可分开展示，也不能给错专辑 / 错单曲。**
    这不是一句口号，是探针里真实失败过的一次：`probe-artist-mapping.md` P6 的 `邓紫棋` 那一行，
-   「归一化名称完全相等」的朴素算法锚到了网易云的**仿冒号** `邓紫棋`(62017015, 1 张专辑)，
-   于是两侧都配不上，判定 `NONE` —— 而真身 `G.E.M.邓紫棋`（网易云 7763 / QQ 001fNHEF1SFEFN，
+   「归一化名称完全相等」的朴素算法锚到了 ncm 的**仿冒号** `邓紫棋`(62017015, 1 张专辑)，
+   于是两侧都配不上，判定 `NONE` —— 而真身 `G.E.M.邓紫棋`（ncm 7763 / QQ 001fNHEF1SFEFN，
    专辑重合 54 张）明明是 `EXACT`。**名字对了不等于身份对了。**
    落地要求：任何跨源合并都必须有**结构判据**（专辑列表重合、曲目名集合重合、时长差），
    名字只能用来**召回**。
@@ -3000,7 +3000,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 3. **匹配结果必须可追溯、可手动覆盖。**
    `AggregatedSong.matchReason` / `AggregatedAlbum.reason` 携带一句人能看懂的依据
    （「同名 + 专辑重合 33 张」），UI 通过 `strings.source.aggMatchReason` 显示；
-   三个页面都必须提供「双源 / 只看网易云 / 只看 QQ」三档口径（`SourceFilter`）。
+   三个页面都必须提供「双源 / 只看 ncm / 只看 QQ」三档口径（`SourceFilter`）。
    匹配结果**不能是用户看不见也改不了的隐式状态**。
 
 ### 本版的关键取舍（有意为之，不是遗漏）
@@ -3040,7 +3040,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 | `crosssource/CatalogAggregator.kt` | 三个页面的双源聚合编排（IO + 纯装配分离） |
 | `qq/QqCatalog.kt` | QQ 目录接口的请求构造 + 响应映射 + **批量可播放性预检**的判据 |
 | `qq/QqCatalogApi.kt` | QQ 目录查询与预检的 IO 层（**绝不抛异常**） |
-| `network/NeteaseAvailabilityApi.kt` | 网易云的**批量 privilege** 探测（专辑页/艺人页唯一拿得到版权字段的路径） |
+| `network/NeteaseAvailabilityApi.kt` | ncm 的**批量 privilege** 探测（专辑页/艺人页唯一拿得到版权字段的路径） |
 
 **两条与探针逐字对应的实现约束**（改代码前先看这两条）：
 
@@ -3343,7 +3343,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 2. **队列身份必须用 `TrackKey`，不得用裸 `song.id`。**
    本版把队列去重从裸 `Long` 换成了 `TrackKey`（`source` 参与相等性）。
    理由**不是**「发现了 bug」—— 探针实测跨源裸 id 撞号的**实际发生率是 0**：
-   QQ 的 id 一律由 `SourceIds.qqId()` 产出、bit62 恒置位，与网易云 1e6~3e9 的
+   QQ 的 id 一律由 `SourceIds.qqId()` 产出、bit62 恒置位，与 ncm 1e6~3e9 的
    区间在 64 位整数上**不可能相交**。
    换的理由是**那个 0 依赖一条纪律**（「每个 id 生产者都记得走 `qqId`」），
    而纪律破过一次（v2.1.0 之前 10+ 处结构都是裸 `Long` 作唯一键）。
@@ -3353,7 +3353,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
    - 队列的取身份只有**一个**入口：`SongItem.trackKeyOf()` / `QueueKeys.keyOf()`。
      **优先用 `TrackKey.ofSong`，不要用 `TrackKey.fromSong`** —— 后者信那个
      **字符串** `source`，而「只存 id」的持久化路径（搜索历史）会把 QQ 曲目
-     恢复成 `source = null`，于是被认成网易云；`ofSong` 走 `TrackKey.of`，
+     恢复成 `source = null`，于是被认成 ncm；`ofSong` 走 `TrackKey.of`，
      `source` 为空时按 id 的 bit62 标志位推断，**认得出 QQ**；
    - 队列身份的运算（判重 / 重定位 / 批量剔除 / 重建）收敛在
      `player/QueueKeys.kt`（纯逻辑、JVM 可单测），**不许再内联在 `MainActivity` 里**。
@@ -3444,13 +3444,13 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
    搜索历史是那条开了之后留下隐患的路（v2.5.3 点名、v2.5.4 修复）。它的形态比任务书
    描述的更细，三条都要记住：
 
-   - **「被当成网易云」只在字符串口径成立**。`SongItem.musicSource` 读 `source` 字符串；
+   - **「被当成 ncm」只在字符串口径成立**。`SongItem.musicSource` 读 `source` 字符串；
      而播放路径 `TrackKey.of(null, id)` 会用 **bit62** 把 QQ 认出来。
      真正的用户可见故障是**「认得出是 QQ、songmid 丢了 ⇒ 取不到链」**，
-     外加一条方向错误的「可切到网易云」提示。**写 bug 报告时要按这个形态写**，
+     外加一条方向错误的「可切到 ncm」提示。**写 bug 报告时要按这个形态写**，
      否则会去修一个不存在的问题；
    - **唯一可证明的推断是 bit62**（`SourceIds.isQqId`）。**id 区间启发式必须放弃** ——
-     QQ 的裸 songid 与网易云的 id 同样是 9~10 位十进制，区间重叠。
+     QQ 的裸 songid 与 ncm 的 id 同样是 9~10 位十进制，区间重叠。
      散列兜底造出来的合成 id **不可逆**：`songmid` 推不回来，**任何启发式都不许补**；
    - **降级要显式**：补不回 songmid 的老条目必须能被判出来
      （`SearchHistoryMigration.isIncomplete`），并且
@@ -3513,7 +3513,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 |---|---|
 | **不给 `library.**` 加 `-keep`** | 加 keep 会改掉**全局**混淆映射，可能把同一类静默丢失换到 `cache.**`（`ncrust_offline/tracks`）上。改用 `@SerializedName` 固定契约 + 三形状读取，代价是手写 codec —— 换来了「迁移逻辑显式存在且可单测」 |
 | **不做「直读对照包」** | 产物级证据已经足够：120 条转发属性在 release 里 **0 条**留方法体，开销上界是每次 2 条 `iget`。为量化这个上界再编一个包不划算；因此本版只声称「建立基线」，**不声称因果** |
-| **不修 `PlayReporter` 的跨音源泄漏** | 它是探针**发现**的既有缺陷（QQ 合成 id 被 POST 给网易云 webLog），与「统计兜底频率」是两件事；改上报行为需要单独的证据与回归面 |
+| **不修 `PlayReporter` 的跨音源泄漏** | 它是探针**发现**的既有缺陷（QQ 合成 id 被 POST 给 ncm webLog），与「统计兜底频率」是两件事；改上报行为需要单独的证据与回归面 |
 | **不给平板补 ⤢ 入口** | 与「波浪条不显示」不同源；混改会让两者的回归面互相污染 |
 | **托盘不做逐字、不做跑马灯** | 逐字要接 `drawWithContent` 帧路径、跑马灯会持续排帧，两者都与铁律 17 冲突，而收益是一行 56dp 小字 |
 | **托盘不加方向闸门** | 它在两种方向下都是 56dp 两行；加一个方向谓词只会多一格需要 A/B 的状态 |
@@ -3588,7 +3588,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 3. **跨源 id 不得上报给非本源服务。**
    本版在真机上复现了这条泄漏（PLC110 / Android 16 / v2.5.4 vc45）：
    从 `ncrust_playback_state` 恢复出一首 QQ 曲目（`song:qqmusic:4611686018784987997`）→
-   自然播完 → `D/PlayReporter: weblog resp: 200` —— **一个 QQ 合成 id 被 POST 给了网易云的 webLog**。
+   自然播完 → `D/PlayReporter: weblog resp: 200` —— **一个 QQ 合成 id 被 POST 给了 ncm 的 webLog**。
 
    根因是**结构性的**，不是漏了一个判断：`SourceIds.qqId` 用 `1L shl 62` 造 id，
    所以合成 id 是**正数**，而旧卫语句里有一条是 `songId > 0` —— 它在数学上不可能拦住 QQ id。
@@ -3596,7 +3596,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
    落地要求：
 
    - **判据只能是 bit62**（`SourceIds.isQqId`）。**不许用 id 区间启发式** ——
-     QQ 裸 songid 与网易云 id 同样是 9~10 位十进制，区间完全重叠；
+     QQ 裸 songid 与 ncm id 同样是 9~10 位十进制，区间完全重叠；
      也不许用散列反推（`qqId` 的兜底散列不可逆）；
    - **闸门挂在唯一的网络出口上**，不是在各个调用点各判一次（调用点会变多，
      而出口只有一个）。本版是 `PlayReporter.reportPlay` 的最外层，
@@ -3782,7 +3782,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 |---|---|
 | **不加 `:baselineprofile` 新模块** | 官方模板只是「再开一个 `com.android.test` 模块」；本仓库已有的 `:benchmark` 模块结构完全等价（`targetProjectPath = ":app"`、`self-instrumenting = true`、`benchmark-macro-junit4` 齐备）⇒ 把采样器加进去改动面最小，采样与被测应用还共用同一套安装流程 |
 | **搜索不加 `callTimeout` 到共用 client** | `api` 是共用实例（专辑详情 / 歌词 / 歌曲详情全走它）。给共用实例加 `callTimeout` 会把「修搜索」变成「改半个网络层的失败面」。新增 `searchApi`（只多一个 20s `callTimeout`）—— 只有「用户正盯着转圈等」的那条路径拿到熔断 |
-| **不做「流式映射」「占位渲染」** | 探针实测：状态写入 → QQ 计数上屏的**渲染段 P50 = 41.5ms，占总量 1.4%**（`screenrecord --bugreport` 帧内毫秒时间戳直读）。在这个量级上做占位屏是拿真复杂度换噪声。真正值得做的是**解掉首帧对网易云的硬阻塞**（真机抓到 `elapsed=30006ms netease=0 qq=30`） |
+| **不做「流式映射」「占位渲染」** | 探针实测：状态写入 → QQ 计数上屏的**渲染段 P50 = 41.5ms，占总量 1.4%**（`screenrecord --bugreport` 帧内毫秒时间戳直读）。在这个量级上做占位屏是拿真复杂度换噪声。真正值得做的是**解掉首帧对 ncm 的硬阻塞**（真机抓到 `elapsed=30006ms netease=0 qq=30`） |
 | **不换 QQ 搜索主通道（musicu）** | 探针测得 legacy TTFB 2905ms vs musicu 378ms（**7.7 倍**），但换主通道的回归面是**结果顺序**，且代码注释记载 musicu 历史上被限流（code 2001）。本版只在报告里给出机会与取证要求，**不在没有 n≥30 稳定性 + 逐字段比对的情况下动它** |
 | **平板 ⤢ 不加「左栏 ≥ 478dp」这种魔数门控** | 那种阈值是**症状级**修法：换个字号/语言/按钮数就再次重叠。本版改成顺序 `Row`（结构性不可重叠）+ 可单测的宽度预算（让位的是音质片，不是 ⤢ 也不是传输三键） |
 | **离线索引不加 `offline_index_version`、不加启动期对账** | 探针证明注入记录是**一条无音频、无 URL 的惰性记录**，既有对账路径（打开「离线缓存管理」）已能精确清除；而 `OfflineTrackCodec` 明写「版本号不落盘」，再加一个版本 key 与既有契约冲突。加启动期对账则把「索引静默缩水」从用户主动动作扩大到每次冷启 |
@@ -3794,7 +3794,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 | 任务书原文 | 实测 | 处置 |
 |---|---|---|
 | §2.1「确认仓库当前无 `androidx.profileinstaller` 依赖」 | **有**，自 v1.2.1（`f9d45f4`）起；v2.5.3/2.5.4/2.5.5 三个 tag 里 `grep -c` 均为 1；APK 清单命中 7 处；API 24 真机 `RESULT_INSTALL_SUCCESS` | **推翻**。P0 从「加依赖」改为「补采样管线 + 用真机采样替换手写清单 + 量化效果」 |
-| §1/§4「搜索延迟 gap（TTFB → UI）最值得压缩」 | **推翻**：QQ 腿 P50 2923ms 里 98% 是服务端 TTFB；客户端「状态写入→上屏」P50 **41.5ms（1.4%）**，天花板约 2% | 改为解掉**首帧被网易云硬阻塞**（真机证据 30s 空屏）并补齐 4 个缺失埋点 |
+| §1/§4「搜索延迟 gap（TTFB → UI）最值得压缩」 | **推翻**：QQ 腿 P50 2923ms 里 98% 是服务端 TTFB；客户端「状态写入→上屏」P50 **41.5ms（1.4%）**，天花板约 2% | 改为解掉**首帧被 ncm 硬阻塞**（真机证据 30s 空屏）并补齐 4 个缺失埋点 |
 | §2.3「EMUI 未采纳 wm 旋转 override，平板 ⤢ 不工作」 | **推翻**：EMUI 采纳（受控 A/B，`ignore-orientation-request=false`）。真因是**竖屏下控制条三组重叠**、⤢ 被传输组盖住（352dp 容器重叠 65dp） | 改为修命中区（顺序布局 + 宽度预算），并按新铁律 21 做双方向真机验证 |
 | §6「PLC110 离线索引注入记录清理」隐含「需要改代码 + 加迁移」 | **部分推翻**：注入记录**恰好 1 条**（`songId 503616`），且无音频、无 URL ⇒ 功能上惰性；既有对账路径已能精确清除 | 归为**设备状态收尾**（不改产品代码），补一条真机形状的防御性单测，并改正 v2.5.5 那条会造成数据损失的建议 |
 
@@ -3809,11 +3809,11 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 
 23. **本地新增必须持久化，同步不得覆盖用户手动添加。**
 
-    「加入库」在 v2.5.6 及以前写的是**网易云红心歌单的镜像**（`ncrust_library` /
+    「加入库」在 v2.5.6 及以前写的是**ncm 红心歌单的镜像**（`ncrust_library` /
     `saved_songs`），而 `refreshFromCloud` 用云端 `likedIds` **顺序重建整张表**。
     后果是「用户手动加的」与「云端删掉的」在同步时**完全同形**（都是「id 不在
     `likedIds` 里」），于是被一起丢掉 —— 而 QQ 曲目的 id 由 `SourceIds.qqId`
-    合成（`bit62` 恒置位，≥ 2⁶²），**值域与网易云 songId（< 2⁴⁰）不相交**
+    合成（`bit62` 恒置位，≥ 2⁶²），**值域与 ncm songId（< 2⁴⁰）不相交**
     ⇒ QQ 曲目**100% 命中**这条路径，表现为「入库 → 短暂可见 → 刷新消失」。
 
     这条纪律在 `local/`（用户自建歌单）上**从 v2.3.0 起就存在**（只加不减 +
@@ -3887,7 +3887,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
       `library_playlist_layout`，`0 = CARD` / `1 = LIST`），非法值与**类型错配**
       一律回落默认（真机上类型错配是 `ClassCastException` 崩溃，
       而它只是一个显示偏好）。判「键不存在」与「显式写了非法值」必须是两个形状；
-    - **默认值必须写清是哪两段的现状**：本页是**三个**按源分区（本地 / 网易云 / QQ），
+    - **默认值必须写清是哪两段的现状**：本页是**三个**按源分区（本地 / ncm / QQ），
       **不存在**「都零行为变化」的默认值。本版取 `CARD`（保留面积最大的两段），
       理由与代价写在 `PlaylistLayout` 的 KDoc 里 ——
       「默认值随便选一个」正是下一次「用户升级后界面变了」的来源；
@@ -3921,7 +3921,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 
 | 取舍 | 理由 |
 |---|---|
-| **默认布局取 `CARD`** | 本页是**三个**源分区（探针推翻了「两个源」这个前提），**不存在**零行为变化的默认值。`CARD` 保留面积最大的两段（本地 + 网易云）的现状，只让 QQ 那一段改变形态；「用整行区分 QQ 段」原来的诉求由**区块标题**承担（标题一直都在，不是新增信息负担） |
+| **默认布局取 `CARD`** | 本页是**三个**源分区（探针推翻了「两个源」这个前提），**不存在**零行为变化的默认值。`CARD` 保留面积最大的两段（本地 + ncm）的现状，只让 QQ 那一段改变形态；「用整行区分 QQ 段」原来的诉求由**区块标题**承担（标题一直都在，不是新增信息负担） |
 | **折叠单位是「区块」而不是「单张歌单」** | 用户来这一页最常见的诉求是「我现在只想看 QQ 那一段」。按单张歌单折叠等于要求用户逐个收起 100 张里的 99 张 —— 那不叫折叠，叫整理 |
 | **折叠 QQ 区块不停掉它的网络加载** | 本仓库的闸门是 **tab 级**的；按折叠态去 gate 可见容器里的加载没有先例，而展开后要等一次网络往返会违反「先渲染、绝不空白 + 加载」的既有模式 |
 | **不给布局切换加「过渡动画」** | 切换的是**容器列数与条目形状**，两者都不是可以插值的量；`animateItem` 的 placement 动画已经覆盖了条目位移。为「切换」本身加 Crossfade 只会多一层合成 |
@@ -3937,7 +3937,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 |---|---|---|
 | §0 铁律 23「跨源混播去重…（本版新增）」 | 仓库里**从来没有**编号 23 的铁律（`grep -rn "铁律 *2[3-9]"` → 0 命中）；其实质早已存在（v2.4.0 三条新规则第 1、2 条），且 `crosssource/**` 注释把它误写成「铁律 17」 | 本版把 22/23/24 真正写进 AGENTS.md（**注意编号从 22 续到 25**），并把编号漂移一并修正 |
 | §4.1「跨源混播去重…复用 v2.4.0 的匹配规则**或新建**」 | 主路径**已经做完了**（`CatalogAggregator.assembleSongs` 已把 `mergeable` 的对端行吸收掉）；真实增量只有「加 ▶ 入口」+「补 `TrackKey` 轴」 | P1 按「入口 + 一条正交轴」做 |
-| §5.1「两个源（网易云、QQ）统一使用同一布局」 | 这一页是**三个**按源分区（本地 / 网易云 / QQ），**本地那一段也是网格卡片** | 按三段统一做；只统一两段会留下一个半切换的页面 |
+| §5.1「两个源（ncm、QQ）统一使用同一布局」 | 这一页是**三个**按源分区（本地 / ncm / QQ），**本地那一段也是网格卡片** | 按三段统一做；只统一两段会留下一个半切换的页面 |
 | §2.3 隐含「布局切换有一个零行为变化的默认值」 | **不存在**（改造前本身就是混合形态） | 默认值取 `CARD`，理由与代价写进 KDoc 与 release notes |
 | §2.4 隐含 `BottomOverlayInsetDp` = 144/64dp | **168dp（窄）/ 88dp（宽）**（`TrayLayout.kt:163-165`）；144/64 是 v2.5.4 之前的字面量。AGENTS.md 的「Theming & Responsive Layout」一节仍是过期数字 | 本版未改这个值（与本版范围无关），在 `EVIDENCE.md` 里点名那条过期文档 |
 | §2.1 问「QQ 特殊 dirId 是否导致写入被忽略」 | **不是**。`dirId` 是载荷不是身份（v2.2.0 已判决），特殊歌单只影响 `isFavorite` 排序 | 该问题的答案是「否」，不进修复清单 |
@@ -3956,7 +3956,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 
 26. **跨源身份跳转必须携带 source，不得只传数值 ID。**
 
-    P0 本体：QQ 曲目《稻香》的二级菜单「转到歌手」把用户送到了网易云的**马洪波**。
+    P0 本体：QQ 曲目《稻香》的二级菜单「转到歌手」把用户送到了 ncm 的**马洪波**。
     链条是三段，每一段单独看都"合理"：
 
     | # | 位置（v2.6.0） | 做了什么 |
@@ -3967,7 +3967,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 
     实测撞号（2026-09，匿名可复现，脚本见 `probe-raw/probe-artist-id-collision.sh`）：
 
-    | QQ 歌手 | QQ `singer.id` | 当成网易云 id 查出来 |
+    | QQ 歌手 | QQ `singer.id` | 当成 ncm id 查出来 |
     |---|---|---|
     | 周杰伦 | `4558` | **马洪波**（专辑 1 / 单曲 32 —— 页面看起来完全正常） |
     | 林俊杰 | `4286` | 刘子译（0 / 0） |
@@ -3978,14 +3978,14 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
     - **身份必须是 `(source, id)` 一对**：艺人走 `ArtistKey` / 新增的
       `ArtistNav.Direct(source, id)`，曲目走 `TrackKey`。**不许**在路由、回调、
       事件里传裸 `Long` —— 裸 `Long` 无法回答「它属于哪个源」；
-    - **形状不同就是最好的闸门**：网易云艺人是十进制、QQ 艺人是 base62 的 `singerMID`，
+    - **形状不同就是最好的闸门**：ncm 艺人是十进制、QQ 艺人是 base62 的 `singerMID`，
       所以 `ArtistNavigator.idDomainMatches(source, id)` 能**结构性**拦下「传错域」。
       QQ 的**数字 `singerID` 在 QQ 域不是合法身份**（它是诊断/排序用的），
       这一条把本 P0 的错法变成"过不了闸门"；
     - **路由必须带源段**：用 `NavRoutes.artist(source, id)`（`artist/{source}/{artistId}`）。
       单参数的 `NavRoutes.artist(artistId: Long)` **只为历史调用点保留**，
       任何新调用点都必须带源；`ArtistRouteContractTest` 会**扫源码**把违规行报出来；
-    - **按构造就是网易云的入口也要显式写出来**（剪贴板链接、音乐人推荐卡、搜索艺人 tab）：
+    - **按构造就是 ncm 的入口也要显式写出来**（剪贴板链接、音乐人推荐卡、搜索艺人 tab）：
       「按构造正确」正是本 P0 里唯一没被写下来的东西，而它一旦没写下来，
       下一个人就会以为这个重载"谁都能用"。
 
@@ -4032,7 +4032,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
       将来也不许加 —— 兜底值（0 / -1 / null 转换后的值）在服务端往往**真的对应一个艺人**，
       马洪波就是 `4552+206` 这种巧合的产物；
     - **fallback 必须与"身份补全"分开**：v2.6.0 的回落是「补一次 `song/detail`」，
-      而它打的是**网易云**接口、QQ 曲目的 id 带 bit62 ⇒ 必然查空 ⇒ 静默放弃。
+      而它打的是**ncm**接口、QQ 曲目的 id 带 bit62 ⇒ 必然查空 ⇒ 静默放弃。
       补全必须**在曲目自己的源上做**（`isResolvable` / `musicSource` 判据），
       做不了就跳搜索，**不要**跨源试一次；
     - **降级路径要有界**：`ArtistNav` 只有三态、没有循环、没有重试，
@@ -4054,7 +4054,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 |---|---|
 | **「转到专辑」的同类 bug 本版不修** | 它需要 QQ 的 `albumMID`，而 `AlbumItem` 不带；为此再加一次跨表迁移 + 5 张持久化结构的回归，会把一次 hotfix 的面扩大到半个数据层。如实列进未修清单 |
 | **不给 `ArtistItem` 加 `source` 字段** | `ArtistItem` 是**曲目内部**的艺人，它的源恒等于 `SongItem.musicSource`。再加一个 `source` 就有两份真相，而两份真相必然漂移（v2.1.5 与 v2.6.0 各踩过一次同形状的坑）。跨源艺人身份用已有的 `ArtistKey` |
-| **保留 `NavRoutes.artist(artistId: Long)` 老路由** | 删它会让剪贴板/推荐卡/搜索 tab 三个"按构造就是网易云"的入口被迫改形状，而它们与本次 P0 无关。改为**要求显式写 `MusicSource.NETEASE`** + 源码扫描守卫 |
+| **保留 `NavRoutes.artist(artistId: Long)` 老路由** | 删它会让剪贴板/推荐卡/搜索 tab 三个"按构造就是 ncm"的入口被迫改形状，而它们与本次 P0 无关。改为**要求显式写 `MusicSource.NETEASE`** + 源码扫描守卫 |
 | **不删 `QqCatalogMapper.artistsOf`（零调用方）** | 它与 `QqSongMapper` 是同一件事的两条链路。本版让两条链路**逐值一致**并加对称单测，而不是删掉一条 —— 删它会把回归面扩大到歌单解析 |
 | **`crossSourceJump` 目前恒返回 null** | 探针结论：这条路径没有可用的跨源结论（`MatchCacheStore` 的键是 `(source, id)`，而 QQ 数字 `singerID` 不是任何一个源的有效键）。保留它是为了**下一处**跨源跳转，且它有单测覆盖两种放行/四种拒绝 |
 | **不加性能基准** | 本版改的是纯逻辑判定与一次跳转分支，没有逐帧路径。按铁律 22，**不声称**任何性能结论 |
@@ -4065,7 +4065,7 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 | 任务书原文 | 实测 | 处置 |
 |---|---|---|
 | §2.3 假设走了 v2.4.0 跨源匹配、置信度不足 | **完全没走匹配**。路径上零次 `CrossSourceMatcher` / `MatchCacheStore` 调用 | 修复不走"提高阈值"，而是"把 QQ 侧本来就有的 `singerMID` 带出来"；置信度闸门按铁律 27 先立好 |
-| §3.3 假设存在 fallback 跳到某个默认艺人 | **不存在**。fallback 是"补一次**网易云** `song/detail`"，对 QQ 的 bit62 合成 id 必然查空 ⇒ 静默放弃 | 真因是「补全打错了源」，处置见铁律 28 |
+| §3.3 假设存在 fallback 跳到某个默认艺人 | **不存在**。fallback 是"补一次**ncm** `song/detail`"，对 QQ 的 bit62 合成 id 必然查空 ⇒ 静默放弃 | 真因是「补全打错了源」，处置见铁律 28 |
 | §2.3 假设匹配缓存被污染 | **没污染**，缓存里存的恰恰是**正确**的 `6452 ↔ 0025NhlN2yWrP4 / EXACT` | 不加缓存版本号、不加失效逻辑（那会是无的放矢的改动） |
 | §1/§2 称菜单项为「查看艺人」 | 实际文案是 **「转到歌手」**（`Strings.actionGoToArtist`） | 按实际文案取证；不改文案 |
 | §1 隐含「只有二级菜单」 | **播放页竖屏托盘的作者名是第二个独立入口**，同一错法（`PlayerCard.onArtistClick: (Long) -> Unit`） | 两个入口一起改，且收敛到**同一个出口** `navigateToArtist` |
@@ -4100,11 +4100,11 @@ media3 的 `ChannelMixingMatrix` 只实现 `N→N / 1→2 / 2→1`，**6→1 抛
 | ① 映射层丢掉源内字符串身份 | `singer[].mid` 被丢 | `album.mid` **只喂给了封面 URL** |
 | ② 跳转层不看 `song.musicSource` | 只读 `artists[0].id` | 只读 `album.id` |
 | ③ 老路由 source 写死 | `artist/{id}` → `NETEASE` | `album/{id}` → `NETEASE` |
-| ④ 身份不可信时静默失败 | 补 id 回落打**网易云**接口 ⇒ 查空 | **连回落都没有** ⇒ 直接 no-op（连网络请求都不发） |
+| ④ 身份不可信时静默失败 | 补 id 回落打**ncm**接口 ⇒ 查空 | **连回落都没有** ⇒ 直接 no-op（连网络请求都不发） |
 
 实测撞号（2026-09 匿名可复现，`tools/probe-album-cross-domain.py`）：
 
-| QQ 曲目 | QQ `album.id` | QQ `album.mid` | 当成网易云专辑 id 查出来 |
+| QQ 曲目 | QQ `album.id` | QQ `album.mid` | 当成 ncm 专辑 id 查出来 |
 |---|---|---|---|
 | 富士山下 / 陈奕迅《What's Going On...?》 | `22276` | `004Z85XP1c25b7` | **《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云**（页面完全正常） |
 | 葡萄成熟时 / 陈奕迅《U 87》 | `7879` | `003J6fvc0bVJon` | **《爱的供养》/ 邓杰** |
@@ -4546,7 +4546,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
 3. **B站音频流 URL 有时效，TTL 必须按 URL 的 `deadline` 反推 —— 不是响应里的 `timeout` 的 3 小时。**
    - 可执行判据：`PreloadCachePolicyTest` 的**两模型边界** ——
      `显式过期时刻优先于固定 TTL`、`显式过期时刻到了就不可用（边界取过期）`、
-     `显式过期时刻为 null 时退回固定 TTL（网易云与 QQ 的行为不变）`、
+     `显式过期时刻为 null 时退回固定 TTL（ncm与 QQ 的行为不变）`、
      `两种模型下档位判据都在最前面`。解析侧：`BiliParseTest.TTL 按 deadline 算 而不是按 timeout（实测两者差 1 小时）`。
    - 数字（实测，[`EVIDENCE.md` §7](docs/verification/v3.1.0/bili-research/EVIDENCE.md)）：响应字段
      `timeout = 10800`（名义 3 小时，**恒定常量**），URL query 里的 `deadline = now + 7200`（真实 2 小时，连测 3 次
@@ -4556,12 +4556,12 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
      **内容寻址**的（`<hash>-<档位>.m4a` 不变、query 全变），所以键取文件名并加 `bili:` 前缀与既有键空间隔离：
      `BiliCdn.cacheKeyFor`（`BiliCdn.kt:107-112`），守卫 `BiliSourceProviderTest.缓存键取内容寻址的文件名 且与既有键空间隔离`。
    - 过期时刻必须由**产出 URL 的那一层**算好带上来：`SongUrlResult.expiresAtMs`（`SongUrlFetcher.kt:62-75`，
-     默认 `null` ⇒ 网易云/QQ 的 5 分钟模型**逐字不变**）。**不要**让缓存层去猜服务端的 TTL。
+     默认 `null` ⇒ ncm/QQ 的 5 分钟模型**逐字不变**）。**不要**让缓存层去猜服务端的 TTL。
 
 4. **B站音源接入不得破坏现有音源行为（铁律 27 在这一版的具体落点）。**
    - 可执行判据（三条，缺一不可）：
      1. **跨源 Referer 会互相打死** ⇒ 判据只能是 **host 白名单**：
-        `BiliCdnTest.网易云与 QQ 的 host 一个都不能命中` —— **11 个 host 逐个断言**
+        `BiliCdnTest.ncm与 QQ 的 host 一个都不能命中` —— **11 个 host 逐个断言**
         （`music.163.com` / `interface3.music.163.com` / `interface.music.163.com` /
         `clientlogusf.music.163.com` / `u.y.qq.com` / `c.y.qq.com` /
         `isure.stream.qqmusic.qq.com` / `ws.stream.qqmusic.qq.com` / `dl.stream.qqmusic.qq.com`
@@ -4571,7 +4571,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
         配套：`BiliSourceProviderTest.非 B 站 host 不给缓存键（交给既有规则）`、
         `BiliSourceProviderTest.请求头只有一个 Referer`（不带 Cookie）。
         **白名单宁可漏加也不能加宽**：漏加的症状是「部分 B站歌放不出来」，误加的症状是
-        「网易云和 QQ 全部放不出来」（实测：拿 B站 Referer 请求别家同样 403）。
+        「ncm 和 QQ 全部放不出来」（实测：拿 B站 Referer 请求别家同样 403）。
      2. **关掉 B站时统计行逐字不变**：`SourceCountsBiliTest.B 站关闭时统计行逐字不变`
         （结构保证在 `SourceCounts.summary`：`biliStatus == SKIPPED` 时**短路**第三段，
         `SourceCounts.kt:108-114`；`biliStatus` 默认就是 `SKIPPED` 而不是 `DONE+0`）。
@@ -4640,7 +4640,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
    用户看到的是「一直缓冲」。
    证据：`evidence/80-cdn-referer-and-ttl.txt`、`evidence/96-cdn-referer-exoplayer.txt`；
    真机复现见 [`verification/EVIDENCE-bili-probe.md`](docs/verification/v3.1.0/verification/EVIDENCE-bili-probe.md)。
-   反过来同样成立且已实测（`net-research/EVIDENCE-S6.md` §4 的 A/B）：**拿 B站 Referer 去请求网易云也会被拒** ⇒
+   反过来同样成立且已实测（`net-research/EVIDENCE-S6.md` §4 的 A/B）：**拿 B站 Referer 去请求 ncm 也会被拒** ⇒
    绝不能给所有请求统一塞一个默认头，判据只能是 `BiliCdn.needsReferer(host)`（纯函数 + host 白名单），
    落点在 `OfflineAudioCache.dataSourceFactory` 的 `ResolvingDataSource`。
    ⚠️ 两个附带坑：① `Content-Type` 是 `application/octet-stream`（不是 `audio/mp4`），ExoPlayer 靠**嗅探**识别
@@ -4679,7 +4679,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
   **用户自己的账号**，只换来收藏夹 / 投币 / FLAC。UI 上如实写「无需登录」「最高 320K（匿名）」，
   **不承诺**「登录可得无损」（匿名环境无法确认登录后能否拿到 FLAC）。
 - **B站收藏夹同步**：匿名不可用（`code:4511003 用户未登录`）⇒ `LocalPlaylistRepository.loadRemoteSongs`
-  对 B站返回 `null`，收藏页分组仍是网易云 + QQ 两组（`groupPlaylistsBySource` 默认源改为 `loginSources`）。
+  对 B站返回 `null`，收藏页分组仍是 ncm + QQ 两组（`groupPlaylistsBySource` 默认源改为 `loginSources`）。
 - **视频画面模式**：本版只取 DASH **音轨**，不取视频轨、不做画面渲染。
 - **B站音频区歌单/榜单作为发现源**：`menu/rank` / `menu/hit` / `song/of-menu` 实测匿名可用，
   但没有「我的歌单」语义可依附，本版不做入口。
@@ -4697,13 +4697,13 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
   复现：在未被限流的出口上重跑 `BiliV310ProbeTest#probeExoPlayerCanPlayBiliStream`（403 时打印 SKIP，其它错误才变红）。
 - **并行之后「点按 → 出声」快了多少毫秒：完全未采集**（本轮只有 JVM 单测与探针，没有端到端延迟对照）；
   并发上限 4 是否最优（vs 6）、列表预取的流量与解码影响、移动数据 5→2 省下的字节数、预取 LRC 的命中率均未采集。
-- **B站歌词不进 `LyricsCache`**（那张表存的是网易云字段形状）⇒ 每次播放现取，**断网无词**。
+- **B站歌词不进 `LyricsCache`**（那张表存的是 ncm 字段形状）⇒ 每次播放现取，**断网无词**。
 - **B站媒体流不参与「离线下载」承诺**：`OfflineUrlStore` 没有 TTL 字段而 B站直链 2 小时轮换；
   播放期 `SimpleCache` 靠**内容寻址键**命中。⚠️ **未实测**：`OfflineLibrary.record` 的 key 由
   `OfflineKeys.keyOf(uri)` 算出，与 `SimpleCache` 给 B站用的 `BiliCdn.cacheKeyFor` **不是同一个函数**，
   两者对账后 B站曲目能否留在离线曲目清单里没有验证过。
 - **老版本 App 读到 `"bilibili"` 音源 key 的真实表现未实测**（源码审计：`fromKey` 回落 `NETEASE` ⇒
-  可能把一首 B站曲目当网易云同号歌取链；设备上未复现）。
+  可能把一首 B站曲目当 ncm 同号歌取链；设备上未复现）。
 - **Wbi 密钥跨天轮换未实测**（本次会话只观测到一个 key 值，「6h TTL + `-352` 强制刷新一次」是否够用需跨天长跑）。
 - **`search_type=au` / `song` 是否也返回 `-1200` 无原始证据**（只采到 `music` / `audio` / `foobar` 三份）。
 - **`type=-1`（30 秒试听）未复现**（23 首样本全是完整曲，但实现里保留了防御分支）。
@@ -4728,7 +4728,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
      = **15,120 组**输入，断言没有任何一组能让 QQ 的失败映射成
      `COPYRIGHT_GONE` / `REGION_LOCKED`）。
    - **只有音源显式声明时**才允许产出 `COPYRIGHT_GONE`。全仓库唯一满足这一条的信号是
-     网易云的 `noCopyrightRcmd != null`（v2.3.0 探针：591 条样本里 2 条，零假阳性）。
+     ncm 的 `noCopyrightRcmd != null`（v2.3.0 探针：591 条样本里 2 条，零假阳性）。
      **QQ 侧没有任何字段能证明这件事**，所以 `QqRejection.toResolveFailureKind()`
      的映射表里**没有一行**产出它。
    - 触发这次修复的实测（2026-09-28，真机 + 真 VIP 账号）：QQ 取链在**匿名态**
@@ -5000,7 +5000,7 @@ S6 简洁档的帧时间复测过（`docs/verification/v3.2.2/probe-perf-tier.md
 
 | 项 | 内容 |
 |---|---|
-| **P0 · B站播放** | `BiliCdn.USER_AGENT`（桌面 Chrome UA，与取链身份同一个常量）+ `requestHeaders()` 带上 UA；`OfflineAudioCache.dataSourceFactory` 的上游换成 `SourceRoutingDataSource`（**按 URI 逐次选数据源**：B 站媒体用 `DefaultHttpDataSource.Factory().setUserAgent(BiliCdn.USER_AGENT)`，其余用 media3 默认的裸工厂 —— 网易云/QQ **逐字节不变**）；判据从「host 后缀白名单」扩成「白名单 ∪ **取链见过的 host**」（`BiliCdn.markStream`，有界 LRU 64，唯一调用点是 `BiliSourceProvider.toResult`）。 |
+| **P0 · B站播放** | `BiliCdn.USER_AGENT`（桌面 Chrome UA，与取链身份同一个常量）+ `requestHeaders()` 带上 UA；`OfflineAudioCache.dataSourceFactory` 的上游换成 `SourceRoutingDataSource`（**按 URI 逐次选数据源**：B 站媒体用 `DefaultHttpDataSource.Factory().setUserAgent(BiliCdn.USER_AGENT)`，其余用 media3 默认的裸工厂 —— ncm/QQ **逐字节不变**）；判据从「host 后缀白名单」扩成「白名单 ∪ **取链见过的 host**」（`BiliCdn.markStream`，有界 LRU 64，唯一调用点是 `BiliSourceProvider.toResult`）。 |
 | **P1 · 帧率适配** | 新增 `ui/player/motion/DisplayRefresh.kt`：`sanitizeHz` / `frameIntervalMs` / `strideFor`（非低内存 = **1**，低内存 = `ceil(33ms / 帧间隔)`）/ `FrameStride`（数帧计数器）/ `rememberDisplayRefreshRate()`（读 `View.display.refreshRate` + `DisplayManager.DisplayListener` 跟随面板切换与 LTPO 变频）。`MotionFrameClock` 的闸门从「时间阈值」改成「帧步长」，`dtMs` 仍取真实帧时间戳之差。 |
 
 ### 关键实现落点
@@ -5034,7 +5034,7 @@ S6 简洁档的帧时间复测过（`docs/verification/v3.2.2/probe-perf-tier.md
 ### 本版明确**不做**（避免下一个人重复调研）
 
 - **不碰华为 / 荣耀媒体卡片**（任务书明令）。
-- **不做网易云歌单同步、不做主题色对比度（v3.2.3 遗留）、不做功耗测试**（任务书列为独立范围）。
+- **不做 ncm 歌单同步、不做主题色对比度（v3.2.3 遗留）、不做功耗测试**（任务书列为独立范围）。
 - **不改 B 站取链参数**（`songid`/`quality`/`privilege`/`mid`/`platform` 与实测逐字一致，见探针 §7）、
   **不改 TTL 口径**（`deadline` 优先已经是正确实现，实测 7166s vs `timeout` 10800s）。
 - **不给高刷设备加「帧率上限」这种新旋钮**：`stride` 只由 `isLowRamDevice` 决定，

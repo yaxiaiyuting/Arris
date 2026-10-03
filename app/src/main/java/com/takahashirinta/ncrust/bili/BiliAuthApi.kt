@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -152,8 +152,8 @@ interface BiliAuthEndpoints {
  *
  * ## 为什么复用 [BiliApi] 的客户端，而不是自己建一个 / 用 `RetrofitClient`
  *
- * v3.1.0 的 A/B 实测钉死了这条：拿网易云的 `Referer` 请求 B 站会 **403**，
- * 而 `RetrofitClient` 的每个请求都无条件注入网易云的 UA/Referer/Cookie。
+ * v3.1.0 的 A/B 实测钉死了这条：拿 ncm 的 `Referer` 请求 B 站会 **403**，
+ * 而 `RetrofitClient` 的每个请求都无条件注入 ncm 的 UA/Referer/Cookie。
  * 复用它的结果不是「不太优雅」，而是「B 站永远 403」。
  * 所以本类的每一个请求都走 [BiliApi] 的独立 client 与 UA/Referer 约定
  * （`BiliApi.getRaw`，见那里的 KDoc）。

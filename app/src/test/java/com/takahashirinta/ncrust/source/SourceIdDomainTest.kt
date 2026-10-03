@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -35,10 +35,10 @@ import org.junit.Test
  */
 class SourceIdDomainTest {
 
-    // ------------------------------------------------------------ 网易云
+    // ------------------------------------------------------------ ncm
 
     @Test
-    fun `网易云只吃十进制正整数`() {
+    fun `ncm只吃十进制正整数`() {
         assertTrue(SourceIdDomain.matches(MusicSource.NETEASE, "1"))
         assertTrue(SourceIdDomain.matches(MusicSource.NETEASE, "6451"))
         assertTrue(SourceIdDomain.matches(MusicSource.NETEASE, "18905"))
@@ -46,24 +46,24 @@ class SourceIdDomainTest {
     }
 
     @Test
-    fun `网易云拒绝零 负数 小数与任何非数字形状`() {
+    fun `ncm拒绝零 负数 小数与任何非数字形状`() {
         for (bad in listOf("0", "-1", "1.5", "6451L", "abc", "004Z85XP1c25b7", "12a", "", "   ")) {
-            assertFalse("'$bad' 不该通过网易云闸门", SourceIdDomain.matches(MusicSource.NETEASE, bad))
+            assertFalse("'$bad' 不该通过 ncm 闸门", SourceIdDomain.matches(MusicSource.NETEASE, bad))
         }
         assertFalse(SourceIdDomain.matches(MusicSource.NETEASE, null))
     }
 
     @Test
-    fun `网易云拒绝超出值域上界的数`() {
+    fun `ncm拒绝超出值域上界的数`() {
         assertTrue(SourceIdDomain.matches(MusicSource.NETEASE, (SourceIdDomain.NETEASE_ID_MAX - 1).toString()))
         assertFalse(SourceIdDomain.matches(MusicSource.NETEASE, SourceIdDomain.NETEASE_ID_MAX.toString()))
         assertFalse(
-            "QQ 的 bit62 合成 id 必须落在网易云值域之外",
+            "QQ 的 bit62 合成 id 必须落在 ncm 值域之外",
             SourceIdDomain.matches(MusicSource.NETEASE, SourceIds.QQ_ID_FLAG.toString()),
         )
     }
 
-    // ------------------------------------------------------------ QQ 音乐
+    // ------------------------------------------------------------ qm
 
     @Test
     fun `QQ 只吃 base62 的 mid`() {
@@ -76,7 +76,7 @@ class SourceIdDomainTest {
     }
 
     @Test
-    fun `QQ 拒绝网易云值域内的纯数字——这就是两个 P0 的形状`() {
+    fun `QQ 拒绝ncm值域内的纯数字——这就是两个 P0 的形状`() {
         for (qqNumeric in listOf("4558", "22276", "7879", "8220", "143", "1")) {
             assertFalse(
                 "'$qqNumeric' 是 QQ 的数字 id，不是 mid —— 放它过去就等于放回了 P0",
@@ -101,7 +101,7 @@ class SourceIdDomainTest {
         assertFalse(SourceIdDomain.matches(MusicSource.QQMUSIC, "004Z85XP1c25 7"))
         assertFalse(SourceIdDomain.matches(MusicSource.QQMUSIC, null))
         assertFalse(SourceIdDomain.matches(MusicSource.QQMUSIC, ""))
-        // 首尾空白在闸门内被 trim（与网易云一侧同一条规则），内部空白则不是合法 base62。
+        // 首尾空白在闸门内被 trim（与 ncm 一侧同一条规则），内部空白则不是合法 base62。
         assertTrue(SourceIdDomain.matches(MusicSource.QQMUSIC, " 004Z85XP1c25b7 "))
     }
 

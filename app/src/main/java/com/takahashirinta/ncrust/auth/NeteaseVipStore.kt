@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.4 · 网易云会员状态的读取与缓存。缺失的那一块。
+ * v2.1.4 · ncm 会员状态的读取与缓存。缺失的那一块。
  */
 
 package com.takahashirinta.ncrust.auth
@@ -19,11 +19,11 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * 网易云账号的会员状态（v2.1.4）。
+ * ncm 账号的会员状态（v2.1.4）。
  *
  * ## 为什么现在才需要它
  *
- * 在此之前全仓库**没有任何「网易云会员」的概念** —— 唯一与会员有关的东西是 QQ 侧的
+ * 在此之前全仓库**没有任何「ncm 会员」的概念** —— 唯一与会员有关的东西是 QQ 侧的
  * `QqProfile` 角标。v2.1.4 的聚合搜索排序要回答「该把哪一家的会员专享曲排前面」，
  * 才发现这一块是空的。
  *

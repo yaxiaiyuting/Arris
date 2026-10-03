@@ -54,7 +54,7 @@ class QqQualityTest {
     }
 
     @Test
-    fun `未知档位从无损往下试——与网易云侧同样保守`() {
+    fun `未知档位从无损往下试——与ncm侧同样保守`() {
         assertEquals(listOf(QqFileType.F000), QqQuality.ladderFor("sky"))
         assertEquals(listOf(QqFileType.F000), QqQuality.ladderFor(""))
     }

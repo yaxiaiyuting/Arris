@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# v2.6.1 探针 P2：QQ 数字 singer id 与网易云 artist id 的值域撞号取证。
+# v2.6.1 探针 P2：QQ 数字 singer id 与 ncm artist id 的值域撞号取证。
 #
 # 回答三个问题：
 #   1. QQ 搜索响应里的 `singer[]` 到底有没有 `mid`（singerMID）？→ 决定「参数是在映射层丢的」还是「服务端就不给」
-#   2. QQ 数字 singer id 是多少？把它当**网易云** artist id 查 `api/artist/{id}` 会得到谁？
+#   2. QQ 数字 singer id 是多少？把它当**ncm** artist id 查 `api/artist/{id}` 会得到谁？
 #   3. 换几个 QQ 艺人（林俊杰 / 陈奕迅）复核，判断是普遍现象还是周杰伦个例
 #
 # 只读、不发写请求、不带任何账号凭证（两条腿都是匿名可用的公开接口）。
@@ -46,13 +46,13 @@ PY
 done
 
 echo
-echo "=================== 撞号验证：把 QQ 的 singer.id 当网易云 artist id 查 ==================="
+echo "=================== 撞号验证：把 QQ 的 singer.id 当 ncm artist id 查 ==================="
 for kw in 稻香 林俊杰 陈奕迅; do
   f="$OUT_DIR/qq-search-$kw.json"
   [ -f "$f" ] || continue
   while read -r sid sname; do
     ne="$(ne_artist "$sid")"
-    printf '  QQ singer id=%-8s name=%-12s → 网易云 api/artist/%s = %s\n' "$sid" "$sname" "$sid" "$ne"
+    printf '  QQ singer id=%-8s name=%-12s → ncm api/artist/%s = %s\n' "$sid" "$sname" "$sid" "$ne"
   done < <(python3 -c "
 import json,sys
 d=json.load(open('$f'))

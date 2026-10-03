@@ -8,10 +8,10 @@
 | 问题 | 结论 |
 |---|---|
 | 现在有没有「本地歌单」这个概念？ | **完全没有**。全仓只有**一句注释**提到它「尚不存在」 |
-| 那现在的「歌单」是什么？ | **两个远程歌单的本地镜像**：网易云（**只在内存** `ContentCache`，不落盘曲目）+ QQ（落盘 `ncrust_qq_playlists`，**只读**） |
+| 那现在的「歌单」是什么？ | **两个远程歌单的本地镜像**：ncm（**只在内存** `ContentCache`，不落盘曲目）+ QQ（落盘 `ncrust_qq_playlists`，**只读**） |
 | 本地存储用什么？ | **SharedPreferences + Gson**。全仓**没有 Room**，没有 DataStore |
 | 现有 `PlaylistTrack` 能不能直接扩展？ | **不能**。它是**远程镜像**的行，语义是「服务端第 n 首」；塞 `tombstoned` 进去会让「镜像」与「用户意图」两套语义纠缠。本版**另建** `LocalPlaylistTrack` |
-| 有没有现成的本地编辑路径？ | **没有**。`PlaylistEditApi` 是**网易云远程写**（`/eapi/playlist/...`），与本地存储无关；QQ 侧连远程写都没有 |
+| 有没有现成的本地编辑路径？ | **没有**。`PlaylistEditApi` 是**ncm 远程写**（`/eapi/playlist/...`），与本地存储无关；QQ 侧连远程写都没有 |
 | 有没有可复用的迁移范式？ | **有**。`PlaylistCacheCodec`（v2.2.0）就是为此写的：DTO + `SCHEMA_VERSION` + 显式构造 + 丢弃式迁移 + 单测 |
 
 ---
@@ -21,7 +21,7 @@
 ```bash
 $ grep -rn "本地歌单\|localPlaylist\|LocalPlaylist\|local_playlist" app/src/main/java --include=*.kt
 app/src/main/java/com/takahashirinta/ncrust/qq/QqMusicSourceProvider.kt:38:
- *   - 不把 QQ 歌曲加进网易云歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
+ *   - 不把 QQ 歌曲加进ncm歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
 ```
 
 **唯一一处命中是一句注释**（v2.1.0 写的），它明确说这个概念**尚不存在**。
@@ -29,7 +29,7 @@ app/src/main/java/com/takahashirinta/ncrust/qq/QqMusicSourceProvider.kt:38:
 
 ## 2. 当前「歌单」的两条链路（都是远程镜像）
 
-### 2.1 网易云：**内存镜像，曲目不落盘**
+### 2.1 ncm：**内存镜像，曲目不落盘**
 
 | 环节 | 实现 | 是否落盘 |
 |---|---|---|
@@ -39,9 +39,9 @@ app/src/main/java/com/takahashirinta/ncrust/qq/QqMusicSourceProvider.kt:38:
 
 证据：`PlaylistDetailScreen.kt:74` 读的是 `ContentCache`（`cache/ContentCache.kt` 是
 「in-memory snapshot (not persistence)」，见 AGENTS.md）；全仓
-`getSharedPreferences` 的调用点里没有任何一个属于网易云歌单。
+`getSharedPreferences` 的调用点里没有任何一个属于 ncm 歌单。
 
-### 2.2 QQ 音乐：**落盘镜像，只读**
+### 2.2 qm：**落盘镜像，只读**
 
 `QqPlaylistStore`（v2.2.0）把 QQ 歌单列表与详情写进
 `ncrust_qq_playlists`（`Context.MODE_PRIVATE`）：

@@ -810,7 +810,7 @@ export interface AudioStreamUrlRequestParams {
 
 `src/service/request/wbi-sign.ts`：`mixinKeyEncTab` 与本文 §3 相同，用 `spark-md5` + `encodeURIComponent`（空格→`%20`）；调用处 `player-playurl.ts` → `/x/player/wbi/playurl` 带 `useWbi: true`。
 
-歌词：`electron/ipc/api/lrclib-lyric.ts`（LRCLIB）+ `netease-lyric.ts`（网易云）—— **不用 B站自己的歌词**。
+歌词：`electron/ipc/api/lrclib-lyric.ts`（LRCLIB）+ `netease-lyric.ts`（ncm）—— **不用 B站自己的歌词**。
 
 ---
 

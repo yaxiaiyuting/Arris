@@ -7,7 +7,7 @@ content-desc="未在播放" checkable="false" checked="false" clickable="true" e
 
 同一时刻的会话（应用确实在播、且标题就是歌词行）:
 
-## 2. A/B：官方网易云（第三方应用）在同一张卡上正常
+## 2. A/B：官方 ncm（第三方应用）在同一张卡上正常
 
 content-desc="The Final Countdown Europe"
 
@@ -33,7 +33,7 @@ content-desc="喜欢你 BEYOND"
 
 ## 6. 清单差异
 
-  官方网易云: <receiver ...MediaButtonEventReceiver> with action android.intent.action.MEDIA_BUTTON (priority MAX)
+  官方 ncm: <receiver ...MediaButtonEventReceiver> with action android.intent.action.MEDIA_BUTTON (priority MAX)
   华为音乐:   MediaButtonIntentReceiver
   Ncrust 修复前: 清单里 receiver 数量 = 0
   Ncrust 修复后: androidx.media3.session.MediaButtonReceiver + MEDIA_BUTTON（已进包，见 aapt2 xmltree）

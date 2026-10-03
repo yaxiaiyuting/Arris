@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -225,17 +225,17 @@ class NetTimingProbeTest {
         }
 
         val targets: List<Pair<String, Request>> = listOf(
-            // 网易云：搜索（用户报告「慢」的那条路）
+            // ncm：搜索（用户报告「慢」的那条路）
             "netease.search" to get("https://music.163.com/api/cloudsearch/pc?s=%E6%99%B4%E5%A4%A9&type=1&limit=10"),
-            // 网易云：取链（播放关键路径）
+            // ncm：取链（播放关键路径）
             "netease.songurl" to post(
                 "https://interface3.music.163.com/eapi/song/enhance/player/url/v1",
                 "params=probe",
                 "https://music.163.com/",
             ),
-            // 网易云：歌词（REST）
+            // ncm：歌词（REST）
             "netease.lyric" to get("https://music.163.com/api/song/lyric?id=186016&lv=-1&kv=-1&tv=-1"),
-            // QQ 音乐：搜索
+            // qm：搜索
             "qq.search" to post(
                 "https://u.y.qq.com/cgi-bin/musicu.fcg",
                 "{\"comm\":{\"ct\":24,\"cv\":0},\"req\":{\"module\":\"music.search.SearchCgiService\",\"method\":\"DoSearchForQQMusicDesktop\",\"param\":{\"query\":\"晴天\",\"num_per_page\":10,\"page_num\":1}}}",
@@ -307,12 +307,12 @@ class NetTimingProbeTest {
     /**
      * B 站请求头 A/B 对照（v3.1.0 · P1 接入前的**必做**一步）。
      *
-     * 第一轮探针里 B 站三条 URL **全部 HTTP 403**，而同一台设备上的网易云/QQ 都是 200。
+     * 第一轮探针里 B 站三条 URL **全部 HTTP 403**，而同一台设备上的 ncm/QQ 都是 200。
      * 唯一可疑的差异是探针给**所有**请求都带了 `Referer: https://music.163.com/` ——
-     * 拿网易云的 Referer 去请求 B 站，是最典型的「跨站来源」形状。
+     * 拿 ncm 的 Referer 去请求 B 站，是最典型的「跨站来源」形状。
      *
      * 本用例把「Referer / Origin / UA」三件事分开对照，回答：
-     * **B 站接入能不能复用网易云那个 `CookieInterceptor`（它无条件注入网易云 Referer）？**
+     * **B 站接入能不能复用 ncm 那个 `CookieInterceptor`（它无条件注入 ncm Referer）？**
      */
     @Test
     fun probeBiliHeaders() {

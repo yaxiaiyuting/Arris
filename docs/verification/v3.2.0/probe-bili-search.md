@@ -45,7 +45,7 @@
 9. ⇒ `BiliParse.parseSearchTracks("")` 解析空串 ⇒ `emptyList()` ⇒ `searchVideos` 记
    `"search '…' -> 0 条（正文长度=0）"`（`:300`）
 10. ⇒ `SourceCounts(biliCount=0, biliStatus=DONE)`（`SearchViewModel.kt:362-363`、`:413-414`）
-    ⇒ 统计行显示 `网易云 N 首 · QQ 音乐 M 首 · B站 0 首`（`SourceCounts.kt:108-114`）
+    ⇒ 统计行显示 `ncm N 首 · qm M 首 · B站 0 首`（`SourceCounts.kt:108-114`）
 
 **一句话**：HTTP 请求**从未发出**，所以「0 条」既不是接口返回的 0，也不是解析丢弃的 0。
 用户看到的「B站 0 首」是一句由**被吞掉的平台异常**伪造出来的结论，全程没有任何错误提示。
@@ -140,8 +140,8 @@
   （`MusicSource.kt:221`、`:236-238`）；视频搜索结果没有 auid ⇒ 用 `aid`
 - `trackKey = SourceIds.trackKey(musicSource, id)` = `"bilibili:<id>"`（`SongSourceExt.kt:35-36`、`MusicSource.kt:121`）
 - `SongItem.musicSource` 读的是 `source` 字符串（`SongSourceExt.kt:20-21`），而 `toSongItem` 写死了
-  `MusicSource.BILIBILI.key` ⇒ 音源不会回落成网易云
-- **key 唯一性**：三个音源的值域互不重叠（网易云裸 songId < 2^40；QQ = 位 62；B站 = 位 61）
+  `MusicSource.BILIBILI.key` ⇒ 音源不会回落成 ncm
+- **key 唯一性**：三个音源的值域互不重叠（ncm 裸 songId < 2^40；QQ = 位 62；B站 = 位 61）
   ⇒ `itemsIndexed(visibleSongs, key = { _, item -> item.id })`（`SearchScreen.kt:559`）
   不会抛 `IllegalArgumentException: Key was already used`；
   `publish()` 的 `distinctBy { it.trackKey }`（`SearchViewModel.kt:175`）只去掉 (source,id) 完全相同的行。

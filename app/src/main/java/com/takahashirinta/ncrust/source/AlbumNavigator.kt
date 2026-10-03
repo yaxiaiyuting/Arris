@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -39,7 +39,7 @@ sealed interface AlbumNav {
      *
      * @property source 目标音源。**构造它的唯一入口是 [AlbumNavigator]**，
      *   且恒等于歌曲自己的音源（见 [AlbumNavigator.resolve] 的不变量）。
-     * @property id 该音源内的**字符串**身份：网易云是十进制专辑 id，QQ 音乐是
+     * @property id 该音源内的**字符串**身份：ncm 是十进制专辑 id，qm 是
      *   `albumMID`。恒满足 [AlbumNavigator.idDomainMatches]。
      */
     data class Direct(val source: MusicSource, val id: String) : AlbumNav
@@ -78,7 +78,7 @@ enum class AlbumNavReason {
     /**
      * 只有**数字** id、没有该源可用的字符串身份 —— 本 P0 的确切形状。
      *
-     * QQ 曲目只有 `album.id`（QQ 域数字）时，唯一能"用"它的方式是把它当网易云
+     * QQ 曲目只有 `album.id`（QQ 域数字）时，唯一能"用"它的方式是把它当 ncm
      * 专辑 id 查，而实测那样会跳到**另一张真专辑**（陈奕迅 `22276` → 陈小云
      * 《百万金曲 陈小云2 苦恋梦 免失志》）。宁可跳搜索。
      */
@@ -105,13 +105,13 @@ enum class AlbumNavReason {
  * | ① 映射层丢掉源内字符串身份 | `singer[].mid` 被丢 | `album.mid` 只用于拼封面 |
  * | ② 跳转层不看 `song.musicSource` | 只读 `artists[0].id` | 只读 `album.id` |
  * | ③ 老路由 source 写死 | `artist/{id}` → `NETEASE` | `album/{id}` → `NETEASE` |
- * | ④ 身份不可信时静默失败 | 补 id 回落打**网易云**接口 ⇒ 查空 | **连回落都没有** ⇒ 直接 no-op |
+ * | ④ 身份不可信时静默失败 | 补 id 回落打**ncm**接口 ⇒ 查空 | **连回落都没有** ⇒ 直接 no-op |
  *
  * 真机实测（PCL110 / S6，v2.6.0 与 v2.6.1）同一条菜单项的两种错法：
  *
  * | 当前歌曲的数据来源 | `song.album` 的形状 | 点「转到专辑」的结果 |
  * |---|---|---|
- * | 搜索结果里**新鲜**加载的 QQ 曲目 | `{id:22276, mid:"004Z85XP1c25b7", name:"What's Going On...?"}` | 跳到**《百万金曲 陈小云2 苦恋梦 免失志》**（网易云 22276） |
+ * | 搜索结果里**新鲜**加载的 QQ 曲目 | `{id:22276, mid:"004Z85XP1c25b7", name:"What's Going On...?"}` | 跳到**《百万金曲 陈小云2 苦恋梦 免失志》**（ncm 22276） |
  * | **老队列 / 冷启动恢复**的 QQ 曲目 | `{picUrl:"…T002R500x500M000002Neh8l0uciQZ_3.jpg"}` | **毫无反应**（静默失败） |
  *
  * ## 三条不变量（改这个文件之前先读）
@@ -119,7 +119,7 @@ enum class AlbumNavReason {
  * 1. **绝不产出与歌曲音源不同的 [AlbumNav.Direct]**。跨源跳转不在本应用的
  *    产品范围内；把它排除在类型之外，比在实现里小心不提更可靠。
  * 2. **身份必须过值域闸门**（[idDomainMatches]，实现是 [SourceIdDomain.matches]）。
- *    QQ 的专辑字符串身份是 base62 的 `albumMID`，网易云是十进制 id —— 形状不同，
+ *    QQ 的专辑字符串身份是 base62 的 `albumMID`，ncm 是十进制 id —— 形状不同，
  *    所以「拿数字 QQ albumID 当专辑身份用」这种错法在**闸门**上就被拦下。
  *    闸门还顺带挡住了 QQ 的 `pmid`（封面照片 id，含 `_`）—— 它**不是**身份。
  * 3. **置信度不足一律跳搜索**（[crossSourceJump]）。即便将来真要做跨源跳转，
@@ -128,23 +128,23 @@ enum class AlbumNavReason {
  *
  * ## 为什么名字不能当身份
  *
- * 与艺人那条同一依据：v2.4.0 已实测「同名仿冒」真实存在（网易云上的同名艺人
+ * 与艺人那条同一依据：v2.4.0 已实测「同名仿冒」真实存在（ncm 上的同名艺人
  * 把真身判成 `NONE`）。专辑一侧更明显 —— 本次真机复现里 QQ《富士山下》与
- * 网易云《富士山下》的专辑名在**归一化前**就不相等（`What's Going On...?`
+ * ncm《富士山下》的专辑名在**归一化前**就不相等（`What's Going On...?`
  * vs `What's Going On…?`，一个是三个点、一个是省略号）。
  * 所以 [AlbumItem.name] 在这里**只**用来生成搜索关键词，**从不**参与
  * [AlbumNav.Direct] 的构造。
  */
 object AlbumNavigator {
 
-    /** 网易云 id 值域上界的别名（真正的定义在 [SourceIdDomain]，见那里的 KDoc）。 */
+    /** ncm id 值域上界的别名（真正的定义在 [SourceIdDomain]，见那里的 KDoc）。 */
     const val NETEASE_ID_MAX: Long = SourceIdDomain.NETEASE_ID_MAX
 
     /**
      * 这个 id 是不是 [source] 域内的合法**字符串**身份。
      *
      * v2.6.2：实现委托 [SourceIdDomain.matches] —— 值域判据只有**一份**，
-     * 艺人页与专辑页共用。两个源的性质（网易云十进制 / QQ base62 mid）不因
+     * 艺人页与专辑页共用。两个源的性质（ncm 十进制 / QQ base62 mid）不因
      * 被跳的是艺人还是专辑而改变，抄第二份只会得到一处会漂移的规则。
      */
     fun idDomainMatches(source: MusicSource, id: String?): Boolean =
@@ -155,7 +155,7 @@ object AlbumNavigator {
      *
      * 语义是「本源内有没有一个过了值域闸门的字符串身份」：
      *
-     * - 网易云：`album.id` 转成十进制串后过闸门；
+     * - ncm：`album.id` 转成十进制串后过闸门；
      * - QQ：`album.mid`（albumMID）过闸门 ——
      *   **`null` 就是「身份不可信」**：它同时覆盖「本字段出现之前的旧数据」
      *   与「服务端这次没给」，而两者的正确处置是同一个（跳搜索）。
@@ -171,11 +171,11 @@ object AlbumNavigator {
     /**
      * 取 [source] 域内的**字符串身份**；没有就返回 null。
      *
-     * 这是「哪个字段是身份」的**唯一**落点：网易云看 `album.id`，
+     * 这是「哪个字段是身份」的**唯一**落点：ncm 看 `album.id`，
      * QQ 看 `album.mid`。写成函数而不是让到处 `when (source)`，是为了让
      * 将来再加一个源时**编译期**就能看到这里要改（`when` 是穷尽的）。
      *
-     * ⚠️ QQ 一侧**只认 `mid`**：`album.id` 是 QQ 域数字（拿它去网易云查就是本 P0），
+     * ⚠️ QQ 一侧**只认 `mid`**：`album.id` 是 QQ 域数字（拿它去 ncm 查就是本 P0），
      * `picUrl` 里那串 pmid 是封面照片 id（服务端碰巧能容忍，但不是契约）。
      */
     fun albumIdentityOf(source: MusicSource, album: AlbumItem?): String? {
@@ -198,7 +198,7 @@ object AlbumNavigator {
      *
      * 与 [ArtistNavigator.crossSourceJump] 同形。探针结论：v2.6.2 的这条 P0
      * **没有**走 v2.4.0 的跨源匹配 —— 它连匹配都没做，直接把 QQ 的数字 albumID
-     * 交给了网易云路由。所以本函数在当前代码里恒返回 null（没有可用的跨源结论）。
+     * 交给了 ncm 路由。所以本函数在当前代码里恒返回 null（没有可用的跨源结论）。
      * 保留它是因为**下一处**跨源跳转一定会用到它，而「阈值写在调用方」正是
      * v2.4.0 铁律 2 点名要避免的形状。
      *
@@ -226,7 +226,7 @@ object AlbumNavigator {
         val source = song.musicSource
         val album = song.album
 
-        // 本源内的字符串身份优先 → 直接跳。网易云看 id，QQ 看 albumMID。
+        // 本源内的字符串身份优先 → 直接跳。ncm 看 id，QQ 看 albumMID。
         val sameSourceId = albumIdentityOf(source, album)
         if (idDomainMatches(source, sameSourceId)) {
             return AlbumNav.Direct(source, sameSourceId!!.trim())
@@ -235,7 +235,7 @@ object AlbumNavigator {
         // 走到这里说明**本源内**没有可用身份。两条降级路都不许猜：
         //
         //  · QQ 曲目只剩 `album.id`（QQ 域数字）时，唯一能"用"它的方式就是拿它去
-        //    网易云查 —— 那正是本 P0（22276 → 陈小云）。它属于「只有跨源猜才能用」
+        //    ncm 查 —— 那正是本 P0（22276 → 陈小云）。它属于「只有跨源猜才能用」
         //    的身份，因此必须过 [crossSourceJump] 闸门；而探针结论是这条路上没有
         //    任何可用的匹配结论（`MatchCacheStore` 的键是 `(source, id)`，
         //    数字 albumID 不是任何一个源的有效键）⇒ 一律跳搜索。

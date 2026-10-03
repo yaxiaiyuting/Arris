@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -34,7 +34,7 @@ import org.junit.Test
  *
  * `docs/verification/v2.5.3/probe-queue-dedup.md` 实测：
  *  · 全部 QQ 曲目的 id 都由 [SourceIds.qqId] 产出，bit62 恒置位，
- *    与网易云的 id 区间**结构性不相交**；
+ *    与 ncm 的 id 区间**结构性不相交**；
  *  · 抽样 1000 首双源配对，裸 id 跨源冲突 **0** 次；
  *  · 队列快照落盘的是整个 `SongItem`（含 `source`/`mid`/`media_id`），
  *    **没有需要迁移的旧 key 形状**。
@@ -71,7 +71,7 @@ class QueueKeysTest {
     // ---------------------------------------------------------------- 身份
 
     @Test
-    fun `身份含音源 - 网易云的 123 与 QQ 的 123 是两首歌`() {
+    fun `身份含音源 - ncm的 123 与 QQ 的 123 是两首歌`() {
         // TrackKey 的相等性只看 (source, id) —— 这是全部队列判重的地基。
         assertNotEquals(TrackKey(MusicSource.NETEASE, 123L), TrackKey(MusicSource.QQMUSIC, 123L))
         assertNotEquals(
@@ -95,7 +95,7 @@ class QueueKeysTest {
             id = synthId, name = "丢了 source 的 QQ 曲目",
             artists = null, album = null, duration = null, source = null,
         )
-        assertEquals(MusicSource.NETEASE, sourceLost.musicSource)      // ← 字符串口径：认成网易云
+        assertEquals(MusicSource.NETEASE, sourceLost.musicSource)      // ← 字符串口径：认成 ncm
         assertEquals(MusicSource.QQMUSIC, sourceLost.trackKeyOf().source) // ← 结构性口径：认出 QQ
         assertEquals(TrackKey.fromSong(sourceLost).source, MusicSource.NETEASE) // 记录旧口径的差异
     }
@@ -159,7 +159,7 @@ class QueueKeysTest {
         val qqKey = TrackKey(MusicSource.QQMUSIC, 123L)
         assertNotEquals(ne, qqKey)
 
-        // 队列里同时有这两首 ⇒ 加第三首（网易云 123）只应去重网易云那一份。
+        // 队列里同时有这两首 ⇒ 加第三首（ncm 123）只应去重 ncm 那一份。
         val queue = listOf(ne, qqKey)
         val after = QueueKeys.dedupe(queue, ne) + ne
         assertEquals(listOf(qqKey, ne), after)
@@ -179,7 +179,7 @@ class QueueKeysTest {
 
     @Test
     fun `真实的双源队列可以同时装下两首同号歌`() {
-        // 端到端形状：网易云 123 与 QQ 的 123 同时进队列，两首都在。
+        // 端到端形状：ncm 123 与 QQ 的 123 同时进队列，两首都在。
         val ne = netease(123)
         val qqPlain = qqWithPlainId(123)
         val songs = listOf(ne, qqPlain)
@@ -263,8 +263,8 @@ class QueueKeysTest {
      * `TrackKey` 可以直接从既有字段算出来，没有任何「旧 key 形状」需要翻译。
      *
      * 而 v2.1.0 **之前**写入的条目没有 `source` 字段，Gson 走 Unsafe 反序列化
-     * 不调用构造函数 ⇒ 读到 `null` ⇒ `MusicSource.fromKey(null)` 回落网易云。
-     * 那正是老数据的正确解释（那时候只有网易云），本版**保持**这个语义。
+     * 不调用构造函数 ⇒ 读到 `null` ⇒ `MusicSource.fromKey(null)` 回落 ncm。
+     * 那正是老数据的正确解释（那时候只有 ncm），本版**保持**这个语义。
      */
     @Test
     fun `持久化队列的形状 - 老 JSON 直接可用 无需迁移`() {
@@ -304,7 +304,7 @@ class QueueKeysTest {
         val mid = "0039MnYb0qxYhV"
         val synth = SourceIds.qqId(123L, mid)
         val json = """
-            [{"id":123,"name":"老网易云"},
+            [{"id":123,"name":"老 ncm"},
              {"id":$synth,"name":"新 QQ","source":"qqmusic","mid":"$mid"}]
         """.trimIndent()
         val queue: List<SongItem> = gson.fromJson(json, listType)
@@ -348,7 +348,7 @@ class QueueKeysTest {
         val ne = netease(123)
         val q = qq(123)
 
-        // mediaId 里编了音源：网易云 song:123 / QQ song:qqmusic:<synth>
+        // mediaId 里编了音源：ncm song:123 / QQ song:qqmusic:<synth>
         assertEquals("song:123", PreloadSlot.mediaIdFor(MusicSource.NETEASE, ne.id, "http://x"))
         assertEquals(
             "song:qqmusic:${q.id}",
@@ -399,7 +399,7 @@ class QueueKeysTest {
      */
     @Test
     fun `随机模式 - 跨源插入后的排列仍然合法`() {
-        // 队列：网易云1, QQ1(合成), 网易云2, 网易云3 —— 4 首，当前 = 网易云1
+        // 队列：ncm1, QQ1(合成), ncm2, ncm3 —— 4 首，当前 = ncm1
         val songs = listOf(netease(1), qq(1), netease(2), netease(3))
         val oldKeys = QueueKeys.keysOf(songs)
         assertEquals(4, oldKeys.size)
@@ -411,7 +411,7 @@ class QueueKeysTest {
         assertEquals(5, plan.keys.size)
         assertFalse(QueueKeys.hasDuplicates(plan.keys))
 
-        // 编排：下标 0,2,3,1（= 网易云1, 网易云2, 网易云3, QQ1）
+        // 编排：下标 0,2,3,1（= ncm1, ncm2, ncm3, QQ1）
         val shuffled = listOf(0, 2, 3, 1)
         val fixed = QueueInsert.shuffleAfterInsert(
             oldKeys = oldKeys,

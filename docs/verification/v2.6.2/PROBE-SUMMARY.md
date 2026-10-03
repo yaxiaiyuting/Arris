@@ -11,7 +11,7 @@
 
 ### 1.1 最短复现路径（用户报告的路径）
 
-> 搜索 `Eason Chan` → 结果里同时出现网易云与 QQ 两条同名曲目 → **长按 QQ 那一行** →
+> 搜索 `Eason Chan` → 结果里同时出现 ncm 与 QQ 两条同名曲目 → **长按 QQ 那一行** →
 > 二级菜单 → 点「转到专辑」→ 落地页是**另一张真专辑**
 
 | 设备 | 版本 | 曲目（QQ） | QQ `album.id` | 落地页 | 稳定性 |
@@ -20,13 +20,13 @@
 | S6（三星 G9209 / Android 7.0） | `v2.6.0-gpl` (48) | 富士山下 / 陈奕迅《What's Going On...?》 | `22276` | **《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云** | **2/2** |
 
 **两台设备落到两张不同的错专辑** ⇒ 排除"某个写死的 fallback 值"，
-指向"QQ 的数字 id 恰好命中了网易云的哪张专辑"。
+指向"QQ 的数字 id 恰好命中了 ncm 的哪张专辑"。
 
 原始证据：
 `screenshots/before-pcl-01-qq-song-menu.png` → `before-pcl-02-goto-album-result.png`；
 `screenshots/before-s6-01-qq-song-menu.png` → `before-s6-02-goto-album-result.png`；
 语义树 `probe-raw/s6-before-menu-tree.txt`、`probe-raw/s6-before-album-tree.txt`；
-`logcat-before-pcl-album-jump.txt`（`/api/v1/album/7879` —— QQ 的 album id 打在网易云的接口上）。
+`logcat-before-pcl-album-jump.txt`（`/api/v1/album/7879` —— QQ 的 album id 打在 ncm 的接口上）。
 
 ### 1.2 第二种症状：**点了没反应**
 
@@ -48,8 +48,8 @@ S6 真机上**真实存在**的队列条目（`probe-raw/s6-persisted-qq-queue-e
 
 | 点的是哪一行 | 菜单里的曲目头 | 落地页 | 结果 |
 |---|---|---|---|
-| QQ 音乐《富士山下》 | 陈奕迅 / `What's Going On...?` | 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云 | ✗ **错专辑** |
-| 网易云《富士山下》 | 陈奕迅 / `What's Going On…?` | 《What's Going On…?》/ 陈奕迅（17 首） | ✓ **正确** |
+| qm《富士山下》 | 陈奕迅 / `What's Going On...?` | 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云 | ✗ **错专辑** |
+| ncm《富士山下》 | 陈奕迅 / `What's Going On…?` | 《What's Going On…?》/ 陈奕迅（17 首） | ✓ **正确** |
 
 ---
 
@@ -77,10 +77,10 @@ S6 真机上**真实存在**的队列条目（`probe-raw/s6-persisted-qq-queue-e
    `qq/QqCatalog.kt:343-352` 是第二条同形的映射链路。
 2. `MainActivity.resolveAndNavigate` 的专辑分支只读 `song.album?.id`，**从不读 `song.musicSource`**。
 3. 老路由 `album/{albumId}`（`NavType.LongType`）的 composable 把 `sourceKey` **写死**成
-   `MusicSource.NETEASE` —— QQ 的数字 album id 于是被拿去查网易云。
+   `MusicSource.NETEASE` —— QQ 的数字 album id 于是被拿去查 ncm。
 
-> **两个编号空间互不相通**：周杰伦《叶惠美》QQ `8220` vs 网易云 `18905`；
-> 陈奕迅《What's Going On...?》QQ `22276` vs 网易云 `6451`。
+> **两个编号空间互不相通**：周杰伦《叶惠美》QQ `8220` vs ncm `18905`；
+> 陈奕迅《What's Going On...?》QQ `22276` vs ncm `6451`。
 > 拿一个去查另一个不是"查不到"，而是**查到另一张真专辑**：
 > `22276` → 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云（页面看起来完全正常）。
 
@@ -124,10 +124,10 @@ coroutineScope.launch(Dispatchers.IO) {
 
 | 问题 | 答案 |
 |---|---|
-| 只有 QQ？ | **是。** 网易云曲目的 `album.id` 就是网易云专辑 id，老路由写死的源恰好正确（真机 A/B 已回归，无回归） |
+| 只有 QQ？ | **是。** ncm 曲目的 `album.id` 就是 ncm 专辑 id，老路由写死的源恰好正确（真机 A/B 已回归，无回归） |
 | 有几个入口？ | **动作 1 个、宿主页面 9 个、出口 1 个**（首页 / 库页 / 搜索 / 歌单 / QQ 歌单 / 本地歌单 / 专辑 / 艺人 / 播放器卡）。全树只有 `MainActivity.kt:2613` 一处构造这个动作（§2.6） |
 | 只有二级菜单？ | **是**（与艺人不同：艺人另有"播放页托盘作者名"这个第二出口，专辑没有） |
-| 只有陈奕迅？ | **不是。** 撞号与否取决于 QQ 的数字 id 落在网易云哪张专辑上。四个样本里 **2 首撞到真人**（陈奕迅两首）、**3 张 404**（周杰伦/林俊杰/邓紫棋各一） |
+| 只有陈奕迅？ | **不是。** 撞号与否取决于 QQ 的数字 id 落在 ncm 哪张专辑上。四个样本里 **2 首撞到真人**（陈奕迅两首）、**3 张 404**（周杰伦/林俊杰/邓紫棋各一） |
 | 哪些数据形态会中招 | ① 新鲜加载的 QQ 曲目 ⇒ **跳错专辑**；② 老队列/老缓存/冷启动恢复/搜索历史重开 ⇒ **静默无反应** |
 | 严重度排序 | **跳错专辑最严重**：页面正常渲染（封面/发行日期/厂牌/曲目数）⇒ 用户会以为"这个应用的专辑数据整体是错的"（铁律 15：跳转错误比找不到更严重） |
 
@@ -143,7 +143,7 @@ coroutineScope.launch(Dispatchers.IO) {
    **类型上就不存在「跳到另一个源」**。
 3. **值域闸门抽成唯一落点** `source/SourceIdDomain.kt`（v2.6.1 的
    `ArtistNavigator.idDomainMatches` 改为委托它，**行为零变化**、原单测原样通过）：
-   网易云吃十进制、QQ 吃 base62 mid。
+   ncm 吃十进制、QQ 吃 base62 mid。
 4. **置信度闸门**：`crossSourceJump(confidence, targetSource, targetId)` 要求
    `MatchConfidence.mergeable`（全应用唯一阈值）**且**目标值域合法；任一不满足 ⇒ 跳搜索。
 5. **兜底跳搜索**：身份不可信时切到搜索 tab 并预填关键词，**并给一句提示**
@@ -164,7 +164,7 @@ coroutineScope.launch(Dispatchers.IO) {
 | `probe-album-jump.md` | 真机复现步骤、同机 A/B、老缓存溯源、**WGR-W09 未取到干净复现的诚实记录** |
 | `probe-logcat.md` | 「修复前这条路径零日志」的取证与可重跑命令；修复后应出现的日志 |
 | `probe-raw/probe-album-id-collision.*` | 接口取证：QQ `album` 对象的字段集 + 三个身份候选 |
-| `probe-raw/probe-album-cross-domain.out.txt` | 接口取证：QQ 数字 id → 网易云专辑的撞号矩阵（含两例"跳到另一张真专辑"） |
+| `probe-raw/probe-album-cross-domain.out.txt` | 接口取证：QQ 数字 id → ncm 专辑的撞号矩阵（含两例"跳到另一张真专辑"） |
 | `probe-raw/probe-album-detail-identity.out.txt` | 接口取证：QQ 专辑接口按 `mid` 命中、按数字 id 报 `104400` |
 | `probe-raw/s6-persisted-qq-queue-entry.json` | 真机上"老缓存"QQ 队列条目的原文（`al` 只有 `picUrl`） |
 | `screenshots/` | 修复前截图（两台设备 × 菜单/落地页） |

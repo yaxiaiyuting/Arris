@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -184,8 +184,8 @@ class LyricLoadCoordinator {
      *
      * ## 为什么 key 里没有音源段（以及对「按 source 隔离」的交代）
      *
-     * v2.1.0 起 QQ 音乐的数字 id 被 [com.takahashirinta.ncrust.source.SourceIds.qqId]
-     * 抬到 `1L shl 62` 以上，而网易云的 id 是百万~十亿量级（远小于 `2^40`）。
+     * v2.1.0 起 qm 的数字 id 被 [com.takahashirinta.ncrust.source.SourceIds.qqId]
+     * 抬到 `1L shl 62` 以上，而 ncm 的 id 是百万~十亿量级（远小于 `2^40`）。
      * 两个 id 空间**结构性不相交**，所以 `id.toString()` 这个既有形状本身就已经按音源隔离了
      * —— 这不是推断，[LyricLoadCoordinatorTest] 用边界值把它钉死了。
      *

@@ -98,7 +98,7 @@ bili-status-code: 0
 | 头 | 是否发送 | 证据 |
 |---|---|---|
 | `User-Agent` | ✅ | `BiliApi.kt:335` `.header("User-Agent", UA)` |
-| `Referer: https://www.bilibili.com/` | ✅ | `:336`；`REFERER` 常量在 `:158`，注释明确写了「**绝不能是网易云那个**」 |
+| `Referer: https://www.bilibili.com/` | ✅ | `:336`；`REFERER` 常量在 `:158`，注释明确写了「**绝不能是 ncm 那个**」 |
 | `Origin: https://www.bilibili.com` | ✅ | `:337` |
 | `Cookie` | ❌（设计如此） | `getRaw` 只在 `cookieHeader` 非空时加；generate 不传 —— 与 v3.2.0 探针「generate 无 Set-Cookie、不需要 CookieJar」一致，**且在线抓取证明匿名可通** |
 

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
  * 正好等于「没有 TTML」—— 既不崩，也不会被误判成新鲜数据。
  *
  * [romalrc] / [translationSource] / [romanSource] 是 v1.9.2 新增的，**同一条规矩**（可空 + 默认值）：
- * - [romalrc]：网易云音译轨原文。它本来就在 `/api/song/lyric` 的响应里（实测 `rv=0` 与 `rv=-1`
+ * - [romalrc]：ncm 音译轨原文。它本来就在 `/api/song/lyric` 的响应里（实测 `rv=0` 与 `rv=-1`
  *   对同一首歌返回逐字节相同的 body），v1.9.2 之前只是没有解析；
  * - [translationSource] / [romanSource]：译文轨 / 音译轨**上一次实际展示用的源**
  *   （[LyricTrackSource] 的枚举名，见 [LyricTrackSource.cacheTag]）。
@@ -265,7 +265,7 @@ object LyricsCache {
      * 为什么需要它：LRC 条目**没有 TTL**（只有 200 条的 LRU 上限），所以 v1.9.1 及更早写下的条目
      * 会一直躺在盘上、`romalrc` 一直是 null。若照旧当命中用，音译回退对升级用户就**永远不生效** ——
      * 真机实测（PCL110，装着 v1.9.1 时期的缓存）：64 条里 63 条没有这个字段，1959528822 因此只拿到
-     * TTML 的 16 行音译，而网易云那 41 行 romalrc 明明在服务端、却一直用不上。判据用「字段缺失」
+     * TTML 的 16 行音译，而 ncm 那 41 行 romalrc 明明在服务端、却一直用不上。判据用「字段缺失」
      * 而不是「字段为空」：空串是「这首歌确实没有音译」的权威结论（v1.9.2 会写下去），缺失才是「没记过」。
      *
      * 条目为 null（本来就要打网络）返回 false。

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -229,7 +229,7 @@ class MatchCacheCodecTest {
     // ------------------------------------------------------------------ key ----
 
     @Test
-    fun `缓存 key 里必须有音源（网易云的 6452 与 QQ 的 6452 是两个东西）`() {
+    fun `缓存 key 里必须有音源（ncm的 6452 与 QQ 的 6452 是两个东西）`() {
         assertEquals("artist:netease:6452",
             MatchCacheKeys.artist(ArtistKey(MusicSource.NETEASE, "6452", "周杰伦")))
         assertEquals("artist:qqmusic:6452",

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -249,7 +249,7 @@ fun QqPlaylistDetailScreen(
                 }
             }
         }
-        // 复用既有 SongCard（与网易云歌单详情同一套行组件）—— 不另写一套列表行。
+        // 复用既有 SongCard（与 ncm 歌单详情同一套行组件）—— 不另写一套列表行。
         itemsIndexed(songs, key = { i, s -> "t-$i-${s.id}" }) { _, song ->
             SongCard(
                 song = song,

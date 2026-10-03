@@ -1,6 +1,6 @@
 # 探针：聚合搜索「TTFB → 结果上屏」的延迟缺口（v2.5.6）
 
-- 设备：`PLC110`（`3B15CD00GB700000`，Android 16 / API 36，KernelSU root，**网易云 + QQ 音乐双登录**）
+- 设备：`PLC110`（`3B15CD00GB700000`，Android 16 / API 36，KernelSU root，**ncm + qm 双登录**）
   、`WGR-W09`（`WVQ6R22124000968`，Android 12，**未取到有效数据，见 §6**）
   、`SM-G9209`（`0715f763f54c023a`，Android 7.0，**本轮未使用**）
 - 被测包：**`v2.5.5-gpl` / `versionCode = 46`**（`dumpsys package` 实测；三台设备装的都是它，
@@ -40,17 +40,17 @@ QQ 结果从请求发出到上屏 P50 = **2963ms**，其中：
 | 「TTFB 到 UI 更新之间存在需要量化的缺口」 | ⚠️ **成立但极小**：缺口 = 响应体读取 + 解析/映射/排序 + 41.5ms 渲染，**≲10%**，实测到的部分只有 **1.4%** | §3 表 1、表 3 |
 | 「这段缺口是最值得压缩的」 | ❌ **推翻**：98% 的服务端 TTFB 才是主成本；客户端再怎么优化，天花板也只有 ~2% | §3、§4 |
 | 「最可能的真实缺口是搜索响应之后每首歌 N 次额外网络请求（跨源匹配 / simiSong / 详情补全）」 | ❌ **推翻**：搜索链路上**一次额外网络请求都没有**。`CatalogAggregator`/`CrossSourceMatcher` 只被 3 个详情页调用，**不在搜索链路** | §2.4、§4.1 |
-| 「"0 首在屏幕" 花了 2.2~2.7s ⇒ 这就是 time-to-first-result」 | ❌ **读错了**：v2.5.5 探针原文里 **2.2–2.7s 是「假状态『QQ 音乐 0 首』在屏幕上停留的时长」**，不是首条结果上屏耗时。首条结果上屏是 **tap 后 1.17–1.76s**（含 500ms 防抖） | `PROBE-SUMMARY.md:29,205` |
+| 「"0 首在屏幕" 花了 2.2~2.7s ⇒ 这就是 time-to-first-result」 | ❌ **读错了**：v2.5.5 探针原文里 **2.2–2.7s 是「假状态『qm 0 首』在屏幕上停留的时长」**，不是首条结果上屏耗时。首条结果上屏是 **tap 后 1.17–1.76s**（含 500ms 防抖） | `PROBE-SUMMARY.md:29,205` |
 
 ### 0.3 真正值得改的地方（按性价比，详见 §7）
 
 1. **换主通道**：QQ 搜索现在**先用 legacy `client_search_cp`**（TTFB P50 **2905ms**），
    `musicu.fcg` 只做兜底（TTFB P50 **378ms**）⇒ **7.7 倍差距**，且响应体 55KB vs 2.2KB（25 倍）。
    这一条单独就能把 QQ 腿从 ~2.9s 压到 ~0.4s。**本轮实测再次确认（v2.5.5 是 4.6 倍）**。
-2. **解掉「先上屏」对网易云腿的硬阻塞**：首帧上屏被 `neteaseDeferred.await()` 卡住
+2. **解掉「先上屏」对 ncm 腿的硬阻塞**：首帧上屏被 `neteaseDeferred.await()` 卡住
    （`SearchViewModel.kt:230`），**哪怕 QQ 已经先回来了也不发布**。真机实测到
    `elapsed=30006ms netease=0 qq=30`：QQ 数据在 ≤5s 内已经到手，界面却空了 30 秒 ⇒
-   **≥4.5s 已被帧证据证实、完整浪费约 25s（= 网易云 30s 超时 − QQ 5s 预算），全部是客户端的结构性浪费**（§3.4）。
+   **≥4.5s 已被帧证据证实、完整浪费约 25s（= ncm 30s 超时 − QQ 5s 预算），全部是客户端的结构性浪费**（§3.4）。
 3. **补 4 个埋点**（这是让本问题**可测**的前提）：今天从 socket 到状态写入之间**一个时间戳都没有**
    （§2.5）。最小改动 = 给 QQ 搜索的 OkHttp 挂一个 `EventListener`。
 
@@ -154,11 +154,11 @@ SearchViewModel.searchByType(type = 1)                       // :149
                                 SourceRouter.searchSongs(QQMUSIC, keyword, 30) } }
     (netease, neteaseError) = neteaseDeferred.await()         // :230  ★ 首帧上屏的硬闸门
     publish(netease, emptyList())                             // :231  ← 第一次上屏
-    _sourceCounts = SourceCounts(netease…DONE, qq…PENDING)    // :234-239  → 界面「QQ 音乐 搜索中…」
+    _sourceCounts = SourceCounts(netease…DONE, qq…PENDING)    // :234-239  → 界面「qm 搜索中…」
     _isLoading = false                                        // :240  → 转圈到此结束
     qqOutcome = qqDeferred?.await()                           // :243  ← 第二次等待
     if (qq.isNotEmpty() && _query.value == keyword) publish(netease, qq)   // :248-250
-    if (_query.value == keyword) _sourceCounts = …qq 计数…     // :251-263 → 界面「QQ 音乐 N 首」
+    if (_query.value == keyword) _sourceCounts = …qq 计数…     // :251-263 → 界面「qm N 首」
     Log.i("SearchViewModel", "aggregate … elapsed=…ms")        // :270-276 ← 唯一的时间日志
   }
 ```
@@ -167,9 +167,9 @@ SearchViewModel.searchByType(type = 1)                       // :149
 
 | 问 | 答 | 证据 |
 |---|---|---|
-| UI 等两个源吗？ | **不等两个，但等网易云**。`:230` 是发布前的唯一 `await`；QQ 只影响第二次 `publish`（`:248`） | `SearchViewModel.kt:230,243,248` |
-| 有 `awaitAll` 吗？ | **没有**。只有两次顺序 `await`（`:230` 网易云、`:243` QQ） | 同上 |
-| QQ 结果一到就显示吗？ | **不是**。QQ 到手时若网易云还没回来，`publish` **不会**被调用 —— QQ 数据只能干等 `:230` 返回 | §3.4 的 30s 实测 |
+| UI 等两个源吗？ | **不等两个，但等 ncm**。`:230` 是发布前的唯一 `await`；QQ 只影响第二次 `publish`（`:248`） | `SearchViewModel.kt:230,243,248` |
+| 有 `awaitAll` 吗？ | **没有**。只有两次顺序 `await`（`:230` ncm、`:243` QQ） | 同上 |
+| QQ 结果一到就显示吗？ | **不是**。QQ 到手时若 ncm 还没回来，`publish` **不会**被调用 —— QQ 数据只能干等 `:230` 返回 | §3.4 的 30s 实测 |
 
 ### 2.3 两次结果如何合并
 
@@ -249,7 +249,7 @@ tl-t10/logcat.txt:0
 | ④ JSON 解析 / 模型映射 | ❌ 没有（`JSONObject(text)` 在 `QqClient.kt:291`，映射在 `QqSongMapper`） | `QqSongMapper.kt:71-86` |
 | ⑤ UI 状态写入 / 首帧 | ⚠️ 只有 `Log.i` 的**行时刻**可以当「状态已写入」的锚点，**没有**重组/首帧计时 | `SearchViewModel.kt:270-276` |
 
-网易云侧同理，且**更差**：`RetrofitClient` 的网易云 client 只有 debug 才挂 `HttpLoggingInterceptor`
+ncm 侧同理，且**更差**：`RetrofitClient` 的 ncm client 只有 debug 才挂 `HttpLoggingInterceptor`
 （`RetrofitClient.kt:48-51`，`Level.BASIC` 也不含分相耗时），release 里连一条请求日志都没有。
 
 ---
@@ -275,8 +275,8 @@ tl-t10/logcat.txt:0
 |---|---|---|---|
 | QQ 腿（派发 → 状态写入）= `elapsed` | **2923** | 1619 | 3969 |
 | 派发 → QQ 计数上屏 | **2963.5** | 1660 | 4019 |
-| 派发 → 首条结果上屏（网易云） | 616 | 519 | 718 |
-| 「QQ 音乐 搜索中…」窗口 | **2345** | 1097 | 3453 |
+| 派发 → 首条结果上屏（ncm） | 616 | 519 | 718 |
+| 「qm 搜索中…」窗口 | **2345** | 1097 | 3453 |
 | **渲染段（状态写入 → 上屏）** | **41.5** | **36** | **50** |
 
 6/6 样本 `netease=30 qq=30 qqTimedOut=false qqAllowed=true`；`qqTimedOut=false` 全部成立
@@ -292,7 +292,7 @@ tl-t10/logcat.txt:0
 | QQ legacy `client_search_cp`（新连接） | 30 | **3055ms** | 4008ms | **2905ms** | 3870ms | 215ms | 7ms | 55 517 B |
 | QQ legacy（同连接 ×10） | 10 | 2680ms | 3337ms | 2542ms | 3197ms | 0ms | 0ms | — |
 | QQ `musicu.fcg` POST（兜底通道） | 15 | **378ms** | 1689ms | **378ms** | 754ms | 251ms | 1ms | 2 219 B |
-| 网易云 `api/cloudsearch/pc` | 20 | **743ms** | 784ms | **702ms** | 747ms | — | — | 46 353 B |
+| ncm `api/cloudsearch/pc` | 20 | **743ms** | 784ms | **702ms** | 747ms | — | — | 46 353 B |
 
 30/30、15/15、20/20 全部 HTTP 200 且返回非空（`empty_results=0`，QQ `items=30`）。
 
@@ -305,17 +305,17 @@ v2.5.5 实测 legacy TTFB P50 **1722ms**（关键词「晴天」），本轮 **2
 
 | 交叉验证 | 设备实测 | 宿主机同网段 | 差 |
 |---|---|---|---|
-| 网易云腿 + 渲染（派发→上屏） | P50 **616ms** | 网易云 total P50 **743ms** | 设备**比宿主机还快 127ms** ⇒ 网易云结果**一到就上屏**，客户端可忽略 |
+| ncm 腿 + 渲染（派发→上屏） | P50 **616ms** | ncm total P50 **743ms** | 设备**比宿主机还快 127ms** ⇒ ncm 结果**一到就上屏**，客户端可忽略 |
 | QQ 腿（派发→状态写入） | P50 **2923ms** | QQ legacy TTFB P50 **2905ms** | **+18ms（0.6%）** |
 | QQ 响应体传输（宿主机自证） | — | total − TTFB = **150ms** | 设备若做同样的响应体读取 + 任何解析，`elapsed` 应比宿主机 TTFB 高出 **≥150ms**；实测只高 **18ms** |
 
 ⇒ 两个独立方向都指向同一结论：**响应首字节之后的客户端工作（读体 + 解析 + 映射 + 排序 + 状态写入）
 相对跨主机噪声是小量**，而其中**唯一被直接测到的渲染段是 36–50ms**。
 
-### 3.4 ★ 真机实测到的结构性浪费：首帧被网易云腿硬阻塞
+### 3.4 ★ 真机实测到的结构性浪费：首帧被 ncm 腿硬阻塞
 
 本轮第一次采集（t5）撞上了 v2.5.5 §4.1 记录过的**同一个环境阻塞**（PLC110 该 WiFi 到
-`*.music.163.com` 的 IPv6 被黑洞 ⇒ 连接停在 SYN_SENT，而网易云 client 是 30s connect / 30s read
+`*.music.163.com` 的 IPv6 被黑洞 ⇒ 连接停在 SYN_SENT，而 ncm client 是 30s connect / 30s read
 且**没有 callTimeout**，见 `RetrofitClient.kt:53-54`）。这一次它变成了**本报告最有价值的一条证据**：
 
 ```
@@ -338,7 +338,7 @@ $ adb -s 3B15CD00GB700000 logcat -d | grep -a "SearchViewModel"
 | 派发时刻 | ≈ 19:36:52.8 | `type_ms = 19:36:52.278` + 500ms 防抖（`SearchViewModel.kt:99`） |
 | **QQ 数据到手** | **≤ 19:36:57.8**（派发 + ≤5s） | `qqTimedOut=false` ⇒ `withTimeoutOrNull(5000)`（`:205`）没超时 |
 | 界面仍然空白 | 19:37:02.333 | 帧内覆盖层直读 |
-| 首帧真正上屏 | ≈ 19:37:22.9 | 网易云腿 30s 超时后才 `publish`（`:230-231`） |
+| 首帧真正上屏 | ≈ 19:37:22.9 | ncm 腿 30s 超时后才 `publish`（`:230-231`） |
 
 ⇒ **≥4.5s 已被实测证实、最多 ~25s 的纯客户端阻塞**：
 QQ 的 30 条结果早就躺在 `qqDeferred` 里，但 `:230` 的 `await` 不返回，
@@ -386,7 +386,7 @@ QQ 的 30 条结果早就躺在 `qqDeferred` 里，但 `:230` 的 `await` 不返
 |---|---|---|
 | 列表 `key` | ✅ 有，`itemsIndexed(songs, key = { _, item -> item.id })` ⇒ diff 正常 | `SearchScreen.kt:490` |
 | 有没有骨架屏 / 占位 | ❌ **没有**。`if (songs.isEmpty() && !isLoading) 显示「没有找到歌曲」 else LazyColumn`；加载中且无结果时 `LazyColumn` 里**一项都没有** ⇒ 结果区一片空白 | `SearchScreen.kt:437-448` |
-| 转圈 | 有，但 `_isLoading=false` 在**网易云到手那刻**就执行（`SearchViewModel.kt:240`）⇒ QQ 还在路上时**没有任何加载信号**（v2.5.5 已改成文字「搜索中…」，`:234-239` + `SourceCounts.kt:111`） |
+| 转圈 | 有，但 `_isLoading=false` 在**ncm 到手那刻**就执行（`SearchViewModel.kt:240`）⇒ QQ 还在路上时**没有任何加载信号**（v2.5.5 已改成文字「搜索中…」，`:234-239` + `SourceCounts.kt:111`） |
 | 入场动效 | 前 12 项播 `tween(220ms)` 淡入+上滑（`ListItemAppear.kt:49,86-102`、`AppMotion.kt:222,225`）。**首帧可见即 alpha 从 0 开始**，完全显现要 +220ms | 同上 |
 | 二次上屏的抖动 | QQ 到手会**整表重排**（`:248-250` → `SearchRanking.order`）。按 key diff ⇒ 已有行**移动**、新 QQ 行**首次组合**并重新播 220ms 入场动效 | 实测：**首行本身没有变**（QQ 计数帧的 row 带 diff = 0.0，因为首行两次都是 netease 的会员墙组第 0 项）；但**首行以下仍在持续变化** —— 各轮「QQ 计数帧」之后还各有 **53–101 帧**画面变化（t4=53 / t6=78 / t7=69 / t8=100 / t9=87 / t10=101），与「新插入的 QQ 行首次组合 + 封面异步加载 + 前 12 行 220ms 动效」一致。**这不是「首条结果延迟」，只是观感抖动** |
 
@@ -419,7 +419,7 @@ QQ 的 30 条结果早就躺在 `qqDeferred` 里，但 `:230` 的 `await` 不返
 | **响应体读完时刻** | 同上（`QqClient.kt:288` 一行读完，无计时） | 用宿主机 `total − TTFB = 150ms` 近似 |
 | **JSON 解析 / 模型映射耗时** | 无埋点，**没有独立基准**（v2.5.5 §4.2 也是同一个缺口） | 只能由 §3.3 的 P50 对比判定为「小量」，给不出数字 |
 | **首次重组耗时** | 无 `Modifier.layout`/`onGloballyPositioned` 埋点。只能测「状态写入 → 上屏」的**外包络** = 36–50ms | 渲染段有了上界，但没有拆成「重组/布局/绘制」 |
-| **健康态下 QQ 先于网易云返回** | 6 个样本里网易云腿（519–718ms）**总是**先完成，没抓到反序样本 | 反序的影响只能由 §3.4 的阻塞样本（QQ 先好、界面空等 30s）体现 |
+| **健康态下 QQ 先于 ncm 返回** | 6 个样本里 ncm 腿（519–718ms）**总是**先完成，没抓到反序样本 | 反序的影响只能由 §3.4 的阻塞样本（QQ 先好、界面空等 30s）体现 |
 | **平板 WGR-W09（Android 12）** | ① **该设备没有 `screenrecord`**（`/system/bin/sh: screenrecord: inaccessible or not found`，`rc=127`）；② `screencap` 轮询只有 **1.71–1.80 fps**（≈550ms/帧），**分辨率不足以测 41ms 的渲染段**；③ 我的坐标试探误触了界面，遂主动停止 | 平板**无有效量化数据**；跨设备结论只能由 PLC110 单机给出 |
 | **S6（Android 7.0）** | 本轮未使用（v2.5.5 已记录它是带 PIN 的锁屏，`input swipe` 无法解锁）；没有 Android 7 的数据 | 低端机/旧 API 的结论**缺失** |
 | **移动数据 / 弱网** | 全部数据在 WiFi `CMCC-YKPt-5G`（PLC110 `192.168.5.70`）下取得 | 弱网下服务端 TTFB 占比只会更高，不会改变结论方向 |
@@ -443,15 +443,15 @@ QQ 的 30 条结果早就躺在 `qqDeferred` 里，但 `:230` 的 `await` 不返
 | 响应体读完 | 同上 `responseBodyEnd` | 同上 |
 | 映射完成 | `QqApi.kt:72` 之后 | `Log.i("QqSearch", "map=${…}ms n=${songs.size}")`，同时**把映射移出主线程**（§4.2） |
 
-### 7.2 P0 · 解掉首帧对网易云的硬阻塞（§3.4，实测 ≥4.5s / 最多 25s 的纯浪费）
+### 7.2 P0 · 解掉首帧对 ncm 的硬阻塞（§3.4，实测 ≥4.5s / 最多 25s 的纯浪费）
 
 三个候选，建议 ①+② 一起：
 
 1. **谁先回来谁先上屏**：把 `:230` 的 `await` 换成「先到先发布」——
-   例如给网易云也加一个小预算（如 2s）或让两侧都往同一个 `Channel` 投递，
+   例如给 ncm 也加一个小预算（如 2s）或让两侧都往同一个 `Channel` 投递，
    收到第一份就 `publish`。**注意保住 v2.1.0 hotfix 3 的契约**：主源仍要优先、
    绝不能回到「两个都等」。
-2. **给网易云 client 补 `callTimeout`**（`RetrofitClient.kt:53-54` 现在只有 30s connect/read、
+2. **给 ncm client 补 `callTimeout`**（`RetrofitClient.kt:53-54` 现在只有 30s connect/read、
    **无 callTimeout`**）⇒ 把最坏阻塞从 30s 压到可配置的秒级。
 3. 顺带修 v2.5.5 §3.2 遗留的 `_sourceCounts` 陈旧写回守卫（现在是有了，`:251`）与
    `CancellationException` 语义（`:294-302` 已修）——这两条 v2.5.5 已处理，不用重做。
@@ -491,6 +491,6 @@ QQ 的 30 条结果早就躺在 `qqDeferred` 里，但 `:230` 的 `await` 不返
 | `/tmp/probe-256/raw/tl-t5` | IPv6 阻塞样本（`elapsed=30006ms netease=0 qq=30`）+ 空白界面帧 |
 | `/tmp/probe-256/raw/all-runs.png` | 25 张「覆盖层时间戳 + 来源统计行」对照图（表 1 的原始读数） |
 | `/tmp/probe-256/raw/host-qq-search-2.5.6.json` | 宿主机 QQ 两条通道 n=30/10/15 全样本（表 2） |
-| `/tmp/probe-256/raw/host-netease-search-2.5.6.json` | 宿主机网易云搜索 n=20 全样本 |
+| `/tmp/probe-256/raw/host-netease-search-2.5.6.json` | 宿主机 ncm 搜索 n=20 全样本 |
 | `/tmp/probe-256/{run_probe2.sh,scan.py,scan_generic.py,keyframe.py,thin.py,series.py,netease_probe.py}` | 本轮全部探针脚本（可复现） |
 | `docs/verification/v2.5.5/probe-search-qq-latency.md` · `PROBE-SUMMARY.md` §6 | v2.5.5 的同类探针（TTFB P50 1722 / P95 2989；串行 sum；无加载态；musicu 快 5 倍） |

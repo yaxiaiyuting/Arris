@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -26,7 +26,7 @@ import org.junit.Test
  * | 用例 | 对应的真机现象 |
  * |---|---|
  * | [stale_response_after_track_change_must_not_land] | 快速切歌时旧歌词盖掉新歌词 |
- * | [cross_source_response_must_not_land] | **QQ 播完自动切网易云，歌词仍是 QQ 那首** |
+ * | [cross_source_response_must_not_land] | **QQ 播完自动切 ncm，歌词仍是 QQ 那首** |
  * | [auto_next_marks_loading_before_any_request] | 自动接续瞬间旧歌词残留在屏幕上 |
  * | [shuffle_switch_between_sources_never_lands_old] | 随机播放跨源切歌 |
  * | [offline_cache_cross_source_switch] | 离线缓存曲目跨源切 |
@@ -78,11 +78,11 @@ class LyricLoadCoordinatorTest {
         assertTrue(c.accept(second, 12))
     }
 
-    // ---------- 2. 跨源：QQ 播完自动切网易云 ----------
+    // ---------- 2. 跨源：QQ 播完自动切 ncm ----------
 
     /**
      * 本版修复的核心场景，也是用户报障的原文：
-     * 「QQ 音乐歌曲播放完，自动切到网易云歌曲，音频已变，但歌词仍显示 QQ 那首」。
+     * 「qm 歌曲播放完，自动切到 ncm 歌曲，音频已变，但歌词仍显示 QQ 那首」。
      *
      * 关键在于这次响应**不是过期的旧请求** —— 它是当次请求的真实响应，序号新鲜、
      * `currentSongId` 也已经是新歌。唯一错的是它回答的是**另一个音源**的曲目。
@@ -96,7 +96,7 @@ class LyricLoadCoordinatorTest {
         val loadC = c.begin(qqC)
         assertTrue(c.accept(loadC, 40))
 
-        // C 自然播完 → 自动接续到网易云的 B。
+        // C 自然播完 → 自动接续到 ncm 的 B。
         c.onTrackChanged(neteaseB)
         val loadB = c.begin(neteaseB)
 
@@ -110,7 +110,7 @@ class LyricLoadCoordinatorTest {
     }
 
     /**
-     * 反向：网易云 → QQ。
+     * 反向：ncm → QQ。
      *
      * 这一侧用户不一定报障（症状是「没有歌词」而不是「错歌词」），
      * 但同一处接缝，必须一起钉死。
@@ -207,7 +207,7 @@ class LyricLoadCoordinatorTest {
         val loadC = c.begin(qqC)
         assertEquals(LyricLoadCoordinator.State.Loading(qqC), c.state)
 
-        // 立刻跨源切到网易云，网易云那份命中本地缓存、同步落地。
+        // 立刻跨源切到 ncm，ncm 那份命中本地缓存、同步落地。
         c.onTrackChanged(neteaseB)
         val loadB = c.begin(neteaseB)
         assertTrue(c.accept(loadB, 41))
@@ -224,7 +224,7 @@ class LyricLoadCoordinatorTest {
      * 验收标准「缓存 key 按 source 隔离」。
      *
      * 隔离的来源是 v2.1.0 的**结构性**设计：QQ 的 id 被抬到 `1L shl 62` 以上，
-     * 而网易云的 id 在十亿量级，两个 id 空间不相交。所以既有的
+     * 而 ncm 的 id 在十亿量级，两个 id 空间不相交。所以既有的
      * `songId.toString()` 形状本身就已经按音源隔离，不需要给缓存表加音源段
      * （那会让 200 条存量缓存全部失效，白付一次迁移成本）。
      *
@@ -234,11 +234,11 @@ class LyricLoadCoordinatorTest {
     fun qq_and_netease_cache_keys_are_disjoint() {
         val c = coordinator()
 
-        // 网易云：可缓存，key 就是裸 id。
+        // ncm：可缓存，key 就是裸 id。
         assertEquals("5257138", c.cacheKeyOf(neteaseA))
         assertEquals("287035", c.cacheKeyOf(neteaseB))
 
-        // QQ：不进这张表（字段形状是网易云的，塞进去要么加迁移要么污染语义）。
+        // QQ：不进这张表（字段形状是 ncm 的，塞进去要么加迁移要么污染语义）。
         assertNull(c.cacheKeyOf(qqC))
         assertNull(c.cacheKeyOf(qqD))
 

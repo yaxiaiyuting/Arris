@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -40,7 +40,7 @@ enum class LocalTrackOrigin {
  *
  * ## 为什么 `id` 是 String 而 [PlaylistKey.id] 也是 String
  *
- * 直接沿用 [PlaylistKey] 的定义，不额外造一个 id 空间 —— 网易云的 playlistId 与
+ * 直接沿用 [PlaylistKey] 的定义，不额外造一个 id 空间 —— ncm 的 playlistId 与
  * QQ 的 tid 都放进同一个 `String` 里，靠 `source` 区分（v2.2.0 已经这么做）。
  *
  * @property lastSyncedAt 上一次成功同步的时刻（ms）。0 = 从未同步。
@@ -53,7 +53,7 @@ data class LocalPlaylist(
     val updatedAt: Long,
     val lastSyncedAt: Long = 0L,
     /**
-     * QQ 音乐请求详情要用的**账号内目录号**（v2.2.0 的实测结论：`dirId` 是载荷、不是身份）。
+     * qm 请求详情要用的**账号内目录号**（v2.2.0 的实测结论：`dirId` 是载荷、不是身份）。
      *
      * 它**不进 [PlaylistKey]**（身份归身份、载荷归载荷）—— 与 `Playlist.dirId` 是同一条规则。
      * 传 0 时 QQ 侧会按 `disstid` 让服务端自行解析，所以老数据缺这个字段也能同步。
@@ -67,7 +67,7 @@ data class LocalPlaylist(
         /**
          * 纯本地歌单（没有远程来源）的 id 前缀。
          *
-         * 用一个**不可能与真实 id 撞**的前缀：网易云的 playlistId 是十进制数字、
+         * 用一个**不可能与真实 id 撞**的前缀：ncm 的 playlistId 是十进制数字、
          * QQ 的 tid 也是数字，所以 `local:` 开头是结构上安全的。
          */
         const val LOCAL_ONLY_ID_PREFIX = "local:"

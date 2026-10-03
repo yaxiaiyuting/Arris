@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · C：QQ 音乐 cookie 的纯逻辑处理（解析 / 合并 / 关键字段提取）。
+ * v2.1.0 · C：qm cookie 的纯逻辑处理（解析 / 合并 / 关键字段提取）。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -13,10 +13,10 @@ package com.takahashirinta.ncrust.qq
 import org.json.JSONObject
 
 /**
- * QQ 音乐 cookie 的纯字符串处理（v2.1.0 · C）。**无 Android 依赖，JVM 可单测。**
+ * qm cookie 的纯字符串处理（v2.1.0 · C）。**无 Android 依赖，JVM 可单测。**
  *
  * 为什么值得单独抽一个对象：登录态是**跨版本存活**的数据，而它的判据比看上去脆 ——
- * - QQ 音乐的登录凭证不止一个名字（`qqmusic_key` 与 `qm_keyst` 在不同登录路径下出现）；
+ * - qm 的登录凭证不止一个名字（`qqmusic_key` 与 `qm_keyst` 在不同登录路径下出现）；
  * - 微信登录拿到的 `uin` 带 `o` 前缀（腾迅用它区分 openid 与 QQ 号），
  *   而 `musicu.fcg` 的 `comm.uin` 要的是纯数字；
  * - 二维码登录与 WebView 登录拿到的 cookie **字段集不同**，必须做合并而不是替换。
@@ -153,7 +153,7 @@ object QqCookie {
 
     /**
      * 取出用于 `musicu.fcg` 请求的 cookie 串：只保留我们认识的字段，
-     * **过滤掉与 QQ 音乐无关的第三方 cookie**（QQ 域下还会有一堆 `ptui_loginuin`、
+     * **过滤掉与 qm 无关的第三方 cookie**（QQ 域下还会有一堆 `ptui_loginuin`、
      * `RK`、`ptcz` 之类），它们既没用又会在日志里泄露更多身份信息。
      *
      * 注意：过滤只发生在**发请求**这一侧，落盘的是完整原始 cookie

@@ -56,18 +56,18 @@ import android.widget.Toast
  * 与 v2.3.0 的单源版本相比，这里换掉了三件事：
  *
  * 1. **身份带音源**：路由参数是 `(sourceKey, artistId)`，QQ 的 `artistId` 是 `singerMID`
- *    （base62 字符串），网易云是十进制 id 的字符串形式。旧路由
+ *    （base62 字符串），ncm 是十进制 id 的字符串形式。旧路由
  *    （[com.takahashirinta.ncrust.ui.navigation.NavRoutes.ARTIST]）仍可用，
- *    它构造出来的**就是网易云身份**（见 `MainNavGraph`）。
+ *    它构造出来的**就是 ncm 身份**（见 `MainNavGraph`）。
  * 2. **数据来自 [CatalogAggregator]**：专辑与曲目是两源合并后的结果，每行都带
  *    匹配置信度与**探测出来的**可用性。可用性只活在本页状态里，
  *    **绝不写回 `SongItem`**（那是落盘结构，队列/歌单/离线索引都在存它）。
- * 3. **口径可选**：顶部多一排「双源 / 只看网易云 / 只看 QQ」，两段列表都按它过滤。
+ * 3. **口径可选**：顶部多一排「双源 / 只看 ncm / 只看 QQ」，两段列表都按它过滤。
  *
- * @param sourceKey 音源 key（[MusicSource.key]）。不认识的值回落网易云
+ * @param sourceKey 音源 key（[MusicSource.key]）。不认识的值回落 ncm
  *   （见 [MusicSource.fromKey] —— 老数据的唯一正确解释）。
- * @param artistId 该音源内的艺人标识：网易云十进制 id / QQ `singerMID`。
- * @param onAlbumClick 点专辑。**把音源一起给出去**，否则 QQ 专辑会被当网易云打开。
+ * @param artistId 该音源内的艺人标识：ncm 十进制 id / QQ `singerMID`。
+ * @param onAlbumClick 点专辑。**把音源一起给出去**，否则 QQ 专辑会被当 ncm 打开。
  */
 @Composable
 fun ArtistDetailScreen(
@@ -103,16 +103,16 @@ fun ArtistDetailScreen(
     val source = remember(sourceKey) { MusicSource.fromKey(sourceKey) }
 
     // 锚点的名字：路由里没有它（`artist/{source}/{artistId}` 三段已满），而
-    // `CatalogAggregator.loadArtist` 会拿它当搜索关键词去拉网易云热门曲、并对端召回 ——
+    // `CatalogAggregator.loadArtist` 会拿它当搜索关键词去拉 ncm 热门曲、并对端召回 ——
     // 空串不会报错，只会**静默地什么都搜不到**。
-    // 网易云一侧先读 [ContentCache]（上一次进本页写回的），QQ 一侧没有可读的名字来源，
-    // 从空串起步（页面标题随后由聚合结果补，见 displayName）。**不编名字、也不写死「网易云」**。
+    // ncm 一侧先读 [ContentCache]（上一次进本页写回的），QQ 一侧没有可读的名字来源，
+    // 从空串起步（页面标题随后由聚合结果补，见 displayName）。**不编名字、也不写死「ncm」**。
     // 缓存也没命中时，真正的名字在 [LaunchedEffect] 里现取一次（见那里的注释）。
     val cachedName = remember(source, artistId, initialName) {
         val fromRoute = initialName.trim()
         if (fromRoute.isNotEmpty()) {
             // 路由带来的名字优先：它是**用户点的那首歌**上的名字，
-            // 比缓存新、也比网易云那条"按 id 现取"的路径少一次往返。
+            // 比缓存新、也比 ncm 那条"按 id 现取"的路径少一次往返。
             fromRoute
         } else if (source == MusicSource.NETEASE) {
             ContentCache.getArtistAlbums(artistId.toLongOrNull() ?: -1L)?.artist?.name.orEmpty()
@@ -135,11 +135,11 @@ fun ArtistDetailScreen(
         isLoading = true
         error = null
         try {
-            // 锚点的名字：`CatalogAggregator.loadArtist` 拿它当**搜索关键词**去拉网易云热门曲、
+            // 锚点的名字：`CatalogAggregator.loadArtist` 拿它当**搜索关键词**去拉 ncm 热门曲、
             // 并召回对端艺人。空串不会报错，只会**静默地什么都搜不到**（`searchTracks` /
             // 搜索接口遇到空关键词就返回空列表）—— 而路由里没有名字。
             //
-            // 网易云一侧因此在这里现取一次 `/api/artist/albums/{id}`（旧页面本来就是它），
+            // ncm 一侧因此在这里现取一次 `/api/artist/albums/{id}`（旧页面本来就是它），
             // 拿到名字后写回 [ContentCache]，下次进入就不用再取。
             // QQ 一侧没有「按 singerMID 取艺人名」的既有接口（mid 只出现在专辑/曲目列表里），
             // 所以那里仍然从空串起步：宁可少搜，也不编一个名字。
@@ -170,7 +170,7 @@ fun ArtistDetailScreen(
     }
 
     val loaded = page
-    // 标题取**聚合结果**：网易云一侧就是锚点/缓存里的名字；QQ 一侧锚点没有名字，
+    // 标题取**聚合结果**：ncm 一侧就是锚点/缓存里的名字；QQ 一侧锚点没有名字，
     // 退回对端艺人的名字（匹配上了才存在），再退回「未知歌手」。
     val displayName = loaded?.merged?.name?.takeIf { it.isNotBlank() }
         ?: loaded?.merged?.aliases?.firstOrNull()?.name
@@ -237,7 +237,7 @@ fun ArtistDetailScreen(
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                // 展示口径：双源 / 只看网易云 / 只看 QQ。三个标签的文案全部来自
+                // 展示口径：双源 / 只看 ncm / 只看 QQ。三个标签的文案全部来自
                 // `strings.source.*`，顺序与 `SourceFilter` 的 ordinal 一一对应。
                 MetroTabRow(
                     items = listOf(
@@ -415,7 +415,7 @@ private fun confidenceLabel(c: MatchConfidence, s: Strings): String = when (c) {
  *
  * 与旧的 `ArtistAlbumGridItem`（单源 `ArtistAlbumItem`）的区别就是本版要展示的东西：
  * **这张专辑在哪几个源上有、另一源有没有、为什么认为两源是同一张**。
- * 点它时必须把 `album.key` 的**音源与 id 一起**给出去 —— 否则 QQ 专辑会被当网易云打开。
+ * 点它时必须把 `album.key` 的**音源与 id 一起**给出去 —— 否则 QQ 专辑会被当 ncm 打开。
  */
 @Composable
 private fun AggregatedAlbumGridItem(

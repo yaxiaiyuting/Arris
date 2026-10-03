@@ -124,7 +124,7 @@ nc_has_state3() {
 # 「被测应用确实在播、且它是系统认定的当前播放器」—— 这是全部结论的前提。
 #
 # 为什么必须有这道闸：v2.1.6 采集期间踩过一次真事故 —— 另一个 session 在同一台设备上
-# 做网易云的 A/B，我的脚本照样跑完，抓到的却是**网易云的会话**
+# 做 ncm 的 A/B，我的脚本照样跑完，抓到的却是**ncm 的会话**
 # （`metadata: size=11, description=The Final Countdown, Europe`）。
 # 若不检测，这批数据会被当成 Ncrust 的证据写进文档 —— 那就是伪造证据。
 under_test_playing() {

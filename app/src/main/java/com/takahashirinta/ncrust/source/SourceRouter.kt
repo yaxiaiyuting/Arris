@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -23,7 +23,7 @@ import com.takahashirinta.ncrust.player.SongUrlResult
  * 搜索页）只需要把 [SongItem] 递进来，由这里决定找哪个 [MusicSourceProvider]。
  *
  * 这样做的收益不是「少写 if」，而是**把串台的可能性收敛到一处**：
- * 网易云的 songId 与 QQ 音乐的 songid 各自独立编号，撞号是迟早的事；
+ * ncm 的 songId 与 qm 的 songid 各自独立编号，撞号是迟早的事；
  * 只要有一次取链忘了带音源，用户听到的就是另一首歌。让所有取链都经过这里，
  * 「忘了带音源」就变成一个可以在这个文件里一眼看完的问题。
  */
@@ -32,7 +32,7 @@ object SourceRouter {
     private val providers = LinkedHashMap<MusicSource, MusicSourceProvider>()
 
     init {
-        // 网易云恒可用；QQ 音乐在 B 阶段注册（它的客户端需要先 init 拿到 cookie）。
+        // ncm 恒可用；qm 在 B 阶段注册（它的客户端需要先 init 拿到 cookie）。
         register(NeteaseSourceProvider)
         // v3.1.0 · B：B 站。**注册是无条件的**，但 Provider 的每条路径第一行都判
         // `BiliPrefs.isEnabled()` —— 关闭时它返回空列表 / null，一个请求都不发。
@@ -59,9 +59,9 @@ object SourceRouter {
      * 按歌曲所属音源取播放 URL。
      *
      * 三条前置判断都在这里做掉，调用方不必各自重复：
-     * 1. 音源没注册（QQ 音乐在未登录 / 未接入时不会注册）⇒ null；
-     * 2. [SongItem.isResolvable] == false（QQ 音乐缺 songmid）⇒ null。
-     *    **绝不退回网易云取链** —— id 相同不代表是同一首歌；
+     * 1. 音源没注册（qm 在未登录 / 未接入时不会注册）⇒ null；
+     * 2. [SongItem.isResolvable] == false（qm 缺 songmid）⇒ null。
+     *    **绝不退回 ncm 取链** —— id 相同不代表是同一首歌；
      * 3. Provider 返回什么就是什么（失败即 null，由调用方决定跳歌还是提示）。
      */
     suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult? {

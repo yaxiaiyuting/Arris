@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -490,7 +490,7 @@ private fun qualityLabel(strings: Strings, level: String?): String? {
 
 /** 缺封面时的稳定色块：按歌曲 id 派生色相，同一首歌每次都是同一个颜色。 */
 private fun coverPlaceholder(songId: Long): Color {
-    // v2.1.0 · A：QQ 音乐的 id 带 2^62 标志位（见 SourceIds.QQ_ID_FLAG），
+    // v2.1.0 · A：qm 的 id 带 2^62 标志位（见 SourceIds.QQ_ID_FLAG），
     // `songId * 47L` 在长整型下会**溢出**成负数，取模后色相为负 —— Color.hsv 收到负色相
     // 会得到意料之外的颜色。用 Math.floorMod 保证结果恒在 [0,360)。
     val hue = Math.floorMod(songId * 47L, 360L).toFloat()

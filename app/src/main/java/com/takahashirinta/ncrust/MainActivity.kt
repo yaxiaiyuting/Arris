@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -230,7 +230,7 @@ class MainActivity : ComponentActivity() {
         // （表现是「扫码成功了但请求还是匿名」）。与 BiliPrefs.init 同一处，
         // 两者都是「进程级一次性配置」。
         BiliAuthStore.init(this)
-        // v2.1.0 · C：接线 QQ 音乐音源（注册 Provider + 初始化它自己的 HTTP 通道）。
+        // v2.1.0 · C：接线 qm 音源（注册 Provider + 初始化它自己的 HTTP 通道）。
         // 与 RetrofitClient.init 并列，幂等。
         com.takahashirinta.ncrust.qq.QqMusicSourceProvider.install(this)
         // v2.2.0：QQ 歌单仓库（只读同步 + 私有目录缓存）。与上面并列、幂等。
@@ -710,7 +710,7 @@ object QueueModes {
  * `SongItem.id` 里** —— `id` 是 [`SourceIds.qqId`] 造出来的**合成数字 id**（带 `1L shl 62`
  * 标志位），真正的 songid 要用 [`SourceIds.qqRawId`] 掩码取回。把合成 id 直接写进路由，
  * 单曲页就得再反解一次，而且合成 id 的十进制是 `46xxxxxxxxxxxxxxxxx` 这种量级，
- * 肉眼完全无法与网易云的 songId 区分 —— 路由里带**裸 songid** + `source` 段才是自解释的。
+ * 肉眼完全无法与 ncm 的 songId 区分 —— 路由里带**裸 songid** + `source` 段才是自解释的。
  *
  * 反解不出来（理论上是「这不是个 QQ 合成 id」）时退回原 id：路由至少是确定的，
  * 单曲页一定拿得到同一首歌的身份，不会因为一次反解失败跳去别的曲子。
@@ -970,7 +970,7 @@ fun MainScreen(
                 artists = if (artist != null) listOf(ArtistItem(name = artist)) else null,
                 album = AlbumItem(id = null, name = "", picUrl = artwork),
                 duration = null,
-                // v2.1.0 · C：把音源一起恢复 —— 少了它，冷启动后播 QQ 曲目会去网易云取链。
+                // v2.1.0 · C：把音源一起恢复 —— 少了它，冷启动后播 QQ 曲目会去 ncm 取链。
                 source = PlaybackStateManager.getSourceKey(context),
                 sourceId = PlaybackStateManager.getSourceId(context),
                 mediaId = PlaybackStateManager.getMediaId(context),
@@ -1160,7 +1160,7 @@ fun MainScreen(
     // 从队列中找到对应 SongItem 并更新 currentSong，保证 UI 与音频同步。
     // v2.5.3 · P1：这里只有裸 id（ViewModel 广播的是 `currentSongId`），
     // 所以按 **TrackKey.ofSong 推断出的音源**比对，而不是"id 相等即同一首"——
-    // 后者会让「网易云 123」与「QQ 合成的 123」互相认领。
+    // 后者会让「ncm 123」与「QQ 合成的 123」互相认领。
     LaunchedEffect(vmCurrentSongId) {
         val id = vmCurrentSongId ?: return@LaunchedEffect
         val vmSourceKey = playerViewModel.currentTrackKey?.source?.key
@@ -1575,40 +1575,37 @@ fun MainScreen(
         }
     }
 
+    /**
+     * 从任意列表点一首歌：**立刻打断当前播放**，并把它插到当前歌的下一首。
+     *
+     * v3.3.2 · P0：判定整体搬进 [QueueKeys.planPlayItem]（纯函数 + JVM 单测）。
+     *
+     * 为什么要搬：旧实现在最后两行有一处**静默失败**——
+     * `rebuild` 装配不出新队列时它把 `playbackQueue` 原样留着，接着
+     * `indexOfFirst { … == songKey }` 必然返回 -1，于是 `if (idx >= 0) playFromQueue(idx)`
+     * 什么都不做：没有日志、没有提示、连 `playSong` 都不会被调用，
+     * 用户听到的就是「点了其他歌曲没反应，一直在播原来那首」。
+     * 现在那条分支会走兜底（追加到队尾并播它），且 [QueueKeys.PlayItemPlan.fallbackUsed]
+     * 为 true 时这里会留一条 warning —— 它是这类报告唯一的诊断锚点。
+     */
     fun playSongItem(song: SongItem) {
-        // 单曲直接播放 → 插到当前播放的下一首并立即播放（不再是"排到队尾"）。
-        // 队列未在播放（空/无当前曲）时, 该曲作为唯一一首。
-        val isQueued = playbackQueue.isNotEmpty() && currentQueueIndex in playbackQueue.indices
-        if (!isQueued) {
-            playbackQueue = listOf(song)
-            currentQueueIndex = 0
-            if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
-            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
-            playFromQueue(0)
-            expandCard()
-            return
-        }
-        // 内联 insertNext 语义：去重后把该曲插到当前歌的下一首，并让 currentQueueIndex 指向它。
-        // v2.5.3 · P1：判重与重定位都改走 `TrackKey`（见 QueueKeys）。
-        val currentKey = playbackQueue.getOrNull(currentQueueIndex)?.let { QueueKeys.keyOf(it) }
-        val songKey = QueueKeys.keyOf(song)
-        if (songKey != currentKey) {
-            val filtered = QueueKeys.dedupe(QueueKeys.keysOf(playbackQueue), songKey).toMutableList()
-            val newCurrentIndex = QueueKeys.indexOfCurrent(filtered, currentKey).coerceAtLeast(0)
-                .let { if (currentKey == null) -1 else it }
-            val insertPos = (newCurrentIndex + 1).coerceIn(0, filtered.size)
-            filtered.add(insertPos, songKey)
-            playbackQueue = QueueKeys.rebuild(
-                songs = playbackQueue,
-                keys = filtered,
-                extra = listOf(song),
-            ) ?: playbackQueue
-            currentQueueIndex = if (newCurrentIndex < 0) 0 else newCurrentIndex
+        val plan = QueueKeys.planPlayItem(playbackQueue, currentQueueIndex, song)
+        if (plan.queueChanged) {
+            playbackQueue = plan.queue
+            currentQueueIndex = plan.currentIndex
+            // v2.0.0 · T1-C：乱序模式必须跟着重排，否则「下一首」仍按旧编排推进。
             if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
             PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
         }
-        val idx = playbackQueue.indexOfFirst { QueueKeys.keyOf(it) == songKey }
-        if (idx >= 0) playFromQueue(idx)
+        if (plan.fallbackUsed) {
+            // 这条日志以前不存在 —— 而它对应的正是「点了没反应」那一类报告。
+            Log.w(
+                "MainActivity",
+                "playSongItem: queue rebuild failed for key=${QueueKeys.keyOf(song).tag} " +
+                    "-> appended to tail and played (queue=${playbackQueue.size})",
+            )
+        }
+        playFromQueue(plan.playIndex)
         expandCard()
     }
 
@@ -1886,7 +1883,7 @@ fun MainScreen(
      * 三态处置，判据全部来自 [ArtistNavigator]（纯函数、有单测）：
      *
      * - [ArtistNav.Direct] → 带 source 的两段路由 `artist/{source}/{artistId}`，
-     *   进**本源**艺人页。QQ 曲目走的是 `singerMID`，不再经过网易云。
+     *   进**本源**艺人页。QQ 曲目走的是 `singerMID`，不再经过 ncm。
      * - [ArtistNav.Search] → 切到搜索 tab 并预填艺人名。这是「**找不到但用户能理解**」
      *   的那条路：身份不可信时绝不猜一个艺人出来（AGENTS.md 铁律 20/21）。
      * - [ArtistNav.Unavailable] → 什么都不做（连名字都没有，跳搜索也搜不出东西）。
@@ -1927,7 +1924,7 @@ fun MainScreen(
      * （纯函数、有单测）：
      *
      * - [AlbumNav.Direct] → 带 source 的两段路由 `album/{source}/{albumId}`，
-     *   进**本源**专辑页。QQ 曲目走的是 `albumMID`，不再经过网易云。
+     *   进**本源**专辑页。QQ 曲目走的是 `albumMID`，不再经过 ncm。
      * - [AlbumNav.Search] → 切到搜索 tab 并预填关键词。这是「**找不到但用户能理解**」
      *   的那条路：身份不可信时绝不猜一张专辑出来（AGENTS.md 铁律 14/15）。
      * - [AlbumNav.Unavailable] → 什么都不做（连一个能当关键词的串都没有）。
@@ -1982,9 +1979,9 @@ fun MainScreen(
      *
      * ## v2.6.1 · P0：艺人那一半
      *
-     * 这条路以前会把 QQ 曲目送到**错误的艺人页**：补 id 的回落打的是**网易云**的
+     * 这条路以前会把 QQ 曲目送到**错误的艺人页**：补 id 的回落打的是**ncm**的
      * `/eapi/v3/song/detail`（QQ 的 bit62 合成 id 在那里必然查空 ⇒ 静默失败），
-     * 而跳的是硬编码网易云的 `NavRoutes.artist(artistId: Long)`（周杰伦 `4558` → 马洪波）。
+     * 而跳的是硬编码 ncm 的 `NavRoutes.artist(artistId: Long)`（周杰伦 `4558` → 马洪波）。
      * 现在身份判定收在 [ArtistNavigator] 一处，本函数只负责**执行**它的结论。
      *
      * ## v2.6.2 · P0：专辑那一半（本版修的）
@@ -1995,7 +1992,7 @@ fun MainScreen(
      * 2. 走 `NavRoutes.album(albumId: Long)` —— composable 里把 `sourceKey` **写死**成
      *    `MusicSource.NETEASE`。
      *
-     * 于是 QQ 的数字专辑 id 被拿去查网易云：陈奕迅《What's Going On...?》`22276`
+     * 于是 QQ 的数字专辑 id 被拿去查 ncm：陈奕迅《What's Going On...?》`22276`
      * → **《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云**（PCL110 + S6 两台真机复现，
      * 页面渲染完全正常）；而 `album.id` 缺失时（老队列 / 冷启动恢复）**静默无反应**。
      * 现在同样收在 [AlbumNavigator] 一处。
@@ -2057,8 +2054,8 @@ fun MainScreen(
                     }
                     artistId != null -> withContext(Dispatchers.Main) {
                         // v2.6.1 · P0：显式声明音源。这个 id 由 `music.163.com/artist?id=` 的
-                        // 正则解析而来，**按构造**就是网易云身份 —— 而「按构造」正是本 P0 里
-                        // 唯一没被写下来的东西。老的单参数重载会把 source 静默补成网易云，
+                        // 正则解析而来，**按构造**就是 ncm 身份 —— 而「按构造」正是本 P0 里
+                        // 唯一没被写下来的东西。老的单参数重载会把 source 静默补成 ncm，
                         // 于是「谁都可以用它」；写成两段路由之后，用错必须由作者显式写错。
                         navController.navigate(NavRoutes.artist(MusicSource.NETEASE, artistId.toString()))
                     }
@@ -2092,7 +2089,7 @@ fun MainScreen(
     }
 
     var showWebLogin by remember { mutableStateOf(false) }
-    // v2.1.0 · C：QQ 音乐登录浮层（与网易云那个**完全独立**：两份 cookie、两条登录路径）。
+    // v2.1.0 · C：qm 登录浮层（与 ncm 那个**完全独立**：两份 cookie、两条登录路径）。
     var showQqLogin by remember { mutableStateOf(false) }
     /** v3.2.0 · P1：B 站扫码登录浮层（浮层本体复用 `MetroDialog` + 既有二维码渲染）。 */
     var showBiliLogin by remember { mutableStateOf(false) }
@@ -2115,7 +2112,7 @@ fun MainScreen(
             LibraryManager.refreshFromCloud(context)
         }
     }
-    // v2.1.0 · C：QQ 音乐登录。
+    // v2.1.0 · C：qm 登录。
     //
     // 登录浮层本体在 ui/components/QqLoginOverlay.kt —— 那里记录了「必须用桌面 UA」
     // 与「必须接管 window.open 弹窗」两条真机踩出来的结论（v2.1.0 hotfix 1：
@@ -2202,7 +2199,7 @@ fun MainScreen(
         //
         // 这是用户反馈第 6 条「需要很多次退出登录再登录才能播放 VIP 资源或者音质」的**头号机制**。
         //
-        // 网易云登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA**：
+        // ncm 登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA**：
         // 登录成功后的跳转**不产生新的文档级导航**，因此经常**不触发** `onPageFinished`。
         // 原实现把「抓 cookie」挂在那一个回调上 ⇒ 抓取时机是否落在
         // 「cookie 已写入 且 回调恰好到来」这个窗口里，每次重登都是一次独立的伯努利试验。
@@ -2210,7 +2207,7 @@ fun MainScreen(
         //
         // 修法与同仓库 QQ 侧**早已采用**的做法一致（`QqLoginOverlay` 的 KDoc：
         // 「登录成功的唯一权威事实是 cookie，所以这里按固定间隔直接读 cookie，
-        // 不依赖任何页面回调」）。那条纪律在 QQ 那边写了很久，网易云这条一直没跟上。
+        // 不依赖任何页面回调」）。那条纪律在 QQ 那边写了很久，ncm 这条一直没跟上。
         //
         // 两个判据细节：
         // - 用 `NeteaseCookie.isUsable`（`MUSIC_U` **与** `__csrf` 都要有），
@@ -2409,8 +2406,8 @@ fun MainScreen(
             // 与 `onSongInfoClick` 的分工：那一个是「先在菜单里选转到歌手/转到专辑」，
             // 这一个已经是明确意图，不再多一次选择。
             //
-            // v2.6.1 · P0：这里以前收一个裸 `Long` 再拼老路由（硬编码网易云），
-            // 于是 QQ 曲目点作者名 = 跳到网易云的同号艺人（周杰伦 4558 → 马洪波）。
+            // v2.6.1 · P0：这里以前收一个裸 `Long` 再拼老路由（硬编码 ncm），
+            // 于是 QQ 曲目点作者名 = 跳到 ncm 的同号艺人（周杰伦 4558 → 马洪波）。
             // 现在整首歌交给 `navigateToArtist`，身份判定与「跳搜索」兜底都在那里，
             // 与长按菜单走**同一个出口** —— 两个入口两套判据正是本 P0 的形状。
             onArtistClick = { song -> navigateToArtist(song) },
@@ -2500,7 +2497,7 @@ fun MainScreen(
                             // 判定纯本地（收藏单曲艺人 ∩ 锚点），不发请求；配置默认空 → 其他用户看不到。
                             artistRecoArtistId = artistRecoArtistId,
                             // v2.6.1 · P0：推荐卡的 id 来自 `reco/ArtistReco.kt` 的
-                            // `artist_reco_target_id`，是配置里写死的**网易云** id；
+                            // `artist_reco_target_id`，是配置里写死的**ncm** id；
                             // 显式带音源，理由同上面的剪贴板入口。
                             onArtistRecoClick = { id ->
                                 navController.navigate(NavRoutes.artist(MusicSource.NETEASE, id.toString()))
@@ -2566,10 +2563,10 @@ fun MainScreen(
                         2 -> SearchScreen(
                             onSongClick = { playSongItem(it) },
                             onAlbumClick = { albumId -> navController.navigate(NavRoutes.album(albumId)) },
-                            // v2.6.1 · P0：搜索页的艺人 tab 至今**只**由网易云的
+                            // v2.6.1 · P0：搜索页的艺人 tab 至今**只**由 ncm 的
                             // `cloudsearch/pc type=100` 填充（见 SearchViewModel 的 100 分支），
-                            // 所以这里的 id 恒是网易云十进制 id，走带 source 的两段路由同样正确
-                            // —— 顺带把「老路由 = 网易云身份」这个隐式约定显式化。
+                            // 所以这里的 id 恒是 ncm 十进制 id，走带 source 的两段路由同样正确
+                            // —— 顺带把「老路由 = ncm 身份」这个隐式约定显式化。
                             onArtistClick = { artistId ->
                                 navController.navigate(
                                     NavRoutes.artist(MusicSource.NETEASE, artistId.toString())
@@ -2680,7 +2677,7 @@ fun MainScreen(
                             onShowWebLogin = { showWebLogin = true },
                             // 二维码为主入口；网页登录是它内部的兜底按钮。
                             onShowQqLogin = { showQqQr = true },
-                            // v3.2.0 · P1：B 站扫码登录（独立通道，不走 QQ/网易云那两条）。
+                            // v3.2.0 · P1：B 站扫码登录（独立通道，不走 QQ/ncm 那两条）。
                             onShowBiliLogin = { showBiliLogin = true },
                             // v2.1.1：手机号验证码登录（微信用户的可用路径）。
                             onShowQqPhoneLogin = { showQqPhone = true },

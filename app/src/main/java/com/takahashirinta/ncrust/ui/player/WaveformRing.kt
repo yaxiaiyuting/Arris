@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -140,6 +140,22 @@ class WaveformRing(
 
     /** UI 侧已消费到的位置。只有 UI 线程读写。 */
     private var readIndex: Int = 0
+
+    /**
+     * 滚动窗口自起播以来**累计平移了多少格**（= 被消费的柱数）。
+     *
+     * 存在的唯一理由是**给判据提供与渲染层完全同源的位移量**：渲染层真正消费的是
+     * 「窗口下标 + [scrollPhase01]」（`W[i] + (W[i+1] − W[i]) × phase`），
+     * 所以「这一帧可见位移」只可能是 `Δ本值 + ΔscrollPhase01()`。
+     * 测试若另建一套「可见位置」的定义（v3.3.0 踩过三次：只量相位差分、把平移硬编码 +1、
+     * `shiftedCells + frac(phase)`），量出来的数就不再是画面上的那个东西。
+     *
+     * 生产代码**不读它**：`private` + `internal` 访问器 = 同一模块内可见，JVM 单测可直接调。
+     */
+    private var shiftedCells: Long = 0
+
+    /** 单测 / 诊断：累计平移格数（见 [shiftedCells] 的注释，生产路径零调用）。 */
+    internal fun shiftedCellsForTest(): Long = shiftedCells
 
     /**
      * v3.2.3：**两条柱之间的推进相位**（0..1），让画面按帧率连续滚动。
@@ -325,6 +341,9 @@ class WaveformRing(
             if (shiftBandIn(midTargets, midValue)) changed = true
             if (shiftBandIn(highTargets, highValue)) changed = true
             readIndex += 1
+            // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
+            // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
+            shiftedCells += 1
         }
         pendingConsumed = pending
         return pending

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -34,13 +34,13 @@ import java.util.concurrent.TimeUnit
  * variant=C_no_referer       （不带 Referer）                     http=200  body={"code":-101,...}
  * ```
  *
- * 也就是说：**拿网易云的 `Referer` 去请求 B 站，会被 B 站的 WAF 直接挡在 403**，
+ * 也就是说：**拿 ncm 的 `Referer` 去请求 B 站，会被 B 站的 WAF 直接挡在 403**，
  * 而 `RetrofitClient` 的 `CookieInterceptor` 与 `eapiPost` / `get` 全都**无条件**注入
- * 网易云的 Referer + UA + Cookie。复用那套等于「B 站音源永远 403」。
+ * ncm 的 Referer + UA + Cookie。复用那套等于「B 站音源永远 403」。
  *
  * 顺带还买到两件事：
- * - **B 站不会收到网易云的 Cookie**（隐私上的正确做法：两个平台的登录态不该互相外泄）；
- * - B 站的 412 / -352 风控不会影响网易云那条链路（铁律 27：不得破坏现有音源行为）。
+ * - **B 站不会收到 ncm 的 Cookie**（隐私上的正确做法：两个平台的登录态不该互相外泄）；
+ * - B 站的 412 / -352 风控不会影响 ncm 那条链路（铁律 27：不得破坏现有音源行为）。
  *
  * ## 音频区**没有搜索接口**（实测证伪的任务前提，见下）
  *
@@ -177,7 +177,7 @@ object BiliApi {
      */
     private const val UA = BiliCdn.USER_AGENT
 
-    /** B 站自己的 Referer。**绝不能是网易云那个** —— 见类文档的 A/B 对照。 */
+    /** B 站自己的 Referer。**绝不能是 ncm 那个** —— 见类文档的 A/B 对照。 */
     private const val REFERER = BiliCdn.REFERER
 
     /** wbi 密钥的缓存时长。服务端每天轮换，取 6 小时（一天内至少刷新一次，且不会每通请求都问）。 */
@@ -340,7 +340,7 @@ object BiliApi {
      * 带**完整 Cookie 头**的 GET（v3.2.0 · P1 · 只给 `BiliAuthApi` 的扫码登录用）。
      *
      * 与 [get] 的区别只有两点，其余（独立 client / UA / Referer / Origin / 超时）**逐字相同** ——
-     * 复用同一个 `client` 是硬要求：v3.1.0 实测「拿网易云 Referer 请求 B 站 ⇒ 403」，
+     * 复用同一个 `client` 是硬要求：v3.1.0 实测「拿 ncm Referer 请求 B 站 ⇒ 403」，
      * 再建第二个 client 就是把那条已被证伪的路又铺一遍。
      *
      * @param cookieHeader 直接写进 `Cookie` 头的整串文本（`SESSDATA=…; bili_jct=…`）。

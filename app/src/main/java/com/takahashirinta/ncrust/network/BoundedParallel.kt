@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -48,7 +48,7 @@ val FetchOutcome<*>.isOk: Boolean get() = this is FetchOutcome.Ok
  * 而 `viewModelScope.launch { fetchLyrics(track) }` 排在它**之后** ——
  * 于是「取链 RTT」与「歌词 RTT」**相加**，而不是取最大值。
  *
- * 探针实测这两段各自 P50 在 80~250ms 量级（网易云搜索 TTFB 249ms），
+ * 探针实测这两段各自 P50 在 80~250ms 量级（ncm 搜索 TTFB 249ms），
  * 相加就是用户感知里那一段「点了没反应」。
  *
  * ## 三条硬约束（都有单测）

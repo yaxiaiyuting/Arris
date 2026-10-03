@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * v2.1.0 · C：QQ 音乐会员判定的纯逻辑单测。
+ * v2.1.0 · C：qm 会员判定的纯逻辑单测。
  *
  * 会员判据是「能不能放出无损/母带」的唯一依据，写错的两个方向代价不对称：
  * 判宽了 ⇒ 用户点了无损却放不出来（体验差但能理解）；

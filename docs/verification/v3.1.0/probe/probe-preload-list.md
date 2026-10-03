@@ -22,7 +22,7 @@
 | 列表本身 | — | 本来就在列表响应里，不需要额外请求（RECOMMENDATIONS §P0-C） |
 
 **为什么不预取 URL**（代码里写死了理由，ListPrefetch.kt:35-41）：URL 有时效 ——
-网易云实测会轮换，B 站直链自带 `deadline`（实测 `now + 7200s`，见
+ncm 实测会轮换，B 站直链自带 `deadline`（实测 `now + 7200s`，见
 `bili-research/evidence/80-cdn-referer-and-ttl.txt` F 段）。用户进入歌单后可能几分钟才点第一首、
 也可能直接划走 ⇒ 预取一批 URL 等于制造一批**必然过期**的条目：要么被 TTL 判据丢掉（白花流量），
 要么在临界点被用掉（播到一半 403）。

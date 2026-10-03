@@ -90,4 +90,4 @@ git show v2.2.0-gpl:app/build.gradle.kts | grep -E "versionCode|versionName"
 | 新增文件 | 11 个（模型 / 协调器 / 缓存编解码 / 存储 / 解析 / 接口 / 仓库 / 2 个页面 / 1 个阈值 / 1 个类型契约） |
 | 新增测试 | 4 个测试类 |
 | 修改文件 | `QqRequests.kt`（加只读请求构造）、`Strings.kt` + 8 语言、`NavGraph.kt`、`LibraryScreen.kt`、`MainActivity.kt`（3 行接线）、`build.gradle.kts`（版本号） |
-| **未触碰** | `PlaybackService.kt`、`MediaSessionMerge.kt`、`docs/verification/v2.1.6/**`、华为控制中心相关的一切、网易云歌单的任何写路径 |
+| **未触碰** | `PlaybackService.kt`、`MediaSessionMerge.kt`、`docs/verification/v2.1.6/**`、华为控制中心相关的一切、ncm 歌单的任何写路径 |

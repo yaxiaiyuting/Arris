@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -75,7 +75,7 @@ class SongTagsTest {
     // ------------------------------------------------ 音源归属：两源都标 ----
 
     @Test
-    fun `网易云的行也标音源（v230 的改变）`() {
+    fun `ncm的行也标音源（v230 的改变）`() {
         // 用一个**判不出可用性**的曲目，把音源角标单独隔离出来看。
         val tags = SongTags.of(ne(st = -1, pl = 0, fee = 0), strings)
         assertEquals(1, tags.size)
@@ -88,7 +88,7 @@ class SongTagsTest {
     }
 
     @Test
-    fun `QQ 的行标 QQ 音乐`() {
+    fun `QQ 的行标 qm`() {
         val tags = SongTags.of(qq(), strings)
         assertEquals(strings.sourceQqMusic, tags.single().text)
         assertEquals(SongTagKind.SOURCE, tags.single().kind)
@@ -299,7 +299,7 @@ class SongTagsTest {
      * ★ 单曲分区**必须**给角标 —— 这是「区分同名历史」的唯一线索。
      *
      * 同名场景是真实的：同一关键词下两源会返回逐字同名的条目
-     * （《晴天》网易云 `186016` / QQ 另一套 songmid），历史列表里两行的
+     * （《晴天》ncm `186016` / QQ 另一套 songmid），历史列表里两行的
      * 封面、标题、歌手可能完全一样。
      */
     @Test
@@ -318,8 +318,8 @@ class SongTagsTest {
      * ★ 专辑 / 艺人历史**不显示**角标。
      *
      * 它们的 `HistoryItem.source` 从来没有被写过（`addAlbum` / `addArtist` 不传它），
-     * `effectiveSource` 只能靠 bit62 反推 —— 而专辑/艺人的 id 都是网易云的普通 id，
-     * 反推恒为「网易云」。给每一条挂一个恒定标签是纯噪音。
+     * `effectiveSource` 只能靠 bit62 反推 —— 而专辑/艺人的 id 都是 ncm 的普通 id，
+     * 反推恒为「ncm」。给每一条挂一个恒定标签是纯噪音。
      */
     @Test
     fun `专辑与艺人历史条目不显示音源角标`() {
@@ -339,24 +339,24 @@ class SongTagsTest {
         presets.forEach { s ->
             val netease = SongTags.historySourceBadge(true, MusicSource.NETEASE, s)
             val qq = SongTags.historySourceBadge(true, MusicSource.QQMUSIC, s)
-            assertTrue("网易云角标为空", !netease.isNullOrBlank())
+            assertTrue("ncm 角标为空", !netease.isNullOrBlank())
             assertTrue("QQ 角标为空", !qq.isNullOrBlank())
             assertNotEquals("两种音源的角标文案撞了：$netease", netease, qq)
         }
     }
 
     /**
-     * ★ **老条目**（`source == null` 但 id 的 bit62 置位）必须显示 **QQ 音乐**。
+     * ★ **老条目**（`source == null` 但 id 的 bit62 置位）必须显示 **qm**。
      *
      * 这是 v2.5.4 修过的那个 bug 的 UI 侧：`SongItem.musicSource` 读的是**字符串**，
-     * 而老条目那里是 null ⇒ 会被认成网易云。角标必须走
+     * 而老条目那里是 null ⇒ 会被认成 ncm。角标必须走
      * `SearchHistoryMigration.effectiveSource`（bit62 推断），不能直接读字符串。
      *
      * 本用例通过 `effectiveSource` 的输入口径把这条事实钉住：
      * 用 bit62 合成 id 造一条 `source == null` 的历史条目，断言角标是 QQ。
      */
     @Test
-    fun `老条目 source 为空但 bit62 置位时角标是 QQ 音乐`() {
+    fun `老条目 source 为空但 bit62 置位时角标是 qm`() {
         val legacyQqId = com.takahashirinta.ncrust.source.SourceIds.qqId(357600093L, "0039MnYb0qxYhV")
         val item = com.takahashirinta.ncrust.library.SearchHistoryManager.HistoryItem(
             id = legacyQqId,
@@ -369,7 +369,7 @@ class SongTagsTest {
         )
         val effective = com.takahashirinta.ncrust.library.SearchHistoryMigration.effectiveSource(item)
         assertEquals(
-            "老条目被认成了网易云 —— 角标必须走 effectiveSource 的 bit62 推断",
+            "老条目被认成了 ncm —— 角标必须走 effectiveSource 的 bit62 推断",
             MusicSource.QQMUSIC,
             effective,
         )

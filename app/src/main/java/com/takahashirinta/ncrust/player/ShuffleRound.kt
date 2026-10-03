@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -33,7 +33,7 @@ import kotlin.random.Random
  * ## 防扎堆的口径（**不是**语种均衡）
  *
  * 用**主艺人 id**（`SongItem.artists.first().id`）作为分散键：相邻两首不来自同一主艺人。
- * 语言是伪概念（网易云没有语言字段），按语种均衡需要猜语言，本 fork 明确不做；
+ * 语言是伪概念（ncm 没有语言字段），按语种均衡需要猜语言，本 fork 明确不做；
  * 而"同一艺人连播"是真实存在的观感问题（歌单里同艺人常成块出现），且零网络成本。
  *
  * **必须能优雅退化**：池子太小、整张专辑都是同一艺人时约束不可满足 ——

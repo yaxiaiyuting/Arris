@@ -113,7 +113,7 @@ data class Strings(
     val offline: OfflineStrings,
 
     /**
-     * v2.1.0 · C：多音源（QQ 音乐）那一组。
+     * v2.1.0 · C：多音源（qm）那一组。
      *
      * 为什么又拆一组：上面那条注释说得清楚 —— `Strings` 的构造参数已经贴着 dex 255 上限，
      * 再加字段**必须**继续拆组。这一组只有 3 条，但同样走分组，避免下次有人顺手往
@@ -361,7 +361,7 @@ data class Strings(
 
     // ---------------------------------------------------------------- v2.5.5 · G：聚合搜索的加载态 ----
     //
-    // 这一组修的是「搜『晴天』先显示『QQ 音乐 0 首』、5 秒后才变成真实数字」——
+    // 这一组修的是「搜『晴天』先显示『qm 0 首』、5 秒后才变成真实数字」——
     // 那 5 秒里 0 是**假话**（它把"还没回来"显示成了"真的没有"）。
     // 根因是统计量的类型只能表达计数，不能表达「未知」；这五条给它一个合法的表示。
     //
@@ -385,7 +385,7 @@ data class Strings(
     /** 计数文案：`(条数) -> "30 首"`。 */
     val searchSourceCount: (Int) -> String,
     /**
-     * 统计行：`(网易云侧文案, QQ 侧文案) -> "网易云 %s · QQ 音乐 %s"`。
+     * 统计行：`(ncm侧文案, QQ 侧文案) -> "ncm %s · qm %s"`。
      *
      * 与 [sourceSummary] 的关系：那个只收两个**整数**，因此无法表达「未知」。
      * 两源都返回时两条路径必须产出**逐字相同**的文案（`SourceCountsTest` 在 8 种语言上钉住）。
@@ -872,15 +872,15 @@ data class OfflineStrings(
 data class SourceStrings(
     /** 品牌名。**各语言保持一致**（专有名词不翻译）。 */
     val sourceQqMusic: String,
-    /** 账号区块标题，例如「QQ 音乐账号」。 */
+    /** 账号区块标题，例如「qm 账号」。 */
     val sourceQqAccount: String,
-    /** 登录动作，例如「登录 QQ 音乐」。 */
+    /** 登录动作，例如「登录 qm」。 */
     val sourceQqLoginAction: String,
     /**
-     * 搜索结果顶部那行小字：`(网易云条数, QQ 音乐条数) -> 文案`。
+     * 搜索结果顶部那行小字：`(ncm条数, qm条数) -> 文案`。
      *
-     * 为什么需要它：`SongCard` 只在**非网易云**的行上标音源，于是纯网易云的结果
-     * 在界面上看不出「来自哪里」——真机反馈正是「现在有了稻香，似乎是网易云的搜索结果？」。
+     * 为什么需要它：`SongCard` 只在**非 ncm**的行上标音源，于是纯 ncm 的结果
+     * 在界面上看不出「来自哪里」——真机反馈正是「现在有了稻香，似乎是 ncm 的搜索结果？」。
      */
     val sourceSummary: (Int, Int) -> String,
     /** 二维码等待扫码。 */
@@ -906,7 +906,7 @@ data class SourceStrings(
     /** 改用网页登录。 */
     val sourceWebLogin: String,
 
-    // ---------- v2.1.1：播放页音源角标 + QQ 音乐手机号验证码登录 ----------
+    // ---------- v2.1.1：播放页音源角标 + qm 手机号验证码登录 ----------
     //
     // ⚠️ 为什么这些**必须**放在本分组里，而不是加到外层 `Strings` 的构造参数上：
     // 外层构造函数当时有 **244 个参数 = 245 个 dex 寄存器**（含 this），上限是 255。
@@ -914,7 +914,7 @@ data class SourceStrings(
     // v2.0.0 · HF1 就是因为往它上面直接加字段而崩的（见外层那段注释）。
     // 本分组只有 15 个参数，随便加；外层一个都不加 —— 于是本版对那个上限的占用是 0。
 
-    /** 网易云（音源名，与 [sourceQqMusic] 对称）。只用在播放页的音源角标上。 */
+    /** ncm（音源名，与 [sourceQqMusic] 对称）。只用在播放页的音源角标上。 */
     val sourceNetease: String,
     /** 手机号登录浮层标题。 */
     val sourceQqPhoneTitle: String,
@@ -994,9 +994,35 @@ data class SourceStrings(
     /** v3.2.0 · P0-D：`(筛选档名) -> "「只看 B 站」下没有结果"`。 */
     val searchFilterEmpty: (String) -> String,
     val aggFilterBoth: String,
-    /** 「只看网易云」口径。 */
+    /**
+     * v3.4.0 · 专辑页音源筛选的「全部」档。
+     *
+     * 与搜索页的 [aggFilterBoth]（「双源」）**不是同一句话**：搜索页那一档的语义是
+     * 「两个源的结果混在一起看」，而专辑页这一档是「不过滤」。共用一个词会让
+     * 专辑页出现一个语义不对的标签（那里并没有「双源合并」这件事）。
+     *
+     * 新调用点直接用 `strings.source.albumSourceFilterAll`，**不要**在主构造器或类体里
+     * 加转发属性 —— 那会吃主构造器的槽位预算（[SourceStrings] 已 77/80）。
+     */
+    val albumSourceFilterAll: String,
+    /**
+     * v3.4.0 · 专辑页筛空文案，参数是**档位名**（如「只看 qm」）。
+     *
+     * 与 [searchFilterEmpty] 分开的理由：两者说的是不同的事 —— 搜索页是「没搜到结果」，
+     * 专辑页是「这个来源下没有收藏的专辑」。后者要能指出**是哪个档位**空的，
+     * 否则用户看到空列表会以为收藏丢了。
+     */
+    val albumFilterEmpty: (String) -> String,
+    /**
+     * v3.4.0 · 专辑详情页的音源行（`音源: ncm`）。
+     *
+     * 参数是音源显示名（来自 `SongTags.sourceLabel`），不是模板里写死某个源 ——
+     * 这样将来接第三个源时不用改文案。
+     */
+    val albumSourceInfo: (String) -> String,
+    /** 「只看 ncm」口径。 */
     val aggFilterNetease: String,
-    /** 「只看 QQ 音乐」口径。 */
+    /** 「只看 qm」口径。 */
     val aggFilterQq: String,
     /** v3.1.0： 「只看 B 站」口径。B 站音源关闭时这一档不出现在 UI 上（见 `SourceFilter`）。 */
     val aggFilterBili: String,
@@ -1064,7 +1090,7 @@ data class SourceStrings(
     /**
      * B 站（音源名）。**各语言保持同一串**：它是专有名词，与 [sourceQqMusic] 同一条纪律。
      *
-     * 用「B站」而不是「哔哩哔哩」：搜索统计行是 `网易云 30 首 · QQ 音乐 0 首 · B站 5 首`，
+     * 用「B站」而不是「哔哩哔哩」：搜索统计行是 `ncm 30 首 · qm 0 首 · B站 5 首`，
      * 四字品牌名会把那一行撑到折行（手机上 360dp 宽只放得下约 22 个全角字符）。
      */
     val sourceBilibili: String,
@@ -1082,7 +1108,7 @@ data class SourceStrings(
 )
 
 /**
- * v2.2.0 · QQ 音乐用户歌单文案组。
+ * v2.2.0 · qm 用户歌单文案组。
  *
  * 单独成组的原因见 [Strings.playlists] 的 KDoc（dex 255 参数寄存器上限）。
  * 文案契约：
@@ -1146,7 +1172,7 @@ data class PlaylistsStrings(
  *
  * ## 为什么「可播放」这三个字必须谨慎
  *
- * v2.3.0 的探针（`docs/verification/v2.3.0/probe-copyright.md`）证明网易云的
+ * v2.3.0 的探针（`docs/verification/v2.3.0/probe-copyright.md`）证明 ncm 的
  * `privilege.pl > 0` ⇒ 30/30 能取到链、假阳性 0，所以 [playable] 是一个**能被实测支撑**的断言。
  * 但它的语义是「**当前账号**可播放」，不是「有版权」——文案刻意写「可播放」而不是「正版」。
  *
@@ -1160,9 +1186,9 @@ data class TagsStrings(
     val memberOnly: String,
     /** 服务端显式声明无版权 / 已下架。 */
     val noCopyright: String,
-    /** 服务端声明这条就是原曲本身（网易云 `originCoverType == 1`）。 */
+    /** 服务端声明这条就是原曲本身（ncm `originCoverType == 1`）。 */
     val original: String,
-    /** 服务端声明这条是翻唱（网易云 `originCoverType == 2`）。 */
+    /** 服务端声明这条是翻唱（ncm `originCoverType == 2`）。 */
     val cover: String,
     /** 翻唱行的副标题：参数是 (原唱艺人, 原曲名)。 */
     val coverOrigin: (String, String) -> String,
@@ -1229,7 +1255,7 @@ data class LocalPlaylistStrings(
     val deleted: String,
     /** 「加入本地歌单」选择器的标题。 */
     val choose: String,
-    /** v2.3.0 · B：把一个远程歌单转存成可编辑的本地歌单（QQ 歌单页 / 网易云歌单页的顶部入口）。 */
+    /** v2.3.0 · B：把一个远程歌单转存成可编辑的本地歌单（QQ 歌单页 / ncm 歌单页的顶部入口）。 */
     val adopt: String,
     /** 转存成功的反馈，参数是歌单名。 */
     val adopted: (String) -> String,
@@ -1308,7 +1334,7 @@ data class QueueStrings(
  * ## 文案纪律（与铁律 20 配套）
  *
  * - `noCopyright` 那一条**只有**服务端显式声明无版权时才会被选中
- *   （网易云的 `noCopyrightRcmd`；QQ 侧没有任何字段能证明这件事）；
+ *   （ncm 的 `noCopyrightRcmd`；QQ 侧没有任何字段能证明这件事）；
  * - 服务端原始 `tips` **一律不回显** —— 那是外部平台的自由文本，
  *   既不本地化也不可信（「服务端标签不可信」在客户端对外说的话上同样成立）。
  */
@@ -1321,7 +1347,7 @@ data class PlaybackFailureStrings(
     val needPurchase: String,
     /** 凭证过期（HTTP 401/403）。 */
     val authExpired: String,
-    /** 服务端**显式声明**无版权（目前只有网易云产出这一档）。 */
+    /** 服务端**显式声明**无版权（目前只有 ncm 产出这一档）。 */
     val copyrightGone: String,
     /** 地区限制。 */
     val regionLocked: String,
@@ -1359,7 +1385,7 @@ data class PlaybackFailureStrings(
 data class WidgetStrings(
     /** 空态那一行：桌面卡片上没有可播放内容。 */
     val widgetEmpty: String,
-    /** 落盘状态里歌名是空串时的占位（网易云有纯音乐曲目）。 */
+    /** 落盘状态里歌名是空串时的占位（ncm 有纯音乐曲目）。 */
     val widgetUnknownTitle: String,
     /** 歌手为空时的占位。 */
     val widgetUnknownArtist: String,
@@ -1477,7 +1503,7 @@ data class SettingsStrings(
     // ---------- v2.8.0：设置界面二级菜单的 7 个一级分组（顺序 = SettingsGroup 声明顺序） ----------
     // 卡片标题＝xxxTitle、卡片副标题＝xxxSubtitle；副标题是**内容清单**（「语言、旋转、推荐」），
     // 不是标题的同义改写 —— 两行写成同一句话用户会看到重复的一行字（v2.1.3 规则 10）。
-    /** 账号与登录：网易云 / QQ 音乐两个互相独立的账号。 */
+    /** 账号与登录：ncm / qm 两个互相独立的账号。 */
     val settingsGroupAccountTitle: String,
     val settingsGroupAccountSubtitle: String,
     /** 通用：语言、旋转、音乐人推荐、后台运行。 */
@@ -1536,7 +1562,7 @@ data class SettingsStrings(
     // LyricsSweepQuality 的常量一一对应。
     val lyricsSweepQualityLabel: String,
     val lyricsSweepQualityOptions: List<String>,
-    // v1.9.0：AMLL TTML 歌词源总开关（默认开）+ 与网易云歌词同时可用时是否优先用 TTML（默认开）。
+    // v1.9.0：AMLL TTML 歌词源总开关（默认开）+ 与 ncm 歌词同时可用时是否优先用 TTML（默认开）。
     // 两者都只在「用户开了 TTML」时才有意义；关掉后行为与 v1.8.1 完全一致（一个 TTML 请求都不发）。
     val lyricsTtmlEnabledLabel: String,
     val lyricsTtmlFirstLabel: String,

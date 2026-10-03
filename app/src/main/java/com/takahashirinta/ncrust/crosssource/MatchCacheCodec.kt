@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -253,7 +253,7 @@ object MatchCacheCodec {
  * 缓存 key 的形状（v2.4.0 · E）。**纯逻辑，抽出来是为了让单测能钉住它。**
  *
  * 形状：`<kind>:<sourceKey>:<id>`。**音源必须在 key 里** ——
- * 网易云的 `6452` 与 QQ 的 `6452` 是两个完全不同的东西，
+ * ncm 的 `6452` 与 QQ 的 `6452` 是两个完全不同的东西，
  * 少了音源段就会互相覆盖（这正是 v2.1.0 给 id 加标志位要解决的那类问题）。
  */
 object MatchCacheKeys {

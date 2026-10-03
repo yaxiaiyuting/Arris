@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -20,10 +20,10 @@ package com.takahashirinta.ncrust.ui.settings
  * 「这个条目到底渲不渲染、在哪渲染」只有一个问题、一处答案。
  */
 enum class SettingsRowKind {
-    /** 网易云账号块（头像 / 昵称 / UID + 登录、登出、扫码授权）。 */
+    /** ncm 账号块（头像 / 昵称 / UID + 登录、登出、扫码授权）。 */
     ACCOUNT_PROFILE,
 
-    /** QQ 音乐账号块（登录态 + 会员角标 + 登录/登出/手机号登录）。 */
+    /** qm 账号块（登录态 + 会员角标 + 登录/登出/手机号登录）。 */
     ACCOUNT_QQ,
 
     /**

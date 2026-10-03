@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -166,7 +166,7 @@ object QqPlaylistStore {
 
     /**
      * 只清某个账号的缓存。登出时调用 —— **不要**顺手清掉另一个账号的，
-     * 那会让「登出网易云」意外把 QQ 的离线歌单也清掉（反之亦然）。
+     * 那会让「登出 ncm」意外把 QQ 的离线歌单也清掉（反之亦然）。
      */
     fun clearOwner(context: Context, ownerId: String) {
         val p = prefs(context)

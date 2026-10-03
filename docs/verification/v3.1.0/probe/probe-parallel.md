@@ -99,7 +99,7 @@
   不是异常。把业务结论塞进异常里，下一个读代码的人就会开始 `catch` 它 ——
   v2.5.2 的 `runCatching` 吞取消就是这么来的。
 - `Result` **只有两态**，无法表达「没有」。本仓库在搜索侧已经为同一件事付过一次学费：
-  `Pair<Int,Int>` 用 `0` 代表「还没回来」，界面上就是「QQ 音乐 0 首」这句假话
+  `Pair<Int,Int>` 用 `0` 代表「还没回来」，界面上就是「qm 0 首」这句假话
   （`SourceCounts.kt:19-32`），后来才补上 `SourceSearchStatus.PENDING/TIMEOUT/ERROR/SKIPPED`
   （`SourceCounts.kt:34-56`）。`FetchOutcome` 的 `Missing` 是同一个教训的第二次应用。
 
@@ -177,7 +177,7 @@ DNS 与 HTTP 两段各自 `catch (CancellationException) { throw e }` 在前（:
 | 语义 | 谁先回来谁先上屏，其余后到再合并 | 等齐了按入参顺序返回结局 |
 | 实现 | `kotlinx.coroutines.selects.select { … onAwait { … } }` | `Semaphore` + `async` + `awaitAll` |
 | 本版落点 | `SearchViewModel.searchByType`（SearchViewModel.kt:313-327，第一次发布 :343-368，`_isLoading=false` :366） | `BoundedParallel.runAll`（BoundedParallel.kt:95-111） |
-| 为什么不能用对方 | 搜索结果写的是**同一个列表**，需要「先上屏」这一个可见事件；三条腿若等齐再发，慢源会拖住快源（v2.5.6 的真机证据：网易云 30s 时 QQ 的 30 条在 ≤5s 已到手，界面却空了 30s，见 :286-295 注释） | 播放侧的腿写的是**同一个对象的不同字段**（`lyrics` / `currentSongArtwork`），没有「发布」这个动作，需要的是失败隔离 + 顺序确定 |
+| 为什么不能用对方 | 搜索结果写的是**同一个列表**，需要「先上屏」这一个可见事件；三条腿若等齐再发，慢源会拖住快源（v2.5.6 的真机证据：ncm 30s 时 QQ 的 30 条在 ≤5s 已到手，界面却空了 30s，见 :286-295 注释） | 播放侧的腿写的是**同一个对象的不同字段**（`lyrics` / `currentSongArtwork`），没有「发布」这个动作，需要的是失败隔离 + 顺序确定 |
 
 调用点清单（本次审计，`grep BoundedParallel` 全量）：
 

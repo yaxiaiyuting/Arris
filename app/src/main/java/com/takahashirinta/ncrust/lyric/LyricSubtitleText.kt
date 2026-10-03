@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -32,7 +32,7 @@ object LyricSubtitleText {
      *
      *  1. 开关关掉（默认）→ 空串。老用户升级后渲染路径与 v1.9.2 逐字节一致；
      *  2. 纯空白 → 空串。**这是「无音译的歌打开开关也不产生空行」的关键**：
-     *     网易云 romalrc 与 TTML 的 x-roman 都可能出现空文本行（间奏 / 纯音乐段），
+     *     ncm romalrc 与 TTML 的 x-roman 都可能出现空文本行（间奏 / 纯音乐段），
      *     而 Compose 里挂一个空 MetroText 会照样占掉一行行高 + 2dp 间距；
      *  3. 与原文 trim 后逐字相同 → 空串。英文歌的 romalrc 有时就是原文本身，
      *     同一句话在原文下方再显示一遍，等于把副文本槽变成噪音源。
@@ -51,7 +51,7 @@ object LyricSubtitleText {
     /**
      * 一行歌词的副文本，按**渲染顺序**返回：译文在上、音译在下。
      *
-     * 顺序与网易云官方客户端的「原文 / 翻译 / 音译」三层一致，用户不需要重新学；
+     * 顺序与 ncm 官方客户端的「原文 / 翻译 / 音译」三层一致，用户不需要重新学；
      * 空串与纯空白一律不占槽位（返回值里绝不会出现空元素）。
      */
     fun subtitleLines(translation: String, romanization: String): List<String> {

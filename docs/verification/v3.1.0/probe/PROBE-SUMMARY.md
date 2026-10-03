@@ -57,7 +57,7 @@
 
 | # | 探针结论（证据） | 决策 | 代码落点 | 守卫测试 |
 |---|---|---|---|---|
-| D1 | auid 与网易云 id **值域重叠**（实测 auid 2.3×10⁷，`EVIDENCE-S6.md:62`） | 合成 id：`BILI_ID_FLAG(1L shl 61) or auid`；`sourceOfId` **先位 62 再位 61** | `MusicSource.kt:221`、`biliId` :236-239、`isBiliId` :227、`sourceOfId` :263-269 | `TrackKeyTest.kt:170-188`（含 `QQ_ID_FLAG - 1` 的边界断言） |
+| D1 | auid 与 ncm id **值域重叠**（实测 auid 2.3×10⁷，`EVIDENCE-S6.md:62`） | 合成 id：`BILI_ID_FLAG(1L shl 61) or auid`；`sourceOfId` **先位 62 再位 61** | `MusicSource.kt:221`、`biliId` :236-239、`isBiliId` :227、`sourceOfId` :263-269 | `TrackKeyTest.kt:170-188`（含 `QQ_ID_FLAG - 1` 的边界断言） |
 | D2 | 音频区**没有搜索接口**（7 个端点 404、`menu/search` 空壳、`search_type=audio/music` 与乱填的 `foobar` 同回 `-1200`） | 两条腿：搜索走视频、取词走音频区；关键词若是 `au…`/链接则按 auid 直取 | `BiliApi.kt:46-58`；`BiliSourceProvider.searchSongs` :71-81、`parseAuidKeyword` :177-183 | `BiliSourceProviderTest.auid 关键词的识别形状` :147；`BiliParseTest.搜索只认 video 条目` :49 |
 | D3 | 视频音轨**没有歌词数据源** | 诚实降级：`markEmpty`，**不是 `fail`** | `BiliSourceProvider.fetchLyric` :149-167；`PlayerViewModel.loadBiliLyrics` :1945-1949 | `BiliParseTest` 的两义性用例 :207/:232 |
 | D4 | `song/info` 的 `lyric` 是 **URL**（`evidence/02`），正文在 `/song/lyric`（`evidence/21`） | **已修（`0b4ed2c`）**：改走 `/song/lyric`，URL 形状一律返回 null | `BiliApi.audioLyric` :249-253、`BiliParse.parseAudioLyric` :423-428、`looksLikeUrl` :437-440、provider :153-166 | `BiliParseTest.kt:199/:207/:216/:232` |
@@ -65,7 +65,7 @@
 | D6 | 缺签名/错签名是 `HTTP 200 + code:-352`，不是 412（`wbi-signature.md:20`） | **已修（`0b4ed2c`）**：`-352` 也算被拒 ⇒ 触发强制刷新密钥一次 | `BiliApi.isSignatureRejected` :220-226 | `BiliSignatureRejectionTest.结构化响应里的 -352 与 -403 与 -1200 都算被拒` :182 |
 | D7 | B 站 CDN 对**三种流**都强校验 Referer；模拟 ExoPlayer 一律 403（`evidence/80`、`evidence/96`） | **未修（指 HEAD `0b4ed2c`；本版最高优先级遗留）**：媒体数据源没有任何请求头注入，`SongUrlResult` 也没有 headers 字段。⚠️ 02:52 观察到工作区有一份**未提交、未审计**的草稿（新增 `bili/BiliCdn.kt`，改 `BiliApi.kt`/`OfflineAudioCache.kt`） | 缺口在 `cache/OfflineAudioCache.kt:111-122`（`DefaultDataSource.Factory` 无 `defaultRequestProperties`）与 `player/SongUrlFetcher.kt:34-75` | **无**（这正是它危险的地方：单测全绿也发现不了） |
 | D8 | 独立开关必须默认关（外部平台依赖） | 默认 `false`；读内存镜像、写唯一入口；关闭时四条入口第一行 return | `BiliPrefs.kt:121/:124/:135/:143-146/:155`；`SettingsRegistry.kt:354-365`；`MainActivity.kt:224`；`BiliSourceProvider.isEnabled` :62 | `BiliSourceProviderTest.kt:41/:49/:60`（行为性；**不是**字节级零请求） |
-| D9 | 网易云 Referer 会让 B 站 403（`EVIDENCE-S6.md:104-106`） | B 站**独立 OkHttpClient**，不共享 CookieInterceptor/Referer/连接池 | `BiliApi.kt:116-121`、类文档 :23-42 | `BiliSourceProviderTest.Provider 已在 SourceRouter 注册` :107 |
+| D9 | ncm Referer 会让 B 站 403（`EVIDENCE-S6.md:104-106`） | B 站**独立 OkHttpClient**，不共享 CookieInterceptor/Referer/连接池 | `BiliApi.kt:116-121`、类文档 :23-42 | `BiliSourceProviderTest.Provider 已在 SourceRouter 注册` :107 |
 | D10 | B 站失败不得影响其他音源 | Provider 契约「绝不抛」+ 路由器 `runCatching` + 搜索硬预算 + 取链不回落 | `MusicSourceProvider.kt:33-41`、`SourceRouter.kt:82-87`、`SearchViewModel.kt:269-279`、`SourceRouter.kt:65-76` | `BiliSourceProviderTest.来源缺少载荷时取链返回 null 而不是退回别的音源` :73 |
 | D11 | 匿名 web 端点四个 qn 都返回 192K（`evidence/13..16`） | 映射表 8 档 → qn 0/1/2/3；阶梯有界；`levelFromFile = true` 如实显示降级 | `BiliPrefs.kt:64-70`、`:78-81`；`BiliSourceProvider.kt:97-106`、`:195` | `BiliQualityTest.kt:192/:207/:220` |
 | D12 | B 站没有会员信号 | 搜索结果**追加在最后**、不参与交错；统计行第三段在 `SKIPPED` 时**短路** | `SearchViewModel.kt:147-175`、`:351-364`；`SourceCounts.kt:108-114`（短路 :112） | `SourceCountsBiliTest.kt:34`（关闭时逐字不变）、`SearchRankingThreeSourceTest.kt:154/:166` |
@@ -81,7 +81,7 @@
 | # | 问题 | 现状 | 怎么答 |
 |---|---|---|---|
 | Q1 | **ExoPlayer 能否播 B 站流**（§2.4 D7） | 实测三条 CDN 路径模拟 ExoPlayer 都是 403；代码里没有任何 Referer 注入 ⇒ 推断为「不能」。⚠️ 02:52 起工作区有一份未提交的 Referer 修复草稿（`bili/BiliCdn.kt`），**本探针未审计**；结论只对 HEAD `0b4ed2c` 成立 | 真机启用 B 站开关，播一个 `au:<id>` 曲目，看 `onPlayerError`；或在挂上 host 限定的 Referer 后重测（注意先清 `filesDir/offline/audio`，403 可能已被写进缓存） |
-| Q2 | 老版本 App 读到 `"bilibili"` 音源 key 的真实表现 | 源码审计：`MusicSource.fromKey` 回落 NETEASE ⇒ 可能把 B 站曲目当网易云同号歌**取链**；但标志位（位 61）不在 `sourceOfId` 的老实现里，老版本会判成网易云 | 装一个 v3.0.0 包 + 写入一条 `source=bilibili` 的队列 JSON，观察是否跳到一首网易云的同号歌 |
+| Q2 | 老版本 App 读到 `"bilibili"` 音源 key 的真实表现 | 源码审计：`MusicSource.fromKey` 回落 NETEASE ⇒ 可能把 B 站曲目当 ncm 同号歌**取链**；但标志位（位 61）不在 `sourceOfId` 的老实现里，老版本会判成 ncm | 装一个 v3.0.0 包 + 写入一条 `source=bilibili` 的队列 JSON，观察是否跳到一首 ncm 的同号歌 |
 | Q3 | 视频音轨的 `cid` 获取链在真实网络下的成功率（`view` → `playurl` 两跳） | 只有 curl 证据（`evidence/64`），没有客户端实测 | 真机启用开关、搜关键词、点一条视频条目，看 `BiliApi` 日志 |
 | Q4 | `audioStream` 的 web 端点是否会在某些曲目/账号态下返回 `type:-1`（30s 试听） | 调研 23 首样本**从未复现**；实现拿到 `-1` 只会显示成「未知」档 | 更大样本抽样（`bili-audio-api.md` §9） |
 

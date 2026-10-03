@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -51,7 +51,7 @@ data class AggregatedAlbum(
  * 聚合后的一页（v2.4.0）。
  *
  * @property preferredSource 「点进去应该用哪一源」的默认值。它由**可播放性**决定，
- *   不由 id 空间或匹配置信度决定 —— 这是本版要修的那条体验（「不再默认网易云」）。
+ *   不由 id 空间或匹配置信度决定 —— 这是本版要修的那条体验（「不再默认 ncm」）。
  * @property availabilityNote 为什么选这一源的一句话说明（可追溯；空串表示没有特别理由）。
  */
 data class ArtistPage(
@@ -92,8 +92,8 @@ data class TrackPage(
  *
  * | 页面 | 探测对象 | 请求数 | 为什么不是别的 |
  * |---|---|---|---|
- * | 艺人页 | 该艺人的**曲目列表**（两源合并后 ≤60 首） | 网易云 ≤1 批 + QQ ≤2 批 | **不逐张专辑探测** —— 44 张专辑 × 2 源 = 88 次请求，艺人页会变成不可用。专辑行的音源偏好因此由**艺人级**的可播放比例决定 |
- * | 专辑页 | 该专辑的**曲目列表** | 网易云 ≤1 批 + QQ ≤1 批 | 一屏之内，成本与主请求同级 |
+ * | 艺人页 | 该艺人的**曲目列表**（两源合并后 ≤60 首） | ncm ≤1 批 + QQ ≤2 批 | **不逐张专辑探测** —— 44 张专辑 × 2 源 = 88 次请求，艺人页会变成不可用。专辑行的音源偏好因此由**艺人级**的可播放比例决定 |
+ * | 专辑页 | 该专辑的**曲目列表** | ncm ≤1 批 + QQ ≤1 批 | 一屏之内，成本与主请求同级 |
  * | 单曲页 | 两源各自的**那一首** | ≤2 次 | 只有一首 |
  *
  * ## 失败隔离（铁律 5）
@@ -271,7 +271,7 @@ object CatalogAggregator {
      * 把两侧的专辑列表装配成一行行（v2.4.0 · A）。
      *
      * **纯函数**，单测直接钉。规则：
-     * 1. 以网易云一侧的顺序为骨架（它是主源，顺序即相关性）；
+     * 1. 以 ncm 一侧的顺序为骨架（它是主源，顺序即相关性）；
      * 2. 每张专辑在 QQ 一侧找**最好的一档**匹配，`mergeable` 才合并；
      * 3. QQ 独有的专辑**追加在末尾**，不插进主序列 —— 插进去会打乱服务端相关性顺序，
      *    而「相关性顺序」是用户唯一能感知的排序依据（v2.3.0 的教训：
@@ -336,7 +336,7 @@ object CatalogAggregator {
      * 把两侧的曲目装配成一行行 + 探一次可用性（v2.4.0 · A/B/D）。
      *
      * 顺序 = **按可用性稳定排序**（`PLAYABLE` > `UNKNOWN` > `MEMBER_ONLY` > `NO_COPYRIGHT`），
-     * 同档保持接口原顺序。网易云的曲目排在 QQ 之前（同档时主源优先）——
+     * 同档保持接口原顺序。ncm 的曲目排在 QQ 之前（同档时主源优先）——
      * 这条让「同样能播时先看到自己点进来的那一源」，与用户的心理预期一致。
      */
     suspend fun assembleSongs(
@@ -383,7 +383,7 @@ object CatalogAggregator {
             val selfAvailability = probed[key] ?: TrackAvailability.UNKNOWN
 
             // ★ 合并之后「这一行放哪一源的哪一首」由**可播放性**决定（特性 D 的核心）：
-            //   网易云无版权、QQ 能播时，这一行的 `song` 必须是 QQ 那一首 ——
+            //   ncm 无版权、QQ 能播时，这一行的 `song` 必须是 QQ 那一首 ——
             //   否则界面上标着「可播放」、点下去播的还是那个播不了的版本。
             //   平级时保持主源（用户是从主源进来的）。
             val preferOther = mergeable && otherKey != null &&
@@ -410,7 +410,7 @@ object CatalogAggregator {
         }
         for (s in qqSongs) {
             val key = TrackKey.fromSong(s)
-            if (key in absorbedQq) continue // 已经作为网易云那一行的合并结果出现
+            if (key in absorbedQq) continue // 已经作为 ncm 那一行的合并结果出现
             rows += AggregatedSong(
                 song = s,
                 availability = probed[key] ?: TrackAvailability.UNKNOWN,
@@ -491,7 +491,7 @@ object CatalogAggregator {
                 name = it.name.orEmpty(),
                 trackCount = it.size,
                 publishDate = it.publishTime?.let { ms -> yearOf(ms) },
-                // 网易云的 `/api/artist/albums/{id}` **不返回厂牌**（实测：`ArtistAlbumItem`
+                // ncm 的 `/api/artist/albums/{id}` **不返回厂牌**（实测：`ArtistAlbumItem`
                 // 只有 id/name/picUrl/publishTime/size/artist）。这里如实留 null，
                 // 不去别处补一个「看起来像厂牌」的字段 —— 探针已经证明两源的 company
                 // 口径不同（8/34 一致），它本来就不该参与判定。
@@ -683,7 +683,7 @@ object CatalogAggregator {
             MusicSource.NETEASE -> runCatching {
                 RetrofitClient.api.search(keyword = keyword, type = 1, limit = 20).result?.songs.orEmpty()
             }.getOrDefault(emptyList())
-            // v3.1.0：B 站的「对端查找」不做 —— 音频区的搜索命中率与网易云/QQ 的曲目
+            // v3.1.0：B 站的「对端查找」不做 —— 音频区的搜索命中率与 ncm/QQ 的曲目
             // 不是同一套命名（标题里常年带【】与翻唱标注），跨源匹配的假阳性会直接
             // 体现为「单曲页推荐了另一首歌」。宁可没有对端，也不给错的对端。
             MusicSource.BILIBILI -> emptyList()
@@ -702,7 +702,7 @@ object CatalogAggregator {
             albumName = song.album?.name,
         )
 
-    /** 匹配候选 → 可展示的 `SongItem`（补齐音源字段，别让下游把它当成网易云）。 */
+    /** 匹配候选 → 可展示的 `SongItem`（补齐音源字段，别让下游把它当成 ncm）。 */
     fun candidateToSong(candidate: CrossSourceMatcher.TrackCandidate): SongItem? {
         if (candidate.name.isBlank()) return null
         return songRefOf(
@@ -742,7 +742,7 @@ object CatalogAggregator {
     /**
      * 毫秒时间戳 → 年份。
      *
-     * 网易云的 `publishTime` 是**毫秒**、QQ 的 `pubTime` 是 `YYYY-MM-DD` 字符串
+     * ncm 的 `publishTime` 是**毫秒**、QQ 的 `pubTime` 是 `YYYY-MM-DD` 字符串
      * （`probe-catalog-api.md`）。两源不能直接比，展示层统一成年份字符串，
      * 免得 UI 上一边显示 `1059580800000`、一边显示 `2003-07-31`。
      */

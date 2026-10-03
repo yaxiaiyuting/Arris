@@ -1,5 +1,5 @@
 /*
- * Ncrust -- 网易云音乐第三方客户端
+ * Ncrust -- ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -605,7 +605,7 @@ fun NcrustLyricsPanel(
                                     .padding(top = 2.dp),
                             )
                         }
-                        // v1.9.3：音译槽（原文 → 译文 → 音译，与网易云官方客户端的三层顺序一致）。
+                        // v1.9.3：音译槽（原文 → 译文 → 音译，与 ncm 官方客户端的三层顺序一致）。
                         // 刻意**不**把上面那个译文槽重构成共用的私有 composable：本版的红线之一是
                         // 「关掉音译开关时渲染路径与 v1.9.2 逐字节一致」，让译文分支源码保持原样是
                         // 最省事的证明方式（同构的十来行重复一次，换一条可审计的不变量）。

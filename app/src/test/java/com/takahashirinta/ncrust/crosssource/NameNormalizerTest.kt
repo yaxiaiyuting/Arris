@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -71,8 +71,8 @@ class NameNormalizerTest {
     @Test
     fun `包含召回能认出艺名不等于真名的那一对（探针里朴素算法失败的那条）`() {
         // probe-artist-mapping.md P6 的原始数据：
-        // 网易云真身是 `G.E.M.邓紫棋`(7763)，QQ 也是 `G.E.M.邓紫棋`(001fNHEf1SFEFN)；
-        // 而网易云的仿冒号叫 `邓紫棋`(62017015)。包含关系必须**同时**召回这两个 ——
+        // ncm 真身是 `G.E.M.邓紫棋`(7763)，QQ 也是 `G.E.M.邓紫棋`(001fNHEf1SFEFN)；
+        // 而 ncm 的仿冒号叫 `邓紫棋`(62017015)。包含关系必须**同时**召回这两个 ——
         // 判定交给专辑重合，不在这里做。
         assertTrue(NameNormalizer.containsName("邓紫棋", "G.E.M.邓紫棋"))
         assertTrue(NameNormalizer.containsName("G.E.M.邓紫棋", "邓紫棋"))

@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · C：QQ 音乐账号的独立存储。
+ * v2.1.0 · C：qm 账号的独立存储。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -14,10 +14,10 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * QQ 音乐账号资料（v2.1.0 · C）。
+ * qm 账号资料（v2.1.0 · C）。
  *
  * @property nick 昵称。取不到时 null（UI 显示「已登录」而不是空白）。
- * @property uid QQ 音乐的 uid（`music.UserInfo` 的 `uid`），与 cookie 里的 uin 不是一回事：
+ * @property uid qm 的 uid（`music.UserInfo` 的 `uid`），与 cookie 里的 uin 不是一回事：
  *   uin 是登录身份，uid 是音乐侧账号 id。
  * @property vipType 会员类型。**0 = 非会员**，>0 = 会员（腾讯侧的枚举会变化，
  *   所以这里只区分「有没有会员」与原始值，绝不把具体数字写死进业务判断 ——
@@ -41,13 +41,13 @@ data class QqProfile(
 }
 
 /**
- * QQ 音乐账号的独立存储（v2.1.0 · C）。
+ * qm 账号的独立存储（v2.1.0 · C）。
  *
  * ## 为什么必须是**独立的 SharedPreferences 文件**
  *
- * 网易云的 cookie 在 `ncrust_prefs`/`user_cookie`（[com.takahashirinta.ncrust.auth.CookieManager]）。
+ * ncm 的 cookie 在 `ncrust_prefs`/`user_cookie`（[com.takahashirinta.ncrust.auth.CookieManager]）。
  * 两家的登录态必须能**各自独立地**读、写、失效、登出：
- * - 共用一份存储 ⇒ 登出网易云会把 QQ 音乐的登录态一起清掉；
+ * - 共用一份存储 ⇒ 登出 ncm 会把 qm 的登录态一起清掉；
  * - 共用一份存储 ⇒ 「哪一家的 cookie 过期了」无法判定，只能两家一起重新登录。
  *
  * 所以这里用 `ncrust_qq_prefs`，与 `ncrust_prefs` 没有任何交集。
@@ -55,7 +55,7 @@ data class QqProfile(
  * ## 落盘内容与合规
  *
  * 只落**服务端下发的 cookie 与公开资料**。本应用不采集 QQ 密码、不做密码登录，
- * cookie 也**只存在本机**、不上传任何服务器（与网易云一侧同样的约定）。
+ * cookie 也**只存在本机**、不上传任何服务器（与 ncm 一侧同样的约定）。
  */
 object QqAuthStore {
 
@@ -98,7 +98,7 @@ object QqAuthStore {
 
     fun uin(context: Context): Long? = QqCookie.uinOf(getCookie(context))
 
-    /** 登出：**只清 QQ 音乐这一份**，不碰 `ncrust_prefs` 里的网易云 cookie。 */
+    /** 登出：**只清 qm 这一份**，不碰 `ncrust_prefs` 里的 ncm cookie。 */
     fun clear(context: Context) {
         prefs(context).edit()
             .remove(KEY_COOKIE)

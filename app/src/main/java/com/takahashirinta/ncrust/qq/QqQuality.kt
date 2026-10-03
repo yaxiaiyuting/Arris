@@ -1,19 +1,19 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B：QQ 音乐音质档位映射。**纯逻辑，JVM 可单测。**
+ * v2.1.0 · B：qm 音质档位映射。**纯逻辑，JVM 可单测。**
  */
 
 package com.takahashirinta.ncrust.qq
 
 /**
- * QQ 音乐的「文件档位」（v2.1.0 · B）。
+ * qm 的「文件档位」（v2.1.0 · B）。
  *
- * QQ 音乐取链不传「音质等级」，而是传一个**拼好的文件名**：
+ * qm 取链不传「音质等级」，而是传一个**拼好的文件名**：
  * `<档位前缀><media_mid>.<扩展名>`，例如 `M800003Qui1q2u1Zho.mp3`。
  * 服务端按这个文件名去找文件，找不到就返回空 [purl]（不是报错）——
  * 所以档位前缀写错的表现是「静默拿不到 URL」，而不是一个显式的失败。
@@ -77,7 +77,7 @@ enum class QqFileType(
  * ## 未验证项的边界（如实标注）
  *
  * `M500`/`M800`/`C400`/`F000`/`RS01` 是社区实现里长期一致的前缀，可信度高；
- * `AI00`/`Q000`/`Q001` 只见于部分实现，**没有在登录态实测过**（本仓库没有 QQ 音乐账号），
+ * `AI00`/`Q000`/`Q001` 只见于部分实现，**没有在登录态实测过**（本仓库没有 qm 账号），
  * 它们排在无损之上、且后面永远跟着 `F000`⇒`M800`⇒`M500` ——
  * 猜错的最坏结果是「退到无损」，不是「放不出来」。
  */
@@ -99,7 +99,7 @@ object QqQuality {
         "exhigh" -> listOf(QqFileType.C400, QqFileType.M800)
         "higher" -> listOf(QqFileType.M800)
         "standard" -> listOf(QqFileType.M500)
-        // 未知档位（服务端可能返回阶梯之外的值）：从无损往下试，与网易云侧同样保守。
+        // 未知档位（服务端可能返回阶梯之外的值）：从无损往下试，与 ncm 侧同样保守。
         else -> listOf(QqFileType.F000)
     }
 

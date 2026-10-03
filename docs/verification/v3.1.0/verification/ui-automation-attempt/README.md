@@ -21,5 +21,5 @@ release 包这一侧改用**冒烟**（安装 → 冷启 → 无崩溃 → 首�
 ## 这份记录能证明什么
 
 `summary.txt` 里那四轮日志（`00`~`04`）显示的是：**B 站关闭时**两轮搜索都是
-`bili=0 biliAllowed=false`，而网易云与 QQ 各 30 条 —— 即「关掉 B 站不影响另外两个源」。
+`bili=0 biliAllowed=false`，而 ncm 与 QQ 各 30 条 —— 即「关掉 B 站不影响另外两个源」。
 这条结论后来由仪器化探针的 `PROBE-BILI-ROUTER` 与 `PROBE-BILI-TOGGLE` 更严格地复现。

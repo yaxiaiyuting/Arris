@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -30,9 +30,9 @@ import org.junit.Test
  * ## 背景（为什么这条值得单独一个文件）
  *
  * v2.4.0 就加了带音源的两段路由 `artist/{source}/{artistId}`，但到 v2.6.0 为止
- * 它**只有两个调用点，且都来自硬编码网易云的专辑页** —— 也就是说
+ * 它**只有两个调用点，且都来自硬编码 ncm 的专辑页** —— 也就是说
  * 「QQ 主源歌手页」在真机上**根本不可达**，而 5 个入口全都走那条
- * 把音源写死成网易云的老路由。这个 P0 的形状就是「新路由建好了，老入口没人改」。
+ * 把音源写死成 ncm 的老路由。这个 P0 的形状就是「新路由建好了，老入口没人改」。
  *
  * 所以这里做三件事：
  *
@@ -106,7 +106,7 @@ class ArtistRouteContractTest {
         val songs = listOf(
             // 主路径：QQ 有 singerMID
             song(MusicSource.QQMUSIC, ArtistItem(id = 4558L, name = "周杰伦", mid = "0025NhlN2yWrP4")),
-            // 主路径：网易云十进制
+            // 主路径：ncm 十进制
             song(MusicSource.NETEASE, ArtistItem(id = 6452L, name = "周杰伦")),
             // P0 本体：只有数字 QQ id
             song(MusicSource.QQMUSIC, ArtistItem(id = 4558L, name = "周杰伦")),
@@ -171,7 +171,7 @@ class ArtistRouteContractTest {
         }
         assertTrue(
             "这些调用点用了不带音源的老重载 `NavRoutes.artist(artistId: Long)` —— " +
-                "它在 composable 里把 source 写死成 NETEASE，QQ 曲目会被送到同号的网易云艺人页" +
+                "它在 composable 里把 source 写死成 NETEASE，QQ 曲目会被送到同号的 ncm 艺人页" +
                 "（真机实测：周杰伦 4558 → 马洪波）。正确写法有两种：\n" +
                 "  ① `NavRoutes.artist(MusicSource.NETEASE, id.toString(), name)`（按构造就是某源的入口）；\n" +
                 "  ② `NavRoutes.artist(someArtistNavDirect)`（身份判定走 ArtistNavigator）。\n" +
@@ -267,7 +267,7 @@ class ArtistRouteContractTest {
      *
      * 判据分两类，**不是**风格检查：
      *  ① 显式点名音源（`MusicSource.X` / `*.source` / `musicSource`）——
-     *     本仓库连"按构造就是网易云"的三个入口都要求写出来，因为
+     *     本仓库连"按构造就是 ncm"的三个入口都要求写出来，因为
      *     「按构造正确」正是那个 P0 里唯一没被写下来的东西；
      *  ② 交出一个 `ArtistNav.Direct`（`NavRoutes.artist(direct)` 重载）——
      *     身份的合法性已经由 `ArtistNavigator` 保证过了。

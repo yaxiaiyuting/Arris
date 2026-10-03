@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -212,7 +212,7 @@ object LocalPlaylistCodec {
         val tid = trackId ?: return null
         if (tid <= 0L) return null
         // `source == null` 的解释与 [TrackKey.of] 完全一致：先看 id 有没有 QQ 的标志位，
-        // 都没有才回落网易云。**不猜成网易云**（v2.1.5 的教训）。
+        // 都没有才回落 ncm。**不猜成 ncm**（v2.1.5 的教训）。
         val key = TrackKey.of(source, tid, sourceId, mediaId)
         return LocalPlaylistTrack(
             trackKey = key,

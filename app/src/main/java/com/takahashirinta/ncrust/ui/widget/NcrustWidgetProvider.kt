@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -136,7 +136,7 @@ class NcrustWidgetProvider : AppWidgetProvider() {
 
             val snapshot = WidgetSnapshot(
                 // 「有内容」的判据是歌名或 songId —— 只判 songId 会让某些
-                // mediaId 不是数字的来源（QQ 音乐走 mediaId）在桌面上永远空态。
+                // mediaId 不是数字的来源（qm 走 mediaId）在桌面上永远空态。
                 hasContent = songId > 0L || title.isNotBlank(),
                 songId = songId,
                 title = title,

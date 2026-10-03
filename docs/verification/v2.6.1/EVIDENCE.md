@@ -9,14 +9,14 @@
 |---|---|---|
 | QQ `singer[]` 条目**同时**给数字 `id` 与 base62 `mid` | `probe-raw/qq-search-稻香.json`、`-林俊杰.json`、`-陈奕迅.json` | `probe-raw/probe-artist-id-collision.sh` |
 | 周杰伦 QQ `singer.id = 4558` / `singer.mid = 0025NhlN2yWrP4` | `probe-raw/probe-artist-id-collision.out.txt` | 同上 |
-| 网易云 `api/artist/4558` = **马洪波**（专辑 1 / 单曲 32） | `probe-raw/probe-artist-id-collision.out.txt` | `curl -A '<UA>' -H 'Referer: https://music.163.com/' https://music.163.com/api/artist/4558` |
-| 网易云 `api/artist/6452` = 周杰伦（专辑 41 / 单曲 568） | `probe-artist-jump-static.md` §3 | `curl 'https://music.163.com/api/search/get/web?s=周杰伦&type=100&limit=3'` |
+| ncm `api/artist/4558` = **马洪波**（专辑 1 / 单曲 32） | `probe-raw/probe-artist-id-collision.out.txt` | `curl -A '<UA>' -H 'Referer: https://music.163.com/' https://music.163.com/api/artist/4558` |
+| ncm `api/artist/6452` = 周杰伦（专辑 41 / 单曲 568） | `probe-artist-jump-static.md` §3 | `curl 'https://music.163.com/api/search/get/web?s=周杰伦&type=100&limit=3'` |
 | 林俊杰 `4286` → 刘子译（0/0）；陈奕迅 `143` → 404 | `probe-raw/probe-artist-id-collision.out.txt` | 同第一行 |
 | QQ `singer[]` 字段集 = `{id, mid, name, pmid, title, title_highlight, type, uin}` | `probe-raw/qq-search-*.json`（脚本打印了 `sorted(sg.keys())`） | 同上 |
 
 **这些是外部接口数据，随服务端变化可能失效。** 复现命令与脚本已入库，任何人可重跑；
 `docs/verification/v2.4.0/probe-artist-mapping.md:80-83` 也有独立的同向记录
-（`网易云周杰伦 id=6452` vs `QQ singerID=4558`，「两个编号空间各自独立」）。
+（`ncm周杰伦 id=6452` vs `QQ singerID=4558`，「两个编号空间各自独立」）。
 
 ## B. 真机取证（PCL110 / WGR-W09）
 
@@ -45,10 +45,10 @@
 
 | 结论 | 位置 |
 |---|---|
-| 老路由把音源**写死**成网易云 | `app/src/main/java/com/takahashirinta/ncrust/ui/navigation/NavGraph.kt:196-203` |
-| 带音源的两段路由存在，但只有 2 个调用点（都在专辑页，且被 gate 成网易云） | `NavGraph.kt:215-237`、`AlbumDetailScreen.kt:173-181` |
+| 老路由把音源**写死**成 ncm | `app/src/main/java/com/takahashirinta/ncrust/ui/navigation/NavGraph.kt:196-203` |
+| 带音源的两段路由存在，但只有 2 个调用点（都在专辑页，且被 gate 成 ncm） | `NavGraph.kt:215-237`、`AlbumDetailScreen.kt:173-181` |
 | 二级菜单「转到歌手」入口 | `MainActivity.kt:2511-2513`（v2.6.0） |
-| `resolveAndNavigate` 只取 `artists[0].id`、补 id 用网易云接口 | `MainActivity.kt:1838-1864`（v2.6.0） |
+| `resolveAndNavigate` 只取 `artists[0].id`、补 id 用 ncm 接口 | `MainActivity.kt:1838-1864`（v2.6.0） |
 | QQ 映射丢掉 `singer.mid` | `qq/QqSongMapper.kt:110`（v2.6.0） |
 | 播放页托盘只传裸 `Long` | `ui/player/PlayerCard.kt:123,1518` + `MainActivity.kt:2169`（v2.6.0） |
 | 冷启动恢复的曲目 `artists[0].id` 恒为 null | `MainActivity.kt:917-932`（`artists = listOf(ArtistItem(name = artist))`） |
@@ -85,7 +85,7 @@
    但「下一次联网刷新写回 mid」只在单测层面成立，没有真机时序证据。
 4. **「转到专辑」对 QQ 曲目仍然错**（同类 bug，本版明确不修）——见
    `probe-artist-jump-static.md` §5。
-5. **搜索页「艺人」tab 仍只有网易云结果**（缺失功能，不是错误跳转）。
+5. **搜索页「艺人」tab 仍只有 ncm 结果**（缺失功能，不是错误跳转）。
 
 ---
 

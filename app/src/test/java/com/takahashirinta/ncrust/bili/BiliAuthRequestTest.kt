@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -215,13 +215,13 @@ class BiliAuthRequestTest {
     }
 
     @Test
-    fun `认证网络层绝不自建 client 也绝不复用网易云那套`() {
+    fun `认证网络层绝不自建 client 也绝不复用ncm那套`() {
         // 只看**代码**：类文档里当然会提到 RetrofitClient / OkHttpClient（那是在解释为什么不用它们），
         // 把注释算进来只会得到一条自己打自己的守卫。
         val code = codeOnly(source("bili/BiliAuthApi.kt"))
         assertFalse(
-            "代码里不许出现 RetrofitClient：它的拦截器无条件注入网易云的 Referer/UA/Cookie，" +
-                "而 v3.1.0 实测「拿网易云 Referer 请求 B 站 ⇒ 403」",
+            "代码里不许出现 RetrofitClient：它的拦截器无条件注入 ncm 的 Referer/UA/Cookie，" +
+                "而 v3.1.0 实测「拿 ncm Referer 请求 B 站 ⇒ 403」",
             code.contains("RetrofitClient"),
         )
         assertFalse("代码里不许新建第二个 OkHttpClient（必须复用 BiliApi 那个独立 client）", code.contains("OkHttpClient"))

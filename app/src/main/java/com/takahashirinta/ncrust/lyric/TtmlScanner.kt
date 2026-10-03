@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -37,7 +37,7 @@ import kotlin.math.roundToLong
  * ## 与渲染层的约定（[LrcLine] / [LrcWord] 的语义）
  * - `<p>` → 一行 [LrcLine]，叶子 `<span>` → 一个 [LrcWord]，两者复用既有模型，渲染层零改动。
  * - **行文本 = `<p>` 内所有文本节点的拼接，含 span 之间的裸空白**，只裁整行首尾。
- *   实测依据：网易云自己的 LRC 就是 `[00:22.290]都 是勇敢的`（中间有空格），与 TTML 拼接结果逐字
+ *   实测依据：ncm 自己的 LRC 就是 `[00:22.290]都 是勇敢的`（中间有空格），与 TTML 拼接结果逐字
  *   相同；吞掉这个空白会让 [LrcWord.charStart] 与行文本错位，逐字高亮直接错帧。
  *   （Kotlin 的 `isWhitespace` 认全角空格 U+3000 与 NBSP，行内空白一律原样保留。）
  * - **字符区间**以「行内已累积字符数」为游标：词的 `charStart` = 进入该 span 时的游标，
@@ -57,7 +57,7 @@ import kotlin.math.roundToLong
  * - **`ttm:role="x-translation"` / `"x-roman"`** 是 `<p>` 的子元素（也可能嵌在 x-bg 里），
  *   整棵子树既不进入该行文本也不建词，而是各自升成独立的**行级**轨道
  *   （[TtmlDoc.translations] / [TtmlDoc.romans]）。行级轨道的时间戳取**父 `<p>` 的 begin**，
- *   这样调用方能直接按时间与 [TtmlDoc.lines] 配对（语义同网易云的 tlyric）。
+ *   这样调用方能直接按时间与 [TtmlDoc.lines] 配对（语义同 ncm 的 tlyric）。
  *   轨道**不带逐字词**：实测《海阔天空》347230 的 x-roman 连 begin/end 都没有（`<span
  *   ttm:role="x-roman">gam tin ngo  ...</span>`），给逐字只会是假信息。
  * - **`end` 缺失时**：行 [LrcLine.endMs] = `null`；词时长依次用「下一个词 begin − 本词 begin」、
@@ -68,7 +68,7 @@ import kotlin.math.roundToLong
  * ## 时间表达式
  * `MM:SS.fff`（分钟允许 1 位，实测《我记得》1974443814 用 `1:01.110`）、`HH:MM:SS.fff`、
  * offset-time（`12.3s` / `1500ms` / `10f` / `2m` / `1.5h`），另外**额外**接受裸数字（按秒）：
- * 同一个真实文件 1974443814 前 7 行用 `begin="28.571"`，与网易云 LRC 的 `[00:28.15]我带着比身体重的行李`
+ * 同一个真实文件 1974443814 前 7 行用 `begin="28.571"`，与 ncm LRC 的 `[00:28.15]我带着比身体重的行李`
  * 逐句对齐 ⇒ 裸数字就是秒。帧数按 TTML1 默认 30 fps 换算（根元素带 `ttp:frameRate` 时以它为准）。
  * 小数秒用 roundToLong 而不是截断 —— `22.402 * 1000` 在 double 下是 22401.999…，截断会差 1 ms。
  *

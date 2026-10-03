@@ -47,7 +47,7 @@ Ncrust/
 
 - **`app/`** — everything documented below.
 - **`benchmark/`** — `StartupBenchmark` (cold start, 8 iters), `HomeScrollBenchmark` (frame timing, 6 iters), `ExpandPlayerBenchmark` (player expand/collapse, 6 iters, HOT start). Results land in `benchmark/output/<device>/` (gitignored) as `*-benchmarkData.json` + Perfetto traces. `benchmark/cookie.secret` (gitignored) injects a login cookie for realistic runs; `cookie.secret.example` documents it.
-- **`ncrust-api/`** — a self-contained Go 1.21 service (stdlib only) that reverse-proxies NetEase with eapi encryption and TTL caching. It includes a checked-in 9.75 MB binary. **The Android app never calls it** — the app talks directly to `music.163.com` / `interface*.music.163.com`. Treat it as an unused side artifact / future scaffold; do not assume it is part of the runtime.
+- **`ncrust-api/`** — a self-contained Go 1.21 service (stdlib only) that reverse-proxies ncm with eapi encryption and TTL caching. It includes a checked-in 9.75 MB binary. **The Android app never calls it** — the app talks directly to `music.163.com` / `interface*.music.163.com`. Treat it as an unused side artifact / future scaffold; do not assume it is part of the runtime.
 
 ## Versioning & Release
 
@@ -103,8 +103,8 @@ Conventional Commits, lowercase type prefix, Chinese subject:
 
 ## What This App Is
 
-Ncrust is a third-party Android client for **two** music sources — NetEase Cloud Music (网易云音乐) and
-QQ Music (QQ 音乐) — each with its own independent login. It is built around three design priorities:
+Ncrust is a third-party Android client for **two** music sources — ncm (ncm) and
+qm (qm) — each with its own independent login. It is built around three design priorities:
 
 1. **Kanesumi Design** — right-angle cuts, no curves, no rounded corners, information-first.
 2. **GPU zero-recomposition** — animations driven by a single `progress: Float` through `graphicsLayer`, not state-driven recomposition.
@@ -355,7 +355,7 @@ Defaults: Wi-Fi = 3 (lossless), Mobile = 1 (higher). The selected label shows as
 
 #### Playback reporting (webLog)
 
-`PlayReporter` replays the official web player's `webLog` so local listening feeds NetEase recommendations. On natural end **or** progress ≥ 80%, it POSTs a form `logs=JSON([{action:"play", json:{type:"song", wifi:0|1, download:0, id, time, end:"playend", mainsite:"1", mainsiteWeb:"1"}}])` to `https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<csrf>`. **No eapi/weapi encryption.** Fire-and-forget on a `ncrust-weblog` thread, deduped per song, never blocks playback.
+`PlayReporter` replays the official web player's `webLog` so local listening feeds ncm recommendations. On natural end **or** progress ≥ 80%, it POSTs a form `logs=JSON([{action:"play", json:{type:"song", wifi:0|1, download:0, id, time, end:"playend", mainsite:"1", mainsiteWeb:"1"}}])` to `https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<csrf>`. **No eapi/weapi encryption.** Fire-and-forget on a `ncrust-weblog` thread, deduped per song, never blocks playback.
 
 ### Queue Management
 
@@ -404,7 +404,7 @@ SharedPreferences files:
 | 版本 | 新字段 | 踩到的坑 |
 |---|---|---|
 | v1.9.0 | `ttml: String?` + `ttmlAt: Long = 0` | Gson 走 Unsafe 反序列化、不调用构造函数 ⇒ 老条目缺 key 时字段是 null。必须**可空 + 有默认值**，否则读的地方 NPE 或把「没有 TTML」误判成新鲜缓存 |
-| v1.9.2 | `romalrc: String?` | 老条目该字段为 null，语义是「**字段缺失**」而不是「这首歌没有音译」。PCL110 实测 64 条里 **63 条**是老条目，`1959528822` 因此只拿到 TTML 的 16 行音译、网易云那 41 行 romalrc 明明在服务端却用不上。修法 `LyricsCache.needsRomalrcRefetch(entry)`：缺失按 miss 重取一次（一次性、自愈），网络失败回落老缓存（`degraded()`） |
+| v1.9.2 | `romalrc: String?` | 老条目该字段为 null，语义是「**字段缺失**」而不是「这首歌没有音译」。PCL110 实测 64 条里 **63 条**是老条目，`1959528822` 因此只拿到 TTML 的 16 行音译、ncm 那 41 行 romalrc 明明在服务端却用不上。修法 `LyricsCache.needsRomalrcRefetch(entry)`：缺失按 miss 重取一次（一次性、自愈），网络失败回落老缓存（`degraded()`） |
 
 **通用规则**（下一个加字段的人照着做）：
 
@@ -1235,7 +1235,7 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
   「有内容」的候选；再没有 → 无歌词。** 语义要点：LRC 是整行，只要还有任何逐字候选可用，就不该退到 LRC
   （哪怕它排在更前面 —— 比如 TTML 只有整句、YRC 有逐字时选 YRC）。
 - `hasWordLevel` **必须由解析器判「有没有词」**（`TtmlParser.hasWordLevel`），不能拿「解析成功」冒充 ——
-  AMLL DB 里有只有 `<p>` 没有 `<span>` 的逐句投稿，用它替换 LRC 只会白丢网易云的行级数据。
+  AMLL DB 里有只有 `<p>` 没有 `<span>` 的逐句投稿，用它替换 LRC 只会白丢 ncm 的行级数据。
 - **关掉总开关时 TTML 根本不进 `order`**，不是「排在最后」：用户关掉的源一个字节都不该拉。
 - 不做的事：不删改既有 YRC / LRC 路径；TTML 取不到 / 解析失败 / 没有逐字一律**静默回退**，不弹错、不新增 Toast。
 
@@ -1245,8 +1245,8 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 |---|---|
 | 数据源 | [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)（社区维护的公开静态文件仓库） |
 | 许可 | **CC0-1.0**，明确允许音乐播放器使用；**不引入任何新的运行时依赖** |
-| 取数方式 | 按网易云 `songId` 直接 GET `ncm-lyrics/<id>.ttml`（只读公开静态文件） |
-| 红线 | **不爬虫、不模拟登录、不绕过任何保护**；不发网易云请求、不碰 cookie / 用户凭据 |
+| 取数方式 | 按 ncm `songId` 直接 GET `ncm-lyrics/<id>.ttml`（只读公开静态文件） |
+| 红线 | **不爬虫、不模拟登录、不绕过任何保护**；不发 ncm 请求、不碰 cookie / 用户凭据 |
 | 超时 | 自建 OkHttp（连接 5s / 读 10s），不复用 `RetrofitClient` 的 30s/30s —— 补充源拿不到必须立刻回退 |
 
 ### 镜像表与 HTTP 语义（2026-09 curl 实测）
@@ -1271,8 +1271,8 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 
 | 目录 | 文件数 | 说明 |
 |---|---|---|
-| `ncm-lyrics/` | **20,326** | 按**网易云 ID** 命名的派生产物，每 ID 最多 6 种格式 |
-| `qq-lyrics/` | 16,833 | QQ 音乐 ID |
+| `ncm-lyrics/` | **20,326** | 按**ncm ID** 命名的派生产物，每 ID 最多 6 种格式 |
+| `qq-lyrics/` | 16,833 | qm ID |
 | `am-lyrics/` | 14,906 | Apple Music ID |
 | `spotify-lyrics/` | 14,121 | Spotify ID |
 | `raw-lyrics/` | 3,291 | 社区原始投稿（文件名 = 时间戳-作者ID-哈希.ttml） |
@@ -1280,7 +1280,7 @@ TTML 开启 + ttmlFirst=false         → YRC → TTML → LRC
 
 - `ncm-lyrics/` 的 20,326 个文件里，**`.ttml` 只有 3,544 个唯一数字 ID**（其余是同一批 ID 的
   `.yrc` / `.qrc` / `.lys` / `.lrc` / `.eslrc` 派生物）
-  ⇒ **能按网易云 `songId` 直接拉取的 TTML 上限 = 3,544 首**。
+  ⇒ **能按 ncm `songId` 直接拉取的 TTML 上限 = 3,544 首**。
 - ⚠️ **别误读 `/api/lyrics-status` 的 `ttmlFilesCount: 3288`**：那个计数**只数了 `raw-lyrics/` 那一层**
   （3,291 条投稿），**不是** `ncm-lyrics/` 的规模，更不是全库规模 —— 这两个数必须分开说，否则覆盖率会算错一个数量级。
 
@@ -1337,8 +1337,8 @@ at `PlayerViewModel.<init>` → `fetchLyrics`。老代码里 `lyricsFetchingSong
 | 暂存 | 预取下一首时往往还没有 LRC 正式条目；**绝不为了存 TTML 建 `lrc=""` 的正式条目**（那是「确无歌词」的权威标记），先落在 `ttml:<songId>` 暂存键，写正式条目时合并 |
 | 预取 | 复用既有预载时机预取**下一首**（`AmllTtmlClient.prefetch`，单独 `launch`，不挤占取链）；已新鲜则幂等跳过，同一首一轮播放被调多次也只打一次网络 |
 | 竞态 | `LyricRequestGate`（`AtomicLong`）：每次 `fetchLyrics` 先 `begin()` 领号，每个挂起点之后校验 `isCurrent(seq)`，不匹配整包丢弃。**去重（同歌在途）与闸门（旧歌响应盖新歌）是两件事**，且去重必须排在 `begin()` **之前** |
-| 两相落地 | 第一相只用网易云候选（YRC / LRC）决策、**选中立刻显示**（时机与 v1.8.1 一致）；第二相才拉 TTML，连同第一相候选重新 `pick`，TTML 赢了才替换。**绝不把 TTML 放在第一相之前** —— 最坏 4 面镜子 × 5s 连接会把「本来有歌词」变成「一直转圈」 |
-| 译文 | TTML 的 `x-translation` 是独立行级轨道，按 `timeMs` 与正文行精确配对，对不上的丢弃；**TTML 译文与网易云 `tlyric` 不会同时显示**（TTML 赢了就只有 TTML 的译文） |
+| 两相落地 | 第一相只用 ncm 候选（YRC / LRC）决策、**选中立刻显示**（时机与 v1.8.1 一致）；第二相才拉 TTML，连同第一相候选重新 `pick`，TTML 赢了才替换。**绝不把 TTML 放在第一相之前** —— 最坏 4 面镜子 × 5s 连接会把「本来有歌词」变成「一直转圈」 |
+| 译文 | TTML 的 `x-translation` 是独立行级轨道，按 `timeMs` 与正文行精确配对，对不上的丢弃；**TTML 译文与 ncm `tlyric` 不会同时显示**（TTML 赢了就只有 TTML 的译文） |
 
 ### 设置项（`ncrust_settings`）
 
@@ -1385,7 +1385,7 @@ v1.9.0 新增 **66 个**：
 2. **TTML 逐字渐变的帧率未与 YRC 对比**：渲染层零改动意味着它走同一条 `SweepTrack` 路径，但 TTML 的词密度普遍高于 yrc，帧率没有实测对照。
 3. **离线飞行模式未实测**：`getTtmlStale` 的离线兜底路径只有单测覆盖，没有真机飞行模式验证。
 4. **`x-bg` 背景人声不单独建模**：与主唱混在同一行，时间倒退的词被丢弃（有意取舍，不是 bug）。
-5. **TTML 译文与网易云 `tlyric` 不会同时显示**：TTML 赢了就只有 TTML 的 `x-translation`；双源译文合并没有实现。
+5. **TTML 译文与 ncm `tlyric` 不会同时显示**：TTML 赢了就只有 TTML 的 `x-translation`；双源译文合并没有实现。
 6. 未做「按歌名 / 歌手模糊匹配」的兜底（有意不做，不是遗漏）。
 
 
@@ -1471,9 +1471,9 @@ v1.9.0 的 `PlayerViewModel.applyTtmlLyrics()` 在 TTML 胜出时**整体覆盖*
 translatedLyrics.value = doc.translations.filter { it.timeMs in lineTimes }
 `@
 
-TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚从网易云拿到的 `tlyric` 被**整轨清空**。
+TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚从 ncm 拿到的 `tlyric` 被**整轨清空**。
 调研实测（667 首候选池 + 42 份 TTML 缓存）：该判据命中 **1 首** = `22704409 DAY BY DAY`
-（TTML 79 行逐字、0 翻译；网易云 tlyric 79 行）—— 与 `RESEARCH-ttml-vs-netease.md` §3.4 一致。
+（TTML 79 行逐字、0 翻译；ncm tlyric 79 行）—— 与 `RESEARCH-ttml-vs-netease.md` §3.4 一致。
 
 ### 音译轨的真相：v1.9.0/v1.9.1 **从来没有渲染过音译**
 
@@ -1493,9 +1493,9 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 
 | | |
 |---|---|
-| 任务书原文 | TTML 与网易云两条副文本轨按「**整轨二选一**」取用（TTML 有就用 TTML 那一整轨，没有就整轨用网易云） |
-| 实际实现 | **逐行合并**：TTML 里能落到主轨时间轴上的行原样保留；主轨里没有任何 TTML 副文本的行算缺口，缺口按文本/行序逐行回退到网易云 |
-| 偏离理由 | 实测 `1959528822` 紫荆花盛开：TTML 有 **16 行 `x-roman`**，网易云有 **41 行 `romalrc`**，且 TTML 那 16 行与网易云**逐字相同**（是子集）。轨级规则取 16 行 ⇒ **丢掉 13 行明明能对上的音译** |
+| 任务书原文 | TTML 与 ncm 两条副文本轨按「**整轨二选一**」取用（TTML 有就用 TTML 那一整轨，没有就整轨用 ncm） |
+| 实际实现 | **逐行合并**：TTML 里能落到主轨时间轴上的行原样保留；主轨里没有任何 TTML 副文本的行算缺口，缺口按文本/行序逐行回退到 ncm |
+| 偏离理由 | 实测 `1959528822` 紫荆花盛开：TTML 有 **16 行 `x-roman`**，ncm 有 **41 行 `romalrc`**，且 TTML 那 16 行与 ncm**逐字相同**（是子集）。轨级规则取 16 行 ⇒ **丢掉 13 行明明能对上的音译** |
 | 偏离代价 | 合并从「选一条轨」变成「逐行配对」，需要 `YrcAligner.lcsPairs` 的 LCS 文本配对（复用 v1.6.0 逐字对齐那一份实现），并新增 `LyricTrackSource.MIXED` 这个来源标记 |
 | 影响面 | **严格不劣**：覆盖满时一行不多一行不少（单测直接与 v1.9.0 的老表达式逐行比对）；只有缺口才补，补不上就丢这一行，不猜不过桥 |
 | 审计证据 | `LyricTrackMergeTest` 13 例（4 首真实样本夹具 + 合成用例）；期望值另由仓库外 `tools/expected-merge.py` 独立复算 |
@@ -1507,10 +1507,10 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 2. **缺口按文本/行序回退**：主轨里没有任何 TTML 副文本的行才算缺口；用 `YrcAligner.lcsPairs`
    （归一化去空白 + LCS 保序，与 v1.6.0 逐字对齐**同一份实现**）在两源**主轨文本**上配对，
    配对成功才补一行，并把时间戳改写成**主轨那一行**的（副文本轨自己的时间戳一律不用）；
-3. **逐行丢弃**：文本对不上、或网易云那一行没有内容 ⇒ 这一行没有副文本，不猜、不过桥、不硬塞。
+3. **逐行丢弃**：文本对不上、或 ncm 那一行没有内容 ⇒ 这一行没有副文本，不猜、不过桥、不硬塞。
 
 **为什么是逐行而不是「整轨二选一」**：轨级规则在实测数据上会丢东西 —— `1959528822 紫荆花盛开`
-的 TTML 有 **16 行 `x-roman`**、网易云有 **41 行 romalrc**（且 TTML 那 16 行文本与网易云**逐字相同**，
+的 TTML 有 **16 行 `x-roman`**、ncm 有 **41 行 romalrc**（且 TTML 那 16 行文本与 ncm**逐字相同**，
 是子集），轨级规则取 16 行、丢掉 13 行能对上的。逐行合并严格不劣：覆盖满时一行不多一行不少。
 
 > ⚠️ **数据勘误**：`RESEARCH-ttml-vs-netease.md` R311 写「紫荆花盛开 TTML 只有 1 处 `x-roman`」是错的
@@ -1522,13 +1522,13 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 | songId | 主轨 | 译文轨 | 音译轨 | 说明 |
 |---|---|---|---|---|
 | 22704409 DAY BY DAY | TTML/79 words=true | **NETEASE/64** | **NETEASE/52** | v1.9.0 是 **0 行**；直接修复 |
-| 1959528822 紫荆花盛开 | TTML/57 words=true | none/0 | TTML/16 → 修缓存后 **MIXED/29** | 网易云 tlyric 本就为 0 |
+| 1959528822 紫荆花盛开 | TTML/57 words=true | none/0 | TTML/16 → 修缓存后 **MIXED/29** | ncm tlyric 本就为 0 |
 | 36990266 Faded | TTML/54 | TTML/54 | none/0 | 两源译文 54/54 相同，不重复 |
 | 16686599 Numb | TTML/47 | TTML/49 | none/0 | 两源行数不等（47/35）不崩 |
 | 2645500113 跳楼机 | TTML/57 | none/0 | none/0 | 两源都无译文 ⇒ **不产生空轨** |
 
-42 份 TTML 缓存的统计：TTML 无译文但有网易云 tlyric = **1 首**（22704409）；两源都有译文 = 21 首
-（其中 8 首 TTML 覆盖行数少于网易云）；TTML 有可用音译 = 4 首；**网易云有 romalrc 而 TTML 无音译 = 1 首
+42 份 TTML 缓存的统计：TTML 无译文但有 ncm tlyric = **1 首**（22704409）；两源都有译文 = 21 首
+（其中 8 首 TTML 覆盖行数少于 ncm）；TTML 有可用音译 = 4 首；**ncm 有 romalrc 而 TTML 无音译 = 1 首
 （22704409，53 行）** —— 这才是音译回退最干净的验证样本。
 
 ### 缓存：新字段与**升级迁移**（本版真机发现的第二个 bug）
@@ -1539,14 +1539,14 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
 
 真机发现的坑：**LRC 条目没有 TTL**（只有 200 条的 LRU 上限），所以 v1.9.1 及更早写下的条目
 `romalrc` 永远是 null。PCL110 实测 **64 条里 63 条是老条目**，`1959528822` 因此只拿到 TTML 的 16 行音译、
-网易云那 41 行 romalrc 明明在服务端却用不上。修法：`LyricsCache.needsRomalrcRefetch(entry)`
+ncm 那 41 行 romalrc 明明在服务端却用不上。修法：`LyricsCache.needsRomalrcRefetch(entry)`
 （纯函数，判「字段缺失」而不是「字段为空」—— 空串是「确实没有音译」的权威结论）为 true 的条目
 **按 miss 处理重取一次**，补完即恢复缓存命中；**网络失败时回落到这份老缓存**（`degraded()`），
 不让离线用户从「有歌词」变成「没歌词」。代价：升级后每首老歌第一次播放多一次歌词请求（一次性、自愈）。
 
 ### 与序列号闸门 / 渲染层的约束
 
-- 网易云三条轨（主轨 + tlyric + romalrc）在**同一次** `withContext(Dispatchers.Default)` 里解析完，
+- ncm 三条轨（主轨 + tlyric + romalrc）在**同一次** `withContext(Dispatchers.Default)` 里解析完，
   第一相与第二相共用 ⇒ 合并只发生在**一次 fetch 内部**，不存在「A 歌的译文配 B 歌的主轨」；
 - 合并结果在 `withContext` 之后**复查** `lyricReqGate.isCurrent(seq)` 与 `currentSongId` 再落地；
 - 产出的每一行 `timeMs` 都取自主轨 ⇒ `LyricsView` 的 `translatedLyrics.associateBy { timeMs }`
@@ -1555,7 +1555,7 @@ TTML 那份没有 `x-translation` 时这个列表就是空的 ⇒ 第一相刚�
   （实测 `rv=0` 与 `rv=-1` 对同一首歌返回**逐字节相同**的 body，4/4 首 sha256 一致），
   所以本版**没动请求参数**，只是把此前没解析的字段接上。
 
-### 附带发现：AMLL DB 的 `.yrc` **不能**替代网易云的 yrc
+### 附带发现：AMLL DB 的 `.yrc` **不能**替代 ncm 的 yrc
 
 AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lrc/eslrc sidecar，容易被当成
 「yrc 服务端开关抖动时的补充路径」。调研已验证**不可替代**（`PHASE0-REPORT-v1.9.0.md` §10）：
@@ -1566,7 +1566,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 数据源：`RESEARCH-ttml-vs-netease.md` §2.2 / §3.5（100 首收藏样本 + 667 首池）。
 
-| 语种 | 网易云 YRC | 逐字并集（YRC ∪ TTML） | tlyric |
+| 语种 | ncm YRC | 逐字并集（YRC ∪ TTML） | tlyric |
 |---|---|---|---|
 | 中文 | 16/30 = **53.3%** | 66.7% | 池内 232 首只有 4 首（2%） |
 | 英文 | 24/30 = **80.0%** | 83.3% | 池内 274 首 248 首（91%） |
@@ -1576,7 +1576,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 ⇒ TTML 的定位是「**英文歌的逐字 + 翻译源**」，覆盖率上限只有 10.2%（与热度强相关），
 **不是覆盖率主力，也不能宣传成「大幅提升逐字覆盖率」**（真实增量 +5.1pp）。
 日韩用户拿不到逐字（TTML 在日韩基本 0 命中、YRC 也是 0–5%），但译文与音译接近 100% ——
-译文质量的天花板在网易云。**不做按语言分流**（§6.1 数据不支持：语言维度相关的是覆盖率，不是「哪个源更好」），
+译文质量的天花板在 ncm。**不做按语言分流**（§6.1 数据不支持：语言维度相关的是覆盖率，不是「哪个源更好」），
 **不做语言检测**（脚本判定本身就会误判），**不做同名异版模糊匹配**（会导致逐字错位）。
 
 ### v1.9.2 的测试与实测
@@ -1585,7 +1585,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 |---|---|
 | JVM 单测 | **276 个全绿**（v1.9.1 = 255，本版 +21：`LyricTrackMergeTest` 13 + `LyricsCacheModelTest` 16−9+8） |
 | 合并单测的样本 | 4 首真实样本夹具（`app/src/test/resources/lyric-tracks/`，由 `tools/gen-merge-fixtures.py` 从调研原始响应生成）；期望值另由 `tools/expected-merge.py` 独立复算 |
-| 合并单测的关键断言 | 22704409 译文 64 / 音译 52；1959528822 音译 29 = TTML 16 + 网易云补 13；Faded 与 v1.9.0 逐行相同；Numb 行数不等不崩 |
+| 合并单测的关键断言 | 22704409 译文 64 / 音译 52；1959528822 音译 29 = TTML 16 + ncm 补 13；Faded 与 v1.9.0 逐行相同；Numb 行数不等不崩 |
 | PCL110 真机 | `轨道 translation=NETEASE/64 roman=NETEASE/52`（22704409）；翻译渲染截图复核（韩文逐字行下方出现中文译文） |
 | 渲染层 | `SweepTrack` / `LyricsView` / `NcrustLyricsPanel` `git diff` **为空** |
 
@@ -1593,7 +1593,7 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 - **音译轨没有 UI**（见上）：本版的音译回退只能在单测与日志层验证，**没有任何截图能证明它显示出来**；
 - **P1 时间轴对拍未做**：环境无播放/录音能力（`RESEARCH` §1.4 已声明），只做了跨源对照，
-  **不能证明 TTML 与网易云谁更准**；
+  **不能证明 TTML 与 ncm 谁更准**；
 - **1959528822 的 MIXED/29 只在单测夹具上复算过**：真机第一次跑的是 v1.9.1 老缓存（得到 TTML/16），
   修掉缓存迁移后需要再看一次真机日志才算端到端确认；
 - **S6（API 24）未跑本版**：本版只装了 PCL110；
@@ -1603,14 +1603,14 @@ AMLL DB 的 `ncm-lyrics/` 目录除了 TTML 还存了每首歌的 yrc/qrc/lys/lr
 
 ### 做了什么
 
-v1.9.2 把音译轨做进了数据层（TTML `x-roman` + 网易云 `romalrc`，缺口按文本逐行回退），
+v1.9.2 把音译轨做进了数据层（TTML `x-roman` + ncm `romalrc`，缺口按文本逐行回退），
 但当时的硬约束是「渲染层 diff 必须为空」，于是数据只躺在缓存与日志里。本版**解禁音译行渲染**：
 原文 → 译文 → 音译，三行同在一个 LazyColumn item 内，跟着主行一起滚动 / 缩放 / 变色。
 
 | 项 | 决策 |
 |---|---|
 | 显示位置 | **原文下方小字，不替换原文**（PHASE0-REPORT-v1.9.3.md §2 逐条核对：逐字高亮的几何来自**原文那一个 BasicText** 的 TextLayoutResult，替换原文等于让 v1.5.2 的成果失去几何来源） |
-| 副文本顺序 | 原文 → **译文 → 音译**（与网易云官方客户端三层顺序一致） |
+| 副文本顺序 | 原文 → **译文 → 音译**（与 ncm 官方客户端三层顺序一致） |
 | 开关 | `lyrics_romanization`，**默认关**：默认关时副文本槽条件挂载、连 Map 都不建，渲染路径与 v1.9.2 逐字节一致 |
 | 字号 | 音译 18sp / 行高 24sp（译文 20/26、原文 32/42），三者同乘 v1.5.1 的 fontScale ⇒ A- / A+ 一起缩放 |
 | 可点性 | 音译行**不新增任何 pointerInput**：它落在主行 Box 的 detectTapGestures 内，点它 == 点主行 |
@@ -1731,7 +1731,7 @@ Gson 反序列化）、或点击落在 `graphicsLayer` 过渡期的命中期（�
   无固定/秒级种子、无按语种/专辑分池。
 - **统计事实**：均匀随机排列下同类占比 k/n 时期望相邻同类对 = k(k-1)/n；n=50、日语 70% 时
   P(≥10 连) ≈ **27.8%** ⇒ 在日语为主的库里是**正常统计现象**，算法层面无法"修正"分布。
-  **本 fork 不做「按语种均衡」**（语言是伪概念，网易云没有语言字段）。
+  **本 fork 不做「按语种均衡」**（语言是伪概念，ncm 没有语言字段）。
 - **但有三处真缺陷**（它们才会造成"真·连播"）：
 
 | # | 缺陷 | 后果 | 修法 |
@@ -2139,7 +2139,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 ### v2.0.2 的已知问题 / 系统限制（应用层无法解决）
 
 1. **华为「播控中心」不会出现本应用卡片、也不显示歌词**：它是独立的系统卡片（华为官方称
-   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/网易云/QQ/酷狗/酷我/
+   「系统设计的实况窗」），且有**官方支持应用清单**（音乐类只列了华为音乐/ncm/QQ/酷狗/酷我/
    咪咕/波点/Apple Music/Spotify/TIDAL 等，不含第三方小众客户端），需要厂商白名单/商业合作，
    **没有 API 可申请**。
 2. **无法阻止 ROM 再画一张系统卡片**（系统侧行为）。本版能做的是**不再自己多发一条**。
@@ -2164,7 +2164,7 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
    并把限流从「丢弃」改成「延后重试」。
 3. 任务书说 versionCode 由 `tools/next-version.sh` 决定 —— 一致，三源最大值 28 ⇒ **29**。
 
-## v2.1.0 新增（本 fork · QQ 音乐音源 + 双账号体系）
+## v2.1.0 新增（本 fork · qm 音源 + 双账号体系）
 
 > **版本**：`2.1.0-gpl` / versionCode **30**（`tools/next-version.sh` 三源交叉验证：
 > 最近 5 个 tag / dist 44 个 APK 的 aapt2 badging / 仓库当前 build.gradle 最大值都是 29）。
@@ -2185,8 +2185,8 @@ media3 自己那条通知的刷新白名单也只有 playbackState / playWhenRea
 `PlaybackStateManager` / `OfflineLibrary` / `LibraryManager` 五个文件里各做一次
 「key 带音源 + 老 key 兼容读」。**本版采用了更小的替代方案并在此记录偏离**：
 
-QQ 音乐的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）。
-网易云的 id 是十进制百万~十亿量级，永远触不到 2^62，于是：
+qm 的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）。
+ncm 的 id 是十进制百万~十亿量级，永远触不到 2^62，于是：
 
 - 撞号从「每个调用点都要记得带音源」变成**结构上不可能**；
 - **既有结构一个字节都不用改**，不需要任何数据迁移；
@@ -2194,7 +2194,7 @@ QQ 音乐的数字 id 一律写成 `(1L shl 62) or rawId`（`SourceIds.qqId`）�
 
 `qqRawId` 用掩码无损反解（真实 songid 是 9~10 位十进制数，不可能占到 bit 62；
 真占了就退回 FNV-1a 62 位散列兜底）。它对**非 QQ id 返回 null 而不是原样返回**：
-调用方拿到 null 说明「这不是 QQ 音乐的 id」，静默通过只会让它跑到取链那一步才炸。
+调用方拿到 null 说明「这不是 qm 的 id」，静默通过只会让它跑到取链那一步才炸。
 
 ### 决策 2：**QQ 用的不是标准 3DES**（本版最反直觉的一条）
 
@@ -2250,9 +2250,9 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 ### 决策 6：QQ 歌词**不经过** `LyricsCache`，也不走 TTML 那一相
 
-- **不走 TTML**：TTML DB 是按网易云 id 索引的，拿 QQ 的 id 去查只会 404，
+- **不走 TTML**：TTML DB 是按 ncm id 索引的，拿 QQ 的 id 去查只会 404，
   极小概率还会命中一首**完全无关**的歌的 TTML。
-- **不进 `LyricsCache`**：那张表存的是网易云的字段形状（lrc/tlyric/yrc/romalrc/ttml），
+- **不进 `LyricsCache`**：那张表存的是 ncm 的字段形状（lrc/tlyric/yrc/romalrc/ttml），
   塞 QQ 数据要么加字段 + 迁移逻辑、要么污染字段语义。取舍是每次播放现取一次，
   **代价是断网时 QQ 曲目没有歌词** —— 已进 release notes 的已知问题。
 
@@ -2262,7 +2262,7 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 | 路线 | 最后一跳 | 采纳 |
 |---|---|---|
-| QQ 音乐客户端扫码（`CreateQRCode` + `GetQRCodeStatus`） | **只能是 MQTT**（扫码方确认后由服务端推送；HTTP 侧穷举 48 个候选方法后确认没有「把登录态交给发起方」的接口） | ❌ 要自己实现 MQTT 5.0 over WSS，成本远超范围 |
+| qm 客户端扫码（`CreateQRCode` + `GetQRCodeStatus`） | **只能是 MQTT**（扫码方确认后由服务端推送；HTTP 侧穷举 48 个候选方法后确认没有「把登录态交给发起方」的接口） | ❌ 要自己实现 MQTT 5.0 over WSS，成本远超范围 |
 | **QQ 互联扫码**（`ptqrshow` + `ptqrlogin`） | 纯 HTTP 长轮询，官方 Web 端现役；**手机 QQ** 扫 | ✅ 本版实现 |
 
 **实现**：`QqQrLogin`（纯逻辑：`hash33` token、`ptuiCB` 解析、状态映射）+ `QqQrClient`（HTTP：
@@ -2301,16 +2301,16 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 - QQ 互联的扫码轮询端点在本机出口 IP 上被 WAF **恒定 403**（调研期 8 种以上参数 /
   Header / TLS 指纹变体全部失败）；
-- QQ 音乐客户端自己的扫码链路（`CreateQRCode` + MQTT over WSS）实测可达，
+- qm 客户端自己的扫码链路（`CreateQRCode` + MQTT over WSS）实测可达，
   但要自己实现 MQTT 5.0 握手与订阅，协议栈成本远超本版范围；
-- WebView 与网易云那条已经用了很久的登录路径**同一套机制**，覆盖 QQ / 微信 / 手机号
+- WebView 与 ncm 那条已经用了很久的登录路径**同一套机制**，覆盖 QQ / 微信 / 手机号
   三种方式，且**全程不采集密码**（用户在腾讯自己的页面输入）。
 
 ### 决策 8：会员状态**只用于显示**，不参与播放决策
 
 `VipLogin.VipLoginInter / vip_login_base` 匿名也能调（实测 `code=0`），返回
 `identity.vip/svip/overdate` 与音质权益。但**登录态下的取值没有实测过**
-（本仓库没有 QQ 音乐账号），所以它只驱动设置页的一个角标；
+（本仓库没有 qm 账号），所以它只驱动设置页的一个角标；
 「这首歌能不能放」永远由服务端返回的 purl 决定（见 `QqApi.fetchPlayUrl`）。
 判断错了最坏是界面上的一个角标不对，不会凭空给或夺走播放权限。
 
@@ -2329,10 +2329,10 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
 
 ### 双账号
 
-| | 网易云 | QQ 音乐 |
+| | ncm | qm |
 |---|---|---|
 | cookie | `ncrust_prefs`/`user_cookie` | **`ncrust_qq_prefs`/`qq_cookie`** |
-| 登出 | 只清网易云 | **只清 QQ 音乐** |
+| 登出 | 只清 ncm | **只清 qm** |
 
 登录判据 = **uin 与票据同时存在**（只看票据会在票据过期但仍留在 cookie 里时误判成已登录，
 表现是「设置页显示已登录、一播放就跳歌」，比干脆显示未登录更难排查）。
@@ -2348,12 +2348,12 @@ QRC（9808 hex）与**另一份独立实现**解出的黄金 XML（9821 字节�
   会员接口匿名可调；
 - **跨实现黄金样本**：真实《晴天》QRC 的解密结果与另一份独立实现逐字节一致；
 - 真机（PCL110 / Android 16 / API 36）：v2.0.2 → v2.1.0 **覆盖安装成功**（签名兼容）、
-  启动无 FATAL、UI 正常渲染、网易云歌词链（缓存命中 → YRC 逐字 59 行）正常；
+  启动无 FATAL、UI 正常渲染、ncm 歌词链（缓存命中 → YRC 逐字 59 行）正常；
 - 权限 11 条与 v2.0.2 **逐条 diff 为空**；签名指纹 `e75af3ff…5511`。
 
 **未验证（写进 release notes）**：登录态的 QQ 取链/歌词/会员取值；
 QQ 登录链路端到端（无账号）；QQ 曲目断网无歌词；音源角标对 QQ 曲目不细分档位；
-QQ 曲目不进网易云歌单。
+QQ 曲目不进 ncm 歌单。
 
 **真机 UI 自动化的限制**（沿用 v1.7.0 的记录）：本轮 adb 注入文本到 Compose 输入框
 **完全不生效**（设备无可用 IME，`input text` 与 `input keyevent` 均无效），
@@ -2545,7 +2545,7 @@ v2.1.0 把 HTTP 403、空 body、解析失败、`IOException` **四类失败归�
 ### 8. 播放页音源角标（v2.1.1）
 
 播放页是用户唯一能确认「现在放的是哪家」的地方，所以**两个音源都标**
-（`歌手 · 网易云` / `歌手 · QQ 音乐`），与列表页「只标非网易云」的降噪策略不同。
+（`歌手 · ncm` / `歌手 · qm`），与列表页「只标非 ncm」的降噪策略不同。
 落点五处共用 `PlayerCard.ArtistLineWithSource`。三个取舍：角标与歌手**同一行**
 （窄屏顶栏是固定 56dp 的 Box，多一行会被裁）；`weight(1f, fill = false)` 只给歌手，
 **角标永远完整可见**；`alignByBaseline()` 让 12sp 与 14/16sp 基线对齐。

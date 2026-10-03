@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -108,7 +108,7 @@ object PlayAllDedup {
         }
 
         // ---------------------------------------------------------------- 轴 A
-        // 跨源配对：锚点 = 网易云那一侧，候选 = QQ 那一侧（各保持界面顺序）。
+        // 跨源配对：锚点 = ncm 那一侧，候选 = QQ 那一侧（各保持界面顺序）。
         // `pairTracks` 是**一对一贪心**的，所以不会出现「两条抢同一个候选」。
         val anchorIdx = indexes.filter { rows[it].song.musicSource == MusicSource.NETEASE }
         val otherIdx = indexes.filter { rows[it].song.musicSource == MusicSource.QQMUSIC }

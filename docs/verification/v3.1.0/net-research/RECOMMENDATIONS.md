@@ -5,12 +5,12 @@
 > [cache-status.md](cache-status.md)、[connection-layer.md](connection-layer.md)（源码审计）
 > 采集时间：2026-09-28 ｜ 代码基线：`a86d97b`
 
-## 1. 结论先行：网易云「慢」可以分成三层，其中**只有一层是网络环境**
+## 1. 结论先行：ncm「慢」可以分成三层，其中**只有一层是网络环境**
 
 | 层 | 现象 | 本轮证据 | 可优化？ |
 |---|---|---|---|
-| **L1 网络/服务端** | 网易云搜索 TTFB P50 **249ms**，QQ 只有 **121ms**（同设备、同 h2 连接、同 `write`） | 探针 §1/§2 | ❌ **改不动**。这是网易云 `cloudsearch/pc` 自身的处理时间 |
-| **L1b 网络/连接** | 冷连接一次性成本 ~365ms（dns 19 + tcp 139 + tls 99），且网易云的搜索/取链/歌词分布在 **2 个 host** ⇒ 冷启动要付 2 次 | 探针 §4 | ✅ **可优化**：连接预热（收益 ≈ 365ms × 命中率，成本 ≈ 1 个 404 请求） |
+| **L1 网络/服务端** | ncm 搜索 TTFB P50 **249ms**，QQ 只有 **121ms**（同设备、同 h2 连接、同 `write`） | 探针 §1/§2 | ❌ **改不动**。这是 ncm `cloudsearch/pc` 自身的处理时间 |
+| **L1b 网络/连接** | 冷连接一次性成本 ~365ms（dns 19 + tcp 139 + tls 99），且 ncm 的搜索/取链/歌词分布在 **2 个 host** ⇒ 冷启动要付 2 次 | 探针 §4 | ✅ **可优化**：连接预热（收益 ≈ 365ms × 命中率，成本 ≈ 1 个 404 请求） |
 | **L2 编排** | 点歌之后：**取链（网络，阻塞）→ 才 `launch { fetchLyrics }`** ⇒ 歌词的 RTT 完全串在取链后面；封面不预取；下一首只预取 URL + TTML | `request-orchestration.md`、`preload-slot-status.md` | ✅ **可优化，且这是本轮最大的收益点** |
 | **L3 缓存** | 歌词缓存命中**不直接落地**（要等 `applyBestLyricSource` 的源选择）；URL 缓存 TTL 是**隐式的 5 分钟常量**、没有显式过期时间戳；进入列表不预取封面 | `cache-status.md` | ✅ **可优化**（也正是 B 站 TTL 必须显式化的原因） |
 
@@ -77,16 +77,16 @@
 | 给任何请求加 `callTimeout` | v2.5.6 真机证伪（见 `RetrofitClient.kt:75-116`）；本轮探针再次证明「慢」不在客户端可控段 |
 | 调大 `maxRequestsPerHost` / 换 `Dispatcher` | 探针证明排队不是瓶颈（maxWait 157ms） |
 | 自建代理 / 中转（`ncrust-api` 那条路） | 铁律 1：无自建 API |
-| 把网易云的 host 合并成一个 | 服务端行为，客户端改不了；预热两个 host 更便宜 |
+| 把 ncm 的 host 合并成一个 | 服务端行为，客户端改不了；预热两个 host 更便宜 |
 | 把首页三请求改成串行「省流量」 | 与 L2 的方向相反 |
-| 预取 URL 到列表 | URL 有时效（B 站 3h / 网易云实测会轮换），预取一批等于制造一批必然过期的条目 |
+| 预取 URL 到列表 | URL 有时效（B 站 3h / ncm 实测会轮换），预取一批等于制造一批必然过期的条目 |
 
 ## 4. 这一层给 B 站接入的直接约束（从探针来的，不是文档推断）
 
-1. **B 站必须用自己的 HTTP 客户端**：探针 A/B 对照显示，带网易云的
+1. **B 站必须用自己的 HTTP 客户端**：探针 A/B 对照显示，带 ncm 的
    `Referer: https://music.163.com/` 会让 B 站返回 **HTTP 403**（`api.bilibili.com` 与
    `www.bilibili.com` 都中招），换成 B 站自己的 Referer 或**不带** Referer 都是
-   `200 + code:-101`。⇒ **绝不能复用生产里那个无条件注入网易云 Referer/UA/Cookie 的
+   `200 + code:-101`。⇒ **绝不能复用生产里那个无条件注入 ncm Referer/UA/Cookie 的
    `CookieInterceptor` 与 `plainClient`**（铁律 27 的具体落点）。
 2. **B 站的 URL TTL 必须显式化**：P0-B 的 `expiresAtMs` 就是为它准备的。
 3. **并发的同一套上限**：B 站的搜索/取链也走 P0-A 的编排原语，不额外开线程池。

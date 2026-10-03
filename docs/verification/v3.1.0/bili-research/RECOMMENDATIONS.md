@@ -18,7 +18,7 @@
 | 登录 | **本版不做** | 匿名已覆盖"搜索→播放→歌词"全链路；登录只换来收藏夹/投币/FLAC，却引入账号级风控与合规风险 |
 | 开关默认值 | **默认关闭**（`BiliPrefs.DEFAULT_ENABLED = false`，现有实现已如此） | 见 §6 的法律风险；且 B站音源的风控状态**会随出口 IP 与时间变化**，不适合做默认开启的主音源 |
 | URL TTL | **以 URL 里的 `deadline` 为准（`now+7200s`），再乘 0.9 安全系数**；`timeout`(10800) **不可信** | 实测 `timeout` 是名义常量、`deadline` 才是真实过期；两者差 1 小时 |
-| 歌词 | **B站自己的 `song/lyric`（标准 LRC）**，不引第三方 | 实测是 `[MM:SS.mm]`，**可直接喂现有 `LrcParser`**；社区项目去接 LRCLIB/网易云是因为不知道这个端点 |
+| 歌词 | **B站自己的 `song/lyric`（标准 LRC）**，不引第三方 | 实测是 `[MM:SS.mm]`，**可直接喂现有 `LrcParser`**；社区项目去接 LRCLIB/ncm 是因为不知道这个端点 |
 | 音质映射 | `standard→qn0(128K)` / `higher→qn1` / `exhigh→qn2(320K)`；`lossless+` 一律**不请求** | 匿名没有 FLAC（`qualities[]` 里根本没有 `type:3`），请求了也是静默降级 |
 
 ---
@@ -46,7 +46,7 @@
 
 **不支持"只做视频 DASH"**（社区 4/5 个项目的做法）：会失去
 ① **零风控**的稳定播放路径（视频 `/x/player/wbi/playurl` 在本机出口直接 412）；
-② **LRC 歌词**（视频没有对应数据源，`biu` 因此去接 LRCLIB + 网易云）；
+② **LRC 歌词**（视频没有对应数据源，`biu` 因此去接 LRCLIB + ncm）；
 ③ 干净的"一首歌 = 一个条目"粒度。
 
 **"两条腿"的代价（必须承认）**：
@@ -240,7 +240,7 @@ enum class MusicSource(val key: String) {
 ⚠️ **任务书写的是 `TrackKey(source=BILIBILI, id="au<auid>", mediaId=null)` —— 但 `TrackKey.id` 是 `Long`，字符串 `"au123"` 放不进去。** 现有实现的做法（合成数字 id + `sourceId` 承载载荷）才是对的，理由：
 
 1. `TrackKey.id` 的类型是 `Long`（见 `TrackKey.kt`），**结构性约束**；
-2. 本项目已有成熟的"数字 id 需要隔离"的方案：`SourceIds.QQ_ID_FLAG = 1L shl 62` —— 把 QQ 的 id 抬到网易云到不了的区间。B站应**沿用同一模式**（现有实现已有 `isBiliId(id)` 与 `sourceOfId` 分支）；
+2. 本项目已有成熟的"数字 id 需要隔离"的方案：`SourceIds.QQ_ID_FLAG = 1L shl 62` —— 把 QQ 的 id 抬到 ncm 到不了的区间。B站应**沿用同一模式**（现有实现已有 `isBiliId(id)` 与 `sourceOfId` 分支）；
 3. `sourceId` 的既有语义就是"取链/取词必须带、但不参与身份相等"的载荷 —— B站的 `auid`/`bvid+cid` 正是这个语义。
 
 **必须满足的三条不变量**（来自 `TrackKey` 的既有 KDoc）：
@@ -249,7 +249,7 @@ enum class MusicSource(val key: String) {
 |---|---|
 | `equals` 只比 `(source, id)` | 同一个 auid 在冷启动恢复时缺 `sourceId` 也必须判为同一首 —— 现有实现用**合成 id 自带可逆载荷**（`parseSourceId`）满足 |
 | `id` 必须**自解释**音源 | `sourceOfId(id)` 要能从 id 反推 `BILIBILI`（防止持久化丢 `source` 字符串后串台） |
-| **撞号在结构上不可能** | B站的 `auid` 是 6–7 位十进制（实测 au39 ~ au4059094），与网易云 id 空间**重叠** ⇒ **必须加标志位/偏移**，不能直接透传 |
+| **撞号在结构上不可能** | B站的 `auid` 是 6–7 位十进制（实测 au39 ~ au4059094），与 ncm id 空间**重叠** ⇒ **必须加标志位/偏移**，不能直接透传 |
 
 ✅ 现有实现已按此设计（`isBiliId` + `SourceIds` 分支）。**建议补一条 JVM 单测**：`TrackKey.of(null, biliSyntheticId)` 必须反解成 `BILIBILI`（照抄 QQ 那条测试的形状）。
 
@@ -297,7 +297,7 @@ enum class MusicSource(val key: String) {
 - `song/info` 的 `lyric` 字段是同一份 LRC 的**文件 URL**（http，可能为空串），可作兜底；
 - **只有行级 LRC，没有逐字/翻译/TTML** ⇒ B站音源上 Ncrust 的逐字歌词与 TTML 能力**不可用**，应走既有的"诚实降级"路径而不是报错。
 
-⚠️ **视频条目没有歌词数据源**。`BiliSourceProvider` 现有 KDoc 已明确"空（诚实降级）"，这是对的。**不要**像 `biu` 那样去接 LRCLIB/网易云 —— 那会引入新的第三方依赖、新的许可证问题，以及**把 B站曲目名发给第三方**的隐私问题。
+⚠️ **视频条目没有歌词数据源**。`BiliSourceProvider` 现有 KDoc 已明确"空（诚实降级）"，这是对的。**不要**像 `biu` 那样去接 LRCLIB/ncm —— 那会引入新的第三方依赖、新的许可证问题，以及**把 B站曲目名发给第三方**的隐私问题。
 
 ### 4.5 封面来源
 
@@ -311,8 +311,8 @@ enum class MusicSource(val key: String) {
 
 现有 `SourceCounts` 已经有 `biliCount` / `biliStatus` / `sourceSummaryBili` / `aggFilterBili`，结构已就位。三点建议：
 
-1. **`SourceSearchStatus.SKIPPED` 语义**：B站**默认关闭**（`DEFAULT_ENABLED = false`）⇒ 关掉时必须是 `SKIPPED`（不计入"三源"文案），而不是 `DONE`(0 条)。现有 `SourceCounts.kt:112` 的 `if (biliStatus == SKIPPED) return two` 正是这个语义 ✅。**这条很重要** —— 否则默认关闭的用户会看到"网易云 20 · QQ 15 · B站 0"，以为 B站搜不到东西。
-2. **排序**：B站视频条目的元数据质量低于网易云/QQ（作者是 UP 主、时长可能是合集长度），**不建议给 B站结果加权**。建议沿用既有的 `SearchRanking`，让 B站条目按自身匹配度自然排序。
+1. **`SourceSearchStatus.SKIPPED` 语义**：B站**默认关闭**（`DEFAULT_ENABLED = false`）⇒ 关掉时必须是 `SKIPPED`（不计入"三源"文案），而不是 `DONE`(0 条)。现有 `SourceCounts.kt:112` 的 `if (biliStatus == SKIPPED) return two` 正是这个语义 ✅。**这条很重要** —— 否则默认关闭的用户会看到"ncm 20 · QQ 15 · B站 0"，以为 B站搜不到东西。
+2. **排序**：B站视频条目的元数据质量低于 ncm/QQ（作者是 UP 主、时长可能是合集长度），**不建议给 B站结果加权**。建议沿用既有的 `SearchRanking`，让 B站条目按自身匹配度自然排序。
 3. **计数文案**：B站是"**部分能力源**"（能搜到视频、能播，但视频条目无歌词），建议在聚合文案里不要把它与另两个源完全并列；至少在新的 `aggAvailabilityNote` 里说明。
 
 ### 4.7 独立开关：**默认关闭**
@@ -331,15 +331,15 @@ enum class MusicSource(val key: String) {
 **必须遵守的既有契约**（`MusicSourceProvider` KDoc）：
 
 1. **绝不抛异常给调用方** —— 网络失败一律返回 `null` / 空列表。B站挂掉不该让聚合搜索或播放失败。✅ 现有实现全部包在 `runCatching` 里；
-2. **绝不返回指向 HTML 错误页的 URL** —— 这是本项目**踩过的坑**（网易云 `song/media/outer/url` 会 302→404 返回 HTML，导致"缓冲不动"）。B站的 412 / 错误页必须在这里拦掉，✅ 现有 `isSignatureRejected` + 非 JSON 判定已拦；
-3. **独立的 `OkHttpClient`** ✅ **现有实现做对了，且理由充分**：`RetrofitClient` 的拦截器**无条件注入网易云的 Referer/UA/Cookie**，而复用它会让 B站永远 403（实测"用网易云 Referer 请求 B站 → 403"），同时会把网易云 Cookie 泄露给 B站。**这个隔离必须保留**。
+2. **绝不返回指向 HTML 错误页的 URL** —— 这是本项目**踩过的坑**（ncm `song/media/outer/url` 会 302→404 返回 HTML，导致"缓冲不动"）。B站的 412 / 错误页必须在这里拦掉，✅ 现有 `isSignatureRejected` + 非 JSON 判定已拦；
+3. **独立的 `OkHttpClient`** ✅ **现有实现做对了，且理由充分**：`RetrofitClient` 的拦截器**无条件注入 ncm 的 Referer/UA/Cookie**，而复用它会让 B站永远 403（实测"用 ncm Referer 请求 B站 → 403"），同时会把 ncm Cookie 泄露给 B站。**这个隔离必须保留**。
 
 **需要新增的隔离**（来自本次实测）：
 
 | 项 | 建议 |
 |---|---|
 | **Referer（CDN 取流）** | ⚠️ **最高优先级** —— 见 §4.9 |
-| **B站请求的速率限制** | 全局串行 + 最小间隔（§2.5），且**不要与网易云/QQ 的并发共用一个信号量**（避免 B站的慢请求拖累另两个源） |
+| **B站请求的速率限制** | 全局串行 + 最小间隔（§2.5），且**不要与 ncm/QQ 的并发共用一个信号量**（避免 B站的慢请求拖累另两个源） |
 | **端点冷却** | 某个 B站端点连续失败后进入冷却期，期间直接走降级（§2.5） |
 | **离线缓存隔离** | B站的 URL 会过期（2h），`OfflineUrlStore` 是**无 TTL 的 LRU** ⇒ 必须带过期时刻，或让 B站条目**不进** `OfflineUrlStore`（离线播放对 B站意义有限：匿名 + 2 小时过期 + 需要 Referer，三个约束叠加后"离线可播"的承诺很难兑现）。**建议本版让 B站不参与离线下载**，并在 UI 上说清。 |
 
@@ -371,7 +371,7 @@ data class SongUrlResult(val url: String, val actualLevel: String, ...)  // ← 
 | 方案 | 做法 | 评价 |
 |---|---|---|
 | **A（推荐）** | 给 `SongUrlResult` 加 `headers: Map<String,String>`，`BiliSourceProvider` 填 `{"Referer": "https://www.bilibili.com/"}`；`PlaybackService` 建 `MediaItem` 时把 headers 传进一个自定义 `DataSource.Factory` | 最干净：**"这个 URL 需要什么头"由产出 URL 的那一层决定**，不污染其他音源 |
-| B | 给 `OfflineAudioCache.dataSourceFactory` 的 `DefaultDataSource.Factory` 挂 `setDefaultRequestProperties(...)` | ⚠️ **必须按 host 白名单限定**（只对 B站 CDN）。否则会给网易云/QQ 的请求也带上 B站 Referer —— 而本项目**已实测**"拿网易云 Referer 请求 B站 → 403"，反向同理，有把现有音源打出 403 的风险 |
+| B | 给 `OfflineAudioCache.dataSourceFactory` 的 `DefaultDataSource.Factory` 挂 `setDefaultRequestProperties(...)` | ⚠️ **必须按 host 白名单限定**（只对 B站 CDN）。否则会给 ncm/QQ 的请求也带上 B站 Referer —— 而本项目**已实测**"拿 ncm Referer 请求 B站 → 403"，反向同理，有把现有音源打出 403 的风险 |
 | C | 在 Provider 内先做一次 HEAD 校验（带 Referer），通过后才返回 URL | 多一次往返，且 HEAD 可能不被 CDN 支持；**不推荐** |
 
 **另外两个必须注意的点**：

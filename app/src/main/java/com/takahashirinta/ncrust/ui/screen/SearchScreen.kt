@@ -121,7 +121,7 @@ fun SearchScreen(
     val albums by viewModel.albums.collectAsState()
     val artists by viewModel.artists.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    // v2.1.0 · E：结果来自哪些音源（(网易云条数, QQ 音乐条数)；null = 还没搜过）。
+    // v2.1.0 · E：结果来自哪些音源（(ncm 条数, qm 条数)；null = 还没搜过）。
     val sourceCounts by viewModel.sourceCounts.collectAsState()
     val error by viewModel.error.collectAsState()
     val currentType by viewModel.currentType.collectAsState()
@@ -321,7 +321,7 @@ fun SearchScreen(
                                 item = item,
                                 // v2.5.5 · D：单曲历史带音源角标（同名两源条目靠它区分）。
                                 // 音源走 `effectiveSource`（老条目 source==null 时靠 bit62 推断），
-                                // **不是**直接读 `item.source` 字符串 —— 那样老 QQ 条目会显示成网易云。
+                                // **不是**直接读 `item.source` 字符串 —— 那样老 QQ 条目会显示成 ncm。
                                 sourceBadge = SongTags.historySourceBadge(
                                     isSongSection = true,
                                     source = SearchHistoryMigration.effectiveSource(item),
@@ -330,7 +330,7 @@ fun SearchScreen(
                                 onClick = {
                                     // v2.5.4 · B：老 QQ 条目（v2.5.4 之前只存了裸 id，
                                     // 而 songmid 不可逆）点下去**必然取不到链**。旧行为是
-                                    // 静默入队 → 被跳歌 → 还弹一条方向错误的「可切到网易云」
+                                    // 静默入队 → 被跳歌 → 还弹一条方向错误的「可切到 ncm」
                                     // 提示（它其实已经是 QQ 了）。现在把标题填回搜索框、让用户
                                     // 重新点一次带 songmid 的结果：一次请求都不多发，
                                     // 也不会拿猜出来的 mid 去要一条坏链。
@@ -362,7 +362,7 @@ fun SearchScreen(
                                     )
                                     // 「添加到下一首」「加入库」对不完整条目**不挂载**：
                                     // 它们会把一首取不到链、音源标识也不全的歌写进队列/收藏库
-                                    // （收藏走裸 id，QQ 的合成 id 会被发给网易云的 like 接口）。
+                                    // （收藏走裸 id，QQ 的合成 id 会被发给 ncm 的 like 接口）。
                                     // 不挂载而不是置灰 —— 见 AGENTS.md 触摸陷阱第 1/4 条。
                                     if (!SearchHistoryMigration.isIncomplete(item)) {
                                         MetroDropdownMenuItem(
@@ -1032,7 +1032,7 @@ private fun SearchHistoryItemCard(
 
 // v2.5.4 · B：重建逻辑搬到 `library/SearchHistoryMigration.toSongItem`。
 // 搬家的理由不是"整洁"，而是**它必须能被单测够到** —— 音源恢复是否正确
-// （bit62 推断、网易云写成 null、老 QQ 条目不猜 songmid）全部靠那个纯函数上的用例钉住，
+// （bit62 推断、ncm 写成 null、老 QQ 条目不猜 songmid）全部靠那个纯函数上的用例钉住，
 // 留在这里（一个 Composable 文件里的 private 扩展）就只能靠真机点一遍看角标。
 private fun SearchHistoryManager.HistoryItem.toSongItem(): SongItem =
     SearchHistoryMigration.toSongItem(this)

@@ -50,20 +50,20 @@
 
 ### B-1 症状的准确定性（与任务书措辞有偏差）
 
-任务书说「把 QQ 认成网易云」。探针实测的准确形态是**两件事**：
+任务书说「把 QQ 认成 ncm」。探针实测的准确形态是**两件事**：
 
 | 口径 | 修之前的行为 |
 |---|---|
-| **字符串口径**（`SongItem.musicSource`） | **确实认错**。它读 `source` 字符串，`null` ⇒ 网易云。角标、单曲页路由、收藏 / 点赞都按网易云处理 |
+| **字符串口径**（`SongItem.musicSource`） | **确实认错**。它读 `source` 字符串，`null` ⇒ ncm。角标、单曲页路由、收藏 / 点赞都按 ncm 处理 |
 | **播放口径**（`TrackKey.of(null, id)`） | **不会问错平台**。bit62 把 QQ 认了出来 |
 
 所以用户真正看到的是：**「认得出是 QQ，但 songmid 丢了 ⇒ 取不到链」** ——
-点一条历史，歌被跳过，还弹一条方向错误的「可切到网易云」提示（它本来就是 QQ）。
+点一条历史，歌被跳过，还弹一条方向错误的「可切到 ncm」提示（它本来就是 QQ）。
 
 ### B-2 修了什么
 
 1. `HistoryItem` 补 `source` / `sourceId` / `mediaId` 三个字段（可空 + 默认值）；
-2. 写路径一律写**规范值** `song.musicSource.key`（网易云也显式写 `"netease"`
+2. 写路径一律写**规范值** `song.musicSource.key`（ncm 也显式写 `"netease"`
    —— 不写的话 `null` 会被读成「老条目」）；
 3. 读路径按 **bit62** 推断老条目的音源，规则收敛在纯函数
    `SearchHistoryMigration.effectiveSource`；
@@ -205,7 +205,7 @@ isWidePlayer, isLargeScreen, orientationLandscape)`，用
    本版修好了波浪条，但大屏模式本身在平板上仍不可达；
 2. **`cache.**`（`ncrust_offline` 的 `tracks`）同样是 R8 混淆的单字母 key**，
    本版**未修**（修它要动全局混淆映射，风险面比收益大）；
-3. **`PlayReporter` 没有音源闸门** —— QQ 曲目的合成 id 会被 POST 给网易云的 webLog，
+3. **`PlayReporter` 没有音源闸门** —— QQ 曲目的合成 id 会被 POST 给 ncm 的 webLog，
    与 `QqMusicSourceProvider` 的 KDoc 承诺矛盾。服务端效果未验证，本版未改；
 4. **QQ 兜底统计的长窗口样本**（1~2 天）未跑满；
 5. **「兜底率是否恒为 0」未验证** —— 需要服务端在某个入口真的不下发 `id`；

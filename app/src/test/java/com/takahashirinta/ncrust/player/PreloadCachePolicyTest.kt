@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -103,7 +103,7 @@ class PreloadCachePolicyTest {
     }
 
     @Test
-    fun `显式过期时刻为 null 时退回固定 TTL（网易云与 QQ 的行为不变）`() {
+    fun `显式过期时刻为 null 时退回固定 TTL（ncm与 QQ 的行为不变）`() {
         val now = 1_000_000L
         val e = entry(timestamp = now, expiresAtMs = null)
         assertTrue(PreloadCachePolicy.isFresh(e, "lossless", now + 1_000L))

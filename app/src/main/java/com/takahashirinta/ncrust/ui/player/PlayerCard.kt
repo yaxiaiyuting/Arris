@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -138,7 +138,7 @@ internal fun PlayerCard(
      * ## v2.6.1 · P0：形参从 `Long` 改成整首 [SongItem]
      *
      * 旧形状是 `(Long) -> Unit`，调用方拿到的只有 `artists[0].id`。对 QQ 曲目那是
-     * **QQ 域的数字 `singerID`**，而调用方拼的是硬编码网易云的老路由 —— 周杰伦 `4558`
+     * **QQ 域的数字 `singerID`**，而调用方拼的是硬编码 ncm 的老路由 —— 周杰伦 `4558`
      * 于是跳到了马洪波（真机复现）。改成整首歌之后，身份判定由
      * [com.takahashirinta.ncrust.source.ArtistNavigator] 统一做
      * （它同时看得到 `musicSource` 与 `artists[0].mid`），
@@ -752,9 +752,9 @@ internal fun StableCover(
  * v2.1.0 · F：「歌手名 · 音源」一行。播放页的四个歌曲信息区（窄屏顶栏 / 窄屏大封面
  * overlay / 宽屏左栏 / 大屏左栏）与折叠态 mini bar 共用这一份实现。
  *
- * **两个音源都标**（与列表行 `SongCard.sourceBadge` 只标非网易云不同）：播放页是用户
- * 唯一能确认「现在放的是哪一家」的地方 —— 队列里 QQ 音乐与网易云混在一起，只标一边
- * 等于让另一边变成"看不出是什么"。列表页不标网易云是为了给长列表降噪，这个理由在
+ * **两个音源都标**（与列表行 `SongCard.sourceBadge` 只标非 ncm 不同）：播放页是用户
+ * 唯一能确认「现在放的是哪一家」的地方 —— 队列里 qm 与 ncm 混在一起，只标一边
+ * 等于让另一边变成"看不出是什么"。列表页不标 ncm 是为了给长列表降噪，这个理由在
  * 播放页不成立。
  *
  * 视觉语言与列表行保持一致：小一号字（bodySmall）、次要色、`·` 分隔、**无边框无底色**
@@ -784,7 +784,7 @@ internal fun ArtistLineWithSource(
 ) {
     val strings = LocalStrings.current
     // 走 song.musicSource（枚举）而不是原始 source 字符串：null / 未知 key 的旧数据在
-    // 这里也落到「网易云」，与列表行同一条判定（SongSourceExt.musicSource）。
+    // 这里也落到「ncm」，与列表行同一条判定（SongSourceExt.musicSource）。
     val sourceLabel = when (song.musicSource) {
         MusicSource.NETEASE -> strings.sourceNetease
         MusicSource.QQMUSIC -> strings.sourceQqMusic

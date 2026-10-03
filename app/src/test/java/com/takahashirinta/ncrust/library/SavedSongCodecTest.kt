@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -253,7 +253,7 @@ class SavedSongCodecTest {
     /**
      * `trackKey` 缺失/解析不出来时，身份回落到 `TrackKey.ofSong(song)` ——
      * 那里有 **bit62 兜底**，所以「song.source 字符串丢了」的 QQ 条目
-     * 仍然会被认成 QQ，而不是被当成网易云的同号歌曲。
+     * 仍然会被认成 QQ，而不是被当成 ncm 的同号歌曲。
      */
     @Test
     fun `trackKey 缺失时用 song 回落 且认得出 QQ 的 bit62`() {
@@ -272,7 +272,7 @@ class SavedSongCodecTest {
         assertEquals(SavedSongOrigin.REMOTE, SavedSongCodec.decode(json).single().origin)
     }
 
-    /** 身份字段也认 `SourceIds.parseTrackKey` 的白名单：未知音源不许猜成网易云。 */
+    /** 身份字段也认 `SourceIds.parseTrackKey` 的白名单：未知音源不许猜成 ncm。 */
     @Test
     fun `未知音源前缀的 trackKey 不解析 回落到 song`() {
         val json = """[{"trackKey":"spotify:1","origin":"LOCAL","addedAt":1,"tombstoned":false,"song":{"id":1,"name":"n"}}]"""

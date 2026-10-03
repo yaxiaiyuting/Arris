@@ -2,7 +2,7 @@
 
 设备：`3B15CD00GB700000` = PLC110 / Android 16 / KernelSU root
 包：`com.takahashirinta.ncrust` **v2.5.4-gpl / versionCode 45**（release，已安装，非本仓库重新构建）
-网易云登录态：`ncrust_prefs.xml` 同时存在 `MUSIC_U` 与 `__csrf`（只检查了「键是否存在」，**未采集凭证值**）
+ncm 登录态：`ncrust_prefs.xml` 同时存在 `MUSIC_U` 与 `__csrf`（只检查了「键是否存在」，**未采集凭证值**）
 QQ 登录态：`ncrust_qq_prefs.xml` 存在（`qq_cookie` / `qq_uid` / …，同样**未采集值**）
 时间：2026-09-26 18:32 – 18:37（+08:00）
 
@@ -51,22 +51,22 @@ adb -s $D shell "am startservice -n com.takahashirinta.ncrust/.player.PlaybackSe
 | 2 | 18:35:12.817 | `I/NcrustTrack(32055): qq lyric APPLIED track=qqmusic:4611686018784987997 … lines=62` | 与 #1 同一身份（QQ 取词链路） |
 | 3 | 18:35:19.999 | `D/PlaybackService(32055): onCreate` | 服务刚起来，**此前从未上报过本曲**（`lastReportedSongId = -1`） |
 | 4 | 18:35:20.097 | `D/PlaybackService(32055): onStartCommand action=next` | 命中 `PlaybackService.kt:677` → `onPlaybackEnded?.invoke()` |
-| 5 | 18:35:20.127 | `I/NcrustTrack(32055): playSong -> currentTrack=netease:503572 …` | **队列推进到下一首（网易云）**。发生在 #4 之后 —— 也就是说 #4 那一刻 `currentSongId` 仍是 QQ id |
+| 5 | 18:35:20.127 | `I/NcrustTrack(32055): playSong -> currentTrack=netease:503572 …` | **队列推进到下一首（ncm）**。发生在 #4 之后 —— 也就是说 #4 那一刻 `currentSongId` 仍是 QQ id |
 | 6 | **18:35:20.390** | **`D/PlayReporter(32055): weblog resp: 200 duration=0/0`** | **上报真的发出去了，服务端返回 HTTP 200** |
 
-### 为什么可以断定 #6 上报的是 **QQ id** 而不是随后的网易云 id
+### 为什么可以断定 #6 上报的是 **QQ id** 而不是随后的 ncm id
 
 1. **读 id 的时刻在 #4，不在 #5。**
    `PlayerViewModel` 的 `onPlaybackEnded` 回调（`PlayerViewModel.kt:581-591`）先读
    `val sid = currentSongId.value`，再 `reportPlay(...)`，**最后**才 `onSongEndedCallback?.invoke()`
    —— 推进队列（#5）在 `reportPlay` 之后。同一个主线程顺序执行，没有竞态。
-   `currentSongId` 上一次被写就是 #1（18:35:12），#5（18:35:20.127）才写网易云 id。
+   `currentSongId` 上一次被写就是 #1（18:35:12），#5（18:35:20.127）才写 ncm id。
 2. **`duration=0/0` 是这条分支的指纹。**
    另一个调用点（`PlayerViewModel.kt:562-564`，进度 ticker + `reachedCompletion`）**不可能**打出
    `duration=0/0`：`reachedCompletion` 的第一条就是 `durationMs > 0`（`PlayReporter.kt:82`）。
    而 `onPlaybackEnded` 分支传的是 `reportPlay(sid, duration.value, duration.value)`
    （`PlayerViewModel.kt:588`）—— 进程刚重启、`duration.value` 还是 0，于是正是 `0/0`。
-   即：**这一行日志只可能来自「onPlaybackEnded + 当前曲是网易云 id 之前的那个身份」**。
+   即：**这一行日志只可能来自「onPlaybackEnded + 当前曲是 ncm id 之前的那个身份」**。
 3. `reportPlay` 内部把 `songId` 原样写进 JSON：`.put("id", songId)`（`PlayReporter.kt:57`），
    从形参到请求体**没有任何分支或改写**。
 
@@ -91,9 +91,9 @@ adb -s $D shell "am startservice -n com.takahashirinta.ncrust/.player.PlaybackSe
 | 项 | 状态 |
 |---|---|
 | `logs=` 表单里 `id` 字段的**字节级内容** | **未验证**。设备走 TLS，未安装 MITM 根证书（targetSdk 36 默认不信任用户 CA），未做抓包解密。目前是「设备侧时机证据 + 无分支数据流」的合力结论，不是报文级证据 |
-| 网易云服务端拿到这个 id 之后做什么（丢弃 / 记账 / 报错） | **未验证**，客户端无法观测（与 v2.5.4 探针 §12.3 的遗留项一致） |
+| ncm 服务端拿到这个 id 之后做什么（丢弃 / 记账 / 报错） | **未验证**，客户端无法观测（与 v2.5.4 探针 §12.3 的遗留项一致） |
 | 80% 进度路径喂 QQ id | **未在真机取到**（见「干扰」）。代码事实确定（`PlayerViewModel.kt:562-564`），JVM 复算见 `bit62_guard_probe.out` / `GuardProbe.out` |
-| 老设备（S6 / Android 7） | **未复现**。该机落盘的当前曲是网易云曲目（`song_id=557920`）。要在它上面造出「当前曲是 QQ 曲目」，必须写应用的持久化状态 —— 本次探针按「尽量只读」原则**没有做**，也不排除会干扰同机上的其他探针 |
+| 老设备（S6 / Android 7） | **未复现**。该机落盘的当前曲是 ncm 曲目（`song_id=557920`）。要在它上面造出「当前曲是 QQ 曲目」，必须写应用的持久化状态 —— 本次探针按「尽量只读」原则**没有做**，也不排除会干扰同机上的其他探针 |
 | 上报频率 / 占比 | **不提供**。没有做频次统计，也不拿单次样本外推 |
 
 ---

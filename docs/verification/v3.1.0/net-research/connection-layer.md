@@ -54,12 +54,12 @@
 - `:99-100`：「即在这台设备的当前网络下，**每通请求都要 ~30 秒才把请求头送出去**（连接建立/排队，与 `ttfb` 无关）」
 - `:102-103`：「⇒ **20s 的 `callTimeout` 卡在这条 30s 的必经路径下面**，于是它拦掉的不是「挂死的请求」，而是**本来会成功的请求**。」
 - `:107-110`：「`callTimeout` 覆盖**整通**请求（含连接建立与排队），而 `connectTimeout`/`readTimeout` 是**分阶段空闲**超时。……**加超时前必须先量一次「这个环境里正常请求要多久」，`ttfb` 快不代表整通快。**」
-- `:112-113`：「而且本版**根本不需要**这个熔断：用户可见的收益（首帧不再等网易云）完全来自 `SearchViewModel` 的「先到先发布」，与超时无关。」
+- `:112-113`：「而且本版**根本不需要**这个熔断：用户可见的收益（首帧不再等 ncm）完全来自 `SearchViewModel` 的「先到先发布」，与超时无关。」
 - `:115`：「保留本注释而不是默默删掉：下一个想『顺手加个超时』的人应该先看到这段。」
 
-`SearchViewModel.kt:197-200` 与 `:245-247` 是同一件事在调用侧的复述（`⚠️ v2.5.6 曾在这里改用过 searchApi…已撤销，回到共用的 api`；`根因是网易云那条 OkHttp 只有 read/connect 超时、没有 callTimeout`）。
+`SearchViewModel.kt:197-200` 与 `:245-247` 是同一件事在调用侧的复述（`⚠️ v2.5.6 曾在这里改用过 searchApi…已撤销，回到共用的 api`；`根因是ncm那条 OkHttp 只有 read/connect 超时、没有 callTimeout`）。
 
-**当前生效的实际超时语义**：网易云一侧「一通请求可能 30s 才把请求头送出去、整通 30s+」（`:95-97` 的真机数据），而 `plainClient` / `restClient` 只有 30s connect + 30s read，**没有整通上限** —— 这就是 `SearchViewModel` 里 `select` 先到先发布（`SearchViewModel.kt:263-274`）要解决的问题。
+**当前生效的实际超时语义**：ncm 一侧「一通请求可能 30s 才把请求头送出去、整通 30s+」（`:95-97` 的真机数据），而 `plainClient` / `restClient` 只有 30s connect + 30s read，**没有整通上限** —— 这就是 `SearchViewModel` 里 `select` 先到先发布（`SearchViewModel.kt:263-274`）要解决的问题。
 
 ---
 
@@ -142,15 +142,15 @@ OkHttp 默认走 `Dns.SYSTEM`（`InetAddress.getAllByName`），**库语义**：
 
 ---
 
-## 7. QQ 音乐的网络栈，与网易云是不是同一套配置
+## 7. qm 的网络栈，与 ncm 是不是同一套配置
 
 **不是同一套，而且是刻意分开的。** 依据是 `qq/QqClient.kt:25-34` 的 KDoc 原文：
 
-> 「## 为什么不复用 `RetrofitClient` … 网易云那条链路里塞满了只对网易云有意义的东西：eapi 的 AES 签名与 `/eapi/`→`/api/` 路径重写、weapi 的双层 AES + RSA、CSRF token、PC 身份 Cookie。把那条链路「参数化」成一个通用客户端，等于让两套互不相干的协议互相污染 —— 任何一边改签名逻辑都可能悄悄改到另一边的行为。所以 QQ 自己一条 OkHttp 通道，**只共享 OkHttp 这个库，不共享它的配置**。」
+> 「## 为什么不复用 `RetrofitClient` … ncm 那条链路里塞满了只对 ncm 有意义的东西：eapi 的 AES 签名与 `/eapi/`→`/api/` 路径重写、weapi 的双层 AES + RSA、CSRF token、PC 身份 Cookie。把那条链路「参数化」成一个通用客户端，等于让两套互不相干的协议互相污染 —— 任何一边改签名逻辑都可能悄悄改到另一边的行为。所以 QQ 自己一条 OkHttp 通道，**只共享 OkHttp 这个库，不共享它的配置**。」
 
 具体差异（逐项对照 §1 的表）：
 
-| 维度 | 网易云（`plainClient` / `restClient`） | QQ（`searchHttp` / `http`） |
+| 维度 | ncm（`plainClient` / `restClient`） | QQ（`searchHttp` / `http`） |
 |---|---|---|
 | 端点 | `music.163.com`、`interface.music.163.com`、`interface3.music.163.com` | `u.y.qq.com/cgi-bin/musicu.fcg`（`QqClient.kt:59`），搜索另有 `c.y.qq.com` 旧版 GET（`:275-297`） |
 | 超时 | 30s / 30s，**无 callTimeout** | `searchHttp` 4/6/6 + **callTimeout 8s**；`http` 15/20/20 |
@@ -159,7 +159,7 @@ OkHttp 默认走 `Dns.SYSTEM`（`InetAddress.getAllByName`），**库语义**：
 | 用户代理 | 固定 PC Chrome UA（`RetrofitClient.kt:21`），登录等场景另用 iOS UA（`:22`） | `UA_APP = "QQMusic 14090008(android 10)"`（`:62`）与 `UA_WEB`（浏览器 UA，`:65-67`）两套身份，由 `appIdentity` 开关切换（`:130-133`、`:140`） |
 | 扫码登录 | — | 第三个实例 `QqQrClient.http`，额外带 `cookieJar`（`QqQrClient.kt:46-52`） |
 
-**所以：QQ 与网易云共享的只有 OkHttp 这个库，配置（超时/拦截器/事件监听/身份）完全各自一份。**
+**所以：QQ 与 ncm 共享的只有 OkHttp 这个库，配置（超时/拦截器/事件监听/身份）完全各自一份。**
 
 第三个「外来源」的先例是 AMLL TTML：`AmllTtmlClient.kt:208-217` 的 KDoc 写明**不复用** `RetrofitClient` 的 client，两条理由 —— ① `plainClient` 是 `private`、没有公开访问器；② 「它的超时是 30s/30s，对『只是补充源』的 TTML 太长 —— 拿不到必须立刻回退，不能让用户等」。
 
@@ -178,11 +178,11 @@ OkHttp 默认走 `Dns.SYSTEM`（`InetAddress.getAllByName`），**库语义**：
   - 这三个文件里**都没有 `OkHttpClient` / `Retrofit` 的定义**（`grep` 在 `bili/` 下只命中 KDoc 里的 URL 文本）。也就是说：**截至采集时刻，B 站方向还没有自己的 HTTP 客户端**，B 站网络栈尚不存在。
   - 结论按「基线 vs 工作区」两分：连接层的现状（§1–§7）全部基于 `a86d97b`；B 站只有签名与 prefs 两件**纯逻辑**文件，**未接入任何传输层配置**。
 
-### 8.2 仓库里已有的两套「非网易云源」接入先例（事实，不含取舍建议）
+### 8.2 仓库里已有的两套「非 ncm 源」接入先例（事实，不含取舍建议）
 
 | 先例 | 做法 | 证据 |
 |---|---|---|
-| QQ 音乐（v2.1.0 · B，**第二个音源**） | 自己的 `OkHttpClient`（两个：搜索收紧、业务常规）+ 自己的 cookie 存储 + 自己的 `MusicSourceProvider` 实现，**只共享 OkHttp 库、不共享配置** | `QqClient.kt:25-34`、`:81-96`；`qq/QqMusicSourceProvider.kt:42`（实现）、`:98`（`SourceRouter.register(this)`）、`MainActivity.kt:223`（`QqMusicSourceProvider.install(this)`，进程启动时注册） |
+| qm（v2.1.0 · B，**第二个音源**） | 自己的 `OkHttpClient`（两个：搜索收紧、业务常规）+ 自己的 cookie 存储 + 自己的 `MusicSourceProvider` 实现，**只共享 OkHttp 库、不共享配置** | `QqClient.kt:25-34`、`:81-96`；`qq/QqMusicSourceProvider.kt:42`（实现）、`:98`（`SourceRouter.register(this)`）、`MainActivity.kt:223`（`QqMusicSourceProvider.install(this)`，进程启动时注册） |
 | AMLL TTML（v1.9.0，**第三方补充数据源**，非音源） | 自己的短超时客户端（5s/10s），理由是「补充源拿不到必须立刻回退」 | `AmllTtmlClient.kt:208-217`、`:222-227` |
 
 另有可复用的**音源路由与身份约定**（与传输层无关，但接入新音源必须遵守）：`source/MusicSourceProvider.kt:33-46`（三条契约：绝不抛异常、导出的 `SongItem` 必须带 `MusicSource` 与 sourceId、平台内部标识放 `sourceId` 而不是 `id`）与 `source/SourceRouter.kt`（全应用**唯一**允许按音源分叉的地方）。
@@ -193,10 +193,10 @@ OkHttp 默认走 `Dns.SYSTEM`（`InetAddress.getAllByName`），**库语义**：
 
 | 问题 | 现状 |
 |---|---|
-| OkHttp 实例数 | 6 个常驻（2 网易云 + 2 QQ + 1 QQ 扫码 + 1 TTML）+ 1 个每次新建（短链 HEAD）+ Coil 内部 1 个 |
+| OkHttp 实例数 | 6 个常驻（2 ncm + 2 QQ + 1 QQ 扫码 + 1 TTML）+ 1 个每次新建（短链 HEAD）+ Coil 内部 1 个 |
 | 连接池配置 | **未配置**，全部吃 OkHttp 库默认（5 空闲 / 5 分钟），且**每个实例各自一份** |
 | Dispatcher 配置 | **未配置**，全部吃库默认（64 / 5） |
-| `callTimeout` | 仅 `QqClient.searchHttp`（8s）；网易云两条链路**都没有**，且 `RetrofitClient.kt:75-116` 记录了「加了 20s 反而造成回归、已撤销」的真机证据 |
+| `callTimeout` | 仅 `QqClient.searchHttp`（8s）；ncm 两条链路**都没有**，且 `RetrofitClient.kt:75-116` 记录了「加了 20s 反而造成回归、已撤销」的真机证据 |
 | 自定义 `Dns` | 无 |
 | DNS 预解析 | 无 |
 | 连接预热 / preconnect | 无。`AppWarmup` 只预热 SharedPreferences、首页三请求、首页快照、18 张封面 |

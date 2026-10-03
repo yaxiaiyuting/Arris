@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -48,7 +48,7 @@ data class SongUrlResult(
      * 「请求超清母带、拿到 Hi-Res」在界面上既不是降级也没有任何提示 —— 用户无从判断。
      *
      * `true` 的来源：QQ 取链（前缀反推）、离线缓存 key（key 里就写着档位）。
-     * `false`（默认）：网易云 eapi 返回的 `level` 字符串 —— 它只是标签。
+     * `false`（默认）：ncm eapi 返回的 `level` 字符串 —— 它只是标签。
      *
      * 注意：本类型**不落盘**（纯内存 DTO），所以按「加字段 = 加迁移逻辑」的规矩这里
      * 不需要迁移；但新语义有单测（QualityAssessmentTest 的 trusted-level 用例）。
@@ -69,7 +69,7 @@ data class SongUrlResult(
      * 响应里的 `timeout` 是 **10800s（3h）**，而 URL 自带的 `deadline` 参数是
      * **now + 7200s（2h）** —— 两者不一致，且 URL 自己那个更保守。
      * 只有拿到 URL 的那一层（Provider）才知道该信哪个，所以过期时刻在这里算好、
-     * 一路带到缓存条目上。给 `null` 的音源（网易云 / QQ）行为**逐字不变**：
+     * 一路带到缓存条目上。给 `null` 的音源（ncm / QQ）行为**逐字不变**：
      * 缓存仍按既有的 5 分钟常量判新鲜。
      */
     val expiresAtMs: Long? = null,

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -24,9 +24,9 @@ val SongItem.musicSource: MusicSource
 /**
  * 该曲**是否具备取链的必要信息**。
  *
- * 只有 QQ 音乐可能为 false（它必须带 songmid）；网易云恒为 true。
+ * 只有 qm 可能为 false（它必须带 songmid）；ncm 恒为 true。
  * 调用方拿到 false 时应当把这首歌当「不可播放」（跳歌 / 灰显），
- * **不要**退回网易云取链 —— id 相同不代表是同一首歌。
+ * **不要**退回 ncm 取链 —— id 相同不代表是同一首歌。
  */
 val SongItem.isResolvable: Boolean
     get() = !musicSource.requiresSourceId || !sourceId.isNullOrEmpty()
@@ -36,8 +36,8 @@ val SongItem.trackKey: String
     get() = SourceIds.trackKey(musicSource, id)
 
 /**
- * media3 `MediaItem` 用的 id：网易云仍是 `song:123`（与 v2.0.2 逐字节相同），
- * QQ 音乐是 `song:qqmusic:456`。[id] 非正时返回 null。
+ * media3 `MediaItem` 用的 id：ncm 仍是 `song:123`（与 v2.0.2 逐字节相同），
+ * qm 是 `song:qqmusic:456`。[id] 非正时返回 null。
  */
 val SongItem.mediaIdOrNull: String?
     get() = SourceIds.mediaId(musicSource, id)
@@ -45,13 +45,13 @@ val SongItem.mediaIdOrNull: String?
 /**
  * 队列内判重用的身份串。
  *
- * **不能用 [SongItem.id] 单独判重**：QQ 音乐的数字 songid 与网易云的 songId 各自独立编号，
- * 撞号是迟早的事，撞上就是「点了 QQ 的歌，播放器跳到了网易云那首同名 id 的歌」。
+ * **不能用 [SongItem.id] 单独判重**：qm 的数字 songid 与 ncm 的 songId 各自独立编号，
+ * 撞号是迟早的事，撞上就是「点了 QQ 的歌，播放器跳到了 ncm 那首同名 id 的歌」。
  *
  * ## v2.5.3 · P1：从「另写一份」改成「就是 [TrackKey] 的那一份」
  *
  * 原先它是 `SourceIds.trackKey(musicSource, id)` —— 与 [TrackKey] **各算各的**，
- * 区别在音源怎么定：这里信 `source` 字符串（缺失回落网易云），
+ * 区别在音源怎么定：这里信 `source` 字符串（缺失回落 ncm），
  * `TrackKey.of` 会再看 id 的 bit62 标志位。两份规则意味着
  * 「同一个队列里，判重按一套、待播槽位按另一套」，正是 AGENTS.md 点名的形状。
  *
@@ -62,7 +62,7 @@ val SongItem.mediaIdOrNull: String?
  *
  * 取值变化只发生在「id 带 QQ 标志位、而 `source` 字符串为空」这一种形态上：
  * 旧值 `netease:<合成id>`，新值 `qqmusic:<合成id>`。这是**修正**（那确实是一首 QQ 曲目），
- * 且因为 id 里的标志位使两者数值上仍不可能与任何真实网易云曲目相撞，
+ * 且因为 id 里的标志位使两者数值上仍不可能与任何真实 ncm 曲目相撞，
  * 所以没有任何既有队列会因此判重失败。
  */
 val SongItem.dedupeKey: String
@@ -93,7 +93,7 @@ fun songRefOf(
     artists = null,
     album = null,
     duration = null,
-    // 网易云一侧刻意写 null 而不是 "netease"：这样它与 v2.1.0 之前持久化的条目
+    // ncm 一侧刻意写 null 而不是 "netease"：这样它与 v2.1.0 之前持久化的条目
     // 在 data class 意义上完全相等，队列判重/收藏命中/离线命中都不受影响。
     source = if (source == MusicSource.NETEASE) null else source.key,
     sourceId = sourceId,

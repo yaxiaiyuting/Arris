@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## 它修的是什么
  *
- * v2.5.4 的探针发现：`PlayReporter`（**网易云**的 webLog 上报）的入口卫语句只有
- * `cookie 里有 MUSIC_U` 与 `songId > 0` 两条，**没有任何音源判据**。而 QQ 音乐的
+ * v2.5.4 的探针发现：`PlayReporter`（**ncm**的 webLog 上报）的入口卫语句只有
+ * `cookie 里有 MUSIC_U` 与 `songId > 0` 两条，**没有任何音源判据**。而 qm 的
  * 数字 id 由 [SourceIds.qqId] 合成（`bit62` 恒置位）：
  *
  * ```
@@ -29,24 +29,24 @@ import java.util.concurrent.atomic.AtomicLong
  * ```
  *
  * 也就是说**一个 QQ 曲目的合成 id 会原样通过那两条卫语句**，被 POST 到
- * `clientlogusf.music.163.com/api/feedback/weblog`。网易云拿到的是一条它自己
+ * `clientlogusf.music.163.com/api/feedback/weblog`。ncm 拿到的是一条它自己
  * id 空间里不存在的 `id`，配上一段它没有的播放时长 —— 这正是「跨源数据泄露」
  * 的形状：不是崩溃，不是用户可见的错，而是**把一个不该给的数据给了另一个服务**。
  *
  * ## 判据为什么只能是 bit62
  *
- * 与 [SourceIds.sourceOfId] 同源：网易云的 songId 是十进制百万~十亿量级
- * （远小于 `2^40`），**永远不可能**触到位 62 —— 所以「带标志位 ⇒ QQ 音乐」
+ * 与 [SourceIds.sourceOfId] 同源：ncm 的 songId 是十进制百万~十亿量级
+ * （远小于 `2^40`），**永远不可能**触到位 62 —— 所以「带标志位 ⇒ qm」
  * 是结构性的、不会误判的结论，而不是启发式。
  *
- * **不许用 id 区间启发式**：QQ 的裸 songid 与网易云的 id 同样是 9~10 位十进制，
+ * **不许用 id 区间启发式**：QQ 的裸 songid 与 ncm 的 id 同样是 9~10 位十进制，
  * 区间完全重叠（`docs/verification/v2.5.4/probe-search-history.md` 的实测）。
  * 也不许用散列反推 —— [SourceIds.qqId] 的兜底散列是不可逆的。
  *
  * ## 两个方向都定义，但只有一边有调用方
  *
  * [Target.QQ] 这一侧**目前没有消费者**：仓库里没有任何向 QQ 上报播放行为的实现
- * （`grep -rn "weblog\|reportPlay" app/src/main/java` 只命中网易云那条链路）。
+ * （`grep -rn "weblog\|reportPlay" app/src/main/java` 只命中 ncm 那条链路）。
  * 仍然把它写进枚举，是因为 AGENTS.md 的新规则是**双向**的
  * （「跨源 id 不得上报给非本源服务」），而一条只写在文档里的规则不会在
  * 有人新加 QQ 上报时拦住他。有了 [mayReport] 这个唯一落点，
@@ -56,10 +56,10 @@ object ReportGate {
 
     /** 上报目标（= 服务）。一个目标一个 id 空间。 */
     enum class Target {
-        /** 网易云 `clientlogusf.music.163.com/api/feedback/weblog`。 */
+        /** ncm `clientlogusf.music.163.com/api/feedback/weblog`。 */
         NETEASE_WEBLOG,
 
-        /** QQ 音乐（**目前无实现**，见类 KDoc）。 */
+        /** qm（**目前无实现**，见类 KDoc）。 */
         QQ,
     }
 
@@ -103,7 +103,7 @@ object ReportGate {
 data class ReportGateCounters(
     /** 被拦下的总次数。 */
     @SerializedName("blockedTotal") val blockedTotal: Long? = null,
-    /** 其中「QQ 合成 id 试图上报给网易云」的次数 —— 本版修的就是这一条。 */
+    /** 其中「QQ 合成 id 试图上报给 ncm」的次数 —— 本版修的就是这一条。 */
     @SerializedName("blockedQqToNetease") val blockedQqToNetease: Long? = null,
     /** 其中「非 QQ id 试图上报给 QQ」的次数（当前恒为 0，见 [ReportGate.Target.QQ]）。 */
     @SerializedName("blockedNeteaseToQq") val blockedNeteaseToQq: Long? = null,
@@ -151,7 +151,7 @@ data class ReportGateCounters(
             (c.reportedTotal ?: 0L) <= 0L ->
                 "闸门拦下 ${c.blockedTotal} 次、放行 0 次 —— 判据可能反了"
             else ->
-                "拦下 ${c.blockedTotal} 次（QQ→网易云 ${c.blockedQqToNetease}）/ 放行 ${c.reportedTotal} 次"
+                "拦下 ${c.blockedTotal} 次（QQ→ncm ${c.blockedQqToNetease}）/ 放行 ${c.reportedTotal} 次"
         }
     }
 

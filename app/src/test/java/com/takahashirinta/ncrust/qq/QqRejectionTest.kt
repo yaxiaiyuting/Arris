@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -24,7 +24,7 @@ import org.junit.Test
 
 /**
  * 这个文件的每一条都是**用户报的那个 P0 的回归网**：
- * 「QQ 音乐 VIP 歌曲被误判无版权 + 自动跳歌」。
+ * 「qm VIP 歌曲被误判无版权 + 自动跳歌」。
  *
  * 那个缺陷在 v3.1.0 上**不能稳定复现**（取决于账号状态 / 网络 / 具体曲目），
  * 所以它不能靠「跑一次看有没有事」来守 —— 只能把「哪些结论允许被下」写成穷举断言。

@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.2.0：QQ 音乐歌单响应的**纯解析**（无 IO、无 Android 依赖、JVM 可单测）。
+ * v2.2.0：qm 歌单响应的**纯解析**（无 IO、无 Android 依赖、JVM 可单测）。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -73,7 +73,7 @@ data class QqPlaylistPage(
 )
 
 /**
- * QQ 音乐歌单响应的解析（v2.2.0）。**纯函数**，夹具是四轮真机实测的真实响应形状。
+ * qm 歌单响应的解析（v2.2.0）。**纯函数**，夹具是四轮真机实测的真实响应形状。
  *
  * ## 字段命名（本文件最容易写错的地方）
  *
@@ -220,7 +220,7 @@ object QqPlaylistParser {
             coverUrl = cover,
             trackCount = count.coerceAtLeast(0),
             // 实测：`GetPlaylistByUin` 返回的就是「我的歌单」（含我喜欢）⇒ 自建；
-            // 收藏列表返回的是他人的 ⇒ 非自建。这与网易云一侧要用 creator 判定不同，
+            // 收藏列表返回的是他人的 ⇒ 非自建。这与 ncm 一侧要用 creator 判定不同，
             // 因为 QQ 的列表接口本身就把两者分开了。
             isOwned = owned,
             isFavorite = dirId == FAVORITE_DIR_ID,

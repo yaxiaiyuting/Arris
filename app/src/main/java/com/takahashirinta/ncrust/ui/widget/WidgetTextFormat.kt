@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -43,7 +43,7 @@ object WidgetTextFormat {
 
     private fun pad(value: Long): String = if (value < 10L) "0$value" else value.toString()
 
-    /** 标题兜底：空白标题（网易云有纯音乐曲目）换成 [fallback]，绝不发空串。 */
+    /** 标题兜底：空白标题（ncm 有纯音乐曲目）换成 [fallback]，绝不发空串。 */
     fun titleOrFallback(title: String?, fallback: String): String =
         title?.takeIf { it.isNotBlank() } ?: fallback
 

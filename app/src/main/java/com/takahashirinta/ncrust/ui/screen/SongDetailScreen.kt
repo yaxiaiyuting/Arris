@@ -46,24 +46,24 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
  * 页面有两块，各自独立：
  *
  * 1. **两源版本区**（本版新增）：`CatalogAggregator.loadTrack` 找出同一首歌在另一源上的
- *    版本，每行显示源、探测出来的可用性与「默认该播哪一个」。这是「不再默认网易云」的
+ *    版本，每行显示源、探测出来的可用性与「默认该播哪一个」。这是「不再默认 ncm」的
  *    落点 —— 哪一源可播就默认哪一源，两源都不可播时如实说明。
- * 2. **歌词区**（既有）：仍然走单源的 [SongViewModel]（网易云 `song/lyric`）。
- *    QQ 的取词链路不在本次改动范围，所以只在网易云一侧触发。
+ * 2. **歌词区**（既有）：仍然走单源的 [SongViewModel]（ncm `song/lyric`）。
+ *    QQ 的取词链路不在本次改动范围，所以只在 ncm 一侧触发。
  *
  * ## 路由锚点为什么还要补一次元数据
  *
  * 路由只有 `(source, id)` —— 没有曲名与艺人。而跨源召回的**唯一**输入就是
  * 「曲名 + 艺人」（[com.takahashirinta.ncrust.crosssource.CrossSourceMatcher] 没有共享 id 空间，
  * 这是铁律 17 的前提）。拿不到名字就**没法搜**，此时若还显示「另一源未找到对应条目」，
- * 那是一句假话。所以网易云一侧先用既有的 `song/detail`（`PlaylistApi.getSongsByIds`，
+ * 那是一句假话。所以 ncm 一侧先用既有的 `song/detail`（`PlaylistApi.getSongsByIds`，
  * 「转到歌手/专辑」已经在用的同一个接口，不新增网络路径）把锚点补全；
  * 补全**不改身份**（`TrackKey` 只看 `(source, id)`），还是同一首歌。
  *
  * @param sourceKey 音源 key（[MusicSource.key]）。
- * @param songId 该音源内的曲目标识：网易云十进制 id / QQ 数字 id（裸 id，见 [routeAnchorSong]）。
+ * @param songId 该音源内的曲目标识：ncm 十进制 id / QQ 数字 id（裸 id，见 [routeAnchorSong]）。
  * @param onPlay 播放某一行版本。**传的是那一行真实的 `SongItem`**（带音源与载荷），
- *   不是本页的路由锚点 —— 否则 QQ 版本会被当网易云播。
+ *   不是本页的路由锚点 —— 否则 QQ 版本会被当 ncm 播。
  */
 @Composable
 fun SongDetailScreen(
@@ -89,7 +89,7 @@ fun SongDetailScreen(
     val lyric by viewModel.lyric.collectAsState()
     val translatedLyric by viewModel.translatedLyric.collectAsState()
 
-    // 歌词区仍是既有的**网易云单源**链路：拿一个带 bit62 标志位的合成 id 去问网易云取词
+    // 歌词区仍是既有的**ncm 单源**链路：拿一个带 bit62 标志位的合成 id 去问 ncm 取词
     // 只会拿回空，所以 QQ 一侧不触发（那条链路不在本次改动范围）。
     LaunchedEffect(numericId, source) {
         if (source == MusicSource.NETEASE) numericId?.let { viewModel.loadSongDetail(it) }
@@ -101,7 +101,7 @@ fun SongDetailScreen(
     val anchor = remember(source, numericId) { numericId?.let { routeAnchorSong(source, it) } }
 
     var page by remember(anchor) { mutableStateOf<TrackPage?>(null) }
-    // 实际拿去召回的锚点（可能在网易云一侧被补全）。它与 [anchor] 同身份，
+    // 实际拿去召回的锚点（可能在 ncm 一侧被补全）。它与 [anchor] 同身份，
     // 「有没有搜过」由它的名字是否为空决定。
     var recallSong by remember(anchor) { mutableStateOf(anchor) }
     var isLoading by remember(anchor) { mutableStateOf(anchor != null) }
@@ -246,7 +246,7 @@ fun SongDetailScreen(
  * （见 [SongDetailScreen] 的 KDoc）。
  *
  * QQ 的合成 id 带 `1L shl 62` 标志位（[SourceIds.qqId]）：路由里若已经是带标志位的形态
- * 就**原样透传**，否则在这里补标志位。补这一步不是洁癖 —— 网易云与 QQ 的数字 id 各自
+ * 就**原样透传**，否则在这里补标志位。补这一步不是洁癖 —— ncm 与 QQ 的数字 id 各自
  * 独立编号，裸 id 当 QQ id 用会让两套 id 空间混在一起，撞号就是「给错单曲」。
  * 标志位缺省时的 songmid 只能用 id 的字符串形式兜底（该兜底是确定性的，
  * 见 `SourceIds.qqId` 的 `hashSourceId`），因为我们手上没有 songmid。

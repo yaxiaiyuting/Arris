@@ -18,11 +18,11 @@
 
 | # | 任务书原文 | 实测 | 处置 |
 |---|---|---|---|
-| 1 | §1「P0：QQ 歌曲长按入库后刷新消失」隐含「QQ 歌单是只读镜像，入库写到别处」 | **前提基本成立但需修正**：QQ 歌单**确实是只读镜像**（本地不存它的曲目），但「入库」写的是**网易云红心歌单的镜像** `LibraryManager.saved_songs` —— 一个 QQ 曲目**永远进不去**的表。见 §1 | 按「同步口径错误」修，不是按「QQ 只读」修 |
+| 1 | §1「P0：QQ 歌曲长按入库后刷新消失」隐含「QQ 歌单是只读镜像，入库写到别处」 | **前提基本成立但需修正**：QQ 歌单**确实是只读镜像**（本地不存它的曲目），但「入库」写的是**ncm 红心歌单的镜像** `LibraryManager.saved_songs` —— 一个 QQ 曲目**永远进不去**的表。见 §1 | 按「同步口径错误」修，不是按「QQ 只读」修 |
 | 2 | §0 铁律 23「跨源混播去重…（本版新增）」 | 仓库里**从来没有**编号 23 的铁律（`grep -rn "铁律 *2[3-9]"` → 0 命中），该规则的实质早已存在：AGENTS.md **v2.4.0 三条新规则第 1、2 条**（`MatchConfidence.mergeable` ≥ MEDIUM 是唯一阈值） | 本版把 22/23/24 三条**真正写进 AGENTS.md**（任务书 §9 要求），并把「编号漂移」这件事一并修掉 |
 | 3 | §4.1「跨源混播去重…复用 v2.4.0 的匹配规则**或新建**」 | 主路径**已经做完了**：聚合器 `assembleSongs` 已把 `mergeable` 的对端行吸收掉（`CatalogAggregator.kt:372-374,413`）。真正的增量只有两件：① 给歌手页加 ▶ 入口；② 补 **`TrackKey` 轴**去重（`replaceQueueAndPlay` 一句判重都没有） | P1 按「入口 + 一条正交轴」做，**不改** `replaceQueueAndPlay`（14 处调用，含 FM 电台） |
-| 4 | §5.1「两个源（网易云、QQ）统一使用同一布局」 | 这一页是**三个**按源分区：本地歌单 / 网易云 / QQ 音乐，**本地那一段也是网格卡片** | 按**三段统一**做。只统一两段会留下一个「本地卡片 + 两源列表」的半切换页面 |
-| 5 | §2.3 隐含「布局切换有一个零行为变化的默认值」 | **不存在**：改造前这一页本身就是混合形态（本地/网易云卡片 + QQ 整行） | 默认值取 **CARD**（保留面积最大的两段现状），理由与代价写进 `PlaylistLayout` 的 KDoc 与 release notes |
+| 4 | §5.1「两个源（ncm、QQ）统一使用同一布局」 | 这一页是**三个**按源分区：本地歌单 / ncm / qm，**本地那一段也是网格卡片** | 按**三段统一**做。只统一两段会留下一个「本地卡片 + 两源列表」的半切换页面 |
+| 5 | §2.3 隐含「布局切换有一个零行为变化的默认值」 | **不存在**：改造前这一页本身就是混合形态（本地/ncm 卡片 + QQ 整行） | 默认值取 **CARD**（保留面积最大的两段现状），理由与代价写进 `PlaylistLayout` 的 KDoc 与 release notes |
 | 6 | §1「P2：歌单手动折叠」隐含「已有折叠概念」 | 本页**确无**任何折叠概念（三条独立路径交叉证否，见 `probe-fold.md` §3） | 按**新增**做；折叠单位取「区块」而不是「单张歌单」 |
 | 7 | §2.1 问「QQ 歌单的『我喜欢』等特殊 dirId 是否导致写入被忽略」 | **不是**。`dirId` 是**载荷不是身份**（v2.2.0 已判决），特殊歌单只影响 `isFavorite` 排序；写入被忽略的原因与 dirId 完全无关 | 探针第 5 问的答案是「否」，不进修复清单 |
 | 8 | §2.1 问「是否与 v2.2.0 的只加不减 + tombstone 冲突」 | **不冲突、也没关系**：v2.2.0 的实现在 `local/LocalPlaylistSync`，它**只追加、从不删除、从不 tombstone**，方向正确（27 个既有 `@Test` + 本次转写实跑复核）。丢歌的是 `library/LibraryManager`，它**根本没有 origin/tombstone 概念** | 根因不是「tombstone 逻辑反向」，而是「这条纪律从未被应用到收藏库上」 |
@@ -34,11 +34,11 @@
 
 ### 一句话
 
-「入库」写进的是**网易云红心歌单的镜像**（`ncrust_library` / `saved_songs`），
+「入库」写进的是**ncm 红心歌单的镜像**（`ncrust_library` / `saved_songs`），
 而 `refreshFromCloud` 用**云端 `likedIds` 顺序整体重建**这张表 ——
 不在云端红心歌单里的条目**连候选都不是**，被静默物理丢弃，紧接着 `scheduleFlush`
 把丢掉的结果写回磁盘。QQ 曲目的 id 由 `SourceIds.qqId` 合成（`bit62` 恒置位，≥ 2⁶²），
-而网易云 songId < 2⁴⁰，**两个值域不相交 ⇒ QQ 曲目 100% 命中这条路径**。
+而 ncm songId < 2⁴⁰，**两个值域不相交 ⇒ QQ 曲目 100% 命中这条路径**。
 
 ### 存储位置 / 持久化 / 同步覆盖（任务书 §2.5 要求明确回答的三问）
 
@@ -62,14 +62,14 @@ S6 上 `su -c cat /data/data/com.takahashirinta.ncrust/shared_prefs/ncrust_libra
 - `ids >= 2^62` 的条目数 = **0** ⇒ 磁盘上**一条 QQ 曲目都没有**，与根因预测一致；
 - 原始 XML 留档：`verification/ncrust_library-BEFORE-S6.xml`。
 
-### 网易云是否同样受影响（探针问题六）
+### ncm 是否同样受影响（探针问题六）
 
 **是，条件性。** 存活谓词与 QQ 完全相同（**与音源无关**），差别只在可满足性：
 
 | 情形 | 结果 |
 |---|---|
 | 加的是 QQ 曲目 | **必然丢**（合成 id 永远进不了 `likedIds`） |
-| 加的是网易云曲目，且 `like` 真的生效 | 存活（它在 `likedIds` 里） |
+| 加的是 ncm 曲目，且 `like` 真的生效 | 存活（它在 `likedIds` 里） |
 | 加时未登录 | `pushLike` 被 `saveSong` 的卫语句跳过 ⇒ **下次刷新消失** |
 | 加时离线 / like 被风控拦 | 写请求失败被 `runCatching` 吞掉 ⇒ **下次刷新消失** |
 
@@ -90,7 +90,7 @@ S6 上 `su -c cat /data/data/com.takahashirinta.ncrust/shared_prefs/ncrust_libra
 **不受影响，但有两个次级缺口**（都在本版一并处理或如实记录）：
 
 - 队列身份走 `TrackKey`（v2.5.3 起），与 `saved_songs` 无耦合 ⇒ **主链路安全**；
-- 但 `pushLike` 把 QQ 合成 id 原样 POST 给网易云 `/api/radio/like`（**无任何闸门**），
+- 但 `pushLike` 把 QQ 合成 id 原样 POST 给 ncm `/api/radio/like`（**无任何闸门**），
   本版在 like 的唯一出口加闸门（判据 `SourceIds.isQqId`，与 v2.5.5 的 `ReportGate` 同源）；
 - 8 个 `saveSong` 调用点**全部无条件弹「已加入库」**（因为 `saveSong` 返回 `Unit`）——
   用户看到的成败与真实成败完全脱钩。本版改成按返回值提示。
@@ -177,14 +177,14 @@ S6 上 `su -c cat /data/data/com.takahashirinta.ncrust/shared_prefs/ncrust_libra
 
 | 项 | 取值 | 依据 |
 |---|---|---|
-| **折叠单位** | **按源分区的三个区块**（本地 / 网易云 / QQ） | 「我只想看 QQ 那一段」是这一页最常见的诉求；按单张歌单折叠等于让用户收起 99 张 |
+| **折叠单位** | **按源分区的三个区块**（本地 / ncm / QQ） | 「我只想看 QQ 那一段」是这一页最常见的诉求；按单张歌单折叠等于让用户收起 99 张 |
 | prefs 文件 | `ncrust_settings` | 同上 |
 | key | `library_section_collapsed_local` / `_netease` / `_qq`（三个独立 `Boolean`） | 生产代码 `putStringSet` **0 命中**（只在测试 FakePrefs 里）⇒ 不引入 `Set<String>`；键集编译期固定 3 个，用集合只换来两个额外失败面 |
 | 默认 | 全 `false`（展开） | 老用户升级零行为变化；同时满足「绝不自动折叠」 |
 | 状态归属 | **prefs**，不是 `remember` | 本页被 `AnimatedContent(targetState = selectedCategory)` 包裹，**切走再切回会卸载整棵子树** —— 只放 `remember` 会静默展开（用户看到「我收起来的又自己打开了」） |
 | 折叠时显示 | 标题右侧 `展开全部 N 个`（收起态）/ `收起`（展开态） | 显示**数量**是因为用户要判断「值不值得展开」；不带数字的「已收起」回答不了 |
 | 展开/收起动画 | `animateItem(fadeIn 150ms / placement 220ms / fadeOut 120ms, MetroDefault)` | 这**正是本文件里已有的取值**（本地歌单段 v2.5.0 就在用）。`expandVertically`/`shrinkVertically`/`animateContentSize` 全仓 **0 命中** ⇒ 不引入新机制 |
-| 覆盖补齐 | 网易云段与 QQ 段**目前没有 `animateItem`**，本版一并补上 | 不补就是「本地淡出、另两段硬跳」，平滑只满足 1/3 |
+| 覆盖补齐 | ncm 段与 QQ 段**目前没有 `animateItem`**，本版一并补上 | 不补就是「本地淡出、另两段硬跳」，平滑只满足 1/3 |
 | 折叠按钮位置 | **区块标题整行可点** | QQ 段的标题不是 `SectionHeader` 而是带刷新按钮的内联 `Row` —— 做进 `SectionHeader` 会**漏掉 QQ** |
 | 折叠 QQ 时是否停掉网络加载 | **不停** | 本仓库的闸门是 **tab 级**的；展开后要等一次网络往返会违反「先渲染、绝不空白 + 加载」的既有模式 |
 
@@ -205,7 +205,7 @@ S6 上 `su -c cat /data/data/com.takahashirinta.ncrust/shared_prefs/ncrust_libra
 | 1 | 「QQ 歌单详情长按入库」这一条**确切点击路径** | HEAD 的 `QqPlaylistDetailScreen.kt:257` 传的是 `emptyList()`，那张菜单里**没有**「加入库」（`grep -c LibraryAdd` = 0；阳性对照 `PlaylistDetailScreen` = 2）。QQ 曲目可达的「加入库」是**播放器卡片按钮**与**搜索结果/历史菜单** | 需要一张用户菜单截图 + versionName 才能定案；本版修的是**共享的存储与同步层**，所以只要走的是 `LibraryManager`，路径差异不影响修复有效性 |
 | 2 | `subscribeAlbum` 触发 `flushToDisk` 清空收藏单曲的**时序可达性** | 【读码】已证明代码路径存在，**未在真机上复现**（需要精确的操作时序） | 本版已把它修掉（三个键独立判断），所以即使可达也已关闭 |
 | 3 | 布局切换的**帧时间**（release 包） | 本仓库**没有任何歌单 tab 的滚动基准**（`grep -rn 歌单 benchmark/src` → exit 1）。新增一条基准需要设备 + 时间预算，且必须 release 包 | 结论：本版**不声称**「性能无显著下降」（铁律 22）。切换只改 `columns` 与条目的 `if`，不新增逐帧动画 |
-| 4 | QQ 主源歌手页 | `NavRoutes.artist(source,id)` 的唯一调用点 `AlbumDetailScreen.onArtistClick` 在 `source != NETEASE` 时恒不触发 ⇒ **QQ 主源歌手页今天不可达**，其歌单是单源的 | 「全部播放」的跨源去重在 QQ 主源页面上走不到；网易云主源页面（可达的那条）**已实测** |
+| 4 | QQ 主源歌手页 | `NavRoutes.artist(source,id)` 的唯一调用点 `AlbumDetailScreen.onArtistClick` 在 `source != NETEASE` 时恒不触发 ⇒ **QQ 主源歌手页今天不可达**，其歌单是单源的 | 「全部播放」的跨源去重在 QQ 主源页面上走不到；ncm 主源页面（可达的那条）**已实测** |
 | 5 | 「全部播放」在**真实登录态**下的端到端播放 | 需要真机 + 登录 + 点击 | 已列为真机验证项，见 `EVIDENCE.md` |
 | 6 | `MatchCacheStore.track()/putTrack()` 是死代码 | 【实测】`grep` exit=1（正对照 `putArtist/putAlbum` 各命中） | 不影响本版（本版不需要它）；如实记录，不顺手删 |
 | 7 | 结论 1 的转写验证是**逻辑等价**而非同一份字节码 | 探针把重建块逐句转写成 Java 实跑，证明的是**判据**而不是那个 class 文件 | 判据已由 4 份新单测在 Kotlin 侧再钉一遍 |

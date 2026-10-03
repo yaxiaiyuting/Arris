@@ -88,7 +88,7 @@ Ncrust 若接入 B站音源，**在行为形态上与该项目有重叠面**（�
 本文档**不构成法律意见**，但必须把这条风险**显式记录**，供项目所有者决策：
 
 1. B站已于 2026-01 展现实质性的法务动作意愿；
-2. B站音源与网易云/QQ 音源在这一点上的风险**不同**（后两者未见到同等量级的公开法务动作）；
+2. B站音源与 ncm/QQ 音源在这一点上的风险**不同**（后两者未见到同等量级的公开法务动作）；
 3. 建议的**风险缓释**（技术侧能做的）：
    - 音频源**默认关闭**、由用户显式开启（"用户主动选择"而非"产品默认提供"）；
    - 不实现任何**写操作**（投币/收藏/点赞）；
@@ -196,7 +196,7 @@ Ncrust 若接入 B站音源，**在行为形态上与该项目有重叠面**（�
 | **Wbi** | ✅ 实现于 `src/service/request/wbi-sign.ts`，用 `spark-md5`；`mixinKeyEncTab` 与文档相同；`encodeURIComponent`（JS，空格→`%20` ✅）；通过 `useWbi: true` 开关式调用 |
 | **Wbi 调用点** | `player-playurl.ts` → `/x/player/wbi/playurl`（`useWbi: true`）；另有 `space-wbi-acc-info.ts`、`space-wbi-acc-relation.ts`、`space-wbi-arc-search.ts` |
 | **URL TTL** | ❌ `playurl` 的类型定义里 `ttl: number; // 1` 指的是**响应 top-level 的 `ttl` 字段**（恒为 1），**不是 URL 有效期**；**未找到 `deadline` 解析或 TTL 常量** |
-| **歌词** | ⚠️ **来自第三方，不是 B站**：`electron/ipc/api/lrclib-lyric.ts`（LRCLIB）+ `netease-lyric.ts`（**网易云**）—— 说明作者认为 **B站自身歌词不够用** |
+| **歌词** | ⚠️ **来自第三方，不是 B站**：`electron/ipc/api/lrclib-lyric.ts`（LRCLIB）+ `netease-lyric.ts`（**ncm**）—— 说明作者认为 **B站自身歌词不够用** |
 | **新发现（本次实测采纳）** | `src/service/web-interface-new-music.ts` → **`/x/centralization/interface/new/music?plat=2&web_location=333.1351`** —— 本次照着实测，确认**匿名可用**（见 `bili-audio-api.md` §6.8）。这是本次调研**唯一**从社区实现里"捡到"的有价值端点 |
 | **可借鉴点** | ⚠️ **仅限"知道它这么做"**，**不得复制任何代码或注释文本**。可借鉴的**思路**：① 音频区 vs DASH 双路并存；② `useWbi` 开关式设计；③ B站歌词质量不足时接第三方（Ncrust 不应这么做，见 `RECOMMENDATIONS.md`） |
 
@@ -258,7 +258,7 @@ Ncrust 若接入 B站音源，**在行为形态上与该项目有重叠面**（�
 | **bilibili-API-collect** | **CC BY-NC 4.0**（已关停） | 文档（两路都记） | ✅ 文档+5 语言 Demo | 两态都覆盖 | 文档写 `timeout`≈3h（**实测应为 `deadline`=2h**） | `info.lyric` / `song/lyric` |
 | **AprDeci/bili-music** ★373 | **MIT** | **视频 DASH**（`fnval=4048`） | ✅ 完整（`bili_wbi_signer.dart`） | ✅ 有 auth 模块，取流带会话头 | ❌ 无（每次现取） | ❌ 未发现 |
 | **despcy/Bilibili-MusicPlayer** ★45 | **MIT** | **视频 DASH**（`fnval=16`） | ❌ 无（2019 年项目） | ✅ **强依赖**（曲库=收藏夹） | ❌ 无 | ❌ 未发现 |
-| **wood3n/biu** ★2695 | ❌ **PolyForm Noncommercial 1.0.0** | **音频区 APP 端点 + 视频 DASH（双路）** | ✅ 完整（`wbi-sign.ts`，开关式） | 文档称 APP `access_key` 或 `SESSDATA` 可取付费音频 | ❌ 无（`ttl` 是响应字段，不是 URL 寿命） | ⚠️ **第三方：LRCLIB + 网易云** |
+| **wood3n/biu** ★2695 | ❌ **PolyForm Noncommercial 1.0.0** | **音频区 APP 端点 + 视频 DASH（双路）** | ✅ 完整（`wbi-sign.ts`，开关式） | 文档称 APP `access_key` 或 `SESSDATA` 可取付费音频 | ❌ 无（`ttl` 是响应字段，不是 URL 寿命） | ⚠️ **第三方：LRCLIB + ncm** |
 | **bb-music / 哔哔音乐** | ❌ **无 LICENSE** | **视频**（README 明说） | ⚠️ 疑似（有 `sign.dart`），**未验证** | ❌ **明确不需要登录** | 未确认 | 未确认 |
 | **（本次实测结论）** | — | **音频区 au 优先**（见 RECOMMENDATIONS） | ✅ 必须实现但**音频区端点不需要** | ❌ 本版不需要 | ✅ **必须显式处理：`deadline` = now+7200s** | **B站 `song/lyric`（LRC）** |
 
@@ -275,7 +275,7 @@ Ncrust 若接入 B站音源，**在行为形态上与该项目有重叠面**（�
 3. **Wbi 实现方式高度一致**（三个实现了的项目都是同一张乱序表 + `md5(query+mixin_key)`），差异只在**编码器**（Dart 用 `encodeQueryComponent` 可能出 `+`，JS/Python 出 `%20`）。
    → Ncrust 应**自己手写百分号编码 + JVM 单测**，不要依赖平台 API。
 
-4. **B站歌词质量被普遍认为不足**：`biu` 直接放弃了 B站歌词，改接 **LRCLIB 与网易云**。
+4. **B站歌词质量被普遍认为不足**：`biu` 直接放弃了 B站歌词，改接 **LRCLIB 与 ncm**。
    → 但本次实测确认音频区的 `song/lyric` **是标准 LRC**（`[MM:SS.mm]`，含重复段落多时间戳），**可直接喂 Ncrust 现有 `LrcParser`**。Ncrust 不需要引第三方歌词源（那还会引入新的许可与隐私问题）。
 
 5. **许可证风险是真实的、可量化的**：5 个参考项目里，**2 个无许可、1 个非商业许可、1 个 CC BY-NC 且已因律师函关停** —— 只有 2 个（都是 MIT）是干净的。

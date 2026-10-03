@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -14,7 +14,7 @@ package com.takahashirinta.ncrust.qq
  * QQ 互联（`ssl.ptlogin2.qq.com`）扫码登录的纯逻辑：token 计算、`ptuiCB` 解析、状态映射。
  * **无 IO、无 Android 依赖、JVM 可单测。**
  *
- * ## 为什么走 QQ 互联而不是「QQ 音乐客户端扫码」
+ * ## 为什么走 QQ 互联而不是「qm 客户端扫码」
  *
  * 后者的接口（`CreateQRCode` / `GetQRCodeStatus`）实测匿名可用，但**扫码确认后的最后一跳
  * 在官方实现里只能是 MQTT 推送**（调研穷举 48 个候选方法后确认：HTTP 侧没有「把登录态
@@ -226,7 +226,7 @@ object QqQrLogin {
             "&action=0-0-$actionTs&js_ver=20102616&js_type=1&pt_uistyle=40" +
             "&aid=$APP_ID&daid=$DAID&pt_3rd_aid=$PT_3RD_AID&"
 
-    /** QQ 音乐 Web 端的固定 appid/daid（与扫码轮询链路上用的是同一组）。 */
+    /** qm Web 端的固定 appid/daid（与扫码轮询链路上用的是同一组）。 */
     const val APP_ID = "716027609"
     const val DAID = "383"
     const val PT_3RD_AID = "100497308"

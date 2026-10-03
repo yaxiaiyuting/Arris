@@ -1,9 +1,9 @@
-# PROBE — QQ 音乐「用户歌单 / 用户信息」只读接口实测（v2.2.0）
+# PROBE — qm「用户歌单 / 用户信息」只读接口实测（v2.2.0）
 
 - 探针日期：2026-09-25
-- 目标：在写任何同步代码**之前**，把 QQ 音乐用户歌单相关的接口、字段、分页、登录态语义钉死
+- 目标：在写任何同步代码**之前**，把 qm 用户歌单相关的接口、字段、分页、登录态语义钉死
 - 端点：`https://u.y.qq.com/cgi-bin/musicu.fcg`（客户端协议，**免签**，与 v2.1.0 既定结论一致）
-- 设备：`3B15CD00GB700000`（OPPO PLC110 / Android 16 / SDK 36 / arm64-v8a），已 root（KernelSU），已登录 QQ 音乐
+- 设备：`3B15CD00GB700000`（OPPO PLC110 / Android 16 / SDK 36 / arm64-v8a），已 root（KernelSU），已登录 qm
 - 账号：本机真机登录态（cookie 从应用私有目录 `ncrust_qq_prefs` 经 root 读出，**只在内存中使用，不打印、不落盘**）
 - 脚本：`tools/probe-qq-playlist.py`（第 1–2 轮）、`tools/probe-qq-playlist-r3.py`、`tools/probe-qq-playlist-r4.py`
 - 纪律：**只调读接口**；写接口只在 §7 登记、一次都没有调用；落盘一律脱敏
@@ -12,7 +12,7 @@
 
 ## 0. 一句话结论
 
-> QQ 音乐用户歌单同步**可做且已实测打通全链路**：`music.musicasset.PlaylistBaseRead.GetPlaylistByUin`
+> qm 用户歌单同步**可做且已实测打通全链路**：`music.musicasset.PlaylistBaseRead.GetPlaylistByUin`
 > 拿歌单列表（**含 `dirId=201`「我喜欢」**），`music.srfDissInfo.DissInfo.CgiGetDiss` 用
 > `song_begin`/`song_num` 分页拿歌单详情，`songlist[]` 经**既有的 `QqSongMapper`** 即可得到
 > `songmid`/`media_mid` 两个身份载荷 —— 与播放链路需要的字段**完全一致**。
@@ -61,7 +61,7 @@
 **`uin` 不在这个接口里** —— 它来自 cookie（`QqCookie.uinOf`）。会员信息来自接口 2 的 `data.identity`（`vip`/`svip`/`overdate`/`music_lev_*`）。
 
 > **对既有代码的修正**：`QqApi.fetchProfile()` 当前硬编码 `nick = null, uid = 0L`
-> （`QqApi.kt:436-443`，注释写「本仓库没有 QQ 音乐账号」）。**这个前提已经不成立**：
+> （`QqApi.kt:436-443`，注释写「本仓库没有 qm 账号」）。**这个前提已经不成立**：
 > 本探针就是在有真实登录态的设备上跑出来的，`nick` 与 `logo` 都拿得到。v2.2.0 据此补上。
 
 ---

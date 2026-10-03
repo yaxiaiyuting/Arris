@@ -71,7 +71,7 @@ fun SongCard(
     //
     // v2.1.0 · E 时这里只标 QQ（`else -> ""`）。改成两源都标的原因是聚合搜索会把两源的
     // 条目混进同一个列表，而两源的 id 完全独立 —— 实测同关键词下会出现**完全同名**的行
-    // （《晴天》网易云 186016 / QQ 00083kc41YcFuR），不标音源用户判断不出哪行是哪个源。
+    // （《晴天》ncm 186016 / QQ 00083kc41YcFuR），不标音源用户判断不出哪行是哪个源。
     // 装配规则（含「什么时候什么都不显示」）全部在 SongTags 里，JVM 可单测。
     val tags = remember(song, strings, availabilityOverride) {
         SongTags.of(song, strings, availabilityOverride)

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -25,7 +25,7 @@ import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 /** 主设置文件（与其余设置项一致：`LyricsDisplayPrefs.PREFS_NAME`）。 */
 const val PREFS_SETTINGS = "ncrust_settings"
 
-/** 网易云 cookie 所在文件（`auth/CookieManager.kt:7`）。 */
+/** ncm cookie 所在文件（`auth/CookieManager.kt:7`）。 */
 const val PREFS_COOKIE = "ncrust_prefs"
 
 /** QQ cookie 所在文件（`qq/QqAuthStore.kt:62`）。 */
@@ -50,7 +50,7 @@ enum class SettingsGroup(
     val subtitleKey: String,
     val iconName: String,
 ) {
-    /** 账号与登录：网易云 / QQ 音乐。 */
+    /** 账号与登录：ncm / qm。 */
     ACCOUNT(
         id = "account",
         titleKey = "settingsGroupAccountTitle",

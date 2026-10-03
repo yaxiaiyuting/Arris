@@ -12,7 +12,7 @@
 |---|---|---|
 | QQ 曲目 →「转到专辑」 | 跳到**另一张真实存在的专辑**（陈奕迅《What's Going On...?》→ 陈小云《百万金曲…》；陈奕迅《U 87》→ 邓杰《爱的供养》），页面渲染完全正常 | 进 **QQ 的《What's Going On...?》/《U 87》** 专辑页 |
 | QQ 曲目（老队列 / 冷启动恢复）→「转到专辑」 | **毫无反应**：页面不变、无提示、logcat 一条不留 | 切到搜索 tab 并预填关键词，**给一句提示**，并记 `AlbumNav` 日志 |
-| 网易云曲目 →「转到专辑」 | 正确 | 正确（**零回归**，真机 A/B 已验） |
+| ncm 曲目 →「转到专辑」 | 正确 | 正确（**零回归**，真机 A/B 已验） |
 | 收藏专辑表 / 队列 / 收藏 / 歌单 里的老数据 | 身份缺失被当成"数字 id 可用" | 读时兼容老形状；**缺身份一律标记「身份不可信」**，绝不猜 |
 
 ---
@@ -62,7 +62,7 @@ sealed interface AlbumNav {
 三条不变量：
 
 1. **绝不产出与歌曲音源不同的 `Direct`**（`Direct` 的两条出口都写死 `song.musicSource`）；
-2. **身份必须过值域闸门**：网易云十进制 / QQ base62 mid。QQ 的数字 `albumID`、`pmid`
+2. **身份必须过值域闸门**：ncm 十进制 / QQ base62 mid。QQ 的数字 `albumID`、`pmid`
    都在闸门上失败；
 3. **置信度不足一律跳搜索**：`crossSourceJump` 要求 `MatchConfidence.mergeable`
    **且**目标值域合法，任一不满足 ⇒ `Search`。
@@ -73,7 +73,7 @@ sealed interface AlbumNav {
 
 ### 2.4 值域闸门抽成唯一落点：新增 `source/SourceIdDomain.kt`
 
-「网易云吃十进制、QQ 吃 base62 mid」是**音源的性质**，不是艺人的性质。
+「ncm 吃十进制、QQ 吃 base62 mid」是**音源的性质**，不是艺人的性质。
 v2.6.1 把它写在 `ArtistNavigator` 里；本版修专辑时最自然的动作是**再抄一份**，
 而抄一份的代价是**两处会漂移的规则** —— 症状恰好就是「艺人跳得对、专辑跳错」。
 
@@ -159,7 +159,7 @@ fun navigateToAlbum(song: SongItem) {
 | 不改艺人跳转的任何行为 | v2.6.1 已验收；本版只做了**行为等价的**闸门搬迁 |
 | 不修「折叠态播放器卡的命中带吞掉菜单最后几行」 | 既有缺陷（`AGENTS.md` 触摸陷阱第 2/5/6 条），与本 P0 无关，见 `probe-album-jump.md` §5 |
 | 不给搜索历史加专辑身份字段 | `SearchHistoryManager.HistoryItem` 里**根本没有专辑字段**（只有 `coverUrl`），为它新造一个字段属于另一个改动；这些曲目走「跳搜索」是正确处置 |
-| 不支持 QQ 专辑收藏 | `subscribeAlbum` 写的是网易云订阅；`AlbumDetailScreen` 对 QQ 一侧**不挂**收藏按钮（v2.4.0 既有决定）。本版给 `AlbumInfo` 加 `mid` 只是把身份补上，没有打开这个能力 |
+| 不支持 QQ 专辑收藏 | `subscribeAlbum` 写的是 ncm 订阅；`AlbumDetailScreen` 对 QQ 一侧**不挂**收藏按钮（v2.4.0 既有决定）。本版给 `AlbumInfo` 加 `mid` 只是把身份补上，没有打开这个能力 |
 | 不碰华为控制中心卡片 | 任务书禁止项 |
 | 不做跨源专辑匹配跳转 | `crossSourceJump` 闸门保留但当前**恒返回 null**（这条路上没有任何可用的匹配结论）。要做跨源跳转必须先有 `MatchConfidence.mergeable` 的结论，那是另一个版本的事 |
 
@@ -181,8 +181,8 @@ fun navigateToAlbum(song: SongItem) {
 1. **专辑跳转必须携带 source** —— `跳转路由必须把 source 编进路径`、
    `任何情况下 Direct 的 source 都等于歌曲自己的音源`、
    `所有宿主入口的曲目形状都产出带 source 的参数`；
-2. **source 与 albumId 值域匹配** —— `网易云值域只吃十进制…`、
-   `QQ 值域只吃 base62 且拒绝网易云值域内的纯数字`、`QQ 的 pmid 不是身份`、
+2. **source 与 albumId 值域匹配** —— `ncm值域只吃十进制…`、
+   `QQ 值域只吃 base62 且拒绝ncm值域内的纯数字`、`QQ 的 pmid 不是身份`、
    `SourceIdDomainTest` 全套；
 3. **匹配置信度不足时跳搜索** —— `跨源跳转只有 mergeable 才放行`、
    `跨源跳闸门两道都要过…`、`当前这条路径上没有可用的跨源结论`；

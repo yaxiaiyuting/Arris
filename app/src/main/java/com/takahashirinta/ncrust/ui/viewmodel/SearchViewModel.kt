@@ -68,9 +68,9 @@ class SearchViewModel : ViewModel() {
     /**
      * 上一次单曲搜索里两个音源各出了多少条（v2.1.0 · E）。
      *
-     * 存在的理由很直接：`SongCard` 只在**非网易云**的行上加音源标识，
-     * 于是「网易云的行」和「QQ 的行」在列表里长得一样，用户无法判断结果来自哪里 ——
-     * 真机反馈原话「现在有了稻香，似乎是网易云的搜索结果？」。
+     * 存在的理由很直接：`SongCard` 只在**非 ncm**的行上加音源标识，
+     * 于是「ncm 的行」和「QQ 的行」在列表里长得一样，用户无法判断结果来自哪里 ——
+     * 真机反馈原话「现在有了稻香，似乎是 ncm 的搜索结果？」。
      * 一行小字把两个来源的条数都说清楚，比给每一行都挂标签更省地方。
      *
      * `null` = 还没搜过（不显示那一行）。
@@ -79,7 +79,7 @@ class SearchViewModel : ViewModel() {
      * v2.5.5 · G：逐源统计（含**状态**）。
      *
      * 旧类型是 `Pair<Int, Int>?` —— 它只能表达计数，于是「QQ 还没回来」被迫写成 0，
-     * 界面上就是「QQ 音乐 0 首」那句假话。新类型见 [SourceCounts]。
+     * 界面上就是「qm 0 首」那句假话。新类型见 [SourceCounts]。
      */
     private val _sourceCounts = MutableStateFlow<SourceCounts?>(null)
     val sourceCounts: StateFlow<SourceCounts?> = _sourceCounts
@@ -90,7 +90,7 @@ class SearchViewModel : ViewModel() {
     private var searchJob: Job? = null
 
     /**
-     * 补充源（QQ 音乐）的时间预算（v2.1.0 · hotfix 3）。
+     * 补充源（qm）的时间预算（v2.1.0 · hotfix 3）。
      *
      * 搜索是**交互式**功能，用户对「多久算慢」的容忍度是秒级。补充源晚到不如不到 ——
      * 主源的结果必须先让用户看见（见 [searchByType] 的顺序说明）。
@@ -192,29 +192,29 @@ class SearchViewModel : ViewModel() {
         try {
             when (type) {
                 1 -> {
-                    // v2.1.0 · E：**聚合搜索** —— 网易云与 QQ 音乐。
+                    // v2.1.0 · E：**聚合搜索** —— ncm 与 qm。
                     //
                     // ## hotfix 3 留下的顺序契约（**本版没有改它**）
                     //
-                    // 第一版写成「先 await 网易云、再 await QQ，最后一起发布」。这在 QQ 那条
+                    // 第一版写成「先 await ncm、再 await QQ，最后一起发布」。这在 QQ 那条
                     // 通道慢或不可达时是灾难：OkHttp 的 connect/read 超时是 15/20 秒，
-                    // 网易云的结果明明已经到手，却要陪着一起等 —— 用户看到的就是**一直转圈**。
+                    // ncm 的结果明明已经到手，却要陪着一起等 —— 用户看到的就是**一直转圈**。
                     // 现在的顺序：
-                    //  ① 网易云（主源）拿到就**立刻发布并停止转圈**；
+                    //  ① ncm（主源）拿到就**立刻发布并停止转圈**；
                     //  ② QQ（补充源）带**硬预算**地追加，超时就放弃这一轮；
-                    //  ③ 两个源都空且网易云报过错 ⇒ 把错误交出去，界面不留一块哑掉的空白。
+                    //  ③ 两个源都空且 ncm 报过错 ⇒ 把错误交出去，界面不留一块哑掉的空白。
                     //
                     // ## v2.5.5 · G 改了两件事（都是「并发」与「状态」，不是「顺序」）
                     //
-                    // **(1) 两个请求并发发起。** 旧实现是「await 网易云 → 再发 QQ」——
-                    // 整体耗时是**和**而不是**最大值**。用户报告的「网易云秒出、QQ 5 秒后到」
+                    // **(1) 两个请求并发发起。** 旧实现是「await ncm → 再发 QQ」——
+                    // 整体耗时是**和**而不是**最大值**。用户报告的「ncm 秒出、QQ 5 秒后到」
                     // 里，那 5 秒中其实有一段是白白串行等出来的。
                     // `async`（默认 start = DEFAULT，立即开始）把两段重叠起来，
-                    // 而**发布顺序一个字没改**：仍然是网易云一到就 publish。
+                    // 而**发布顺序一个字没改**：仍然是 ncm 一到就 publish。
                     //
-                    // **(2) 统计量能表达「还没回来」。** 旧代码在网易云到手时写
+                    // **(2) 统计量能表达「还没回来」。** 旧代码在 ncm 到手时写
                     // `_sourceCounts.value = netease.size to 0` —— 那个 0 在界面上是
-                    // 「QQ 音乐 0 首」，而它的真实含义是「QQ 还没回来」。
+                    // 「qm 0 首」，而它的真实含义是「QQ 还没回来」。
                     // 用户据此以为 QQ 搜不到那首歌。现在写 [SourceSearchStatus.PENDING]，
                     // 界面显示「搜索中…」，QQ 回来后原地更新成计数。
                     val keyword = _query.value
@@ -230,14 +230,14 @@ class SearchViewModel : ViewModel() {
                     trace.mark(SearchLatencyTrace.MARK_DISPATCH)
 
                     coroutineScope {
-                        // 网易云：结果与异常一起回传，不用共享可变变量跨协程写。
+                        // ncm：结果与异常一起回传，不用共享可变变量跨协程写。
                         // ⚠️ 只发**一次**请求：`runCatching` 包住调用，异常从 `exceptionOrNull()` 取，
                         // 绝不能为了拿异常而再调一次 `search(...)`（那会把一次搜索变成两次）。
                         val neteaseDeferred = async {
                             val outcome = runCatching {
                                 // ⚠️ v2.5.6 曾在这里改用过 `searchApi`（多一个 20s `callTimeout`），
                                 // 真机上**造成回归**：该网络下每通请求要 ~30s 才送出请求头，
-                                // 20s 的 callTimeout 于是拦掉了本来会成功的搜索 ⇒ 网易云恒 0 首。
+                                // 20s 的 callTimeout 于是拦掉了本来会成功的搜索 ⇒ ncm 恒 0 首。
                                 // 已撤销，回到共用的 `api`。根因与证据见 `RetrofitClient` 里那段撤销注释。
                                 RetrofitClient.api.search(keyword = keyword, type = 1).result?.songs
                             }
@@ -297,23 +297,23 @@ class SearchViewModel : ViewModel() {
                         // ## 旧实现的缺陷（真机证据，不是推理）
                         //
                         // 旧代码第一行是 `val (netease, _) = neteaseDeferred.await()`：
-                        // 网易云那条腿**无论多慢**都是发布前的唯一闸门 —— QQ 先回来也白搭，
+                        // ncm 那条腿**无论多慢**都是发布前的唯一闸门 —— QQ 先回来也白搭，
                         // 因为 `publish()` 在 await 之后。探针在 PLC110 上抓到的形状是
                         // `elapsed=30006ms netease=0 qq=30 qqTimedOut=false`：
                         // QQ 的 30 条在 ≤5 秒就已经到手，界面却空了 30 秒。
-                        // 根因是网易云那条 OkHttp 只有 read/connect 超时、**没有 callTimeout**。
+                        // 根因是 ncm 那条 OkHttp 只有 read/connect 超时、**没有 callTimeout**。
                         // （v2.5.6 一度给它加过 20s `callTimeout`，但真机证明它会拦掉本来会成功的
                         //  请求 —— 已撤销，见 `RetrofitClient` 里那段撤销注释。）
                         //
                         // ## 现在的语义
                         //
                         // 谁先回来谁先上屏（转圈随之结束），另一条回来后再合并发布一次。
-                        // **「网易云先到」这条主路径的行为与 v2.5.5 逐字相同** ——
-                        // 探针实测 6/6 样本都是网易云先到，所以这是一个「只影响异常路径」的改动。
+                        // **「ncm 先到」这条主路径的行为与 v2.5.5 逐字相同** ——
+                        // 探针实测 6/6 样本都是 ncm 先到，所以这是一个「只影响异常路径」的改动。
                         //
-                        // ## 为什么用 `select` 而不是「先 await QQ 带超时、再 await 网易云」
+                        // ## 为什么用 `select` 而不是「先 await QQ 带超时、再 await ncm」
                         //
-                        // 那种写法会给 QQ 引入一个**额外的**前置等待，把网易云先到的常见情形变慢。
+                        // 那种写法会给 QQ 引入一个**额外的**前置等待，把 ncm 先到的常见情形变慢。
                         // `select` 是「谁先完成用谁」，对两条腿都不加延迟。
                         var netease: List<SongItem>? = null
                         var neteaseError: Throwable? = null
@@ -405,7 +405,7 @@ class SearchViewModel : ViewModel() {
                         // 已发布的那一份逐字节相同，重发只会给 StateFlow 塞一个内容相同的新
                         // list 实例，白白触发一次列表重组（铁律 17）。
                         // v2.5.5 原来的守卫是 `qq.isNotEmpty()`（只覆盖「QQ 后到」），
-                        // 本版把它推广到两侧 —— 「网易云后到且为空」同样不需要重发。
+                        // 本版把它推广到两侧 —— 「ncm 后到且为空」同样不需要重发。
                         val shouldRepublish = if (neteaseArrivedSecond) {
                             neteaseList.isNotEmpty()
                         } else {
@@ -453,15 +453,15 @@ class SearchViewModel : ViewModel() {
                 //
                 // | 音源 | 歌词搜索 | 实测依据 |
                 // |---|---|---|
-                // | 网易云 | `cloudsearch/pc` 的 **`type=1006`** | 搜「让我掉下眼泪的」→ `songCount:60`，首条《成都》- 赵雷 |
-                // | QQ 音乐 | 旧版 `client_search_cp` 的 **`t=7`** | 响应把条目放在 `data.lyric.list`，首条同为《成都》- 赵雷 |
+                // | ncm | `cloudsearch/pc` 的 **`type=1006`** | 搜「让我掉下眼泪的」→ `songCount:60`，首条《成都》- 赵雷 |
+                // | qm | 旧版 `client_search_cp` 的 **`t=7`** | 响应把条目放在 `data.lyric.list`，首条同为《成都》- 赵雷 |
                 // | B 站 | **没有** | v3.1.0 的探针已穷举：`search_type=music`/`audio` 与非法值 `foobar` 返回**同一个** `-1200 被降级过滤的请求` ⇒ 取值非法；音频区只有播/词/元数据接口，搜索类全部下线（`docs/verification/v3.1.0/bili-bili-audio-api.md` §6.2）。搜索走视频区，而视频没有「歌词」这个可检索字段 |
                 //
                 // 所以这里聚合**两路**，B 站如实缺席 —— 而不是假装它也有、或拿视频标题去凑。
                 // 两路都用各自**原生**的能力，没有一方是靠猜关键词实现的。
                 //
                 // 并发与发布顺序沿用单曲搜索的既有纪律（见上面 `1 ->` 分支的长注释）：
-                // 网易云是主源、拿到就发布并停止转圈；QQ 是补充源、带硬预算。
+                // ncm 是主源、拿到就发布并停止转圈；QQ 是补充源、带硬预算。
                 1006 -> {
                     coroutineScope {
                         val keyword = _query.value
@@ -495,7 +495,7 @@ class SearchViewModel : ViewModel() {
                             }
                         }
 
-                        // ① 网易云是主源：到手就发布并停止转圈（与 `1 ->` 分支同一条纪律）。
+                        // ① ncm 是主源：到手就发布并停止转圈（与 `1 ->` 分支同一条纪律）。
                         val neteaseList = neteaseDeferred.await()
                         publish(neteaseList = neteaseList, qqList = emptyList())
                         _sourceCounts.value = SourceCounts(
@@ -615,7 +615,7 @@ class SearchViewModel : ViewModel() {
         _albums.value = emptyList()
         _artists.value = emptyList()
         // 计数必须跟着一起清，否则清空搜索框后还会留着一行
-        // 「网易云 20 首 · QQ 音乐 6 首」挂在那儿（清空与清结果永远是同一件事）。
+        // 「ncm 20 首 · qm 6 首」挂在那儿（清空与清结果永远是同一件事）。
         _sourceCounts.value = null
     }
 }
@@ -625,7 +625,7 @@ class SearchViewModel : ViewModel() {
  *
  * 单独一个类型（而不是 `List<SongItem>`）是为了把「超时」这件事**带出来**：
  * 旧代码只有一个列表，超时与「确实 0 条」在类型上完全一样，
- * 于是界面只能显示「QQ 音乐 0 首」—— 而对超时来说那句话是错的。
+ * 于是界面只能显示「qm 0 首」—— 而对超时来说那句话是错的。
  */
 /**
  * v3.1.0 · B：B 站补充源这一轮的结果。与 [QqOutcome] 同构（超时与「确实 0 条」

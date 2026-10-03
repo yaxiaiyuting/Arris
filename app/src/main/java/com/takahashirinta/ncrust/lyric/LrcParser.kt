@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -79,7 +79,7 @@ object LrcParser {
      * `docs/verification/v3.1.0/bili-research/evidence/21-lyric-au39.txt`）：22 行里
      * **13 行是多戳、共 44 个时间点**，旧实现只产出 22 条 ⇒ 丢 21 个时间点。
      *
-     * 这不是 B 站独有的问题：网易云与 QQ 的 LRC 走的是同一个函数
+     * 这不是 B 站独有的问题：ncm 与 QQ 的 LRC 走的是同一个函数
      * （`QqApi.kt` 的译文解析、`PlayerViewModel` 的译文/音译解析），所以**所有音源**都受影响。
      *
      * 修法：先收集行首的**全部**时间戳，逐个展开成 [LrcLine]，正文只取最后一个时间戳之后。

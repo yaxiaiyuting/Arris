@@ -34,8 +34,8 @@
 
 | 音源 | 能力 | 实测 |
 |---|---|---|
-| 网易云 | `cloudsearch/pc` 的 `type=1006` | 搜「让我掉下眼泪的」→ 60 条，首条《成都》- 赵雷 |
-| QQ 音乐 | 旧版 `client_search_cp` 的 `t=7` | 条目在 `data.lyric.list`，首条同为《成都》- 赵雷 |
+| ncm | `cloudsearch/pc` 的 `type=1006` | 搜「让我掉下眼泪的」→ 60 条，首条《成都》- 赵雷 |
+| qm | 旧版 `client_search_cp` 的 `t=7` | 条目在 `data.lyric.list`，首条同为《成都》- 赵雷 |
 | B 站 | **没有这个能力** | 见下面第 7 条的实测说明 |
 
 搜索页新增「歌词」tab（挨着「单曲」，因为它返回的也是单曲、复用同一套卡片与筛选）。
@@ -86,12 +86,12 @@ v3.2.4 刚做过帧率适配，而那条改动**在 60Hz 上等于没改**（非
 这是**概率性**症状，排查出三条独立机制，都修了：
 
 **(a) 登录态靠 `onPageFinished` 一次性快照抓取 —— 头号机制。**
-网易云登录页是 `music.163.com/#/login` 的 **hash 路由 SPA**：登录成功后的跳转
+ncm 登录页是 `music.163.com/#/login` 的 **hash 路由 SPA**：登录成功后的跳转
 **不产生新的文档级导航**，因此经常**不触发** `onPageFinished`。
 抓取时机是否落在「cookie 已写入且回调恰好到来」这个窗口里，每次重登都是独立掷骰子，
 命中次数服从几何分布 —— 那正是「要试很多次才偶尔成功」的形状。
 → 改成**轮询 cookie**，与同仓库 **QQ 侧早已采用**的做法一致（那条纪律在 QQ 那边写了很久，
-网易云这条一直没跟上）。上限 150 次 × 1s，有界。
+ncm 这条一直没跟上）。上限 150 次 × 1s，有界。
 
 **(b) cookie 覆盖写 + 判据过弱。**
 三条登录路径写入形状不同（WebView 整串 / 扫码只回增量 / 局域网回传），覆盖写会丢掉先到的键。
@@ -143,7 +143,7 @@ v3.2.4 刚做过帧率适配，而那条改动**在 60Hz 上等于没改**（非
 **还有一条你可能没注意到的**：所有音源共用的歌词解析器有一个 P0 缺陷 ——
 LRC 允许一行挂多个时间戳（副歌重复），而旧实现**只取第一个**，
 把后面的 `[02:44.32]` 当成歌词正文。结果是：**副歌在 02:44 / 03:15 / 03:50 / 04:47 整段消失，
-且屏上出现方括号字面量**。这不是 B 站独有 —— 网易云与 QQ 的歌词走同一个函数。
+且屏上出现方括号字面量**。这不是 B 站独有 —— ncm 与 QQ 的歌词走同一个函数。
 真实样本 22 行里 13 行是多戳、44 个时间点里丢了 21 个。已修并补 13 条单测（此前**没有**这个解析器的测试）。
 
 ### 8. 安卓桌面小组件的适配
@@ -253,7 +253,7 @@ the user cookie already had a same-named key (silently capping quality at lossle
 logged in. Also fixed a shared LRC parser bug where repeated-chorus lines with multiple
 timestamps lost every timestamp but the first, dropping whole choruses across all sources.
 
-**Features.** (2) Lyric search, aggregating NetEase `type=1006` and QQ `t=7` natively
+**Features.** (2) Lyric search, aggregating ncm `type=1006` and QQ `t=7` natively
 (Bilibili has no such capability — verified). (4)(8) An App Widget for the desktop player
 card, single provider with three runtime size buckets. (9) Lyric copy / share / poster
 image generation with a three-level degradation chain. (10) A playback statistics page with

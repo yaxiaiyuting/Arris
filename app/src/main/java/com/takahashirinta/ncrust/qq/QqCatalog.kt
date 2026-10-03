@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.4.0 · A/B：QQ 音乐的**目录接口**（艺人 / 专辑 / 曲目列表）。
+ * v2.4.0 · A/B：qm 的**目录接口**（艺人 / 专辑 / 曲目列表）。
  * 纯逻辑部分（请求构造 + 响应映射），**无 Android 依赖，JVM 可单测**。
  */
 
@@ -20,9 +20,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * QQ 音乐的艺人（v2.4.0 · A）。
+ * qm 的艺人（v2.4.0 · A）。
  *
- * @property id QQ 的**数字** `singerID`。它与网易云的艺人 id **互不相通**
+ * @property id QQ 的**数字** `singerID`。它与 ncm 的艺人 id **互不相通**
  *   （实测周杰伦 `4558` vs `6452`，见 `probe-artist-mapping.md` P1），
  *   本应用只用它做诊断与排序，**不做跨源键**。
  * @property mid `singerMID`（base62 字符串）—— **这才是本应用打开 QQ 艺人页的键**。
@@ -37,7 +37,7 @@ data class QqArtist(
 )
 
 /**
- * QQ 音乐的专辑（v2.4.0 · A）。
+ * qm 的专辑（v2.4.0 · A）。
  *
  * @property trackCount 曲目数。**只有旧版 `fcg_v8_singer_album.fcg` 的
  *   `latest_song.song_count` 给得到它**；`musicu` 的 `GetAlbumList` 恒为 0
@@ -55,7 +55,7 @@ data class QqAlbum(
 )
 
 /**
- * QQ 音乐的一张专辑 + 它的曲目（v2.4.0 · B）。
+ * qm 的一张专辑 + 它的曲目（v2.4.0 · B）。
  */
 data class QqAlbumDetail(
     val mid: String,
@@ -320,7 +320,7 @@ object QqCatalogMapper {
         return out
     }
 
-    /** 网易云侧把 `privilege.pl` 直接当可播判据；QQ 侧对应的就是 `purl` 非空。 */
+    /** ncm 侧把 `privilege.pl` 直接当可播判据；QQ 侧对应的就是 `purl` 非空。 */
     fun artistsOf(item: JSONObject): List<ArtistItem> {
         val arr = item.optJSONArray("singer") ?: return emptyList()
         val out = ArrayList<ArtistItem>(arr.length())
@@ -328,7 +328,7 @@ object QqCatalogMapper {
             val a = arr.optJSONObject(i) ?: continue
             val name = a.optString("name").takeIf { it.isNotEmpty() } ?: continue
             // v2.6.1 · P0：与 [QqSongMapper] 同一条纪律 —— `singer.mid` 必须带出去，
-            // 否则这条路上的曲目一样会把 QQ 的数字 singerID 当网易云 id 用。
+            // 否则这条路上的曲目一样会把 QQ 的数字 singerID 当 ncm id 用。
             // 两条映射路径的行为必须逐值一致（有单测钉住）。
             out += ArtistItem(
                 id = a.optLong("id", 0L).takeIf { it > 0L },

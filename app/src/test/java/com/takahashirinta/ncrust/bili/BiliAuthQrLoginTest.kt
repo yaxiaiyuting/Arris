@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -153,7 +153,7 @@ class BiliAuthQrLoginTest {
         assertEquals(180L * 1000L, BiliQrLogin.QR_TTL_MS)
         assertEquals("实测 180 秒（+178s 仍是 86101、+189s 已 86038）", 180, BiliQrLogin.QR_TTL_SECONDS)
         assertEquals(BiliQrLogin.QR_TTL_MS / BiliQrLogin.POLL_INTERVAL_MS, BiliQrLogin.MAX_POLLS.toLong())
-        assertEquals("与 QQ/网易云两侧同口径的 2 秒", 2_000L, BiliQrLogin.POLL_INTERVAL_MS)
+        assertEquals("与 QQ/ncm 两侧同口径的 2 秒", 2_000L, BiliQrLogin.POLL_INTERVAL_MS)
     }
 
     // ---------------------------------------------------------------- 错误分类（重试无意义 vs 抖动）

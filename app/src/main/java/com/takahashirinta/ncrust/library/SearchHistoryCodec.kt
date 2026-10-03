@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -27,7 +27,7 @@ import com.takahashirinta.ncrust.source.SourceIds
  *
  * `HistoryItem` 原先只有 5 个字段，`addSong` 一次都没读 `song.source` / `song.sourceId`
  * / `song.mediaId`。读回来重建的 `SongItem` 三个字段全是 `null`，于是
- * `SongItem.musicSource`（读**字符串**口径）把一首 QQ 曲目认成网易云 —— 角标错、
+ * `SongItem.musicSource`（读**字符串**口径）把一首 QQ 曲目认成 ncm —— 角标错、
  * 单曲页路由错、点下去必然取不到链。本版补上三个字段。
  *
  * ### bug 2（探针没发现，靠**真机取证**才看见的）：落盘字段名由 R8 决定

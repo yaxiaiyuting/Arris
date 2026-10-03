@@ -257,7 +257,7 @@
 1643:) {
 1644:    val strings = LocalStrings.current
 1645:    // 走 song.musicSource（枚举）而不是原始 source 字符串：null / 未知 key 的旧数据在
-1646:    // 这里也落到「网易云」，与列表行同一条判定（SongSourceExt.musicSource）。
+1646:    // 这里也落到「ncm」，与列表行同一条判定（SongSourceExt.musicSource）。
 1647:    val sourceLabel = when (song.musicSource) {
 1648:        MusicSource.NETEASE -> strings.sourceNetease
 1649:        MusicSource.QQMUSIC -> strings.sourceQqMusic
@@ -291,7 +291,7 @@
 ```
 
 **行为契约（KDoc，PlayerCard.kt:1617-1635 摘录）**：
-- **两个音源都标**（与列表行 `SongCard.sourceBadge` 只标非网易云不同）——「播放页是用户唯一能确认
+- **两个音源都标**（与列表行 `SongCard.sourceBadge` 只标非 ncm 不同）——「播放页是用户唯一能确认
   现在放的是哪一家的地方」；
 - 视觉：`bodySmall`、次要色、`·` 分隔、**无边框无底色**；
 - `Modifier.weight(1f, fill = false)` **只给歌手**：歌手过长由它自己省略，**角标永远完整可见**；
@@ -436,9 +436,9 @@ JVM 单测 [SweepTrackTest.kt](../../../app/src/test/java/com/takahashirinta/ncr
 
 - 状态：`PlayerViewModel.translatedLyrics: MutableStateFlow<List<LrcLine>>`（[PlayerViewModel.kt:97](../../../app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt)）、
   `romanizedLyrics`（[PlayerViewModel.kt:107](../../../app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt)）。
-- 网易云源落地：`applyNeteaseLyrics(...)`（[PlayerViewModel.kt:2092-2117](../../../app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt)）
+- ncm 源落地：`applyNeteaseLyrics(...)`（[PlayerViewModel.kt:2092-2117](../../../app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt)）
 
-  > 「网易云源的两条副文本轨**按时间戳与原行配对**是既有语义（tlyric/romalrc 与 lrc 是同一份资产、
+  > 「ncm 源的两条副文本轨**按时间戳与原行配对**是既有语义（tlyric/romalrc 与 lrc 是同一份资产、
   > 时间戳同刻），v1.5.0 起就是这么显示的，本版一行不改」（2090 行注释）
 
 - TTML 胜出时走**分轨合并** `LyricTrackMerge`：`applyTtmlLyrics(...)`（[PlayerViewModel.kt:2130-2147](../../../app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt)），
@@ -781,7 +781,7 @@ KDoc 的规则表：有歌词行 → 第一行 = 当前歌词行 / 第二行 = `
 
 | 常量 / 函数 | 行 | 值 |
 |---|---|---|
-| `ARTIST` | 28 | `"artist/{artistId}"`（`LongType`，网易云） |
+| `ARTIST` | 28 | `"artist/{artistId}"`（`LongType`，ncm） |
 | `ARTIST_SRC` | 75 | `"artist/{source}/{artistId}"`（v2.4.0 · E，**StringType**，QQ 的 `singerMID`） |
 | `fun artist(artistId: Long)` | 80 | `"artist/$artistId"` |
 | `fun artist(source: MusicSource, id: String)` | 86 | `"artist/${source.key}/$id"` |
@@ -840,7 +840,7 @@ KDoc 的规则表：有歌词行 → 第一行 = 当前歌词行 / 第二行 = `
 - **解析层不做任何长度限制**：`LrcParser.parse` 只按正则取时间戳与文本、`trim()` 后原样入库
   （[LrcParser.kt:45-64](../../../app/src/main/java/com/takahashirinta/ncrust/lyric/LrcParser.kt)）——
   ⇒ 托盘第 1 行可能是一整句长句（中文 20–40 字、英文更长），**也可能是一条元信息行**：
-  NetEase 的 LRC 前几行常是 `作词 : xxx` / `作曲 : xxx`，解析器**不过滤**它们
+  ncm 的 LRC 前几行常是 `作词 : xxx` / `作曲 : xxx`，解析器**不过滤**它们
   （`grep 作词` 只命中 [YrcParser.kt:25/222-223](../../../app/src/main/java/com/takahashirinta/ncrust/lyric/YrcParser.kt) 的注释与
   [YrcAligner.kt:26](../../../app/src/main/java/com/takahashirinta/ncrust/lyric/YrcAligner.kt) 的说明）。
   面板今天就会把这些行显示出来 ⇒ **托盘跟着显示是"与面板一致"的正确行为**，不要额外过滤（否则

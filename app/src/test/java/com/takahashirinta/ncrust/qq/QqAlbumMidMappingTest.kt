@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -35,7 +35,7 @@ import org.junit.Test
  * |---|---|---|
  * | `mid` | albumMID（`004Z85XP1c25b7`） | **身份** —— `musicu.fcg` 的 `albumMid` 参数认它 |
  * | `pmid` | **封面照片 id**（`004Z85XP1c25b7_5`，尾部 `_N` 是封面序号） | 拼封面 URL |
- * | `id` | QQ 域数字 albumID（`22276`） | 诊断；**拿去网易云查就是本次 P0** |
+ * | `id` | QQ 域数字 albumID（`22276`） | 诊断；**拿去 ncm 查就是本次 P0** |
  *
  * 夹具是 2026-09 的**真实响应形状**（匿名可复现），其中《富士山下》一条
  * 与真机复现、`logcat` 里的 `/api/v1/album/22276` 逐字对应。
@@ -75,7 +75,7 @@ class QqAlbumMidMappingTest {
         assertEquals(22276L, album.id)
         assertEquals("What's Going On...?", album.name)
         assertEquals(
-            "album.mid 就在同一个 JSONObject 上，丢掉它 = 「转到专辑」只能拿数字 id 去网易云猜",
+            "album.mid 就在同一个 JSONObject 上，丢掉它 = 「转到专辑」只能拿数字 id 去 ncm 猜",
             "004Z85XP1c25b7", album.mid,
         )
     }
@@ -169,7 +169,7 @@ class QqAlbumMidMappingTest {
     // ------------------------------------------------- 3. 端到端：映射 → 决策
 
     @Test
-    fun `映射出来的 QQ 曲目会被决策成 QQ 专辑页而不是网易云的同号专辑`() {
+    fun `映射出来的 QQ 曲目会被决策成 QQ 专辑页而不是ncm的同号专辑`() {
         val song = QqSongMapper.fromSongObject(searchItem)!!
         val nav = AlbumNavigator.resolve(song)
         assertEquals(AlbumNav.Direct(MusicSource.QQMUSIC, "004Z85XP1c25b7"), nav)

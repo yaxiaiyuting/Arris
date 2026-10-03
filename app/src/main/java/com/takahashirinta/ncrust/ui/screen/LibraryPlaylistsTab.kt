@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.3.0 · A/B：库页「歌单」tab —— 本地歌单 / 网易云 / QQ 音乐 **三个按源分区的区块**。
+ * v2.3.0 · A/B：库页「歌单」tab —— 本地歌单 / ncm / qm **三个按源分区的区块**。
  * v2.6.0 · P1/P2：三个区块**统一**的布局切换（卡片式 / 列表式）+ 每区块**手动**折叠。
  */
 
@@ -71,8 +71,8 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroTypography
  * | 区块 | 内容 | 来源 |
  * |---|---|---|
  * | 本地歌单 | 可编辑、可混装音源、只加不减 + tombstone | 本地 prefs |
- * | 网易云 | 新建入口 + 云端歌单网格 | `PlaylistApi.getUserPlaylists` |
- * | QQ 音乐 | **歌单列表直接平铺** | `QqPlaylistRepository.loadList` |
+ * | ncm | 新建入口 + 云端歌单网格 | `PlaylistApi.getUserPlaylists` |
+ * | qm | **歌单列表直接平铺** | `QqPlaylistRepository.loadList` |
  *
  * ## 「QQ 歌单一步可达」是怎么做到的（与 v2.2.0 的差别）
  *
@@ -256,7 +256,7 @@ fun LibraryPlaylistsTab(
             }
         }
 
-        // ============================================================== 网易云
+        // ============================================================== ncm
         item(key = "hdr-netease", span = { GridItemSpan(maxLineSpan) }) {
             SectionHeader(
                 text = strings.sourceNetease,
@@ -321,7 +321,7 @@ fun LibraryPlaylistsTab(
             }
         }
 
-        // ============================================================ QQ 音乐
+        // ============================================================ qm
         // ⚠️ QQ 的标题**不是** [SectionHeader]：它右侧多一个手动刷新按钮，
         //    所以折叠开关挂在这个内联 Row 上（探针 §(b) 的提醒：做进 SectionHeader 会漏掉 QQ）。
         item(key = "hdr-qq", span = { GridItemSpan(maxLineSpan) }) {
@@ -693,7 +693,7 @@ private fun LocalPlaylistItem(
  *
  * 三个源共用这一个 composable（而不是各写一份）：它们在这一档里**必须逐像素一致**
  * ——「统一布局」的全部意义就在这里，三份实现必然漂移成「QQ 那行高 64、
- * 网易云那行高 60」。
+ * ncm 那行高 60」。
  */
 @Composable
 private fun PlaylistListRow(

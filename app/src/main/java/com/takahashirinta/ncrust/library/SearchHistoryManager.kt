@@ -13,23 +13,23 @@ import com.takahashirinta.ncrust.source.musicSource
  *
  * 本表原先只存裸 `id`，读回来重建的 `SongItem` 没有 `source` / `sourceId` / `mediaId`：
  * 一首 QQ 曲目会被**字符串口径**（[com.takahashirinta.ncrust.source.SongItem.musicSource]）
- * 认成网易云（角标错、单曲页路由错、收藏与点赞会拿合成 id 去调网易云的接口），
+ * 认成 ncm（角标错、单曲页路由错、收藏与点赞会拿合成 id 去调 ncm 的接口），
  * 而真正取链时 bit62 又把它认回 QQ、却因为没有 songmid 必然失败
  * （`QqApi.kt:134` 是硬要求）—— 用户看到的是「点了一条历史，歌被跳过了」。
  *
  * 现在：
- * - **写**：`source` 一律写规范值（网易云也显式写 `"netease"`，见下），
+ * - **写**：`source` 一律写规范值（ncm 也显式写 `"netease"`，见下），
  *   `sourceId` / `mediaId` 原样带上；
  * - **读**：老条目（`source == null`）按 bit62 推断，规则收敛在 [SearchHistoryMigration]；
  * - **判重 / 删除 / LazyColumn key** 三处统一走 [SearchHistoryMigration.dedupeKey]；
  * - **落盘形状**由 [SearchHistoryCodec] 的显式 `@SerializedName` 固定，不再由 R8 决定
  *   （真机证据与论证见该文件的 KDoc）。
  *
- * ## 为什么写网易云也显式写 `"netease"`
+ * ## 为什么写 ncm 也显式写 `"netease"`
  *
  * 不写的话 `source` 就是 `null`，而 `null` 在本表里的语义是「**v2.5.4 之前写入的老条目**」
  * —— 新数据会长成老条目的形状，[SearchHistoryMigration.isIncomplete] 之类的判据就失效了。
- * 代价是重建 `SongItem` 时仍要把网易云还原成 `null`（与 `songRefOf` 同一条约定），
+ * 代价是重建 `SongItem` 时仍要把 ncm 还原成 `null`（与 `songRefOf` 同一条约定），
  * 这一层转换在 [SearchHistoryMigration.toSongItem] 里。
  */
 object SearchHistoryManager {
@@ -44,7 +44,7 @@ object SearchHistoryManager {
     /**
      * 按歌词搜索（v3.3.0）。
      *
-     * 网易云 `cloudsearch/pc` 的 `type=1006`，实测（2026-10）：搜「让我掉下眼泪的」
+     * ncm `cloudsearch/pc` 的 `type=1006`，实测（2026-10）：搜「让我掉下眼泪的」
      * 返回 `songCount=60`，第一条正是《成都》- 赵雷。返回结构里的 `songs` 与 `type=1`
      * **同形**（`SongItem` 全字段可用），所以展示与播放都复用单曲那条路。
      *
@@ -65,9 +65,9 @@ object SearchHistoryManager {
          * 判定请用 [SearchHistoryMigration.effectiveSource]，不要直接读这个字符串。
          */
         val source: String? = null,
-        /** QQ 的 `songmid`。网易云恒为 null。**老条目不可推断 ⇒ 保持 null，绝不猜。** */
+        /** QQ 的 `songmid`。ncm 恒为 null。**老条目不可推断 ⇒ 保持 null，绝不猜。** */
         val sourceId: String? = null,
-        /** QQ 的 `media_mid`。网易云恒为 null。 */
+        /** QQ 的 `media_mid`。ncm 恒为 null。 */
         val mediaId: String? = null,
     )
 
@@ -78,7 +78,7 @@ object SearchHistoryManager {
             title = song.name,
             coverUrl = song.album?.picUrl,
             subtitle = song.artists?.firstOrNull()?.name,
-            // 规范值：网易云也显式写 "netease"（见类文档）。
+            // 规范值：ncm 也显式写 "netease"（见类文档）。
             source = song.musicSource.key,
             sourceId = song.sourceId,
             mediaId = song.mediaId,

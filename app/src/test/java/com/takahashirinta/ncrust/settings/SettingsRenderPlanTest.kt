@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -64,7 +64,7 @@ class SettingsRenderPlanTest {
         assertEquals(
             mapOf(
                 // v3.2.0：2 → 3（B 站账号块，P1）。三块共用同一个登录框架的不同通道。
-                "account" to 3,      // 网易云账号块 + QQ 音乐账号块 + B 站账号块
+                "account" to 3,      // ncm 账号块 + qm 账号块 + B 站账号块
                 // v3.1.0：+1（B 站音源开关）⇒ 5。它是**内容源开关**，不属于账号页。
                 "general" to 5,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行 / B 站音源
                 // v3.0.0：动效/波形相关的 8 个可见项从「播放与音质」搬到「外观与动效」

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -110,10 +110,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val translatedLyrics = MutableStateFlow<List<LrcLine>>(emptyList())
     /**
      * v1.9.2：音译轨（罗马音 / 粤拼），与 [translatedLyrics] 同构的行级轨道，来源可以是 TTML 的
-     * `x-roman`，也可以是网易云的 `romalrc`，缺口按文本逐行回退（见 [LyricTrackMerge]）。
+     * `x-roman`，也可以是 ncm 的 `romalrc`，缺口按文本逐行回退（见 [LyricTrackMerge]）。
      *
      * **本版没有 UI 消费者**：v1.9.0/v1.9.1 从来没有渲染过音译（TtmlDoc.romans 无引用、
-     * 网易云 romalrc 也没解析），要显示它必须给 LyricsView / NcrustLyricsPanel 加一个副文本槽，
+     * ncm romalrc 也没解析），要显示它必须给 LyricsView / NcrustLyricsPanel 加一个副文本槽，
      * 而「渲染层 diff 必须为空」是本版的硬约束。所以这里先把**数据层**做完整并单测覆盖，
      * 渲染接线留给解禁渲染层的版本（届时 LyricsView 只需多收一个参数）。
      */
@@ -174,7 +174,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val lyricsTtmlEnabled = MutableStateFlow(true)
 
     /**
-     * v1.9.0：TTML 与网易云歌词都可用时是否优先用 TTML（默认开）。
+     * v1.9.0：TTML 与 ncm 歌词都可用时是否优先用 TTML（默认开）。
      * 只在 [lyricsTtmlEnabled] 开着时有意义 —— 关掉 TTML 时它不影响任何结果。
      */
     val lyricsTtmlFirst = MutableStateFlow(true)
@@ -202,7 +202,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 无缝预载的自动接续（`preloadNextSong` → `onMediaItemTransition` → `onSongTransitioned`）
      * 只更新了 `currentSongId`，三个音源字段全部留在上一首的取值上。
      * 于是跨源自动接续之后，取词仍然按**上一首的音源**路由 ——
-     * 用户看到「音频已经是网易云，歌词还是 QQ 那首」。
+     * 用户看到「音频已经是 ncm，歌词还是 QQ 那首」。
      *
      * 现在只有一个写入点（本字段），三个旧名字退化成**只读派生值**：
      * 想改音源就必须改身份，结构上不可能再出现「id 换了、音源没换」的半更新状态。
@@ -236,8 +236,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** B4：本次起播的续播位置（0 = 从 0 分 0 秒开始）。 */
     val resumedFromMs = MutableStateFlow(0L)
 
-    // Incremented on every explicit playSong call; lets preloadNextSong detect staleness.
-    private var songPlayVersion = 0
+    /**
+     * 开播请求的**代际闸门**（v3.3.2 · P0，见 [PlayRequestGate]）。
+     *
+     * 旧写法是一个裸计数器，判据本身没问题，问题在**丢弃是静默的**：取链/预载回来发现
+     * 代际已前进就直接 `return`，既不报错也不重发，日志里一个字都没有。于是
+     * 「点其他歌不切换」这类报告无法与「点击根本没到达播放链」区分开 —— 见 [PlayRequestGate]。
+     */
+    private val playGate = PlayRequestGate()
 
     companion object {
         /**
@@ -460,7 +466,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 同一首歌的歌词请求只允许一个在途(playSong / onSongTransitioned / 冷启动恢复
     // 会并发发起, 不打去重会瞬间打 3×n 个请求, 触发服务端限流反而更拉胯)。
     //
-    // v2.1.5：判重的键从裸 songId 换成 [TrackKey]（裸 id 会把「网易云 123」与
+    // v2.1.5：判重的键从裸 songId 换成 [TrackKey]（裸 id 会把「ncm 123」与
     // 「QQ 123」当成同一首歌而误判为「已在途」，直接吞掉新歌的请求），
     // 并且**同时要求那次请求仍然是当前世代**。
     //
@@ -700,8 +706,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (savedState != null) {
             resetLyricsForNewSong()
             // v2.1.5：续播状态里只存得下裸 id，而 QQ 的 id 带 bit62 标志位 ——
-            // [TrackKey.of] 会据此把音源判成 QQ 音乐，不会再拿一个 2^62 的 id
-            // 去问网易云的歌词接口（那必然查不到，表现是「恢复 QQ 歌曲永远没歌词」）。
+            // [TrackKey.of] 会据此把音源判成 qm，不会再拿一个 2^62 的 id
+            // 去问 ncm 的歌词接口（那必然查不到，表现是「恢复 QQ 歌曲永远没歌词」）。
             //
             // v2.2.1 · P0：**光有 bit62 不够 —— 取链要的是 songmid，不是音源名。**
             // 旧实现在这里写死 `TrackKey.of(null, savedState.songId)`，即使
@@ -1028,7 +1034,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             artist = currentSongArtist.value ?: "",
             artworkUrl = currentSongArtwork.value ?: "",
             quality = newLevel,
-            // v2.1.0 · C：换档重播必须带上**当前歌的音源** —— 不然 QQ 曲目会去网易云取链。
+            // v2.1.0 · C：换档重播必须带上**当前歌的音源** —— 不然 QQ 曲目会去 ncm 取链。
             sourceKey = currentSongSourceKey,
             sourceId = currentSongSourceId,
             mediaId = currentSongMediaId,
@@ -1125,8 +1131,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         artist: String = "",
         artworkUrl: String = "",
         quality: String = "",
-        // v2.1.0 · C：音源三件套。默认值 = 网易云，因此所有既有调用点**零改动**且行为不变。
-        // 只有 QQ 音乐的曲目需要显式带上（它必须要 songmid 才能取链）。
+        // v2.1.0 · C：音源三件套。默认值 = ncm，因此所有既有调用点**零改动**且行为不变。
+        // 只有 qm 的曲目需要显式带上（它必须要 songmid 才能取链）。
         sourceKey: String? = null,
         sourceId: String? = null,
         mediaId: String? = null,
@@ -1138,8 +1144,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 而失败处理据此把「音质问题」与「播放问题」分开（见 [handlePlaybackError]）。
         origin: PlayOrigin = PlayOrigin.USER,
     ) {
-        songPlayVersion++
-        val fetchVersion = songPlayVersion
+        val fetchVersion = playGate.next()
         latestPlaySongId = songId
         lastPlayOrigin = origin
         // 计数清零条件（写死在这里，别处不许发明）：
@@ -1308,7 +1313,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // 取链期间若有更新的 playSong / 预载接管发生(版本号已前进),
                 // 本次结果作废: 再发一次 "url" intent 会让 ExoPlayer setMediaItem
                 // 把同一首歌重播一遍 —— 就是"听起来像拖带"的卡顿。
-                if (fetchVersion != songPlayVersion) return@launch
+                if (!playGate.isCurrent(fetchVersion)) {
+                    // v3.3.2 · P0：这条丢弃**以前是静默的**（一行日志都没有）。
+                    // 它正是「点了歌却没切」最容易被误判成「点击没到达」的一处，
+                    // 所以必须留下「谁作废了谁」这个事实。
+                    Log.i(
+                        TAG_TRACK,
+                        "fetch result DISCARDED (superseded): songId=$songId gen=$fetchVersion " +
+                            "current=${playGate.current} — a newer playSong / preload takeover owns playback",
+                    )
+                    return@launch
+                }
                 // setMediaItem 会替换整个播放列表，槽位随之作废。
                 clearPreloadedState()
                 // v3.1.0 · P0-A：取词与封面已在本函数开头并行发起（startAuxiliaryLoad），
@@ -1420,7 +1435,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
         }
         // v2.1.0 · A/C：取链从「直连 SongUrlFetcher」改为按音源路由。
-        // 网易云一侧走的就是 NeteaseSourceProvider → SongUrlFetcher.fetch(id, level)，
+        // ncm 一侧走的就是 NeteaseSourceProvider → SongUrlFetcher.fetch(id, level)，
         // 与 v2.0.2 **逐字节同一条路径**（8 档降级阶梯、FLAC 门控、离线 key 全在里面）。
         // 在线取链失败（典型是取链途中断网）时仍回落离线缓存 —— v1.6.0 · D1 的兜底路径。
         //
@@ -1727,7 +1742,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 所以这里只做「请求 + 落缓存」：走的是与正式路径**同一张表、同一组字段**
      * （`LyricsCache.put`），切歌时 `loadNeteaseLyrics` 会以缓存命中把它秒回。
      *
-     * 只对**网易云**曲目做：QQ 与 B 站的歌词不进这张表（字段形状不同，
+     * 只对**ncm**曲目做：QQ 与 B 站的歌词不进这张表（字段形状不同，
      * 见 `loadQqLyrics` / `loadBiliLyrics` 的 KDoc），给它们预取等于白花一次请求。
      *
      * 失败完全静默：预取失败不该在日志里伪装成播放故障。
@@ -1779,7 +1794,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // addMediaItem 入 ExoPlayer 队列才能无缝切换; 否则缓存命中时直接 return,
         // ExoPlayer 队列永远只有当前一首, 播完必然走 songEnded→playNext 硬切(= 无缝失效)。
         //
-        // v2.1.5：判重的键从裸 songId 换成 [TrackKey]。裸 id 会把「网易云 123」与
+        // v2.1.5：判重的键从裸 songId 换成 [TrackKey]。裸 id 会把「ncm 123」与
         // 「QQ 123」当成同一首歌 —— 在跨源队列里那会让真正该预载的那一首被静默跳过，
         // 无缝播放退化成硬切，且下一次自动接续没有身份可用。
         val nextTrack = TrackKey.of(sourceKey, songId, sourceId, mediaId)
@@ -1794,7 +1809,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // media item 再 addMediaItem 一遍，播放列表变成 [当前, 下一首, 下一首']。
         if (songId > 0 && nextTrack == preloadedTrack) return
 
-        val capturedVersion = songPlayVersion
+        val capturedVersion = playGate.current
         preloadJob?.cancel()
         currentlyPreloadingSongId = songId
         preloadJob = viewModelScope.launch(Dispatchers.IO) {
@@ -1859,16 +1874,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // Store in cache regardless of staleness — URL is valid even if a new song started.
                     preloadCache[songId] = PreloadCacheEntry(
                         result.url, result.actualLevel, quality, result.br, result.type, result.songMaxLevel,
-                        // v3.1.0：把 Provider 给的绝对过期时刻带上（B 站必需；网易云/QQ 为 null）。
+                        // v3.1.0：把 Provider 给的绝对过期时刻带上（B 站必需；ncm/QQ 为 null）。
                         expiresAtMs = result.expiresAtMs,
                     )
-                    if (capturedVersion != songPlayVersion) {
+                    if (!playGate.isCurrent(capturedVersion)) {
                         // playSong was called while this fetch was in flight.
                         // If it was for THIS same song and hasn't completed its own fetch, take over.
                         if (songId == latestPlaySongId && currentSongId.value != songId) {
                             // 接管 = 一次新的开播动作: 版本号前进, 让并发 playSong 的
                             // 取链结果在 fetchVersion 检查处作废, 杜绝二次 setMediaItem 重播。
-                            songPlayVersion++
+                            playGate.next()
                             playJob?.cancel()
                             lastRequestedLevel = quality
                             applyQualityVerdict(quality, result)
@@ -1895,7 +1910,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                     PlaybackStateManager.getSongPosition(getApplication(), songId)
                                 )
                                 // v2.1.5：音源身份随 Intent 交给服务，媒体会话/车机才不会再按
-                                // 默认的网易云去解释一首 QQ 曲目。
+                                // 默认的 ncm 去解释一首 QQ 曲目。
                                 putExtra("sourceKey", nextTrack.source.key)
                                 putExtra("sourceId", sourceId)
                                 putExtra("mediaId", mediaId)
@@ -1977,7 +1992,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { fetchLyrics(track) }
     }
 
-    /** v1.9.0：一次网易云歌词取数的结果。抽出来是为了让「缓存命中」与「网络返回」共用同一条源选择路径。 */
+    /** v1.9.0：一次 ncm 歌词取数的结果。抽出来是为了让「缓存命中」与「网络返回」共用同一条源选择路径。 */
     private data class NeteaseLyrics(
         val lrc: String,
         val tlyric: String,
@@ -1988,7 +2003,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val authoritative: Boolean,
     )
 
-    /** 网易云一侧解析好的三条轨（主轨 + 译文 + 音译），一次解析、两相共用。 */
+    /** ncm 一侧解析好的三条轨（主轨 + 译文 + 音译），一次解析、两相共用。 */
     private data class NeteaseTracks(
         val lines: List<LrcLine> = emptyList(),
         val tlyric: List<LrcLine> = emptyList(),
@@ -2002,22 +2017,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     )
 
     /**
-     * v2.1.0 · C：QQ 音乐歌词（QRC 逐字 + 翻译 + 音译）。
+     * v2.1.0 · C：qm 歌词（QRC 逐字 + 翻译 + 音译）。
      *
-     * **不经过 `LyricsCache`**：那张表存的是网易云的字段形状（lrc/tlyric/yrc/romalrc/ttml），
+     * **不经过 `LyricsCache`**：那张表存的是 ncm 的字段形状（lrc/tlyric/yrc/romalrc/ttml），
      * 往里塞 QQ 的数据要么新加字段 + 迁移逻辑（v1.9.3 的教训：加字段 = 加迁移逻辑 = 加单测），
-     * 要么污染网易云的字段语义。本版的取舍是**每次播放现取**（一次请求，实测 QRC 十几 KB），
+     * 要么污染 ncm 的字段语义。本版的取舍是**每次播放现取**（一次请求，实测 QRC 十几 KB），
      * 代价是断网时 QQ 曲目没有歌词 —— 已在 release notes 的未验证/已知问题里写明。
      * [LyricLoadCoordinator.cacheKeyOf] 对 QQ 曲目返回 null，把这条约定变成可执行的判据。
      *
-     * 瞬时失败（网络错误）**什么都不写**，与网易云侧同一契约：歌词按钮保持可点、
+     * 瞬时失败（网络错误）**什么都不写**，与 ncm 侧同一契约：歌词按钮保持可点、
      * 用户重试能再来一次；只有服务端明确回答（哪怕是「没有歌词」）才落状态。
      *
      * ## v2.1.5：身份来自参数，**不再读全局字段**
      *
      * 旧实现在这里读 `currentSongSourceKey` / `currentSongSourceId` 构造 ref。
      * 那正是跨源串台的最后一步：自动接续时它们是**上一首**的取值，
-     * 于是「为网易云新歌取词」变成了「用上一首 QQ 曲目的 songmid 去问 QQ」——
+     * 于是「为 ncm 新歌取词」变成了「用上一首 QQ 曲目的 songmid 去问 QQ」——
      * 拿回来的是上一首的 QRC，而且因为请求确实是当前代而通过了所有闸门。
      * 现在 ref 只能由 [track] 构造，物理上不可能问错歌。
      */
@@ -2068,9 +2083,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      *   （「这首歌没有歌词」），而不是 [LyricLoadCoordinator.fail] ——
      *   重试一百次也不会有歌词，把它标成可重试的错误只会让界面白转圈。
      *
-     * 缓存：**不走 [LyricsCache]**。那张表存的是网易云的字段形状
+     * 缓存：**不走 [LyricsCache]**。那张表存的是 ncm 的字段形状
      * （lrc/tlyric/yrc/romalrc/ttml），往里塞 B 站的数据要么新加字段 + 迁移逻辑
-     * （v1.9.3 的教训），要么污染网易云的字段语义 —— 与 QQ 那条路同一取舍
+     * （v1.9.3 的教训），要么污染 ncm 的字段语义 —— 与 QQ 那条路同一取舍
      * （见 `loadQqLyrics` 的 KDoc）。代价是每次播放现取一次，已写进未验证项。
      */
     private suspend fun loadBiliLyrics(track: TrackKey, load: LyricLoadCoordinator.Load) {
@@ -2163,16 +2178,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         lyricsLoading.value = true
         Log.i(TAG_TRACK, "lyric request begin: track=$track gen=${load.generation}")
         try {
-            // v2.1.0 · C：QQ 音乐的曲目走 QRC 直取（网易云那套两相取数链对它没有意义 ——
-            // TTML DB 是按网易云 id 索引的，拿 QQ 的 id 去查只会 404，
+            // v2.1.0 · C：qm 的曲目走 QRC 直取（ncm 那套两相取数链对它没有意义 ——
+            // TTML DB 是按 ncm id 索引的，拿 QQ 的 id 去查只会 404，
             // 极小概率还会命中一首**完全无关**的歌的 TTML）。
             // v2.1.5：分叉依据是**这次请求的身份**，不是全局字段。
             if (track.source == MusicSource.QQMUSIC) {
                 loadQqLyrics(track, load)
                 return
             }
-            // v3.1.0 · B：B 站音源的取词。**不能**落进下面那条网易云的链 ——
-            // TTML DB 是按网易云 id 索引的，拿 B 站的合成 id 去查只会 404
+            // v3.1.0 · B：B 站音源的取词。**不能**落进下面那条 ncm 的链 ——
+            // TTML DB 是按 ncm id 索引的，拿 B 站的合成 id 去查只会 404
             // （极小概率命中一首完全无关的歌的 TTML，与 QQ 那条路的理由逐字相同）。
             if (track.source == MusicSource.BILIBILI) {
                 loadBiliLyrics(track, load)
@@ -2181,7 +2196,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val netease = loadNeteaseLyrics(track, load)
             if (!lyricCoordinator.isCurrent(load)) return
             // 瞬时失败（风控 / 需登录 / 断网）：保持既有行为 —— 什么都不写、按钮保持可点可重试，
-            // 也**不**去拉 TTML（拉 TTML 的前提是「已经拿到网易云的权威答复」）。
+            // 也**不**去拉 TTML（拉 TTML 的前提是「已经拿到 ncm 的权威答复」）。
             if (!netease.authoritative) {
                 lyricCoordinator.fail(load, "netease lyrics not authoritative")
                 return
@@ -2199,7 +2214,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 取网易云那份歌词：先缓存、后网络（含既有 4 次退避重试）。
+     * 取 ncm 那份歌词：先缓存、后网络（含既有 4 次退避重试）。
      *
      * 缓存命中也不在这里直接落地：TTML 开关是**播放期**策略，缓存里只有 LRC 原文，
      * 最终显示哪一份统一交给 [applyBestLyricSource] 用 [LyricSourceChain] 决定。
@@ -2296,7 +2311,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /**
      * v1.9.0：按 [LyricSourceChain] 选源并落地。分两相，为的是**不让 TTML 拖住既有 LRC 的显示**：
      *
-     *  1. 第一相只用网易云的候选（YRC / LRC）决策，选中立刻显示 —— 显示时机与 v1.8.1 完全一致；
+     *  1. 第一相只用 ncm 的候选（YRC / LRC）决策，选中立刻显示 —— 显示时机与 v1.8.1 完全一致；
      *  2. 第二相在「用户开了 TTML」时拉一次 TTML，连同第一相的候选重新 [LyricSourceChain.pick]
      *     一次，TTML 赢了才替换。TTML 是第三方镜像（最坏要跑 4 面镜子、每面 connect 5s），
      *     把它放在第一相之前，会把「本来就有歌词」变成「一直转圈」，那是对既有行为的倒退。
@@ -2315,7 +2330,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
         val order = LyricSourceChain.order(sourcePrefs)
         // 解析是 CPU 活(逐行正则), 放 Default 上跑, 别让主线程在切歌瞬间一边处理重组一边解 LRC。
-        // v1.9.2：网易云三条轨（主轨 + 译文 + 音译）在**同一次** withContext 里解析完，
+        // v1.9.2：ncm 三条轨（主轨 + 译文 + 音译）在**同一次** withContext 里解析完，
         // 第一相与第二相共用同一份结果 —— 合并只发生在一次 fetch 内部，不会把两次请求的数据拼起来。
         val parsed = if (netease.lrc.isNotEmpty()) {
             withContext(Dispatchers.Default) {
@@ -2332,19 +2347,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val neteaseHasWords = parsed.lines.any { it.words.isNotEmpty() }
 
         fun candidate(kind: LyricSourceKind, ttml: TtmlDoc?): LyricCandidate? = when (kind) {
-            // YRC 与 LRC 都来自同一份网易云响应：行文本是同一份，差别只在有没有逐字时间轴。
+            // YRC 与 LRC 都来自同一份 ncm 响应：行文本是同一份，差别只在有没有逐字时间轴。
             LyricSourceKind.YRC -> parsed.lines.takeIf { it.isNotEmpty() }
                 ?.let { LyricCandidate(kind, it.size, neteaseHasWords) }
             LyricSourceKind.LRC -> parsed.lines.takeIf { it.isNotEmpty() }
                 ?.let { LyricCandidate(kind, it.size, false) }
             LyricSourceKind.TTML -> ttml?.let {
                 // hasWordLevel 必须由解析器判「有没有词」——只有整句的 TTML 投稿
-                // 用它替换 LRC 只会白白丢掉网易云的行级数据。
+                // 用它替换 LRC 只会白白丢掉 ncm 的行级数据。
                 LyricCandidate(kind, it.lines.size, TtmlParser.hasWordLevel(it))
             }
         }
 
-        // 第一相：网易云的候选按 order 排好（TTML 先缺席）交给 pick，选中就落地显示。
+        // 第一相：ncm 的候选按 order 排好（TTML 先缺席）交给 pick，选中就落地显示。
         val neteasePick = LyricSourceChain.pick(
             order.filter { it != LyricSourceKind.TTML }.mapNotNull { candidate(it, null) }
         )
@@ -2373,7 +2388,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val fresh = runCatching { AmllTtmlClient.load(getApplication(), songId) }.getOrNull()
             // v2.0.0 · T3：离线时用**过期** TTML 兜底。LyricsCache.getTtmlStale 在 v1.9.0 就
             // 写好了（KDoc 明说「给离线兜底用」）却一直没有调用者，后果是：离线时过期的 AMLL
-            // TTML 直接消失，逐字退到网易云那份。这里补上，并且**只在明确离线时**兜底 ——
+            // TTML 直接消失，逐字退到 ncm 那份。这里补上，并且**只在明确离线时**兜底 ——
             // 在线时一个字节的行为都不变（在线拿不到就走 phase=1 的结果，与 v1.9.3 一致）。
             val raw = fresh ?: if (NetworkAvailability.isOnline(getApplication())) {
                 null
@@ -2435,10 +2450,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * 把网易云那份落地：行来自 lrc（有 yrc 时已挂上逐字），译文来自 tlyric，音译来自 romalrc。
+     * 把 ncm 那份落地：行来自 lrc（有 yrc 时已挂上逐字），译文来自 tlyric，音译来自 romalrc。
      *
      * 三条轨的解析已经在 [applyBestLyricSource] 里（Default 线程上）做完，这里只写状态。
-     * 网易云源的两条副文本轨**按时间戳与原行配对**是既有语义（tlyric/romalrc 与 lrc 是同一份资产、
+     * ncm 源的两条副文本轨**按时间戳与原行配对**是既有语义（tlyric/romalrc 与 lrc 是同一份资产、
      * 时间戳同刻），v1.5.0 起就是这么显示的，本版一行不改 —— 分轨合并只在 TTML 胜出时介入。
      */
     private suspend fun applyNeteaseLyrics(
@@ -2472,9 +2487,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 把 TTML 那份落地（v1.9.2：分轨合并）。
      *
      * 主轨是 TTML 的行；译文轨与音译轨各自独立决定（[LyricTrackMerge]）：
-     * TTML 那一轨能对上主轨时间戳的行原样用，**缺的行**按文本/行序回退到网易云的 tlyric / romalrc，
+     * TTML 那一轨能对上主轨时间戳的行原样用，**缺的行**按文本/行序回退到 ncm 的 tlyric / romalrc，
      * 对不上的逐行丢弃。v1.9.0 是直接把 `doc.translations.filter { ... }` 覆盖上去 ——
-     * TTML 没有译文时那是个空表，会把刚显示的网易云译文**整轨清空**（实测 22704409）。
+     * TTML 没有译文时那是个空表，会把刚显示的 ncm 译文**整轨清空**（实测 22704409）。
      *
      * 渲染层按 timeMs 精确配对（translatedLyrics.associateBy { timeMs }），而合并产出的每一行
      * 时间戳都取自 [TtmlDoc.lines]，所以这里不需要动渲染层一行。
@@ -2514,7 +2529,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun retryLyrics() {
         // v2.1.5：重试的是**当前曲目的身份**，不是裸 id —— 否则 QQ 曲目会被
-        // 当成网易云同号歌去重取（这正是跨源串台的反向版本）。
+        // 当成 ncm 同号歌去重取（这正是跨源串台的反向版本）。
         val track = currentTrack ?: return
         if (track.id <= 0L) return
         lyricsNoContentSongId.value = -1L
@@ -2628,4 +2643,51 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onPlaybackError = null
         super.onCleared()
     }
+}
+
+/**
+ * v3.3.2 · P0：**开播请求的代际闸门**（纯逻辑，JVM 可单测）。
+ *
+ * ## 它解决的是哪一类问题
+ *
+ * 「取链结果过期就作废」这条判据在本仓库里写了很久（v1.5.2 起），一直是一个裸 `Int`：
+ *
+ * ```kotlin
+ * songPlayVersion++
+ * val fetchVersion = songPlayVersion
+ * ...
+ * if (fetchVersion != songPlayVersion) return@launch     // ← 静默丢弃
+ * ```
+ *
+ * 判据是对的，缺的是**可观测性与可测性**：
+ *
+ *  1. **丢弃是静默的** —— 用户报「播放一首歌的时候点击其他歌曲不会切换，无论怎么点击都会
+ *     一直播放原来的歌」时，日志里「取链被作废」与「点击根本没进播放链」长得一模一样
+ *     （两者都没有 `Playing:` 行）。现在 [isCurrent] 的调用点会打出被作废的 songId 与代际；
+ *  2. **判据不可单测** —— 它是内联在两个协程里的比较，谁都没法在不启动 Android 的情况下
+ *     验证「后一次请求作废前一次」。抽成对象之后 `PlayRequestGateTest` 直接钉住语义。
+ *
+ * ## 语义（三条，缺一不可）
+ *
+ *  · [next] **只由「一次新的开播动作」调用**：用户点歌（`playSong`）与预载接管。
+ *    预载的**普通**入队（`preload_next`）不算开播，绝不能推进代际 ——
+ *    否则它会把同一首歌正在进行的取链作废掉，那正是「预载把点歌吃掉」的形状；
+ *  · [isCurrent] 是**唯一**允许判断「这次结果还算不算数」的写法；
+ *  · 代际单调递增、不回绕（`Int` 溢出在 2^31 次开播之后，现实里不可达）。
+ */
+class PlayRequestGate {
+
+    private var generation: Int = 0
+
+    /** 当前代际。用于预载路径记下「我开始取链时的代际」。 */
+    val current: Int get() = generation
+
+    /** 一次新的开播动作：推进代际并返回它。 */
+    fun next(): Int {
+        generation++
+        return generation
+    }
+
+    /** 这次取链/预载的结果是否仍然有效。`false` = 期间已有更新的开播动作，结果必须丢弃。 */
+    fun isCurrent(gen: Int): Boolean = gen == generation
 }

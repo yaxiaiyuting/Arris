@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -333,14 +333,14 @@ class BiliParseTest {
 class BiliTrackMappingTest {
 
     @Test
-    fun `音频区曲目的 id 带 B 站标志位 且与网易云同号不会撞`() {
+    fun `音频区曲目的 id 带 B 站标志位 且与ncm同号不会撞`() {
         val t = BiliTrack(auid = 2478206L, title = "t", author = "a", coverUrl = "", durationMs = 1000L)
         val song = t.toSongItem()!!
         assertEquals(MusicSource.BILIBILI, song.musicSource)
         assertTrue(SourceIds.isBiliId(song.id))
         assertEquals(2478206L, SourceIds.biliRawId(song.id))
         assertEquals("au:2478206", song.sourceId)
-        // 关键：同一个数字在网易云域里是**另一首歌**，两者不相等。
+        // 关键：同一个数字在 ncm 域里是**另一首歌**，两者不相等。
         assertFalse(song.id == 2478206L)
         assertEquals(MusicSource.NETEASE, SourceIds.sourceOfId(2478206L))
     }

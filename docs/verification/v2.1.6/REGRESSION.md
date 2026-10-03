@@ -39,7 +39,7 @@ I MediaSessionService: Media button session is changed to …/androidx.media3.se
 I MediaSessionService: Media button session is changed to …/NcrustSession
 ```
 
-对照：官方网易云 `com.netease.cloudmusic/MediaSession` 只有一条；华为音乐
+对照：官方 ncm `com.netease.cloudmusic/MediaSession` 只有一条；华为音乐
 `com.android.mediacenter.mediasession` 也只有一条。
 
 **改法**（三处承重点，缺一不可）：
@@ -158,8 +158,8 @@ state=PlaybackState {state=3, position=227707, ...}
 证据：`baseline/WVQ6R22124000968/CARD-AB.txt`、`after/WVQ6R22124000968/CARD-AB.txt`（含 uiautomator 原文与截图）。
 
 > 采集过程本身踩到两个真机坑，已写进脚本注释，避免下次重复：
-> ① WGR-W09 的 ROM 有 `startHistoryMediaApp` 行为 —— 一旦没有白名单内的应用在播，它会把网易云
-> 拉起来播，于是卡片显示的是**网易云**（连续两次采到 `Dangerous Michael Jackson`）；
+> ① WGR-W09 的 ROM 有 `startHistoryMediaApp` 行为 —— 一旦没有白名单内的应用在播，它会把 ncm
+> 拉起来播，于是卡片显示的是**ncm**（连续两次采到 `Dangerous Michael Jackson`）；
 > ② `input tap/swipe` 用的是**当前朝向**的帧缓冲坐标，而帧缓冲会在 1600x2560 / 2560x1600 之间翻转。
 > 两条都靠「采完复核被测应用是否仍在播」+ 按朝向现算坐标解决。
 
@@ -170,13 +170,13 @@ state=PlaybackState {state=3, position=227707, ...}
 | 应用侧自我声明（权限/清单/MediaStyle/priority） | ❌ | 华为音乐声明比 Ncrust 少也上卡；判据只比包名 |
 | 合并会话（本版做的） | ❌ 对卡片无效 | 判据不读 session |
 | `hasMediaPermission` 旁路 | ❌ | 需系统属性 `hwouc.media_controller_enable=enable` **且**系统级测试包 `com.huawei.mediacontroller.plrdtest`，本机两项都不成立 |
-| 改包名冒充名单内应用 | ❌ **不做** | 会顶掉真正的网易云（Android 不允许同包名共存）⇒ 先毁掉唯一的 A/B 反例；且违反任务书铁律「不改包名、不冒用身份、不蹭别家会话标识」 |
-| hook 成「网易云的调用」 | ❌ 语义上不成立 | MediaSession 的包身份来自**拥有它的进程 UID**，不是可填的字符串；只能注入网易云进程（恶意软件行为，且对方一升级即失效） |
+| 改包名冒充名单内应用 | ❌ **不做** | 会顶掉真正的 ncm（Android 不允许同包名共存）⇒ 先毁掉唯一的 A/B 反例；且违反任务书铁律「不改包名、不冒用身份、不蹭别家会话标识」 |
+| hook 成「ncm 的调用」 | ❌ 语义上不成立 | MediaSession 的包身份来自**拥有它的进程 UID**，不是可填的字符串；只能注入 ncm 进程（恶意软件行为，且对方一升级即失效） |
 | 设备侧覆盖白名单（root / Magisk） | ⚠️ 唯一诚实的路，**未验证** | COTA 覆盖目录 `/data/cota/para/thirdappfilter` 本机不存在且 `root:root 0755`；`/system` 只读。改由用户在自己设备上做，不改包名不冒用。**本版未采用、未验证** |
 
 结论的合规写法（满足「写能力边界必须先给反例解释」这条铁律）：
 
-> 控制中心媒体卡对第三方应用是开放的（官方网易云、用户自装的抖音都正常），
+> 控制中心媒体卡对第三方应用是开放的（官方 ncm、用户自装的抖音都正常），
 > 但它采用「ROM 预置包名白名单」而不是「应用自我声明」；名单之外的包名一律被
 > `isInMediaSessionOrStyleList(...,2)` 拒绝。`com.takahashirinta.ncrust` 不在名单内，
 > 且名单位于只读系统分区、无面向开发者的自助入口 ⇒ 就「出现在华为控制中心媒体卡」这一具体
@@ -194,7 +194,7 @@ state=PlaybackState {state=3, position=227707, ...}
 | U4 | **蓝牙 AVRCP 真链路** | 无蓝牙音频外设。用 `input keyevent`（InputManager → MediaSessionService → media button session）作**代理观测**；这是同一条平台路径，但不是真蓝牙链路 |
 | U5 | **耳机按键双击/长按** | 双击/长按由耳机固件与 ROM 识别，应用只收 keycode。只验证了单击（HEADSETHOID 79） |
 | U6 | 锁屏歌词的**肉眼**确认 | 已采截图与 uiautomator，但本机锁屏有密码，未做端到端肉眼确认 |
-| U7 | OPPO PLC110（ColorOS / API 36）整表 | 基线与改动后都**没有取到有效整表**：该机的 ROM 同样会把上一个媒体应用（QQ 音乐/哔哩哔哩）拉起来抢焦点，脚本的前置闸如实中止（`*/3B15CD00GB700000/PRECONDITION-FAILED.txt`）。**未验证，不当作通过。** 该机只验证了「安装与启动正常」 |
+| U7 | OPPO PLC110（ColorOS / API 36）整表 | 基线与改动后都**没有取到有效整表**：该机的 ROM 同样会把上一个媒体应用（qm/哔哩哔哩）拉起来抢焦点，脚本的前置闸如实中止（`*/3B15CD00GB700000/PRECONDITION-FAILED.txt`）。**未验证，不当作通过。** 该机只验证了「安装与启动正常」 |
 | U8 | 设备侧白名单覆盖（root / Magisk） | 用户已决定暂停此路线。仓库里保留了模块生成器与模块本体，**全部标注「未在真机验证」**，不随本次 release 出货 |
 | U9 | 华为 Rom 的 `MediaControlUtils.checkVersion` 边界 | 名单里 `version="0"` 为通配已由抖音（40.6.0 vs 名单 25.3.0）侧证；但版本比较的完整规则未逐条逆完 |
 
@@ -221,7 +221,7 @@ cd docs/verification/v2.1.6/regression
    它必须是被测应用。
 
 任一不成立就写 `PRECONDITION-FAILED.txt` 并以 exit 3 中止 —— **宁可没有数据，不要错的数据。**
-这条闸在本次采集里真的拦下过两次污染（网易云抢焦点、S6 降档瞬态 ERROR），不是摆设。
+这条闸在本次采集里真的拦下过两次污染（ncm 抢焦点、S6 降档瞬态 ERROR），不是摆设。
 
 ---
 

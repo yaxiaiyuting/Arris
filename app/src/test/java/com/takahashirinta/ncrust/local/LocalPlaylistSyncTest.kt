@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -203,7 +203,7 @@ class LocalPlaylistSyncTest {
     // ------------------------------------------------- 去重 key 的源隔离 ----
 
     @Test
-    fun `去重按 source 加 id 隔离 网易云 123 与 QQ 123 是两首歌`() {
+    fun `去重按 source 加 id 隔离 ncm 123 与 QQ 123 是两首歌`() {
         val existing = listOf(track(123, source = MusicSource.NETEASE))
         val result = LocalPlaylistSync.merge(
             existing = existing,

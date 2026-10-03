@@ -15,8 +15,8 @@
 |---|---|---|---|---|---|
 | 1 | PCL110（OPPO） | Android 16 | **QQ 曲目**（搜索页入口）→「转到专辑」 | ✅ 进 **QQ《What's Going On...?》** | `after-pcl-02-qq-goto-album-ok.png` + `logcat-after-pcl-album-jump.txt` |
 | 2 | PCL110 | Android 16 | **老缓存 QQ 曲目**（库页入口，`al` 无 `mid`）→「转到专辑」 | ✅ **跳搜索**，关键词 = 专辑名，**没跳错专辑** | `after-pcl-02-library-oldcache-search-fallback.png` + `logcat-after-pcl-library-oldcache.txt` |
-| 3 | PCL110 | Android 16 | **网易云曲目** →「转到专辑」（A/B 对照，无回归） | ✅ 进 **网易云《U 87》**（14 首 / 默认播放源：网易云） | `after-pcl-03-netease-album-ok.png` +（同一 `logcat-*` 文件） |
-| 4 | S6（三星 G9209） | Android 7.0 | **QQ 曲目**（搜索页入口）→「转到专辑」 | ✅ 进 **QQ《What's Going On...?》**（10 首，全部 QQ 音乐源） | `after-s6-01-qq-song-menu.png`、`after-s6-02-qq-goto-album-ok.png` + `logcat-after-s6-album-jump.txt` |
+| 3 | PCL110 | Android 16 | **ncm 曲目** →「转到专辑」（A/B 对照，无回归） | ✅ 进 **ncm《U 87》**（14 首 / 默认播放源：ncm） | `after-pcl-03-netease-album-ok.png` +（同一 `logcat-*` 文件） |
+| 4 | S6（三星 G9209） | Android 7.0 | **QQ 曲目**（搜索页入口）→「转到专辑」 | ✅ 进 **QQ《What's Going On...?》**（10 首，全部 qm 源） | `after-s6-01-qq-song-menu.png`、`after-s6-02-qq-goto-album-ok.png` + `logcat-after-s6-album-jump.txt` |
 | 5 | S6 | Android 7.0 | **老缓存 QQ 曲目**（库页入口，`al` 只剩 `picUrl`）→「转到专辑」 | ✅ **跳搜索 + 提示**，关键词回落到「曲名 + 艺人名」 | `after-s6-03-oldcache-search-fallback.png`、`after-s6-04-oldcache-search-toast.png` + `logcat-after-s6-oldcache.txt` |
 | 6 | WGR-W09（华为平板） | Android 12 | **QQ 曲目**（搜索页入口）→「转到专辑」 | ✅ 进 **QQ《What's Going On...?》** | `after-wgr-02-qq-goto-album-ok.png` + `logcat-after-wgr-album-jump.txt` |
 
@@ -24,7 +24,7 @@
 
 | | 落地页 | 日志 |
 |---|---|---|
-| 修复前（`v2.6.0-gpl`） | 《百万金曲 陈小云2 苦恋梦 免失志》/ **陈小云** | **零日志**（`logcat-before-pcl-album-jump.txt` 里只有网易云的 `/api/v1/album/7879`） |
+| 修复前（`v2.6.0-gpl`） | 《百万金曲 陈小云2 苦恋梦 免失志》/ **陈小云** | **零日志**（`logcat-before-pcl-album-jump.txt` 里只有 ncm 的 `/api/v1/album/7879`） |
 | 修复后（`v2.6.2-gpl`） | 《What's Going On...?》/ **陈奕迅** | `I AlbumNav: 转到专辑 source=qqmusic id=004Z85XP1c25b7 song=…` |
 
 ---
@@ -33,8 +33,8 @@
 
 | 验收点 | 结论 | 依据 |
 |---|---|---|
-| QQ 曲目「转到专辑」跳到正确专辑 | ✅ | #1 #4 #6 —— **三台设备**，落地页的曲目全部标 `QQ 音乐` |
-| 网易云曲目不回归 | ✅ | #3 —— 同机 A/B，落地页《U 87》/ 14 首 / `默认播放源：网易云` |
+| QQ 曲目「转到专辑」跳到正确专辑 | ✅ | #1 #4 #6 —— **三台设备**，落地页的曲目全部标 `qm` |
+| ncm 曲目不回归 | ✅ | #3 —— 同机 A/B，落地页《U 87》/ 14 首 / `默认播放源：ncm` |
 | 所有入口均正确 | ✅（结构上 + 抽测） | 全树只有 **1 个动作构造点**（`MainActivity.kt:2613`），9 个宿主共用同一个 `SongMenuSheet` 与同一个出口。抽测了 **搜索页**（#1/#6，QQ）+ **库页**（#2/#5，老缓存）两个宿主，以及**播放器卡的二级菜单**（探针阶段在 S6/PCL110 上取到过菜单展开态，见 `screenshots/before-*-01-*-song-menu.png`） |
 | 老缓存跳搜索，不跳错误专辑 | ✅ | #2（PCL110 真机老条目）与 #5（S6 上把一条真条目的 `al` 打回老形状）。两次都切到搜索 tab、没有打开任何专辑页 |
 | 单测覆盖各种路径 | ✅ | 59 条新增用例（见 `CHANGELOG-v2.6.2.md` §5） |
@@ -62,7 +62,7 @@
 ```
 
 三台设备的 QQ 曲目拿到的都是 **`004Z85XP1c25b7`**（QQ 的 albumMID）——
-`probe-album-cross-domain.py` 实测它与网易云的 `6451`（同名专辑的真身）是**两个不同的值**，
+`probe-album-cross-domain.py` 实测它与 ncm 的 `6451`（同名专辑的真身）是**两个不同的值**，
 而修复前被送过去的是 `22276`（QQ 域数字 id ⇒ 陈小云那张）。
 
 ---
@@ -109,7 +109,7 @@ docs/verification/v2.6.2/verification/ui-drive.sh <serial> find "转到专辑"
 | 缺口 | 说明 |
 |---|---|
 | 9 个宿主**逐个**真机点一遍 | 只抽测了 搜索页 / 库页 / 播放器卡二级菜单 三个。剩下的（首页 / 歌单 / QQ 歌单 / 本地歌单 / 专辑页 / 艺人页）**结构上**与抽测的完全同源：都经 `MainActivity.showSongMenu` 汇到同一张 `SongMenuSheet`，`SongItem` 也来自同一批映射函数；但**没有逐个点过** |
-| 「收藏专辑表新增 `albumMid`」的**真机迁移** | 单测覆盖了三种落盘形状，但真机上收藏专辑列表里目前**全是网易云专辑**（`mid` 恒为 null），所以「老条目读出来 `mid=null`」这一条只在单测里验证过 |
+| 「收藏专辑表新增 `albumMid`」的**真机迁移** | 单测覆盖了三种落盘形状，但真机上收藏专辑列表里目前**全是 ncm 专辑**（`mid` 恒为 null），所以「老条目读出来 `mid=null`」这一条只在单测里验证过 |
 | QQ 歌单 / 本地歌单 页里的 QQ 曲目 | 未抽测（同上，结构同源） |
 | iOS/其他 ROM | 不适用 |
 

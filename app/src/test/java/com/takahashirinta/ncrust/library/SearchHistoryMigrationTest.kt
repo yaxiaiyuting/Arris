@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -75,10 +75,10 @@ class SearchHistoryMigrationTest {
     }
 
     @Test
-    fun `网易云曲目恢复出的 source 仍是 null（与 v2_1_0 之前的数据逐字段相等）`() {
+    fun `ncm曲目恢复出的 source 仍是 null（与 v2_1_0 之前的数据逐字段相等）`() {
         val song = SearchHistoryMigration.toSongItem(item(657666, source = "netease"))
         assertEquals(MusicSource.NETEASE, song.musicSource)
-        assertNull("网易云一侧刻意写 null，见 SongSourceExt.songRefOf 的约定", song.source)
+        assertNull("ncm 一侧刻意写 null，见 SongSourceExt.songRefOf 的约定", song.source)
     }
 
     // ------------------------------------------------------ 旧条目的迁移 ----
@@ -91,7 +91,7 @@ class SearchHistoryMigrationTest {
     }
 
     @Test
-    fun `老条目缺 source 且 id 无标志位时按网易云处理`() {
+    fun `老条目缺 source 且 id 无标志位时按ncm处理`() {
         val it = item(657666)
         assertEquals(MusicSource.NETEASE, SearchHistoryMigration.effectiveSource(it))
         assertFalse(SearchHistoryMigration.isIncomplete(it))
@@ -114,13 +114,13 @@ class SearchHistoryMigrationTest {
     }
 
     @Test
-    fun `读不懂的 source 字符串回落网易云而不是 QQ`() {
+    fun `读不懂的 source 字符串回落ncm而不是 QQ`() {
         val it = item(qqId(), source = "listen1")
         assertEquals(MusicSource.NETEASE, SearchHistoryMigration.effectiveSource(it))
     }
 
     @Test
-    fun `空串 source 不是"老条目"以外的第三种语义（回落网易云）`() {
+    fun `空串 source 不是"老条目"以外的第三种语义（回落ncm）`() {
         // 判「老条目」只看 null；空串走 fromKey 的回落路径。
         assertEquals(MusicSource.NETEASE, SearchHistoryMigration.effectiveSource(item(657666, source = "")))
     }
@@ -145,7 +145,7 @@ class SearchHistoryMigrationTest {
     }
 
     @Test
-    fun `网易云老条目与新条目的去重键相同`() {
+    fun `ncm老条目与新条目的去重键相同`() {
         assertEquals(
             SearchHistoryMigration.dedupeKey(item(657666)),
             SearchHistoryMigration.dedupeKey(item(657666, source = "netease"))
@@ -155,7 +155,7 @@ class SearchHistoryMigrationTest {
     // ------------------------------------------------- "不完整" 的三态 ----
 
     @Test
-    fun `QQ 有 songmid 不算不完整，QQ 无 songmid 算，网易云永远不算`() {
+    fun `QQ 有 songmid 不算不完整，QQ 无 songmid 算，ncm永远不算`() {
         assertFalse(SearchHistoryMigration.isIncomplete(item(qqId(), source = "qqmusic", sourceId = "mid")))
         assertTrue(SearchHistoryMigration.isIncomplete(item(qqId(), source = "qqmusic", sourceId = null)))
         assertTrue(SearchHistoryMigration.isIncomplete(item(qqId(), source = "qqmusic", sourceId = "")))

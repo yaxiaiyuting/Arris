@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -218,7 +218,7 @@ internal fun SettingsAccountPage(
                                     // v2.5.5 · B：同一个诊断入口顺带把**跨源上报闸门**的计数读出并落盘
                                     // （`ncrust_report_gate`）。两条统计的落盘时机与纪律完全一致：
                                     // 只在用户主动点开这个入口（release 里整行不挂载）与 Activity.onStop。
-                                    // 它读的是「拦了几次 QQ id → 网易云 webLog」，同样**不上报**。
+                                    // 它读的是「拦了几次 QQ id → ncm webLog」，同样**不上报**。
                                     runCatching {
                                         val gate = com.takahashirinta.ncrust.player.ReportGateStore
                                             .snapshotAndFlush(context)
@@ -540,15 +540,15 @@ internal fun FullWidthDialogButton(
 }
 
 /**
- * v2.1.0 · C：QQ 音乐账号卡片。
+ * v2.1.0 · C：qm 账号卡片。
  *
  * 只做三件事：显示登录态、显示会员角标、提供登录/登出。
  * **刻意不做**「哪些音质可用」的细表：会员权益的权威判据在服务端
  * （详见 QqApi.fetchProfile 的注释 —— 登录态下的 VIP 字段没有实测过），
  * 界面上多写一行就多一行可能撒谎的文案。
  *
- * 登录态读的是 [QqAuthStore]（`ncrust_qq_prefs`），与网易云的 cookie 完全隔离：
- * 在这里登出**不会**影响网易云，反之亦然。
+ * 登录态读的是 [QqAuthStore]（`ncrust_qq_prefs`），与 ncm 的 cookie 完全隔离：
+ * 在这里登出**不会**影响 ncm，反之亦然。
  *
  * 视觉沿用 [ProfileBlock] 的既有语言（整块可点 + 一行标题 + 一行状态），
  * 不引新组件、不加圆角（Kanesumi：直角、信息优先）。
@@ -569,7 +569,7 @@ internal fun QqAccountBlock(
     /**
      * v2.1.4：**仅 debug 包**显示的取链诊断入口 —— 对当前播放的 QQ 曲目一次性问全档位。
      *
-     * 为什么需要它：开发侧没有 QQ 音乐账号，而「超清母带只出极高」这件事**只有登录态才有区分度**
+     * 为什么需要它：开发侧没有 qm 账号，而「超清母带只出极高」这件事**只有登录态才有区分度**
      * （匿名态所有档位都是 `104003`，见 PHASE0 报告 §7.2/§8）。没有这个入口，
      * 用户要复现就只能靠「碰巧在播放 QQ 曲目时抓 logcat」，日志里未必有高档位的结果。
      * release 包里它整行不挂载（不是 `alpha=0`，见 AGENTS.md「Compose 触摸陷阱」第 1 条）。

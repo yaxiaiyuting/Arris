@@ -40,6 +40,7 @@ import com.takahashirinta.ncrust.source.ArtistNav
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.trackKey
+import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.DetailHeader
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
 import com.takahashirinta.ncrust.ui.components.PlayAllDialog
@@ -64,14 +65,14 @@ import android.widget.Toast
  *
  * 1. **身份带音源**：`(sourceKey, albumId)`，QQ 的 `albumId` 是 albumMid（base62 字符串）。
  *    旧路由（[com.takahashirinta.ncrust.ui.navigation.NavRoutes.ALBUM]）仍可用，
- *    它构造出来的是网易云身份。
+ *    它构造出来的是 ncm 身份。
  * 2. **曲目来自 [CatalogAggregator]**：两源合并 + 每首带探测出来的可用性；
  *    「播放全部」播的是**当前口径过滤后**的那一份列表，不是两源全量。
- * 3. **订阅按钮只在网易云一侧出现**：本应用没有 QQ 专辑订阅接口，
- *    拿 QQ 专辑去写一条网易云订阅是**静默写坏数据**，比没有按钮糟得多。
+ * 3. **订阅按钮只在 ncm 一侧出现**：本应用没有 QQ 专辑订阅接口，
+ *    拿 QQ 专辑去写一条 ncm 订阅是**静默写坏数据**，比没有按钮糟得多。
  *
  * @param sourceKey 音源 key（[MusicSource.key]）。
- * @param albumId 该音源内的专辑标识：网易云十进制 id / QQ albumMid。
+ * @param albumId 该音源内的专辑标识：ncm 十进制 id / QQ albumMid。
  * @param onArtistClick 点副标题（艺人）。**音源一起给出去**；QQ 一侧拿不到 `singerMID`，
  *   此时副标题不可点（见 [artistTarget]）。
  */
@@ -98,7 +99,7 @@ fun AlbumDetailScreen(
     val source = remember(sourceKey) { MusicSource.fromKey(sourceKey) }
     val albumIdLong = remember(albumId) { albumId.toLongOrNull() }
 
-    // 头部元信息（封面 / 发行日期 / 厂牌 / 艺人）只存在于网易云 `/api/v1/album/{id}` 的
+    // 头部元信息（封面 / 发行日期 / 厂牌 / 艺人）只存在于 ncm `/api/v1/album/{id}` 的
     // 响应里 —— 聚合器只回传**曲目**（[AlbumPage] 没有这些字段）。所以这里保留
     // 「缓存优先 + 后台刷新」的元信息读取，它同时把 [ContentCache] 写回，
     // 让下次进入的第一帧就有封面和日期。QQ 一侧没有对应端点，头部只显示聚合出来的
@@ -108,7 +109,7 @@ fun AlbumDetailScreen(
     }
     var albumMeta by remember(source, albumIdLong) { mutableStateOf(cachedAlbum) }
 
-    // 聚合器锚点的名字：网易云一侧来自缓存（它参与对端召回的搜索关键词），
+    // 聚合器锚点的名字：ncm 一侧来自缓存（它参与对端召回的搜索关键词），
     // QQ 一侧路由里没有名字，只能先用空串。
     val cachedName = cachedAlbum?.name.orEmpty()
     val anchor = remember(source, albumId, cachedName) { AlbumKey(source, albumId, cachedName) }
@@ -132,7 +133,7 @@ fun AlbumDetailScreen(
         // 专辑。空串不报错，只会静默地配不上（搜索接口遇到空关键词直接返回空列表），
         // 而路由 `album/{source}/{albumId}` 里没有名字 —— 所以这里先把它解出来。
         var resolvedName = anchor.name
-        // ① 网易云：`/api/v1/album/{id}` 既给头部元信息（封面 / 发行日期 / 厂牌 / 艺人），
+        // ① ncm：`/api/v1/album/{id}` 既给头部元信息（封面 / 发行日期 / 厂牌 / 艺人），
         //    也给专辑名。它同时写回 [ContentCache]，让下次进入第一帧就有内容。
         if (source == MusicSource.NETEASE && albumIdLong != null) {
             try {
@@ -147,7 +148,7 @@ fun AlbumDetailScreen(
             // ② QQ：没有 ContentCache，也没有「按 albumMid 取专辑名」的轻量接口 ——
             //    唯一带专辑名的就是曲目列表接口本身。所以这里必须先取一次：
             //    没有名字，`findCounterpartAlbum` 连搜索关键词都构造不出来，
-            //    QQ 专辑页就**永远**配不上网易云那一侧（而「配上」正是本版存在的理由）。
+            //    QQ 专辑页就**永远**配不上 ncm 那一侧（而「配上」正是本版存在的理由）。
             //    代价是这一次请求与聚合器内部那一次重复；详情页是低频路径，换的是功能可用。
             resolvedName = runCatching { QqCatalogApi.albumDetail(albumId)?.name }.getOrNull().orEmpty()
         }
@@ -174,9 +175,9 @@ fun AlbumDetailScreen(
         ?: loaded?.songs?.firstOrNull()?.song?.artists?.joinToString("/") { it.name }?.takeIf { it.isNotBlank() }
 
     // 艺人入口：路由 `album/{source}/{albumId}` 里没有艺人信息，所以从元信息或曲目里取。
-    // **只在主源是网易云时给入口**：QQ 曲目也带一个数字艺人 id，但那是 QQ 的数字 id，
+    // **只在主源是 ncm 时给入口**：QQ 曲目也带一个数字艺人 id，但那是 QQ 的数字 id，
     // 而 QQ 艺人路由要的是 `singerMID` —— 拿数字 id 当 mid 必然跳到错误的艺人页，
-    // 所以宁可没有入口（不猜、不退回网易云）。
+    // 所以宁可没有入口（不猜、不退回 ncm）。
     val artistTarget = remember(source, albumMeta, loaded) {
         if (source != MusicSource.NETEASE) {
             null
@@ -235,6 +236,20 @@ fun AlbumDetailScreen(
                 // 点击作曲者 → 跳歌手页, 无按动反馈。拿不到可校验的艺人身份时**不可点**。
                 onSubtitleClick = artistTarget?.let { target -> { onArtistClick(target) } },
                 infoLines = buildList {
+                    // v3.4.0：**音源角标**（用户建议：「专辑界面建议加个来自 ncm 或者 qq」）。
+                    //
+                    // 详情页的音源是**路由给的**（`album/{source}/{albumId}`），不是反推的 ——
+                    // 所以这里直接用 `source`，与收藏页格子那条「从落盘字段反推」的路互不相关
+                    // （后者的判据见 `AlbumSourceTag`）。
+                    //
+                    // 位置放在 infoLines 的**第一行**：它与「发行: …」「厂牌: …」是同一层
+                    // 元信息，且这一行**不可点**（详情页的交互元素不得落在底部播放器卡片的
+                    // 命中死带里，见 AGENTS.md 触摸陷阱第 2 条 —— 纯文本没有这个问题）。
+                    //
+                    // ⚠️ 文案出口与搜索结果页、收藏页格子**同一处**（`SongTags.sourceLabel`）。
+                    // 目前这一行是「裸音源名」（与专辑格子那行的第一段逐字相同）；
+                    // 建议改成带标签的一句，见交付报告里的 `albumSourceInfo` 新键。
+                    AlbumSourceTag.sourceLabel(source, strings)?.let { add(strings.source.albumSourceInfo(it)) }
                     albumMeta?.publishTime?.let { time ->
                         val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                             .format(java.util.Date(time))
@@ -245,9 +260,9 @@ fun AlbumDetailScreen(
                 },
                 onPlayAll = if (songItems.isNotEmpty()) ({ showPlayAllDialog = true }) else null,
                 headerActions = {
-                    // 订阅专辑**只有网易云有写接口**（`LibraryManager.subscribeAlbum` 写的是
-                    // 网易云收藏）。QQ 一侧没有对应能力 → 这个按钮干脆不挂，
-                    // 绝不拿一张 QQ 专辑去写一条网易云的订阅。
+                    // 订阅专辑**只有 ncm 有写接口**（`LibraryManager.subscribeAlbum` 写的是
+                    // ncm 收藏）。QQ 一侧没有对应能力 → 这个按钮干脆不挂，
+                    // 绝不拿一张 QQ 专辑去写一条 ncm 的订阅。
                     if (source == MusicSource.NETEASE && albumIdLong != null && songItems.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Row(

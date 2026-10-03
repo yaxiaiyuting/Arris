@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -812,7 +812,7 @@ class StringsConstructorBudgetTest {
      * `searchSourceSummaryWithStatus`（因为前者在类型上无法表达「还没回来」）。
      * 换路径**不许改口径** —— 八种语言、四组数字逐个比。
      * 这条断言曾经真的红过：en/de/ru 的 `searchSourceCount` 一开始带了单位词，
-     * 而那三个语言的 `sourceSummary` 是 `"NetEase $a · QQ Music $b"`（无单位）⇒ 两边不一致。
+     * 而那三个语言的 `sourceSummary` 是 `"ncm $a · qm $b"`（无单位）⇒ 两边不一致。
      */
     @Test
     fun `v2_5_5 统计行的新路径与旧格式逐字一致`() {

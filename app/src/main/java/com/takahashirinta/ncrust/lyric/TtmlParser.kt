@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -14,7 +14,7 @@ import androidx.compose.runtime.Immutable
  * TTML 文件 <head> 里的 AMLL 元数据（v1.9.0）。
  *
  * AMLL TTML DB 的每个文件都带一组 `<amll:meta key="..." value="..."/>`，
- * 其中 [ncmMusicId] 是**网易云歌曲 ID**，与 Ncrust 的 `songId` 同一套编号 ——
+ * 其中 [ncmMusicId] 是**ncm 歌曲 ID**，与 Ncrust 的 `songId` 同一套编号 ——
  * 这是「按 songId 直接拉取」能成立的根据，也是校验「拉回来的确实是这首歌」的唯一凭据。
  */
 @Immutable
@@ -35,7 +35,7 @@ data class TtmlMeta(
  * 于是 [LyricsView] / [NcrustLyricsPanel] / `SweepTrack` 完全不需要知道歌词来自 TTML 还是 yrc。
  *
  * [translations] / [romans] 是独立的行级轨道（对应 `ttm:role="x-translation"` / `"x-roman"`），
- * 它们**不参与** [lines] 的文本，按时间戳与 [lines] 配对展示，语义与网易云的 `tlyric` 一致。
+ * 它们**不参与** [lines] 的文本，按时间戳与 [lines] 配对展示，语义与 ncm 的 `tlyric` 一致。
  */
 @Immutable
 data class TtmlDoc(
@@ -69,7 +69,7 @@ object TtmlParser {
      *
      * 「有逐字」= 至少一行有非空 [LrcLine.words]。**判据必须看词，不能看行** ——
      * AMLL DB 里存在只有 `<p>` 没有 `<span>` 的逐句投稿，那种文件对
-     * 「提升逐字覆盖率」这个目标毫无价值，用它替换 LRC 只会白白丢掉网易云的行级数据。
+     * 「提升逐字覆盖率」这个目标毫无价值，用它替换 LRC 只会白白丢掉 ncm 的行级数据。
      */
     fun hasWordLevel(doc: TtmlDoc): Boolean = doc.lines.any { it.words.isNotEmpty() }
 }

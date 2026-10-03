@@ -8,7 +8,7 @@
 
 | 设备 | 通道 | 当前歌曲的数据来源 | 点「转到歌手」的结果 | 稳定性 |
 |---|---|---|---|---|
-| **WGR-W09**（华为平板，Android 12） | 搜索结果长按 → 二级菜单 | 搜索响应**新鲜**加载 | **跳到「马洪波」**（网易云 4558） | **5/5 稳定复现** |
+| **WGR-W09**（华为平板，Android 12） | 搜索结果长按 → 二级菜单 | 搜索响应**新鲜**加载 | **跳到「马洪波」**（ncm 4558） | **5/5 稳定复现** |
 | **PCL110**（OPPO 手机，Android 16） | 同上 | 同上 | **跳到「马洪波」** | **2/2 稳定复现** |
 | **PCL110**（同一台手机） | 全屏播放器点歌名 → 二级菜单 | **冷启动恢复**（`PlaybackStateManager`） | **毫无反应**（菜单关闭，页面不变） | **2/2 稳定复现** |
 | S6（G9209，Android 7） | 搜索结果长按 | 新鲜加载 | 长按被播放器手势层吃掉，未取到菜单（见 §6） | — |
@@ -36,7 +36,7 @@ adb -s $S shell input text "Jay%sChou"  # → "Jay Chou"
 sleep 9
 adb -s $S shell input keyevent KEYCODE_BACK   # 收键盘
 
-# 3) 长按 QQ 结果行《晴天》（周杰伦 · 叶惠美 · QQ 音乐）
+# 3) 长按 QQ 结果行《晴天》（周杰伦 · 叶惠美 · qm）
 adb -s $S shell input swipe 420 1068 420 1068 1000 ; sleep 4
 #    截图确认菜单出现，且第一项是「加入歌单」、倒数第三项是「转到歌手」
 
@@ -60,20 +60,20 @@ adb -s $S exec-out screencap -p > after.png
 760   436  clickable=false  双源
 ...
 1146  1491  clickable=true  周杰伦          ← 底部托盘仍在播 QQ 的《稻香》
-2202  1491  clickable=false  QQ 音乐
+2202  1491  clickable=false  qm
 ```
 
 页面标题是**马洪波**、专辑 5 / 单曲 40，而底部播放器里明明是
-**稻香 · 周杰伦 · QQ 音乐**。这与用户报告完全一致。
+**稻香 · 周杰伦 · qm**。这与用户报告完全一致。
 
 「马洪波」的身份与来源见 `probe-artist-id-collision.md`：
-他就是**网易云的艺人 4558**，而 4558 恰好是**QQ 的周杰伦**的数字 `singerID`。
+他就是**ncm 的艺人 4558**，而 4558 恰好是**QQ 的周杰伦**的数字 `singerID`。
 
 ## 3. 波及范围（换艺人验证）
 
 `probe-raw/probe-artist-id-collision.out.txt`（接口侧）+ 真机换艺人：
 
-| QQ 歌手 | QQ `singer.id` | 被当成网易云 id 查出来的 | 用户看到什么 |
+| QQ 歌手 | QQ `singer.id` | 被当成 ncm id 查出来的 | 用户看到什么 |
 |---|---|---|---|
 | 周杰伦 | `4558` | **马洪波**（专辑 1 / 单曲 32） | **一个有内容的、毫不相干的歌手页** |
 | 林俊杰 | `4286` | 刘子译（专辑 0 / 单曲 0） | 一个空艺人页 |
@@ -119,7 +119,7 @@ $U $S dump
 | 任务书写 | 仓库实际 | 处置 |
 |---|---|---|
 | 二级菜单项叫「查看艺人」 | 实际文案是 **「转到歌手」**（`Strings.actionGoToArtist`，`ui/i18n/zh_CN.kt:239`）。全仓库 8 个语言文件里**不存在**「查看艺人」 | 按实际文案取证；不改文案（改文案会让 8 个语言文件一起动，与本 P0 无关） |
-| 「QQ 音乐歌曲（如《稻香》）」 | 《稻香》在 QQ 搜索里存在且有版权态；本次同时用了《稻香》与《晴天》两首，结论一致 | 两首都留了证据 |
+| 「qm 歌曲（如《稻香》）」 | 《稻香》在 QQ 搜索里存在且有版权态；本次同时用了《稻香》与《晴天》两首，结论一致 | 两首都留了证据 |
 
 ## 5. 交叉 A/B：**同一台手机上切换数据来源，症状就切换**
 
@@ -150,7 +150,7 @@ currentSong = SongItem(
 )
 ```
 
-而 `resolveAndNavigate` 的补 id 回落打的是**网易云**的 `/eapi/v3/song/detail`，
+而 `resolveAndNavigate` 的补 id 回落打的是**ncm**的 `/eapi/v3/song/detail`，
 QQ 的合成 id（bit62）在那里必然查不到 ⇒ 条件全不匹配 ⇒ 什么都不做。
 
 > **纪律对照（AGENTS.md 铁律 6「平台假设必须 A/B 对照」）**：
@@ -168,12 +168,12 @@ QQ 的合成 id（bit62）在那里必然查不到 ⇒ 条件全不匹配 ⇒ �
 | release 包在这条路径上**零日志** | 无法用 logcat 定位 | 见 `probe-logcat.md`；修复里补了 `TAG_ARTIST_NAV` |
 | Gradle 测试执行器在本机 JDK 上 fork 失败（`Spawn helper ran into JDK version mismatch`） | `testDebugUnitTest` 直接起不来 | 用 `JAVA_HOME=/usr/lib/jvm/java-21-openjdk` + `GRADLE_OPTS=-Djdk.lang.Process.launchMechanism=FORK`（见 `verification/gradle-fullbuild-round1.log` 的调用方式） |
 
-## 7. 网易云侧 A/B 对照（回归基线）
+## 7. ncm 侧 A/B 对照（回归基线）
 
-同一台 WGR-W09、同一路径，换一首**网易云**曲目（搜索结果里带「网易云」角标的行）：
+同一台 WGR-W09、同一路径，换一首**ncm**曲目（搜索结果里带「ncm」角标的行）：
 
-- 二级菜单 → 转到歌手 → **进入正确的网易云艺人页**（无回归）。
-- 原因（静态）：网易云曲目的 `artists[0].id` 就是网易云艺人 id，
+- 二级菜单 → 转到歌手 → **进入正确的 ncm 艺人页**（无回归）。
+- 原因（静态）：ncm 曲目的 `artists[0].id` 就是 ncm 艺人 id，
   老路由写死的 `NETEASE` 恰好是对的 —— 这也说明**这个 bug 只在跨源时暴露**，
   单源时代（v2.1.0 之前）不可能被发现。
 

@@ -116,11 +116,11 @@
 
 **9 步**（同一口径）：点按 → `playSongItem` → `playFromQueue`/`playSong` → 起 IO 协程 → `fetchUrlOfflineFirst` → 版本校验/清槽位/清歌词 → **歌词 launch** → 主线程 Intent + `startForegroundService` → `playUrl` → 出声。
 
-耗时构成（推断）：**几乎全部落在取链**。`NetworkAvailability.isOnline`（`:1329`）是瞬时系统查询；`SourceRouter.resolveUrl`（`:1336`）在网易云一侧就是 `SongUrlFetcher.fetch`，它是**逐档串行**的 eapi POST（`SongUrlFetcher.kt:142-191`），每一档都要等一次完整往返（成功即 `return`，失败才下一档），每档的客户端超时是 30s connect / 30s read（`network/RetrofitClient.kt:38-39`，见 `connection-layer.md`）。最坏情况（全部档位失败）在 `jymaster` 起手是 6 档，`dolby` 也是 6 档（`SongUrlFetcher.kt:131-132`）。
+耗时构成（推断）：**几乎全部落在取链**。`NetworkAvailability.isOnline`（`:1329`）是瞬时系统查询；`SourceRouter.resolveUrl`（`:1336`）在 ncm 一侧就是 `SongUrlFetcher.fetch`，它是**逐档串行**的 eapi POST（`SongUrlFetcher.kt:142-191`），每一档都要等一次完整往返（成功即 `return`，失败才下一档），每档的客户端超时是 30s connect / 30s read（`network/RetrofitClient.kt:38-39`，见 `connection-layer.md`）。最坏情况（全部档位失败）在 `jymaster` 起手是 6 档，`dolby` 也是 6 档（`SongUrlFetcher.kt:131-132`）。
 
 ---
 
-## 4. 网易云「超清母带」是否需要多级取链
+## 4. ncm「超清母带」是否需要多级取链
 
 ### 4.1 `fetch()` 的主体是「档位降级阶梯」，不是「多级取链」
 
@@ -164,10 +164,10 @@ val songMaxLevel =
 | 项 | 现状 | 落点 |
 |---|---|---|
 | 触发 | 输入 500ms 防抖（`delay(500)`）后 `searchByType(_currentType.value)`；切 tab 立即搜 | `:97-108`（`:101` delay）、`:110-118` |
-| 分支 | `searchByType(type)` 的 `1 ->` 分支 = 聚合搜索（网易云 + QQ） | `:151`、`:156` |
+| 分支 | `searchByType(type)` 的 `1 ->` 分支 = 聚合搜索（ncm + QQ） | `:151`、`:156` |
 | 并发结构 | `coroutineScope { val neteaseDeferred = async {...}; val qqDeferred = if (qqAllowed) async {...} }` —— **两个 `async` 默认 `start = DEFAULT`，立即开跑** | `:191`、`:195`、`:214` |
 | QQ 预算 | `QQ_SEARCH_BUDGET_MS = 5_000L`，包在 `withTimeoutOrNull(QQ_SEARCH_BUDGET_MS)` 里；返回 null 记 `timedOut = true`，异常记 `failed = true` | `:95`、`:216-231` |
-| 网易云预算 | **无预算**（没有 `callTimeout`，参见 `RetrofitClient.kt:75-116` 的撤销注释） | `:195-208` |
+| ncm 预算 | **无预算**（没有 `callTimeout`，参见 `RetrofitClient.kt:75-116` 的撤销注释） | `:195-208` |
 | 先到先发布 | `select { neteaseDeferred.onAwait {...}; qqDeferred.onAwait {...} }`：谁先完成谁先上屏；发布后 `_isLoading.value = false` 结束转圈 | `:263-274`（发布 `:290-309`，`_isLoading = false` 在 `:307`） |
 | 后半程 | 等另一条腿（QQ 已被预算卡死）→ 内容真的会变时才二次合并发布 | `:311-322`、`:334-342` |
 | 无 QQ 时 | 退化回 `neteaseDeferred.await()`（`else` 分支） | `:275-280` |

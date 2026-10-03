@@ -15,7 +15,7 @@ import org.junit.Test
  *
  * 夹具是**真实响应**（2026-09 `music.search.SearchCgiService` 返回的《晴天》条目，
  * 只保留本映射用到的字段），不是编造的：QQ 的字段名（`singer`/`interval`/`file.media_mid`）
- * 与网易云完全不同，写错一个的表现是「能搜到、没封面、时长为 0」，只有真机肉眼可见。
+ * 与 ncm 完全不同，写错一个的表现是「能搜到、没封面、时长为 0」，只有真机肉眼可见。
  */
 class QqSongMapperTest {
 
@@ -52,12 +52,12 @@ class QqSongMapperTest {
         val song = QqSongMapper.fromSongObject(realItem)!!
         assertTrue(SourceIds.isQqId(song.id))
         assertEquals(97773L, SourceIds.qqRawId(song.id))
-        // 与网易云的 id 空间不重叠 —— 离线缓存/歌词缓存/队列判重都靠这一点
+        // 与 ncm 的 id 空间不重叠 —— 离线缓存/歌词缓存/队列判重都靠这一点
         assertFalse(SourceIds.isQqId(97773L))
     }
 
     @Test
-    fun `时长是秒转毫秒——interval 与网易云的 dt 单位不同`() {
+    fun `时长是秒转毫秒——interval 与ncm的 dt 单位不同`() {
         val song = QqSongMapper.fromSongObject(realItem)!!
         assertEquals(269_000L, song.duration)
     }

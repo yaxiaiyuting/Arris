@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B：QQ 音乐 JSON → SongItem 映射。**纯逻辑，JVM 可单测。**
+ * v2.1.0 · B：qm JSON → SongItem 映射。**纯逻辑，JVM 可单测。**
  */
 
 package com.takahashirinta.ncrust.qq
@@ -19,10 +19,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * QQ 音乐的搜索/详情响应 → 本应用统一的 [SongItem]（v2.1.0 · B）。
+ * qm 的搜索/详情响应 → 本应用统一的 [SongItem]（v2.1.0 · B）。
  *
  * 这一层是纯函数（只吃 [JSONObject]，不碰网络），因此可以用**真实响应片段**做单测 ——
- * 而这里恰恰是最需要单测的地方：QQ 的字段名与网易云完全不同（`singer`/`interval`/`mid`），
+ * 而这里恰恰是最需要单测的地方：QQ 的字段名与 ncm 完全不同（`singer`/`interval`/`mid`），
  * 映射错一个字段的表现是「歌能搜到、点进去没封面/时长为 0」，只在真机上肉眼可见。
  *
  * ## 三个 id 的关系（这是本文件最容易被写错的地方）
@@ -128,7 +128,7 @@ object QqSongMapper {
                 val a = arr.optJSONObject(i) ?: return@mapNotNull null
                 val name = a.optString("name").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 // v2.6.1 · P0：`singer[].mid`（singerMID）是**唯一**能打开 QQ 艺人页的身份，
-                // 必须在这里带出去。旧代码只取数字 `id`，于是「转到歌手」把它当网易云 id 查，
+                // 必须在这里带出去。旧代码只取数字 `id`，于是「转到歌手」把它当 ncm id 查，
                 // 周杰伦(4558) 跳到马洪波 —— 真机复现过的 P0。
                 // 实测 QQ 搜索响应里 `singer[]` 条目的字段是
                 // `{id, mid, name, pmid, title, title_highlight, type, uin}`（2026-09，匿名可复现）；
@@ -150,7 +150,7 @@ object QqSongMapper {
         //     也是「转到专辑」要跳过去的那张专辑的键。
         //
         // 旧代码把 `pmid ?: mid` 读进一个局部 val 只喂给封面，`AlbumItem` 没有字段装身份，
-        // 于是跳转只能拿数字 `album.id` 去网易云查 —— 陈奕迅 `22276` → 陈小云（真机复现）。
+        // 于是跳转只能拿数字 `album.id` 去 ncm 查 —— 陈奕迅 `22276` → 陈小云（真机复现）。
         // 实测 QQ 服务端**碰巧**能容忍把 `pmid` 当 `albumMid` 传（内部会剥掉 `_N`），
         // 但那是服务端的宽容而不是契约，所以身份这一路只认 `mid`，
         // 且由 `AlbumNavigator` 的值域闸门（base62，`_` 不合法）把 `pmid` 挡在门外。
@@ -173,7 +173,7 @@ object QqSongMapper {
                 ?: "",
             artists = artists,
             album = album,
-            // `interval` 是**秒**（网易云那边 `dt` 是毫秒）—— 不乘 1000 会让进度条与歌词全错。
+            // `interval` 是**秒**（ncm 那边 `dt` 是毫秒）—— 不乘 1000 会让进度条与歌词全错。
             duration = item.optLong("interval", 0L).takeIf { it > 0L }?.times(1000L),
             source = MusicSource.QQMUSIC.key,
             sourceId = mid,

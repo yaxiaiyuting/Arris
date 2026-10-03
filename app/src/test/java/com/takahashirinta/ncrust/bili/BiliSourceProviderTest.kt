@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -77,7 +77,7 @@ class BiliSourceProviderTest {
             id = SourceIds.biliId(1L), name = "t", artists = null, album = null, duration = null,
             source = MusicSource.BILIBILI.key, sourceId = null,
         )
-        // 契约：解析不出载荷就返回 null。**绝不退回网易云取链** ——
+        // 契约：解析不出载荷就返回 null。**绝不退回 ncm 取链** ——
         // id 相同不代表是同一首歌（`MusicSourceProvider` 的既有契约）。
         assertNull(BiliSourceProvider.resolveUrl(broken, "lossless"))
         assertNull(BiliSourceProvider.fetchLyric(broken))
@@ -86,7 +86,7 @@ class BiliSourceProviderTest {
     @Test
     fun `B 站不是可登录音源 —— 不出现在换源提示里`() {
         // otherThan 的语义是「另一个**能拿到这首歌**的地方」。
-        // 把 B 站算进去会让网易云的无版权提示变成「去 B 站试试」，
+        // 把 B 站算进去会让 ncm 的无版权提示变成「去 B 站试试」，
         // 而 B 站在默认关闭时根本不可用。
         assertEquals(MusicSource.QQMUSIC, MusicSource.otherThan(MusicSource.NETEASE))
         assertEquals(MusicSource.NETEASE, MusicSource.otherThan(MusicSource.QQMUSIC))
@@ -100,7 +100,7 @@ class BiliSourceProviderTest {
     fun `音源 key 是稳定字符串（写进持久化数据的值）`() {
         assertEquals("bilibili", MusicSource.BILIBILI.key)
         assertEquals(MusicSource.BILIBILI, MusicSource.fromKey("bilibili"))
-        // 未知 key 仍然回落网易云（老版本 App 读到 "bilibili" 的行为）。
+        // 未知 key 仍然回落 ncm（老版本 App 读到 "bilibili" 的行为）。
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey("bilibili2"))
     }
 
@@ -203,7 +203,7 @@ class BiliSignatureRejectionTest {
 /**
  * B 站 CDN 的取流约束（`BiliCdn`）。
  *
- * 这一组的关键不是「命中 B 站」，而是**不命中网易云/QQ** ——
+ * 这一组的关键不是「命中 B 站」，而是**不命中 ncm/QQ** ——
  * 判据写宽了会把那两个音源一起打死（实测：跨源 Referer 会 403），
  * 那是铁律 27 里最不能接受的方向。
  */
@@ -219,7 +219,7 @@ class BiliCdnTest {
     }
 
     @Test
-    fun `网易云与 QQ 的 host 一个都不能命中`() {
+    fun `ncm与 QQ 的 host 一个都不能命中`() {
         val mustNotMatch = listOf(
             "music.163.com",
             "interface3.music.163.com",
@@ -374,12 +374,12 @@ class BiliCdnLearnedHostTest {
     }
 
     @Test
-    fun `网易云与 QQ 的 host 永远不可能被标记`() {
+    fun `ncm与 QQ 的 host 永远不可能被标记`() {
         // 生产代码里 markStream 的唯一调用点是 B 站取链出口，所以这些 URL 不可能走到那里；
         // 但即便有人误调用，判据也不该把它们变成「B 站媒体」以外的行为。
         // 这一条断的是「markStream 只接受 http(s) 且只记 host」这条形状。
         BiliCdn.markStream("https://music.163.com/song/media/outer/url?id=1.mp3")
-        // 网易云的 host 被记下来了 —— 这是 markStream 的**输入契约**问题，不是 isBiliMedia 的。
+        // ncm 的 host 被记下来了 —— 这是 markStream 的**输入契约**问题，不是 isBiliMedia 的。
         // 所以这里断言的是「调用点必须唯一且可信」，由 BiliSourceProvider 的结构保证；
         // 测试只钉住「非 http(s) 一律忽略」。
         BiliCdn.clearLearnedHostsForTest()

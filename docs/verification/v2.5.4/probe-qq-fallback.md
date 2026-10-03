@@ -1,4 +1,4 @@
-# QQ 音乐「无 songid 兜底」探针（v2.5.4）
+# qm「无 songid 兜底」探针（v2.5.4）
 
 > 只读调研。本文**没有改动任何源码**；所有 `file:line` 都用 read/grep 工具在
 > `/home/duanjb666/deepseek/ncrust-gpl/Ncrust` 当前工作区（HEAD = `da5c9f8`）上核对过，
@@ -386,7 +386,7 @@ PlaybackService.onStartCommand → url extra                          PlaybackSe
    `AnalyticsListener`（`PlaybackService.kt:52/564`，进程内事件回调，不发网络）。
 2. **QQ 侧刻意不做上报**，且写进了 KDoc：`qq/QqMusicSourceProvider.kt:40`
    「不把 QQ 的播放行为上报给任何一方（QQ 侧没有对应的 webLog 机制，也不该伪造）」。
-3. **⚠️ 但唯一年上报通道 `PlayReporter` 没有音源闸门。** 它是网易云的 webLog
+3. **⚠️ 但唯一年上报通道 `PlayReporter` 没有音源闸门。** 它是 ncm 的 webLog
    （`player/PlayReporter.kt:24-25`，POST 到 `clientlogusf.music.163.com/api/feedback/weblog`），
    gate 只有两条：
 
@@ -407,12 +407,12 @@ PlaybackService.onStartCommand → url extra                          PlaybackSe
    }
    ```
 
-   QQ 曲目的 `id` 是 `2^62 | raw`（恒为正），所以**当用户同时登录了网易云时，一首 QQ 曲目的
-   合成 id 与收听时长会被 POST 到网易云的 weblog 端点**。第二个调用点同理
+   QQ 曲目的 `id` 是 `2^62 | raw`（恒为正），所以**当用户同时登录了 ncm 时，一首 QQ 曲目的
+   合成 id 与收听时长会被 POST 到 ncm 的 weblog 端点**。第二个调用点同理
    （`PlayerViewModel.kt:570-580` 的 `onPlaybackEnded`）。
 
    **这是既有的、非预期的跨音源泄漏，不是本次埋点要引入的东西。**
-   影响面（网易云是丢弃还是记账）未验证，见 §12。给实施者的纪律：
+   影响面（ncm 是丢弃还是记账）未验证，见 §12。给实施者的纪律：
    **QQ 探针一律本地，绝不新增任何网络出口；顺手修不修 PlayReporter 是另一个决策，不在本报告范围。**
 
 ---
@@ -709,9 +709,9 @@ T2 用真实响应片段（照 `qq/QqSongMapperTest.kt:22-38` 的夹具写法，
    服务端若优先取 `songId`，则这类曲目的歌词会拿错或拿不到；若只认 `songMid`，则无影响。
    本仓库无 QQ 账号，无法实测。
 
-3. **`PlayReporter` 把 QQ 合成 id 发到网易云后的服务端行为 —— 未验证。**
+3. **`PlayReporter` 把 QQ 合成 id 发到 ncm 后的服务端行为 —— 未验证。**
    代码事实是确定的（无音源闸门，`PlayerViewModel.kt:549-554` + `PlayReporter.kt:47-48`），
-   但网易云是**丢弃未知 id** 还是**记成一首不存在的歌**，从客户端无法证明。
+   但 ncm 是**丢弃未知 id** 还是**记成一首不存在的歌**，从客户端无法证明。
    影响：仅统计口径与「是否存在跨源数据泄漏」的判断，不影响本埋点方案。
 
 4. **QQ `vkey` 响应里 `sip` 为空的真实频率 —— 未验证。**

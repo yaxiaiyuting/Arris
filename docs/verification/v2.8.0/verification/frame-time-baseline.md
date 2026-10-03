@@ -11,7 +11,7 @@
 | 被测包 | **release**（R8 minified，`assembleRelease`），`versionCode=50` / `versionName=2.6.2-gpl` |
 | 签名 | 新密钥 `ncrust-release-v2.jks`（cert SHA-256 `e62eca39…bbec82`），与历史发布签名**不同**（见 EVIDENCE.md） |
 | APK sha256 | `308abee59484a4db9fe2b1bbdfeb2f1e081a7326f2224192b4f4729f104956b1` |
-| 界面状态 | 播放中（网易云《燕无歇》）+ 播放器卡片展开 + **大屏幕模式（⤢）** —— 这是 S6 上唯一会挂载可视化的布局（`PlayerLayout.visualizerSlot`：`bigScreenActive \|\| (isWidePlayer && isLargeScreen && orientationLandscape)`） |
+| 界面状态 | 播放中（ncm《燕无歇》）+ 播放器卡片展开 + **大屏幕模式（⤢）** —— 这是 S6 上唯一会挂载可视化的布局（`PlayerLayout.visualizerSlot`：`bigScreenActive \|\| (isWidePlayer && isLargeScreen && orientationLandscape)`） |
 | 可视化 | 开（`ncrust_settings/audio_visualizer` 未显式设置 ⇒ 默认 `true`） |
 | 分辨率 / 方向 | 2560×1440（横屏，大屏幕模式） |
 

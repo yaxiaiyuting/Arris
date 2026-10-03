@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -428,7 +428,7 @@ class CrossSourceMatcherTest {
         assertTrue(SourceFilter.BOTH.accepts(ne) && SourceFilter.BOTH.accepts(qq))
         assertTrue(SourceFilter.NETEASE_ONLY.accepts(ne))
         assertFalse(SourceFilter.NETEASE_ONLY.accepts(qq))
-        // 循环顺序 = 枚举声明顺序：双源 → 只看网易云 → 只看 QQ → 双源。
+        // 循环顺序 = 枚举声明顺序：双源 → 只看 ncm → 只看 QQ → 双源。
         assertEquals(SourceFilter.NETEASE_ONLY, SourceFilter.BOTH.next())
         assertEquals(SourceFilter.QQMUSIC_ONLY, SourceFilter.NETEASE_ONLY.next())
         assertEquals(SourceFilter.BOTH, SourceFilter.QQMUSIC_ONLY.next())

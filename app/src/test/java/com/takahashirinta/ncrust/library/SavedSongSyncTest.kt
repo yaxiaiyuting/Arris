@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -328,13 +328,13 @@ class SavedSongSyncTest {
     // -------------------------------------------------------- 跨源写闸门 ----
 
     @Test
-    fun `闸门 网易云 id 可以发写请求`() {
+    fun `闸门 ncm id 可以发写请求`() {
         assertTrue(SavedSongSync.isRemoteLikeEligible(1L))
         assertTrue(SavedSongSync.isRemoteLikeEligible(3_000_000_000L))
     }
 
     @Test
-    fun `闸门 QQ 合成 id 不许发给网易云的写接口`() {
+    fun `闸门 QQ 合成 id 不许发给ncm的写接口`() {
         val qq = SourceIds.qqId(1234567890L, "0039MnYb0qxYhV")
         assertTrue("QQ 合成 id 是正数 ⇒ 旧卫语句拦不住它", qq > 0L)
         assertFalse(SavedSongSync.isRemoteLikeEligible(qq))
@@ -348,13 +348,13 @@ class SavedSongSyncTest {
 
     /**
      * ★ 闸门判据与 `ReportGate`（v2.5.5 · B）**同源**：对任意 id，
-     * 「能不能上报给网易云」与「能不能发写请求给网易云」必须给出同一个答案。
+     * 「能不能上报给 ncm」与「能不能发写请求给 ncm」必须给出同一个答案。
      *
      * 两条链路各写一份判据迟早会分叉（一条修了另一条没修）——
      * 而它们的根因是同一个（`bit62` 是正数）。这里用穷举把它钉住。
      */
     @Test
-    fun `闸门判据与 ReportGate 的网易云方向逐值一致`() {
+    fun `闸门判据与 ReportGate 的ncm方向逐值一致`() {
         val samples = buildList {
             addAll(listOf(-1L, 0L, 1L, 999L, 3_000_000_000L))
             addAll((1..50).map { SourceIds.qqId(it.toLong(), "mid$it") })

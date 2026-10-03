@@ -1,17 +1,17 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v3.3.0：网易云 cookie 的**合并、规范化与登录判据**。纯逻辑，JVM 可单测。
+ * v3.3.0：ncm cookie 的**合并、规范化与登录判据**。纯逻辑，JVM 可单测。
  */
 
 package com.takahashirinta.ncrust.auth
 
 /**
- * 网易云 cookie 的纯逻辑部分。
+ * ncm cookie 的纯逻辑部分。
  *
  * ## 为什么要有这个对象（用户反馈第 6 条：「需要很多次退出登录再登录才能播放 VIP 资源或者音质」）
  *
@@ -19,20 +19,20 @@ package com.takahashirinta.ncrust.auth
  * 实测勘察确认了三条独立的机制，本对象负责其中的第一条与第二条：
  *
  * 1. **登录态靠 `onPageFinished` 一次性快照抓取**（真正的掷骰子）。
- *    网易云登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA** ——
+ *    ncm 登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA** ——
  *    登录成功后的跳转**不产生新的文档级导航**，因此常常**不触发** `onPageFinished`。
  *    抓取时机是否落在「cookie 已写入且页面回调恰好到来」这个窗口里，
  *    每次重登都是一次独立的伯努利试验 ⇒ 命中次数服从几何分布 ⇒
  *    「要试很多次才偶尔成功」。
  *    ⚠️ 同仓库的 **QQ 侧早已因为同一个坑改成轮询 cookie**
  *    （`QqLoginOverlay` 的 KDoc：「登录成功的唯一权威事实是 cookie，
- *    所以这里按固定间隔直接读 cookie，不依赖任何页面回调」）—— 网易云这条当年没跟着改。
- *    本版把轮询搬到网易云侧。
+ *    所以这里按固定间隔直接读 cookie，不依赖任何页面回调」）—— ncm 这条当年没跟着改。
+ *    本版把轮询搬到 ncm 侧。
  *
  * 2. **写入是覆盖而不是合并，且完不完整的判据只有一条 `MUSIC_U`**。
  *    三条登录路径写入的形状不同（WebView 整串 / 扫码只取 803 响应的
  *    `Set-Cookie` 增量 / 局域网回传），覆盖写会让**先到的那一批键丢掉**。
- *    而网易云的会话**不止 `MUSIC_U`**：实测真机 cookie 有 20 个键，其中
+ *    而 ncm 的会话**不止 `MUSIC_U`**：实测真机 cookie 有 20 个键，其中
  *    `MUSIC_U` 是会话票据、`__csrf` 是写操作的必需项（缺它写操作恒 403
  *    `illegal request!`，见 AGENTS.md 的 Playlist 写操作一节）。
  *    只判 `MUSIC_U` 会把「缺 `__csrf` 的半截会话」也当成登录成功。

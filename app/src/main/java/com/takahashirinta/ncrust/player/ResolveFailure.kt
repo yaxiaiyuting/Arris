@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -61,7 +61,7 @@ enum class ResolveFailureKind {
     /**
      * 已登录，但**权益不足**（会员专享 / 高音质档需要会员）。
      *
-     * 产出者：QQ 的 `result=104003` 且本地**有**票据；网易云的 `memberOnly == true`
+     * 产出者：QQ 的 `result=104003` 且本地**有**票据；ncm 的 `memberOnly == true`
      * 或 `fee == 1`（VIP 专享）。⚠️ 票据**已失效**时服务端同样回 104003 ——
      * 客户端分不开这两种，所以文案要同时给出「开通会员」与「重新登录」两条出路，
      * 绝不把它们说成「无版权」。
@@ -77,7 +77,7 @@ enum class ResolveFailureKind {
     /**
      * **版权方下架 / 无版权**——⚠️ 只有**音源自己显式声明**时才允许产出。
      *
-     * 已实测的唯一合法产出者：网易云的 `noCopyrightRcmd != null`
+     * 已实测的唯一合法产出者：ncm 的 `noCopyrightRcmd != null`
      * （v2.3.0 探针：零假阳性，带上它时该曲确实取不到链）。
      * QQ 侧**没有任何字段**能证明这件事，所以 **QQ 永远不产出这一档**
      * （见 `QqRejection.toResolveFailureKind`）。
@@ -98,7 +98,7 @@ enum class ResolveFailureKind {
  * 一次取链失败的完整描述。
  *
  * @property kind 分类结论（本文件唯一的决策输入）。
- * @property source 出错的音源。用于文案（「QQ 音乐」/「网易云」）与「可切另一源」的判据。
+ * @property source 出错的音源。用于文案（「qm」/「ncm」）与「可切另一源」的判据。
  * @property rawCode 服务端原始码（仅用于**日志**；`null` = 没有这个信息）。
  * @property rawMessage 服务端原始文案（仅用于**日志**）。
  *   ⚠️ **绝不直接回显给用户**：这是外部平台的自由文本，既不本地化也不可信。

@@ -29,31 +29,31 @@ data class SongItem(
      * 音源 key（v2.1.0 · A）：`"netease"` / `"qqmusic"`。**可空且默认 null 是硬要求** ——
      * 队列是 Gson 持久化在 `ncrust_playback_state` 里的，而 Gson 走 Unsafe 反序列化、
      * 不调用构造函数：v2.1.0 之前写入的队列 JSON 里没有这个 key，读到就是 null。
-     * null 的语义是「v2.1.0 之前的数据 ⇒ 网易云」（见 MusicSource.fromKey）。
+     * null 的语义是「v2.1.0 之前的数据 ⇒ ncm」（见 MusicSource.fromKey）。
      *
      * 判定请用 source 包里的扩展属性 `SongItem.musicSource`，不要直接读这个字符串。
      */
     @SerializedName("source") val source: String? = null,
     /**
-     * 平台侧字符串 ID（v2.1.0 · A）：QQ 音乐的 `songmid`（形如 `0039MnYb0qxYhV`）。
+     * 平台侧字符串 ID（v2.1.0 · A）：qm 的 `songmid`（形如 `0039MnYb0qxYhV`）。
      *
-     * 为什么必须有它：QQ 音乐的取链接口要按 **mid** 拼文件名（`<音质前缀><mid>.<扩展名>`），
-     * 数字 songid 只能定位歌曲、不能取链。网易云一侧恒为 null（它的 [id] 就够用）。
+     * 为什么必须有它：qm 的取链接口要按 **mid** 拼文件名（`<音质前缀><mid>.<扩展名>`），
+     * 数字 songid 只能定位歌曲、不能取链。ncm 一侧恒为 null（它的 [id] 就够用）。
      * 同样可空 + 默认值，理由与 [source] 相同。
      */
     @SerializedName("mid") val sourceId: String? = null,
     /**
-     * 平台侧**媒体文件** ID（v2.1.0 · B）：QQ 音乐的 `file.media_mid`。
+     * 平台侧**媒体文件** ID（v2.1.0 · B）：qm 的 `file.media_mid`。
      *
      * 为什么它与 [sourceId] 必须分开：QQ 的播放 URL 文件名按 **media_mid** 拼
      * （`<音质前缀><media_mid>.<扩展名>`），而实测同一首歌这两个值经常不同
      * （《晴天》`mid=0039MnYb0qxYhV` 而 `media_mid=003Qui1q2u1Zho`）。
      * 用错一个就会静默拿不到 URL（服务端只回空 purl，不报错）。
-     * 网易云一侧恒为 null。可空 + 默认值，理由同 [source]。
+     * ncm 一侧恒为 null。可空 + 默认值，理由同 [source]。
      */
     @SerializedName("media_id") val mediaId: String? = null,
     /**
-     * 网易云的付费类型原始值（v2.1.4）。**只用于派生「播放是否需要会员」，不参与取链。**
+     * ncm 的付费类型原始值（v2.1.4）。**只用于派生「播放是否需要会员」，不参与取链。**
      *
      * 实测语义（2026-09，登录态，cloudsearch/pc）：
      * - `0` = 免费；`8` = 免费播放但**高音质**需会员（播放本身不受限）；
@@ -68,14 +68,14 @@ data class SongItem(
      * **播放是否需要会员**（v2.1.4）。`true` = 会员专享，`false` = 免费可播，
      * `null` = 服务端没给判据或读不懂（见 [com.takahashirinta.ncrust.search.TrackAccess]）。
      *
-     * 与 [fee] 的分工：QQ 音乐的判据是布尔（`pay.pay_play == 1`），映射时就能确定，
-     * 直接写在这里；网易云的判据是 [fee] 那个整数，由搜索聚合层派生。
+     * 与 [fee] 的分工：qm 的判据是布尔（`pay.pay_play == 1`），映射时就能确定，
+     * 直接写在这里；ncm 的判据是 [fee] 那个整数，由搜索聚合层派生。
      * **null 的语义是「不知道」**，不是「免费」—— 排序把「不知道」与「免费」同组靠后，
      * 绝不把它当会员专享往前推。
      */
     @SerializedName("member_only") val memberOnly: Boolean? = null,
     /**
-     * 网易云的**逐曲 `privilege` 对象**（v2.3.0）。搜索 / 艺人热歌 / 单曲详情三条接口
+     * ncm 的**逐曲 `privilege` 对象**（v2.3.0）。搜索 / 艺人热歌 / 单曲详情三条接口
      * 都会下发它，不需要额外请求。
      *
      * ## 为什么必须解析它
@@ -89,7 +89,7 @@ data class SongItem(
      */
     @SerializedName("privilege") val privilege: SongPrivilege? = null,
     /**
-     * 网易云的**「无版权时可推荐的替代」**（v2.3.0）。`null` = 服务端没有声明。
+     * ncm 的**「无版权时可推荐的替代」**（v2.3.0）。`null` = 服务端没有声明。
      *
      * 实测（2026-09，591 条样本）只有 **2 条**带它，但**零假阳性** ——
      * 带上它时该曲确实取不到链，且服务端自己给了替代说明（实测 `typeDesc = "其它版本可播"`）。
@@ -97,12 +97,12 @@ data class SongItem(
      */
     @SerializedName("noCopyrightRcmd") val noCopyright: NoCopyrightRecommendation? = null,
     /**
-     * 网易云的**原唱 / 翻唱**标注（v2.3.0）。实测取值与语义（`probe-official-tag.md`）：
+     * ncm 的**原唱 / 翻唱**标注（v2.3.0）。实测取值与语义（`probe-official-tag.md`）：
      * `1` = 原唱、`2` = 翻唱、`0`/`3` = 不知道（**不打标签**）。
      *
      * 这是**接口字段**，不是启发式 —— 自洽性检验（翻唱声称的原曲回头查是不是原唱）
      * 58/60 = 96.7%，且剩余 3.3% 全落在「不知道」一侧而不是「说反了」。
-     * QQ 音乐没有等价字段，所以 QQ 侧的该字段恒为 null。
+     * qm 没有等价字段，所以 QQ 侧的该字段恒为 null。
      */
     @SerializedName("originCoverType") val originCoverType: Int? = null,
     /**
@@ -115,7 +115,7 @@ data class SongItem(
 )
 
 /**
- * 网易云逐曲 `privilege` 里**本应用用到的两个整数**（v2.3.0）。
+ * ncm 逐曲 `privilege` 里**本应用用到的两个整数**（v2.3.0）。
  *
  * 只解析两个字段是有意的：整个 `privilege` 对象有 30+ 个 key（`chargeInfoList` /
  * `freeTrialPrivilege` / 各种 `*Level`），本版一个都不用 —— 探针只确证了这两个的语义。
@@ -133,7 +133,7 @@ data class SongPrivilege(
 )
 
 /**
- * 网易云的「无版权推荐」对象（v2.3.0）。
+ * ncm 的「无版权推荐」对象（v2.3.0）。
  *
  * @property typeDesc 服务端给用户的一句话（实测 `"其它版本可播"`）。中文原文，
  *   本版**只把它当作「确实无版权」的证据**，展示文案走本地化字符串，不直接回显。
@@ -146,7 +146,7 @@ data class NoCopyrightRecommendation(
 )
 
 /**
- * 翻唱曲目指向的原曲（v2.3.0）。字段名与网易云 `originSongSimpleData` 一一对应。
+ * 翻唱曲目指向的原曲（v2.3.0）。字段名与 ncm `originSongSimpleData` 一一对应。
  *
  * @property songId 原曲的 songId。**可精确回查**，所以「翻唱 → 原唱」这条关系可验证，
  *   不是名字匹配。

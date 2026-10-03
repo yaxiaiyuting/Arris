@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -223,7 +223,7 @@ class QqFallbackStatsTest {
         assertFalse(SourceIds.isSynthesizedQqId(id, null))
         assertFalse(SourceIds.isSynthesizedQqId(id, ""))
         assertFalse("换一个 songmid 就不是同一首歌的兜底 id 了", SourceIds.isSynthesizedQqId(id, "other"))
-        assertFalse("网易云 id 永远不是 QQ 兜底", SourceIds.isSynthesizedQqId(657666L, mid))
+        assertFalse("ncm id 永远不是 QQ 兜底", SourceIds.isSynthesizedQqId(657666L, mid))
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -49,7 +49,7 @@ sealed interface LocalSyncOutcome {
  *
  * | 用途 | 依赖 |
  * |---|---|
- * | 拉网易云歌单曲目 | `PlaylistApi.getPlaylistDetail`（GET 语义，只读） |
+ * | 拉 ncm 歌单曲目 | `PlaylistApi.getPlaylistDetail`（GET 语义，只读） |
  * | 拉 QQ 歌单曲目 | `QqPlaylistRepository.loadDetail`（v2.2.0 的只读镜像） |
  * | 落盘 | `LocalPlaylistStore`（应用私有 prefs） |
  *
@@ -65,7 +65,7 @@ object LocalPlaylistRepository {
      * （与 `MusicSourceProvider` 的契约一致）。
      *
      * @param key 远程歌单身份。
-     * @param dirId QQ 音乐的目录号（载荷）。0 = 让服务端按 disstid 解析。
+     * @param dirId qm 的目录号（载荷）。0 = 让服务端按 disstid 解析。
      */
     suspend fun loadRemoteSongs(
         key: PlaylistKey,
@@ -82,8 +82,8 @@ object LocalPlaylistRepository {
                     is PlaylistResult.Failed -> null
                 }
             }
-            // 网易云的 playlistId 是数字；本地歌单的 key.id 是 String（v2.2.0 的统一形状）。
-            // 解析不出来 ⇒ 这个 key 不是网易云的歌单 id（例如 local: 前缀）⇒ 没有远程来源。
+            // ncm 的 playlistId 是数字；本地歌单的 key.id 是 String（v2.2.0 的统一形状）。
+            // 解析不出来 ⇒ 这个 key 不是 ncm 的歌单 id（例如 local: 前缀）⇒ 没有远程来源。
             MusicSource.NETEASE -> {
                 val pid = key.id.toLongOrNull() ?: return null
                 runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull()

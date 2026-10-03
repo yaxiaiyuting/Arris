@@ -1,6 +1,6 @@
 # v2.6.2 探针 · logcat 取证
 
-> 目的有两层：① 用**网络请求路径**坐实"QQ 的数字专辑 id 被交给了网易云接口"；
+> 目的有两层：① 用**网络请求路径**坐实"QQ 的数字专辑 id 被交给了 ncm 接口"；
 > ② 证明**修复前这条路径在 release 包里一条日志都没有** —— 这正是它能拖到用户报告
 > 才被发现的原因，也是本版必须补 `TAG_ALBUM_NAV` 的理由。
 
@@ -22,12 +22,12 @@
 
 | 事实 | 依据 |
 |---|---|
-| 请求打的是**网易云**的专辑接口 | `/api/v1/album/{id}` 是 `NcmApi.getAlbumDetail`，`RetrofitClient.BASE_URL = https://music.163.com` |
+| 请求打的是**ncm**的专辑接口 | `/api/v1/album/{id}` 是 `NcmApi.getAlbumDetail`，`RetrofitClient.BASE_URL = https://music.163.com` |
 | 路径里的 `7879` 是 **QQ** 的 `album.id` | QQ 搜索响应实测《葡萄成熟时》`album.id = 7879`（`probe-raw/probe-album-id-collision.out.json` 可复跑） |
-| 两个编号空间不相通 | 网易云上 `7879` 是《爱的供养》/ 邓杰（`probe-raw/probe-album-cross-domain.out.txt`） |
+| 两个编号空间不相通 | ncm 上 `7879` 是《爱的供养》/ 邓杰（`probe-raw/probe-album-cross-domain.out.txt`） |
 | 页面为什么"看起来正常" | 服务端 `code 200` + 一张真实存在的专辑 ⇒ 封面/发行日期/厂牌/曲目数全都渲染得出来 |
 
-**这一条同时覆盖了根因的 ② 和 ③**：跳转层没读 `song.musicSource`（否则不会用 7879 去问网易云），
+**这一条同时覆盖了根因的 ② 和 ③**：跳转层没读 `song.musicSource`（否则不会用 7879 去问 ncm），
 老路由 `album/{albumId}` 把 `sourceKey` 写死成 `MusicSource.NETEASE`（否则请求不会落到
 `music.163.com`）。两件事各缺一半都不会出现这行日志。
 

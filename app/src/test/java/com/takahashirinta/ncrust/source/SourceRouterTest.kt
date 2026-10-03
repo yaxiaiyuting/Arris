@@ -15,7 +15,7 @@ import org.junit.Test
  * v2.1.0 · A：音源路由的纯逻辑单测（注入假 Provider，不发网络请求）。
  *
  * 重点覆盖「路由错了会串台」这件事：同 id 不同音源必须走到各自的 Provider，
- * 缺 songmid 的 QQ 曲目必须**失败**而不是退回网易云。
+ * 缺 songmid 的 QQ 曲目必须**失败**而不是退回 ncm。
  */
 class SourceRouterTest {
 
@@ -65,7 +65,7 @@ class SourceRouterTest {
     )
 
     @Test
-    fun `网易云曲目路由到网易云 Provider`() = runBlocking {
+    fun `ncm曲目路由到ncm Provider`() = runBlocking {
         registerFakes()
         val r = SourceRouter.resolveUrl(song(1L), "lossless")
         assertNotNull(r)
@@ -74,7 +74,7 @@ class SourceRouterTest {
     }
 
     @Test
-    fun `QQ 曲目路由到 QQ Provider —— 同 id 也不会串到网易云`() = runBlocking {
+    fun `QQ 曲目路由到 QQ Provider —— 同 id 也不会串到ncm`() = runBlocking {
         registerFakes()
         val r = SourceRouter.resolveUrl(song(1L, MusicSource.QQMUSIC, "mid1"), "lossless")
         assertNotNull(r)
@@ -83,7 +83,7 @@ class SourceRouterTest {
     }
 
     @Test
-    fun `QQ 曲目缺 songmid 时不取链也不退回网易云`() = runBlocking {
+    fun `QQ 曲目缺 songmid 时不取链也不退回ncm`() = runBlocking {
         registerFakes()
         assertNull(SourceRouter.resolveUrl(song(1L, MusicSource.QQMUSIC, null), "lossless"))
         assertEquals(0, netease.urlCalls)
@@ -91,8 +91,8 @@ class SourceRouterTest {
     }
 
     @Test
-    fun `未注册的音源返回 null 而不是回落网易云`() = runBlocking {
-        // 只注册网易云：QQ 未接入 / 未登录时就是这种状态。
+    fun `未注册的音源返回 null 而不是回落ncm`() = runBlocking {
+        // 只注册 ncm：QQ 未接入 / 未登录时就是这种状态。
         SourceRouter.register(netease)
         assertNull(SourceRouter.resolveUrl(song(2L, MusicSource.QQMUSIC, "mid2"), "lossless"))
         assertEquals(0, netease.urlCalls)
@@ -142,8 +142,8 @@ class SourceRouterTest {
     }
 
     @Test
-    fun `默认注册表里至少有网易云`() {
-        // 真实单例的初始状态：没有 QQ（B 阶段才注册），但不能连网易云都没有。
+    fun `默认注册表里至少有ncm`() {
+        // 真实单例的初始状态：没有 QQ（B 阶段才注册），但不能连 ncm 都没有。
         assertNotNull(SourceRouter.provider(MusicSource.NETEASE))
     }
 }

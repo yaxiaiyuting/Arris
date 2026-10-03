@@ -32,7 +32,7 @@
 **两源各自编号，接口里没有任何跨源标识（无 ISRC、无指纹）⇒ 跨源合并不可做。**
 
 - `SearchViewModel.publish` 用 `distinctBy { it.trackKey }`，而两个源的 key 天然不同 ⇒
-  同一首歌会出现**两行**（实测《晴天》：网易云 `186016`，QQ `00083kc41YcFuR` 与 `002DMfDx1macLz`）；
+  同一首歌会出现**两行**（实测《晴天》：ncm `186016`，QQ `00083kc41YcFuR` 与 `002DMfDx1macLz`）；
 - v2.1.0 只给 QQ 挂音源角标（`else -> ""`），在聚合列表里**用户判断不出哪一行是哪个源**；
 - **本版改成两源都标**（`SongTags`），并保留「不合并、不隐藏」；
 - QQ 侧**没有**任何可用的「可播放 / 无版权」字段：`action.switch` 的 bit0 在 **130/130** 条上恒为 1
@@ -49,8 +49,8 @@
 
 | 概念 | 是否实现 | 判据 |
 |---|---|---|
-| **原唱** | ✅ | 网易云 `originCoverType == 1` |
-| **翻唱** | ✅（并显示原曲名/原唱者） | 网易云 `originCoverType == 2`（51% 另带 `originSongSimpleData`） |
+| **原唱** | ✅ | ncm `originCoverType == 1` |
+| **翻唱** | ✅（并显示原曲名/原唱者） | ncm `originCoverType == 2`（51% 另带 `originSongSimpleData`） |
 | 官方音源 vs 用户上传 | ❌ | **无字段**（`copyright` / `resourceState` / `ftype` / `rtype` / `single` / `version` 全部无区分度或语义未知） |
 | 官方发行 vs 用户自制 | ❌ | 同上 |
 | QQ 的任何官方/原唱标签 | ❌ | **一个相关字段都没有**（`label`/`type`/`ov`/`singer[].type` 在 130 条上全部同值；`songtype` 不存在） |
@@ -73,7 +73,7 @@
 **此前完全没有这个概念** —— 全仓只有**一句注释**说它「尚不存在」
 （`QqMusicSourceProvider.kt:38`，v2.1.0 写的）。现有「歌单」是两个远程镜像：
 
-| | 网易云 | QQ 音乐 |
+| | ncm | qm |
 |---|---|---|
 | 列表 | 每次进 tab 重新拉（内存 state） | 落盘 `ncrust_qq_playlists`（按 source+ownerId+tid 隔离） |
 | 曲目 | **只在内存** `ContentCache`（LRU-32，进程死即失） | 落盘，**只读镜像** |

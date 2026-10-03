@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -19,7 +19,7 @@ import com.takahashirinta.ncrust.ui.i18n.Strings
 
 /** 角标的**语义类别** —— 决定配色，不决定文案。 */
 enum class SongTagKind {
-    /** 音源归属（网易云 / QQ 音乐）。 */
+    /** 音源归属（ncm / qm）。 */
     SOURCE,
 
     /** 版权可用性（可播放 / 需会员 / 无版权）。 */
@@ -45,9 +45,9 @@ data class SongTag(val text: String, val kind: SongTagKind)
  * 三条规则都是「什么情况下**不**显示」，而「不显示」是最容易在 UI 里被顺手写成
  * 「显示一个默认值」的地方：
  *
- * 1. **音源两源都标**（v2.3.0 的改变）。v2.1.0 · E 只标 QQ，理由是「网易云是原本的唯一音源，
+ * 1. **音源两源都标**（v2.3.0 的改变）。v2.1.0 · E 只标 QQ，理由是「ncm 是原本的唯一音源，
  *    每行都挂标签会变成噪音」。到了聚合搜索把两源混在同一个列表里之后，这个理由不成立了 ——
- *    实测同一关键词下两源会返回**完全同名**的条目（《晴天》在网易云是 `186016`，
+ *    实测同一关键词下两源会返回**完全同名**的条目（《晴天》在 ncm 是 `186016`，
  *    在 QQ 是 `00083kc41YcFuR`，见 `probe-source-attribution.md` §2），
  *    不标音源用户无法判断哪一行是哪个源。
  * 2. **版权可用性只在能确证时标**。[TrackAvailability.UNKNOWN] 必须**什么都不显示** ——
@@ -58,12 +58,12 @@ data class SongTag(val text: String, val kind: SongTagKind)
  */
 object SongTags {
 
-    /** 音源名。两个音源**都**给文案，不再对网易云返回空串。 */
+    /** 音源名。两个音源**都**给文案，不再对 ncm 返回空串。 */
     fun sourceLabel(source: MusicSource, strings: Strings): String = when (source) {
         MusicSource.QQMUSIC -> strings.sourceQqMusic
         MusicSource.NETEASE -> strings.sourceNetease
         // v3.1.0：B 站也要有名字 —— 搜索聚合之后「这一行来自哪里」必须一眼可见
-        // （v2.1.0 · E 的原话：纯网易云的结果看不出「来自哪里」）。
+        // （v2.1.0 · E 的原话：纯 ncm 的结果看不出「来自哪里」）。
         MusicSource.BILIBILI -> strings.source.sourceBilibili
     }
 
@@ -152,20 +152,20 @@ object SongTags {
      * ## 为什么只有单曲分区显示
      *
      * 「用户能区分同名历史」这条需求只在**单曲**上成立：同一关键词下两源会返回
-     * 完全同名的条目（《晴天》在网易云是 `186016`、在 QQ 是另一套 songmid），
+     * 完全同名的条目（《晴天》在 ncm 是 `186016`、在 QQ 是另一套 songmid），
      * 而历史列表里两行的封面、标题、歌手可能**逐字相同** —— 除了音源没有别的线索。
      *
      * 专辑与艺人的历史条目**没有这一层歧义**：它们的 `HistoryItem.source` 从来没有被写过
      * （`addAlbum` / `addArtist` 不传它），`effectiveSource` 只能靠 bit62 反推 ——
-     * 而专辑/艺人的 id 都是网易云的普通 id，反推结果恒为「网易云」。
-     * 给每一条专辑历史都挂一个恒定的「网易云」标签是纯噪音。
+     * 而专辑/艺人的 id 都是 ncm 的普通 id，反推结果恒为「ncm」。
+     * 给每一条专辑历史都挂一个恒定的「ncm」标签是纯噪音。
      *
      * ## 判据抽成纯函数
      *
      * 与 [of] 同源的理由：「什么情况下**不**显示」是最容易在 UI 里被顺手写成
      * 「显示一个默认值」的地方。这里把它变成一条 [SongTagsTest] 能钉住的断言 ——
-     * 尤其是「老条目（`source == null` 但 id 的 bit62 置位）必须显示 **QQ 音乐**、
-     * 不能回落成网易云」这一条，它正是 v2.5.4 修过的那个 bug 的 UI 侧。
+     * 尤其是「老条目（`source == null` 但 id 的 bit62 置位）必须显示 **qm**、
+     * 不能回落成 ncm」这一条，它正是 v2.5.4 修过的那个 bug 的 UI 侧。
      *
      * @param isSongSection 该条目属于单曲分区（`SearchHistoryManager.TYPE_SONG`）。
      * @param source 由 `SearchHistoryMigration.effectiveSource(item)` 算出 ——

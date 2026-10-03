@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -68,7 +68,7 @@ enum class MatchConfidence {
  * 艺人在某个音源里的身份（v2.4.0 · E）。
  *
  * @property source 音源。
- * @property id 该音源内的艺人标识：**网易云是十进制 id 的字符串形式，QQ 音乐是 `singerMID`**。
+ * @property id 该音源内的艺人标识：**ncm 是十进制 id 的字符串形式，qm 是 `singerMID`**。
  *   两者形状不同（一个是 `"6452"`，一个是 `"0025NhlN2yWrP4"`），
  *   所以这里用 `String` 而不是 `Long` —— 用 Long 会逼着调用方给 QQ 的 mid 编一个假数字 id，
  *   那正是「给错专辑 / 错单曲」的温床。

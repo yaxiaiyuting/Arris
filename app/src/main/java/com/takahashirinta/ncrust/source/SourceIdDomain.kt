@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -36,12 +36,12 @@ package com.takahashirinta.ncrust.source
  *
  * | 源 | 页面身份 | 形状 | 谁在用 |
  * |---|---|---|---|
- * | 网易云 | 十进制 id | `"6452"` / `"18905"` | `api/artist/{id}`、`api/v1/album/{id}` |
- * | QQ 音乐 | base62 mid | `"0025NhlN2yWrP4"`（singerMID）/ `"000MkMni19ClKG"`（albumMID） | `musicu.fcg` 的 `singermid` / `albumMid` 参数 |
+ * | ncm | 十进制 id | `"6452"` / `"18905"` | `api/artist/{id}`、`api/v1/album/{id}` |
+ * | qm | base62 mid | `"0025NhlN2yWrP4"`（singerMID）/ `"000MkMni19ClKG"`（albumMID） | `musicu.fcg` 的 `singermid` / `albumMid` 参数 |
  *
  * 于是「传错域」不需要靠调用方自觉，在闸门上就会失败：
  * **QQ 的数字 `singerID`(4558) / `albumID`(22276) 在 QQ 域里不是合法身份**
- * （它是纯数字且落在网易云值域内），因此必然被拦下。
+ * （它是纯数字且落在 ncm 值域内），因此必然被拦下。
  * 这正是 v2.6.1（周杰伦 `4558` → 马洪波）与 v2.6.2（陈奕迅 `22276` → 陈小云）
  * 两处 P0 的共同形状。
  *
@@ -58,9 +58,9 @@ package com.takahashirinta.ncrust.source
 object SourceIdDomain {
 
     /**
-     * 网易云 id 的值域上界（不含）。
+     * ncm id 的值域上界（不含）。
      *
-     * 取 `2^40`：网易云的 id 是十进制百万~十亿量级，远小于它；而
+     * 取 `2^40`：ncm 的 id 是十进制百万~十亿量级，远小于它；而
      * [SourceIds.QQ_ID_FLAG]（`2^62`）造的合成 id 远大于它。
      * 于是「这个 id 到底属于哪个值域」是一个**结构性**判据，不是启发式。
      */
@@ -78,10 +78,10 @@ object SourceIdDomain {
     /**
      * 这个 id 是不是 [source] 域内的合法**字符串**身份。纯函数，JVM 可单测。
      *
-     * - **网易云**：纯十进制、`1 ..< ` [NETEASE_ID_MAX]。这就是 `api/artist/{id}` /
+     * - **ncm**：纯十进制、`1 ..< ` [NETEASE_ID_MAX]。这就是 `api/artist/{id}` /
      *   `api/v1/album/{id}` 吃的形状。
-     * - **QQ 音乐**：base62 的 mid（`singerMID` / `albumMID`），长度
-     *   [QQ_MID_MIN_LEN]`..`[QQ_MID_MAX_LEN]，**且不能是一个网易云值域内的纯数字**
+     * - **qm**：base62 的 mid（`singerMID` / `albumMID`），长度
+     *   [QQ_MID_MIN_LEN]`..`[QQ_MID_MAX_LEN]，**且不能是一个 ncm 值域内的纯数字**
      *   —— 后者正是「QQ 数字 id 被当成 mid 用」的形状。真实 mid 是 14 位 base62，
      *   恰好落在 [NETEASE_ID_MAX] 以内的纯数字概率约 `62^-14`，可以忽略；
      *   而把这条写死成判据，是为了让「传错域」**必然**在闸门上失败。
@@ -96,7 +96,7 @@ object SourceIdDomain {
             MusicSource.QQMUSIC -> {
                 if (v.length < QQ_MID_MIN_LEN || v.length > QQ_MID_MAX_LEN) return false
                 if (!BASE62.matches(v)) return false
-                // 纯数字且落在网易云值域 ⇒ 这是 QQ 的数字 id，不是 mid。
+                // 纯数字且落在 ncm 值域 ⇒ 这是 QQ 的数字 id，不是 mid。
                 val asLong = v.toLongOrNull()
                 !(asLong != null && asLong in 1 until NETEASE_ID_MAX)
             }
@@ -104,7 +104,7 @@ object SourceIdDomain {
             /**
              * v3.1.0 · B：B 站的页面身份就是 **auid**（十进制数字）。
              *
-             * ⚠️ **它与网易云的值域重叠**（实测 auid 2.3×10⁷ 落在网易云的量级里），
+             * ⚠️ **它与 ncm 的值域重叠**（实测 auid 2.3×10⁷ 落在 ncm 的量级里），
              * 所以这一条分支**不能**用来判「这个数字属于哪个源」—— 值域在这里
              * 结构性地不可用。真正承担隔离的是 [SourceIds.BILI_ID_FLAG]：应用内部的
              * 数字 id 一律是 `BILI_ID_FLAG or auid`，而**字符串**身份（本函数的入参）

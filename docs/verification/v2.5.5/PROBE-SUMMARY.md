@@ -22,11 +22,11 @@
 | 探针 | 一句话结论 |
 |---|---|
 | **R8 单字母 key 全仓扫描** | 除已知的 `cache.**`（`ncrust_offline/tracks`）外，**又找到两个此前所有文档都没提过的实例**（`PlaybackStateManager$PositionEntry`、`library.AlbumInfo`），共 3 处必修、7 个历史实例 |
-| **PlayReporter 跨源泄露** | **真机复现成功**：QQ 合成 id（bit62 置位 ⇒ 正数）通过了 `songId > 0` 卫语句，被 POST 给网易云 webLog（`weblog resp: 200`） |
+| **PlayReporter 跨源泄露** | **真机复现成功**：QQ 合成 id（bit62 置位 ⇒ 正数）通过了 `songId > 0` 卫语句，被 POST 给 ncm webLog（`weblog resp: 200`） |
 | **托盘上一首按钮回归** | **不存在回归** —— 那个按钮从来没有存在过 |
 | **托盘三层布局** | 可做，但必须把托盘从 56dp 加到 80dp（三行排版盒实测 56dp，56dp 托盘上下各剩 0dp）；同时有**三个** 56dp 消费者必须一起改 |
 | **macrobenchmark 换设备** | 推荐 PCL110 + `CompilationMode.Ignore` + 3 迭代；预估 5–8 分钟（测量阶段）；`run_benchmark.sh` 有一个**会永久关掉设备动画**的 bug |
-| **QQ 搜索延迟** | 延迟来源 = **串行编排 + QQ legacy 接口本身慢**（TTFB P50 1722ms / P95 2989ms，n=30）；**不是** token 初始化、**不是**映射、**不是**重试；「QQ 音乐 0 首」在屏幕上挂了 **2.2–2.7 秒** |
+| **QQ 搜索延迟** | 延迟来源 = **串行编排 + QQ legacy 接口本身慢**（TTFB P50 1722ms / P95 2989ms，n=30）；**不是** token 初始化、**不是**映射、**不是**重试；「qm 0 首」在屏幕上挂了 **2.2–2.7 秒** |
 
 ---
 
@@ -74,7 +74,7 @@ Coil / media3 / PNG（二进制）。
 
 ## §2 PlayReporter 跨源泄露（`probe-playreporter.md`）
 
-**上报路径**：`PlayReporter.reportPlay()` 在网易云登录态下
+**上报路径**：`PlayReporter.reportPlay()` 在 ncm 登录态下
 `POST https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<__csrf>`，
 表单 `logs=[{action:"play",json:{type,wifi(反),download,id,time,end,mainsite,mainsiteWeb}}]`；
 主线程过卫语句 → 新建 `ncrust-weblog` 线程 fire-and-forget。
@@ -92,11 +92,11 @@ Coil / media3 / PNG（二进制）。
 `duration=0/0` 是 `onPlaybackEnded` 分支的指纹（80% 路径因 `reachedCompletion` 要求 `dur>0`
 不可能打 0/0），且 `sid` 在队列推进前读取 ⇒ 报的就是 QQ 合成 id。
 
-**反方向不成立**：QQ 侧没有任何上报实现（`grep -rn "weblog\|postWeblog\|reportPlay"` 只命中网易云链路）。
+**反方向不成立**：QQ 侧没有任何上报实现（`grep -rn "weblog\|postWeblog\|reportPlay"` 只命中 ncm 链路）。
 仍然把它写进 `ReportGate.Target.QQ` 并加双向对称单测 —— 一条只写在文档里的规则拦不住
 下一个加 QQ 上报的人。
 
-**未验证**：报文里 `id` 的字节级内容（TLS，无 MITM）；网易云服务端如何处理该 id；
+**未验证**：报文里 `id` 的字节级内容（TLS，无 MITM）；ncm 服务端如何处理该 id；
 80% 路径 + QQ id 的真机证据。**不提供任何频率数字。**
 
 ---
@@ -190,8 +190,8 @@ graphicsLayer{alpha} → background(surface))` 内套 `Row(fillMaxSize, CenterVe
 
 | 问题 | 答案 | 证据 |
 |---|---|---|
-| **5s 延迟的来源** | ①**串行编排**（结构性）：旧码 `await 网易云 → 发布 → 才发 QQ`，整体耗时是 **sum 而非 max**；②**QQ legacy 接口本身慢**：`client_search_cp` TTFB **P50 1722ms / P95 2989ms**（n=30 同网段直连，DNS 6ms / TLS 213ms，其余全在服务端）；③**不是** token 初始化（搜索路径**零** token/签名，`ptqrtoken` 只属扫码登录）；④**不是**映射（纯 JSON 遍历 30 条，上界 ≤0.3s）；⑤**无循环重试**，只有一条**一次性** legacy→musicu 兜底（本次 45 次全未触发） | 直连接口探测脚本 + app 自身 `aggregate` 日志 15 次 |
-| **加载态现状** | **QQ leg 完全没有加载态**。`_isLoading = false` 在网易云到手那刻就执行，唯一的转圈是搜索框指示器；`songs.isEmpty() && !isLoading` 还会直接显示「没有找到歌曲」；QQ 单独失败/超时**静默** | 代码行号 + 逐帧截图 |
+| **5s 延迟的来源** | ①**串行编排**（结构性）：旧码 `await ncm → 发布 → 才发 QQ`，整体耗时是 **sum 而非 max**；②**QQ legacy 接口本身慢**：`client_search_cp` TTFB **P50 1722ms / P95 2989ms**（n=30 同网段直连，DNS 6ms / TLS 213ms，其余全在服务端）；③**不是** token 初始化（搜索路径**零** token/签名，`ptqrtoken` 只属扫码登录）；④**不是**映射（纯 JSON 遍历 30 条，上界 ≤0.3s）；⑤**无循环重试**，只有一条**一次性** legacy→musicu 兜底（本次 45 次全未触发） | 直连接口探测脚本 + app 自身 `aggregate` 日志 15 次 |
+| **加载态现状** | **QQ leg 完全没有加载态**。`_isLoading = false` 在 ncm 到手那刻就执行，唯一的转圈是搜索框指示器；`songs.isEmpty() && !isLoading` 还会直接显示「没有找到歌曲」；QQ 单独失败/超时**静默** | 代码行号 + 逐帧截图 |
 | **结果合并方式** | **替换 + 整表重排**（`SearchRanking.order(...).distinctBy{trackKey}`），不是追加 | `SearchViewModel.publish` |
 | **是否被去重丢弃** | **不会**。`CatalogAggregator` 只在专辑/艺人/单曲详情 3 个 Screen 被调用，**不在搜索链路**；搜索里唯一的去重是 `distinctBy{trackKey}`，而 `trackKey` **含音源** ⇒ 同号不同源不合并 | grep + `SongSourceExt.kt` |
 | **超时阈值与表现** | 预算 `QQ_SEARCH_BUDGET_MS = 5000`；**顶到预算时结果被整包丢弃、UI 永久停在「0 首」** —— 这正是用户「以为没有」的机制 | 代码 + 一次 max 4363ms 的实测 |
@@ -201,7 +201,7 @@ graphicsLayer{alpha} → background(surface))` 内套 `Row(fillMaxSize, CenterVe
 - app 自身 `aggregate` 行 15 次：总耗时 **P50 2545ms / P95 4147ms / max 4363ms**，每次 netease=30 qq=30；
 - 冷启首搜 2117 / **4363** / 2295ms；同进程热态 5 次 2034…2864ms ⇒ **无冷启/首次初始化效应**，
   变量是服务端抖动（接口 P95/P50 ≈ 1.7）；
-- **逐帧 UI 证据**：「网易云 30 首 · **QQ 音乐 0 首**」在 tap 后 **1.17–1.76s** 出现，
+- **逐帧 UI 证据**：「ncm 30 首 · **qm 0 首**」在 tap 后 **1.17–1.76s** 出现，
   直到 **3.98–4.50s** 才翻成「30 首」⇒ 假状态在屏幕上挂了 **约 2.2–2.7 秒**；
 - QQ 兜底通道 `musicu` **P50 376ms**，比 legacy 快约 **5 倍**。
 
@@ -210,10 +210,10 @@ graphicsLayer{alpha} → background(surface))` 内套 `Row(fillMaxSize, CenterVe
 | 选项 | 做不做 | 依据 |
 |---|---|---|
 | **A 加载态** | ✅ **做** | 「0 首」是类型问题（`Pair<Int,Int>` 无法表达「未知」）⇒ 新增 `SourceCounts` + `SourceSearchStatus` |
-| **B 并发** | ✅ **做** | 探针确认串行 ⇒ 两个 `async` 同时起飞，省掉网易云那一段的串行等待 |
+| **B 并发** | ✅ **做** | 探针确认串行 ⇒ 两个 `async` 同时起飞，省掉 ncm 那一段的串行等待 |
 | **C 预热** | ❌ 不做 | 探针证明**没有**首次/token 初始化效应（冷热差落在服务端抖动范围内），预热无收益 |
 | **D 缓存** | ❌ 本版不做 | 是「重复搜同一个词」的优化，与本次报告的现象（首次搜索就慢）不同源；列入 v2.5.6 候选 |
-| **E 降级** | ✅ 部分做 | 保留 5000ms 预算（P95 已接近 3s，砍到 3s 会丢掉约 5% 的结果，而**用户已经不再等待**：网易云结果与「搜索中…」都已上屏）；超时/失败各给一句诚实话 + **可点的手动重试**（不做自动重试 —— 那会在用户已经往下翻时突然往列表里插结果） |
+| **E 降级** | ✅ 部分做 | 保留 5000ms 预算（P95 已接近 3s，砍到 3s 会丢掉约 5% 的结果，而**用户已经不再等待**：ncm 结果与「搜索中…」都已上屏）；超时/失败各给一句诚实话 + **可点的手动重试**（不做自动重试 —— 那会在用户已经往下翻时突然往列表里插结果） |
 
 **本版不改、但如实记录**：把主通道从 legacy 换成 `musicu`（快约 5 倍）会改掉结果形状，
 回归面无法在本版验证完 ⇒ 列为 **v2.5.6 候选**，并附上这次的实测数字。

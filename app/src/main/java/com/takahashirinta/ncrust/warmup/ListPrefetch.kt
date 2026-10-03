@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -34,7 +34,7 @@ import kotlinx.coroutines.runBlocking
  *
  * ## 为什么不预取 URL（这不是保守，是必需）
  *
- * URL 有时效：网易云实测会轮换、B 站的直链自带 `deadline`（实测 `now + 7200s`）。
+ * URL 有时效：ncm 实测会轮换、B 站的直链自带 `deadline`（实测 `now + 7200s`）。
  * 用户「进入歌单」之后可能几分钟才点第一首，也可能直接划走 ——
  * 预取一批 URL 等于制造一批**必然过期**的条目，它们要么被 TTL 判据丢掉（白花流量），
  * 要么在临界点上被用掉（播到一半 403）。铁律 22 与探针结论都指向同一条：

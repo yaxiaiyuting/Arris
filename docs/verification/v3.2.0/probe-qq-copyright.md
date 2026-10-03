@@ -1,8 +1,8 @@
-# 探针 · P0：QQ 音乐 VIP 歌曲「误判无版权 + 自动切歌」
+# 探针 · P0：qm VIP 歌曲「误判无版权 + 自动切歌」
 
 > 版本：v3.2.0 ｜ 采集时间：2026-09-28 18:20–18:40 CST
 > 设备：SM-G9209（`0715f763f54c023a`，Android 7.0 / API 24，已 root，Magisk）
-> 账号：设备上已登录的 QQ 音乐账号（`ncrust_qq_prefs.qq_vip_type = 1`，`qq_vip_expire_at = 1793548800` = 2026-11-01）
+> 账号：设备上已登录的 qm 账号（`ncrust_qq_prefs.qq_vip_type = 1`，`qq_vip_expire_at = 1793548800` = 2026-11-01）
 > 原始命令与输出：本文件内联（全部可复现）；cookie 与 purl/vkey **一律未落盘**
 
 ---
@@ -142,7 +142,7 @@ PlayerViewModel.fetchUrlOfflineFirst
 PlayerViewModel.onUrlUnavailable(songId, requested, origin)
   ├─ maySkipOnUrlFailure(origin) == false（音质切换/降档重试）-> 回退档位 / 停下
   └─ maySkipOnUrlFailure(origin) == true （USER / AUTO_NEXT / PRELOAD）
-        ├─ showSourceFallbackHint(songId)      // ★「此源无版权，可切另一源：网易云」
+        ├─ showSourceFallbackHint(songId)      // ★「此源无版权，可切另一源：ncm」
         └─ autoSkipGuard.requestAutoSkip()     // ★连续 5 次熔断
               └─ onUnplayableCallback()        // ★跳到下一首
 ```
@@ -193,7 +193,7 @@ PlayerViewModel.onUrlUnavailable(songId, requested, origin)
 |---|---|---|
 | D1 | 新增 `QqRejection` 分类（纯逻辑 + 单测），`fetchPlayUrl` 的每一处失败都写分类 | `qq/QqRejection.kt`、`qq/QqApi.kt` |
 | D2 | `lastUrlFailure.rejection` + `lastRejection` 成为**唯一**分流判据；传输层也记账（HTTP 401/403 = 凭证过期） | `qq/QqApi.kt`、`qq/QqClient.kt` |
-| D3 | 文案按分类产出；**只有服务端显式声明无版权时才出现「暂无版权」**（网易云的 `noCopyrightRcmd`）；QQ 侧永远不产出那一档（有穷举单测守） | `player/ResolveFailureText.kt`、`ui/i18n/*` |
+| D3 | 文案按分类产出；**只有服务端显式声明无版权时才出现「暂无版权」**（ncm 的 `noCopyrightRcmd`）；QQ 侧永远不产出那一档（有穷举单测守） | `player/ResolveFailureText.kt`、`ui/i18n/*` |
 | D4 | 新增 `resolveFailureAction(kind)` 三态表：只有 `UNRESOLVABLE` 允许跳歌；`NETWORK` 有界重试；其余**停下 + 说明原因** | `player/ResolveFailure.kt`、`ui/viewmodel/PlayerViewModel.kt` |
 
 **未做（如实记录）：**

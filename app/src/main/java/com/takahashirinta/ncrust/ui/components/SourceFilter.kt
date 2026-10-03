@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -19,7 +19,7 @@ import com.takahashirinta.ncrust.ui.i18n.Strings
  * ## 为什么现在才需要它
  *
  * v2.1.0 起聚合搜索就有两个源，而**筛选一直没做** —— 那两个源的结果行只差一个角标，
- * 而角标是 v2.1.0 · E 才补上的（用户当时的原话：「现在有了稻香，似乎是网易云的搜索结果？」）。
+ * 而角标是 v2.1.0 · E 才补上的（用户当时的原话：「现在有了稻香，似乎是 ncm 的搜索结果？」）。
  * 到 v3.1.0 有了第三个源，用户要「只看 B 站」的诉求就变成一个**必须**有的开关：
  * B 站的结果按设计**追加在最后**（见 `SearchRanking.order` 的三源重载），
  * 不加筛选的话它永远在列表尾部，等于看不见。
@@ -31,7 +31,7 @@ import com.takahashirinta.ncrust.ui.i18n.Strings
  * 2. 用户切筛选时**不该**产生新的网络流量 —— 那三个请求刚刚才发过。
  *
  * 代价是「筛选后为空」有诚实提示的责任：`emptyHint` 与搜索无结果的提示分开写，
- * 因为「网易云没有这首歌」与「这次搜索里 B 站一条都没有」是两句不同的话。
+ * 因为「ncm 没有这首歌」与「这次搜索里 B 站一条都没有」是两句不同的话。
  */
 enum class SourceFilter {
     /** 不过滤（= v3.0.0 的行为）。 */

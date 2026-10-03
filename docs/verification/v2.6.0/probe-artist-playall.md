@@ -17,7 +17,7 @@
 | 5 | 队列身份规则 | 规范入口 `QueueKeys.keyOf(song)` → `SongItem.trackKeyOf()` → `TrackKey.ofSong(song)`（带 bit62 回落）；`SongItem.dedupeKey = trackKeyOf().tag`。`TrackKey.equals` **只看 `(source, id)`**。`QueueInsert.plan` 签名 = `plan(queueKeys: List<TrackKey>, currentIndex: Int, newKey: TrackKey): Plan` | `QueueKeys.kt:74,77`；`SongSourceExt.kt:68-69,77`；`TrackKey.kt:75-78,148-149`；`QueueInsert.kt:155` |
 | 6 | 播放时能否同步查到「同曲另一源」 | **不能。** `MatchCacheStore.track()` / `putTrack()` 两个 API 存在但**零调用**（`grep` 退出码 1，正对照 `putArtist/putAlbum` 各有命中）——单曲配对缓存是死代码。全应用只有**聚合网络过程中**算过一次配对，且结果只以 `TrackKey` 留在内存页面状态里 | `MatchCacheStore.kt:129-155`；`CatalogAggregator.kt:136,187`；§2.2、§5.6 |
 | 7 | 空列表 / 加载中处置 | 详情页把「空」渲染成占位文案、把 ▶ 的**可空回调传 `null`** 从而不渲染；库页把 ▶ 那一行放进 `LazyColumn`，空列表时整行不存在；网络兜底用 `Toast(loading)` | `ArtistDetailScreen.kt:250-255`；`AlbumDetailScreen.kt:224`；`PlaylistDetailScreen.kt:254`；`DetailScaffold.kt:345-347`；`LibraryScreen.kt:287-291,314`；`MainActivity.kt:1791,1808,2297` |
-| 8 | 当前排序键与计算位置 | **按版权可用性稳定排序**：`PLAYABLE(0) > UNKNOWN(1) > MEMBER_ONLY(2) > NO_COPYRIGHT(3)`，同档保持接口原顺序（网易云行在前、QQ 未吸收行在后）。计算位置：`CatalogAggregator.assembleSongsWithProbe()` 末尾 | `CatalogAggregator.kt:377-426`；`CrossSourceMatcher.kt:333-347` |
+| 8 | 当前排序键与计算位置 | **按版权可用性稳定排序**：`PLAYABLE(0) > UNKNOWN(1) > MEMBER_ONLY(2) > NO_COPYRIGHT(3)`，同档保持接口原顺序（ncm 行在前、QQ 未吸收行在后）。计算位置：`CatalogAggregator.assembleSongsWithProbe()` 末尾 | `CatalogAggregator.kt:377-426`；`CrossSourceMatcher.kt:333-347` |
 
 **给施工者的一句话**：P1 的「跨源去重」在**当前聚合器里已经做完了**（mergeable 对合成一行、低置信度对保留两行）。
 P1 真正缺的是两件小事：① `replaceQueueAndPlay` **不判重**（同源同号重复会原样进队列）；
@@ -145,19 +145,19 @@ fun availabilityOrder(availability: TrackAvailability): Int = when (availability
 fun <T> rankByAvailability(items: List<T>, availabilityOf: (T) -> TrackAvailability): List<T> =
     items.sortedWith(compareBy { availabilityOrder(availabilityOf(it)) })   // 稳定排序
 ```
-装配顺序（`CatalogAggregator.kt:377-420`）：① 先按**网易云接口原顺序**出行（行内可能被换成 QQ 那份，
+装配顺序（`CatalogAggregator.kt:377-420`）：① 先按**ncm 接口原顺序**出行（行内可能被换成 QQ 那份，
 `:389-394 preferOther`）；② 再追加**未被吸收**的 QQ 行（`if (key in absorbedQq) continue`，`:413`）；
-③ 整体按可用性稳定排序 ⇒ 同档内「网易云在前、QQ 在后」。
+③ 整体按可用性稳定排序 ⇒ 同档内「ncm 在前、QQ 在后」。
 
 ### 3.3 列表的来源与规模（影响 P1 的边界）
 
 | 侧 | 取数路径 | 上限 |
 |---|---|---|
-| 网易云 | `api.search(keyword = anchor.name, type = 1, limit = 30)` + `artists.any { it.name == anchor.name }` 精确过滤 | **≤30**（`CatalogAggregator.kt:508-511`） |
+| ncm | `api.search(keyword = anchor.name, type = 1, limit = 30)` + `artists.any { it.name == anchor.name }` 精确过滤 | **≤30**（`CatalogAggregator.kt:508-511`） |
 | QQ | `QqCatalogApi.artistSongs(singerMID)` ← `musicu` `get_singer_detail_info`，`take(TRACK_LIMIT)` | **200**（`QqCatalogApi.kt:85-94`，`:47`） |
 | 可用性探测 | `probe()` 只探前 `PROBE_LIMIT = 60` 首 | 60（`CatalogAggregator.kt:113-114,471-479`） |
 
-⚠️ **非对称**：`neSongs` 只在**主源是网易云**时才拉（`CatalogAggregator.kt:150-152`），
+⚠️ **非对称**：`neSongs` 只在**主源是 ncm**时才拉（`CatalogAggregator.kt:150-152`），
 即「QQ 主源」形态下歌单**只有 QQ 一侧**（§10-2）。
 
 ---
@@ -344,7 +344,7 @@ val absorbedQq = mergeablePairs.map { it.other.key }.toHashSet()
   它保证队列里不会出现两份）；
 - **轴 B（同源同号）**今天**真的会干活** —— `replaceQueueAndPlay` 不判重（§4.2），
   而 `pairTracks` 是一对一贪心（`CrossSourceMatcher.kt:291-314` 的 `used`），同源侧若本身有重复
-  （网易云那侧是 `search(limit=30)` 的结果、QQ 那侧是接口原表），重复项会**原样进队列**，
+  （ncm 那侧是 `search(limit=30)` 的结果、QQ 那侧是接口原表），重复项会**原样进队列**，
   破坏「队列里同一首歌最多一份」这条事实不变量。
 
 ### 6.2 建议签名（落在 `crosssource/` 包，与 `NameNormalizer` 同级约定）
@@ -431,7 +431,7 @@ for (row in rows) {
 |---|---|---|
 | 1 | 可用性不同 ⇒ 取 `availabilityOrder` **更小**（更能播）的那份 | 与 `CatalogAggregator.kt:389-394 preferOther`、`CrossSourceMatcher.pickPlayable`（`:375-388`）同一规则 |
 | 2 | 可用性平级 ⇒ 取 `preferred` 指定的源 | `CatalogAggregator.preferredSource`（`:441-453`，平级时 = 锚点源） |
-| 3 | 仍平级 / `preferred == null` ⇒ **列表里先出现的那份** | 列表顺序已编码聚合器的决定（可用性排序 + 网易云行在前），且**稳定可复现** |
+| 3 | 仍平级 / `preferred == null` ⇒ **列表里先出现的那份** | 列表顺序已编码聚合器的决定（可用性排序 + ncm 行在前），且**稳定可复现** |
 
 **注意**：顺位 1、2 在今天的页面状态下几乎总已被聚合器执行过（`displaySong` 就是那份），实际生效的是顺位 3；
 顺位 1 只在「同一对的两份都出现在入参里」时有意义 —— 那正是幂等防线要处理的形态。
@@ -577,7 +577,7 @@ if (songs.isEmpty()) {
 2. **QQ 主源路线今天不可达（读码得出，未真机验证）**：`NavRoutes.artist(source, id)` 只被
    `NavGraph.kt:160,185` 调用，其 `source` 来自 `AlbumDetailScreen.onArtistClick`，而后者在
    `source != MusicSource.NETEASE` 时**恒不触发**（`AlbumDetailScreen.kt:173-181,214`）。⇒「歌手页双源合并」
-   在今天只有**网易云主源**一种形态；QQ 主源下 `neSongs == emptyList()`（`CatalogAggregator.kt:150`），歌单是单源的。
+   在今天只有**ncm 主源**一种形态；QQ 主源下 `neSongs == emptyList()`（`CatalogAggregator.kt:150`），歌单是单源的。
    *未在真机上点过 QQ 艺人入口确认它确实进不去。*
 3. **`hasEditionMarker` 的 Python 探针副本与 Kotlin 原文已漂移**：`probe_lib.py:229-234` 的标记词集合是
    `NameNormalizer.kt:60-68` 的**真子集**（缺 `version`/`ver`/`off vocal`/`karaoke`/`加长`/`快板`/`慢板`/
@@ -594,14 +594,14 @@ if (songs.isEmpty()) {
 6. **用例 8（`HIGH` = 版本标记不同 ⇒ 合并）是否可接受，未经产品确认**：代码语义如此（§5.2），但对「全部播放」
    而言把 `晴天` 与 `晴天 (Remix)` 合并成一首意味着**用户少听一首**。若要更严（只有 `EXACT`/`MEDIUM` 才合并），
    必须改 `MatchConfidence.mergeable`（唯一阈值定义）并同步重跑 v2.4.0 的三份探针。
-7. **「同源重复」在真实接口里是否会出现未验证**：用例 11/12 是构造的。网易云那侧是 `search(limit=30)` 的结果
+7. **「同源重复」在真实接口里是否会出现未验证**：用例 11/12 是构造的。ncm 那侧是 `search(limit=30)` 的结果
    （`CatalogAggregator.kt:508-511`）、QQ 那侧是 `get_singer_detail_info` 原表 —— **没有实测过这两份数据里是否存在
    同 id 重复**。轴 B 的价值不依赖这个概率（结构性防线），但「今天会不会真踩到」未测。
 8. **未跑任何构建/单测**：§8 的 14 条用例是**设计**（归一化部分有执行证据，其余为读码推演），
    落成 `PlayAllDedupTest.kt` 后才算「单测覆盖」。
 9. **`ArtistDetailScreen` 列表 key 用的是 `TrackKey.fromSong`（非 `ofSong`）**：`ArtistDetailScreen.kt:280`
    `key = { it.key.tag }`，而 `AggregatedSong.key = TrackKey.fromSong(song)`（`CrossSourceModels.kt:222`），
-   它信 `source` 字符串、缺失回落网易云。理论上「source 丢失的 QQ 行」会与网易云行 key 相同 ⇒ `LazyColumn`
+   它信 `source` 字符串、缺失回落 ncm。理论上「source 丢失的 QQ 行」会与 ncm 行 key 相同 ⇒ `LazyColumn`
    key 冲突。**未验证该形态在歌手页是否可能出现**（同路径上 `QueueKeys.keyOf` 用的是 `ofSong`，两处口径不一致，
    值得单独记一笔）。
 10. **并发写入者可能改动本报告引用的文件**：探针期间 library 包正在被写。若后续有人改了

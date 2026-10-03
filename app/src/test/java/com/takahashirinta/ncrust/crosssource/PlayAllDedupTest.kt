@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -92,7 +92,7 @@ class PlayAllDedupTest {
         )
         assertEquals("同一首歌跨源必须只播一遍", listOf("晴天"), names(plan))
         assertEquals(1, plan.mergedPairs.size)
-        // 保留的那一份应当是列表里先出现的（网易云），因为两者 availability 都是 UNKNOWN。
+        // 保留的那一份应当是列表里先出现的（ncm），因为两者 availability 都是 UNKNOWN。
         assertEquals(MusicSource.NETEASE, plan.songs.single().musicSource)
     }
 
@@ -243,7 +243,7 @@ class PlayAllDedupTest {
     // ==================================================== tie-break ----
 
     @Test
-    fun `更能播的那一份胜出（网易云不可播 QQ 可播）`() {
+    fun `更能播的那一份胜出（ncm不可播 QQ 可播）`() {
         val ne = song(1L, "晴天")
         val qq = qqSong(2L, "晴天")
         val plan = PlayAllDedup.plan(

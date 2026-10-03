@@ -132,7 +132,7 @@ WGR-W09 实测 `ro.board.platform = kirin9000E`（≠ `hmos_emulator`）；
 ```
 
 ⇒ XML 里的 `version="7.3.28"` 是**最低版本**语义，`version="0"` 是**通配**。
-本机实测：网易云装的 9.6.05 ≥ 名单 7.3.28 ✔；华为音乐装的 12.11.45.301 ≥ 名单 12.11.10.366 ✔。
+本机实测：ncm 装的 9.6.05 ≥ 名单 7.3.28 ✔；华为音乐装的 12.11.45.301 ≥ 名单 12.11.10.366 ✔。
 
 ### 2.5 `hasMediaPermission`（旁路 A，`20-…txt`）—— 存在但普通应用不可用
 
@@ -198,8 +198,8 @@ HwCfgFilePolicy.getDownloadCfgFile(verDir, filePath):
 **55 个 unique package**（逐条实测计数：`mediasession` 51 条 / `mediastyle` 8 条 / `callapp` 4 条），同时包含：
 
 - 华为自家签名：`com.huawei.music`、`com.huawei.music.local`、`com.huawei.browser`、`com.huawei.health` …
-- **第三方签名**：`com.netease.cloudmusic`（网易云）、`com.kugou.android`（酷狗）、`cn.kuwo.player`（酷我）、
-  `com.tencent.qqmusic`（QQ 音乐）、`com.ximalaya.ting.android`、`fm.qingting.qtradio`、`com.yibasan.lizhifm`、
+- **第三方签名**：`com.netease.cloudmusic`（ncm）、`com.kugou.android`（酷狗）、`cn.kuwo.player`（酷我）、
+  `com.tencent.qqmusic`（qm）、`com.ximalaya.ting.android`、`fm.qingting.qtradio`、`com.yibasan.lizhifm`、
   `com.tencent.radio`、`com.tencent.weread`、`com.luojilab.player`、`cmccwm.mobilemusic`、
   `com.luna.music`（汽水音乐）、`cn.wenyu.bodian`、`cn.missevan`、`com.apple.android.music`（Apple Music）、
   `com.spotify.music`、`deezer.android.app`、`com.aspiro.tidal`、`com.anghami`、`ru.yandex.music` …
@@ -222,8 +222,8 @@ HwCfgFilePolicy.getDownloadCfgFile(verDir, filePath):
 `grep -n "netease\|ncrust\|takahashirinta"` 的结果（原文）：
 
 ```
-854:  <enable name="网易云音乐" package="com.netease.cloudmusic" version="7.3.28" options=""/>
-907:  <enable name="网易云音乐" package="com.netease.cloudmusic" version="8.9.61" options=""/>   ← mediastyle 段
+854:  <enable name="ncm" package="com.netease.cloudmusic" version="7.3.28" options=""/>
+907:  <enable name="ncm" package="com.netease.cloudmusic" version="8.9.61" options=""/>   ← mediastyle 段
 <ncrust / takahashirinta: NO MATCH>
 ```
 
@@ -238,7 +238,7 @@ HwCfgFilePolicy.getDownloadCfgFile(verDir, filePath):
   `com.huawei.meetime`、`com.eg.android.AlipayGphone`、`com.android.server.telecom`
   （计算方式：`comm -12 tmp/installed.txt tmp/wl_mpc.txt`，两个中间文件均已落盘）
 
-**而「卡片正常」的两个应用恰好就是这份名单里装的音乐类应用**（网易云、华为音乐）；
+**而「卡片正常」的两个应用恰好就是这份名单里装的音乐类应用**（ncm、华为音乐）；
 名单外的 `com.takahashirinta.ncrust` 被拒。这个交集是本节最强的相关性证据。
 
 ### 3.5 COTA 覆盖通道：本机没用上，且普通应用写不进去（已证）
@@ -284,11 +284,11 @@ $ adb -s … shell 'mount | grep " /data "'
 
 | 应用 | `dumpsys media_session` 的 state | `HwMediaSessionServiceInner` / `MediaControlUtils` 的 white list 判定 | 控制中心媒体卡 `content-desc` |
 |---|---|---|---|
-| **网易云**（第三方） | `state=3`（正在播放） | **`I MediaControlUtils: checkController is true` ×4，无 not-in-white-list** | **`The Final Countdown Europe`** ✅ |
+| **ncm**（第三方） | `state=3`（正在播放） | **`I MediaControlUtils: checkController is true` ×4，无 not-in-white-list** | **`The Final Countdown Europe`** ✅ |
 | 华为音乐（系统应用） | `state=2`（**未在播放，本轮证据无效**，见 §6） | 本轮未采到 | 沿用 v2.1.5：`喜欢你 BEYOND` ✅ |
 | **Ncrust** | `state=2`（本轮未重跑，见 §6 与协调说明） | **`V HwMediaSessionServiceInner: this app is not in media white list, pkgName: com.takahashirinta.ncrust` ×2**（12:59:10 抓到） | v2.1.5：`未在播放` ❌ |
 
-网易云那次采集的原始文件：`dumpsys-media-session-netease.txt`、`logcat-hwmediasession-netease.txt`、
+ncm 那次采集的原始文件：`dumpsys-media-session-netease.txt`、`logcat-hwmediasession-netease.txt`、
 `uiautomator-netease.xml`、`screenshots/netease-controlcenter.png`、`tmp/capture-netease.log`。
 其中 logcat 原文（节选）：
 
@@ -299,26 +299,26 @@ $ adb -s … shell 'mount | grep " /data "'
 09-25 13:02:45.106  1639  3987 I MediaControlUtils: checkController is true
 ```
 
-同一时刻网易云的 `getPlayerInfoList` 侧也有 `V HwMediaSessionServiceEx: getPlayerInfo, playerId: 202558260,pkgname: com.netease.cloudmusic`
-与 `I HwMediaSessionServiceEx: player infoList size: 1`（见 `logcat-hwmediasession-douyin.txt`，那次跑到的其实是网易云）。
+同一时刻 ncm 的 `getPlayerInfoList` 侧也有 `V HwMediaSessionServiceEx: getPlayerInfo, playerId: 202558260,pkgname: com.netease.cloudmusic`
+与 `I HwMediaSessionServiceEx: player infoList size: 1`（见 `logcat-hwmediasession-douyin.txt`，那次跑到的其实是 ncm）。
 
 **这就是铁律 2 要求的「同设备另一个应用正常工作」的反例搜索记录**，
-并且给出了机制解释：**网易云之所以能上，不是因为它「是音乐软件」或「声明得更全」，
+并且给出了机制解释：**ncm 之所以能上，不是因为它「是音乐软件」或「声明得更全」，
 而是因为它的包名 `com.netease.cloudmusic` 就写在 §3.3 那份名单里**（`version="7.3.28"`，装有 9.6.05 ≥ 7.3.28 ✔）。
 
 ---
 
-## 5. 为什么网易云能过而 Ncrust 不能 —— 逐项对比到具体差异
+## 5. 为什么 ncm 能过而 Ncrust 不能 —— 逐项对比到具体差异
 
-| 对比项 | 网易云 | 华为音乐 | Ncrust | 是判据吗 |
+| 对比项 | ncm | 华为音乐 | Ncrust | 是判据吗 |
 |---|---|---|---|---|
 | 包名在 `third_app_filter.xml` → `mediaplaybackcontroller/mediasession` | **在**（`version="7.3.28"`） | **在**（`version="12.11.10.366"`） | **不在** | ✅ **是（已证）** |
 | 安装版本 ≥ 名单版本 | 9.6.05 ≥ 7.3.28 ✔ | 12.11.45.301 ≥ 12.11.10.366 ✔ | 无条目可比 | ✅ 是（已证，但本例未走到这一步） |
-| 签名 | NetEase 自签 | Huawei 平台签 | Ncrust GPL Fork 自签 | ❌ 否（名单里华为签与几十个第三方签并存） |
+| 签名 | ncm 自签 | Huawei 平台签 | Ncrust GPL Fork 自签 | ❌ 否（名单里华为签与几十个第三方签并存） |
 | 清单声明 `MEDIA_BUTTON` receiver | ✓ ×2（priority **MAX**） | ✓ ×1（priority **999**） | ✓ ×1（**未声明 priority**） | ❌ 否（华为音乐无 MediaBrowserService 也照样上卡） |
 | 声明 `MediaBrowserService` | ✓（`UCarService`） | **✗ 一个都没有** | ✓（`PlaybackService`） | ❌ 否（被华为音乐证伪） |
 | 声明 `MediaSessionService` | ✗ | ✗ | ✓ | ❌ 否（同上） |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | ✗ | ✗ | ✓ | ❌ 否（网易云没有也上卡） |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | ✗ | ✗ | ✓ | ❌ 否（ncm 没有也上卡） |
 | `MEDIA_CONTENT_CONTROL` 等媒体权限 | ✗ | ✗ | ✗ | ❌ 否（三家都没有） |
 | MediaSession 条数 | 1 | 1 | **2**（`NcrustSession` + `androidx.media3.session.id.*`） | ❌ 否（判据只看 `getPackageName()`，与条数无关 —— 已证） |
 | Session metadata 是否完整 | 完整 | 完整 | v2.1.5 起已完整 | ❌ 否（同上，判据函数不读 metadata —— 已证） |
@@ -339,7 +339,7 @@ $ adb -s … shell 'mount | grep " /data "'
 见 `manifest-diff.md` §2–§4 的逐项表。一句话：
 
 - `MEDIA_BUTTON` receiver：三包**都有**；
-- `MediaBrowserService`：网易云有、**华为音乐没有**、Ncrust 有；
+- `MediaBrowserService`：ncm 有、**华为音乐没有**、Ncrust 有；
 - `MediaSessionService`：只有 Ncrust 有；
 - `FOREGROUND_SERVICE_MEDIA_PLAYBACK`：只有 Ncrust 有；
 - 媒体权限：三家都没有 `MEDIA_CONTENT_CONTROL`。
@@ -377,10 +377,10 @@ $ adb -s … shell 'mount | grep " /data "'
 
 ### 7.4 因此，关于「平台不支持/能力边界」怎么说才合规
 
-铁律 2 要求的反例搜索**已经做了并且找到了正例**（网易云，同一台设备、同一张卡、同一个判据函数）。
+铁律 2 要求的反例搜索**已经做了并且找到了正例**（ncm，同一台设备、同一张卡、同一个判据函数）。
 所以结论**不能**写成「华为不支持第三方应用」，正确的表述是：
 
-> **控制中心媒体卡对第三方应用是开放的（网易云就是第三方，工作正常），
+> **控制中心媒体卡对第三方应用是开放的（ncm 就是第三方，工作正常），
 > 但它采用的是「ROM 预置包名白名单」而不是「应用自我声明」；
 > 名单之外的包名一律被 `isInMediaSessionOrStyleList(...,2)` 拒绝。
 > `com.takahashirinta.ncrust` 不在名单内，且名单文件位于只读系统分区、无面向开发者的自助入口 ⇒
@@ -414,7 +414,7 @@ $ adb -s … shell 'mount | grep " /data "'
 6. 判据**不是签名**：名单同时含华为签名与几十个第三方签名；判定指令里没有任何签名 API 调用。→ §3.2
 7. 判据**不是清单声明**：华为音乐无 `MediaBrowserService`/`MediaSessionService` 也上卡；
    Ncrust 声明更全却被拒。→ `manifest-diff.md`
-8. 动态：网易云 → `checkController is true`、无 not-in-white-list、卡片显示歌名/艺人；
+8. 动态：ncm → `checkController is true`、无 not-in-white-list、卡片显示歌名/艺人；
    Ncrust → `not in media white list`（12:59:10 原文）。→ `logcat-hwmediasession-netease.txt`、§4
 9. `hasMediaPermission` 旁路存在但需系统级 `com.huawei.mediacontroller.plrdtest`。→ `20-…txt`
 
@@ -422,8 +422,8 @@ $ adb -s … shell 'mount | grep " /data "'
 
 | # | 推断 | 推断链与支持证据 | 能证伪它的实验 |
 |---|---|---|---|
-| H1 | 名单里的第三方包（网易云等）**之所以**能上卡，就是因为在名单里；名单是**唯一**准入判据 | 判据函数已证是纯包名/版本比较（8.1-2）；本机名单内装的音乐类应用恰好就是卡片正常的两个（§3.4）；名单外的 Ncrust 被同一函数拒绝（§4）。缺的一步：没有穷尽证明「不存在其它旁路」 | ① 让名单内另一个**第三方**（如抖音 `com.ss.android.ugc.aweme`，在名单中，装机 v40.6.0 > 名单 25.3.0）真正播放，观察是否出现 not-in-white-list；② 找一个包名不在名单、但**清单声明与网易云完全同类**的第三方音乐应用做 A/B（本轮未做） |
-| H2 | 控制中心那张卡的播放器列表就是 `HwMediaSessionServiceEx.filterMediaInfos` 产出的 `MediaPlayerInfoEx` 列表 | `filterMediaInfos` 逐条 `checkPkgName` → `isInMediaWhiteList` → 命中才 `new MediaPlayerInfoEx(...)` 并 `List.add`（已证）；`getPlayerInfoList` 是 `com.huawei.mediacontroller` 的取数接口；logcat 有 `player infoList size: 1` 与 `onActiveSessionsChanged controller size = 1 topPkg:com.netease.cloudmusic` 时间对齐 | 关掉/卸载网易云后打开控制中心，对比 `player infoList size` 与卡片是否同时变空；或在名单内应用播放时观察 `filterMediaInfos` 的 `Log.i("this app is not support pkgName = ")` 是否只对名单外出现 |
+| H1 | 名单里的第三方包（ncm 等）**之所以**能上卡，就是因为在名单里；名单是**唯一**准入判据 | 判据函数已证是纯包名/版本比较（8.1-2）；本机名单内装的音乐类应用恰好就是卡片正常的两个（§3.4）；名单外的 Ncrust 被同一函数拒绝（§4）。缺的一步：没有穷尽证明「不存在其它旁路」 | ① 让名单内另一个**第三方**（如抖音 `com.ss.android.ugc.aweme`，在名单中，装机 v40.6.0 > 名单 25.3.0）真正播放，观察是否出现 not-in-white-list；② 找一个包名不在名单、但**清单声明与 ncm 完全同类**的第三方音乐应用做 A/B（本轮未做） |
+| H2 | 控制中心那张卡的播放器列表就是 `HwMediaSessionServiceEx.filterMediaInfos` 产出的 `MediaPlayerInfoEx` 列表 | `filterMediaInfos` 逐条 `checkPkgName` → `isInMediaWhiteList` → 命中才 `new MediaPlayerInfoEx(...)` 并 `List.add`（已证）；`getPlayerInfoList` 是 `com.huawei.mediacontroller` 的取数接口；logcat 有 `player infoList size: 1` 与 `onActiveSessionsChanged controller size = 1 topPkg:com.netease.cloudmusic` 时间对齐 | 关掉/卸载 ncm 后打开控制中心，对比 `player infoList size` 与卡片是否同时变空；或在名单内应用播放时观察 `filterMediaInfos` 的 `Log.i("this app is not support pkgName = ")` 是否只对名单外出现 |
 | H3 | `checkSessionRecord` 的拒绝意味着「别的应用起播时不会自动暂停 Ncrust」 | 唯一调用者 `pauseOtherMedia`，返回 false 时直接 `return-void`，不走 `pauseLocalMedia` / `pauseMigrateInMedia`（已证指令流）；`mContext`/`mUserId` 传参一致 | 让 Ncrust 播放，再让名单内应用起播，观察 Ncrust 是否被自动暂停（本轮未做） |
 
 ### 8.3 未定位（直说没查到）
@@ -433,7 +433,7 @@ $ adb -s … shell 'mount | grep " /data "'
 | U1 | `hw_mediaplaybackcontroller_app_config.xml`（32 条 `<whiteapp>`）**在运行时是否真的被读** | 该文件名常量 `CONFIG_FILE_WHITE_BLACK_APP` 由 `getHwCfgFileList` 使用，而 `getHwCfgFileList` 的唯一调用者是 `MediaControlUtils.getPath`；**`getPath` 的调用者未展开**。它不在这条 `initHwMediaControllerWhiteList` 链上，但也不能断言它永不生效 |
 | U2 | `getCfgPolicyDir(0)` 具体展开成哪些目录/优先级 | 未反汇编该函数；只知道 `getDownloadCfgFile` 会用它的返回值逐个 `getFileInfo` |
 | U3 | COTA 更新的**触发方式与签名校验**（谁下发、怎么签名、是否只能 OTA） | `/data/cota/para` 无写入权限已证，但「华为服务卡/OTA 包如何投递该文件」未查 |
-| U4 | 「抖音能过」这条 A/B **未采到有效证据** | 本轮抖音采集时它的 session 停在 `state=1`（未播放），随后 ROM 自行把历史媒体应用网易云拉起播放，导致 dump 到的是网易云的卡。两份 uiautomator 文件 md5 相同（`41c322c4…`）⇒ **该条 A/B 判为无效，不作为证据**（详见 `EVIDENCE.md` §B-5） |
+| U4 | 「抖音能过」这条 A/B **未采到有效证据** | 本轮抖音采集时它的 session 停在 `state=1`（未播放），随后 ROM 自行把历史媒体应用 ncm 拉起播放，导致 dump 到的是 ncm 的卡。两份 uiautomator 文件 md5 相同（`41c322c4…`）⇒ **该条 A/B 判为无效，不作为证据**（详见 `EVIDENCE.md` §B-5） |
 | U5 | 华为音乐为何被 `checkSessionRecord` **主动排除**却仍能上卡 | `checkSessionRecord` 对 `com.huawei.music` / `com.android.mediacenter` / `com.huawei.music.local` 显式返回 false（`Log.v("this session is not support pkgName: …")`，已证），说明它走的是**另一条原生路径**；那条路径是什么，未定位 |
 | U6 | Ncrust 本轮**未重跑**播放态采集 | 与主会话在同一台 WGR-W09 上并发采集会互相污染（见 `EVIDENCE.md` §B-6），按协调要求让出设备；Ncrust 侧的动态证据沿用 12:59:10 抓到的 logcat 原文与 v2.1.5 的 A/B |
 | U7 | 华为音乐本轮动态采集停在 `state=2`（未在播放） | 按任务规则记为「未在播放状态，证据无效」；为避免抢占媒体焦点干扰主会话回归，**未重跑**。其卡片结论沿用 v2.1.5 |
@@ -480,7 +480,7 @@ com.huawei.music/com.android.mediacenter.playback.systeminteract.MediaButtonInte
 com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButtonReceiver,0,1
 ```
 
-【实测】该列表里有网易云（3 条，含重复）与华为音乐（1 条），**没有 Ncrust**——
+【实测】该列表里有 ncm（3 条，含重复）与华为音乐（1 条），**没有 Ncrust**——
 尽管 Ncrust 的清单里确实声明了 `androidx.media3.session.MediaButtonReceiver`（`manifest-diff.md` §2.1）。
 
 【高置信推断】这个键**不是**华为白名单，而是 **AOSP 的 `MediaSessionService.Settings`
@@ -489,7 +489,7 @@ com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButto
 1. 它在 `secure` 命名空间，值格式 `pkg/component,userId,type[-…]` 与 AOSP 的实现一致；
 2. 同一毫秒的 logcat 有 AOSP 侧的方法名：
    `09-25 13:02:03.828 I MediaSessionService: rememberMediaButtonReceiverLocked com.netease.cloudmusic/MediaSession (userId=0)`
-   —— 该行出现的时刻正好是网易云成为 media button session 的时刻；
+   —— 该行出现的时刻正好是 ncm 成为 media button session 的时刻；
 3. 因此「Ncrust 不在这张表里」**很可能是结果而不是原因**（它只被 `remember` 于会话成为 media button session
    且该 session 带有非 null 的 `mediaButtonReceiver` 时），**不能**把它当作准入判据。
 

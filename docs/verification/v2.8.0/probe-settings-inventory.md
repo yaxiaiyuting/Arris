@@ -49,9 +49,9 @@ grep -rn "saveThemeIndex\|saveThemeMode\|saveAccentSource\|saveLanguageCode\|set
 | # | prefs 文件 | 归属类/文件（file:line 定义） | 内容性质 | 是否用户可见设置 |
 |---|---|---|---|---|
 | 1 | `ncrust_settings` | 多处共用（见 §2） | 显示/播放/歌词/主题/缓存上限 | **是（主设置文件）** |
-| 2 | `ncrust_prefs` | `auth/CookieManager.kt:7` | 网易云 cookie | 是（账号） |
+| 2 | `ncrust_prefs` | `auth/CookieManager.kt:7` | ncm cookie | 是（账号） |
 | 3 | `ncrust_device` | `network/ClientIdentity.kt:23` | 客户端指纹 deviceId | 否（内部） |
-| 4 | `ncrust_netease_vip` | `auth/NeteaseVipStore.kt:62` | 网易云红V缓存 | 否（派生缓存） |
+| 4 | `ncrust_netease_vip` | `auth/NeteaseVipStore.kt:62` | ncm 红V缓存 | 否（派生缓存） |
 | 5 | `ncrust_qq_prefs` | `qq/QqAuthStore.kt:62`、`qq/QqIdentity.kt:32` | QQ cookie / 资料 / 设备种子 | 是（账号）+ 内部 |
 | 6 | `ncrust_qq_playlists` | `qq/QqPlaylistStore.kt:52` | QQ 歌单缓存 | 否（缓存） |
 | 7 | `ncrust_qq_probe` | `qq/QqProbeStore.kt:40` | QQ 兜底统计 | 否（诊断） |
@@ -120,7 +120,7 @@ grep -rn "saveThemeIndex\|saveThemeMode\|saveAccentSource\|saveLanguageCode\|set
 | `ncrust_settings` | `session_metadata_lyrics` | Boolean | `true`（`player/PlaybackService.kt:1406`） | `true` / `false` | `player/PlaybackService.kt:1406`（`sessionMetadataFollowsLyrics`） | **无写入点**（`PlaybackService.kt:1395-1399` 注释明确给出 adb 写法） | — | **是 —— 注释称「缺失即默认 true，对既有用户零行为变化」**（`PlaybackService.kt:1401-1403`） | 与 `lyrics_in_media_session` 语义耦合（§4.5） |
 | `ncrust_settings` | `live_update_enabled` | Boolean | `true`（`player/LiveUpdateNotifier.kt:63`） | `true` / `false` | `player/LiveUpdateNotifier.kt:63` | **无写入点** | — | **是 —— 注释写「用户可在 prefs 里关掉」但代码里没有 UI**（`LiveUpdateNotifier.kt:46`） | 需要 API 36 + 系统允许 promoted notification（`:61`） |
 | `ncrust_settings` | `battery_prompt_done` | Boolean | `false`（`MainActivity.kt:390`） | `true` / `false` | `MainActivity.kt:390` | `MainActivity.kt:399`、`410` | 「首次启动电池白名单弹窗」自身（`MainActivity.kt:386-412`）—— **不是设置行**，是首启一次性标记 | 否（内部标记） | 无 |
-| `ncrust_settings` | `artist_reco_target_id` | Long | `0L`（`reco/ArtistReco.kt:78`） | 任意网易云艺人 id；`0` = 未配置 | `reco/ArtistReco.kt:78` | `reco/ArtistReco.kt:81`（`setTarget`） | — （无 UI 调用方；`grep setTarget` 只有定义处） | **是（隐藏配置）** | 与 `artist_reco_enabled`、锚点共同决定卡片是否出现（`:97-99`） |
+| `ncrust_settings` | `artist_reco_target_id` | Long | `0L`（`reco/ArtistReco.kt:78`） | 任意 ncm 艺人 id；`0` = 未配置 | `reco/ArtistReco.kt:78` | `reco/ArtistReco.kt:81`（`setTarget`） | — （无 UI 调用方；`grep setTarget` 只有定义处） | **是（隐藏配置）** | 与 `artist_reco_enabled`、锚点共同决定卡片是否出现（`:97-99`） |
 | `ncrust_settings` | `artist_reco_anchor_ids` | String（CSV） | `""`（`reco/ArtistReco.kt:84`） | 逗号/分号/空格分隔的 id 串（解析见 `:96`） | `reco/ArtistReco.kt:84` | `reco/ArtistReco.kt:87`（`setManualAnchors`） | —（无 UI 调用方） | **是（隐藏配置）** | 同上 |
 | `ncrust_settings` | `artist_reco_auto_anchor_ids` | String（CSV） | `""`（`reco/ArtistReco.kt:91`） | 同上，另有 `AUTO_MAX_ANCHORS = 20` 上限（`:60`） | `reco/ArtistReco.kt:91` | `reco/ArtistReco.kt:163`（`refreshAutoAnchors` 自动推导） | —（全自动，无 UI） | 否（派生） | 依赖 `artist_reco_target_id` 非 0；7 天 TTL（`:48-49`、`:94`） |
 | `ncrust_settings` | `artist_reco_auto_anchor_at` | Long | `0L`（`reco/ArtistReco.kt:94`） | 毫秒时间戳 | `reco/ArtistReco.kt:94` | `reco/ArtistReco.kt:164` | — | 否（派生） | TTL 判定用（`AUTO_TTL_MS`，`:48-49`） |
@@ -200,8 +200,8 @@ grep -rn "saveThemeIndex\|saveThemeMode\|saveAccentSource\|saveLanguageCode\|set
 | 顺序 | 区块（`item` 行号） | 标题来源 | 包含项（逐项 file:line） |
 |---|---|---|---|
 | 1 | 页头 `:318-332` | `strings.tabUser` | 「用户/我的」大字标题 |
-| 2 | **账号块 · 网易云** `:335-352` | 无 `SectionTitle`（`ProfileBlock`） | 头像/昵称/UID；整块点击 → 已登录进 `AccountDialog`（`:227-244`）／未登录进扫码（宽屏）或 WebView 登录（窄屏）`ui/screen/UserScreen.kt:342-349` |
-| 3 | **账号块 · QQ 音乐** `:354-424` | `strings.sourceQqAccount`（`QqAccountBlock` 内 `:1467`） | 登录态/VIP 角标 + 登录/登出 `:1468-1517`；手机号登录入口 `:1527-1534`；扫码可用性说明 `:1535-1540`；**debug-only** 取链诊断 `:1542-1551`、兜底统计 `:1556-1565` |
+| 2 | **账号块 · ncm** `:335-352` | 无 `SectionTitle`（`ProfileBlock`） | 头像/昵称/UID；整块点击 → 已登录进 `AccountDialog`（`:227-244`）／未登录进扫码（宽屏）或 WebView 登录（窄屏）`ui/screen/UserScreen.kt:342-349` |
+| 3 | **账号块 · qm** `:354-424` | `strings.sourceQqAccount`（`QqAccountBlock` 内 `:1467`） | 登录态/VIP 角标 + 登录/登出 `:1468-1517`；手机号登录入口 `:1527-1534`；扫码可用性说明 `:1535-1540`；**debug-only** 取链诊断 `:1542-1551`、兜底统计 `:1556-1565` |
 | 4 | **音质** `:426-460` | `strings.qualitySectionTitle` `:428` | ① Wi-Fi 音质 `:432-445` ② 移动网络音质 `:446-458`（附 FLAC 不支持提示 `:431`、`:436-438`） |
 | 5 | **播放** `:462-632` | `strings.playbackSectionTitle` `:464` | ① 无缝播放 `:467-478` ② 播放时禁止熄屏 `:481-489` ③ 自动旋转 `:493-501` ④ 音频可视化 `:503-511` ⑤ 音乐人推荐 `:514-521` ⑥ 页面切换动效 `:526-531` ⑦ **歌词翻译** `:533-541` ⑧ **逐字动画模式** `:544-552` ⑨ **渐变质量** `:555-563` ⑩ **歌词字号** `:565-574` ⑪ **媒体面板歌词** `:577-585` ⑫ **AMLL 逐字歌词(TTML)** `:587-594` ⑬ **TTML 优先**（条件挂载）`:598-607` ⑭ **音译显示** `:610-618` ⑮ **动态字号（实验性）** `:622-630` |
 | 6 | **外观** `:634-704`（一个 item 里塞了 4 个 `SectionTitle`） | 依次：`themeModeSectionTitle` `:636` / `themeSectionTitle` `:648` / `accentSourceSectionTitle` `:659` / `languageSectionTitle` `:690` | ① 主题模式三选一 `:637-645` ② 主题色六选一 `:649-655` ③ 主题色来源三选一 `:660-670` + 条件「重读系统色」按钮 `:672-687` ④ 语言下拉 `:691-702` |
@@ -400,7 +400,7 @@ grep -rn "saveThemeIndex\|saveThemeMode\|saveAccentSource\|saveLanguageCode\|set
 | `user_cookie` | `auth/CookieManager.kt:8`，唯一读写点 `:13`/`:17`/`:26`；UI `ui/screen/UserScreen.kt:335-352` |
 | `qq_cookie` | `qq/QqAuthStore.kt:64`；UI `ui/screen/UserScreen.kt:354-424` |
 | QQ 资料缓存（`qq_nick`/`qq_uid`/`qq_vip_type`/`qq_vip_expire_at`/`qq_profile_at`） | 与 `qq_cookie` 同文件、同登录态、同清空路径（`qq/QqAuthStore.kt:100-105`）→ **跟随账号分组，但不应出现在 UI**（派生数据） |
-| 网易云会员缓存（`is_vip`/`checked_at`/`red_vip_level`） | `auth/NeteaseVipStore.kt:65-71`；登录/登出必须一起清（`ui/screen/UserScreen.kt:197`、`239` 注释明确「留着会让下一个登录的账号按**上一个账号**的会员状态排序」）→ **跟随账号分组，不出现在 UI** |
+| ncm 会员缓存（`is_vip`/`checked_at`/`red_vip_level`） | `auth/NeteaseVipStore.kt:65-71`；登录/登出必须一起清（`ui/screen/UserScreen.kt:197`、`239` 注释明确「留着会让下一个登录的账号按**上一个账号**的会员状态排序」）→ **跟随账号分组，不出现在 UI** |
 
 > **注**：`ncrust_device.client_device_id`（`network/ClientIdentity.kt:24`）与 `ncrust_qq_prefs.qq_device_seed`（`qq/QqIdentity.kt:33`）**不归账号**：前者是设备指纹（`QqIdentity.kt:28-29` 明确「不含任何账号信息，清空 QQ 账号也不会清掉它（它标识的是设备，不是账号）」），归 **通用 / 内部**。
 

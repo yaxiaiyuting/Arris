@@ -100,12 +100,12 @@ dex 槽位           : this(1) + 245 + ceil(245/32)=8 mask + marker(1) = 255 / �
 
 ```
 QQ_ID_FLAG = 1L shl 62 = 4611686018427387904
-网易云 songId 实测量级 : 1e6 ~ 3e9（远小于 2^40 = 1099511627776）
+ncm songId 实测量级 : 1e6 ~ 3e9（远小于 2^40 = 1099511627776）
 QQ 合成 id 最小值      : 4611686018427387905（bit62 恒置位）
 两个区间相交           : 否
 ```
 
-⇒ 只要 QQ 曲目的 id 都经 `SourceIds.qqId()` 产出，**「网易云 id == QQ id」
+⇒ 只要 QQ 曲目的 id 都经 `SourceIds.qqId()` 产出，**「ncm id == QQ id」
 在 64 位整数上不可能成立**，与队列长度、抽样规模都无关。
 
 **A/B 对照抽样（1000 首双源配对，取值形状取自仓库里的真实观测）**：
@@ -115,7 +115,7 @@ QQ 合成 id 最小值      : 4611686018427387905（bit62 恒置位）
 | 跨源数值冲突 | **0** | **0** |
 | 同源重复 | 0 | 0 |
 
-同源唯一性：网易云 = 平台 songId（唯一）；QQ = `bit62 \| songid`（唯一）；
+同源唯一性：ncm = 平台 songId（唯一）；QQ = `bit62 \| songid`（唯一）；
 QQ 无 songid 时的 FNV-1a 散列兜底：抽样 20000 个 songmid → **0 碰撞**
 （理论概率 `n²/2^63 ≈ 4.3e-11`）。
 
@@ -150,7 +150,7 @@ v2.5.0 / v2.5.1 的未验证清单写着「跨源裸 id 撞号时会把其中一
 
 队列快照落盘的是 `List<SongItem>`（Gson 全量对象，**不是 id 列表**），
 v2.1.0 · A 起每条都带 `source` / `mid` / `media_id` ⇒ `TrackKey` 可直接从既有字段算出。
-v2.1.0 **之前**的条目没有 `source`，`MusicSource.fromKey(null)` 回落网易云 ——
+v2.1.0 **之前**的条目没有 `source`，`MusicSource.fromKey(null)` 回落 ncm ——
 那正是老数据的正确解释，本版**保持**该语义。
 
 > **不写迁移逻辑**是正确决定：v1.9.3 的规则是「加字段 = 加迁移逻辑 = 加单测」，
@@ -160,7 +160,7 @@ v2.1.0 **之前**的条目没有 `source`，`MusicSource.fromKey(null)` 回落�
 ### 顺带发现的相邻风险（**不是本版引入**，本版只避开它）
 
 `SearchHistoryManager.HistoryItem` 只存 `id`、没有 `source` ⇒
-搜索历史里恢复出来的 QQ 曲目会被 `SongItem.musicSource` 认成**网易云**。
+搜索历史里恢复出来的 QQ 曲目会被 `SongItem.musicSource` 认成**ncm**。
 这直接决定了 P1 用哪个构造函数：`TrackKey.fromSong`（字符串口径）会继承这个错误，
 `TrackKey.ofSong`（走 `TrackKey.of`，`source` 为空时按 bit62 推断）不会。
 **本版选了 `ofSong`** 并把它定为唯一落点。完整修复（改历史记录的表结构 + 迁移 + 单测）

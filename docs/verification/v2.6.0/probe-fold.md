@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| 探针对象 | 库页「歌单」tab（`LibraryPlaylistsTab`）的三个源区块：本地歌单 / 网易云 / QQ 音乐 |
+| 探针对象 | 库页「歌单」tab（`LibraryPlaylistsTab`）的三个源区块：本地歌单 / ncm / qm |
 | 目标特性 | 每个区块可**手动**展开/折叠；**绝不自动折叠**；折叠态**跨重启持久化**；折叠时显示「展开全部 N 个」；展开/折叠动画平滑 |
 | 仓库 | `/home/duanjb666/deepseek/ncrust-gpl/Ncrust` |
 | 分支 / HEAD | `master` / `7a4e33b`（`docs(v2.5.6): 回填设备验证结果与发布物信息（含未完成的平板复测）`） |
@@ -63,10 +63,10 @@ app/src/main/java/com/takahashirinta/ncrust/player/PlayerCard.kt                
 | # | 问题 | 结论 | 关键证据 |
 |---|---|---|---|
 | 1 | 仓库今天有没有任何「折叠/展开」概念？ | **确无「区块折叠」概念。** 全部命中都是**播放器卡片折叠**、**下拉菜单 `expanded`**、**折叠屏机型**三件事；`animateContentSize` / `expandVertically` / `shrinkVertically` 在 Kotlin 源码里 **0 命中**（`EXIT=1`，stderr 0 字节） | §3；`LibraryPlaylistsTab.kt` 全文无折叠状态 |
-| 2 | 三个区块各含哪些 `item(key=…)`？ | 本地 4 类 key、网易云 6 类 key、QQ 6 类 key；**网易云与 QQ 的开头各有一个 `when` 状态块**（同一时刻只渲染其中一个）。**QQ 的区块标题不是 `SectionHeader`，是一段内联 `Row`** | §4；`LibraryPlaylistsTab.kt:157/165/176`、`:189/194/201/212/217/223`、`:235/260/274/283/288/297` |
-| 3 | 折叠单位该是「按源」还是「按歌单」？ | **按源（每区块一个布尔）**。文件的 KDoc 明确写「按音源分区，三块，各自独立、不合并」；且 QQ 条目是整行、本地/网易云是栅格单元，按歌单折叠无法统一 | `LibraryPlaylistsTab.kt:62-70`、`:78-84`、`:297` |
+| 2 | 三个区块各含哪些 `item(key=…)`？ | 本地 4 类 key、ncm 6 类 key、QQ 6 类 key；**ncm 与 QQ 的开头各有一个 `when` 状态块**（同一时刻只渲染其中一个）。**QQ 的区块标题不是 `SectionHeader`，是一段内联 `Row`** | §4；`LibraryPlaylistsTab.kt:157/165/176`、`:189/194/201/212/217/223`、`:235/260/274/283/288/297` |
+| 3 | 折叠单位该是「按源」还是「按歌单」？ | **按源（每区块一个布尔）**。文件的 KDoc 明确写「按音源分区，三块，各自独立、不合并」；且 QQ 条目是整行、本地/ncm 是栅格单元，按歌单折叠无法统一 | `LibraryPlaylistsTab.kt:62-70`、`:78-84`、`:297` |
 | 4 | 持久化放哪？ | **`ncrust_settings`**，与全仓库所有显示偏好同文件；键命名 `snake_case`；**没有**任何生产代码写过 `Set<String>`，**有** CSV 先例（`artist_reco_anchor_ids`）；`ncrust_settings` **从未被 `edit().clear()`** | `ThemeManager.kt:38`、`LanguageManager.kt:25`、`ArtistReco.kt:44/84/87/99`、§5 |
-| 5 | 折叠与 `LazyVerticalGrid` 的关系？ | `contentPadding` 与条目数**无关**（只由托盘高度派生），折叠**不影响**它；但 `animateItem` 只挂在**本地**条目的 2 处，网易云/QQ 条目**没有**，折叠时会出现「本地淡出、另两段硬跳」的不一致 | `LibraryPlaylistsTab.kt:153/167/179` vs `:223/:297`；`BottomOverlayInset.kt:27-30` |
+| 5 | 折叠与 `LazyVerticalGrid` 的关系？ | `contentPadding` 与条目数**无关**（只由托盘高度派生），折叠**不影响**它；但 `animateItem` 只挂在**本地**条目的 2 处，ncm/QQ 条目**没有**，折叠时会出现「本地淡出、另两段硬跳」的不一致 | `LibraryPlaylistsTab.kt:153/167/179` vs `:223/:297`；`BottomOverlayInset.kt:27-30` |
 | 6 | 动效该用什么？ | **`Modifier.animateItem(...)`，逐字复用本文件既有的 `150/220/120 + MetroDefault`**；`AnimatedVisibility` 在本仓库**只有 2 处且都是「只入场、从不切回」的级联**，**没有可重复 toggle 的先例** | `LibraryPlaylistsTab.kt:167-171`、`DetailScaffold.kt:147-154`、`AboutScreen.kt:163-171`；`UwpEasing.kt:115` |
 | 7 | 折叠 QQ 区块要不要停掉它的网络加载？ | **不要。** 仓库的闸门是**「tab 级」而不是「区块级」**：只有 `selectedCategory == 1` 时才 `loadPlaylists()`，QQ 的加载在 tab 组合时才起 | `LibraryScreen.kt:155-161`、`:268`、`:350-366`；`LibraryPlaylistsTab.kt:115-139` |
 | 8 | 折叠指示器怎么写、文案放哪？ | 复用 `SectionHint` 的**几何与字色**（`onSurfaceVariant` + `bodySmall`），但必须**新增**文案属性；新文案进 **`PlaylistsStrings`**（当前 **17** 个参数，预算 150/120）——**绝不能**加外层 `Strings`（钉死 **135**） | `LibraryPlaylistsTab.kt:314-318/322-326`；`StringsConstructorBudgetTest.kt:73/84/177-187`；`Strings.kt:863-898` |
@@ -286,7 +286,7 @@ $ rg -n -F 'expanded' docs TASK.md AGENTS.md             # EXIT=0, 41 行（正�
 - **A2/A3/A4 是本区块的全部内容项**；A1 是标题。折叠实现 = `if (!collapsed) { A2; A3; A4… }`。
 - 本地区块**永远至少有 1 项内容**（A3 无条件渲染），所以「折叠后区块空掉」这种情况不存在。
 
-### 4.2 区块 B：网易云（`neteasePlaylists: List<PlaylistApi.PlaylistInfo>`）
+### 4.2 区块 B：ncm（`neteasePlaylists: List<PlaylistApi.PlaylistInfo>`）
 
 | # | `item(key = …)` | 行 | 出现条件 | span | 折叠时 |
 |---|---|---|---|---|---|
@@ -302,7 +302,7 @@ $ rg -n -F 'expanded' docs TASK.md AGENTS.md             # EXIT=0, 41 行（正�
   同一时刻只会有 `hdr-netease` + 其中一个状态项 / 或 `ne-create` + N 个 `ne-<id>`。
   所以折叠的落点是**整个 `when` 块**，不是逐分支判断。
 
-### 4.3 区块 C：QQ 音乐（`qqOrdered`，`:141-145` 派生）
+### 4.3 区块 C：qm（`qqOrdered`，`:141-145` 派生）
 
 | # | `item(key = …)` | 行 | 出现条件 | span | 折叠时 |
 |---|---|---|---|---|---|
@@ -322,8 +322,8 @@ $ rg -n -F 'expanded' docs TASK.md AGENTS.md             # EXIT=0, 41 行（正�
 | 区块 | 标题实现 | 行 |
 |---|---|---|
 | 本地歌单 | `SectionHeader(strings.localPlaylistSectionTitle, …)` | `:158` |
-| 网易云 | `SectionHeader(strings.sourceNetease, …)` | `:190` |
-| **QQ 音乐** | **内联 `Row`**（`MetroText(strings.sourceQqMusic, …)` + `Spacer(weight)` + 刷新 `Box`） | **`:235-258`** |
+| ncm | `SectionHeader(strings.sourceNetease, …)` | `:190` |
+| **qm** | **内联 `Row`**（`MetroText(strings.sourceQqMusic, …)` + `Spacer(weight)` + 刷新 `Box`） | **`:235-258`** |
 
 `SectionHeader` 只有 2 个调用点。**把折叠开关做进 `SectionHeader` 会漏掉 QQ 区块** ——
 QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-256`，折叠开关要避免与它抢命中区，
@@ -375,8 +375,8 @@ QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-2
 66:  * | 区块 | 内容 | 来源 |
 67:  * |---|---|---|
 68:  * | 本地歌单 | 可编辑、可混装音源、只加不减 + tombstone | 本地 prefs |
-69:  * | 网易云 | 新建入口 + 云端歌单网格 | `PlaylistApi.getUserPlaylists` |
-70:  * | QQ 音乐 | **歌单列表直接平铺** | `QqPlaylistRepository.loadList` |
+69:  * | ncm | 新建入口 + 云端歌单网格 | `PlaylistApi.getUserPlaylists` |
+70:  * | qm | **歌单列表直接平铺** | `QqPlaylistRepository.loadList` |
 ```
 
 ```kotlin
@@ -393,7 +393,7 @@ QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-2
 
 1. **分区是既定的信息架构**（`:64` 黑体「按音源分区，三块，各自独立、不合并」）——
    折叠是分区的自然粒度。
-2. **粒度不匹配**：本地/网易云条目是**栅格单元**（默认 span=1），QQ 条目是**整行**（`span = maxLineSpan`，`:297`）。
+2. **粒度不匹配**：本地/ncm 条目是**栅格单元**（默认 span=1），QQ 条目是**整行**（`span = maxLineSpan`，`:297`）。
    「按歌单折叠」在栅格区会一次只藏 1 格，视觉上等于没有折叠。
 3. **状态量爆炸**：按歌单折叠需要为每个歌单持久化一个 key（本地 key 含 `ownerId`，`:176` + `PlaylistModels.kt:44-60`），
    而仓库没有任何「按条目 id 存显示偏好」的先例（§5.3）。
@@ -403,7 +403,7 @@ QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-2
 | 区块 | 数据源 | 行 | 上界（证据） | 可能为 0 |
 |---|---|---|---|---|
 | 本地 | `localPlaylists: List<LocalPlaylist>`（参数，由 `LibraryScreen` 从 `LocalPlaylistStore.readPlaylists` 提供） | 参数 `:88`；`LibraryScreen.kt:122` | **≤ 100**：`LocalPlaylistSync.MAX_PLAYLISTS = 100`（`LocalPlaylistModels.kt:319`，超出时按 `updatedAt` 降序截断，`LocalPlaylistStore.kt:76-87`） | 是（但「＋新建」格恒在） |
-| 网易云 | `neteasePlaylists: List<PlaylistApi.PlaylistInfo>`（参数） | 参数 `:89` | **≤ 100**：`getUserPlaylists(uid, limit = 100, offset = 0)`（`PlaylistApi.kt:80`）；调用点只传 uid（`LibraryScreen.kt:135`），**不翻页**；且 `specialType != 0` 被过滤掉（`:98`） | 是 |
+| ncm | `neteasePlaylists: List<PlaylistApi.PlaylistInfo>`（参数） | 参数 `:89` | **≤ 100**：`getUserPlaylists(uid, limit = 100, offset = 0)`（`PlaylistApi.kt:80`）；调用点只传 uid（`LibraryScreen.kt:135`），**不翻页**；且 `specialType != 0` 被过滤掉（`:98`） | 是 |
 | QQ | **页内自己加载**：`qqPlaylists` + `qqOrdered` | `:107`、`:115-139`、`:141-145` | 自建 + 收藏合并（`QqPlaylistRepository.kt:111-118`）；收藏单页 `size = 50`（`QqPlaylistApi.kt:96-107`）；**无硬上限** | 是 |
 
 `qqOrdered` 是**排序后的派生列表**（`:141-145`）：
@@ -417,7 +417,7 @@ QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-2
 ```
 
 → **折叠后要显示的 N 必须取自「当前实际渲染的那个列表」**：本地 = `localPlaylists.size`、
-网易云 = `neteasePlaylists.size`、QQ = `qqOrdered.size`（**不是** `qqPlaylists.size`）。
+ncm = `neteasePlaylists.size`、QQ = `qqOrdered.size`（**不是** `qqPlaylists.size`）。
 
 ### 5.3 持久化：`ncrust_settings` 的既有形状
 
@@ -443,8 +443,8 @@ QQ 标题必须单独改（它已经有一个可点区域：刷新按钮 `:245-2
 | 键 | 类型 | 默认 | 语义 |
 |---|---|---|---|
 | `library_section_collapsed_local` | Boolean | `false` | 本地歌单区块是否折叠 |
-| `library_section_collapsed_netease` | Boolean | `false` | 网易云区块是否折叠 |
-| `library_section_collapsed_qq` | Boolean | `false` | QQ 音乐区块是否折叠 |
+| `library_section_collapsed_netease` | Boolean | `false` | ncm 区块是否折叠 |
+| `library_section_collapsed_qq` | Boolean | `false` | qm 区块是否折叠 |
 
 默认 `false` = **展开**，这同时满足「绝不自动折叠」与「键不存在 = 老用户升级后行为零变化」。
 
@@ -519,12 +519,12 @@ private fun SectionFoldIndicator(
 | 区块 | 折叠行文案（zh-CN） | N 的取值 |
 |---|---|---|
 | 本地歌单 | 「展开全部 12 个」 | `localPlaylists.size` |
-| 网易云 | 「展开全部 37 个」 | `neteasePlaylists.size` |
-| QQ 音乐 | 「展开全部 8 个」 | `qqOrdered.size`（`:141-145`） |
+| ncm | 「展开全部 37 个」 | `neteasePlaylists.size` |
+| qm | 「展开全部 8 个」 | `qqOrdered.size`（`:141-145`） |
 
 **边界处理（建议写进实现注释）**：
 
-- 区块内容项**为 0 时也要能展开**（网易云/QQ 的空态、加载态、错误态都是「内容项」）。
+- 区块内容项**为 0 时也要能展开**（ncm/QQ 的空态、加载态、错误态都是「内容项」）。
   此时折叠行显示「展开全部 0 个」并不友好 —— 建议：**只有该区块当前有成规模的内容（N ≥ 1）时才提供折叠开关**，
   否则标题右侧不显示折叠入口。这样「展开全部 0 个」永远不会出现，而空态/错误态提示仍由
   展开后的 `SectionHint` 承担。
@@ -693,7 +693,7 @@ private fun Modifier.sectionFoldItemAnimation(): Modifier = animateItem(
 
 ⚠️ 注意一处**仓库内部不一致**：`AppMotion.listItemEnter` 用 `FastOutSlowInEasing`（220ms），
 而 `DetailScaffold.kt:149` 的入场用 `MetroDefault`（220ms）。折叠条目建议跟随**本文件**（`MetroDefault`），
-因为同一个列表里两种曲线并存会让「本地淡出」与「网易云淡出」手感不同。
+因为同一个列表里两种曲线并存会让「本地淡出」与「ncm 淡出」手感不同。
 
 ---
 
@@ -793,7 +793,7 @@ private fun Modifier.sectionFoldItemAnimation(): Modifier = animateItem(
 | `qq-<tag>` | ❌ | `:297-299` |
 | 库页专辑栅格（旁证） | ✅ | `LibraryScreen.kt:385` |
 
-→ **折叠三个区块时，只有本地那一段会淡出/滑动，网易云与 QQ 会硬跳。**
+→ **折叠三个区块时，只有本地那一段会淡出/滑动，ncm 与 QQ 会硬跳。**
 这是本次实现**必须**一并补齐的（§7.3），否则「动画平滑」这条硬要求只满足了 1/3。
 
 ### 9.3 key 稳定性
@@ -837,7 +837,7 @@ $ rg -n -F 'expanded'        docs TASK.md AGENTS.md    # EXIT=0, 41 行（正向
 
 ### 9.5 网格列数
 
-`columns = GridCells.Adaptive(minSize = 160.dp)`（`:149`）。折叠会让「本地 + 网易云」的格子总数变化，
+`columns = GridCells.Adaptive(minSize = 160.dp)`（`:149`）。折叠会让「本地 + ncm」的格子总数变化，
 但由于折叠是**整段移除**，剩余格子的**列数不变、每格宽度不变**（自适应按容器宽度算，不按条目数），
 所以不会出现「折叠后封面变大/变小」。这一点是**读码可证**的（`GridCells.Adaptive` 只依赖容器宽度）。
 
@@ -908,7 +908,7 @@ data class PlaylistsStrings(
      * 区块折叠后那一行的文案：(该区块当前渲染的条目数) -> 文案。
      *
      * 参数是**已渲染列表**的长度，不是服务端 total：
-     * 本地取 `localPlaylists.size`、网易云取 `neteasePlaylists.size`、
+     * 本地取 `localPlaylists.size`、ncm取 `neteasePlaylists.size`、
      * QQ 取 `qqOrdered.size`（不是 `qqPlaylists.size` —— 排序后才是真正渲染的那份）。
      */
     val sectionExpandAll: (Int) -> String,
@@ -961,7 +961,7 @@ data class PlaylistsStrings(
 
 | # | 项 | 为什么没验证 | 怎么验 |
 |---|---|---|---|
-| 1 | **key 锚定能保住滚动位置**（折叠移除条目后用户视口不跳） | 这是 Compose LazyLayout 的框架语义，仓库里既没有测试也没有 probe 记录（§9.4 的 0 命中）；本轮只读代码、未在设备上跑 | 真机：滚到 QQ 段中部 → 折叠网易云段 → 记录折叠前后首个可见条目的 key（可用 `LayoutInspector` 或加临时日志） |
+| 1 | **key 锚定能保住滚动位置**（折叠移除条目后用户视口不跳） | 这是 Compose LazyLayout 的框架语义，仓库里既没有测试也没有 probe 记录（§9.4 的 0 命中）；本轮只读代码、未在设备上跑 | 真机：滚到 QQ 段中部 → 折叠 ncm 段 → 记录折叠前后首个可见条目的 key（可用 `LayoutInspector` 或加临时日志） |
 | 2 | **折叠底部区块时滚动偏移被钳回、可见内容跳一下** | 同上，纯框架行为 | 真机：滚到列表最底 → 折叠 QQ → 观察是否跳；这是本轮**最可能出问题**的场景 |
 | 3 | `AnimatedContent` 在切 tab 后**确实会 dispose** `LibraryPlaylistsTab` | 需读 Compose 框架语义；仓库没有注释或测试说明这一点 | 真机：把折叠态**故意**只放 `remember` 跑一次，切 tab 回来观察是否复位；或读 Compose `AnimatedContent` 的 `SaveableStateProvider` 行为 |
 | 4 | `animateItem` 的 `fadeOutSpec` 在「一批条目同时被移除」时确实逐个播放 | 未在设备上测；`QueueView.kt:403-406` 的注释只讨论了 `placementSpec` | 真机观察；必要时降到只保留 `placementSpec` |
@@ -987,7 +987,7 @@ data class PlaylistsStrings(
 | # | 任务书原话 | 实际情况 | 证据 |
 |---|---|---|---|
 | 1 | `contentPadding`（`BottomOverlayInsetDp`）按 **144dp/64dp** 讨论 | 实际是 **168dp（窄）/ 88dp（宽）** | `TrayLayout.kt:163-165` + `:75/148/151`；`BottomOverlayInset.kt:12-13`。`TrayLayout.kt:159-161` 明确说 144/64 是 **v2.5.4 之前**的字面量。`AGENTS.md:450` 仍在写 144/64 —— **过期文档**（与仓库自己的「源码优先」纪律冲突） |
-| 2 | 「`SectionHeader`」被当作三个区块的区块标题 | **只有本地与网易云用 `SectionHeader`**；**QQ 的标题是一段内联 `Row`**（带刷新按钮） | `LibraryPlaylistsTab.kt:158`、`:190` vs `:235-258`。把开关做进 `SectionHeader` 会漏掉 QQ |
+| 2 | 「`SectionHeader`」被当作三个区块的区块标题 | **只有本地与 ncm 用 `SectionHeader`**；**QQ 的标题是一段内联 `Row`**（带刷新按钮） | `LibraryPlaylistsTab.kt:158`、`:190` vs `:235-258`。把开关做进 `SectionHeader` 会漏掉 QQ |
 | 3 | 「仓库禁止播放器卡片用状态驱动重组，但**这是列表、不是播放器卡片**」（暗示列表可以放宽） | `AppMotion` 的 KDoc 把这条约束**写给了所有消费者**，不只是播放器：「这些 spec **只描述时间**，不规定怎么消费。消费侧仍必须遵守「GPU 零重组」…**不得**为了用这些 spec 而新引入逐帧重组的 `animateFloatAsState`」 | `AppMotion.kt:71-73`。本轮推荐的 `animateItem` 恰好符合（它不动画 state、不需要逐帧重组），但**不能**因此认为列表可以随便用 `animateFloatAsState` |
 | 4 | 检索「`expanded`/`collapsed`」并期望得到干净的命中清单 | 大小写无关的英文子串检索会命中 `Detail**Scaffold**State`（→ `foldstate`）与 `DetailScaffold**Cross**fade`（→ `foldcrossfade`） | §3.3 词频表；`DetailScaffold.kt:101/102/103/112/117/140/208`、`:109` |
 
@@ -1048,7 +1048,7 @@ rg -n '^(data )?class \w*Strings' app/src/main/java/com/takahashirinta/ncrust/ui
 > **本仓库今天没有任何「区块折叠」先例（三条检索路径交叉证否，`expandVertically`/`shrinkVertically`/`animateContentSize` 均 0 命中）。**
 > 折叠单位定为**按源**（3 个布尔，存 `ncrust_settings`，键名建议 `library_section_collapsed_{local,netease,qq}`，默认 `false`，脏键回落 `false`）。
 > 动效**逐字复用本文件已有的** `Modifier.animateItem(fadeIn = tween(150, MetroDefault), placement = tween(220, MetroDefault), fadeOut = tween(120, MetroDefault))`，
-> 并**必须**把 `animateItem` 补到目前缺失的网易云条目（`LibraryPlaylistsTab.kt:217-230`）与 QQ 条目（`:297-299`）。
+> 并**必须**把 `animateItem` 补到目前缺失的 ncm 条目（`LibraryPlaylistsTab.kt:217-230`）与 QQ 条目（`:297-299`）。
 > 文案进 `PlaylistsStrings`（17→19 参数），**不要**碰外层 `Strings`（钉死 135）。
 > 实现时最容易踩的两个坑：① QQ 区块标题**不是** `SectionHeader`（是 `:235-258` 的内联 `Row`）；
 > ② 折叠态**不能只放 `remember`**，否则切 tab 回来会「自动展开」（`LibraryScreen.kt:268` 的 `AnimatedContent`）。

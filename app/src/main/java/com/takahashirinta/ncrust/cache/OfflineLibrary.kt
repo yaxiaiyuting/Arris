@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -95,7 +95,7 @@ internal data class OfflineTrack(
             album = albumPicUrl?.takeIf { it.isNotBlank() }
                 ?.let { AlbumItem(id = null, name = null, picUrl = it) },
             duration = durationMs?.takeIf { it > 0L },
-            // 显式写音源 key（而不是留 null）：留 null 的语义是「v2.1.0 之前的老数据 ⇒ 网易云」，
+            // 显式写音源 key（而不是留 null）：留 null 的语义是「v2.1.0 之前的老数据 ⇒ ncm」，
             // 对 QQ / B 站曲目是错的，会让取链走错源。
             source = source.key,
         )

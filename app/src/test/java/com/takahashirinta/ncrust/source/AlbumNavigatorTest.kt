@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -28,13 +28,13 @@ import org.junit.Test
  *
  * | 场景 | 修复前的真实表现 | 本文件的用例 |
  * |---|---|---|
- * | QQ 曲目**新鲜**加载（`album.id` 在，`mid` 被映射层丢过） | 跳到网易云的同号专辑（陈奕迅 `22276` → **《百万金曲 陈小云2 苦恋梦 免失志》**） | [QQ 曲目带 albumMID 时直接进 QQ 专辑页] / [QQ 曲目只有数字 albumID 时跳搜索而不是猜一张专辑] |
+ * | QQ 曲目**新鲜**加载（`album.id` 在，`mid` 被映射层丢过） | 跳到 ncm 的同号专辑（陈奕迅 `22276` → **《百万金曲 陈小云2 苦恋梦 免失志》**） | [QQ 曲目带 albumMID 时直接进 QQ 专辑页] / [QQ 曲目只有数字 albumID 时跳搜索而不是猜一张专辑] |
  * | QQ 曲目**冷启动恢复**（`album` 只有 `picUrl`） | **毫无反应**（静默失败，连网络请求都不发） | [老队列形状的 QQ 曲目跳搜索而不是没反应] |
  *
  * 夹具里的数字全部来自 2026-09 的真实接口响应与真机落盘数据（匿名可复现）：
  * QQ `album` = `{id:22276, mid:"004Z85XP1c25b7", pmid:"004Z85XP1c25b7_5", name:"What's Going On...?"}`；
- * 网易云 `api/v1/album/22276` = 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云；
- * 同专辑的网易云 id 是 `6451`。
+ * ncm `api/v1/album/22276` = 《百万金曲 陈小云2 苦恋梦 免失志》/ 陈小云；
+ * 同专辑的 ncm id 是 `6451`。
  */
 class AlbumNavigatorTest {
 
@@ -96,7 +96,7 @@ class AlbumNavigatorTest {
     }
 
     @Test
-    fun `网易云曲目带十进制 id 时直接进网易云专辑页`() {
+    fun `ncm曲目带十进制 id 时直接进ncm专辑页`() {
         val nav = AlbumNavigator.resolve(song(MusicSource.NETEASE, neteaseAlbum))
         assertEquals(AlbumNav.Direct(MusicSource.NETEASE, "6451"), nav)
     }
@@ -107,7 +107,7 @@ class AlbumNavigatorTest {
     fun `QQ 曲目只有数字 albumID 时跳搜索而不是猜一张专辑`() {
         val nav = AlbumNavigator.resolve(song(MusicSource.QQMUSIC, qqAlbumNumericOnly))
         assertEquals(
-            "22276 是 QQ 域的数字专辑 id；拿它去网易云查会跳到陈小云的《百万金曲…》",
+            "22276 是 QQ 域的数字专辑 id；拿它去 ncm 查会跳到陈小云的《百万金曲…》",
             AlbumNav.Search("What's Going On...?", AlbumNavReason.AMBIGUOUS_NUMERIC_ID),
             nav,
         )
@@ -172,7 +172,7 @@ class AlbumNavigatorTest {
     }
 
     @Test
-    fun `网易云曲目 id 缺失时同样跳搜索——不允许拿名字去猜源`() {
+    fun `ncm曲目 id 缺失时同样跳搜索——不允许拿名字去猜源`() {
         val noId = AlbumItem(id = null, name = "叶惠美", picUrl = null, mid = null)
         assertEquals(
             AlbumNav.Search("叶惠美", AlbumNavReason.MISSING_ID),
@@ -242,7 +242,7 @@ class AlbumNavigatorTest {
         val ne = AlbumNavigator.resolve(song(MusicSource.NETEASE, neteaseAlbum)) as AlbumNav.Direct
         assertEquals("album/qqmusic/004Z85XP1c25b7", NavRoutes.album(qq.source, qq.id))
         assertEquals("album/netease/6451", NavRoutes.album(ne.source, ne.id))
-        // 两条路由**不可能相同**：网易云的 6451 与 QQ 的 004Z85XP1c25b7 落在不同段里。
+        // 两条路由**不可能相同**：ncm 的 6451 与 QQ 的 004Z85XP1c25b7 落在不同段里。
         assertFalse(NavRoutes.album(qq.source, qq.id) == NavRoutes.album(ne.source, ne.id))
     }
 
@@ -271,7 +271,7 @@ class AlbumNavigatorTest {
     // ------------------------------------------------------ 5. 值域闸门本身
 
     @Test
-    fun `网易云值域只吃十进制且小于 2 的 40 次方`() {
+    fun `ncm值域只吃十进制且小于 2 的 40 次方`() {
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.NETEASE, "6451"))
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.NETEASE, "18905"))
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.NETEASE, " 6451 "))
@@ -281,13 +281,13 @@ class AlbumNavigatorTest {
         assertFalse(AlbumNavigator.idDomainMatches(MusicSource.NETEASE, null))
         assertFalse(AlbumNavigator.idDomainMatches(MusicSource.NETEASE, ""))
         assertFalse(
-            "QQ 的 bit62 合成 id 必须落在网易云值域之外",
+            "QQ 的 bit62 合成 id 必须落在 ncm 值域之外",
             AlbumNavigator.idDomainMatches(MusicSource.NETEASE, "4611686018427837109"),
         )
     }
 
     @Test
-    fun `QQ 值域只吃 base62 且拒绝网易云值域内的纯数字`() {
+    fun `QQ 值域只吃 base62 且拒绝ncm值域内的纯数字`() {
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.QQMUSIC, "004Z85XP1c25b7"))
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.QQMUSIC, "000MkMni19ClKG"))
         assertTrue(AlbumNavigator.idDomainMatches(MusicSource.QQMUSIC, "003J6fvc0bVJon"))
@@ -344,7 +344,7 @@ class AlbumNavigatorTest {
 
     @Test
     fun `当前这条路径上没有可用的跨源结论`() {
-        // 探针结论：这条 P0 连匹配都没做，直接把 QQ 的数字 id 交给了网易云路由。
+        // 探针结论：这条 P0 连匹配都没做，直接把 QQ 的数字 id 交给了 ncm 路由。
         // 所以 resolve 在任何输入下都不该产出"跨源"的 Direct —— 用穷举钉住。
         val all = listOf(
             song(MusicSource.QQMUSIC, qqAlbumFull),
@@ -368,7 +368,7 @@ class AlbumNavigatorTest {
         // 即便**完全相等**，判定也不看名字：QQ 侧只有数字 id 时仍然跳搜索。
         val qqNamed = AlbumItem(id = 22276L, name = "What's Going On…?", picUrl = null, mid = null)
         val nav = AlbumNavigator.resolve(song(MusicSource.QQMUSIC, qqNamed))
-        assertTrue("同名的网易云专辑不能成为 QQ 曲目的跳转目标", nav is AlbumNav.Search)
+        assertTrue("同名的 ncm 专辑不能成为 QQ 曲目的跳转目标", nav is AlbumNav.Search)
     }
 
     @Test

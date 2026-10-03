@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -192,7 +192,7 @@ object QqPlaylistRepository {
     /**
      * 加载某个歌单的全部曲目（分页累积）。
      *
-     * @param dirId 目录号。QQ 音乐用它寻址（「我喜欢」= 201）；收藏来的歌单没有自己的
+     * @param dirId 目录号。qm 用它寻址（「我喜欢」= 201）；收藏来的歌单没有自己的
      *   `dirId`，传 0 让服务端按 `disstid` 解析。
      * @param onPage 每页回调，让 UI 渐进显示大歌单。
      */

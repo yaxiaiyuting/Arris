@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -21,10 +21,10 @@ import android.content.SharedPreferences
  *
  * 探针（`docs/verification/v2.6.0/probe-layout-switch.md` §5.5）查明：
  * **不存在「两个源都零行为变化」的默认值** —— 改造前这一页本来就是混合形态
- * （本地歌单与网易云是网格卡片、QQ 是整行）。所以默认值是一个**产品选择**，
+ * （本地歌单与 ncm 是网格卡片、QQ 是整行）。所以默认值是一个**产品选择**，
  * 选定 [CARD] 的理由：
  *
- * 1. 它保留**面积最大**的两段（本地歌单 + 网易云）的现状，升级后绝大多数用户
+ * 1. 它保留**面积最大**的两段（本地歌单 + ncm）的现状，升级后绝大多数用户
  *    看到的界面与升级前一致；
  * 2. 任务书的验收要求是「两个源布局一致」，而那必然意味着**某一段要改变形态**；
  *    选 [LIST] 会让两段同时改变，选 [CARD] 只让 QQ 那一段改变，改动面更小；

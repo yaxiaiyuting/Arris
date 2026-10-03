@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -26,7 +26,7 @@ internal fun sourceLabelOf(source: MusicSource, strings: Strings): String = when
  * ## 三条纪律（都来自 v3.2.0 的探针结论）
  *
  * 1. **不说服务端没说过的话。** 只有 [ResolveFailureKind.COPYRIGHT_GONE] 才允许出现
- *    「没有版权」字样，而那一档只有音源**显式声明**时才会被产出（目前只有网易云的
+ *    「没有版权」字样，而那一档只有音源**显式声明**时才会被产出（目前只有 ncm 的
  *    `noCopyrightRcmd`）。QQ 侧的失败一律不会被说成无版权（铁律 20）。
  * 2. **不回显服务端文案。** `failure.rawMessage` 只进日志。外部平台的自由文本
  *    既不本地化也不可信 —— 而且它常常带着内部诊断信息。

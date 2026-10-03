@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -41,7 +41,7 @@ object ClientIdentity {
     /** 客户端类型。实测 pc 与 android 都能解锁 Hi-Res，A1 先用风险更低的 pc。 */
     const val OS = "pc"
 
-    // appver 取自 2026-09 网易云 PC 官方客户端，实测有效
+    // appver 取自 2026-09 ncm PC 官方客户端，实测有效
     // 若未来服务端降权，参考 music.163.com/release/ 更新
     const val APPVER = "3.0.6"
 

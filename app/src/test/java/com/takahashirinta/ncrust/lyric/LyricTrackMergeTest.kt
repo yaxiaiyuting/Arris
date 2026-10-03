@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -19,11 +19,11 @@ import org.junit.Test
  *
  * 前 5 个用例用**真实样本**（`app/src/test/resources/lyric-tracks/` 下的 4 份 json，由
  * `tools/gen-merge-fixtures.py` 从调研落盘的原始响应生成，不是手写编造）：
- * TTML 侧的行/译文/音译按 TtmlScanner 语义预先解析好，网易云侧按 LrcParser 语义解析好 ——
+ * TTML 侧的行/译文/音译按 TtmlScanner 语义预先解析好，ncm 侧按 LrcParser 语义解析好 ——
  * 夹具就是两个解析器的**输出**，所以这里测的是合并本身，不重复测解析。
  *
  * 期望的行数不是估的：`tools/expected-merge.py` 用同一套语义独立复算过一遍
- * （22704409 译文 64 / 音译 52，1959528822 音译 29 = TTML 16 + 网易云补 13，Faded 54，Numb 49）。
+ * （22704409 译文 64 / 音译 52，1959528822 音译 29 = TTML 16 + ncm 补 13，Faded 54，Numb 49）。
  */
 class LyricTrackMergeTest {
 
@@ -66,18 +66,18 @@ class LyricTrackMergeTest {
     // ------------------------------------------------- 真实样本：缺陷的直接修复
 
     @Test
-    fun `真实——22704409 DAY BY DAY：TTML 79 行逐字但零翻译，译文轨必须回退网易云 tlyric`() {
+    fun `真实——22704409 DAY BY DAY：TTML 79 行逐字但零翻译，译文轨必须回退ncm tlyric`() {
         val f = load(22704409)
         val main = f.main.toLines()
         val tlyric = f.nettrackTlyric!!.toLines()
         assertEquals("夹具前提：TTML 这份没有 x-translation", 0, f.ttml.size)
-        assertTrue("夹具前提：网易云有译文", tlyric.isNotEmpty())
+        assertTrue("夹具前提：ncm 有译文", tlyric.isNotEmpty())
 
         val track = LyricTrackMerge.merge(main, f.ttml.toLines(), f.netmain.toLines(), tlyric)
 
         // v1.9.0 的行为是 emptyList（TTML 的 0 行译文整体覆盖），这里必须不再是空的。
         assertEquals(LyricTrackSource.NETEASE, track.source)
-        assertEquals("探针实测：82 行网易云主轨里 64 行能按文本配上", 64, track.lines.size)
+        assertEquals("探针实测：82 行 ncm 主轨里 64 行能按文本配上", 64, track.lines.size)
         assertAllOnMainTimeline(main, track)
         // 首行对照（两源时间轴不同：TTML 这一句起于 16690ms）
         assertEquals(16690L, track.lines.first().timeMs)
@@ -87,7 +87,7 @@ class LyricTrackMergeTest {
     }
 
     @Test
-    fun `真实——22704409：音译轨同样回退（TTML 无 x-roman，网易云 53 行 romalrc）`() {
+    fun `真实——22704409：音译轨同样回退（TTML 无 x-roman，ncm 53 行 romalrc）`() {
         val f = load(22704409)
         val main = f.main.toLines()
         val romalrc = f.nettrackRomalrc!!.toLines()
@@ -101,17 +101,17 @@ class LyricTrackMergeTest {
     }
 
     @Test
-    fun `真实——1959528822 紫荆花盛开：TTML 有 16 行音译时也不丢网易云那 41 行（逐行合并）`() {
+    fun `真实——1959528822 紫荆花盛开：TTML 有 16 行音译时也不丢ncm那 41 行（逐行合并）`() {
         val f = load(1959528822)
         val main = f.main.toLines()
         val ttmlRomans = f.ttml.toLines()
         val romalrc = f.nettrackRomalrc!!.toLines()
-        assertEquals("夹具前提：TTML 这 16 行 x-roman 是网易云那份的子集", 16, ttmlRomans.size)
+        assertEquals("夹具前提：TTML 这 16 行 x-roman 是 ncm 那份的子集", 16, ttmlRomans.size)
         assertEquals(41, romalrc.size)
 
         val track = LyricTrackMerge.merge(main, ttmlRomans, f.netmain.toLines(), romalrc)
 
-        // 轨级二选一（只按任务书表格字面）会只留 16 行、丢掉 13 行能对上的网易云音译。
+        // 轨级二选一（只按任务书表格字面）会只留 16 行、丢掉 13 行能对上的 ncm 音译。
         assertEquals(LyricTrackSource.MIXED, track.source)
         assertEquals("TTML 16 行 + 缺口补 13 行", 29, track.lines.size)
         assertAllOnMainTimeline(main, track)
@@ -119,11 +119,11 @@ class LyricTrackMergeTest {
         val kept = track.lines.filter { it in ttmlRomans }
         assertEquals(16, kept.size)
         assertEquals(ttmlRomans, kept)
-        // 补进来的行是网易云有、TTML 没有的那几句（例：首句 紫荆花飘扬）。
+        // 补进来的行是 ncm 有、TTML 没有的那几句（例：首句 紫荆花飘扬）。
         val filled = track.lines.filter { it !in ttmlRomans }
         assertEquals(13, filled.size)
         assertTrue(
-            "首句音译应当由网易云补上",
+            "首句音译应当由 ncm 补上",
             filled.any { it.timeMs == 17920L && it.text == "zi ging fa piu yoeng" }
         )
     }
@@ -190,10 +190,10 @@ class LyricTrackMergeTest {
     }
 
     @Test
-    fun `合成——网易云那一行没有内容时只丢这一行，其余照常`() {
+    fun `合成——ncm那一行没有内容时只丢这一行，其余照常`() {
         val main = listOf(LrcLine(1_000, "A"), LrcLine(2_000, "B"))
         val neteaseMain = listOf(LrcLine(500, "A"), LrcLine(600, "B"))
-        // B 那一行网易云没有译文（tlyric 行数常少于 lrc）
+        // B 那一行 ncm 没有译文（tlyric 行数常少于 lrc）
         val neteaseTrack = listOf(LrcLine(500, "ta"))
 
         val track = LyricTrackMerge.merge(main, emptyList(), neteaseMain, neteaseTrack)
@@ -214,7 +214,7 @@ class LyricTrackMergeTest {
     }
 
     @Test
-    fun `合成——TTML 覆盖满时即使网易云有内容也不重复`() {
+    fun `合成——TTML 覆盖满时即使ncm有内容也不重复`() {
         val main = listOf(LrcLine(1_000, "A"))
         val ttml = listOf(LrcLine(1_000, "TA"))
         val neteaseMain = listOf(LrcLine(900, "A"))

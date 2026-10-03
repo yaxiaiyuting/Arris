@@ -16,7 +16,7 @@ val ruRU = Strings(
         // v2.8.0: 7 карточек-групп двухуровневого меню настроек
         // (порядок = порядок объявления SettingsGroup).
         settingsGroupAccountTitle = "Аккаунт и вход",
-        settingsGroupAccountSubtitle = "Аккаунты NetEase и QQ Music",
+        settingsGroupAccountSubtitle = "Аккаунты ncm и qm",
         settingsGroupGeneralTitle = "Общие",
         settingsGroupGeneralSubtitle = "Язык, поворот, рекомендации",
         settingsGroupAppearanceTitle = "Внешний вид и анимация",
@@ -31,7 +31,7 @@ val ruRU = Strings(
         settingsGroupAboutSubtitle = "Версия и информация о проекте",
         bilibiliEnabledLabel = "Источник Bilibili",
         bilibiliEnabledDescription =
-            "Поиск и воспроизведение через Bilibili (аудиораздел и аудиодорожки видео). Включено — в поиске появляется ветка Bilibili; выключено — ни один запрос к Bilibili не отправляется. NetEase и QQ Music не затрагиваются.",
+            "Поиск и воспроизведение через Bilibili (аудиораздел и аудиодорожки видео). Включено — в поиске появляется ветка Bilibili; выключено — ни один запрос к Bilibili не отправляется. ncm и qm не затрагиваются.",
         qualitySectionTitle = "Качество звука",
         wifiQualityLabel = "В сети Wi-Fi",
         mobileQualityLabel = "В мобильной сети",
@@ -214,9 +214,9 @@ val ruRU = Strings(
     ),
 
     source = SourceStrings(
-        sourceQqMusic = "QQ Music",
-        sourceQqAccount = "Аккаунт QQ Music",
-        sourceSummary = { a, b -> "NetEase $a · QQ Music $b" },
+        sourceQqMusic = "qm",
+        sourceQqAccount = "Аккаунт qm",
+        sourceSummary = { a, b -> "ncm $a · qm $b" },
         sourceQrWaiting = "Сканируйте в мобильном QQ",
         sourceQrScanned = "Отсканировано — подтвердите на телефоне",
         sourceQrExpired = "QR-код истёк",
@@ -228,8 +228,8 @@ val ruRU = Strings(
         sourceQrAvailabilityNote = "QR-вход зависит от доступности сервисов Tencent; если он долго недоступен, войдите через веб.",
         sourceQrRefresh = "Обновить QR-код",
         sourceWebLogin = "Войти через веб",
-        sourceQqLoginAction = "Войти в QQ Music",
-        sourceNetease = "NetEase",
+        sourceQqLoginAction = "Войти в qm",
+        sourceNetease = "ncm",
         sourceQqPhoneTitle = "Вход по номеру телефона",
         sourceQqPhoneLabel = "Номер телефона",
         sourceQqPhoneHint = "Введите 11-значный номер",
@@ -265,8 +265,11 @@ val ruRU = Strings(
         biliQualityNote = "Предел качества: анонимно 320K. Даёт ли вход lossless — НЕ проверено, эта версия ничего не обещает.",
         searchFilterEmpty = { label -> "Нет результатов в " + label },
         aggFilterBoth = "Оба",
-        aggFilterNetease = "Только NetEase",
-        aggFilterQq = "Только QQ Music",
+        albumSourceFilterAll = "Все",
+        albumFilterEmpty = { label -> "Нет сохранённых альбомов в " + label },
+        albumSourceInfo = { src -> "Источник: $src" },
+        aggFilterNetease = "Только ncm",
+        aggFilterQq = "Только qm",
         aggFilterBili = "Только Bilibili",
         sourceBilibili = "Bilibili",
         sourceSummaryBili = { a, b -> "$a · Bilibili $b" },
@@ -326,7 +329,7 @@ val ruRU = Strings(
     actionGoToArtist = "К исполнителю",
     actionGoToAlbum = "К альбому",
     qrLoginTitle = "Вход по QR-коду",
-    qrScanHint = "Отсканируйте в приложении NetEase Cloud Music",
+    qrScanHint = "Отсканируйте в приложении ncm",
     qrScannedHint = "Отсканировано, подтвердите на телефоне",
     qrExpiredHint = "QR-код истёк, нажмите для обновления",
     qrLoadFailed = "Не удалось загрузить, нажмите для повтора",
@@ -353,7 +356,7 @@ val ruRU = Strings(
 
     about = AboutStrings(
         aboutTitle = "О Ncrust",
-        aboutAppSubtitle = "Неофициальный клиент NetEase Cloud Music",
+        aboutAppSubtitle = "Неофициальный клиент ncm",
         aboutSectionProject = "О проекте",
         aboutVersion = "Версия",
         aboutDeveloperOriginal = "Автор оригинала",
@@ -442,22 +445,22 @@ val ruRU = Strings(
     removeFromPlaylist = "Убрать из плейлиста",
     addToPlaylistFailed = "Не удалось добавить, попробуйте позже",
     playlists = PlaylistsStrings(
-        qqPlaylistsTitle = "Плейлисты QQ Music",
+        qqPlaylistsTitle = "Плейлисты qm",
         sectionOwned = "Созданные",
         sectionFav = "Сохранённые",
         favorite = "Мне нравится",
         refresh = "Обновить",
         empty = "Плейлистов пока нет",
         emptyTracks = "Этот плейлист пуст",
-        loginExpired = "Сессия QQ Music истекла",
+        loginExpired = "Сессия qm истекла",
         relogin = "Войти снова",
         offline = "Офлайн: показаны локальные данные",
         truncated = "Большой плейлист — показана загруженная часть",
         loadFailed = "Не удалось загрузить",
         retry = "Повторить",
         notFound = "Плейлист не найден или не принадлежит этой учётной записи",
-        entryHint = "Из вашей учётной записи QQ Music",
-        loginRequired = "Войдите в QQ Music, чтобы увидеть плейлисты",
+        entryHint = "Из вашей учётной записи qm",
+        loginRequired = "Войдите в qm, чтобы увидеть плейлисты",
         trackCount = { n -> "$n треков" },
         // v2.6.0 · P1/P2：库页歌单 tab 的布局切换与手动折叠。
         layoutCard = "Карточки",
@@ -524,8 +527,8 @@ val ruRU = Strings(
             recentDaysTitle = "Последние 14 дней",
             peakLabel = { v -> "Максимум $v" },
             bySourceTitle = "По платформам",
-            sourceNetease = "NetEase Cloud Music",
-            sourceQq = "QQ Music",
+            sourceNetease = "ncm",
+            sourceQq = "qm",
             sourceBili = "Аудио Bilibili",
             sourceOther = { k -> "Другой источник ($k)" },
             topSongsTitle = "Чаще всего слушали",
@@ -560,10 +563,10 @@ val ruRU = Strings(
         searchSourceTimeout = "Время поиска истекло",
         searchSourceError = "Ошибка поиска",
         searchSourceSkipped = "Вход не выполнен",
-        // 与既有 sourceSummary 的口径对齐（那三个语言的格式是 "NetEase $a · QQ Music $b"，
+        // 与既有 sourceSummary 的口径对齐（那三个语言的格式是 "ncm $a · qm $b"，
         // 没有单位词）—— 带单位会让「两源都返回时新旧路径逐字相同」这条不变量破掉。
         searchSourceCount = { n -> "$n" },
-        searchSourceSummaryWithStatus = { a, b -> "NetEase $a · QQ Music $b" },
+        searchSourceSummaryWithStatus = { a, b -> "ncm $a · qm $b" },
 
 
         playbackFailure = PlaybackFailureStrings(

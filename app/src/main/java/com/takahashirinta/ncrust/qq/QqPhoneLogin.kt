@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.1：QQ 音乐「手机号 + 短信验证码」登录的**纯逻辑**部分。
+ * v2.1.1：qm「手机号 + 短信验证码」登录的**纯逻辑**部分。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -13,7 +13,7 @@ package com.takahashirinta.ncrust.qq
 import org.json.JSONObject
 
 /**
- * QQ 音乐手机号验证码登录的纯逻辑：号码/验证码规范化、响应码归类、凭证 → cookie。
+ * qm 手机号验证码登录的纯逻辑：号码/验证码规范化、响应码归类、凭证 → cookie。
  * **无 IO、无 Android 依赖、JVM 可单测**（`org.json` 由 testImplementation 提供）。
  *
  * ## 为什么要有这条路
@@ -24,7 +24,7 @@ import org.json.JSONObject
  * **移动应用 SDK**，要求 `appid` 与**签名**在腾讯侧配对注册 —— 本 fork 的签名必然不同，
  * 这条路在结构上就走不通。
  *
- * 而 QQ 音乐自己的手机号验证码登录是**纯 HTTP**（`music.login.LoginServer`），
+ * 而 qm 自己的手机号验证码登录是**纯 HTTP**（`music.login.LoginServer`），
  * 单机即可完成，不依赖 QQ 号、不依赖第二台设备、不依赖微信。这正是「微信用户没有 QQ 号」
  * 时唯一可用的登录方式。
  *

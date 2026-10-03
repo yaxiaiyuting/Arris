@@ -34,7 +34,7 @@ Ncrust 声明最全（MediaSessionService + MediaBrowserService + FGS mediaPlayb
 统一流程由脚本 `tmp/capture_app.sh` 执行（脚本原文已落盘），每应用的完整过程日志在 `tmp/capture-<tag>.log`。
 统一前置：`am force-stop` 四个候选包 → `logcat -c` → `am start` → 轮询到 `state=3` → 采证 → `force-stop`。
 
-### B-1 网易云 `com.netease.cloudmusic` —— 【实测】有效
+### B-1 ncm `com.netease.cloudmusic` —— 【实测】有效
 
 | 项 | 值 |
 |---|---|
@@ -92,11 +92,11 @@ Ncrust 声明最全（MediaSessionService + MediaBrowserService + FGS mediaPlayb
 | 启动命令 | `adb -s … shell am start -n com.ss.android.ugc.aweme/.splash.SplashActivity` |
 | 轮询结果 | 全程只在 `state=1`（停止）与空之间摆动，**从未 `state=3`** |
 | 采集时间 | 13:00:56 – 13:02:13 |
-| 失败原因（实测 logcat） | 抖音会话转入 idle 后，**ROM 自行把「历史媒体应用」网易云拉起并开始播放**：`13:02:03.828 MediaSessionService: Audio playback is changed … u/pid:10235/24523 state:started` → `Media button session is changed to com.netease.cloudmusic/MediaSession`。于是采到的是网易云的会话与卡片 |
+| 失败原因（实测 logcat） | 抖音会话转入 idle 后，**ROM 自行把「历史媒体应用」ncm 拉起并开始播放**：`13:02:03.828 MediaSessionService: Audio playback is changed … u/pid:10235/24523 state:started` → `Media button session is changed to com.netease.cloudmusic/MediaSession`。于是采到的是 ncm 的会话与卡片 |
 | logcat 里是否出现 aweme | **否**（`grep aweme logcat-hwmediasession-douyin.txt` 无命中）⇒ 抖音**没有**拿到任何白名单判定 |
-| 两份 uiautomator 的关系 | `uiautomator-douyin.xml` 与 `uiautomator-netease.xml` **md5 完全相同**：`41c322c4337bd9be024b0c3fe53536a6`（76097 B；mtime 13:02:13 vs 13:02:53）。两者内容都是**网易云的卡**（`content-desc="The Final Countdown Europe"`） |
-| 判定 | **该条 A/B 无效，不作为证据**（它证明的是网易云，不是抖音） |
-| 文件 | `dumpsys-media-session-douyin.txt`、`dumpsys-notification-douyin.txt`、`logcat-hwmediasession-douyin.txt`、`uiautomator-douyin.xml`、`screenshots/douyin-controlcenter-WRONG-app-is-netease.png`（❌ 内容是网易云的卡）、`tmp/capture-douyin.log` |
+| 两份 uiautomator 的关系 | `uiautomator-douyin.xml` 与 `uiautomator-netease.xml` **md5 完全相同**：`41c322c4337bd9be024b0c3fe53536a6`（76097 B；mtime 13:02:13 vs 13:02:53）。两者内容都是**ncm 的卡**（`content-desc="The Final Countdown Europe"`） |
+| 判定 | **该条 A/B 无效，不作为证据**（它证明的是 ncm，不是抖音） |
+| 文件 | `dumpsys-media-session-douyin.txt`、`dumpsys-notification-douyin.txt`、`logcat-hwmediasession-douyin.txt`、`uiautomator-douyin.xml`、`screenshots/douyin-controlcenter-WRONG-app-is-netease.png`（❌ 内容是 ncm 的卡）、`tmp/capture-douyin.log` |
 
 > 附带【实测】的 ROM 行为：**当一个媒体会话转入 idle，EMUI 会把「历史媒体应用」拉起来播放。**
 > 这条行为本身与白名单无关，但它会污染「逐个应用隔离采集」，后续做 A/B 时必须注意。
@@ -114,7 +114,7 @@ com.huawei.music/com.android.mediacenter.playback.systeminteract.MediaButtonInte
 com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButtonReceiver,0,1
 ```
 
-【实测】该列表里有网易云（×3 条）与华为音乐（×1 条），**没有 Ncrust**——
+【实测】该列表里有 ncm（×3 条）与华为音乐（×1 条），**没有 Ncrust**——
 尽管 Ncrust 在清单里声明了 `androidx.media3.session.MediaButtonReceiver`。
 
 | 文件 | 内容 |
@@ -133,7 +133,7 @@ com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButto
 |---|---|---|
 | `screenshots/netease-controlcenter.png`（625623 B，sha256 `afe87d6f…`） | ✅ 有效 | 看图可见「控制中心」标题、媒体卡 `The Final Countdown / Europe` + 专辑封面 + 上一首/播放/下一首 |
 | `screenshots/huawei-controlcenter-INVALID-black-frame.png`（19838 B，sha256 `f269ebe8…`） | ❌ **无效** | 整幅纯黑，`screencap` 抓到空白帧；同一时刻控制中心也没打开成功（§B-2） |
-| `screenshots/douyin-controlcenter-WRONG-app-is-netease.png`（437243 B，sha256 `0d3cbd54…`） | ❌ **无效** | 画面里是**网易云**的卡，不是抖音（§B-4 的污染） |
+| `screenshots/douyin-controlcenter-WRONG-app-is-netease.png`（437243 B，sha256 `0d3cbd54…`） | ❌ **无效** | 画面里是**ncm**的卡，不是抖音（§B-4 的污染） |
 
 校验值文件：`05-screenshots-sha256.txt`。
 **未做任何美化/裁剪**：无效的截图保留原文件、仅在文件名上标注无效，避免被误引。
@@ -179,7 +179,7 @@ com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButto
 | D1 | WGR-W09 的 root | 生产版 ROM：`su` 不存在（exit=127），`adb root` 被拒（`01-root-probe.txt`）。**未伪造**，改走「pull system jar + 本地反汇编」，实测可行 |
 | D2 | 华为音乐播放态（`state=3`）证据 | `keyevent 126` ×2 未能起播（60 s 全为 `state=2`）；重跑需真正起播、会抢媒体焦点，按主会话协调要求让出设备（§B-2） |
 | D3 | Ncrust 本轮的播放态 A/B | 同上（§B-3）；沿用 v2.1.5 的三份 uiautomator + 截图 |
-| D4 | 抖音的 white-list 判定 | 抖音会话始终 `state=1`，随后 ROM 拉起网易云 → 采到的是网易云（§B-4）。该条 A/B **判为无效**，两份 uiautomator md5 相同 |
+| D4 | 抖音的 white-list 判定 | 抖音会话始终 `state=1`，随后 ROM 拉起 ncm → 采到的是 ncm（§B-4）。该条 A/B **判为无效**，两份 uiautomator md5 相同 |
 | D5 | Ncrust 会话的 `mediaButtonReceiver=` 字段 | 需 Ncrust 进程存活时有会话；采集窗口结束时它已被 force-stop，而当前（13:07）设备上无 Ncrust 会话（`tmp/dumpsys-media-session-NOW.txt`）。按协调要求未再启动它 |
 | D6 | `hw_mediaplaybackcontroller_app_config.xml` 的运行时读取点 | 该文件名常量由 `getHwCfgFileList` 使用，而 `getHwCfgFileList` 的唯一调用者是 `getPath`；**`getPath` 的调用者未展开** → 记为未定位（`whitelist-criterion.md` §8.3-U1） |
 | D7 | `getCfgPolicyDir(0)` 展开出的目录清单 | 未反汇编该函数（§8.3-U2） |
@@ -205,10 +205,10 @@ com.netease.cloudmusic/com.netease.cloudmusic.module.webview.audio.WebMediaButto
 | 两个打印点 = `HwMediaSessionServiceInner.checkSessionRecord` / `MediaControlUtils.checkController` | 已证 | `20-…txt`、`21-…txt` | §C 反汇编 |
 | 判据 = 包名命中白名单 + `checkVersion` | 已证 | `20-…txt`（`isInMediaWhiteListInner`/`checkMediaWhiteInfo`/`checkVersion`） | §C |
 | 白名单加载链 = `getCotaXmlFile` → `HwCfgFilePolicy.getDownloadCfgFile` → `third_app_filter.xml` 的 `<feature name="mediaplaybackcontroller">` | 已证 | `20-…txt`、`23-…txt` | §C |
-| 本机名单含网易云/华为音乐、不含 Ncrust | 已证 | `14-third_app_filter.xml`、`13-…xml`、`tmp/mediaplaybackcontroller-feature.xml` | §C |
+| 本机名单含 ncm/华为音乐、不含 Ncrust | 已证 | `14-third_app_filter.xml`、`13-…xml`、`tmp/mediaplaybackcontroller-feature.xml` | §C |
 | 本机无 COTA 覆盖、名单文件不可写 | 已证 | `15-cota-and-config-dir-probe.txt` | §C |
 | 判据不是签名 / 不是权限 / 不是清单声明 | 已证 | `02-badging-and-certs.txt`、`manifest-diff.md` §2–§5 | §A |
-| 网易云通过（`checkController is true` ×4，卡片正常） | 已证 | `logcat-hwmediasession-netease.txt`、`uiautomator-netease.xml`、`screenshots/netease-controlcenter.png`（sha256 `afe87d6f…`，人工看图复核：控制中心媒体卡显示 `The Final Countdown / Europe` + 封面 + 三个传输键） | §B-1 |
+| ncm 通过（`checkController is true` ×4，卡片正常） | 已证 | `logcat-hwmediasession-netease.txt`、`uiautomator-netease.xml`、`screenshots/netease-controlcenter.png`（sha256 `afe87d6f…`，人工看图复核：控制中心媒体卡显示 `The Final Countdown / Europe` + 封面 + 三个传输键） | §B-1 |
 | Ncrust 被拒（logcat 原文 ×2） | 已证（时刻早于协调要求，见 §B-3 标注） | `logcat-hwmediasession-ncrust.txt` | §B-3 |
 | 「名单外一律被拒」是唯一判据（无其它旁路） | 高置信推断 | `whitelist-criterion.md` §8.2-H1 | —— |
 | 卡片列表 = `filterMediaInfos` 产出的 `MediaPlayerInfoEx` 列表 | 高置信推断 | `22-…txt` + `logcat-hwmediasession-douyin.txt` 的 `player infoList size: 1` | §C |

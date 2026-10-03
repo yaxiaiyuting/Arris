@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -12,7 +12,7 @@ package com.takahashirinta.ncrust.lyric
  * 歌词来源（v1.9.0）。
  *
  * 三者的能力不同，所以回退链的判据不是「谁先拿到」而是「谁能给出逐字」：
- * - [YRC]：网易云自身的逐字轨，覆盖率不完整（新歌大多没有），与 LRC 行序一一对应；
+ * - [YRC]：ncm 自身的逐字轨，覆盖率不完整（新歌大多没有），与 LRC 行序一一对应；
  * - [TTML]：AMLL TTML DB 的补充源，能补上 yrc 缺失的曲目，但同样存在只有整句没有 span 的投稿；
  * - [LRC]：整行歌词，任何一首歌都至少可能有这一份，是回退链的兜底，永远排最后。
  */
@@ -25,7 +25,7 @@ enum class LyricSourceKind { YRC, TTML, LRC }
  *   [LyricSourceChain.order]** —— 用户关掉的源不该继续发网络请求，否则「关了还在拉」既费流量
  *   又让隐私开关形同虚设。
  * @property ttmlFirst true = TTML 优先（对齐 SPlayer 的 auto 策略：谁的逐字质量好用谁的）；
- *   false = YRC 优先（网易云原生逐字与整行文本同源、时间戳口径一致，不希望被第三方投稿覆盖时选它）。
+ *   false = YRC 优先（ncm 原生逐字与整行文本同源、时间戳口径一致，不希望被第三方投稿覆盖时选它）。
  */
 data class LyricSourcePrefs(
     val ttmlEnabled: Boolean = true,

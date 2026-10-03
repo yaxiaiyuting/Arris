@@ -334,7 +334,7 @@
                     <enable name="新东方在线" package="com.koolearn.android" version="0" options="0"/>
                     <enable name="浙江新闻" package="com.zhejiangdaily" version="0" options="0"/>
                     <enable name="扇贝阅读" package="com.shanbay.news" version="0" options="0"/>
-                    <enable name="网易云课堂" package="com.netease.edu.study" version="0" options="0"/>
+                    <enable name="ncm 课堂" package="com.netease.edu.study" version="0" options="0"/>
                     <enable name="微博极速版" package="com.sina.weibolite" version="0" options="0"/>
                     <enable name="荣耀亲选" package="cn.honor.qinxuan" version="0" options="0"/>
                     <enable name="51talk" package="com.talk51.kid" version="0" options="0"/>
@@ -770,7 +770,7 @@
                     <enable name="羊毛省钱" package="com.meiyou.sheep" version="0" options="0"/>
                     <enable name="美味不用等" package="com.puscene.client" version="0" options="0"/>
                     <enable name="幸福里" package="com.f100.android" version="0" options="0"/>
-                    <enable name="网易云阅读" package="com.netease.pris" version="0" options="0"/>
+                    <enable name="ncm 阅读" package="com.netease.pris" version="0" options="0"/>
                     <enable name="月经期安全期助理" package="com.missu.anquanqi" version="0" options="0"/>
                     <enable name="应届生求职" package="com.yjs.android" version="0" options="0"/>
                     <enable name="恋爱记" package="com.lianaibiji.dev" version="0" options="0"/>
@@ -852,7 +852,7 @@
                 <function name="mediasession">
                     <enable name="Ncrust" package="com.takahashirinta.ncrust" version="0" options=""/>
                     <enable name="音乐" package="com.huawei.music" version="12.11.10.366" options=""/>
-                    <enable name="网易云音乐" package="com.netease.cloudmusic" version="7.3.28" options=""/>
+                    <enable name="ncm" package="com.netease.cloudmusic" version="7.3.28" options=""/>
                     <enable name="酷狗音乐" package="com.kugou.android" version="10.3.5" options=""/>
                     <enable name="酷我音乐" package="cn.kuwo.player" version="9.3.6.1" options=""/>
                     <enable name="喜马拉雅" package="com.ximalaya.ting.android" version="6.6.48.3" options=""/>
@@ -860,7 +860,7 @@
                     <enable name="荔枝" package="com.yibasan.lizhifm" version="5.13.1" options=""/>
                     <enable name="企鹅FM" package="com.tencent.radio" version="7.5.2.56" options=""/>
                     <enable name="音乐" package="com.android.mediacenter" version="12.11.10.333" options=""/>
-                    <enable name="QQ音乐" package="com.tencent.qqmusic" version="10.11.0.8" options=""/>
+                    <enable name="qm" package="com.tencent.qqmusic" version="10.11.0.8" options=""/>
                     <enable name="微信读书" package="com.tencent.weread" version="5.3.4" options=""/>
                     <enable name="得到" package="com.luojilab.player" version="8.12.6" options=""/>
                     <enable name="大屏华为音乐" package="com.huawei.music.bigscreen" version="12.11.4.339" options=""/>
@@ -905,7 +905,7 @@
                 </function>
                 <function name="mediastyle">
                     <enable name="得到" package="com.luojilab.player" version="10.12.0" options=""/>
-                    <enable name="网易云音乐" package="com.netease.cloudmusic" version="8.9.61" options=""/>
+                    <enable name="ncm" package="com.netease.cloudmusic" version="8.9.61" options=""/>
                     <enable name="酷狗音乐" package="com.kugou.android" version="11.5.8" options=""/>
                     <enable name="酷我音乐" package="cn.kuwo.player" version="10.3.8.1" options=""/>
                     <enable name="喜马拉雅" package="com.ximalaya.ting.android" version="9.1.21.2" options=""/>
@@ -924,7 +924,7 @@
         <feature name="hwrestorestatemanager" version="11.1.0.100">
             <functions>
                 <function name="supportrestoreapp">
-                    <enable name="QQ音乐" package="com.tencent.qqmusic" version="0" options=""/>
+                    <enable name="qm" package="com.tencent.qqmusic" version="0" options=""/>
                     <enable name="滴滴出行" package="com.sdu.didi.psnger" version="0" options=""/>
                     <enable name="西瓜视频" package="com.ss.android.article.video" version="0" options=""/>
                     <enable name="喜马拉雅" package="com.ximalaya.ting.android" version="0" options=""/>
@@ -1197,7 +1197,7 @@
                     <disable name="民生信用卡" package="com.cmbc.cc.mbank" version="99" options="0"/>
                     <disable name="天天象棋" package="com.tencent.qqgame.xq" version="99" options="0"/>
                     <disable name="丰收互联" package="com.yitong.zjrc.mfs.android" version="99" options="0"/>
-                    <disable name="网易云音乐" package="com.netease.cloudmusic" version="99" options="0"/>
+                    <disable name="ncm" package="com.netease.cloudmusic" version="99" options="0"/>
                     <disable name="猎聘" package="com.lietou.mishu" version="99" options="0"/>
                     <disable name="国美易卡" package="com.gomejr.icash" version="99" options="0"/>
                     <disable name="明日之后" package="com.netease.mrzh.huawei" version="99" options="0"/>
@@ -1244,7 +1244,7 @@
                     <disable name="使命召唤手游" package="com.tencent.tmgp.cod" version="99" options="0"/>
                     <disable name="炉石传说" package="com.blizzard.wtcg.hearthstone.cn.huawei" version="99" options="0"/>
                     <disable name="暗区突围" package="com.tencent.mf.uam" version="99" options="0"/>
-                    <disable name="QQ音乐HD" package="com.tencent.qqmusicpad" version="99" options="0"/>
+                    <disable name="qmHD" package="com.tencent.qqmusicpad" version="99" options="0"/>
                     <disable name="宝宝巴士HD" package="com.bb.happykids.huawei" version="99" options="0"/>
                     <disable name="智慧视觉" package="com.huawei.scanner" version="99" options="0"/>
                     <disable name="情景智能" package="com.huawei.intelligent" version="99" options="0"/>
@@ -1299,7 +1299,7 @@
                     <disable name="爱奇艺奇巴布" package="com.qiyi.video.child" version="99" options="0"/>
                     <disable name="中信证券" package="com.zxscnew" version="99" options="0"/>
                     <disable name="美丽说" package="com.meilishuo" version="99" options="0"/>
-                    <disable name="QQ音乐HD" package="com.tencent.qqmusicpad" version="99" options="0"/>
+                    <disable name="qmHD" package="com.tencent.qqmusicpad" version="99" options="0"/>
                     <disable name="招才猫直聘" package="com.wuba.bangjob" version="99" options="0"/>
                     <disable name="叽里呱啦儿童英语" package="com.jiliguala.niuwa" version="99" options="0"/>
                     <disable name="掌上高铁" package="com.crgt.ilife" version="99" options="0"/>
@@ -1603,7 +1603,7 @@
                     <enable name="快手" package="com.smile.gifmaker" version="0" options="2,0,0,4"/>
                     <enable name="微博" package="com.sina.weibo" version="0" options="2"/>
                     <enable name="抖音短视频" package="com.ss.android.ugc.aweme" version="0" options="2,0,1,4"/>
-                    <enable name="QQ音乐" package="com.tencent.qqmusic" version="0" options="2,0,1"/>
+                    <enable name="qm" package="com.tencent.qqmusic" version="0" options="2,0,1"/>
                     <enable name="腾讯新闻" package="com.tencent.news" version="0" options="2,0,1"/>
                     <enable name="百度网盘" package="com.baidu.netdisk" version="0" options="2,0,1,4"/>
                     <enable name="QQ邮箱" package="com.tencent.androidqqmail" version="0" options="2"/>
@@ -1766,7 +1766,7 @@
                     <enable name="支付宝" package="com.eg.android.AlipayGphone" version="1.0.0.0" options=""/>
                     <enable name="携程" package="ctrip.android.view" version="1.0.0.0" options=""/>
                     <enable name="美团" package="com.sankuai.meituan" version="1.0.0.0" options=""/>
-                    <enable name="QQ音乐" package="com.tencent.qqmusic" version="1.0.0.0" options=""/>
+                    <enable name="qm" package="com.tencent.qqmusic" version="1.0.0.0" options=""/>
                 </function>
             </functions>
         </feature>
@@ -1910,7 +1910,7 @@
                     <enable name="网易新闻" package="com.netease.newsreader.activity" version="0" options="0x10"/>
                     <enable name="一起小学学生" package="com.A17zuoye.mobile.homework" version="0" options="0x10"/>
                     <enable name="学而思网校" package="com.xueersi.parentsmeeting" version="0" options="0x10"/>
-                    <enable name="网易云音乐" package="com.netease.cloudmusic" version="0" options="0x10"/>
+                    <enable name="ncm" package="com.netease.cloudmusic" version="0" options="0x10"/>
                     <enable name="ClassIn" package="cn.eeo.classin" version="0" options="0x10"/>
                     <enable name="搜狗搜索" package="com.sogou.activity.src" version="0" options="0x8010"/>
                     <enable name="2345天气预报" package="com.tianqi2345" version="0" options="0x8010"/>
@@ -2211,13 +2211,13 @@
                     <enable name="微博" package="com.sina.weibo" version="0" options="0x0a"/>
                     <enable name="腾讯新闻" package="com.tencent.news" version="0" options="0x02"/>
                     <enable name="58同城" package="com.wuba" version="0" options="0x02"/>
-                    <enable name="QQ音乐" package="com.tencent.qqmusic" version="0" options="0x02"/>
+                    <enable name="qm" package="com.tencent.qqmusic" version="0" options="0x02"/>
                     <enable name="小红书" package="com.xingin.xhs" version="0" options="0x0a"/>
                     <enable name="好看视频" package="com.baidu.haokan" version="0" options="0x06"/>
                     <enable name="百度地图" package="com.baidu.BaiduMap" version="0" options="0x02"/>
                     <enable name="交管12123" package="com.tmri.app.main" version="0" options="0x02"/>
                     <enable name="知乎" package="com.zhihu.android" version="0" options="0x02"/>
-                    <enable name="网易云音乐" package="com.netease.cloudmusic" version="0" options="0x02"/>
+                    <enable name="ncm" package="com.netease.cloudmusic" version="0" options="0x02"/>
                     <enable name="唯品会" package="com.achievo.vipshop" version="0" options="0x02"/>
                     <enable name="喜马拉雅" package="com.ximalaya.ting.android" version="0" options="0x02"/>
                     <enable name="百度网盘" package="com.baidu.netdisk" version="0" options="0x0a"/>

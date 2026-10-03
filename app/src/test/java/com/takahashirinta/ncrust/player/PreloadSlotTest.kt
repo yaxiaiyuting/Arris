@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -171,7 +171,7 @@ class PreloadSlotTest {
 
     // ---------- v2.1.5：跨源 ----------
 
-    /** 网易云一侧的 mediaId 形状**逐字节不变**，老媒体项与持久化数据不受影响。 */
+    /** ncm 一侧的 mediaId 形状**逐字节不变**，老媒体项与持久化数据不受影响。 */
     @Test
     fun netease_media_id_shape_is_unchanged() {
         assertEquals("song:42", PreloadSlot.mediaIdFor(MusicSource.NETEASE, 42L, "u42"))
@@ -185,7 +185,7 @@ class PreloadSlotTest {
      * QQ 曲目的预载项 mediaId 必须带音源。
      *
      * 旧实现写 `song:<qqId>`，而 qqId 带 `1L shl 62` 标志位 —— 那会被解析成
-     * 「网易云的一首巨大 id 的歌」。后果从「车机按网易云取链 404」一直到
+     * 「ncm 的一首巨大 id 的歌」。后果从「车机按 ncm 取链 404」一直到
      * 「自动接续时无法从 item 回答这是哪个音源的歌」，后者正是跨源歌词串台的源头。
      */
     @Test
@@ -197,7 +197,7 @@ class PreloadSlotTest {
             MusicSource.QQMUSIC to qqId,
             PreloadSlot.identityFromMediaId(mediaId),
         )
-        // 绝不能退化成「网易云的那个大 id」。
+        // 绝不能退化成「ncm 的那个大 id」。
         assertNotEquals(
             MusicSource.NETEASE to qqId,
             PreloadSlot.identityFromMediaId(mediaId),
@@ -208,7 +208,7 @@ class PreloadSlotTest {
     @Test
     fun transition_rejects_same_number_on_other_source() {
         val qqId = SourceIds.qqId(123L, "mid")
-        // 槽位里是 QQ 的 123，起播项却是网易云的 123 —— 不是同一首，必须拒绝。
+        // 槽位里是 QQ 的 123，起播项却是 ncm 的 123 —— 不是同一首，必须拒绝。
         assertFalse(
             PreloadSlot.transitionMatches(
                 MusicSource.QQMUSIC, qqId, "u",

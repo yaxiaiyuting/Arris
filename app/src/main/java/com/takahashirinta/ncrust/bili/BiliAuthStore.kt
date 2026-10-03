@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -119,9 +119,9 @@ data class BiliProfile(
  *
  * ## 为什么必须是**独立的 SharedPreferences 文件**（照 `QqAuthStore` 的理由写）
  *
- * 网易云的 cookie 在 `ncrust_prefs`/`user_cookie`（`auth/CookieManager`），QQ 音乐的在
+ * ncm 的 cookie 在 `ncrust_prefs`/`user_cookie`（`auth/CookieManager`），qm 的在
  * `ncrust_qq_prefs`（`qq/QqAuthStore`）。三家的登录态必须能**各自独立地**读、写、失效、登出：
- * - 共用一份存储 ⇒ 登出 B 站会把网易云的登录态一起清掉；
+ * - 共用一份存储 ⇒ 登出 B 站会把 ncm 的登录态一起清掉；
  * - 共用一份存储 ⇒「哪一家的 cookie 过期了」无法判定，只能三家一起重新登录；
  * - 而且 B 站音源**默认关闭**（[BiliPrefs.DEFAULT_ENABLED]），它的登录态必须能在
  *   整个 B 站音源关掉的情况下独立存在/独立清除，不牵动另外两家。
@@ -132,7 +132,7 @@ data class BiliProfile(
  * ## 落盘内容与合规
  *
  * 只落**服务端下发的 cookie 与公开资料**。本应用不采集 B 站密码、不做密码登录，
- * 凭据**只存在本机、不上传任何服务器**（与网易云/QQ 一侧同样的约定）。
+ * 凭据**只存在本机、不上传任何服务器**（与 ncm/QQ 一侧同样的约定）。
  * 日志里**只出现字段名与长度**（[BiliCredential.toString] 结构性保证 + 源码扫描守卫）。
  *
  * ## 为什么有「进程内镜像」

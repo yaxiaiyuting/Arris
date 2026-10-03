@@ -17,7 +17,7 @@ python3 docs/verification/v2.5.3/probe-queue-dedup.py | tee docs/verification/v2
 |---|---|
 | 当前队列去重用什么 key？ | **裸 `song.id`**，落点 **14 处**，全在 `MainActivity.kt` |
 | 双源 `song.id` 冲突实际发生率 | **0**，而且是 **bit62 标志位带来的结构性 0**，不是抽样运气 |
-| 同源内 `song.id` 是否唯一？ | 是（网易云 = 平台 songId；QQ = `bit62 \| songid`） |
+| 同源内 `song.id` 是否唯一？ | 是（ncm = 平台 songId；QQ = `bit62 \| songid`） |
 | 跨源冲突的实际影响 | **今天不存在**；今天存在的是「身份规则有两套」 |
 | 跨源队列是否已有用户报障？ | **没有找到任何一条**（`docs/**`、`AGENTS.md`、`git log` 全文检索） |
 | 改成 TrackKey 后顺序/槽位/随机是否受影响？ | 顺序与随机**不受影响**（它们按下标）；待播槽位**本来就按音源**，改造后与队列判重**收敛为同一套** |
@@ -26,11 +26,11 @@ python3 docs/verification/v2.5.3/probe-queue-dedup.py | tee docs/verification/v2
 > ### ⚠️ 对 v2.5.0/v2.5.1 遗留清单的更正
 >
 > v2.5.0 / v2.5.1 的未验证清单里写着：
-> 「队列去重用**裸 `song.id`**，跨源**裸 id 撞号**（网易云某首 vs QQ 某首）时会把其中一首当重复。」
+> 「队列去重用**裸 `song.id`**，跨源**裸 id 撞号**（ncm 某首 vs QQ 某首）时会把其中一首当重复。」
 >
-> **这句话的前提在本版被证伪。** 它成立需要「网易云的 songId 与 QQ 的 songId 落在同一个数值空间」，
+> **这句话的前提在本版被证伪。** 它成立需要「ncm 的 songId 与 QQ 的 songId 落在同一个数值空间」，
 > 而 v2.1.0 · A 起 QQ 的 id 一律由 `SourceIds.qqId()` 产出（见 §2），
-> **bit62 恒置位**，与网易云 1e6~3e9 的区间不相交 —— 撞号在 64 位整数上不可能发生。
+> **bit62 恒置位**，与 ncm 1e6~3e9 的区间不相交 —— 撞号在 64 位整数上不可能发生。
 >
 > 按 `AGENTS.md` v2.5.1 规则 2（探针结论与既有说法冲突时以探针为准），
 > 本版**更正**这条遗留项，并把真正的收益重述为「去掉双身份规则」（§5）。
@@ -74,7 +74,7 @@ MainActivity.kt
 
 `SongSourceExt.kt` 里**已经**定义了 `SongItem.dedupeKey`，KDoc 写着
 「**队列内判重用的身份串**……不能用 `SongItem.id` 单独判重」，
-`SongSourceExtTest` 里**已经有两条守卫用例**（`同为网易云的新旧条目身份一致` /
+`SongSourceExtTest` 里**已经有两条守卫用例**（`同为ncm的新旧条目身份一致` /
 `同 id 不同音源的判重键不同`）——
 
 **而它在生产代码里的调用点是 0 处。**
@@ -102,9 +102,9 @@ MainActivity.kt
 | `qq/QqSongMapper.kt:115` | `syntheticId`（= `SourceIds.qqId(rawId, mid)`） | ✅ QQ 带 bit62 |
 | `qq/QqCatalog.kt:351` | `SourceIds.qqId(...)` | ✅ QQ 带 bit62 |
 | `ui/screen/SongDetailScreen.kt:256` | `SourceIds.qqId(idFromRoute, …)`（路由形态无标志位时补上） | ✅ QQ 带 bit62 |
-| `network/PlaylistApi.kt` ×5 | `optLong("id")`（网易云接口） | ✅ 裸 id（网易云） |
-| `crosssource/CatalogAggregator.kt:520` | `s.id` + `source = NETEASE` | ✅ 裸 id（网易云） |
-| `MainActivity.kt:1752` / `2262` | 网易云专辑详情 | ✅ 裸 id（网易云） |
+| `network/PlaylistApi.kt` ×5 | `optLong("id")`（ncm 接口） | ✅ 裸 id（ncm） |
+| `crosssource/CatalogAggregator.kt:520` | `s.id` + `source = NETEASE` | ✅ 裸 id（ncm） |
+| `MainActivity.kt:1752` / `2262` | ncm 专辑详情 | ✅ 裸 id（ncm） |
 | `playlist/PlaylistCacheCodec.kt:440` | 从 DTO 恢复，**要求 `source` 非空** | ✅ 形态随源 |
 | `source/SongSourceExt.kt:65`（`songRefOf`） | 调用方给 | ✅ 调用方 4 处全部来自 `TrackKey`/合成 id |
 | `MainActivity.kt:887`（续播恢复） | `PlaybackStateManager.getSourceKey/Id/MediaId` | ✅ 三件套齐全 |
@@ -122,12 +122,12 @@ MainActivity.kt
 
 ```
 QQ_ID_FLAG = 1L shl 62 = 4611686018427387904  (0x4000000000000000)
-网易云 songId 实测量级 : 1e6 ~ 3e9   （远小于 2^40 = 1099511627776）
+ncm songId 实测量级 : 1e6 ~ 3e9   （远小于 2^40 = 1099511627776）
 QQ 合成 id 的最小值    : 4611686018427387905  (bit62 恒置位)
 两个区间是否相交       : 否
 ```
 
-⇒ 只要 QQ 曲目的 id 都经 `SourceIds.qqId()` 产出，**「网易云 id == QQ id」在 64 位整数上
+⇒ 只要 QQ 曲目的 id 都经 `SourceIds.qqId()` 产出，**「ncm id == QQ id」在 64 位整数上
 不可能成立** —— 与抽样无关，也与队列里放了多少首无关。
 
 这与 `MusicSource.kt` 里 v2.1.0 · A 的设计文档一致，且该文档已经写明收益是
@@ -141,12 +141,12 @@ QQ 合成 id 的最小值    : 4611686018427387905  (bit62 恒置位)
 
 | 量 | 取值 |
 |---|---|
-| 网易云 songId | 7~10 位十进制，`1e6 ~ 3e9`（实测例：`5257138` / `287035` / `1959528822` / `1295411603` / `102792543`） |
+| ncm songId | 7~10 位十进制，`1e6 ~ 3e9`（实测例：`5257138` / `287035` / `1959528822` / `1295411603` / `102792543`） |
 | QQ 原始 songid | 9~10 位十进制，`1e9 ~ 3.6e9` |
 | QQ songmid | 14 位、`00` 起头的 base62（实测例：`0039MnYb0qxYhV` 等） |
 
 ```
-样本数                          : 1000（网易云 × QQ 各 1 首配对）
+样本数                          : 1000（ncm × QQ 各 1 首配对）
 裸 song.id 上的跨源数值冲突     : 0 次
 裸 song.id 上的同源重复         : 0
 TrackKey 上的冲突               : 0 次
@@ -159,7 +159,7 @@ TrackKey 上的冲突               : 0 次
 
 | 情形 | 结论 |
 |---|---|
-| 网易云同源 | id 就是平台 songId，平台内唯一 ⇒ 无重复可能 |
+| ncm 同源 | id 就是平台 songId，平台内唯一 ⇒ 无重复可能 |
 | QQ 同源（有 songid） | `bit62 \| songid`，songid 平台内唯一 ⇒ 唯一 |
 | QQ 同源（**没有** songid，FNV-1a 散列 songmid 兜底） | 抽样 **20000** 个 songmid → **0** 个散列碰撞；理论概率 ≈ `n²/2^63 = 4.3e-11` |
 
@@ -192,7 +192,7 @@ TrackKey 上的冲突               : 0 次
 `SearchHistoryManager.HistoryItem` 只存 `id`，没有 `source`。
 `SearchScreen.kt:749` 的 `HistoryItem.toSongItem()` 因此恢复出一首
 `source = null` 的曲目 —— 如果它原本是 QQ 曲目，`SongItem.musicSource`
-（`MusicSource.fromKey(null)`）会把它认成**网易云**。
+（`MusicSource.fromKey(null)`）会把它认成**ncm**。
 
 - **这个 bug 不是本版引入的**，本版也没有把「搜索结果写进历史记录」这条路上的音源补全
   （那要改 `SearchHistoryManager` 的表结构与迁移，超出本次范围）。
@@ -239,8 +239,8 @@ SongItem 的持久化字段:
 `TrackKey` 可以直接从既有字段算出来，**没有任何「旧 key 形状」需要翻译**。
 
 而 v2.1.0 **之前**的条目没有 `source` 字段：Gson 走 Unsafe 反序列化、不调用构造函数
-⇒ 读到 `null` ⇒ `MusicSource.fromKey(null)` 回落网易云。那正是老数据的正确解释
-（那时候只有网易云），本版**保持**这个语义。
+⇒ 读到 `null` ⇒ `MusicSource.fromKey(null)` 回落 ncm。那正是老数据的正确解释
+（那时候只有 ncm），本版**保持**这个语义。
 
 `QueueKeysTest` 用 4 条用例把这件事钉住（`持久化队列的形状 - 老 JSON 直接可用 无需迁移`
 等）：直接给 Gson 喂 v2.1.0 之前的 JSON、v2.1.0 之后的 JSON、以及混合队列，

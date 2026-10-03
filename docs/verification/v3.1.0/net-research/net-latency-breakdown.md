@@ -1,4 +1,4 @@
-# 网易云接口耗时分解（v3.1.0 · P0 网络调研）
+# ncm 接口耗时分解（v3.1.0 · P0 网络调研）
 
 > 采集时间：2026-09-28 02:22–02:24 ｜ 代码基线：`a86d97b`（v3.0.0）｜
 > 采集方式：**真机 S6（SM-G9209 / Android 7.0 / API 24 / WiFi）+ 仪器化探针**
@@ -28,7 +28,7 @@
 | `netease.songurl`（eapi 取链） | 96 | 165 | 81 | 145 | 33 | 220 | 143 | 5/6 |
 | `netease.lyric`（api/song/lyric） | 105 | 117 | 82 | 101 | 10 | 139 | 101 | 5/6 |
 | **`qq.search`**（musicu.fcg） | **137** | 187 | **121** | 169 | 19 | 234 | 151 | 5/6 |
-| `bili.nav`（带网易云 Referer，见 §5） | 123 | 141 | 101 | 115 | 50 | 184 | 130 | 5/6 |
+| `bili.nav`（带 ncm Referer，见 §5） | 123 | 141 | 101 | 115 | 50 | 184 | 130 | 5/6 |
 | `bili.audio.info`（同上） | 118 | 138 | 100 | 116 | 15 | 159 | 105 | 5/6 |
 
 冷连接单通（每个目标的第 1 通）：
@@ -42,18 +42,18 @@
 
 复用连接（第 2~6 通）的典型形状：`wait=2~9ms`、`write=2~9ms`、`ttfb≈80~250ms`。
 
-## 2. 网易云 vs QQ：差异在哪一段
+## 2. ncm vs QQ：差异在哪一段
 
 **结论：差异在 TTFB（服务端处理 + 回程），不在连接层。**
 
-- 冷连接：网易云 `connect 139ms / tls 99ms`，QQ `connect 234ms / tls 151ms` —— **QQ 的连接建立更慢**。
-- 冷连接 total：网易云 509ms vs QQ 458ms —— **同一量级**。
-- 复用连接 TTFB：网易云搜索 **249ms** vs QQ 搜索 **121ms** —— **网易云是 QQ 的 2.06 倍**。
+- 冷连接：ncm `connect 139ms / tls 99ms`，QQ `connect 234ms / tls 151ms` —— **QQ 的连接建立更慢**。
+- 冷连接 total：ncm 509ms vs QQ 458ms —— **同一量级**。
+- 复用连接 TTFB：ncm 搜索 **249ms** vs QQ 搜索 **121ms** —— **ncm 是 QQ 的 2.06 倍**。
 - 同一台设备、同一条 h2 连接、同一个 `write`（5ms vs 2ms）⇒ 差异**不可能**来自客户端或连接层，
-  只能来自服务端（网易云的 `cloudsearch/pc` 比 QQ 的 `musicu.fcg` 慢）。
+  只能来自服务端（ncm 的 `cloudsearch/pc` 比 QQ 的 `musicu.fcg` 慢）。
 
-**换算成「用户感知」的那一格**：一次搜索的网易云那一段 = `dns+connect+tls+ttfb`（冷）≈ 139+99+334 = 572ms；
-复用后 ≈ 249ms。这与 v2.5.6 在 PCL110 上观察到的「网易云慢」是同一个方向，但**量级小一个数量级**
+**换算成「用户感知」的那一格**：一次搜索的 ncm 那一段 = `dns+connect+tls+ttfb`（冷）≈ 139+99+334 = 572ms；
+复用后 ≈ 249ms。这与 v2.5.6 在 PCL110 上观察到的「ncm 慢」是同一个方向，但**量级小一个数量级**
 （那次是 30s，这次是 0.25s）—— 见 §3。
 
 ## 3. v2.5.6 的「请求头 30s 才出去」是否复现：**没有复现**
@@ -93,7 +93,7 @@ sample=reuse proto=h2 reused=true  dns=-1 connect=-1  tls=-1  wait=3   ttfb=378 
   `api.bilibili.com` / `www.bilibili.com`），每个 host 各自建连 —— 这是 h2 的正常形状
   （连接按 host 复用，不跨 host）。
 
-**对「冷启动第一通贵」的直接推论**：网易云的搜索、取链、歌词分别落在
+**对「冷启动第一通贵」的直接推论**：ncm 的搜索、取链、歌词分别落在
 `music.163.com`、`interface3.music.163.com` 两个 host 上 ⇒ **至少要建两条连接**
 （≈ 2 × 365ms ≈ 730ms 的一次性成本）。这是可优化项，见 RECOMMENDATIONS §3。
 
@@ -108,7 +108,7 @@ variant=B_bili_referer    referer=https://www.bilibili.com/ origin=true http=200
 variant=C_no_referer      referer=                        origin=false http=200 body={"code":-101,...}
 ```
 
-**判决（证据充分，不是推断）**：B 站接入**不能复用**网易云那个无条件注入 Referer/UA/Cookie 的
+**判决（证据充分，不是推断）**：B 站接入**不能复用**ncm 那个无条件注入 Referer/UA/Cookie 的
 `CookieInterceptor` 与 `plainClient`；必须有自己的 OkHttp 客户端（或无 Referer）。
 带正确的 B 站 Referer 后，匿名 `nav` 返回 **200 + `code:-101` + `wbi_img`** ——
 这正是 Wbi 签名要的 key，且**不需要登录**。
@@ -117,9 +117,9 @@ variant=C_no_referer      referer=                        origin=false http=200 
 
 | 现象 | 本轮证据 | 归类 | 能不能优化 |
 |---|---|---|---|
-| 网易云搜索 TTFB 249ms vs QQ 121ms | 同设备同连接，差在 TTFB | **服务端**（网易云接口本身慢） | ❌ 客户端改不动；只能**别再串行等它** |
+| ncm 搜索 TTFB 249ms vs QQ 121ms | 同设备同连接，差在 TTFB | **服务端**（ncm 接口本身慢） | ❌ 客户端改不动；只能**别再串行等它** |
 | 冷连接 ~365~600ms | `dns+connect+tls` | 网络环境 + 每 host 一次 | ✅ 可**预热连接**（启动时提前建连） |
-| 网易云取链/歌词在**两个不同 host** | `music.163.com` vs `interface3.music.163.com` | 客户端配置 | ✅ 可预热两个 host |
+| ncm 取链/歌词在**两个不同 host** | `music.163.com` vs `interface3.music.163.com` | 客户端配置 | ✅ 可预热两个 host |
 | 复用连接后 `wait=2~9ms`、`write=2~5ms` | 5/6 复用 | —— | 已是最优 |
 | 「请求头 30s 才出去」 | **未复现**（wait/acquireToReq/write 全部 < 10ms） | **环境相关的偶发**（见下） | ⚠️ 只能加可观测性，不能再加短 `callTimeout`（v2.5.6 已证伪） |
 

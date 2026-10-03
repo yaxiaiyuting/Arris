@@ -1,4 +1,4 @@
-# 探针 · 专辑跨源匹配（网易云 ↔ QQ 音乐）
+# 探针 · 专辑跨源匹配（ncm ↔ qm）
 
 > 生成：`docs/verification/v2.4.0/probe-album-mapping.py`（**匿名只读**）。锚点艺人取自 `probe-artist-mapping.md` 的实测结果。
 > 原始响应：`probe-raw/album-mapping.json`。
@@ -23,7 +23,7 @@
 
 逐艺人的配对情况：
 
-| 艺人 | 网易云专辑 | QQ 专辑 | 归一化配对 | 仅网易云 | 仅 QQ |
+| 艺人 | ncm 专辑 | QQ 专辑 | 归一化配对 | 仅 ncm | 仅 QQ |
 |---|---|---|---|---|---|
 | 周杰伦 | 44 | 43 | **33** | 11 | 10 |
 | 林俊杰 | 80 | 75 | **63** | 15 | 9 |
@@ -34,22 +34,22 @@
 
 ### 「只差版本后缀」的近似对（`in` 互相包含但归一化不等）
 
-- 周杰伦：网易云 `2004无与伦比演唱会` ↔ QQ `周杰伦2004无与伦比演唱会livecd`
-- 周杰伦：网易云 `周杰伦2007世界巡回演唱会` ↔ QQ `2007世界巡回演唱会`
-- 周杰伦：网易云 `超时代演唱会` ↔ QQ `theera2010超时代演唱会`
-- 周杰伦：网易云 `魔天伦世界巡回演唱会` ↔ QQ `周杰伦魔天伦世界巡回演唱会`
-- 林俊杰：网易云 `和自己对话` ↔ QQ `和自己对话frommetomyself`
-- 五月天：网易云 `92全运会纪念ep` ↔ QQ `92全运会纪念`
-- 五月天：网易云 `五月之恋` ↔ QQ `音乐电影五月之恋`
-- 五月天：网易云 `五月天十万人出头天live` ↔ QQ `十万人出头天live`
-- 五月天：网易云 `五月天诺亚方舟世界巡回演唱会live` ↔ QQ `诺亚方舟世界巡回演唱会`
-- 五月天：网易云 `五月天追梦3dna电影原声音乐专辑` ↔ QQ `追梦3dna电影原声音乐`
-- 五月天：网易云 `步步自选作品辑` ↔ QQ `步步自选作品辑thebestof19992013`
-- Taylor Swift：网易云 `themorefearlesschapter` ↔ QQ `fearless`
-- Taylor Swift：网易云 `themoreloverchapter` ↔ QQ `lover`
-- Taylor Swift：网易云 `thetorturedpoetsdepartmenttstheerastoursetlist` ↔ QQ `ours`
+- 周杰伦：ncm `2004无与伦比演唱会` ↔ QQ `周杰伦2004无与伦比演唱会livecd`
+- 周杰伦：ncm `周杰伦2007世界巡回演唱会` ↔ QQ `2007世界巡回演唱会`
+- 周杰伦：ncm `超时代演唱会` ↔ QQ `theera2010超时代演唱会`
+- 周杰伦：ncm `魔天伦世界巡回演唱会` ↔ QQ `周杰伦魔天伦世界巡回演唱会`
+- 林俊杰：ncm `和自己对话` ↔ QQ `和自己对话frommetomyself`
+- 五月天：ncm `92全运会纪念ep` ↔ QQ `92全运会纪念`
+- 五月天：ncm `五月之恋` ↔ QQ `音乐电影五月之恋`
+- 五月天：ncm `五月天十万人出头天live` ↔ QQ `十万人出头天live`
+- 五月天：ncm `五月天诺亚方舟世界巡回演唱会live` ↔ QQ `诺亚方舟世界巡回演唱会`
+- 五月天：ncm `五月天追梦3dna电影原声音乐专辑` ↔ QQ `追梦3dna电影原声音乐`
+- 五月天：ncm `步步自选作品辑` ↔ QQ `步步自选作品辑thebestof19992013`
+- Taylor Swift：ncm `themorefearlesschapter` ↔ QQ `fearless`
+- Taylor Swift：ncm `themoreloverchapter` ↔ QQ `lover`
+- Taylor Swift：ncm `thetorturedpoetsdepartmenttstheerastoursetlist` ↔ QQ `ours`
 
-**说明**：归一化规则已把 `（Deluxe）`/`豪华版`/`Remastered` 之类的括注与版本词剥掉（见 `probe_lib.normalize_name`），上与不上的差异都能在上表里看到。「仅网易云 / 仅 QQ」里绝大多数不是版本差异，而是**真的只在一边上架**（例如网易云有大量「Live」「伴奏」单曲碟，QQ 归入专辑下的曲目）。
+**说明**：归一化规则已把 `（Deluxe）`/`豪华版`/`Remastered` 之类的括注与版本词剥掉（见 `probe_lib.normalize_name`），上与不上的差异都能在上表里看到。「仅 ncm / 仅 QQ」里绝大多数不是版本差异，而是**真的只在一边上架**（例如 ncm 有大量「Live」「伴奏」单曲碟，QQ 归入专辑下的曲目）。
 
 ## Q2 · 辅助判据的可信度
 
@@ -57,7 +57,7 @@
 |---|---|---|
 | 曲目数（`album.size` vs `latest_song.song_count` / `totalNum`） | 41 / 48 | ⚠️ 有分歧，**只能当 HIGH 的加分项**，不能单独当 EXACT 判据 |
 | 发行年份 | 43 / 48 | ⚠️ 不够稳，只做参考 |
-| 发行方（company） | 8 / 34 | ⚠️ QQ 侧 `company` 常为空 / 口径不同（网易云是厂牌，QQ 是版权方），**不宜做判据** |
+| 发行方（company） | 8 / 34 | ⚠️ QQ 侧 `company` 常为空 / 口径不同（ncm 是厂牌，QQ 是版权方），**不宜做判据** |
 
 另有两条**比上面都强**的判据（本次实测出来的）：
 
@@ -66,7 +66,7 @@
 
 ## Q4 · 逐对详情（曲目名集合比对）
 
-| 艺人 | 专辑 | 网易云 id | QQ mid | 曲目数 网/QQ | 曲目名重合 | 重合率 | 判定 | 名称相同 |
+| 艺人 | 专辑 | ncm id | QQ mid | 曲目数 网/QQ | 曲目名重合 | 重合率 | 判定 | 名称相同 |
 |---|---|---|---|---|---|---|---|---|
 | 周杰伦 | Jay | `18918` | `000f01724fd7TH` | 10/10 | **10** | 100% | **EXACT** | ✅ |
 | 周杰伦 | Mojito | `90743831` | `0009C3rp3Kfwg0` | 1/1 | **1** | 100% | **EXACT** | ✅ |
@@ -119,17 +119,17 @@
 
 ### 曲目不一致的样本（差异明细）
 
-- **林俊杰 / 100天Love音乐实录**：仅网易云 ['记得心墙当你']；仅 QQ ['组曲记得心墙当你']
-- **林俊杰 / 2006就是俊杰世界巡回演唱会**：仅网易云 ['莎郎嘿哟只对你说', '被风吹过的夏天']；仅 QQ ['사랑해요只对你说']
-- **五月天 / Final Home 当我们混在一起**：仅网易云 ['enrichyourlife', '约翰蓝侬']；仅 QQ ['enrichyourlife让我照顾你', '约翰列侬']
-- **五月天 / Mayday×五月天 the Best of 1999-2013**：仅网易云 ['乾杯', '出陣の歌', '孫悟空', '恋愛ing']；仅 QQ ['孙悟空', '干杯', '恋爱ing']
-- **五月天 / Your Legend ~燃ゆる命~**：仅网易云 ['盛夏光年']；仅 QQ ['青春の彼方盛夏光年']
-- **G.E.M.邓紫棋 / 18**：仅网易云 ['ainy爱你', 'mascara烟熏妆']；仅 QQ ['ainy', 'mascara', 'wheredidugo20', '写不完的温柔']
-- **G.E.M.邓紫棋 / A.I.N.Y. 爱你**：仅网易云 ['allaboutu']；仅 QQ ['allaboutyou', '美好的旧时光']
-- **G.E.M.邓紫棋 / Get Everybody Moving Concert 2011**：仅网易云 ['thevoicewithin遗失的声音', 'wannabestartinsomethin', '我的秘密', '美好的旧时光inmyheart']；仅 QQ ['lupo眼中的gem', 'mysecret', 'tan幕后的故事', 'thevoicewithin']
-- **Taylor Swift / 1989 (Taylor's Version) (Deluxe)**：仅网易云 ['isitovernow', 'nowthatwedonttalk', 'saydontgo', 'slut']；仅 QQ （无）
-- **Taylor Swift / Speak Now (Taylor's Version)**：仅网易云 ['castlescrumbling', 'electrictouch', 'foolishone', 'icanseeyou']；仅 QQ ['ifthiswasamovie']
-- **Taylor Swift / The Life of a Showgirl**：仅网易云 （无）；仅 QQ ['thelifeofashowgirlintro', 'thelifeofashowgirloutro']
+- **林俊杰 / 100天Love音乐实录**：仅 ncm ['记得心墙当你']；仅 QQ ['组曲记得心墙当你']
+- **林俊杰 / 2006就是俊杰世界巡回演唱会**：仅 ncm ['莎郎嘿哟只对你说', '被风吹过的夏天']；仅 QQ ['사랑해요只对你说']
+- **五月天 / Final Home 当我们混在一起**：仅 ncm ['enrichyourlife', '约翰蓝侬']；仅 QQ ['enrichyourlife让我照顾你', '约翰列侬']
+- **五月天 / Mayday×五月天 the Best of 1999-2013**：仅 ncm ['乾杯', '出陣の歌', '孫悟空', '恋愛ing']；仅 QQ ['孙悟空', '干杯', '恋爱ing']
+- **五月天 / Your Legend ~燃ゆる命~**：仅 ncm ['盛夏光年']；仅 QQ ['青春の彼方盛夏光年']
+- **G.E.M.邓紫棋 / 18**：仅 ncm ['ainy爱你', 'mascara烟熏妆']；仅 QQ ['ainy', 'mascara', 'wheredidugo20', '写不完的温柔']
+- **G.E.M.邓紫棋 / A.I.N.Y. 爱你**：仅 ncm ['allaboutu']；仅 QQ ['allaboutyou', '美好的旧时光']
+- **G.E.M.邓紫棋 / Get Everybody Moving Concert 2011**：仅 ncm ['thevoicewithin遗失的声音', 'wannabestartinsomethin', '我的秘密', '美好的旧时光inmyheart']；仅 QQ ['lupo眼中的gem', 'mysecret', 'tan幕后的故事', 'thevoicewithin']
+- **Taylor Swift / 1989 (Taylor's Version) (Deluxe)**：仅 ncm ['isitovernow', 'nowthatwedonttalk', 'saydontgo', 'slut']；仅 QQ （无）
+- **Taylor Swift / Speak Now (Taylor's Version)**：仅 ncm ['castlescrumbling', 'electrictouch', 'foolishone', 'icanseeyou']；仅 QQ ['ifthiswasamovie']
+- **Taylor Swift / The Life of a Showgirl**：仅 ncm （无）；仅 QQ ['thelifeofashowgirlintro', 'thelifeofashowgirloutro']
 
 ## Q3 · 匹配失败时的降级
 

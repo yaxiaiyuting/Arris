@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -149,9 +149,9 @@ class SavedAlbumCodecTest {
         picUrl = "https://p1.music.126.net/x.jpg",
         artist = "艺人",
         songCount = 12,
-        // v2.6.2 · P0：网易云一侧**没有字符串身份**，`mid` 恒为 null。
+        // v2.6.2 · P0：ncm 一侧**没有字符串身份**，`mid` 恒为 null。
         // 夹具保持 null 是**有意的** —— 它同时覆盖「v2.6.2 之前落盘的老条目」
-        // 与「网易云专辑」两种情形，而两者的处置相同（身份不可信）。
+        // 与「ncm 专辑」两种情形，而两者的处置相同（身份不可信）。
     )
 
     /** v2.6.2 · P0：QQ 专辑 —— 有字符串身份（albumMID）。 */
@@ -159,7 +159,7 @@ class SavedAlbumCodecTest {
 
     @Test
     fun `新写入的 key 是稳定字段名而不是单字母`() {
-        // ⚠️ v2.6.2 起 `albumMid` 是**可空**字段，Gson 默认跳过 null ⇒ 网易云那条
+        // ⚠️ v2.6.2 起 `albumMid` 是**可空**字段，Gson 默认跳过 null ⇒ ncm 那条
         // （`mid = null`）落盘时**本来就不该有** `albumMid` 这个 key。
         // 所以「每个 stable key 都出现在 JSON 里」这条断言必须**用身份可信的样本**跑，
         // 否则它会把「可空字段被正确跳过」误判成「字段名被交给 R8 了」。
@@ -183,7 +183,7 @@ class SavedAlbumCodecTest {
     @Test
     fun `身份为空的条目落盘时不写 albumMid 这个 key`() {
         val json = SavedAlbumCodec.encode(listOf(sample))
-        assertFalse("网易云专辑不该写出 albumMid：$json", json.contains("\"albumMid\""))
+        assertFalse("ncm 专辑不该写出 albumMid：$json", json.contains("\"albumMid\""))
         assertTrue("其余 5 个字段照常写出：$json", json.contains("\"albumId\""))
     }
 

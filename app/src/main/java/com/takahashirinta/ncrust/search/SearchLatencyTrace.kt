@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -30,8 +30,8 @@ package com.takahashirinta.ncrust.search
  *
  * [timeToFirstResultMs]（`dispatch → first_publish`）= **用户第一次看到任何结果**的时刻。
  * 这才是「0 首在屏幕」那句话真正对应的量。它**不等于**任何单条腿的耗时：
- * 旧实现是「网易云腿跑完才发布」，所以它恒等于网易云腿；
- * v2.5.6 改成**先到先发布**之后，它等于 `min(网易云腿, QQ 腿)`（在有 QQ 的前提下）。
+ * 旧实现是「ncm 腿跑完才发布」，所以它恒等于 ncm 腿；
+ * v2.5.6 改成**先到先发布**之后，它等于 `min(ncm腿, QQ 腿)`（在有 QQ 的前提下）。
  *
  * ## 打点语义（重复打点保留**第一次**）
  *
@@ -100,7 +100,7 @@ internal class SearchLatencyTrace(
         /** 请求真正发出去的那一刻（500ms 防抖之后）。 */
         const val MARK_DISPATCH = "dispatch"
 
-        /** 网易云腿回来（成功或异常都算「回来了」）。 */
+        /** ncm 腿回来（成功或异常都算「回来了」）。 */
         const val MARK_NETEASE_DONE = "netease_done"
 
         /** QQ 腿回来（含超时/失败）。 */

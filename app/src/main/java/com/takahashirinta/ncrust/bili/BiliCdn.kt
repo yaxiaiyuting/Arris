@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -38,10 +38,10 @@ package com.takahashirinta.ncrust.bili
  *
  * ## 为什么判据是**「白名单 ∪ 取链见过的 host」**，不是「全局加头」
  *
- * 反过来同样成立且已实测：**拿 B 站的 Referer 去请求网易云也会被拒**
+ * 反过来同样成立且已实测：**拿 B 站的 Referer 去请求 ncm 也会被拒**
  * （`net-research/EVIDENCE-S6.md` §4 的 A/B 对照是同一个现象的另一面）。
- * 而且 `RetrofitClient` 那条链路无条件注入的是**网易云自己的** Referer ——
- * 若在这里给所有请求统一塞 B 站头，等于把网易云/QQ 一起打死。
+ * 而且 `RetrofitClient` 那条链路无条件注入的是**ncm 自己的** Referer ——
+ * 若在这里给所有请求统一塞 B 站头，等于把 ncm/QQ 一起打死。
  *
  * 所以只对 B 站媒体 URL 加头。判据两条取或（[isBiliMedia]）：
  *
@@ -51,8 +51,8 @@ package com.takahashirinta.ncrust.bili
  *    （v3.1.0 实测抓到 `b-…edge.mountaintoys.cn`），只靠后缀白名单会漏掉它们，
  *    而「这条 URL 是 B 站刚刚发给我们的」是一个**比域名更可靠**的事实。
  *
- * 两条判据都只可能命中「B 站自己的媒体」，网易云/QQ 的 host 一个都不会进。
- * `BiliCdnTest` 用真实 host 与几个**必须不命中**的网易云/QQ host 把边界钉死。
+ * 两条判据都只可能命中「B 站自己的媒体」，ncm/QQ 的 host 一个都不会进。
+ * `BiliCdnTest` 用真实 host 与几个**必须不命中**的 ncm/QQ host 把边界钉死。
  */
 object BiliCdn {
 
@@ -113,11 +113,11 @@ object BiliCdn {
      * 1. host 落在 [REFERER_HOST_SUFFIXES] 里（`bilivideo.com` 及其子域）；
      * 2. host 是本应用**已知的非 B 站域名**吗 —— 不是。这一条留给调用方：
      *    本函数只回答「是不是 B 站 CDN」，**不认识的一律返回 false**
-     *    （宁可漏加 Referer 也不要给网易云/QQ 加上 —— 那会把能播的歌打死）。
+     *    （宁可漏加 Referer 也不要给 ncm/QQ 加上 —— 那会把能播的歌打死）。
      *
      * 也就是说 PCDN 那种第三方域名**不在**白名单里，会走「不带 Referer」的路。
      * 这是**有意的保守取舍**：漏加的症状是「部分 B 站歌放不出来」，
-     * 误加的症状是「网易云和 QQ 全部放不出来」。前者可诊断，后者是灾难。
+     * 误加的症状是「ncm 和 QQ 全部放不出来」。前者可诊断，后者是灾难。
      *
      * ⚠️ v3.2.4：这个「保守取舍」的缺口由 [isBiliMedia] / [markStream] 补上 ——
      * **判据不再只看域名**，而是「域名 ∪ 这条 URL 是 B 站刚发给我们的」。
@@ -176,7 +176,7 @@ object BiliCdn {
      * v3.2.4：**这条媒体请求要不要按 B 站的方式加头**（Referer + UA）。
      *
      * 判据 = [needsReferer]（域名白名单）∪ [markStream] 学到的 host。
-     * 两者都只可能命中 B 站媒体，网易云 / QQ / 本地文件一律 false。
+     * 两者都只可能命中 B 站媒体，ncm / QQ / 本地文件一律 false。
      *
      * 这是数据源层**唯一**的判据入口：`OfflineAudioCache` 的选源与加头都问它，
      * 绝不允许两处各写一份（铁律 26：对称位置的保护必须对称）。

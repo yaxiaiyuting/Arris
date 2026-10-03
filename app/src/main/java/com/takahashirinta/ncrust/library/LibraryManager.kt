@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -15,7 +15,7 @@
  *     `SavedSongSync` 的七条规则。旧的 refreshFromCloud 是「以云端 likedIds
  *     重建整张表」—— 它**在结构上无法区分**「云端删掉的」与「用户手动加入库的」，
  *     于是把后者一起丢掉，再 flush 回磁盘。QQ 曲目因为 bit62 合成 id 永远不会
- *     出现在网易云的 likedIds 里，所以 100% 命中这条路径。
+ *     出现在 ncm 的 likedIds 里，所以 100% 命中这条路径。
  *     根因链与证据：`docs/verification/v2.6.0/probe-qq-import-loss.md`。
  */
 
@@ -43,9 +43,9 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * 云同步收藏库。
  *
- * 语义（与网易云官方一致）：
- *  - 「收藏单曲」 = 网易云「收藏/我喜欢」（weapi /api/radio/like）；
- *  - 「收藏专辑」 = 网易云「我收藏的专辑」（weapi /api/album/sub），与单曲解耦。
+ * 语义（与 ncm 官方一致）：
+ *  - 「收藏单曲」 = ncm「收藏/我喜欢」（weapi /api/radio/like）；
+ *  - 「收藏专辑」 = ncm「我收藏的专辑」（weapi /api/album/sub），与单曲解耦。
  *
  * 本地用 SharedPreferences 缓存云端状态（收藏单曲 + 收藏专辑），保证：
  *   - 进收藏页/登录时后台拉取（refreshFromCloud）刷新，云端为真源；
@@ -263,11 +263,11 @@ object LibraryManager {
     private fun isLoggedIn(context: Context) = CookieManager.hasCookie(context)
 
     /**
-     * 把「收藏」动作推给网易云。
+     * 把「收藏」动作推给 ncm。
      *
-     * ## v2.6.0 · P0：跨源 id 不许发给网易云的写接口
+     * ## v2.6.0 · P0：跨源 id 不许发给 ncm 的写接口
      *
-     * QQ 音乐的 id 由 `SourceIds.qqId` 合成（`bit62` 恒置位，是**正数**），
+     * qm 的 id 由 `SourceIds.qqId` 合成（`bit62` 恒置位，是**正数**），
      * 所以旧代码里没有任何一条卫语句能拦住它 —— 一首 QQ 曲目的合成 id 会被
      * POST 到 `/api/radio/like`。这与 v2.5.5 修掉的 `PlayReporter` 跨源上报
      * 是**同一个形状**（`ReportGate` 的 KDoc 记了完整根因链）。
@@ -448,7 +448,7 @@ object LibraryManager {
      * 旧实现把 `cachedSongs` 换成「按 likedIds 顺序、只用云端能提供的详情」重建的列表，
      * 于是**任何不在云端 likedIds 里的本地条目都被丢掉**，紧接着 `scheduleFlush`
      * 把丢掉的结果写回磁盘 —— 不可恢复。QQ 曲目的合成 id（bit62）永远不会出现在
-     * 网易云的 likedIds 里，所以**每一次进库页都会丢一次**。
+     * ncm 的 likedIds 里，所以**每一次进库页都会丢一次**。
      *
      * 新实现走 [SavedSongSync.merge] 的七条规则：云端只负责**追加**，
      * 删除只能由用户动作（规则 6）产生。
@@ -613,10 +613,10 @@ object LibraryManager {
  * 落盘契约在 [SavedAlbumCodec] 那一层（`AlbumDto` + 三种读法），本类保持干净、
  * 不加持久化注解 —— 与 `SearchHistoryManager.HistoryItem` 同一条纪律。
  *
- * @property albumId 网易云的十进制专辑 id。它是 `LibraryScreen` 的 LazyColumn key，
+ * @property albumId ncm 的十进制专辑 id。它是 `LibraryScreen` 的 LazyColumn key，
  *   也是「订阅 / 取消订阅」写接口的参数，**必须为正**（codec 会把非正的条目整条丢弃）。
- * @property mid v2.6.2 · P0：专辑在**音源内**的字符串身份 —— QQ 音乐的 `albumMID`
- *   （形如 `000MkMni19ClKG`）。网易云侧恒为 `null`（它的十进制 [albumId] 就是身份）。
+ * @property mid v2.6.2 · P0：专辑在**音源内**的字符串身份 —— qm 的 `albumMID`
+ *   （形如 `000MkMni19ClKG`）。ncm 侧恒为 `null`（它的十进制 [albumId] 就是身份）。
  *
  *   **可空 + 默认值**是硬要求：本字段出现之前落盘的每一条收藏都没有这个 key，
  *   而 Gson 走 Unsafe 反序列化、不调用构造函数。

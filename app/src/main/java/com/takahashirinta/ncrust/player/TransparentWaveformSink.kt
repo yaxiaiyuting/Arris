@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -21,7 +21,7 @@
  *   | 2 → 1 | `{0.5, 0.5}` |
  *   | **其它（含 6 → 1）** | `UnsupportedOperationException: Default channel mixing coefficients for 6->1 are not yet implemented.` |
  *
- * 而 QQ 音乐的「臻品音质 / 臻品全景声」档（本应用统一档位表里的 `dolby` / `jyeffect`）
+ * 而 qm 的「臻品音质 / 臻品全景声」档（本应用统一档位表里的 `dolby` / `jyeffect`）
  * 实测回的**就是 6 声道 FLAC**（`Q001…flac` = FLAC 44100Hz **6ch** 16bit，
  * 见 `docs/verification/v2.2.1/p0-quality-loop/PROBE.md`），于是：
  *

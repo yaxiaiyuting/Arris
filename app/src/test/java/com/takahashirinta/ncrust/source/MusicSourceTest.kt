@@ -19,13 +19,13 @@ class MusicSourceTest {
     // ---------- MusicSource.fromKey：向后兼容是主诉求 ----------
 
     @Test
-    fun `null 与空串回落网易云`() {
+    fun `null 与空串回落ncm`() {
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey(null))
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey(""))
     }
 
     @Test
-    fun `不认识的值回落网易云而不是抛异常`() {
+    fun `不认识的值回落ncm而不是抛异常`() {
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey("spotify"))
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey("NETEASE")) // 大小写敏感是有意的
         assertEquals(MusicSource.NETEASE, MusicSource.fromKey(" qqmusic"))
@@ -45,7 +45,7 @@ class MusicSourceTest {
     }
 
     @Test
-    fun `只有 QQ 音乐需要 sourceId`() {
+    fun `只有 qm需要 sourceId`() {
         assertTrue(MusicSource.QQMUSIC.requiresSourceId)
         assertFalse(MusicSource.NETEASE.requiresSourceId)
     }
@@ -79,13 +79,13 @@ class MusicSourceTest {
     // ---------- mediaId ----------
 
     @Test
-    fun `网易云的 mediaId 与 v2_0_2 逐字节相同`() {
+    fun `ncm的 mediaId 与 v2_0_2 逐字节相同`() {
         // 这条断言是「老用户升级后当前播放项/通知栏不失效」的守门人。
         assertEquals("song:123", SourceIds.mediaId(MusicSource.NETEASE, 123L))
     }
 
     @Test
-    fun `QQ 音乐的 mediaId 带音源段`() {
+    fun `qm的 mediaId 带音源段`() {
         assertEquals("song:qqmusic:456", SourceIds.mediaId(MusicSource.QQMUSIC, 456L))
     }
 
@@ -104,13 +104,13 @@ class MusicSourceTest {
     }
 
     @Test
-    fun `parseMediaId 认历史形状 song_id 为网易云`() {
+    fun `parseMediaId 认历史形状 song_id 为ncm`() {
         // v2.1.0 之前 ExoPlayer 里挂的就是这个形状，升级后正在播的歌不能变成「无法解析」。
         assertEquals(MusicSource.NETEASE to 42L, SourceIds.parseMediaId("song:42"))
     }
 
     @Test
-    fun `parseMediaId 拒绝坏输入而不是猜成网易云`() {
+    fun `parseMediaId 拒绝坏输入而不是猜成ncm`() {
         assertNull(SourceIds.parseMediaId(null))
         assertNull(SourceIds.parseMediaId(""))
         assertNull(SourceIds.parseMediaId("album:42"))
@@ -123,13 +123,13 @@ class MusicSourceTest {
         assertNull(SourceIds.parseMediaId("song:qqmusic:xyz"))
     }
 
-    // ---------- QQ 音乐的数字 id（id 命名空间隔离） ----------
+    // ---------- qm 的数字 id（id 命名空间隔离） ----------
 
     @Test
-    fun `QQ id 落在网易云永远到不了的区间`() {
+    fun `QQ id 落在ncm永远到不了的区间`() {
         val id = SourceIds.qqId(102065756L, "0039MnYb0qxYhV")
         assertTrue(SourceIds.isQqId(id))
-        assertTrue("QQ id 必须大于任何可能的网易云 id", id > 1_000_000_000_000_000L)
+        assertTrue("QQ id 必须大于任何可能的 ncm id", id > 1_000_000_000_000_000L)
         assertTrue("必须是正数，避免与「非正 id 视为无效」的既有守卫冲突", id > 0L)
     }
 
@@ -142,7 +142,7 @@ class MusicSourceTest {
     }
 
     @Test
-    fun `网易云 id 不会被误判成 QQ id`() {
+    fun `ncm id 不会被误判成 QQ id`() {
         for (raw in listOf(1L, 247936L, 3_399_937_943L, 1L shl 40)) {
             assertFalse(SourceIds.isQqId(raw))
             assertNull(SourceIds.qqRawId(raw))

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -36,11 +36,11 @@ fun interface TtmlFetcher {
 }
 
 /**
- * 按网易云 songId 拉 AMLL TTML 的客户端（v1.9.0）。只打 AMLL TTML DB 的只读镜像，
- * **不发任何网易云请求**：不需要登录、不需要 cookie、不碰任何用户凭据。
+ * 按 ncm songId 拉 AMLL TTML 的客户端（v1.9.0）。只打 AMLL TTML DB 的只读镜像，
+ * **不发任何 ncm 请求**：不需要登录、不需要 cookie、不碰任何用户凭据。
  *
  * ## 为什么能按 songId 直接拉
- * TTML DB 的文件名就是网易云歌曲 ID（`ncm-lyrics/<id>.ttml`），不需要搜索接口。
+ * TTML DB 的文件名就是 ncm 歌曲 ID（`ncm-lyrics/<id>.ttml`），不需要搜索接口。
  *
  * ## 镜像行为（2026-09 curl 实测，非文档推断）
  * - 主镜像**有**这首歌 → 直接 200，无重定向；
@@ -79,7 +79,7 @@ object AmllTtmlClient {
     const val NETWORK_ERROR = -1
 
     /**
-     * 一个镜像。[template] 里的 `%d` 是网易云 songId。
+     * 一个镜像。[template] 里的 `%d` 是 ncm songId。
      *
      * [authoritative] = 这一面给出的 404 能不能**判定「这首歌没有 TTML」**。
      * 只有直出官方仓库的三面为 true；jsdelivr 带 50 MB 单包上限，对存在文件也会 403/404，故为 false。

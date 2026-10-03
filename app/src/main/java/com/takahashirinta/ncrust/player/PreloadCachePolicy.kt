@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -33,7 +33,7 @@ package com.takahashirinta.ncrust.player
  * | 模型 | 谁在用 | 判据 |
  * |---|---|---|
  * | 显式过期时刻 [PreloadCacheEntry.expiresAtMs] 非空 | B 站（及将来任何给 TTL 的音源） | `now < expiresAtMs` |
- * | 显式过期时刻为空 | 网易云 / QQ 音乐（**行为与 v3.0.0 逐字相同**） | `now - timestamp <= ttlMs` |
+ * | 显式过期时刻为空 | ncm / qm（**行为与 v3.0.0 逐字相同**） | `now - timestamp <= ttlMs` |
  *
  * ## 铁律 22 的落点
  *
@@ -44,7 +44,7 @@ package com.takahashirinta.ncrust.player
 object PreloadCachePolicy {
 
     /**
-     * 网易云 / QQ 的默认 TTL（毫秒）。**值必须与 v3.0.0 的 `CACHE_TTL_MS` 逐字相同** ——
+     * ncm / QQ 的默认 TTL（毫秒）。**值必须与 v3.0.0 的 `CACHE_TTL_MS` 逐字相同** ——
      * 这个常量搬了一次家，但语义没有变：那两家的 URL 实测在 5 分钟内可复用。
      */
     const val DEFAULT_TTL_MS: Long = 5 * 60 * 1000L
@@ -96,7 +96,7 @@ data class PreloadCacheEntry(
     val songMaxLevel: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
     /**
-     * v3.1.0 · B：**绝对**过期时刻；`null` = 本音源没给显式 TTL（网易云 / QQ）。
+     * v3.1.0 · B：**绝对**过期时刻；`null` = 本音源没给显式 TTL（ncm / QQ）。
      *
      * 由 `SongUrlResult.expiresAtMs` 一路带过来，唯一的产出者是 Provider 的取链实现
      * （B 站那条从 URL 的 `deadline` 反推）。

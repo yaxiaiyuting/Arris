@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -43,7 +43,7 @@ import com.takahashirinta.ncrust.source.trackKeyOf
  *
  * 这不是一次 bug 修复，是**把结构事实变成类型事实**。实测：
  *  · 全部 QQ 曲目的 id 都由 `SourceIds.qqId()` 产出，bit62 恒置位
- *    （`1L shl 62` ≈ 4.6e18），而网易云 songId 是 1e6~3e9 量级 ——
+ *    （`1L shl 62` ≈ 4.6e18），而 ncm songId 是 1e6~3e9 量级 ——
  *    两段区间在 64 位整数上**不可能相交**，与抽样无关；
  *  · 抽样 1000 首双源配对，裸 id 跨源冲突 **0** 次、同源重复 **0** 次；
  *  · 队列快照落盘的是整个 `SongItem`（带 `source`/`mid`/`media_id`），
@@ -70,8 +70,112 @@ import com.takahashirinta.ncrust.source.trackKeyOf
  */
 object QueueKeys {
 
+    /**
+     * v3.3.2 · P0：**「从列表里点一首歌」的完整判定结果**（纯值，JVM 可单测）。
+     *
+     * @property queue 这次点击之后的队列（与入参同一份实例 = 队列没动）。
+     * @property currentIndex 新的 `currentQueueIndex`。不变量：它一定指着 [queue] 里的
+     *   **被点的那首**（[playIndex]），不存在「游标停在别的歌上」的中间态。
+     * @property playIndex 调用方应当交给 `playFromQueue` 的下标。**恒 `>= 0`** ——
+     *   这是本类型存在的理由之一：旧写法在定位失败时会静默什么都不做（见 [planPlayItem]）。
+     * @property queueChanged 队列是否真的变了。`false` = 点的是当前正在播的那首，
+     *   调用方**不要**再写一次 `saveQueue`（与旧行为逐字一致）。
+     * @property fallbackUsed 是否走了「定位失败」的兜底（追加到队尾并播它）。
+     *   正常路径恒 `false`；为 `true` 说明命中了一条以前会**静默丢弃**这次点击的分支 ——
+     *   调用方应当打日志：它是「点了没反应」类报告的诊断锚点。
+     */
+    data class PlayItemPlan(
+        val queue: List<SongItem>,
+        val currentIndex: Int,
+        val playIndex: Int,
+        val queueChanged: Boolean,
+        val fallbackUsed: Boolean,
+    )
+
     /** 队列条目的身份。**这是队列代码里唯一允许的「取身份」写法。** */
     fun keyOf(song: SongItem): TrackKey = song.trackKeyOf()
+
+    /**
+     * v3.3.2 · P0：**「点某一首歌」的唯一决策函数**（`MainActivity.playSongItem` 消费它）。
+     *
+     * ## 为什么把它抽出来
+     *
+     * 用户报告「播放一首歌的时候点击其他歌曲不会切换，无论怎么点击都会一直播放原来的歌」。
+     * 那条链路里**唯一一处会静默什么都不做**的地方，就是旧写法的最后两行：
+     *
+     * ```kotlin
+     * playbackQueue = QueueKeys.rebuild(...) ?: playbackQueue   // ← 装配失败 ⇒ 队列原样不动
+     * val idx = playbackQueue.indexOfFirst { keyOf(it) == songKey }
+     * if (idx >= 0) playFromQueue(idx)                          // ← idx < 0 ⇒ 静默 return
+     * ```
+     *
+     * 也就是说：只要 [rebuild] 交不出新队列（返回 null），这次点击就**一个字节都不会发生** ——
+     * 没有日志、没有提示、没有 `playSong`，用户耳朵里只有上一首还在响。这条分支原先写在
+     * composable 作用域的 `MainActivity` 里，既不可单测、也没有任何判定守着。
+     *
+     * 抽成本函数之后：① 判定是纯函数（`QueueKeysPlayItemTest` 钉住）；
+     * ② [rebuild] 失败**不再是静默丢弃**，而是「追加到队尾并播它」—— 点哪首就播哪首；
+     * 队列顺序退化成「这首歌排在最后」，远好于「点了没反应」。
+     *
+     * ## 语义（与旧实现逐条对应，除上面那条兜底）
+     *
+     * | 情形 | queue | currentIndex | playIndex |
+     * |---|---|---|---|
+     * | 队列空 / 游标越界 | 只含被点那首 | 0 | 0 |
+     * | 被点那首不在队列里 | 去重后插到当前歌**之后** | 被点那首 | 被点那首 |
+     * | 被点那首已在队列（含就是当前歌） | 去重后插到当前歌**之后** | 被点那首 | 被点那首 |
+     * | 被点那首**就是**当前歌 | **原样不动** | 不变 | 它的下标 |
+     * | [rebuild] 失败（兜底） | 队尾追加被点那首 | 队尾 | 队尾 |
+     *
+     * 「插到当前歌之后」是它与 `appendToQueue`（排到队尾）**不同**的地方，
+     * 也是它取代 insertNext 的语义：点歌 = 立刻打断当前播放。
+     *
+     * 游标越界那一条特别重要：它意味着「UI 认为有当前歌，但队列里找不到」——
+     * 此时**不能**去重、不能插队，否则会拿一个不存在的 currentKey 去定位，
+     * 整条队列都可能被改错。
+     */
+    fun planPlayItem(queue: List<SongItem>, currentIndex: Int, song: SongItem): PlayItemPlan {
+        val songKey = keyOf(song)
+        if (queue.isEmpty() || currentIndex !in queue.indices) {
+            return PlayItemPlan(
+                queue = listOf(song),
+                currentIndex = 0,
+                playIndex = 0,
+                queueChanged = true,
+                fallbackUsed = false,
+            )
+        }
+        val currentKey = queue.getOrNull(currentIndex)?.let { keyOf(it) }
+        // 点的是当前正在播的那首：队列**一个字节都不动**（旧行为：不 saveQueue、不重排）。
+        // 这正是「用户在队列面板点当前歌」的场景 —— 它必须能出声音，而不是被当成无操作。
+        if (songKey == currentKey) {
+            val idx = queue.indexOfFirst { keyOf(it) == songKey }.takeIf { it >= 0 } ?: currentIndex
+            return PlayItemPlan(queue, idx, idx, queueChanged = false, fallbackUsed = false)
+        }
+
+        val filtered = dedupe(keysOf(queue), songKey).toMutableList()
+        val newCurrentIndex = indexOfCurrent(filtered, currentKey).coerceAtLeast(0)
+            .let { if (currentKey == null) -1 else it }
+        val insertPos = (newCurrentIndex + 1).coerceIn(0, filtered.size)
+        filtered.add(insertPos, songKey)
+        val rebuilt = rebuild(songs = queue, keys = filtered, extra = listOf(song))
+        // ── 兜底：装配不出来也**绝不静默丢弃**这次点击 ────────────────────────────────
+        // 正常输入下 rebuild 不可能失败（keys 全部来自 queue ∪ {songKey}）；真失败说明
+        // 队列里出现了装配不出的身份。那种时候「点了没反应」是最坏的表现形式，
+        // 因为它把一次数据异常伪装成「按钮坏了」。
+        val idx = rebuilt?.indexOfFirst { keyOf(it) == songKey } ?: -1
+        if (rebuilt == null || idx < 0) {
+            val appended = queue + song
+            return PlayItemPlan(
+                queue = appended,
+                currentIndex = appended.lastIndex,
+                playIndex = appended.lastIndex,
+                queueChanged = true,
+                fallbackUsed = true,
+            )
+        }
+        return PlayItemPlan(rebuilt, idx, idx, queueChanged = true, fallbackUsed = false)
+    }
 
     /** 整条队列的身份序列。 */
     fun keysOf(queue: List<SongItem>): List<TrackKey> = queue.map { keyOf(it) }

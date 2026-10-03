@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -55,7 +55,7 @@ object CrossSourceMatcher {
     data class ArtistCandidate(
         val key: ArtistKey,
         val albumNames: List<String>,
-        /** 该源的「专辑数」标签（网易云 `albumSize` / QQ `albumNum`），只用于候选排序。 */
+        /** 该源的「专辑数」标签（ncm `albumSize` / QQ `albumNum`），只用于候选排序。 */
         val albumCountHint: Int = 0,
     )
 
@@ -73,7 +73,7 @@ object CrossSourceMatcher {
         val artistNames: List<String> = emptyList(),
     )
 
-    /** 曲目候选。`durationMs` 为 null 表示该源没给时长（网易云 `dt` / QQ `interval`）。 */
+    /** 曲目候选。`durationMs` 为 null 表示该源没给时长（ncm `dt` / QQ `interval`）。 */
     data class TrackCandidate(
         val key: TrackKey,
         val name: String,
@@ -353,7 +353,7 @@ object CrossSourceMatcher {
      *
      * 单曲页原本在「默认那一行」上无条件显示「已默认选中有版权的音源」。
      * API 24 模拟器实测反例：Adele《Strangers By Nature》在**两源都是「需会员」**
-     * （QQ 拿不到 `purl`、网易云 `pl==0`），而那一行照样写着「已默认选中有版权的音源」——
+     * （QQ 拿不到 `purl`、ncm `pl==0`），而那一行照样写着「已默认选中有版权的音源」——
      * 这违反铁律 7（降级时不得回显虚高）。
      *
      * 判据只能看 [TrackAvailability.PLAYABLE]：`UNKNOWN` **不算**确证

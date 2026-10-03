@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -27,7 +27,7 @@ import org.junit.Test
  * 实测到：冷启动从 `ncrust_playback_state` 恢复出一首 QQ 曲目
  * （`restore -> track=qqmusic:4611686018987997` 形状的 bit62 id），
  * 自然播完时 `PlayReporter` 打出了 `weblog resp: 200` —— 也就是
- * **一个 QQ 合成 id 真的被 POST 给了网易云的 webLog**。
+ * **一个 QQ 合成 id 真的被 POST 给了 ncm 的 webLog**。
  *
  * 所以这里的边界值取的是**那台设备上真实出现过的 id 形态**，不是随手写的 12345。
  */
@@ -36,7 +36,7 @@ class ReportGateTest {
     /** 真机取证过的形状：`(1L shl 62) or 357600093`。 */
     private val realQqId = SourceIds.qqId(357600093L, "0039MnYb0qxYhV")
 
-    /** 普通的网易云 id。 */
+    /** 普通的 ncm id。 */
     private val neteaseId = 503572L
 
     // ------------------------------------------------------------ bit62 是唯一判据
@@ -46,17 +46,17 @@ class ReportGateTest {
         // 这条断言就是整个 bug 的根因：`songId <= 0` 结构上不可能拦住 QQ 合成 id。
         assertTrue("bit62 合成 id 必须是正数", realQqId > 0L)
         assertTrue(SourceIds.isQqId(realQqId))
-        // 网易云的 id 空间远小于 2^40，永远触不到位 62。
+        // ncm 的 id 空间远小于 2^40，永远触不到位 62。
         assertFalse(SourceIds.isQqId(neteaseId))
         assertEquals(1L shl 62, realQqId and (1L shl 62))
     }
 
-    // ------------------------------------------------------------ 主方向：QQ id → 网易云
+    // ------------------------------------------------------------ 主方向：QQ id → ncm
 
     @Test
-    fun `QQ 合成 id 不许上报给网易云`() {
+    fun `QQ 合成 id 不许上报给ncm`() {
         assertFalse(
-            "QQ 合成 id 上报给了网易云 webLog —— 跨源数据泄露（铁律：跨源 id 不得上报给非本源服务）",
+            "QQ 合成 id 上报给了 ncm webLog —— 跨源数据泄露（铁律：跨源 id 不得上报给非本源服务）",
             ReportGate.mayReport(ReportGate.Target.NETEASE_WEBLOG, realQqId),
         )
         assertNotNull(
@@ -66,17 +66,17 @@ class ReportGateTest {
     }
 
     @Test
-    fun `网易云 id 正常上报给网易云`() {
+    fun `ncm id 正常上报给ncm`() {
         assertTrue(ReportGate.mayReport(ReportGate.Target.NETEASE_WEBLOG, neteaseId))
         assertNull(ReportGate.blockReason(ReportGate.Target.NETEASE_WEBLOG, neteaseId))
     }
 
-    // ------------------------------------------------------------ 反方向：网易云 id → QQ
+    // ------------------------------------------------------------ 反方向：ncm id → QQ
 
     @Test
-    fun `网易云 id 不许上报给 QQ`() {
+    fun `ncm id 不许上报给 QQ`() {
         assertFalse(
-            "网易云 id 上报给了 QQ —— 反方向同样禁止",
+            "ncm id 上报给了 QQ —— 反方向同样禁止",
             ReportGate.mayReport(ReportGate.Target.QQ, neteaseId),
         )
         assertNotNull(ReportGate.blockReason(ReportGate.Target.QQ, neteaseId))
@@ -126,9 +126,9 @@ class ReportGateTest {
         assertFalse(ReportGate.mayReport(ReportGate.Target.NETEASE_WEBLOG, bare))
     }
 
-    /** 边界扫描：`2^62 - 1`（网易云永远到不了的最大正数）必须仍属网易云侧。 */
+    /** 边界扫描：`2^62 - 1`（ncm 永远到不了的最大正数）必须仍属 ncm 侧。 */
     @Test
-    fun `2 的 62 次方减一 仍属网易云侧`() {
+    fun `2 的 62 次方减一 仍属ncm侧`() {
         val below = (1L shl 62) - 1L
         assertFalse(SourceIds.isQqId(below))
         assertTrue(ReportGate.mayReport(ReportGate.Target.NETEASE_WEBLOG, below))
@@ -139,9 +139,9 @@ class ReportGateTest {
     @Test
     fun `计数器按目标与 id 形态归类`() {
         val c = ReportGateCounter(clock = { 1_000L })
-        c.onBlocked(ReportGate.Target.NETEASE_WEBLOG, realQqId)   // QQ→网易云
+        c.onBlocked(ReportGate.Target.NETEASE_WEBLOG, realQqId)   // QQ→ncm
         c.onBlocked(ReportGate.Target.NETEASE_WEBLOG, realQqId)
-        c.onBlocked(ReportGate.Target.QQ, neteaseId)              // 网易云→QQ
+        c.onBlocked(ReportGate.Target.QQ, neteaseId)              // ncm→QQ
         c.onBlocked(ReportGate.Target.NETEASE_WEBLOG, -1L)        // 脏 id
         c.onReported()
 

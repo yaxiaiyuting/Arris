@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B：QQ 音乐的 HTTP 通道（独立于网易云那一套）。
+ * v2.1.0 · B：qm 的 HTTP 通道（独立于 ncm 那一套）。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -23,11 +23,11 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * QQ 音乐的 HTTP 通道（v2.1.0 · B）。
+ * qm 的 HTTP 通道（v2.1.0 · B）。
  *
  * ## 为什么不复用 [com.takahashirinta.ncrust.network.RetrofitClient]
  *
- * 网易云那条链路里塞满了只对网易云有意义的东西：eapi 的 AES 签名与
+ * ncm 那条链路里塞满了只对 ncm 有意义的东西：eapi 的 AES 签名与
  * `/eapi/`→`/api/` 路径重写、weapi 的双层 AES + RSA、CSRF token、PC 身份 Cookie。
  * 把那条链路「参数化」成一个通用客户端，等于让两套互不相干的协议互相污染 ——
  * 任何一边改签名逻辑都可能悄悄改到另一边的行为。所以 QQ 自己一条 OkHttp 通道，
@@ -47,9 +47,9 @@ import java.util.concurrent.TimeUnit
  * 拿到歌词，只是取不到播放 URL（服务端返回 `purl: ""` + `result: 104003`，即
  * 「需要登录/会员」）。
  *
- * ## 与网易云 cookie 的关系：**零关系**
+ * ## 与 ncm cookie 的关系：**零关系**
  *
- * QQ 的 cookie 存在 [QqAuthStore]（`ncrust_qq_prefs`），与网易云的 `ncrust_prefs`
+ * QQ 的 cookie 存在 [QqAuthStore]（`ncrust_qq_prefs`），与 ncm 的 `ncrust_prefs`
  * 完全隔离。登出一家不影响另一家。
  */
 object QqClient {

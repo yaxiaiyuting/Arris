@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -153,7 +153,7 @@ class PlaylistCacheCodecTest {
      * 「QQ 歌单详情 → 长按曲目 → 转到歌手」从「进 QQ 艺人页」退化成「跳搜索」——
      * 而搜索页在真机上看起来完全正常，只有点进去才知道降级了。
      *
-     * 网易云一侧不受影响（它的身份就是 `id`），所以更不能靠「网易云没事」来发现。
+     * ncm 一侧不受影响（它的身份就是 `id`），所以更不能靠「ncm 没事」来发现。
      */
     @Test
     fun `艺人 mid 穿过详情缓存往返保真`() {
@@ -300,10 +300,10 @@ class PlaylistCacheCodecTest {
 
     /**
      * **条目级**的「缺字段 ≠ 空值」：一条 `source` 缺失的条目要被丢掉，
-     * 而**不能**因为 [MusicSource.fromKey] 对未知值回落网易云、就被静默当成网易云歌单。
+     * 而**不能**因为 [MusicSource.fromKey] 对未知值回落 ncm、就被静默当成 ncm 歌单。
      */
     @Test
-    fun `条目缺 source 时丢弃而不是回落网易云`() {
+    fun `条目缺 source 时丢弃而不是回落ncm`() {
         // 内层数组存成**字符串**（playlistsJson）—— 这是 codec 的当前形状，
         // 为的是绕开 R8 丢泛型签名导致 Gson 产出 LinkedTreeMap 的 release 崩溃
         // （见 PlaylistCacheCodec.ListEnvelope 的 KDoc 与 proguard-rules.pro）。

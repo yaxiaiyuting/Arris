@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -141,7 +141,7 @@ class TrackAvailabilityTest {
     }
 
     @Test
-    fun `按音源分派：QQ 曲目走 QQ 判据 网易云曲目走网易云判据`() {
+    fun `按音源分派：QQ 曲目走 QQ 判据 ncm曲目走ncm判据`() {
         assertEquals(TrackAvailability.MEMBER_ONLY, TrackAvailability.of(qq(true)))
         assertEquals(TrackAvailability.UNKNOWN, TrackAvailability.of(qq(false)))
         assertEquals(TrackAvailability.PLAYABLE, TrackAvailability.of(ne(st = 0, pl = 320000)))
@@ -188,7 +188,7 @@ class TrackAvailabilityTest {
     }
 
     @Test
-    fun `网易云曲目按 originCoverType 判`() {
+    fun `ncm曲目按 originCoverType 判`() {
         assertEquals(TrackVersionTag.ORIGINAL, TrackVersionTag.of(ne(oct = 1)))
         assertEquals(TrackVersionTag.COVER, TrackVersionTag.of(ne(oct = 2)))
     }

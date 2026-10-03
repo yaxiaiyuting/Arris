@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -24,7 +24,7 @@ import org.junit.Test
  *
  * v2.4.0 的 `AlbumDetailScreen` 注释断言 QQ 曲目「只带一个数字艺人 id」，
  * 于是映射层只取了 `singer.id`、丢掉了同一个 `JSONObject` 上的 `singer.mid`。
- * 后果是「转到歌手」只能拿数字 id 去网易云查 —— 周杰伦 `4558` → **马洪波**。
+ * 后果是「转到歌手」只能拿数字 id 去 ncm 查 —— 周杰伦 `4558` → **马洪波**。
  *
  * 本文件的夹具是 2026-09 的**真实响应形状**（匿名可复现）：
  * `singer[]` 条目的字段集是 `{id, mid, name, pmid, title, title_highlight, type, uin}`。
@@ -75,7 +75,7 @@ class QqArtistMidMappingTest {
         assertEquals("周杰伦", artist.name)
         assertEquals(4558L, artist.id)
         assertEquals(
-            "singer.mid 就在同一个 JSONObject 上，丢掉它 = 「转到歌手」只能拿数字 id 去网易云猜",
+            "singer.mid 就在同一个 JSONObject 上，丢掉它 = 「转到歌手」只能拿数字 id 去 ncm 猜",
             "0025NhlN2yWrP4", artist.mid,
         )
     }
@@ -130,7 +130,7 @@ class QqArtistMidMappingTest {
     // ------------------------------------------------- 3. 端到端：映射 → 决策
 
     @Test
-    fun `映射出来的 QQ 曲目会被决策成 QQ 艺人页而不是网易云的同号艺人`() {
+    fun `映射出来的 QQ 曲目会被决策成 QQ 艺人页而不是ncm的同号艺人`() {
         val song = QqSongMapper.fromSongObject(searchItem)!!
         val nav = ArtistNavigator.resolve(song)
         assertEquals(ArtistNav.Direct(MusicSource.QQMUSIC, "0025NhlN2yWrP4", "周杰伦"), nav)

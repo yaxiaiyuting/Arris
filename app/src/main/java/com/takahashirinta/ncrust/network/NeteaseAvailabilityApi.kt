@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.4.0 · D：网易云的**批量版权可用性探测**。
+ * v2.4.0 · D：ncm 的**批量版权可用性探测**。
  */
 
 package com.takahashirinta.ncrust.network
@@ -21,7 +21,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 网易云的批量可播放性探测（v2.4.0 · D）。
+ * ncm 的批量可播放性探测（v2.4.0 · D）。
  *
  * ## 为什么必须有这个类（探针直接逼出来的）
  *

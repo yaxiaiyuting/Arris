@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B/C：QQ 音乐音源的 Provider 实现。
+ * v2.1.0 · B/C：qm 音源的 Provider 实现。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -22,7 +22,7 @@ import com.takahashirinta.ncrust.source.MusicSourceProvider
 import com.takahashirinta.ncrust.source.SourceRouter
 
 /**
- * QQ 音乐音源（v2.1.0 · B）。
+ * qm 音源（v2.1.0 · B）。
  *
  * 与 [com.takahashirinta.ncrust.source.NeteaseSourceProvider] 的差别不只是换个 API：
  * QQ 这一侧**没有云歌单/收藏/播放上报**的对应物（本版也不做，见下），
@@ -30,15 +30,15 @@ import com.takahashirinta.ncrust.source.SourceRouter
  *
  * ## 为什么 [isLoggedIn] 为 false 时**不**把自己从路由表里摘掉
  *
- * 摘掉的话，未登录用户搜索 QQ 音乐只能得到空结果，而**原因是「未登录」还是「搜不到」
+ * 摘掉的话，未登录用户搜索 qm 只能得到空结果，而**原因是「未登录」还是「搜不到」
  * 在 UI 上完全无法区分**。保留注册、让请求照发：
  * 实测匿名态搜索与歌词都能拿到数据（只有取链会被拒，`result=104003`），
  * 所以未登录用户至少能搜到歌、看到歌词，点播放时才提示需要登录 —— 这是更好的降级。
  *
  * ## 本版**不做**的事（避免误以为已支持）
  *
- * - 不把 QQ 歌曲加进网易云歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
- *   而且网易云的歌单写接口会拒绝外部曲目）；
+ * - 不把 QQ 歌曲加进 ncm 歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
+ *   而且 ncm 的歌单写接口会拒绝外部曲目）；
  * - 不把 QQ 的播放行为上报给任何一方（QQ 侧没有对应的 webLog 机制，也不该伪造）。
  */
 object QqMusicSourceProvider : MusicSourceProvider {
@@ -56,11 +56,11 @@ object QqMusicSourceProvider : MusicSourceProvider {
             .also { results ->
                 // v2.1.5 · 探针：把 QQ 侧的搜索结果（身份三件套 + 标题）打到 logcat。
                 //
-                // 存在的理由：跨源切歌的验收要求「QQ ↔ 网易云混合队列连续切换」，
+                // 存在的理由：跨源切歌的验收要求「QQ ↔ ncm 混合队列连续切换」，
                 // 而**构造这样一条队列需要真实的 (songid, songmid, media_mid)** ——
                 // songmid 只从 QQ 服务端来，界面上又不显示。没有这条日志，
                 // 真机验证就只能靠反复点搜索结果猜哪一条是 QQ 的（列表只有 QQ 行带角标，
-                // 且聚合结果里 QQ 的 30 条排在网易云的 30 条之后）。
+                // 且聚合结果里 QQ 的 30 条排在 ncm 的 30 条之后）。
                 //
                 // 它与 [com.takahashirinta.ncrust.source.TrackKey] 的 `toString()` 同形，
                 // 所以日志里一眼就能对上「起播的是谁 / 请求为谁发的」。

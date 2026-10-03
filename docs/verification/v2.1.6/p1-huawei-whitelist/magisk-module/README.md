@@ -86,5 +86,5 @@ Magisk app 里停用或删除模块，重启即可 —— 模块不写入任何�
 
 本模块**不改包名、不冒用签名、不蹭别家会话标识**，只是设备所有者在自己机器上
 把 `com.takahashirinta.ncrust` 加进一份系统配置。它与「把包名改成
-`com.netease.cloudmusic`」有本质区别：后者会顶掉真正的网易云（Android 不允许同包名共存），
+`com.netease.cloudmusic`」有本质区别：后者会顶掉真正的 ncm（Android 不允许同包名共存），
 属于身份冒用，且违反本项目铁律。

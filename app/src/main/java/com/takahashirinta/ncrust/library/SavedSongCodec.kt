@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -280,8 +280,8 @@ internal object SavedSongCodec {
      * `netease:123` → [TrackKey]。解析不出来返回 null（由调用方回落到 `ofSong`）。
      *
      * 走 `SourceIds.parseTrackKey`：它**只接受「已知音源 key + 正整数 id」**，
-     * 未知音源返回 null 而不是猜成网易云 —— 猜错会把一首 QQ 曲目
-     * 拿去问网易云要播放链。
+     * 未知音源返回 null 而不是猜成 ncm —— 猜错会把一首 QQ 曲目
+     * 拿去问 ncm 要播放链。
      */
     private fun parseKey(text: String?): TrackKey? {
         val (source, id) = com.takahashirinta.ncrust.source.SourceIds.parseTrackKey(text) ?: return null

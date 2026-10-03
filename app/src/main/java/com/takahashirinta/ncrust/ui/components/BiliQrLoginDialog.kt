@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -124,7 +124,7 @@ internal fun biliQrPanel(
  * ## 为什么二维码内容直接是 URL
  *
  * B 站的 `generate` 返回的 `data.url` **就是二维码要编码的内容**（一个 URL 字符串，
- * 不是 PNG/base64）—— 这一点与网易云/QQ 两侧都不同，所以这里不需要
+ * 不是 PNG/base64）—— 这一点与 ncm/QQ 两侧都不同，所以这里不需要
  * `decodeQrImage` 那条分支。证据见 `docs/verification/v3.2.0/probe-bili-login.md`。
  *
  * ## 必须显示的风险提示

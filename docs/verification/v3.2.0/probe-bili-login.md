@@ -153,7 +153,7 @@ set-cookie: sid=***; Path=/; Domain=bilibili.com; Expires=…
 
 ## 2. 探针问题 2：复用现有扫码登录框架的可行性（逐条）
 
-对照对象：QQ 侧 `qq/QqQrLogin.kt` + `qq/QqQrClient.kt` + `ui/components/QqQrLoginDialog.kt`（网易云侧 `auth/QrPair*` 是**手机扫平板**的局域网传票，与平台扫码登录不同源，只作旁证）。
+对照对象：QQ 侧 `qq/QqQrLogin.kt` + `qq/QqQrClient.kt` + `ui/components/QqQrLoginDialog.kt`（ncm 侧 `auth/QrPair*` 是**手机扫平板**的局域网传票，与平台扫码登录不同源，只作旁证）。
 
 ### 2.1 **直接可用**（形状照搬，语义一一对应）
 
@@ -191,7 +191,7 @@ set-cookie: sid=***; Path=/; Domain=bilibili.com; Expires=…
 | CSRF | 无 | `bili_jct`（社区文档：写操作必带；本版**不做任何写操作**，只存不用） |
 | 过期判据 | `65` | `86038`（服务端）**或**本地 180s 上限先到 |
 
-网易云侧（`QrPair*`）与本任务无关：它解决的是「手机扫平板、把手机 cookie 经局域网递给平板」，
+ncm 侧（`QrPair*`）与本任务无关：它解决的是「手机扫平板、把手机 cookie 经局域网递给平板」，
 是**同账号跨设备传票**，不是平台侧扫码登录；唯一可借鉴的是「有界轮询 + 状态三态」的写法，
 而那部分 QQ 侧已有更贴近的形状（且 QQ 侧自己踩过 403 与码表写反两个坑）。
 
@@ -277,12 +277,12 @@ curl -s 'https://api.bilibili.com/x/web-interface/nav' -H '<桌面 UA>' -H 'Refe
 
 | 项 | 决定 | 理由 |
 |---|---|---|
-| prefs 文件 | **`ncrust_bili_prefs`**（独立） | 与 `ncrust_prefs`（网易云）/`ncrust_qq_prefs`（QQ）/`ncrust_settings`（开关）分开：登出一家不能清掉另一家；「哪一家过期了」必须能单独判定；B 站音源默认关闭时它的登录态仍要能独立存在 |
+| prefs 文件 | **`ncrust_bili_prefs`**（独立） | 与 `ncrust_prefs`（ncm）/`ncrust_qq_prefs`（QQ）/`ncrust_settings`（开关）分开：登出一家不能清掉另一家；「哪一家过期了」必须能单独判定；B 站音源默认关闭时它的登录态仍要能独立存在 |
 | 字段名 | **显式常量**（铁律 17）：`SESSDATA`/`bili_jct`/`DedeUserID`/`DedeUserID__ckMd5`/`sid`/`uname`/`mid`/`vip_type`/`vip_status`/`profile_at` | 有源码扫描守卫逐字比对；`clear` 清掉的键集合必须**等于**写入集合（漏清一个的症状是「换账号后还显示上一个账号的昵称」） |
 | 进程内镜像 | `@Volatile`；`init(context)` 载入、`save`/`clear` 同步 | 网络层（`BiliApi` 是 `object`）没有 `Context`；镜像为空 = 匿名 |
 | 注入请求头 | 业务请求（搜索/取流/歌词/详情）在 `BiliApi.get` 里合并 `SESSDATA=…; bili_jct=…; DedeUserID=…`；**扫码流程自己不发** | 「登录之后请求带上身份」是登录唯一有意义的落点；未登录/未 init 时**一个 Cookie 都不带**（有行为用例：匿名时 `Cookie` 头为 null） |
 | 日志 | **只打字段名与长度** | `BiliCredential.toString()` 被改写成 `SESSDATA len=…`（结构性：任何字符串插值、崩溃上报都带不出凭据）+ 源码扫描守卫（任何 `Log.` 行都不许直接插值凭据变量） |
-| 上传 | **不上传任何服务器** | 与网易云/QQ 同样的约定；`SESSDATA` 只在本机 |
+| 上传 | **不上传任何服务器** | 与 ncm/QQ 同样的约定；`SESSDATA` 只在本机 |
 | 资料刷新 | TTL **10 分钟**（`BiliAuthStore.PROFILE_TTL_MS`），未登录恒 `false` | 与 `QqAuthStore` 同口径；未登录时不该发一个注定 `-101` 的请求 |
 
 `bili_jct` **一起存**（社区文档明确它与 `SESSDATA` 同时下发、写操作缺它必失败），

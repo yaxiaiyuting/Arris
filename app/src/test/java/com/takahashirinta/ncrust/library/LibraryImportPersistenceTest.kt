@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -73,7 +73,7 @@ class LibraryImportPersistenceTest {
 
     private val qqRaw = SourceIds.qqId(1234567890L, "0039MnYb0qxYhV")
     private val qqSong = song(qqRaw, "晴天", MusicSource.QQMUSIC, "0039MnYb0qxYhV")
-    private val neteaseSong = song(111L, "网易云的一首")
+    private val neteaseSong = song(111L, "ncm 的一首")
 
     // ============================================================ 主用例 ----
 
@@ -143,7 +143,7 @@ class LibraryImportPersistenceTest {
     }
 
     @Test
-    fun `网易云歌曲同样正常（入库 刷新 重启）`() {
+    fun `ncm歌曲同样正常（入库 刷新 重启）`() {
         val device = FakeDevice()
         var memory = SavedSongSync.merge(device.restart(), listOf(111L), mapOf(111L to neteaseSong), tick())
         device.flushInMemory(memory)
@@ -168,7 +168,7 @@ class LibraryImportPersistenceTest {
      */
     @Test
     fun `从 v1 裸数组升级后 老收藏一条不少且不会在同步时被删`() {
-        val v1 = """[{"al":{"id":2,"name":"某专辑","picUrl":"https://x/y.jpg"},"ar":[{"id":1,"name":"某艺人"}],"dt":200000,"id":111,"name":"网易云的一首"}]"""
+        val v1 = """[{"al":{"id":2,"name":"某专辑","picUrl":"https://x/y.jpg"},"ar":[{"id":1,"name":"某艺人"}],"dt":200000,"id":111,"name":"ncm 的一首"}]"""
         val device = FakeDevice(v1)
         val memory = SavedSongSync.merge(device.restart(), listOf(111L, 999L), mapOf(111L to neteaseSong), tick())
         assertEquals(1, memory.size)

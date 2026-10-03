@@ -33,7 +33,7 @@ object NavRoutes {
     const val SONG_DETAIL = "song/{songId}"
 
     /**
-     * v2.2.0：QQ 音乐歌单详情。
+     * v2.2.0：qm 歌单详情。
      *
      * 详情路由把**身份三元组**编进路径：`playlistId`(tid) + `ownerId`(uin) + `dirId`。
      * ownerId 必须进路由 —— 否则「A 账号点进歌单 → 返回 → 切到 B 账号 → 系统恢复同一条
@@ -62,15 +62,15 @@ object NavRoutes {
      *
      * ## 为什么必须新增一套而不是改旧的
      *
-     * 旧路由的 id 参数是 [NavType.LongType]，而 **QQ 音乐的身份是字符串**：
+     * 旧路由的 id 参数是 [NavType.LongType]，而 **qm 的身份是字符串**：
      * 艺人是 `singerMID`、专辑是 albumMid、单曲是 songmid（形状 `0025NhlN2yWrP4`）。
      * 用 Long 装它只有两条路，两条都是错的：要么给 QQ 编一个假数字 id
-     * （那正是「给错专辑 / 错单曲」的温床），要么把它当网易云的 id 用。
+     * （那正是「给错专辑 / 错单曲」的温床），要么把它当 ncm 的 id 用。
      *
      * 所以新的三段路由里 `source` 与 id **一律是 `StringType`**（QQ 的 id 天然是字符串，
-     * 网易云的十进制 id 写成字符串也不丢信息），旧的单段 `Long` 路由**原样保留**：
-     * 剪贴板识别、`resolveAndNavigate`、首页/库页那些「只有网易云 id」的老调用点
-     * 一个都不用改（它们构造出的就是网易云身份，见下面的 composable）。
+     * ncm 的十进制 id 写成字符串也不丢信息），旧的单段 `Long` 路由**原样保留**：
+     * 剪贴板识别、`resolveAndNavigate`、首页/库页那些「只有 ncm id」的老调用点
+     * 一个都不用改（它们构造出的就是 ncm 身份，见下面的 composable）。
      *
      * 注册顺序上两套路由互不冲突：`album/{albumId}` 只吃一段路径，
      * `album/{source}/{albumId}` 吃两段，导航库的深链正则无法互相匹配。
@@ -235,9 +235,9 @@ fun MainNavGraph(
             arguments = listOf(navArgument("albumId") { type = NavType.LongType })
         ) { backStackEntry ->
             val albumId = backStackEntry.arguments?.getLong("albumId") ?: return@composable
-            // 旧路由只有网易云的十进制 id ⇒ 它构造出来的**就是网易云身份**。
+            // 旧路由只有 ncm 的十进制 id ⇒ 它构造出来的**就是 ncm 身份**。
             // 这里不猜、不查表：能走到这条路由的调用点（剪贴板识别、resolveAndNavigate、
-            // 首页/库页）本来就只认识网易云的 id。
+            // 首页/库页）本来就只认识 ncm 的 id。
             AlbumDetailScreen(
                 sourceKey = MusicSource.NETEASE.key,
                 albumId = albumId.toString(),
@@ -429,7 +429,7 @@ fun MainNavGraph(
             arguments = listOf(navArgument("songId") { type = NavType.LongType })
         ) { backStackEntry ->
             val songId = backStackEntry.arguments?.getLong("songId") ?: return@composable
-            // 旧路由 = 网易云身份（理由同 ALBUM 那一段）。
+            // 旧路由 = ncm 身份（理由同 ALBUM 那一段）。
             SongDetailScreen(
                 sourceKey = MusicSource.NETEASE.key,
                 songId = songId.toString(),

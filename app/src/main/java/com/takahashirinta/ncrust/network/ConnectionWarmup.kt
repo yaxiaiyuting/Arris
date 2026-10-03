@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
  * 复用后：dns=-1  connect=-1  tls=-1 ⇒ wait = 2~9ms，ttfb 不变
  * ```
  *
- * 也就是「首通贵 ~365ms、之后每通省下这 365ms」。而网易云的搜索 / 取链 / 歌词分布在
+ * 也就是「首通贵 ~365ms、之后每通省下这 365ms」。而 ncm 的搜索 / 取链 / 歌词分布在
  * **两个 host**（`music.163.com` 与 `interface3.music.163.com`），所以冷启动时
  * 取链的那一条路要**现付一次建连**。
  *

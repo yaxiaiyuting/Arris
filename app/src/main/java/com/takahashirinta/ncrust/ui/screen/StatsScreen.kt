@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -92,7 +92,7 @@ private val STATS_MAX_WIDTH = 560.dp
  * 没有任何流派 / 曲风 / 语种字段（服务端不下发）。所以页面上**不显示**这个维度，
  * 只在「统计口径」里如实说明（`methodNoGenre`）—— 一个永远为空的图例比没有更糟。
  * 「本地歌曲」也不算一个平台：`local/LocalPlaylistRepository.kt` 里「本地歌单」指的是
- * **本地保存的歌单定义**，曲目本身仍旧来自网易云 / QQ（见该文件的只读远程、只写本地契约），
+ * **本地保存的歌单定义**，曲目本身仍旧来自 ncm / QQ（见该文件的只读远程、只写本地契约），
  * 所以按平台统计时它们本来就落在各自音源里。
  *
  * ## 重组

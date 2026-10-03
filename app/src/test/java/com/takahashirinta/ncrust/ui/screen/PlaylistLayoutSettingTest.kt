@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -228,7 +228,7 @@ class LibrarySectionFoldSettingTest {
         )
         assertTrue(fold.isCollapsed(LibrarySection.QQMUSIC))
         assertFalse("折叠 QQ 不该连带折叠本地", fold.isCollapsed(LibrarySection.LOCAL))
-        assertFalse("折叠 QQ 不该连带折叠网易云", fold.isCollapsed(LibrarySection.NETEASE))
+        assertFalse("折叠 QQ 不该连带折叠 ncm", fold.isCollapsed(LibrarySection.NETEASE))
     }
 
     /**
@@ -240,7 +240,7 @@ class LibrarySectionFoldSettingTest {
         val p = FakePrefs()
         LibrarySectionFoldSetting.write(p, LibrarySection.LOCAL, true)
         assertFalse(
-            "写 LOCAL 时网易云的键不该被创建",
+            "写 LOCAL 时 ncm 的键不该被创建",
             p.contains(LibrarySection.NETEASE.prefsKey),
         )
         assertFalse(p.contains(LibrarySection.QQMUSIC.prefsKey))

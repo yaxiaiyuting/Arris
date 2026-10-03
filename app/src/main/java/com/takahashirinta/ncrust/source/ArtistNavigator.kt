@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -38,7 +38,7 @@ sealed interface ArtistNav {
      *
      * @property source 目标音源。**构造它的唯一入口是 [ArtistNavigator]**，
      *   且恒等于歌曲自己的音源（见 [ArtistNavigator.resolve] 的不变量）。
-     * @property id 该音源内的**字符串**身份：网易云是十进制 id，QQ 音乐是 `singerMID`。
+     * @property id 该音源内的**字符串**身份：ncm 是十进制 id，qm 是 `singerMID`。
      *   恒满足 [ArtistNavigator.idDomainMatches]。
      * @property name 艺人名的快照，**只作展示与召回**（艺人页拿它当搜索关键词去拉对端热门曲）。
      *   **绝不参与身份判定** —— 名字可以空、可以错、可以重名，而 [id] 不行。
@@ -71,7 +71,7 @@ enum class ArtistNavReason {
     /**
      * 只有**数字**身份、没有该源可用的字符串身份 —— 本 P0 的确切形状。
      *
-     * QQ 曲目只有 `singer.id`（QQ 域数字）时，唯一能"用"它的方式是把它当网易云 id 查，
+     * QQ 曲目只有 `singer.id`（QQ 域数字）时，唯一能"用"它的方式是把它当 ncm id 查，
      * 而实测那样会跳到**另一个歌手**（周杰伦 `4558` → 马洪波）。宁可跳搜索。
      */
     AMBIGUOUS_NUMERIC_ID,
@@ -86,12 +86,12 @@ enum class ArtistNavReason {
  *
  * | 当前歌曲的数据来源 | `artists[0]` 的形状 | 点「转到歌手」的结果 |
  * |---|---|---|
- * | 搜索结果里**新鲜**加载的 QQ 曲目 | `id=4558`（QQ 数字）、无 mid | 跳到**马洪波**（网易云 4558） |
+ * | 搜索结果里**新鲜**加载的 QQ 曲目 | `id=4558`（QQ 数字）、无 mid | 跳到**马洪波**（ncm 4558） |
  * | **冷启动恢复**的 QQ 曲目 | `id=null`、只有名字 | **毫无反应**（静默失败） |
  *
- * 第一种错在「拿 QQ 的数字 id 当网易云 id 走老路由」；第二种错在
- * `resolveAndNavigate` 的补 id 回落是**网易云**的 `song/detail`，而 QQ 曲目的 id 带
- * bit62 标志位（[SourceIds.QQ_ID_FLAG]），问网易云必然查不到 ⇒ `artistId` 仍是 null
+ * 第一种错在「拿 QQ 的数字 id 当 ncm id 走老路由」；第二种错在
+ * `resolveAndNavigate` 的补 id 回落是**ncm**的 `song/detail`，而 QQ 曲目的 id 带
+ * bit62 标志位（[SourceIds.QQ_ID_FLAG]），问 ncm 必然查不到 ⇒ `artistId` 仍是 null
  * ⇒ `when` 一个分支都不匹配 ⇒ 什么都不发生。
  *
  * ## 三条不变量（改这个文件之前先读）
@@ -99,7 +99,7 @@ enum class ArtistNavReason {
  * 1. **绝不产出与歌曲音源不同的 [ArtistNav.Direct]**。跨源跳转不在本应用的
  *    产品范围内；把它排除在类型之外，比在实现里小心不提更可靠。
  * 2. **身份必须过值域闸门**（[idDomainMatches]）。QQ 的艺人字符串身份是 base62 的
- *    `singerMID`，网易云是十进制 id —— 形状不同，所以「拿数字 QQ id 当 mid 用」
+ *    `singerMID`，ncm 是十进制 id —— 形状不同，所以「拿数字 QQ id 当 mid 用」
  *    这种错法在**闸门**上就被拦下，不需要调用方自觉。
  * 3. **置信度不足一律跳搜索**（[crossSourceJump]）。即便将来真要做跨源跳转，
  *    也必须拿到 `MatchConfidence.mergeable`（>= MEDIUM，全应用唯一阈值）
@@ -107,17 +107,17 @@ enum class ArtistNavReason {
  *
  * ## 为什么名字不能当身份
  *
- * v2.4.0 已经用实测钉过这条：网易云上存在与 `邓紫棋` 同名的仿冒号（62017015，1 张专辑），
+ * v2.4.0 已经用实测钉过这条：ncm 上存在与 `邓紫棋` 同名的仿冒号（62017015，1 张专辑），
  * 按名字锚定会把真身 `G.E.M.邓紫棋`（7763）判成 `NONE`。所以 [ArtistItem.name] 在这里
  * **只**用来生成搜索关键词，**从不**参与 [ArtistNav.Direct] 的构造。
  */
 object ArtistNavigator {
 
     /**
-     * 网易云 id 的值域上界（不含）。
+     * ncm id 的值域上界（不含）。
      *
      * v2.6.2 · P0：判定本身搬到了 [SourceIdDomain]（它现在同时服务艺人页与专辑页，
-     * 因为「网易云吃十进制、QQ 吃 base62 mid」是**音源的性质**，不是艺人的性质）。
+     * 因为「ncm 吃十进制、QQ 吃 base62 mid」是**音源的性质**，不是艺人的性质）。
      * 这个常量保留成别名，是为了不惊动 v2.6.1 的调用点与文档 —— 取值与语义一字未改。
      */
     const val NETEASE_ID_MAX: Long = SourceIdDomain.NETEASE_ID_MAX
@@ -143,7 +143,7 @@ object ArtistNavigator {
      * 跨源跳转闸门（不变量 3）。**两道都要过**，否则返回 null（调用方据此跳搜索）。
      *
      * 探针结论：v2.6.1 的这条 P0 **没有**走 v2.4.0 的跨源匹配 ——
-     * 它连匹配都没做，直接把 QQ 的数字 id 交给了网易云路由。所以本函数在当前代码里
+     * 它连匹配都没做，直接把 QQ 的数字 id 交给了 ncm 路由。所以本函数在当前代码里
      * 恒返回 null（没有可用的跨源结论）。保留它是因为**下一处**跨源跳转一定会用到它，
      * 而「阈值写在调用方」正是 v2.4.0 铁律 2 点名要避免的形状。
      *
@@ -174,7 +174,7 @@ object ArtistNavigator {
         val artist = song.artists?.firstOrNull()
         val keyword = artist?.name?.trim()?.takeIf { it.isNotEmpty() }
 
-        // 本源内的字符串身份优先 → 直接跳。网易云看 id，QQ 看 mid。
+        // 本源内的字符串身份优先 → 直接跳。ncm 看 id，QQ 看 mid。
         val sameSourceId: String? = when (source) {
             MusicSource.NETEASE -> artist?.id?.toString()
             MusicSource.QQMUSIC -> artist?.mid
@@ -190,7 +190,7 @@ object ArtistNavigator {
         // 走到这里说明**本源内**没有可用身份。两条降级路都不许猜：
         //
         //  · QQ 曲目只剩 `singer.id`（QQ 域数字）时，唯一能"用"它的方式就是拿它去
-        //    网易云查 —— 那正是本 P0（4558 → 马洪波）。它属于「只有跨源猜才能用」
+        //    ncm 查 —— 那正是本 P0（4558 → 马洪波）。它属于「只有跨源猜才能用」
         //    的身份，因此必须过 [crossSourceJump] 闸门；而探针结论是这条路上没有
         //    任何可用的匹配结论（`MatchCacheStore` 的键是 `(source, id)`，
         //    数字 singerID 不是任何一个源的有效键）⇒ 一律跳搜索。

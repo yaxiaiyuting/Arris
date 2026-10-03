@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -44,7 +44,7 @@ import com.takahashirinta.ncrust.source.musicSource
  * ## 为什么 v1 → v2 的迁移是「丢弃」而不是「补默认值」
  *
  * v1 的条目**没有 `ownerId`**。歌单是**按账号隔离**的数据（同一个 `tid` 在不同账号下
- * 可能完全不是一回事，QQ 音乐的 `dirId` 更是账号内编号）。给缺 `ownerId` 的老条目
+ * 可能完全不是一回事，qm 的 `dirId` 更是账号内编号）。给缺 `ownerId` 的老条目
  * 「补上当前账号」是**最危险的一种迁移**：它会把「不知道属于谁」的数据**断言成属于当前账号**，
  * 于是 A 账号的歌单会在 B 账号下被当成自己的显示出来。
  *
@@ -116,7 +116,7 @@ object PlaylistCacheCodec {
      * **这不是冗余字段**：详情缓存存的是扁平 DTO，而不是直接把 `SongItem` 丢给 Gson，
      * 所以 `ArtistItem` 上新增的字段**不会**自动跟过来 —— 漏掉这一处，
      * 「QQ 歌单详情 → 长按曲目 → 转到歌手」就会退化成跳搜索
-     * （网易云歌单不受影响，因为它的身份就是 [id]）。
+     * （ncm 歌单不受影响，因为它的身份就是 [id]）。
      *
      * [mid] 可空 + 有默认值：本字段出现之前落盘的条目里没有这个 key，
      * Gson 走 Unsafe 反序列化、不调用构造函数 ⇒ 读出来是 `null` ⇒
@@ -126,7 +126,7 @@ object PlaylistCacheCodec {
     internal data class ArtistDto(
         val id: Long? = null,
         val name: String? = null,
-        /** v2.6.1：QQ 音乐的 `singerMID`；网易云恒为 null。 */
+        /** v2.6.1：qm 的 `singerMID`；ncm 恒为 null。 */
         val mid: String? = null,
     )
 
@@ -411,9 +411,9 @@ object PlaylistCacheCodec {
     /**
      * DTO → 领域模型。**必填字段（id / source / ownerId）缺失时返回 null**。
      *
-     * 注意 `source` 的解析用的是 [MusicSource.fromKey]，它对未知值**回落网易云**。
-     * 这在「读老数据」时是对的（v2.1.0 之前的队列 JSON 没有 source 字段 ⇒ 那确实是网易云），
-     * 但在这里**不能**直接用它判合法性 —— 老条目 `source` 为 null 时会被静默当成网易云歌单。
+     * 注意 `source` 的解析用的是 [MusicSource.fromKey]，它对未知值**回落 ncm**。
+     * 这在「读老数据」时是对的（v2.1.0 之前的队列 JSON 没有 source 字段 ⇒ 那确实是 ncm），
+     * 但在这里**不能**直接用它判合法性 —— 老条目 `source` 为 null 时会被静默当成 ncm 歌单。
      * 所以下面**先判 null/空**再解析：缺 source 的条目直接丢弃。
      */
     private fun PlaylistDto.toDomain(): Playlist? {
@@ -447,10 +447,10 @@ object PlaylistCacheCodec {
     /**
      * DTO → [SongItem]。**`id <= 0` 或 `source` 缺失时返回 null**（条目被丢弃）。
      *
-     * `source` 先判 null/空再交给 [MusicSource.fromKey]：后者对未知值**回落网易云**，
+     * `source` 先判 null/空再交给 [MusicSource.fromKey]：后者对未知值**回落 ncm**，
      * 那是为「v2.1.0 之前的队列 JSON 没有 source 字段」准备的兼容语义；
-     * 这里若直接用它，一条 `source=null` 的损坏条目会被静默当成**网易云**歌曲，
-     * 于是 QQ 歌单里混进一首「来自网易云」的歌 —— 点下去会拿另一个平台的 id 去取链。
+     * 这里若直接用它，一条 `source=null` 的损坏条目会被静默当成**ncm**歌曲，
+     * 于是 QQ 歌单里混进一首「来自 ncm」的歌 —— 点下去会拿另一个平台的 id 去取链。
      */
     private fun SongDto.toDomain(): SongItem? {
         if (id <= 0L) return null

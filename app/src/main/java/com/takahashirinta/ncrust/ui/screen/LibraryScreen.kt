@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -64,8 +64,11 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import com.takahashirinta.ncrust.ui.components.AlbumSourceFilterRow
+import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.CreatePlaylistDialog
 import com.takahashirinta.ncrust.ui.components.PlayAllButton
+import com.takahashirinta.ncrust.ui.components.SourceFilter
 import com.takahashirinta.ncrust.ui.components.PlaylistCreateOutcome
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
@@ -114,6 +117,14 @@ fun LibraryScreen(
     // 红心歌单总数（含尚未分页加载的部分），供「播放全部」入口显示规模。
     var likedTotal by remember { mutableIntStateOf(LibraryManager.getLikedSongIds(context).size) }
     var selectedCategory by remember { mutableIntStateOf(0) }
+    // v3.4.0：专辑 tab 的**音源筛选档**（全部 / 只看 ncm / 只看 qm）。
+    //
+    // 状态提升到页面级（而不是塞在 `2 ->` 分支里）的理由：`when (selectedCategory)`
+    // 外面是 `AnimatedContent`，切到别的 tab 会把那一支**卸载**，写在分支里的
+    // `remember` 会在切回时被重置 —— 用户「切走看一眼再切回来，筛选还是刚才那档」
+    // 是应该成立的。它是纯 UI 状态（本地过滤，不发请求，不落盘），
+    // 与 `playlistLayout` / `sectionFold` 那两个「必须落盘」的偏好不是一类东西。
+    var albumSourceFilter by remember { mutableStateOf(SourceFilter.ALL) }
     // v2.3.0 · A：**分类顺序改成 单曲 / 歌单 / 专辑**（用户拍板，任务书 3.2）。
     // v2.2.1 及以前是 单曲 / 专辑 / 歌单。改顺序不是「换个 position」那么简单：
     // 下面所有 `selectedCategory == N` 的判定都必须跟着换（本版一次性改完，
@@ -134,7 +145,7 @@ fun LibraryScreen(
     var isLoadingPlaylists by remember { mutableStateOf(false) }
     var playlistError by remember { mutableStateOf<String?>(null) }
     // v2.3.0 · B：本地歌单（可编辑、只加不减 + tombstone）。它**不依赖任何网络状态** ——
-    // 本地歌单存在的意义之一就是「网易云/QQ 都挂了也能看到自己的歌单」。
+    // 本地歌单存在的意义之一就是「ncm/QQ 都挂了也能看到自己的歌单」。
     var localPlaylists by remember { mutableStateOf(LocalPlaylistStore.readPlaylists(context)) }
     var showCreateLocal by remember { mutableStateOf(false) }
     // v2.6.0 · P1/P2：布局模式 + 三个区块的折叠状态。两者的真源都是
@@ -248,7 +259,7 @@ fun LibraryScreen(
         )
     }
 
-    // v2.3.0 · B：新建**本地**歌单。与「新建网易云歌单」是两个不同的对话框 ——
+    // v2.3.0 · B：新建**本地**歌单。与「新建 ncm 歌单」是两个不同的对话框 ——
     // 前者只写本地 prefs，后者会发远程写请求（`PlaylistEditApi.createPlaylist`）。
     // 按钮文案与落点都不同，合成一个对话框会让用户以为是同一件事。
     if (showCreateLocal) {
@@ -408,31 +419,64 @@ fun LibraryScreen(
                     )
                 }
                 2 -> {
+                    // v3.4.0：专辑 tab 的音源筛选（用户建议：「专辑界面建议加个来自 ncm 或者 qq」）。
+                    //
+                    // 三件事按顺序：
+                    // ① 未筛选为空 ⇒ 与今天完全一样（`noSavedAlbums`）。这一句与筛选无关，
+                    //    所以它**不看** `albumSourceFilter`。
+                    // ② 筛选行的挂载判据只用**未筛选**的总数（`shouldShowFilterRow`）——
+                    //    v3.2.0 · P0-D 的教训：拿「筛选后的结果」决定筛选行自己的可见性，
+                    //    会让它在最该出现的那一刻消失（点「只看 qm」→ 空 ⇒ 连档位一起没了）。
+                    // ③ 筛选后为空 ⇒ 一句**指名当前档位**的空态，而不是复用「暂无收藏专辑」
+                    //    （那会让用户以为自己的收藏丢了）。
+                    val visibleAlbums = AlbumSourceTag.filterAlbums(
+                        savedAlbums,
+                        albumSourceFilter,
+                        { AlbumSourceTag.sourceOf(it) },
+                    )
                     if (savedAlbums.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             MetroText(strings.noSavedAlbums, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodyLarge)
                         }
                     } else {
-                        // 自适应栅格：列数随内容栏宽度变化（宽屏多列），取代写死的 2 列。
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 160.dp),
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
-                            flingBehavior = rememberMetroFlingBehavior()
-                        ) {
-                            items(savedAlbums, key = { it.albumId }) { album ->
-                                LibraryAlbumGridItem(
-                                    album = album,
-                                    modifier = Modifier.fillMaxWidth().animateItem(
-                                        fadeInSpec = tween(150, easing = MetroDefault),
-                                        placementSpec = tween(220, easing = MetroDefault),
-                                        fadeOutSpec = tween(120, easing = MetroDefault)
-                                    ),
-                                    onClick = { onAlbumClick(album.albumId) },
-                                    onPlayAll = { onPlayAlbum(album.albumId) }
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (AlbumSourceTag.shouldShowFilterRow(savedAlbums.size)) {
+                                AlbumSourceFilterRow(
+                                    selected = albumSourceFilter,
+                                    onSelect = { albumSourceFilter = it },
                                 )
+                            }
+                            if (visibleAlbums.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    MetroText(
+                                        AlbumSourceTag.filteredEmptyText(albumSourceFilter, strings),
+                                        color = LocalMetroColors.current.onSurfaceVariant,
+                                        style = LocalMetroTypography.current.bodyLarge,
+                                    )
+                                }
+                            } else {
+                                // 自适应栅格：列数随内容栏宽度变化（宽屏多列），取代写死的 2 列。
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = 160.dp),
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
+                                    flingBehavior = rememberMetroFlingBehavior()
+                                ) {
+                                    items(visibleAlbums, key = { it.albumId }) { album ->
+                                        LibraryAlbumGridItem(
+                                            album = album,
+                                            modifier = Modifier.fillMaxWidth().animateItem(
+                                                fadeInSpec = tween(150, easing = MetroDefault),
+                                                placementSpec = tween(220, easing = MetroDefault),
+                                                fadeOutSpec = tween(120, easing = MetroDefault)
+                                            ),
+                                            onClick = { onAlbumClick(album.albumId) },
+                                            onPlayAll = { onPlayAlbum(album.albumId) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -466,7 +510,7 @@ fun LibraryScreen(
 fun NewPlaylistGridItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    // v2.3.0 · A/B：同一个「＋」格子被三处复用（新建网易云歌单 / 新建本地歌单），
+    // v2.3.0 · A/B：同一个「＋」格子被三处复用（新建 ncm 歌单 / 新建本地歌单），
     // 文案必须能改 —— 默认值保持既有调用点的行为不变。
     label: String? = null,
     listMode: Boolean = false,
@@ -536,7 +580,7 @@ fun NewPlaylistGridItem(
 }
 
 /**
- * 网易云歌单条目（v2.6.0 · P1 起两种布局）。
+ * ncm 歌单条目（v2.6.0 · P1 起两种布局）。
  *
  * 卡片式与 v2.5.0 逐值相同；列表式新增 —— 48dp 封面（`CoverUrls.small` 的
  * 既有封装不变）+ 歌单名 + 「N 首」+ 右侧 ▶（列表式下 ▶ 从封面右下角
@@ -622,6 +666,17 @@ fun LibraryAlbumGridItem(
     onPlayAll: () -> Unit
 ) {
     val strings = LocalStrings.current
+    // v3.4.0：**音源角标**。位置与写法都照 `AggregatedAlbumGridItem`（艺人页的专辑格子，
+    // v2.4.0 · A 起就在这一行的**第一段**显示音源）—— 拼贴格子空间紧，
+    // 「音源 · 艺人 · 曲目数」一行内解决，而不是给角标单开一行。
+    //
+    // ⚠️ 判不出来时 `badge == null` ⇒ 这一行**只有**「艺人 · N首」，不画角标。
+    // 绝不回落成「ncm」（那会给错信息），判据见 `AlbumSourceTag`。
+    val sourceBadge = remember(album, strings) { AlbumSourceTag.badgeLabel(album, strings) }
+    val infoLine = listOfNotNull(
+        sourceBadge,
+        strings.albumArtistAndCount(album.artist, album.songCount),
+    ).joinToString(" · ")
     Column(modifier = modifier.appPressScale().clickable { onClick() }) {
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
             AsyncImage(
@@ -640,7 +695,7 @@ fun LibraryAlbumGridItem(
         }
         Spacer(Modifier.height(6.dp))
         MetroText(album.name, color = LocalMetroColors.current.onBackground, style = LocalMetroTypography.current.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
-        MetroText(strings.albumArtistAndCount(album.artist, album.songCount), color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
+        MetroText(infoLine, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         Spacer(Modifier.height(6.dp))
     }
 }

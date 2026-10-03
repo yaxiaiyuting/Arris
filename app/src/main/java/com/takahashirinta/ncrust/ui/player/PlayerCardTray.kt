@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -237,7 +237,7 @@ private fun RowScope.TrayInfoColumn(
         // 左右对齐靠两个 `weight(1f)` 之间的 `Spacer` 撑开：作者的 weight
         // 让它吃掉「作者名之后的全部剩余宽度」，音源角标因此永远贴右。
         // v2.5.4 是两段相邻的 `weight(1f, fill = false)`，中间没有撑开物，
-        // 角标实际贴在作者名后面（真机截图可见：`苏谭谭QQ音乐` 之间只有 6dp）。
+        // 角标实际贴在作者名后面（真机截图可见：`苏谭谭qm` 之间只有 6dp）。
         //
         // 音源角标**不加 clickable** —— 判据见 probe-tray-layout.md §6.1
         // （跨源换播需要跨源身份，v2.3.0 已判决接口里没有；「看信息」与
@@ -264,7 +264,7 @@ private fun RowScope.TrayInfoColumn(
                             // v2.6.1 · P0：把**整首歌**交出去，不再在这里
                             // 按 `id != null` 分流。理由有两条：
                             //  ① 用 `id` 判断「能不能进艺人页」是错的判据 ——
-                            //     QQ 曲目的数字 id 恒存在，但它不是网易云的 id；
+                            //     QQ 曲目的数字 id 恒存在，但它不是 ncm 的 id；
                             //  ② 冷启动恢复的曲目 `id` 恒为 null，而它**恰恰**
                             //     是最该跳搜索（而不是弹一个点了也没反应的菜单）的那一种。
                             // 身份判定收在 ArtistNavigator 一处，这里只做转发。

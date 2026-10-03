@@ -1,11 +1,11 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * v2.1.0 · B：QQ 音乐请求体的**纯构造**（无 IO、无 Android 依赖、JVM 可单测）。
+ * v2.1.0 · B：qm 请求体的**纯构造**（无 IO、无 Android 依赖、JVM 可单测）。
  */
 
 package com.takahashirinta.ncrust.qq
@@ -199,7 +199,7 @@ internal object QqRequests {
     const val USER_INFO_MODULE = "music.UserInfo.userInfoServer"
     const val USER_INFO_METHOD = "GetLoginUserInfo"
 
-    /** 单页上限。实测 2000 也被接受；取 500 是为了与网易云 `LIKED_FILL_PAGE_SIZE` 量级一致。 */
+    /** 单页上限。实测 2000 也被接受；取 500 是为了与 ncm `LIKED_FILL_PAGE_SIZE` 量级一致。 */
     const val PLAYLIST_PAGE_MAX = 500
 
     /** 用户自建歌单列表。实测返回里**包含 `dirId=201`「我喜欢」**。 */

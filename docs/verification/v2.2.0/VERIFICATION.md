@@ -24,14 +24,14 @@ debug 完全正常 —— 只测 debug 会把它漏掉。所以 A/B 对照的主
 
 ### 2.1 入口按源隔离（`07-playlist-tab.png`）
 
-库 → 歌单 tab：`QQ 音乐歌单 / 来自 QQ 音乐账号` 独占一整行，**在网易云歌单网格之外**，
-下方才是网易云的 `新建歌单 / 1(16首) / 南斯拉夫内战金曲 / internationale`。
+库 → 歌单 tab：`qm歌单 / 来自 qm账号` 独占一整行，**在 ncm 歌单网格之外**，
+下方才是 ncm 的 `新建歌单 / 1(16首) / 南斯拉夫内战金曲 / internationale`。
 两者分区展示，**没有任何合并**。
 
 ### 2.2 歌单列表（`10-qq-list-release-fixed.png`）
 
 ```
-QQ 音乐歌单
+qm歌单
   我喜欢      ← 分组「我喜欢」
     我喜欢   1 首 · 我喜欢        ← dirId=201，isFavorite 标记生效
   自建歌单    ← 分组「自建歌单」
@@ -44,13 +44,13 @@ QQ 音乐歌单
 
 ```
 新建歌单1        ← 标题取自接口返回的 dirinfo.title（不是路由参数）
-QQ 音乐
+qm
 22 首
-[22 首歌曲，每行带「QQ 音乐」音源角标、封面、歌手、时长]
+[22 首歌曲，每行带「qm」音源角标、封面、歌手、时长]
 ```
 
 - 曲目行复用既有 `SongCard`，**没有另写列表行**；
-- 音源角标说明这些曲目属于 QQ 音乐（`SourceIds` 的 bit62 隔离在 UI 上可见）；
+- 音源角标说明这些曲目属于 qm（`SourceIds` 的 bit62 隔离在 UI 上可见）；
 - 标题用**接口返回的真名**而非路由参数 —— 路由参数要过 URL 编解码，中文可能失真。
 
 ### 2.4 离线可看（`14-offline-list.png`）
@@ -58,7 +58,7 @@ QQ 音乐
 操作：飞行模式 + 关 WiFi/数据 → 点右上角刷新（强制联网）→ 失败。
 
 ```
-QQ 音乐歌单
+qm歌单
 离线模式：下面显示的是本地缓存     ← 降级横幅
   我喜欢  1 首 · 我喜欢            ← 缓存数据照常渲染
   新建歌单1  22 首
@@ -72,8 +72,8 @@ QQ 音乐歌单
 （保留 `uin` 与字段存在，所以 `QqCookie.isLoggedIn` 仍为 true，App 会真的去问服务端）。
 
 ```
-QQ 音乐歌单
-QQ 音乐登录已过期          ← 明确的过期状态
+qm歌单
+qm登录已过期          ← 明确的过期状态
 重新登录                   ← 可操作的出口
   我喜欢  1 首 · 我喜欢     ← 缓存数据仍然可看
   新建歌单1  22 首
@@ -98,7 +98,7 @@ $ adb shell su -c 'ls -la /data/data/com.takahashirinta.ncrust/shared_prefs/ | g
 | 截图 | 内容 |
 |---|---|
 | `24-huawei-awake.png` | 应用启动正常，**宽屏侧边栏布局**（首页/库/搜索/用户），无崩溃 |
-| `25-huawei-playlist-tab.png` | 歌单 tab：QQ 入口行在顶部，网易云歌单为**自适应 3 列**网格；绿色主题 |
+| `25-huawei-playlist-tab.png` | 歌单 tab：QQ 入口行在顶部，ncm 歌单为**自适应 3 列**网格；绿色主题 |
 | `26-huawei-qq-list.png` | QQ 歌单页：`我喜欢 1 首 · 我喜欢` + `新建歌单1 22 首`，与 Android 16 上**完全一致** |
 
 **A/B 结论**：同一份 release APK，在 Android 16（窄屏 + 侧边栏）与 Android 12（宽屏 + 3 列自适应栅格）
@@ -147,20 +147,20 @@ Gson 看到裸 `List` ⇒ 元素按 `Object` 反序列化成 `LinkedTreeMap` ⇒
 
 ### 4.2 头部与顶部 scrim 重叠（`04-qq-list.png` → `10-qq-list-release-fixed.png`）
 
-第一版把页面标题交给 `DetailScaffold(title = ...)`，实测「QQ 音乐歌单」被返回箭头压住
+第一版把页面标题交给 `DetailScaffold(title = ...)`，实测「qm 歌单」被返回箭头压住
 （截图里只剩「音乐」两字可见）。查 `DetailScaffold` 的 KDoc 才知道 **`title` 参数已弃用**
 （「页面标题由 header 本身承担」），既有详情页都是 `DetailHeader` 自己渲染标题。
 
 修法：`title = ""`，标题由本页 header 渲染，并按 `DetailHeader` 的约定用 `top = 56.dp` 让开 scrim。
 
-### 4.3 QQ 入口被网易云加载状态绑架（`17a-before-tap.png`）
+### 4.3 QQ 入口被 ncm 加载状态绑架（`17a-before-tap.png`）
 
-QQ 入口原本是网易云歌单网格的第一格 ⇒ 网易云在转圈 / 报错 / 空列表时，**用户根本点不到 QQ 歌单**。
-实测网易云歌单卡在加载态 10s+，QQ 入口整个不可见。
+QQ 入口原本是 ncm 歌单网格的第一格 ⇒ ncm 在转圈 / 报错 / 空列表时，**用户根本点不到 QQ 歌单**。
+实测 ncm 歌单卡在加载态 10s+，QQ 入口整个不可见。
 
 修法：把入口**提到 `when` 之外**（`Column { QqPlaylistEntryRow(); Box(weight) { when { ... } } }`）。
-QQ 音乐是独立音源，它的入口不该被另一个音源的加载状态决定。
-验证：`18-entry-visible-while-loading.png` —— 网易云仍在转圈，QQ 入口已经可见可点。
+qm 是独立音源，它的入口不该被另一个音源的加载状态决定。
+验证：`18-entry-visible-while-loading.png` —— ncm 仍在转圈，QQ 入口已经可见可点。
 
 ---
 
@@ -215,7 +215,7 @@ cd Ncrust-v220
 # 2) 装机（PLC110：release）
 adb -s 3B15CD00GB700000 install -r app/build/outputs/apk/release/app-release.apk
 adb -s 3B15CD00GB700000 shell am start -n com.takahashirinta.ncrust/.MainActivity
-# 库 → 歌单 tab → 「QQ 音乐歌单」
+# 库 → 歌单 tab → 「qm歌单」
 #   注意：本 ROM 上 uiautomator dump 会被 SIGKILL，只能用「截图 + 坐标点击」驱动
 
 # 3) 离线

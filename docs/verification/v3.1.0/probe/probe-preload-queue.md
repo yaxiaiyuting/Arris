@@ -43,7 +43,7 @@ PlayerViewModel.kt:1656-1661 的三道判重：`currentlyPreloadingSongId` :1652
 
 三条**有意**的边界：
 
-1. **LRC 预取只对网易云做**：`if (track.source != MusicSource.NETEASE || track.id <= 0L) return`
+1. **LRC 预取只对 ncm 做**：`if (track.source != MusicSource.NETEASE || track.id <= 0L) return`
    （PlayerViewModel.kt:1602）。QQ 与 B 站的歌词字段形状不同、不进 `LyricsCache`
    （:1596-1597 注释；B 站那条见 `loadBiliLyrics` 的 KDoc :1932-1935）。
 2. **TTML 预取受开关门控**（:1682）：关掉 TTML 时那一条腿根本不加入任务表，不是「发了再丢」。
@@ -66,7 +66,7 @@ PlayerViewModel.kt:1656-1661 的三道判重：`currentlyPreloadingSongId` :1652
 | 模型 | 谁在用 | 判据 | 代码 |
 |---|---|---|---|
 | **显式过期时刻**（`expiresAtMs != null`） | B 站（及将来任何给 TTL 的音源） | `nowMs < expiresAtMs`（**边界取过期**） | `PreloadCachePolicy.isFresh` :70-73 |
-| **固定 TTL**（`expiresAtMs == null`） | 网易云 / QQ 音乐（**行为与 v3.0.0 逐字相同**） | `nowMs - entry.timestamp <= defaultTtlMs` | 同上 :74-75 |
+| **固定 TTL**（`expiresAtMs == null`） | ncm / qm（**行为与 v3.0.0 逐字相同**） | `nowMs - entry.timestamp <= defaultTtlMs` | 同上 :74-75 |
 
 - 默认 TTL：**5 分钟**。常量 `DEFAULT_TTL_MS: Long = 5 * 60 * 1000L`（PreloadCachePolicy.kt:50），
   注释明确要求「值必须与 v3.0.0 的 `CACHE_TTL_MS` 逐字相同」。
@@ -102,7 +102,7 @@ PlayerViewModel.kt:1705   preloadNextSong 的缓存命中判定
 | `显式过期时刻优先于固定 TTL` | :76 | 模型分派 |
 | `显式过期时刻到了就不可用（边界取过期）` | :85 | `now == expiresAt` ⇒ 不可用（与固定 TTL 的边界方向**相反**，有意的保守） |
 | `已经过期的条目在时间戳很新的情况下也不可用` | :97 | 显式模型不被 timestamp 干扰 |
-| `显式过期时刻为 null 时退回固定 TTL（网易云与 QQ 的行为不变）` | :106 | 向后兼容 |
+| `显式过期时刻为 null 时退回固定 TTL（ncm与 QQ 的行为不变）` | :106 | 向后兼容 |
 | `两种模型下档位判据都在最前面` | :116 | 判据顺序 |
 
 ---
@@ -157,11 +157,11 @@ app/src/main/java/com/takahashirinta/ncrust/player/PreloadSlot.kt` 输出为空�
 | `transition_rejected_when_slot_empty` | :148 | 空槽拒绝 |
 | `transition_url_fallback_without_ids` | :153 | 无 id 回落 URL |
 | `media_id_round_trip` | :162 | mediaId 往返 |
-| `netease_media_id_shape_is_unchanged` | :176 | 网易云形状 `song:<id>` 不变 |
+| `netease_media_id_shape_is_unchanged` | :176 | ncm 形状 `song:<id>` 不变 |
 | `qq_media_id_carries_the_source` | :192 | 跨源 mediaId |
 | `transition_rejects_same_number_on_other_source` | :209 | **跨源同号必须拒绝** |
 | `cross_source_transition_is_accepted_when_it_matches` | :234 | 跨源匹配时接受 |
-| `transition_rejects_unresolvable_item_when_slot_has_id` | :248 | 解析不出音源 ⇒ 拒绝（不猜网易云） |
+| `transition_rejects_unresolvable_item_when_slot_has_id` | :248 | 解析不出音源 ⇒ 拒绝（不猜 ncm） |
 | `transition_url_fallback_still_works_with_source` | :259 | 带音源的 URL 回落 |
 
 ---

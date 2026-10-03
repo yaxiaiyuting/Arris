@@ -37,16 +37,16 @@ $ git show HEAD:app/src/main/java/com/takahashirinta/ncrust/library/LibraryManag
 
 ## 1. 结论先行
 
-**根因一句话**：「加入库」写的是 `LibraryManager` 的**网易云红心歌单镜像**（`cachedSongs` → `ncrust_library/saved_songs` + 异步 `pushLike`），而 `refreshFromCloud` 用**云端 `likedIds` 顺序整体重建**这张表（`LibraryManager.kt:317-329`）。QQ 曲目的 id 由 `SourceIds.qqId` 合成、`bit62` 恒置位（`≥ 2^62`），而网易云 songId 是十进制百万~十亿量级（`< 2^40`）——两者**值域不相交**，所以 QQ 曲目**在结构上不可能**出现在 `likedIds` 里，重建时必然被 `?: continue` 静默丢弃；紧接着 `scheduleFlush` 把这个「丢了 QQ 曲目」的结果写回磁盘。用户看到的就是「点一下弹『已加入库』→ 下次刷新/切 tab/重启就没了」。
+**根因一句话**：「加入库」写的是 `LibraryManager` 的**ncm 红心歌单镜像**（`cachedSongs` → `ncrust_library/saved_songs` + 异步 `pushLike`），而 `refreshFromCloud` 用**云端 `likedIds` 顺序整体重建**这张表（`LibraryManager.kt:317-329`）。QQ 曲目的 id 由 `SourceIds.qqId` 合成、`bit62` 恒置位（`≥ 2^62`），而 ncm songId 是十进制百万~十亿量级（`< 2^40`）——两者**值域不相交**，所以 QQ 曲目**在结构上不可能**出现在 `likedIds` 里，重建时必然被 `?: continue` 静默丢弃；紧接着 `scheduleFlush` 把这个「丢了 QQ 曲目」的结果写回磁盘。用户看到的就是「点一下弹『已加入库』→ 下次刷新/切 tab/重启就没了」。
 
 | # | 问题 | 答案 | 关键证据 |
 |---|---|---|---|
-| 1 | 「入库」写哪个数据结构？ | **内存** `cachedSongs: MutableList<SongItem>`（网易云收藏镜像）+ 去抖落盘 `ncrust_library/saved_songs` + 异步 POST 网易云 `/eapi/radio/like`。**不是**本地歌单，**不是** QQ 歌单镜像 | `LibraryManager.kt:61,194-206,49-52,161,184-186`；`PlaylistApi.kt:690-710` |
+| 1 | 「入库」写哪个数据结构？ | **内存** `cachedSongs: MutableList<SongItem>`（ncm 收藏镜像）+ 去抖落盘 `ncrust_library/saved_songs` + 异步 POST ncm `/eapi/radio/like`。**不是**本地歌单，**不是** QQ 歌单镜像 | `LibraryManager.kt:61,194-206,49-52,161,184-186`；`PlaylistApi.kt:690-710` |
 | 2 | 立即落盘？路径/键/去抖？进程死在窗口内？ | **否**。`scheduleFlush` 去抖 **300ms**（`delay(300L)`），落盘用 `.apply()`（异步提交）。进程死在窗口内 ⇒ 该次（及窗口内全部）修改丢失 | `LibraryManager.kt:135-144,146-167` |
 | 3 | 「刷新」触发什么？会覆盖本地新增吗？ | 四处触发 `refreshFromCloud`（进收藏页/切 tab、登录信号、登录成功、冷启动预热）。它**按 `likedIds` 整体重建** `cachedSongs` 并回写磁盘 ⇒ **覆盖并丢弃**本地新增 | `LibraryScreen.kt:165-168,171-176`；`MainActivity.kt:1959-1963`；`AppWarmup.kt:204-207`；`LibraryManager.kt:317-329,354` |
 | 4 | 与 v2.2.0「只加不减 + tombstone」冲突？会被误判 tombstone？方向对吗？ | **两个互不相干的子系统**。`local/` 的 `merge` **只追加、从不删除/从不打 tombstone**，方向**正确**（可执行验证见 §6）。HEAD 的 `library/LibraryManager` **根本没有 origin/tombstone 概念**，「只加不减」这条纪律从未被应用到它身上 —— 它不是「误判成删除」，而是**直接物理丢弃** | `LocalPlaylistModels.kt:158-197,217-230`；`LibraryManager.kt:317-329` |
 | 5 | QQ 特殊 `dirId`（我喜欢=201）导致写入被忽略？ | **否**（不是本 Bug 的成因）。`dirId` 只用于寻址与展示（`FAVORITE_DIR_ID=201`、`isFavorite`），写入路径拿到的是 `SongItem`，既不看 `dirId` 也不看 `source`。另外 **HEAD 的 QQ 歌单详情页菜单里没有「加入库」**（传 `emptyList()`），QQ 曲目可达的「加入库」是播放器卡片按钮与搜索结果菜单 | `QqPlaylistParser.kt:93-94,191-193,226`；`QqPlaylistDetailScreen.kt:257`；`PlayerCard.kt:737-750`；`SearchScreen.kt:299-315,502-506` |
-| 6 | 网易云是否同样受影响？ | **同样会丢，但条件不同**。存活谓词是 `id ∈ getLikedTrackIds(uid)`：QQ 曲目**必然**丢（值域不相交）；网易云曲目在 like 推送没生效（风控 `-460` / 离线 / 加的时候未登录）时**一样丢** | `LibraryManager.kt:308,317-329`；`PlaylistApi.kt:680-710`（KDoc 自述 like 四种协议变体被风控拦截） |
+| 6 | ncm 是否同样受影响？ | **同样会丢，但条件不同**。存活谓词是 `id ∈ getLikedTrackIds(uid)`：QQ 曲目**必然**丢（值域不相交）；ncm 曲目在 like 推送没生效（风控 `-460` / 离线 / 加的时候未登录）时**一样丢** | `LibraryManager.kt:308,317-329`；`PlaylistApi.kt:680-710`（KDoc 自述 like 四种协议变体被风控拦截） |
 | 7 | 当前 QQ 歌单是只读镜像还是可写本地歌单？ | **只读镜像**。`QqPlaylistStore`（`ncrust_qq_playlists`）+ `QqPlaylistRepository` 只有 `loadList/loadDetail/clearAll/clearCurrentOwner`，没有任何用户意图写入口。可写的是 v2.3.0 另建的**本地歌单**（`ncrust_local_playlists`），而「入库」两者都不写 | `QqPlaylistStore.kt:52`；`QqPlaylistRepository.kt:80,199,285-293`；`LocalPlaylistStore.kt:56-66` |
 | 8 | 队列 / 待播槽位受影响？ | **结构上不受影响**：队列判重与待播槽位以 `TrackKey(source,id)` 为身份（`TrackKey.equals` 只看 `(source,id)`），从不读 `LibraryManager`；已进队列的 QQ 曲目不会因刷新被移除。**间接耦合 3 处**：车机 `LIKED_ID` 节点、库页「播放全部」、口味匹配/「按专辑播放全部」（后两者无音源过滤，**跨源串味**） | `TrackKey.kt:75-78`；`PlaybackService.kt:861`；`MainActivity.kt:1803,2283-2290`；`ArtistReco.kt:112` |
 
@@ -77,7 +77,7 @@ git show 5634500:app/src/main/java/com/takahashirinta/ncrust/library/LibraryMana
 git show 6da6560 --stat
 grep -rn "LibraryManager.saveSong|refreshFromCloud|loadMoreLikedSongs" app/src/main/java --include=*.kt
 grep -rn "isQqId|qqRawId|sourceOfId|QQ_ID_FLAG" app/src/main/java --include=*.kt
-grep -c "LibraryAdd" <QQ 歌单详情页 / 网易云歌单详情页>
+grep -c "LibraryAdd" <QQ 歌单详情页 / ncm歌单详情页>
 grep -n "Playlist(|isFavorite|isOwned|dirId" app/src/main/java/.../qq/QqCatalog.kt   # 阴性结果，见 §4.5
 grep -rn "refreshFromCloud" docs --include=*.md                                      # 阴性结果，见 §4.6
 grep -rn "入库|加入库" app/src/main/java app/src/main/res
@@ -139,8 +139,8 @@ return new ArrayList<>(merged.values());
 ```kotlin
 // app/src/main/java/com/takahashirinta/ncrust/library/LibraryManager.kt:34-47（类 KDoc，HEAD）
  * 云同步收藏库。
- * 语义（与网易云官方一致）：
- *  - 「收藏单曲」 = 网易云「收藏/我喜欢」（weapi /api/radio/like）；
+ * 语义（与ncm官方一致）：
+ *  - 「收藏单曲」 = ncm「收藏/我喜欢」（weapi /api/radio/like）；
  * 本地用 SharedPreferences 缓存云端状态（收藏单曲 + 收藏专辑），保证：
  *   - 进收藏页/登录时后台拉取（refreshFromCloud）刷新，云端为真源；
 ```
@@ -153,7 +153,7 @@ private const val KEY_SONGS = "saved_songs"
 @Volatile private var cachedSongs: MutableList<SongItem>? = null
 ```
 
-**(a)** 设计意图写得很清楚：这是**网易云红心歌单的本地缓存**，`云端为真源`。它没有任何「本地独有条目」的概念 —— 这一点是全案的根据。
+**(a)** 设计意图写得很清楚：这是**ncm 红心歌单的本地缓存**，`云端为真源`。它没有任何「本地独有条目」的概念 —— 这一点是全案的根据。
 
 ### 步骤 2 — `saveSong` 只把歌放进内存，然后去抖落盘 + 异步推送
 
@@ -175,7 +175,7 @@ fun saveSong(context: Context, song: SongItem) {
 ```
 
 **(a)** 三个事实：
-1. 判重只看 `it.id == song.id`（`Long`）——QQ 合成 id 带 bit62，所以**不会**与网易云曲目撞号（这一点是好的）；
+1. 判重只看 `it.id == song.id`（`Long`）——QQ 合成 id 带 bit62，所以**不会**与 ncm 曲目撞号（这一点是好的）；
 2. `song` 里带着 `source = "qqmusic"` 与 `sourceId = songmid`（`QqSongMapper.kt:125-141`），但 `saveSong` **完全不看**它们；
 3. `saveSong` 返回 `Unit` —— **调用方拿不到任何成败信息**，这是步骤 7「UI 说谎」的结构性前提。
 
@@ -224,7 +224,7 @@ private fun flushToDisk() {
 |---|---|---|
 | 进收藏页 / 切 tab（`LibraryScreen` 会被卸载重建，见 `MainActivity.kt:2233` 的 `when (selectedTab)`） | `LibraryScreen.kt:165-168` | 无条件（函数内部再判 cookie） |
 | 登录后刷新信号 `refreshTrigger` 变化 | `LibraryScreen.kt:171-176` | `refreshTrigger > 0` |
-| 网易云登录成功 | `MainActivity.kt:1959-1963` | `cookieRefreshTrigger > 0` |
+| ncm 登录成功 | `MainActivity.kt:1959-1963` | `cookieRefreshTrigger > 0` |
 | **冷启动预热**（App 启动就发） | `AppWarmup.kt:204-207` | `CookieManager.hasCookie(app)` |
 
 ```kotlin
@@ -237,7 +237,7 @@ if (CookieManager.hasCookie(app)) {
 
 **(a)** 「切换 tab / 重启 App」两条用户描述都能被解释：切 tab 让 `LibraryScreen` 重挂载 ⇒ `LaunchedEffect(Unit)` 再跑一次；重启则由 `AppWarmup` 在冷启动阶段三直接调 `refreshFromCloud`。
 
-### 步骤 5 — `refreshFromCloud` **按 `likedIds` 重建**，`likedIds` 只含网易云曲目
+### 步骤 5 — `refreshFromCloud` **按 `likedIds` 重建**，`likedIds` 只含 ncm 曲目
 
 ```kotlin
 // LibraryManager.kt:291-312
@@ -246,14 +246,14 @@ suspend fun refreshFromCloud(context: Context): Boolean = withContext(Dispatcher
     val uid: Long = try { PlaylistApi.getCurrentUserId() } catch (e: Exception) { ... return@withContext false }
     var anySuccess = false
     try {
-        val likedIds = PlaylistApi.getLikedTrackIds(uid)                          // ← 网易云「我喜欢的音乐」trackIds
+        val likedIds = PlaylistApi.getLikedTrackIds(uid)                          // ← ncm「我喜欢的音乐」trackIds
         Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
         synchronized(idsLock) { cachedLikedIds = likedIds }
         val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
         val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
 ```
 
-`getLikedTrackIds` 的来源是网易云红心歌单（`PlaylistApi.kt:623-660`，走 `/eapi/v6/playlist/detail` 的 `trackIds` + 截断补齐），其 id 空间就是网易云 songId。
+`getLikedTrackIds` 的来源是 ncm 红心歌单（`PlaylistApi.kt:623-660`，走 `/eapi/v6/playlist/detail` 的 `trackIds` + 截断补齐），其 id 空间就是 ncm songId。
 
 ### 步骤 6 — 重建循环：**不在 `likedIds` 里 = 当场丢弃**（本 Bug 的致命一步）
 
@@ -277,7 +277,7 @@ synchronized(songsLock) {
 }
 ```
 
-**(a)** `oldById[id]` 这个「本地兜底」**只在 `id ∈ likedIds` 时才会被查询**。本地新增的 QQ 曲目 **id 不在 `likedIds` 里 ⇒ 从来不是候选 ⇒ 一定出局**。注释里那句「同时剔除已取消收藏的歌（云端为真源）」正是这个行为的自我说明：这条规则对网易云是对的，对**不属于这个云端的曲目**（QQ 合成 id）就是纯数据丢失。
+**(a)** `oldById[id]` 这个「本地兜底」**只在 `id ∈ likedIds` 时才会被查询**。本地新增的 QQ 曲目 **id 不在 `likedIds` 里 ⇒ 从来不是候选 ⇒ 一定出局**。注释里那句「同时剔除已取消收藏的歌（云端为真源）」正是这个行为的自我说明：这条规则对 ncm 是对的，对**不属于这个云端的曲目**（QQ 合成 id）就是纯数据丢失。
 
 ### 步骤 7 — 丢完还写回磁盘
 
@@ -296,7 +296,7 @@ if (anySuccess) scheduleFlush(context)
 | 搜索结果长按菜单 | `SearchScreen.kt:502-506` | ❌ 无条件 |
 | 搜索历史菜单 | `SearchScreen.kt:299-315` | ❌ 无条件 |
 | 库页单曲长按菜单 | `LibraryScreen.kt:327-330` | ❌ 无条件 |
-| 首页 / 专辑 / 歌手 / 网易云歌单详情 | `HomeScreen.kt:297-300`、`AlbumDetailScreen.kt:312-315`、`ArtistDetailScreen.kt:290-293`、`PlaylistDetailScreen.kt:270-273` | ❌ 无条件 |
+| 首页 / 专辑 / 歌手 / ncm 歌单详情 | `HomeScreen.kt:297-300`、`AlbumDetailScreen.kt:312-315`、`ArtistDetailScreen.kt:290-293`、`PlaylistDetailScreen.kt:270-273` | ❌ 无条件 |
 
 也就是说：**Toast 只反映「内存 `MutableList` 里多了一条」，不反映「云端收藏成功」「不会被下次刷新抹掉」**。用户报告的「UI 短暂显示已加入」就是这一句 Toast。
 
@@ -372,12 +372,12 @@ JAVAC_EXIT=0
 $ java MergeProbe ; echo "JAVA_EXIT=$?"
 QQ 合成 id           = 4611686019661955794  (isQqId=true)
 QQ_ID_FLAG           = 4611686018427387904
-网易云 id 上界(2^40) = 1099511627776
+ncm id 上界(2^40) = 1099511627776
 rebuild 前 cached    = [4611686019661955794, 101, 999]
 rebuild 后 cached    = [101]
 QQ 曲目存活?         = false
-网易云 999 存活?     = false
-网易云 101 存活?     = true
+ncm 999 存活?     = false
+ncm 101 存活?     = true
 JAVA_EXIT=0
 ```
 
@@ -409,9 +409,9 @@ JAVA_EXIT=0
 >
 > 注意 `firstSongs`/`oldById` 两条兜底都要先 `id ∈ likedIds` 才可能被查到（`:321-324`），所以它们**不构成**额外豁免。
 
-第 3 条对 QQ 曲目恒假：`SourceIds.qqId` 的定义是 `QQ_ID_FLAG or raw`（`MusicSource.kt:198-201`），`QQ_ID_FLAG = 1L shl 62 = 4611686018427387904`（`:164`），而网易云 songId 按仓库自己的实测结论「十进制百万~十亿量级（远小于 `2^40`）」（`MusicSource.kt:170-174`、`ReportGate.kt:38-48`）。值域不相交 ⇒ **QQ 曲目 100% 被丢**。
+第 3 条对 QQ 曲目恒假：`SourceIds.qqId` 的定义是 `QQ_ID_FLAG or raw`（`MusicSource.kt:198-201`），`QQ_ID_FLAG = 1L shl 62 = 4611686018427387904`（`:164`），而 ncm songId 按仓库自己的实测结论「十进制百万~十亿量级（远小于 `2^40`）」（`MusicSource.kt:170-174`、`ReportGate.kt:38-48`）。值域不相交 ⇒ **QQ 曲目 100% 被丢**。
 
-### 4.5 `pushLike` 会把 QQ 合成 id 发给网易云，且**没有任何闸门**
+### 4.5 `pushLike` 会把 QQ 合成 id 发给 ncm，且**没有任何闸门**
 
 ```kotlin
 // LibraryManager.kt:184-186（HEAD）
@@ -441,7 +441,7 @@ suspend fun likeSong(songId: Long, like: Boolean): Boolean = withContext(Dispatc
 
 **(a)** 客户端后果（可证）：
 1. `pushLike` 走的是 `runCatching { }` + 丢掉布尔返回值 ⇒ **失败静默**，用户只看得到 Toast；
-2. `likeSong` 的 KDoc 自述（`PlaylistApi.kt:680-689`）：「like 写操作受网易账号/IP 级风险控制，本账号四种协议变体…均被 `-460「检测到您的网络环境存在风险」` 或异常响应拦截而读取全部正常」——**即使是正常的网易云曲目，like 也可能根本没生效**；
+2. `likeSong` 的 KDoc 自述（`PlaylistApi.kt:680-689`）：「like 写操作受网易账号/IP 级风险控制，本账号四种协议变体…均被 `-460「检测到您的网络环境存在风险」` 或异常响应拦截而读取全部正常」——**即使是正常的 ncm 曲目，like 也可能根本没生效**；
 3. 服务端后果 **未验证**（见 §10）——本机没有登录态、不做任何网络请求。
 
 对照仓库已有的同类闸门（这正是本 Bug 的形状已经被修过一次的地方）：
@@ -464,8 +464,8 @@ fun mayReport(target: Target, songId: Long): Boolean {
 
 ```kotlin
  * ## 本版**不做**的事（避免误以为已支持）
- * - 不把 QQ 歌曲加进网易云歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
- *   而且网易云的歌单写接口会拒绝外部曲目）；
+ * - 不把 QQ 歌曲加进ncm歌单/收藏（那需要「本地歌单」这个尚不存在的概念，
+ *   而且ncm的歌单写接口会拒绝外部曲目）；
 ```
 
 （这句话写于 v2.1.0；v2.3.0 已经建好了「本地歌单」，但**没有回头把这条约束接到 `LibraryManager` 上**。）
@@ -554,17 +554,17 @@ synchronized(songsLock) { songsSnapshot = cachedSongs?.toList() ?: emptyList() }
 
 ---
 
-## 5. 网易云是否同样受影响
+## 5. ncm 是否同样受影响
 
 **受影响，但判定条件不同。**
 
 | 情形 | 加入库时 | like 推送结果 | 下次 `refreshFromCloud` | 结果 |
 |---|---|---|---|---|
 | QQ 曲目（合成 id） | 加进 `cachedSongs` | 必然无效（跨源 id；客户端无闸门、服务端不认） | `id ∉ likedIds`（值域不相交） | **必然消失** |
-| 网易云曲目，已登录且 like 成功 | 加进 `cachedSongs` | `code == 200`，云端红心新增 | `id ∈ likedIds` | 存活 |
-| 网易云曲目，like 被风控拦（`-460`，KDoc 自述 v1.3.0 实测该账号四种协议变体均被拦） | 加进 `cachedSongs` | 失败，静默 | `id ∉ likedIds` | **消失** |
-| 网易云曲目，加的时候**未登录** | 加进 `cachedSongs` | `pushLike` 根本不发（`saveSong:204` 的 `isLoggedIn` 卫语句） | 登录后 `refreshFromCloud` 跑起来 | **消失** |
-| 网易云曲目，离线加 | 加进 `cachedSongs` | 请求失败（`runCatching` 吞） | 同第 3 行 | **消失** |
+| ncm 曲目，已登录且 like 成功 | 加进 `cachedSongs` | `code == 200`，云端红心新增 | `id ∈ likedIds` | 存活 |
+| ncm 曲目，like 被风控拦（`-460`，KDoc 自述 v1.3.0 实测该账号四种协议变体均被拦） | 加进 `cachedSongs` | 失败，静默 | `id ∉ likedIds` | **消失** |
+| ncm 曲目，加的时候**未登录** | 加进 `cachedSongs` | `pushLike` 根本不发（`saveSong:204` 的 `isLoggedIn` 卫语句） | 登录后 `refreshFromCloud` 跑起来 | **消失** |
+| ncm 曲目，离线加 | 加进 `cachedSongs` | 请求失败（`runCatching` 吞） | 同第 3 行 | **消失** |
 
 **精确存活谓词**（与 §4.4 同一句）：
 
@@ -573,12 +573,12 @@ synchronized(songsLock) { songsSnapshot = cachedSongs?.toList() ?: emptyList() }
                        （或 refreshFromCloud 在取 likedIds 之前就 return/抛异常）
 ```
 
-**「网易云也会丢」和「QQ 必然丢」的差别只在第一条谓词的可满足性**：QQ 的合成 id 永远无法进入网易云的 `likedIds`，网易云的 id 只要 like 真的生效就能进入。所以：
+**「ncm 也会丢」和「QQ 必然丢」的差别只在第一条谓词的可满足性**：QQ 的合成 id 永远无法进入 ncm 的 `likedIds`，ncm 的 id 只要 like 真的生效就能进入。所以：
 
-* 用户报告的「QQ 曲目入库后消失」是**确定性缺陷**，不需要任何额外条件（只要他还登录着网易云——`refreshFromCloud` 在无 cookie 时提前 return，反而「不会丢」）；
-* 「网易云曲目入库后消失」是**条件性缺陷**，触发条件是 like 写失败/未登录——而 `PlaylistApi.kt:686-688` 的 KDoc 说明这个条件在真机上**并不罕见**。
+* 用户报告的「QQ 曲目入库后消失」是**确定性缺陷**，不需要任何额外条件（只要他还登录着 ncm——`refreshFromCloud` 在无 cookie 时提前 return，反而「不会丢」）；
+* 「ncm 曲目入库后消失」是**条件性缺陷**，触发条件是 like 写失败/未登录——而 `PlaylistApi.kt:686-688` 的 KDoc 说明这个条件在真机上**并不罕见**。
 
-一个可以立刻用眼睛验证的旁证：库页单曲 tab 的表头计数用的是 `likedTotal = LibraryManager.getLikedSongIds(context).size`（网易云红心歌单长度，`LibraryScreen.kt:109,151,309`），而列表渲染的是 `savedSongs`（`LibraryScreen.kt:319`）。**在「加入库」之后、下一次刷新之前，列表条数会大于表头声明的总数** —— 那个差值就是马上要被丢掉的本地新增条目。
+一个可以立刻用眼睛验证的旁证：库页单曲 tab 的表头计数用的是 `likedTotal = LibraryManager.getLikedSongIds(context).size`（ncm 红心歌单长度，`LibraryScreen.kt:109,151,309`），而列表渲染的是 `savedSongs`（`LibraryScreen.kt:319`）。**在「加入库」之后、下一次刷新之前，列表条数会大于表头声明的总数** —— 那个差值就是马上要被丢掉的本地新增条目。
 
 ---
 
@@ -590,7 +590,7 @@ synchronized(songsLock) { songsSnapshot = cachedSongs?.toList() ?: emptyList() }
 
 | 维度 | `library/LibraryManager.kt`（本 Bug 现场） | `local/LocalPlaylist*.kt`（v2.2.0/v2.3.0 子系统） |
 |---|---|---|
-| 语义 | **网易云红心歌单镜像**（KDoc：`云端为真源`） | **本地歌单**（可混装两源，只加不减） |
+| 语义 | **ncm 红心歌单镜像**（KDoc：`云端为真源`） | **本地歌单**（可混装两源，只加不减） |
 | prefs 文件 / 键 | `ncrust_library` / `saved_songs`、`saved_albums`、`liked_ids` | `ncrust_local_playlists` / `playlists`、`tracks:<source>:<ownerId>:<id>` |
 | 身份 | 裸 `Long` id（`cachedSongs.none { it.id == song.id }`，`:199`） | `TrackKey(source, id)`（`LocalPlaylistModels.kt:93-102`，判等只看 `(source,id)`，`TrackKey.kt:75-78`） |
 | 有条目来源标记？ | **没有**（HEAD） | **有**：`LocalTrackOrigin.REMOTE / LOCAL`（`LocalPlaylistModels.kt:24-30`） |
@@ -646,7 +646,7 @@ JAVA_EXIT=0
 | `isFavorite` 被某处当作「不可写」判据 | **否** | `grep -rn "isFavorite" app/src/main/java --include=*.kt`（`EXIT=0`，命中 11 处）的全部消费者只有：排序（`LibraryPlaylistsTab.kt:142,143`）、副标题（`:378`）、生成侧（`QqPlaylistParser.kt:226`）、取 `encrypt_uin` 用（`QqPlaylistRepository.kt:167`）、缓存 DTO（`PlaylistCacheCodec.kt:60,99,388,411`）、模型定义（`PlaylistModels.kt:70,81`）——**没有一处写入路径** |
 | `dirId=0`（收藏歌单没有自己的目录号）让详情拉不到曲目，因此「没歌可加」 | **否**（有兜底） | `QqPlaylistRepository.loadDetail` 对 `dirId=0` 传 `disstid = key.id`（`:229-233`），注释说明「传 0 让服务端按 `disstid` 解析」 |
 
-**唯一与「写入」有关的 QQ 侧事实是**：QQ 这边**没有**任何「收藏」写接口被实现（`QqMusicSourceProvider.kt:36-41` 明文声明不做云歌单/收藏），所以 QQ 曲目入库时**只能**落到网易云的 `like` 上——而那一定失败（§4.5）。换句话说：**不是 `dirId` 让写入被忽略，而是这条写入从一开始就写错了地方**。
+**唯一与「写入」有关的 QQ 侧事实是**：QQ 这边**没有**任何「收藏」写接口被实现（`QqMusicSourceProvider.kt:36-41` 明文声明不做云歌单/收藏），所以 QQ 曲目入库时**只能**落到 ncm 的 `like` 上——而那一定失败（§4.5）。换句话说：**不是 `dirId` 让写入被忽略，而是这条写入从一开始就写错了地方**。
 
 ---
 
@@ -664,11 +664,11 @@ JAVA_EXIT=0
 
 | 耦合点 | 位置 | 表现 | 等级 |
 |---|---|---|---|
-| 车机 / Android Auto「我喜欢的音乐」节点 | `PlaybackService.kt:861` `LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }` | 「入库」后 QQ 曲目会**短暂出现在网易云的「我喜欢的音乐」节点**里，刷新后又消失；`songItem()` 用 `SourceIds.mediaId(song.mediaSource, song.id)` 编码音源（`:836-839`），所以**播放不会串源**，只是列表内容随刷新抖动 | (a) 读代码 |
-| 库页「播放全部」`onPlayAllLiked` | `MainActivity.kt:2282-2303` | 先用 `getSavedSongs()`（**可能含 QQ 曲目**）`replaceQueueAndPlay`，再用 `loadAllLikedSongs()`（**只含网易云红心 id**，`LibraryManager.kt:400-419`）补队尾 ⇒ 首次会播到 QQ 曲目，补齐阶段又"不认识"它（靠 `known` 去重兜住，不会重复入队） | (a) 读代码 |
-| 口味匹配 / 按专辑播放全部 | `ArtistReco.kt:112`（`getSavedSongs().flatMap { it.artists }` 直接拿 artist id 去比网易云相似艺人锚点）；`MainActivity.kt:1803`（`getSongsByAlbumId` 用 `it.album?.id == albumId`，**没有音源过滤**） | QQ 曲目的 **QQ artistId / QQ albumId** 被当作网易云的 id 使用：口味匹配可能命中错误的锚点；「按专辑播放全部」可能因为一首 QQ 曲目的 album.id 恰好等于某网易云专辑 id 而返回错误的曲目集合 | (a) 读代码；(c) 实际撞号概率未实测（`SongItem.album.id` 在 QQ 侧来自 `album.id`，`QqSongMapper.kt:117-123`） |
+| 车机 / Android Auto「我喜欢的音乐」节点 | `PlaybackService.kt:861` `LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }` | 「入库」后 QQ 曲目会**短暂出现在 ncm 的「我喜欢的音乐」节点**里，刷新后又消失；`songItem()` 用 `SourceIds.mediaId(song.mediaSource, song.id)` 编码音源（`:836-839`），所以**播放不会串源**，只是列表内容随刷新抖动 | (a) 读代码 |
+| 库页「播放全部」`onPlayAllLiked` | `MainActivity.kt:2282-2303` | 先用 `getSavedSongs()`（**可能含 QQ 曲目**）`replaceQueueAndPlay`，再用 `loadAllLikedSongs()`（**只含 ncm 红心 id**，`LibraryManager.kt:400-419`）补队尾 ⇒ 首次会播到 QQ 曲目，补齐阶段又"不认识"它（靠 `known` 去重兜住，不会重复入队） | (a) 读代码 |
+| 口味匹配 / 按专辑播放全部 | `ArtistReco.kt:112`（`getSavedSongs().flatMap { it.artists }` 直接拿 artist id 去比 ncm 相似艺人锚点）；`MainActivity.kt:1803`（`getSongsByAlbumId` 用 `it.album?.id == albumId`，**没有音源过滤**） | QQ 曲目的 **QQ artistId / QQ albumId** 被当作 ncm 的 id 使用：口味匹配可能命中错误的锚点；「按专辑播放全部」可能因为一首 QQ 曲目的 album.id 恰好等于某 ncm 专辑 id 而返回错误的曲目集合 | (a) 读代码；(c) 实际撞号概率未实测（`SongItem.album.id` 在 QQ 侧来自 `album.id`，`QqSongMapper.kt:117-123`） |
 
-**(a)** 这三处都不是「用户丢数据」，但它们是**同一个设计缺口**的下游症状：`cachedSongs` 里混进了非网易云条目，而所有消费者都默认「这里面的 id 都是网易云的」。
+**(a)** 这三处都不是「用户丢数据」，但它们是**同一个设计缺口**的下游症状：`cachedSongs` 里混进了非 ncm 条目，而所有消费者都默认「这里面的 id 都是 ncm 的」。
 
 ---
 
@@ -700,7 +700,7 @@ JAVA_EXIT=0
 | 5/7 | 用户「加入库」→ `origin=LOCAL`；已存在则清 tombstone 且**保持原下标** | `saveSong` |
 | 6 | 用户「移出库」→ 打 tombstone，**不物理删**（否则下次刷新复活） | `removeSong` |
 
-* 顺序与游标：`likedIdCursor` 必须只按**网易云** id 前缀计算（WIP 已经这么做了：只把 `trackKey.source == NETEASE` 的条目计入 `coveredIds`），否则 QQ 条目会把游标顶到错位处。
+* 顺序与游标：`likedIdCursor` 必须只按**ncm** id 前缀计算（WIP 已经这么做了：只把 `trackKey.source == NETEASE` 的条目计入 `coveredIds`），否则 QQ 条目会把游标顶到错位处。
 
 **C. 用户动作立即落盘 —— 去抖只留给批量补详情 [WIP 已覆盖]**
 
@@ -763,10 +763,10 @@ JAVA_EXIT=0
 ## 10. 未验证项
 
 1. **未运行 App / 未跑 `./gradlew test`**：本机没有连接的设备；构建还依赖同级 `Kanesumi-sec-a` 复合构建与网络。§4.3/§4.4/§6.2 的探针是**逐句转写的 Java 程序**（OpenJDK 26.0.2），不是 App 字节码。
-2. **服务端行为未实测**：QQ 合成 id 发到 `/eapi/radio/like` 之后网易云返回什么 code、是否会在账号上留下脏数据 —— 本机无登录态，**没有发任何网络请求**。
-3. **`likeSong` 风控失败率未复测**：`PlaylistApi.kt:686-688` 的「四种协议变体均被 `-460` 拦截」是 v1.3.0 的实测结论，本次未重新测量 ⇒ §5 里「网易云也会丢」的概率无法量化。
+2. **服务端行为未实测**：QQ 合成 id 发到 `/eapi/radio/like` 之后 ncm 返回什么 code、是否会在账号上留下脏数据 —— 本机无登录态，**没有发任何网络请求**。
+3. **`likeSong` 风控失败率未复测**：`PlaylistApi.kt:686-688` 的「四种协议变体均被 `-460` 拦截」是 v1.3.0 的实测结论，本次未重新测量 ⇒ §5 里「ncm 也会丢」的概率无法量化。
 4. **用户实际点击路径未确认**：HEAD 的 QQ 歌单详情页菜单里**没有**「加入库」（§4.7）。用户报告里的「QQ 歌单列表长按 → 入库」与 HEAD 不符，可能是：(a) 他点的是「加入本地歌单」（那样本 Bug 不适用）；(b) 他是在播放器卡片或搜索结果里点的「加入库」；(c) 设备上的包不是 v2.5.6。**需要一张菜单截图 + `versionName` 才能定案。**
 5. **`flushToDisk` 写空表（§4.9）的时序可达性**：只证明写入路径存在（`cachedSongs == null ⇒ 写 []`），未在真机上复现 `preload` 与 `subscribeAlbum` 的竞争。
-6. **跨源 id 撞号风险（§8.2 的 `album.id` / `artist.id`）未实测**：QQ 与网易云的 album/artist id 是否真的会撞、撞上后「按专辑播放全部」给错歌集合的概率 —— 未做数据比对。
+6. **跨源 id 撞号风险（§8.2 的 `album.id` / `artist.id`）未实测**：QQ 与 ncm 的 album/artist id 是否真的会撞、撞上后「按专辑播放全部」给错歌集合的概率 —— 未做数据比对。
 7. **本地歌单子系统是否有独立缺陷未证伪**：本次只做了规则级转写验证（§6.2）+ 读了 27 个既有单测的用例名，**没有**在真机上走一遍「QQ 歌单 → 转存 → 加歌 → 刷新」。
 8. **工作区 WIP 的正确性未审计**：`SavedSongCodec.kt` / `SavedSongModels.kt` / 改后的 `LibraryManager.kt` 是别的会话正在进行中的改动（`22:00:55`），本报告只把它当作「修复方向的旁证」，**没有**评审其实现、也没有运行其单测。

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -104,7 +104,7 @@ class PlaybackService : MediaLibraryService() {
      * I MediaSessionService: Media button session is changed to …/NcrustSession
      * ```
      *
-     * 对照：官方网易云 `com.netease.cloudmusic/MediaSession` **只有一条**、华为音乐
+     * 对照：官方 ncm `com.netease.cloudmusic/MediaSession` **只有一条**、华为音乐
      * `com.android.mediacenter.mediasession` **也只有一条**。Ncrust 是唯一让系统在
      * 两个「当前播放器」之间摇摆的应用 —— 而「谁是当前播放器」正是控制中心媒体卡
      * 与蓝牙 AVRCP 要回答的第一个问题。所以本版把 legacy 会话整个删掉。
@@ -383,7 +383,7 @@ class PlaybackService : MediaLibraryService() {
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
         // 流内嵌的 ID3 元数据（尤其封面图，单张可达数百 KB）在本 App 里毫无用处：
-        // 标题 / 歌手 / 封面一律由网易云 API 提供，并显式写入 MediaMetadata 与通知栏
+        // 标题 / 歌手 / 封面一律由 ncm API 提供，并显式写入 MediaMetadata 与通知栏
         // （见 songItem() 与通知栏的 MediaMetadataCompat.Builder）。关掉解析可省下
         // 这部分解析 CPU 与内存 —— 对 3GB 机型是实打实的收益，且不影响任何显示。
         val extractorsFactory = DefaultExtractorsFactory()
@@ -484,7 +484,7 @@ class PlaybackService : MediaLibraryService() {
                 // 才允许把元数据写进通知栏 / 歌词 / ViewModel。重复入队的年代，这里会把
                 // 「下下首」的标题写到正在播的「上一首」上 —— 就是用户听到的串台。
                 // 现在宁可让 UI 停在原处（下一首自然会走硬切重新对齐），也绝不显示错歌。
-                // v2.1.5：判定加上音源维度（网易云 123 与 QQ 123 是不同的歌）。
+                // v2.1.5：判定加上音源维度（ncm 123 与 QQ 123 是不同的歌）。
                 if (!PreloadSlot.transitionMatches(
                         pendingNextSource, pendingNextSongId, pendingNextUrl,
                         itemSource, itemSongId, itemUrl,
@@ -709,7 +709,7 @@ class PlaybackService : MediaLibraryService() {
         val artwork = intent?.getStringExtra("artwork")
         val songId = intent?.getLongExtra("songId", -1L) ?: -1L
         // v2.1.0 · C：音源身份。媒体通知与车机路径都要靠它把媒体项指回**正确的**音源 ——
-        // 少了它，QQ 音乐的曲目在通知栏/车机上会被当成网易云的同号歌曲。
+        // 少了它，qm 的曲目在通知栏/车机上会被当成 ncm 的同号歌曲。
         val sourceKey = intent?.getStringExtra("sourceKey")
         val sourceId = intent?.getStringExtra("sourceId")
         val mediaId = intent?.getStringExtra("mediaId")
@@ -860,8 +860,8 @@ class PlaybackService : MediaLibraryService() {
         .build()
 
     private fun songItem(song: SongItem): MediaItem = MediaItem.Builder()
-        // 网易云仍是 `song:123`（与 v2.0.2 逐字节相同，老媒体项继续能解析）；
-        // QQ 音乐是 `song:qqmusic:456`。同号不同源在媒体层也必须分得开。
+        // ncm 仍是 `song:123`（与 v2.0.2 逐字节相同，老媒体项继续能解析）；
+        // qm 是 `song:qqmusic:456`。同号不同源在媒体层也必须分得开。
         .setMediaId(com.takahashirinta.ncrust.source.SourceIds.mediaId(song.musicSource, song.id) ?: "song:${song.id}")
         .setMediaMetadata(
             MediaMetadata.Builder()
@@ -893,7 +893,7 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun resolveMediaItem(item: MediaItem): MediaItem {
         if (item.localConfiguration != null) return item
         // v2.1.0 · C：车机路径同样按音源路由。解析不出音源的 mediaId 直接放弃
-        // （返回原 item 让上层跳歌），**不要**猜成网易云 —— 猜错就是放到别人的歌。
+        // （返回原 item 让上层跳歌），**不要**猜成 ncm —— 猜错就是放到别人的歌。
         val parsed = com.takahashirinta.ncrust.source.SourceIds.parseMediaId(item.mediaId) ?: return item
         val (source, songId) = parsed
         val ref = com.takahashirinta.ncrust.source.songRefOf(source, songId)
@@ -981,7 +981,7 @@ class PlaybackService : MediaLibraryService() {
      * androidx.media3.session.id.  metadata: size=3, description=null,  null, null      ← 空
      * ```
      *
-     * 而华为控制中心的媒体卡对**官方网易云**（第三方应用）与自带华为音乐都正常显示，
+     * 而华为控制中心的媒体卡对**官方 ncm**（第三方应用）与自带华为音乐都正常显示，
      * 唯独 Ncrust 显示「未在播放」—— 说明这不是 ROM 能力边界，是应用讲了两套不一致的话。
      *
      * 顺带：预载项（[buildPreloadMediaItem]）一直是带 metadata 的，所以「无缝接续过来的那首歌」

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -30,8 +30,8 @@ import org.junit.Test
  *
  * ## 这一组用例对应的**用户报告**
  *
- * 搜「晴天」→ 界面立刻显示「网易云 30 首 · **QQ 音乐 0 首**」，
- * 而底部托盘正在播的那首《晴天》就是 QQ 音乐源；约 5 秒后 QQ 结果才出现、数字才更新。
+ * 搜「晴天」→ 界面立刻显示「ncm 30 首 · **qm 0 首**」，
+ * 而底部托盘正在播的那首《晴天》就是 qm 源；约 5 秒后 QQ 结果才出现、数字才更新。
  * 那 5 秒里「0 首」是**假话** —— 用户据此以为 QQ 搜不到那首歌。
  *
  * 所以本文件的第一条、也是最重要的一条断言是：
@@ -57,13 +57,13 @@ class SourceCountsTest {
             qqStatus = SourceSearchStatus.PENDING,
         )
         val line = counts.summary(strings)
-        // ⚠️ 不能写成 `!line.contains("0")`：网易云的「30 首」里也有一个 0。
+        // ⚠️ 不能写成 `!line.contains("0")`：ncm 的「30 首」里也有一个 0。
         // 要断言的是**QQ 那一侧**没有出现「0 首」这个计数形态。
         val qqZero = strings.sourceQqMusic + " " + strings.searchSourceCount(0)
         assertTrue("QQ 侧出现了 0 —— 这正是用户报告的那句假话：$line", !line.contains(qqZero))
         assertEquals("QQ 侧必须是「搜索中」", strings.searchSourcePending, counts.qqText(strings))
         assertTrue("统计行里没有「搜索中」标记：$line", line.contains(strings.searchSourcePending))
-        assertTrue("网易云的计数应当照常显示：$line", line.contains(strings.searchSourceCount(30)))
+        assertTrue("ncm 的计数应当照常显示：$line", line.contains(strings.searchSourceCount(30)))
     }
 
     /** 相反的一面：**真的 0 首**（QQ 已返回且为空）必须显示 0，不能被"搜索中"盖住。 */
@@ -101,7 +101,7 @@ class SourceCountsTest {
         )
         val line = counts.summary(strings)
         assertEquals(strings.searchSourceSkipped, counts.qqText(strings))
-        assertFalse("未发起也不该显示 0：$line", line.contains("QQ 音乐 0"))
+        assertFalse("未发起也不该显示 0：$line", line.contains("qm 0"))
     }
 
     // ------------------------------------------------------------ 与既有格式逐字相同（换路径不许改口径）
@@ -298,7 +298,7 @@ class SourceCountsTest {
         val counts = SourceCounts()
         assertEquals(SourceSearchStatus.PENDING, counts.qqStatus)
         assertFalse(counts.isDone(MusicSource.QQMUSIC))
-        // 网易云默认 DONE：它总是第一个被发布的源。
+        // ncm 默认 DONE：它总是第一个被发布的源。
         assertEquals(SourceSearchStatus.DONE, counts.neteaseStatus)
     }
 }

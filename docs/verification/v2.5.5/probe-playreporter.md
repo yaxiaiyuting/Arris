@@ -14,7 +14,7 @@
 
 ## §0 结论先行
 
-1. **上报路径**：`PlayReporter.reportPlay()`（`player/PlayReporter.kt:39-78`）在网易云登录态下，
+1. **上报路径**：`PlayReporter.reportPlay()`（`player/PlayReporter.kt:39-78`）在 ncm 登录态下，
    向 `POST https://clientlogusf.music.163.com/api/feedback/weblog?csrf_token=<__csrf>`
    发一条表单 `logs=[{"action":"play","json":{…,"id":<songId>,…}}]`。
    **不带任何音源信息、不区分上报目标**，UI 线程上过卫语句后丢给 `ncrust-weblog` 线程 fire-and-forget。
@@ -40,7 +40,7 @@
 
 5. **反方向不成立**：仓库里**没有任何向 QQ 上报播放行为的实现**
    （`qq/QqMusicSourceProvider.kt:40` 明确写入 KDoc；全包 grep 无 weblog/report 出口），
-   所以「网易云 id 上报给 QQ」这条方向**没有实现，不成立**。
+   所以「ncm id 上报给 QQ」这条方向**没有实现，不成立**。
 
 6. **闸门建议（并且本仓库工作区里已在按这个方向落地，见 §3.6）**：
    判据用 `SourceIds.isQqId()`（bit62 结构性事实，不用区间/散列启发式）；
@@ -80,7 +80,7 @@ body: logs=<JSON 数组串>
 - `csrf_token` 取自 cookie 串里的 `__csrf=` 字段（`RetrofitClient.getCsrfToken()`，`network/RetrofitClient.kt:223-231`），
   取不到就直接 `return`（`PlayReporter.kt:50`）——**不发请求**。
 - 请求头由 `RetrofitClient.postWeblog` 统一加：`User-Agent`（PC UA）、`Referer: https://music.163.com/`、
-  `Cookie: <当前网易云 cookie>`（`RetrofitClient.kt:212-220`）。**不加密**，不走 eapi/weapi。
+  `Cookie: <当前ncm cookie>`（`RetrofitClient.kt:212-220`）。**不加密**，不走 eapi/weapi。
 
 **字段**（`PlayReporter.kt:53-66`，字段顺序即源码顺序）
 
@@ -128,7 +128,7 @@ ExoPlayer `STATE_ENDED`（`PlaybackService.kt:426-429`）、
 
 | # | 源码 | 判据 | 一个 bit62 的 QQ id 能过吗 |
 |---|---|---|---|
-| 1 | `val cookie = RetrofitClient.getCookie() ?: return` | 有没有网易云 cookie | **能过**（只要用户登录了网易云） |
+| 1 | `val cookie = RetrofitClient.getCookie() ?: return` | 有没有 ncm cookie | **能过**（只要用户登录了 ncm） |
 | 2 | `if (!cookie.contains("MUSIC_U") \|\| songId <= 0) return` | cookie 含 `MUSIC_U` **且** `songId > 0` | **能过**：QQ id 是**正数**（见下），`contains` 与音源无关 |
 | 3 | `val csrf = RetrofitClient.getCsrfToken() ?: return` | cookie 里有没有 `__csrf=` | **能过**（登录态通常都有） |
 
@@ -142,7 +142,7 @@ ExoPlayer `STATE_ENDED`（`PlaybackService.kt:426-429`）、
 |---|---|---|---|---|---|---|
 | 真机 QQ《怪我太天真》/ 苏谭谭 | **4611686018784987997** | + | true | true | QQMUSIC | 357600093 |
 | 其反解出的裸 songid | 357600093 | + | true | **false** | NETEASE | null |
-| 网易云样本（S6 落盘） | 557920 | + | true | false | NETEASE | null |
+| ncm 样本（S6 落盘） | 557920 | + | true | false | NETEASE | null |
 | 只有标志位 `1L shl 62` | 4611686018427387904 | + | true | true | QQMUSIC | 0 |
 
 > 关键：**bit62 置位后符号位（bit63）仍然是 0**，所以 `Long` 依旧是正数。
@@ -208,11 +208,11 @@ ExoPlayer `STATE_ENDED`（`PlaybackService.kt:426-429`）、
 | `time` | 否 | 已播毫秒 |
 | `end` | 否 | 恒 `"playend"` |
 | `mainsite` / `mainsiteWeb` | 否 | 恒 `"1"` |
-| （HTTP 头） | 否 | UA / Referer 都是网易云 PC 身份；Cookie 是网易云登录态 |
+| （HTTP 头） | 否 | UA / Referer 都是 ncm PC 身份；Cookie 是 ncm 登录态 |
 
 **结论**：没有任何字段能显式区分音源；服务端**只能**靠 `id` 落在哪个 id 空间来猜。
-而 bit62 合成 id（`4611686018784987997`）落在网易云 id 空间之外 —— 也就是说，
-**网易云收到的是一条「id 不存在」的播放记录**，而不是「一首 QQ 歌的播放记录」。
+而 bit62 合成 id（`4611686018784987997`）落在 ncm id 空间之外 —— 也就是说，
+**ncm 收到的是一条「id 不存在」的播放记录**，而不是「一首 QQ 歌的播放记录」。
 （服务端怎么处理这条记录，客户端无法观测，见 §4。）
 
 ### 2.5 `reachedCompletion` 会不会让 QQ 曲目更容易/更不容易触发上报？
@@ -235,7 +235,7 @@ ExoPlayer `STATE_ENDED`（`PlaybackService.kt:426-429`）、
 3. **自动跳歌不上报**：`handlePlaybackError` / `auto skip` 走的是队列推进，不经过 `onPlaybackEnded`。
    真机证据：`auto skip #1 for songId=186016`（18:35:32.588）**后面没有** `PlayReporter` 行。
 4. **去重是「进程内按 id」**：`lastReportedSongId`（`:219`）不区分音源，也不因换歌重置；
-   一首 QQ 曲目与一首同裸 id 的网易云曲目是**两个不同的 Long**，去重表不会互相顶掉。
+   一首 QQ 曲目与一首同裸 id 的 ncm 曲目是**两个不同的 Long**，去重表不会互相顶掉。
 
 一句话：**阈值是中立的；让 QQ 曲目「更早、更容易」被上报的是 `onPlaybackEnded` 那条没有进度条件的旁路。**
 
@@ -277,7 +277,7 @@ grep PlayReporter raw.txt
   （`Killing … (adj 0): stop com.takahashirinta.ncrust due to from pid 2632 / 3198`），
   加上那首 QQ 曲目卡在 `BUFFERING`（position 165461 不再前进），到 80% 的窗口始终没打开。
   **没有编造任何频率数字**：本报告不提供「多久发生一次」「占比多少」这类数字。
-- **S6（Android 7）未复现**：该机落盘的当前曲是网易云（`song_id=557920`）；要在它上面造出
+- **S6（Android 7）未复现**：该机落盘的当前曲是 ncm（`song_id=557920`）；要在它上面造出
   「当前曲是 QQ 曲目」必须写应用的持久化状态，按「尽量只读」原则**没有做**（也避免干扰同机其他探针）。
 
 ### 2.7 加闸门后的建议行为（详见 §3）
@@ -286,13 +286,13 @@ grep PlayReporter raw.txt
 被拦次数落**单开的 prefs**（照 `QqProbeStore` 的做法）；
 闸门放在 `PlayReporter.reportPlay` 的**最外层**——它已经在播放关键路径之外。
 
-### 2.8 反方向：网易云 id 会不会被上报给 QQ？
+### 2.8 反方向：ncm id 会不会被上报给 QQ？
 
 **不会 —— QQ 侧无上报实现，该方向不成立。**
 
 证据（都是检索/读码，不是推断）：
 
-1. **唯一的上报通道只有网易云这一条**：全仓库（含 `benchmark/`、`ncrust-api/`）搜
+1. **唯一的上报通道只有 ncm 这一条**：全仓库（含 `benchmark/`、`ncrust-api/`）搜
    `weblog` / `postWeblog` / `clientlogusf` / `reportPlay`，**提交态**命中全部落在
    `player/PlayReporter.kt` 与 `network/RetrofitClient.postWeblog`，**没有任何 QQ 对应物**
    （工作区里新增的 `player/ReportGate.kt` 是闸门本身，不是 QQ 上报实现，见 §3.6）。
@@ -307,7 +307,7 @@ grep PlayReporter raw.txt
    （`QqProbeStore.kt:37-88`，prefs `ncrust_qq_probe`，`apply()` 落盘，无网络类型引用）——
    这正是本报告 §3 建议照抄的落盘范式。
 5. 反过来说，QQ 侧确实会收到**用户的搜索词**与**曲目 mid**（那是数据来源本身），
-   但那不是播放行为上报，也不含网易云 id；网易云的数字 id 发到 QQ 没有任何意义，
+   但那不是播放行为上报，也不含 ncm id；ncm 的数字 id 发到 QQ 没有任何意义，
    代码里也没有任何路径会这么发（取词/取链都按音源路由：`source/TrackKey.kt:105-109` 用 bit62 判源）。
 
 ---
@@ -326,8 +326,8 @@ fun mayReport(target: Target, songId: Long): Boolean =
 ```
 
 - ✅ **bit62 是结构性事实**：全部 QQ 曲目的 id 都由 `SourceIds.qqId()` 产出、bit62 恒置位；
-  网易云 id 是百万~十亿量级，永远触不到 2^62（`MusicSource.kt:147-163`）。
-- ❌ **不要用 id 区间启发式**：QQ 裸 songid 与网易云 id 都是 9~10 位十进制，区间完全重叠
+  ncm id 是百万~十亿量级，永远触不到 2^62（`MusicSource.kt:147-163`）。
+- ❌ **不要用 id 区间启发式**：QQ 裸 songid 与 ncm id 都是 9~10 位十进制，区间完全重叠
   （实测与论证见 `docs/verification/v2.5.4/probe-search-history.md:318`、`:327`）。
 - ❌ **不要用散列反推**：`qqId` 在服务端没给 songid 时走 FNV 散列兜底，不可逆（`MusicSource.kt:198-201`）。
 - ❌ **不要用 `currentTrack.source` 之类的旁路字段做主判据**：它是可变状态，
@@ -351,7 +351,7 @@ fun mayReport(target: Target, songId: Long): Boolean =
 | 什么时候落盘 | 只在 ① `MainActivity.onStop`（进程可能被杀）；② 诊断入口被点开时。参照 `MainActivity.kt:453` 对 `QqProbeStore.snapshotAndFlush` 的调用，以及 `QqMusicSourceProvider.kt:101` 的 `ensureSeeded` |
 | 怎么写 | `prefs.edit().putString(...).apply()`（异步落盘、不阻塞调用线程），整段包 `try/catch` 并只打 `Log.w` |
 | 迁移 | 新字段一律**可空 + 默认值**，读出来先过 `canonical()`（`null → 0`，语义 = 「没记到」）；加字段 = 加迁移逻辑 = 加单测 |
-| 记什么 | 至少：被拦总数、其中「QQ id → 网易云」的次数、放行并真的发出去的次数（做分母算拦截率）、首次/最后时间戳、schemaVersion |
+| 记什么 | 至少：被拦总数、其中「QQ id → ncm」的次数、放行并真的发出去的次数（做分母算拦截率）、首次/最后时间戳、schemaVersion |
 
 ### 3.4 落点层次：放在唯一网络出口，**不要**放进播放链路
 
@@ -376,7 +376,7 @@ I/PlayReporter: weblog blocked: songId=4611686018784987997 reason=cross-source:q
 ```
 
 且 **不再出现** `D/PlayReporter: weblog resp: 200 duration=0/0`；
-同时播一首网易云曲目，仍应出现 `weblog resp: 200 duration=<pos>/<dur>`（本源不受影响）。
+同时播一首 ncm 曲目，仍应出现 `weblog resp: 200 duration=<pos>/<dur>`（本源不受影响）。
 另可读 `ncrust_report_gate` 的 `stats`（或实施时定的 prefs 名）核对被拦计数 ≥1。
 
 ### 3.6 ⚠️ 落地现状（**工作区里已经有实现了，且不是本探针写的**）
@@ -401,7 +401,7 @@ I/PlayReporter: weblog blocked: songId=4611686018784987997 reason=cross-source:q
    参照 `MainActivity.kt:453` 对 `QqProbeStore` 的那一行）。
 2. **`ReportGate` 没有单测**：`app/src/test/java/…/player/` 下没有 `ReportGateTest.kt`，
    而 `ReportGate` 的 KDoc 自己写着「判据是纯函数、可单测」。建议至少覆盖：
-   `1L shl 62` 本身 / bit62+1 / 真实 QQ 合成 id（`4611686018784987997`）/ 网易云 id（`557920`）/
+   `1L shl 62` 本身 / bit62+1 / 真实 QQ 合成 id（`4611686018784987997`）/ ncm id（`557920`）/
    `0` / 负数 / `Long.MAX_VALUE`，以及两个方向（`NETEASE_WEBLOG` 与 `QQ`）的对称性。
 3. **闸门位置正确**（最外层、在 cookie 判断之前）：被拦路径不读 cookie、不起线程，符合 §3.4。
 4. `Log.i` 被拦日志建议保留 INFO 级（不要降成 DEBUG）：它是线上唯一能证明「闸门在工作」的信号。
@@ -416,10 +416,10 @@ I/PlayReporter: weblog blocked: songId=4611686018784987997 reason=cross-source:q
 | # | 未验证的事 | 卡在哪 | 影响 |
 |---|---|---|---|
 | 1 | **上报报文里 `id` 字段的字节级内容** | 设备 TLS，未装 MITM 根证书（targetSdk 36 不信任用户 CA），也没做系统 CA 注入 | 目前的结论是「设备侧时机证据（`duration=0/0` 指纹 + 队列推进顺序）+ `.put("id", songId)` 无分支数据流」。要闭环只能上 MITM |
-| 2 | **网易云服务端拿到这个 id 之后做什么**（丢弃 / 当成不存在的歌记账 / 污染推荐画像） | 客户端无法观测 | 与 v2.5.4 探针 §12.3 的遗留项相同。这决定了泄露的**实际后果**，不影响「该不该加闸门」 |
+| 2 | **ncm 服务端拿到这个 id 之后做什么**（丢弃 / 当成不存在的歌记账 / 污染推荐画像） | 客户端无法观测 | 与 v2.5.4 探针 §12.3 的遗留项相同。这决定了泄露的**实际后果**，不影响「该不该加闸门」 |
 | 3 | **80% 进度路径喂 QQ id 的真机证据** | 探针期间应用被另一进程反复 `force-stop`（18:35:48 起）；那首 QQ 曲目又卡在 `BUFFERING`（position 165461 不动） | 代码事实确定（`PlayerViewModel.kt:561-565`），JVM 复算已给；缺的是一次真机日志 |
 | 4 | **上报频率 / 占比 / 拦截率** | 没有做频次统计，也不拿单次样本外推 | **本报告不提供任何频率数字**（不编造） |
-| 5 | **S6（Android 7）上的复现** | 该机落盘当前曲是网易云；要造 QQ 当前曲必须写应用持久化状态，按「尽量只读」原则没做 | 影响面：低（同一份代码、同一份 apk 版本） |
+| 5 | **S6（Android 7）上的复现** | 该机落盘当前曲是 ncm；要造 QQ 当前曲必须写应用持久化状态，按「尽量只读」原则没做 | 影响面：低（同一份代码、同一份 apk 版本） |
 | 6 | **`action=next` 之外的媒体键路径**（`cmd media_session dispatch next`） | Android 16 + media3 上没有落到 `onPlayerCommandRequest`，应用侧无日志 | 只是触发手段的差异，不改变结论（`onPlaybackEnded` 的三个发射点是同一段代码路径） |
 | 7 | 华为控制中心卡片 | **本探针完全没碰**（铁律） | — |
 

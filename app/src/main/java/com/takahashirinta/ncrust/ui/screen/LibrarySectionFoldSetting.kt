@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -20,7 +20,7 @@ import android.content.SharedPreferences
  * ## 为什么折叠单位是「区块」而不是「单张歌单」
  *
  * 探针（`docs/verification/v2.6.0/probe-fold.md` §3）查明这一页是**按源分区的三段**：
- * 本地歌单 / 网易云 / QQ 音乐，而用户来这里最常见的诉求是
+ * 本地歌单 / ncm / qm，而用户来这里最常见的诉求是
  * 「我现在只想看 QQ 那一段」（或者「QQ 没登录，别占我半屏」）。
  * 按单张歌单折叠要求用户逐个收起 100 张歌单里的 99 张 —— 那不叫折叠，叫整理。
  * 区块级折叠一次点击就把一整段收掉，且与既有的区块标题（[SectionHeader]）天然对齐。
@@ -37,10 +37,10 @@ enum class LibrarySection(val prefsKey: String) {
     /** 本地歌单。 */
     LOCAL("library_section_collapsed_local"),
 
-    /** 网易云歌单。 */
+    /** ncm 歌单。 */
     NETEASE("library_section_collapsed_netease"),
 
-    /** QQ 音乐歌单。 */
+    /** qm 歌单。 */
     QQMUSIC("library_section_collapsed_qq"),
 }
 

@@ -16,7 +16,7 @@ val deDE = Strings(
         // v2.8.0: die 7 Gruppenkarten des zweistufigen Einstellungsmenüs
         // (Reihenfolge = Deklarationsreihenfolge von SettingsGroup).
         settingsGroupAccountTitle = "Konto & Anmeldung",
-        settingsGroupAccountSubtitle = "NetEase- und QQ-Music-Konten",
+        settingsGroupAccountSubtitle = "ncm- und qm-Konten",
         settingsGroupGeneralTitle = "Allgemein",
         settingsGroupGeneralSubtitle = "Sprache, Drehung, Empfehlungen",
         settingsGroupAppearanceTitle = "Darstellung & Bewegung",
@@ -31,7 +31,7 @@ val deDE = Strings(
         settingsGroupAboutSubtitle = "Version & Projektinfo",
         bilibiliEnabledLabel = "Bilibili-Quelle",
         bilibiliEnabledDescription =
-            "Suchen und abspielen über Bilibili (Audiobereich und Video-Audiospuren). Aktiviert ergänzt die Suche eine Bilibili-Spur; deaktiviert wird nie eine Anfrage an Bilibili gesendet. NetEase und QQ Music bleiben unberührt.",
+            "Suchen und abspielen über Bilibili (Audiobereich und Video-Audiospuren). Aktiviert ergänzt die Suche eine Bilibili-Spur; deaktiviert wird nie eine Anfrage an Bilibili gesendet. ncm und qm bleiben unberührt.",
         qualitySectionTitle = "Audioqualität",
         wifiQualityLabel = "Im WLAN",
         mobileQualityLabel = "Bei mobilen Daten",
@@ -214,9 +214,9 @@ val deDE = Strings(
     ),
 
     source = SourceStrings(
-        sourceQqMusic = "QQ Music",
-        sourceQqAccount = "QQ-Music-Konto",
-        sourceSummary = { a, b -> "NetEase $a · QQ Music $b" },
+        sourceQqMusic = "qm",
+        sourceQqAccount = "qm-Konto",
+        sourceSummary = { a, b -> "ncm $a · qm $b" },
         sourceQrWaiting = "Mit mobilem QQ scannen",
         sourceQrScanned = "Gescannt – bitte am Handy bestätigen",
         sourceQrExpired = "QR-Code abgelaufen",
@@ -228,8 +228,8 @@ val deDE = Strings(
         sourceQrAvailabilityNote = "Die QR-Anmeldung hängt von der Verfügbarkeit der Tencent-Dienste ab; falls sie länger nicht verfügbar ist, verwenden Sie die Web-Anmeldung.",
         sourceQrRefresh = "QR-Code erneuern",
         sourceWebLogin = "Web-Anmeldung verwenden",
-        sourceQqLoginAction = "Bei QQ Music anmelden",
-        sourceNetease = "NetEase",
+        sourceQqLoginAction = "Bei qm anmelden",
+        sourceNetease = "ncm",
         sourceQqPhoneTitle = "Mit Telefonnummer anmelden",
         sourceQqPhoneLabel = "Telefonnummer",
         sourceQqPhoneHint = "11-stellige Nummer eingeben",
@@ -265,8 +265,11 @@ val deDE = Strings(
         biliQualityNote = "Qualitätsgrenze: anonym 320K. Ob eine Anmeldung verlustfrei freischaltet, ist NICHT geprüft — diese Version verspricht es nicht.",
         searchFilterEmpty = { label -> "Keine Ergebnisse unter " + label },
         aggFilterBoth = "Beide",
-        aggFilterNetease = "Nur NetEase",
-        aggFilterQq = "Nur QQ Music",
+        albumSourceFilterAll = "Alle",
+        albumFilterEmpty = { label -> "Keine gespeicherten Alben unter " + label },
+        albumSourceInfo = { src -> "Quelle: $src" },
+        aggFilterNetease = "Nur ncm",
+        aggFilterQq = "Nur qm",
         aggFilterBili = "Nur Bilibili",
         sourceBilibili = "Bilibili",
         sourceSummaryBili = { a, b -> "$a · Bilibili $b" },
@@ -326,7 +329,7 @@ val deDE = Strings(
     actionGoToArtist = "Zum Künstler",
     actionGoToAlbum = "Zum Album",
     qrLoginTitle = "Anmeldung per QR-Code",
-    qrScanHint = "Mit der NetEase Cloud Music App scannen",
+    qrScanHint = "Mit der ncm App scannen",
     qrScannedHint = "Gescannt, auf dem Handy bestätigen",
     qrExpiredHint = "QR-Code abgelaufen, zum Aktualisieren tippen",
     qrLoadFailed = "Laden fehlgeschlagen, zum Wiederholen tippen",
@@ -353,7 +356,7 @@ val deDE = Strings(
 
     about = AboutStrings(
         aboutTitle = "Über Ncrust",
-        aboutAppSubtitle = "Inoffizieller NetEase Cloud Music Client",
+        aboutAppSubtitle = "Inoffizieller ncm Client",
         aboutSectionProject = "Projektinfo",
         aboutVersion = "Version",
         aboutDeveloperOriginal = "Ursprünglicher Entwickler",
@@ -442,22 +445,22 @@ val deDE = Strings(
     removeFromPlaylist = "Aus Playlist entfernen",
     addToPlaylistFailed = "Hinzufügen fehlgeschlagen, später erneut versuchen",
     playlists = PlaylistsStrings(
-        qqPlaylistsTitle = "QQ Music Playlists",
+        qqPlaylistsTitle = "qm Playlists",
         sectionOwned = "Erstellt",
         sectionFav = "Gesammelt",
         favorite = "Favoriten",
         refresh = "Aktualisieren",
         empty = "Noch keine Playlists",
         emptyTracks = "Diese Playlist ist leer",
-        loginExpired = "QQ Music-Sitzung abgelaufen",
+        loginExpired = "qm-Sitzung abgelaufen",
         relogin = "Erneut anmelden",
         offline = "Offline: lokal zwischengespeicherte Daten",
         truncated = "Große Playlist — nur geladener Teil",
         loadFailed = "Laden fehlgeschlagen",
         retry = "Wiederholen",
         notFound = "Playlist nicht gefunden oder gehört nicht zu diesem Konto",
-        entryHint = "Aus deinem QQ Music-Konto",
-        loginRequired = "Bei QQ Music anmelden, um Playlists zu sehen",
+        entryHint = "Aus deinem qm-Konto",
+        loginRequired = "Bei qm anmelden, um Playlists zu sehen",
         trackCount = { n -> "$n Titel" },
         // v2.6.0 · P1/P2：库页歌单 tab 的布局切换与手动折叠。
         layoutCard = "Karten",
@@ -524,8 +527,8 @@ val deDE = Strings(
             recentDaysTitle = "Letzte 14 Tage",
             peakLabel = { v -> "Spitze $v" },
             bySourceTitle = "Nach Plattform",
-            sourceNetease = "NetEase Cloud Music",
-            sourceQq = "QQ Music",
+            sourceNetease = "ncm",
+            sourceQq = "qm",
             sourceBili = "Bilibili-Audio",
             sourceOther = { k -> "Andere Quelle ($k)" },
             topSongsTitle = "Meistgehört",
@@ -560,10 +563,10 @@ val deDE = Strings(
         searchSourceTimeout = "Zeitüberschreitung",
         searchSourceError = "Suche fehlgeschlagen",
         searchSourceSkipped = "Nicht angemeldet",
-        // 与既有 sourceSummary 的口径对齐（那三个语言的格式是 "NetEase $a · QQ Music $b"，
+        // 与既有 sourceSummary 的口径对齐（那三个语言的格式是 "ncm $a · qm $b"，
         // 没有单位词）—— 带单位会让「两源都返回时新旧路径逐字相同」这条不变量破掉。
         searchSourceCount = { n -> "$n" },
-        searchSourceSummaryWithStatus = { a, b -> "NetEase $a · QQ Music $b" },
+        searchSourceSummaryWithStatus = { a, b -> "ncm $a · qm $b" },
 
 
         playbackFailure = PlaybackFailureStrings(

@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -37,7 +37,7 @@ class TrackKeyTest {
     }
 
     /**
-     * **本版最重要的一条**：网易云的 123 与 QQ 的 123 是两首歌。
+     * **本版最重要的一条**：ncm 的 123 与 QQ 的 123 是两首歌。
      *
      * 旧代码用裸 `Long` 判等，这两个值相等 ⇒ 跨源切歌时「还是不是当前歌」判成 true，
      * 旧音源的歌词于是被当成当前歌的歌词落地。
@@ -107,7 +107,7 @@ class TrackKeyTest {
 
     @Test
     fun of_falls_back_to_netease_for_unknown_key() {
-        // v2.1.0 之前持久化的数据没有 source 字段，唯一正确的解释是网易云。
+        // v2.1.0 之前持久化的数据没有 source 字段，唯一正确的解释是 ncm。
         assertEquals(MusicSource.NETEASE, TrackKey.of(null, 123L).source)
         assertEquals(MusicSource.NETEASE, TrackKey.of("", 123L).source)
         assertEquals(MusicSource.NETEASE, TrackKey.of("spotify", 123L).source)
@@ -119,10 +119,10 @@ class TrackKeyTest {
     }
 
     /**
-     * 没有音源字符串、但 id 带 QQ 标志位 ⇒ 判成 QQ 音乐。
+     * 没有音源字符串、但 id 带 QQ 标志位 ⇒ 判成 qm。
      *
      * 这条修的是「冷启动恢复 QQ 曲目永远没歌词」：`PlaybackStateManager` 只存得下裸 id，
-     * 旧逻辑按「null ⇒ 网易云」处理，于是拿一个 `2^62` 量级的 id 去问网易云的歌词接口。
+     * 旧逻辑按「null ⇒ ncm」处理，于是拿一个 `2^62` 量级的 id 去问 ncm 的歌词接口。
      * 标志位让这个二义性根本不存在。
      */
     @Test
@@ -153,7 +153,7 @@ class TrackKeyTest {
         assertNull(TrackKey.fromMediaId(null))
         assertNull(TrackKey.fromMediaId(""))
         assertNull(TrackKey.fromMediaId("https://example.com/a.mp3"))
-        // 未知音源前缀绝不能猜成网易云 —— 猜错就是拿别人的歌去取词。
+        // 未知音源前缀绝不能猜成 ncm —— 猜错就是拿别人的歌去取词。
         assertNull(TrackKey.fromMediaId("song:spotify:456"))
         assertNull(TrackKey.fromMediaId("song:0"))
     }
@@ -161,9 +161,9 @@ class TrackKeyTest {
     // ---------- sourceOfId：结构性判据 ----------
 
     /**
-     * 「带标志位 ⇒ QQ 音乐」是**结构性**结论，不是启发式。
+     * 「带标志位 ⇒ qm」是**结构性**结论，不是启发式。
      *
-     * 网易云的真实 id 都在十亿量级（远小于 `2^40`），永远触不到位 62；
+     * ncm 的真实 id 都在十亿量级（远小于 `2^40`），永远触不到位 62；
      * 这里用一批真实 id 与边界值把这条不变量钉死。
      */
     @Test
@@ -173,7 +173,7 @@ class TrackKeyTest {
             1_000_000_000L, 9_999_999_999L, // 远超真实规模，仍未触到位 62
             // v3.1.0：边界值从 `QQ_ID_FLAG - 1` 换成 `BILI_ID_FLAG - 1`。
             // 前者恰好把**位 61**置了起来，而位 61 从 v3.1.0 起归 B 站 ——
-            // 它因此不再是「网易云的边界值」（见下面那条新断言）。
+            // 它因此不再是「ncm 的边界值」（见下面那条新断言）。
             SourceIds.BILI_ID_FLAG - 1L,    // 位 61 / 62 都为 0 的上沿
         )
         for (id in realNeteaseIds) {
@@ -182,7 +182,7 @@ class TrackKeyTest {
             assertEquals(MusicSource.NETEASE, SourceIds.sourceOfId(id))
         }
         // v3.1.0：位 61 是 B 站。`QQ_ID_FLAG - 1` 把位 61 也置起来了 ⇒ 它现在**正确地**
-        // 被判成 B 站。这条断言把这个边界写下来，而不是让下一个读到这里的人以为它是网易云。
+        // 被判成 B 站。这条断言把这个边界写下来，而不是让下一个读到这里的人以为它是 ncm。
         assertEquals(MusicSource.BILIBILI, SourceIds.sourceOfId(SourceIds.QQ_ID_FLAG - 1L))
         assertEquals(MusicSource.QQMUSIC, SourceIds.sourceOfId(SourceIds.QQ_ID_FLAG))
         assertEquals(MusicSource.QQMUSIC, SourceIds.sourceOfId(SourceIds.qqId(456L, "mid")))

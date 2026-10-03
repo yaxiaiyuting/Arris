@@ -9,16 +9,16 @@
 ## 1. 一句话根因
 
 **与 v2.6.1 的艺人跳转**同构**：QQ `album.mid`（albumMID）在映射层被丢掉，跳转层把 QQ 的数字
-`album.id` 交给**写死网易云**的老路由 —— 而两个源的专辑编号空间互不相通。**
+`album.id` 交给**写死 ncm**的老路由 —— 而两个源的专辑编号空间互不相通。**
 
 v2.6.1 已经修好了艺人那一半，并且在 `MainActivity.resolveAndNavigate` 的 KDoc 里
 **明确写下**了这一半的处置（「本版不修」）—— 本探针的第一件事就是确认那句话仍然成立。
 
 ```kotlin
 // app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:1917-1923（v2.6.1-gpl，原文）
-// ## 专辑分支为什么还留着网易云回落
+// ## 专辑分支为什么还留着ncm回落
 //
-// 与 artist 分支同形的那处 bug（QQ 的 `album.id` 被当网易云 album id）**本版不修**：
+// 与 artist 分支同形的那处 bug（QQ 的 `album.id` 被当ncm album id）**本版不修**：
 // 它需要 QQ 侧的 `albumMID`，而 `AlbumItem` 目前不带（本次只给 `ArtistItem` 加了字段）。
 ```
 
@@ -87,7 +87,7 @@ QQ 曲目 晴天  songmid=0039MnYb0qxYhV songid=97773
 
 ### 2.2 专辑跳转路由是否携带 source？还是只传数值 id？
 
-**只传数值 id，source 在 composable 里被写死成网易云。**
+**只传数值 id，source 在 composable 里被写死成 ncm。**
 
 `app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:1929-1937`（v2.6.1-gpl）：
 
@@ -131,12 +131,12 @@ fun album(source: MusicSource, id: String) = "album/${source.key}/$id"
 连一次网络请求都不发。**
 
 对照艺人分支（v2.6.0 的形状，v2.6.1 已删）：`PlaylistApi.getSongsByIds(listOf(song.id))`
-打 `/eapi/v3/song/detail`（**网易云**），QQ 的 bit62 合成 id 在那里必然查空 ⇒ 静默失败。
+打 `/eapi/v3/song/detail`（**ncm**），QQ 的 bit62 合成 id 在那里必然查空 ⇒ 静默失败。
 专辑分支连这一步都没有：
 
 | 数据形态 | `song.album` | 专辑分支的行为 |
 |---|---|---|
-| 搜索/歌单/专辑页新鲜加载的 QQ 曲目 | `{id: 22276, name: "What's Going On...?"}` | 用 `22276` 走**网易云**路由 ⇒ **跳到另一张真专辑** |
+| 搜索/歌单/专辑页新鲜加载的 QQ 曲目 | `{id: 22276, name: "What's Going On...?"}` | 用 `22276` 走**ncm**路由 ⇒ **跳到另一张真专辑** |
 | 老队列/老缓存里的 QQ 曲目 | `{picUrl: "…T002R500x500M000002Neh8l0uciQZ_3.jpg"}` | `albumId == null` ⇒ **一个分支都不匹配，静默无反应** |
 | ViewModel 冷启动恢复（`MainActivity.kt:944-958`） | `AlbumItem(id = null, name = "", picUrl = artwork)` | 同上 —— 且**连名字都是空串** |
 | 搜索历史重开（`library/SearchHistoryMigration.kt:103`） | `AlbumItem(id = null, name = null, picUrl = item.coverUrl)` | 同上 |
@@ -188,7 +188,7 @@ internal data class AlbumDto(
 | ① 映射层丢掉源内字符串身份 | `singer[].mid` 被丢（`QqSongMapper.kt:110`） | `album.mid` 只用于拼封面（`QqSongMapper.kt:124-133`） |
 | ② 跳转层不看 `song.musicSource` | 只读 `artists[0].id` | 只读 `album.id` |
 | ③ 老路由 source 写死 | `artist/{artistId}` → `NETEASE` | `album/{albumId}` → `NETEASE` |
-| ④ 身份不可信时静默失败 | 补 id 回落打网易云 ⇒ 查空 | 连回落都没有 ⇒ 直接 no-op |
+| ④ 身份不可信时静默失败 | 补 id 回落打 ncm ⇒ 查空 | 连回落都没有 ⇒ 直接 no-op |
 
 **一处不同（本版据此收窄了修复面）**：艺人有**两个出口**（长按菜单 + 播放页托盘作者名），
 专辑只有**一个**（见 §3）。所以本版不需要像 v2.6.1 那样同时改托盘。
@@ -235,7 +235,7 @@ SongMenuAction(Icons.Default.LibraryMusic, LocalStrings.current.actionGoToAlbum)
 
 两个源的专辑编号空间互不相通，且**不是"查不到"而是"查到另一张真专辑"**：
 
-| QQ 曲目 | QQ `album.id` | QQ `album.mid` | 同专辑的网易云 id | 拿 QQ 数字 id 查网易云的结果 |
+| QQ 曲目 | QQ `album.id` | QQ `album.mid` | 同专辑的 ncm id | 拿 QQ 数字 id 查 ncm 的结果 |
 |---|---|---|---|---|
 | 晴天 / 周杰伦《叶惠美》 | `8220` | `000MkMni19ClKG` | `18905` | `code 404`（静默失败） |
 | 江南 / 林俊杰《第二天堂》 | `8036` | `000y5gq7449K9I` | `10804` | `code 404` |
@@ -254,9 +254,9 @@ SongMenuAction(Icons.Default.LibraryMusic, LocalStrings.current.actionGoToAlbum)
 
 | 问题 | 答案 |
 |---|---|
-| 只有 QQ？ | **是。** 网易云曲目的 `album.id` 就是网易云专辑 id，老路由写死的源恰好正确（真机 A/B 已回归，见 `probe-album-jump.md` §4） |
+| 只有 QQ？ | **是。** ncm 曲目的 `album.id` 就是 ncm 专辑 id，老路由写死的源恰好正确（真机 A/B 已回归，见 `probe-album-jump.md` §4） |
 | 只有二级菜单？ | **是**（与艺人不同）。全树只有 1 个动作构造点（§2.6） |
-| 只有某几个艺人？ | **不是。** 撞号与否取决于 QQ 数字 id 落在网易云哪张专辑上：陈奕迅/周杰伦/林俊杰/邓紫棋 四个样本里 **2 个撞到真人**（陈奕迅两首）、**3 个 404** |
+| 只有某几个艺人？ | **不是。** 撞号与否取决于 QQ 数字 id 落在 ncm 哪张专辑上：陈奕迅/周杰伦/林俊杰/邓紫棋 四个样本里 **2 个撞到真人**（陈奕迅两首）、**3 个 404** |
 | 哪些数据形态会中招 | ① 新鲜加载的 QQ 曲目（`album.id` 在）⇒ **跳错专辑**；② 老队列/老缓存/冷启动恢复/搜索历史重开的 QQ 曲目（`album.id` 不在）⇒ **静默无反应** |
 | 严重度 | **跳错专辑 > 找不到**（AGENTS.md 铁律 15）。页面正常渲染 ⇒ 用户会以为"这个应用的专辑数据整体是错的" |
 
@@ -283,7 +283,7 @@ SongMenuAction(Icons.Default.LibraryMusic, LocalStrings.current.actionGoToAlbum)
    **类型上就不存在「跳到另一个源」**。
 3. **值域闸门**抽成**唯一落点** `source/SourceIdDomain.kt`（v2.6.1 的
    `ArtistNavigator.idDomainMatches` 改为委托它，**行为零变化**，v2.6.1 单测原样通过）：
-   网易云吃十进制、QQ 吃 base62 mid。`pmid` 的 `_` 在这里被挡下。
+   ncm 吃十进制、QQ 吃 base62 mid。`pmid` 的 `_` 在这里被挡下。
 4. **置信度闸门**：`crossSourceJump(confidence, targetSource, targetId)` 要求
    `MatchConfidence.mergeable`（全应用唯一阈值）**且**目标值域合法；任一不满足 ⇒ 跳搜索。
 5. **兜底跳搜索**：身份不可信时切到搜索 tab 并预填关键词，**并给一句提示**；

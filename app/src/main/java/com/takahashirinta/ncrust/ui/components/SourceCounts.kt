@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -18,11 +18,11 @@ import com.takahashirinta.ncrust.ui.i18n.Strings
  *
  * ## 为什么需要它（用户报告的现象）
  *
- * 搜「晴天」→ 界面立刻显示「网易云 30 首 · **QQ 音乐 0 首**」，
- * 而底部托盘正在播的那首《晴天》就是 QQ 音乐源；约 5 秒后 QQ 结果才出现、数字才更新。
+ * 搜「晴天」→ 界面立刻显示「ncm 30 首 · **qm 0 首**」，
+ * 而底部托盘正在播的那首《晴天》就是 qm 源；约 5 秒后 QQ 结果才出现、数字才更新。
  *
  * 那 5 秒里「0 首」是**假话**：它把「还没回来」显示成了「真的没有」。
- * 用户据此判断「QQ 音乐搜不到这首歌」，而实际上 QQ 只是慢。
+ * 用户据此判断「qm 搜不到这首歌」，而实际上 QQ 只是慢。
  *
  * 根因在 `SearchViewModel` 的发布顺序（v2.1.0 · hotfix 3 的产物 —— 那个 hotfix 本身是对的：
  * 它让主源到手即发布、不再陪 QQ 一起转圈）。问题出在**发布时用 0 代表了「未知」**：
@@ -58,7 +58,7 @@ enum class SourceSearchStatus {
 /**
  * 聚合搜索这一轮的**逐源统计**。
  *
- * @property neteaseCount 网易云返回条数（仅 [neteaseStatus] == [SourceSearchStatus.DONE] 时权威）。
+ * @property neteaseCount ncm 返回条数（仅 [neteaseStatus] == [SourceSearchStatus.DONE] 时权威）。
  * @property qqCount QQ 返回条数（同上）。
  */
 data class SourceCounts(
@@ -116,7 +116,7 @@ data class SourceCounts(
      *
      * **两种形态，一个函数**：
      * - 某一源未返回 ⇒ 那一侧显示「搜索中…」/「搜索超时」/「未登录」；
-     * - 两源都已返回 ⇒ 两侧都是计数（`网易云 30 首 · QQ 音乐 12 首`）。
+     * - 两源都已返回 ⇒ 两侧都是计数（`ncm 30 首 · qm 12 首`）。
      *
      * ## 为什么不再直接调 `Strings.sourceSummary`
      *
@@ -136,7 +136,7 @@ data class SourceCounts(
         return strings.source.sourceSummaryBili(two, biliText(strings))
     }
 
-    /** 网易云侧那半句。 */
+    /** ncm 侧那半句。 */
     fun neteaseText(strings: Strings): String = sideText(neteaseStatus, neteaseCount, strings)
 
     /**

@@ -1,16 +1,16 @@
-# 探针 · 专辑页接口（网易云 ↔ QQ 音乐）
+# 探针 · 专辑页接口（ncm ↔ qm）
 
 > 生成：`docs/verification/v2.4.0/probe-catalog-api.py`（**匿名只读**）。原始响应：`probe-raw/catalog-api.json`。
 
 ## 端点对照
 
-| 能力 | 网易云 | QQ 音乐 |
+| 能力 | ncm | qm |
 |---|---|---|
 | 专辑详情 + 曲目 | `GET /api/v1/album/{id}` | `musicu.fcg` → `music.musichallAlbum.AlbumSongList/GetAlbumSongList` |
 | 专辑搜索 | `POST /api/cloudsearch/pc` `type=10` | `GET client_search_cp?t=8` |
 | 专辑元数据专端点 | 无（详情里带） | `music.musichallAlbum.AlbumInfoServer/GetAlbumInfo` → **实测 `code=40000` 失败** |
 
-## 网易云返回的字段
+## ncm 返回的字段
 
 ```
 resourceState = bool
@@ -88,11 +88,11 @@ req.data.countdownText = str
 
 | 源 | 参数 | 语义 | 实测 |
 |---|---|---|---|
-| 网易云 | 无（一次全量） | 专辑曲目一次返回 | 叶惠美 11 首一次回全 |
+| ncm | 无（一次全量） | 专辑曲目一次返回 | 叶惠美 11 首一次回全 |
 | QQ | `begin` + `num` | 偏移分页 | `num=50` 一次回全 11 首 |
 
 ## 双源聚合必须补的东西
 
 1. **QQ 专辑曲目端点本版本之前完全没有接入**；
 2. 两源都能拿到「曲目名集合」与「曲目数」⇒ 专辑页可以做到 `EXACT` 级匹配；
-3. 网易云页面的 `SongItem` 产物**不带 `source`**（`AlbumDetailScreen` 手搓 `SongItem`），这是「点进去播不了」的一条隐藏成因：下游会把它当网易云。
+3. ncm 页面的 `SongItem` 产物**不带 `source`**（`AlbumDetailScreen` 手搓 `SongItem`），这是「点进去播不了」的一条隐藏成因：下游会把它当 ncm。

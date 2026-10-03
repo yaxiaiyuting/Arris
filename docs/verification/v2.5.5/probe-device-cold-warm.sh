@@ -3,7 +3,7 @@
 #
 # 为什么这么测：release 包（BuildConfig.DEBUG=false）里 QQ 侧的 Log.d 全部被关掉，
 # 唯一还活着的埋点是 SearchViewModel 的 Log.i（SearchViewModel.kt:202-207），
-# 它给出**一轮聚合搜索的总耗时**（网易云 leg + QQ leg，因为两者串行）与两侧条数。
+# 它给出**一轮聚合搜索的总耗时**（ncm leg + QQ leg，因为两者串行）与两侧条数。
 #
 # 用法: probe-device-cold-warm.sh <serial> <rounds> <outfile>
 set -u
