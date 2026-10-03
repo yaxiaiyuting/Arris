@@ -640,7 +640,7 @@ fun AudioVisualizerBars(
 ) {
     val barColor = LocalMetroColors.current.primary
     val bars = remember(barCount) { FloatArray(barCount) }
-    val peaks = remember(barCount) { FloatArray(barCount) }
+
     // v3.2.2：三条频带的历史窗口（低 / 中 / 高）。**降级路径下不读它们** ——
     // 中/高频没有数据时画出来是两条贴着中线的直线，那是编造而不是"没测到"。
     val lowWindow = remember(barCount) { FloatArray(barCount) }
@@ -649,6 +649,19 @@ fun AudioVisualizerBars(
     // v3.2.2：曲线几何的复用缓冲（**跨帧复用 = 帧路径零分配**，见 WaveformCurve 的 KDoc）。
     //  三频带模式下点序列是三条泳道**拼起来**的，所以缓冲要 3 倍长。
     val pointCount = barCount * BandLanes.LANE_COUNT
+    /**
+     * 峰值保持数组。
+     *
+     * ⚠️ **容量必须是 [pointCount]，不是 `barCount`** —— v3.4.1 我在这里踩过一次 P0：
+     * 三泳道模式下 x 范围要多延伸一格补右边缘缺口（`heights[total] = heights[total - 1]`），
+     * 同时也要给 `peaks` 补一格，于是写了 `peaks[total]`；而当时它的容量还是 `barCount`
+     * ⇒ **越界写 ⇒ 一播放就闪退**。
+     *
+     * 为什么没被测试拦住：`AudioVisualizer` 是 `DrawScope` 渲染代码，`pointCount : barCount`
+     * 这个 3:1 的比例在单测里没有覆盖，而越界只在**三泳道且真的在播放**时才走到。
+     * **教训：这个类里凡是被 `heights` 用到的下标，`peaks` 都必须有同样的容量。**
+     */
+    val peaks = remember(pointCount) { FloatArray(pointCount) }
     val heights = remember(pointCount) { FloatArray(pointCount) }
     val tangents = remember(pointCount) { FloatArray(pointCount) }
     val path = remember { Path() }
@@ -776,9 +789,22 @@ fun AudioVisualizerBars(
             //
             // 为什么 `total + 1` 个点：左移一个亚格后最右侧会露出至多一格的缺口，
             // x 范围多延伸一格即可补上 —— **不需要多采历史**，最右那格本来就被画到可见区外。
-            heights[total] = heights[total - 1]
-            peaks[total] = peaks[total - 1]
-            WaveformCurve.computeTangents(heights, total + 1, step, tangents)
+            //
+            // ⚠️ 三个数组（heights / peaks / tangents）都必须容得下 `total + 1`。
+            // v3.4.1 我漏了 `peaks`（它当时是 `barCount`）⇒ 越界写 ⇒ 一播放就闪退。
+            // 这里留一道显式守卫：容量不够就**不延伸**（少画最右一格，画面几乎无差别），
+            // 而不是让越界把整个播放崩掉 —— 渲染层的失误绝不该升级成崩溃。
+            val extend = total < heights.size && total < peaks.size && total < tangents.size
+            // 绘制点数必须与上面「延伸了没有」一致：没延伸却多画一个点，会把一个
+            // 未初始化的高度画进去（形状上多一个尖刺）。
+            val drawCount = if (extend) total + BandScroll.EXTRA_POINTS else total
+            if (extend) {
+                heights[total] = heights[total - 1]
+                peaks[total] = peaks[total - 1]
+            }
+            WaveformCurve.computeTangents(
+                heights, if (extend) total + 1 else total, step, tangents,
+            )
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 laneEmphasis[lane] = if (bandReliable) {
                     LANE_DIM + (1f - LANE_DIM) * bandWeights[BandLanes.LANE_ROLE[lane]]
@@ -790,7 +816,7 @@ fun AudioVisualizerBars(
             // v3.2.2（铁律 28）：一帧的绘制整段隔离 —— 失败丢这一帧，不向上抛、不重试。
             isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
                 drawWaveformCurve(
-                    heights, peaks, total + BandScroll.EXTRA_POINTS, tangents, path, barColor,
+                    heights, peaks, drawCount, tangents, path, barColor,
                     laneBrush, effects,
                     xShift = xShiftPx, step = step, firstX = 0f, heightPx = heightPx,
                     minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
