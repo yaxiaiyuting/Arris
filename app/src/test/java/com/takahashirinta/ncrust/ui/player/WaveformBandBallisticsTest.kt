@@ -189,18 +189,28 @@ class WaveformBandBallisticsTest {
 
     @Test
     fun `弹道与帧率无关 —— 60Hz 与 146Hz 下同一条曲线`() {
+        // ⚠️ 口径修正（v3.4.5）：旧写法按**帧数**推进（`while (elapsed < barMs)`），
+        // 于是 60Hz 走 5 帧 = 83.3ms、146Hz 走 13 帧 = 88.9ms —— **两次模拟的总时长差 111ms**。
+        // 那量到的是采样网格的相位差，不是积分器的性质（换弹簧之后它一度报到 0.031）。
+        // 现在两次运行推柱的**模拟时刻**与**总时长**都相同，只剩"目标切换被观测到的时刻
+        // 被量化到帧边界"这一项（≤ 一帧），那才是真正的刷新率无关性。
         fun trajectory(fps: Double): FloatArray {
             val r = ring()
             val dt = (1000.0 / fps).toFloat()
+            val totalMs = 2000f
+            var sim = 0f
+            var nextBar = 0f
+            var k = 0
             var t = 1_000_000L
-            repeat(20) { k ->
-                r.push(0f, if (k == 12) 1.0f else 0f, 0f, 0f, arrivalAtMs = t)
-                var elapsed = 0f
-                while (elapsed < barMs) {
-                    r.pump(active = true, dtMs = dt)
-                    elapsed += dt
+            while (sim < totalMs) {
+                if (sim >= nextBar) {
+                    r.push(0f, if (k == 12) 1.0f else 0f, 0f, 0f, arrivalAtMs = t)
+                    k++
+                    nextBar += barMs
+                    t += barMs.toLong()
                 }
-                t += barMs.toLong()
+                r.pump(active = true, dtMs = dt)
+                sim += dt
             }
             return snapshot(r)
         }
@@ -208,7 +218,7 @@ class WaveformBandBallisticsTest {
         val b = trajectory(146.2)
         var worst = 0f
         for (i in 0 until 28) worst = maxOf(worst, abs(a[i] - b[i]))
-        println("60Hz vs 146.2Hz 画面值最大差 = $worst（时间常数形式 ⇒ 与刷新率无关）")
+        println("60Hz vs 146.2Hz 画面值最大差 = $worst（二阶闭式解 ⇒ 与刷新率无关）")
         assertTrue("两条刷新率下的画面值必须基本一致，实测最大差 $worst", worst < 0.02f)
     }
 

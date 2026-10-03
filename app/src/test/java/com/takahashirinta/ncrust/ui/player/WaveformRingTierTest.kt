@@ -74,37 +74,54 @@ class WaveformRingTierTest {
     // ------------------------------------------------------------------
 
     @Test
-    fun `峰值跟随柱子上冲，并在柱子回落时保持`() {
+    fun `小球站在柱顶上，柱子回落时被留在空中（弹道滞后）`() {
+        // v3.4.5：峰值保持（420ms 计时器 + 匀速下落）已被物理模型取代。
+        // 现在小球是一个受重力的质点，柱顶是地面 —— 它**不会**跟着柱子瞬间下降，
+        // 而是被留在空中自由落体。这一条就是用户要的「弹起来」的来源。
         val ring = WaveformRing(capacity = 16, barCount = 2)
         ring.push(0f)
         ring.push(1f)
-        ring.pump(active = true, dtMs = 16f, effects = refined)
-        val peakAfterRise = ring.peakAt(1)
-        assertTrue("峰值必须跟上柱子", peakAfterRise > 0.5f)
+        repeat(12) { ring.pump(active = true, dtMs = 16f, effects = refined) }
+        val barAfterRise = ring.barAt(1)
+        assertTrue("柱子必须升到接近满幅（实测 $barAfterRise）", barAfterRise > 0.8f)
+        assertTrue("小球必须站在柱顶上（绝不低于柱高）", ring.peakAt(1) >= barAfterRise - 1e-6f)
 
-        // 数据掉到 0：柱子开始回落，但峰值在保持期内不应跟着掉
+        // 数据掉到 0：柱子开始回落 ⇒ 小球被留在空中
         ring.push(0f)
-        ring.pump(active = true, dtMs = 16f, effects = refined)
-        assertEquals(peakAfterRise, ring.peakAt(1), 1e-6f)
-        assertTrue("柱子在回落", ring.barAt(1) < peakAfterRise)
+        repeat(3) { ring.pump(active = true, dtMs = 16f, effects = refined) }
+        assertTrue("柱子必须已经明显回落", ring.barAt(1) < barAfterRise - 0.05f)
+        assertTrue(
+            "小球必须留在柱子**上方**（弹道滞后，不是粘在柱顶上）：peak=${ring.peakAt(1)} bar=${ring.barAt(1)}",
+            ring.peakAt(1) > ring.barAt(1) + 1e-4f,
+        )
+        assertTrue("小球必须已经在下落（速度向下）", ring.peakVelAt(1) < 0f)
     }
 
     @Test
-    fun `保持期结束后峰值下落，但绝不低于柱子`() {
+    fun `小球落地后必须反弹（位置序列出现局部极小再上升）`() {
         val ring = WaveformRing(capacity = 16, barCount = 2)
-        ring.push(1f)
-        ring.pump(active = true, dtMs = 16f, effects = refined)
-        // 数据掉到 0：柱子开始回落、峰值进入保持期
         ring.push(0f)
-        ring.pump(active = true, dtMs = 16f, effects = refined)
-        val peakAtHoldStart = ring.peakAt(1)
-        // 保持期（420ms ≈ 26 帧）内不落
-        repeat(10) { ring.pump(active = true, dtMs = 16f, effects = refined) }
-        assertEquals(peakAtHoldStart, ring.peakAt(1), 1e-6f)
-        // 再跑 60 帧（≈960ms）必然已经在下落
-        repeat(60) { ring.pump(active = true, dtMs = 16f, effects = refined) }
-        assertTrue("保持期结束后必须开始下落", ring.peakAt(1) < peakAtHoldStart)
-        assertTrue("峰值不得低于柱子", ring.peakAt(1) >= ring.barAt(1) - 1e-6f)
+        ring.push(1f)
+        repeat(12) { ring.pump(active = true, dtMs = 16f, effects = refined) }
+        ring.push(0f)
+        var minSeen = Float.MAX_VALUE
+        var bounces = 0
+        var wasFalling = false
+        var prev = ring.peakAt(1)
+        repeat(400) {
+            ring.pump(active = true, dtMs = 16f, effects = refined)
+            val now = ring.peakAt(1)
+            if (now < prev) wasFalling = true
+            if (now < minSeen) {
+                minSeen = now
+            } else if (wasFalling && now > minSeen + 1e-4f) {
+                // 局部极小之后又上升 == 一次反弹
+                bounces++
+                wasFalling = false
+            }
+            prev = now
+        }
+        assertTrue("落地后必须出现反弹（局部极小再上升），实测 $bounces 次", bounces >= 1)
     }
 
     /**

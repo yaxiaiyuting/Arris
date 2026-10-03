@@ -41,6 +41,7 @@ import com.takahashirinta.ncrust.ui.player.motion.MotionBindings
 import com.takahashirinta.ncrust.ui.player.waveform.BandColorRoles
 import com.takahashirinta.ncrust.ui.player.waveform.BandDominance
 import com.takahashirinta.ncrust.ui.player.waveform.BandLanes
+import com.takahashirinta.ncrust.ui.player.waveform.BandMarkerGeometry
 import com.takahashirinta.ncrust.ui.player.waveform.BandScroll
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
@@ -396,6 +397,14 @@ object WaveformStore {
         ring.copyBandsInto(low, mid, high)
 
     /**
+     * v3.4.5：把**三条泳道各自的小球位置**拷进调用方复用的三个数组（零分配）。
+     *
+     * 与 [snapshotBands] 逐格对齐：`low[i]` 就是站在 `snapshotBands` 的 `low[i]` 那根柱子顶上的小球。
+     */
+    fun snapshotBandPeaks(low: FloatArray, mid: FloatArray, high: FloatArray) =
+        ring.copyBandPeaksInto(low, mid, high)
+
+    /**
      * v2.9.0：最新的**未平滑**柱值（0..1）。
      *
      * 界面动效的响度包络（`ui/player/motion/MotionEnvelope.kt`）与 C 档节拍判据共用它。
@@ -646,6 +655,16 @@ fun AudioVisualizerBars(
     val lowWindow = remember(barCount) { FloatArray(barCount) }
     val midWindow = remember(barCount) { FloatArray(barCount) }
     val highWindow = remember(barCount) { FloatArray(barCount) }
+    /**
+     * v3.4.5：三条泳道**各自的小球**位置（0..1）。
+     *
+     * 改前 `peaks` 只有一份，而且是**单条曲线**的峰值，却画在三泳道的几何上 ——
+     * 「地面」（柱顶）与小球所在的柱子根本不是同一个量。现在逐泳道各一份，
+     * 小球弹的就是它自己那条泳道的柱顶。
+     */
+    val lowPeakWindow = remember(barCount) { FloatArray(barCount) }
+    val midPeakWindow = remember(barCount) { FloatArray(barCount) }
+    val highPeakWindow = remember(barCount) { FloatArray(barCount) }
     // v3.2.2：曲线几何的复用缓冲（**跨帧复用 = 帧路径零分配**，见 WaveformCurve 的 KDoc）。
     //  三频带模式下点序列是三条泳道**拼起来**的，所以缓冲要 3 倍长。
     val pointCount = barCount * BandLanes.LANE_COUNT
@@ -741,6 +760,10 @@ fun AudioVisualizerBars(
         val threeLane = effects.waveBandOn && WaveformStore.featuresAvailable() && paletteReady
         if (threeLane) {
             WaveformStore.snapshotBands(lowWindow, midWindow, highWindow)
+            // v3.4.5：小球也要逐泳道取（与柱高同一套下标，见 BandScroll.fillLane 的映射）。
+            if (effects.peaks) {
+                WaveformStore.snapshotBandPeaks(lowPeakWindow, midPeakWindow, highPeakWindow)
+            }
         }
         val n = bars.size
         // v3.2.2：曲线至少要有两个点才谈得上"相邻两点连接"。
@@ -778,6 +801,11 @@ fun AudioVisualizerBars(
                     BandLanes.LANE_MID -> midWindow
                     else -> highWindow
                 }
+                val lanePeak = when (lane) {
+                    BandLanes.LANE_LOW -> lowPeakWindow
+                    BandLanes.LANE_MID -> midPeakWindow
+                    else -> highPeakWindow
+                }
                 val base = lane * n
                 // 取值与位移的唯一来源（纯逻辑 + 单测）：值保真、相位走几何。
                 val laneShift = BandScroll.fillLane(
@@ -786,6 +814,17 @@ fun AudioVisualizerBars(
                     minBar = minBar, step = step, mode = BandScroll.PRODUCTION,
                 )
                 if (lane == 0) xShiftPx = laneShift
+                // v3.4.5：小球（峰值标记）逐泳道映射成**像素半高**，与柱高走同一套增益，
+                // 并且夹到"不小于该格柱高" —— 画面上也不许穿进柱子里。
+                // 容量守卫：`peaks` 与 `heights` 同为 geomCount，容不下就少画一格，
+                // 绝不越界（v3.4.1 在 `peaks` 上踩过一次 P0 闪退）。
+                for (i in 0 until n) {
+                    val j = base + i
+                    if (j >= peaks.size) break
+                    var half = BandLanes.amplitude(lanePeak[i].coerceIn(0f, 1f), lane) * heightPx * 0.5f
+                    if (half < heights[j]) half = heights[j]
+                    peaks[j] = half
+                }
             }
             // **点距在整条拼接序列上恒定** —— 这是"无缝"的几何含义：
             // 接缝两侧的点距与段内完全一样，曲线在接缝处不会"折一下"。
@@ -863,6 +902,13 @@ fun AudioVisualizerBars(
                 heights[i] = sqrt(bars[i].coerceIn(0f, 1f)) * heightPx
                 if (heights[i] < minBar) heights[i] = minBar
                 heights[i] *= 0.5f
+            }
+            // v3.4.5：小球用**同一条 sqrt 映射**（否则小球会看起来比柱子还矮），
+            // 并且不小于该格柱高 —— 这两个条件合起来保证"小球绝不低于柱顶"。
+            for (i in 0 until n) {
+                var half = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx * 0.5f
+                if (half < heights[i]) half = heights[i]
+                peaks[i] = half
             }
             val step = size.width / (n - 1)
             WaveformCurve.computeTangents(heights, n, step, tangents)
@@ -1016,6 +1062,9 @@ private fun Modifier.visualizerPerspective(density: Float): Modifier = graphicsL
  * `effects.rounded`（圆角柱）在曲线上**没有几何可作用**（连续的带子没有角），
  * 这一位保留是为了 API 稳定与档位表可读，曲线路径不再读它。
  *
+ * @param peaks **像素半高**（v3.4.5 起，与 [heights] 同一量纲）—— 由调用方用与柱高
+ *   **同一套** sqrt / 泳道增益映射好，并且已经夹到"不小于柱高"。圆点（`effects.dots`）
+ *   画在它上面；`effects.peaks` 关掉时圆点回到 `heights[i]`（与改前逐像素一致）。
  * @param xShift 只有流动模式非 0：画布已整体左移 `xShift`，这里给每个 x 补回去。
  * @param brush 非 null 时用 `brush=`（渐变流动 / 时序淡出），否则用 `color=` ——
  *   两者是 API 层的二选一，[VisualizerEffects.colorChannelMode] 是这条规则的唯一读法。
@@ -1078,8 +1127,21 @@ private fun DrawScope.drawWaveformCurve(
     var i = 0
     while (i < n) {
         val x = firstX + i * step + xShift
+        // v3.4.5：传进来的 `peaks[]` 已经是**像素半高**（与 `heights[]` 同一量纲），
+        // 由调用方用同一套 sqrt / 泳道增益映射好 —— 这里不再做值域映射。
+        // `effects.peaks` 关掉时小球就等于柱高（粘在色带顶边上），与改前逐像素一致。
+        val ballHalf = if (effects.peaks) peaks[i] else heights[i]
         if (effects.peaks) {
-            val peakHalf = sqrt(peaks[i].coerceIn(0f, 1f)) * heightPx * 0.5f
+            // v3.4.6：短横抬到小球**上方**（用户：「短横感觉错开比较合理」）。
+            // 改前 `peakHalf = ballHalf` ⇒ 短横矩形正好落在圆点半径内、被完全遮住，
+            // 于是"粉色虚线"在 peaks+dots 都开的档位上变成"一串小球"。
+            // 错开量与柱高**无关**（若随柱高缩放，高柱上又会重叠）。
+            // 几何抽在 `BandMarkerGeometry`（纯函数 + 单测），这里只消费。
+            val peakHalf = BandMarkerGeometry.peakHalfPx(
+                ballHalf = ballHalf,
+                dotRadiusPx = dotRadiusPx,
+                peakCapPx = peakCapPx,
+            )
             if (peakHalf > heights[i] + peakVisibleDelta) {
                 val topLeft = Offset(x - markerWidth / 2f, centerY - peakHalf - peakCapPx)
                 val size = Size(markerWidth, peakCapPx)
@@ -1093,11 +1155,14 @@ private fun DrawScope.drawWaveformCurve(
                 }
             }
         }
-        if (effects.dots && heights[i] * 2f > dotThreshold) {
+        // v3.4.5：圆点跟着**小球**走（改前它粘在色带顶边上、与柱子逐像素同步，
+        // 所以结构上不可能"弹起来"）。小球静止在柱顶时 `ballHalf == heights[i]`，
+        // 圆点位置与改前**完全一致** —— 只有在空中时才会离开色带。
+        if (effects.dots && ballHalf * 2f > dotThreshold) {
             drawCircle(
                 color = color,
                 radius = dotRadiusPx,
-                center = Offset(x, centerY - heights[i] - dotRadiusPx),
+                center = Offset(x, centerY - ballHalf - dotRadiusPx),
                 alpha = breath,
             )
         }
