@@ -54,6 +54,51 @@ import kotlin.math.exp
  * 的「不空转」契约冲突。渐变流动没有额外的门槛：它和呼吸共用同一个「有信号」条件
  * （静音时既没有色带要流、也不该呼吸）。
  */
+/**
+ * ⚠️ **v3.3.1 回退了 v3.3.0 对滚动的改动。改这个类之前请先读完这一段。**
+ *
+ * ## 发生了什么
+ *
+ * 用户反馈「60 帧设备上还是抖动」。v3.2.4 的帧闸门改动在 60Hz 上等于没改
+ * （非低内存设备 stride 恒为 1），所以抖动来自 v3.2.3 引入的**亚格插值**：
+ * 它把相位（`sinceBarMs`）在**每根柱到达时清零**，那一帧的位移因此多出 `1 − 相位`
+ * （最高 2.1× 名义速度），观感是每 ~100ms 一次的「顿-冲」。
+ *
+ * ## v3.3.0 试了什么、为什么失败
+ *
+ * 我把「窗口平移」与「小数位置」合并到一个相位上（相位每跨过整数就平移一格，
+ * 见当时的 `scrollPhase` / `shiftedCells`）。逐帧仿真确实得到过
+ * 「步长恒为 0.1667、偏差 4.4e-6」。
+ *
+ * **但用户在真机上实测：仍然抖动，而且会「抽搐」。**
+ *
+ * 复盘出的两条教训（都是我的错，写在这里防止重犯）：
+ *
+ * 1. **判据的测量口径错了三次。** 我先后用「只量相位的差分」「把平移格数硬编码成 +1」
+ *    「`shiftedCells + frac(phase)`」三种口径去量「可见位移」，每一种都能自圆其说地
+ *    给出「已修好」的数字 —— 而渲染层真正用的是
+ *    `W[i] + (W[i+1] − W[i]) × scrollPhase01()`，
+ *    它对应的量是「窗口下标 + 小数」，不是我在测试里另建的那套账。
+ *    **结论：这个组件的判据必须在真机上看画面，仿真绿灯不算数。**
+ * 2. **我把「帧时间抖动」与「相位量化」混成了一个缺陷。** 真机 `dt` 在 15~20ms 之间跳是
+ *    常态（GC / 组合 / 调度），那是**帧时间**的抖动；而 v3.2.3 的缺陷是**相位量化**。
+ *    两者都会表现为「波形抖」，但修法相反：前者要平滑速率，后者要去掉清零。
+ *    我在两个假设之间来回改了 6 次，每次都以为找到了根因。
+ *
+ * ## 现在的状态（v3.3.1 起）
+ *
+ * 本文件已**逐字节回退到 v3.2.4**（用户实测「能用」的那一版）——
+ * 也就是说 v3.2.3 的相位清零**回来了**，抖动仍在，但它至少是**已知的、可用的**行为。
+ * 本版不再尝试修它：没有可靠自验手段的改动，风险大于收益。
+ *
+ * ## 如果将来还要修
+ *
+ * 至少要做到这三条，否则不要动：
+ * - **先在真机上录屏量化**（帧间隔 + 可见位移两条序列），不要只做 JVM 仿真；
+ * - 判据必须**直接读渲染层消费的那个量**（`scrollPhase01()` 与窗口下标），
+ *   不要在测试里另建一套「可见位置」的定义；
+ * - 90 / 120Hz 面板与 60Hz 面板**分别**验证 —— 本环境只有 60Hz 模拟器。
+ */
 class WaveformRing(
     /** 环形缓冲容量（柱数）。UI 掉帧时最多积压这么多，再多就丢最旧的。 */
     private val capacity: Int,
@@ -106,53 +151,12 @@ class WaveformRing(
      * 用户读到的就是"刷新率低"。柱高那一层有 22/130ms 的时间常数在抹平，
      * 而**三条泳道的形状**（历史窗口本身）没有任何抹平：它一格一格跳。
      *
-     * 所以这里记两个量：**相位**（[scrollPhase]）与柱间隔的滑动平均
+     * 所以这里记两个量：距上一根柱过了多久（[sinceBarMs]）与柱间隔的滑动平均
      * （[barIntervalMs]），渲染层用它们的比值做**相邻两格之间的线性插值**——
      * 形状因此按帧率连续左移，而数据仍然是 10 Hz 的真实值（没有插值出假数据：
      * 插的是"两格之间"的位置，不是"未来"的值）。
-     *
-     * ## v3.3.0 · P1：相位语义从「距上次到达的时长」改成「**时间积分，到达减整数格**」
-     *
-     * [scrollPhase] 的单位仍是「格」（1.0 = 一整格 = 一个柱间隔），但**它不再在到达时清零**，
-     * 而是减去整数格。原因是清零会让那一帧的位移多出 `1 − 小数部分`，
-     * 在 60Hz 上表现为每 ~100ms 一次的「顿-冲」（完整推导与实测放大倍数见 [pump] 的注释）。
-     *
-     * 关键性质：`x` 与 `x−1` 的小数部分相同 ⇒ 小数部分连续 ⇒ 逐帧位移恒为 `dt / interval`。
-     * 被减掉的整数格由 `consumePendingCount()` 同步推进的历史窗口承担，
-     * 所以「多减一格」或「少减一格」都只会让画面**平移一格**，不会让滚动速度变形。
      */
-    private var scrollPhase: Float = 0f
-
-    /**
-     * v3.3.0：距上一次**柱到达**的挂钟毫秒数。柱间隔估计**只**用它。
-     *
-     * ## 为什么不再从相位反推（这是我踩过的一个坑）
-     *
-     * 相位是「时间量」，直觉上「相位涨了 p 格 ⇒ 过了 p × 间隔毫秒」，于是
-     * `avg = phase / arrivals * intervalMs` 看起来等价。**它不等价**：
-     * 相位会被 `floor` 扣掉整数部分，所以它**同时**表示「攒了多少」与「欠了多少」，
-     * 两者混在一起时按 `phase × interval` 反推会把间隔算飞
-     * （逐帧诊断实测：柱间隔从 100ms 被一步步推到 **140ms**，于是每帧步长
-     * 从 0.1667 缩到 0.125 —— 画面越滚越慢，而这不是原型缺陷、是本版引入的）。
-     *
-     * 用挂钟直接量就没有这层耦合：到达时读一次、清零，语义与 `sinceBarMs` 时代
-     * **完全一致**（那本来就是它的含义），而相位只负责插值。
-     */
-    private var msSinceArrival: Float = 0f
-
-    /**
-     * v3.3.0：历史窗口**累计平移的格数**。它和 [scrollPhase] 一起构成可见位置：
-     *
-     * ```
-     * 可见位置 = shiftedCells + frac(scrollPhase)
-     * ```
-     *
-     * 暴露它（[shiftedCellsForTest]）不是为了给渲染层用 —— 渲染层直接用窗口下标 ——
-     * 而是为了让「滚动速度」这条判据**可被精确测量**：
-     * 抖动是「逐帧位移不均」，而位移必须拿这个组合量去量，单看相位或单看格数都会量错
-     * （本用例为此错过两次，理由见 `WaveformRingTest` 里那条用例的注释）。
-     */
-    private var shiftedCells: Float = 0f
+    private var sinceBarMs: Float = 0f
 
     /** 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。 */
     private var barIntervalMs: Float = DEFAULT_BAR_INTERVAL_MS
@@ -236,114 +240,26 @@ class WaveformRing(
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects): Boolean {
         var changed = false
         if (active) {
-            // ── v3.3.0 · P1：相位改为「**小数计数器**」────────────────────────────────
-            //
-            // v3.2.3 的写法是「记距上一根柱过了多久（sinceBarMs），消费到柱时**归零**」。
-            // 那个写法在 60Hz 上**必然**抖，而且与刷新率、stride 都无关：
-            //
-            //   可见位置 W = 已到达的格数 + p，其中 p = sinceBarMs / interval。
-            //   某一帧消费了 n 根柱 ⇒ 格数 +n，而 p 被**清零**。
-            //   于是那一帧的位移 = n + dt/interval + (1 − p_prev)  ← 多出的 (1 − p_prev) 就是跳变。
-            //
-            // 实测放大倍数（逐行复刻 pump 的仿真）：柱间隔 92.88ms（4×1024@44.1k）
-            // ⇒ 单帧位移 0.51×~1.86× 名义；100±3ms（真实抖动）⇒ 0.00×~2.10×；
-            // 静音闸门冻结相位后再恢复 ⇒ 最高 6.0×。
-            // 而 `scrollPhase01()` 的 `coerceIn(0f, 1f)` 把「迟到」压成**停顿**，
-            // 下一帧再补回来 —— 观感就是每 ~100ms 一次的「顿-冲」。
-            //
-            // ## 正确模型：**相位按 dt 推进，消费的格数 = 相位的整数部分**
-            //
-            // [scrollPhase] 的单位是「格」：整数部分 = 画面**已经该平移过去的格数**，
-            // 小数部分 = 这一格之内的插值位置。于是「推进」与「消费」在同一次 pump 里结算：
-            //
-            //   phase += dt / interval              （时间积分）
-            //   cells  = floor(phase)               （该平移几格 —— **这就是它的物理含义**）
-            //   phase -= min(cells, 本帧到达数)      （平移掉的部分从相位里扣掉）
-            //
-            // 关键性质：消费量与推进量**同帧**结算 ⇒ 相位的**小数部分逐帧恒定**地只受
-            // `dt/interval` 影响，可见速度恒等于名义速度，与到达抖动、与柱间隔是否和 vsync
-            // 公度**全都无关**。仿真实测（三种柱间隔 × 60/120Hz）：平均速度误差 0.00%、
-            // 逐帧位移的平均绝对偏差 **0.00%**。
-            //
-            // ⚠️ 一个反直觉之处：**不能用 `max(1, floor(phase))`**（那是我第一版写的）。
-            // 到达帧上按全程 dt 推进了相位、却至少扣掉一整格，于是每个到达帧都**净亏**
-            // `dt/interval` 的小数部分 —— 仿真里 92.88ms 柱间隔的平均速度因此掉到
-            // 名义值的 92.7%（系统性偏慢），而且相位会周期性攒到上界。
+            // v3.2.3：先结算相位（用**上一帧**的间隔），再消费新柱 —— 消费到柱时相位归零。
+            val dtForPhase = dtMs.coerceIn(0f, 200f)
             val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
-            val sounding = targets[barCount - 1] > ANIMATION_MIN_SIGNAL
-
-            // ── 本版最终形态：**相位是唯一的时钟** ────────────────────────────────
-            //
-            // 前面几版都把「平移格数」挂在**到达事件**上、把「小数位置」挂在**相位**上。
-            // 那是两个时钟：到达由音频回调驱动、相位由帧循环驱动，两者必然错拍
-            // （逐帧诊断实测：到达在 fr=5、相位跨过整数在 fr=6 ⇒ 平移与相位错开一帧，
-            //  可见位置出现 −0.83 / +1.17 的交替跳变，平均绝对偏差 0.334）。
-            //
-            // 现在的规则只有一条：
-            //
-            //   **相位每跨过一个 1，就平移一格历史窗口。**
-            //
-            // 于是「平移」与「小数位置」共用同一个时钟，**按定义**同步：
-            //
-            //   可见位置 = shiftedCells + frac(scrollPhase)
-            //   每帧：相位 +dt/interval；跨过 k 个整数 ⇒ shiftedCells += k、相位 -= k
-            //   ⇒ 可见位置的逐帧增量恒为 dt/interval（`frac` 减整数不变）
-            //
-            // 这正是「x 与 x−1 小数部分相同」那条性质的用法，也是唯一能同时满足
-            // 「与到达抖动无关」和「与刷新率无关」的写法。仿真实测三种柱间隔 × 60/120Hz：
-            // 平均速度误差与逐帧位移偏差**都是 0.00%**。
-            //
-            // 顺带纠正一个我一直搞错的关系：**柱到达次数与相位跨整数次数并不逐帧对齐**
-            // （前者由回调驱动、后者由帧驱动），所以不能再写 `shiftedCells += arrivals`。
-            // 平移量由相位决定；`arrivals` 只用来（a）估计柱间隔、（b）防止音频侧积压。
-            // ⚠️ 静音段必须**整体冻结**（相位 + 平移），不能只冻结相位。
-            //
-            // 只冻结相位是不够的：下一段（平移）仍会读相位并推进窗口，
-            // 于是静音期间窗口一直在滚（`fully settled ring reports no repaint`
-            // 那条用例抓到的就是这个 —— 静止后 `changed` 恒为 true）。
-            // 更隐蔽的后果是：恢复演奏时相位已经跨过很多格，而窗口却没跟着走，
-            // 两者脱节 —— 那正是本版要消除的那类不同步。
-            //
-            // 整段冻结之后，「相位」与「窗口位置」在任何时刻都描述同一个瞬间，
-            // 恢复时从冻结点继续，不需要任何补偿。
-            if (sounding) {
-                // 相位推进量自带 [PHASE_FLOOR, PHASE_MAX] 夹取 ⇒
-                // 恢复演奏时不会补齐静音期间的时间（不空转契约）。
-                val before = scrollPhase
-                advanceScrollPhase(dtMs, interval)
-                if (scrollPhase != before) changed = true
-
-                // 相位跨过的整数 = 本帧该平移的格数。**有界**：一帧最多
-                // [MAX_CELLS_PER_FRAME] 格（60Hz/100ms 柱正常是 0 或 1），
-                // 挂起后恢复也不会一次跳一整屏。
-                var cells = kotlin.math.floor(scrollPhase).toInt()
-                if (cells > MAX_CELLS_PER_FRAME) cells = MAX_CELLS_PER_FRAME
-                if (cells > 0) {
-                    scrollPhase -= cells.toFloat()
-                    shiftedCells += cells.toFloat()
-                    // 真的把历史窗口推进；参数是**上限** —— 音频侧没有足够数据时
-                    // 会消费得更少（画面平移由相位驱动，但受真实数据约束）。
-                    consumePendingCells(cells)
-                    changed = true
-                }
+            // 空转门槛与动画相位同一条（`ANIMATION_MIN_SIGNAL`）：**画面最后一格还有内容**时
+            // 才推进相位、才为"滚动"排帧。静音段 / 放完 / 暂停都既不排帧也不推进
+            // —— v1.8.1 的「不空转」契约原样保住（相位冻在那里，下一根柱到达时归零）。
+            if (targets[barCount - 1] > ANIMATION_MIN_SIGNAL) {
+                if (sinceBarMs < interval) changed = true
+                sinceBarMs += dtForPhase
             }
-
-            // 柱到达（音频侧）只用于两件事：估计柱间隔、以及把音频侧的积压消费掉
-            // —— 后者保证 `readIndex` 不落后于 `writeIndex`（否则环形缓冲会溢出）。
-            val arrivals = consumePendingCount()
-            if (arrivals > 0) {
-                val avg = msSinceArrival / arrivals
+            val consumed = consumePending()
+            if (consumed) {
+                // 柱间隔的滑动平均：只用落在合理区间的样本，避免一次卡顿把间隔带飞。
+                val avg = sinceBarMs / pendingConsumed.coerceAtLeast(1)
                 if (avg in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) {
                     barIntervalMs += (avg - barIntervalMs) * BAR_INTERVAL_EMA
                 }
-                msSinceArrival = 0f
-                changed = true
+                sinceBarMs = 0f
             }
-            // 挂钟照常累加（静音段也累加）：间隔估计的语义是「音频回调的周期」，
-            // 与画面是否在滚无关；静音时音频回调仍在跑。
-            if (dtMs.isFinite() && dtMs > 0f) {
-                msSinceArrival += dtMs.coerceAtMost(MAX_FRAME_DT_MS)
-            }
+            if (consumed) changed = true
         } else if (targets.any { it != 0f }) {
             targets.fill(0f)
             changed = true
@@ -371,22 +287,14 @@ class WaveformRing(
         return animated || changed || phaseAdvanced
     }
 
-    /**
-     * 消费了多少根柱（相位推进要用它换算平均柱间隔）。
-     *
-     * ⚠️ 这是一个**副作用字段**：它由 [consumePendingCount] 写入。
-     * v3.3.0 起 [pump] 直接吃 `consumePendingCount()` 的返回值，
-     * 不再读这个字段 —— 留它是因为 `pendingConsumed` 在
-     * `WaveformRingTest` 的既有用例里被断言过（那是 v3.2.3 的口径）。
-     */
+    /** 把环形缓冲里 UI 还没消费的柱搬进 [targets]。 */
+    private fun consumePending(): Boolean = consumePendingCount() > 0
+
+    /** v3.2.3：消费了多少根柱（相位推进要用它换算平均柱间隔）。 */
     private var pendingConsumed: Int = 0
 
-    /**
-     * 音频侧积压了几格（不消费，只数）。
-     *
-     * 溢出时会把最旧的丢掉（绝不阻塞写者），所以这个数**不是**无限增长的。
-     */
-    private fun pendingCount(): Int {
+    private fun consumePendingCount(): Int {
+        pendingConsumed = 0
         val snapshot = writeIndex
         var pending = snapshot - readIndex
         if (pending <= 0) return 0
@@ -395,31 +303,6 @@ class WaveformRing(
             readIndex = snapshot - capacity
             pending = capacity
         }
-        return pending
-    }
-
-    /**
-     * 把音频侧的积压**全部**消费掉（音频回调驱动的路径）。
-     *
-     * 与 [consumePendingCells] 的分工：
-     * - 画面平移用 [consumePendingCells]（**帧驱动**，格数由相位决定）；
-     * - 这里负责保证 `readIndex` 不落后于 `writeIndex`，否则环形缓冲会溢出。
-     *   `pump` 每次都会调它一次，所以积压实际上总被清空，它的返回值是 0 或 1。
-     */
-    private fun consumePendingCount(): Int = consumePendingCells(Int.MAX_VALUE)
-
-    /**
-     * 把历史窗口向"新"的方向推进至多 [max] 格，返回**实际**消费的格数。
-     *
-     * 参数是**上限**而不是精确值：音频侧可能还没有那么多数据（例如帧循环比音频回调快），
-     * 那时它会消费得更少 —— 这正是「画面平移由相位驱动、但受真实数据约束」的落点。
-     */
-    private fun consumePendingCells(max: Int): Int {
-        pendingConsumed = 0
-        if (max <= 0) return 0
-        val available = pendingCount()
-        if (available <= 0) return 0
-        val pending = minOf(available, max)
         var changed = false
         repeat(pending) {
             // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
@@ -599,130 +482,15 @@ class WaveformRing(
     /**
      * v3.2.3：两条柱之间的推进相位（0..1）。渲染层用它把历史窗口**连续左移**一格，
      * 而不是每 100ms 跳一格。**不产生新数据**：插的是相邻两格之间的位置。
-     *
-     * v3.3.0：**只取小数部分**。[scrollPhase] 现在是「时间积分」量，
-     * 可能大于 1（到达与帧循环不在同一时刻，最多差一格）；小数部分才是有意义的插值位置。
-     * 这与旧实现的 `coerceIn(0f, 1f)` 有本质区别：旧写法把「超前」**截断**成 1.0，
-     * 于是准时到达的柱会被渲染成一次停顿；取小数则是「它本来就在下一格的 0.3 处」。
      */
     fun scrollPhase01(): Float {
-        val p = scrollPhase
-        if (!p.isFinite()) return 0f
-        val frac = p - kotlin.math.floor(p)
-        return if (frac < 0f) 0f else frac
-    }
-
-    /**
-     * 推进相位。**纯函数**（无副作用、只用参数），所以能在 JVM 里被逐帧断言
-     * —— 这条链路的缺陷（每 ~100ms 一次的速度突变）在真机上要靠录屏才能看出来，
-     * 单测里没有纯函数就完全测不到。
-     *
-     * @param phase 当前相位（单位：格）。
-     * @param dtMs 本帧真实帧间隔。
-     * @param intervalMs 柱间隔（滑动平均）。
-     * @return 新相位，夹在 `[PHASE_FLOOR, PHASE_MAX]`。
-     *
-     * ## 下界为什么是 **−1** 而不是 0（这是本版最后才找对的一处）
-     *
-     * 直觉是「相位不该为负」，于是夹到 0。但相位是**时间量**：柱到达时相位常常
-     * **还没攒满一格**（60Hz/100ms 柱 ⇒ 每帧 0.1667，到达时相位常在 0.83 这种值），
-     * 而 [phasesToConsume] 按 `floor(phase)` 扣 —— 扣完就落在 `[−1, 0)`。
-     * **那个负值是信息，不是错误**：它表示「这一格已经平移了，但还欠着一部分时间」。
-     *
-     * 夹到 0 会把这份信息抹掉，下一帧的小数部分于是凭空少掉 `|负值|`，
-     * 表现为可见的**倒退**（逐帧诊断实测 `raw=-0.3333` 被夹成 0 之后，
-     * 位移出现 −0.67 的倒退）。放宽到 −1 之后：
-     * - 小数部分仍然连续（`frac` 是周期函数，`−0.17 ≡ 0.83`，渲染层用 `floor` 取小数，
-     *   对负值天然正确）；
-     * - 逐帧位移恒为 `dt/interval`（仿真：三种柱间隔 × 60/120Hz，偏差 **0.00%**）；
-     * - 仍然**有界**（下界 −1、上界 [PHASE_MAX]，不会无界累积）。
-     */
-    internal fun advanceScrollPhase(
-        phase: Float,
-        dtMs: Float,
-        intervalMs: Float,
-    ): Float {
-        val interval = if (intervalMs > 1f) intervalMs else DEFAULT_BAR_INTERVAL_MS
-        val dt = dtMs.coerceIn(0f, MAX_FRAME_DT_MS)
-        val next = phase + dt / interval
-        return if (next.isFinite()) next.coerceIn(PHASE_FLOOR, PHASE_MAX) else phase.coerceIn(PHASE_FLOOR, PHASE_MAX)
-    }
-
-    /** [advanceScrollPhase] 的就地版本（避免每帧一次装箱；`pump` 是逐帧路径）。 */
-    private fun advanceScrollPhase(dtMs: Float, intervalMs: Float) {
-        scrollPhase = advanceScrollPhase(scrollPhase, dtMs, intervalMs)
-    }
-
-    /**
-     * 本帧该从相位里扣掉多少「格」。**纯函数**。
-     *
-     * 判据就是**相位的整数部分**（`floor`），再夹到「本帧到达数」与
-     * [MAX_ARRIVALS_PER_FRAME] 以内。**不强制至少 1。**
-     *
-     * ## 为什么是 floor（逐帧诊断穷举过三种写法）
-     *
-     * 相位是**随帧累积**的时间量：每帧 `+dt/interval`（60Hz / 100ms 柱 ⇒ +0.1667）。
-     * 柱到达并不发生在相位恰好等于 1 的那一刻，但**相位跨过 1 的次数必然等于到达次数**
-     * —— 两条链都由 `dt` 驱动。所以在到达帧上：
-     *
-     * ```
-     * consume = floor(phase)     ← 相位跨过几个 1，就平移几格
-     * phase  -= consume          ← 扣掉整数部分，小数部分连续 ⇒ 逐帧位移恒为 dt/interval
-     * ```
-     *
-     * 这就是「x 与 x−1 小数部分相同」那条性质的用法，也是本版要的**恒定滚动速度**。
-     *
-     * ## 两种被否决的写法（都实测跑过，留在这里防止重走）
-     *
-     * | 写法 | 后果 | 逐帧诊断证据 |
-     * |---|---|---|
-     * | `max(1, floor(phase))` | 到达帧上相位常**不足 1**（0.6667 这种），强制扣 1 会把相位压成**负数**（实测 `raw=-0.3333`、甚至 `-1.0000`），而 [advanceScrollPhase] 的下界 0 会把它夹平 ⇒ 小数部分被抹掉 ⇒ 下一帧出现 `-0.67` 的倒退 | 相位瞬时为负、位移倒退 |
-     * | 扣 0（只在 `floor ≥ 1` 时扣） | 相位攒过 1 后**再不回落**（实测单调涨到 1.0043、1.0104…），`scrollPhase01()` 不再是「这一格之内的位置」而是持续漂移的残差 | 相位无界上涨 |
-     *
-     * ⚠️ 本类刻意**不依赖 Android**（纯逻辑、JVM 可直测），所以这里不打日志。
-     * 需要观测相位时用 `rawScrollPhaseForTest()`。
-     */
-    internal fun phasesToConsume(phase: Float, arrivals: Int): Float {
-        if (arrivals <= 0) return 0f
-        if (!phase.isFinite()) return 0f
-        val byPhase = kotlin.math.floor(phase)
-        if (byPhase < 1f) return 0f
-        val n = arrivals.coerceAtMost(MAX_ARRIVALS_PER_FRAME)
-        return byPhase.coerceAtMost(n.toFloat())
+        val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
+        val p = sinceBarMs / interval
+        return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
     }
 
     /** v3.2.3：当前测到的柱间隔（毫秒，滑动平均）。诊断 / 单测用。 */
     fun barIntervalMs(): Float = barIntervalMs
-
-    /**
-     * v3.3.0：**只给单测**注入一个确定的柱间隔。
-     *
-     * 抖动判据要量的是「在**给定**柱间隔下逐帧位移是否均匀」，而不是「间隔估得准不准」
-     * （后者由 `柱间隔是测出来的` 那条用例单独守）。不让新判据依赖估计算法，
-     * 是为了让它的失败能干净地指回相位逻辑 —— 否则一次估计偏差就会让抖动用例变红，
-     * 把排查方向带偏。
-     *
-     * `internal` 而不是 `public`：生产代码没有调用点。
-     */
-    internal fun setBarIntervalForTest(intervalMs: Float) {
-        if (intervalMs > 1f) barIntervalMs = intervalMs
-    }
-
-    /**
-     * v3.3.0：**只给单测**读原始相位（未取小数）。诊断「相位是否在到达帧上被多扣」用。
-     *
-     * 生产代码不读它 —— 渲染层要的是 [scrollPhase01] 的小数部分。
-     * `internal` 而不是 `public`：没有生产调用点。
-     */
-    internal fun rawScrollPhaseForTest(): Float = scrollPhase
-
-    /**
-     * v3.3.0：**只给单测**读「累计平移格数」。
-     *
-     * 与 [rawScrollPhaseForTest] 配对使用：`shiftedCellsForTest() + frac(rawScrollPhaseForTest())`
-     * 就是画面的真实滚动位置。抖动判据量的正是它的逐帧差分。
-     */
-    internal fun shiftedCellsForTest(): Float = shiftedCells
 
     /** v2.9.0：最新的低频能量（与 [newestTarget] 同一时刻）。 */
     fun newestBass(): Float = bassTarget
@@ -798,47 +566,6 @@ class WaveformRing(
 
         /** 柱间隔滑动平均的更新系数（每根柱一次）。 */
         const val BAR_INTERVAL_EMA = 0.15f
-
-        /**
-         * v3.3.0：单帧 `dt` 的上限（毫秒）。与相位推进的旧实现同值（200ms），
-         * 含义也一样 —— 一次卡顿/挂起后的超大 `dt` 不该被当成「真的过了这么久」，
-         * 否则恢复的第一帧会把相位一次性推到很远。
-         */
-        const val MAX_FRAME_DT_MS = 200f
-
-        /**
-         * v3.3.0：相位的上界（单位：格）。
-         *
-         * 4 格 ≈ 四根柱的间隔。正常情况相位恒在 `[0, 1)`（每根柱到达时减掉整数格），
-         * 只有「到达与帧循环错拍」才会短暂超前。给一个**有界**的上限是仓库的硬规则
-         * （任何累积路径都要有熔断）：无界累积在帧循环被挂起后恢复时会变成整屏跳变。
-         */
-        const val PHASE_MAX = 4f
-
-        /**
-         * v3.3.0：相位的下界（单位：格）。**是 −1 而不是 0** —— 理由见
-         * [advanceScrollPhase] 的 KDoc：柱到达时相位常不足一格，按 `floor` 扣完
-         * 会落到 `[-1, 0)`，而那个负值是「这一格已平移但还欠一部分时间」的信息。
-         * 夹到 0 会把小数部分抹掉，表现为可见的倒退。
-         */
-        const val PHASE_FLOOR = -1f
-
-        /**
-         * v3.3.0：一帧内最多认几根柱的到达。
-         *
-         * 正常每 100ms 到达一根，一帧最多一根；取 4 给溢出与错拍留余量。
-         * 超出时**宁可少减**（画面平移一格），也不要一次减几十格（整屏跳变）。
-         */
-        const val MAX_ARRIVALS_PER_FRAME = 4
-
-        /**
-         * v3.3.0：一帧最多平移几格。
-         *
-         * 60Hz / 100ms 柱下正常是 0 或 1（每帧相位推进 0.1667）。取 4 是为了容纳
-         * 帧循环被短暂挂起后的追赶；再大就会变成"整屏跳一下"，
-         * 而那正是要消除的观感。**有界**是仓库硬规则（任何累积路径都要有熔断）。
-         */
-        const val MAX_CELLS_PER_FRAME = 4
 
         /** v3.2.2：频带下标（与 `BandColorRoles` / `BandDominance` 的三色顺序一致）。 */
         const val BAND_LOW = 0
