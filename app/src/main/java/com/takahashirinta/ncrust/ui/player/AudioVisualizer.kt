@@ -41,6 +41,7 @@ import com.takahashirinta.ncrust.ui.player.motion.MotionBindings
 import com.takahashirinta.ncrust.ui.player.waveform.BandColorRoles
 import com.takahashirinta.ncrust.ui.player.waveform.BandDominance
 import com.takahashirinta.ncrust.ui.player.waveform.BandLanes
+import com.takahashirinta.ncrust.ui.player.waveform.BandScroll
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import com.takahashirinta.ncrust.ui.player.waveform.WaveformCurve
@@ -733,10 +734,15 @@ fun AudioVisualizerBars(
         val heightPx = size.height
         // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
         if (threeLane) {
+            // 三条泳道共享同一个亚格位移（相位是全局的），在 lane 0 处记下。
+            var xShiftPx = 0f
             // v3.2.3：**亚格插值**（连续滚动）。音频缓冲 ~10 Hz ⇒ 历史窗口每 100ms 整条跳一格；
             // 帧循环再快，看到的也是 10 Hz 的阶跃。这里用 `scrollPhase01()` 在**相邻两格之间**
             // 线性取值，形状因此按帧率连续左移。插的是"两格之间"，不是"未来" —— 没有假数据。
             val phase = WaveformStore.scrollPhase01()
+            // step 必须在取值之前算出来：`BandScroll.fillLane` 用它把亚格相位换算成像素位移。
+            val total = n * BandLanes.LANE_COUNT
+            val step = size.width / (total - 1)
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 val window = when (lane) {
                     BandLanes.LANE_LOW -> lowWindow
@@ -744,22 +750,35 @@ fun AudioVisualizerBars(
                     else -> highWindow
                 }
                 val base = lane * n
-                for (i in 0 until n) {
-                    val a = window[i]
-                    // 最后一格没有"下一格"可插（新柱还没到）—— 保持原值，等同"最新点先站住"。
-                    val b = if (i < n - 1) window[i + 1] else window[n - 1]
-                    val v = a + (b - a) * phase
-                    val half = BandLanes.amplitude(v, lane) * heightPx * 0.5f
-                    heights[base + i] = if (half < minBar * 0.5f) minBar * 0.5f else half
-                }
+                // 取值与位移的唯一来源（纯逻辑 + 单测）：值保真、相位走几何。
+                val laneShift = BandScroll.fillLane(
+                    window = window, out = heights, base = base, count = n,
+                    phase = phase, lane = lane, heightPx = heightPx,
+                    minBar = minBar, step = step, mode = BandScroll.PRODUCTION,
+                )
+                if (lane == 0) xShiftPx = laneShift
             }
-            val total = n * BandLanes.LANE_COUNT
             // **点距在整条拼接序列上恒定** —— 这是"无缝"的几何含义：
             // 接缝两侧的点距与段内完全一样，曲线在接缝处不会"折一下"。
             // 三段各自的高度只由**自己那个频带**决定，不做跨频带的插值平均，
             // 所以"低音 / 中音 / 高音"的差距不会被抹平（用户明确要求）。
-            val step = size.width / (total - 1)
-            WaveformCurve.computeTangents(heights, total, step, tangents)
+            // ── v3.4.1 · P0：亚格相位从「插值」改成「几何平移」────────────────────
+            //
+            // 用户实测「波形条会尖端变平滑再变回去」，并给了截图。这条与横向「顿-冲」
+            // （v3.3.2 修的分母量化）是**两个独立缺陷** —— 这一条是形状问题。
+            //
+            // 旧写法 `a + (b-a)*phase` 看着像"相邻两格之间平滑滚动"，实际是**把两个相邻
+            // 时刻的信号线性混合**（时域模糊），不是平移。实测：峰尖度随相位在
+            // 0.0034~0.0339 之间摆动 = **90%**，周期正好是柱间隔（约 100ms）。
+            //
+            // 现在：取值**直接取整格**（形状保真），亚格相位交给 x 平移 —— 同口径实测
+            // 尖度波动 **0%**。判据与取舍见 [BandScroll] 的 KDoc 与 `BandScrollTest`。
+            //
+            // 为什么 `total + 1` 个点：左移一个亚格后最右侧会露出至多一格的缺口，
+            // x 范围多延伸一格即可补上 —— **不需要多采历史**，最右那格本来就被画到可见区外。
+            heights[total] = heights[total - 1]
+            peaks[total] = peaks[total - 1]
+            WaveformCurve.computeTangents(heights, total + 1, step, tangents)
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 laneEmphasis[lane] = if (bandReliable) {
                     LANE_DIM + (1f - LANE_DIM) * bandWeights[BandLanes.LANE_ROLE[lane]]
@@ -771,8 +790,9 @@ fun AudioVisualizerBars(
             // v3.2.2（铁律 28）：一帧的绘制整段隔离 —— 失败丢这一帧，不向上抛、不重试。
             isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
                 drawWaveformCurve(
-                    heights, peaks, total, tangents, path, barColor, laneBrush, effects,
-                    xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
+                    heights, peaks, total + BandScroll.EXTRA_POINTS, tangents, path, barColor,
+                    laneBrush, effects,
+                    xShift = xShiftPx, step = step, firstX = 0f, heightPx = heightPx,
                     minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                     breath = breath, markerStride = LANE_MARKER_STRIDE,
                 )

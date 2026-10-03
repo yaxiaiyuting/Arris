@@ -58,7 +58,11 @@ class WaveformVsyncProbeTest {
                     // 1) 先把「这一帧之前到达的柱」推入环 —— 与生产同构：音频线程独立 push。
                     val nowMs = frameTimeNanos / 1_000_000.0
                     while (nextBarAt <= nowMs) {
-                        ring.push(0.6f, 0.5f, 0.4f, 0.3f)
+                        // 到达时刻用**计划时刻** `nextBarAt`，而不是「处理它的那一帧」：
+                        // 真实缓冲回调在它自己的节拍上打时间戳，UI 只是稍后才看到。
+                        // 用帧时间戳会让同一帧内补发的多根柱共享一个时刻 ⇒ 间隔 0ms
+                        // ⇒ 分母被打成 0.2ms（本探针第一版就踩了这个坑）。
+                        ring.push(0.6f, 0.5f, 0.4f, 0.3f, arrivalAtMs = nextBarAt.toLong())
                         pushed++
                         nextBarAt += barPeriodMs
                     }
@@ -100,6 +104,12 @@ class WaveformVsyncProbeTest {
         return out
     }
 
+    /** 真机上 `am instrument` 不回传 stdout ⇒ 同时写 logcat（本探针专用的唯一 tag）。 */
+    private fun emit(line: String) {
+        android.util.Log.i("VSYNCPROBE", line)
+        println(line)
+    }
+
     private fun report(tag: String, recs: List<Rec>) {
         val body = recs.drop(30)
         if (body.isEmpty()) return
@@ -113,18 +123,19 @@ class WaveformVsyncProbeTest {
         val nominal = mean / recs.last().intervalMs
         val stalls = steps.count { it < nominal * 0.25 }
         val backs = steps.count { it < -0.01 }
-        println(
-            "PROBE[$tag] 帧数=${body.size} dt: 均=%.3fms sd=%.3f min=%.3f max=%.3f | " +
-                "位移: 均=%.4f sd=%.4f 名义=%.4f 抖动率=%.2f%% 顿=%s 倒退=%s | 柱间隔估计=%.1fms".format(
-                    mean, sd, dts.min(), dts.max(),
+        emit(
+            ("PROBE[%s] 帧数=%d dt: 均=%.3fms sd=%.3f min=%.3f max=%.3f | " +
+                "位移: 均=%.4f sd=%.4f 名义=%.4f 抖动率=%.2f%% 顿=%d 倒退=%d | 柱间隔估计=%.2fms")
+                .format(
+                    tag, body.size, mean, sd, dts.min(), dts.max(),
                     sMean, sSd, nominal, sSd / nominal * 100, stalls, backs,
                     recs.last().intervalMs,
                 ),
         )
         // 前 14 帧原始序列（先数据后结论）。
-        println("PROBE[$tag] 帧# dt(ms) Δ平移 Δ相位 位移")
+        emit("PROBE[$tag] 帧# dt(ms) Δ平移 Δ相位 位移")
         body.take(14).forEachIndexed { i, r ->
-            println("PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f".format(i, r.dtMs, r.shifted.toInt(), r.phase, r.shifted + r.phase))
+            emit("PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f".format(i, r.dtMs, r.shifted.toInt(), r.phase, r.shifted + r.phase))
         }
     }
 
