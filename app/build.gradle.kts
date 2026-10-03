@@ -377,14 +377,14 @@ android {
         //   ② 已发布 APK 的 aapt2 badging：v2.6.2-gpl-release.apk=50
         //   ③ 工作区：59
         // 最大 = 59 ⇒ v3.3.0 取 **60**；v3.3.1 取 **61**（均已发布）。
-        // ── v3.4.3（本版）────────────────────────────────────────────────────────
+        // ── v3.4.4（本版）────────────────────────────────────────────────────────
         // 定号依据：三源交叉校验最大值 = 63 ⇒ 本版取 **64**。
         // 版本名取 **3.4.2**（patch）：修 v3.4.1 引入的**闪退** ——
         // `peaks` 数组容量是 `barCount`，而三泳道路径写 `peaks[total]`（total = barCount×3）
         // ⇒ 越界写 ⇒ 一播放就崩。已把容量改成 `pointCount` 并加显式守卫。
         // 同时保留 v3.4.1 的波形形状修复（相位改成几何平移）。
-        versionCode = 65
-        versionName = "3.4.3-gpl"
+        versionCode = 66
+        versionName = "3.4.4-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
