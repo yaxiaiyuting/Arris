@@ -650,6 +650,22 @@ fun AudioVisualizerBars(
     //  三频带模式下点序列是三条泳道**拼起来**的，所以缓冲要 3 倍长。
     val pointCount = barCount * BandLanes.LANE_COUNT
     /**
+     * 几何缓冲的实际容量 = [pointCount] + 1。
+     *
+     * ⚠️ 为什么 +1：三泳道用**位置平移**表达亚格相位，最右侧会露出至多一格的缺口，
+     * 解法是把 x 范围多延伸一个点（`heights[total] = heights[total - 1]`，见下方绘制段）。
+     * 而 `drawWaveformCurve` 第一行是
+     * `val n = minOf(count, heights.size, tangents.size)` —— **它会静默把点数夹到
+     * 数组容量**。所以容量不给够，那个延伸点根本画不出来，缺口照样在。
+     *
+     * v3.4.1 在这里连踩两个坑：
+     * 1. `peaks` 容量还是 `barCount`（28）而写入下标是 `total`（84）⇒ **越界崩溃**（用户实测闪退）；
+     * 2. 修好容量后仍只给到 [pointCount]（84），而需要的是 85 ⇒ 延伸点被静默夹掉。
+     *
+     * 教训：**这个类里凡是与 `heights` 同下标的数组，容量必须一律取 `geomCount`。**
+     */
+    val geomCount = pointCount + 1
+    /**
      * 峰值保持数组。
      *
      * ⚠️ **容量必须是 [pointCount]，不是 `barCount`** —— v3.4.1 我在这里踩过一次 P0：
@@ -661,9 +677,9 @@ fun AudioVisualizerBars(
      * 这个 3:1 的比例在单测里没有覆盖，而越界只在**三泳道且真的在播放**时才走到。
      * **教训：这个类里凡是被 `heights` 用到的下标，`peaks` 都必须有同样的容量。**
      */
-    val peaks = remember(pointCount) { FloatArray(pointCount) }
-    val heights = remember(pointCount) { FloatArray(pointCount) }
-    val tangents = remember(pointCount) { FloatArray(pointCount) }
+    val peaks = remember(geomCount) { FloatArray(geomCount) }
+    val heights = remember(geomCount) { FloatArray(geomCount) }
+    val tangents = remember(geomCount) { FloatArray(geomCount) }
     val path = remember { Path() }
     val bandWeights = remember { FloatArray(3) }
     val laneEmphasis = remember { FloatArray(BandLanes.LANE_COUNT) }
