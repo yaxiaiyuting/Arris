@@ -75,6 +75,26 @@ object QqSongMapper {
         return mapArray(list)
     }
 
+    /**
+     * v3.3.0 · 需求 2：**歌词搜索**（`t=7`）的旧版响应。
+     *
+     * 与 [songsFromLegacySearch] 的唯一差别是条目装在 **`data.lyric.list`** 而不是
+     * `data.song.list`。实测（2026-10，`t=7&w=让我掉下眼泪的`）：
+     * ```json
+     * {"code":0,"data":{"lyric":{"list":[{"mid":"…","id":…,"title":"成都","singer":[…],"album":{…}}]}}}
+     * ```
+     * 而 `t=0` 返回的是 `data.song.list`。
+     *
+     * 条目的**字段形状与单曲搜索逐字相同**，所以复用 [mapArray] 而不是抄一份 ——
+     * 抄一份的下场是某天单曲那条修了缺陷、歌词这条没跟上（仓库里已经有过同类教训）。
+     */
+    fun songsFromLegacyLyricSearch(json: JSONObject?): List<SongItem> {
+        val list = json?.optJSONObject("data")
+            ?.optJSONObject("lyric")
+            ?.optJSONArray("list") ?: return emptyList()
+        return mapArray(list)
+    }
+
     private fun mapArray(arr: JSONArray): List<SongItem> {
         val out = ArrayList<SongItem>(arr.length())
         for (i in 0 until arr.length()) {

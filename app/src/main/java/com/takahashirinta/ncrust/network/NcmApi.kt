@@ -33,6 +33,25 @@ interface NcmApi {
         @Field("limit") limit: Int = 30
     ): SearchResponse
 
+    /**
+     * 按歌词搜索（v3.3.0）—— `type=1006`。
+     *
+     * 实测（2026-10，匿名）：`s=让我掉下眼泪的&type=1006` → `code:200`、`songCount:60`，
+     * 第一条是《成都》- 赵雷。返回体里的 `result.songs` 与 `type=1` **同形**，
+     * 所以调用方直接复用单曲的展示与播放链路，不需要新模型。
+     *
+     * ⚠️ 没有复用 [search] 是因为 `type` 有 Kotlin 默认值 `1`：那个默认值在
+     * Retrofit 的 `@Field` 上是**编译期常量**，改不了运行时分支。多写一个方法
+     * 比把默认值改成参数化的哨兵值清楚 —— 后者会让「不传 type」的语义变得含糊。
+     */
+    @FormUrlEncoded
+    @POST("api/cloudsearch/pc")
+    suspend fun searchLyric(
+        @Field("s") keyword: String,
+        @Field("type") type: Int = 1006,
+        @Field("limit") limit: Int = 30
+    ): SearchResponse
+
     @FormUrlEncoded
     @POST("api/v3/song/detail")
     suspend fun getSongDetail(

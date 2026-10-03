@@ -163,7 +163,15 @@ fun SearchScreen(
             com.takahashirinta.ncrust.auth.NeteaseVipStore.refresh(context)
         }
     }
-    val categories = listOf(strings.searchCategoryTracks, strings.searchCategoryAlbums, strings.searchCategoryArtists)
+    // v3.3.0 · 需求 2「用歌词搜索歌曲」：第 4 个 tab。
+    // 位置放在「单曲」之后是有意的 —— 它返回的也是单曲（复用同一套 SongCard），
+    // 挨着单曲比排在最右更容易被发现。
+    val categories = listOf(
+        strings.searchCategoryTracks,
+        strings.searchCategoryLyrics,
+        strings.searchCategoryAlbums,
+        strings.searchCategoryArtists,
+    )
 
     val currentThemeColor = themeColorForIndex(themeIndex)
     val desaturatedFill = desaturateColor(
@@ -466,16 +474,18 @@ fun SearchScreen(
                                 items = categories.map { MetroTabItem(it) },
                                 selectedTabIndex = when (currentType) {
                                     1 -> 0
-                                    10 -> 1
-                                    100 -> 2
+                                    1006 -> 1
+                                    10 -> 2
+                                    100 -> 3
                                     else -> 0
                                 },
                                 onTabSelected = { index ->
                                     viewModel.onTypeChanged(
                                         when (index) {
                                             0 -> 1
-                                            1 -> 10
-                                            2 -> 100
+                                            1 -> 1006
+                                            2 -> 10
+                                            3 -> 100
                                             else -> 1
                                         }
                                     )
@@ -491,7 +501,11 @@ fun SearchScreen(
                 }
 
                 when (currentType) {
-                    1 -> {
+                    // v3.3.0 · 需求 2：`1006`（歌词搜索）与 `1`（单曲搜索）**共用同一段渲染** ——
+                    // 它返回的也是单曲（同一套 SongCard、同一套筛选与统计行），
+                    // 单独写一段只会让两个分支逐日漂移。
+                    // 两者真正的差别全在 ViewModel 的取数那一层（`searchByType` 里分派）。
+                    1, 1006 -> {
                         // ------------------------------------------------------------------
                         // v3.2.0 · P0-D：筛选档与逐源统计行**移出 `LazyColumn`**，常驻在结果区顶部。
                         //

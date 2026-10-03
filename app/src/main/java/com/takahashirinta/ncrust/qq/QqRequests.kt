@@ -96,13 +96,23 @@ internal object QqRequests {
                 .put("param", searchParam(keyword, limit, page, searchId)),
         )
 
-    /** 旧版 GET 搜索的 URL（主通道，实测比 musicu 稳定）。 */
-    fun legacySearchUrl(keyword: String, limit: Int, page: Int): String =
+    /**
+     * 旧版 GET 搜索的 URL（主通道，实测比 musicu 稳定）。
+     *
+     * @param type `t` 参数。**默认 0 = 单曲搜索**；v3.3.0 · 需求 2 用 **7 = 歌词搜索**
+     *   （实测 `t=7&w=让我掉下眼泪的` 返回 `data.lyric.list`，第一条就是《成都》- 赵雷）。
+     *   默认值保证既有调用点与 v3.2.4 **逐字节一致**（URL 里多一个 `t=0` 也是多余的变化，
+     *   所以为 0 时不写进 query）。
+     */
+    fun legacySearchUrl(keyword: String, limit: Int, page: Int, type: Int = 0): String =
         "https://c.y.qq.com/soso/fcgi-bin/client_search_cp" +
             "?p=" + page.coerceAtLeast(1) +
             "&n=" + limit.coerceIn(1, 60) +
             "&w=" + java.net.URLEncoder.encode(keyword, "UTF-8") +
-            "&format=json&cr=1&new_json=1"
+            "&format=json&cr=1&new_json=1" +
+            // type=0 走**完全不带 t 的历史形状**：加一个 `&t=0` 虽然语义等价，
+            // 但会让「本版没有改动单曲搜索」这句话不再能用 diff 直接证明。
+            (if (type > 0) "&t=$type" else "")
 
     /** 歌词请求体。`songId` 是服务端数字 songid（不是我们合成的 id）。 */
     fun lyric(songMid: String, rawSongId: Long): JSONObject = JSONObject()

@@ -41,6 +41,18 @@ object SearchHistoryManager {
     const val TYPE_ALBUM = 10
     const val TYPE_ARTIST = 100
 
+    /**
+     * 按歌词搜索（v3.3.0）。
+     *
+     * 网易云 `cloudsearch/pc` 的 `type=1006`，实测（2026-10）：搜「让我掉下眼泪的」
+     * 返回 `songCount=60`，第一条正是《成都》- 赵雷。返回结构里的 `songs` 与 `type=1`
+     * **同形**（`SongItem` 全字段可用），所以展示与播放都复用单曲那条路。
+     *
+     * ⚠️ 这个常量**不进** [keyFor] 的分支表 —— 歌词搜索的结果就是单曲，
+     * 历史记录与单曲共用一个桶（见 [keyFor] 的注释）。
+     */
+    const val TYPE_LYRIC = 1006
+
     data class HistoryItem(
         val id: Long,
         val title: String,
@@ -138,8 +150,16 @@ object SearchHistoryManager {
         return filtered
     }
 
+    /**
+     * 搜索类型 → 历史记录桶名。
+     *
+     * v3.3.0：`TYPE_LYRIC` **显式**归到 `"songs"`，不走 `else`。理由有两层：
+     * ① 歌词搜索的结果就是单曲（同形 `SongItem`），混进 `"artists"` 桶会让艺人历史里
+     *    冒出歌名；② 显式分支让「新加一个搜索类型」必须在这里面对一次选择，
+     *    而不是被 `else` 静默兜到艺人桶里 —— 后者正是这个 `when` 原本的缺陷形状。
+     */
     private fun keyFor(type: Int) = when (type) {
-        TYPE_SONG -> "songs"
+        TYPE_SONG, TYPE_LYRIC -> "songs"
         TYPE_ALBUM -> "albums"
         else -> "artists"
     }

@@ -40,6 +40,14 @@ object QqApi {
 
     private const val TAG = "QqApi"
 
+    /**
+     * v3.3.0 · 需求 2：QQ 旧版搜索的 `t` 参数里「按歌词搜索」的取值。
+     *
+     * 实测（2026-10）：`t=7` 时响应把条目装在 `data.lyric.list`（`t=0` 是 `data.song.list`）。
+     * 其余取值（1=专辑、12=MV 等）本应用不用。
+     */
+    private const val LYRICS_SEARCH_TYPE = 7
+
     /** 取链失败时服务端给的业务码（实测匿名态）。 */
     const val RESULT_NEED_LOGIN_OR_VIP = 104003
 
@@ -96,6 +104,33 @@ object QqApi {
 
         val songs = searchViaMusicu(keyword, n, p)
         if (BuildConfig.DEBUG) Log.d(TAG, "search(musicu) '$keyword' -> ${songs.size}")
+        return songs
+    }
+
+    /**
+     * v3.3.0 · 需求 2：**按歌词搜索**（`t=7`）。
+     *
+     * 实测（2026-10）：`client_search_cp?t=7&w=让我掉下眼泪的` 返回 `data.lyric.list`，
+     * 条目字段与 `t=0` 的单曲结果**同形**（`mid`/`id`/`title`/`singer`/`album`），
+     * 所以映射复用 [QqSongMapper.songsFromLegacyLyricSearch]，不另写一套。
+     *
+     * ⚠️ **只走旧版 GET，不回落到 `musicu`**：`musicu.fcg` 的搜索信封
+     * （[QqRequests.searchEnvelope]）是按**单曲**搜索实测出来的配方，
+     * 它的 `t` 语义**没有实测依据**。拿未验证的通道去赌，失败形态会是
+     * 「QQ 歌词搜索静默返回 0 条」—— 与本仓库修过的那些「阴性结果伪装成没有数据」
+     * 是同一个形状。旧版通道实测可用，所以这条能力**只挂在能被证明的那条路上**。
+     *
+     * 失败一律返回空列表（与 [searchSongs] 同一条契约：绝不抛给聚合调用方）。
+     */
+    suspend fun searchSongsByLyric(keyword: String, limit: Int, page: Int = 1): List<SongItem> {
+        if (keyword.isBlank()) return emptyList()
+        val n = limit.coerceIn(1, 60)
+        val p = page.coerceAtLeast(1)
+        val json = runCatching {
+            QqClient.legacyGet(QqRequests.legacySearchUrl(keyword, n, p, type = LYRICS_SEARCH_TYPE))
+        }.getOrNull() ?: return emptyList()
+        val songs = QqSongMapper.songsFromLegacyLyricSearch(json)
+        if (BuildConfig.DEBUG) Log.d(TAG, "searchLyric(legacy) '$keyword' -> ${songs.size}")
         return songs
     }
 

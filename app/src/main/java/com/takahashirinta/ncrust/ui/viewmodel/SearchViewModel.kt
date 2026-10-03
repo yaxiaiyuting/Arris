@@ -7,6 +7,7 @@ import com.takahashirinta.ncrust.network.*
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import com.takahashirinta.ncrust.qq.QqAccountAvailability
 import com.takahashirinta.ncrust.qq.QqAuthStore
+import com.takahashirinta.ncrust.qq.QqApi
 import com.takahashirinta.ncrust.qq.QqClient
 import com.takahashirinta.ncrust.search.RankedSong
 import com.takahashirinta.ncrust.search.SearchLatencyTrace
@@ -16,6 +17,7 @@ import com.takahashirinta.ncrust.search.TrackAvailability
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.trackKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.takahashirinta.ncrust.ui.components.SourceCounts
@@ -94,6 +96,15 @@ class SearchViewModel : ViewModel() {
      * 主源的结果必须先让用户看见（见 [searchByType] 的顺序说明）。
      */
     private val QQ_SEARCH_BUDGET_MS = 5_000L
+
+    /**
+     * v3.3.0 · 需求 2：QQ **歌词搜索**每次取的条数。
+     *
+     * 取 30 与聚合路径给 QQ 的条数（`SourceRouter.searchSongs(QQMUSIC, keyword, 30)`）
+     * 保持一致 —— 两个入口给同一个音源的条数不该不同，否则「切换 tab 后结果变少」
+     * 会被读成一个缺陷。
+     */
+    private val QQ_LYRIC_LIMIT = 30
 
     /**
      * v3.1.0 · B：B 站搜索的时间预算。
@@ -435,6 +446,98 @@ class SearchViewModel : ViewModel() {
                         android.util.Log.i(SearchLatencyTrace.TAG, trace.summary())
                     }
                 }
+                // ── v3.3.0 · 需求 2：**按歌词搜索**（两个音源原生都支持）────────────────
+                //
+                // 用户原话「用户可以用歌词搜索有对应歌词的音乐」。这条需求的关键是
+                // **它不是一个音源的能力，而是三个音源各自的能力之和**：
+                //
+                // | 音源 | 歌词搜索 | 实测依据 |
+                // |---|---|---|
+                // | 网易云 | `cloudsearch/pc` 的 **`type=1006`** | 搜「让我掉下眼泪的」→ `songCount:60`，首条《成都》- 赵雷 |
+                // | QQ 音乐 | 旧版 `client_search_cp` 的 **`t=7`** | 响应把条目放在 `data.lyric.list`，首条同为《成都》- 赵雷 |
+                // | B 站 | **没有** | v3.1.0 的探针已穷举：`search_type=music`/`audio` 与非法值 `foobar` 返回**同一个** `-1200 被降级过滤的请求` ⇒ 取值非法；音频区只有播/词/元数据接口，搜索类全部下线（`docs/verification/v3.1.0/bili-bili-audio-api.md` §6.2）。搜索走视频区，而视频没有「歌词」这个可检索字段 |
+                //
+                // 所以这里聚合**两路**，B 站如实缺席 —— 而不是假装它也有、或拿视频标题去凑。
+                // 两路都用各自**原生**的能力，没有一方是靠猜关键词实现的。
+                //
+                // 并发与发布顺序沿用单曲搜索的既有纪律（见上面 `1 ->` 分支的长注释）：
+                // 网易云是主源、拿到就发布并停止转圈；QQ 是补充源、带硬预算。
+                1006 -> {
+                    coroutineScope {
+                        val keyword = _query.value
+                        val qqAllowed = QqClient.isLoggedIn() || QqAccountAvailability.allowAnonymousSearch
+                        // 先声明「这一轮 QQ 会不会发请求」，让统计行能区分
+                        // 「搜了但 0 首」（DONE+0）与「这一轮没发起」（SKIPPED）。
+                        _sourceCounts.value = SourceCounts(
+                            neteaseCount = 0,
+                            neteaseStatus = SourceSearchStatus.PENDING,
+                            qqCount = 0,
+                            qqStatus = if (qqAllowed) SourceSearchStatus.PENDING else SourceSearchStatus.SKIPPED,
+                            biliCount = 0,
+                            biliStatus = SourceSearchStatus.SKIPPED,
+                        )
+                        val neteaseDeferred = async {
+                            runCatching {
+                                RetrofitClient.api.searchLyric(keyword = keyword, type = 1006)
+                            }.getOrNull()?.result?.songs ?: emptyList()
+                        }
+                        // 两路都用**不带 dispatcher 参数**的 `async`：与上面 `1 ->` 分支同形。
+                        // 加 `async(Dispatchers.IO)` 在本仓库解析不到 `await`（既有代码从没这么用过），
+                        // 而且网络调用本身已在 OkHttp 的 IO 线程上执行，不需要在这里换线程。
+                        val qqDeferred = async {
+                            if (!qqAllowed) return@async emptyList()
+                            // ⚠️ **不要**在 `withTimeoutOrNull` 后面接 `?: emptyList()`：
+                            // 那会把「超时」压成「0 条」，而这两个状态在统计行上必须分开
+                            // （一个要给可点的重试，另一个是真的没有结果）。
+                            withTimeoutOrNull(QQ_SEARCH_BUDGET_MS) {
+                                runCatching { QqApi.searchSongsByLyric(keyword, QQ_LYRIC_LIMIT) }
+                                    .getOrNull() ?: emptyList()
+                            }
+                        }
+
+                        // ① 网易云是主源：到手就发布并停止转圈（与 `1 ->` 分支同一条纪律）。
+                        val neteaseList = neteaseDeferred.await()
+                        publish(neteaseList = neteaseList, qqList = emptyList())
+                        _sourceCounts.value = SourceCounts(
+                            neteaseCount = neteaseList.size,
+                            neteaseStatus = SourceSearchStatus.DONE,
+                            qqCount = 0,
+                            qqStatus = if (qqAllowed) SourceSearchStatus.PENDING else SourceSearchStatus.SKIPPED,
+                            biliCount = 0,
+                            biliStatus = SourceSearchStatus.SKIPPED,
+                        )
+                        _isLoading.value = false
+
+                        // ② 等 QQ（预算已卡死，不会无限等）。
+                        // ② 等 QQ（预算已卡死，不会无限等）。
+                        //
+                        // 类型写成 `Deferred<List<SongItem>?>`：**null 表示预算用完**（超时），
+                        // 空列表表示「搜到了但确实 0 条」。两者必须分开 ——
+                        // 拿「空列表」当超时的代理，会让一次真的 0 结果显示成「搜索超时」，
+                        // 那正是 v2.5.5 修掉的「用 0 代表未知」的同一个形状。
+                        val qqResult: List<SongItem>? = qqDeferred.await()
+                        val qqList = qqResult.orEmpty()
+                        publish(neteaseList = neteaseList, qqList = qqList)
+                        _sourceCounts.value = SourceCounts(
+                            neteaseCount = neteaseList.size,
+                            neteaseStatus = SourceSearchStatus.DONE,
+                            qqCount = qqList.size,
+                            qqStatus = when {
+                                !qqAllowed -> SourceSearchStatus.SKIPPED
+                                qqResult == null -> SourceSearchStatus.TIMEOUT
+                                else -> SourceSearchStatus.DONE
+                            },
+                            biliCount = 0,
+                            biliStatus = SourceSearchStatus.SKIPPED,
+                        )
+                        android.util.Log.i(
+                            "SearchViewModel",
+                            "lyric search query='$keyword' netease=${neteaseList.size} qq=${qqList.size} " +
+                                "qqAllowed=$qqAllowed bili=SKIPPED(平台无此能力)",
+                        )
+                    }
+                }
+
                 10 -> {
                     _sourceCounts.value = null
                     val response = RetrofitClient.api.searchAlbum(keyword = _query.value, type = 10)
