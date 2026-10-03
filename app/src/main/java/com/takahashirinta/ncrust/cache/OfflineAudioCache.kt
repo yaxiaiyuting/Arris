@@ -188,6 +188,24 @@ object OfflineAudioCache {
     fun contains(context: Context, key: String): Boolean =
         runCatching { get(context).keys.contains(key) }.getOrDefault(false)
 
+    /**
+     * v3.3.0：这个 key 的缓存**能不能从头播**。
+     *
+     * 与 [contains] 的区别是本版修的一个 P1 缺陷：`contains` 只问「有没有任何片段」，
+     * 而播放器是从 position 0 读的。缓存里只有中段时（seek 过去听过、或上次缓冲到一半
+     * 就切歌），`contains` 会放行 ⇒ 起播正常、播到洞的位置**突然卡死**再弹降级 ——
+     * 用户读到的就是「播一半就断」，而且它先给了「能放」的承诺，比直接说放不了更糟。
+     *
+     * 判据本身是纯函数 [OfflineKeys.coversStart]，这里只负责把 media3 的
+     * `CacheSpan` 翻译成它要的三元组 —— 那层翻译没有逻辑，逻辑全在纯函数那边。
+     */
+    fun coversStart(context: Context, key: String): Boolean = runCatching {
+        val spans = get(context).getCachedSpans(key).map {
+            OfflineKeys.CachedSpan(position = it.position, length = it.length, isCached = it.isCached)
+        }
+        OfflineKeys.coversStart(spans)
+    }.getOrDefault(false)
+
     /** 已用字节数。 */
     fun sizeBytes(context: Context): Long =
         runCatching { get(context).cacheSpace }.getOrDefault(0L)

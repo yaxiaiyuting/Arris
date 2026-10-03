@@ -74,4 +74,56 @@ object OfflineKeys {
         if (parts.size != 3 || parts[0] != "song") return null
         return parts[1].toLongOrNull()?.takeIf { it > 0L }
     }
+
+    /**
+     * v3.3.0：判定「缓存里这一段能不能**从头播**」—— 即 position 0 是否被一段
+     * **磁盘上真实存在**的片段覆盖。
+     *
+     * ## 为什么原来的判据不够（用户反馈第 1 条「离线播放不太行」的第二个缺陷）
+     *
+     * 原判据是 `SimpleCache.keys.contains(key)` —— 「这首歌**有任何片段**」。
+     * 但播放器是**从 position 0 开始读**的，而缓存里可能只有中段：
+     * seek 过去听了一段、或者上次只缓冲到一半就切歌了。此时：
+     *
+     * - 离线兜底放行 ⇒ 起播正常（0 那一段在缓存里）⇒ 播到洞的位置**突然卡死**，
+     *   然后弹音质降级；用户读到的就是「播一半就断」；
+     * - 观感比「直接说放不了」更糟：它给了用户一个「能放」的承诺。
+     *
+     * ## 为什么是「覆盖 0」而不是「覆盖整曲」
+     *
+     * 要求整曲会**过度收紧**：本应用没有下载功能，离线范围就是「本机真播过的片段」，
+     * 而「播过的片段」通常是「从头到某个位置」。要求整曲会让绝大多数真实缓存被判不可用，
+     * 把上一版的功能整体关掉。而「能从头开始播」正是缓存唯一能承诺的事 ——
+     * 后面的洞由网络补，断网时才会露出边界（这一条如实写在这里，不假装已经解决）。
+     *
+     * ## 纯函数
+     *
+     * 输入是 `(position, length, isCached)` 三元组，因此可以在 JVM 里覆盖
+     * 「空、只覆盖 0 那一点、覆盖 0 到中段、从中段开始、多个片段接上 0」等形状，
+     * 不需要真的建一个 SimpleCache。
+     *
+     * @param spans 该 key 的全部 span（顺序无关，内部会排序）。
+     * @return true = 存在一段从 0 起的连续**已缓存**覆盖。
+     */
+    fun coversStart(spans: List<CachedSpan>): Boolean {
+        val cached = spans.filter { it.isCached && it.length > 0L }.sortedBy { it.position }
+        if (cached.isEmpty()) return false
+        // 第一段必须从 0 起（position <= 0 都算，SimpleCache 的 position 不会是负数，
+        // 但写 <= 是为了让判据对「实现细节变了」保持健壮）。
+        if (cached.first().position > 0L) return false
+        var coveredUpTo = cached.first().let { it.position + it.length }
+        for (span in cached.drop(1)) {
+            // 允许相邻片段之间**不留缝**（后一段的起点 <= 已覆盖到的位置）。
+            if (span.position > coveredUpTo) return false
+            coveredUpTo = maxOf(coveredUpTo, span.position + span.length)
+        }
+        return coveredUpTo > 0L
+    }
+
+    /**
+     * 一个缓存片段的最小形状。**只保留判据需要的两个字段** ——
+     * 这样 [coversStart] 不必依赖 media3 的 `CacheSpan`（那是 Android 类型，
+     * 会把这条纯逻辑拖进 instrumented test 才能跑的地界）。
+     */
+    data class CachedSpan(val position: Long, val length: Long, val isCached: Boolean)
 }

@@ -86,6 +86,9 @@ import com.takahashirinta.ncrust.ui.player.VisualizerSetting
 import kotlinx.coroutines.*
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 import com.takahashirinta.ncrust.ui.theme.CoverThemeExtractor
+// v3.3.0 · 桌面播放卡片：只用到它的两个推送入口（push / pushFromPersistedState），
+// 卡片侧不反向依赖本服务的任何字段（见 NcrustWidgetProvider 的 KDoc）。
+import com.takahashirinta.ncrust.ui.widget.NcrustWidgetProvider
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
@@ -501,6 +504,29 @@ class PlaybackService : MediaLibraryService() {
                     val playedItems = player.currentMediaItemIndex
                     if (playedItems > 0) player.removeMediaItems(0, playedItems)
                     return
+                }
+                // ── v3.3.0 · P0：无缝接续起播的歌**也要进离线 URL 清单** ──────────────────
+                //
+                // 用户反馈第 1 条「离线播放目前还是有点不太行」的头号缺陷，用户原话形状是：
+                // 「连播一张歌单后断网，只有当初手点的那几首能放，自动接续的下一首全
+                //   『暂时无法播放』，可设置→离线缓存管理里它们都在。」
+                //
+                // 根因：URL 清单的唯一写入点是 [playUrl]（约 :929 的
+                // `OfflineUrlStore.rememberFromUrl`），而无缝接续走的是
+                // `preload_next` → `addMediaItem` → **这条 onMediaItemTransition**，
+                // 全程不经过 [playUrl]。于是：
+                //   - 音频字节**已经落盘**（播放时 CacheDataSource 写的）；
+                //   - 离线曲目索引**也已经写了**（`maybeRecordOfflineLibrary` 的心跳）；
+                //   - 唯独 URL 清单是空的。
+                // 而离线兜底 `recallOfflineCache` 要求「URL 清单命中 **且** 缓存里有片段」
+                // 两个条件同时成立 ⇒ 自动接续的歌**永远**进不了离线兜底。
+                // 管理页里看得到它们，正因为那一页读的是**曲目索引**而不是 URL 清单。
+                //
+                // 为什么放在守卫**之后**：`itemUrl` 是 ExoPlayer 真正在播的那一项的 URL，
+                // 而槽位（`pendingNextUrl`）在车机插内容等场景下可能与 item 不一致。
+                // 这份清单的语义是「最后一次**成功播放**的 URL」，所以只认真起播的那一条。
+                runCatching {
+                    itemUrl?.let { OfflineUrlStore.rememberFromUrl(this@PlaybackService, it) }
                 }
                 // 元数据优先取 item 自带的（与音频同源），槽位只作兜底。
                 val itemMetadata = mediaItem?.mediaMetadata
@@ -1501,6 +1527,10 @@ class PlaybackService : MediaLibraryService() {
                 if (player.isPlaying) {
                     onProgressUpdate?.invoke(player.currentPosition, player.duration)
                     updatePlaybackState()
+                    // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
+                    // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次；
+                    // 暂停时这个分支整个不执行，卡片自然停推（需求里的 P0 节流）。
+                    pushWidgetUpdate()
                 }
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
@@ -1651,6 +1681,52 @@ class PlaybackService : MediaLibraryService() {
         } catch (e: Exception) {
             Log.e("PlaybackService", "Failed to update notification", e)
         }
+        // v3.3.0 · 桌面播放卡片：与通知并列的一条推送通路。
+        // 放在 try/catch **之外**：通知发不出去（渠道被关、RemoteServiceException）
+        // 不该连带桌面卡片一起不更新 —— 两者是同一份数据的两个消费者，不互为前提。
+        pushWidgetUpdate()
+    }
+
+    /**
+     * v3.3.0 · 桌面播放卡片（App Widget）：把当前播放状态推给桌面。
+     *
+     * ## 为什么调用点这么少
+     *
+     * 本方法被 `updateNotify()`（播放/暂停切换、切歌、跨歌词行）与
+     * `startProgressUpdates()` 的 2Hz tick 调用 —— 也就是**调用频率远高于推送频率**。
+     * 「该不该真的推」全部收敛在 `WidgetPushGate`（纯逻辑 + JVM 单测）里：
+     * 只有播放/暂停切换、切歌、整数秒变化、尺寸变化、封面有无变化五种情况会漏到桌面上，
+     * 且**暂停时一律不推**。调用方不需要自己算时机，也不必怕多调。
+     *
+     * 另一条硬约束：桌面上没有卡片时 `NcrustWidgetProvider.push` 会立刻返回，
+     * 连一次 Binder 都不发（见 WidgetPresencePolicy）。
+     *
+     * ## 为什么在这里读字段（而不是让 widget 去服务上拿）
+     *
+     * `currentArtworkBitmap` / `currentDominantColor` 是**本类的私有状态**，而且封面位图
+     * 会在暂停 N 秒后被 `scheduleArtworkIdleRelease` 主动释放 —— 那份生命周期只有本类知道。
+     * 卡片侧只接收一份快照，不持有任何对本服务的引用。
+     */
+    private fun pushWidgetUpdate() {
+        // 包一层 runCatching：桌面卡片是**次要消费者**，它出任何问题都不许影响播放。
+        // 这不是洁癖 —— 本方法跑在 2Hz 的 tick 上，读的是 `player`（lateinit）与封面位图
+        // 两条可能出状况的路径；通知那条通路本来就有同样的保护（updateNotify 里的
+        // try/catch），卡片这条不该比它脆。
+        runCatching {
+            NcrustWidgetProvider.push(
+                context = this,
+                songId = mediaSongId ?: -1L,
+                title = mediaTitle,
+                artist = mediaArtist,
+                isPlaying = player.isPlaying,
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                // player.duration 在时长未知时是 C.TIME_UNSET（Long.MIN_VALUE）⇒ 一律夹到 0，
+                // 由 WidgetProgressSpec 判成「这一档不画进度条」。
+                durationMs = player.duration.coerceAtLeast(0L),
+                artwork = currentArtworkBitmap,
+                accent = currentDominantColor,
+            )
+        }.onFailure { Log.w("PlaybackService", "widget push failed", it) }
     }
 
     private fun buildNotification(): Notification {
@@ -1789,6 +1865,13 @@ class PlaybackService : MediaLibraryService() {
         mediaSession?.release()
         player.release()
         scope.cancel()
+        // v3.3.0 · 桌面播放卡片：服务退出后桌面上的那张卡片必须跟着「停」下来。
+        // 走**落盘状态**而不是 push()：此刻 player 已 release、位图已丢，
+        // 服务侧已经没有可信的活数据了（详情见 pushFromPersistedState 的 KDoc）。
+        // 放在 super.onDestroy() 之前 —— 它是纯粹的「把最后已知状态画一次」，
+        // 与父类的清理没有先后依赖，早一点做能让卡片少挂一帧旧画面。
+        runCatching { NcrustWidgetProvider.pushFromPersistedState(this) }
+            .onFailure { Log.w("PlaybackService", "widget cleanup on destroy failed", it) }
         super.onDestroy()
     }
 
