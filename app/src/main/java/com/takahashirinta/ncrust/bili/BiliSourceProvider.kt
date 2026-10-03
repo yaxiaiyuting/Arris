@@ -231,10 +231,54 @@ object BiliSourceProvider : MusicSourceProvider {
         }
         // 视频轨：字幕 → LRC。
         val bvid = payload.bvid ?: return null
-        val cid = payload.cid ?: return null
-        val url = biliOrNull("subtitle list failed: $bvid/$cid") {
+        // ── v3.3.1 · P0：cid **必须像取流那条路一样补问一次** ────────────────────────
+        //
+        // 这是我上一版引入的缺陷（用户实测「B站歌词还是拉取不上，账号已登录」）。
+        //
+        // 背景：视频搜索接口**不返回 cid**（`BiliParse.parseSearchTracks` 只给 bvid/aid），
+        // 所以 `toSourceId` 产出的是 `bv:<bvid>:**0**`，而 `parseSourceId` 里的
+        // `takeIf { it > 0L }` 会把它还原成 `null`。也就是说**正常播放路径下
+        // `payload.cid` 恒为 null**。
+        //
+        // 取流那条路早就知道这一点，所以它写的是
+        // `payload.cid ?: biliOrNull { BiliApi.videoCid(bvid) }`（见 [fetchStream]）；
+        // 而我在取词这条路上只写了 `payload.cid ?: return null` ——
+        // 于是**字幕链路一次请求都没发过**，用户看到的永远是「暂无歌词」，
+        // 与「这首歌没有字幕」在界面上完全同形。
+        //
+        // 教训属于仓库已有的那一条：**同一个前提在两条链路上不能有两种写法**。
+        // 取流要 cid、取词也要 cid，那就都得补问。
+        val cid = payload.cid ?: biliOrNull("view failed for subtitle: bvid=$bvid") {
+            BiliApi.videoCid(bvid)
+        }
+        if (cid == null || cid <= 0L) {
+            Log.w(TAG, "subtitle skipped: no cid for bvid=$bvid")
+            return null
+        }
+        // ⚠️ 这里**不能**用 `biliOrNull { videoSubtitleUrl(...) } ?: return null`。
+        //
+        // `videoSubtitleUrl` 把两种完全不同的情况折叠成了同一个 null：
+        // 「请求失败/风控」（可重试）与「**这个视频没有字幕**」（稳定属性，重试不会变）。
+        // 上层按这个区分处置（null ⇒ `fail` 保持可点；空串 ⇒ `markEmpty` 稳定空态），
+        // 折叠之后「视频本来就没字幕」的用户会看到一个永远点不出结果的按钮
+        // —— 那正是 v3.3.0 从另一头修掉的缺陷形状。
+        //
+        // 所以这里自己接异常：**抛了** ⇒ 取不到（null）；**没抛且返回空** ⇒
+        // 「字幕列表拿到了，但里面没有可用字幕」⇒ 稳定空态（空串）。
+        val url = try {
             BiliApi.videoSubtitleUrl(bvid, cid)
-        } ?: return null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "subtitle list failed: $bvid/$cid", e)
+            return null
+        }
+        if (url.isNullOrBlank()) {
+            // 未登录时服务端的行为就是这一支：`code:0` + 空的 `subtitles` 数组（实测）。
+            // 它是**稳定**的 —— 要么这个视频没有字幕，要么当前身份拿不到。
+            Log.i(TAG, "subtitle none: $bvid/$cid（列表为空 ⇒ 稳定空态，不给可点的重试）")
+            return ""
+        }
         val body = biliOrNull("subtitle body failed: $bvid/$cid") { BiliApi.subtitleBody(url) } ?: return null
         val cues = BiliSubtitle.parseCues(body)
         val lyric = BiliSubtitle.lyricCues(cues)
