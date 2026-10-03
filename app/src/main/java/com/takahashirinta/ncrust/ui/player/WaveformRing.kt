@@ -271,6 +271,41 @@ class WaveformRing(
     private val midTargets = FloatArray(barCount)
     private val highTargets = FloatArray(barCount)
 
+    /**
+     * v3.4.4：三条泳道的**画面值**窗口 —— 就是 [lowTargets] / [midTargets] / [highTargets]
+     * 经过 [ATTACK_TAU_MS] / [RELEASE_TAU_MS] 弹道平滑之后的结果。
+     *
+     * ## 为什么必须有这一层（这是「小球和横线没有弹起来的物理感觉」的唯一根因）
+     *
+     * v3.2.2 引入三泳道时，几何取值直接从**原始**窗口 `*Targets[i]` 算：
+     * `BandScroll.fillLane` 读的是 `lowTargets/midTargets/highTargets`，
+     * 而 `AudioVisualizer` 的三泳道分支画的就是它。于是 [bars] 那一层的
+     * 起音 22ms / 回落 130ms **整条被绕过了** —— 三泳道的画面值与音频缓冲**逐格相等**：
+     *
+     *  - 一根新柱到达 ⇒ 该格高度**瞬间**跳到新值（没有起音，也没有回落尾巴）；
+     *  - 柱间隔 82.6ms（真机 PCM 缓冲实测）⇒ 画面是一条 **12.1Hz 的阶梯**。
+     *
+     * 用户读到的就是「小球（`heights[i]` 画在色带顶边上的圆点）与横线（色带顶边包络）
+     * 没有真实的弹起来的物理感觉」，而且是「一口一口拼上去 / 吃回去」——
+     * 因为每一格都是**瞬时**赋值：涨是硬跳、落也是硬跳。
+     *
+     * 单条曲线那条老路径一直是有弹道的（`heights[i] = sqrt(bars[i]) * …`，`bars` 带 22/130ms），
+     * 所以这是三泳道引入的**回归**，不是新需求。
+     *
+     * ## 为什么是「先同步平移、再平滑」而不是「直接对旧值做平滑」
+     *
+     * 平移与平滑**必须分开**，否则会把 v3.4.1 修掉的时域模糊又请回来：
+     * [shiftBandIn] 把**两个数组一起**平移一格（画面值跟着原始窗口走，形状是刚性平移），
+     * [approach] 只在这个已经平移过的坐标系里做逐格弹道。
+     * 两步都对「格」是平移不变的 ⇒ 整条轨迹 == 未平移轨迹的刚性平移，
+     * 不会跨格混合（v3.4.1 的「峰尖度波动 90%」正是跨格混合造成的）。
+     *
+     * 代价：3 × `barCount` 个 float 与每帧 3 × `barCount` 次乘加，**零分配**。
+     */
+    private val lowBars = FloatArray(barCount)
+    private val midBars = FloatArray(barCount)
+    private val highBars = FloatArray(barCount)
+
     /** 画面上的柱子高度（0..1）= 平滑后的值。UI 线程原地更新。 */
     private val bars = FloatArray(barCount)
 
@@ -331,6 +366,9 @@ class WaveformRing(
         lowTargets.fill(0f)
         midTargets.fill(0f)
         highTargets.fill(0f)
+        lowBars.fill(0f)
+        midBars.fill(0f)
+        highBars.fill(0f)
         peaks.fill(0f)
         peakHoldMs.fill(0f)
         flowPhase = 0f
@@ -379,6 +417,18 @@ class WaveformRing(
             // 只有「画面内容会随相位改变」时才需要为滚动排帧；
             // 相位本身照常前进（它是时间量，不是画面量）。
             if (hadSignal && sinceBarMs < interval) changed = true
+            // ⚠️ v3.4.4 实测记录（**故意不改，别再试**）：这一行看起来该用 `roundToLong()` ——
+            // `dtMs` 是 6.84 / 16.67 这样的非整数，向下取整会让帧时钟比
+            // `SystemClock.uptimeMillis()`（到达时间戳的来源）慢 4%~12%，
+            // 而锚点式子把两者相减 ⇒ 理论上会单调跑负、让相位被钉在 0。
+            //
+            // 但真把取整改成四舍五入后，项目自己的两条判据**同时变红**：
+            // `WaveformScrollJitterRegressionTest`「真实音乐幅度下位移必须匀速」量到
+            // 最大步是名义的 **5.88 倍**，`WaveformFrameRateTest`「相位不许停在 1.0 顶棚」
+            // 量到 478/1080 帧停在顶棚（阈值 2%）。也就是说：**向下取整现在承担着
+            // 「让相位在到达前爬不满一格」的作用**，去掉它反而让相位撞上 `coerceIn(0,1)`。
+            // 这说明相位模型里另有一处系统性偏差在抵消它（未定位），
+            // 在这个偏差被量出来之前**不要动这一行**。
             frameClockMs += dtForPhase.toLong()
             sinceBarMs += dtForPhase
             val consumed = consumePending()
@@ -469,9 +519,9 @@ class WaveformRing(
             // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
             // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
             // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
-            if (shiftBandIn(lowTargets, lowValue)) changed = true
-            if (shiftBandIn(midTargets, midValue)) changed = true
-            if (shiftBandIn(highTargets, highValue)) changed = true
+            if (shiftBandIn(lowTargets, lowBars, lowValue)) changed = true
+            if (shiftBandIn(midTargets, midBars, midValue)) changed = true
+            if (shiftBandIn(highTargets, highBars, highValue)) changed = true
             // v3.3.2：这一根柱自己的柱间隔（= 它与前一根柱之间实际过了多久）。
             // 成为相位斜坡的**分母**，与分子 `sinceBarMs` 同源。
             val gap = arriveGapMs[slot]
@@ -492,20 +542,27 @@ class WaveformRing(
     /**
      * 把一条频带值搬进它自己的滚动窗口（与 [shiftIn] 同构）。
      *
+     * v3.4.4：[display]（画面值窗口）**跟着一起平移** —— 见 [lowBars] 的 KDoc。
+     * 两个数组的平移必须逐格同构，否则画面值会与原始窗口错位一格（形状被抹平）。
+     *
      * @return 这一格是否真的改变了窗口内容（全等值时不必重绘）。
      */
-    private fun shiftBandIn(window: FloatArray, value: Float): Boolean {
+    private fun shiftBandIn(window: FloatArray, display: FloatArray, value: Float): Boolean {
         var changed = false
         for (i in 0 until barCount - 1) {
             if (window[i] != window[i + 1]) {
                 window[i] = window[i + 1]
                 changed = true
             }
+            // 画面值窗口同步平移：不平移就会把「上一格的弹道」留在原地 —— 那是时域模糊。
+            display[i] = display[i + 1]
         }
         if (window[barCount - 1] != value) {
             window[barCount - 1] = value
             changed = true
         }
+        // 最右一格进入的是**原始**值；它自己的起音由 [approach] 在随后的帧上做，
+        // 所以这里不做任何赋初值 —— 一进来就赋值等于没有起音。
         return changed
     }
 
@@ -554,6 +611,34 @@ class WaveformRing(
                 changed = true
             }
             if (effects.peaks && advancePeak(i, dt, bars[i])) changed = true
+        }
+        // v3.4.4：三条泳道的画面值走**同一套弹道**（起音 22ms / 回落 130ms）。
+        // 不加这一层的后果见 [lowBars] 的 KDoc：12.1Hz 的瞬时阶梯 = 没有弹起感。
+        // 这三个循环必须也参与返回值：静音段里 `hadSignal` 为 false 时不排帧，
+        // 若弹道不计入 changed，回落尾巴会被冻在画面上（v1.8.1 踩过的同形状缺陷）。
+        if (approachBand(lowTargets, lowBars, kAttack, kRelease)) changed = true
+        if (approachBand(midTargets, midBars, kAttack, kRelease)) changed = true
+        if (approachBand(highTargets, highBars, kAttack, kRelease)) changed = true
+        return changed
+    }
+
+    /** 一条频带画面窗口的弹道推进（与 [bars] 的逐格规则逐字同构）。 */
+    private fun approachBand(
+        window: FloatArray,
+        display: FloatArray,
+        kAttack: Float,
+        kRelease: Float,
+    ): Boolean {
+        var changed = false
+        for (i in display.indices) {
+            val target = window[i]
+            val current = display[i]
+            if (current != target) {
+                val k = if (target > current) kAttack else kRelease
+                val next = current + (target - current) * k
+                display[i] = if (abs(next - target) < SETTLE_EPSILON) target else next
+                changed = true
+            }
         }
         return changed
     }
@@ -621,15 +706,21 @@ class WaveformRing(
     /**
      * v3.2.2：把**三条频带**的滚动窗口拷进调用方复用的三个数组（零分配）。
      *
+     * v3.4.4：拷出的是**画面值**（[lowBars] 等，带 22/130ms 弹道），不是原始窗口 ——
+     * 渲染层画的就是它。原始窗口仍由 [bandAt] 读（诊断与回归测试用），
+     * 两者的差就是这一版修掉的「没有弹起感」。
+     *
      * 三个数组长度都按 `barCount` 截断 —— 调用方传大数组也不会越界。
      */
     fun copyBandsInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
-        val n = minOf(lowDestination.size, barCount)
-        for (i in 0 until n) lowDestination[i] = lowTargets[i]
-        val m = minOf(midDestination.size, barCount)
-        for (i in 0 until m) midDestination[i] = midTargets[i]
-        val h = minOf(highDestination.size, barCount)
-        for (i in 0 until h) highDestination[i] = highTargets[i]
+        copyBand(lowBars, lowDestination)
+        copyBand(midBars, midDestination)
+        copyBand(highBars, highDestination)
+    }
+
+    private fun copyBand(source: FloatArray, destination: FloatArray) {
+        val n = minOf(destination.size, barCount)
+        for (i in 0 until n) destination[i] = source[i]
     }
 
     /** B 档：呼吸亮度倍率（[1-BREATHE_DEPTH] .. 1）。draw 阶段直接读，不触发重组。 */
@@ -673,6 +764,17 @@ class WaveformRing(
             BAND_LOW -> lowTargets[index]
             BAND_MID -> midTargets[index]
             BAND_HIGH -> highTargets[index]
+            else -> 0f
+        }
+    }
+
+    /** 单测用：某一条频带**画面值**窗口里的第 `index` 格（v3.4.4，带 22/130ms 弹道）。 */
+    fun bandBarAt(band: Int, index: Int): Float {
+        if (index !in 0 until barCount) return 0f
+        return when (band) {
+            BAND_LOW -> lowBars[index]
+            BAND_MID -> midBars[index]
+            BAND_HIGH -> highBars[index]
             else -> 0f
         }
     }
