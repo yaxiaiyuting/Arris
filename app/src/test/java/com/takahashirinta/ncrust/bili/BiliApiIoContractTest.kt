@@ -52,9 +52,22 @@ class BiliApiIoContractTest {
             "audioInfo",
             "audioStream",
             "probeReachable",
+            // v3.3.0：视频字幕（`player/wbi/v2` 取列表 + 字幕 CDN 取正文）。
+            // 两者**刻意分开**：失败语义不同（「这个视频没有字幕」vs「字幕下载失败」），
+            // 合并成一个函数会让本版要修的「失败被误报成没有歌词」失去区分能力。
+            "videoSubtitleUrl",
+            "subtitleBody",
         )
 
-        /** 允许的非 suspend 对外函数：读 `@Volatile` 缓存，不发网络。 */
+        /**
+         * 允许的非 suspend 对外函数：读 `@Volatile` 缓存，不发网络。
+         *
+         * v3.3.0：`normalizeSubtitleUrl` 本来被我按直觉写进了 `BiliApi`，
+         * 被这道守卫拦下 —— 拦得对。`BiliApi` 是**传输层**，在这一层放一个
+         * 「既不碰网络也不读缓存」的对外函数，等于开了个例外口子，
+         * 而**下一个**人往里加什么都不会再被这道守卫看见。
+         * 它现在住在 `BiliSubtitle.normalizeSubtitleUrl`（纯逻辑对象，JVM 可断言）。
+         */
         val PURE_PUBLIC_METHODS = setOf("hasWbiKeys")
 
         /** 阻塞的传输层 —— 必须是 private（同文件内一眼看完调用点）。 */

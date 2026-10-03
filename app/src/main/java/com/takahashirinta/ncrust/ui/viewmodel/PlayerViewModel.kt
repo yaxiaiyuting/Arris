@@ -495,6 +495,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val TAG_TRACK = "NcrustTrack"
 
     /**
+     * B 站取词的**三义结果**（v3.3.0 · 需求 7）。
+     *
+     * 存在的唯一理由是「失败」与「确实没有歌词」**不能再共用一个 null**。
+     * 旧实现是 `runCatching { fetchLyric(...) }.getOrNull()`，两种含义折叠在一起，
+     * 然后一律 `markEmpty` ⇒ 断网/风控时歌词按钮**永久置灰、点不动、无法重试**，
+     * 而用户看不出与「这首歌没词」的区别。
+     *
+     * 对照 QQ 那条路用的是 `lyricCoordinator.fail(...)`，`PlayerCard` 的注释也明写
+     * 「失败保持可点」—— B 站这条当年把那条纪律绕过去了。
+     *
+     * 用 sealed class 而不是 `Pair<Boolean, String?>`：后者在调用点读不出意图，
+     * 而这两种情况在**处置上完全相反**（一个 markEmpty、一个 fail）。
+     */
+    private sealed interface BiliLyricOutcome {
+        /** 取到了（`body` 为 null = 没有可用字幕/数据源；空串 = 确实没有歌词正文）。 */
+        data class Of(val body: String?) : BiliLyricOutcome
+
+        /** 取不到：网络失败 / 风控 / 解析异常。**可重试**。 */
+        data object Transport : BiliLyricOutcome
+    }
+
+    /**
      * 播放器当前曲目身份（只读镜像，给诊断与渲染判据用）。
      *
      * 与 [currentTrack] 是同一个值；单独暴露是为了让「歌词是不是当前歌的」这个问题
@@ -1342,7 +1364,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
         val hit = OfflineUrlStore.recall(app, songId, listOf(level)) ?: return null
-        if (!OfflineAudioCache.contains(app, hit.first)) return null
+        // v3.3.0 · P1：判据从 `contains`（有任何片段）换成 `coversStart`（**能从头播**）。
+        //
+        // 旧判据只问「缓存里有没有这个 key 的片段」，而播放器是从 position 0 读的。
+        // 缓存只有中段时（seek 过去听过、或上次缓冲到一半就切歌）它会放行 ⇒
+        // 起播正常、播到洞的位置**突然卡死**再弹降级 —— 用户读到的就是「播一半就断」。
+        // 更糟的是它先给了「能放」的承诺，比直接说放不了更难理解。
+        if (!OfflineAudioCache.coversStart(app, hit.first)) {
+            Log.i(
+                "PlayerViewModel",
+                "offline cache hit but does not cover position 0: songId=$songId key=${hit.first}",
+            )
+            return null
+        }
         // v2.2.1 · P0：本会话里已经证明播不出来的那条链，不再喂第二次。
         //
         // 这一条是那个**固定点**的最后一道闸：离线清单会「退化成这首歌的任意档位」，
@@ -2041,34 +2075,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     private suspend fun loadBiliLyrics(track: TrackKey, load: LyricLoadCoordinator.Load) {
         val ref = songRefOf(track.source, track.id, track.sourceId, track.mediaId)
-        val raw = runCatching { BiliSourceProvider.fetchLyric(ref) }.getOrNull()
+        // ── v3.3.0 · P0：**三义返回**（正文 / 确无歌词 / 取不到）──────────────────────
+        //
+        // 用户反馈第 7 条「b站音源歌词问题」的另一半。旧实现是
+        // `runCatching { fetchLyric(...) }.getOrNull()`，把「网络失败/风控」
+        // 与「这首确实没有歌词」**折叠成同一个 null**，然后一律 `markEmpty`：
+        // 后果是歌词按钮**永久置灰、点不动、无法重试**，而用户完全无法区分
+        // 「这首歌没词」与「刚才断网了」。
+        //
+        // 对照 QQ 那条路（`loadQqLyrics`）用的是 `fail`，`PlayerCard` 的注释也明写
+        // 「失败保持可点」—— B 站这条把那条纪律绕过去了。
+        //
+        // 所以这里用一个显式的结果类型把三义分开，异常不再被吞成「没有歌词」。
+        val outcome = try {
+            BiliLyricOutcome.Of(BiliSourceProvider.fetchLyric(ref))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 取消是控制流，不是失败：原样抛出，否则「切歌」会被记成一次取词失败。
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG_TRACK, "bili lyric transport failed track=$track", e)
+            BiliLyricOutcome.Transport
+        }
         if (!lyricCoordinator.isCurrent(load)) {
             Log.i(TAG_TRACK, "bili lyric DROPPED (stale): track=$track")
             return
         }
-        // null = 这个数据源没有歌词（视频音轨）；空串 = 确实是纯音乐。
-        if (raw.isNullOrBlank()) {
-            lyricCoordinator.markEmpty(load)
-            lyricsNoContentSongId.value = track.id
-            Log.i(TAG_TRACK, "bili lyric EMPTY track=$track (source=${if (raw == null) "none" else "blank"})")
-            return
+        when (outcome) {
+            // 取不到（网络/风控/解析失败）⇒ **可重试的失败**，按钮保持可点。
+            is BiliLyricOutcome.Transport -> {
+                lyricCoordinator.fail(load, "bili lyric transport failed")
+                Log.i(TAG_TRACK, "bili lyric ERROR track=$track（保持可重试）")
+                return
+            }
+            is BiliLyricOutcome.Of -> {
+                val raw = outcome.body
+                // null = 这个数据源没有可用字幕/音频区没有这份数据；空串 = 确实没有歌词正文。
+                // 两者都是「重试一百次也不会有」⇒ markEmpty 是对的处置。
+                if (raw.isNullOrBlank()) {
+                    lyricCoordinator.markEmpty(load)
+                    lyricsNoContentSongId.value = track.id
+                    Log.i(TAG_TRACK, "bili lyric EMPTY track=$track (source=${if (raw == null) "none" else "blank"})")
+                    return
+                }
+                val lines = withContext(Dispatchers.Default) { LrcParser.parse(raw) }
+                if (!lyricCoordinator.isCurrent(load)) return
+                if (lines.isEmpty()) {
+                    lyricCoordinator.markEmpty(load)
+                    lyricsNoContentSongId.value = track.id
+                    return
+                }
+                if (!lyricCoordinator.accept(load, lines.size)) return
+                lyrics.value = lines
+                // B 站只给一份主轨（视频字幕也没有译文/音译接口），
+                // 所以译文与音译显式清空 —— 而不是沿用上一首的（那正是 v2.1.5 的串台形状）。
+                translatedLyrics.value = emptyList()
+                romanizedLyrics.value = emptyList()
+                lyricsSongId.value = track.id
+                lyricsNoContentSongId.value = -1L
+                Log.i(TAG_TRACK, "bili lyric APPLIED track=$track lines=" + lines.size)
+            }
         }
-        val lines = withContext(Dispatchers.Default) { LrcParser.parse(raw) }
-        if (!lyricCoordinator.isCurrent(load)) return
-        if (lines.isEmpty()) {
-            lyricCoordinator.markEmpty(load)
-            lyricsNoContentSongId.value = track.id
-            return
-        }
-        if (!lyricCoordinator.accept(load, lines.size)) return
-        lyrics.value = lines
-        // B 站音频区只给一份主轨（没有 tlyric / romalrc 的对应接口），
-        // 所以译文与音译显式清空 —— 而不是沿用上一首的（那正是 v2.1.5 的串台形状）。
-        translatedLyrics.value = emptyList()
-        romanizedLyrics.value = emptyList()
-        lyricsSongId.value = track.id
-        lyricsNoContentSongId.value = -1L
-        Log.i(TAG_TRACK, "bili lyric APPLIED track=$track lines=" + lines.size)
     }
 
     /** 日志用：「来源/行数」。 */

@@ -186,38 +186,66 @@ object BiliSourceProvider : MusicSourceProvider {
     /**
      * 取歌词（**行级 LRC 原文**，解析交给既有的 `LrcParser`）。
      *
-     * ## 诚实降级（不是「顺手返回空」）
+     * ## 两条腿各有各的歌词数据源（v3.3.0 补齐了视频那条）
      *
-     * 视频音轨在 B 站上**没有歌词数据源**：
-     * - 音乐区视频的字幕（`player/wbi/v2` 的 `subtitle`）需要登录才给 `subtitle_url`，
-     *   且绝大多数音乐区视频根本没有字幕；
-     * - 音频区那条路的歌词是 `song/info` 的 `lyric` 字段，与视频无关。
+     * | 曲目形态 | 数据源 | 失败语义 |
+     * |---|---|---|
+     * | **音频区**（`au:<auid>`） | `/audio/music-service-c/web/song/lyric` 的 `data` 正文 | 空串 = 「这首歌确实没有歌词」 |
+     * | **视频轨**（`bv:<bvid>:<cid>`） | **视频字幕**（`player/wbi/v2` → `ai-zh` 字幕 JSON → LRC） | null = 「没有可用字幕」 |
      *
-     * 所以这里对视频返回 **null**（= 「没有这个数据源」），对音频区返回
-     * **`/audio/music-service-c/web/song/lyric` 的正文**（可能是空串 = 「这首歌确实没有歌词」）。
-     * ⚠️ **不是** `song/info` 的那个 `lyric` 字段 —— 实测它是 LRC 文件的 URL，
-     * 当正文用会解析出 0 行（见 [fetchLyric] 函数体里的说明）。
-     * 两种情况的 UI 表现都是「暂无歌词」，但语义不同 —— 与 `LyricLoadCoordinator.State`
-     * 把 [空] 与 [失败] 分开是同一条纪律。
+     * ⚠️ **v3.1.0 的结论「视频音轨在 B 站上没有歌词数据源」是错的**，本版据实测推翻：
+     * 漏掉的是**字幕**。实测（2026-10，登录态）12 条音乐视频里 **8 条有字幕**、
+     * 其中 **5 条的字幕正文就是带时间轴的逐句歌词**（绝大多数是 B 站 AI 自动生成的
+     * `ai-zh`）。真实样本见 [BiliSubtitle] 的类文档。
+     *
+     * 推翻它而不是留着，是因为那一版**只查了音频区**就下了「平台没有这个能力」的结论 ——
+     * 这正是仓库那条「平台假设必须 A/B 对照」纪律要防的形状。
+     *
+     * ⚠️ 音频区那条路**不是** `song/info` 的 `lyric` 字段 —— 实测它是 LRC 文件的 **URL**，
+     * 当正文用会解析出 0 行（见下面 [BiliParse.looksLikeUrl] 的守卫说明）。
+     *
+     * ## 三义性：null（没有数据源/取不到）vs 空串（确实没有歌词）
+     *
+     * 调用方（`PlayerViewModel.loadBiliLyrics`）按这个区分 [LyricLoadCoordinator.markEmpty]
+     * 与 `fail` —— 把「网络失败」说成「这首歌没有歌词」会让重试按钮永久置灰，
+     * 那是本版要从另一头修掉的缺陷。所以这里**绝不把失败折叠成空串**。
      */
     suspend fun fetchLyric(song: SongItem): String? {
         if (!isEnabled) return null
         val payload = BiliTrack.parseSourceId(song.sourceId) ?: return null
-        if (!payload.isAudioZone) return null
-        // ★ 走 `/song/lyric` 拿**正文**。
-        //
-        // 曾经写成「取 `song/info` 的 lyric 字段」——那是一个**已修的缺陷**：
-        // 该字段实测是 LRC 文件的 **URL**（`…/149994607539.lrc`），把它交给 `LrcParser`
-        // 会解析出 0 行 ⇒ 界面永远「暂无歌词」，而且不报任何错。
-        // 证据：`docs/verification/v3.1.0/bili-research/evidence/02-songinfo-au39.txt`
-        // 与 `21-lyric-au39.txt`（后者是 `/song/lyric` 的真实正文）。
-        val raw = biliOrNull("lyric failed: auid=${payload.auid}") { BiliApi.audioLyric(payload.auid!!) }
-        if (raw == null) return null
-        // 个别曲目服务端在 `data` 里给的是 .lrc 的 URL。**不在取词路径上再发一次网络**：
-        // 那会把一次播放变成两次往返，而且失败面还多一个。如实返回 null（没有可解析的正文），
-        // 让界面显示「暂无歌词」—— 比拿 URL 去解析出 0 行要诚实。
-        if (BiliParse.looksLikeUrl(raw)) return null
-        return raw
+        if (payload.isAudioZone) {
+            // ★ 走 `/song/lyric` 拿**正文**。
+            //
+            // 曾经写成「取 `song/info` 的 lyric 字段」——那是一个**已修的缺陷**：
+            // 该字段实测是 LRC 文件的 **URL**（`…/149994607539.lrc`），把它交给 `LrcParser`
+            // 会解析出 0 行 ⇒ 界面永远「暂无歌词」，而且不报任何错。
+            // 证据：`docs/verification/v3.1.0/bili-research/evidence/02-songinfo-au39.txt`
+            // 与 `21-lyric-au39.txt`（后者是 `/song/lyric` 的真实正文）。
+            val raw = biliOrNull("lyric failed: auid=${payload.auid}") { BiliApi.audioLyric(payload.auid!!) }
+            if (raw == null) return null
+            // 个别曲目服务端在 `data` 里给的是 .lrc 的 URL。**不在取词路径上再发一次网络**：
+            // 那会把一次播放变成两次往返，而且失败面还多一个。如实返回 null（没有可解析的正文），
+            // 让界面显示「暂无歌词」—— 比拿 URL 去解析出 0 行要诚实。
+            if (BiliParse.looksLikeUrl(raw)) return null
+            return raw
+        }
+        // 视频轨：字幕 → LRC。
+        val bvid = payload.bvid ?: return null
+        val cid = payload.cid ?: return null
+        val url = biliOrNull("subtitle list failed: $bvid/$cid") {
+            BiliApi.videoSubtitleUrl(bvid, cid)
+        } ?: return null
+        val body = biliOrNull("subtitle body failed: $bvid/$cid") { BiliApi.subtitleBody(url) } ?: return null
+        val cues = BiliSubtitle.parseCues(body)
+        val lyric = BiliSubtitle.lyricCues(cues)
+        // 有字幕但判定「不是歌词」（MV 合集的对白、访谈）⇒ 空串 = 「这首确实没有歌词正文」。
+        // **不是** null：字幕源是通的，只是内容不是歌词 —— 重试一百次也不会变。
+        if (lyric.isEmpty()) {
+            Log.i(TAG, "subtitle is not lyrics: $bvid/$cid cues=${cues.size}")
+            return ""
+        }
+        Log.i(TAG, "subtitle -> lyric: $bvid/$cid cues=${cues.size} kept=${lyric.size}")
+        return BiliSubtitle.lyricLrc(lyric)
     }
 
     /**

@@ -428,6 +428,51 @@ object BiliParse {
     }
 
     /**
+     * `player/wbi/v2` 响应 → **第一条可用字幕的 URL**（v3.3.0）。
+     *
+     * 实测响应形状（登录态，`BV1cN4y167BJ`，`aid=877869754 cid=1381738635`）：
+     * ```json
+     * { "code":0, "data": { "subtitle": { "subtitles": [
+     *     { "id":1387771279457024256, "lan":"ai-zh", "lan_doc":"中文", "is_lock":false,
+     *       "subtitle_url":"//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/…?auth_key=…",
+     *       "subtitle_url_v2":"//subtitle.bilibili.com/…" } ] } } }
+     * ```
+     *
+     * 选哪一条：
+     * - **优先中文**（`lan` 含 `zh`，实测值是 `ai-zh`）。选到英文字幕会拿到一份
+     *   逐句英译而不是歌词正文；
+     * - 没有中文就取**第一条有 URL 的**（有总比没有好，且 [BiliSubtitle] 的 `music`
+     *   判据会独立判断它到底是不是歌词 —— 判定与选取是两件事）；
+     * - **用 `subtitle_url`，不用 `subtitle_url_v2`**：后者实测是
+     *   `subtitle.bilibili.com` 上一串百分号转义的非 JSON 载荷，形状未经证实。
+     *   拿没验证过的字段去赌，就是把「未验证」写成「已实现」。
+     *
+     * 不按 `is_lock` 过滤：实测它为 `false`，而「锁定」与「能否下载」的关系
+     * **没有实测依据**，按未证实字段过滤会静默丢字幕。
+     *
+     * @return 原始 URL（可能是 `//` 开头，协议补全由 `BiliApi.normalizeSubtitleUrl` 负责）；
+     *   无字幕 / `code != 0` / 解析失败一律返回 null。
+     */
+    fun parseFirstSubtitleUrl(body: String?): String? {
+        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return null
+        if (root.optInt("code", -1) != 0) return null
+        val arr = root.optJSONObject("data")
+            ?.optJSONObject("subtitle")
+            ?.optJSONArray("subtitles")
+            ?: return null
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val url = o.optString("subtitle_url").takeIf { it.isNotBlank() } ?: continue
+            if (o.optString("lan").lowercase().contains("zh")) return url
+        }
+        for (i in 0 until arr.length()) {
+            val url = arr.optJSONObject(i)?.optString("subtitle_url")?.takeIf { it.isNotBlank() }
+            if (url != null) return url
+        }
+        return null
+    }
+
+    /**
      * 这个「歌词值」其实是一个 **LRC 文件的 URL**（而不是 LRC 正文）。
      *
      * `song/info` 的 `lyric` 字段实测就是这种形状（见 [BiliApi.audioLyric] 的说明）。

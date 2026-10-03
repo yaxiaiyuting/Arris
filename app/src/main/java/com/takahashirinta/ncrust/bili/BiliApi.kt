@@ -123,6 +123,22 @@ object BiliApi {
     private const val PLAYURL_URL = "https://api.bilibili.com/x/player/playurl"
 
     /**
+     * 播放器信息端点（v3.3.0 起用于取**字幕列表**）。
+     *
+     * ⚠️ 路径里带 `wbi` 但**本实现不签名** —— 实测（2026-10，登录态）
+     * `?bvid=…&cid=…` 不签名也返回 `code:0` 且 `subtitles` 有内容。
+     * **不要顺手改成 `signedGet`**：签名版在 `/x/player/wbi/playurl` 上实测回 412
+     * （见 [PLAYURL_URL] 的说明），把这条也签名等于重蹈那个坑。
+     */
+    private const val PLAYER_V2_URL = "https://api.bilibili.com/x/player/wbi/v2"
+
+    /**
+     * 字幕 CDN 基址。只在服务端给**裸路径**时用于补全 ——
+     * 补全逻辑在 [BiliSubtitle.normalizeSubtitleUrl]（纯函数、有单测）。
+     */
+    private const val SUBTITLE_CDN_BASE = "https://aisubtitle.hdslb.com"
+
+    /**
      * DASH 的 `fnval`。**4048 = DASH + 一堆特性位**，是社区与实测都拿到完整
      * `dash.audio[]` 的取值；`fnval=16`（纯 DASH）在旧路径上同样可用，
      * 但 4048 是实测过的那个，不留"看起来等价"的第二个选择。
@@ -437,6 +453,80 @@ object BiliApi {
             }
         } ?: return null
         return BiliParse.parseAudioLyric(body)
+    }
+
+    // ---------------------------------------------------------------- 视频字幕（v3.3.0） ----
+
+    /**
+     * 取**视频字幕列表**，返回第一条可用字幕的下载 URL。
+     *
+     * ## 为什么 v3.1.0 判定「视频没有歌词数据源」是错的
+     *
+     * v3.1.0 只查了音频区的 `song/lyric`，于是视频音轨被判「无词」，一律显示「暂无歌词」。
+     * 实测（2026-10，登录态 `isLogin=true`）漏掉了**字幕**这条数据源：
+     *
+     * | 事实 | 实测值 |
+     * |---|---|
+     * | `player/wbi/v2` 能列出字幕 | 是 |
+     * | **只需 `bvid` + `cid`** | 是 —— **不必**先问 `view` 拿 `aid`（已实测：只给 bvid+cid，`code:0` 且返回 1 条字幕）|
+     * | 匿名能拿到字幕列表吗 | **不能**，列表恒为空 —— **字幕需要登录态** |
+     * | 字幕来源 | 绝大多数是 **`ai-zh`（B 站 AI 自动生成）**，不是 UP 主手传的 CC 字幕 |
+     * | 字幕正文里有歌词吗 | **有，带时间轴的逐句歌词** |
+     * | 抽样覆盖率 | 12 条音乐视频：8 条有字幕，其中 **5 条判定为歌词** |
+     *
+     * ## 为什么匿名也照发这个请求
+     *
+     * 未登录时它稳定返回「有 `data` 但 `subtitles` 为空数组」，**不是错误**，
+     * 代价只有一次往返。反过来「先判断有没有登录再决定发不发」会让
+     * [BiliSourceProvider.fetchLyric] 多一个必须在 JVM 里被 mock 的分支，
+     * 而它现在是一条可以离线断言的纯链路。取词发生在播放开始时（每首一次），
+     * 这个量级的往返不值得用可测性去换。
+     *
+     * @return 字幕 JSON 的 URL（`//` 开头，**调用方负责补 `https:`**）；
+     *   没有字幕 / 未登录 / 网络失败 / 风控一律返回 **null**。
+     */
+    suspend fun videoSubtitleUrl(bvid: String, cid: Long): String? {
+        if (bvid.isBlank() || cid <= 0L) return null
+        val body = withContext(Dispatchers.IO) {
+            try {
+                get("$PLAYER_V2_URL?bvid=$bvid&cid=$cid")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "subtitle list failed: $bvid/$cid", e)
+                null
+            }
+        } ?: return null
+        return BiliParse.parseFirstSubtitleUrl(body)
+    }
+
+    /**
+     * 下载字幕正文（`aisubtitle.hdslb.com` 上的 JSON）。
+     *
+     * 与 [videoSubtitleUrl] **刻意分开**：两者的失败语义不同，
+     * 合并成一个函数会让「这个视频没有字幕」与「有字幕但下载失败」无法区分 ——
+     * 而后者被当成前者正式本版要从另一头修掉的缺陷形状（重试按钮永久置灰）。
+     *
+     * @param url [videoSubtitleUrl] 的返回值。协议补全走
+     *   [BiliSubtitle.normalizeSubtitleUrl]（纯函数、有单测）——
+     *   实测服务端给的是**协议相对** URL（`//aisubtitle.hdslb.com/…`），
+     *   直接交给 OkHttp 会抛 `IllegalArgumentException: Expected URL scheme`，
+     *   那是一个只在真机上出现的崩溃形状。
+     * @return 字幕 JSON 正文；失败返回 null。
+     */
+    suspend fun subtitleBody(url: String): String? {
+        val full = BiliSubtitle.normalizeSubtitleUrl(url)
+        if (full.isBlank()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                get(full)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "subtitle body failed", e)
+                null
+            }
+        }
     }
 
     // ---------------------------------------------------------------- 搜索（视频） ----
