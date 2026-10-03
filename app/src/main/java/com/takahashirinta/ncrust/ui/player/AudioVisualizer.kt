@@ -243,7 +243,20 @@ object WaveformStore {
      */
     fun onBar(rootMeanSquare: Double, low: Double, mid: Double, high: Double) {
         if (enabled) {
-            ring.push(rootMeanSquare.toFloat(), low.toFloat(), mid.toFloat(), high.toFloat())
+            // v3.3.2：把**到达时刻**一并交给环。相位斜坡的分母（柱间隔）只有在这里才测得准：
+            // UI 消费处倒推会被 vsync 网格量化（100ms 的柱被量成 100 / 116.7 / 133.3ms），
+            // 滑动平均永远收敛不到真值（同口径实测 100 → 155ms 不停），
+            // 于是相位爬不满一格就撞上限幅、停在 1.0 上 2~4 帧 —— 就是用户报的「顿-冲 / 抽搐」。
+            //
+            // 音频线程上的代价：一次 `SystemClock.uptimeMillis()`（单调时钟读，无系统调用、
+            // 无分配）加一次 long 数组写，与既有的四个 float 写同级（铁律 29）。
+            ring.push(
+                rootMeanSquare.toFloat(),
+                low.toFloat(),
+                mid.toFloat(),
+                high.toFloat(),
+                arrivalAtMs = android.os.SystemClock.uptimeMillis(),
+            )
         }
     }
 

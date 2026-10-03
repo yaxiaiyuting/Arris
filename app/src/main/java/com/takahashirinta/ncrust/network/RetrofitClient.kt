@@ -13,11 +13,11 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "https://music.163.com"
-    private const val INTERFACE_URL = "https://interface3.music.163.com"
+    internal const val BASE_URL = "https://music.163.com"
+    internal const val INTERFACE_URL = "https://interface3.music.163.com"
     // eapi 客户端接口域：官方/参考实现全部 eapi 打到 interface.music.163.com（非 music.163.com）。
     // 读接口在 music 上宽松可通,但写操作(如 /eapi/radio/like)发错 host 会被判 -460 风险。
-    private const val API_URL = "https://interface.music.163.com"
+    internal const val API_URL = "https://interface.music.163.com"
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private const val IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
 
@@ -33,10 +33,77 @@ object RetrofitClient {
 
     fun getCookie(): String? = currentCookie
 
-    private val plainClient: OkHttpClient by lazy {
+    /**
+     * **全应用唯一的连接池**。
+     *
+     * OkHttp 的 `ConnectionPool` 是 `OkHttpClient` 实例的私有字段，不是全局的：
+     * 不显式共享时每个 `OkHttpClient.Builder().build()` 都带一个自己的池子，
+     * 连接复用（`ConnectionPool.transmitterAcquirePooledConnection`）只在**同一个池子**里找。
+     *
+     * `ConnectionWarmup` 从 v3.1.0 起就形同虚设，第一个原因就是它自建了一个第三方客户端：
+     * 它把 `interface3.music.163.com` 的连接建在自己的池子里，而真正取链的是 [plainClient]、
+     * 取歌词的是 [restClient] —— 两个池子它都没碰到。
+     *
+     * 池子参数用 OkHttp 默认（5 个空闲连接 / 5 分钟保活）：本应用同时活跃的 host 不超过 4 个。
+     */
+    internal val sharedConnectionPool: ConnectionPool = ConnectionPool()
+
+    /**
+     * **所有 OkHttpClient 的唯一基座**（v3.3.2）。
+     *
+     * ## 为什么光有共享池还不够（这是本次最容易踩空的一格）
+     *
+     * 只把同一个 [sharedConnectionPool] 传给两个**各自独立 build** 的客户端，
+     * 连接**仍然不会**跨客户端复用。原因在 `RealConnection.isEligible`：
+     * 它先比 `Address`，而 `Address.equalsNonHost` 的字段里包含
+     * `sslSocketFactory` 与 `certificatePinner` —— `OkHttpClient.Builder.build()`
+     * 在调用方没有显式指定这两者时，会**给每个 client 各造一份**
+     * （`build()` 里 `sslSocketFactoryOrNull` 为 null 时现建一个 TrustManager 与工厂）。
+     * 于是两个 client 的 `Address` 永不相等，池子里明明有同一 host 的空闲连接也匹配不上。
+     *
+     * 实测（OkHttp 4.12.0，真实打 `https://interface3.music.163.com/`，
+     * `conn+queue = requestHeadersEnd − callStart`，与 [HttpTimingListener] 同口径）：
+     *
+     * | 形态 | 预热通 | 业务通 |
+     * |---|---|---|
+     * | 各自 build + 共享池 | connect=true, 134ms | **connect=true, 131ms**（又建一次） |
+     * | 同一 client 两通（对照） | connect=true, 335ms | connect=false, **0ms** |
+     * | **全部从本基座 newBuilder() 派生** | connect=true, 315ms | connect=false, **0ms** |
+     *
+     * 所以「共享」必须做到**基座同源**：`newBuilder()` 会原样沿用已建好的
+     * `sslSocketFactory` / `certificatePinner` 实例，因此派生出来的客户端 Address 兼容，
+     * 池子里的连接才真的能被下一条业务请求拿走。
+     *
+     * 注意 `newBuilder()` **会**复制 `interceptors` 与 `eventListenerFactory`，
+     * 所以各客户端只在自己那一层加需要的东西（见 [plainClient] / [restClient]）。
+     */
+    private val baseClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .connectionPool(sharedConnectionPool)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /**
+     * 预热专用客户端的工厂：**与业务客户端同源**（Address 兼容 ⇒ 连接真能被复用），
+     * 但保留自己的短超时，且**不挂** [HttpTimingListener]。
+     *
+     * 不挂计时器是有意的：预热打的是 `GET /`，它不是业务请求；
+     * 让它进 `NcrustHttpTiming` 只会给「TTFB 花在哪」这本账添噪声。
+     *
+     * @param connectTimeoutSeconds 预热自己的超时上限（见 `ConnectionWarmup.TIMEOUT_SECONDS`）。
+     */
+    internal fun warmupDerivedClient(
+        connectTimeoutSeconds: Long,
+        readTimeoutSeconds: Long = connectTimeoutSeconds,
+    ): OkHttpClient = baseClient.newBuilder()
+        .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
+        .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+        .build()
+
+    private val plainClient: OkHttpClient by lazy {
+        baseClient.newBuilder()
             // v2.5.6 · P1：被动计时（真 TTFB / 响应体读完）。见 HttpTimingListener 的 KDoc ——
             // 它是纯观测，不改变请求行为；不加这一行，「TTFB 花在哪」在 release 包里无从取证。
             .eventListenerFactory(HttpTimingListener.factory)
@@ -48,18 +115,15 @@ object RetrofitClient {
      * 行为与 v2.5.5 逐字节相同）。
      */
     private val restClient: OkHttpClient by lazy {
-        // BASIC 日志只在 debug 装：release 每次请求省一次 chain.proceed 拦截 + logcat 序列化。
-        // 低端机上 CPU 敏感，能省则省。
-        OkHttpClient.Builder().apply {
+        baseClient.newBuilder().apply {
+            // BASIC 日志只在 debug 装：release 每次请求省一次 chain.proceed 拦截 + logcat 序列化。
+            // 低端机上 CPU 敏感，能省则省。
             if (BuildConfig.DEBUG) {
                 addInterceptor(HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
                 })
             }
             addInterceptor(CookieInterceptor())
-            connectTimeout(30, TimeUnit.SECONDS)
-            readTimeout(30, TimeUnit.SECONDS)
-            eventListenerFactory(HttpTimingListener.factory)
         }.build()
     }
 

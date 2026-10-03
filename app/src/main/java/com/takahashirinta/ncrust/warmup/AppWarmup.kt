@@ -131,6 +131,19 @@ object AppWarmup {
                 return@launch
             }
 
+            // v3.1.0 · P1-B 引入 / **v3.3.2 提前到与首页预取并行**。
+            //
+            // 旧位置在首页预取 + 封面预取**之后**（原第 211 行），而那一整段被
+            // `withTimeoutOrNull(NETWORK_BUDGET_MS = 8s)` 包着 —— 于是预热最晚可能在
+            // 冷启动后 **8 秒**才开始。取链（`interface3.music.163.com`）是用户点歌时
+            // 才会碰到的 host，用户完全可能在那 8 秒内就点了歌，
+            // 那一刻预热还没跑 ⇒ 这条优化对「冷启动后第一首歌」等于不存在。
+            //
+            // 现在与首页预取**同时**发出：三通 GET `/` 是极小请求，不会挤掉首页那三条；
+            // 而它换来的是一条已建好的取链连接。它仍然是**独立 launch、在 8 秒预算之外**，
+            // 谁都不等它，它失败了也完全静默（铁律 4）。
+            scope.launch { runCatchingCancellable { ConnectionWarmup.warmUp() } }
+
             // 预算现在**真的**生效（超时取消不会被吞）：到点就撤，剩下的交给 HomeScreen。
             withTimeoutOrNull(NETWORK_BUDGET_MS) {
                 // 阶段一：三条 Home 请求并发写入 ContentCache
@@ -202,13 +215,9 @@ object AppWarmup {
                 )
             }
 
-            // v3.1.0 · P1-B：连接预热（DNS + TCP/TLS + 回池）。
-            //
-            // ⚠️ 它是**独立 launch**、且在 `withTimeoutOrNull` 的 8 秒预算**之外**：
-            // 预热是尽力而为，绝不能因为它慢而把首页预取挤掉（谁都不等它，它也不占预算）。
-            // 收益上界是探针实测的「冷连接 ~365ms / host，复用后 wait=2~9ms」
-            // （`docs/verification/v3.1.0/net-research/net-latency-breakdown.md` §4）。
-            scope.launch { runCatchingCancellable { ConnectionWarmup.warmUp() } }
+            // v3.1.0 · P1-B：连接预热已在上面（与首页预取并行）发出 —— 见那段注释。
+            // 这里**不再**重复 launch：同一个 host 预热两次是纯粹的浪费，
+            // 而池子共享之后第一次那三通就已经把连接建好并回池了。
 
             // 阶段三：收藏库刷新(已登录时)。3 次额外网络往返，同样谁都不等。
             if (CookieManager.hasCookie(app)) {

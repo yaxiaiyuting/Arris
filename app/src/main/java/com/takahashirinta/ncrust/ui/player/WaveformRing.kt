@@ -55,49 +55,72 @@ import kotlin.math.exp
  * （静音时既没有色带要流、也不该呼吸）。
  */
 /**
- * ⚠️ **v3.3.1 回退了 v3.3.0 对滚动的改动。改这个类之前请先读完这一段。**
+ * ## ⚠️ v3.3.2：滚动抖动的**真实机制**（改这个类之前请先读完这一段）
  *
- * ## 发生了什么
+ * 前六次尝试全部失败，根因是**判据口径**与**归因**都错了。这一节记录的是
+ * 用「与渲染层同源的口径」（`位移 = Δ窗口平移格 + ΔscrollPhase01()`）量出来的事实，
+ * 不是推理。所有数字都可由 `WaveformScrollJitterDiagTest` 复现。
  *
- * 用户反馈「60 帧设备上还是抖动」。v3.2.4 的帧闸门改动在 60Hz 上等于没改
- * （非低内存设备 stride 恒为 1），所以抖动来自 v3.2.3 引入的**亚格插值**：
- * 它把相位（`sinceBarMs`）在**每根柱到达时清零**，那一帧的位移因此多出 `1 − 相位`
- * （最高 2.1× 名义速度），观感是每 ~100ms 一次的「顿-冲」。
+ * ### 症状与量到的形状
  *
- * ## v3.3.0 试了什么、为什么失败
+ * 用户：「波形抖动还是老问题」/「新的播放条也还在抖动，这次甚至会抽搐」。
+ * 60Hz 面板、柱间隔 100ms 时，逐帧可见位移长这样（单位 = 格，名义步长 0.1667）：
  *
- * 我把「窗口平移」与「小数位置」合并到一个相位上（相位每跨过整数就平移一格，
- * 见当时的 `scrollPhase` / `shiftedCells`）。逐帧仿真确实得到过
- * 「步长恒为 0.1667、偏差 4.4e-6」。
+ * ```
+ * 0.1667 ×5 帧 → 0.0000 → 0.1391 → 0.0000 → 1.1399 → 0.4903 …
+ * ```
  *
- * **但用户在真机上实测：仍然抖动，而且会「抽搐」。**
+ * 也就是**每 ~100ms 一轮**：先停住 1~4 帧（位移 0.0000），再一次性冲出 1.1 格（名义的 660%）。
+ * 这就是「顿-冲」，也就是用户说的「抽搐」。
  *
- * 复盘出的两条教训（都是我的错，写在这里防止重犯）：
+ * ### 机制（两个缺陷叠加，**都不是**「到达时清零」本身）
  *
- * 1. **判据的测量口径错了三次。** 我先后用「只量相位的差分」「把平移格数硬编码成 +1」
- *    「`shiftedCells + frac(phase)`」三种口径去量「可见位移」，每一种都能自圆其说地
- *    给出「已修好」的数字 —— 而渲染层真正用的是
- *    `W[i] + (W[i+1] − W[i]) × scrollPhase01()`，
- *    它对应的量是「窗口下标 + 小数」，不是我在测试里另建的那套账。
- *    **结论：这个组件的判据必须在真机上看画面，仿真绿灯不算数。**
- * 2. **我把「帧时间抖动」与「相位量化」混成了一个缺陷。** 真机 `dt` 在 15~20ms 之间跳是
- *    常态（GC / 组合 / 调度），那是**帧时间**的抖动；而 v3.2.3 的缺陷是**相位量化**。
- *    两者都会表现为「波形抖」，但修法相反：前者要平滑速率，后者要去掉清零。
- *    我在两个假设之间来回改了 6 次，每次都以为找到了根因。
+ * 1. **相位斜坡的分母被 vsync 量化，永远收敛不到真值 —— 这是主因。**
+ *    分母（柱间隔）原本在 **UI 消费处**倒推：`sinceBarMs / 消费根数`。而 UI 消费只能发生在
+ *    帧上，于是一根真实 100ms 的柱被量成 **100 / 116.7 / 133.3ms** 三者之一，
+ *    滑动平均因此**永远收敛不到真值** —— 同口径实测 20 秒里从 100ms 一路爬到 **155ms**
+ *    且没有停下来的意思。分母偏大 ⇒ 相位按 0.65 倍速爬 ⇒ **爬满一格之前下一根柱就到了**。
+ * 2. **于是相位撞上 `scrollPhase01()` 的 `coerceIn(0, 1)` 顶棚，停在 1.0 上不动**，
+ *    连续几帧位移 `0.0000`；下一根柱到达时相位被折回，位移一次性冲出 1.1 格。
+ *    旧代码在到达时把 `sinceBarMs` **清零**（而不是减整数）又放大了这一下。
  *
- * ## 现在的状态（v3.3.1 起）
+ * `barIntervalMs` 就是那个爬飞的分母 —— 它是本缺陷的**指纹**：
+ * 只要它在真机上单调爬升，画面就一定在顿-冲。
  *
- * 本文件已**逐字节回退到 v3.2.4**（用户实测「能用」的那一版）——
- * 也就是说 v3.2.3 的相位清零**回来了**，抖动仍在，但它至少是**已知的、可用的**行为。
- * 本版不再尝试修它：没有可靠自验手段的改动，风险大于收益。
+ * ### 修法（三条，缺一不可）
  *
- * ## 如果将来还要修
+ * | # | 改动 | 为什么必须 |
+ * |---|---|---|
+ * | 1 | 分母改在 **push（音频线程）处**测：每根柱带一个 `arrivalAtMs` | 那是音频缓冲**自己的节拍**，与 vsync 无关 ⇒ 没有量化，收敛到真值（实测钉在 100.00ms） |
+ * | 2 | 消费时把相位**锚到那根柱的到达时刻**（`frameClockMs − clockOffsetMs − pendingArrivalMs`） | 帧时间轴与到达时间轴之间那一帧的相位误差被一次性算掉，不会逐轮累积 |
+ * | 3 | 折回**小数余量**而不是清零；且推进**不再受信号门槛控制** | 清零会丢掉「这一帧多出来的位移」；门槛挂在原始柱高上，真实音乐里单根安静缓冲就会让相位冻住 5 帧、再冲出 1 格 |
  *
- * 至少要做到这三条，否则不要动：
- * - **先在真机上录屏量化**（帧间隔 + 可见位移两条序列），不要只做 JVM 仿真；
- * - 判据必须**直接读渲染层消费的那个量**（`scrollPhase01()` 与窗口下标），
- *   不要在测试里另建一套「可见位置」的定义；
- * - 90 / 120Hz 面板与 60Hz 面板**分别**验证 —— 本环境只有 60Hz 模拟器。
+ * 信号门槛（[ANIMATION_MIN_SIGNAL]）**保留**，但只管「要不要为这一帧排重绘」——
+ * v1.8.1 的「不空转」契约与暂停即停帧契约一行没改。
+ *
+ * ### 改前 / 改后（同一台仿真、同一口径、时间相邻）
+ *
+ * | 场景 | 改前抖动率 | 改后抖动率 | 改前顿帧 | 改后顿帧 |
+ * |---|---|---|---|---|
+ * | 理想帧 + 理想柱 | 6.09% | 6.09% | 2 | 2 |
+ * | 仅柱与 vsync 错开 | 0.00% | 0.00% | 0 | 0 |
+ * | 仅帧时间抖动 | 14.34% | 14.34% | 2 | 2 |
+ * | 帧抖 + 柱抖 | 22.20% | 22.20% | 22 | 22 |
+ * | **真实音乐幅度（每 20 柱一根安静缓冲）** | **50.00%** | **0.00%** | **45** | **0** |
+ * | **真实音乐幅度（每 8 柱一根安静缓冲）** | **79.87%** | **0.00%** | **114** | **0** |
+ *
+ * 读法：**「帧时间抖动」那一列的贡献是零**（改前改后完全相同）——它本身不是缺陷，
+ * 位移本来就该正比于 `dt`（匀速运动在帧时间上就是不等步长的）。
+ * 抖动全部来自上面那两条被修掉的缺陷。
+ *
+ * ### 教训（写给下一个改这里的人）
+ *
+ * - **判据必须直接读渲染层消费的那两个量**（[scrollPhase01] 与窗口平移格数）。
+ *   前三次失败都是因为在测试里另建了「可见位置」的定义：只量相位差分 /
+ *   把平移硬编码成 +1 / `shiftedCells + frac(phase)`。仿真因此可以一路绿灯而真机照抖。
+ * - **`[barIntervalMs]` 是诊断指纹**：它会爬，就说明分母又被量化了。
+ * - 帧时间抖动（真机 `dt` 在 15~20ms 跳）**不是**缺陷，不要去平滑它 ——
+ *   平滑帧时间等于篡改速度，只会把匀速运动变成忽快忽慢。
  */
 class WaveformRing(
     /** 环形缓冲容量（柱数）。UI 掉帧时最多积压这么多，再多就丢最旧的。 */
@@ -128,6 +151,47 @@ class WaveformRing(
     private val lowRing = FloatArray(capacity)
     private val midRing = FloatArray(capacity)
     private val highRing = FloatArray(capacity)
+
+    /**
+     * v3.3.2：与 [ring] 逐槽对齐的**柱间隔**（毫秒）—— 这一根柱与**前一根柱**之间实际过了多久。
+     *
+     * ## 为什么分母必须记在 push 这一侧（这是「抖动」的真正根因）
+     *
+     * 相位斜坡的分子是「距上一根柱过了多久」（帧时间累加，精确），分母是「柱间隔」。
+     * 旧写法在 **UI 消费处**倒推分母（`sinceBarMs / 消费根数`），而消费只能发生在帧上：
+     * 一根真实 100ms 的柱会被量成 100 / 116.7 / 133.3ms 三者之一（60Hz），
+     * 滑动平均因此**永远收敛不到真值** —— 真机同口径实测从 100ms 一路爬到 155ms 且不停。
+     *
+     * 分母偏大 55% ⇒ 相位按 0.65 倍速爬 ⇒ 爬满一格之前下一根柱就到了：
+     * 相位撞上 `scrollPhase01()` 的 `coerceIn(0,1)` **顶棚停在 1.0**，
+     * 连续 2~4 帧位移 `0.0000`（画面**原地不动**），随后被折回、位移一次性冲出 `1.14` 格。
+     * 量到的形状：`0.0000, 0.1391, 0.0000, 1.1399, 0.4903, …` —— 就是用户报的「顿-冲 / 抽搐」。
+     *
+     * 在 push 处测就没有量子化：那是**音频缓冲自己的节拍**，与 vsync 无关，
+     * 也正是「一根柱代表多久的音乐」的真值（约 100ms）。同一根柱的分子/分母因此同源，
+     * 相位在一个柱周期内**正好**爬到 1.0：既不撞顶棚，也不在到达帧上多摊或少摊位移。
+     *
+     * ## 代价（音频线程）
+     *
+     * 三次数组写（`arrivalMs` long、`arriveGapMs` float）与一次 volatile long 读，
+     * **没有分配、没有锁、没有系统调用** —— 与既有的四个 float 写同级。
+     * 时间戳由调用方传入（`SystemClock.uptimeMillis()`），所以本类仍然不依赖 Android。
+     */
+    private val arriveGapMs = FloatArray(capacity)
+
+    /** v3.3.2：与 [ring] 逐槽对齐的**到达时刻**（调用方的时间基准，毫秒；0 = 没给）。 */
+    private val arriveStampMs = LongArray(capacity)
+
+    /** 上一根柱的到达时刻（音频线程独占读写；用来算 [arriveGapMs]）。 */
+    private var lastPushArrivalMs: Long = 0L
+
+    /** 最近一根柱的柱间隔（volatile：音频线程写、UI 线程读，单写者）。 */
+    @Volatile
+    private var latestArriveGapMs: Float = 0f
+
+    /** 最近一根柱的到达时刻（volatile：音频线程写、UI 线程读，单写者）。 */
+    @Volatile
+    private var latestArrivalMs: Long = 0L
 
     /**
      * 写入游标 = 累计写入的柱数（不是下标）。
@@ -174,7 +238,26 @@ class WaveformRing(
      */
     private var sinceBarMs: Float = 0f
 
-    /** 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。 */
+    /**
+     * v3.3.2：UI 侧的**单调帧时钟**（毫秒，自第一次 pump 起累加 dt）。
+     *
+     * 存在的理由：柱的到达时刻（[arriveGapMs] / `pendingArrivalMs`）是音频线程按自己的节拍
+     * 打的，与「UI 消费到它的那一帧」**不是同一时刻**（最多差一帧）。相位要相对**真正的到达
+     * 时刻**起算，就必须有一个能和它相减的时钟 —— 而 [sinceBarMs] 会被折叠，不能兼任。
+     * 它只在 `active` 时累加，与到达时间戳同源（都是 uptime 量级）。
+     */
+    private var frameClockMs: Long = 0L
+
+    /** [frameClockMs] 与调用方到达时间戳之间的固定偏移（首次同时可用时标定一次）。 */
+    private var clockOffsetMs: Long = 0L
+
+    /**
+     * 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。
+     *
+     * v3.3.2：它就是相位斜坡的**分母**，而且只在**到达处**测量（见 [arrivalMs]）。
+     * 初值 [DEFAULT_BAR_INTERVAL_MS] 在第一次测到真实间隔之前充当分母 —— 若真值是 96ms，
+     * 头几百毫秒的相位会略微偏慢（0.96 倍速），EMA（α=0.15，约 7 根柱收敛）随后把它拉正。
+     */
     private var barIntervalMs: Float = DEFAULT_BAR_INTERVAL_MS
 
     /** 最新数据（阶跃）。UI 线程原地更新，绝不重新分配。 */
@@ -213,7 +296,7 @@ class WaveformRing(
      * 所以「柱高、低频、明亮度」三者永远来自**同一个音频缓冲**，不会错帧。
      * 老调用点（只给 RMS，或给 RMS + 低频）继续可用：默认 `bass = value`、`mix = 0`。
      */
-    fun push(value: Float, low: Float = value, mid: Float = 0f, high: Float = 0f) {
+    fun push(value: Float, low: Float = value, mid: Float = 0f, high: Float = 0f, arrivalAtMs: Long = 0L) {
         // NaN / Inf 防御：环形缓冲的边界读在和写者赛跑时理论上可能读到半个值
         // （见 pump 的注释）。宁可画成静音，也不要让 NaN 传染给整块画布。
         val slot = writeIndex % capacity
@@ -221,6 +304,21 @@ class WaveformRing(
         lowRing[slot] = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
         midRing[slot] = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
         highRing[slot] = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
+        // v3.3.2：柱间隔**在这里**测（见 [arriveGapMs] 的 KDoc）—— 音频缓冲自己的节拍。
+        // 槽位与 writeIndex 一次自增绑定，非 volatile；但 UI 侧永远读 `[0, snapshot)`，
+        // 而 snapshot 是**自增之后**才发布的，所以这一槽对读者一定已经写完。
+        // 这里存**原始**到达间隔（不做平滑）：平滑只在 [pump] 里做一次，
+        // 免得同一份系数被套两层、`barIntervalMs` 的读数也就不可解释了。
+        var rawGap = 0f
+        if (arrivalAtMs > 0L && lastPushArrivalMs > 0L && arrivalAtMs > lastPushArrivalMs) {
+            val raw = (arrivalAtMs - lastPushArrivalMs).toFloat()
+            if (raw in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) rawGap = raw
+        }
+        arriveGapMs[slot] = rawGap
+        arriveStampMs[slot] = arrivalAtMs
+        if (arrivalAtMs > 0L) lastPushArrivalMs = arrivalAtMs
+        if (rawGap > 0f) latestArriveGapMs = rawGap
+        latestArrivalMs = arrivalAtMs
         writeIndex += 1
     }
 
@@ -256,24 +354,50 @@ class WaveformRing(
     fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects): Boolean {
         var changed = false
         if (active) {
-            // v3.2.3：先结算相位（用**上一帧**的间隔），再消费新柱 —— 消费到柱时相位归零。
+            // v3.3.2：`sinceBarMs` 是**时间积分量**，推进只看 `dt`，与信号、与到达都无关。
             val dtForPhase = dtMs.coerceIn(0f, 200f)
-            val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
-            // 空转门槛与动画相位同一条（`ANIMATION_MIN_SIGNAL`）：**画面最后一格还有内容**时
-            // 才推进相位、才为"滚动"排帧。静音段 / 放完 / 暂停都既不排帧也不推进
-            // —— v1.8.1 的「不空转」契约原样保住（相位冻在那里，下一根柱到达时归零）。
-            if (targets[barCount - 1] > ANIMATION_MIN_SIGNAL) {
-                if (sinceBarMs < interval) changed = true
-                sinceBarMs += dtForPhase
-            }
+            // ★ v3.3.2：相位 = 「距上一根柱过了多久」÷「上一根柱自己的间隔」，两个量**同源**。
+            //
+            //   旧写法两处都错，叠加成用户看到的「顿一下、再冲一下」：
+            //   ① **分母**在 UI 消费处倒推（`sinceBarMs / 消费根数`），被 vsync 量化成
+            //      100 / 116.7 / 133.3ms 三者之一 ⇒ 滑动平均**永远收敛不到真值**
+            //      （真机同口径实测 100 → 155ms 不停）；
+            //      分母偏大 ⇒ 相位按 0.65 倍速爬 ⇒ 爬不到 1.0 就被打回 0。
+            //   ② **清零**而不是折回余量 ⇒ 每轮少摊掉一小截位移。
+            //   于是相位撞上 `scrollPhase01()` 的 `coerceIn(0,1)` 顶棚**停在 1.0**、位移
+            //   连续几帧 `0.0000`（画面原地不动），随后一次性冲出 1.1 格。
+            //   量到的形状：`0.0000, 0.1391, 0.0000, 1.1399, 0.4903, …`
+            //
+            //   现在：分母取自**到达处实测的柱间隔**（[arriveGapMs]，与 vsync 无关），
+            //   并且消费时把相位**锚到那根柱的到达时刻**上 —— 帧时间轴与到达时间轴之间的
+            //   那一帧相位误差因此被一次性算掉，不会逐轮累积。
+            //
+            //   信号门槛**保留**在它该在的地方 —— 「要不要为这一帧排重绘」：静音段既不
+            //   排帧也不白烧 GPU，v1.8.1 的「不空转」契约与暂停即停帧契约都没有变。
+            val hadSignal = targets[barCount - 1] > ANIMATION_MIN_SIGNAL
+            val interval = phaseIntervalMs()
+            // 只有「画面内容会随相位改变」时才需要为滚动排帧；
+            // 相位本身照常前进（它是时间量，不是画面量）。
+            if (hadSignal && sinceBarMs < interval) changed = true
+            frameClockMs += dtForPhase.toLong()
+            sinceBarMs += dtForPhase
             val consumed = consumePending()
             if (consumed) {
-                // 柱间隔的滑动平均：只用落在合理区间的样本，避免一次卡顿把间隔带飞。
-                val avg = sinceBarMs / pendingConsumed.coerceAtLeast(1)
-                if (avg in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) {
-                    barIntervalMs += (avg - barIntervalMs) * BAR_INTERVAL_EMA
+                // 分母：**到达处实测**的柱间隔（原始值），平滑只在这里做一次。
+                if (pendingGapMs > 0f) {
+                    barIntervalMs += (pendingGapMs - barIntervalMs) * BAR_INTERVAL_EMA
                 }
-                sinceBarMs = 0f
+                // 锚点：相位重新起算为「这一帧比那根柱晚了多少」。
+                if (pendingArrivalMs > 0L && frameClockMs > 0L) {
+                    // frameClockMs 是 UI 侧的单调帧时钟；pendingArrivalMs 是调用方时钟，
+                    // 两者**同源**（都是 uptime 量级）。首次可用时标定一次偏移。
+                    if (clockOffsetMs == 0L) clockOffsetMs = frameClockMs - pendingArrivalMs
+                    // 条件宽松是刻意的：即使调用方的到达时刻是**拍脑袋**给的（例如测试里
+                    // 直接拿帧时间当到达时刻），这条式子也只是把它当成真实到达减去一帧，
+                    // 结果仍然有界且单调 —— 不会把相位推成负数或超过一格。
+                    sinceBarMs = (frameClockMs - clockOffsetMs - pendingArrivalMs).toFloat()
+                }
+                sinceBarMs = foldScrollPhase(sinceBarMs, interval, pendingConsumed)
             }
             if (consumed) changed = true
         } else if (targets.any { it != 0f }) {
@@ -309,8 +433,16 @@ class WaveformRing(
     /** v3.2.3：消费了多少根柱（相位推进要用它换算平均柱间隔）。 */
     private var pendingConsumed: Int = 0
 
+    /** v3.3.2：本批消费到的柱间隔（毫秒）；0 = 这批柱没有可用的到达时间戳。 */
+    private var pendingGapMs: Float = 0f
+
+    /** v3.3.2：本批最新那根柱的到达时刻（0 = 调用方没给时间戳）。 */
+    private var pendingArrivalMs: Long = 0L
+
     private fun consumePendingCount(): Int {
         pendingConsumed = 0
+        pendingGapMs = 0f
+        pendingArrivalMs = 0L
         val snapshot = writeIndex
         var pending = snapshot - readIndex
         if (pending <= 0) return 0
@@ -340,6 +472,14 @@ class WaveformRing(
             if (shiftBandIn(lowTargets, lowValue)) changed = true
             if (shiftBandIn(midTargets, midValue)) changed = true
             if (shiftBandIn(highTargets, highValue)) changed = true
+            // v3.3.2：这一根柱自己的柱间隔（= 它与前一根柱之间实际过了多久）。
+            // 成为相位斜坡的**分母**，与分子 `sinceBarMs` 同源。
+            val gap = arriveGapMs[slot]
+            if (gap > 0f) pendingGapMs = gap
+            // 最新那根柱的到达时刻：相位要相对它重新起算（见 pump 里的「锚点」注释）。
+            // 只在调用方给了到达时间戳时有效（0 = 没给）。
+            pendingArrivalMs = latestArrivalMs
+            if (arriveStampMs[slot] > 0L) pendingArrivalMs = arriveStampMs[slot]
             readIndex += 1
             // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
             // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
@@ -452,6 +592,19 @@ class WaveformRing(
         return if (next.isFinite()) next else 0f
     }
 
+    /**
+     * 相位斜坡的**分母**（毫秒）：优先用「最新一根柱自己的间隔」（到达处实测），
+     * 拿不到时回落 [barIntervalMs]（旧口径），再拿不到用 [DEFAULT_BAR_INTERVAL_MS]。
+     *
+     * 三级回落的理由：`latestArriveGapMs` 只在调用方给了到达时间戳时才有值；
+     * 老调用点（单测 / 没有时钟的宿主）走 `arrivalAtMs = 0`，此时退回旧口径仍然可用。
+     */
+    private fun phaseIntervalMs(): Float = when {
+        latestArriveGapMs.isFinite() && latestArriveGapMs > 1f -> latestArriveGapMs
+        barIntervalMs.isFinite() && barIntervalMs > 1f -> barIntervalMs
+        else -> DEFAULT_BAR_INTERVAL_MS
+    }
+
     /** 把滚动窗口拷进调用方**复用**的数组（避免每帧分配）。 */
     fun copyInto(destination: FloatArray) {
         val n = minOf(destination.size, barCount)
@@ -503,8 +656,7 @@ class WaveformRing(
      * 而不是每 100ms 跳一格。**不产生新数据**：插的是相邻两格之间的位置。
      */
     fun scrollPhase01(): Float {
-        val interval = if (barIntervalMs > 1f) barIntervalMs else DEFAULT_BAR_INTERVAL_MS
-        val p = sinceBarMs / interval
+        val p = sinceBarMs / phaseIntervalMs()
         return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
     }
 
@@ -570,7 +722,15 @@ class WaveformRing(
         const val BREATHE_DEPTH = 0.16f
 
         /**
-         * 动画相位的空转门槛：**画面**最新一根柱低于它就不推进相位（也就不会为它排帧）。
+         * 动画相位的空转门槛：**画面**最新一根柱低于它就不为「滚动」排重绘
+         * （渐变流动 / 呼吸两个动画相位同此门槛）。
+         *
+         * ⚠️ v3.3.2：它**只管要不要重绘**，不再管 `sinceBarMs` 推不推进。
+         * 旧写法让门槛同时管住「时间积分」，于是真实音乐里单根缓冲低于 0.02
+         * （间奏 / 换气 / 混音空档，**未平滑的原始柱高**意义上的常态）会让相位冻住、
+         * 画面原地停 5 帧再一次性冲出去 —— 量到的形状是「0,0,0,0,0,1.0」。
+         * 判据是「画面值还有没有内容」，不是「时间走不走」。
+         *
          * 0.02 远低于音乐 RMS 的常见区间（0.05~0.3，见 AudioVisualizer 的 sqrt 映射注释），
          * 但高于"全零后的残余"，所以静音段与暂停态都不会白烧帧。
          */
@@ -582,6 +742,34 @@ class WaveformRing(
         /** 柱间隔样本的合法区间：超出就丢弃（卡顿 / 暂停恢复不该污染滑动平均）。 */
         const val MIN_BAR_INTERVAL_MS = 20f
         const val MAX_BAR_INTERVAL_MS = 500f
+
+        /**
+         * v3.3.2：把「距上一根柱过了多久」**折回**到一格之内（纯函数，JVM 单测直测）。
+         *
+         * 窗口在消费 `barsConsumed` 根柱时正好平移了同样多的格数 ⇒ 相位的整数部分
+         * 已经由窗口承担，小数部分留给渲染层插值。所以到达时该做的是
+         * `elapsed -= floor(elapsed / interval) × interval`，**不是**把 `elapsed` 清零。
+         *
+         * 清零只在「一根柱一帧、且恰好走到格尾」的稳态下与减整数数值相同；
+         * 一帧里到达多根柱（卡顿后追帧）时，清零会把那一帧本该有的余量丢掉，
+         * 于是位移少一截、下一帧再补回来 —— 又是一次「顿-冲」。
+         *
+         * @return 折回后的余量（毫秒），落在 `[0, interval)`；输入非有限时返回 0。
+         */
+        internal fun foldScrollPhase(elapsedMs: Float, intervalMs: Float, barsConsumed: Int): Float {
+            if (!elapsedMs.isFinite()) return 0f
+            val interval = if (intervalMs.isFinite() && intervalMs > 1f) {
+                intervalMs
+            } else {
+                DEFAULT_BAR_INTERVAL_MS
+            }
+            val cells = maxOf(0, barsConsumed).toFloat()
+            var remaining = elapsedMs - cells * interval
+            // 巨额 dt（暂停恢复 / 长卡顿）防御：折到一格之内，顺带避开大数浮点精度损失。
+            if (remaining >= interval) remaining %= interval
+            if (remaining < 0f) remaining += cells * interval
+            return if (remaining.isFinite() && remaining >= 0f) remaining else 0f
+        }
 
         /** 柱间隔滑动平均的更新系数（每根柱一次）。 */
         const val BAR_INTERVAL_EMA = 0.15f

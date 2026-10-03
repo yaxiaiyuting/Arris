@@ -1929,6 +1929,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 sourceId = sourceId,
                                 mediaId = mediaId,
                             )
+                        } else {
+                            // v3.3.2 · P0：**这里以前完全静默**。走到这里意味着预载结果既没被
+                            // 接管、也没入队 —— 正常场景是「期间用户点了别的歌」（那次 playSong
+                            // 负责出声），但它同时也是「点了歌却没切」的嫌疑路径之一，
+                            // 所以留一条可检索的 debug：谁被丢弃、当前用户点的是哪首。
+                            Log.d(
+                                TAG_TRACK,
+                                "preload result DROPPED (stale, no takeover): slotSongId=$songId " +
+                                    "gen=$capturedVersion current=${playGate.current} " +
+                                    "latestPlay=$latestPlaySongId currentSong=${currentSongId.value}",
+                            )
                         }
                         return@withContext
                     }
@@ -2665,7 +2676,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
  *     一直播放原来的歌」时，日志里「取链被作废」与「点击根本没进播放链」长得一模一样
  *     （两者都没有 `Playing:` 行）。现在 [isCurrent] 的调用点会打出被作废的 songId 与代际；
  *  2. **判据不可单测** —— 它是内联在两个协程里的比较，谁都没法在不启动 Android 的情况下
- *     验证「后一次请求作废前一次」。抽成对象之后 `PlayRequestGateTest` 直接钉住语义。
+ *     验证「后一次请求作废前一次」。抽成对象之后 `QueueKeysPlayItemTest` 的代际闸门四例直接钉住语义。
  *
  * ## 语义（三条，缺一不可）
  *

@@ -85,6 +85,8 @@ class WaveformScrollJitterHarness(
         val displacement: Float,
         /** `pump` 的返回值（要不要重绘）。 */
         val wantsRedraw: Boolean,
+        /** 这一帧 `barIntervalMs()` 的读数（相位斜坡的时间基准）。 */
+        val intervalMs: Float,
     )
 
     private val records = ArrayList<Frame>()
@@ -117,18 +119,61 @@ class WaveformScrollJitterHarness(
         val dtMs = if (records.isEmpty()) FIRST_FRAME_DT_MS else dt
         val wantsRedraw = ring.pump(active = active, dtMs = dtMs)
         val shifted = ring.shiftedCellsForTest()
-        val phase = ring.scrollPhase01()
+        val phase = if (legacyPhase) legacyPhase(shifted, dtMs) else ring.scrollPhase01()
         val displacement = (shifted - prevShifted).toFloat() + (phase - prevPhase)
         prevShifted = shifted
         prevPhase = phase
-        val frame = Frame(tMs, dtMs, shifted, phase, displacement, wantsRedraw)
+        val frame = Frame(tMs, dtMs, shifted, phase, displacement, wantsRedraw, ring.barIntervalMs())
         records.add(frame)
         return frame
     }
 
-    /** 推一根柱（柱到达时刻与帧到达时刻**独立**）。 */
+    // ------------------------------------------------------------------
+    // 「改前」复刻：v3.2.4 的相位（每根柱到达时**清零**，且只在画面还有内容时推进）
+    //
+    // 为什么要在测试里复刻旧实现、而不是 checkout 老代码：判据必须只有一份。
+    // 复刻只用**环本身报出来的** `barIntervalMs()`，与生产同源；本模式与新模式
+    // 喂同一份帧/柱时间线、用同一个 `位移 = Δ平移格 + Δphase` 口径 ⇒ 改前改后可比。
+    // ------------------------------------------------------------------
+
+    /** true = 用 v3.2.4 的相位（复刻缺陷）；false = 用当前生产的 `scrollPhase01()`。 */
+    var legacyPhase: Boolean = false
+
+    private var legacySinceBarMs = 0f
+
+    private fun legacyPhase(shifted: Long, dtMs: Float): Float {
+        // v3.2.4 的**顺序本身就是缺陷**：先算柱间隔、再判信号门控、最后才（在门控通过时）清零。
+        // 门控用的是 `targets[barCount-1]`（**未平滑的原始柱高**）⇒ 真实音乐里
+        // 单根安静缓冲会让相位**冻在**旧值上，下一根有声的柱到达时才归零 + 摊开整格位移。
+        // 环自己维护柱间隔的滑动平均，这里读它的 `barIntervalMs()`，与生产同源。
+        val interval = if (ring.barIntervalMs() > 1f) {
+            ring.barIntervalMs()
+        } else {
+            WaveformRing.DEFAULT_BAR_INTERVAL_MS
+        }
+        val hasSignal = ring.targetAt(barCount - 1) > WaveformRing.ANIMATION_MIN_SIGNAL
+        if (hasSignal) {
+            legacySinceBarMs += dtMs
+            if (shifted != prevShifted) legacySinceBarMs = 0f
+        }
+        val p = legacySinceBarMs / interval
+        return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
+    }
+
+    /**
+     * 推一根柱（柱到达时刻与帧到达时刻**独立**）。
+     *
+     * `arrivalAtMs` 就是生产里 `SystemClock.uptimeMillis()` 的那个值 —— 环用它测**到达间隔**
+     * （相位斜坡的分母）。传 0 会让环退回旧口径，所以这里必须如实给。
+     */
     fun pushBar(tMs: Double, value: Float = 0.6f) {
-        ring.push(value = value, low = value * 0.8f, mid = value * 0.6f, high = value * 0.4f)
+        ring.push(
+            value = value,
+            low = value * 0.8f,
+            mid = value * 0.6f,
+            high = value * 0.4f,
+            arrivalAtMs = tMs.toLong(),
+        )
         barArrivalsMs.add(tMs)
         barsPushed++
     }
@@ -206,15 +251,15 @@ class WaveformScrollJitterHarness(
      */
     fun dump(fromIndex: Int, count: Int): String {
         val sb = StringBuilder()
-        sb.append("帧#        t(ms)     dt(ms)  平移格  phase    位移(格)  重绘\n")
+        sb.append("帧#        t(ms)     dt(ms)  平移格  phase    位移(格)  重绘  间隔估计\n")
         for (i in fromIndex until minOf(fromIndex + count, records.size)) {
             val f = records[i]
             val prev = records.getOrNull(i - 1)
             val marker = if (prev != null && f.shiftedCells != prev.shiftedCells) "  ← 柱到达" else ""
             sb.append(
-                "%4d  %10.3f  %7.3f  %5d  %7.4f  %8.4f  %s%s%n".format(
+                "%4d  %10.3f  %7.3f  %5d  %7.4f  %8.4f  %s  %7.2f%s%n".format(
                     i, f.tMs, f.dtMs, f.shiftedCells, f.phase, f.displacement,
-                    if (f.wantsRedraw) "Y" else "n", marker,
+                    if (f.wantsRedraw) "Y" else "n", f.intervalMs, marker,
                 ),
             )
         }

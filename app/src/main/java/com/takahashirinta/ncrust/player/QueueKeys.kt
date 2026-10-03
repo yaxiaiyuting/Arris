@@ -149,8 +149,10 @@ object QueueKeys {
         // 点的是当前正在播的那首：队列**一个字节都不动**（旧行为：不 saveQueue、不重排）。
         // 这正是「用户在队列面板点当前歌」的场景 —— 它必须能出声音，而不是被当成无操作。
         if (songKey == currentKey) {
-            val idx = queue.indexOfFirst { keyOf(it) == songKey }.takeIf { it >= 0 } ?: currentIndex
-            return PlayItemPlan(queue, idx, idx, queueChanged = false, fallbackUsed = false)
+            // 直接回到 currentIndex：`songKey == currentKey` 已经保证它就是被点的那首。
+            // （不去用 indexOfFirst —— 旧版本的队列快照可能含重复身份，那时它会命中**第一份**，
+            //  把游标从用户真正在听的那一份上悄悄搬走。）
+            return PlayItemPlan(queue, currentIndex, currentIndex, queueChanged = false, fallbackUsed = false)
         }
 
         val filtered = dedupe(keysOf(queue), songKey).toMutableList()

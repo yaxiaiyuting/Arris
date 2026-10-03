@@ -260,26 +260,57 @@ class WaveformRingBandWindowTest {
  * 每 100ms 整条跳一格，帧循环再快也看不出是"在流"。相位把这一格之内的时间摊开，
  * 渲染层据此在**相邻两格之间**插值 ⇒ 形状按帧率连续左移。
  *
- * 三条要钉住的：
- *  1. 相位在 0..1 之间、随帧推进、消费到新柱时归零；
+ * 四条要钉住的（v3.3.2 修订了第 1、3 条的措辞，**不是放宽要求**）：
+ *  1. 相位在 0..1 之间、随帧推进；新柱到达后相位**回绕到接近 0**（不是「清零」）——
+ *     到达帧上相位是「这一帧比那根柱晚了多少」，因此是一个小于一帧的小量；
  *  2. 柱间隔是**测出来的**（滑动平均），不是写死的常量（缓冲粒度是运行时行为）；
- *  3. **静音时不推进相位**（与动画相位共用同一条空转门槛）—— v1.8.1 的「不空转」契约不变。
+ *  3. **不播放时不推进相位**（`active = false`）—— v1.8.1 的「不空转」契约。
+ *     ⚠️ v3.3.2 修正：旧版把这条写成「**静音**时不推进相位」，而那个门槛用的是
+ *     **未平滑的原始柱高**，于是真实音乐里单根安静缓冲就会让相位冻住 5 帧再冲出 1 格 ——
+ *     那正是用户报的「抽搐」。静音时该停的是**重绘**（`pump` 返回 false），不是**时间**。
+ *  4. 相位**不会停在 1.0 上一动不动**（撞 `coerceIn(0,1)` 顶棚 = 画面顿住）。
  */
 class WaveformRingScrollTest {
 
     @Test
-    fun `相位随帧推进 —— 消费到新柱时归零`() {
+    fun `相位随帧推进 —— 消费到新柱后回绕到接近 0`() {
         val ring = WaveformRing(capacity = 64, barCount = 8)
-        ring.push(0.5f, 0.5f, 0.5f, 0.5f)
-        ring.pump(active = true, dtMs = 16f)
-        val first = ring.scrollPhase01()
-        assertTrue("刚消费完应该接近 0（实际 $first）", first < 0.05f)
-        repeat(4) { ring.pump(active = true, dtMs = 16f) }
+        // 生产路径的调用次序：帧时钟与音频线程的到达时刻**同源**（都是 uptime 量级）。
+        // 测试用同一个单调时钟复刻它 —— `arrivalAtMs = 0` 是「宿主没给时钟」的降级路径，
+        // 那条路径的行为由下面 `没有到达时间戳时相位仍然有界` 单独钉住。
+        var clock = 0f
+        fun frame(): Float {
+            ring.pump(active = true, dtMs = 16f)
+            clock += 16f
+            return ring.scrollPhase01()
+        }
+
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = clock.toLong())
+        val first = frame()
+        assertTrue("刚消费完相位应该很小（实际 $first）", first < 0.25f)
+        repeat(4) { frame() }
         val later = ring.scrollPhase01()
         assertTrue("相位应该随帧推进（$first -> $later）", later > first)
-        ring.push(0.5f, 0.5f, 0.5f, 0.5f)
-        ring.pump(active = true, dtMs = 16f)
-        assertTrue("新柱到达后相位归零（实际 ${ring.scrollPhase01()}）", ring.scrollPhase01() < 0.05f)
+        // 新柱到达（比这一帧早一点点，模拟缓冲回调与 vsync 的相位差）：相位回绕。
+        // **判据是「变小」而不是「为 0」** —— 到达帧上相位 = 这一帧比那根柱晚了多少
+        // ÷ 柱间隔，本来就该是个小正数（真机上最多一帧的量）。要求它严格为 0
+        // 会把这个量丢掉，那一帧的位移就少一截、下一帧再补回来 —— 又是一次「顿-冲」。
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = (clock - 4f).toLong())
+        val wrapped = frame()
+        assertTrue("新柱到达后相位必须回绕变小（$later -> $wrapped）", wrapped < later)
+        assertTrue("回绕后相位应该接近 0（实际 $wrapped）", wrapped < 0.25f)
+    }
+
+    @Test
+    fun `没有到达时间戳时相位仍然有界 —— 老调用点的降级路径`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        repeat(50) { i ->
+            ring.push(0.5f) // 不给 arrivalAtMs
+            repeat(6) { ring.pump(active = true, dtMs = 16f) }
+            val p = ring.scrollPhase01()
+            assertTrue("第 $i 轮相位越界: $p", p in 0f..1f)
+        }
+        assertTrue("没时钟时分母应回落初值（实际 ${ring.barIntervalMs()}）", ring.barIntervalMs() > 0f)
     }
 
     @Test
@@ -309,13 +340,13 @@ class WaveformRingScrollTest {
     }
 
     @Test
-    fun `静音时不推进相位 —— 不空转`() {
+    fun `不播放时不推进相位 —— 不空转`() {
         val ring = WaveformRing(capacity = 64, barCount = 8)
-        // 从未 push ⇒ targets 全零 ⇒ 不排帧、相位不前进。
-        assertFalse(ring.pump(active = true, dtMs = 16f))
+        // 从未 push ⇒ targets 全零 ⇒ 不排帧。
+        assertFalse(ring.pump(active = false, dtMs = 16f))
         val p = ring.scrollPhase01()
-        repeat(10) { ring.pump(active = true, dtMs = 16f) }
-        assertEquals("静音时相位不该前进", p, ring.scrollPhase01(), 0f)
+        repeat(10) { ring.pump(active = false, dtMs = 16f) }
+        assertEquals("暂停时相位不该前进", p, ring.scrollPhase01(), 0f)
     }
 
     @Test

@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.InetAddress
-import java.util.concurrent.TimeUnit
 
 /**
  * 连接预热（v3.1.0 · P1-B）。**收益有上界，成本也极低，所以做；但它不是主要优化。**
@@ -62,39 +61,80 @@ object ConnectionWarmup {
     private const val TIMEOUT_SECONDS = 5L
 
     /**
-     * 要预热的 host。**顺序即优先级**（前两个是取链与读接口的实际落点）。
+     * 要预热的 host。**顺序即优先级**（第一个是取链的实际落点）。
+     *
+     * ## v3.3.2：从「手抄常量」改成**由业务端点推导**（本版修的性能缺陷）
      *
      * `interface3.music.163.com` 是 `SongUrlFetcher` 的取链 host
      * （`RetrofitClient.INTERFACE_URL`），而冷启动时**没有任何别的请求会碰它** ——
      * 它是这条优化里唯一真正「从零到一」的那一格。
+     *
+     * 旧实现是一张手抄的表，与业务端点**没有任何机制保证一致**：改了端点常量、
+     * 或加了一个新 host，预热会静默地继续预热老的（甚至预热一个没人调的 host），
+     * 而这类错**不会报错**，只会让优化等于零。现在输入直接取 `RetrofitClient`
+     * 的端点常量，经 [WarmupTargetPlanner] 去重/有界，并由
+     * `WarmupTargetPlannerTest` 钉住边界。
+     *
+     * 顺序：**取链域最先**（播放路径上最靠前、也最可能是冷启动后第一条），
+     * 其次 eapi 默认域，最后 REST 域（首页/歌词已经在用它，冷启动时通常已经热了）。
      */
-    private val HOSTS = listOf(
-        "https://interface3.music.163.com/",
-        "https://music.163.com/",
-    )
+    private val HOSTS: List<String> by lazy {
+        WarmupTargetPlanner.plan(
+            candidates = listOf(
+                RetrofitClient.INTERFACE_URL,   // 取链：interface3.music.163.com
+                RetrofitClient.API_URL,         // eapi 默认域：interface.music.163.com
+                RetrofitClient.BASE_URL,        // REST（歌词/详情）：music.163.com
+            ),
+            // B 站音源默认关闭，未启用的音源不该产生任何流量（铁律 24 / 27）。
+            // 目前 B 站走的是它自己的客户端与 host，不在上面三项里；这条 skip 是**显式**的护栏：
+            // 将来若把 B 站 host 加进 candidates，必须同时决定它在什么条件下才允许预热。
+            skip = setOf("api.bilibili.com", "api.bilibili.com/"),
+        )
+    }
 
+    /**
+     * 预热用的客户端。
+     *
+     * ## v3.3.2：**必须与业务客户端同源**（本版修的性能缺陷，两处都错了）
+     *
+     * 旧实现在这里 `OkHttpClient.Builder().build()` 出了一个**第三方客户端**。
+     * 要让预热真的有用，需要同时满足两个条件，缺一不可：
+     *
+     * 1. **共用连接池** —— OkHttp 的 `ConnectionPool` 是 client 的私有字段，
+     *    不共享时预热建好的连接进了另一个池子，业务请求根本查不到；
+     * 2. **共用 `sslSocketFactory` / `certificatePinner` 的实例** —— 光共享池子**不够**。
+     *    `RealConnection.isEligible` 先比 `Address`，而 `Address.equalsNonHost` 包含这两项；
+     *    `OkHttpClient.Builder.build()` 在未显式指定时会为**每个 client 各造一份**，
+     *    于是「共池的两个独立 client」Address 永不相等，池子里有同一 host 的空闲连接也匹配不上。
+     *    实测（OkHttp 4.12.0，真实打 `https://interface3.music.163.com/`）：
+     *    各自 build + 共池 ⇒ 业务通仍然 `connect=true, 131ms`（又建一次）；
+     *    从同一基座 `newBuilder()` 派生 ⇒ 业务通 `connect=false, 0ms`。
+     *
+     * 所以这里走 [RetrofitClient.warmupDerivedClient]：它与 `plainClient` / `restClient`
+     * 同出一个基座，Address 兼容；同时保留自己的 [TIMEOUT_SECONDS] 短超时，
+     * 也**不挂** `HttpTimingListener`（预热打的是 `GET /`，不是业务请求，
+     * 让它进 `NcrustHttpTiming` 只会给「TTFB 花在哪」这本账添噪声）。
+     */
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .build()
+        RetrofitClient.warmupDerivedClient(TIMEOUT_SECONDS)
     }
 
     /**
      * 预热全部 host。**调用方负责放进一个不等它的协程里。**
      *
-     * 并发上限走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]：两个 host 用不上 4，
+     * 并发上限走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]：三个 host 用不上 4，
      * 但走同一个原语是为了让「并发上限只有一处定义」（本仓库的既有纪律）。
      */
     suspend fun warmUp() {
         // lambda 必须显式标注成 suspend：`runAll` 收的是 `suspend () -> T?`，
         // 而这里要调 `warmOne`（suspend）。让类型推断去猜会得到一个非挂起的 lambda。
-        val tasks: List<Pair<String, suspend () -> Boolean?>> = HOSTS.map { url ->
+        val tasks: List<Pair<String, suspend () -> Boolean?>> = HOSTS.map { host ->
+            val url = "https://$host/"
             val block: suspend () -> Boolean? = {
                 warmOne(url)
                 true
             }
-            "preconnect:$url" to block
+            "preconnect:$host" to block
         }
         runCatching { BoundedParallel.runAll(tasks) }
             .onFailure { Log.d(TAG, "warmup skipped: ${it.javaClass.simpleName}") }

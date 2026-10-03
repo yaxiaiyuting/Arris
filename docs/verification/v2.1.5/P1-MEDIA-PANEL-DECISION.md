@@ -104,7 +104,7 @@ V MediaControlUtils:          this app is not in media white list, pkgName: com.
   但 `uiautomator dump` 就能把卡片上的文字**读出来**，而且同设备换个应用就能做 A/B。
   工具一直在手里，缺的是「先验证观测手段本身是否够用」。
 - **用户的直觉两次都比我的推断准**：第一次是「没被当成音乐软件」（命中
-  `media white list` 与缺 `MEDIA_BUTTON` 声明），第二次是「qq音乐和 ncm 都是正常的」
+  `media white list` 与缺 `MEDIA_BUTTON` 声明），第二次是「qm 和 ncm 都是正常的」
   （直接证伪了我的「ROM 不认第三方」假设）。
 
 **固化成规则**：只要结论是「ROM/平台不支持」，必须先给出**同一设备上另一个应用正常**的
