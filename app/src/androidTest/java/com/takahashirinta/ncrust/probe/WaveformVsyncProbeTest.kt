@@ -1,5 +1,5 @@
 /*
- * Ncrust —— 网易云音乐第三方客户端
+ * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
@@ -115,7 +115,7 @@ class WaveformVsyncProbeTest {
         val backs = steps.count { it < -0.01 }
         println(
             "PROBE[$tag] 帧数=${body.size} dt: 均=%.3fms sd=%.3f min=%.3f max=%.3f | " +
-                "位移: 均=%.4f sd=%.4f 名义=%.4f 抖动率=%.2f%% 顿=%d 倒退=%d | 柱间隔估计=%.1fms".format(
+                "位移: 均=%.4f sd=%.4f 名义=%.4f 抖动率=%.2f%% 顿=%s 倒退=%s | 柱间隔估计=%.1fms".format(
                     mean, sd, dts.min(), dts.max(),
                     sMean, sSd, nominal, sSd / nominal * 100, stalls, backs,
                     recs.last().intervalMs,
@@ -124,7 +124,7 @@ class WaveformVsyncProbeTest {
         // 前 14 帧原始序列（先数据后结论）。
         println("PROBE[$tag] 帧# dt(ms) Δ平移 Δ相位 位移")
         body.take(14).forEachIndexed { i, r ->
-            println("PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f".format(i, r.dtMs, r.shifted, r.phase, r.shifted + r.phase))
+            println("PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f".format(i, r.dtMs, r.shifted.toInt(), r.phase, r.shifted + r.phase))
         }
     }
 
