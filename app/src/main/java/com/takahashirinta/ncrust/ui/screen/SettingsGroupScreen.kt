@@ -12,6 +12,7 @@ package com.takahashirinta.ncrust.ui.screen
 
 import com.takahashirinta.ncrust.bili.BiliPrefs
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +37,7 @@ import com.takahashirinta.ncrust.KeepScreenOnSetting
 import com.takahashirinta.ncrust.RotationSetting
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
+import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.power.BackgroundActivity
@@ -136,6 +138,18 @@ fun SettingsGroupScreen(
     /** v3.2.0 · P1：B 站扫码登录浮层（透传给 [SettingsAccountSection]）。 */
     onShowBiliLogin: () -> Unit,
     onOpenAbout: () -> Unit,
+    /**
+     * v3.3.0 · 用户建议：**离线列表的行可直接点播**。
+     *
+     * 为什么由外面传进来而不是在这里直接调播放：队列、`currentQueueIndex`、
+     * `PlaybackStateManager` 的写入都归 `MainScreen` 所有（见 AGENTS.md「队列管理」），
+     * 在这一层自己起播会造出第二条队列修改路径 —— 那正是「当前曲与队列不同步」
+     * 那类缺陷的温床。
+     *
+     * 默认值 `{}` 让既有调用点零改动即可编译（本页在 UI 上是可复用的，
+     * 「不给播放能力」应当是一个合法配置，而不是编译错误）。
+     */
+    onPlaySong: (SongItem) -> Unit = {},
 ) {
     // 账号组自带一整套覆盖层（账号弹窗 / 二维码登录 / 手机扫码授权），单独一页更清楚。
     if (group == SettingsGroup.ACCOUNT) {
@@ -166,6 +180,8 @@ fun SettingsGroupScreen(
         pageTransitionEnabled = pageTransitionEnabled,
         onPageTransitionChange = onPageTransitionChange,
         onOpenAbout = onOpenAbout,
+        // v3.3.0：离线缓存列表的「点行即播」需要把意图交回 MainScreen（它拥有队列）。
+        onPlaySong = onPlaySong,
     )
 }
 
@@ -191,6 +207,8 @@ private fun SettingsPreferenceGroupPage(
     pageTransitionEnabled: Boolean,
     onPageTransitionChange: (Boolean) -> Unit,
     onOpenAbout: () -> Unit,
+    /** v3.3.0：离线缓存列表「点行即播」的出口（见 [SettingsGroupScreen] 的同名参数）。 */
+    onPlaySong: (SongItem) -> Unit,
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
@@ -257,6 +275,14 @@ private fun SettingsPreferenceGroupPage(
 
     // ── 存储与缓存 ────────────────────────────────────────────────────────────────
     var offlineCacheMb by remember { mutableIntStateOf(OfflineAudioCache.maxMb(context)) }
+
+    /**
+     * v3.3.0：让「后台运行」那一行能在从系统设置返回后**重读白名单状态**。
+     *
+     * 没有它的话，用户点了「允许」回到应用，行上还写着「未允许」——
+     * 那与本条反馈要修的「反馈缺失」是同一个病，只是换了个方向。
+     */
+    var backgroundBatteryRefresh by remember { mutableIntStateOf(0) }
     // v2.0.0 · T3：缓存占用三项分账（音频 / 图片 / 其他 cacheDir）。旧口径把图片缓存算了两遍
     // （Coil 的磁盘缓存目录就是 cacheDir/image_cache，而 folderSize(cacheDir) 已递归含它）。
     var cacheUsage by remember { mutableStateOf(CacheUsage.ZERO) }
@@ -702,16 +728,63 @@ private fun SettingsPreferenceGroupPage(
                     }
 
                     SettingsRowKind.ACTION_JUMP -> item(key = entry.id) {
-                        // 后台运行：跳转系统"允许后台活动 / 忽略电池优化"设置（与首次启动弹窗同一入口）。
+                        // ── v3.3.0 · 用户反馈第 5 条「后台播放明明有一个可以打开的图标但是点不动」──
+                        //
+                        // 真根因**不是**回调失效。实测（emulator API 33 / v3.2.4-gpl，正在放歌）：
+                        //   未白名单时点这一行 → `START …IGNORE_BATTERY…` + `Displayed …RequestIgnoreBatteryOptimizations`
+                        //   点「允许」后 `dumpsys deviceidle whitelist` → `user,com.takahashirinta.ncrust,10183`
+                        //   **已经在白名单内**时点同一行 → 同样 `START` 但 **无 Displayed**、
+                        //   `ResumedActivity` 仍是 MainActivity、截图零变化
+                        //
+                        // 也就是「功能是好的，反馈是缺的」：应用一旦进过白名单（首启弹窗引导过
+                        // 就是常态），系统页启动即 finish，屏幕**零变化**；而这一行既没有开关
+                        // 也不显示状态，失败还被 `runCatching` 静默吞掉 —— 用户只能判定「点不动」。
+                        //
+                        // 修法三步：① 读 `isUnrestricted()` 做两态回显；② 已在白名单时改跳
+                        // 电池优化**列表页**（必有界面，不再是一次空跳）；③ 两条路都失败时给可见提示。
+                        val allowed = remember(backgroundBatteryRefresh) {
+                            BackgroundActivity.isUnrestricted(context)
+                        }
                         SettingActionRow(
                             label = rowTitle(strings, entry),
+                            trailing = if (allowed) strings.batteryStatusAllowed else strings.batteryStatusDenied,
                             onClick = {
-                                runCatching {
-                                    context.startActivity(BackgroundActivity.requestIntent(context))
-                                }.onFailure {
+                                // 跳转与刷新都放进一个返回 Boolean 的块：`true` = 系统界面确实起来了。
+                                val launched = runCatching {
+                                    context.startActivity(
+                                        if (allowed) BackgroundActivity.settingsListIntent()
+                                        else BackgroundActivity.requestIntent(context)
+                                    )
+                                    true
+                                }.getOrElse {
+                                    // 直达弹窗被 ROM 拒绝 ⇒ 退到应用详情页（与首启弹窗同一降级链）。
                                     runCatching {
                                         context.startActivity(BackgroundActivity.appDetailsIntent(context))
+                                        true
+                                    }.getOrElse { false }
+                                }
+                                if (launched) {
+                                    // 已在白名单时不会有任何视觉变化，所以必须明确说一句 ——
+                                    // 这正是本条反馈的症结。
+                                    if (allowed) {
+                                        Toast.makeText(
+                                            context,
+                                            strings.batteryAlreadyAllowed,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
                                     }
+                                    // 回来时重读白名单状态（用户可能刚点了「允许」）。
+                                    backgroundBatteryRefresh++
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        strings.batteryJumpFailed,
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                    Log.w(
+                                        "SettingsGroup",
+                                        "battery row: 直达弹窗与降级路径都失败 entry=${entry.id}",
+                                    )
                                 }
                             }
                         )
@@ -803,6 +876,11 @@ private fun SettingsPreferenceGroupPage(
             OfflineCacheManagerDialog(
                 onDismiss = { showOfflineCacheManager = false },
                 currentSongId = playingSongId ?: -1L,
+                // v3.3.0 · 用户建议：离线列表的行可直接点播。
+                // 播放归 MainScreen 所有（队列 / currentQueueIndex / 持久化），
+                // 所以这里只把「用户点了哪一首」交出去 —— 与从任意列表点歌**同一条链路**
+                // （离线兜底 `recallOfflineCache` 会按 id 找回缓存里的 URL，不需要新路径）。
+                onPlayTrack = { song -> song?.let { onPlaySong(it) } },
             )
         }
     }

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片（App Widget）的 provider info。
+
+  ## 单 provider + 运行时分尺寸
+  这里**只声明一份**、默认落在 4×2（大档）。用户把卡片拖成 4×1 / 2×1 时，系统不会换
+  provider —— 它只是把新的可用尺寸通过 OPTION_APPWIDGET_MIN_WIDTH/HEIGHT 告诉我们，
+  由 WidgetSizeResolver 现场选布局。所以 minWidth/minHeight 与 minResizeWidth/Height
+  必须覆盖**最小那一档**（2×1 = 110×40dp，即系统的 70n-30 换算），否则用户拖不到小档。
+
+  ## 两套尺寸属性都要填
+  · targetCellWidth/targetCellHeight（API 31+）：新系统的「默认占几格 + 预览里画几个格子」；
+  · minWidth/minHeight（API 24~30）：老系统只认这两个，缺了会按 0 处理 ⇒ 卡片被压成一条。
+  tools:targetApi="31" 只影响 lint（让新属性不被判成 NewApi 错误），不影响运行时。
+
+  ## updatePeriodMillis = 0
+  **不要**周期唤醒：卡片内容由 PlaybackService 按需推送（见 WidgetPushGate），
+  设成 30 分钟一次既没意义（听歌时内容每秒都在变），又会让设备定期被唤醒。
+
+  ## resizeMode
+  horizontal|vertical：两个方向都可拖。Kanesumi 排版在 3 档之间是单调的，
+  任意拖法都能落到一个能看的档位上。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:initialLayout="@layout/widget_player_empty"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/widget_player_large"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    tools:targetApi="31" />

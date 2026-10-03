@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：播放键图标（深色，画在主色方块上）。
+
+  ## 为什么不用 android.R.drawable.ic_media_play
+
+  框架那套 ic_media_* 是**深灰**的，为浅色背景设计：放在这张 #0B0B0B 的卡片上几乎看不见。
+  自绘矢量还顺带满足了 Kanesumi 的「直角、无圆角」——三角的三个角是尖的。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#0B0B0B"
+        android:pathData="M6,4 L20,12 L6,20 Z" />
+</vector>

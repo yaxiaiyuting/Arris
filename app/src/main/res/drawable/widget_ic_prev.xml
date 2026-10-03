@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：上一首（浅色，画在透明底上 —— 只有中间的播放键有主色方块，
+  这样卡片上「哪个是主操作」一眼可辨）。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#F2F2F2"
+        android:pathData="M5,4 L8.5,4 L8.5,20 L5,20 Z M20,4 L20,20 L10,12 Z" />
+</vector>

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片 · 中档（4×1）：封面 + 标题/歌手 + 三键。
+
+  ## id 契约
+  = 小档的全部 id，另加 widget_artist / widget_prev / widget_next。
+  **仍然没有** widget_progress / widget_elapsed / widget_duration —— 4×1 的高度
+  （系统给 40dp）放不下一条进度条加一行计时；硬塞的结果是把标题挤没。
+  进度与计时属于大档（4×2），见 widget_player_large.xml。
+-->
+<!--
+  `android:tint` 而不是 `app:tint`：**这是有意的，lint 的 UseAppTint 在这里是误判**。
+  widget 的 RemoteViews 由 **Launcher 进程** 的 LayoutInflater 实例化，
+  那里没有 AppCompat 的自定义 view inflater ⇒ `app:tint`（由 AppCompatImageView
+  在 inflation 时应用）会被**静默忽略**，图标就不着色。
+  而 `android:tint` 是框架 View 自带的（API 21+），在 RemoteViews 里按预期生效。
+  所以这里必须抑制该检查；改成 app:tint 会引入一个「图标不变色」的真实缺陷。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_bg"
+    android:orientation="vertical"
+    tools:ignore="ContentDescription">
+
+    <TextView
+        android:id="@+id/widget_accent"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:background="@drawable/widget_accent_fill" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="6dp">
+
+        <FrameLayout
+            android:id="@+id/widget_cover_box"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/widget_accent_fill">
+
+            <ImageView
+                android:id="@+id/widget_cover_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_ic_note"
+                android:tint="#0B0B0B"
+            tools:ignore="UseAppTint" />
+
+            <ImageView
+                android:id="@+id/widget_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#F2F2F2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#99FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/widget_prev"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_prev"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/widget_play"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/widget_accent_fill"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_play"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/widget_next"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="2dp"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_next"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：卡片底。
+
+  Kanesumi 风格的三条硬要求在这里就定死了：
+    · **直角** —— 没有 <corners>，一个圆角都没有；
+    · 深底（#0B0B0B，与 OLED 黑主题同族）—— 桌面上绝大多数壁纸下信息都读得清；
+    · 一条 1dp 的描边把卡片从壁纸上「切」出来（没有它，深色壁纸上的卡片会糊成一片）。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#0B0B0B" />
+    <stroke
+        android:width="1dp"
+        android:color="#33FFFFFF" />
+</shape>

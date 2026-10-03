@@ -213,6 +213,14 @@ data class Strings(
     val searchCategoryTracks: String,
     val searchCategoryAlbums: String,
     val searchCategoryArtists: String,
+    /**
+     * 按歌词搜索（v3.3.0）—— 搜索页的第 4 个 tab。
+     *
+     * 与其它 `searchCategory*` 一样是**必需**属性（无默认值）：加它会让 8 个语言文件
+     * 在编译期全部报错，从而不可能漏翻译。构造器预算不受影响 ——
+     * `StringsConstructorBudgetTest` 断言的是参数个数上限，当前余量充足。
+     */
+    val searchCategoryLyrics: String,
     val searchPlaceholder: String,
     val searchSongsEmpty: String,
     val searchAlbumsEmpty: String,
@@ -386,6 +394,41 @@ data class Strings(
 
     /** v3.2.0 · P0：取链失败的分类文案（见 [PlaybackFailureStrings]）。 */
     val playbackFailure: PlaybackFailureStrings,
+
+    /**
+     * v3.3.0 · 用户需求第 9 条：歌词复制 / 分享 / 生成图片的文案（见 [ShareStrings]）。
+     *
+     * 与 [PlaybackFailureStrings] 同一范式：**外层只为这个组加 1 个参数**
+     * （138 → 139，预算 150），20 条文案全部落在组里。往主构造器直接加这 20 条
+     * 会把它推到 158 —— 那就越过预警线了（见本类 KDoc 的 dex 槽算式）。
+     */
+    val share: ShareStrings,
+
+    /**
+     * v3.3.0 · 用户需求第 4 / 8 条：**桌面播放卡片（App Widget）**的文案（见 [WidgetStrings]）。
+     *
+     * 与 [PlaybackFailureStrings] / [ShareStrings] 同一范式：外层只为这个组加 1 个参数
+     * （139 → 140，预算 150），8 条文案全部落在组里。
+     *
+     * 这一组的 8 条里有 5 条是**无障碍内容描述**（播放/暂停/上一首/下一首/打开应用）——
+     * 桌面卡片上的按钮是纯图标，TalkBack 靠 `RemoteViews.setContentDescription` 念出它们，
+     * 而在 XML 里写死中文会让另外 7 种语言的用户听到中文（本应用是运行时 i18n，
+     * 卡片文案必须与 `LocalStrings` 同源，见 `NcrustWidgetProvider.widgetStrings`）。
+     */
+    val widget: WidgetStrings,
+
+    /**
+     * v3.3.0 · 用户需求第 10 条：**播放统计页**的文案（见 [StatsStrings]）。
+     *
+     * 与 [PlaybackFailureStrings] / [ShareStrings] / [WidgetStrings] 同一范式：
+     * 外层只为这一组加 **1** 个参数（140 → 141，预算 150），
+     * 37 条文案全部落在组里。
+     *
+     * ⚠️ **余量只剩 9 个**（`StringsConstructorBudgetTest` 的预警线附近）。
+     * 下一个要加文案的人必须先把既有文案搬进语义相符的组、
+     * 并在类体里留转发属性，不要再往主构造器直接加参数。
+     */
+    val stats: StatsStrings,
 ) {
     // ---------- 转发属性（v2.0.0 · HF1）----------
     // 离线 / 缓存那一组（19 条）的构造参数已经挪进 [OfflineStrings]，这里用**成员**转发属性把
@@ -414,6 +457,7 @@ data class Strings(
     val offlineCacheDeleteTrack: String get() = offline.offlineCacheDeleteTrack
     val offlineCacheDeleteTitle: String get() = offline.offlineCacheDeleteTitle
     val offlineCacheDeleted: String get() = offline.offlineCacheDeleted
+    val categoryOffline: String get() = offline.categoryOffline
 
     // v2.3.0：这两条随字段一起搬进 [offline] 组，调用点（MainScreen / HomeScreen 的离线空态）
     // 读的仍是 `strings.networkOfflineTitle`，一个字都不用改。
@@ -595,6 +639,10 @@ data class Strings(
     val storageSectionTitle: String get() = settings.storageSectionTitle
     val clearCache: String get() = settings.clearCache
     val clearCacheConfirm: String get() = settings.clearCacheConfirm
+    // v3.3.0：清除缓存的两种后果要写清 —— 旧确认框只写「确定清除全部缓存？」，
+    // 而它会永久删掉离线音频（用户点一下几百 MB 就没了，事后无从得知）。
+    val clearCacheAudioNote: String get() = settings.clearCacheAudioNote
+    val clearCacheEverything: String get() = settings.clearCacheEverything
     val bgSectionTitle: String get() = settings.bgSectionTitle
     val bgPick: String get() = settings.bgPick
     val bgChange: String get() = settings.bgChange
@@ -613,6 +661,12 @@ data class Strings(
     val batteryMessage: String get() = settings.batteryMessage
     val batteryAllow: String get() = settings.batteryAllow
     val batteryLater: String get() = settings.batteryLater
+    // v3.3.0：后台运行行的两态回显（用户反馈第 5 条）。走 settings 分组，
+    // 不进外层主构造器（预算纪律）。
+    val batteryStatusAllowed: String get() = settings.batteryStatusAllowed
+    val batteryStatusDenied: String get() = settings.batteryStatusDenied
+    val batteryAlreadyAllowed: String get() = settings.batteryAlreadyAllowed
+    val batteryJumpFailed: String get() = settings.batteryJumpFailed
 
     // ---------- 转发属性（v2.8.0）：二级菜单分组文案 → [SettingsStrings] ----------
     // 这 14 条是**新文案**（没有老调用点要保住），补转发属性是为了让
@@ -784,6 +838,15 @@ data class OfflineStrings(
     val offlineCacheDeleteTrack: String,
     val offlineCacheDeleteTitle: String,
     val offlineCacheDeleted: String,
+    /**
+     * v3.3.0 · 用户建议：库页的「离线」tab 名。
+     *
+     * 之前离线歌只能在「设置 → 存储与缓存 → 离线缓存管理」里看到，而那里是
+     * **管理**入口（看占用、删曲目）。用户的原话是「在库里单独做一个界面，
+     * 可以直接点击播放」—— 这条把它提到库页，与单曲/歌单/专辑并列。
+     * 按纪律进 [OfflineStrings] 组，不进外层主构造器。
+     */
+    val categoryOffline: String,
     /**
      * v1.5.1 · C：无网络时的首页降级空态标题。
      *
@@ -1270,6 +1333,110 @@ data class PlaybackFailureStrings(
     val switchSource: (String) -> String,
 )
 
+/**
+ * v3.3.0 · 用户需求第 4 / 8 条：**桌面播放卡片（App Widget）**的文案组（8 条）。
+ *
+ * ## 为什么自成一组
+ *
+ * 与 [PlaybackFailureStrings] 同一形状：这 8 条的消费点只有
+ * `ui/widget/NcrustWidgetProvider.kt` 一个文件，而且它们的**可见性完全不同** ——
+ * 卡片由桌面进程 inflate，应用侧能决定的只有「文本内容」与「无障碍描述」，
+ * 加一条文案往往同时要动布局，所以它天然是一个独立的功能面。
+ *
+ * ## 这个组里 5 条是无障碍描述，不是「看着好看」
+ *
+ * 桌面卡片上的三个按钮是**纯图标**（自绘矢量，没有文字标签），
+ * TalkBack 唯一能念出来的就是 `RemoteViews.setContentDescription` 写进去的东西。
+ * 少一条 = 视障用户面对一个念不出名字的按钮（v1.5.0 · C2 的同一类问题）。
+ *
+ * ## 一条硬纪律：卡片文案必须与应用内语言同源
+ *
+ * 本应用是**运行时 i18n**（`ncrust_settings` 的 `language_code`，切语言不重建 Activity）。
+ * 桌面卡片的文案因此**不能**走 Android 资源字符串（`res/values-xx/`）——
+ * 用户切成日语后卡片还是中文，而这个 bug 只在「换语言 → 回桌面看卡片」时出现。
+ * 所以这一组和别的组一样由 `Strings` 携带，卡片侧读 `stringsForCode(getSavedLanguageCode(ctx)).widget`。
+ */
+data class WidgetStrings(
+    /** 空态那一行：桌面卡片上没有可播放内容。 */
+    val widgetEmpty: String,
+    /** 落盘状态里歌名是空串时的占位（网易云有纯音乐曲目）。 */
+    val widgetUnknownTitle: String,
+    /** 歌手为空时的占位。 */
+    val widgetUnknownArtist: String,
+    /** 播放键的无障碍描述（当前是暂停态）。 */
+    val widgetPlay: String,
+    /** 播放键的无障碍描述（当前是播放态）。 */
+    val widgetPause: String,
+    /** 上一首的无障碍描述。 */
+    val widgetPrevious: String,
+    /** 下一首的无障碍描述。 */
+    val widgetNext: String,
+    /** 整卡点击（打开应用）的无障碍描述。 */
+    val widgetOpenApp: String,
+)
+
+/**
+ * v3.3.0 · 用户需求第 9 条：**歌词复制 / 分享 / 生成图片**的文案组（20 条）。
+ *
+ * ## 为什么自成一组
+ *
+ * 与 [PlaybackFailureStrings] 同一形状：这 20 条属于**同一个功能面**，
+ * 消费点只有 `ui/components/LyricShareSheet.kt` 与 `ui/player/LyricsView.kt` 两个文件。
+ * 塞进 `PlayerUiStrings`（播放器界面的控件文案）会让下一个人从「组里有什么」
+ * 看不出这条功能线；而直接加在外层会把主构造器推到 158，越过 150 的预警线。
+ *
+ * ## 三条机械约束
+ *
+ * 1. **八种语言全部要填**（具名实参 + 默认值会让漏填静默通过，
+ *    所以 `StringsConstructorBudgetTest` 的家族列表里也应把它加进去）；
+ * 2. **`creditLine` 是印在分享图与复制文本上的署名**，
+ *    它是这段内容唯一的出处标记 —— 翻译时不要把 "Ncrust" 这个名字改掉；
+ * 3. **`copied` / `savedToGallery` 只在真的成功之后才说**（对应 v2.6.0 的
+ *    「提示与事实脱钩」修复）；失败一律走 `imageFailed` / `saveFailed`。
+ */
+data class ShareStrings(
+    /** 入口（歌词面板右上角图标）的无障碍描述，同时是弹层标题：「分享歌词」。 */
+    val action: String,
+    /** 范围：当前唱段（前后各若干行）。 */
+    val scopeSection: String,
+    /** 范围：整首歌词。 */
+    val scopeWhole: String,
+    /** 选项：把译文一起复制 / 出图。 */
+    val optionTranslation: String,
+    /** 选项：把音译一起复制 / 出图。 */
+    val optionRomanization: String,
+    /** 选项：每行前面加 `[mm:ss.xx]` 时间戳。 */
+    val optionTimestamps: String,
+    /** 动作：复制歌词到剪贴板。 */
+    val copyLyrics: String,
+    /** 动作：分享纯文本。 */
+    val shareText: String,
+    /** 动作：生成图片并调起分享。 */
+    val shareImage: String,
+    /** 动作：保存图片到相册（**仅 API 29+ 显示**，理由见 LyricShareActions.canSaveToGallery）。 */
+    val saveImage: String,
+    /** 出图进行中（按钮置灰时显示）。 */
+    val generating: String,
+    /** 复制成功。 */
+    val copied: String,
+    /** 这段歌词是空的（没歌词 / 纯音乐）。 */
+    val nothingToShare: String,
+    /** 出图失败后自动退回文本分享时的一句话（说明降级，不是纯报错）。 */
+    val imageFailed: String,
+    /** 出图彻底失败（没有文本可退回时）。 */
+    val imageFailedOnly: String,
+    /** 保存到相册成功。 */
+    val savedToGallery: String,
+    /** 保存到相册失败。 */
+    val saveFailed: String,
+    /** 系统分享弹窗的标题。 */
+    val chooserTitle: String,
+    /** 文本 / 图片末尾的署名行：「来自 Ncrust」（"Ncrust" 这个名字不翻译）。 */
+    val creditLine: String,
+    /** 设备上一个能接收 ACTION_SEND 的应用都没有。 */
+    val shareUnavailable: String,
+)
+
 data class MotionStrings(
     /** 设置页开关标题：「页面切换动效」。 */
     val pageTransitionLabel: String,
@@ -1405,6 +1572,18 @@ data class SettingsStrings(
     val storageSectionTitle: String,
     val clearCache: String,
     val clearCacheConfirm: String,
+    /**
+     * v3.3.0 · 用户反馈第 1 条的第四个缺陷：**「清除缓存」会把离线音频一起删掉，而确认框不说**。
+     *
+     * 旧行为是有意的（v1.6.0 · D1：避免留下指向空缓存的死条目），但确认框只写
+     * 「确定清除全部缓存？」—— 用户点一下，几百 MB 离线音频永久消失，而且
+     * 事后无从得知是这一步干的。这属于「危险操作没有如实告知」，不是功能缺陷。
+     *
+     * 现在给两个**明确**的选择：默认只清缓存（图片 + 临时文件），
+     * 想连离线音频一起清必须走第二个按钮。两个按钮的文案都写清后果。
+     */
+    val clearCacheAudioNote: String,
+    val clearCacheEverything: String,
 
     // User screen — 自定义背景（v1.2.0 · B3）
     val bgSectionTitle: String,
@@ -1433,6 +1612,29 @@ data class SettingsStrings(
     val batteryMessage: String,
     val batteryAllow: String,
     val batteryLater: String,
+    /**
+     * v3.3.0：这一行的**两态回显**（用户反馈第 5 条「后台播放明明有一个可以打开的图标
+     * 但是点不动」）。
+     *
+     * 真根因不是回调失效 —— 实测点它确实拉起了系统电池优化授权页
+     * （`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`），点「允许」后
+     * `dumpsys deviceidle whitelist` 从「不在白名单」变成
+     * `user,com.takahashirinta.ncrust,10183`：**功能是好的**。
+     *
+     * 坏的是**反馈**。应用已在白名单内时（首启弹窗引导过就是常态），系统页启动后
+     * 立刻 finish ⇒ 屏幕**零变化**；而这一行本身没有开关、没有状态，失败还被
+     * `runCatching` 静默吞掉。用户看到的就只能是「点了没反应」。
+     *
+     * ⚠️ 措辞必须描述**权限状态**，不能说成「后台播放开着没有」——
+     * 本应用的后台播放是**恒开**的（前台服务 + `WAKE_MODE_NETWORK`），
+     * 用户唯一能影响的就是「在不在白名单」。
+     */
+    val batteryStatusAllowed: String,
+    val batteryStatusDenied: String,
+    /** 已在白名单时点击该行的提示（那时跳系统页零变化，必须给一句可见反馈）。 */
+    val batteryAlreadyAllowed: String,
+    /** 两条跳转路径都失败时的提示（原来是 `runCatching` 静默吞掉）。 */
+    val batteryJumpFailed: String,
     // ---------- v3.1.0 · B：B 站音源开关 ----------
     // 按 v2.2.1 规则 5：新增文案必须往分组里放（外层主构造器预算 150，本组 64 → 66）。
     /** 设置页开关标题。 */
@@ -1674,4 +1876,95 @@ data class PlayerUiStrings(
     val queueClearAll: String,
 
     val clearQueue: String
+)
+
+
+/**
+ * v3.3.0 · 用户需求第 10 条：**播放统计页**（`ui/screen/StatsScreen.kt`）的文案组。
+ *
+ * ## 为什么是嵌套组
+ *
+ * `Strings` 的主构造器每加 1 个参数就要占 1 个 dex 槽（算式见 [Strings] 的 KDoc）。
+ * 37 条文案直接进主构造器会把它推到 178 —— 早已越过 `StringsConstructorBudgetTest`
+ * 的 150 预算。放进组里，外层只花 1 个参数。
+ *
+ * ## 这一组里**没有**「曲风 / 语种」类文案，这是有意的
+ *
+ * 任务书要求「统计各个类歌曲」。查证结果：`network/SongItem.kt` 与 `network/model/`
+ * 下**没有任何流派 / 曲风 / 语种类字段**（全仓库 grep `genre` / `曲风` / `流派` / `语种`
+ * 零命中，2026-02 核对）。服务端本来就不下发，客户端**造不出**这个维度 ——
+ * 所以统计页里**不显示**它，也不在这里预备一组永远为空的文案。
+ * 页面的「统计口径」区块里有一条 `methodNoGenre` **如实告诉用户**为什么没有这个维度；
+ * 那比一个空图例诚实。
+ *
+ * ## 格式化为什么用 lambda 而不是把单位写进模板
+ *
+ * 中文「3 小时 12 分」、英文「3 h 12 min」、日文「3 時間 12 分」的单位位置与数量都不同，
+ * 所以时长由 `(时, 分)` / `(分, 秒)` / `(秒)` 三个 lambda 组装，
+ * 判断「该显示到时还是到分」的逻辑在 `StatsScreen` 里只有一处（`statsDurationText`）。
+ */
+data class StatsStrings(
+    /** 页面标题（Groove 风页头的大字）。 */
+    val title: String,
+    /** 页头副标题：一句话说明「统计范围是本机」。 */
+    val subtitle: String,
+    /** 「统计自 %s」（参数是 ISO 日期，如 `2026-02-14`）。 */
+    val since: (String) -> String,
+
+    // ---- 总览四格 ----
+    val totalLabel: String,
+    val playsLabel: String,
+    val activeDaysLabel: String,
+    val dailyAverageLabel: String,
+    /** 日均的分母说明（必须有，否则用户会把它读成「按自然日平均」）。 */
+    val dailyAverageHint: String,
+
+    // ---- 柱状图 ----
+    val recentDaysTitle: String,
+    /** 「峰值 %s」（参数是格式化后的时长）。 */
+    val peakLabel: (String) -> String,
+
+    // ---- 各平台 ----
+    val bySourceTitle: String,
+    val sourceNetease: String,
+    val sourceQq: String,
+    val sourceBili: String,
+    /** 未知音源的回退名（参数是音源 key）。将来加新音源时页面不会显示空白。 */
+    val sourceOther: (String) -> String,
+
+    // ---- Top 歌曲 ----
+    val topSongsTitle: String,
+    /** 「播放 %d 次」。 */
+    val songPlays: (Long) -> String,
+    val unknownSong: String,
+    val unknownArtist: String,
+
+    // ---- 空态 ----
+    val empty: String,
+    val emptyHint: String,
+
+    // ---- 统计口径（把「为什么这个数是这样」写在页面上，而不是只写在代码注释里）----
+    val methodTitle: String,
+    val methodListen: String,
+    val methodPlayThreshold: String,
+    val methodFlush: String,
+    /** 「按设备本地时区分天（当前 %s）」。 */
+    val methodDay: (String) -> String,
+    /** 如实说明「曲风 / 语种维度不存在」以及为什么。 */
+    val methodNoGenre: String,
+
+    // ---- 其它 ----
+    /** 占比文案（0..100 的整数）。 */
+    val sharePercent: (Int) -> String,
+    val clearLabel: String,
+    val clearTitle: String,
+    val clearMessage: String,
+    val clearConfirm: String,
+    val clearCancel: String,
+    val cleared: String,
+
+    // ---- 时长格式（三个粒度，见类 KDoc）----
+    val durationHm: (Int, Int) -> String,
+    val durationMinSec: (Int, Int) -> String,
+    val durationSec: (Int) -> String,
 )

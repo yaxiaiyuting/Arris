@@ -123,5 +123,76 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+
+        <!--
+            v3.3.0 · 歌词分享 / 出图：把 cacheDir/share/ 下生成的海报以 content:// 交给接收方。
+
+            ## 为什么必须是 FileProvider
+
+            直接 `putExtra(EXTRA_STREAM, Uri.fromFile(f))` 在 API 24+ 会抛
+            FileUriExposedException（本应用 minSdk 24，所以这条路从第一天起就是死的）；
+            而写系统相册再分享则需要存储权限（API ≤ 28）。FileProvider 是唯一
+            **零权限、全 API 可用**的图片分享路径。
+
+            ## 三个属性都不能省
+
+            · authorities = "${applicationId}.fileprovider" —— 与
+              LyricShareActions 里 `"${context.packageName}.fileprovider"` 同源
+              （packageName 就是 applicationId，debug 变体带后缀时两侧一起变）；
+            · exported="false"：只有本应用能用它开 URI 权限（权限通过 Intent flag 临时授予）；
+            · grantUriPermissions="true"：少了它，接收方打开 content:// 会
+              SecurityException —— 症状是「分享出去是空白图」。
+
+            路径白名单在同目录的 res/xml/file_paths.xml（只放开了 cache/share/）。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
+            v3.3.0 · 桌面播放卡片（App Widget，用户需求第 4 条 = 第 8 条）。
+
+            ## 为什么只声明一个 receiver
+
+            尺寸适配走**运行时**：系统的 AppWidgetService 在每一次
+            onUpdate / onAppWidgetOptionsChanged 里把 OPTION_APPWIDGET_MIN_WIDTH/HEIGHT
+            交给 provider，由 WidgetSizeResolver 现场选布局。所以声明 5 个 provider
+            去对应 5 种摆法既没必要、也做不到（用户把 4×1 拖成 2×2 时系统不会换 provider，
+            只会改交给我们的尺寸）。五档/三档的取舍写在 WidgetSizeResolver 的 KDoc 里。
+
+            ## exported="false" 是对的（不是漏写）
+
+            APPWIDGET_UPDATE / OPTIONS_CHANGED 由**系统进程**（AppWidgetService，
+            uid 1000）显式广播到本组件，系统不受 exported 限制；而 exported="true"
+            会让任何应用都能给我们发 APPWIDGET_UPDATE —— 那只是白白多一个被骚扰的入口。
+            （与 Android Studio 的 widget 模板一致。）
+
+            ## meta-data 的 resource 指向 res/xml/ncrust_widget_info.xml
+
+            那里才有 minWidth/minHeight（API 24~30）与 targetCellWidth/Height（API 31+）
+            以及 resizeMode —— 卡片是几格、能不能拖、默认多大，全部在那一份里。
+
+            ## 它同时是「本应用是媒体应用」的第二条正规声明
+
+            与上面那条 MediaButtonReceiver 同源：桌面卡片让系统多一个「这个包会放音乐」的
+            可发现事实，对华为那类维护 media white list 的 ROM 是正向的。
+        -->
+        <receiver
+            android:name=".ui.widget.NcrustWidgetProvider"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/ncrust_widget_info" />
+        </receiver>
     </application>
 </manifest>

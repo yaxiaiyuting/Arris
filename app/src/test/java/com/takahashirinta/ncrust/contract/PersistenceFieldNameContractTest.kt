@@ -97,6 +97,14 @@ class PersistenceFieldNameContractTest {
         // （`network.model.**` 有 `-keep` 兜底，但注册表是**显式**契约：
         //  keep 规则被误删时这里会红，而不是等下一次发布后由用户的数据发现。）
         "com.takahashirinta.ncrust.network.model.AlbumItem",
+        // v3.3.0 · 需求 10：播放统计（`ncrust_stats`）。
+        // 这张表比其它几张小得多（聚合计数器 ≈80 KB，与听多少年无关），但**语义上更需要**
+        // 这份契约：它是**跨年累积**的数据，字段名一旦被 R8 改成单字母，
+        // 后果不是崩溃而是「用户几百小时的收听记录在某次升级后静默清零」——
+        // `StatsCodec` 的容错解码会把认不出的字段当成缺失、按默认值处理，
+        // 所以现场连一行错误日志都不会有。这正是注册表存在的理由（v2.5.5 的教训）。
+        "com.takahashirinta.ncrust.stats.StatsCodec\$SnapshotDto",
+        "com.takahashirinta.ncrust.stats.StatsCodec\$SongDto",
     )
 
     /**
@@ -127,8 +135,22 @@ class PersistenceFieldNameContractTest {
         for (name in PERSISTED_DTOS) {
             val clazz = Class.forName(name)
             val fields = clazz.declaredFields.filter {
-                // 跳过 Kotlin 合成物（$stable / Companion / 静态标记）
-                !it.isSynthetic && !java.lang.reflect.Modifier.isStatic(it.modifiers)
+                // 跳过 Kotlin 合成物（Companion / 静态标记）
+                !it.isSynthetic && !java.lang.reflect.Modifier.isStatic(it.modifiers) &&
+                    // v3.3.0：再按**名字**跳过编译器管理的字段。
+                    //
+                    // 起因：`StatsCodec$SnapshotDto` 上出现了 `$stable` —— 它是
+                    // Compose 编译器为「稳定性推断」插入的字段，**不是** synthetic
+                    // （`isSynthetic == false`），所以上面那道过滤拦不住它，
+                    // 而这轮它把两处 DTO 判成了「缺 @SerializedName」。
+                    //
+                    // 它是编译器产物，**不可能也不该**加 `@SerializedName`：
+                    // 加了反而会在运行时与编译器的插入逻辑打架。
+                    // 过滤条件写成「以 `$` 开头」而不是「等于 `$stable`」——
+                    // 将来编译器再插别的 `$` 前缀字段（`$cachedSerializer` 之类）时，
+                    // 这条守卫不会第二次误报。业务字段不允许以 `$` 开头（Kotlin 语法也不允许），
+                    // 所以这个过滤**不会漏掉任何真实字段**。
+                    !it.name.startsWith("$")
             }
             assertTrue("$name 一个实例字段都没有？反射路径可能失效了", fields.isNotEmpty())
             for (f in fields) {

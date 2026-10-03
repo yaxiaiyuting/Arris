@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片 · 小档（2×1）—— 本仓库的第一份 XML 布局。
+
+  ## 为什么是 XML 而不是 Compose
+  桌面卡片由**宿主进程**（launcher）用自己的主题 inflate，只认 @RemoteView 白名单里的
+  那几个 View 类。Compose 没有任何一条路能进 RemoteViews。
+
+  ## id 契约（渲染器 WidgetRenderer 只对这些 id 发 action）
+  本布局提供：widget_root / widget_accent / widget_cover_box / widget_cover_icon /
+  widget_cover / widget_title / widget_play。
+  **没有** widget_artist / widget_prev / widget_next / widget_progress*：
+  对布局里不存在的 id 发 action 会在宿主进程抛 ActionException、卡片直接白掉，
+  所以「这一档有哪些控件」由 WidgetLayoutSpec.capabilitiesFor 决定，两者必须一致。
+
+  ## 排版
+  直角卡片 + 顶部 3dp 主色条（运行时换成封面主色）+ 封面 + 一行标题 + 一个播放键。
+  高度按 2×1 的最坏情况算：3dp 主色条 + 40dp 封面 = 43dp，正好压在系统给的 40dp 上沿。
+-->
+<!--
+  `android:tint` 而不是 `app:tint`：**这是有意的，lint 的 UseAppTint 在这里是误判**。
+  widget 的 RemoteViews 由 **Launcher 进程** 的 LayoutInflater 实例化，
+  那里没有 AppCompat 的自定义 view inflater ⇒ `app:tint`（由 AppCompatImageView
+  在 inflation 时应用）会被**静默忽略**，图标就不着色。
+  而 `android:tint` 是框架 View 自带的（API 21+），在 RemoteViews 里按预期生效。
+  所以这里必须抑制该检查；改成 app:tint 会引入一个「图标不变色」的真实缺陷。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_bg"
+    android:orientation="vertical"
+    tools:ignore="ContentDescription">
+
+    <TextView
+        android:id="@+id/widget_accent"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:background="@drawable/widget_accent_fill" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="6dp">
+
+        <FrameLayout
+            android:id="@+id/widget_cover_box"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/widget_accent_fill">
+
+            <ImageView
+                android:id="@+id/widget_cover_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_ic_note"
+                android:tint="#0B0B0B"
+            tools:ignore="UseAppTint" />
+
+            <ImageView
+                android:id="@+id/widget_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#F2F2F2"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/widget_play"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/widget_accent_fill"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_play"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+</LinearLayout>

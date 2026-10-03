@@ -216,7 +216,15 @@ class StringsMigrationTest {
         // v3.1.0：settings 78 → 80（B 站音源开关的标题 + 说明；waveform 一个参数都没加）。
         // v3.2.0：waveform 30 → 38（界面律动的 1 个总闸 + 3 个细粒度开关 × 标题/说明；
         //         按纪律进 WaveformStrings，外层 `Strings` 只为**组参数** +1）。
-        val expectedSizes = mapOf("settings" to 80, "about" to 25, "playerUi" to 31, "waveform" to 38)
+        // v3.3.0：settings 80 → **86**（本版往这一组加了 6 条：
+        //   · 用户反馈第 5 条「后台运行」的两态回显 2 条（已允许 / 未允许）+
+        //     点击提示 2 条（已在白名单 / 跳转失败）；
+        //   · 清除缓存的两种后果说明 2 条（只清缓存 / 连离线音频一起清）。
+        //   ⚠️ 这里的口径是**快照遍历 getter**，`StringsConstructorBudgetTest` 读的是
+        //   **构造器参数** —— 两条链路数的是同一批文案，实测**都是 86**。
+        //   （我一度以为两者差 2，那是因为我先改了其中一边、又被失败信息里的旧值误导。
+        //    改这两个数之前，请以**各自那条链路的实测值**为准，不要照抄另一个。）
+        val expectedSizes = mapOf("settings" to 86, "about" to 25, "playerUi" to 31, "waveform" to 38)
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

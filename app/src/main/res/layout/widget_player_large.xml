@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片 · 大档（4×2）：中档 + 真进度条 + 计时。
+
+  ## id 契约
+  = 中档的全部 id，另加 widget_progress_row / widget_progress / widget_elapsed / widget_duration。
+  四个都**必须**存在，因为 WidgetLayoutSpec 的大档能力位里 showProgress = true，
+  渲染器会给它们发 action。
+
+  ## 进度与计时为什么这么写
+  · **真 ProgressBar + setProgressBar**：RemoteViews 支持的类里只有它是进度条，
+    而且 setProgressBar 直接落到 ProgressBar.setMax/setProgress —— 不是「自己画一条」。
+  · **Chronometer 宿主自己走秒**：`setChronometer(base = 开机毫秒 - 已播毫秒, started = isPlaying)`
+    之后，**宿主每秒自己刷新**，我们不必为了「秒数在动」而每秒推一次。
+    这是本版把推送压到「整数秒才推」的关键之一 —— 秒数显示根本不依赖我们的推送节奏。
+  · 时长未知（直播流 / metadata 还没到）时渲染器把 widget_progress_row 整行 GONE，
+    而不是留一条永远 0% 的进度条。
+
+  ## 直角
+  进度条用 @drawable/widget_progress_fill（直角、无圆角、不跟随宿主主题色），
+  与卡片其余部分同族。
+-->
+<!--
+  `android:tint` 而不是 `app:tint`：**这是有意的，lint 的 UseAppTint 在这里是误判**。
+  widget 的 RemoteViews 由 **Launcher 进程** 的 LayoutInflater 实例化，
+  那里没有 AppCompat 的自定义 view inflater ⇒ `app:tint`（由 AppCompatImageView
+  在 inflation 时应用）会被**静默忽略**，图标就不着色。
+  而 `android:tint` 是框架 View 自带的（API 21+），在 RemoteViews 里按预期生效。
+  所以这里必须抑制该检查；改成 app:tint 会引入一个「图标不变色」的真实缺陷。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_bg"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/widget_accent"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:background="@drawable/widget_accent_fill" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="6dp">
+
+        <FrameLayout
+            android:id="@+id/widget_cover_box"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/widget_accent_fill">
+
+            <ImageView
+                android:id="@+id/widget_cover_icon"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_gravity="center"
+                android:importantForAccessibility="no"
+                android:src="@drawable/widget_ic_note"
+                android:tint="#0B0B0B"
+            tools:ignore="UseAppTint" />
+
+            <ImageView
+                android:id="@+id/widget_cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="#F2F2F2"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#99FFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/widget_prev"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_prev"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/widget_play"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/widget_accent_fill"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_play"
+            tools:ignore="ContentDescription" />
+
+        <ImageButton
+            android:id="@+id/widget_next"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="2dp"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/widget_ic_next"
+            tools:ignore="ContentDescription" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@drawable/widget_divider" />
+
+    <LinearLayout
+        android:id="@+id/widget_progress_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="5dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="5dp">
+
+        <Chronometer
+            android:id="@+id/widget_elapsed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#99FFFFFF"
+            android:textSize="11sp" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="4dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress_fill" />
+
+        <TextView
+            android:id="@+id/widget_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#99FFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+</LinearLayout>

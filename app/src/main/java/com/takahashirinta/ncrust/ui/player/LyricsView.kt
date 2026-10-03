@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -32,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.takahashirinta.ncrust.lyric.DynamicLyricFont
 import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.lyric.LyricSubtitleText
@@ -40,8 +44,13 @@ import com.takahashirinta.ncrust.lyric.LyricsSweepPerf
 import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.SweepTrack
+import com.takahashirinta.ncrust.share.LyricShareLine
+import com.takahashirinta.ncrust.share.LyricShareTrack
+import com.takahashirinta.ncrust.ui.components.LyricShareSheet
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
+import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -375,6 +384,23 @@ fun LyricsView(
         ).toDp()
     }
 
+    // ── v3.3.0 · 9：歌词复制 / 分享 / 出图的入口 ────────────────────────────────
+    //
+    // 三条设计约束，读一眼再改：
+    //
+    // 1. **只加一个入口，不动既有动画 / 手势 / 命中测试**。分享按钮挂在上方那一排
+    //    （A- / A+ 左边），与它们共用 44×28dp 的命中盒；不新增任何全屏或贴边浮层，
+    //    因此不会在本应用那套「播放器卡片死带」问题上新增一条。
+    // 2. **点击那一刻把歌词与位置快照下来**（[SharePayload]），不是让弹层实时读播放位置。
+    //    出图要几秒，期间用户可能已经听到下一段；选段必须固定在他点下去时看到的那几句上。
+    //    快照同时是「弹层打开时不再持有 LyricsView 的 recomposition 依赖」的保证。
+    // 3. **曲目身份从 PlayerViewModel 取**（PlayerCard 里那个 `viewModel()` 的同一个实例，
+    //    作用域是 Activity）：本组件的唯一调用点在 `PlayerCardExpanded`，它的签名不在本次
+    //    改动范围内。这里只在**点击时**读 `.value`（不 collectAsState），
+    //    所以不会新增任何逐帧 / 逐次重组订阅。
+    val shareViewModel: PlayerViewModel = viewModel()
+    var sharePayload by remember { mutableStateOf<SharePayload?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -459,6 +485,19 @@ fun LyricsView(
                     .padding(top = 4.dp, end = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // v3.3.0 · 9：分享歌词。放在 A- / A+ 左边（先于字号调节）——
+                // 它是一次性的动作，而字号是会被反复调的，高频的贴近屏幕右边缘更顺手。
+                LyricShareButton(description = strings.share.action) {
+                    sharePayload = SharePayload(
+                        track = LyricShareTrack(
+                            name = shareViewModel.currentSongName.value.orEmpty(),
+                            artist = shareViewModel.currentSongArtist.value.orEmpty(),
+                            coverUrl = shareViewModel.currentSongArtwork.value,
+                        ),
+                        lines = buildShareLines(lyrics, translatedLyrics, romanizedLyrics),
+                        positionMs = displayPosition.longValue,
+                    )
+                }
                 FontScaleButton(
                     label = "A-",
                     description = strings.lyricsFontSmaller,
@@ -470,6 +509,20 @@ fun LyricsView(
                     enabled = fontScale < LyricsDisplayPrefs.FONT_SCALE_MAX - 0.001f,
                 ) { onFontScaleStep(+1) }
             }
+        }
+
+        // v3.3.0 · 9：分享弹层。`MetroDialog` 是独立 Window（见 LyricShareSheet 的 KDoc），
+        // 因此它不会被播放器卡片的 graphicsLayer 平移影响，也不参与卡片的命中测试。
+        sharePayload?.let { payload ->
+            LyricShareSheet(
+                track = payload.track,
+                lyrics = payload.lines,
+                positionMs = payload.positionMs,
+                // 「复制下来的 == 屏幕上看到的」：两个初值直接跟随当前显示开关。
+                defaultShowTranslation = showTranslation,
+                defaultShowRomanization = showRomanization,
+                onDismiss = { sharePayload = null },
+            )
         }
     }
 }
@@ -500,6 +553,77 @@ private fun FontScaleButton(
                 LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.35f)
             },
             style = TextStyle(fontSize = 13.sp),
+        )
+    }
+}
+
+/**
+ * v3.3.0 · 9：歌词分享入口。
+ *
+ * 与 [FontScaleButton] **同一套触摸契约**（44×28dp 命中盒、13sp 那一排的位置与内边距），
+ * 只把文字换成一个 16dp 的分享图标 —— 于是这一排的命中区与视觉重量都没有变化，
+ * 既有的 A- / A+ 手感一个像素都不动。
+ *
+ * `contentDescription` 用 `ShareStrings.action`（简中「分享歌词」）。这不只是无障碍：
+ * `adb shell uiautomator dump` 能按这个 content-desc 精确定位节点的 bounds，
+ * 于是「点开分享弹层」在自动化验证里是可寻址的一步（见本版的验证说明）。
+ */
+@Composable
+private fun LyricShareButton(description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(width = 44.dp, height = 28.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            imageVector = Icons.Default.Share,
+            contentDescription = null,
+            tint = LocalMetroColors.current.onSurfaceVariant,
+            sizeDp = 16.dp,
+        )
+    }
+}
+
+/**
+ * v3.3.0 · 9：打开分享弹层那一刻的快照。
+ *
+ * 「快照」而不是「实时读」是刻意的：出图最长要几秒（封面 4s 超时 + 渲染），
+ * 期间播放位置会继续走。用户点的是「这一句」，出图/复制就必须是这一句。
+ * 顺带的好处是本数据类把弹层的输入固定下来，弹层不再持有 LyricsView 的任何可观察状态。
+ */
+private data class SharePayload(
+    val track: LyricShareTrack,
+    val lines: List<LyricShareLine>,
+    val positionMs: Long,
+)
+
+/**
+ * v3.3.0 · 9：把三份歌词轨（原文 / 译文 / 音译）按 `timeMs` 合成分享用的行表。
+ *
+ * 与 `LyricsView` 里给面板用的那份合并**刻意分开**：面板那份受 `showTranslation` /
+ * `showRomanization` 开关影响（关掉就不合并），而分享弹层要能**独立**勾选译文/音译
+ * —— 从面板那份里取数据会让「屏幕上关着译文时分享弹层勾不出译文」。
+ * 代价是这里再做一次 `associateBy`，只在点击分享时发生一次，可以接受。
+ */
+private fun buildShareLines(
+    lyrics: List<LrcLine>,
+    translatedLyrics: List<LrcLine>,
+    romanizedLyrics: List<LrcLine>,
+): List<LyricShareLine> {
+    if (lyrics.isEmpty()) return emptyList()
+    if (translatedLyrics.isEmpty() && romanizedLyrics.isEmpty()) {
+        return lyrics.map { LyricShareLine(timeMs = it.timeMs, text = it.text) }
+    }
+    val tMap = translatedLyrics.associateBy { it.timeMs }
+    val rMap = romanizedLyrics.associateBy { it.timeMs }
+    return lyrics.map { line ->
+        LyricShareLine(
+            timeMs = line.timeMs,
+            text = line.text,
+            translation = tMap[line.timeMs]?.text.orEmpty(),
+            romanization = rMap[line.timeMs]?.text.orEmpty(),
         )
     }
 }

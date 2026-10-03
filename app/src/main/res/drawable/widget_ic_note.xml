@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：音符占位图标（白色，由使用处用 android:tint 决定实际颜色）。
+
+  ⚠️ 用 android:tint（ImageView 属性）而不是 android:fillColor 写死颜色，是因为同一个图标
+  要在两种底色上出现：
+    · 空态那条：浅灰（#8AFFFFFF），画在深色卡片上；
+    · 封面占位块上：深色（#0B0B0B），画在主色块上。
+  同一份矢量配两种 tint，比维护两个几乎相同的文件更不容易走样。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,3 L12,13.55 C11.41,13.21 10.73,13 10,13 C7.79,13 6,14.79 6,17 C6,19.21 7.79,21 10,21 C12.21,21 14,19.21 14,17 L14,7 L18,7 L18,3 Z" />
+</vector>

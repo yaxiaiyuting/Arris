@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider 的可用根目录（v3.3.0 · 歌词分享 / 出图）。
+
+    只暴露**一个**子目录，而且是 cache 下的子目录：
+      · 与 LyricShareActions.SHARE_DIR（"share"）必须逐字一致，改了这里就要改那里
+        —— 对不上时 FileProvider.getUriForFile 抛
+        IllegalArgumentException: Failed to find configured root that contains ...；
+      · 不写 <external-path> / <files-path>：分享出去的东西只需要能被别的应用读到一次，
+        暴露更宽的根（比如整个 filesDir，里面有离线音频与登录 cookie 落盘）是没有必要的风险。
+
+    注意 cache-path 的 path 是**相对 cacheDir** 的，且必须以 / 结尾表示目录。
+-->
+<paths>
+    <cache-path
+        name="share_images"
+        path="share/" />
+</paths>

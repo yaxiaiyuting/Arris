@@ -36,6 +36,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -124,6 +125,7 @@ import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
 import com.takahashirinta.ncrust.ui.navigation.MainNavGraph
 import com.takahashirinta.ncrust.ui.navigation.NavRoutes
 import com.takahashirinta.ncrust.ui.player.PlayerCardOverlay
+import com.takahashirinta.ncrust.stats.StatsRecorder
 import com.takahashirinta.ncrust.ui.screen.*
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
@@ -2196,6 +2198,63 @@ fun MainScreen(
     }
 
     if (showWebLogin) {
+        // ── v3.3.0 · P1：登录态改为**轮询 cookie**（原来是等 `onPageFinished`）──────────
+        //
+        // 这是用户反馈第 6 条「需要很多次退出登录再登录才能播放 VIP 资源或者音质」的**头号机制**。
+        //
+        // 网易云登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA**：
+        // 登录成功后的跳转**不产生新的文档级导航**，因此经常**不触发** `onPageFinished`。
+        // 原实现把「抓 cookie」挂在那一个回调上 ⇒ 抓取时机是否落在
+        // 「cookie 已写入 且 回调恰好到来」这个窗口里，每次重登都是一次独立的伯努利试验。
+        // 命中次数服从几何分布 —— 那正是「要试很多次才偶尔成功」的形状。
+        //
+        // 修法与同仓库 QQ 侧**早已采用**的做法一致（`QqLoginOverlay` 的 KDoc：
+        // 「登录成功的唯一权威事实是 cookie，所以这里按固定间隔直接读 cookie，
+        // 不依赖任何页面回调」）。那条纪律在 QQ 那边写了很久，网易云这条一直没跟上。
+        //
+        // 两个判据细节：
+        // - 用 `NeteaseCookie.isUsable`（`MUSIC_U` **与** `__csrf` 都要有），
+        //   不是原来的 `contains("MUSIC_U=")`：只带 `MUSIC_U` 的半截会话会让界面显示
+        //   「已登录」而**所有写操作 403**（收藏、歌单增删改）。
+        // - 写入走 `saveCookieMerged`（合并而非覆盖）：登录过程中键是分几批到的，
+        //   覆盖写会丢掉先到的那批。
+        // ⚠️ `LocalContext.current` 是 **@Composable 读**，必须在组合期取；
+        // 放进 `LaunchedEffect` 的挂起 lambda 里会因为「不是 composable 作用域」编译不过。
+        val loginActivity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        LaunchedEffect(showWebLogin) {
+            if (!showWebLogin) return@LaunchedEffect
+            val webCookie = android.webkit.CookieManager.getInstance()
+            // 用 `while` 而不是 `repeat { }`：`continue` / `break` 在 `repeat` 的 lambda 里
+            // 是**编译错误**（lambda 不是循环），而这里两种跳转都要用。
+            // 上限 150 次 × 1s，与 QQ 侧同量级。**有界**（仓库硬规则：循环必须有熔断）。
+            var attempt = 0
+            while (attempt < 150) {
+                attempt++
+                kotlinx.coroutines.delay(1_000)
+                if (!showWebLogin) return@LaunchedEffect
+                val cookie = webCookie.getCookie("https://music.163.com/")
+                    ?: webCookie.getCookie("https://music.163.com")
+                // 还没写入、或只写了一半（缺 `__csrf`）⇒ 继续轮询，**不结束**。
+                if (cookie == null || !com.takahashirinta.ncrust.auth.NeteaseCookie.isUsable(cookie)) {
+                    continue
+                }
+                val auth = com.takahashirinta.ncrust.auth.CookieManager
+                // 拿不到 Activity 就没法写 prefs（理论上不会发生：这是带主题的 Activity）。
+                val activity = loginActivity ?: return@LaunchedEffect
+                if (auth.saveCookieMerged(activity, cookie)) {
+                    val merged = auth.getCookie(activity)
+                    RetrofitClient.updateCookie(merged)
+                    Log.i(
+                        "NcrustLogin",
+                        "netease login: ${com.takahashirinta.ncrust.auth.NeteaseCookie.describe(merged)}",
+                    )
+                }
+                showWebLogin = false
+                cookieRefreshTrigger++
+                return@LaunchedEffect
+            }
+            Log.w("NcrustLogin", "netease login 轮询到 150s 上限仍未拿到可用 cookie")
+        }
         Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
             AndroidView(
                 factory = { ctx ->
@@ -2206,22 +2265,33 @@ fun MainScreen(
                         settings.loadWithOverviewMode = true
                         android.webkit.CookieManager.getInstance()
                             .setAcceptThirdPartyCookies(this, true)
+                        // 轮询是**主路径**；这个回调只作为「多一次机会」的补充，不再承担正确性。
+                        // 判据与写入方式都与轮询保持一致（否则两条路会把 cookie 写成两种形状）。
                         webViewClient = object : android.webkit.WebViewClient() {
                             override fun onPageFinished(
                                 view: android.webkit.WebView, url: String
                             ) {
-                                val cookie = android.webkit.CookieManager.getInstance()
-                                    .getCookie(url)
-                                if (cookie != null && cookie.contains("MUSIC_U=")) {
-                                    com.takahashirinta.ncrust.auth.CookieManager
-                                        .saveCookie(ctx, cookie)
-                                    RetrofitClient.updateCookie(cookie)
-                                    showWebLogin = false
-                                    cookieRefreshTrigger++
+                                val cookie = android.webkit.CookieManager.getInstance().getCookie(url)
+                                if (cookie != null &&
+                                    com.takahashirinta.ncrust.auth.NeteaseCookie.isUsable(cookie)
+                                ) {
+                                    if (com.takahashirinta.ncrust.auth.CookieManager
+                                            .saveCookieMerged(ctx, cookie)
+                                    ) {
+                                        RetrofitClient.updateCookie(
+                                            com.takahashirinta.ncrust.auth.CookieManager.getCookie(ctx)
+                                        )
+                                        showWebLogin = false
+                                        cookieRefreshTrigger++
+                                    }
                                 }
                             }
                         }
+                        // ⚠️ `removeAllCookies` 是**异步**的，而它紧接在 `loadUrl` 之前：
+                        // 清库有可能落在登录页写入 Set-Cookie **之后**，把刚写好的会话键抹掉。
+                        // `flush()` 把清理动作排到网络加载之前 —— 这是那场竞态的对症修法。
                         android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                        android.webkit.CookieManager.getInstance().flush()
                         loadUrl("https://music.163.com/#/login")
                     }
                 },
@@ -2241,12 +2311,25 @@ fun MainScreen(
 
     val navStrings = LocalStrings.current
     // 导航项在底部导航(窄屏)与左侧 sidebar(宽屏)之间共用。
+    //
+    // v3.3.0 · 用户需求第 10 条：**「统计」是第 5 项，追加在末尾**。
+    // 为什么不插在中间：SEARCH_TAB_INDEX = 2 被「跳搜索兜底」与导航栏本身两处消费
+    // （见该常量的 KDoc）—— 插队会让它静默指到错的页；追加则一个既有下标都不用改。
     val navTabs = listOf(
         Icons.Default.Home to navStrings.tabHome,
         Icons.Default.LibraryMusic to navStrings.tabLibrary,
         Icons.Default.Search to navStrings.tabSearch,
         Icons.Default.Person to navStrings.tabUser,
+        Icons.Default.BarChart to navStrings.stats.title,
     )
+
+    // v3.3.0：播放统计的**采集**必须全程在跑，不能等用户点开统计页才开始 ——
+    // 否则「打开这一页之前听的全部不算」，而那恰恰是用户最想看的部分。
+    // StatsRecorder 是只读观察者（订阅 PlayerViewModel 的 StateFlow），
+    // 不抢 PlaybackService 那些单槽位回调、不碰播放链路；attach 幂等。
+    LaunchedEffect(playerViewModel) {
+        StatsRecorder.attach(context, playerViewModel)
+    }
     val onNavSelected: (Int) -> Unit = { tab ->
         selectedTab = tab
         if (!isInMain) navController.popBackStack(NavRoutes.HOME, false)
@@ -2426,6 +2509,8 @@ fun MainScreen(
 
                         1 -> LibraryScreen(
                             onSongClick = { playSongItem(it) },
+                            // v3.3.0 · 用户建议：离线 tab 要知道哪一首在播（那一行锁删除）。
+                            currentSongId = playerViewModel.currentSongId.value ?: -1L,
                             onAlbumClick = { albumId -> navController.navigate(NavRoutes.album(albumId)) },
                             // ▶ 立即播放：本地收藏单曲里有就直接播（秒开），否则提示后走网络。
                             onPlayAlbum = { albumId -> playAlbumNow(albumId) },
@@ -2547,6 +2632,11 @@ fun MainScreen(
                                 navController.navigate(NavRoutes.settingsGroup(group.id))
                             },
                         )
+
+                        // v3.3.0 · 用户需求第 10 条：播放统计。
+                        // 与上面四个 tab 同构 —— 直接渲染而不是注册一条 NavRoute：
+                        // tab 切换没有返回栈语义，给它开路由会造出一条压栈后退不回去的死路由。
+                        4 -> StatsScreen()
                     }
                 }
 
@@ -2595,6 +2685,11 @@ fun MainScreen(
                             // v2.1.1：手机号验证码登录（微信用户的可用路径）。
                             onShowQqPhoneLogin = { showQqPhone = true },
                             onOpenAbout = { showAbout = true },
+                            // v3.3.0 · 用户建议：离线缓存列表的行可直接点播。
+                            // 复用 `playSongItem`（从任意列表点歌的同一条链路）：
+                            // 它负责队列插入 + `currentQueueIndex` + 持久化，
+                            // 而 URL 由离线兜底 `recallOfflineCache` 按 id 找回缓存里的那一条。
+                            onPlaySong = { song -> playSongItem(song) },
                         )
                     },
                     startDestination = NavRoutes.HOME

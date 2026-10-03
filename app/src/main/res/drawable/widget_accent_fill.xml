@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：主色块（顶部主色条 / 封面占位块 / 播放按钮底）。
+
+  ★ 这三处的颜色**运行时**由 `RemoteViews.setInt(id, "setBackgroundColor", accent)` 覆盖成
+  `PlaybackService.currentDominantColor`（封面主色）。这里的 #1DB954 只是：
+    · 服务还没起来（冷启动后第一次渲染）时的兜底；
+    · 以及 setBackgroundColor 万一失败时的可见底 —— 不会出现「一块白板」。
+
+  用同一个 drawable 供三处，是有意的：主色在这张卡片上出现的每一处都必须**完全一致**，
+  分开写三份形状迟早会出现「按钮是旧绿、条子是新绿」。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1DB954" />
+</shape>

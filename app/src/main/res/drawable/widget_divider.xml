@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：细分割线（1dp 高，由使用处的 layout_height 决定）。
+
+  与卡片描边（#33FFFFFF）刻意不同色：描边是「卡片与外界的边界」，
+  分割线是「卡片内部两块信息的边界」，后者必须更弱，否则一张卡片里会出现两条同等强度的线。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1FFFFFFF" />
+</shape>

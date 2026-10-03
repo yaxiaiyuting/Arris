@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片 · 空态（没有播放内容 / 用户按过停止 / 服务退出且无落盘状态）。
+
+  ## 为什么单独一份布局，而不是在内容布局上把每处设成空
+  内容布局上「逐个隐藏 + 清空」也能达到同样的画面，但那是**靠人记得**：
+  以后给大档加一个控件，忘了在新写的空态分支里隐藏它，桌面上就会出现
+  「暂无播放 + 一条别的歌的进度条」这种半截画面。独立布局是物理保证 ——
+  空态能画出来的东西只有这里有的那几个。
+
+  ## id 契约
+  只有 widget_root / widget_accent / widget_empty_icon / widget_empty_text。
+  渲染器（WidgetRenderer.buildEmpty）只碰这四个。
+
+  ## 整卡点击
+  widget_root 上挂的是「打开应用」的 PendingIntent —— 空态下用户点卡片
+  唯一合理的期待就是「进应用挑首歌」。这是本布局唯一可点的东西。
+-->
+<!--
+  `android:tint` 而不是 `app:tint`：**这是有意的，lint 的 UseAppTint 在这里是误判**。
+  widget 的 RemoteViews 由 **Launcher 进程** 的 LayoutInflater 实例化，
+  那里没有 AppCompat 的自定义 view inflater ⇒ `app:tint`（由 AppCompatImageView
+  在 inflation 时应用）会被**静默忽略**，图标就不着色。
+  而 `android:tint` 是框架 View 自带的（API 21+），在 RemoteViews 里按预期生效。
+  所以这里必须抑制该检查；改成 app:tint 会引入一个「图标不变色」的真实缺陷。
+-->
+<LinearLayout
+    xmlns:tools="http://schemas.android.com/tools" xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_bg"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/widget_accent"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:background="@drawable/widget_accent_fill" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp">
+
+        <ImageView
+            android:id="@+id/widget_empty_icon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_ic_note"
+            android:tint="#66FFFFFF"
+            tools:ignore="UseAppTint" />
+
+        <TextView
+            android:id="@+id/widget_empty_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#B3FFFFFF"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

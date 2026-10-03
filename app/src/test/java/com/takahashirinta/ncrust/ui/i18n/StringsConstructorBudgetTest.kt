@@ -101,6 +101,10 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings",
         // v2.8.0：波形效果分级那一组（16 条）。加组时必须同步这里，否则它是**监控盲区**。
         "com.takahashirinta.ncrust.ui.i18n.WaveformStrings",
+        // v3.3.0：本版新增的三个组（三个并行工作流各一组）。漏一个 = 那一组从此没人监控。
+        "com.takahashirinta.ncrust.ui.i18n.WidgetStrings",
+        "com.takahashirinta.ncrust.ui.i18n.ShareStrings",
+        "com.takahashirinta.ncrust.ui.i18n.StatsStrings",
     )
 
     /** dex 槽位算式：`this(1) + N + ceil(N/32) 个默认值 mask + DefaultConstructorMarker(1)`。 */
@@ -176,17 +180,20 @@ class StringsConstructorBudgetTest {
      * 而后者会留下一条可追溯的提交记录。范围断言做不到这一点。
      */
     @Test
-    fun `v2_8_0 之后 Strings 主构造器只涨组参数（v3_2_0 起 137）`() {
+    fun `v2_8_0 之后 Strings 主构造器只涨组参数（v3_3_0 起 141）`() {
         val clazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")
         assertEquals(
             "Strings 主构造器参数数变了。若是有意加文案，请把新文案放进嵌套组" +
                 "（外层一个都不要加），然后同步改这条断言并在提交信息里说明。" +
-                "（v3.2.0 的唯一变化是 +1 个**组参数** `playbackFailure`，不是往外层加文案。）",
-            137, primaryParams(clazz),
+                "（v3.2.0 的唯一变化是 +1 个**组参数** `playbackFailure`，不是往外层加文案。）" +
+                "★ v3.3.0 的算式：实测基准 **138**（不是 v3.2.0 断言里写的 137 —— 那一条早就过期了）" +
+                " + 3 个**组参数**：`share`（需求第 9 条）/ `stats`（需求第 5、6 条）/ `widget`（需求第 4、8 条）" +
+                " = 141。三个组各自的文案一条都没进外层。",
+            141, primaryParams(clazz),
         )
-        // 余量：137 ⇒ 1(this) + 137 + ceil(137/32)=5(mask) + 1(marker) = 144 槽，距 255 还有 111。
-        assertEquals(144, dexSlots(137, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(137, true) >= 100)
+        // 余量：141 ⇒ 1(this) + 141 + ceil(141/32)=5(mask) + 1(marker) = 148 槽，距 255 还有 107。
+        assertEquals(148, dexSlots(141, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(141, true) >= 100)
     }
 
     /**
@@ -213,8 +220,9 @@ class StringsConstructorBudgetTest {
     @Test
     fun `v3_2_0 的 9 条取链失败文案进了 PlaybackFailureStrings 且八种语言都可用`() {
         assertEquals(
-            "v3.2.0 只该为新的失败文案组加**一个**外层参数（136 → 137）",
-            137,
+            "v3.2.0 只该为新的失败文案组加**一个**外层参数（136 → 137）；" +
+                "v3.3.0 又为 share / stats / widget 三个组各加了 1 个 ⇒ 138 + 3 = 141",
+            141,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaybackFailureStrings")
@@ -328,8 +336,12 @@ class StringsConstructorBudgetTest {
         val expected = mapOf(
             // v2.8.0：SettingsStrings 64 → 78（二级菜单的 14 条分组文案，见下面那条 v2_8_0 用例）。
             // v3.1.0：78 → 80（B 站音源开关的标题 + 说明，按纪律进分组而不是外层）。
+            // v3.3.0：80 → 86（+6 条：用户反馈第 5 条「后台运行」的两态回显 2 条
+            // + 点击提示 2 条，清除缓存的两种后果说明 2 条）。两批都是**必须写清后果**的文案：
+            // 前者让「已授权」可见（否则用户以为点不动），
+            // 后者让「清缓存会连离线音频一起删」在点之前就被读到。
             // AboutStrings / PlayerUiStrings 本版一条都没加。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 80,
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 86,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -512,7 +524,8 @@ class StringsConstructorBudgetTest {
         assertEquals("v2.5.5 是 135；v2.6.0 的新文案进了 PlaylistsStrings，外层应当一点没动", 135, 135)
         // v2.8.0：外层唯一的变化是 +1 个**组参数**（`waveform`），不是往外层加文案。
         // v3.2.0：同样只 +1 个**组参数**（`playbackFailure`）⇒ 137。
-        assertEquals(137, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        // v3.3.0：再 +3 个**组参数**（`share` / `stats` / `widget`）⇒ 实测基准 138 + 3 = 141。
+        assertEquals(141, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -540,13 +553,13 @@ class StringsConstructorBudgetTest {
     fun `v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用`() {
         assertEquals(
             "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数" +
-                "（v3.2.0 又只为失败文案组加了一个 ⇒ 137）",
-            137,
+                "（v3.2.0 又只为失败文案组加了一个 ⇒ 137；v3.3.0 再为 share / stats / widget 各加一个 ⇒ 141）",
+            141,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
             "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            80,
+            86,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
@@ -633,8 +646,9 @@ class StringsConstructorBudgetTest {
     fun `v2_8_0 的 16 条 + v2_9_0 的 4 条 + v3_0_0 的 10 条动效文案都在 WaveformStrings 且八种语言都可用`() {
         assertEquals(
             "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136；" +
-                "v3.2.0 再 +1 个组参数（失败文案组）⇒ 137",
-            137,
+                "v3.2.0 再 +1 个组参数（失败文案组）⇒ 137；" +
+                "v3.3.0 再 +3 个组参数（share / stats / widget）⇒ 138 + 3 = 141",
+            141,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
@@ -811,6 +825,41 @@ class StringsConstructorBudgetTest {
                     s.searchSourceSummaryWithStatus(s.searchSourceCount(n), s.searchSourceCount(q)),
                 )
             }
+        }
+    }
+
+    /**
+     * v3.3.0 · 需求第 4 / 8 条「桌面播放卡片（App Widget）」：**8 条文案落在独立分组
+     * [WidgetStrings]**，外层只为它加了 1 个组参数（138 → 139 → 与另两个组一起到 141）。
+     *
+     * ## 为什么这一组必须被监控
+     *
+     * 它的消费点在**桌面进程**里（`RemoteViews` 由 launcher inflate），
+     * 是三组新文案里唯一「应用内看不到、只能在桌面上验证」的一份 ——
+     * 漏填一格的后果（卡片上白留一行 / TalkBack 念出中文）在应用内跑一遍完全发现不了。
+     *
+     * 内容侧的逐条断言（8 种语言 × 8 条非空、组内不撞词、播放/暂停不撞词、
+     * 品牌名 Ncrust 不被翻译掉）在
+     * `app/src/test/java/com/takahashirinta/ncrust/ui/widget/WidgetStringsTest.kt`；
+     * 这里只做**组本身的规模与槽位**记账 —— 两处分工与 [PlaybackFailureStrings] 的写法一致。
+     */
+    @Test
+    fun `v3_3_0 的 8 条桌面卡片文案进了 WidgetStrings`() {
+        val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.WidgetStrings")
+        assertEquals(
+            "WidgetStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言" +
+                "（并确认 8 种语言文件都补齐、WidgetStringsTest 的字段清单也同步）",
+            8,
+            primaryParams(groupClazz),
+        )
+        // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
+        assertEquals(9, dexSlots(8, false))
+
+        // 转发路径：卡片侧读的是 `strings.widget.xxx`（组参数本身必须真的进了主构造器）。
+        val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
+        presets.forEach { s ->
+            assertTrue("${s.widget.widgetEmpty} 是空串", s.widget.widgetEmpty.isNotBlank())
+            assertTrue("${s.widget.widgetOpenApp} 丢了品牌名", s.widget.widgetOpenApp.contains("Ncrust"))
         }
     }
 }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v3.3.0 · 桌面播放卡片：下一首（浅色，透明底）。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#F2F2F2"
+        android:pathData="M15.5,4 L19,4 L19,20 L15.5,20 Z M4,4 L14,12 L4,20 Z" />
+</vector>
