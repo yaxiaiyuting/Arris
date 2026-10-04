@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 #
 # check.sh - 按目录统计 Kotlin 源文件行数与占比
-# 用法：在 ncrust 源码根目录执行 ./check.sh
+# 用法：在仓库任意位置执行 bash scripts/check.sh
+#
+# v3.4.5（移植自上游 9129c7f）：本脚本随早年多语言提交误入库，落在
+# app/src/main/java 的 Kotlin 源码树里，且 BASE_DIR 硬编码了另一台开发机的
+# 绝对路径（/home/rain/…），换机即失效。移到 scripts/ 并改为按脚本自身位置
+# 推导仓库根，任何机器克隆后可直接 bash scripts/check.sh。
 
 set -euo pipefail
 
@@ -10,7 +15,8 @@ GREEN="\033[32m"
 YELLOW="\033[33m"
 RESET="\033[0m"
 
-BASE_DIR="/home/rain/AndroidStudioProjects/Ncrust/app/src/main/java/com/takahashirinta/ncrust"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BASE_DIR="$ROOT/app/src/main/java/com/takahashirinta/ncrust"
 cd "$BASE_DIR" || exit 1
 
 echo ""
