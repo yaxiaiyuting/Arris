@@ -51,6 +51,17 @@ import java.util.concurrent.atomic.AtomicLong
  * （「跨源 id 不得上报给非本源服务」），而一条只写在文档里的规则不会在
  * 有人新加 QQ 上报时拦住他。有了 [mayReport] 这个唯一落点，
  * 那一天只需要 `ReportGate.mayReport(Target.QQ, id)` 一行即可复用全部判据与单测。
+ *
+ * ## v3.4.5 · P0：判据从「不是 QQ」改成「是 ncm」（B 站漏网）
+ *
+ * v2.5.5 写这道闸门时只有两个音源，所以 `!isQq` 恰好等价于「是 ncm」。
+ * 但 **B 站音源是 v3.1.0（两天后）才进来的**，它的 id 是 bit61 置位、bit62 清零
+ * ⇒ `isQq` 为 false ⇒ **被放行到 ncm 的 webLog**。根因与实测见 [SourceIds.isNeteaseId]。
+ *
+ * 因此这里把契约从「**恰好**被一个目标接受」修正为「**至多**被一个目标接受」：
+ * 带标志位但**没有对应上报目标**的音源（当前是 B 站）现在**两个目标都拒绝** ——
+ * 上报本来就无处可去，丢掉才是对的。任何新增音源在补齐自己的上报目标之前，
+ * 默认是被挡住的，而不是默认放行。
  */
 object ReportGate {
 
@@ -66,18 +77,21 @@ object ReportGate {
     /**
      * 这个 id 能不能上报给这个目标。
      *
-     * - [Target.NETEASE_WEBLOG]：`id > 0` 且 **不是** QQ 合成 id；
-     * - [Target.QQ]：`id > 0` 且 **是** QQ 合成 id。
+     * - [Target.NETEASE_WEBLOG]：**必须是 ncm 自己的 id**（[SourceIds.isNeteaseId]）；
+     * - [Target.QQ]：`id > 0` 且**是** QQ 合成 id。
      *
      * `id <= 0` 一律拒绝（两个方向都是）—— 它不是任何真实曲目。
+     *
+     * ## v3.4.5 · P0：ncm 侧从「不是 QQ」改成「是 ncm」
+     *
+     * 旧判据是 `!isQq`。B 站音源（v3.1.0）的 id 是 bit61 置位、bit62 清零，
+     * 所以 `isQq` 为 false ⇒ 被**放行**到 ncm 的 webLog。改成正向白名单后，
+     * 「带标志位但没有对应上报目标」的音源（当前是 B 站）**两个目标都拒绝**：
+     * 上报本就无处可去，丢掉才是对的。完整根因见 [SourceIds.isNeteaseId]。
      */
-    fun mayReport(target: Target, songId: Long): Boolean {
-        if (songId <= 0L) return false
-        val isQq = SourceIds.isQqId(songId)
-        return when (target) {
-            Target.NETEASE_WEBLOG -> !isQq
-            Target.QQ -> isQq
-        }
+    fun mayReport(target: Target, songId: Long): Boolean = when (target) {
+        Target.NETEASE_WEBLOG -> SourceIds.isNeteaseId(songId)
+        Target.QQ -> songId > 0L && SourceIds.isQqId(songId)
     }
 
     /**
@@ -103,8 +117,19 @@ object ReportGate {
 data class ReportGateCounters(
     /** 被拦下的总次数。 */
     @SerializedName("blockedTotal") val blockedTotal: Long? = null,
-    /** 其中「QQ 合成 id 试图上报给 ncm」的次数 —— 本版修的就是这一条。 */
+    /** 其中「QQ 合成 id 试图上报给 ncm」的次数 —— v2.5.5 修的就是这一条。 */
     @SerializedName("blockedQqToNetease") val blockedQqToNetease: Long? = null,
+    /**
+     * v3.4.5 · P0：其中「B 站合成 id 试图上报给 ncm」的次数。
+     *
+     * 与 [blockedQqToNetease] 分开记，是因为两者**根因不同**：QQ 那次是判据压根不存在，
+     * 这次是「负向判据 + 两天后新增音源」。混在一栏里，下一个看日志的人会把
+     * B 站的量当成 QQ 的存量，从而误判闸门有没有生效。
+     *
+     * 新字段一律**可空 + 有默认值**（Gson 走 Unsafe 反序列化、不调用构造函数），
+     * 老 JSON 缺这个 key 时读出来是 `null`，由 [canonical] 归零。
+     */
+    @SerializedName("blockedBiliToNetease") val blockedBiliToNetease: Long? = null,
     /** 其中「非 QQ id 试图上报给 QQ」的次数（当前恒为 0，见 [ReportGate.Target.QQ]）。 */
     @SerializedName("blockedNeteaseToQq") val blockedNeteaseToQq: Long? = null,
     /** 其中 `id <= 0` 的次数（不是跨源，是脏数据）。 */
@@ -119,6 +144,7 @@ data class ReportGateCounters(
     fun canonical(): ReportGateCounters = ReportGateCounters(
         blockedTotal = blockedTotal ?: 0L,
         blockedQqToNetease = blockedQqToNetease ?: 0L,
+        blockedBiliToNetease = blockedBiliToNetease ?: 0L,
         blockedNeteaseToQq = blockedNeteaseToQq ?: 0L,
         blockedInvalidId = blockedInvalidId ?: 0L,
         reportedTotal = reportedTotal ?: 0L,
@@ -151,12 +177,20 @@ data class ReportGateCounters(
             (c.reportedTotal ?: 0L) <= 0L ->
                 "闸门拦下 ${c.blockedTotal} 次、放行 0 次 —— 判据可能反了"
             else ->
-                "拦下 ${c.blockedTotal} 次（QQ→ncm ${c.blockedQqToNetease}）/ 放行 ${c.reportedTotal} 次"
+                "拦下 ${c.blockedTotal} 次（QQ→ncm ${c.blockedQqToNetease} / B站→ncm ${c.blockedBiliToNetease}）" +
+                    " / 放行 ${c.reportedTotal} 次"
         }
     }
 
     companion object {
-        const val SCHEMA_VERSION = 1
+        /**
+         * 持久化快照的 schema 版本。
+         *
+         * v1 → v2（v3.4.5 · P0）：新增 [blockedBiliToNetease]。加字段是**向后兼容**的
+         * （老数据缺 key ⇒ `null` ⇒ [canonical] 归零），所以不写迁移逻辑；
+         * 但版本号必须跟着走，否则将来分不清一份快照里到底有没有这一栏。
+         */
+        const val SCHEMA_VERSION = 2
     }
 }
 
@@ -175,6 +209,7 @@ class ReportGateCounter(private val clock: () -> Long = System::currentTimeMilli
 
     private val blockedTotal = AtomicLong()
     private val blockedQqToNetease = AtomicLong()
+    private val blockedBiliToNetease = AtomicLong()
     private val blockedNeteaseToQq = AtomicLong()
     private val blockedInvalidId = AtomicLong()
     private val reportedTotal = AtomicLong()
@@ -190,15 +225,20 @@ class ReportGateCounter(private val clock: () -> Long = System::currentTimeMilli
     /**
      * 记一次拦截。[songId] 与 [target] 决定归到哪一栏。
      *
-     * 归类判据与 [ReportGate.blockReason] 同源（都用 `SourceIds.isQqId`），
+     * 归类判据与 [ReportGate.mayReport] 同源（都用 `SourceIds` 的谓词），
      * 不在这里重写一遍 `songId <= 0` 之类的条件。
+     *
+     * v3.4.5 · P0：ncm 侧的被拦 id 现在可能是 QQ **或 B 站**，所以必须先按
+     * [SourceIds.isBiliId] 分一次栏 —— 否则 B 站的量会记进「QQ→ncm」，
+     * 让日志读者以为闸门在拦 QQ 存量。
      */
     fun onBlocked(target: ReportGate.Target, songId: Long) {
         blockedTotal.incrementAndGet()
         when {
             songId <= 0L -> blockedInvalidId.incrementAndGet()
-            target == ReportGate.Target.NETEASE_WEBLOG -> blockedQqToNetease.incrementAndGet()
-            else -> blockedNeteaseToQq.incrementAndGet()
+            target != ReportGate.Target.NETEASE_WEBLOG -> blockedNeteaseToQq.incrementAndGet()
+            SourceIds.isBiliId(songId) -> blockedBiliToNetease.incrementAndGet()
+            else -> blockedQqToNetease.incrementAndGet()
         }
         touch()
     }
@@ -212,6 +252,7 @@ class ReportGateCounter(private val clock: () -> Long = System::currentTimeMilli
     fun snapshot(): ReportGateCounters = ReportGateCounters(
         blockedTotal = blockedTotal.get(),
         blockedQqToNetease = blockedQqToNetease.get(),
+        blockedBiliToNetease = blockedBiliToNetease.get(),
         blockedNeteaseToQq = blockedNeteaseToQq.get(),
         blockedInvalidId = blockedInvalidId.get(),
         reportedTotal = reportedTotal.get(),
@@ -231,6 +272,7 @@ class ReportGateCounter(private val clock: () -> Long = System::currentTimeMilli
         val c = base.canonical()
         blockedTotal.addAndGet(c.blockedTotal ?: 0L)
         blockedQqToNetease.addAndGet(c.blockedQqToNetease ?: 0L)
+        blockedBiliToNetease.addAndGet(c.blockedBiliToNetease ?: 0L)
         blockedNeteaseToQq.addAndGet(c.blockedNeteaseToQq ?: 0L)
         blockedInvalidId.addAndGet(c.blockedInvalidId ?: 0L)
         reportedTotal.addAndGet(c.reportedTotal ?: 0L)

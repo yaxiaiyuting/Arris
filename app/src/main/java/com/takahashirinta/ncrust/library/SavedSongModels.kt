@@ -331,16 +331,24 @@ object SavedSongSync {
      * 所以「`id > 0`」这条既有的卫语句在数学上不可能拦住它 —— 与 v2.5.5 修掉的
      * `PlayReporter` 跨源上报是**同一个形状**（`ReportGate` 的 KDoc 记了完整根因链）。
      *
-     * 判据只能是 `bit62`（[SourceIds.isQqId]）。**不许用 id 区间启发式** ——
-     * QQ 的裸 songid 与 ncm 的 id 同样是 9~10 位十进制，区间完全重叠。
-     *
      * ## 为什么单独一个函数，而不是复用 `ReportGate` 的枚举
      *
-     * `ReportGate.Target` 的契约是**双向对称**的（每个合法 id 恰好被一个目标接受），
-     * 它的两个取值是两个**上报目标**。收藏（like）是**写操作**，不是上报；
-     * 把它塞进那个枚举会破坏「恰好被一个目标接受」这条被单测钉住的语义。
-     * 所以判据落在这里，但**与 `ReportGate` 共用同一个底层谓词**（`SourceIds.isQqId`），
-     * 不重新实现一遍。
+     * `ReportGate.Target` 的契约是**双向**的（每个 id **至多**被一个目标接受，
+     * v3.4.5 起由「恰好」放宽为「至多」），它的两个取值是两个**上报目标**。
+     * 收藏（like）是**写操作**，不是上报；把它塞进那个枚举会破坏那条被单测钉住的语义。
+     * 所以判据落在这里，但**与 `ReportGate` 共用同一个底层谓词**
+     * （[SourceIds.isNeteaseId]），不重新实现一遍。
+     *
+     * ## v3.4.5 · P0：从「不是 QQ」改成「是 ncm」
+     *
+     * 旧实现是 `songId > 0L && !SourceIds.isQqId(songId)` —— **负向判据**。
+     * B 站音源（v3.1.0）的 id 是 `BILI_ID_FLAG or auid`（bit61 置位、bit62 清零），
+     * 于是 `isQqId` 为 false ⇒ **放行**：一首 B 站曲目点「加入曲库」或点心形按钮，
+     * 会把 `2305843009213817408` 这类合成 id POST 到 ncm 的 `/eapi/radio/like`。
+     * 它与 QQ 那次完全同源，只是晚了两天进仓。
+     *
+     * 改成正向白名单后，**下一个音源进来时默认被挡住**，而不是默认放行 ——
+     * 后者正是漏掉 B 站的机制（加音源的人不会知道还有第二处要同步改）。
      */
-    fun isRemoteLikeEligible(songId: Long): Boolean = songId > 0L && !SourceIds.isQqId(songId)
+    fun isRemoteLikeEligible(songId: Long): Boolean = SourceIds.isNeteaseId(songId)
 }

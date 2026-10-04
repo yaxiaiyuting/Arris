@@ -269,6 +269,40 @@ object SourceIds {
     }
 
     /**
+     * v3.4.5 · P0：这个 id 是不是**ncm 自己的** id —— 发给 ncm 的服务之前必须过这一关。
+     *
+     * ## 为什么要有这个函数（而不是继续在调用点写「不是 QQ」）
+     *
+     * v2.5.5 / v2.6.0 的两道闸门（`ReportGate.mayReport`、`SavedSongSync.isRemoteLikeEligible`）
+     * 判据都写成**负向**的「`id > 0` 且**不是** QQ 合成 id」。当时只有两个音源，
+     * 「不是 QQ」等价于「是 ncm」，所以没问题。
+     *
+     * **B 站音源是两天后（v3.1.0 · `3dc482b`）才进来的**，而它的 id 是
+     * `BILI_ID_FLAG or auid`（[biliId]）—— **bit61 置位、bit62 清零**，于是
+     * `isQqId` 为 false ⇒ 负向判据**放行**。实测：
+     *
+     * ```
+     * bili auid 123456   id=2305843009213817408  isQqId=false  ⇒ 旧判据放行 ✗
+     * qq  合成 id         id=4611686018427511360  isQqId=true   ⇒ 旧判据拦下 ✓
+     * ncm  id             id=1959528822           isQqId=false  ⇒ 旧判据放行 ✓
+     * ```
+     *
+     * 后果与 v2.5.5 修掉的那次**完全同形**：一首 B 站曲目的合成 id 会被
+     * POST 到 ncm 的 `/eapi/radio/like` 与 `clientlogusf…/weblog`。没有任何设计意图
+     * 是「把 B 站 id 发给网易云」，所以这是缺陷而不是取舍。
+     *
+     * ## 为什么是正向白名单
+     *
+     * 判据写成「`sourceOfId` 是不是 ncm」，而不是「排除 QQ 再排除 B 站」：
+     * **下一个音源进来时，它默认被挡住，而不是默认放行**。后者正是这次漏掉 B 站
+     * 的机制 —— 加音源的人不会知道有第二个地方需要同步改。
+     *
+     * `id <= 0` 一并拒绝：它不是任何真实曲目（`sourceOfId` 对非正数会回落成
+     * `NETEASE`，所以这一条**必须**显式写出来，不能靠 `sourceOfId`）。
+     */
+    fun isNeteaseId(id: Long): Boolean = id > 0L && sourceOfId(id) == MusicSource.NETEASE
+
+    /**
      * 造一个 qm 的数字 id。
      *
      * @param rawSongId 服务端给的 songid。**<= 0 或已经占到标志位时**改用 [sourceId] 的散列兜底

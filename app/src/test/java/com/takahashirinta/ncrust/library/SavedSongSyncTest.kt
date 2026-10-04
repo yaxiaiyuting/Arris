@@ -340,6 +340,21 @@ class SavedSongSyncTest {
         assertFalse(SavedSongSync.isRemoteLikeEligible(qq))
     }
 
+    /**
+     * ★ v3.4.5 · P0 的回归守卫：**B 站**合成 id 同样不许发给 ncm 的写接口。
+     *
+     * 旧判据 `songId > 0 && !isQqId(songId)` 对 B 站 id 返回 true（bit62 清零）——
+     * 于是「加入曲库」或点心形会把 `2^61 + auid` POST 到 `/eapi/radio/like`。
+     * 这条用例在旧实现下会红。
+     */
+    @Test
+    fun `闸门 B站合成 id 不许发给ncm的写接口`() {
+        val bili = SourceIds.biliId(22760301L)
+        assertTrue("B 站合成 id 是正数 ⇒ 旧的 id>0 卫语句拦不住它", bili > 0L)
+        assertFalse("B 站 id 的 bit62 必须清零，否则本用例测不到东西", SourceIds.isQqId(bili))
+        assertFalse(SavedSongSync.isRemoteLikeEligible(bili))
+    }
+
     @Test
     fun `闸门 非法 id 一律拒绝`() {
         assertFalse(SavedSongSync.isRemoteLikeEligible(0L))
@@ -351,13 +366,15 @@ class SavedSongSyncTest {
      * 「能不能上报给 ncm」与「能不能发写请求给 ncm」必须给出同一个答案。
      *
      * 两条链路各写一份判据迟早会分叉（一条修了另一条没修）——
-     * 而它们的根因是同一个（`bit62` 是正数）。这里用穷举把它钉住。
+     * 而它们的根因是同一个（v2.5.5 是 bit62，v3.4.5 是 bit61 的 B 站）。
+     * 这里用穷举把它钉住，**样本必须含三种音源的 id 形态**。
      */
     @Test
     fun `闸门判据与 ReportGate 的ncm方向逐值一致`() {
         val samples = buildList {
             addAll(listOf(-1L, 0L, 1L, 999L, 3_000_000_000L))
             addAll((1..50).map { SourceIds.qqId(it.toLong(), "mid$it") })
+            addAll((1..50).map { SourceIds.biliId(it.toLong()) })
         }
         samples.forEach { id ->
             assertEquals(
