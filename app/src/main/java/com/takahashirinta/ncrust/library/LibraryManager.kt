@@ -469,27 +469,47 @@ object LibraryManager {
         var anySuccess = false
 
         // 单曲：先拉全量有序 trackIds 作底表，只需首屏分批详情即可渲染(懒加载)。
+        //
+        // v3.4.5 · P0（移植自上游 `6b5b470`）：读失败**一律保留现有缓存**。
+        // 旧写法把 `Failure`（业务码非 200 / 结构异常）与「服务端确认收藏为空」
+        // 折叠成同一个 `emptyList()`，于是 `cachedLikedIds` 被清空**并落盘**
+        // （见下方 `scheduleFlush` → `KEY_LIKED_IDS`）—— 表头显示「0 首」、
+        // 分页底表变空，且重启后仍是空。收藏单曲本体不受影响（merge 只加不减）。
         try {
-            val likedIds = PlaylistApi.getLikedTrackIds(uid)
-            Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
-            synchronized(idsLock) { cachedLikedIds = likedIds }
-            val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
-            val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
-            val freshById = firstSongs.associateBy { it.id }
-            synchronized(songsLock) {
-                val before = cachedEntries ?: mutableListOf()
-                val after = SavedSongSync.merge(before, likedIds, freshById, System.currentTimeMillis())
-                cachedEntries = after.toMutableList()
-                // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
-                // 「已覆盖」= **表里有这个 trackKey 的条目**（tombstone 也算），
-                // 见 likedIdCursor 的 KDoc。
-                val coveredIds = after.asSequence()
-                    .filter { it.trackKey.source == MusicSource.NETEASE }
-                    .map { it.trackKey.id }
-                    .toHashSet()
-                likedIdCursor = likedIds.takeWhile { it in coveredIds }.size
+            when (val likedResult = PlaylistApi.getLikedTrackIds(uid)) {
+                is PlaylistApi.LikedIdsResult.Failure -> {
+                    // 关键：不写 cachedLikedIds、也不置 anySuccess
+                    // （后者会触发一次落盘，把「没变」写成「变空」的时机提前）。
+                    Log.w(
+                        TAG,
+                        "refreshFromCloud: liked songs 读取失败，保留本地 ids=" +
+                            "${cachedLikedIds?.size ?: 0}：${likedResult.reason}"
+                    )
+                }
+
+                is PlaylistApi.LikedIdsResult.Success -> {
+                    val likedIds = likedResult.ids
+                    Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
+                    synchronized(idsLock) { cachedLikedIds = likedIds }
+                    val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
+                    val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
+                    val freshById = firstSongs.associateBy { it.id }
+                    synchronized(songsLock) {
+                        val before = cachedEntries ?: mutableListOf()
+                        val after = SavedSongSync.merge(before, likedIds, freshById, System.currentTimeMillis())
+                        cachedEntries = after.toMutableList()
+                        // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
+                        // 「已覆盖」= **表里有这个 trackKey 的条目**（tombstone 也算），
+                        // 见 likedIdCursor 的 KDoc。
+                        val coveredIds = after.asSequence()
+                            .filter { it.trackKey.source == MusicSource.NETEASE }
+                            .map { it.trackKey.id }
+                            .toHashSet()
+                        likedIdCursor = likedIds.takeWhile { it in coveredIds }.size
+                    }
+                    anySuccess = true
+                }
             }
-            anySuccess = true
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: liked songs failed: ${e.message}")
         }

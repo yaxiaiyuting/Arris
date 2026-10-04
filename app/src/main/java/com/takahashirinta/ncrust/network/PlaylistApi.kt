@@ -583,9 +583,25 @@ object PlaylistApi {
     /**
      * 找到「我喜欢的音乐」（红心歌单）的 playlist id。
      *
-     * 该歌单在 /eapi/user/playlist 中作为用户自己的特殊歌单出现（specialType != 0，
-     * 普通自建歌单为 0），正是收藏页单曲 tab 的数据源。与官方 weapi 的 likelist
-     * （/api/song/like/get，eapi 加密）等价，但走已证明可用的 playlist-detail 路径。
+     * 该歌单在 `/eapi/user/playlist` 中作为**特殊歌单**出现
+     * （名称「我喜欢的音乐」/ `specialType == 5`，普通自建歌单 `specialType` 为 0），
+     * 正是收藏页单曲 tab 的数据源。依次按**名称 → `specialType == 5` → 任意特殊歌单**
+     * 三级兜底，与官方 weapi 的 likelist 等价，但走已证明可用的 playlist-detail 路径。
+     *
+     * ## v3.4.5 · P0（移植自上游 `de193ff`）：为什么必须精确命中
+     *
+     * 旧实现取「**第一个** `specialType != 0`」的歌单。这个谓词**不唯一** ——
+     * 账号里只要还有别的特殊歌单且排在红心歌单之前，读端拿到的就是**另一个歌单**的
+     * trackIds，与 like 的**写入目标**（服务端固定的红心歌单）不是同一个。
+     *
+     * 后果比「计数不对」更脏：本仓库的收藏库是**只加不减**的
+     * （`SavedSongSync.merge`，云端只负责追加），所以错歌单的 id 会被当作
+     * 「云端有、本地没有」而**追加进本地收藏** —— 把别处的歌**导入**「我的收藏」。
+     * 上游把这条的症状记为「收藏后隔天消失」，本仓库因为只加不减不会消失，
+     * 但读错源这件事是一样的。
+     *
+     * 挑选规则已抽成纯函数 [pickLikedPlaylistIdFrom]（JVM 可单测）；
+     * 这里只负责取数与解 JSON。
      */
     suspend fun getLikedPlaylistId(uid: Long): Long? = withContext(Dispatchers.IO) {
         val payload = mapOf(
@@ -597,17 +613,34 @@ object PlaylistApi {
         val response = RetrofitClient.eapiPost(USER_PLAYLIST_PATH, payload)
         val body = response.body?.string() ?: return@withContext null
         val json = JSONObject(body)
-        val arr = json.optJSONArray("playlist") ?: return@withContext null
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            if (item.optInt("specialType") != 0) return@withContext item.optLong("id")
-        }
-        // 兜底：按名字识别「我喜欢的音乐」
-        for (i in 0 until arr.length()) {
-            val item = arr.getJSONObject(i)
-            if (item.optString("name").contains("我喜欢的音乐")) return@withContext item.optLong("id")
-        }
-        null
+        pickLikedPlaylistIdFrom(json.optJSONArray("playlist"))
+    }
+
+    /**
+     * 读取「我喜欢的音乐」单曲 ID 的**显式结果**（v3.4.5 · 移植自上游 `6b5b470`）。
+     *
+     * ## 为什么不能再用 `List<Long>` 表示失败
+     *
+     * 旧签名把**三种完全不同的语义**压进同一个返回值 `emptyList()`：
+     *
+     * 1. 服务端**权威确认**「收藏为空」—— 这是真的空；
+     * 2. HTTP 200 但**业务码非 200**（风控 `-460` / 未登录 / 参数错）；
+     * 3. **结构异常**（空 body / 缺 `playlist` / 缺 `trackIds`）。
+     *
+     * 调用方（`LibraryManager.refreshFromCloud`）无法区分它们，于是 2、3 会被当成 1
+     * 覆盖掉 `cachedLikedIds` 并**落盘** —— 一次抖动就让收藏页表头显示「0 首」、
+     * 分页底表变空（`getLikedSongIds` / `loadAllLikedSongs` 都拿不到 id），
+     * 且**重启后仍然是空**，直到下一次成功刷新。
+     *
+     * 收藏单曲**本体**不会因此丢失：本仓库的收藏库是只加不减的
+     * （`SavedSongSync.merge`，云端只负责追加）。丢的是 `liked_ids` 这份底表。
+     *
+     * 所以：`Success(emptyList())` = 服务端确认收藏为空；`Failure` = 「不知道」，
+     * 调用方**必须保留现有缓存**。
+     */
+    sealed interface LikedIdsResult {
+        data class Success(val ids: List<Long>) : LikedIdsResult
+        data class Failure(val reason: String) : LikedIdsResult
     }
 
     /**
@@ -619,22 +652,48 @@ object PlaylistApi {
      *
      * 终止性由三重条件保证，不会死循环：①页数上限 MAX_LIKED_FILL_PAGES；
      * ②某页返回空；③整页都是重复 id（说明服务端不再前进）。
+     *
+     * v3.4.5：**失败不再返回空列表**，而是 [LikedIdsResult.Failure]，由调用方决定
+     * 是否保留本地数据（见 [LikedIdsResult] 的 KDoc）。
+     *
+     * 补齐循环的**部分失败不算 Failure**：head 已经是服务端权威给的一段，
+     * 取不满只是「少了一点」，按 Success 返回并打日志；把它降级成 Failure 会让
+     * 一张本来完好的底表完全不更新。这条语义与 v3.4.5 之前一致，没有改动。
      */
-    suspend fun getLikedTrackIds(uid: Long): List<Long> = withContext(Dispatchers.IO) {
-        val playlistId = getLikedPlaylistId(uid) ?: return@withContext emptyList()
+    suspend fun getLikedTrackIds(uid: Long): LikedIdsResult = withContext(Dispatchers.IO) {
+        val playlistId = try {
+            getLikedPlaylistId(uid)
+        } catch (e: Exception) {
+            return@withContext LikedIdsResult.Failure("getLikedPlaylistId threw: ${e.message}")
+        } ?: return@withContext LikedIdsResult.Failure("liked playlist not found")
+
         val payload = mapOf(
             "id" to playlistId.toString(),
             "n" to "1000",
             "s" to "0"
         )
-        val response = RetrofitClient.eapiPost(PLAYLIST_DETAIL_PATH, payload)
-        val body = response.body?.string() ?: return@withContext emptyList()
-        val json = JSONObject(body)
-        val playlistObj = json.optJSONObject("playlist") ?: return@withContext emptyList()
-        val trackIds = playlistObj.optJSONArray("trackIds") ?: return@withContext emptyList()
-        val head = (0 until trackIds.length()).map { trackIds.getJSONObject(it).optLong("id") }
-        val declaredCount = playlistObj.optInt("trackCount", head.size)
-        if (head.size >= declaredCount) return@withContext head.distinct()
+        val head: List<Long>
+        val declaredCount: Int
+        try {
+            val response = RetrofitClient.eapiPost(PLAYLIST_DETAIL_PATH, payload)
+            val body = response.body?.string()
+                ?: return@withContext LikedIdsResult.Failure("empty body")
+            val json = JSONObject(body)
+            // 业务码必须显式校验：v3.4.5 之前这里从不看 code，
+            // 于是 -460 / 未登录都长成「收藏为空」。
+            val code = json.optInt("code", -1)
+            if (code != 200) return@withContext LikedIdsResult.Failure("business code=$code")
+            val playlistObj = json.optJSONObject("playlist")
+                ?: return@withContext LikedIdsResult.Failure("missing playlist object")
+            val trackIds = playlistObj.optJSONArray("trackIds")
+                ?: return@withContext LikedIdsResult.Failure("missing trackIds")
+            head = (0 until trackIds.length()).map { trackIds.getJSONObject(it).optLong("id") }
+            declaredCount = playlistObj.optInt("trackCount", head.size)
+        } catch (e: Exception) {
+            return@withContext LikedIdsResult.Failure("request threw: ${e.message}")
+        }
+
+        if (head.size >= declaredCount) return@withContext LikedIdsResult.Success(head.distinct())
 
         // LinkedHashSet：保序 + 去重，重复 id 不会让结果变长。
         val all = LinkedHashSet<Long>(maxOf(head.size, declaredCount).coerceAtLeast(16))
@@ -656,7 +715,7 @@ object PlaylistApi {
             "getLikedTrackIds: declared=" + declaredCount + " head=" + head.size +
                 " final=" + all.size + " pages=" + pages
         )
-        all.toList()
+        LikedIdsResult.Success(all.toList())
     }
 
     /** 分页读取红心歌单第 offset 起的 limit 个单曲 id（Bug2-③ 补齐用）。 */
@@ -678,36 +737,100 @@ object PlaylistApi {
     suspend fun getSongsByIds(ids: List<Long>): List<SongItem> = fetchSongDetails(ids)
 
     /**
-     * 收藏(like=true) / 取消收藏(false) 单曲。
+     * 收藏(`like=true`) / 取消收藏(`false`) 单曲 —— 写入「我喜欢的音乐」。
      *
-     * 走官方安卓客户端协议：eapi `/eapi/radio/like` + 客户端身份头 + 真随机 deviceId，
-     * 并对**加密响应**做 AES 解密（eapi 写接口返回加密 JSON，读取接口为明文）。
+     * ## v3.4.5 · P0（移植自上游 `de193ff`）：`time` 不是时间戳，通道也要换
      *
-     * 注意：like 写操作受网易账号/IP 级风险控制，本账号四种协议变体(eapi 最小/eapi+PC 指纹/
-     * eapi+安卓身份/经典 weapi)均被 `-460「检测到您的网络环境存在风险」`或异常响应拦截而
-     * 读取全部正常——这是服务端风控，非本实现问题。真实官方 like 协议待后续抓包确认。
+     * 主通道改为与官方网页/参考实现完全一致的 weapi `/api/radio/like`：
+     * `alg=itembased & trackId=<id> & like=<bool> & time=3`。
+     *
+     * **`time` 的语义是「试听秒数」，官方固定为 `3`**。旧实现把它当成 Unix 秒级
+     * 时间戳发送（`System.currentTimeMillis() / 1000` ≈ 1.7e9），上游判断服务端风控
+     * 会先接受、随后在例行审核里把这条 like 判为异常并**回滚** —— 那是「收藏后隔天
+     * 消失」的服务端诱因。
+     *
+     * 本仓库因为收藏库是**只加不减**的（`SavedSongSync.merge` 规则 3），
+     * 服务端回滚**不会**让歌从本地列表里消失；但这条 like 会**没有真正落到云端**：
+     * 换机 / 重装 / 清数据后丢失，官方客户端与网页看不到，也不喂 ncm 的推荐。
+     * 所以读端「列表还在」不代表写端没问题。
+     *
+     * weapi 被账号级风控（`-460「检测到您的网络环境存在风险」`）拦截时回退到
+     * eapi 客户端协议（`/eapi/radio/like` + 客户端身份头 + 真随机 deviceId +
+     * 加密响应 AES 解密）；回退路径同样使用 `time=3`。
+     *
+     * ## 关于风控的那段历史观测（保留，避免后人误读）
+     *
+     * like 写操作历史上曾受网易账号/IP 级风险控制，本账号四种协议变体（eapi 最小 /
+     * eapi+PC 指纹 / eapi+安卓身份 / 经典 weapi）均被 `-460` 或异常响应拦截，
+     * 而**读取全部正常**。该注释是**既往观测，不代表当前版本/当前账号的现状** ——
+     * 以实际响应为准。成功与否只由 `code == 200` 判定，**绝不把非 200 响应当成功**。
+     *
+     * 额外记录脱敏的 HTTP 状态、业务码与耗时，便于诊断；**不记录** Cookie、
+     * CSRF token 或完整加密请求体。
      */
     suspend fun likeSong(songId: Long, like: Boolean): Boolean = withContext(Dispatchers.IO) {
+        if (tryWeapiLike(songId, like) == 200) return@withContext true
+        tryEapiLike(songId, like) == 200
+    }
+
+    /** weapi 主通道。返回业务码；请求失败返回 -1（调用方据此回退 eapi）。 */
+    private fun tryWeapiLike(songId: Long, like: Boolean): Int {
+        return try {
+            val payload = JSONObject()
+                .put("alg", "itembased")
+                .put("trackId", songId)
+                .put("like", like)
+                .put("time", "3")
+                .toString()
+            val response = RetrofitClient.weapiPost("/api/radio/like", payload)
+            val body = response.body?.string() ?: return -1
+            JSONObject(body).optInt("code", -1).also {
+                Log.i("PlaylistApi", "likeSong(weapi) id=$songId like=$like code=$it")
+            }
+        } catch (e: Throwable) {
+            Log.w("PlaylistApi", "likeSong(weapi) req failed id=$songId like=$like", e)
+            -1
+        }
+    }
+
+    /** eapi 回退通道（官方安卓客户端协议）。返回业务码；失败返回 -1。 */
+    private fun tryEapiLike(songId: Long, like: Boolean): Int {
         val payload = mapOf(
             "alg" to "itembased",
             "trackId" to songId.toString(),
             "like" to like.toString(),
-            "time" to (System.currentTimeMillis() / 1000).toString(),
+            // 试听秒数，官方固定 3 —— 不是时间戳（见 likeSong 的 KDoc）。
+            "time" to "3",
             "e_r" to "TRUE",
             "csrf_token" to (RetrofitClient.getCsrfToken().orEmpty())
         )
+        val startedAt = System.currentTimeMillis()
         val http = try {
             RetrofitClient.eapiPostOfficial("/eapi/radio/like", payload)
         } catch (e: Throwable) {
-            Log.w("PlaylistApi", "likeSong req failed id=$songId like=$like", e)
-            return@withContext false
+            Log.w("PlaylistApi", "likeSong(eapi) req failed id=$songId like=$like", e)
+            return -1
         }
-        val raw = try { http.body?.bytes() } catch (_: Throwable) { null } ?: return@withContext false
+        val elapsed = System.currentTimeMillis() - startedAt
+        val raw = try { http.body?.bytes() } catch (_: Throwable) { null }
+        if (raw == null) {
+            Log.w("PlaylistApi", "likeSong(eapi) id=$songId like=$like http=${http.code} no body elapsedMs=$elapsed")
+            return -1
+        }
         val plain = EapiCrypto.decryptResponse(java.util.Base64.getEncoder().encodeToString(raw))
         val jsonText = plain.ifEmpty { String(raw) }
-        val code = try { JSONObject(jsonText).optInt("code", -1) } catch (_: Throwable) { -1 }
-        Log.i("PlaylistApi", "likeSong(eapi/client) id=$songId like=$like code=$code")
-        code == 200
+        var code = -1
+        var parseOk = false
+        try {
+            code = JSONObject(jsonText).optInt("code", -1)
+            parseOk = true
+        } catch (_: Throwable) { /* parseOk stays false */ }
+        Log.i(
+            "PlaylistApi",
+            "likeSong(eapi/client) id=$songId like=$like http=${http.code} " +
+                "code=$code parsed=$parseOk elapsedMs=$elapsed"
+        )
+        return code
     }
 
     /** 收藏的专辑（云端的「我收藏的专辑」，weapi）。 */
