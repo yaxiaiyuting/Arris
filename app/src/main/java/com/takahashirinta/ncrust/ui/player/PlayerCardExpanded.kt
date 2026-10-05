@@ -193,6 +193,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     durationFlow = playerViewModel.duration,
                     qualityIndexFlow = playerViewModel.currentQualityIndex,
                     qualityStatusFlow = playerViewModel.qualityStatus,
+                    qualityBitrateFlow = playerViewModel.currentBitrate,
                     qualityOptions = strings.qualityOptions,
                     onPlayPause = callbacks.onPlayPause,
                     onPlayPrevious = callbacks.onPlayPrevious,

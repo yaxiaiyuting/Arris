@@ -271,6 +271,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val qualityStatus = MutableStateFlow(QualityStatus.NORMAL)
 
     /**
+     * 当前**实际在播文件**的码率（bit/s）；`0` = 拿不到（不是「零码率」）。
+     *
+     * 与 [qualityStatus] 走**同一条链路**：有值的那次写入在 [applyQualityVerdict] 里，
+     * 就在档位判定的同一个函数内。理由是这两个值本来就是同一次取链结果的两个字段 ——
+     * 档位由 `br`/`type` 推出来，码率就是那个 `br`。另起一条写路径必然漂移：
+     * 换歌、预载接管、降级重试、离线兜底四处都得各写一遍，漏一处就是「显示上一首的码率」。
+     *
+     * 另外两处写入是**复位为 0**（不是给值）：`playSong` 开头「先复位、等取链结论」那一段，
+     * 以及 [stopForQualityFailure]（整条链放弃、已无文件在播）。两处都与相邻的
+     * `qualityStatus.value = …` 成对出现，读的时候一起看。
+     *
+     * 拿不到的情形（如实留 0，UI 侧由 `QualityAssessment.bitrateLabel` 决定不显示）：
+     * 离线缓存兜底 / B 站音频区 / 取链失败 / 老缓存条目。
+     */
+    val currentBitrate = MutableStateFlow(0L)
+
+    /**
      * B2-C：跟随封面时的原始主题色（ARGB）。由 PlaybackService 的 Palette 结果静态回调推送，
      * null = 无封面 / 提取失败 → UI 回落预设色。饱和度压制与亮度锚定在 UI 侧按当前明暗处理
      * （同一张封面在深色/浅色下锚定区间不同，不能只按 URL 缓存处理结果）。
@@ -994,6 +1011,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         currentQualityIndex.value = verdict.displayIndex
         qualityStatus.value = verdict.status
+        // 码率与档位同源（就是上面那次 assess 用的 result.br），所以在这里一起写。
+        // 0 = 这条链没给出码率（离线兜底 / B 站音频区 / 取链失败），UI 会据此不显示。
+        currentBitrate.value = result.br
         // v2.1.4 · 诊断：把「这一次到底拿到了什么」打成一行。
         // 起因是用户报「选了超清母带却只出极高」—— 而档位标签显示的是**请求档位**，
         // 没有这一行就分不清「真的只拿到 320k」还是「拿到了高档位、只是界面没体现」。
@@ -1238,6 +1258,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (quality.isEmpty()) preferredQualityIndex.value = qIdx
         currentQualityIndex.value = qIdx
         qualityStatus.value = QualityStatus.NORMAL
+        // 与上面两行同一次「先复位、等取链结论」—— 不复位的话新歌开播前会短暂挂着
+        // 上一首的码率（那正是「界面显示的歌与耳朵听到的不一致」的形状）。
+        currentBitrate.value = 0L
 
         // Fast path: URL was preloaded and cached for THIS requested level — skip network round-trip.
         // 缓存条目带档位:播放失败降档重试时,绝不会把上一档(可能已证明播不出声)的 URL 原样喂回。
@@ -1684,6 +1707,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
         isPlaying.value = false
         qualityStatus.value = QualityStatus.DOWNGRADED
+        // 已经没有任何文件在播（这条链彻底放弃），码率随之作废 —— 挂着一个「刚失败那条链」
+        // 的码率会让人以为还在放。
+        currentBitrate.value = 0L
         // 静音停下（保留当前歌与队列，用户点一下就能重来）。
         val intent = Intent(getApplication(), PlaybackService::class.java).apply {
             putExtra("action", "pause")

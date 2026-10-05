@@ -194,6 +194,8 @@ internal fun PlayerCardBigScreenLayout(
                 PlayerQualityChip(
                     qualityIndexFlow = playerViewModel.currentQualityIndex,
                     qualityStatusFlow = playerViewModel.qualityStatus,
+                    // 只传 StateFlow 引用，值由 PlayerQualityLabel 这个叶子自己 collect。
+                    qualityBitrateFlow = playerViewModel.currentBitrate,
                     options = strings.qualityOptions,
                     preferredIndexProvider = {
                         playerViewModel.currentQualityPreferenceIndex()

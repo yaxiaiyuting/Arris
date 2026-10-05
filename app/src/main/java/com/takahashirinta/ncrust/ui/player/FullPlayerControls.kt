@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.formatDuration
+import com.takahashirinta.ncrust.player.QualityAssessment
 import com.takahashirinta.ncrust.player.QualityStatus
 import com.takahashirinta.ncrust.player.SongUrlFetcher
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -63,6 +64,13 @@ fun FullPlayerControls(
     durationFlow: StateFlow<Long>,
     qualityIndexFlow: StateFlow<Int>,
     qualityStatusFlow: StateFlow<QualityStatus>,
+    /**
+     * 实际在播文件的码率（bit/s，0 = 拿不到）。
+     *
+     * 与 [qualityIndexFlow] / [qualityStatusFlow] 一样只传 StateFlow 引用、由**叶子**各自
+     * collect，不在这一层读值 —— 否则每次换歌都会让整条控制栏重组，破坏零重组纪律。
+     */
+    qualityBitrateFlow: StateFlow<Long>,
     qualityOptions: List<String>,
     onPlayPause: () -> Unit,
     onPlayPrevious: () -> Unit = {},
@@ -360,6 +368,7 @@ fun FullPlayerControls(
                     PlayerQualityChip(
                         qualityIndexFlow = qualityIndexFlow,
                         qualityStatusFlow = qualityStatusFlow,
+                        qualityBitrateFlow = qualityBitrateFlow,
                         options = qualityOptions,
                         preferredIndexProvider = preferredQualityIndexProvider,
                         onSelect = onQualitySelect,
@@ -393,6 +402,7 @@ fun FullPlayerControls(
             PlayerQualityChip(
                 qualityIndexFlow = qualityIndexFlow,
                 qualityStatusFlow = qualityStatusFlow,
+                qualityBitrateFlow = qualityBitrateFlow,
                 options = qualityOptions,
                 preferredIndexProvider = preferredQualityIndexProvider,
                 onSelect = onQualitySelect,
@@ -616,6 +626,8 @@ fun RotationToggleButton(
 fun PlayerQualityChip(
     qualityIndexFlow: StateFlow<Int>,
     qualityStatusFlow: StateFlow<QualityStatus>,
+    /** 实际在播文件的码率（bit/s，0 = 拿不到）；语义见 [PlayerQualityLabel]。 */
+    qualityBitrateFlow: StateFlow<Long>,
     options: List<String>,
     preferredIndexProvider: () -> Int,
     onSelect: (Int) -> Unit,
@@ -651,6 +663,7 @@ fun PlayerQualityChip(
             PlayerQualityLabel(
                 qualityIndexFlow = qualityIndexFlow,
                 qualityStatusFlow = qualityStatusFlow,
+                qualityBitrateFlow = qualityBitrateFlow,
                 options = options
             )
         }
@@ -702,7 +715,7 @@ private fun DurationText(durationFlow: StateFlow<Long>, modifier: Modifier) {
 }
 
 /**
- * 音质档位 + 状态角标。唯一实现，两处复用：
+ * 音质档位 + 状态角标 + 实际码率。唯一实现，两处复用：
  *  - 控制条（窄屏底部居中 / 宽屏横向右端）：点一下跳设置页；
  *  - P1 大屏模式左栏：包一层可点盒子 + MetroSelectorFlyout，就地切换档位。
  * 拆成公开 Composable 而不是复制一份，是为了让「实际档位 vs 偏好档位」的角标语义
@@ -712,10 +725,14 @@ private fun DurationText(durationFlow: StateFlow<Long>, modifier: Modifier) {
 fun PlayerQualityLabel(
     qualityIndexFlow: StateFlow<Int>,
     qualityStatusFlow: StateFlow<QualityStatus>,
+    qualityBitrateFlow: StateFlow<Long>,
     options: List<String>
 ) {
     val qualityIndex by qualityIndexFlow.collectAsState()
     val status by qualityStatusFlow.collectAsState()
+    // 码率是**叶子自己** collect 的第三个流（不是从上层传值下来的）：
+    // 换歌时只有这一小块文字重组，控制栏的按钮 / 进度条一行都不动。
+    val bitrate by qualityBitrateFlow.collectAsState()
     val label = options.getOrElse(qualityIndex) { options.getOrElse(3) { "" } }
     // A3：状态按实际文件参数（br/type）判定，不再按 level 序号 —— 明确区分
     // 「无权限」「该曲无此档位」「真实降级」，避免把"其实在播 Hi-Res"或
@@ -726,6 +743,9 @@ fun PlayerQualityLabel(
         QualityStatus.NO_ENTITLEMENT -> LocalStrings.current.qualityNoEntitlementBadge
         QualityStatus.SONG_LACKS_TIER -> LocalStrings.current.qualitySongLacksTierBadge
     }
+    // 拿不到码率时为 null ⇒ 不挂任何节点（不是显示 0/空白）。判据只有一份，
+    // 在 QualityAssessment.bitrateLabel 里 —— 这里不重复判 br > 0。
+    val bitrateLabel = QualityAssessment.bitrateLabel(bitrate)
     Row(verticalAlignment = Alignment.CenterVertically) {
         MetroText(
             label,
@@ -740,6 +760,21 @@ fun PlayerQualityLabel(
             Spacer(Modifier.width(4.dp))
             MetroText(
                 badge,
+                color = LocalMetroColors.current.onSurfaceVariant,
+                style = TextStyle(fontSize = 10.sp),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        // 码率排在**最后**，让位顺序是「档位名 > 诚实角标 > 码率」：
+        // 顺序 Row 的子节点依次摆放，宽度不够时最后声明的那个先被挤成省略号。
+        // 角标（已降级/无权限/该曲无此档位）是 v2.1.4 特意加的诚实信号，不能被一个
+        // 可选的数字挤掉；而码率本身在拿不到时就整段不挂载，少显示是它的正常状态之一。
+        if (bitrateLabel != null) {
+            Spacer(Modifier.width(4.dp))
+            MetroText(
+                bitrateLabel,
                 color = LocalMetroColors.current.onSurfaceVariant,
                 style = TextStyle(fontSize = 10.sp),
                 maxLines = 1,
