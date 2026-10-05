@@ -5,13 +5,20 @@
  * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * 探针（第 1 步「先量化」）：**在真机的真实 vsync 上**采集两条序列 ——
- * 帧间隔（Choreographer 的 frameTimeNanos 之差）与可见位移
- * （`Δ窗口平移格 + ΔscrollPhase01()`，与渲染层同源）。
+ * 探针：**在真机的真实 vsync 上**采集两条序列 —— 帧间隔（Choreographer 的 frameTimeNanos 之差）
+ * 与可见位移（`Δ窗口平移格 + ΔscrollPhase01()`，与渲染层同源）。
  *
- * 为什么需要它：模拟器的帧时间被 SwiftShader 拖慢（仓库铁律 16），
- * 不能当 60Hz 面板的结论；而本机的 S6（G920F / 60Hz）是真面板。
+ * 为什么需要它：模拟器的帧时间被 SwiftShader 拖慢（仓库铁律 16），不能当面板的结论。
  * 本探针不改任何生产代码 —— 它把**真实的 vsync 时间戳**喂给真实的 WaveformRing。
+ *
+ * ## v3.4.7 起多量三件事（这才是重点）
+ *
+ * 1. **两个时钟的基准差**：帧时间戳（`frameTimeNanos / 1e6`）与 `SystemClock.uptimeMillis()`
+ *    在同一帧里各取一次，报告差值 —— 相位锚点把这两个量相减，它们必须**同源**。
+ * 2. **柱到达帧的位移**：单独统计「窗口平移了的那一帧」的位移。相位若被清零或锚错，
+ *    这一帧的位移会塌成 0（用户读到的就是「顿一下」），而它本该 ≈ 名义步长。
+ * 3. **柱来自另一条线程**：柱由独立的 HandlerThread 按自己的节拍 push、时间戳取
+ *    `SystemClock.uptimeMillis()`（与生产里 ExoPlayer 的播放线程同构），**不在 vsync 网格上**。
  */
 
 package com.takahashirinta.ncrust.probe
@@ -23,6 +30,7 @@ import android.view.Choreographer
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.takahashirinta.ncrust.ui.player.WaveformRing
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.CountDownLatch
@@ -32,58 +40,88 @@ import kotlin.math.sqrt
 @RunWith(AndroidJUnit4::class)
 class WaveformVsyncProbeTest {
 
-    private class Rec(val tMs: Double, val dtMs: Float, val shifted: Long, val phase: Float, val intervalMs: Float)
+    private class Rec(
+        val tMs: Double,
+        val dtMs: Float,
+        val shifted: Long,
+        val phase: Float,
+        val intervalMs: Float,
+        /** 同一帧里 `uptimeMillis() − frameTimeNanos/1e6`（两个时钟的基准差，毫秒）。 */
+        val clockSkewMs: Long,
+    )
 
     /**
-     * @param barPeriodMs 柱到达周期（模拟 AudioTrack 缓冲回调，与 vsync 无关）
-     * @param barOffsetMs 柱到达相对 vsync 网格的错开量
+     * @param barPeriodMs 柱到达周期（模拟 AudioTrack / ExoPlayer 的缓冲回调，与 vsync 无关）
+     * @param feedFrameClock true = 把帧时间戳喂给 ring（v3.4.7 的生产锚点）；
+     *   false = 不喂（旧口径：环自己按 `dt` 累加帧时钟）。
      */
-    private fun run(barPeriodMs: Double, barOffsetMs: Double, frames: Int): List<Rec> {
+    private fun run(
+        barPeriodMs: Double,
+        frames: Int,
+        feedFrameClock: Boolean,
+    ): List<Rec> {
         val out = ArrayList<Rec>(frames)
         val latch = CountDownLatch(1)
-        val thread = HandlerThread("vsync-probe").apply { start() }
-        val handler = Handler(thread.looper)
+        val uiThread = HandlerThread("vsync-probe-ui").apply { start() }
+        val barThread = HandlerThread("vsync-probe-bar").apply { start() }
+        val ui = Handler(uiThread.looper)
+        val bar = Handler(barThread.looper)
         val ring = WaveformRing(capacity = 512, barCount = 16)
         val clock = LongArray(2)
-        var nextBarAt = barOffsetMs
-        var pushed = 0
+        var first = true
         var shiftedPrev = 0L
         var phasePrev = 0f
-        var first = true
 
-        handler.post {
+        // 音频线程：按自己的节拍推柱。时间戳就是它自己那一刻的 uptimeMillis —— 与生产同构。
+        val pushBar = object : Runnable {
+            override fun run() {
+                ring.push(
+                    value = 0.6f,
+                    low = 0.5f,
+                    mid = 0.4f,
+                    high = 0.3f,
+                    arrivalAtMs = SystemClock.uptimeMillis(),
+                )
+                bar.postDelayed(this, barPeriodMs.toLong())
+            }
+        }
+        bar.post(pushBar)
+
+        ui.post {
             val choreographer = Choreographer.getInstance()
             val cb = object : Choreographer.FrameCallback {
                 override fun doFrame(frameTimeNanos: Long) {
-                    // 1) 先把「这一帧之前到达的柱」推入环 —— 与生产同构：音频线程独立 push。
-                    val nowMs = frameTimeNanos / 1_000_000.0
-                    while (nextBarAt <= nowMs) {
-                        // 到达时刻用**计划时刻** `nextBarAt`，而不是「处理它的那一帧」：
-                        // 真实缓冲回调在它自己的节拍上打时间戳，UI 只是稍后才看到。
-                        // 用帧时间戳会让同一帧内补发的多根柱共享一个时刻 ⇒ 间隔 0ms
-                        // ⇒ 分母被打成 0.2ms（本探针第一版就踩了这个坑）。
-                        ring.push(0.6f, 0.5f, 0.4f, 0.3f, arrivalAtMs = nextBarAt.toLong())
-                        pushed++
-                        nextBarAt += barPeriodMs
-                    }
-                    // 2) 帧推进：dt 取两次 Choreographer 时间戳之差（逐字复刻 MotionFrameClock）。
+                    val frameMs = frameTimeNanos / 1_000_000.0
+                    val skew = SystemClock.uptimeMillis() - (frameTimeNanos / 1_000_000L)
                     val dt = if (clock[1] == 0L) {
                         16.667f
                     } else {
                         ((frameTimeNanos - clock[1]) / 1_000_000f).coerceIn(1f, 100f)
                     }
                     clock[1] = frameTimeNanos
-                    ring.pump(active = true, dtMs = dt)
+                    // ↓↓↓ 生产路径：帧时间戳与柱到达时间戳**同一个时钟** ↓↓↓
+                    if (feedFrameClock) {
+                        ring.pump(
+                            active = true,
+                            dtMs = dt,
+                            effects = VisualizerEffects.BASELINE,
+                            nowMs = frameTimeNanos / 1_000_000L,
+                        )
+                    } else {
+                        // 对照臂：不喂帧时间戳 ⇒ 环回落到「自己按 dt 累加」的旧口径。
+                        ring.pump(active = true, dtMs = dt, effects = VisualizerEffects.BASELINE)
+                    }
                     val shifted = ring.shiftedCellsForTest()
                     val phase = ring.scrollPhase01()
                     if (!first) {
                         out.add(
                             Rec(
-                                frameTimeNanos / 1_000_000.0,
+                                frameMs,
                                 dt,
                                 shifted - shiftedPrev,
                                 phase - phasePrev,
-                                ring.barIntervalMs(),
+                                ring.phaseIntervalMsForTest(),
+                                skew,
                             ),
                         )
                     }
@@ -91,6 +129,7 @@ class WaveformVsyncProbeTest {
                     shiftedPrev = shifted
                     phasePrev = phase
                     if (out.size >= frames) {
+                        bar.removeCallbacksAndMessages(null)
                         latch.countDown()
                         return
                     }
@@ -99,8 +138,9 @@ class WaveformVsyncProbeTest {
             }
             choreographer.postFrameCallback(cb)
         }
-        latch.await(60, TimeUnit.SECONDS)
-        thread.quitSafely()
+        latch.await(90, TimeUnit.SECONDS)
+        barThread.quitSafely()
+        uiThread.quitSafely()
         return out
     }
 
@@ -111,7 +151,7 @@ class WaveformVsyncProbeTest {
     }
 
     private fun report(tag: String, recs: List<Rec>) {
-        val body = recs.drop(30)
+        val body = recs.drop(60)
         if (body.isEmpty()) return
         val dts = body.map { it.dtMs.toDouble() }
         val mean = dts.average()
@@ -123,6 +163,13 @@ class WaveformVsyncProbeTest {
         val nominal = mean / recs.last().intervalMs
         val stalls = steps.count { it < nominal * 0.25 }
         val backs = steps.count { it < -0.01 }
+        // 柱到达帧（窗口平移了的那一帧）单独统计 —— 相位被清零/锚错时，塌的就是这一帧。
+        val arrivals = body.filter { it.shifted > 0 }
+        val aSteps = arrivals.map { it.shifted + it.phase.toDouble() }
+        val aMin = aSteps.minOrNull() ?: 0.0
+        val aMax = aSteps.maxOrNull() ?: 0.0
+        val aMean = if (aSteps.isEmpty()) 0.0 else aSteps.average()
+        val sk = body.map { it.clockSkewMs }
         emit(
             ("PROBE[%s] 帧数=%d dt: 均=%.3fms sd=%.3f min=%.3f max=%.3f | " +
                 "位移: 均=%.4f sd=%.4f 名义=%.4f 抖动率=%.2f%% 顿=%d 倒退=%d | 柱间隔估计=%.2fms")
@@ -132,10 +179,23 @@ class WaveformVsyncProbeTest {
                     recs.last().intervalMs,
                 ),
         )
+        emit(
+            ("PROBE[%s] 到达帧(n=%d): 位移 均=%.4f 最小=%.4f 最大=%.4f （名义 %.4f，最小=%.0f%% 名义） | " +
+                "时钟基准差 uptime−frame: 均=%.1fms 最小=%d 最大=%d")
+                .format(
+                    tag, arrivals.size, aMean, aMin, aMax, nominal,
+                    if (nominal > 0) aMin / nominal * 100 else 0.0,
+                    sk.average(), sk.minOrNull() ?: 0L, sk.maxOrNull() ?: 0L,
+                ),
+        )
         // 前 14 帧原始序列（先数据后结论）。
-        emit("PROBE[$tag] 帧# dt(ms) Δ平移 Δ相位 位移")
+        emit("PROBE[$tag] 帧# dt(ms) Δ平移 Δ相位 位移 基准差(ms)")
         body.take(14).forEachIndexed { i, r ->
-            emit("PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f".format(i, r.dtMs, r.shifted.toInt(), r.phase, r.shifted + r.phase))
+            emit(
+                "PROBE[$tag] %3d %7.3f %5d %8.4f %8.4f %6d".format(
+                    i, r.dtMs, r.shifted.toInt(), r.phase, r.shifted + r.phase, r.clockSkewMs,
+                ),
+            )
         }
     }
 
@@ -143,15 +203,16 @@ class WaveformVsyncProbeTest {
     fun 真机真实vsync上的帧间隔与可见位移() {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         listOf(
-            Triple("柱100ms对齐vsync", 100.0, 0.0),
-            Triple("柱100ms错开5ms", 100.0, 5.0),
-            Triple("柱100ms错开11ms", 100.0, 11.0),
-            Triple("柱96ms错开5ms", 96.0, 5.0),
-        ).forEach { (tag, period, offset) ->
-            // 先预热 2 秒再采集（避开起播阶段 EMA 未收敛）。
-            run(period, offset, frames = 120)
-            val recs = run(period, offset, frames = 420)
-            report(tag, recs)
+            "A 柱100.0ms" to 100.0,
+            "B 柱82.6ms（录像工况）" to 82.6,
+            "C 柱41.2ms（用户报的那台）" to 41.2,
+        ).forEach { (tag, period) ->
+            // 同一个进程、同一台设备、时间相邻的两臂：
+            //  · 「同源」= 帧时间戳喂给 ring（v3.4.7 生产路径）
+            //  · 「累加」= 不喂（环按 dt 自己攒时钟 = 旧口径的底座）
+            run(period, frames = 60, feedFrameClock = true) // 预热
+            report("$tag · 同源", run(period, frames = 420, feedFrameClock = true))
+            report("$tag · 累加", run(period, frames = 420, feedFrameClock = false))
         }
     }
 }

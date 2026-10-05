@@ -44,6 +44,11 @@ class WaveformScrollDeviceRegimeTest {
         offGridArrival: Boolean = true,
     ): WaveformScrollJitterHarness {
         val h = WaveformScrollJitterHarness(capacity = 512, barCount = 28)
+        // ⚠️ v3.4.7：帧与柱**必须共用同一个时间基准**（生产里两边都是 uptime 单调时钟）。
+        // 旧版把柱的时间戳整体加了 1e6 —— 在「自己攒帧时钟 + 一次性标定偏移」的旧模型下
+        // 这无所谓（偏移会被标定吃掉），但相位改成**两个真实时间戳相减**之后，
+        // 基准不一致就是真的不一致：相位会恒为 0。基准取一个正数（0 是「没给时钟」的哨兵）。
+        val base = 1_000_000.0
         var nextBar = 0.0
         var t = 0.0
         var i = 0
@@ -51,10 +56,10 @@ class WaveformScrollDeviceRegimeTest {
             if (t >= nextBar) {
                 // 真实音乐幅度：每 8 根一根安静缓冲（与 `WaveformScrollJitterRegressionTest` 同口径）
                 val v = if ((i / 8) % 5 == 0) 0.01f else 0.55f
-                h.pushBar(1_000_000.0 + if (offGridArrival) nextBar else t, v)
+                h.pushBar(base + if (offGridArrival) nextBar else t, v)
                 nextBar += barMs
             }
-            h.advanceTo(t)
+            h.advanceTo(base + t)
             t += frameMs
             i++
         }

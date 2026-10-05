@@ -345,9 +345,13 @@ object WaveformStore {
      * UI 线程按帧率调用；有新数据（或平滑/峰值/呼吸/C 档特效尚未收敛）时才让画面失效。
      * @param dtMs 距上一帧的毫秒数（平滑系数由它算，见 [WaveformRing.pump]）。
      * @param effects 当前档位的能力位（组合期读一次后捕获，帧路径里不再读任何 state）。
+     * @param nowMs **这一帧的时间戳**（毫秒），与柱的 `arrivalAtMs` 必须同一个时钟 ——
+     *   v3.4.7 起相位的分子就是它与「最后一根被消费的柱」的到达时刻之差，
+     *   所以这条链上**不允许**任何一方自己攒时钟（见 [WaveformRing.pump] 的 `nowMs`）。
+     *   传 0 = 没有帧时钟（老调用点 / 单测），ring 会回落到旧的累加口径。
      */
-    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects) {
-        var changed = ring.pump(active, dtMs, effects)
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L) {
+        var changed = ring.pump(active, dtMs, effects, nowMs)
         // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
         // 关掉（用户关了多频段开关）时音频线程根本不发布特征值，
         // 此时若还去读 `featureLow()` 会把「上一首残留的」或初值 0 当数据用。

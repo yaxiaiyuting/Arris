@@ -89,6 +89,11 @@ object MotionClock {
     /**
      * 推进一步。**只在 [MotionFrameClock] 的循环里调用**（每帧一次）。
      *
+     * @param nowMs **这一帧的时间戳**（毫秒），必须与音频线程打在柱上的到达时间戳**同一个时钟**。
+     *   v3.4.7 起它一路传到 [WaveformStore.pump] → `WaveformRing.pump`，成为波形滚动相位的分子
+     *   （相位 = `nowMs − 最后一根被消费的柱的到达时刻`）。**不要在这里传 `dt` 的累加值** ——
+     *   那正是 v3.3.2~v3.4.6 的缺陷（自攒帧时钟被 `.toLong()` 逐帧截断 ⇒ 4%/秒的系统性漂移）。
+     *   传 0 = 没有帧时钟（单测 / 老调用点），ring 回落到旧的累加口径。
      * @return 界面动效这一层是否需要重绘（波形的失效由 `WaveformStore` 自己管）。
      */
     fun frame(
@@ -96,8 +101,9 @@ object MotionClock {
         dtMs: Float,
         waveform: VisualizerEffects,
         motion: MotionEffects,
+        nowMs: Long = 0L,
     ): Boolean {
-        WaveformStore.pump(active, dtMs, waveform)
+        WaveformStore.pump(active, dtMs, waveform, nowMs)
         // 特征快照：优先用音频线程发布的真值；链路不可用时它对消费方呈现 available=false。
         featureBindings.update(
             rms = WaveformStore.featureRms(),
@@ -232,7 +238,18 @@ fun MotionFrameClock(
                 else ((now - clock[1]) / 1_000_000f).coerceIn(1f, 100f)
                 clock[0] = now
                 clock[1] = now
-                MotionClock.frame(active = true, dtMs = dtMs, waveform = waveform, motion = motion)
+                // ★ v3.4.7：把**这一帧自己的时间戳**原样交给波形（`withFrameNanos` 的
+                //   `frameTimeNanos` 与柱到达时间戳的 `SystemClock.uptimeMillis()` 都是
+                //   单调时钟、同一个基准）。波形滚动的相位就是它与柱到达时刻之差 ——
+                //   以前这里只给 `dtMs`，环自己累加出来的帧时钟被 `.toLong()` 截断，
+                //   与到达时间戳不再是同一个时钟（4%/秒的漂移，就是「抽搐」的根因）。
+                MotionClock.frame(
+                    active = true,
+                    dtMs = dtMs,
+                    waveform = waveform,
+                    motion = motion,
+                    nowMs = now / 1_000_000L,
+                )
             }
         }
         while (true) {

@@ -11,6 +11,7 @@
 package com.takahashirinta.ncrust.ui.player
 
 import com.takahashirinta.ncrust.ui.player.motion.DisplayRefresh
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import com.takahashirinta.ncrust.ui.player.motion.FrameStride
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -282,30 +283,37 @@ class WaveformFrameRateTest {
     @Test
     fun `相位在一个柱周期内爬满一格 —— 既不回跳也不停在顶棚`() {
         val ring = WaveformRing(capacity = 256, barCount = 8)
-        var t = 0.0
-        var nextBar = 0.0
+        // 时间基准从 1000ms 起：`arrivalAtMs = 0` 是「宿主没给时间戳」的哨兵，
+        // 拿它当真实时刻会让第一格走降级路径（那条路径的顶棚行为另有用例钉）。
+        val origin = 1000.0
+        var t = origin
+        var nextBar = origin
         var last = -1.0
         var lastPhase = 0f
         var wraps = 0
         var backJumps = 0
         var ceilingDwell = 0
-        while (t < 20_000.0) {
+        while (t < origin + 20_000.0) {
             // 第一帧就要有内容（空窗口时相位不排帧，与「不空转」契约一致）。
-            if (last < 0) ring.push(0.7f, arrivalAtMs = 0L)
+            if (last < 0) ring.push(0.7f, arrivalAtMs = origin.toLong())
+            // v3.4.7：柱的到达时刻用**它自己的计划时刻**（不是「处理它的那一帧」）——
+            // 真实缓冲回调在它自己的节拍上打时间戳，UI 只是稍后才看到它。
             while (nextBar <= t) {
-                ring.push(0.7f, arrivalAtMs = t.toLong())
+                ring.push(0.7f, arrivalAtMs = nextBar.toLong())
                 nextBar += 100.0
             }
             val dt = if (last < 0) 16.667f else (t - last).toFloat()
             last = t
-            ring.pump(true, dt)
+            // v3.4.7：帧循环把**这一帧自己的时间戳**一并交下去（相位的分子 = 它与
+            // 最后一根被消费的柱的到达时刻之差）。这条链上不允许任何一方自攒时钟。
+            ring.pump(true, dt, VisualizerEffects.BASELINE, nowMs = t.toLong())
             val phase = ring.scrollPhase01()
-            // 判据（v3.3.2 修订）：
+            // 判据（v3.4.7 修订）：
             //  · 相位在格内单调不减；
             //  · 变小 = 回绕，此时必须**明显变小**（回跳到接近 0 一侧），
             //    而不是在顶棚附近抖一下 —— 后者正是 v3.2.4 的「顿-冲」形状；
-            //  · 不许在 1.0 顶棚上连续停留超过一个帧周期
-            //    （停了 = 相位爬不满一格，画面原地冻住）。
+            //  · 不许在 1.0 顶棚上停留：停了 = 相位爬不满一格、画面原地冻住。
+            //    锚到真实到达时刻之后这一条是**严格**的（分子/分母同源），不是「尽量不要」。
             if (phase < lastPhase - 1e-6f) {
                 wraps++
                 if (phase > lastPhase - 0.5f && lastPhase > 0.5f) backJumps++
@@ -316,10 +324,11 @@ class WaveformFrameRateTest {
         }
         assertTrue("回绕样本 $wraps", wraps > 100)
         assertEquals("回绕后相位必须明显变小（否则曲线在顶棚附近抖）", 0, backJumps)
-        // 20 秒 @60Hz、柱间隔 100ms ⇒ 200 根柱、1200 帧。顶棚停留应该寥寥无几。
+        // 20 秒、柱间隔 100ms ⇒ 200 根柱、1200 帧。相位由真实时间戳相减得到，
+        // 永远不会「爬过头」⇒ 顶棚停留应当是 0 帧。
         assertTrue(
-            "相位在 1.0 顶棚停留了 $ceilingDwell 帧 —— 超过 20 帧就说明斜坡爬不满一格（顿住）",
-            ceilingDwell <= 20,
+            "相位在 1.0 顶棚停留了 $ceilingDwell 帧 —— 任何一帧都说明分子/分母不同源",
+            ceilingDwell == 0,
         )
     }
 }

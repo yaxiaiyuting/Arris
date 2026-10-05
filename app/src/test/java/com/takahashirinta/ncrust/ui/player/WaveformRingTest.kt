@@ -8,6 +8,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -283,28 +284,34 @@ class WaveformRingScrollTest {
     @Test
     fun `相位随帧推进 —— 消费到新柱后回绕到接近 0`() {
         val ring = WaveformRing(capacity = 64, barCount = 8)
-        // 生产路径的调用次序：帧时钟与音频线程的到达时刻**同源**（都是 uptime 量级）。
-        // 测试用同一个单调时钟复刻它 —— `arrivalAtMs = 0` 是「宿主没给时钟」的降级路径，
+        // 生产路径的调用次序：帧时钟与音频线程的到达时刻**同源**（都是 uptime 量级），
+        // 而且**两个量都由调用方给**（v3.4.7 起 ring 不再自己攒帧时钟 ——
+        // 自攒的那个被 `.toLong()` 逐帧截断，与到达时间戳不是同一个时钟）。
+        // 测试用同一个单调时钟复刻它，起点取 1000 而不是 0：`0` 是「宿主没给时钟」的降级哨兵，
         // 那条路径的行为由下面 `没有到达时间戳时相位仍然有界` 单独钉住。
-        var clock = 0f
+        var clock = 1000L
         fun frame(): Float {
-            ring.pump(active = true, dtMs = 16f)
-            clock += 16f
-            return ring.scrollPhase01()
+            ring.pump(active = true, dtMs = 16f, effects = VisualizerEffects.BASELINE, nowMs = clock)
+            val p = ring.scrollPhase01()
+            clock += 16L
+            return p
         }
 
-        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = clock.toLong())
+        // 第一根柱在 1000ms 到达，同帧被消费。
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = clock)
         val first = frame()
         assertTrue("刚消费完相位应该很小（实际 $first）", first < 0.25f)
-        repeat(4) { frame() }
+        repeat(5) { frame() } // 1016 → 1080ms：一格还没走完
         val later = ring.scrollPhase01()
         assertTrue("相位应该随帧推进（$first -> $later）", later > first)
-        // 新柱到达（比这一帧早一点点，模拟缓冲回调与 vsync 的相位差）：相位回绕。
+        // 第二根柱按**它自己的节拍**在 1100ms 到达（与上一根相隔 100ms），
+        // 而 UI 要等到 1112ms 那一帧才看到它 —— 相位回绕。
         // **判据是「变小」而不是「为 0」** —— 到达帧上相位 = 这一帧比那根柱晚了多少
         // ÷ 柱间隔，本来就该是个小正数（真机上最多一帧的量）。要求它严格为 0
         // 会把这个量丢掉，那一帧的位移就少一截、下一帧再补回来 —— 又是一次「顿-冲」。
-        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = (clock - 4f).toLong())
-        val wrapped = frame()
+        frame() // 1096ms：这根柱还没到
+        ring.push(0.5f, 0.5f, 0.5f, 0.5f, arrivalAtMs = 1100L)
+        val wrapped = frame() // 1112ms：消费它 ⇒ 相位 = 12 / 100
         assertTrue("新柱到达后相位必须回绕变小（$later -> $wrapped）", wrapped < later)
         assertTrue("回绕后相位应该接近 0（实际 $wrapped）", wrapped < 0.25f)
     }

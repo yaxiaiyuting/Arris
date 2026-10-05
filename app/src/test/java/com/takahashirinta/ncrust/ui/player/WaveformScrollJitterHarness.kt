@@ -8,6 +8,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -85,7 +86,10 @@ class WaveformScrollJitterHarness(
         val displacement: Float,
         /** `pump` 的返回值（要不要重绘）。 */
         val wantsRedraw: Boolean,
-        /** 这一帧 `barIntervalMs()` 的读数（相位斜坡的时间基准）。 */
+        /**
+         * 这一帧相位斜坡**实际使用的分母**（`phaseIntervalMs()` 的读数，不是滑动平均）——
+         * 判据读的必须是被消费的那个量，读滑动平均会在分母不是它的时候把结论读反（v3.4.7）。
+         */
         val intervalMs: Float,
     )
 
@@ -96,6 +100,14 @@ class WaveformScrollJitterHarness(
     private var prevShifted = 0L
 
     private var prevPhase = 0f
+
+    /**
+     * v3.4.7：是否把**帧时间戳**喂给环（`pump(nowMs = 帧到达时刻)`）。
+     *
+     * 默认 true = **生产模型**：相位由「这一帧的时间戳 − 最后一根被消费的柱的到达时刻」算出，
+     * 两个量同源。设成 false 只剩回落口径（环自己按 dt 累加），用来对照。
+     */
+    var feedFrameClock: Boolean = true
 
     /** 累计推入的柱数（名义位移的基准）。 */
     var barsPushed: Int = 0
@@ -111,25 +123,40 @@ class WaveformScrollJitterHarness(
      *
      * @param tMs 帧到达时刻（毫秒）。
      * @param active 播放中（喂给 `pump` 的 `active`）。
+     * @param dtScale 把喂给 `pump` 的 `dt` 乘一个系数。**只该影响弹道**（柱高 / 小球），
+     *   不该影响相位 —— v3.4.7 起相位的分子分母都来自真实时间戳，`dt` 一个字都不参与。
+     *   这条参数就是给「相位是不是从累加量来的」那一条判据用的。
      */
-    fun advanceTo(tMs: Double, active: Boolean = true): Frame {
+    fun advanceTo(tMs: Double, active: Boolean = true, dtScale: Float = 1f): Frame {
         val dt = if (lastFrameT.isNaN()) 0f else (tMs - lastFrameT).toFloat()
         lastFrameT = tMs
         // 逐字复刻 MotionFrameClock：dt 取两次帧时间戳之差，首帧用名义帧间隔。
-        val dtMs = if (records.isEmpty()) FIRST_FRAME_DT_MS else dt
-        val wantsRedraw = ring.pump(active = active, dtMs = dtMs)
+        val dtMs = (if (records.isEmpty()) FIRST_FRAME_DT_MS else dt) * dtScale
+        val wantsRedraw = ring.pump(
+            active = active,
+            dtMs = dtMs,
+            effects = VisualizerEffects.BASELINE,
+            // ★ v3.4.7：生产里帧循环把**这一帧自己的时间戳**原样传下去
+            //   （`withFrameNanos` 的 frameTimeNanos / 1e6）。这里如实照做 ——
+            //   以前只喂 `dtMs`，于是量的是「环自己攒的时钟」，与真机不是一回事。
+            nowMs = if (feedFrameClock) tMs.toLong() else 0L,
+        )
         val shifted = ring.shiftedCellsForTest()
-        val phase = if (legacyPhase) legacyPhase(shifted, dtMs) else ring.scrollPhase01()
+        val phase = when {
+            legacyAnchor -> legacyAnchorPhase(dtMs, shifted)
+            legacyPhase -> legacyPhase(shifted, dtMs)
+            else -> ring.scrollPhase01()
+        }
         val displacement = (shifted - prevShifted).toFloat() + (phase - prevPhase)
         prevShifted = shifted
         prevPhase = phase
-        val frame = Frame(tMs, dtMs, shifted, phase, displacement, wantsRedraw, ring.barIntervalMs())
+        val frame = Frame(tMs, dtMs, shifted, phase, displacement, wantsRedraw, ring.phaseIntervalMsForTest())
         records.add(frame)
         return frame
     }
 
     // ------------------------------------------------------------------
-    // 「改前」复刻：v3.2.4 的相位（每根柱到达时**清零**，且只在画面还有内容时推进）
+    // 「改前」复刻之一：v3.2.4 的相位（每根柱到达时**清零**，且只在画面还有内容时推进）
     //
     // 为什么要在测试里复刻旧实现、而不是 checkout 老代码：判据必须只有一份。
     // 复刻只用**环本身报出来的** `barIntervalMs()`，与生产同源；本模式与新模式
@@ -157,6 +184,47 @@ class WaveformScrollJitterHarness(
             if (shifted != prevShifted) legacySinceBarMs = 0f
         }
         val p = legacySinceBarMs / interval
+        return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
+    }
+
+    // ------------------------------------------------------------------
+    // 「改前」复刻之二：**v3.3.2 ~ v3.4.6 的锚点**（跨时钟相减 —— v3.4.7 定位到的真根因）
+    //
+    // 逐字复刻那三行：
+    //   frameClockMs += dtMs.toLong()                                   // ← 逐帧截断
+    //   if (clockOffsetMs == 0L) clockOffsetMs = frameClockMs - arrival  // 只标定一次
+    //   sinceBarMs = frameClockMs - clockOffsetMs - arrival             // ← 两个时钟相减
+    //   sinceBarMs = foldScrollPhase(sinceBarMs, interval, consumed)
+    //
+    // 它必须能复现真机探针量到的指纹：`sinceBarMs` 只在 {0, 柱间隔} 之间跳、到达帧位移塌成 0。
+    // 它**只活在测试里**，用来给「改前/改后」提供同一份时间线上的对照（与 `legacyPhase` 同规矩）。
+    // ------------------------------------------------------------------
+
+    /** true = 用 v3.3.2 的跨时钟锚点（复刻缺陷）。 */
+    var legacyAnchor: Boolean = false
+
+    private var legacyFrameClockMs = 0L
+
+    private var legacyClockOffsetMs = 0L
+
+    private var legacyAnchorSinceBarMs = 0f
+
+    private fun legacyAnchorPhase(dtMs: Float, shifted: Long): Float {
+        val interval = if (ring.barIntervalMs() > 1f) {
+            ring.barIntervalMs()
+        } else {
+            WaveformRing.DEFAULT_BAR_INTERVAL_MS
+        }
+        legacyFrameClockMs += dtMs.toLong()
+        legacyAnchorSinceBarMs += dtMs
+        val consumed = (shifted - prevShifted).toInt()
+        if (consumed > 0 && barArrivalsMs.isNotEmpty()) {
+            val arrival = barArrivalsMs[(shifted - 1).toInt().coerceIn(0, barArrivalsMs.size - 1)].toLong()
+            if (legacyClockOffsetMs == 0L) legacyClockOffsetMs = legacyFrameClockMs - arrival
+            legacyAnchorSinceBarMs = (legacyFrameClockMs - legacyClockOffsetMs - arrival).toFloat()
+            legacyAnchorSinceBarMs = WaveformRing.foldScrollPhase(legacyAnchorSinceBarMs, interval, consumed)
+        }
+        val p = legacyAnchorSinceBarMs / interval
         return if (p.isFinite()) p.coerceIn(0f, 1f) else 0f
     }
 
@@ -218,6 +286,11 @@ class WaveformScrollJitterHarness(
         }
         val minStep = steps.minOrNull() ?: 0f
         val maxStep = steps.maxOrNull() ?: 0f
+        // v3.4.7：**柱到达帧**（窗口平移了的那一帧）的位移。相位若被清零或锚到错误的时钟，
+        // 这一帧的位移会塌成 0（用户读到的「顿一下」），而它本该 ≈ 名义步长。
+        val arrivalSteps = analyzed.indices
+            .filter { i -> i > 0 && analyzed[i].shiftedCells != analyzed[i - 1].shiftedCells }
+            .map { i -> analyzed[i].displacement.toDouble() }
         // 停顿帧：位移低于名义的 25%（肉眼就是「顿住」）。
         val stallCount = analyzed.indices.count { i ->
             nominal[i] > 0f && analyzed[i].displacement < nominal[i] * STALL_FRACTION
@@ -241,6 +314,20 @@ class WaveformScrollJitterHarness(
             barsPushed = barsPushed,
             // 位移总量 = 逐帧位移之和（与判据**同一个式子**，不另立基准）。
             advancedCells = analyzed.sumOf { it.displacement.toDouble() },
+            // v3.4.7：柱**到达帧**的位移单独统计 —— 相位被清零/锚错时，塌的就是这一帧。
+            arrivalCount = arrivalSteps.size,
+            arrivalMinStepRatio = if (arrivalSteps.isEmpty() || meanNominal <= 0.0) {
+                0f
+            } else {
+                (arrivalSteps.minOrNull() ?: 0.0).toFloat() / meanNominal.toFloat()
+            },
+            arrivalMaxStepRatio = if (arrivalSteps.isEmpty() || meanNominal <= 0.0) {
+                0f
+            } else {
+                (arrivalSteps.maxOrNull() ?: 0.0).toFloat() / meanNominal.toFloat()
+            },
+            // 相位停在 `coerceIn(0,1)` 顶棚的帧数：>2% 就说明斜坡爬不满一格（柱子迟到或分母偏大）。
+            ceilingDwell = analyzed.count { it.phase >= 0.999f },
         )
     }
 
@@ -285,12 +372,21 @@ class WaveformScrollJitterHarness(
         val backsteps: Int,
         val barsPushed: Int,
         val advancedCells: Double,
+        /** v3.4.7：柱到达帧的条数（窗口平移了的那一帧）。 */
+        val arrivalCount: Int,
+        /** 到达帧位移 ÷ 名义步长。**1.0 ≈ 正确**；0 = 这一帧的位移被丢掉了（旧模型的形状）。 */
+        val arrivalMinStepRatio: Float,
+        val arrivalMaxStepRatio: Float,
+        /** 相位停在 1.0 顶棚的帧数（斜坡爬不满一格 = 画面原地不动）。 */
+        val ceilingDwell: Int,
     ) {
         override fun toString(): String = buildString {
             append("柱间隔=%.2fms 名义步长=%.4f 实测均步=%.4f 步长sd=%.5f 抖动率=%.2f%%\n"
                 .format(meanBarIntervalMs, nominalStep, meanStep, sdStep, jitterRatio * 100))
             append("最小步=%.4f(%.0f%%名义) 最大步=%.4f(%.0f%%名义) 顿(位移<25%%名义)=%d帧 倒退=%d帧\n"
                 .format(minStep, minStepRatio * 100, maxStep, maxStepRatio * 100, stallCount, backsteps))
+            append("到达帧 n=%d 位移 %.0f%%~%.0f%% 名义  顶棚停留=%d帧\n"
+                .format(arrivalCount, arrivalMinStepRatio * 100, arrivalMaxStepRatio * 100, ceilingDwell))
             append("最差顿-冲比=%.3f× @%.0fms  位移总量=%.2f格  推入=%d根  分析帧数=%d"
                 .format(worstBurstRatio, worstBurstAtMs, advancedCells, barsPushed, frames))
         }
