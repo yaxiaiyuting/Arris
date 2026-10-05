@@ -142,7 +142,7 @@ data class BiliTrack(
  *   由 URL 自带的 `deadline` 参数反推（见 [BiliParse.expiryFromUrl]）。
  *   铁律 26：B 站音频流有时效，必须处理 TTL 和过期刷新 —— 这个字段就是它的载体。
  * @property qualityLabel 实际拿到的档位文案（服务端说了算，不是我们请求的那一档）。
- * @property br 码率（服务端给多少算多少，拿不到填 0）。
+ * @property br 码率（bit/s）；服务端这条响应里没有码率字段时填 **0 = 未知**，绝不拿别的字段顶替。
  * @property container 容器后缀（`m4a` / `mp3` / `flac`…），只用于诊断与角标。
  */
 data class BiliStream(
@@ -509,7 +509,13 @@ object BiliParse {
             url = picked,
             expiresAtMs = expiryFromUrl(picked, timeout, nowMs),
             qualityLabel = qualityLabelOfFileName(picked),
-            br = data.optLong("size", 0L),
+            // 旧写法是 `br = data.optLong("size", 0L)` —— 但这条响应里的 `size` 是**文件字节数**
+            // （实测 `"size":10374528` = 一个 10MB 的 m4a，见 EVIDENCE.md 的响应样本），
+            // 不是码率：它进 `QualityAssessment.measuredLevel(br, type)` 会被读成
+            // 「5 Mbps 以上的母带级文件」，进播放界面的码率标签会写成 `10374kbps`。
+            // 这条响应里**没有任何码率字段**（`qualities[].bps` 只是档位描述文案），
+            // 所以如实填 0 = 未知：界面不显示码率，档位判定退回 levelFromFile 那条路。
+            br = 0L,
             container = fileNameExtension(picked),
         )
     }
