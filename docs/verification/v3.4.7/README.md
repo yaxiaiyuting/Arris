@@ -7,6 +7,7 @@
 |---|---|
 | `ab-same-ruler.log` | 改前（`v3.4.6-gpl` 原样代码，git worktree）与改后（本版）跑**同一份脚本**的对照 |
 | `probe-vsync-emu33.log` | 在 API 33 模拟器（1080×2340 / 60.000004Hz）上跑 `WaveformVsyncProbeTest` 的完整输出 |
+| `probe-wiring-emu33.log` | **生产单例链路**（`WaveformStore.onBar` → `MotionClock.frame`）的端到端输出 |
 
 ## 一、判据（JVM，`app/src/test`）
 
@@ -55,6 +56,23 @@
 `frameTimeNanos / 1e6` 的差实测 **均 0.0~0.1ms、最大 1ms** ——
 两个时间戳确实是**同一个单调时钟基准**（差值就是回调延迟）。
 相位锚点把这两个量相减，这条是前提；它现在有数。
+
+## 三·补、生产单例链路（端到端）
+
+`WaveformRing` 的单测只能证明「喂它 `nowMs` 时算得对」，它在设备上真正跑的是
+`onBar`（音频线程，自己打 `uptimeMillis()`）→ `MotionClock.frame(nowMs=…)` → `WaveformStore.pump`
+→ `ring.pump`。这条链上任何一处漏传 / 传错单位，单测都会全绿而设备上照旧抽搐。
+
+`WaveformPhaseWiringProbeTest` 用**一个明显不对的 `dt`** 把两套口径分开（`dt = 200ms`，
+而柱间隔实测 ≈ 80ms）：
+
+```
+WIRING 第一帧: elapsed=0ms  dt=200ms phase=0.0000   ← 累加口径在这里会是 1.0
+WIRING 第二帧: elapsed=31ms dt=200ms phase=0.3875   ← 31 / 0.3875 = 80ms = 实测柱间隔
+```
+
+两帧的 `dt` 都是 200ms，相位却只随**真实时间戳**走 ⇒ 生产链路上锚点确实生效，
+没有退化成累加口径。
 
 ## 四、没验证到的（如实）
 
