@@ -403,8 +403,20 @@ android {
         //       ③ 振幅留 12% 余量（竖屏不再顶满）；
         //       ④ B 站音频区不再把文件字节数当码率；
         //       ⑤ 音质标签旁显示实际播放码率。
-        versionCode = 68
-        versionName = "3.4.6-gpl"
+        // ── v3.4.7（本版）────────────────────────────────────────────────────────
+        // 定号依据：`tools/next-version.sh` 三源交叉校验（fetch 后）
+        //   ① 最近 5 个 tag：v3.4.6-gpl=68 / v3.4.5-gpl=67 / v3.4.4-gpl=66 /
+        //      v3.4.3-gpl=65 / v3.4.2-gpl=64
+        //   ② 已发布 APK 的 aapt2 badging：v2.6.2-gpl-release.apk=50
+        //   ③ 工作区：68
+        // 最大 = 68 ⇒ 本版取 **69**。
+        // 版本名取 **3.4.7**（patch）：**只修三泳道波形的横向滚动**，
+        // 不改持久化结构、不改包名与签名（可直接覆盖安装 v3.4.6）。
+        // 内容：删掉 `frameClockMs` / `clockOffsetMs` / `pendingArrivalMs` 三个字段 ——
+        //   相位的分子改成由帧循环传入的**真实帧时间戳**与「最后一根被消费的柱的到达时刻」
+        //   相减（两个量同源、都不经过本类累加），到达帧不再被清零、位移不再丢。
+        versionCode = 69
+        versionName = "3.4.7-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
