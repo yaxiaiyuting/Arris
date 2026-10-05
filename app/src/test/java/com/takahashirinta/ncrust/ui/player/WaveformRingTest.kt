@@ -25,7 +25,14 @@ import org.junit.Test
  */
 class WaveformRingTest {
 
-    private fun settle(ring: WaveformRing, frames: Int = 40, dtMs: Float = 16f) {
+    /**
+     * 泵到收敛。
+     *
+     * ⚠️ v3.4.6：帧预算从 40 提到 200。小球改成真正的弹道之后，一次"顶起 → 自由落体 →
+     * 连弹"要 ~1.2s ≈ 75 帧才吸附（旧实现因为位置容差让它一直贴地微落，几乎不弹，
+     * 40 帧够用）。这不是空转回来了 —— 是可见的弹跳序列本来就该有这么长。
+     */
+    private fun settle(ring: WaveformRing, frames: Int = 200, dtMs: Float = 16f) {
         repeat(frames) { ring.pump(active = true, dtMs = dtMs) }
     }
 
@@ -166,7 +173,8 @@ class WaveformRingTest {
  */
 class WaveformRingBandWindowTest {
 
-    private fun settle(ring: WaveformRing, frames: Int = 40, dtMs: Float = 16f) {
+    /** 帧预算 200 的理由见 [WaveformRingTest] 里同名助手的 KDoc（v3.4.6 弹道变长）。 */
+    private fun settle(ring: WaveformRing, frames: Int = 200, dtMs: Float = 16f) {
         repeat(frames) { ring.pump(active = true, dtMs = dtMs) }
     }
 

@@ -343,6 +343,19 @@ class WaveformRing(
     private val highBarVel = FloatArray(barCount)
 
     /** v3.4.5：三条泳道各自的小球（位置 / 速度 / 静止标志）。 */
+    /**
+     * v3.4.6：**峰值短横的保持值**（归一化高度，`[0,1]`）。
+     *
+     * 与 [peaks] / [lowPeaks] 等（小球位置）是**两份独立状态**：小球是受重力的质点，
+     * 短横是"这一格曾经到过的最高点"（见 [BandBallistics.holdStep]）。
+     * 在它之前短横只是"小球位置 + 常量"，两者永远同步 —— 用户实测两次指出这一点。
+     */
+    private val dash = FloatArray(barCount)
+
+    private val lowDash = FloatArray(barCount)
+    private val midDash = FloatArray(barCount)
+    private val highDash = FloatArray(barCount)
+
     private val lowPeaks = FloatArray(barCount)
     private val midPeaks = FloatArray(barCount)
     private val highPeaks = FloatArray(barCount)
@@ -417,6 +430,10 @@ class WaveformRing(
         lowPeaks.fill(0f)
         midPeaks.fill(0f)
         highPeaks.fill(0f)
+        dash.fill(0f)
+        lowDash.fill(0f)
+        midDash.fill(0f)
+        highDash.fill(0f)
         lowPeakVel.fill(0f)
         midPeakVel.fill(0f)
         highPeakVel.fill(0f)
@@ -629,6 +646,9 @@ class WaveformRing(
             ball[i] = ball[i + 1]
             ballVel[i] = ballVel[i + 1]
             ballRest[i] = ballRest[i + 1]
+            // v3.4.6：短横的保持值同样必须平移 —— 它记的是"这一格"的历史峰值，
+            // 不平移就会变成"记在横轴某个位置上"，柱子滚过去之后短横留在原地。
+            dash[i] = dash[i + 1]
         }
         if (window[barCount - 1] != value) {
             window[barCount - 1] = value
@@ -687,8 +707,16 @@ class WaveformRing(
         var changed = false
         for (i in bars.indices) {
             if (stepSpring(bars, barVel, i, targets[i])) changed = true
-            if (effects.peaks && stepBall(peaks, peakVel, peakRest, i, bars[i], barVel[i], dtSec)) {
-                changed = true
+            if (effects.peaks) {
+                if (stepBall(peaks, peakVel, peakRest, i, bars[i], barVel[i], dtSec)) changed = true
+                // v3.4.6：短横 = 小球位置的历史最大值（带缓慢回落）。
+                // 它必须**每帧都算**（即使小球没动 —— 回落本身也是运动），所以这里
+                // 不能像小球那样只在 changed 时才更新。
+                val next = BandBallistics.holdStep(peaks[i], dash[i], dtSec)
+                if (next != dash[i]) {
+                    dash[i] = next
+                    changed = true
+                }
             }
         }
         // v3.4.4：三条泳道的画面值走**同一套弹道**。
@@ -702,9 +730,9 @@ class WaveformRing(
         // 改前 peaks 是**单条曲线**的峰值，却画在三泳道的几何上（左中右三段的横轴），
         // 于是「地面」与「小球所在的柱子」根本不是同一个量。现在逐泳道各一份。
         if (effects.peaks) {
-            if (stepBallBand(lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, dtSec)) changed = true
-            if (stepBallBand(midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, dtSec)) changed = true
-            if (stepBallBand(highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, dtSec)) changed = true
+            if (stepBallBand(lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, lowDash, dtSec)) changed = true
+            if (stepBallBand(midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, midDash, dtSec)) changed = true
+            if (stepBallBand(highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, highDash, dtSec)) changed = true
         }
         return changed
     }
@@ -771,11 +799,18 @@ class WaveformRing(
         ball: FloatArray,
         ballVel: FloatArray,
         ballRest: BooleanArray,
+        dash: FloatArray,
         dtSec: Float,
     ): Boolean {
         var changed = false
         for (i in ball.indices) {
             if (stepBall(ball, ballVel, ballRest, i, ground[i], groundVel[i], dtSec)) changed = true
+            // 短横每帧都推进（回落也是运动），见 [BandBallistics.holdStep]。
+            val next = BandBallistics.holdStep(ball[i], dash[i], dtSec)
+            if (next != dash[i]) {
+                dash[i] = next
+                changed = true
+            }
         }
         return changed
     }
@@ -815,6 +850,25 @@ class WaveformRing(
     }
 
     /**
+     * v3.4.6：滚动窗口 + 小球 + **峰值短横的保持值**一起拷出（渲染路径用，零分配）。
+     *
+     * 短横与小球是两份独立状态：小球是受重力的质点，短横是"这一格曾经到过的最高点"
+     * （见 [BandBallistics.holdStep]）。渲染层必须同时拿到两者，否则又退回
+     * "短横 = 小球 + 常量"那种同步移动。
+     */
+    fun copyInto(
+        barsDestination: FloatArray,
+        peaksDestination: FloatArray,
+        dashDestination: FloatArray,
+    ) {
+        copyInto(barsDestination)
+        val n = minOf(peaksDestination.size, barCount)
+        for (i in 0 until n) peaksDestination[i] = peaks[i]
+        val m = minOf(dashDestination.size, barCount)
+        for (i in 0 until m) dashDestination[i] = dash[i]
+    }
+
+    /**
      * v3.2.2：把**三条频带**的滚动窗口拷进调用方复用的三个数组（零分配）。
      *
      * v3.4.4：拷出的是**画面值**（[lowBars] 等，带 22/130ms 弹道），不是原始窗口 ——
@@ -842,6 +896,19 @@ class WaveformRing(
         copyBand(lowPeaks, lowDestination)
         copyBand(midPeaks, midDestination)
         copyBand(highPeaks, highDestination)
+    }
+
+    /**
+     * v3.4.6：把**三条泳道各自的峰值短横保持值**拷进调用方复用的三个数组（零分配）。
+     *
+     * 与 [copyBandPeaksInto] 逐格对齐，语义不同：那一份是"此刻的质点"（小球），
+     * 这一份是"这一格曾经到过的最高点"（短横）。两者的高低关系由
+     * [BandBallistics.holdStep] 的不变量保证（保持值恒 ≥ 小球）。
+     */
+    fun copyBandDashInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
+        copyBand(lowDash, lowDestination)
+        copyBand(midDash, midDestination)
+        copyBand(highDash, highDestination)
     }
 
     private fun copyBand(source: FloatArray, destination: FloatArray) {

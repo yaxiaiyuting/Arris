@@ -92,6 +92,37 @@ object BandMarkerGeometry {
     }
 
     /**
+     * v3.4.6：**短横的最终半高** —— 取「峰值保持」与「不许压住小球」两者的较大值。
+     *
+     * ## 两个约束各自的来源
+     *
+     * - **峰值保持**（[holdHalf]）：短横记的是"这一格曾经到过的最高点"（见
+     *   `BandBallistics.DASH_HOLD_DECAY_PER_SEC`）。小球落下去之后，短横应当留在上面，
+     *   而不是跟着一起下来 —— 那正是"它和小球一样"的旧毛病。
+     * - **不与小球重叠**（[peakHalfPx]）：小球弹回到接近历史最高点时，两者会重合。
+     *   这里仍然用「抬到小球的圆点之上 `2r + cap`」那个既有几何（用户定的错开量）
+     *   兜住这种情况。
+     *
+     * 取 `max` 而不是相加：相加会让短横在"小球本来就低"的时候被无谓地抬高，
+     * 那时它与小球相距很远，根本不需要错开量。
+     *
+     * @param ballHalf 小球当前半高（像素）
+     * @param holdHalf 峰值保持的半高（像素，与 `ballHalf` 同量纲）
+     * @param separate `false` 时退化成"只跟小球"（= v3.4.6 之前的行为，供 A/B 与测试对照）
+     */
+    fun dashHalfPx(
+        ballHalf: Float,
+        holdHalf: Float,
+        dotRadiusPx: Float,
+        peakCapPx: Float,
+        separate: Boolean = true,
+    ): Float {
+        if (!separate) return peakHalfPx(ballHalf, dotRadiusPx, peakCapPx, separate = false)
+        val hold = if (holdHalf.isFinite()) max(0f, holdHalf) else 0f
+        return max(hold, peakHalfPx(ballHalf, dotRadiusPx, peakCapPx))
+    }
+
+    /**
      * 短横与圆点在纵向上是否**确实分开**（判据本身，供测试断言）。
      *
      * 几何（屏幕坐标，y 向下）：

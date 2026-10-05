@@ -67,16 +67,24 @@ class WaveformBallisticsTest {
             val airborne = r.peakAt(7) > r.barAt(7) + 1e-4f
             if (airborne) {
                 airborneFrames++
-                // 自由落体期间速度必须逐帧减少 g·dt
-                val dv = v - prevV
-                val err = abs(dv + g * dtMs / 1000f)
-                if (err > worstErr) worstErr = err
-                samples++
+                // v3.4.6：只统计**仍在下降**的空中帧。
+                //
+                // 撞地那一帧速度会被弹性碰撞反向（`v ← −e·v`）—— 那是一个**冲量**，
+                // 不是"自由落体被破坏"。旧实现（e=0.45，加上位置容差让它一直贴地微落）
+                // 几乎不产生可见的反弹，这条断言因此碰不到撞地帧；
+                // v3.4.6 让后继弹跳真正可见之后必须把它排除，否则量到的是冲量本身。
+                if (v < 0f && prevV < 0f) {
+                    val dv = v - prevV
+                    val err = abs(dv + g * dtMs / 1000f)
+                    if (err > worstErr) worstErr = err
+                    samples++
+                }
             }
             prevV = v
         }
-        println("空中帧数=$airborneFrames，逐帧 Δv 与 −g·dt 的最大偏差=$worstErr（g=${g}）")
+        println("空中帧数=$airborneFrames，其中下降帧样本=$samples，逐帧 Δv 与 −g·dt 的最大偏差=$worstErr（g=$g）")
         assertTrue("小球必须真的离开柱顶（弹道滞后）", airborneFrames >= 3)
+        assertTrue("必须量到下降中的空中帧（否则这条断言是空跑的）", samples >= 2)
         assertTrue("自由落体期间 Δv 必须恒等于 −g·dt，实测最大偏差 $worstErr", worstErr < 1e-4f)
     }
 

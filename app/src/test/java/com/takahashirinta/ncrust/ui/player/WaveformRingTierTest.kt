@@ -94,7 +94,19 @@ class WaveformRingTierTest {
             "小球必须留在柱子**上方**（弹道滞后，不是粘在柱顶上）：peak=${ring.peakAt(1)} bar=${ring.barAt(1)}",
             ring.peakAt(1) > ring.barAt(1) + 1e-4f,
         )
-        assertTrue("小球必须已经在下落（速度向下）", ring.peakVelAt(1) < 0f)
+        // v3.4.6：重力从 32 降到 10（用户：「落地好快…像平移到下一帧」），滞空时间变长 ——
+        // 被顶起后小球可能**还在上升段**，写死"3 帧后必须在下落"会随参数一起变红。
+        // 改成在窗口内观察它是否真的出现过下落段（这才是"弹道滞后"的可证伪命题）。
+        var sawDescending = ring.peakVelAt(1) < 0f
+        var stillAbove = true
+        repeat(40) {
+            if (sawDescending) return@repeat
+            ring.pump(active = true, dtMs = 16f, effects = refined)
+            if (ring.peakVelAt(1) < 0f) sawDescending = true
+            if (ring.peakAt(1) <= ring.barAt(1) + 1e-4f) stillAbove = false
+        }
+        assertTrue("小球必须出现下落段（弹道滞后，而不是粘着柱子一起下去）", sawDescending)
+        assertTrue("在下落过程中小球必须始终在柱子之上", stillAbove)
     }
 
     @Test

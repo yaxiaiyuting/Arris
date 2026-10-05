@@ -137,4 +137,85 @@ class BandMarkerGeometryTest {
             }
         }
     }
+
+    // ─────────────── v3.4.6：短横取「峰值保持」与「不许压住小球」的较大值 ───────────────
+
+    /**
+     * 保持值高于小球时，短横画在**保持值**处（不再跟着小球下来）。
+     *
+     * 旧实现里短横 = `小球 + 常量`，所以这条用例在旧实现下必然红 —— 那正是
+     * 用户说的「它和小短线是一样的」。
+     */
+    @Test
+    fun `峰值保持高于小球时短横用保持值`() {
+        val r = 1.2f
+        val cap = 1.5f
+        val ball = 10f
+        val hold = 40f
+        val half = BandMarkerGeometry.dashHalfPx(ball, hold, r, cap)
+        assertEquals("保持值更高时必须用它（而不是小球 + 常量）", hold, half, 1e-4f)
+        assertTrue("必须明显高于「只跟小球」的结果", half > BandMarkerGeometry.peakHalfPx(ball, r, cap) + 10f)
+    }
+
+    /** 小球弹回接近历史最高点时，由既有错开量兜住 —— 两者不许重叠。 */
+    @Test
+    fun `小球追平保持值时短横仍不与小球重叠`() {
+        val r = 1.2f
+        val cap = 1.5f
+        val ball = 30f
+        val half = BandMarkerGeometry.dashHalfPx(ball, 30f, r, cap)
+        assertEquals(
+            "小球与保持值同高时，退化成既有的错开几何",
+            BandMarkerGeometry.peakHalfPx(ball, r, cap), half, 1e-4f,
+        )
+        assertTrue(
+            "必须仍然分开",
+            BandMarkerGeometry.isSeparated(ball, r, cap),
+        )
+        assertTrue("空隙必须为正", BandMarkerGeometry.gapPx(ball, r, cap) > 0f)
+    }
+
+    /** 短横永远不低于小球（保持值被传成更小也不许画到小球下面）。 */
+    @Test
+    fun `保持值更小时短横仍不低于小球`() {
+        val r = 1.2f
+        val cap = 1.5f
+        for (ball in listOf(0f, 5f, 20f, 60f)) {
+            for (hold in listOf(0f, 1f, ball, ball - 5f)) {
+                val half = BandMarkerGeometry.dashHalfPx(ball, hold, r, cap)
+                assertTrue(
+                    "ball=$ball hold=$hold ⇒ 短横($half) 绝不低于小球($ball)",
+                    half >= ball - 1e-4f,
+                )
+            }
+        }
+    }
+
+    /**
+     * 非有限输入不许传染到画布。
+     *
+     * 契约是「结果有限」，不是「结果等于 0」：`ballHalf` 为 NaN 时会被净化成 0，
+     * 但**错开量仍然要加**（否则短横会压在圆点上）。所以那条断言的是有限性与下界，
+     * 不是精确值 —— 我第一版写成 `assertEquals(0f, ...)` 是错的。
+     */
+    @Test
+    fun `峰值几何 非有限输入不传染`() {
+        val a = BandMarkerGeometry.dashHalfPx(Float.NaN, Float.NaN, 1.2f, 1.5f)
+        assertTrue("结果必须有限，实测 $a", a.isFinite())
+        assertEquals("NaN 净化成 0 之后只剩错开量", 2f * 1.2f + 1.5f, a, 1e-4f)
+        val b = BandMarkerGeometry.dashHalfPx(0f, 0f, Float.NaN, Float.NaN)
+        assertTrue("半径/厚度非有限时结果必须有限，实测 $b", b.isFinite())
+        assertEquals(0f, b, 1e-4f)
+    }
+
+    /** `separate = false` 时退化成"只跟小球"（= v3.4.6 之前的逐像素行为，供 A/B 对照）。 */
+    @Test
+    fun `关闭错开时退化回只跟小球`() {
+        val ball = 25f
+        assertEquals(
+            BandMarkerGeometry.peakHalfPx(ball, 1.2f, 1.5f, separate = false),
+            BandMarkerGeometry.dashHalfPx(ball, 99f, 1.2f, 1.5f, separate = false),
+            1e-4f,
+        )
+    }
 }
