@@ -15,6 +15,7 @@ import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLDecoder
 
@@ -412,16 +413,21 @@ object BiliParse {
         val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return emptyList()
         val dash = root.optJSONObject("data")?.optJSONObject("dash") ?: return emptyList()
         val out = ArrayList<BiliStream>(4)
-        // ① FLAC（单对象，不是数组）。
-        dash.optJSONObject("flac")?.optJSONObject("audio")?.let { a ->
+        // ① FLAC。实测（`BV1EC4y1R7ax` / `BV1BZbSzZEGT`）`dash.flac.audio` 是**单对象**。
+        //    仍然走 `nodesOf`：形状判据只花一次 `when`，而赌错的代价是这条支路静默为空。
+        nodesOf(dash.optJSONObject("flac")?.opt("audio")).forEach { a ->
             streamOf(a, BiliAudioKind.FLAC, nowMs)?.let { out += it }
         }
-        // ② 杜比全景声（数组）。
-        dash.optJSONObject("dolby")?.optJSONArray("audio")?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val a = arr.optJSONObject(i) ?: continue
-                streamOf(a, BiliAudioKind.DOLBY, nowMs)?.let { out += it }
-            }
+        // ② 杜比全景声。
+        //
+        // ⚠️ **形状未实测**：两次真实响应里 `dolby` 都是 `{"type":0,"audio":null}`
+        // （即这两条视频没有杜比轨），而 `audio` 为 `null` 时**看不出**它非空时是数组还是单对象。
+        // 社区实现只说「`dash.flac.audio` 也要读」，没有说 dolby 的形状。
+        // 所以这里**两种都认** —— 拿一个没验证过的形状去赌，代价是这条支路在真机上
+        // 永远解析不出东西，而表现与「这个视频没有杜比」**完全同形**
+        // （下一个排查的人会先去怀疑服务端，而不是这行代码）。
+        nodesOf(dash.optJSONObject("dolby")?.opt("audio")).forEach { a ->
+            streamOf(a, BiliAudioKind.DOLBY, nowMs)?.let { out += it }
         }
         // ③ 普通 AAC —— 只在这一支内部按带宽降序。
         val audios = dash.optJSONArray("audio")
@@ -436,6 +442,19 @@ object BiliParse {
             out += aac.sortedByDescending { it.br }
         }
         return out
+    }
+
+    /**
+     * 一个「可能是数组、也可能是单个对象」的 DASH 节点 → 节点列表。
+     *
+     * 存在的理由写在 [parseDashAudios] ②：`dolby.audio` 的形状**没有实测依据**。
+     * 两种形状都接受，比赌一种便宜得多 —— 赌错的失败模式是
+     * 「这条支路静默为空」，与「这个视频确实没有杜比」在日志里分不出来。
+     */
+    private fun nodesOf(raw: Any?): List<JSONObject> = when (raw) {
+        is JSONArray -> (0 until raw.length()).mapNotNull { raw.optJSONObject(it) }
+        is JSONObject -> listOf(raw)
+        else -> emptyList()
     }
 
     /**

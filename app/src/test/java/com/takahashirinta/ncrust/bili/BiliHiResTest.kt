@@ -100,7 +100,11 @@ class BiliHiResTest {
         }}}
         """.trimIndent()
 
-        /** 杜比全景声的形状（`dash.dolby.audio` 是**数组**，与 flac 的单对象不同）。 */
+        /**
+         * 杜比全景声的样本。**这一份是构造的，不是实测原文** —— 两次真实响应的
+         * `dolby` 都是 `{"type":0,"audio":null}`，形状无法从它反推。
+         * 所以解析层两种形状都认，这里两条都测（见 `杜比在 dash_dolby_audio 里两种形状都认`）。
+         */
         val DOLBY_DASH = """
         {"code":0,"data":{"dash":{
           "audio":[{"id":30280,"baseUrl":"$AAC320_URL?deadline=1791394130","bandwidth":213610,"mimeType":"audio/mp4","codecs":"mp4a.40.2"}],
@@ -160,7 +164,7 @@ class BiliHiResTest {
     }
 
     @Test
-    fun `杜比在 dash_dolby_audio 里是数组 也要读`() {
+    fun `杜比在 dash_dolby_audio 里两种形状都认（数组与单对象）`() {
         val all = BiliParse.parseDashAudios(DOLBY_DASH, nowMs = NOW)
         assertEquals(2, all.size)
         val dolby = all.first { it.kind == BiliAudioKind.DOLBY }
@@ -168,6 +172,27 @@ class BiliHiResTest {
         // 容器给 `mp4`：它进 `QualityAssessment.measuredLevel(br, "mp4")` 会得到 dolby。
         assertEquals("mp4", dolby.container)
         assertEquals("dolby", BiliQuality.levelOf(dolby))
+
+        // ★ 单对象形状也要认：真实响应里 `audio` 恒为 null，**没有实测依据**证明
+        //   它非空时是数组。赌一种形状的失败模式是「这条支路静默为空」，
+        //   而那与「这个视频没有杜比」在日志里分不出来。
+        val asObject = BiliParse.parseDashAudios(
+            """{"code":0,"data":{"dash":{"dolby":{"type":0,"audio":""" +
+                """{"id":30250,"baseUrl":"https://x/d.m4s?deadline=1791394130","bandwidth":448000,"codecs":"ec-3","mimeType":"audio/mp4"}}}}}""",
+            nowMs = NOW,
+        )
+        assertEquals(1, asObject.size)
+        assertEquals(BiliAudioKind.DOLBY, asObject.single().kind)
+        assertEquals(448_000L, asObject.single().br)
+
+        // FLAC 那一支同理（实测是单对象，但数组形状也认）。
+        val flacAsArray = BiliParse.parseDashAudios(
+            """{"code":0,"data":{"dash":{"flac":{"audio":[""" +
+                """{"id":30251,"baseUrl":"https://x/f.m4s?deadline=1791394130","bandwidth":2247494,"codecs":"fLaC","mimeType":"audio/mp4"}]}}}}""",
+            nowMs = NOW,
+        )
+        assertEquals(1, flacAsArray.size)
+        assertEquals(BiliAudioKind.FLAC, flacAsArray.single().kind)
     }
 
     @Test
