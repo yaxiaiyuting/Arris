@@ -174,6 +174,25 @@ ncm / qm 的服务端**每条歌词只有一轨译文**（`tlyric` / QQ 的 `tra
 - **方向互斥**：只有 `hires` 抬升、且**永不降低**；其余三档只夹取、**永不升高**；
 - **未知档位服从显式选择**（`sky` + `exhigh` → `exhigh`），而不是静默绕过上限。
 
+### 3.1 顺带发现并修掉的第四条：服务被系统单独拉起时镜像没播种
+
+`BiliPrefs` / `BiliAuthStore` 是「拿不到 `Context` 的调用点读的进程内镜像」，
+而播种点原先**只有 `MainActivity.onCreate`**。`PlaybackService` 是除 Activity 之外
+**唯一的进程入口**（Android Auto / 车机绑定、媒体按钮、通知栏恢复）：
+
+| 镜像 | 未播种时的表现 |
+|---|---|
+| `BiliPrefs.isEnabled` | 恒 false ⇒ B 站曲目直接返回 null、整首跳过 |
+| `BiliPrefs.qualityCap` | 恒 auto ⇒ 用户设的「仅 192K 省流」失效 |
+| `BiliPrefs.preferFlac` | 恒 true ⇒ 省流用户拿到 2~3 Mbps 的 FLAC |
+| `BiliAuthStore` | 恒匿名 ⇒ **大会员也拿不到 Hi-Res** |
+
+最后一行与本版的核心修复直接相关：车机路径恒匿名 ⇒ 恒拿不到 `dash.flac.audio`
+⇒ **修复在那个路径上完全不生效**，而表现恰好就是用户报的那句
+「无论如何都播放的是普通版本」。修法是在 `PlaybackService.onCreate` 里补两行
+（与既有的 `VisualizerSetting.read(this)` 同一模式），
+守卫是 `BiliMirrorSeedingTest` 的源码形状扫描（含「必须在 `onCreate` 体内」那一条）。
+
 ---
 
 ## 四、未验证项（不要把它们读成已解决）
@@ -185,6 +204,7 @@ ncm / qm 的服务端**每条歌词只有一轨译文**（`tlyric` / QQ 的 `tra
 | 3 | **多语言字幕在真机上的端到端** | 同上 | 设置页把字幕语言切成「英语」→ 播放 `BV1GJ411x7h7` → 歌词应变成英文轨 |
 | 4 | **`dash.flac.audio` 在别的账号上是否稳定** | 只测了本机这一个年度大会员账号 | 抽样更多账号 / 更多视频；代码已按「读 `qualities`/字段存在性而不是硬编码」写，拿不到就退 AAC 并如实标降级 |
 | 5 | 「30 秒试听」（`type = -1`）与付费墙 | 本次 2 首样本都是完整曲 | 沿用 v3.1.0 的防御分支（`BiliQn` 降级阶梯） |
+| 6 | **Android Auto / 车机上的 B 站播放** | 同上（无设备，也没有车机） | `BiliMirrorSeedingTest` 只守住了「那两行写在 `onCreate` 体内」这个**形状**，证明不了它真的被执行到 —— 需要真机 + 车机模拟器（`desktop-head-unit`）|
 
 ---
 
