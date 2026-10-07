@@ -224,7 +224,11 @@ class StringsMigrationTest {
         //   **构造器参数** —— 两条链路数的是同一批文案，实测**都是 86**。
         //   （我一度以为两者差 2，那是因为我先改了其中一边、又被失败信息里的旧值误导。
         //    改这两个数之前，请以**各自那条链路的实测值**为准，不要照抄另一个。）
-        val expectedSizes = mapOf("settings" to 86, "about" to 25, "playerUi" to 31, "waveform" to 38)
+        // v3.4.8：新增 `bili` 组 17 条（音质上限 6 + 优先无损 2 + 字幕语言 9）；
+        // settings 86 → 87（+`lyricsTranslationHint`）。两个数各自按**自己那条链路**实测。
+        val expectedSizes = mapOf(
+            "settings" to 87, "about" to 25, "playerUi" to 31, "waveform" to 38, "bili" to 17,
+        )
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
             expectedSizes.forEach { (g, n) ->

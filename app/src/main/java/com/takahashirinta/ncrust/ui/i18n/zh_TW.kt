@@ -46,6 +46,7 @@ val zhTW = Strings(
         gaplessSectionTitle = "無縫而歌",
         gaplessDescription = "預載下曲，去其隙縫",
         lyricsTranslationLabel = "歌詞翻譯",
+        lyricsTranslationHint = "ncm / qm：顯示伺服端傳回的譯文軌",
         lyricsWordByWordLabel = "逐字歌詞",
         lyricsWordAnimationLabel = "逐字動畫模式",
         lyricsWordAnimationOptions = listOf("漸層掃過", "逐字硬切", "關閉逐字"),
@@ -614,4 +615,25 @@ scanConnecting = "正在連接平板…",
             widgetOpenApp = "開啟 Ncrust",
         ),
 
+
+        // v3.4.8：B 站音質與字幕（問題 1 / 2 / 3 的使用者可見文案）。
+        bili = BiliStrings(
+            biliQualityCapLabel = "B站音質上限",
+            biliQualityCapDescription = "限制向 B 站要求的音質。無損與 Hi-Res 需要大會員，而且只有部分影片提供。",
+            biliQualityCapAuto = "跟隨播放音質",
+            biliQualityCapHires = "允許無損與 Hi-Res",
+            biliQualityCapExhigh = "最高 320K",
+            biliQualityCapHigher = "最高 192K（省流）",
+            biliPreferFlacLabel = "優先無損 FLAC",
+            biliPreferFlacDescription = "同一部影片同時有無損與有損音軌時選無損。無損位元率可達 2~3 Mbps，弱網下起播會變慢。",
+            biliSubtitleLangLabel = "B站字幕語言",
+            biliSubtitleLangDescription = "B 站影片的歌詞取自字幕，同一部影片可能有多條語言軌。選「不抓取字幕」會完全停止字幕請求。",
+            biliSubtitleLangAuto = "跟隨應用程式語言",
+            biliSubtitleLangZhHans = "簡體中文",
+            biliSubtitleLangZhHant = "繁體中文",
+            biliSubtitleLangEn = "英語",
+            biliSubtitleLangJa = "日語",
+            biliSubtitleLangKo = "韓語",
+            biliSubtitleLangOff = "不抓取字幕",
+        ),
 )

@@ -105,6 +105,8 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.WidgetStrings",
         "com.takahashirinta.ncrust.ui.i18n.ShareStrings",
         "com.takahashirinta.ncrust.ui.i18n.StatsStrings",
+        // v3.4.8：B 站音质与字幕那一组（17 条）。加组时必须同步这里，否则它是**监控盲区**。
+        "com.takahashirinta.ncrust.ui.i18n.BiliStrings",
     )
 
     /** dex 槽位算式：`this(1) + N + ceil(N/32) 个默认值 mask + DefaultConstructorMarker(1)`。 */
@@ -188,12 +190,12 @@ class StringsConstructorBudgetTest {
                 "（v3.2.0 的唯一变化是 +1 个**组参数** `playbackFailure`，不是往外层加文案。）" +
                 "★ v3.3.0 的算式：实测基准 **138**（不是 v3.2.0 断言里写的 137 —— 那一条早就过期了）" +
                 " + 3 个**组参数**：`share`（需求第 9 条）/ `stats`（需求第 5、6 条）/ `widget`（需求第 4、8 条）" +
-                " = 141。三个组各自的文案一条都没进外层。",
-            141, primaryParams(clazz),
+                " = 141；v3.4.8 又为 `bili` 组加了一个组参数 ⇒ 142。",
+            142, primaryParams(clazz),
         )
-        // 余量：141 ⇒ 1(this) + 141 + ceil(141/32)=5(mask) + 1(marker) = 148 槽，距 255 还有 107。
-        assertEquals(148, dexSlots(141, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(141, true) >= 100)
+        // 余量：142 ⇒ 1(this) + 142 + ceil(142/32)=5(mask) + 1(marker) = 149 槽，距 255 还有 106。
+        assertEquals(149, dexSlots(142, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(142, true) >= 100)
     }
 
     /**
@@ -221,8 +223,9 @@ class StringsConstructorBudgetTest {
     fun `v3_2_0 的 9 条取链失败文案进了 PlaybackFailureStrings 且八种语言都可用`() {
         assertEquals(
             "v3.2.0 只该为新的失败文案组加**一个**外层参数（136 → 137）；" +
-                "v3.3.0 又为 share / stats / widget 三个组各加了 1 个 ⇒ 138 + 3 = 141",
-            141,
+                "v3.3.0 又为 share / stats / widget 三个组各加了 1 个 ⇒ 138 + 3 = 141；" +
+                "v3.4.8 再为 `bili` 组加 1 个 ⇒ 142",
+            142,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaybackFailureStrings")
@@ -341,7 +344,9 @@ class StringsConstructorBudgetTest {
             // 前者让「已授权」可见（否则用户以为点不动），
             // 后者让「清缓存会连离线音频一起删」在点之前就被读到。
             // AboutStrings / PlayerUiStrings 本版一条都没加。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 86,
+            // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
+            // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 87,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -525,7 +530,8 @@ class StringsConstructorBudgetTest {
         // v2.8.0：外层唯一的变化是 +1 个**组参数**（`waveform`），不是往外层加文案。
         // v3.2.0：同样只 +1 个**组参数**（`playbackFailure`）⇒ 137。
         // v3.3.0：再 +3 个**组参数**（`share` / `stats` / `widget`）⇒ 实测基准 138 + 3 = 141。
-        assertEquals(141, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        // v3.4.8：再 +1 个**组参数**（`bili`）⇒ 142。
+        assertEquals(142, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -553,13 +559,15 @@ class StringsConstructorBudgetTest {
     fun `v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用`() {
         assertEquals(
             "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数" +
-                "（v3.2.0 又只为失败文案组加了一个 ⇒ 137；v3.3.0 再为 share / stats / widget 各加一个 ⇒ 141）",
-            141,
+                "（v3.2.0 又只为失败文案组加了一个 ⇒ 137；v3.3.0 再为 share / stats / widget 各加一个 ⇒ 141；" +
+                "v3.4.8 再为 `bili` 组加一个 ⇒ 142）",
+            142,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
-            "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            86,
+            "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言" +
+                "（v3.4.8：86 → 87，+lyricsTranslationHint）",
+            87,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
@@ -647,8 +655,9 @@ class StringsConstructorBudgetTest {
         assertEquals(
             "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136；" +
                 "v3.2.0 再 +1 个组参数（失败文案组）⇒ 137；" +
-                "v3.3.0 再 +3 个组参数（share / stats / widget）⇒ 138 + 3 = 141",
-            141,
+                "v3.3.0 再 +3 个组参数（share / stats / widget）⇒ 138 + 3 = 141；" +
+                "v3.4.8 再 +1 个组参数（bili）⇒ 142",
+            142,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(

@@ -47,6 +47,7 @@ val en = Strings(
         gaplessSectionTitle = "Gapless Playback",
         gaplessDescription = "Preload next track to eliminate gaps",
         lyricsTranslationLabel = "Lyrics Translation",
+        lyricsTranslationHint = "ncm / qm: show the translation track returned by the service",
         lyricsWordByWordLabel = "Word-by-Word Lyrics",
         lyricsWordAnimationLabel = "Word Animation",
         lyricsWordAnimationOptions = listOf("Gradient sweep", "Word-by-word", "Off"),
@@ -616,4 +617,25 @@ val en = Strings(
             widgetOpenApp = "Open Ncrust",
         ),
 
+
+        // v3.4.8: Bilibili audio quality and subtitles (user-facing text for issues 1 / 2 / 3).
+        bili = BiliStrings(
+            biliQualityCapLabel = "Bilibili quality cap",
+            biliQualityCapDescription = "Limits the audio quality requested from Bilibili. Lossless and Hi-Res need a premium account, and only some videos offer them.",
+            biliQualityCapAuto = "Follow playback quality",
+            biliQualityCapHires = "Allow lossless and Hi-Res",
+            biliQualityCapExhigh = "Up to 320K",
+            biliQualityCapHigher = "Up to 192K (data saver)",
+            biliPreferFlacLabel = "Prefer lossless FLAC",
+            biliPreferFlacDescription = "Picks the lossless track when one video offers both lossless and lossy audio. Lossless can reach 2-3 Mbps and starts slower on weak networks.",
+            biliSubtitleLangLabel = "Bilibili subtitle language",
+            biliSubtitleLangDescription = "Lyrics for Bilibili videos come from subtitles, and one video may carry several language tracks. Choosing Never fetch stops subtitle requests completely.",
+            biliSubtitleLangAuto = "Follow app language",
+            biliSubtitleLangZhHans = "Chinese (Simplified)",
+            biliSubtitleLangZhHant = "Chinese (Traditional)",
+            biliSubtitleLangEn = "English",
+            biliSubtitleLangJa = "Japanese",
+            biliSubtitleLangKo = "Korean",
+            biliSubtitleLangOff = "Never fetch subtitles",
+        ),
 )

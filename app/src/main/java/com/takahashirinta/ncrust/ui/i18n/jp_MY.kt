@@ -46,6 +46,7 @@ val jpMY = Strings(
         gaplessSectionTitle = "無間 再世",
         gaplessDescription = "次 予読 隙 無",
         lyricsTranslationLabel = "歌詞 翻訳",
+        lyricsTranslationHint = "ncm / qm：サーバーが返す訳詞の軌を顕はす",
         lyricsWordByWordLabel = "逐字 歌詞",
         lyricsWordAnimationLabel = "逐字 動畫",
         lyricsWordAnimationOptions = listOf("漸化 掃過", "逐字 硬切", "無効"),
@@ -613,4 +614,25 @@ val jpMY = Strings(
             widgetOpenApp = "Ncrust を開け",
         ),
 
+
+        // v3.4.8：B站の音質と字幕（課題 1 / 2 / 3 の文）。
+        bili = BiliStrings(
+            biliQualityCapLabel = "B站の音質の上限",
+            biliQualityCapDescription = "B站に求むる音質を限る。可逆と Hi-Res は大会員を要し、亦一部の動画にのみ在り。",
+            biliQualityCapAuto = "再生の音質に従ふ",
+            biliQualityCapHires = "可逆と Hi-Res を許す",
+            biliQualityCapExhigh = "最大 320K",
+            biliQualityCapHigher = "最大 192K（通信を省く）",
+            biliPreferFlacLabel = "可逆 FLAC を先にす",
+            biliPreferFlacDescription = "同じ動画に可逆と非可逆の倶に在る時は可逆を取る。可逆は 2〜3 Mbps に至ることあり、弱き回線には起り遅し。",
+            biliSubtitleLangLabel = "B站の字幕の言葉",
+            biliSubtitleLangDescription = "B站動画の歌詞は字幕より得たり。同じ動画に幾つもの言葉の軌の在ることあり。「取らず」を選べば字幕の求めを全く止む。",
+            biliSubtitleLangAuto = "アプリの言葉に従ふ",
+            biliSubtitleLangZhHans = "漢語（簡体）",
+            biliSubtitleLangZhHant = "漢語（繁体）",
+            biliSubtitleLangEn = "英語",
+            biliSubtitleLangJa = "日本語",
+            biliSubtitleLangKo = "韓国語",
+            biliSubtitleLangOff = "字幕を取らず",
+        ),
 )

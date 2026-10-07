@@ -429,6 +429,26 @@ data class Strings(
      * 并在类体里留转发属性，不要再往主构造器直接加参数。
      */
     val stats: StatsStrings,
+
+    /**
+     * v3.4.8：**B 站音质与字幕**的文案（见 [BiliStrings]）。
+     *
+     * 与 [PlaybackFailureStrings] / [ShareStrings] / [WidgetStrings] / [StatsStrings]
+     * 同一范式：外层只为这一组加 **1** 个参数（141 → 142，预算 150），
+     * 17 条文案全部落在组里。
+     *
+     * ## 为什么单开一组而不是塞进 SettingsStrings
+     *
+     * `SettingsStrings` 已经是 **86**，而组**预警线是 80**、硬上限 120 ——
+     * 它是唯一一个已经越过预警线的组。再往里加 17 条 = 103，逼近硬上限；
+     * 而且这 17 条里没有一条是「设置页通用文案」：它们全部只服务于 B 站这一个音源，
+     * 与 `bilibiliEnabledLabel` 那种「一个开关配一句话」的规模完全不同。
+     * 按仓库纪律「再加字段请拆组」，这里单开一组。
+     *
+     * ⚠️ **余量只剩 8 个**（预算 150）。下一个要加文案的人必须先把既有文案搬进
+     * 语义相符的组、并在类体里留转发属性，不要再往主构造器直接加参数。
+     */
+    val bili: BiliStrings,
 ) {
     // ---------- 转发属性（v2.0.0 · HF1）----------
     // 离线 / 缓存那一组（19 条）的构造参数已经挪进 [OfflineStrings]，这里用**成员**转发属性把
@@ -608,6 +628,7 @@ data class Strings(
     val gaplessSectionTitle: String get() = settings.gaplessSectionTitle
     val gaplessDescription: String get() = settings.gaplessDescription
     val lyricsTranslationLabel: String get() = settings.lyricsTranslationLabel
+    val lyricsTranslationHint: String get() = settings.lyricsTranslationHint
     val lyricsWordByWordLabel: String get() = settings.lyricsWordByWordLabel
     val lyricsWordAnimationLabel: String get() = settings.lyricsWordAnimationLabel
     val lyricsWordAnimationOptions: List<String> get() = settings.lyricsWordAnimationOptions
@@ -1547,6 +1568,15 @@ data class SettingsStrings(
     val gaplessDescription: String,
     val lyricsTranslationLabel: String,
     /**
+     * v3.4.8（问题 2）：这条开关**作用于哪些音源**。
+     *
+     * 用户的要求是「在所有音源都支持选择自己想要开启的字幕语言」。
+     * ncm / qm 的服务端每条歌词只有**一轨译文**（`tlyric` / QQ 的 `trans`），
+     * 没有语言元数据可选 —— 所以那两个音源的「语言选择」在事实上就是
+     * 「要不要这一轨」。把这件事写进说明，用户才不会以为这里漏做了。
+     */
+    val lyricsTranslationHint: String,
+    /**
      * v1.5.0 · B 的逐字歌词布尔开关文案。v1.5.1 · A 起设置页改成三选一
      * （[lyricsWordAnimationLabel]），这一项只为迁移路径保留，已无 UI 入口。
      */
@@ -1993,4 +2023,80 @@ data class StatsStrings(
     val durationHm: (Int, Int) -> String,
     val durationMinSec: (Int, Int) -> String,
     val durationSec: (Int) -> String,
+)
+
+/**
+ * v3.4.8：**B 站音质与字幕**的文案组（17 条）。
+ *
+ * ## 它对应哪两个用户问题
+ *
+ * | 用户问题 | 落在这里的文案 |
+ * |---|---|
+ * | ① 「B 站有大会员支持的 Hi-Res，但我们永远播放普通版本」 | [biliQualityCapLabel] / [biliPreferFlacLabel] 两组 |
+ * | ② 「有些歌曲有多种语言歌词，希望能自己选要开启的字幕语言」 | [biliSubtitleLangLabel] 一组 |
+ *
+ * ## 三条事实约束（写错就是骗用户，与 `WaveformStrings` 的写法同源）
+ *
+ * 1. **无损 / Hi-Res 需要大会员，且不是每个视频都有** —— [biliQualityCapDescription]
+ *    必须同时写出这两件事。实测：同一视频同一 cid，匿名请求 `dash.flac` 恒为 `null`，
+ *    登录 + 年度大会员才有内容；而 12 个音乐视频里带 `flac` 的只是少数。
+ *    只写「需要大会员」会让没开的用户以为「开了就有」。
+ * 2. **FLAC 是有代价的** —— [biliPreferFlacDescription] 必须写出码率量级
+ *    （实测 `30251` 是 **2247494 / 3154514 bps**，即 2~3 Mbps）。只说「音质更好」
+ *    会让用户在一个看似无损的开关上花掉十倍流量。
+ * 3. **[biliSubtitleLangOff] 是真的不发请求** —— [biliSubtitleLangDescription]
+ *    必须写明这一点。实测代码路径：选中它之后 `fetchLyric` 在取 `cid` **之前**返回，
+ *    一个字节都不发给 B 站。写成「不显示字幕」会让用户以为只是界面上看不见。
+ *
+ * ## 为什么语言档位用「语言名」而不是语言代码
+ *
+ * 用户看到的是 `zh-Hans` / `zh-Hant` 还是「简体中文 / 繁體中文」，决定了他能不能
+ * 在设置页一眼选对。语言代码只在实现与日志里出现（[BiliSubtitleLang.key]）。
+ *
+ * 参数数量监控见 `StringsConstructorBudgetTest`（本组 17，组上限 120）。
+ */
+data class BiliStrings(
+    // ---------- 音质上限（问题 3） ----------
+    /** 音质上限下拉的标题。 */
+    val biliQualityCapLabel: String,
+    /**
+     * 音质上限的说明。
+     *
+     * ⚠️ 必须写明「需要大会员」**与**「只有部分视频提供」两件事，见类文档约束 1。
+     */
+    val biliQualityCapDescription: String,
+    /** 上限：跟随全局播放音质档位（默认，等价于没有这个开关）。 */
+    val biliQualityCapAuto: String,
+    /** 上限：放开到无损 / Hi-Res（大会员）。 */
+    val biliQualityCapHires: String,
+    /** 上限：320K（永不请求无损）。 */
+    val biliQualityCapExhigh: String,
+    /** 上限：192K（省流）。 */
+    val biliQualityCapHigher: String,
+
+    // ---------- 优先无损 FLAC（问题 3） ----------
+    /** 「优先无损 FLAC」开关的标题。 */
+    val biliPreferFlacLabel: String,
+    /** 说明。必须写出无损的码率量级，见类文档约束 2。 */
+    val biliPreferFlacDescription: String,
+
+    // ---------- 字幕语言（问题 2） ----------
+    /** 字幕语言下拉的标题。 */
+    val biliSubtitleLangLabel: String,
+    /** 说明。必须写明「不抓取」是真的不发请求，见类文档约束 3。 */
+    val biliSubtitleLangDescription: String,
+    /** 档位：跟随应用界面语言，其次中文。 */
+    val biliSubtitleLangAuto: String,
+    /** 档位：简体中文。 */
+    val biliSubtitleLangZhHans: String,
+    /** 档位：繁体中文。 */
+    val biliSubtitleLangZhHant: String,
+    /** 档位：英语。 */
+    val biliSubtitleLangEn: String,
+    /** 档位：日语。 */
+    val biliSubtitleLangJa: String,
+    /** 档位：韩语。 */
+    val biliSubtitleLangKo: String,
+    /** 档位：**不抓取字幕**（真的不发请求）。 */
+    val biliSubtitleLangOff: String,
 )

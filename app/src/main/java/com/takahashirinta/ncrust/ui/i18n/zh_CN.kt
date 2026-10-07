@@ -46,6 +46,7 @@ val zhCN = Strings(
         gaplessSectionTitle = "无缝播放",
         gaplessDescription = "提前加载下一首，消除曲间空白",
         lyricsTranslationLabel = "歌词翻译",
+        lyricsTranslationHint = "ncm / qm：显示服务端返回的译文轨",
         lyricsWordByWordLabel = "逐字歌词",
         lyricsWordAnimationLabel = "逐字动画模式",
         lyricsWordAnimationOptions = listOf("渐变扫过", "逐字硬切", "关闭逐字"),
@@ -614,4 +615,25 @@ val zhCN = Strings(
             widgetOpenApp = "打开 Ncrust",
         ),
 
+
+        // v3.4.8：B 站音质与字幕（问题 1 / 2 / 3 的用户可见文案）。
+        bili = BiliStrings(
+            biliQualityCapLabel = "B站音质上限",
+            biliQualityCapDescription = "限制从 B 站请求的音质。无损与 Hi-Res 需要大会员，而且只有部分视频提供。",
+            biliQualityCapAuto = "跟随播放音质",
+            biliQualityCapHires = "允许无损与 Hi-Res",
+            biliQualityCapExhigh = "最高 320K",
+            biliQualityCapHigher = "最高 192K（省流）",
+            biliPreferFlacLabel = "优先无损 FLAC",
+            biliPreferFlacDescription = "同一个视频同时有无损与有损音轨时选无损。无损码率可达 2~3 Mbps，弱网下起播会变慢。",
+            biliSubtitleLangLabel = "B站字幕语言",
+            biliSubtitleLangDescription = "B 站视频的歌词取自字幕，同一个视频可能有多条语言轨。选「不抓取字幕」会完全停止字幕请求。",
+            biliSubtitleLangAuto = "跟随应用语言",
+            biliSubtitleLangZhHans = "简体中文",
+            biliSubtitleLangZhHant = "繁体中文",
+            biliSubtitleLangEn = "英语",
+            biliSubtitleLangJa = "日语",
+            biliSubtitleLangKo = "韩语",
+            biliSubtitleLangOff = "不抓取字幕",
+        ),
 )

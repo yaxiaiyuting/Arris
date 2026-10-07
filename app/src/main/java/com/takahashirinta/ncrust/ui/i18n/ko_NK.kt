@@ -46,6 +46,7 @@ val koNK = Strings(
         gaplessSectionTitle = "틈 없이 이어 재생",
         gaplessDescription = "다음곡 미리불러와 틈 없애기",
         lyricsTranslationLabel = "가사 번역",
+        lyricsTranslationHint = "ncm / qm: 봉사기가 돌려주는 번역 가사를 보여줍니다",
         lyricsWordByWordLabel = "글자별 가사",
         lyricsWordAnimationLabel = "글자별 애니메이션",
         lyricsWordAnimationOptions = listOf("그라데이션", "글자별", "끄기"),
@@ -613,4 +614,25 @@ scanConnecting = "평판에 연결중…",
             widgetOpenApp = "Ncrust 열기",
         ),
 
+
+        // v3.4.8：B站 음질과 자막（문제 1 / 2 / 3의 사용자 문안).
+        bili = BiliStrings(
+            biliQualityCapLabel = "B站 음질 상한",
+            biliQualityCapDescription = "B站에 요구하는 음질을 제한합니다. 무손실과 Hi-Res는 대회원이 필요하며 일부 동영상에만 있습니다.",
+            biliQualityCapAuto = "재생 음질을 따름",
+            biliQualityCapHires = "무손실과 Hi-Res 허용",
+            biliQualityCapExhigh = "최대 320K",
+            biliQualityCapHigher = "최대 192K (절약)",
+            biliPreferFlacLabel = "무손실 FLAC 우선",
+            biliPreferFlacDescription = "한 동영상에 무손실과 손실 음원이 함께 있을 때 무손실을 고릅니다. 무손실은 2~3 Mbps에 이르며 약한 망에서는 시작이 느립니다.",
+            biliSubtitleLangLabel = "B站 자막 언어",
+            biliSubtitleLangDescription = "B站 동영상의 가사는 자막에서 옵니다. 한 동영상에 여러 언어 자막이 있을 수 있습니다. 《받지 않음》을 고르면 자막 요구를 완전히 끊습니다.",
+            biliSubtitleLangAuto = "응용프로그람 언어를 따름",
+            biliSubtitleLangZhHans = "중국어(간체)",
+            biliSubtitleLangZhHant = "중국어(번체)",
+            biliSubtitleLangEn = "영어",
+            biliSubtitleLangJa = "일본어",
+            biliSubtitleLangKo = "조선어",
+            biliSubtitleLangOff = "자막을 받지 않음",
+        ),
 )

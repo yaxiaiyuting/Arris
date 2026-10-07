@@ -47,6 +47,7 @@ val ruRU = Strings(
         gaplessSectionTitle = "Бесшовное воспроизведение",
         gaplessDescription = "Предзагрузка следующего трека для устранения пауз",
         lyricsTranslationLabel = "Перевод текста",
+        lyricsTranslationHint = "ncm / qm: показывать дорожку перевода от сервиса",
         lyricsWordByWordLabel = "Пословный текст",
         lyricsWordAnimationLabel = "Анимация слов",
         lyricsWordAnimationOptions = listOf("Градиент", "Пословно", "Выкл."),
@@ -616,4 +617,25 @@ val ruRU = Strings(
             widgetOpenApp = "Открыть Ncrust",
         ),
 
+
+        // v3.4.8: качество звука и субтитры Bilibili (тексты для задач 1 / 2 / 3).
+        bili = BiliStrings(
+            biliQualityCapLabel = "Предел качества Bilibili",
+            biliQualityCapDescription = "Ограничивает качество звука, запрашиваемое у Bilibili. Звук без потерь и Hi-Res требуют премиум-аккаунта и есть только у части видео.",
+            biliQualityCapAuto = "Как при воспроизведении",
+            biliQualityCapHires = "Разрешить без потерь и Hi-Res",
+            biliQualityCapExhigh = "Не выше 320K",
+            biliQualityCapHigher = "Не выше 192K (экономия)",
+            biliPreferFlacLabel = "Предпочитать FLAC без потерь",
+            biliPreferFlacDescription = "Выбирает дорожку без потерь, когда у видео есть обе. Звук без потерь достигает 2-3 Мбит/с и стартует медленнее в слабой сети.",
+            biliSubtitleLangLabel = "Язык субтитров Bilibili",
+            biliSubtitleLangDescription = "Тексты песен в видео Bilibili берутся из субтитров, и у одного видео может быть несколько языковых дорожек. Никогда не загружать полностью отключает запросы субтитров.",
+            biliSubtitleLangAuto = "Как в приложении",
+            biliSubtitleLangZhHans = "Китайский (упрощённый)",
+            biliSubtitleLangZhHant = "Китайский (традиционный)",
+            biliSubtitleLangEn = "Английский",
+            biliSubtitleLangJa = "Японский",
+            biliSubtitleLangKo = "Корейский",
+            biliSubtitleLangOff = "Не загружать субтитры",
+        ),
 )

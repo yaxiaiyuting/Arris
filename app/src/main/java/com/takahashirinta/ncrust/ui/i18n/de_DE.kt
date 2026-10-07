@@ -47,6 +47,7 @@ val deDE = Strings(
         gaplessSectionTitle = "Nahtlose Wiedergabe",
         gaplessDescription = "Nächsten Titel vorladen, um Lücken zu vermeiden",
         lyricsTranslationLabel = "Liedtext-Übersetzung",
+        lyricsTranslationHint = "ncm / qm: die vom Dienst gelieferte Übersetzungsspur anzeigen",
         lyricsWordByWordLabel = "Wort-für-Wort-Text",
         lyricsWordAnimationLabel = "Wort-Animation",
         lyricsWordAnimationOptions = listOf("Verlauf", "Wort für Wort", "Aus"),
@@ -616,4 +617,25 @@ val deDE = Strings(
             widgetOpenApp = "Ncrust öffnen",
         ),
 
+
+        // v3.4.8: Bilibili-Audioqualität und Untertitel (Nutzertexte zu den Punkten 1 / 2 / 3).
+        bili = BiliStrings(
+            biliQualityCapLabel = "Bilibili-Qualitätslimit",
+            biliQualityCapDescription = "Begrenzt die von Bilibili angeforderte Audioqualität. Verlustfrei und Hi-Res erfordern ein Premium-Konto und gibt es nur bei einem Teil der Videos.",
+            biliQualityCapAuto = "Wiedergabequalität folgen",
+            biliQualityCapHires = "Verlustfrei und Hi-Res erlauben",
+            biliQualityCapExhigh = "Höchstens 320K",
+            biliQualityCapHigher = "Höchstens 192K (Datensparen)",
+            biliPreferFlacLabel = "Verlustfreies FLAC bevorzugen",
+            biliPreferFlacDescription = "Wählt die verlustfreie Spur, wenn ein Video beide anbietet. Verlustfrei erreicht 2-3 Mbps und startet im schwachen Netz langsamer.",
+            biliSubtitleLangLabel = "Bilibili-Untertitelsprache",
+            biliSubtitleLangDescription = "Die Liedtexte von Bilibili-Videos stammen aus Untertiteln, und ein Video kann mehrere Sprachspuren haben. Nie abrufen stoppt Untertitelanfragen vollständig.",
+            biliSubtitleLangAuto = "App-Sprache folgen",
+            biliSubtitleLangZhHans = "Chinesisch (vereinfacht)",
+            biliSubtitleLangZhHant = "Chinesisch (traditionell)",
+            biliSubtitleLangEn = "Englisch",
+            biliSubtitleLangJa = "Japanisch",
+            biliSubtitleLangKo = "Koreanisch",
+            biliSubtitleLangOff = "Untertitel nie abrufen",
+        ),
 )

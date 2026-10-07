@@ -46,6 +46,7 @@ val jpJP = Strings(
         gaplessSectionTitle = "ギャップレス再生",
         gaplessDescription = "次の曲を先読みして途切れをなくす",
         lyricsTranslationLabel = "歌詞翻訳",
+        lyricsTranslationHint = "ncm / qm：サーバーが返す訳詞トラックを表示します",
         lyricsWordByWordLabel = "一文字ずつ歌詞",
         lyricsWordAnimationLabel = "逐字アニメーション",
         lyricsWordAnimationOptions = listOf("グラデーション", "一文字ずつ", "オフ"),
@@ -614,4 +615,25 @@ val jpJP = Strings(
             widgetOpenApp = "Ncrust を開く",
         ),
 
+
+        // v3.4.8：B站の音質と字幕（課題 1 / 2 / 3 のユーザー向け文言）。
+        bili = BiliStrings(
+            biliQualityCapLabel = "B站の音質上限",
+            biliQualityCapDescription = "B站に要求する音質を制限します。可逆圧縮と Hi-Res は大会員が必要で、対応する動画も一部だけです。",
+            biliQualityCapAuto = "再生音質に従う",
+            biliQualityCapHires = "可逆と Hi-Res を許可",
+            biliQualityCapExhigh = "最大 320K",
+            biliQualityCapHigher = "最大 192K（通信節約）",
+            biliPreferFlacLabel = "可逆 FLAC を優先",
+            biliPreferFlacDescription = "同じ動画に可逆と非可逆の両方があるとき可逆を選びます。可逆は 2〜3 Mbps に達することがあり、弱い回線では再生開始が遅くなります。",
+            biliSubtitleLangLabel = "B站の字幕言語",
+            biliSubtitleLangDescription = "B站動画の歌詞は字幕から取得します。同じ動画に複数の言語トラックがある場合があります。「取得しない」を選ぶと字幕の要求を完全に止めます。",
+            biliSubtitleLangAuto = "アプリの言語に従う",
+            biliSubtitleLangZhHans = "中国語（簡体字）",
+            biliSubtitleLangZhHant = "中国語（繁体字）",
+            biliSubtitleLangEn = "英語",
+            biliSubtitleLangJa = "日本語",
+            biliSubtitleLangKo = "韓国語",
+            biliSubtitleLangOff = "字幕を取得しない",
+        ),
 )
