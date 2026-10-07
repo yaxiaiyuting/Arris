@@ -1,0 +1,79 @@
+# 登录态：有 Cookie
+
+========================================================================
+问题 1 · 大会员 Hi-Res（dash.flac.audio）
+========================================================================
+
+## BV1EC4y1R7ax (【HiRes】崔健《新长征路上的摇滚》)
+   FLAC  br= 2247494 codecs=fLaC
+   AAC   br=  213610 codecs=mp4a.40.2
+   AAC   br=  109633 codecs=mp4a.40.2
+   AAC   br=   53781 codecs=mp4a.40.5
+   请求 standard  → AAC   25931154534-1-30280.m4s          实际档位=higher
+   请求 exhigh    → AAC   25931154534-1-30280.m4s          实际档位=higher
+   请求 lossless  → FLAC  25931154534-1-30251.m4s          实际档位=hires
+   请求 hires     → FLAC  25931154534-1-30251.m4s          实际档位=hires
+   上限 hires + 全局 higher → FLAC
+   上限 exhigh + 全局 lossless → AAC
+   preferFlac=false + lossless → AAC
+   下载前 2MB 实测：bytes=2000001 codec_name=flac sample_rate=96000 channels=2 bit_rate=2029320
+
+## BV1BZbSzZEGT (【Hi-Res无损】周杰伦《晴天》)
+   FLAC  br= 3154514 codecs=fLaC
+   AAC   br=  184052 codecs=mp4a.40.2
+   AAC   br=   82687 codecs=mp4a.40.2
+   AAC   br=   65698 codecs=mp4a.40.2
+   请求 standard  → AAC   31268997329-1-30280.m4s          实际档位=standard
+   请求 exhigh    → AAC   31268997329-1-30280.m4s          实际档位=standard
+   请求 lossless  → FLAC  31268997329-1-30251.m4s          实际档位=hires
+   请求 hires     → FLAC  31268997329-1-30251.m4s          实际档位=hires
+   上限 hires + 全局 higher → FLAC
+   上限 exhigh + 全局 lossless → AAC
+   preferFlac=false + lossless → AAC
+   下载前 2MB 实测：bytes=2000001 codec_name=flac sample_rate=96000 channels=2 bit_rate=2425659
+
+========================================================================
+问题 2 · 多语言字幕（player/wbi/v2 的 subtitles[]）
+========================================================================
+
+## BV1GJ411x7h7 共 12 条语言轨
+   zh-CN / zh-Hans / zh-Hant / zh-HK / en-US / ja / ko / de-DE / ru / iw / ca / ase
+   auto(zh-CN)    → zh-CN    中文（中国）
+   auto(zh-TW)    → zh-Hant  中文（繁體）
+   auto(en-US)    → en-US    English(US)
+   zh-Hans        → zh-CN    中文（中国）
+   zh-Hant        → zh-Hant  中文（繁體）
+   en             → en-US    English(US)
+   ja             → ja       日本語
+   ko             → ko       한국어
+   off            → （不抓取 · 零请求，见 JVM 单测）
+
+## BV1uT4y1P7CX 共 60 条语言轨
+   zh-CN / zh-Hans / zh-Hant / zh-HK / zh-TW / zh-SG / en / en-US / en-CA / en-IE / en-GB / ja / ko / es / pt / pt-BR / fr / fr-BE …
+   auto(zh-CN)    → zh-CN    中文（中国）
+   auto(zh-TW)    → zh-Hant  中文（繁體）
+   auto(en-US)    → en-US    English(US)
+   zh-Hans        → zh-CN    中文（中国）
+   zh-Hant        → zh-Hant  中文（繁體）
+   en             → en-US    English(US)
+   ja             → ja       日本語
+   ko             → ko       한국어
+   off            → （不抓取 · 零请求，见 JVM 单测）
+
+========================================================================
+问题 1 补 · 音频区（au）的档位回显
+========================================================================
+
+## au39  请求 qn=3（FLAC）
+   服务端返回文件：ef0083e1cd13e73dcd20bfe3e672c21a-320k.m4a
+   qualities[] 里有 type:3 吗：没有
+   ★ 修复前回显：lossless（按请求档位，界面写「无损」）
+   ★ 修复后回显：exhigh（按文件名反推，界面如实显示降级）
+
+## au4055594  请求 qn=3（FLAC）
+   服务端返回文件：n230902a2201yiessmtwpv3kwtof8p3h-320k.m4a
+   qualities[] 里有 type:3 吗：没有
+   ★ 修复前回显：lossless（按请求档位，界面写「无损」）
+   ★ 修复后回显：exhigh（按文件名反推，界面如实显示降级）
+
+完成。
