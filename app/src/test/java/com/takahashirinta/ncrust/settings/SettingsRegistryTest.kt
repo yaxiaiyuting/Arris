@@ -19,6 +19,8 @@ import com.takahashirinta.ncrust.ui.settings.SettingsEntry
 import com.takahashirinta.ncrust.ui.settings.SettingsEntryType
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
 import com.takahashirinta.ncrust.ui.settings.SettingsRegistry
+import com.takahashirinta.ncrust.ui.settings.GatingReason
+import com.takahashirinta.ncrust.ui.settings.SettingsVisibility
 import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -48,7 +50,8 @@ class SettingsRegistryTest {
             // 那正好把"机械防线"变成"每次加功能都要改测试"的噪声源。
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
-                    !it.isNewInV310 && !it.isNewInV320
+                    !it.isNewInV310 && !it.isNewInV320 &&
+                    !it.isNewInV348
             }
             .mapNotNull { it.key }
             .toSet()
@@ -84,7 +87,8 @@ class SettingsRegistryTest {
         val legacy = SettingsRegistry.allEntries()
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
-                    !it.isNewInV310 && !it.isNewInV320
+                    !it.isNewInV310 && !it.isNewInV320 &&
+                    !it.isNewInV348
             }
             .mapNotNull { it.key }
             .toSet()
@@ -217,6 +221,88 @@ class SettingsRegistryTest {
         // 文案必须住在分组里（v2.2.1 规则 5），且**两条都要有**。
         assertEquals("bilibiliEnabledLabel", entry.titleKey)
         assertEquals("bilibiliEnabledDescription", entry.subtitleKey)
+    }
+
+    /**
+     * 机械防线之五：v3.4.8 只允许新增「B 站音质上限 / 优先无损 FLAC / 字幕语言」这一组。
+     *
+     * 这三条对应的正是本次用户报的三个问题里的第 1、3 条（音质）与第 2 条（字幕语言）。
+     * 顺手夹带一个无关功能项（一起听 / 下载管理 / 流量管理 / 备份恢复…）会在这里变红。
+     */
+    @Test
+    fun `newV348KeysAreExactlyTheBilibiliQualityAndSubtitleSet`() {
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV348 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals(
+            "v3.4.8 新增项",
+            setOf("bilibili_quality_cap", "bilibili_prefer_flac", "bilibili_subtitle_lang"),
+            actual,
+        )
+
+        // ① 音质上限：有限枚举下拉，默认 = 跟随全局档位（对既有行为零影响）。
+        val cap = SettingsRegistry.allEntries().first { it.id == "bilibili_quality_cap" }
+        assertEquals(SettingsEntryType.CHOICE, cap.type)
+        assertEquals("默认必须是「跟随播放音质」—— 否则升级即改变用户听到的东西", "auto", cap.defaultValue)
+        assertEquals(SettingsGroup.PLAYBACK, cap.group)
+        assertFalse("它是可见项", cap.isInternal)
+        assertEquals(
+            "候选必须与 BiliQualityCap 的声明顺序逐字一致（下拉索引 = 枚举序号）",
+            listOf("auto", "hires", "exhigh", "higher"),
+            cap.choices,
+        )
+
+        // ② 优先无损 FLAC：布尔开关，默认**开**（本次修复默认可见的关键）。
+        val prefer = SettingsRegistry.allEntries().first { it.id == "bilibili_prefer_flac" }
+        assertEquals(SettingsEntryType.SWITCH, prefer.type)
+        assertEquals(true, prefer.defaultValue)
+        assertEquals(SettingsGroup.PLAYBACK, prefer.group)
+        assertFalse(prefer.isInternal)
+
+        // ③ 字幕语言：有限枚举下拉，默认 auto（= 修复前的「优先中文」行为）。
+        val sub = SettingsRegistry.allEntries().first { it.id == "bilibili_subtitle_lang" }
+        assertEquals(SettingsEntryType.CHOICE, sub.type)
+        assertEquals("auto", sub.defaultValue)
+        assertEquals(
+            "字幕语言必须与既有的译文开关同页 —— 那是「所有音源的字幕语言在同一处」的落点",
+            SettingsGroup.LYRICS,
+            sub.group,
+        )
+        assertFalse(sub.isInternal)
+        assertEquals(
+            "七档：跟随应用语言 + 五种具体语言 + 「不抓取」（抓取开关本身）",
+            listOf("auto", "zh-Hans", "zh-Hant", "en", "ja", "ko", "off"),
+            sub.choices,
+        )
+
+        // 三条的文案都必须住在 `bili` 组里（本版新开的组）。
+        listOf(cap, prefer, sub).forEach { entry ->
+            assertNotNull("${entry.id} 缺 titleKey", entry.titleKey)
+            assertNotNull("${entry.id} 缺 subtitleKey", entry.subtitleKey)
+            assertTrue(
+                "${entry.id} 的文案必须指向 bili 组：${entry.titleKey}",
+                entry.titleKey!!.startsWith("bili.") && entry.subtitleKey!!.startsWith("bili."),
+            )
+            assertTrue("${entry.id} 必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+        }
+
+        // ④ 三条都必须受「B 站音源总开关」门控（源关着时它们是死开关）。
+        listOf("bilibili_quality_cap", "bilibili_prefer_flac", "bilibili_subtitle_lang")
+            .forEach { id ->
+                val off = SettingsVisibility.availabilityOf(id) { key ->
+                    if (key == "bilibili_enabled") false else null
+                }
+                assertTrue("$id 在音源关闭时仍可见（应当可见但置灰）", off.visible)
+                assertFalse("$id 在音源关闭时必须置灰", off.enabled)
+                assertEquals(GatingReason.BILI_SOURCE_DISABLED, off.reason)
+
+                val on = SettingsVisibility.availabilityOf(id) { key ->
+                    if (key == "bilibili_enabled") true else null
+                }
+                assertTrue("$id 在音源开启时必须可用", on.enabled)
+                assertEquals(GatingReason.NONE, on.reason)
+            }
     }
 
     @Test

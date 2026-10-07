@@ -11,6 +11,8 @@
 package com.takahashirinta.ncrust.ui.screen
 
 import com.takahashirinta.ncrust.bili.BiliPrefs
+import com.takahashirinta.ncrust.bili.BiliQualityCap
+import com.takahashirinta.ncrust.bili.BiliSubtitleLang
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import android.util.Log
 import android.widget.Toast
@@ -244,6 +246,13 @@ private fun SettingsPreferenceGroupPage(
     }
     /** v3.1.0 · B：B 站音源开关的进程内镜像（初值 = `BiliPrefs.read(context)`）。 */
     var biliEnabled by remember { mutableStateOf(BiliPrefs.read(context)) }
+    // v3.4.8 · 问题 3：B 站音质上限 / 优先无损 FLAC。回显走**各自的 read\***（不是 registry 默认值）——
+    // 盘上可能是一个非法值，而 `read*` 会按既有纪律回落默认；用 registry 默认值回显会让
+    // 「盘上脏值」在界面上显示成「自动」，而实际取链用的是另一个值。
+    var biliQualityCap by remember { mutableStateOf(BiliPrefs.readQualityCap(context)) }
+    var biliPreferFlac by remember { mutableStateOf(BiliPrefs.readPreferFlac(context)) }
+    // v3.4.8 · 问题 2：B 站字幕语言。
+    var biliSubtitleLang by remember { mutableStateOf(BiliPrefs.readSubtitleLang(context)) }
     var lyricsTtmlEnabled by remember { mutableStateOf(LyricsDisplayPrefs.readTtmlEnabled(prefs)) }
     var lyricsTtmlFirst by remember { mutableStateOf(LyricsDisplayPrefs.readTtmlFirst(prefs)) }
     var lyricsRomanization by remember { mutableStateOf(LyricsDisplayPrefs.readRomanization(prefs)) }
@@ -344,6 +353,7 @@ private fun SettingsPreferenceGroupPage(
             "motion_bar_pulse" -> motionBarPulse
             // v3.1.0 · B：B 站音源开关。读的是 `BiliPrefs` 的进程内镜像（初值来自盘）。
             "bilibili_enabled" -> BiliSourceProvider.isEnabled
+            // v3.4.8：三项 B 站专属设置的门控只依赖上面那个总开关，这里不必再接自己的值。
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
             "lyrics_word_animation" -> lyricsWordAnimation
             else -> prefs.all[key]
@@ -365,6 +375,8 @@ private fun SettingsPreferenceGroupPage(
         "lyrics_ttml_first" -> lyricsTtmlFirst
         // v3.1.0 · B：B 站音源开关
         "bilibili_enabled" -> biliEnabled
+        // v3.4.8 · 问题 3
+        "bilibili_prefer_flac" -> biliPreferFlac
         "lyrics_romanization" -> lyricsRomanization
         "lyrics_dynamic_font" -> dynamicFontEnabled
         "ui_motion_enabled" -> uiMotionEnabled
@@ -433,6 +445,11 @@ private fun SettingsPreferenceGroupPage(
             "bilibili_enabled" -> {
                 biliEnabled = value
                 BiliPrefs.setEnabled(context, value)
+            }
+            // v3.4.8 · 问题 3：先落盘、再改内存（`BiliPrefs.set*` 内部就是这个顺序）。
+            "bilibili_prefer_flac" -> {
+                biliPreferFlac = value
+                BiliPrefs.setPreferFlac(context, value)
             }
             "lyrics_ttml_enabled" -> {
                 lyricsTtmlEnabled = value
@@ -635,6 +652,56 @@ private fun SettingsPreferenceGroupPage(
                                     if (scale != null) {
                                         lyricsFontScale = scale
                                         playerViewModel.setLyricsFontScale(scale)
+                                    }
+                                }
+                            )
+                            // v3.4.8 · 问题 3：B 站音质上限。
+                            // 写入口 `BiliPrefs.setQualityCap`（唯一）。它**不需要**
+                            // `playerViewModel.onQualityPreferenceChanged()`：
+                            // 那是「立即按新档位重新取当前这首」的入口，而这里的上限
+                            // 只影响 B 站，且下一次取链（切歌 / 重试）就会生效 ——
+                            // 为它强插一次全源重取会让正在放的 ncm 歌也重启一遍。
+                            "bilibili_quality_cap" -> MetroDropdownRow(
+                                label = strings.bili.biliQualityCapLabel,
+                                selectedIndex = BiliQualityCap.values()
+                                    .indexOf(biliQualityCap).coerceAtLeast(0),
+                                options = listOf(
+                                    strings.bili.biliQualityCapAuto,
+                                    strings.bili.biliQualityCapHires,
+                                    strings.bili.biliQualityCapExhigh,
+                                    strings.bili.biliQualityCapHigher,
+                                ),
+                                enabled = availability.enabled,
+                                hint = strings.bili.biliQualityCapDescription,
+                                onSelect = { index ->
+                                    BiliQualityCap.values().getOrNull(index)?.let { cap ->
+                                        biliQualityCap = cap
+                                        BiliPrefs.setQualityCap(context, cap)
+                                    }
+                                }
+                            )
+                            // v3.4.8 · 问题 2：B 站字幕语言。
+                            // 「不抓取字幕」是这一组的最后一档 —— 它同时就是用户要的
+                            // 「抓取自选项」，所以不需要第二个开关（见 `BiliSubtitleLang.OFF`）。
+                            "bilibili_subtitle_lang" -> MetroDropdownRow(
+                                label = strings.bili.biliSubtitleLangLabel,
+                                selectedIndex = BiliSubtitleLang.values()
+                                    .indexOf(biliSubtitleLang).coerceAtLeast(0),
+                                options = listOf(
+                                    strings.bili.biliSubtitleLangAuto,
+                                    strings.bili.biliSubtitleLangZhHans,
+                                    strings.bili.biliSubtitleLangZhHant,
+                                    strings.bili.biliSubtitleLangEn,
+                                    strings.bili.biliSubtitleLangJa,
+                                    strings.bili.biliSubtitleLangKo,
+                                    strings.bili.biliSubtitleLangOff,
+                                ),
+                                enabled = availability.enabled,
+                                hint = strings.bili.biliSubtitleLangDescription,
+                                onSelect = { index ->
+                                    BiliSubtitleLang.values().getOrNull(index)?.let { lang ->
+                                        biliSubtitleLang = lang
+                                        BiliPrefs.setSubtitleLang(context, lang)
                                     }
                                 }
                             )
@@ -936,6 +1003,12 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
     "auto_rotate" -> strings.autoRotateLabel                   // titleKey = autoRotateLabel
     "artist_reco_enabled" -> strings.artistRecoTitle           // titleKey = artistRecoTitle
     "bilibili_enabled" -> strings.bilibiliEnabledLabel         // titleKey = bilibiliEnabledLabel
+    // v3.4.8：文案住在新的 `Strings.bili` 组（registry 的 titleKey 是 `bili.xxx` 裸路径）。
+    // `bilibili_prefer_flac` 是**开关行**，开关行只能用 rowTitle（没有 MetroDropdownRow
+    // 那种显式 label 参数）—— 所以这三条都必须在这里登记，否则标题会渲染成裸 id。
+    "bilibili_quality_cap" -> strings.bili.biliQualityCapLabel
+    "bilibili_prefer_flac" -> strings.bili.biliPreferFlacLabel
+    "bilibili_subtitle_lang" -> strings.bili.biliSubtitleLangLabel
     "page_transition_enabled" -> strings.motion.pageTransitionLabel
     "lyrics_translation" -> strings.lyricsTranslationLabel
     "lyrics_word_animation" -> strings.lyricsWordAnimationLabel
@@ -999,6 +1072,12 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when 
     "motion_lyric_pulse" -> strings.waveform.motionLyricPulseDescription
     "motion_bar_pulse" -> strings.waveform.motionBarPulseDescription
     "bilibili_enabled" -> strings.bilibiliEnabledDescription
+    // v3.4.8：三条 B 站专属设置各自的说明（开关行必须给副标题 —— 只说标题的
+    // 「允许无损与 Hi-Res」无法回答「要花多少流量」「需要什么账号」）。
+    "bilibili_quality_cap" -> strings.bili.biliQualityCapDescription
+    "bilibili_prefer_flac" -> strings.bili.biliPreferFlacDescription
+    "bilibili_subtitle_lang" -> strings.bili.biliSubtitleLangDescription
+    "lyrics_translation" -> strings.lyricsTranslationHint
     else -> null
 }
 

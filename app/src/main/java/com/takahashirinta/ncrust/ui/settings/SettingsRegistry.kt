@@ -12,6 +12,8 @@
 
 package com.takahashirinta.ncrust.ui.settings
 
+import com.takahashirinta.ncrust.bili.BiliQualityCap
+import com.takahashirinta.ncrust.bili.BiliSubtitleLang
 import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsSweepConfig
 import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
@@ -202,6 +204,15 @@ data class SettingsEntry(
      * 「顺手夹带了无关功能项」不再被机械挡住。
      */
     val isNewInV320: Boolean = false,
+    /**
+     * v3.4.8「B 站音质上限 / 优先无损 FLAC / 字幕语言」新增项
+     * （v3.4.7 的盘上不存在这三个键）。
+     *
+     * 与 [isNewInV280] / [isNewInV290] / [isNewInV300] / [isNewInV310] / [isNewInV320]
+     * 并列而不是复用：那几条断言各自钉住**一个版本**新增了什么，
+     * 合并成一个「新键」标志会让「顺手夹带了无关功能项」不再被机械挡住。
+     */
+    val isNewInV348: Boolean = false,
     /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
@@ -787,6 +798,39 @@ object SettingsRegistry {
                 subtitleKey = "gaplessDescription",
             )
         )
+        // v3.4.8 · 问题 3：**B 站音质的两个用户参数**。
+        //
+        // 为什么放在「播放与音质」而不是「通用」（B 站音源总开关所在的那一页）：
+        // 它们调的是**音质**，与 `wifi_quality` / `mobile_quality` 是同一类决策。
+        // 放在通用页会让用户为了调音质而离开音质页 —— 分组归属跟着语义走，
+        // 不跟着「它属于哪个音源」走。
+        //
+        // 两条都受 `bilibili_enabled` 门控（软依赖：源关着时改了没有任何效果，
+        // 必须置灰而不是留一个死开关）。见 `SettingsVisibility` 的
+        // `BILI_SOURCE_DISABLED`。
+        add(
+            pref(
+                key = "bilibili_quality_cap",
+                type = SettingsEntryType.CHOICE,
+                default = BiliQualityCap.AUTO.key, // bili/BiliPrefs.kt:150 DEFAULT_QUALITY_CAP
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "bili.biliQualityCapLabel",
+                subtitleKey = "bili.biliQualityCapDescription",
+                choices = BiliQualityCap.values().map { it.key },
+                newInV348 = true,
+            )
+        )
+        add(
+            pref(
+                key = "bilibili_prefer_flac",
+                type = SettingsEntryType.SWITCH,
+                default = true, // bili/BiliPrefs.kt:161 DEFAULT_PREFER_FLAC
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "bili.biliPreferFlacLabel",
+                subtitleKey = "bili.biliPreferFlacDescription",
+                newInV348 = true,
+            )
+        )
         add(
             pref(
                 key = "keep_screen_on",
@@ -851,6 +895,31 @@ object SettingsRegistry {
                 default = true, // ui/screen/UserScreen.kt:156 getBoolean("lyrics_translation", true)
                 group = SettingsGroup.LYRICS,
                 titleKey = "lyricsTranslationLabel",
+                // v3.4.8 · 问题 2：把「这条开关作用于哪些音源」写出来。
+                // 用户的要求是「所有音源都支持选择字幕语言」，而 ncm / qm 的服务端
+                // 每条歌词只有**一轨译文**（没有语言元数据）—— 那两个音源的「语言选择」
+                // 在事实上就是这一条开关。不写清楚，用户会以为这里漏做了。
+                subtitleKey = "lyricsTranslationHint",
+            )
+        )
+        // v3.4.8 · 问题 2：**B 站字幕语言**。
+        //
+        // 与上面那条译文开关**放在同一个分组、相邻两行**是有意的：它们回答的是
+        // 同一个问题（「我要哪个语言的歌词」），只是各音源能给的东西不同 ——
+        // ncm / qm 只有一轨译文（开关），B 站有多条语言轨（下拉）。
+        // 分成两页放会让「所有音源的字幕语言在同一处」这句承诺落空。
+        //
+        // 受 `bilibili_enabled` 门控（同 `bilibili_quality_cap`）。
+        add(
+            pref(
+                key = "bilibili_subtitle_lang",
+                type = SettingsEntryType.CHOICE,
+                default = BiliSubtitleLang.AUTO.key, // bili/BiliPrefs.kt:167 DEFAULT_SUBTITLE_LANG
+                group = SettingsGroup.LYRICS,
+                titleKey = "bili.biliSubtitleLangLabel",
+                subtitleKey = "bili.biliSubtitleLangDescription",
+                choices = BiliSubtitleLang.values().map { it.key },
+                newInV348 = true,
             )
         )
         add(
@@ -1083,6 +1152,7 @@ object SettingsRegistry {
         legacyV300: Boolean = false,
         newInV310: Boolean = false,
         newInV320: Boolean = false,
+        newInV348: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1103,6 +1173,7 @@ object SettingsRegistry {
         legacyV300 = legacyV300,
         isNewInV310 = newInV310,
         isNewInV320 = newInV320,
+        isNewInV348 = newInV348,
         isAdvanced = advanced,
         isInternal = internal,
     )

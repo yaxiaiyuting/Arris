@@ -250,8 +250,13 @@ class WaveformSettingsGatingTest {
         assertEquals("appearance", visualizer.group.id)
         assertEquals(SettingsRowKind.SWITCH, SettingsRenderPlan.rowKindOf(visualizer))
         // 播放与音质页现在只剩「音质 + 播放行为」。
+        // v3.4.8：尾巴上多了两项 B 站专属音质设置。它们**不是**动效/波形项，
+        // 所以本条断言要的「动效不在这页」仍然成立 —— 只是清单变长了。
         assertEquals(
-            listOf("wifi_quality", "mobile_quality", "gapless_playback", "keep_screen_on"),
+            listOf(
+                "wifi_quality", "mobile_quality", "gapless_playback",
+                "bilibili_quality_cap", "bilibili_prefer_flac", "keep_screen_on",
+            ),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id },
         )
     }

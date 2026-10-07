@@ -69,6 +69,16 @@ enum class GatingReason {
      * 必须置灰而不是让用户点了没反应（`visualizer_showcase` 那条门控的同一条理由）。
      */
     TIER_BASIC_ONLY,
+
+    /**
+     * v3.4.8 新增：**B 站音源总开关关着** ⇒ 那三项 B 站专属设置（音质上限 / 优先无损 /
+     * 字幕语言）此刻不会产生任何效果。
+     *
+     * 软依赖而不是硬依赖：整行**仍然可见**，只是置灰。理由是这三项的名字里都带
+     * 音源限定（「B站…」），用户看到它们才知道「原来 B 站还有这些可调」——
+     * 藏起来等于把刚做出来的参数又藏回 prefs 里。
+     */
+    BILI_SOURCE_DISABLED,
 }
 
 /** 一个条目的可见性 / 可用性判定结果。 */
@@ -213,6 +223,17 @@ object SettingsVisibility {
     /** 门控判定（按条目）。 */
     fun availabilityOf(entry: SettingsEntry, read: (String) -> Any?): SettingsAvailability =
         when (entry.id) {
+            // v3.4.8：三项 B 站专属设置软依赖音源总开关（`bilibili_enabled`）。
+            // 判据用 `boolValue`：缺键时取 registry 里声明的默认值 false，
+            // 与 `BiliPrefs.read` 的 `getBoolean(KEY, false)` **逐字一致** ——
+            // 门控不能比真实读路径更宽或更严（`lyrics_sweep_quality` 那条同款纪律）。
+            "bilibili_quality_cap", "bilibili_prefer_flac", "bilibili_subtitle_lang" ->
+                if (boolValue("bilibili_enabled", read)) {
+                    SettingsAvailability.FREE
+                } else {
+                    SettingsAvailability.disabled(GatingReason.BILI_SOURCE_DISABLED)
+                }
+
             // 硬依赖：TTML 总开关关 → 整行不挂载（唯一一处在现状里已经正确门控的依赖，原样保留）。
             "lyrics_ttml_first" ->
                 if (boolValue("lyrics_ttml_enabled", read)) {

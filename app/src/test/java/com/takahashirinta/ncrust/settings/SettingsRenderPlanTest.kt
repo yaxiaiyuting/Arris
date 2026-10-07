@@ -75,8 +75,12 @@ class SettingsRenderPlanTest {
                 // v2.9.0：v2.8.0 的 6 个波形项降级为迁移源（不渲染），换成统一动效强度 2 项
                 // ⇒ 11 − 6 + 2 = 7。逐项：音质×2 / 无缝 / 禁止熄屏 / 可视化 / 动效强度 / 界面动效。
                 // v3.0.0：动效/波形项搬走之后，这里只剩「音质 + 播放行为」四项。
-                "playback" to 4,
-                "lyrics" to 9,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
+                // v3.4.8：+2（B 站音质上限 / 优先无损 FLAC）⇒ 6。它们调的是**音质**，
+                // 与 wifi_quality / mobile_quality 同类，所以在同一页而不是「通用」。
+                "playback" to 6,
+                // v3.4.8：+1（B 站字幕语言）⇒ 10。它与既有的「歌词翻译」相邻 ——
+                // 两者回答同一个问题（要哪个语言的歌词），只是各音源能给的东西不同。
+                "lyrics" to 10,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
                 "storage" to 3,      // 离线缓存上限 / 清除缓存 / 离线缓存管理
                 "about" to 1,        // 关于
             ),
@@ -86,7 +90,8 @@ class SettingsRenderPlanTest {
         // v3.0.0：31 → 36（加 5 个「每个动效独立开关」，铁律 26）。
         // v3.1.0：36 → 37（B 站音源开关：一个**可见**的新开关，不是内部项）。
         // v3.2.0：37 → 42（界面律动那一层的闸 4 项 + B 站账号块 1 项，都是可见项）。
-        assertEquals(42, counts.values.sum())
+        // v3.4.8：42 → 45（B 站音质上限 / 优先无损 FLAC / 字幕语言，三条都是可见项）。
+        assertEquals(45, counts.values.sum())
         // 72 条 registry 条目 = 26 条内部项（从来不渲染） + 4 条库页承载 + 42 条二级页渲染
         //
         // v2.9.0 的内部项从 16 涨到 25：+7 是 v2.8.0 的波形键（降级为迁移源，含此前漏枚举的
@@ -95,7 +100,8 @@ class SettingsRenderPlanTest {
         // 条目总数 55 → 61 = 新增的 5 个动效键 + 补枚举的 1 个 v2.8.0 漏项。
         // v3.1.0：66 → 67（bilibili_enabled）。
         // v3.2.0：67 → 72（界面律动那一层的 4 个键 + B 站账号块 1 项）。
-        assertEquals(72, SettingsRegistry.allEntries().size)
+        // v3.4.8：72 → 75（三项 B 站专属设置：音质上限 / 优先无损 FLAC / 字幕语言）。
+        assertEquals(75, SettingsRegistry.allEntries().size)
         // 内部项仍然是 26（v3.0.0 的 5 个动效键与 v3.1.0 的 B 站开关**都是可见开关**）。
         assertEquals(26, SettingsRegistry.allEntries().count { it.isInternal })
         assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
