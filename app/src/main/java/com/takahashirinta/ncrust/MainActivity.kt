@@ -129,6 +129,7 @@ import com.takahashirinta.ncrust.stats.StatsRecorder
 import com.takahashirinta.ncrust.ui.screen.*
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
+import com.takahashirinta.ncrust.ui.i18n.initLanguageMirror
 import com.takahashirinta.ncrust.ui.i18n.saveLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.stringsForCode
 import com.takahashirinta.ncrust.ui.CustomBackgroundLayer
@@ -225,6 +226,11 @@ class MainActivity : ComponentActivity() {
         // v3.1.0 · B：B 站音源的开关镜像（默认关闭）。与 RetrofitClient.init 同处 ——
         // 两者都是「进程级的一次性配置」，分开写会让下一个读代码的人只找到一个。
         BiliPrefs.init(this)
+        // v3.4.8 · 问题 2：**语言代码的进程内镜像**。B 站字幕语言偏好的 `auto` 档
+        // 语义是「跟随应用语言」，而取词路径（`BiliSourceProvider.fetchLyric`）
+        // 是一个没有 `Context` 的单例 —— 没有这个镜像，`auto` 只能一直按 zh-CN 算。
+        // 与 `BiliPrefs.init` 同一处：都是「进程级一次性配置」。
+        initLanguageMirror(this)
         // v3.2.0 · P1：B 站登录态的进程内镜像。**必须在这里播种** ——
         // 网络层的 `BiliApi.get()` 每通请求都读它，没播种就永远匿名
         // （表现是「扫码成功了但请求还是匿名」）。与 BiliPrefs.init 同一处，

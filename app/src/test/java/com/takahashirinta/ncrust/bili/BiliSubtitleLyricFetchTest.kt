@@ -4,6 +4,7 @@ import com.takahashirinta.ncrust.lyric.LrcParser
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
+import com.takahashirinta.ncrust.ui.i18n.setLanguageCodeForTest
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.runBlocking
@@ -14,6 +15,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -87,6 +89,36 @@ class BiliSubtitleLyricFetchTest {
 
         /** 已登录时的字幕列表；未登录时服务端返回**有 data 但 subtitles 为空数组**（实测）。 */
         val PLAYER_V2_ANONYMOUS = """{"code":0,"message":"OK","data":{"subtitle":{"subtitles":[]}}}"""
+
+        /**
+         * v3.4.8（问题 2）：**多语言**字幕列表。
+         *
+         * 实测形状（`BV1GJ411x7h7` / cid 137649199 有 12 条语言轨；
+         * `BV1uT4y1P7CX` 有 60 条）。这里取三条足够区分行为的：
+         * 中文、英文、日文 —— 修复前**永远**只会选到含 `zh` 的那一条。
+         */
+        val PLAYER_V2_MULTI = """{"code":0,"message":"OK","data":{"aid":877869754,"cid":$CID,""" +
+            """"subtitle":{"allow_submit":false,"subtitles":[""" +
+            """{"id":1,"lan":"zh-CN","lan_doc":"中文（中国）","type":0,"ai_type":0,""" +
+            """"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/zh-CN.json"},""" +
+            """{"id":2,"lan":"en-US","lan_doc":"English(US)","type":0,"ai_type":0,""" +
+            """"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/en-US.json"},""" +
+            """{"id":3,"lan":"ja","lan_doc":"日本語","type":0,"ai_type":0,""" +
+            """"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ja.json"}]}}}"""
+
+        /** 三条轨各自的正文：用**语言特有的第一句**区分到底下载了哪一份。 */
+        val BODY_ZH = """{"font_size":0.4,"type":"json","lang":"zh","body":[""" +
+            """{"from":59.46,"to":66.84,"content":"♪ 让我掉下眼泪的不止昨夜的酒 ♪","music":0.9999998387097035},""" +
+            """{"from":67.30,"to":74.82,"content":"♪ 让我依依不舍的不止你的温柔 ♪","music":0.9999998387097035},""" +
+            """{"from":75.28,"to":79.11,"content":"♪ 余路还要走多久 ♪","music":0.9999998387097035}]}"""
+        val BODY_EN = """{"font_size":0.4,"type":"json","lang":"en","body":[""" +
+            """{"from":59.46,"to":66.84,"content":"♪ The wine that made me cry last night ♪","music":0.9999998387097035},""" +
+            """{"from":67.30,"to":74.82,"content":"♪ Is not the only thing I cannot let go ♪","music":0.9999998387097035},""" +
+            """{"from":75.28,"to":79.11,"content":"♪ How much longer is the road ♪","music":0.9999998387097035}]}"""
+        val BODY_JA = """{"font_size":0.4,"type":"json","lang":"ja","body":[""" +
+            """{"from":59.46,"to":66.84,"content":"♪ 昨夜の酒だけが涙を流させたわけじゃない ♪","music":0.9999998387097035},""" +
+            """{"from":67.30,"to":74.82,"content":"♪ 君の優しさだけが名残惜しいわけじゃない ♪","music":0.9999998387097035},""" +
+            """{"from":75.28,"to":79.11,"content":"♪ あとどれだけ歩けばいい ♪","music":0.9999998387097035}]}"""
     }
 
     private val requested = Collections.synchronizedList(ArrayList<String>())
@@ -97,15 +129,20 @@ class BiliSubtitleLyricFetchTest {
         requested.clear()
         count.set(0)
         BiliPrefs.setEnabledForTest(true)
+        // v3.4.8：字幕语言是**进程内静态状态**，用例之间必须还原。
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.AUTO)
+        setLanguageCodeForTest("zh-CN")
     }
 
     @After
     fun tearDown() {
         BiliApi.clientForTest = null
         BiliPrefs.setEnabledForTest(false)
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.AUTO)
+        setLanguageCodeForTest("zh-CN")
     }
 
-    private fun installClient(anonymous: Boolean = false) {
+    private fun installClient(anonymous: Boolean = false, multiLang: Boolean = false) {
         BiliApi.clientForTest = OkHttpClient.Builder()
             .addInterceptor { chain ->
                 val url = chain.request().url.toString()
@@ -113,8 +150,18 @@ class BiliSubtitleLyricFetchTest {
                 count.incrementAndGet()
                 val body = when {
                     url.contains("/x/web-interface/view") -> VIEW
-                    url.contains("/x/player/wbi/v2") -> if (anonymous) PLAYER_V2_ANONYMOUS else PLAYER_V2
-                    url.contains("aisubtitle.hdslb.com") -> SUBTITLE_BODY
+                    url.contains("/x/player/wbi/v2") ->
+                        if (anonymous) PLAYER_V2_ANONYMOUS
+                        else if (multiLang) PLAYER_V2_MULTI
+                        else PLAYER_V2
+                    // 多语言模式下按 URL 里的语言标签回不同的正文 ——
+                    // 这样「到底下载了哪一条轨」是一个**可断言**的事实，而不是靠猜。
+                    url.contains("aisubtitle.hdslb.com") -> when {
+                        !multiLang -> SUBTITLE_BODY
+                        url.contains("/en-US.json") -> BODY_EN
+                        url.contains("/ja.json") -> BODY_JA
+                        else -> BODY_ZH
+                    }
                     else -> """{"code":0}"""
                 }
                 Response.Builder()
@@ -266,5 +313,119 @@ class BiliSubtitleLyricFetchTest {
 
         assertEquals("解析不出载荷 ⇒ 不发请求", 0, count.get())
         assertNull(result)
+    }
+
+    // ─────────────────────────────────────────── v3.4.8 · 问题 2：字幕语言 ──
+
+    /**
+     * ★ 核心判据：**选中的语言轨真的被下载了**。
+     *
+     * 修复前这个函数不存在（`parseFirstSubtitleUrl` 写死中文优先），
+     * 所以这条用例在修复前**无论怎么选都只会拿到中文**。
+     * 判据落到**正文内容**上而不是「请求发出去了」——
+     * 请求 URL 只说明问了哪些轨，正文才说明用户最终看到的是哪种语言。
+     */
+    @Test
+    fun `选英文时真的下载并返回英文轨`() {
+        installClient(multiLang = true)
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.EN)
+
+        val lrc = runBlocking { BiliSourceProvider.fetchLyric(biliVideoSong()) }
+
+        assertTrue(
+            "必须请求英文轨：$requested",
+            requested.any { it.contains("en-US.json") },
+        )
+        assertFalse(
+            "不该顺手把中文轨也下载一遍：$requested",
+            requested.any { it.contains("zh-CN.json") },
+        )
+        assertTrue("返回的必须是英文歌词，实际=${lrc?.take(50)}", lrc?.contains("The wine") == true)
+        assertFalse("不得混进中文歌词", lrc?.contains("昨夜的酒") == true)
+    }
+
+    @Test
+    fun `选日文时真的下载并返回日文轨`() {
+        installClient(multiLang = true)
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.JA)
+
+        val lrc = runBlocking { BiliSourceProvider.fetchLyric(biliVideoSong()) }
+
+        assertTrue("必须请求日文轨：$requested", requested.any { it.contains("/ja.json") })
+        assertTrue("返回的必须是日文歌词，实际=${lrc?.take(50)}", lrc?.contains("昨夜の酒") == true)
+    }
+
+    /**
+     * 自动档跟随**应用界面语言** —— 这条把 `LanguageManager` 的进程内镜像接到取词链路上。
+     *
+     * 镜像没接的话（`BiliSourceProvider` 没有 `Context`），`auto` 只能一直按 zh-CN 算，
+     * 而界面上一切正常 —— 是本版最容易「看起来做完了」的一处。
+     */
+    @Test
+    fun `自动档跟随应用语言（台湾正体选到繁体以外时至少不选简体）`() {
+        installClient(multiLang = true)
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.AUTO)
+        // 应用语言是日语 ⇒ auto 应当要日文轨。
+        setLanguageCodeForTest("ja-JP")
+
+        val lrc = runBlocking { BiliSourceProvider.fetchLyric(biliVideoSong()) }
+
+        assertTrue("auto 必须跟随应用语言（ja）：$requested", requested.any { it.contains("/ja.json") })
+        assertTrue("返回的必须是日文歌词", lrc?.contains("昨夜の酒") == true)
+    }
+
+    /** 默认（auto + zh-CN）与 v3.4.7 的观感**逐字一致**：仍然是中文轨。 */
+    @Test
+    fun `默认档位下仍然是中文轨（升级零观感变化）`() {
+        installClient(multiLang = true)
+
+        val lrc = runBlocking { BiliSourceProvider.fetchLyric(biliVideoSong()) }
+
+        assertTrue("默认必须拿中文轨：$requested", requested.any { it.contains("zh-CN.json") })
+        assertTrue("返回的必须是中文歌词", lrc?.contains("昨夜的酒") == true)
+    }
+
+    /**
+     * ★ 「不抓取字幕」是**真的一发不发**，而且要在取 cid **之前**就停下。
+     *
+     * 判据用**请求条数**而不是「返回了 null」：后者在「请求失败」时也成立，
+     * 而这条开关的语义是「一个字节都不发给 B 站」。
+     */
+    @Test
+    fun `选中不抓取字幕时一个请求都不发 —— 连 cid 都不补问`() {
+        installClient(multiLang = true)
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.OFF)
+
+        val lrc = runBlocking { BiliSourceProvider.fetchLyric(biliVideoSong()) }
+
+        assertEquals("关闭抓取后必须零请求：$requested", 0, count.get())
+        assertNull("null = 没有数据源（不是「这首歌没有歌词」）", lrc)
+    }
+
+    /** 音频区**不受**字幕语言影响 —— 那条腿的歌词是 LRC，没有语言可选。 */
+    @Test
+    fun `字幕语言不影响音频区的歌词路径`() {
+        installClient()
+        BiliPrefs.setSubtitleLangForTest(BiliSubtitleLang.OFF)
+
+        val song = SongItem(
+            id = SourceIds.biliId(39L),
+            name = "成都（Cover赵雷）",
+            artists = emptyList(),
+            album = null,
+            duration = 258_000L,
+            source = MusicSource.BILIBILI.key,
+            sourceId = "au:39",
+            mediaId = null,
+        )
+        // `/audio/music-service-c/web/song/lyric` 不在 installClient 的罐头表里 ⇒
+        // 它会走 `else -> {"code":0}` 分支。判据是**请求发出去过**，
+        // 也就是「关字幕并没有把音频区一起关掉」。
+        runBlocking { BiliSourceProvider.fetchLyric(song) }
+
+        assertTrue(
+            "音频区仍然要发歌词请求：$requested",
+            requested.any { it.contains("/audio/music-service-c/web/song/lyric") },
+        )
     }
 }

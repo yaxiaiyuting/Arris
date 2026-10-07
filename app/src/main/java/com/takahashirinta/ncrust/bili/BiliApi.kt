@@ -482,10 +482,22 @@ object BiliApi {
      * 而它现在是一条可以离线断言的纯链路。取词发生在播放开始时（每首一次），
      * 这个量级的往返不值得用可测性去换。
      *
+     * @param preferredTags v3.4.8（问题 2）：**有序**的语言标签优先表
+     *   （由 `BiliSubtitle.preferredTags(lang, 应用语言)` 展开）。
+     *   空表 = 用户没有指定（等价于「按服务端顺序取第一条手传 CC 轨」）——
+     *   ⚠️ 它**不是**「不抓字幕」的开关，那个判断发生在更上游的
+     *   `BiliSourceProvider.fetchLyric`（在发请求之前），因为「用户不想抓」
+     *   和「抓了但没匹配上」是两件事，混在一起会让日志与失败语义都失真。
+     * @param allowAi 是否允许回落到 B 站 AI 自动生成的轨。
      * @return 字幕 JSON 的 URL（`//` 开头，**调用方负责补 `https:`**）；
-     *   没有字幕 / 未登录 / 网络失败 / 风控一律返回 **null**。
+     *   没有可用字幕 / 未登录 / 网络失败 / 风控一律返回 **null**。
      */
-    suspend fun videoSubtitleUrl(bvid: String, cid: Long): String? {
+    suspend fun videoSubtitleUrl(
+        bvid: String,
+        cid: Long,
+        preferredTags: List<String> = emptyList(),
+        allowAi: Boolean = true,
+    ): String? {
         if (bvid.isBlank() || cid <= 0L) return null
         val body = withContext(Dispatchers.IO) {
             try {
@@ -497,7 +509,17 @@ object BiliApi {
                 null
             }
         } ?: return null
-        return BiliParse.parseFirstSubtitleUrl(body)
+        val tracks = BiliSubtitle.parseSubtitleTracks(body)
+        if (tracks.isEmpty()) return null
+        val picked = BiliSubtitle.pickTrack(tracks, preferredTags, allowAi) ?: return null
+        // 语言命中的**可观测性**：v3.4.8 之前这里没有任何日志，于是
+        // 「为什么拿到的是这条语言」在现场无从判断（用户只会说「字幕语言不对」）。
+        Log.i(
+            TAG,
+            "subtitle track picked: $bvid/$cid lan=${picked.lan} doc=${picked.lanDoc} " +
+                "ai=${picked.isAi} of=${tracks.size} prefer=$preferredTags",
+        )
+        return picked.url
     }
 
     /**
@@ -586,26 +608,42 @@ object BiliApi {
     }
 
     /**
-     * 视频的**音频**流（DASH）。只取 `dash.audio[]`，永不取 `dash.video[]`。
+     * 视频的**全部音频候选流**（DASH）。永不取 `dash.video[]`。
+     *
+     * ## v3.4.8：从「一条」改成「一列」—— 这是 Hi-Res 缺陷的修复点
+     *
+     * 修复前这个函数返回**一条**流，而它只读 `dash.audio[]`。B 站的大会员
+     * Hi-Res 无损（`id=30251`、`codecs=fLaC`、实测 96 kHz / **2029320 bps**）
+     * **不在那一支里**，它在 `dash.flac.audio`。于是「用户开了大会员、选了无损」
+     * 这个组合下客户端仍然只拿得到 192K AAC，而且**不报任何错**。
+     *
+     * 改成返回列表之后，「用哪一条」由 `BiliQuality.selectStream` 按**请求档位**
+     * 与用户设置决定 —— 协议解析与产品决策分开，两边都能单独单测。
      *
      * `fnval=4048` = 请求 DASH + 一组特性位（见 [PLAYURL_FNVAL]，实测过的那个取值）；
+     * **`dash.flac` 只需要 DASH 位（`fnval=16` 也返回它，实测对照过）**，
+     * 所以这里**不需要**为了 Hi-Res 改 `fnval` —— 修复前拿不到纯粹是因为没读那个字段。
      * `fourk=1` 与画质无关（音轨只需要它不拒绝请求）。
      * **还要带匿名指纹**（[buvid3]）：实测这条旧路径不带 `buvid3` 会回 412。
      *
+     * ⚠️ `dash.flac.audio` **只有登录 + 大会员时才有内容**：同一视频同一 cid
+     * 匿名请求时它是 `null`（实测 `BV1EC4y1R7ax` / cid 25931154534）。
+     * 所以读到空列表里的 flac 不是缺陷，是「这个身份拿不到」。
+     *
      * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（见类文档的矩阵）。
      */
-    suspend fun videoAudioStream(bvid: String, cid: Long): BiliStream? {
-        if (bvid.isBlank() || cid <= 0L) return null
+    suspend fun videoAudioStreams(bvid: String, cid: Long): List<BiliStream> {
+        if (bvid.isBlank() || cid <= 0L) return emptyList()
         // **普通 GET，不签名**，但要带匿名指纹 —— 见 [PLAYURL_URL] 与 [buvid3] 的实测说明。
         return withContext(Dispatchers.IO) {
             try {
                 val body = get(playUrlFor(bvid, cid), cookie = buvid3())
-                BiliParse.parseDashAudio(body)
+                BiliParse.parseDashAudios(body)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "playurl failed: $bvid/$cid", e)
-                null
+                emptyList()
             }
         }
     }

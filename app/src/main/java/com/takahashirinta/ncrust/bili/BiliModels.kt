@@ -135,6 +135,39 @@ data class BiliTrack(
 }
 
 /**
+ * DASH 响应里一条音频流**出自哪一支**（v3.4.8）。
+ *
+ * ## 为什么必须把它显式建模出来
+ *
+ * 这是 v3.4.8 修掉的那个缺陷的根：修复前 `parseDashAudio` **只读 `dash.audio[]`**，
+ * 而 B 站的**大会员 Hi-Res（无损 FLAC）根本不在那一支里** —— 它在
+ * `dash.flac.audio`（单对象）、杜比全景声在 `dash.dolby.audio`（数组）。
+ * 于是「同一个视频有 3 条 AAC + 1 条 2.2 Mbps 的 96 kHz FLAC」时，
+ * 客户端永远挑走那条 192K 的 AAC，而且**不报任何错**：
+ * 用户看到的是「开了大会员，B 站音源永远是普通音质」。
+ *
+ * 实测（2026-10-07，登录态 + 年度大会员，`BV1EC4y1R7ax` / cid 25931154534）：
+ *
+ * | 来源 | `id` | `bandwidth` | `codecs` | ffprobe |
+ * |---|---|---|---|---|
+ * | `dash.flac.audio` | 30251 | 2247494 | `fLaC` | **flac / 96000 Hz / 2ch / 2029320 bps** |
+ * | `dash.audio[]` | 30280 | 213610 | `mp4a.40.2` | 192K AAC-LC |
+ *
+ * 匿名请求时 `flac` 恒为 `null`（同一视频同一 cid 实测）—— 所以这一支**只有登录
+ * 且账号有大会员时才有内容**，读到空不是 bug，是「这个身份/这个视频没有 Hi-Res」。
+ */
+enum class BiliAudioKind {
+    /** `dash.flac.audio` —— 大会员 Hi-Res 无损（`codecs = fLaC`）。 */
+    FLAC,
+
+    /** `dash.dolby.audio` —— 杜比全景声（`codecs = ec-3`）。 */
+    DOLBY,
+
+    /** `dash.audio[]` —— 普通有损音轨（AAC；64K / 132K / 192K）。 */
+    AAC,
+}
+
+/**
  * 一条可播放的音频流（v3.1.0 · B）。
  *
  * @property url 直链。**带签名，会过期。**
@@ -144,6 +177,10 @@ data class BiliTrack(
  * @property qualityLabel 实际拿到的档位文案（服务端说了算，不是我们请求的那一档）。
  * @property br 码率（bit/s）；服务端这条响应里没有码率字段时填 **0 = 未知**，绝不拿别的字段顶替。
  * @property container 容器后缀（`m4a` / `mp3` / `flac`…），只用于诊断与角标。
+ * @property kind v3.4.8：这条流出自 DASH 的哪一支（见 [BiliAudioKind]）。
+ *   **选流必须按它判，不能只按 `br` 大小判** —— FLAC 与 AAC 的码率区间会重叠
+ *   （实测 96 kHz FLAC 2.2 Mbps vs 192K AAC 0.2 Mbps 不重叠，但 44.1 kHz 无损 FLAC
+ *   约 0.9 Mbps 与「320K AAC」只差 3 倍，单看数字迟早挑错）。
  */
 data class BiliStream(
     val url: String,
@@ -151,6 +188,7 @@ data class BiliStream(
     val qualityLabel: String,
     val br: Long,
     val container: String,
+    val kind: BiliAudioKind = BiliAudioKind.AAC,
 )
 
 /**
@@ -345,41 +383,89 @@ object BiliParse {
     }
 
     /**
-     * `playurl`（DASH）→ 带宽最高的那条**音频**流。
+     * `playurl`（DASH）→ **全部**音频候选流，按「优先尝试」排序。
      *
-     * 只取 `dash.audio[]`，**永远不碰 `dash.video[]`**：本应用没有视频渲染面，
-     * 拿到视频流只会白费流量。`baseUrl` 缺失时退 `backupUrl[0]`。
+     * ## 排序就是修复本身（v3.4.8）
+     *
+     * 顺序固定为 **FLAC → 杜比 → AAC（按带宽降序）**，理由：
+     *
+     * 1. `dash.flac.audio` 是**大会员 Hi-Res 无损**，也是本函数存在两套来源的原因
+     *    （见 [BiliAudioKind] 的实测表）。它必须排在 AAC 前面 —— 修复前它**根本没被读**；
+     * 2. `dash.dolby.audio` 是杜比全景声（`ec-3`）。它是有损的，但格式/声道与
+     *    AAC 不同，属于「另一条轨」而不是「更好的同一条轨」，所以紧跟 FLAC；
+     * 3. `dash.audio[]` 内部按 `bandwidth` **降序**，与修复前的行为逐字一致
+     *    （修复前取的是带宽最高的那条）。
+     *
+     * ## 为什么返回列表而不是「挑好的那一条」
+     *
+     * 「哪一条最合适」取决于**用户请求的档位**与**音质上限设置**（v3.4.8 新增），
+     * 那是产品决策、不是协议解析。把决策留给 [BiliQuality.selectStream]（纯函数、有单测），
+     * 这一层只负责「服务端到底给了哪些流」这一件事实。
+     *
+     * 永远**不碰 `dash.video[]`**：本应用没有视频渲染面，拿到视频流只会白费流量。
+     * 单条流的 `baseUrl` 缺失时退 `backupUrl[0]`；两者都缺的那一条**直接丢掉**
+     * （保留它只会在下游变成一个必然失败的播放）。
+     *
+     * 契约与其它解析函数一致：**不发网络、不抛异常**，坏输入返回空列表。
      */
-    fun parseDashAudio(body: String?, nowMs: Long = System.currentTimeMillis()): BiliStream? {
-        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return null
-        val dash = root.optJSONObject("data")?.optJSONObject("dash") ?: return null
-        val audios = dash.optJSONArray("audio") ?: return null
-        var best: JSONObject? = null
-        var bestBw = -1L
-        for (i in 0 until audios.length()) {
-            val a = audios.optJSONObject(i) ?: continue
-            val bw = a.optLong("bandwidth", 0L)
-            if (bw > bestBw) {
-                bestBw = bw
-                best = a
+    fun parseDashAudios(body: String?, nowMs: Long = System.currentTimeMillis()): List<BiliStream> {
+        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return emptyList()
+        val dash = root.optJSONObject("data")?.optJSONObject("dash") ?: return emptyList()
+        val out = ArrayList<BiliStream>(4)
+        // ① FLAC（单对象，不是数组）。
+        dash.optJSONObject("flac")?.optJSONObject("audio")?.let { a ->
+            streamOf(a, BiliAudioKind.FLAC, nowMs)?.let { out += it }
+        }
+        // ② 杜比全景声（数组）。
+        dash.optJSONObject("dolby")?.optJSONArray("audio")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val a = arr.optJSONObject(i) ?: continue
+                streamOf(a, BiliAudioKind.DOLBY, nowMs)?.let { out += it }
             }
         }
-        val picked = best ?: return null
-        val url = picked.optString("baseUrl").takeIf { it.isNotBlank() }
-            ?: picked.optJSONArray("backupUrl")?.optString(0)?.takeIf { it.isNotBlank() }
+        // ③ 普通 AAC —— 只在这一支内部按带宽降序。
+        val audios = dash.optJSONArray("audio")
+        if (audios != null) {
+            val aac = ArrayList<BiliStream>(audios.length())
+            for (i in 0 until audios.length()) {
+                val a = audios.optJSONObject(i) ?: continue
+                streamOf(a, BiliAudioKind.AAC, nowMs)?.let { aac += it }
+            }
+            // `sortedByDescending` 是**稳定**排序 ⇒ 同带宽时保持服务端给的顺序，
+            // 同一份响应每次解析出的结果完全一致（可断言、可复现）。
+            out += aac.sortedByDescending { it.br }
+        }
+        return out
+    }
+
+    /**
+     * 兼容入口：**带宽最高的那条 AAC**（修复前的语义，逐字保留）。
+     *
+     * ⚠️ 只给「不需要按档位挑流」的调用方用（探针、诊断）。
+     * **生产取链不要用它** —— 用它就等于回到「永远只播 AAC」那个缺陷，
+     * 那正是 v3.4.8 要修的东西。生产走 [parseDashAudios] + `BiliQuality.select`。
+     */
+    fun parseDashAudio(body: String?, nowMs: Long = System.currentTimeMillis()): BiliStream? {
+        val all = parseDashAudios(body, nowMs)
+        // AAC 那一支已经按带宽降序，取第一条即「带宽最高的 AAC」。
+        return all.firstOrNull { it.kind == BiliAudioKind.AAC } ?: all.firstOrNull()
+    }
+
+    /** DASH 里的一条音频节点 → [BiliStream]；没有可用 URL 时返回 null。 */
+    private fun streamOf(node: JSONObject, kind: BiliAudioKind, nowMs: Long): BiliStream? {
+        val url = node.optString("baseUrl").takeIf { it.isNotBlank() }
+            ?: node.optJSONArray("backupUrl")?.optString(0)?.takeIf { it.isNotBlank() }
             ?: return null
-        val mime = picked.optString("mimeType") // audio/mp4
-        val codecs = picked.optString("codecs")  // mp4a.40.2 / flac
+        val bw = node.optLong("bandwidth", 0L)
+        val mime = node.optString("mimeType") // audio/mp4
+        val codecs = node.optString("codecs")  // mp4a.40.2 / fLaC / ec-3
         return BiliStream(
             url = url,
             expiresAtMs = expiryFromUrl(url, timeoutSeconds = null, nowMs = nowMs),
-            qualityLabel = qualityLabelOf(codecs, bestBw),
-            br = bestBw,
-            container = when {
-                mime.contains("flac", true) || codecs.contains("flac", true) -> "flac"
-                mime.contains("mp4", true) -> "m4a"
-                else -> "m4a"
-            },
+            qualityLabel = qualityLabelOf(codecs, bw, kind),
+            br = bw,
+            container = containerOf(mime, codecs, kind),
+            kind = kind,
         )
     }
 
@@ -425,51 +511,6 @@ object BiliParse {
         if (root.optInt("code", -1) != 0) return null
         if (!root.has("data")) return null
         return root.optString("data")
-    }
-
-    /**
-     * `player/wbi/v2` 响应 → **第一条可用字幕的 URL**（v3.3.0）。
-     *
-     * 实测响应形状（登录态，`BV1cN4y167BJ`，`aid=877869754 cid=1381738635`）：
-     * ```json
-     * { "code":0, "data": { "subtitle": { "subtitles": [
-     *     { "id":1387771279457024256, "lan":"ai-zh", "lan_doc":"中文", "is_lock":false,
-     *       "subtitle_url":"//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/…?auth_key=…",
-     *       "subtitle_url_v2":"//subtitle.bilibili.com/…" } ] } } }
-     * ```
-     *
-     * 选哪一条：
-     * - **优先中文**（`lan` 含 `zh`，实测值是 `ai-zh`）。选到英文字幕会拿到一份
-     *   逐句英译而不是歌词正文；
-     * - 没有中文就取**第一条有 URL 的**（有总比没有好，且 [BiliSubtitle] 的 `music`
-     *   判据会独立判断它到底是不是歌词 —— 判定与选取是两件事）；
-     * - **用 `subtitle_url`，不用 `subtitle_url_v2`**：后者实测是
-     *   `subtitle.bilibili.com` 上一串百分号转义的非 JSON 载荷，形状未经证实。
-     *   拿没验证过的字段去赌，就是把「未验证」写成「已实现」。
-     *
-     * 不按 `is_lock` 过滤：实测它为 `false`，而「锁定」与「能否下载」的关系
-     * **没有实测依据**，按未证实字段过滤会静默丢字幕。
-     *
-     * @return 原始 URL（可能是 `//` 开头，协议补全由 `BiliApi.normalizeSubtitleUrl` 负责）；
-     *   无字幕 / `code != 0` / 解析失败一律返回 null。
-     */
-    fun parseFirstSubtitleUrl(body: String?): String? {
-        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return null
-        if (root.optInt("code", -1) != 0) return null
-        val arr = root.optJSONObject("data")
-            ?.optJSONObject("subtitle")
-            ?.optJSONArray("subtitles")
-            ?: return null
-        for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val url = o.optString("subtitle_url").takeIf { it.isNotBlank() } ?: continue
-            if (o.optString("lan").lowercase().contains("zh")) return url
-        }
-        for (i in 0 until arr.length()) {
-            val url = arr.optJSONObject(i)?.optString("subtitle_url")?.takeIf { it.isNotBlank() }
-            if (url != null) return url
-        }
-        return null
     }
 
     /**
@@ -537,12 +578,50 @@ object BiliParse {
         return name.substring(dot + 1).lowercase()
     }
 
-    /** DASH 音频流的档位文案：按带宽与编码猜一个**保守**的说法。 */
-    private fun qualityLabelOf(codecs: String, bandwidth: Long): String = when {
-        codecs.contains("flac", true) -> "FLAC"
+    /**
+     * DASH 音频流的档位文案。
+     *
+     * ## 为什么以 `kind` 为主判据，`codecs` 只作兜底（v3.4.8）
+     *
+     * 修复前只按 `codecs` + 带宽猜，而 `dash.flac.audio` 与 `dash.audio[]` 的 `mimeType`
+     * **都是 `audio/mp4`** —— 唯一稳定的区分是「它出自哪一支」，也就是 [BiliAudioKind]。
+     * 拿 codecs 当主判据在 `codecs` 字段缺失（实测某些 PCDN 回包会少字段）时
+     * 会把一条 2.2 Mbps 的 Hi-Res 标成「320K」，那正是「标签不可信」的老问题。
+     *
+     * 文案取值沿用既有词表（`FLAC` / `320K` / `192K` / `128K`），**不新增**：
+     * 它进 `SongUrlResult.fallbackFromLevel` 与日志，用户可见的那一栏由
+     * `QualityAssessment` 从 `br` + 容器反推的真实档位决定。
+     */
+    private fun qualityLabelOf(codecs: String, bandwidth: Long, kind: BiliAudioKind): String = when {
+        kind == BiliAudioKind.FLAC || codecs.contains("flac", true) -> "FLAC"
+        kind == BiliAudioKind.DOLBY -> "杜比"
         bandwidth >= 256_000 -> "320K"
         bandwidth >= 160_000 -> "192K"
         bandwidth >= 96_000 -> "128K"
         else -> "未知"
+    }
+
+    /**
+     * 容器/编码标识 —— 它会一路走到 `SongUrlResult.type`，再进
+     * `QualityAssessment.measuredLevel(br, type)` 反推真实档位。
+     *
+     * 所以这三个取值不是「诊断用的字符串」，而是**判据的一部分**：
+     *
+     * | kind | 返回 | `measuredLevel` 的结果 |
+     * |---|---|---|
+     * | [BiliAudioKind.FLAC] | `flac` | 按 `br` 落在 hires（≥1.4 Mbps）/ lossless（≥0.7 Mbps） |
+     * | [BiliAudioKind.DOLBY] | `mp4` | 恒为 `dolby`（杜比是格式，不是码率档） |
+     * | [BiliAudioKind.AAC] | `m4a` | **null** ⇒ 不下结论，退回服务端标签 |
+     *
+     * ⚠️ AAC 那一路**故意**给 `m4a` 而不是 `mp3`：`measuredLevel("mp3")` 会按带宽
+     * 把它读成 exhigh/higher/standard，而 B 站 AAC 的带宽档（64K/132K/192K）
+     * 与 ncm 的 mp3 档位**不是同一套刻度**，套上去会把 132K 说成「较好 192K」。
+     * 拿不到结论时保持安静，与 `QualityAssessment` 的既有纪律一致。
+     */
+    private fun containerOf(mime: String, codecs: String, kind: BiliAudioKind): String = when {
+        kind == BiliAudioKind.FLAC || codecs.contains("flac", true) -> "flac"
+        kind == BiliAudioKind.DOLBY -> "mp4"
+        mime.contains("flac", true) -> "flac"
+        else -> "m4a"
     }
 }

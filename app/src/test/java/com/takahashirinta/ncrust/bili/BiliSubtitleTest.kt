@@ -319,3 +319,267 @@ class BiliSubtitleTest {
         assertEquals("", BiliSubtitle.normalizeSubtitleUrl("   "))
     }
 }
+
+/**
+ * v3.4.8 · 问题 2：**字幕语言的选择**（视频轨的「多语言歌词」）。
+ *
+ * ## 样本是实测原文
+ *
+ * `BV1GJ411x7h7`（cid 137649199）在 2026-10-07 登录态下 `player/wbi/v2` 返回
+ * **12 条**语言轨；`BV1uT4y1P7CX`（cid 287639008）返回 **60 条**。
+ * 这里抄的是前者的 12 条（字段名、`lan`、`lan_doc`、`type` 逐字保留，
+ * 只把 `subtitle_url` 的签名查询串截掉）。
+ *
+ * 修复前 `parseFirstSubtitleUrl` 写死「**优先含 `zh` 的那条**」——
+ * 一个日语视频、一个英语视频、一个想在中文视频上看英文字幕的用户，
+ * 全都只能拿到中文轨，且**没有任何开关**。这一组用例守的就是那条开关。
+ */
+class BiliSubtitleLangTest {
+
+    private companion object {
+        /** 实测：`BV1GJ411x7h7` / cid 137649199，12 条语言轨。 */
+        val TWELVE_TRACKS = """
+        {"code":0,"message":"OK","data":{"subtitle":{"allow_submit":false,"subtitles":[
+          {"id":1,"lan":"zh-CN","lan_doc":"中文（中国）","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/zh-CN.json"},
+          {"id":2,"lan":"zh-Hans","lan_doc":"中文（简体）","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/zh-Hans.json"},
+          {"id":3,"lan":"zh-Hant","lan_doc":"中文（繁體）","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/zh-Hant.json"},
+          {"id":4,"lan":"zh-HK","lan_doc":"中文（中國香港）","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/zh-HK.json"},
+          {"id":5,"lan":"en-US","lan_doc":"English(US)","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/en-US.json"},
+          {"id":6,"lan":"ja","lan_doc":"日本語","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ja.json"},
+          {"id":7,"lan":"ko","lan_doc":"한국어","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ko.json"},
+          {"id":8,"lan":"de-DE","lan_doc":"Deutsch(DE)","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/de-DE.json"},
+          {"id":9,"lan":"ru","lan_doc":"Русский","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ru.json"},
+          {"id":10,"lan":"iw","lan_doc":"עִבְרִית","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/iw.json"},
+          {"id":11,"lan":"ca","lan_doc":"Català","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ca.json"},
+          {"id":12,"lan":"ase","lan_doc":"美国手语","type":0,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/ase.json"}
+        ]}}}
+        """.trimIndent()
+
+        /** 实测：只有 AI 轨的视频（`BV1cN4y167BJ`）。`lan` 带 `ai-` 前缀、`type=1`。 */
+        val AI_ONLY = """
+        {"code":0,"data":{"subtitle":{"subtitles":[
+          {"id":1,"lan":"ai-zh","lan_doc":"中文","type":1,"ai_type":0,"subtitle_url":"//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/x.json"}
+        ]}}}
+        """.trimIndent()
+
+        fun urlOf(lan: String) = "//aisubtitle.hdslb.com/bfs/subtitle/$lan.json"
+    }
+
+    // ---------------------------------------------------------------- 解析
+
+    @Test
+    fun `解析出全部 12 条语言轨且顺序不变`() {
+        val tracks = BiliSubtitle.parseSubtitleTracks(TWELVE_TRACKS)
+        assertEquals(12, tracks.size)
+        assertEquals(
+            listOf("zh-CN", "zh-Hans", "zh-Hant", "zh-HK", "en-US", "ja", "ko", "de-DE", "ru", "iw", "ca", "ase"),
+            tracks.map { it.lan },
+        )
+        assertEquals("中文（中国）", tracks[0].lanDoc)
+        assertEquals("English(US)", tracks[4].lanDoc)
+        assertTrue("手传 CC 轨不是 AI 轨", tracks.none { it.isAi })
+    }
+
+    @Test
+    fun `AI 轨的两个判据取或 —— lan 前缀与 type 各能单独认出来`() {
+        val t = BiliSubtitle.parseSubtitleTracks(AI_ONLY).single()
+        assertTrue(t.isAi)
+        assertEquals("ai-zh", t.lan)
+        // 缺 `lan` 前缀但 `type=1` 也要认（服务端改字段时不能静默失效）。
+        val byType = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[{"lan":"zh","type":1,"subtitle_url":"//x/a.json"}]}}}"""
+        ).single()
+        assertTrue(byType.isAi)
+        // 反过来：有 `ai-` 前缀但 `type` 缺失（optInt 给 0）也要认。
+        val byLan = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[{"lan":"ai-en","subtitle_url":"//x/a.json"}]}}}"""
+        ).single()
+        assertTrue(byLan.isAi)
+    }
+
+    @Test
+    fun `没有 URL 或没有语言的条目被丢掉`() {
+        val tracks = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[
+              {"lan":"en-US","lan_doc":"English","subtitle_url":""},
+              {"lan":"","lan_doc":"?","subtitle_url":"//x/a.json"},
+              {"lan":"ja","lan_doc":"日本語","subtitle_url":"//x/ja.json"}
+            ]}}}"""
+        )
+        assertEquals("只有第三条是有效轨", 1, tracks.size)
+        assertEquals("ja", tracks.single().lan)
+    }
+
+    @Test
+    fun `坏输入返回空表而不抛异常`() {
+        assertTrue(BiliSubtitle.parseSubtitleTracks(null).isEmpty())
+        assertTrue(BiliSubtitle.parseSubtitleTracks("").isEmpty())
+        assertTrue(BiliSubtitle.parseSubtitleTracks("not json").isEmpty())
+        assertTrue(BiliSubtitle.parseSubtitleTracks("""{"code":-352}""").isEmpty())
+        assertTrue(BiliSubtitle.parseSubtitleTracks("""{"code":0,"data":{}}""").isEmpty())
+        assertTrue(BiliSubtitle.parseSubtitleTracks("""{"code":0,"data":{"subtitle":{"subtitles":[]}}}""").isEmpty())
+    }
+
+    // ---------------------------------------------------------------- 偏好展开
+
+    @Test
+    fun `自动档跟随应用语言 其次中文 再其次英文`() {
+        // 界面语言是英文 ⇒ 先找英文轨，再去重保序地接上中文兜底。
+        // （`preferredTags` 用 `LinkedHashSet` 去重：`en-US` 既是应用语言的首选、
+        //   又在兜底清单里，**只能出现一次** —— 否则匹配循环会白跑一遍。）
+        assertEquals(
+            listOf("en-US", "en-GB", "en", "zh-CN", "zh-Hans", "zh"),
+            BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "en-US"),
+        )
+        val tags = BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "en-US")
+        assertEquals("偏好表必须无重复", tags.size, tags.toSet().size)
+        // 界面语言是日语 ⇒ 日语优先，但中文仍在兜底里（B 站是中文内容平台）。
+        val ja = BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "ja-JP")
+        assertEquals("ja", ja.first())
+        assertTrue("中文必须留在兜底里", ja.contains("zh-CN"))
+    }
+
+    @Test
+    fun `自动档区分繁简 —— 台湾正体优先繁体轨`() {
+        val tw = BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "zh-TW")
+        assertEquals("zh-Hant", tw.first())
+        val cn = BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "zh-CN")
+        assertEquals("zh-CN", cn.first())
+        // 万叶假名是 ja 的变体，按 ja 处理。
+        assertEquals("ja", BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, "ja-MY").first())
+    }
+
+    @Test
+    fun `应用语言取不到时退化成修复前的行为（中文优先）`() {
+        // 这是升级上来的老用户看到的默认观感：与 v3.4.7 **逐字一致**。
+        listOf(null, "", "   ", "fr-FR").forEach { code ->
+            assertEquals(
+                "appLanguage=$code",
+                "zh-CN",
+                BiliSubtitle.preferredTags(BiliSubtitleLang.AUTO, code).first(),
+            )
+        }
+    }
+
+    @Test
+    fun `关闭档返回空表 且 fetches 为假`() {
+        assertTrue(BiliSubtitle.preferredTags(BiliSubtitleLang.OFF, "zh-CN").isEmpty())
+        assertFalse(BiliSubtitleLang.OFF.fetches)
+        BiliSubtitleLang.values().filter { it != BiliSubtitleLang.OFF }.forEach {
+            assertTrue("${it.key} 必须抓取", it.fetches)
+        }
+    }
+
+    @Test
+    fun `枚举 key 与设置注册表的候选逐字一致`() {
+        assertEquals(
+            listOf("auto", "zh-Hans", "zh-Hant", "en", "ja", "ko", "off"),
+            BiliSubtitleLang.values().map { it.key },
+        )
+        assertEquals(BiliSubtitleLang.ZH_HANT, BiliSubtitleLang.of("zh-Hant"))
+        assertEquals(BiliSubtitleLang.OFF, BiliSubtitleLang.of(" OFF "))
+        assertEquals(BiliSubtitleLang.AUTO, BiliSubtitleLang.DEFAULT)
+        org.junit.Assert.assertNull(BiliSubtitleLang.of("fr"))
+        org.junit.Assert.assertNull(BiliSubtitleLang.of(null))
+    }
+
+    // ---------------------------------------------------------------- 选择
+
+    private fun pick(lang: BiliSubtitleLang, app: String? = "zh-CN", allowAi: Boolean = true) =
+        BiliSubtitle.pickTrack(
+            BiliSubtitle.parseSubtitleTracks(TWELVE_TRACKS),
+            BiliSubtitle.preferredTags(lang, app),
+            allowAi,
+        )
+
+    @Test
+    fun `每一档都真的选到对应语言的轨`() {
+        assertEquals("zh-CN", pick(BiliSubtitleLang.ZH_HANS)?.lan)
+        assertEquals("zh-Hant", pick(BiliSubtitleLang.ZH_HANT)?.lan)
+        assertEquals("en-US", pick(BiliSubtitleLang.EN)?.lan)
+        assertEquals("ja", pick(BiliSubtitleLang.JA)?.lan)
+        assertEquals("ko", pick(BiliSubtitleLang.KO)?.lan)
+    }
+
+    @Test
+    fun `自动档在不同界面语言下选到不同的轨 —— 这就是这次修复的可见效果`() {
+        assertEquals("zh-CN", pick(BiliSubtitleLang.AUTO, "zh-CN")?.lan)
+        assertEquals("zh-Hant", pick(BiliSubtitleLang.AUTO, "zh-TW")?.lan)
+        assertEquals("en-US", pick(BiliSubtitleLang.AUTO, "en-US")?.lan)
+        assertEquals("ja", pick(BiliSubtitleLang.AUTO, "ja-JP")?.lan)
+        assertEquals("ko", pick(BiliSubtitleLang.AUTO, "ko-KP")?.lan)
+        assertEquals("de-DE", pick(BiliSubtitleLang.AUTO, "de-DE")?.lan)
+        assertEquals("ru", pick(BiliSubtitleLang.AUTO, "ru-RU")?.lan)
+    }
+
+    @Test
+    fun `主语言子标签也能命中 —— 服务端只给 en 时 en-US 的偏好要能选到它`() {
+        val onlyEn = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[
+              {"lan":"zh-CN","subtitle_url":"//x/zh.json"},
+              {"lan":"en","subtitle_url":"//x/en.json"}
+            ]}}}"""
+        )
+        val picked = BiliSubtitle.pickTrack(onlyEn, BiliSubtitle.preferredTags(BiliSubtitleLang.EN, null))
+        assertEquals("en", picked?.lan)
+    }
+
+    @Test
+    fun `偏好全不命中时回落到第一条手传轨 而不是空手而归`() {
+        // 界面语言是法语（应用里没有这一档）⇒ AUTO 展开成中文优先。
+        // 若这个视频只有手语轨，AUTO 仍然应该给出**某一条**，而不是「没有字幕」。
+        val aseOnly = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[
+              {"lan":"ase","lan_doc":"美国手语","type":0,"subtitle_url":"//x/ase.json"}
+            ]}}}"""
+        )
+        val picked = BiliSubtitle.pickTrack(aseOnly, BiliSubtitle.preferredTags(BiliSubtitleLang.EN, null))
+        assertEquals("ase", picked?.lan)
+    }
+
+    @Test
+    fun `AI 轨优先让位给手传轨 但只有 AI 时仍然用它`() {
+        val mixed = BiliSubtitle.parseSubtitleTracks(
+            """{"code":0,"data":{"subtitle":{"subtitles":[
+              {"lan":"ai-zh","lan_doc":"中文","type":1,"subtitle_url":"//x/ai.json"},
+              {"lan":"fr","lan_doc":"Français","type":0,"subtitle_url":"//x/fr.json"}
+            ]}}}"""
+        )
+        // 偏好里没有 fr ⇒ 兜底应先给手传轨（fr），而不是按顺序给 ai-zh。
+        assertEquals(
+            "兜底必须先给手传 CC 轨",
+            "fr",
+            BiliSubtitle.pickTrack(mixed, BiliSubtitle.preferredTags(BiliSubtitleLang.JA, null))?.lan,
+        )
+        // 只有 AI 轨时仍然用它 —— 实测 BV1cN4y167BJ 就是这种形态，而它的正文就是完整歌词。
+        val aiOnly = BiliSubtitle.parseSubtitleTracks(AI_ONLY)
+        assertEquals(
+            "ai-zh",
+            BiliSubtitle.pickTrack(aiOnly, BiliSubtitle.preferredTags(BiliSubtitleLang.JA, null))?.lan,
+        )
+        // allowAi=false 时**才**放弃它。
+        org.junit.Assert.assertNull(
+            BiliSubtitle.pickTrack(aiOnly, BiliSubtitle.preferredTags(BiliSubtitleLang.JA, null), allowAi = false),
+        )
+    }
+
+    @Test
+    fun `显式点名 AI 轨不受 allowAi 开关影响`() {
+        val aiOnly = BiliSubtitle.parseSubtitleTracks(AI_ONLY)
+        assertEquals(
+            "用户显式要 ai-zh 时不能被隐式开关拒掉",
+            "ai-zh",
+            BiliSubtitle.pickTrack(aiOnly, listOf("ai-zh"), allowAi = false)?.lan,
+        )
+    }
+
+    @Test
+    fun `空轨表与空偏好都不抛`() {
+        org.junit.Assert.assertNull(BiliSubtitle.pickTrack(emptyList(), listOf("zh-CN")))
+        assertEquals(
+            "空偏好 = 按服务端顺序取第一条手传轨（不是不抓）",
+            "zh-CN",
+            BiliSubtitle.pickTrack(BiliSubtitle.parseSubtitleTracks(TWELVE_TRACKS), emptyList())?.lan,
+        )
+    }
+}

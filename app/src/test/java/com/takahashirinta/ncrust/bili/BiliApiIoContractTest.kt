@@ -48,7 +48,9 @@ class BiliApiIoContractTest {
             "audioLyric",
             "searchVideos",
             "videoCid",
-            "videoAudioStream",
+            // v3.4.8：返回**全部**音频候选（`dash.audio[]` + `dash.flac.audio` + `dash.dolby.audio`），
+            // 「挑哪一条」由纯函数 `BiliQuality.selectStream` 决定。
+            "videoAudioStreams",
             "audioInfo",
             "audioStream",
             "probeReachable",

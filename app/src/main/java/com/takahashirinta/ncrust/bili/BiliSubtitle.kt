@@ -33,6 +33,105 @@ data class BiliSubtitleCue(
 )
 
 /**
+ * 一条**可选的**字幕轨（v3.4.8）。
+ *
+ * ## 为什么需要它：同一个视频可以有 60 条语言轨
+ *
+ * B 站的 `player/wbi/v2` 会把该视频的**全部**字幕轨列出来，每条自带语言标签：
+ *
+ * ```json
+ * {"lan":"zh-CN","lan_doc":"中文（中国）","type":0,"ai_type":0,
+ *  "subtitle_url":"//aisubtitle.hdslb.com/bfs/subtitle/….json"}
+ * ```
+ *
+ * 实测（2026-10-07，登录态）：
+ *
+ * | 视频 | 轨数 | 语言 |
+ * |---|---|---|
+ * | `BV1uT4y1P7CX` | **60** | zh-CN / zh-Hant / en-US / ja / ko / fr / de / ru / … / ase（美国手语） |
+ * | `BV1GJ411x7h7` | **12** | zh-CN / zh-Hans / zh-Hant / zh-HK / en-US / ja / ko / de-DE / ru / iw / ca / ase |
+ * | `BV1cN4y167BJ` | 1 | `ai-zh`（B 站 AI 自动生成） |
+ *
+ * 而修复前 `parseFirstSubtitleUrl` 写死了「**优先含 `zh` 的那条**」——
+ * 也就是说，一个日语视频、一个英语视频、一个想在中文视频上看英文字幕的用户，
+ * 全都只能拿到中文轨，且**没有任何开关可以改**。这个类型 + [BiliSubtitle.pickTrack]
+ * 就是那条开关的数据形态。
+ *
+ * @property lan 语言标签（BCP-47 风格：`zh-CN` / `zh-Hant` / `en-US` / `ja`…；
+ *   AI 轨是 `ai-zh` 这种**带 `ai-` 前缀**的形状）。
+ * @property lanDoc 服务端给该语言的**显示名**（`中文（中国）` / `English(US)` /
+ *   `日本語`…），与界面语言无关，是**内容本身的语言名**。只用于日志与诊断 ——
+ *   匹配一律按 [lan]，因为 [lanDoc] 是随服务端文案变动的自由文本。
+ * @property url 字幕正文地址，实测是**协议相对**形状（`//aisubtitle.hdslb.com/…`），
+ *   交给 [BiliSubtitle.normalizeSubtitleUrl] 补全。
+ * @property isAi 是不是 B 站 AI 自动生成的轨（`lan` 以 `ai-` 开头，或 `type == 1`）。
+ *   AI 轨的正确性远低于 UP 主手传的 CC 字幕，所以要能被单独降权/排除。
+ */
+data class BiliSubtitleTrack(
+    val lan: String,
+    val lanDoc: String,
+    val url: String,
+    val isAi: Boolean,
+)
+
+/**
+ * 用户可选的**字幕语言偏好**（v3.4.8）。
+ *
+ * ## 语义：它是一个「有序优先表」，不是一个精确匹配
+ *
+ * 同一件事在服务端有多个标签写法（简体中文可能是 `zh-CN` / `zh-Hans` / `zh-SG`；
+ * 繁体可能是 `zh-Hant` / `zh-HK` / `zh-TW`）。要求用户逐字选对一个标签是不现实的，
+ * 所以每一档携带一串**按优先级排列的标签**，由 [BiliSubtitle.pickTrack] 逐个匹配。
+ *
+ * ## 为什么 [AUTO] 是「应用语言优先、其次中文」
+ *
+ * B 站是中文内容平台：一个日语界面的用户看中文视频时，期望的往往仍是中文字幕。
+ * 但**只看一条**又会在「界面语言 == 内容语言」时把本来更好的轨排到后面。
+ * 所以 AUTO 的展开是「应用语言 → 中文 → 英文」，取第一个命中的，
+ * 三条都不命中才回落到「第一条手传 CC 轨 → 第一条 AI 轨」。
+ *
+ * ## [OFF] 是「抓取开关」本身
+ *
+ * 用户要求「增加抓取的自选项」，而这个功能的抓取对象**只有字幕**。
+ * 所以「不抓字幕」不需要第二个开关 —— 它就是 [OFF] 这一档：
+ * 选中它之后 `BiliSourceProvider.fetchLyric` 在**发请求之前**返回 null
+ * （`null` = 没有数据源，不是「这首歌没有歌词」；视频轨本来就只有字幕这一个数据源）。
+ */
+enum class BiliSubtitleLang(val key: String) {
+    /** 跟随应用界面语言，其次中文，最后英文。 */
+    AUTO("auto"),
+
+    /** 简体中文优先（`zh-CN` / `zh-Hans` / `zh-SG`）。 */
+    ZH_HANS("zh-Hans"),
+
+    /** 繁体中文优先（`zh-Hant` / `zh-HK` / `zh-TW`）。 */
+    ZH_HANT("zh-Hant"),
+
+    /** 英文优先（`en-US` / `en-GB` / `en`）。 */
+    EN("en"),
+
+    /** 日文（`ja`）。 */
+    JA("ja"),
+
+    /** 韩文（`ko`）。 */
+    KO("ko"),
+
+    /** **不抓取字幕** —— 视频轨直接返回「没有歌词数据源」。 */
+    OFF("off"),
+    ;
+
+    /** 这一档是否要发字幕请求（[OFF] 是唯一的「不发」）。 */
+    val fetches: Boolean get() = this != OFF
+
+    companion object {
+        val DEFAULT: BiliSubtitleLang = AUTO
+
+        fun of(key: String?): BiliSubtitleLang? =
+            values().firstOrNull { it.key.equals(key?.trim(), ignoreCase = true) }
+    }
+}
+
+/**
  * B 站视频字幕的解析与「字幕 → 歌词」判定。
  *
  * ## 为什么要有这个对象（v3.3.0 的来由）
@@ -239,6 +338,151 @@ object BiliSubtitle {
             u.startsWith("/") -> "$SUBTITLE_CDN_BASE$u"
             else -> ""
         }
+    }
+
+    // ------------------------------------------------------------------ 字幕轨选择（v3.4.8） ----
+
+    /**
+     * `player/wbi/v2` 响应 → **全部可用的字幕轨**（保持服务端顺序）。
+     *
+     * 契约与其它解析函数一致：**不发网络、不抛异常**；坏输入返回空列表。
+     * 三种「不算一条轨」的情况都被跳过，且每一条都有理由：
+     *
+     * - `subtitle_url` 空白 ⇒ 拿到了一个**没有正文地址**的条目，选它等于选一个必然 404
+     *   （实测未登录时 `subtitles` 是空数组，不会走到这里；但风控态出现过 `url:""`）；
+     * - `lan` 空白 ⇒ 无法参与语言匹配，也无法在日志/诊断里被认出来；
+     * - 整个 `data` / `subtitle` / `subtitles` 缺失 ⇒ 空列表
+     *   （**不是** null：null 表示「请求失败」，由 `BiliApi` 那一层负责区分）。
+     *
+     * ⚠️ 这里**不**顺手做「AI 轨降权」：降权是策略，发生在 [pickTrack]。
+     * 解析层只回答「服务端给了什么」。
+     */
+    fun parseSubtitleTracks(body: String?): List<BiliSubtitleTrack> {
+        val root = runCatching { JSONObject(body.orEmpty()) }.getOrNull() ?: return emptyList()
+        if (root.optInt("code", -1) != 0) return emptyList()
+        val arr = root.optJSONObject("data")
+            ?.optJSONObject("subtitle")
+            ?.optJSONArray("subtitles")
+            ?: return emptyList()
+        val out = ArrayList<BiliSubtitleTrack>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val lan = o.optString("lan").trim()
+            val url = o.optString("subtitle_url").trim()
+            if (lan.isEmpty() || url.isEmpty()) continue
+            out += BiliSubtitleTrack(
+                lan = lan,
+                lanDoc = o.optString("lan_doc").trim(),
+                url = url,
+                // 两种 AI 判据取**或**：实测 AI 轨的 `lan` 是 `ai-zh`、`type` 是 `1`；
+                // 只认其中一条会在服务端改字段时静默失效（`type` 缺失 ⇒ `optInt` 给 0）。
+                isAi = lan.startsWith("ai-", ignoreCase = true) || o.optInt("type", 0) == 1,
+            )
+        }
+        return out
+    }
+
+    /**
+     * 语言偏好的**展开**：把一档用户选择展开成有序的标签匹配表。
+     *
+     * @param lang 用户选的那一档。
+     * @param appLanguage 应用当前的界面语言代码（`zh-CN` / `en-US` / …）；
+     *   只有 [BiliSubtitleLang.AUTO] 用得上，其余档位忽略它。
+     *
+     * [BiliSubtitleLang.OFF] 返回**空表** —— 调用方据此在发请求之前就停下
+     * （见 [BiliSubtitleLang.OFF] 的说明：空表 + [pickTrack] 返回 null 是同一件事的两面，
+     * 但取词路径根本不该走到这一步）。
+     */
+    fun preferredTags(lang: BiliSubtitleLang, appLanguage: String?): List<String> = when (lang) {
+        BiliSubtitleLang.OFF -> emptyList()
+        BiliSubtitleLang.ZH_HANS -> listOf("zh-CN", "zh-Hans", "zh-SG", "zh")
+        BiliSubtitleLang.ZH_HANT -> listOf("zh-Hant", "zh-HK", "zh-TW", "zh")
+        BiliSubtitleLang.EN -> listOf("en-US", "en-GB", "en")
+        BiliSubtitleLang.JA -> listOf("ja")
+        BiliSubtitleLang.KO -> listOf("ko")
+        BiliSubtitleLang.AUTO -> autoTags(appLanguage)
+    }
+
+    /**
+     * [BiliSubtitleLang.AUTO] 的展开：**应用语言 → 中文 → 英文**。
+     *
+     * 去重且保序（`LinkedHashSet` 语义）。应用语言取不到（null / 空）时直接
+     * 给「中文 → 英文」——那正是修复前写死的行为，所以老用户升级上来的
+     * **默认观感与 v3.4.7 逐字一致**。
+     *
+     * ⚠️ 只按 `-` 前的主语言子标签做映射，不做完整 BCP-47 匹配：
+     * 应用只有 8 个 locale，而字幕轨有 60 种语言，穷举两边都不现实。
+     */
+    private fun autoTags(appLanguage: String?): List<String> {
+        val out = LinkedHashSet<String>()
+        when (appLanguage?.trim()?.substringBefore('-')?.lowercase()) {
+            "zh" -> {
+                // 繁简：只有 zh-TW 这一支算繁体，其余（zh-CN / zh-MY 万叶假名）按简体找。
+                val traditional = appLanguage.contains("TW", ignoreCase = true)
+                if (traditional) {
+                    out += listOf("zh-Hant", "zh-HK", "zh-TW")
+                } else {
+                    out += listOf("zh-CN", "zh-Hans", "zh-SG")
+                }
+                out += "zh"
+            }
+            "en" -> out += listOf("en-US", "en-GB", "en")
+            "ja" -> out += "ja"
+            "ko" -> out += "ko"
+            "de" -> out += listOf("de-DE", "de")
+            "ru" -> out += "ru"
+            else -> Unit
+        }
+        // 兜底：中文 → 英文。这是修复前的固定行为，也是本平台内容的主要语言。
+        out += listOf("zh-CN", "zh-Hans", "zh", "en-US", "en")
+        return out.toList()
+    }
+
+    /**
+     * 从全部字幕轨里挑出**用户想要的那一条**。
+     *
+     * 匹配按 [preferredTags] 的**顺序**逐档进行，每一档内部按「精确 → 前缀」两级：
+     *
+     * 1. `lan` 与标签**逐字相等**（忽略大小写）—— `en-US` 命中 `en-US`；
+     * 2. `lan` 的语言主标签等于标签的主标签 —— `en` 命中 `en-US` / `en-GB`，
+     *    `zh-CN` 命中 `zh`（服务端偶尔只给主标签）。
+     *
+     * 两条都不命中的档位直接跳过，**不做模糊的 `lanDoc` 文本匹配**：
+     * `lan_doc` 是随服务端文案变动的自由文本（`中文（中国）` 里既有全角括号也有地区名），
+     * 拿它当判据会在服务端改一个字之后静默失效 —— 而失效的表现是「字幕语言悄悄换了」，
+     * 用户根本无从判断。
+     *
+     * 全部标签都不命中时的兜底（保持与修复前一致的不空手而归）：
+     * 第一条**非 AI** 轨 → 第一条 AI 轨。
+     *
+     * @param allowAi 是否允许把 AI 轨计入兜底。AI 轨（`ai-zh`）是 B 站自动生成的，
+     *   断句与正确性都低于 UP 主手传的 CC 字幕；**但它常常是唯一的轨**
+     *   （实测 `BV1cN4y167BJ` 只有 `ai-zh`，而它的正文就是完整歌词）。
+     *   所以默认允许、可关。注意：**显式点名要 AI 轨（`preferredTags` 里含 `ai-…`）
+     *   不受这个开关影响** —— 用户在语言列表里选中了一条真实存在的轨，
+     *   再拿一个隐式开关把它拒掉是更坏的行为。
+     */
+    fun pickTrack(
+        tracks: List<BiliSubtitleTrack>,
+        preferredTags: List<String>,
+        allowAi: Boolean = true,
+    ): BiliSubtitleTrack? {
+        if (tracks.isEmpty()) return null
+        for (tag in preferredTags) {
+            val want = tag.trim()
+            if (want.isEmpty()) continue
+            // ① 逐字相等。
+            tracks.firstOrNull { it.lan.equals(want, ignoreCase = true) }?.let { return it }
+        }
+        for (tag in preferredTags) {
+            val want = tag.trim().substringBefore('-').lowercase()
+            if (want.isEmpty()) continue
+            // ② 主语言子标签相等。
+            tracks.firstOrNull { it.lan.substringBefore('-').lowercase() == want }?.let { return it }
+        }
+        // ③ 兜底：先手传 CC，再 AI（后者只在允许时）。
+        tracks.firstOrNull { !it.isAi }?.let { return it }
+        return if (allowAi) tracks.firstOrNull() else null
     }
 
     private const val SUBTITLE_CDN_BASE = "https://aisubtitle.hdslb.com"

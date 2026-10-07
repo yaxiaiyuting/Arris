@@ -131,9 +131,25 @@ object BiliSourceProvider : MusicSourceProvider {
     /**
      * 取链。
      *
-     * 降级阶梯按 [BiliQuality.fallbackLadder] 逐级下探，**每一档只试一次**（铁律 5）。
-     * 匿名下服务端一律给 192K，所以阶梯通常在第一档就命中 —— 保留它是为了
-     * 「请求 FLAC 却拿不到」时不至于直接判死。
+     * ## 两条腿各有各的档位语义
+     *
+     * | 腿 | 档位怎么用 |
+     * |---|---|
+     * | **音频区**（`au:<auid>`） | 映射成 `qn`（0/1/2/3），按 [BiliQuality.fallbackLadder] 逐级下探 |
+     * | **视频轨**（`bv:<bvid>:<cid>`） | v3.4.8 起**真的按档位选流**：无损档位拿 `dash.flac.audio`（大会员 Hi-Res），有损档位拿 `dash.audio[]` 里带宽最高的那条 |
+     *
+     * ⚠️ 视频轨那一侧在 v3.4.8 之前**完全不看 [level]** —— 它把 `dash.audio[]` 里
+     * 带宽最高的一条直接交出去，于是「用户开了大会员、选了无损」也只能拿到 192K AAC。
+     * 这就是「B 站音源无论如何都播放普通版本」的根因（详见 [BiliParse.parseDashAudios]）。
+     *
+     * ## 用户设置的两个作用点（v3.4.8 · 问题 3）
+     *
+     * 1. [BiliPrefs.qualityCap]：把全局档位换算成本源的**有效档位**
+     *    （`BiliQualityCapRules.applyCap`）—— 它同时管住两条腿；
+     * 2. [BiliPrefs.preferFlac]：只在视频轨「FLAC 与 AAC 都有」时决定选哪个。
+     *
+     * 两者都**只影响选择**，不改写服务端给的任何事实：拿不到 FLAC 时仍然按
+     * `fallbackLadder` / AAC 兜底，并由 `SongUrlResult.levelFromFile` 如实标出「已降级」。
      */
     override suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult? {
         if (!isEnabled) return null
@@ -142,14 +158,17 @@ object BiliSourceProvider : MusicSourceProvider {
             Log.w(TAG, "unresolvable bili sourceId=${song.sourceId} id=${song.id}")
             return null
         }
-        val ladder = BiliQuality.fallbackLadder(level)
+        // v3.4.8：用户设置在这里**一次性**换算成有效档位，两条腿共用同一个值 ——
+        // 分成两处各算一次，就会出现「音频区被限到 320K、视频轨还是无损」这种漂移。
+        val effectiveLevel = BiliQualityCapRules.applyCap(level, BiliPrefs.qualityCap())
+        val ladder = BiliQuality.fallbackLadder(effectiveLevel)
         if (payload.isAudioZone) {
             val auid = payload.auid!!
             for (qn in ladder) {
                 val stream = biliOrNull("audio stream failed: auid=$auid qn=${qn.qn}") {
                     BiliApi.audioStream(auid, qn.qn)
                 } ?: continue
-                return stream.toResult(qn)
+                return stream.toResult(qn, effectiveLevel)
             }
             Log.w(TAG, "audio zone gave no stream: auid=$auid level=$level")
             return null
@@ -161,10 +180,22 @@ object BiliSourceProvider : MusicSourceProvider {
             Log.w(TAG, "no cid for bvid=$bvid")
             return null
         }
-        val stream = biliOrNull("playurl failed: bvid=$bvid cid=$cid") {
-            BiliApi.videoAudioStream(bvid, cid)
+        val candidates = biliOrNull("playurl failed: bvid=$bvid cid=$cid") {
+            BiliApi.videoAudioStreams(bvid, cid)
         } ?: return null
-        return stream.toResult(null)
+        val stream = BiliQuality.selectStream(candidates, effectiveLevel, BiliPrefs.preferFlac())
+            ?: return null
+        if (stream.kind != BiliAudioKind.AAC) {
+            // Hi-Res / 杜比到手时的**唯一一条**可追溯记录：用户报障「还是普通音质」时，
+            // 这一行能直接回答「服务端到底给没给 flac」——
+            // 修复前这个信息在整条链路上不存在（代码根本没读那个字段）。
+            Log.i(
+                TAG,
+                "video stream picked: $bvid/$cid kind=${stream.kind} br=${stream.br} " +
+                    "of=${candidates.size} level=$effectiveLevel(requested=$level)",
+            )
+        }
+        return stream.toVideoResult(effectiveLevel)
     }
 
     /**
@@ -231,6 +262,18 @@ object BiliSourceProvider : MusicSourceProvider {
         }
         // 视频轨：字幕 → LRC。
         val bvid = payload.bvid ?: return null
+        // ── v3.4.8（问题 2）：**用户不想抓字幕时，一个请求都不发** ────────────────────
+        //
+        // 判断必须在 `videoCid` **之前**：取 cid 本身就是一次网络往返，
+        // 而「用户关掉了字幕抓取」是一个纯本地的决定，没有任何理由为它付费。
+        // 返回值是 null（= 「没有数据源」）而不是空串（= 「这首歌确实没有歌词」）：
+        // 关掉之后视频轨**确实没有任何歌词数据源**，这正是 null 的语义；
+        // 用空串会让上层把它记成「稳定空态」，将来用户打开开关也不会重取。
+        val subtitlePref = BiliPrefs.subtitleLang()
+        if (!subtitlePref.fetches) {
+            Log.i(TAG, "subtitle disabled by user: $bvid")
+            return null
+        }
         // ── v3.3.1 · P0：cid **必须像取流那条路一样补问一次** ────────────────────────
         //
         // 这是我上一版引入的缺陷（用户实测「B站歌词还是拉取不上，账号已登录」）。
@@ -266,7 +309,17 @@ object BiliSourceProvider : MusicSourceProvider {
         // 所以这里自己接异常：**抛了** ⇒ 取不到（null）；**没抛且返回空** ⇒
         // 「字幕列表拿到了，但里面没有可用字幕」⇒ 稳定空态（空串）。
         val url = try {
-            BiliApi.videoSubtitleUrl(bvid, cid)
+            // v3.4.8：把用户的语言偏好展开成**有序标签表**再交给传输层。
+            // 展开（产品语义）与匹配（协议知识）都住在 `BiliSubtitle` 里 —— 纯逻辑、有单测；
+            // `BiliApi` 只负责把那串标签带进请求与选择，不自己解释「auto 是什么意思」。
+            BiliApi.videoSubtitleUrl(
+                bvid = bvid,
+                cid = cid,
+                preferredTags = BiliSubtitle.preferredTags(
+                    subtitlePref,
+                    com.takahashirinta.ncrust.ui.i18n.currentLanguageCode(),
+                ),
+            )
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -308,28 +361,76 @@ object BiliSourceProvider : MusicSourceProvider {
         return m.groupValues[1].toLongOrNull()?.takeIf { it > 0L }
     }
 
-    /** [BiliStream] → [SongUrlResult]。`expiresAtMs` 在这里被带出去（铁律 26）。 */
-    private fun BiliStream.toResult(requested: BiliQn?): SongUrlResult {
-        // v3.2.4 · P0：把「这条流是 B 站刚发给我们的」记进 BiliCdn 的有界集合。
-        //
-        // 为什么必须在这里记：B 站的 CDN 会落到**与 bilibili 无关的第三方 PCDN 域名**
-        // （v3.1.0 实测抓到 `b-…edge.mountaintoys.cn`），只按域名后缀判断会漏掉它们，
-        // 于是那些歌连 Referer/UA 都拿不到 ⇒ 403。而「出处」是比域名更可靠的事实。
-        //
-        // 这是 markStream 的**唯一**生产调用点，所以集合里的每个 host 都可追溯到
-        // 一次真实的 B 站取链响应；UI / 队列 / 持久化里的 host 进不来。
+    /**
+     * [BiliStream] → [SongUrlResult]（**音频区**那一腿）。`expiresAtMs` 在这里被带出去（铁律 26）。
+     *
+     * `actualLevel` 仍然是请求的那个 `qn` 名字：音频区这条路的「实际档位」判据是
+     * **URL 文件名**（`qualityLabelOfFileName` 得到 `320K` / `192K` / `128K` / `FLAC`），
+     * 它不是 `QualityLadder` 的档位名，硬塞进 `actualLevel` 会让
+     * `QualityAssessment.levels.indexOf` 得到 -1。真正「如实标出降级」的载体是
+     * [SongUrlResult.fallbackFromLevel] —— 它在 `requested.name != qualityLabel` 时非空。
+     */
+    private fun BiliStream.toResult(requested: BiliQn?, requestedLevel: String): SongUrlResult {
+        // ★ 真实档位来自**文件名**（服务端自己写进去的 `-320k.m4a`），不是我们请求的 qn。
+        //   服务端会静默降级（请求 qn=3 拿到 type:2），按请求档位回显就是 v2.1.4 修掉的
+        //   「标签写高」——界面写着无损、耳朵听到 320K。
+        val actual = BiliQuality.levelOfAudioLabel(qualityLabel)
+        return toResult(
+            actualLevel = actual ?: requested?.name ?: "bili-dash",
+            // 两套词表（本应用档位 vs 文件名标签）不可直接比字符串：曾经 `"lossless" != "FLAC"`
+            // 让**每一次成功拿到 FLAC 都被记成一次降级**。所以先归一化再比刻度。
+            fallbackFromLevel = actual
+                ?.let { BiliQuality.fallbackFrom(requestedLevel, it) }
+                ?: requested?.name?.takeIf { it != qualityLabel },
+        )
+    }
+
+    /**
+     * [BiliStream] → [SongUrlResult]（**视频轨**那一腿，v3.4.8）。
+     *
+     * 与音频区那条路的**唯一**区别是 `actualLevel` 的来源：视频轨没有「请求的 qn」
+     * 这回事（DASH 是按档位从候选里挑），所以档位只能由**挑中的那条流自己**反推
+     * （[BiliQuality.levelOf]）。这与 `levelFromFile = true` 的声明是一致的 ——
+     * 修复前这里写的是请求档位，那条声明是假的。
+     *
+     * @param requestedLevel 用户（经音质上限换算后）请求的档位，只用于
+     *   [SongUrlResult.fallbackFromLevel]：挑中的流够不上它时如实记下来，
+     *   界面据此显示「已降级」。
+     */
+    private fun BiliStream.toVideoResult(requestedLevel: String): SongUrlResult {
+        val actual = BiliQuality.levelOf(this)
+        return toResult(
+            actualLevel = actual,
+            // 只在**真的降级**时记：请求 lossless 而视频只有 Hi-Res FLAC 时
+            // 实际档位比请求**高**（hires > lossless），那不是 fallback。
+            fallbackFromLevel = BiliQuality.fallbackFrom(requestedLevel, actual),
+        )
+    }
+
+    /**
+     * 两条腿共用的出口。`BiliCdn.markStream` 在这里、且**只在这里**被调用。
+     *
+     * v3.2.4 · P0：把「这条流是 B 站刚发给我们的」记进 BiliCdn 的有界集合。
+     *
+     * 为什么必须在这里记：B 站的 CDN 会落到**与 bilibili 无关的第三方 PCDN 域名**
+     * （v3.1.0 实测抓到 `b-…edge.mountaintoys.cn`），只按域名后缀判断会漏掉它们，
+     * 于是那些歌连 Referer/UA 都拿不到 ⇒ 403。而「出处」是比域名更可靠的事实。
+     *
+     * 这是 markStream 的**唯一**生产调用点，所以集合里的每个 host 都可追溯到
+     * 一次真实的 B 站取链响应；UI / 队列 / 持久化里的 host 进不来。
+     */
+    private fun BiliStream.toResult(actualLevel: String, fallbackFromLevel: String?): SongUrlResult {
         BiliCdn.markStream(url)
         return SongUrlResult(
             url = url,
-            actualLevel = requested?.name ?: "bili-dash",
+            actualLevel = actualLevel,
             br = br,
             type = container,
             songMaxLevel = null,
-            // ★ 实际档位来自**文件后缀/编码**（`-192k.m4a` / DASH 的 bandwidth），
-            //   不是我们请求的那个 qn。匿名请求 qn=3 也只会拿到 192K ——
-            //   把 levelFromFile 标成 true，QualityAssessment 才会如实显示「已降级」。
+            // ★ 实际档位来自**文件后缀/编码**（`-192k.m4a` / DASH 的 `kind` + `bandwidth`），
+            //   不是服务端给的标签。标成 true，`QualityAssessment` 才会如实显示「已降级」。
             levelFromFile = true,
-            fallbackFromLevel = requested?.name?.takeIf { it != qualityLabel },
+            fallbackFromLevel = fallbackFromLevel,
             expiresAtMs = expiresAtMs,
         )
     }

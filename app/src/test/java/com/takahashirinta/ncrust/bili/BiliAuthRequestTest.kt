@@ -111,7 +111,7 @@ class BiliAuthRequestTest {
             if (url.contains("/x/frontend/finger/spi")) FINGER else """{"code":0}"""
         }
         BiliAuthStore.setMirrorForTest(BiliCredential(sessdata = "FAKESESS"))
-        BiliApi.videoAudioStream("BV1xx411c7mD", 1L)
+        BiliApi.videoAudioStreams("BV1xx411c7mD", 1L)
         assertEquals("取指纹那次只有身份", "SESSDATA=FAKESESS", seenCookies[0])
         assertEquals(
             "取流那次是身份 + 指纹，且指纹在后（顺序固定 ⇒ 可断言）",
