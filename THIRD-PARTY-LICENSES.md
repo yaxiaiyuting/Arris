@@ -1,6 +1,6 @@
 # 第三方依赖许可证审计（GPLv3 兼容性）
 
-审计对象：`Ncrust` fork 的 **app 模块 debug 运行时 classpath**（即真正会被编译进 APK 并随 GPLv3 分发的代码集合）。
+审计对象：`Arris`（Ncrust 的 GPLv3 fork）的 **app 模块 debug 运行时 classpath**（即真正会被编译进 APK 并随 GPLv3 分发的代码集合）。
 
 - 审计日期：2026-09-20
 - 审计方法：`./gradlew :app:dshDeps`（自定义 init script 打印 `debugRuntimeClasspath` 的全部已解析组件），再逐个读取 Gradle 缓存中该组件的 `*.pom` 的 `<licenses>` 声明。

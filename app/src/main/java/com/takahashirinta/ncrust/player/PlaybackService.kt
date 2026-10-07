@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * 修改说明（B2 FFmpeg 集成）：
@@ -229,7 +229,7 @@ class PlaybackService : MediaLibraryService() {
          * 合并它们会同时改掉通知栏的观感，而那是用户已经习惯的东西。
          */
         var onCoverTheme: ((CoverThemeColors?) -> Unit)? = null
-        var mediaTitle: String = "Ncrust"
+        var mediaTitle: String = "Arris"
         var mediaArtist: String = ""
         var mediaSongId: Long? = null
         var instance: PlaybackService? = null
@@ -704,7 +704,7 @@ class PlaybackService : MediaLibraryService() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 // v1.6.0 · D3：撤掉实时更新通知，别在状态栏留一条不动的进度条。
                 LiveUpdateNotifier.cancel(this)
-                mediaTitle = "Ncrust"
+                mediaTitle = "Arris"
                 mediaArtist = ""
                 mediaSongId = null
                 clearPendingNext()
@@ -770,7 +770,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaId = mediaMediaId,
             )
             playUrl(url, startPositionMs)
-        } else if (!isServiceStarted && mediaTitle != "Ncrust") {
+        } else if (!isServiceStarted && mediaTitle != "Arris") {
             updateNotify()
         }
 
@@ -864,7 +864,7 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun rootItem(): MediaItem = folderItem(ROOT_ID, "Ncrust")
+    private fun rootItem(): MediaItem = folderItem(ROOT_ID, "Arris")
 
     private fun folderItem(id: String, title: String): MediaItem = MediaItem.Builder()
         .setMediaId(id)
@@ -1027,8 +1027,8 @@ class PlaybackService : MediaLibraryService() {
                 ?.let { builder.setMediaId(it) }
         }
         val meta = MediaMetadata.Builder()
-        // mediaTitle 的哨兵值是 "Ncrust"（服务未起播时的默认值）—— 那不是歌名，不要写进去。
-        mediaTitle.takeIf { it.isNotBlank() && it != "Ncrust" }?.let { meta.setTitle(it) }
+        // mediaTitle 的哨兵值是 "Arris"（服务未起播时的默认值）—— 那不是歌名，不要写进去。
+        mediaTitle.takeIf { it.isNotBlank() && it != "Arris" }?.let { meta.setTitle(it) }
         mediaArtist.takeIf { it.isNotBlank() }?.let { meta.setArtist(it) }
         currentArtworkUrl?.takeIf { it.isNotBlank() }?.let { art ->
             CoverUrls.large(art)?.let { meta.setArtworkUri(Uri.parse(it)) }
@@ -1563,7 +1563,7 @@ class PlaybackService : MediaLibraryService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 "ncrust_playback",
-                "Ncrust 音乐播放",
+                "Arris 音乐播放",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "正在播放的音乐"
@@ -1898,7 +1898,7 @@ class PlaybackService : MediaLibraryService() {
         Log.d("PlaybackService", "onTaskRemoved")
         stopForeground(STOP_FOREGROUND_REMOVE)
         LiveUpdateNotifier.cancel(this)
-        mediaTitle = "Ncrust"
+        mediaTitle = "Arris"
         mediaArtist = ""
         mediaSongId = null
         clearPendingNext()

@@ -58,7 +58,7 @@ fun QrLoginDialog(
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var state by remember { mutableStateOf(QrState.Loading) }
     var pollJob by remember { mutableStateOf<Job?>(null) }
-    // 平板侧局域网配对服务：手机 Ncrust 扫同一个二维码时把 cookie 回传过来。
+    // 平板侧局域网配对服务：手机 Arris 扫同一个二维码时把 cookie 回传过来。
     var pairServer by remember { mutableStateOf<QrPairServer?>(null) }
 
     fun refresh() {
@@ -73,7 +73,7 @@ fun QrLoginDialog(
                 state = QrState.Failed
                 return@launch
             }
-            // 官方 App 扫码走轮询; Ncrust 手机扫码走局域网回传, 两条路谁先到用谁。
+            // 官方 App 扫码走轮询; Arris 手机扫码走局域网回传, 两条路谁先到用谁。
             pairServer = QrPairServer(key.unikey) { cookie -> onLoginSuccess(cookie) }.also { it.start() }
             // 二维码内容用带 chainId 的官方登录链接(官方 App 据此绑定确认会话);
             // 服务端一般不给图, 用 zxing 本地生成(官方客户端同款做法)。

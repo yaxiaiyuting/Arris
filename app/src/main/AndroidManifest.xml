@@ -28,7 +28,7 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Ncrust"
+        android:theme="@style/Theme.Arris"
         android:usesCleartextTraffic="true"
         tools:targetApi="36">
 
@@ -48,7 +48,7 @@
             android:exported="true"
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
-            android:theme="@style/Theme.Ncrust">
+            android:theme="@style/Theme.Arris">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

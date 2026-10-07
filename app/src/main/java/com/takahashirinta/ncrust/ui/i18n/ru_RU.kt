@@ -75,7 +75,7 @@ val ruRU = Strings(
         themeModeLight = "Светлая",
         themeColorNames = listOf("Ель", "Кобальт", "Багровый", "Янтарный", "Фиолетовый", "Белый"),
         languageSectionTitle = "Язык",
-        aboutButton = "О Ncrust",
+        aboutButton = "О Arris",
         storageSectionTitle = "Хранилище и кэш",
         clearCache = "Очистить кэш",
         clearCacheConfirm = "Очистить весь кэш?",
@@ -98,7 +98,7 @@ val ruRU = Strings(
 
         userIconDesc = "Пользователь",
         batteryTitle = "Фоновая работа",
-        batteryMessage = "Чтобы музыка играла в фоне, разрешите Ncrust работу в фоне (без ограничений оптимизации батареи) в настройках системы.",
+        batteryMessage = "Чтобы музыка играла в фоне, разрешите Arris работу в фоне (без ограничений оптимизации батареи) в настройках системы.",
         batteryAllow = "Открыть настройки",
         batteryLater = "Позже",
         batteryStatusAllowed = "Фоновая работа разрешена",
@@ -356,7 +356,7 @@ val ruRU = Strings(
     insertNextDesc = "Играть сразу после текущего трека",
 
     about = AboutStrings(
-        aboutTitle = "О Ncrust",
+        aboutTitle = "О Arris",
         aboutAppSubtitle = "Неофициальный клиент ncm",
         aboutSectionProject = "О проекте",
         aboutVersion = "Версия",
@@ -601,7 +601,7 @@ val ruRU = Strings(
             savedToGallery = "Сохранено в галерею",
             saveFailed = "Не удалось сохранить",
             chooserTitle = "Отправить через",
-            creditLine = "Из Ncrust",
+            creditLine = "Из Arris",
             shareUnavailable = "Нет приложения для отправки",
         ),
 
@@ -614,7 +614,7 @@ val ruRU = Strings(
             widgetPause = "Пауза",
             widgetPrevious = "Предыдущий трек",
             widgetNext = "Следующий трек",
-            widgetOpenApp = "Открыть Ncrust",
+            widgetOpenApp = "Открыть Arris",
         ),
 
 

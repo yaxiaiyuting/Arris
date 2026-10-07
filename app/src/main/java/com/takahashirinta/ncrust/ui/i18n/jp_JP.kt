@@ -74,7 +74,7 @@ val jpJP = Strings(
         themeModeLight = "ライト",
         themeColorNames = listOf("スプルース", "コバルト", "クリムゾン", "アンバー", "バイオレット", "ホワイト"),
         languageSectionTitle = "表示言語",
-        aboutButton = "Ncrustについて",
+        aboutButton = "Arrisについて",
         storageSectionTitle = "ストレージとキャッシュ",
         clearCache = "キャッシュを消去",
         clearCacheConfirm = "すべてのキャッシュを消去しますか？",
@@ -97,7 +97,7 @@ val jpJP = Strings(
 
         userIconDesc = "ユーザー",
         batteryTitle = "バックグラウンド実行",
-        batteryMessage = "バックグラウンドで音楽を再生し続けるには、システム設定で Ncrust のバックグラウンド実行（バッテリー最適化の対象外）を許可してください。",
+        batteryMessage = "バックグラウンドで音楽を再生し続けるには、システム設定で Arris のバックグラウンド実行（バッテリー最適化の対象外）を許可してください。",
         batteryAllow = "設定を開く",
         batteryLater = "後で",
         batteryStatusAllowed = "バックグラウンド実行を許可済み",
@@ -355,7 +355,7 @@ val jpJP = Strings(
     insertNextDesc = "現在の曲の直後に再生",
 
     about = AboutStrings(
-        aboutTitle = "Ncrustについて",
+        aboutTitle = "Arrisについて",
         aboutAppSubtitle = "ncm 非公式クライアント",
         aboutSectionProject = "プロジェクト情報",
         aboutVersion = "バージョン",
@@ -599,7 +599,7 @@ val jpJP = Strings(
             savedToGallery = "アルバムに保存しました",
             saveFailed = "保存に失敗しました",
             chooserTitle = "共有先",
-            creditLine = "Ncrust より",
+            creditLine = "Arris より",
             shareUnavailable = "共有できるアプリがありません",
         ),
 
@@ -612,7 +612,7 @@ val jpJP = Strings(
             widgetPause = "一時停止",
             widgetPrevious = "前の曲",
             widgetNext = "次の曲",
-            widgetOpenApp = "Ncrust を開く",
+            widgetOpenApp = "Arris を開く",
         ),
 
 

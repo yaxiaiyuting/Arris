@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v3.2.0 · P1：B 站扫码登录的**状态机**（有界轮询 / 取消不是失败 / 过期可区分）。

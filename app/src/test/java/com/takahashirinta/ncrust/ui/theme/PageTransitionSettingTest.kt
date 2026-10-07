@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v2.5.1 · F 回归单测：「页面切换动效」的设置持久化与迁移。

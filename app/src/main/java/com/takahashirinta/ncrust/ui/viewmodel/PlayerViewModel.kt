@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * 修改说明（Bug1「音质切换」）：
@@ -512,7 +512,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      *
      * 存在的理由：跨源串台在日志里原本**看不出来** —— 旧代码只打 `songId=…`，
      * 而两首歌的 id 都「是当前歌」，出问题的维度（音源）根本没被记下来。
-     * 现在每一环都带上 `音源:id`，`adb logcat -s NcrustTrack` 就能直接对照
+     * 现在每一环都带上 `音源:id`，`adb logcat -s NcrustTrack`（logcat tag 未改） 就能直接对照
      * 「起播的是谁 / 请求为谁发的 / 落到哪首上」。
      */
     private val TAG_TRACK = "NcrustTrack"

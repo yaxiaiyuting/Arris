@@ -75,7 +75,7 @@ val deDE = Strings(
         themeModeLight = "Hell",
         themeColorNames = listOf("Fichte", "Kobalt", "Karmesinrot", "Bernstein", "Violett", "Weiß"),
         languageSectionTitle = "Sprache",
-        aboutButton = "Über Ncrust",
+        aboutButton = "Über Arris",
         storageSectionTitle = "Speicher & Cache",
         clearCache = "Cache leeren",
         clearCacheConfirm = "Gesamten Cache leeren?",
@@ -98,7 +98,7 @@ val deDE = Strings(
 
         userIconDesc = "Benutzer",
         batteryTitle = "Hintergrundaktivität",
-        batteryMessage = "Damit Musik im Hintergrund weiterläuft, erlaube Ncrust in den Systemeinstellungen die Hintergrundaktivität (von der Akku-Optimierung ausgenommen).",
+        batteryMessage = "Damit Musik im Hintergrund weiterläuft, erlaube Arris in den Systemeinstellungen die Hintergrundaktivität (von der Akku-Optimierung ausgenommen).",
         batteryAllow = "Einstellungen öffnen",
         batteryLater = "Später",
         batteryStatusAllowed = "Hintergrundausführung erlaubt",
@@ -356,7 +356,7 @@ val deDE = Strings(
     insertNextDesc = "Sofort nach dem aktuellen Titel abspielen",
 
     about = AboutStrings(
-        aboutTitle = "Über Ncrust",
+        aboutTitle = "Über Arris",
         aboutAppSubtitle = "Inoffizieller ncm Client",
         aboutSectionProject = "Projektinfo",
         aboutVersion = "Version",
@@ -601,7 +601,7 @@ val deDE = Strings(
             savedToGallery = "In Galerie gespeichert",
             saveFailed = "Speichern fehlgeschlagen",
             chooserTitle = "Teilen über",
-            creditLine = "Von Ncrust",
+            creditLine = "Von Arris",
             shareUnavailable = "Keine App zum Teilen verfügbar",
         ),
 
@@ -614,7 +614,7 @@ val deDE = Strings(
             widgetPause = "Pause",
             widgetPrevious = "Vorheriger Titel",
             widgetNext = "Nächster Titel",
-            widgetOpenApp = "Ncrust öffnen",
+            widgetOpenApp = "Arris öffnen",
         ),
 
 

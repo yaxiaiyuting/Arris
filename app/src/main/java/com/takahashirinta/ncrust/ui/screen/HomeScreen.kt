@@ -133,7 +133,7 @@ fun HomeScreen(
     // 私人 FM 电台卡需要登录用户资料: 昵称(卡标题"xx的电台") + 头像(取强调色做封面)。
     // 电台卡**常驻**——资料拿不到也照常显示(标题回退通用文案), 不再因此整卡消失。
     var fmProfile by remember { mutableStateOf(ContentCache.userProfile) }
-    // 头像主色调(Palette), 取不到就回退中性底色(不借用 Ncrust 主题色)
+    // 头像主色调(Palette), 取不到就回退中性底色(不借用 Arris 主题色)
     var fmAccent by remember { mutableStateOf<Color?>(null) }
     val fmContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {

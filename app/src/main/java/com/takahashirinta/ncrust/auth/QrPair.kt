@@ -12,7 +12,7 @@ import javax.crypto.spec.SecretKeySpec
  *
  * 平板显示官方登录二维码（内容仍是标准 `music.163.com/login?codekey=<unikey>`）：
  *  - 官方 ncm App 扫 → 官方确认 unikey → 平板轮询拿到 cookie，走官方登录；
- *  - Ncrust 手机扫 → 解析出 unikey，经局域网把本机会话 cookie 回传给平板。
+ *  - Arris 手机扫 → 解析出 unikey，经局域网把本机会话 cookie 回传给平板。
  *
  * 二维码本身不含平板地址：手机用 UDP 广播按 unikey 询问，平板应答自己的 IP+TCP 端口。
  * 安全上以 unikey（屏幕可见的一次性短时密钥）派生 AES-128 加密 cookie，平板仅在

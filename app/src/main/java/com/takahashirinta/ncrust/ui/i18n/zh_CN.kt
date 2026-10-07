@@ -74,7 +74,7 @@ val zhCN = Strings(
         themeModeLight = "浅色",
         themeColorNames = listOf("云杉", "钴蓝", "绯红", "琥珀", "堇紫", "素白"),
         languageSectionTitle = "显示语言",
-        aboutButton = "关于 Ncrust",
+        aboutButton = "关于 Arris",
         storageSectionTitle = "存储与缓存",
         clearCache = "清除缓存",
         clearCacheConfirm = "确定清除全部缓存？",
@@ -97,7 +97,7 @@ val zhCN = Strings(
 
         userIconDesc = "用户",
         batteryTitle = "后台运行",
-        batteryMessage = "为了让音乐在后台持续播放，请在系统设置中允许 Ncrust 在后台运行（不受电池优化限制）。",
+        batteryMessage = "为了让音乐在后台持续播放，请在系统设置中允许 Arris 在后台运行（不受电池优化限制）。",
         batteryAllow = "去设置",
         batteryLater = "暂不",
         batteryStatusAllowed = "已允许后台运行",
@@ -355,7 +355,7 @@ val zhCN = Strings(
     insertNextDesc = "在当前曲目之后立即播放",
 
     about = AboutStrings(
-        aboutTitle = "关于 Ncrust",
+        aboutTitle = "关于 Arris",
         aboutAppSubtitle = "ncm 第三方客户端",
         aboutSectionProject = "项目信息",
         aboutVersion = "版本",
@@ -599,7 +599,7 @@ val zhCN = Strings(
             savedToGallery = "已保存到相册",
             saveFailed = "保存失败",
             chooserTitle = "分享到",
-            creditLine = "来自 Ncrust",
+            creditLine = "来自 Arris",
             shareUnavailable = "没有可用的分享应用",
         ),
 
@@ -612,7 +612,7 @@ val zhCN = Strings(
             widgetPause = "暂停",
             widgetPrevious = "上一首",
             widgetNext = "下一首",
-            widgetOpenApp = "打开 Ncrust",
+            widgetOpenApp = "打开 Arris",
         ),
 
 

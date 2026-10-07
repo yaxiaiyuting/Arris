@@ -1437,7 +1437,7 @@ data class WidgetStrings(
  * 1. **八种语言全部要填**（具名实参 + 默认值会让漏填静默通过，
  *    所以 `StringsConstructorBudgetTest` 的家族列表里也应把它加进去）；
  * 2. **`creditLine` 是印在分享图与复制文本上的署名**，
- *    它是这段内容唯一的出处标记 —— 翻译时不要把 "Ncrust" 这个名字改掉；
+ *    它是这段内容唯一的出处标记 —— 翻译时不要把 "Arris" 这个名字改掉；
  * 3. **`copied` / `savedToGallery` 只在真的成功之后才说**（对应 v2.6.0 的
  *    「提示与事实脱钩」修复）；失败一律走 `imageFailed` / `saveFailed`。
  */
@@ -1478,7 +1478,7 @@ data class ShareStrings(
     val saveFailed: String,
     /** 系统分享弹窗的标题。 */
     val chooserTitle: String,
-    /** 文本 / 图片末尾的署名行：「来自 Ncrust」（"Ncrust" 这个名字不翻译）。 */
+    /** 文本 / 图片末尾的署名行：「来自 Arris」（"Arris" 这个名字不翻译）。 */
     val creditLine: String,
     /** 设备上一个能接收 ACTION_SEND 的应用都没有。 */
     val shareUnavailable: String,

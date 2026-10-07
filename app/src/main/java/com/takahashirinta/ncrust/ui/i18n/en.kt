@@ -75,7 +75,7 @@ val en = Strings(
         themeModeLight = "Light",
         themeColorNames = listOf("Spruce", "Cobalt", "Crimson", "Amber", "Violet", "White"),
         languageSectionTitle = "Language",
-        aboutButton = "About Ncrust",
+        aboutButton = "About Arris",
         storageSectionTitle = "Storage & Cache",
         clearCache = "Clear Cache",
         clearCacheConfirm = "Clear all cached data?",
@@ -98,7 +98,7 @@ val en = Strings(
 
         userIconDesc = "User",
         batteryTitle = "Background activity",
-        batteryMessage = "To keep music playing in the background, allow Ncrust to run in the background (unrestricted by battery optimization) in system settings.",
+        batteryMessage = "To keep music playing in the background, allow Arris to run in the background (unrestricted by battery optimization) in system settings.",
         batteryAllow = "Open settings",
         batteryLater = "Not now",
         batteryStatusAllowed = "Background allowed",
@@ -356,7 +356,7 @@ val en = Strings(
     insertNextDesc = "Play immediately after the current track",
 
     about = AboutStrings(
-        aboutTitle = "About Ncrust",
+        aboutTitle = "About Arris",
         aboutAppSubtitle = "Unofficial ncm client",
         aboutSectionProject = "Project Info",
         aboutVersion = "Version",
@@ -601,7 +601,7 @@ val en = Strings(
             savedToGallery = "Saved to gallery",
             saveFailed = "Could not save the image",
             chooserTitle = "Share via",
-            creditLine = "From Ncrust",
+            creditLine = "From Arris",
             shareUnavailable = "No app available to share",
         ),
 
@@ -614,7 +614,7 @@ val en = Strings(
             widgetPause = "Pause",
             widgetPrevious = "Previous track",
             widgetNext = "Next track",
-            widgetOpenApp = "Open Ncrust",
+            widgetOpenApp = "Open Arris",
         ),
 
 

@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * 修改说明：
@@ -31,7 +31,7 @@ import com.takahashirinta.ncrust.ui.theme.color.CoverPaletteExtractor
  *
  * ## 为什么必须整体算好再交给 UI
  *
- * 铁律 3：非核心计算必须在后台线程。而 `NcrustTheme` 是在**组合期**求值的 ——
+ * 铁律 3：非核心计算必须在后台线程。而 `NcrustTheme`（类名未改）是在**组合期**求值的 ——
  * 若把「种子色 → 配色」这一步放在 `remember(seed, isDark)` 里做，
  * 那就是在主线程的组合期解 HCT（十余次 CAM16 求解）。放在后台一次算完，
  * UI 侧只剩一次按 [forMode] 取字段。

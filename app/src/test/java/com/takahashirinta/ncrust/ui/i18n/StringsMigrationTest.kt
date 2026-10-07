@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v2.5.3 · P0：**`Strings` 拆分的迁移单测**。
@@ -157,6 +157,9 @@ class StringsMigrationTest {
                 }
                 compared++
                 if (expected != actual) {
+                    // v3.4.8 品牌改名：只有「把旧品牌串换成新品牌串」这一种差异被放行，
+                    // 且改完必须**逐字**等于旧值 —— 任何别的改动仍然会红。
+                    if (actual == expected.replace(BRAND_OLD, BRAND_NEW)) continue
                     problems += "$code: `$path`\n      旧 = $expected\n      新 = $actual"
                 }
             }
@@ -418,6 +421,21 @@ class StringsMigrationTest {
     }
 
     private companion object {
+        /**
+         * v3.4.8 的品牌改名（Ncrust → Arris）。
+         *
+         * ## 为什么是「替换后逐字相等」而不是「跳过这几个路径」
+         *
+         * 跳过路径 = 这几条从此没人看，下一次真被改坏也发现不了。
+         * 这里放行的判据是**可计算的**：`新值 == 旧值.replace(旧品牌, 新品牌)`。
+         * 于是「只换了品牌名」被放行，而「顺手改了标点/多删了一个字」照样红。
+         *
+         * 涉及 24 个路径（8 语言 × 3 条文案：`aboutTitle` / `aboutButton` / `batteryMessage`）
+         * —— 与 `RenameGuardTest` 里「i18n 里不该再有旧品牌名」那条互为印证。
+         */
+        const val BRAND_OLD = "Ncrust"
+        const val BRAND_NEW = "Arris"
+
         /**
          * v3.3.2：**品牌改名**（网易云 / NetEase → `ncm`，QQ 音乐 / QQ Music → `qm`）
          * 导致的「跨语言全同」新增路径。分两类，都只与品牌串有关：

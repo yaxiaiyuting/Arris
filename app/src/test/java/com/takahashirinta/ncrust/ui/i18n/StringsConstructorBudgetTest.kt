@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v2.3.0 起：**`Strings` 的构造参数预算**（dex 单方法 255 参数寄存器）。
@@ -868,7 +868,7 @@ class StringsConstructorBudgetTest {
         val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
         presets.forEach { s ->
             assertTrue("${s.widget.widgetEmpty} 是空串", s.widget.widgetEmpty.isNotBlank())
-            assertTrue("${s.widget.widgetOpenApp} 丢了品牌名", s.widget.widgetOpenApp.contains("Ncrust"))
+            assertTrue("${s.widget.widgetOpenApp} 丢了品牌名", s.widget.widgetOpenApp.contains("Arris"))
         }
     }
 }

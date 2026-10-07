@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v3.3.0 · 桌面播放卡片（App Widget）：**一次渲染所需的全部数据**，以及它的进程内缓存。
@@ -48,7 +48,7 @@ data class WidgetSnapshot(
         /**
          * 拿不到主色时的兜底：云杉绿，与 `PlaybackService.currentDominantColor` 的初值一致。
          *
-         * 卡片上**必须有颜色** —— Kanesumi 风格里那一抹主色是「像 Ncrust」的唯一手段
+         * 卡片上**必须有颜色** —— Kanesumi 风格里那一抹主色是「像 Arris」的唯一手段
          * （RemoteViews 画不了波形、画不了圆角、画不了渐变），没有它卡片就是一块黑砖。
          *
          * 注意这里是 `val` 而不是 `const val`：`0xFF1DB954.toInt()` 是函数调用，

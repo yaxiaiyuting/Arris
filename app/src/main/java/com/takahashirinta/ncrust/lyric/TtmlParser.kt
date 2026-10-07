@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  */
 
@@ -14,7 +14,7 @@ import androidx.compose.runtime.Immutable
  * TTML 文件 <head> 里的 AMLL 元数据（v1.9.0）。
  *
  * AMLL TTML DB 的每个文件都带一组 `<amll:meta key="..." value="..."/>`，
- * 其中 [ncmMusicId] 是**ncm 歌曲 ID**，与 Ncrust 的 `songId` 同一套编号 ——
+ * 其中 [ncmMusicId] 是**ncm 歌曲 ID**，与 Arris 的 `songId` 同一套编号 ——
  * 这是「按 songId 直接拉取」能成立的根据，也是校验「拉回来的确实是这首歌」的唯一凭据。
  */
 @Immutable

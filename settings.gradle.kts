@@ -22,12 +22,12 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Ncrust"
+rootProject.name = "Arris"
 include(":app")
 include(":benchmark")
 
 // Kanesumi-sec-a 通过组合构建接入。这样 Kanesumi 侧源码改动不需要 publish 就能被
-// Ncrust 增量构建看到,迁移期间来回改两边 API 最省事。
+// Arris 增量构建看到,迁移期间来回改两边 API 最省事。
 // 显式 dependencySubstitution 让 Kanesumi 无需配 maven-publish 或设 group/version。
 // 未来 Kanesumi 上 Maven Central 时,只需删掉整个 includeBuild 块,
 // app/build.gradle.kts 里的坐标一字不改就能切。

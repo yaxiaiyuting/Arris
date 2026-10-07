@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * 修改说明：
@@ -80,12 +80,12 @@ fun AboutScreen(onBack: () -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher),
-                            contentDescription = "Ncrust",
+                            contentDescription = "Arris",
                             modifier = Modifier.size(80.dp),
                             contentScale = ContentScale.Fit
                         )
                         Spacer(Modifier.height(16.dp))
-                        MetroText("Ncrust", color = accent, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
+                        MetroText("Arris", color = accent, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
                         MetroText(VERSION, color = accent.copy(alpha = 0.72f), style = TextStyle(fontSize = 14.sp))
                         Spacer(Modifier.height(6.dp))
                         MetroText(s.aboutAppSubtitle, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
@@ -102,7 +102,7 @@ fun AboutScreen(onBack: () -> Unit) {
                         AboutRow(s.aboutDeveloperOriginal, "Takahashi_Rinta")
                         AboutRow(s.aboutDeveloperFork, "yaxiaiyuting")
                         AboutRow(s.aboutLicense, s.aboutLicenseGplWithMit)
-                        AboutRow(s.aboutRepositoryFork, "github.com/yaxiaiyuting/Ncrust")
+                        AboutRow(s.aboutRepositoryFork, "github.com/yaxiaiyuting/Arris")
                         AboutRow(s.aboutRepositoryOriginal, "github.com/GuitaristRin/Ncrust")
                         Spacer(Modifier.height(20.dp))
                     }

@@ -26,7 +26,7 @@ val jpMY = Strings(
         settingsGroupLyricsSubtitle = "譯、逐字、表示 の 様",
         settingsGroupStorageTitle = "貯 と 藏",
         settingsGroupStorageSubtitle = "貯 音 と 久良 の 表示",
-        settingsGroupAboutTitle = "Ncrust 之事",
+        settingsGroupAboutTitle = "Arris 之事",
         settingsGroupAboutSubtitle = "版 と 項目 の 情報",
         bilibiliEnabledLabel = "Bilibili 音源",
         bilibiliEnabledDescription =
@@ -74,7 +74,7 @@ val jpMY = Strings(
         themeModeLight = "明",
         themeColorNames = listOf("樅", "藍", "紅", "琥珀", "菫", "白"),
         languageSectionTitle = "表示 言語",
-        aboutButton = "Ncrust 紹介",
+        aboutButton = "Arris 紹介",
         storageSectionTitle = "ストレージとキャッシュ",
         clearCache = "キャッシュを消去",
         clearCacheConfirm = "凡 貯 消 可",
@@ -97,7 +97,7 @@ val jpMY = Strings(
 
         userIconDesc = "利用者",
         batteryTitle = "背景 行",
-        batteryMessage = "背景 樂 續 奏 爲 系統設定 於 Ncrust 背景 行 (電池 最適化 外) 許",
+        batteryMessage = "背景 樂 續 奏 爲 系統設定 於 Arris 背景 行 (電池 最適化 外) 許",
         batteryAllow = "設定 開",
         batteryLater = "後",
         batteryStatusAllowed = "背景 行 許容済",
@@ -355,7 +355,7 @@ val jpMY = Strings(
     insertNextDesc = "現在曲 直後 奏",
 
     about = AboutStrings(
-        aboutTitle = "Ncrust 紹介",
+        aboutTitle = "Arris 紹介",
         aboutAppSubtitle = "王易雲音楽 第三者 客",
         aboutSectionProject = "項目 情報",
         aboutVersion = "版",
@@ -598,7 +598,7 @@ val jpMY = Strings(
             savedToGallery = "アルバムに納めたり",
             saveFailed = "納め得ず",
             chooserTitle = "頒つ先",
-            creditLine = "Ncrust より",
+            creditLine = "Arris より",
             shareUnavailable = "頒つべきアプリなし",
         ),
 
@@ -611,7 +611,7 @@ val jpMY = Strings(
             widgetPause = "止めよ",
             widgetPrevious = "先の曲",
             widgetNext = "次の曲",
-            widgetOpenApp = "Ncrust を開け",
+            widgetOpenApp = "Arris を開け",
         ),
 
 

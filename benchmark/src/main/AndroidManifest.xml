@@ -5,7 +5,7 @@
     <instrumentation
         android:name="androidx.test.runner.AndroidJUnitRunner"
         android:targetPackage="com.takahashirinta.ncrust"
-        android:label="Ncrust Macrobenchmark" />
+        android:label="Arris Macrobenchmark" />
 
     <!--
         benchmark-macro-junit4 的 manifest 会注入 READ/WRITE_EXTERNAL_STORAGE，

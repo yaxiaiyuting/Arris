@@ -10,7 +10,7 @@ import android.provider.Settings
 /**
  * 后台活动授权（电池优化白名单）。
  *
- * Ncrust 依赖前台播放服务在熄屏后继续跑，但 ColorOS / MIUI 等 ROM 会主动清理
+ * Arris 依赖前台播放服务在熄屏后继续跑，但 ColorOS / MIUI 等 ROM 会主动清理
  * 后台应用，表现为"后台被杀、重进又走一遍 splash"。把本应用加入系统电池优化
  * 白名单（设置里的"允许后台活动 / 不受电池优化限制"）能显著改善存活率。
  *

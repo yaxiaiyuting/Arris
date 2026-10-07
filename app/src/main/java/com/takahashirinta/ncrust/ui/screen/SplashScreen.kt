@@ -46,7 +46,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             MetroText(
-                "Ncrust",
+                "Arris",
                 color = Color(0xFF1DB954),
                 style = TextStyle(fontSize = 48.sp, fontWeight = FontWeight.ExtraBold)
             )

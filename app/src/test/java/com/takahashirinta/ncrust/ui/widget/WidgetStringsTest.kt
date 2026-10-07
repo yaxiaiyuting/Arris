@@ -2,7 +2,7 @@
  * Ncrust —— ncm 第三方客户端
  * 原始代码 Copyright (c) 2026 Takahashi_Rinta，以 MIT 许可发布（全文见仓库根目录 LICENSE-MIT）。
  *
- * 本文件属于本 Fork（https://github.com/yaxiaiyuting/Ncrust）的修改部分，
+ * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * v3.3.0 · 桌面播放卡片（App Widget）：**WidgetStrings 组在 8 种语言里都可用**。
@@ -26,6 +26,7 @@ import com.takahashirinta.ncrust.ui.i18n.ruRU
 import com.takahashirinta.ncrust.ui.i18n.zhCN
 import com.takahashirinta.ncrust.ui.i18n.zhTW
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -92,10 +93,16 @@ class WidgetStringsTest {
     }
 
     @Test
-    fun `打开应用的描述里保留品牌名 Ncrust（不翻译品牌）`() {
+    fun `打开应用的描述里保留品牌名 Arris（不翻译品牌）`() {
+        // 品牌名在所有语言里都不翻译 —— v3.4.8 的改名把 Ncrust 换成 Arris，
+        // 这条断言跟着换，但「必须带品牌名」这条纪律一个字没动。
         presets.forEach { (code, strings) ->
             assertTrue(
                 "$code 的 widgetOpenApp 丢了品牌名：${strings.widget.widgetOpenApp}",
+                strings.widget.widgetOpenApp.contains("Arris"),
+            )
+            assertFalse(
+                "$code 的 widgetOpenApp 还留着旧品牌名：${strings.widget.widgetOpenApp}",
                 strings.widget.widgetOpenApp.contains("Ncrust"),
             )
         }
