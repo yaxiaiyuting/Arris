@@ -415,8 +415,17 @@ android {
         // 内容：删掉 `frameClockMs` / `clockOffsetMs` / `pendingArrivalMs` 三个字段 ——
         //   相位的分子改成由帧循环传入的**真实帧时间戳**与「最后一根被消费的柱的到达时刻」
         //   相减（两个量同源、都不经过本类累加），到达帧不再被清零、位移不再丢。
-        versionCode = 69
-        versionName = "3.4.7-gpl"
+        // v3.4.8（70）：**改名 + 换图标 + 三个用户报的 B 站问题**。
+        //   ① 品牌：Ncrust → **Arris**（显示名 / 8 语言 / 图标 / README）。
+        //      ⚠️ `applicationId` / `namespace` / 24 个 prefs 文件名**一个都没动**
+        //      （有 `RenameGuardTest` 钉着）⇒ 可直接覆盖安装 v3.4.7，数据零迁移。
+        //   ② 图标：正圆唱片 + 内嵌朝右直角三角 + 圆心唱片孔；三层自适应
+        //      （含 Android 13+ 的 `<monochrome>`），并补上 **API 24/25 的密度桶回落**
+        //      —— 仓库此前只有 `mipmap-anydpi-v26`，Android 7.x 上 launcher 拿不到图标。
+        //   ③ B 站：大会员 Hi-Res 无损（读 `dash.flac.audio`，此前从没被读）、
+        //      字幕语言可选（此前写死中文优先）、音质上限与优先 FLAC 两个用户参数。
+        versionCode = 70
+        versionName = "3.4.8-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
