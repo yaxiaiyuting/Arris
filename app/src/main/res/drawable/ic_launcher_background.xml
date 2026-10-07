@@ -1,10 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arris 应用图标 · 背景层（满幅纯色）
+  由 arris-icons/install_into_repo.py 生成（**改图标请改生成器，不要手改本文件**）。
+
+  几何：108×108dp 画布。系统绘制自适应图标时把图层按 1/1.5 缩放居中、蒙版按原尺寸
+  画 ⇒ **实际可见区是中心 72×72dp**（圆蒙版 = 直径 72dp 的圆）。本图最大半径 30dp，
+  连 72dp 圆都不出，比「72×72 方形安全区」更严。
+
+  整块字形是**一条** fill-rule="evenodd" 的 path，靠「被几条子路径包住」决定填充：
+      圆盘正中心（那个点）：圆盘① + 三角② + 点③ = 奇 → 填充 ⇒ 唱片中心孔
+      三角内其余部分      ：圆盘① + 三角②       = 偶 → 挖空 ⇒ 播放三角
+      三角之外的圆盘      ：圆盘①               = 奇 → 填充
+  ⚠️ 所以**不能把三角右移到圆心之外** —— 那样点会变成「①+②=偶」而彻底消失。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-        android:width="108dp"
-        android:height="108dp"
-        android:viewportWidth="108"
-        android:viewportHeight="108">
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
     <path
-        android:fillColor="#1DB954"
-        android:pathData="M0,0h108v108h-108z" />
-    </vector>
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+</vector>

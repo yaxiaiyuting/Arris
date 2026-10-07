@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Arris 应用图标 · 前景层（圆盘 · 播放 · 唱片中心孔）
+  Arris 应用图标 · 单色层（Android 13+ 主题图标，系统按壁纸着色）
   由 arris-icons/install_into_repo.py 生成（**改图标请改生成器，不要手改本文件**）。
 
   几何：108×108dp 画布。系统绘制自适应图标时把图层按 1/1.5 缩放居中、蒙版按原尺寸
@@ -19,7 +19,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#F2F4F8"
+        android:fillColor="#FFFFFF"
         android:fillType="evenOdd"
         android:pathData="M24,54 A30,30 0 1 0 84,54 A30,30 0 1 0 24,54 Z M45,37 L77,54 L45,71 Z" />
 </vector>

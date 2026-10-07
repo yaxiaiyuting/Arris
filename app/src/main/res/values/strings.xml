@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Ncrust</string>
+    <!-- launcher 名 / 任务管理器名 / 桌面小组件名都走这一条。 -->
+    <string name="app_name">Arris</string>
 </resources>

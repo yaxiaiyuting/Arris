@@ -4,7 +4,7 @@
 
   为什么自己写 progressDrawable 而不是用宿主主题的 Horizontal ProgressBar：
   宿主是 launcher，它的主题色由**用户的桌面主题**决定（可能是粉色、可能是金色），
-  那样这张卡片就不再是 Ncrust 的卡片了。这里固定成「半透明白轨 + 近白进度」，
+  那样这张卡片就不再是 Arris 的卡片了。这里固定成「半透明白轨 + 近白进度」，
   直角、无圆角，与卡片其余部分同族。
 
   @android:id/background 与 @android:id/progress 是 ProgressBar 约定的两个 item id，
