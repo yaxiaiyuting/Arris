@@ -52,6 +52,8 @@ import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.takahashirinta.ncrust.BuildConfig
+import com.takahashirinta.ncrust.bili.BiliAuthStore
+import com.takahashirinta.ncrust.bili.BiliPrefs
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineLibrary
@@ -379,6 +381,23 @@ class PlaybackService : MediaLibraryService() {
         // 而 Visualizer 那条路要 RECORD_AUDIO，不能用）。
         // 开关关掉时音频线程侧只剩一次 volatile 读，等于零开销。
         VisualizerSetting.read(this)
+        // v3.4.8：**B 站的三个进程内镜像也必须在这里播种**。
+        //
+        // 与 `VisualizerSetting.read(this)` 同一类：它们是「拿不到 Context 的调用点
+        // 读的进程内镜像」，而 `PlaybackService` 是**除 MainActivity 之外唯一的进程入口** ——
+        // Android Auto / 车机绑定、媒体按钮、通知栏恢复都能在**没有 Activity** 的情况下
+        // 把进程拉起来。那时 `MainActivity.onCreate` 从没跑过，三个镜像全在默认值上：
+        //
+        // | 镜像 | 未播种时的表现 |
+        // |---|---|
+        // | `BiliPrefs.isEnabled` | 恒 false ⇒ **B 站曲目直接返回 null、整首跳过**（用户听到的是「点了没反应」） |
+        // | `BiliPrefs.qualityCap` | 恒 auto ⇒ 用户设的「仅 192K 省流」失效 |
+        // | `BiliPrefs.preferFlac` | 恒 true ⇒ 省流用户拿到 2~3 Mbps 的 FLAC |
+        // | `BiliAuthStore` | 恒匿名 ⇒ **大会员也拿不到 Hi-Res**（本次修复在车机上完全不生效） |
+        //
+        // 两者都是幂等的（只读盘 + 写 volatile），与 MainActivity 里的调用重复执行无害。
+        BiliPrefs.init(this)
+        BiliAuthStore.init(this)
         val renderersFactory = VisualizerRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
