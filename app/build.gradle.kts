@@ -433,8 +433,17 @@ android {
         //   最近 5 个 tag 的最大值 70（v3.4.8-gpl）/ dist 里 aapt2 实测的最大值 69
         //   （v3.4.7 是**最后一个真正进了 dist 的包**，v3.4.8 只有 tag、没有制品）
         //   / 工作区当前值 70 ⇒ 三源最大 70 ⇒ 本版取 **71**。
-        versionCode = 71
-        versionName = "3.4.9-gpl"
+        // v3.4.10（72）：**v3.4.9 发布当天用户真机试用抓出的三个 bug**（都是可以让功能
+        //   完全失效的那种）：① 扫码登录 cookie 造出来但没落盘（永远「未登录」）；
+        //   ② 续期判据要求 refreshKey/refreshToken，而扫码路两个都是空的 ⇒ 明明能续
+        //   被判成不可续期；③ 续期借道登录通道、被硬塞 `tmeLoginMethod=3` ⇒
+        //   每一次续期都被服务端拒（A/B 实测：去掉就是 code=0 + 新票）。
+        //   ⚠️ 不改持久化结构与包名，可直接覆盖安装 v3.4.9。
+        //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ——
+        //   最近 5 个 tag 最大 71（v3.4.9-gpl 已正式发布且被下载过 ⇒ 按纪律**不动它**）
+        //   / dist 的 aapt2 实测最大 69 / 工作区 71 ⇒ 取 **72**。
+        versionCode = 72
+        versionName = "3.4.10-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
