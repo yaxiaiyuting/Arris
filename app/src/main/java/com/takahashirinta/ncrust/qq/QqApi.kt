@@ -825,6 +825,113 @@ object QqApi {
         return SendCodeAttempt(QqPhoneLogin.classifySend(code), securityUrl, errMsg)
     }
 
+    // ---------------- QQ 音乐官方 App 扫码登录（v3.4.9） ----------------
+
+    /**
+     * 一张「QQ 音乐 App 扫码」用的二维码。
+     *
+     * @property png 二维码图片（PNG 字节，已从 `data:image/png;base64,` 解出来）。
+     * @property qrCodeId 91 字符的 ID。**两个用途，缺一不可**：
+     *   ① MQTT 的话题名后缀（`management.qrcode_login/{id}`）；
+     *   ② 换凭证时 `param.qrCodeID`。
+     */
+    data class QqScanQrCode(val png: ByteArray, val qrCodeId: String) {
+        // ByteArray 在 data class 里是引用语义 —— 显式覆盖，免得将来有人拿它比较时
+        // 得到「同一张二维码却不相等」的诡异结果（与 QqQrClient.QrCode 同一条纪律）。
+        override fun equals(other: Any?): Boolean =
+            this === other || (other is QqScanQrCode && qrCodeId == other.qrCodeId && png.contentEquals(other.png))
+
+        override fun hashCode(): Int = 31 * png.contentHashCode() + qrCodeId.hashCode()
+    }
+
+    /**
+     * 申请二维码。失败返回 null（界面据此显示「二维码获取失败，请重试」）。
+     *
+     * 解析两处：`data.qrcode` 是 `data:image/png;base64,<b64>`（**要剥前缀再解 base64**，
+     * 直接把整串喂给 base64 解码会得到一个坏 PNG／抛异常），`data.qrcodeID` 是那个 ID。
+     */
+    suspend fun requestScanQrCode(): QqScanQrCode? {
+        val response = QqClient.musicu(QqRequests.createQrCode(), appIdentity = true)
+            ?: return null
+        if (response.optInt("code", -1) != 0) {
+            Log.w(TAG, "CreateQRCode code=${response.optInt("code", -1)}")
+            return null
+        }
+        val data = response.optJSONObject("data") ?: return null
+        val raw = data.optString("qrcode").takeIf { it.isNotEmpty() } ?: return null
+        val id = data.optString("qrcodeID").takeIf { it.isNotEmpty() } ?: return null
+        val png = runCatching {
+            android.util.Base64.decode(raw.substringAfter(',', raw), android.util.Base64.DEFAULT)
+        }.getOrElse {
+            Log.w(TAG, "CreateQRCode 二维码不是合法 base64", it)
+            return null
+        }
+        if (png.size < 8 || png[0] != 0x89.toByte() || png[1] != 'P'.code.toByte()) {
+            // 与 QqQrClient.requestQr 同一条守卫：拿到 HTML 错误页时不许当二维码画出来。
+            Log.w(TAG, "CreateQRCode 返回的不是 PNG（${png.size} 字节）")
+            return null
+        }
+        Log.i(TAG, "CreateQRCode ok png=${png.size}B qrCodeId=${id.length}字符")
+        return QqScanQrCode(png, id)
+    }
+
+    /** 扫码换凭证的结局。 */
+    data class QrScanLoginAttempt(
+        val outcome: QqPhoneLogin.LoginOutcome,
+        val cookie: String? = null,
+    )
+
+    /**
+     * 用 MQTT 推送回来的凭据换**完整凭证 JSON** 并落盘续期凭证（v3.4.9）。
+     *
+     * ## 这是「扫码也能续期」的全部秘密
+     *
+     * 换回来的 `data` 与手机号登录**完全同形**（同一个 `Login` 方法），所以：
+     * cookie 走 [QqPhoneLogin.cookieFromCredential]（同一个读取器），
+     * 续期凭证走 [QqRefreshCredential.fromLoginData]（同一个解析器），
+     * 之后由 [QqTokenRefresher] 自动续期 —— **这一条链路上没有任何新逻辑**，
+     * 只是终于拿到了那份 JSON。
+     *
+     * 落盘顺序与手机号登录保持一致（先清续期凭证再落 cookie，见
+     * [QqAuthStore.saveCookie] 的注释）：避免换账号时把上一个账号的凭证留给下一次续期。
+     */
+    suspend fun loginWithScanCode(
+        qrCodeId: String,
+        uin: String,
+        token: String,
+    ): QrScanLoginAttempt {
+        val request = QqRequests.scanLogin(qrCodeId, token, uin)
+        // ⚠️ 必须走 musicuLogin（comm.tmeLoginType = 6 的注入点在 QqClient 里，
+        // 见 QqClient.musicuScanLogin）—— 用普通 musicu 会少那个字段，
+        // 服务端会按手机号登录去解释这个 param 并静默失败。
+        val response = QqClient.musicuScanLogin(request) ?: return QrScanLoginAttempt(
+            QqPhoneLogin.LoginOutcome.FAILED,
+        )
+        val reqCode = response.optInt("code", -1)
+        val outcome = QqPhoneLogin.classifyLogin(reqCode)
+        Log.i(TAG, "Login(qr-scan) -> req.code=$reqCode outcome=$outcome")
+        if (outcome != QqPhoneLogin.LoginOutcome.OK) return QrScanLoginAttempt(outcome)
+        val data = response.optJSONObject("data")
+        val cookie = QqPhoneLogin.cookieFromCredential(data)
+        if (cookie == null) {
+            Log.w(TAG, "Login(qr-scan) 成功但凭证不成形，拒绝落盘")
+            return QrScanLoginAttempt(QqPhoneLogin.LoginOutcome.FAILED)
+        }
+        val ctx = QqClient.appContextOrNull()
+        if (ctx != null) {
+            QqRefreshStore.clear(ctx)
+            QqRefreshCredential.fromLoginData(data)?.let { credential ->
+                val saved = QqRefreshStore.save(ctx, credential)
+                Log.i(
+                    TAG,
+                    "Login(qr-scan) 已保存续期凭证 canRefresh=${saved.isRefreshable()} {" +
+                        saved.describe() + "}",
+                )
+            }
+        }
+        return QrScanLoginAttempt(QqPhoneLogin.LoginOutcome.OK, cookie)
+    }
+
     /**
      * 用验证码换凭证。
      *

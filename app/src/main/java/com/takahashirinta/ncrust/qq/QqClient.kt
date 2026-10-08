@@ -236,6 +236,36 @@ object QqClient {
     /** `comm.tmeLoginType`：0 = 手机号（1 = 微信，2 = QQ）。 */
     private const val LOGIN_TYPE_PHONE = 0
 
+    /** `comm.tmeLoginType`：6 = 手机扫码（见 [musicuScanLogin]）。 */
+    private const val LOGIN_TYPE_QR_SCAN = 6
+
+    /**
+     * 「QQ 音乐官方 App 扫码」换凭证专用通道（v3.4.9）。
+     *
+     * 与 [musicuLogin] 只差**一个字段值**，但那一个字段是硬必需的：
+     * `comm.tmeLoginType` 从 0（手机号）换成 **6（手机扫码）**。
+     * 服务端按它决定「怎么解释这个 `param`」——
+     * 少了它（或写成 0）服务端**不报参数错**：它会去找 `code` / `phoneNo`，
+     * 找不到就回一个换不出票的结果。表现是「扫了码、确认了、然后登录失败」，
+     * 而日志里只有一个 `1000`。
+     *
+     * 不发 Cookie（与登录同一条纪律：这次交互的前提就是「还没有身份」）。
+     */
+    suspend fun musicuScanLogin(request: JSONObject): JSONObject? =
+        withContext(Dispatchers.IO) {
+            val ctx = appContext ?: return@withContext null
+            val body = JSONObject()
+                .put("comm", appComm(ctx).put("tmeLoginType", LOGIN_TYPE_QR_SCAN))
+                .put("req", request)
+            execute(
+                ctx,
+                body,
+                request.optString("module"),
+                appIdentity = true,
+                sendCookie = false,
+            )
+        }
+
     private fun execute(
         ctx: Context,
         body: JSONObject,

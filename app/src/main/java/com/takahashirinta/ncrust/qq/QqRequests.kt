@@ -345,4 +345,75 @@ internal object QqRequests {
 
     /** `psrf_access_token_expiresAt` 的 cookie 字段名（[refreshCredential] 的 `expired_in` 兜底来源）。 */
     private const val KEY_ACCESS_TOKEN_TTL = "psrf_access_token_expiresAt"
+
+    // ---------------- QQ 音乐官方 App 扫码登录（v3.4.9） ----------------
+
+    const val CREATE_QR_MODULE = "music.login.LoginServer"
+    const val CREATE_QR_METHOD = "CreateQRCode"
+
+    /**
+     * 申请一张「QQ 音乐 App 扫码」用的二维码（v3.4.9）。
+     *
+     * ## 为什么这个端点值得做
+     *
+     * 它是**唯一**能让扫码登录也拿到续期凭证的路（见 [QqRefreshCredential] 的能力边界表）：
+     * 官方 App 扫码确认后，服务端把 `qqmusic_uin` + `qqmusic_key` 通过 MQTT 推给我们，
+     * 再用 [scanLogin] 就能换到完整凭证 JSON。QQ 互联那条路只能拿到 cookie。
+     *
+     * ## 实测（2026-10-08，本机）
+     *
+     * 用**本应用现有的客户端身份**（`ct=11` / `cv=14090008`，即 [QqClient.appComm] 那一套）
+     * 请求，返回 `code=0` + 91 字符 `qrcodeID` + `data:image/png;base64,…` 的二维码。
+     * 所以这里不为它另配一套 `comm` —— 复用现有客户端身份，
+     * **少一处会与主身份分叉的配置**。
+     *
+     * 匿名可调（`uin=0`）、不需要任何登录态 —— 这正是「登录」这个动作的前提。
+     */
+    fun createQrCode(): JSONObject = JSONObject()
+        .put("module", CREATE_QR_MODULE)
+        .put("method", CREATE_QR_METHOD)
+        .put(
+            "param",
+            JSONObject()
+                .put("tmeAppID", "qqmusic")
+                .put("ct", QR_COMM_CT)
+                .put("cv", QR_COMM_CV),
+        )
+
+    /**
+     * 用扫码推送回来的 `qqmusic_key` 换**完整凭证 JSON**（v3.4.9）。
+     *
+     * 三步里最关键的一步：它是「扫码」与「可续期」之间的那座桥 ——
+     * 换回来的 `data` 里带 `refreshKey` / `refreshToken`，直接就能喂给
+     * [QqRefreshCredential.fromLoginData]。QQ 互联那条路没有这一步，
+     * 所以它拿不到续期凭证。
+     *
+     * ## `comm.tmeLoginType = 6` 是**硬必需**
+     *
+     * 服务端按它区分「这次 `Login` 是从哪条路来的」。少了它（或写错成 0/1/2），
+     * 服务端**不会报参数错** —— 它会按手机号登录那条路去解释 `param`，
+     * 而 `param` 里既没有 `code` 也没有 `phoneNo`，于是回一个换不出票的结果。
+     * 数值 6 来自参考实现的 `_handle_mobile_message`，不是猜的。
+     *
+     * @param qrCodeId [createQrCode] 返回的那个 91 字符 ID（**也是 MQTT 话题名的后缀**）。
+     * @param token 推送里 `cookies.qqmusic_key.value`。
+     * @param uin 推送里 `cookies.qqmusic_uin.value`（数字字符串）。
+     */
+    fun scanLogin(qrCodeId: String, token: String, uin: String): JSONObject = JSONObject()
+        .put("module", LOGIN_MODULE)
+        .put("method", LOGIN_METHOD)
+        .put(
+            "param",
+            JSONObject()
+                .put("musicid", uin.toLongOrNull() ?: 0L)
+                .put("qrCodeID", qrCodeId)
+                .put("token", token),
+        )
+
+    /** 扫码登录用的 `comm.tmeLoginType`（6 = 手机扫码）。 */
+    const val LOGIN_TYPE_QR_SCAN = 6
+
+    /** `CreateQRCode` 的 `param.ct` / `param.cv` —— 与 [QqClient.appComm] 的客户端身份同源。 */
+    private const val QR_COMM_CT = 11
+    private const val QR_COMM_CV = 14090008
 }
