@@ -198,3 +198,128 @@ adb logcat -s QqTokenRefresher QqApi | grep -E "静默续期|refresh"
 | 重新登录一次之后 | 之后每次到期都会静默续期，**不再需要重新登录** |
 | 走网页登录的 | 仍需重新登录（cookie 里没有续期所需的事实，见 §4.2.3） |
 | 登出 / 换账号 | 续期凭证与 cookie 一起清、一起换，不存在跨账号串用 |
+
+---
+
+# 追加：扫码登录也能续期（同一天，同一份证据纪律）
+
+> 用户追问：「有办法做扫码的续签吗，还是必须手机号」。
+> 结论：**可以，但不是现在那条扫码路**。下面是实测过程与两处真机路径上踩到的坑。
+
+## 六、三条登录路各自能不能拿到续期凭证
+
+| 登录方式 | 最后一步拿到的东西 | 能续期吗 |
+|---|---|---|
+| 手机号验证码 | `Login` 的 `data`（含 `refreshKey` / `refreshToken`） | ✅ 已实现（§三） |
+| **QQ 互联扫码**（原「自绘二维码」） | `y.qq.com` 域下的 **cookie** | ❌ 拿不到 `refreshKey`，也没有 `openid` |
+| **QQ 音乐 App 扫码**（本版新增） | 服务端 MQTT 推送 `qqmusic_key` → 再调 `Login` → **完整凭证 JSON** | ✅ 复用同一条续期链路 |
+
+第三条就是答案：**换一条扫码路**。它的最后一步不是交给 WebView，而是
+`Login(param={musicid, qrCodeID, token}, comm={tmeLoginType:6})` ——
+`tmeLoginType = 6` 就是「手机扫码」这一支，回的是与手机号登录**完全同形**的凭证 JSON。
+
+## 七、协议链路（每一步都在本机实测过）
+
+```
+① CreateQRCode            POST musicu.fcg（music.login.LoginServer）
+                          → code=0 + 91 字符 qrCodeID + data:image/png;base64,…
+② wss://mu.y.qq.com/ws/handshake
+   CONNECT  AUTH_METHOD="pass"
+            user props: tmeAppID=qqmusic, business=management,
+                        hashTag=<qrCodeID>, clientTag=management.user, userID=<qrCodeID>
+   → CONNACK reasonCode=0x9D（Server moved）+ SERVER_REFERENCE
+③ 重连 wss://mu.y.qq.com/ws/handshake/<SERVER_REFERENCE>，重发 CONNECT
+   → CONNACK reasonCode=0
+④ SUBSCRIBE management.qrcode_login/<qrCodeID>
+            user props: authorization=tmelogin, pubsub=unicast
+   → SUBACK 成功
+⑤ 等服务端 PUBLISH（`type` 挂在 **user property** 上）：
+     scanned / canceled / timeout / loginFailed / cookies
+   没人扫码时**一条都不推**（实测 25 秒窗口内无推送）
+⑥ cookies 推送 → Login(param={musicid, qrCodeID, token}, comm={tmeLoginType:6})
+   → 完整凭证 JSON → cookie + 续期凭证落盘（复用 §三 那条链路，一行没改）
+```
+
+## 八、两处实测踩到的坑（都只在真机路径上出现）
+
+### 8.1 `mu.y.qq.com` 只认 WebSocket，裸 MQTT over TCP 被 400 拒绝
+
+```
+[TCP+TLS 443] 发 MQTT CONNECT → HTTP/1.1 400 Bad Request (nginx)
+```
+
+所以 **Paho Android 那类纯 TCP 的 MQTT 库在这里连不上**。这条已经写成一条会红的
+单测（`QqScanLoginProbeTest.裸 MQTT over TCP 被服务端拒绝为 400`），
+防止后人「顺手换个库」。
+
+### 8.2 第一条 CONNACK **一定**是重定向，而且 `SERVER_REFERENCE` 是**路径段**
+
+抓到的完整报文（2026-10-08，本机）：
+
+```
+20 59 00 9d 56                        CONNACK, reasonCode=0x9D, props len=86
+   26 0006 "server"    0013 "11.168.20.203_29001"
+   26 0009 "channelID" 0013 "2108223752734814208"
+   1c 0014 "11.154.131.152:29001"     ← SERVER_REFERENCE
+```
+
+它的用法**不是换一台主机**，而是拼成**路径段**
+（参考实现 `_build_redirect_path` 的逻辑）：重连到
+`wss://mu.y.qq.com/ws/handshake/11.154.131.152:29001`，由服务端按这段路由。
+不跟随重定向的表现是「CONNACK 被拒」—— 而它其实是一次正常的指路。
+
+### 8.3 拆旧连接时投进来的「断连哨兵」会污染下一次握手（最难查的一个）
+
+重定向要先拆旧连接，而 OkHttp 的 `cancel()` 会让旧连接的回调**异步**再投一条
+DISCONNECT 进来 —— 它可能落在清队列**之后**，于是新连接上等 CONNACK 的第一次
+`receive()` 拿到的是那条陈旧哨兵，第一版据此判「CONNACK 被拒」。
+
+症状是**每当服务端要求重定向就必然失败**，而日志里只有一句
+`期望 CONNACK，收到 type=14`（`14` 是 DISCONNECT）—— 不了解这个细节的人会去查网络。
+
+修法：`awaitConnAckFrame()` 循环**跳过陈旧的断连哨兵**继续等，
+真正的断开会让它等到超时（那时返回 null、按失败处理），
+所以不会把「连接死了」误判成「连上了」。
+
+### 8.4 附带修掉的一个：SUBACK 之前可能先来一条推送
+
+`awaitSubAck()` 原本「取一条，不是 SUBACK 就失败」。而服务端的推送与确认走**同一条通道** ——
+第一次扫码可能因此失败、重试就好（那种最招人烦的形状）。现在它循环等 SUBACK，
+并把先到的推送**留住**（`pendingEarlyEvent`），交给 `awaitEvent` 消费。
+
+## 九、这一版扫码路的验证
+
+| 项 | 结果 |
+|---|---|
+| `CreateQRCode` 真实响应 | ✅ 实测 `code=0` + 91 字符 ID + PNG（探针用例钉住） |
+| 裸 MQTT over TCP | ✅ 实测被拒（探针用例钉住「为什么不用现成库」） |
+| **WSS 握手 + 重定向跟随 + 订阅** | ✅ **实测 `open() == true`**，连跑 3 次全绿 |
+| 报文编解码 | ✅ 27 条单测，**黄金字节**（不是自洽往返）：CONNECT 178 字节逐字节对上参考实现、四条变长整数分界值、属性表逐项 |
+| 全量单测 / release(R8) / lint | 见 §四.1 的同一份口径 |
+
+### 仍然**没有**验证的部分（如实标注）
+
+1. **拿真手机扫码那三步没有跑过**：`cookies` 推送 → 换凭证 → 续期凭证落盘。
+   自动化不可能扫屏幕上的码。探针用例因此**不断言「一定收到推送」**
+   （实测没人扫码时服务端一条都不推）。复现步骤见 §十。
+2. `cookies` 推送的 **payload 形状**（`{"cookies":{"qqmusic_uin":{"value":…},…}}`）
+   来自参考实现的字段契约，本仓库**没有真实样本**。所以
+   `QqQrMqttSession.eventOf` 在缺字段时**明确失败**而不是拿半个凭据去换票。
+3. `tmeLoginType=6` 这个值同样来自参考实现，没有本仓库的成功态样本验证。
+
+## 十、给有 qm 账号的人：怎么验扫码那条路
+
+```
+# 1. 设置 → 音源账号 → qm → 「用 QQ 音乐 App 扫码」
+# 2. 用手机上的 QQ 音乐 App 扫屏幕上的码并确认
+adb logcat -s QqQrMqtt QqApi QqTokenRefresher | grep -E "PUBLISH|Login\(qr-scan\)|静默续期"
+#    期望依次看到：
+#      QqQrMqtt: PUBLISH type=scanned payloadLen=…
+#      QqApi:    Login(qr-scan) -> req.code=0 outcome=OK
+#      QqApi:    Login(qr-scan) 已保存续期凭证 canRefresh=true {… refreshable=true}
+# 3. 读回落盘（只看字段名与长度，不要贴值）
+adb shell run-as com.takahashirinta.ncrust cat shared_prefs/ncrust_qq_prefs.xml
+#    期望：qq_cookie 里有 uin/qqmusic_key/qm_keyst/psrf_musickey_createtime，
+#          并且多出 qq_refresh_credential（refreshable=true）
+# 4. 之后按 §4.3 的第 3 步验证续期本身
+```
