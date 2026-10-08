@@ -217,6 +217,17 @@ object QqPhoneLogin {
      *
      * ⚠️ `qqmusic_uin` 是实测请求 Cookie 里出现的字段（见 PHASE0-QQMUSIC-API.md §4.5.1
      * 的 `Cookie: uin=…; qqmusic_uin=…; qm_keyst=…; qqmusic_key=…`），所以一并写上。
+     *
+     * ## v3.4.9：这个函数同时服务于**登录**与**续期**
+     *
+     * 续期（[QqRequests.refreshCredential]）走的是同一个 `Login` 方法、回的是同一个响应形状，
+     * 所以两边**共用这一个读取器**。[QqTokenRefresher] 直接调它，
+     * 不另写一份字段映射 —— 两份映射迟早会分叉，而分叉的表现是
+     * 「登录能拿到票、续期拿到半张票」，只在真机上偶发。
+     *
+     * ⚠️ **调用方必须先 [QqRefreshStore.clear]**：这个函数只产出 cookie，
+     * 而续期凭证是另一半。换了账号却留着上一份凭证，下一次续期会把新账号的登录态
+     * 换成旧账号的，且不报任何错（详见 [QqAuthStore.saveCookie] 的注释）。
      */
     fun cookieFromCredential(data: JSONObject?): String? {
         if (data == null) return null

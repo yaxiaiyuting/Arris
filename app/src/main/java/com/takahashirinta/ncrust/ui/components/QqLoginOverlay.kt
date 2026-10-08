@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.takahashirinta.ncrust.qq.QqAuthStore
 import com.takahashirinta.ncrust.qq.QqCookie
+import com.takahashirinta.ncrust.qq.QqRefreshStore
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
@@ -128,6 +129,13 @@ fun QqLoginOverlay(
                 if (QqCookie.isLoggedIn(cookie)) {
                     // 用 merge 语义落盘（QqAuthStore.saveCookie 内部就是 merge）：
                     // 登录流程回传的往往只是增量字段集，覆盖会把 uin 丢掉。
+                    //
+                    // v3.4.9：**先清续期凭证再落 cookie**。这条路（WebView / QQ 互联扫码）
+                    // 拿到的只有 cookie，**拿不到续期凭证** —— 所以清掉旧的才是正确动作：
+                    // 留着它，下一次续期会把新账号的登录态换成旧账号的，而且不报任何错。
+                    // 不清的代价则更隐蔽：用户以为「换了账号」，看到的却是上一个账号的数据。
+                    // 代价是本条登录路径**不可续期**（如实写在 QqRefreshCredential 的 KDoc 里）。
+                    QqRefreshStore.clear(context)
                     QqAuthStore.saveCookie(context, cookie)
                     onLoggedIn()
                     return@LaunchedEffect
@@ -170,6 +178,8 @@ fun QqLoginOverlay(
                             // 往往紧接着一次跳转，这里能立刻收工。
                             val cookie = CookieManager.getInstance().getCookie(COOKIE_PROBE_URL)
                             if (!cookie.isNullOrEmpty() && QqCookie.isLoggedIn(cookie)) {
+                                // v3.4.9：与轮询那条路同样的顺序（先清续期凭证再落 cookie）。
+                                QqRefreshStore.clear(ctx)
                                 QqAuthStore.saveCookie(ctx, cookie)
                                 onLoggedIn()
                             }

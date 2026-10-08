@@ -331,7 +331,68 @@ object QqApi {
         val transportMessage: String? = null,
     )
 
+    /**
+     * 取链请求 + v3.4.9 的**一次性续期重试**。
+     *
+     * ## 为什么重试放在这一层而不是 `fetchPlayUrl`
+     *
+     * 「服务端拒绝了这张票」这个事实只有本函数知道（逐档位的服务端 `result` 码与
+     * 传输层状态码都在它手里）。放在 `fetchPlayUrl` 里判，就要么把整批 `midurlinfo`
+     * 再传出去一层，要么在外面重复判一遍 —— 后者正是本仓库修过的
+     * 「同一个判据写两遍、然后分叉」的形状。
+     *
+     * ## 重试**恰好一次**
+     *
+     * 重试走的是 [requestVkeyBatchOnce]（不带重试的那一层），所以
+     * 「拒绝 → 续期 → 再拒绝」不可能变成循环 —— 出口在结构上只有那一个。
+     */
     private suspend fun requestVkeyBatch(
+        songMid: String,
+        mediaMid: String,
+        types: List<QqFileType>,
+        /** 只用于日志（v2.1.4）：诊断时打的是用户请求档位，正常路径打的是同一个值。 */
+        requestedLevel: String = "",
+    ): VkeyBatch {
+        val first = requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel)
+        if (!isAuthRejection(first)) return first
+        // 走到这里 = 本地有票据、服务端却把我们当成没登录（或直接 401/403）。
+        // v3.4.9 之前这里就是终点：用户看到「此源无版权/要会员」，然后被迫重新登录。
+        Log.i(TAG, "vkey 被服务端拒绝（$first.transportRejection），尝试静默续期登录态")
+        val refreshed = QqTokenRefresher.refreshAfterRejection(QqClient.appContextOrNull())
+        if (refreshed != QqTokenRefresher.RefreshResult.REFRESHED) {
+            Log.i(TAG, "静默续期未成功：${refreshed}（不重试，按原结论上报）")
+            return first
+        }
+        Log.i(TAG, "静默续期成功，用新票据重试一次取链")
+        // 递归的**出口**：这里调的是 `...Once`（不带重试的那一层），
+        // 所以「拒绝 → 刷新 → 再拒绝」不可能变成循环。
+        return requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel)
+    }
+
+    /**
+     * 这次「请求本身失败/被拒」是不是**登录态**问题（v3.4.9）。
+     *
+     * 两个判据都要求**本地持有票据**：
+     * - `AUTH_EXPIRED`：HTTP 401/403；
+     * - `NEED_LOGIN` 且 `isLoggedIn()`：服务端在 `result=104003` 之外还让我们去登录，
+     *   而我们手里明明有票 ⇒ 那张票在服务端已经不算数了。
+     *
+     * **`NEED_VIP` 故意不在列**：它是「票有效、权益不够」——开通会员才能解决，
+     * 拿它去触发续期只会让「非会员点会员歌」每次都换一次票（腾讯侧看到的是
+     * 一个不停续期的账号，而用户的权益一点没变）。
+     * 同理，本地**没有**票据时（`isLoggedIn()` 为 false）也不刷新：
+     * 那是「真的没登录」，该做的是让用户去登录。
+     */
+    private fun isAuthRejection(batch: VkeyBatch): Boolean {
+        val entries = batch.entries
+        if (entries == null) return batch.transportRejection == QqRejection.AUTH_EXPIRED
+        if (!QqClient.isLoggedIn()) return false
+        val inputs = entries.values.map { rejectionInputOf(it) }
+        if (inputs.isEmpty()) return false
+        return classifyQqBatch(inputs) == QqRejection.NEED_LOGIN
+    }
+
+    private suspend fun requestVkeyBatchOnce(
         songMid: String,
         mediaMid: String,
         types: List<QqFileType>,
@@ -770,6 +831,17 @@ object QqApi {
      * 成功（`req.code == 0`）时把 `req.data` 转成 cookie 串返回；**凭证不完整时按失败处理**
      * （见 [QqPhoneLogin.cookieFromCredential] 的注释：缺票据的 cookie 会让界面显示
      * 「已登录」而一取链就说没权限，比直接失败难排查得多）。
+     *
+     * ## v3.4.9：同一个响应里还有**续期凭证**
+     *
+     * 登录响应里除了拼 cookie 的那几个字段，还有 `refreshKey` / `refreshToken` /
+     * `accessToken` / `openid` / `keyExpiresIn` —— 它们才是这次登录**真正的长期收益**
+     * （见 [QqRefreshCredential] 的 KDoc：丢掉它们等于把「可续期的会话」降级成
+     * 「一次性票据」，也就是用户报的「一周左右就掉登录」）。
+     *
+     * 落盘由这里负责，而不是交给调用方（UI 层）：调用方只关心「成没成」，
+     * 多一个必须记得做的步骤，就多一个会漏掉的地方 ——
+     * 而漏掉它的表现（一周后掉登录）在开发机上**永远复现不出来**。
      */
     suspend fun loginWithPhoneCode(
         phone: String,
@@ -782,12 +854,28 @@ object QqApi {
         val outcome = QqPhoneLogin.classifyLogin(reqCode)
         Log.i(TAG, "Login(phone) -> req.code=$reqCode outcome=$outcome")
         if (outcome != QqPhoneLogin.LoginOutcome.OK) return PhoneLoginAttempt(outcome)
-        val cookie = QqPhoneLogin.cookieFromCredential(response.optJSONObject("data"))
+        val data = response.optJSONObject("data")
+        val cookie = QqPhoneLogin.cookieFromCredential(data)
         return if (cookie == null) {
             // 服务端说成功、凭证却不成形：不落盘，按失败报给用户（宁可不登，也不要半份登录态）
             Log.w(TAG, "Login(phone) 成功但凭证不完整，拒绝落盘")
             PhoneLoginAttempt(QqPhoneLogin.LoginOutcome.FAILED)
         } else {
+            // 落 cookie **之前**先清续期凭证：换账号时若留着上一份，
+            // 下一次续期会把新账号的登录态换成旧账号的（见 QqAuthStore.saveCookie 的注释）。
+            // 只在真的拿到完整新凭证之后才清 —— 登录失败的用户不该丢掉手上现成的续期能力。
+            val ctx = QqClient.appContextOrNull()
+            if (ctx != null) {
+                QqRefreshStore.clear(ctx)
+                QqRefreshCredential.fromLoginData(data)?.let { credential ->
+                    val saved = QqRefreshStore.save(ctx, credential)
+                    Log.i(
+                        TAG,
+                        "Login(phone) 已保存续期凭证 canRefresh=${saved.isRefreshable()} " +
+                            "{" + saved.describe() + "}",
+                    )
+                }
+            }
             PhoneLoginAttempt(QqPhoneLogin.LoginOutcome.OK, cookie)
         }
     }

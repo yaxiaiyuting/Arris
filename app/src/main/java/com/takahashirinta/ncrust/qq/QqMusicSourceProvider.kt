@@ -20,6 +20,10 @@ import com.takahashirinta.ncrust.player.SongUrlResult
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.MusicSourceProvider
 import com.takahashirinta.ncrust.source.SourceRouter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * qm 音源（v2.1.0 · B）。
@@ -122,5 +126,49 @@ object QqMusicSourceProvider : MusicSourceProvider {
         // 都会从 0 开始重新计，`onStop` 落盘的那份会被「加到一个空计数器上」的
         // 语义悄悄变成「只统计本次进程」（两条统计的纪律一致，见 ReportGateStore）。
         runCatching { com.takahashirinta.ncrust.player.ReportGateStore.ensureSeeded(context) }
+        // v3.4.9：登录态的**主动续期**（票据寿命还剩不到 12 小时就静默换一张新票）。
+        // 必须异步：它是一次网络往返，而这个函数跑在 MainActivity.onCreate 里。
+        maybeRefreshLogin(context)
+    }
+
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * v3.4.9：冷启动（以及每次 Activity 重新创建）时的主动续期。
+     *
+     * ## 为什么放在这里而不是「取链失败时」
+     *
+     * 取链失败时的被动续期（[QqApi] 的 [QqTokenRefresher.refreshAfterRejection]）是兜底，
+     * 它对用户是**可见的**：先失败一次、界面弹一次「要会员/去登录」、然后才自愈。
+     * 而这条链路最常见的场景是「用户一星期没开 App，再打开时票刚好过期」——
+     * 那时候主动换票是**完全无感**的，代价只是一次后台请求。
+     *
+     * ## 幂等性由三道闸门保证（不是靠「只调用一次」）
+     *
+     * `install()` 与 `RetrofitClient.init` 同处，**每次 Activity 创建都会调**，
+     * 所以这个函数必须能被反复调用而什么都不多做：
+     * ① 同步的窗口检查（这里）—— 不在续期窗口内就直接返回，一个协程都不起；
+     * ② [QqTokenRefresher] 的 `Mutex` 单飞 —— 并发触发时只有一次真的发请求；
+     * ③ 刷新成功后 `needsRefresh()` 立刻变 false —— 窗口关上了。
+     *
+     * 用「进程内只跑一次的布尔标志」是**更差**的选择：进程活着的期间用户可能
+     * 跨过整个到期窗口（后台常驻），那个标志会让第二次机会永远不出现。
+     *
+     * ## 为什么用一个自己的 scope
+     *
+     * 它必须活过 `onCreate`（网络往返），又不能挂在 Activity 的生命周期上 ——
+     * 挂在 Activity 上时用户一进 App 就切走会把续期一起取消，
+     * 表现是「偶尔能续上、偶尔不能」，而这种偶发性在真机上几乎无法归因。
+     */
+    private fun maybeRefreshLogin(context: Context) {
+        if (!QqTokenRefresher.canRefresh(context)) return
+        // 同步的窗口检查：把「每次冷启动都起一个协程去发现无事可做」也省掉。
+        val remaining = QqTokenRefresher.remainingSeconds(context) ?: return
+        if (remaining > QqRefreshCredential.REFRESH_MARGIN_SECONDS) return
+        val app = context.applicationContext
+        refreshScope.launch {
+            runCatching { QqTokenRefresher.refreshIfNeeded(app) }
+                .onFailure { Log.w(TAG, "冷启动续期失败", it) }
+        }
     }
 }

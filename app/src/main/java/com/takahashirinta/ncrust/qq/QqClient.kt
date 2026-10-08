@@ -126,6 +126,19 @@ object QqClient {
     fun isLoggedIn(): Boolean = appContext?.let { QqAuthStore.isLoggedIn(it) } ?: false
 
     /**
+     * v3.4.9：给 [QqTokenRefresher] 用的 application context（进程启动时由 [init] 播种）。
+     *
+     * 之所以开这个口而不是让 `QqApi` 自己存一份 context：`QqClient` **已经**是
+     * 「qm 侧唯一的 context 持有者」，再存第二份就会出现「一个 init 了、另一个没有」
+     * 这种只在后台组件被单独拉起时才暴露的状态（v3.4.8 的 B 站镜像刚踩过同一个坑：
+     * 服务被系统单独拉起 ⇒ 镜像没播种 ⇒ 恒匿名）。
+     *
+     * 未 init（后台组件先于 Activity 被拉起）时返回 null —— 续期直接不尝试，
+     * 而不是崩或发一个没有身份的请求。
+     */
+    fun appContextOrNull(): Context? = appContext
+
+    /**
      * 诊断用（v2.1.4）：当前落盘的完整 cookie，**只读、只给不落任何持久化的诊断日志用**。
      *
      * 单独开这个口是因为取链诊断必须知道「票丢没丢 / uin 在不在」，

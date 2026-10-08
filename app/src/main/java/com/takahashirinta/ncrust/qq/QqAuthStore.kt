@@ -79,6 +79,11 @@ object QqAuthStore {
     /**
      * 保存 cookie。**用 [QqCookie.merge] 而不是覆盖** —— 登录流程拿回来的往往只是增量字段集，
      * 直接覆盖会把上次登录留下的 uin 丢掉（详见 [QqCookie.merge] 的注释）。
+     *
+     * v3.4.9：**登录路径必须先调 [QqRefreshStore.clear]**（见 [QqPhoneLogin.cookieFromCredential]
+     * 与 `QqLoginOverlay` 的调用点）。续期凭证与 cookie 是同一个账号的两半，
+     * 换了账号却留着上一份凭证，会让下一次续期把新账号的登录态换成旧账号的，
+     * 而**全程不报任何错**。
      */
     fun saveCookie(context: Context, cookie: String) {
         val merged = QqCookie.merge(getCookie(context), cookie)
@@ -98,8 +103,16 @@ object QqAuthStore {
 
     fun uin(context: Context): Long? = QqCookie.uinOf(getCookie(context))
 
-    /** 登出：**只清 qm 这一份**，不碰 `ncrust_prefs` 里的 ncm cookie。 */
+    /**
+     * 登出：**只清 qm 这一份**，不碰 `ncrust_prefs` 里的 ncm cookie。
+     *
+     * v3.4.9：[QqRefreshStore.clear] 必须与 cookie 一起清。续期凭证属于**这个**账号，
+     * 留着它等于给下一个账号留了一把上一个账号的钥匙 —— 而误用它的表现是
+     * 「登录着 B、数据全是 A」，没有任何一行日志会提示这件事。
+     * 两个清理写在同一个函数里，是为了让这条不变量由**结构**保证、而不是靠调用方记得。
+     */
     fun clear(context: Context) {
+        QqRefreshStore.clear(context)
         prefs(context).edit()
             .remove(KEY_COOKIE)
             .remove(KEY_NICK)
