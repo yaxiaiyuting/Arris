@@ -202,7 +202,10 @@ object QqTokenRefresher {
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "refresh attempt credential={" + stored.describe() + "}")
         }
-        val response = QqClient.musicuLogin(request) ?: run {
+        // ⚠️ 必须走 musicuRefresh 而**不是** musicuLogin：后者会给 comm 塞
+        // `tmeLoginMethod = 3`（手机验证码登录专用），而续期带上它会被服务端拒
+        // （实测 code=1000；去掉就是 code=0 + 新票）。详见 QqClient.musicuRefresh 的 KDoc。
+        val response = QqClient.musicuRefresh(request, stored.loginType) ?: run {
             // 传输层失败：算失败但**不推进冷却的语义**是「值得马上再试」——
             // 这里仍然进冷却，因为「网络不通」时每首歌都重试一次是最糟的形态。
             markFailed()

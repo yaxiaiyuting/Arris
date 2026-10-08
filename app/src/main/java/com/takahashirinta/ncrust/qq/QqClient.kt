@@ -230,6 +230,49 @@ object QqClient {
             )
         }
 
+    /**
+     * **续期专用**通道（v3.4.9 真机追加）。
+     *
+     * ## 为什么必须与登录那条通道分开（这是实测出来的，不是洁癖）
+     *
+     * [musicuLogin] 会给 `comm` 硬塞 `tmeLoginMethod = 3` —— 那个字段是**手机验证码登录**
+     * 才该有的（见它的 KDoc：`Login` 少了它回 `104400`）。但**续期**走的是同一个
+     * `Login` 方法、不同的语义，服务端在那一刻要的只有 `tmeLoginType`。
+     *
+     * 实测（2026-10-09，同一份凭证、同一个请求体，只改 `comm`）：
+     *
+     * | `comm` | 结果 |
+     * |---|---|
+     * | 只带 `tmeLoginType`（= 凭证的 `loginType`） | **`code = 0` + 一张新票** |
+     * | 多带 `tmeLoginMethod = 3` | `code = 1000`，换不出票 |
+     *
+     * 也就是说：走错通道的续期**每一次都会被拒**，而票据本身完全有效 ——
+     * 症状是「明明登录着，到期还是掉」，也就是用户最初报的那个 bug 原样复发。
+     *
+     * @param loginType 凭证里的 `loginType`（1 = 微信，2 = QQ）。参考实现续期时
+     *   带的就是它（`comm={"tmeLoginType": target.login_type}`）。
+     */
+    suspend fun musicuRefresh(request: JSONObject, loginType: Int): JSONObject? =
+        withContext(Dispatchers.IO) {
+            val ctx = appContext ?: return@withContext null
+            val body = JSONObject()
+                .put(
+                    "comm",
+                    appComm(ctx).apply {
+                        // 只带 tmeLoginType，**绝不带 tmeLoginMethod**（见上表的 A/B）。
+                        if (loginType > 0) put("tmeLoginType", loginType)
+                    },
+                )
+                .put("req", request)
+            execute(
+                ctx,
+                body,
+                request.optString("module"),
+                appIdentity = true,
+                sendCookie = false,
+            )
+        }
+
     /** `comm.tmeLoginMethod`：3 = 手机短信验证码（实测 `Login` 必须要它）。 */
     private const val LOGIN_METHOD_PHONE_CODE = 3
 

@@ -99,9 +99,12 @@ class QqRefreshCredentialTest {
             .put("keyExpiresIn", 0)
         val c = QqRefreshCredential.fromLoginData(skeleton)!!
         assertFalse(c.isRefreshable())
-        assertTrue(c.missingFields().contains("refreshKey/refreshToken"))
         assertTrue(c.missingFields().contains("musicid"))
         assertTrue(c.missingFields().contains("musickey"))
+        // ⚠️ refreshKey/refreshToken **不在**缺项里：它们是「服务端想不想下发」的事，
+        // 不是我们的门槛 —— 实测只带 musicid+musickey+openid 就能换回新票
+        // （见 `QqRefreshCredential.isRefreshable` 的 KDoc 与 `RenewProbeLiveTest`）。
+        assertFalse(c.missingFields().contains("refreshKey"))
     }
 
     /**
@@ -145,6 +148,46 @@ class QqRefreshCredentialTest {
         assertFalse(c.isExpired(nowSeconds = 1L))
         assertFalse(c.needsRefresh(nowSeconds = 1L))
         assertNull(c.remainingSeconds(nowSeconds = 1L))
+    }
+
+    /**
+     * **真机形状的凭证必须判成「可续期」**（v3.4.9 真机实测后的回归钉）。
+     *
+     * 设备上那次扫码登录服务端回的字段是：`openid` / `musicid` / `musickey` /
+     * `str_musicid` / `loginType=1` / `keyExpiresIn=259200`，
+     * 而 `refresh_key` / `refresh_token` / `access_token` **三个键都在、值都空**。
+     *
+     * 第一版因此把它判成不可续期（界面上写着「不会自动续期」），
+     * 而实测「只带 musicid + musickey + openid 去续期」是**成功**的
+     * （`req.code = 0`，且这次响应里的 `refresh_token` 有值）。
+     * 这条用例把那个教训钉住：**门槛写严了，会正好把唯一能续的那条路挡在门外**。
+     */
+    @Test
+    fun `真机形状的微信扫码凭证（无 refreshKey 无 refreshToken）可续期`() {
+        val deviceShaped = QqRefreshCredential(
+            musicId = 1152921504891728649L,
+            musicKey = "W_X_" + "a".repeat(159),
+            openId = "oWvuLjgj_PD_6gfsMoCVlwb9ip04g",
+            strMusicId = "1152921504891728649",
+            loginType = QqRefreshCredential.LOGIN_TYPE_WECHAT,
+            keyCreatedAt = 1791482430L,
+            keyExpiresIn = 259_200L,
+            needRefreshKeyIn = 0L,
+        )
+        assertTrue("真机形状必须判成可续期", deviceShaped.isRefreshable())
+        assertTrue(deviceShaped.missingFields().isEmpty())
+    }
+
+    /** 服务端**明确索要** refreshKey（`needRefreshKeyIn > 0`）而它缺失时，才算不可续期。 */
+    @Test
+    fun `服务端索要 refreshKey 而它缺失时判成不可续期`() {
+        val needsKey = QqRefreshCredential(
+            musicId = 1L,
+            musicKey = "mk",
+            needRefreshKeyIn = 86_400L,
+        )
+        assertFalse(needsKey.isRefreshable())
+        assertEquals(listOf("refreshKey"), needsKey.missingFields())
     }
 
     // ---------------- 时机 ----------------

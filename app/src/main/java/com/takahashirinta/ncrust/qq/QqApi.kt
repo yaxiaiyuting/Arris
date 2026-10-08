@@ -892,8 +892,12 @@ object QqApi {
      * 之后由 [QqTokenRefresher] 自动续期 —— **这一条链路上没有任何新逻辑**，
      * 只是终于拿到了那份 JSON。
      *
-     * 落盘顺序与手机号登录保持一致（先清续期凭证再落 cookie，见
-     * [QqAuthStore.saveCookie] 的注释）：避免换账号时把上一个账号的凭证留给下一次续期。
+     * ## 落盘由本方法负责（与手机号登录那条路**刻意不同**）
+     *
+     * 手机号那条路把 cookie 交给调用方（`MainActivity.onLoggedIn`）去 saveCookie；
+     * 这条路**自己落全**（cookie + 续期凭证）。第一版两边都以为对方会写，
+     * 结果是「扫完码、确认了、界面仍是未登录」—— 真机上一个字节都没落盘。
+     * 现在契约是单向的：**`QqApi` 负责把登录态落全，调用方只刷新界面。**
      */
     suspend fun loginWithScanCode(
         qrCodeId: String,
@@ -912,6 +916,16 @@ object QqApi {
         Log.i(TAG, "Login(qr-scan) -> req.code=$reqCode outcome=$outcome")
         if (outcome != QqPhoneLogin.LoginOutcome.OK) return QrScanLoginAttempt(outcome)
         val data = response.optJSONObject("data")
+        // 诊断（v3.4.9 真机追加）：**只打字段名，绝不打任何值** —— 票据是账号凭证。
+        // 存在的意义是把「服务端到底给不给续期凭证」从一个猜测变成一行事实：
+        // 实测扫码那条路回的是 openid + musickey + keyExpiresIn（3 天），
+        // `refreshKey` / `refreshToken` **一个都没有** —— 那意味着这条路**换不出新票**。
+        Log.i(
+            TAG,
+            "Login(qr-scan) data 字段 = " + (
+                data?.keys()?.asSequence()?.joinToString(",") ?: "(no data)"
+                ),
+        )
         val cookie = QqPhoneLogin.cookieFromCredential(data)
         if (cookie == null) {
             Log.w(TAG, "Login(qr-scan) 成功但凭证不成形，拒绝落盘")
@@ -920,12 +934,19 @@ object QqApi {
         val ctx = QqClient.appContextOrNull()
         if (ctx != null) {
             QqRefreshStore.clear(ctx)
+            // ⚠️ **cookie 必须在这里落盘**（v3.4.9 的第一版漏了这一步，真机上是
+            // 「扫完码、确认了、界面仍是未登录」）：续期凭证落了盘，cookie 没有，
+            // 于是 `QqAuthStore.isLoggedIn()` 恒为 false。
+            // 与手机号登录那条路的差别在于：那条路的调用方（`MainActivity` 的
+            // `onLoggedIn`）自己 saveCookie，而这条路的调用方只刷新界面 ——
+            // 契约必须只有一个归属，这里是「QqApi 负责把登录态落全」。
+            QqAuthStore.saveCookie(ctx, cookie)
             QqRefreshCredential.fromLoginData(data)?.let { credential ->
                 val saved = QqRefreshStore.save(ctx, credential)
                 Log.i(
                     TAG,
-                    "Login(qr-scan) 已保存续期凭证 canRefresh=${saved.isRefreshable()} {" +
-                        saved.describe() + "}",
+                    "Login(qr-scan) 已落盘 cookie+续期凭证 loggedIn=${QqAuthStore.isLoggedIn(ctx)} " +
+                        "canRefresh=${saved.isRefreshable()} {" + saved.describe() + "}",
                 )
             }
         }

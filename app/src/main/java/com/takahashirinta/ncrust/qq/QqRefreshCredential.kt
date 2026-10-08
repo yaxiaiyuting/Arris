@@ -143,20 +143,36 @@ data class QqRefreshCredential(
     }
 
     /**
-     * 关键身份字段是否齐全 —— **缺任何一个都换不出新票据**。
+     * 关键字段是否齐全到**能换出新票据**。
      *
-     * 顺序即重要性：先看有没有可用的刷新凭证（[refreshKey] / [refreshToken]），
-     * 再看身份（[musicId] / [strMusicId]），最后看上一张票（[musicKey]）。
-     * 全空 = 这份凭证是 v3.4.9 之前落的（只有 cookie，没有续期凭证）。
+     * ## 判定条件是**实测**出来的，不是推出来的（v3.4.9 真机，微信扫码那条路）
+     *
+     * 第一版要求「[refreshKey] 或 [refreshToken] 至少有一个」，于是扫码登录
+     * （`loginType = 1`）被一律判成**不可续期** —— 因为服务端在那条路上把
+     * `refresh_key` / `refresh_token` / `access_token` 三个键**都给了、值都是空的**。
+     * 界面上于是显示「不会自动续期」，而用户三天后照样掉登录。
+     *
+     * 后来用手上真实的那份凭证实测了一次续期（`RenewProbeLiveTest`）：
+     * **只带 `musicid` + `musickey` + `openid`（`refresh_key` 传空串）**
+     * 就换回了一张新票（`req.code = 0`），而且响应里 `refresh_token` 这次**有值**。
+     *
+     * 所以续期的真正必需项只有三样：**身份**（[musicId] / [strMusicId]）、
+     * **上一张票**（[musicKey]）、以及能被服务端认出来的登录类型。
+     * `refreshKey` / `refreshToken` 是**服务端想不想下发**的事，不是我们的门槛 ——
+     * 把它们当门槛，正好把唯一能续的那条路挡在门外。
+     *
+     * [refreshKey] 只在一种情况下才算必需：**服务端明确索要它**
+     * （`needRefreshKeyIn > 0`）。那是它自己说「我要求轮换」的字段，此前一律为空。
      */
     fun isRefreshable(): Boolean = missingFields().isEmpty()
 
     /** 缺哪些字段（诊断用，只给字段名，**绝不带值**）。齐全时返回空表。 */
     fun missingFields(): List<String> {
-        val missing = ArrayList<String>(4)
-        if (refreshKey.isNullOrEmpty() && refreshToken.isNullOrEmpty()) missing += "refreshKey/refreshToken"
+        val missing = ArrayList<String>(3)
         if (musicId <= 0L && strMusicId.isNullOrEmpty()) missing += "musicid"
         if (musicKey.isNullOrEmpty()) missing += "musickey"
+        // 只有服务端**明确索要**时才把 refreshKey 当必需项（见 KDoc 的实测依据）。
+        if (needRefreshKeyIn > 0L && refreshKey.isNullOrEmpty()) missing += "refreshKey"
         return missing
     }
 
