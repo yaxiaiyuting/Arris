@@ -105,6 +105,12 @@ class PersistenceFieldNameContractTest {
         // 所以现场连一行错误日志都不会有。这正是注册表存在的理由（v2.5.5 的教训）。
         "com.takahashirinta.ncrust.stats.StatsCodec\$SnapshotDto",
         "com.takahashirinta.ncrust.stats.StatsCodec\$SongDto",
+        // v3.4.9：qm 登录态的续期凭证（`ncrust_qq_prefs` / `qq_refresh_credential`）。
+        // 这张表**尤其**需要这份契约：它是「票据到期后能不能静默换新票」的唯一依据，
+        // 而字段名一旦被 R8 改成单字母，`refreshKey` 会读成 null ⇒
+        // `isRefreshable()` 为 false ⇒ **静默退化成「必须重新登录」**，
+        // 也就是用户报的那个 bug 原样复发，且现场一行错误日志都不会有。
+        "com.takahashirinta.ncrust.qq.QqRefreshCredential",
     )
 
     /**
