@@ -619,6 +619,12 @@ val deDE = Strings(
 
 
         // v3.4.8: Bilibili-Audioqualität und Untertitel (Nutzertexte zu den Punkten 1 / 2 / 3).
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "Mit QQ-Music-App scannen",
+            qqScanTitle = "Mit QQ-Music-App anmelden",
+            qqScanNote = "Scannen Sie diesen Code mit der QQ-Music-App auf Ihrem Telefon. Die Anmeldung wird auf diesem Weg vor Ablauf automatisch erneuert – kein wöchentliches Neuanmelden.",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "Bilibili-Qualitätslimit",
             biliQualityCapDescription = "Begrenzt die von Bilibili angeforderte Audioqualität. Verlustfrei und Hi-Res erfordern ein Premium-Konto und gibt es nur bei einem Teil der Videos.",

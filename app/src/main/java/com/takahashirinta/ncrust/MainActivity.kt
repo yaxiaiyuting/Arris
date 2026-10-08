@@ -2106,6 +2106,10 @@ fun MainScreen(
     // 扫不了自己的屏幕，微信也不认相册里的登录码）；官方那种一键微信登录要微信
     // 开放平台的**签名**配对，fork 不可能满足。详见 QqPhoneLogin 的注释。
     var showQqPhone by remember { mutableStateOf(false) }
+    // v3.4.9：「QQ 音乐 App 扫码」——**可续期的那条扫码路**。
+    // 与上面的 showQqQr（QQ 互联扫码）并存且互不影响：那条只能拿到 cookie，
+    // 这条能换到完整凭证 JSON（含 refreshKey），所以只有这条到期不用重登。
+    var showQqScan by remember { mutableStateOf(false) }
     // 扫码确认后交给 WebView 的起始地址与 cookie（见 QqLoginOverlay 的参数说明）。
     var qqLoginStartUrl by remember { mutableStateOf<String?>(null) }
     var qqLoginCookies by remember { mutableStateOf<String?>(null) }
@@ -2150,6 +2154,25 @@ fun MainScreen(
                 showQqLogin = true
             },
             onDismiss = { showQqPhone = false },
+        )
+        return
+    }
+    if (showQqScan) {
+        com.takahashirinta.ncrust.ui.components.QqScanLoginDialog(
+            onLoggedIn = {
+                // cookie **与续期凭证都已经由 QqApi.loginWithScanCode 落盘** ——
+                // 这里不再 saveCookie：那条路用的是 Login 的完整响应，
+                // 在别处再拼一次 cookie 就等于把同一份契约写两遍（必然分叉）。
+                showQqScan = false
+                qqLoginTrigger++
+            },
+            onUseWebLogin = {
+                qqLoginStartUrl = null
+                qqLoginCookies = null
+                showQqScan = false
+                showQqLogin = true
+            },
+            onDismiss = { showQqScan = false },
         )
         return
     }
@@ -2687,6 +2710,7 @@ fun MainScreen(
                             onShowBiliLogin = { showBiliLogin = true },
                             // v2.1.1：手机号验证码登录（微信用户的可用路径）。
                             onShowQqPhoneLogin = { showQqPhone = true },
+                            onShowQqScanLogin = { showQqScan = true },
                             onOpenAbout = { showAbout = true },
                             // v3.3.0 · 用户建议：离线缓存列表的行可直接点播。
                             // 复用 `playSongItem`（从任意列表点歌的同一条链路）：

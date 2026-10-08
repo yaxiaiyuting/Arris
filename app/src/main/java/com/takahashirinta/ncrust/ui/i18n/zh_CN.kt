@@ -617,6 +617,12 @@ val zhCN = Strings(
 
 
         // v3.4.8：B 站音质与字幕（问题 1 / 2 / 3 的用户可见文案）。
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "用 QQ 音乐 App 扫码",
+            qqScanTitle = "QQ 音乐 App 扫码登录",
+            qqScanNote = "用手机上的 QQ 音乐 App 扫这张码。这条路的登录态到期会自动续期，不用一周重登一次。",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "B站音质上限",
             biliQualityCapDescription = "限制从 B 站请求的音质。无损与 Hi-Res 需要大会员，而且只有部分视频提供。",

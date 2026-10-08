@@ -137,6 +137,8 @@ fun SettingsGroupScreen(
     onShowWebLogin: () -> Unit,
     onShowQqLogin: () -> Unit,
     onShowQqPhoneLogin: () -> Unit,
+    /** v3.4.9：「QQ 音乐 App 扫码」浮层（可续期）。与 [onShowQqLogin] 是两条路。 */
+    onShowQqScanLogin: () -> Unit,
     /** v3.2.0 · P1：B 站扫码登录浮层（透传给 [SettingsAccountSection]）。 */
     onShowBiliLogin: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -161,6 +163,7 @@ fun SettingsGroupScreen(
             onShowWebLogin = onShowWebLogin,
             onShowQqLogin = onShowQqLogin,
             onShowQqPhoneLogin = onShowQqPhoneLogin,
+            onShowQqScanLogin = onShowQqScanLogin,
             onShowBiliLogin = onShowBiliLogin,
             onBack = onBack,
         )

@@ -616,6 +616,12 @@ scanConnecting = "평판에 연결중…",
 
 
         // v3.4.8：B站 음질과 자막（문제 1 / 2 / 3의 사용자 문안).
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "QQ Music 앱으로 스캔",
+            qqScanTitle = "QQ Music 앱으로 로그인",
+            qqScanNote = "휴대전화의 QQ Music 앱으로 이 코드를 스캔하십시오. 이 경로의 로그인 상태는 만료 전에 자동으로 갱신되므로 매주 다시 로그인할 필요가 없습니다.",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "B站 음질 상한",
             biliQualityCapDescription = "B站에 요구하는 음질을 제한합니다. 무손실과 Hi-Res는 대회원이 필요하며 일부 동영상에만 있습니다.",

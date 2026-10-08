@@ -449,6 +449,28 @@ data class Strings(
      * 语义相符的组、并在类体里留转发属性，不要再往主构造器直接加参数。
      */
     val bili: BiliStrings,
+    /**
+     * v3.4.9：**「QQ 音乐 App 扫码」**登录的专属文案（3 条）。
+     *
+     * ## 为什么单开一组，而不是塞进已有的 `source` 组
+     *
+     * `SourceStrings` 已经 **77 个参数**，而本仓库给它定的预警线是 80
+     * （`StringsConstructorBudgetTest` 与 `AggregateStringsTest` 各钉了一半）。
+     * 加这三条就是 80 —— 正好撞线，两条测试都会红。而它们红得**有道理**：
+     * 那条注释写着「真正该拆的信号是『本组越过 80』」，这里就是那个信号。
+     *
+     * ## 为什么这组不是「为了绕开测试而拆」
+     *
+     * 这 3 条与 `source` 组**不是同一条业务线**：`source` 组是「音源与账号」
+     * （ncm/qm/B 站的登录入口、会员、搜索结果计数），而这三条只服务
+     * **一条具体的登录方式**（官方 App 扫码）—— 它自己的状态机、自己的浮层、
+     * 自己的「这条路可续期」语义。下一个加「扫描登录」相关文案的人，
+     * 在这里加才对。
+     *
+     * 代价是 `Strings` 主构造器 +1 个槽位（139 → 140，硬上限 255、预算 150）——
+     * 那是拆组本来就要付的成本，也是 `StringsConstructorBudgetTest` 记录过的账。
+     */
+    val qqScan: QqScanStrings,
 ) {
     // ---------- 转发属性（v2.0.0 · HF1）----------
     // 离线 / 缓存那一组（19 条）的构造参数已经挪进 [OfflineStrings]，这里用**成员**转发属性把
@@ -503,6 +525,12 @@ data class Strings(
 
     // v2.1.1：播放页音源角标 + 手机号验证码登录（都在 `source` 分组里，理由见那边的注释）
     val sourceNetease: String get() = source.sourceNetease
+    // v3.4.9：扫码（QQ 音乐 App）那三条在 [QqScanStrings] 组里 —— 见那边的 KDoc，
+    // 它们与 `source` 组不是同一条业务线（那条是「账号与音源」，这条是「一条登录方式」），
+    // 而且 `source` 组已经撞到了它自己的预警线。
+    val sourceQqScanLoginAction: String get() = qqScan.qqScanLoginAction
+    val sourceQqScanTitle: String get() = qqScan.qqScanTitle
+    val sourceQqScanNote: String get() = qqScan.qqScanNote
     val sourceQqPhoneTitle: String get() = source.sourceQqPhoneTitle
     val sourceQqPhoneLabel: String get() = source.sourceQqPhoneLabel
     val sourceQqPhoneHint: String get() = source.sourceQqPhoneHint
@@ -1959,6 +1987,32 @@ data class PlayerUiStrings(
  * 所以时长由 `(时, 分)` / `(分, 秒)` / `(秒)` 三个 lambda 组装，
  * 判断「该显示到时还是到分」的逻辑在 `StatsScreen` 里只有一处（`statsDurationText`）。
  */
+/**
+ * 「QQ 音乐 App 扫码」登录的专属文案（v3.4.9）。
+ *
+ * 它与 [SourceStrings] 里那套 `sourceQr*`（**QQ 互联**扫码）是两条不同的路：
+ * 互联那条只能拿到 cookie（到期要重登），这条能换到**完整凭证 JSON**
+ * （含 `refreshKey`，到期自动续期）。所以文案必须能区分 ——
+ * 混成一句话会让用户以为「扫码 = 可续期」，而那对互联那条不成立。
+ *
+ * 为什么单开一组（而不是并进 [SourceStrings]）：见 `Strings.qqScan` 的 KDoc ——
+ * 那边的预警线已经撞上了，而且这两套文案不属于同一条业务线。
+ */
+data class QqScanStrings(
+    /** 账号区块里的入口文案，例如「用 QQ 音乐 App 扫码」。 */
+    val qqScanLoginAction: String,
+    /** 扫码浮层的标题。 */
+    val qqScanTitle: String,
+    /**
+     * 扫码浮层底部的说明。
+     *
+     * 这一条是**承重的**：它是用户判断「该选哪一条扫码路」的唯一依据 ——
+     * 只有它说清了「这条到期会自动续期」。写成与互联扫码同一句，
+     * 用户就没有任何理由选这一条，而选错就意味着继续一周重登一次。
+     */
+    val qqScanNote: String,
+)
+
 data class StatsStrings(
     /** 页面标题（Groove 风页头的大字）。 */
     val title: String,

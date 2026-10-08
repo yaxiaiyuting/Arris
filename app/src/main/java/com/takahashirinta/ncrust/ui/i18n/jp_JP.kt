@@ -617,6 +617,12 @@ val jpJP = Strings(
 
 
         // v3.4.8：B站の音質と字幕（課題 1 / 2 / 3 のユーザー向け文言）。
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "QQ Music アプリでスキャン",
+            qqScanTitle = "QQ Music アプリでログイン",
+            qqScanNote = "スマートフォンの QQ Music アプリでこのコードをスキャンします。この経路のログイン状態は期限前に自動更新されるため、毎週ログインし直す必要はありません。",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "B站の音質上限",
             biliQualityCapDescription = "B站に要求する音質を制限します。可逆圧縮と Hi-Res は大会員が必要で、対応する動画も一部だけです。",

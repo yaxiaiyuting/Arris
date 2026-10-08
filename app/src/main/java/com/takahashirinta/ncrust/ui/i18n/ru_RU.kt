@@ -619,6 +619,12 @@ val ruRU = Strings(
 
 
         // v3.4.8: качество звука и субтитры Bilibili (тексты для задач 1 / 2 / 3).
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "Сканировать в приложении QQ Music",
+            qqScanTitle = "Вход через приложение QQ Music",
+            qqScanNote = "Отсканируйте этот код приложением QQ Music на телефоне. На этом пути сеанс продлевается автоматически до истечения, поэтому входить заново каждую неделю не нужно.",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "Предел качества Bilibili",
             biliQualityCapDescription = "Ограничивает качество звука, запрашиваемое у Bilibili. Звук без потерь и Hi-Res требуют премиум-аккаунта и есть только у части видео.",

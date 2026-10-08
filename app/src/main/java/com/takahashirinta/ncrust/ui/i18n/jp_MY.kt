@@ -616,6 +616,12 @@ val jpMY = Strings(
 
 
         // v3.4.8：B站の音質と字幕（課題 1 / 2 / 3 の文）。
+
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "QQ Music アプリにて読み取る",
+            qqScanTitle = "QQ Music アプリにて入り",
+            qqScanNote = "掌の QQ Music アプリにて此の碼を読み取れ。此の道の入りたる状は限り来らば自ずから續く、每週に入り直す事なし。",
+        ),
         bili = BiliStrings(
             biliQualityCapLabel = "B站の音質の上限",
             biliQualityCapDescription = "B站に求むる音質を限る。可逆と Hi-Res は大会員を要し、亦一部の動画にのみ在り。",

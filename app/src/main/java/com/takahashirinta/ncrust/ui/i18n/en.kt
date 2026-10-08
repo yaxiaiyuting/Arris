@@ -618,6 +618,13 @@ val en = Strings(
         ),
 
 
+        // v3.4.9: "Scan with the QQ Music app" sign-in (the path whose session renews itself).
+        qqScan = QqScanStrings(
+            qqScanLoginAction = "Scan with QQ Music app",
+            qqScanTitle = "Sign in with QQ Music app",
+            qqScanNote = "Scan this code with the QQ Music app on your phone. Sign-in on this path renews automatically before it expires, so you will not have to sign in again every week.",
+        ),
+
         // v3.4.8: Bilibili audio quality and subtitles (user-facing text for issues 1 / 2 / 3).
         bili = BiliStrings(
             biliQualityCapLabel = "Bilibili quality cap",

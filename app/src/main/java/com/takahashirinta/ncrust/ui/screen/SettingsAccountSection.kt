@@ -91,6 +91,13 @@ internal fun SettingsAccountPage(
      */
     onShowBiliLogin: () -> Unit,
     onShowQqPhoneLogin: () -> Unit,
+    /**
+     * v3.4.9：打开**「QQ 音乐 App 扫码」**浮层（可续期的那条路）。
+     *
+     * 与 [onShowQqLogin]（QQ 互联扫码）是两条不同的路，浮层与文案都分开 ——
+     * 用户需要能看出「哪一条到期不用重登」，见 `QqScanLoginDialog` 的 KDoc。
+     */
+    onShowQqScanLogin: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -204,6 +211,8 @@ internal fun SettingsAccountPage(
                             phoneLoginText = strings.sourceQqPhoneTitle,
                             onLogin = onShowQqLogin,
                             onPhoneLogin = onShowQqPhoneLogin,
+                            scanLoginText = strings.sourceQqScanLoginAction,
+                            onScanLogin = onShowQqScanLogin,
                             // v2.5.4 · C：第二个**仅 debug 包**的诊断入口 —— QQ 兜底统计的读出。
                             // 与上面那条同形：release 里为 null ⇒ 整行不挂载（不是 alpha=0）。
                             onProbeStats = if (BuildConfig.DEBUG) {
@@ -564,8 +573,17 @@ internal fun QqAccountBlock(
     availabilityNote: String,
     /** v2.1.1：手机号验证码登录的入口文案。 */
     phoneLoginText: String,
+    /**
+     * v3.4.9：**「QQ 音乐 App 扫码」**的入口文案（可续期的那条路）。
+     *
+     * 为什么值得单开一个入口而不是并进 [onLogin]：两条扫码路的**后果不同** ——
+     * 互联扫码拿到的只是 cookie（到期要重登），这一条能换到续期凭证（到期自动续）。
+     * 并成一个按钮就等于把这个差别藏起来，而用户正是为了这个差别才需要选。
+     */
+    scanLoginText: String,
     onLogin: () -> Unit,
     onPhoneLogin: () -> Unit,
+    onScanLogin: () -> Unit,
     /**
      * v2.1.4：**仅 debug 包**显示的取链诊断入口 —— 对当前播放的 QQ 曲目一次性问全档位。
      *
@@ -648,6 +666,19 @@ internal fun QqAccountBlock(
             color = LocalMetroColors.current.primary,
             modifier = Modifier
                 .clickable(onClick = onPhoneLogin)
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+        )
+        // v3.4.9：**可续期**的那条扫码路单独给一个入口。
+        //
+        // 它和上面的登录动作（QQ 互联扫码）在界面上必须能分辨：只有这一条拿得到
+        // 续期凭证，也就是只有这一条「到期不用重登」—— 而那正是用户报障要解决的问题。
+        // 并进一个按钮等于把选择依据藏起来。
+        MetroText(
+            text = scanLoginText,
+            style = LocalMetroTypography.current.bodyLarge,
+            color = LocalMetroColors.current.primary,
+            modifier = Modifier
+                .clickable(onClick = onScanLogin)
                 .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
         )
         MetroText(
