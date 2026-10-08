@@ -424,8 +424,17 @@ android {
         //      —— 仓库此前只有 `mipmap-anydpi-v26`，Android 7.x 上 launcher 拿不到图标。
         //   ③ B 站：大会员 Hi-Res 无损（读 `dash.flac.audio`，此前从没被读）、
         //      字幕语言可选（此前写死中文优先）、音质上限与优先 FLAC 两个用户参数。
-        versionCode = 70
-        versionName = "3.4.8-gpl"
+        // v3.4.9（71）：**qm 登录态续期**（用户报「qq 音乐登录身份一周左右就掉」）
+        //   + 「QQ 音乐 App 扫码」登录（可续期的那条扫码路）。
+        //   ⚠️ 没有改动任何持久化结构或包名 ⇒ 可直接覆盖安装 v3.4.8，数据零迁移。
+        //   新增的落盘只有一个 key（`ncrust_qq_prefs` / `qq_refresh_credential`），
+        //   老用户没有它就是「不能续期」，行为与 v3.4.8 完全一致 —— 这是本次迁移的验收口径。
+        //   版本号出处：`tools/next-version.sh`（带 fetch）三源交叉验证 ——
+        //   最近 5 个 tag 的最大值 70（v3.4.8-gpl）/ dist 里 aapt2 实测的最大值 69
+        //   （v3.4.7 是**最后一个真正进了 dist 的包**，v3.4.8 只有 tag、没有制品）
+        //   / 工作区当前值 70 ⇒ 三源最大 70 ⇒ 本版取 **71**。
+        versionCode = 71
+        versionName = "3.4.9-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
