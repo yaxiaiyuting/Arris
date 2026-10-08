@@ -35,6 +35,19 @@ class QqLiveProbeTest {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    /**
+     * 单独给 CDN 用的客户端：**读超时收紧到 8 秒**。
+     *
+     * 与 [http] 分开的理由是一条实测事实：`streamoc.music.tc.qq.com` 在部分网络里
+     * 会接受连接却永不返回字节，用 15 秒的读超时会让这条用例白等 15 秒才判「跳过」。
+     * 真正的音频响应是 2~4 MB，正常网络下 8 秒足够；**慢到 8 秒还没吐出任何字节**
+     * 与「这个域名不可达」在测试语境下是同一件事。
+     */
+    private val cdnHttp = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
+        .build()
+
     private val jsonType = "application/json; charset=utf-8".toMediaType()
     private val appUa = "QQMusic 14090008(android 10)"
     private val webUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -203,14 +216,26 @@ class QqLiveProbeTest {
         }
         assumeTrue("这次没找到可匿名播放的免费曲目（服务端曲库会变），跳过", playable != null)
 
-        // 关键断言：CDN 真的把音频给我们
+        // 关键断言：CDN 真的把音频给我们。
+        //
+        // ⚠️ 网络层失败**跳过**而不是失败（v3.4.9 实测踩到）：服务端下发的 `sip[0]` 可能是
+        // `streamoc.music.tc.qq.com`，而那个域名在部分网络里**接受 TCP 连接后不返回任何字节**
+        // （实测 `SocketTimeoutException: Read timed out` 于 10.1 s；同一时刻另外三个候选域名
+        // `ws` / `isure` / `dl`.stream.qqmusic.qq.com 都在 330 ms 内返回 403）。
+        // 这条用例要证明的是「拿到的 purl 指向真音频」，不是「这台机器的出口能连通腾讯的每一个
+        // CDN 域名」—— 后者不该让一次全量单测变红（本文件开头的纪律：不可用时 `assumeTrue` 跳过）。
+        // 拿到响应之后的一切（状态码、字节数、ID3/ftyp）**照旧是硬断言**，判据一点没放松。
         val result = try {
-            http.newCall(
+            cdnHttp.newCall(
                 Request.Builder().url(playable!!.first)
                     .header("User-Agent", appUa).header("Referer", "https://y.qq.com/").build()
             ).execute()
-        } catch (e: Exception) {
-            throw AssertionError("CDN 请求失败：${playable!!.first.take(120)}", e)
+        } catch (e: java.io.IOException) {
+            assumeTrue(
+                "CDN 域名不可达（${playable!!.first.take(90)}）：${e::class.java.simpleName}",
+                false,
+            )
+            return
         }
         result.use { resp ->
             assertEquals("CDN 应返回 200", 200, resp.code)
