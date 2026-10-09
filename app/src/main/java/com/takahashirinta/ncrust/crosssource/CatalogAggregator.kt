@@ -602,6 +602,21 @@ object CatalogAggregator {
     }
 
     /** 找到另一源上的同一张专辑：按专辑名搜一次 → 逐个校验（≤3）。 */
+    /**
+     * 对端召回的搜索关键词（v3.4.11）：**专辑名 + 歌手名**。
+     *
+     * 只按专辑名搜会召回一堆同名专辑（原版 / 精选 / 现场 / 翻唱），
+     * 而候选只评估前 3 个 —— 正主排在第 4 位以后就等于没配上。
+     * 两个平台的搜索接口都支持空格分隔的多词，加了歌手不会让正主消失。
+     *
+     * 歌手为空时（路由与缓存都没给）**原样返回专辑名**：与 v3.4.11 之前逐字相同，
+     * 不引入一个「空串拼进去变成前导空格」的新形状。
+     */
+    private fun searchKeywordOf(anchor: AlbumKey): String {
+        val artist = anchor.artistKey?.name?.trim().orEmpty()
+        return if (artist.isEmpty()) anchor.name else anchor.name + " " + artist
+    }
+
     private suspend fun findCounterpartAlbum(
         context: Context,
         anchor: AlbumKey,
@@ -622,9 +637,19 @@ object CatalogAggregator {
         val candidates: List<QqAlbum> = when (other) {
             // 结构上不可达（同 findCounterpartAlbum）；显式分支见 albumTrackCandidates 的说明。
             MusicSource.BILIBILI -> emptyList()
-            MusicSource.QQMUSIC -> runCatching { QqCatalogApi.searchAlbums(anchor.name, 10) }.getOrDefault(emptyList())
+            // v3.4.11：搜索关键词是**专辑名 + 歌手**（此前只有专辑名）。
+            //
+            // 为什么加歌手：同名专辑（原版 / 精选 / 现场 / 翻唱合集）在两个平台上同时
+            // 存在，只按名字搜回来的候选里正主可能排在很后面，而后面 `take(3)` 只评估
+            // 3 个 —— 翻唱合集一旦进来就可能被选中，且界面还会显示一个「已匹配」的置信度。
+            // 两个平台的搜索接口都支持空格分隔的多词（实测 `范特西 周杰伦` 能搜到），
+            // 而**加了词不会让正主消失**（它本来就在结果里）—— 所以这一步是净收益。
+            MusicSource.QQMUSIC -> runCatching {
+                QqCatalogApi.searchAlbums(searchKeywordOf(anchor), 10)
+            }.getOrDefault(emptyList())
             MusicSource.NETEASE -> runCatching {
-                RetrofitClient.api.searchAlbum(keyword = anchor.name, limit = 10).result?.albums.orEmpty()
+                RetrofitClient.api.searchAlbum(keyword = searchKeywordOf(anchor), limit = 10)
+                    .result?.albums.orEmpty()
             }.getOrDefault(emptyList()).map {
                 QqAlbum(
                     id = it.id ?: 0L,
@@ -656,6 +681,30 @@ object CatalogAggregator {
                 candidate,
                 ratio,
             )
+            // v3.4.11：**歌手必须先对上**才允许进入「同名匹配」。
+            //
+            // 这一步是用户要求的「优先原唱 / 用搜索的歌手名字匹配专辑作者」，而它此前
+            // 在结构上做不到：`candidate.artistNames` 里塞的是
+            // `listOfNotNull(c.singerName, anchorArtist)` —— **候选自己的歌手与锚点的歌手
+            // 被合成了一个列表**，判据分不清「这个候选是同一个人唱的」还是「我们只是想
+            // 找一个同歌手的」。现在用 `AlbumLookup` 单独判一次歌手，把它作为
+            // 「同名但不同歌手」的排除条件。
+            val artistMatches = AlbumLookup.score(
+                queryName = anchor.name,
+                queryArtist = anchorArtist.takeIf { it.isNotEmpty() },
+                candidate = AlbumLookup.Candidate(
+                    id = 0L,
+                    name = c.name,
+                    artistName = c.singerName,
+                    trackCount = c.trackCount,
+                ),
+            )
+            // 锚点有歌手、候选也有歌手、但两者对不上 ⇒ **跳过这个候选**（同名不同人）。
+            // 只在两边都已知时才排除：信息不足时保持旧行为（宁可少排除，也不要凭猜测丢候选）。
+            val artistConflict = anchorArtist.isNotEmpty() &&
+                !c.singerName.isNullOrEmpty() &&
+                artistMatches == null
+            if (artistConflict) continue
             val overlap = candidate.trackNames.mapNotNull { NameNormalizer.normalizeName(it).takeIf { n -> n.isNotEmpty() } }
                 .toSet().let { set -> anchorNames.count { NameNormalizer.normalizeName(it) in set } }
             if (best == null || rank(verdict.confidence) > rank(best.second.confidence)) {

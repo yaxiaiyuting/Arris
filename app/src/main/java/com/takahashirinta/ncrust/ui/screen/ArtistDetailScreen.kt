@@ -3,6 +3,10 @@ package com.takahashirinta.ncrust.ui.screen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
+import com.takahashirinta.ncrust.ui.components.pullToRefresh
+import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -128,6 +132,15 @@ fun ArtistDetailScreen(
     // 重试：LaunchedEffect 的 key 里加一个自增 tick（比把加载写成局部函数更好读，
     // 也不会把 coroutineScope 泄漏进 Composable 的闭包）。
     var reloadTick by remember(anchor) { mutableIntStateOf(0) }
+
+    // v3.4.11：**下拉刷新**。用户报障：「音乐作者界面里的单曲和专辑仍然没有下滑刷新」。
+    //
+    // 复用既有组件（`Modifier.pullToRefresh` + `PullToRefreshIndicator`，
+    // v2.3.0 起就在用，此前只有歌单详情页与搜索页接了）—— 不新建组件、不发明新交互。
+    // `DetailScaffold` 从 v2.3.0 就把 `listState` 与 `contentModifier` 暴露出来了，
+    // 那两个参数**就是为这件事留的口子**（见它的 KDoc），所以这里只是把它们用上。
+    val listState = rememberLazyListState()
+    val pullState = rememberPullToRefreshState()
     var filter by remember { mutableStateOf(SourceFilter.BOTH) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -208,6 +221,20 @@ fun ArtistDetailScreen(
         hasCachedContent = loaded != null,
         error = error,
         onRetry = { reloadTick++ },
+        listState = listState,
+        contentModifier = Modifier.pullToRefresh(
+            state = pullState,
+            // `atTop` 判据与搜索页/歌单详情页**逐字相同**（第一项可见且偏移为 0）——
+            // 不看它会把「往下滚列表」误判成下拉刷新。
+            atTop = {
+                listState.firstVisibleItemIndex == 0 &&
+                    listState.firstVisibleItemScrollOffset == 0
+            },
+            // 刷新 = 重新走一遍 `CatalogAggregator.loadArtist`（那个 LaunchedEffect 的 key
+            // 里就有 reloadTick）。**没有「换一批」**：艺人页的曲目来自固定端点，
+            // 同样的输入就是同样的输出；这里能刷新的是「服务端这一轮的数据」。
+            onRefresh = { reloadTick++ },
+        ),
         header = {
             // 顶部 statusBar + 56dp 为浮层返回箭头让路（浮层箭头会盖在这块黑色上）。
             Column(modifier = Modifier.statusBarsPadding()) {
@@ -260,6 +287,9 @@ fun ArtistDetailScreen(
             }
         },
         content = {
+            // 下拉指示器是列表的**第一项**（既有用法，见搜索页 / 歌单详情页）：
+            // 只在真的拉动或刷新中挂载，不做「alpha = 0 常挂载」（AGENTS.md 触摸陷阱第 1 条）。
+            item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
             when (selectedTab) {
                 0 -> {
                     if (albumRows.isEmpty()) {

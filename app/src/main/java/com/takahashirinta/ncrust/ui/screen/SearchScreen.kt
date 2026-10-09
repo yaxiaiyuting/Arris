@@ -85,6 +85,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import android.widget.Toast
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 enum class BatchQueueAction { PLAY_NOW, INSERT_NEXT, APPEND }
 
@@ -160,19 +161,45 @@ fun SearchScreen(
     // （那是对的：用户看到的就是「到底了」）；但拉回来如果仍不满一页，
     // `hasMore` 会变成 false，循环就停在那里。真正防住死循环的是 `hasMore` 那个闸门，
     // 不是这个下标判据。
-    LaunchedEffect(listState, hasMore, isLoadingMore, songs.size, albums.size, artists.size) {
-        if (!hasMore || isLoadingMore) return@LaunchedEffect
-        val total = when (currentType) {
-            10 -> albums.size
-            100 -> artists.size
-            else -> songs.size
+    // ⚠️ **不能用 `LaunchedEffect(listState, hasMore, songs.size, …)` 来观察滚动**。
+    //
+    // 第一版就是这么写的，而它**只在那些 key 变化时才跑一次** —— 用户滚动列表
+    // 不会改变任何一个 key（`songs.size` 没变、`hasMore` 没变），于是「滚到底」
+    // 从来不会触发这个检查。模拟器实测留下了铁证：连续滑动 12 次之后
+    // `lastVisible` 一直是 6（首屏那一屏），而这个 effect 一次都没有再跑过。
+    //
+    // 正确写法是**观察滚动状态本身**：`snapshotFlow { layoutInfo }` 会在快照
+    // （含滚动位置）变化时重新求值。它也满足 GPU 零重组原则 —— `snapshotFlow`
+    // 不订阅重组，只有 `distinctUntilChanged` 之后的**布尔结论**变化才走一次协程体。
+    //
+    // `hasMore` / `isLoadingMore` / 三个列表长度仍然要进 key：`snapshotFlow` 只观察
+    // `listState`，而协程体里读到的这几个值会被捕获在启动那一刻 ——
+    // 不进 key 就会出现「翻页后 hasMore 已是 false 却仍然再触发一次」。
+    LaunchedEffect(
+        listState,
+        hasMore,
+        isLoadingMore,
+        songs.size,
+        albums.size,
+        artists.size,
+        currentType,
+    ) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            // 只把**布尔结论**传下去：滚动位置本身每次都在变，
+            // 用它当 key 会让下游在每一次滚动时都重启一遍。
+            info.totalItemsCount > 0 && lastVisible >= info.totalItemsCount - 2
         }
-        if (total <= 0) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (lastVisible >= listState.layoutInfo.totalItemsCount - 2) {
-            viewModel.loadMore()
-        }
+            .distinctUntilChanged()
+            .collect { atEnd ->
+                if (atEnd && hasMore && !isLoadingMore) {
+                    android.util.Log.i("SearchPaging", "滚到底 ⇒ 自动加载下一页")
+                    viewModel.loadMore()
+                }
+            }
     }
+
     // 刷新何时结束：搜索这一轮跑完（isLoading 落回 false）就把指示器收掉。
     // 判据必须由**发起刷新的那一层**给（组件自己不知道网络什么时候回来）——
     // 与 LocalPlaylistDetailScreen 的 `pullState.refreshing = false` 同一个契约。
@@ -673,7 +700,7 @@ fun SearchScreen(
                                     // 取完且没有更多时**什么都不显示**（不占视觉）。
                                     item(key = "load-more") {
                                         SearchLoadMoreRow(
-                                            hasMore = hasMore,
+                                            
                                             isLoadingMore = isLoadingMore,
                                             loadingLabel = strings.searchLoadingMore,
                                         )
@@ -749,7 +776,7 @@ fun SearchScreen(
                                 // v3.4.11：专辑 tab 同样分页（滚到底自动加载，同上）。
                                 item(key = "load-more") {
                                     SearchLoadMoreRow(
-                                        hasMore = hasMore,
+                                        
                                         isLoadingMore = isLoadingMore,
                                         loadingLabel = strings.searchLoadingMore,
                                     )
@@ -814,7 +841,7 @@ fun SearchScreen(
                                 // v3.4.11：艺人 tab 同样分页（滚到底自动加载，同上）。
                                 item(key = "load-more") {
                                     SearchLoadMoreRow(
-                                        hasMore = hasMore,
+                                        
                                         isLoadingMore = isLoadingMore,
                                         loadingLabel = strings.searchLoadingMore,
                                     )
@@ -1162,16 +1189,14 @@ fun SongSearchItem(
  * 那个意见是对的：翻页是**列表到底**这个动作的自然延续，让用户为此再点一次
  * 是把「浏览」切成了「浏览 + 操作」。
  *
- * 触发判据在页面的 `LaunchedEffect` 里（见那段注释：为什么是「差两项」而不是「等于最后一项」，
- * 以及为什么真正防死循环的是 `hasMore` 闸门而不是下标判据）。
+ * 触发判据在页面的 `snapshotFlow` 里（见那段注释：**为什么不能用 `LaunchedEffect` 的 key
+ * 来观察滚动** —— 那是本版踩过的坑，以及为什么真正防死循环的是 `hasMore` 闸门）。
  *
  * 这里只剩**状态显示**：
- * - 正在取下一页 ⇒ 「正在加载…」（让用户知道那一秒在干什么）；
- * - 取完且没有更多，或者没有下一页 ⇒ **什么都不画**（不占视觉、不留空行）。
+ * 正在取下一页 ⇒ 「正在加载…」（让用户知道那一秒在干什么）；其余时候**什么都不画**。
  */
 @Composable
 private fun SearchLoadMoreRow(
-    hasMore: Boolean,
     isLoadingMore: Boolean,
     loadingLabel: String,
 ) {

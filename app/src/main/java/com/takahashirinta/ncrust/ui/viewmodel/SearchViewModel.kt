@@ -562,7 +562,7 @@ class SearchViewModel : ViewModel() {
                                 } else {
                                     SourceSearchStatus.PENDING
                                 },
-                                qqCount = qqOutcome?.songs?.size ?: 0,
+                                qqCount = lastQqSongs.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
                                 biliCount = biliOutcome?.songs?.size ?: 0,
                                 biliStatus = biliStatusOf(biliOutcome, biliAllowed),
@@ -624,7 +624,12 @@ class SearchViewModel : ViewModel() {
                             _sourceCounts.value = SourceCounts(
                                 neteaseTotal = lastTotals["netease"],
                                 qqTotal = lastTotals["qqmusic"],
-                                neteaseCount = neteaseList.size,
+                                // ⚠️ 这里填的是**累计已加载**（`lastSongs`），不是「本页」。
+                                // 服务端给了总数时界面显示总数（那一栏与翻页无关）；
+                                // **没给**时回落到「已载 N 首」，而那个 N 必须是累计 ——
+                                // 填本页条数会让它翻页前后都显示 30，看起来像「没有实时更新」
+                                // （用户报的正是这句话）。
+                                neteaseCount = lastSongs.size,
                                 neteaseStatus = SourceSearchStatus.DONE,
                                 qqCount = qq.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),

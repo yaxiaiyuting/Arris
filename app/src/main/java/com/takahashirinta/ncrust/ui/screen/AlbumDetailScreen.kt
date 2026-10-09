@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.PlaylistAdd
@@ -27,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.crosssource.AlbumKey
+import com.takahashirinta.ncrust.crosssource.AlbumLookup
+import com.takahashirinta.ncrust.crosssource.ArtistKey
 import com.takahashirinta.ncrust.crosssource.AlbumPage
 import com.takahashirinta.ncrust.crosssource.CatalogAggregator
 import com.takahashirinta.ncrust.crosssource.MatchConfidence
@@ -42,6 +45,9 @@ import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.trackKey
 import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.DetailHeader
+import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
+import com.takahashirinta.ncrust.ui.components.pullToRefresh
+import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
 import com.takahashirinta.ncrust.ui.components.PlayAllDialog
 import com.takahashirinta.ncrust.ui.components.SongCard
@@ -109,15 +115,40 @@ fun AlbumDetailScreen(
     }
     var albumMeta by remember(source, albumIdLong) { mutableStateOf(cachedAlbum) }
 
-    // 聚合器锚点的名字：ncm 一侧来自缓存（它参与对端召回的搜索关键词），
-    // QQ 一侧路由里没有名字，只能先用空串。
+    // 聚合器锚点的名字与歌手：ncm 一侧来自缓存（名字参与对端召回的搜索关键词，
+    // 歌手参与「同名专辑里谁是正主」的判定），QQ 一侧路由里两样都没有，只能先用空串。
+    //
+    // v3.4.11：**歌手此前从来没有被填进锚点** —— `AlbumKey.artistKey` 一直有字段、
+    // 但没有任何调用点写过它，于是聚合器里的 `anchorArtist` 恒为空串，
+    // 「用歌手名匹配专辑作者」这条判据在结构上不可能生效（用户报的正是这件事）。
     val cachedName = cachedAlbum?.name.orEmpty()
-    val anchor = remember(source, albumId, cachedName) { AlbumKey(source, albumId, cachedName) }
+    val cachedArtist = cachedAlbum?.artist?.name.orEmpty()
+    val anchorArtistKey = remember(cachedArtist) {
+        cachedArtist.takeIf { it.isNotBlank() }?.let { ArtistKey(source, "", it) }
+    }
+    val anchor = remember(source, albumId, cachedName, anchorArtistKey) {
+        AlbumKey(source, albumId, cachedName, anchorArtistKey)
+    }
+
+    /**
+     * 解析出来的歌手名（v3.4.11）。
+     *
+     * 为什么要单独存一份：`anchor` 来自缓存（首帧就定），而直取元信息是**异步**的 ——
+     * 歌手名到手之后要能把它带进**这一轮**的聚合锚点，否则第一次进入这一页时
+     * 锚点里仍然是空歌手，而那正是「优先原唱」最该生效的时机。
+     */
+    var resolvedArtist by remember(source, albumId) { mutableStateOf(cachedArtist) }
 
     var page by remember(anchor) { mutableStateOf<AlbumPage?>(null) }
     var isLoading by remember(anchor, cachedAlbum) { mutableStateOf(cachedAlbum == null) }
     var error by remember(anchor) { mutableStateOf<String?>(null) }
     var reloadTick by remember(anchor) { mutableIntStateOf(0) }
+
+    // v3.4.11：**下拉刷新**（用户报「作者界面里的单曲和专辑仍然没有下滑刷新」，
+    // 专辑详情页同样缺这个入口）。复用既有组件，与搜索页 / 歌单详情页逐字同一条写法 ——
+    // `DetailScaffold` 从 v2.3.0 就暴露了 `listState` 与 `contentModifier` 这两个口子。
+    val listState = rememberLazyListState()
+    val pullState = rememberPullToRefreshState()
     var filter by remember { mutableStateOf(SourceFilter.BOTH) }
     var showPlayAllDialog by remember { mutableStateOf(false) }
     // 专辑收藏状态: 本地缓存是即时真源(云端异步同步), 切换后自增 tick 刷新。
@@ -141,6 +172,7 @@ fun AlbumDetailScreen(
                 ContentCache.putAlbum(albumIdLong, response)
                 albumMeta = response.album
                 response.album?.name?.takeIf { it.isNotBlank() }?.let { resolvedName = it }
+                resolvedArtist = response.album?.artist?.name.orEmpty()
             } catch (_: Exception) {
                 // 元信息是**增强**：失败不影响页面（有缓存就继续用缓存、没有就少两行信息）。
             }
@@ -152,8 +184,11 @@ fun AlbumDetailScreen(
             //    代价是这一次请求与聚合器内部那一次重复；详情页是低频路径，换的是功能可用。
             resolvedName = runCatching { QqCatalogApi.albumDetail(albumId)?.name }.getOrNull().orEmpty()
         }
-        val effective =
-            if (resolvedName == anchor.name) anchor else AlbumKey(source, albumId, resolvedName)
+        // 用**解出来的名字与歌手**构造这一轮的锚点：名字参与对端召回（搜索关键词），
+        // 歌手参与「同名专辑里谁是正主」的判定（`AlbumLookup`）。
+        val effectiveArtist = resolvedArtist.takeIf { it.isNotBlank() }
+            ?.let { ArtistKey(source, anchor.artistKey?.id.orEmpty(), it) }
+        val effective = AlbumKey(source, albumId, resolvedName, effectiveArtist)
         try {
             page = CatalogAggregator.loadAlbum(context, effective)
         } catch (e: Exception) {
@@ -228,6 +263,17 @@ fun AlbumDetailScreen(
         hasCachedContent = loaded != null || albumMeta != null,
         error = error,
         onRetry = { reloadTick++ },
+        listState = listState,
+        contentModifier = Modifier.pullToRefresh(
+            state = pullState,
+            // `atTop` 判据与搜索页 / 歌单详情页 / 艺人页**逐字相同**。
+            atTop = {
+                listState.firstVisibleItemIndex == 0 &&
+                    listState.firstVisibleItemScrollOffset == 0
+            },
+            // 刷新 = 重跑聚合（`LaunchedEffect(anchor, reloadTick)` 的 key 里有 reloadTick）。
+            onRefresh = { reloadTick++ },
+        ),
         header = {
             DetailHeader(
                 coverUrl = albumMeta?.picUrl ?: loaded?.songs?.firstOrNull()?.song?.album?.picUrl,
@@ -305,6 +351,9 @@ fun AlbumDetailScreen(
             )
         },
         content = {
+            // 下拉指示器是列表的**第一项**（既有用法）：只在真的拉动或刷新中挂载，
+            // 不做「alpha = 0 常挂载」（AGENTS.md 触摸陷阱第 1 条）。
+            item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
             if (songs.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
