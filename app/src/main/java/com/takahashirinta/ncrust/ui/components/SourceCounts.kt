@@ -76,6 +76,23 @@ data class SourceCounts(
      */
     val biliCount: Int = 0,
     val biliStatus: SourceSearchStatus = SourceSearchStatus.SKIPPED,
+    /**
+     * v3.4.11：**服务端声明的总曲库数**（这一轮只取了它的一小段）。
+     *
+     * 用户建议原话：「最顶部哪个音源多少个歌曲也没有实时更新，建议用抓取的
+     * 总曲库数字作为哪个音源多少首的度值」。他是对的 —— 此前这里显示的是
+     * 「这一轮取回了多少条」，于是「ncm 30 首」读起来像「ncm 只有 30 首」，
+     * 而且翻页后那个数字**不会变**（它本来就是「这一轮」的量），
+     * 用户看到的就是「没有实时更新」。
+     *
+     * 实测两个音源都给总数：ncm 的 `result.songCount`（周杰伦 = **273**）、
+     * QQ 的 `data.song.totalnum`（同为周杰伦 = **999**）。
+     *
+     * `null` = 这个音源/这一轮没给 ⇒ **回落到「已载 N 首」**（如实说「已载」，
+     * 不把已载量冒充总数）。
+     */
+    val neteaseTotal: Int? = null,
+    val qqTotal: Int? = null,
 ) {
 
     /** 还有源在飞。 */
@@ -137,19 +154,40 @@ data class SourceCounts(
     }
 
     /** ncm 侧那半句。 */
-    fun neteaseText(strings: Strings): String = sideText(neteaseStatus, neteaseCount, strings)
+    fun neteaseText(strings: Strings): String =
+        sideText(neteaseStatus, neteaseCount, strings, neteaseTotal)
 
     /**
      * QQ 侧那半句。
      *
      * ★ **绝不在未返回时返回 "0"** —— 这一条是本版的核心修复，由 `SourceCountsTest` 钉住。
      */
-    fun qqText(strings: Strings): String = sideText(qqStatus, qqCount, strings)
+    fun qqText(strings: Strings): String =
+        sideText(qqStatus, qqCount, strings, qqTotal)
 
     /** v3.1.0 · B：B 站侧那半句。判据与 [qqText] 完全一致（同一个 [sideText]）。 */
     fun biliText(strings: Strings): String = sideText(biliStatus, biliCount, strings)
 
-    private fun sideText(status: SourceSearchStatus, count: Int, strings: Strings): String =
+    /**
+     * 一侧那半句。
+     *
+     * v3.4.11：`total` 非空时显示**服务端声明的总数**（`ncm 273 首`），
+     * 为空时回落到「已载 N 首」—— 后者是对「这一轮取回多少」的如实描述，
+     * 不再被冒充成总数（这正是用户报的那句「没有实时更新」）。
+     */
+    private fun sideText(
+        status: SourceSearchStatus,
+        count: Int,
+        strings: Strings,
+        total: Int? = null,
+    ): String =
+        if (status == SourceSearchStatus.DONE && total != null && total > 0) {
+            strings.searchSourceTotal(total)
+        } else {
+            sideTextByStatus(status, count, strings)
+        }
+
+    private fun sideTextByStatus(status: SourceSearchStatus, count: Int, strings: Strings): String =
         when (status) {
             SourceSearchStatus.PENDING -> strings.searchSourcePending
             SourceSearchStatus.TIMEOUT -> strings.searchSourceTimeout

@@ -113,6 +113,24 @@ object QqApi {
     }
 
     /**
+     * 只问 QQ 那边这个关键词**总共有多少首**（v3.4.11）。
+     *
+     * 走的是与 [searchSongs] **同一条**旧版 GET（`client_search_cp`，`n=1` 把正文压到最小），
+     * 只读 `data.song.totalnum` —— 不新发明请求形状，也就不会引入一个没实测过的通道。
+     *
+     * 实测（2026-10-10，匿名）：`w=周杰伦` → `totalnum = 999`。
+     * 取不到返回 null（**不是 0**）：「不知道总数」与「总数是 0」是两件事，
+     * 界面在 null 时回落到「已载 N 首」。
+     */
+    suspend fun searchTotalCount(keyword: String): Int? {
+        if (keyword.isBlank()) return null
+        val json = runCatching {
+            QqClient.legacyGet(QqRequests.legacySearchUrl(keyword, limit = 1, page = 1))
+        }.getOrNull() ?: return null
+        return QqSongMapper.totalCountOf(json, "song")
+    }
+
+    /**
      * v3.3.0 · 需求 2：**按歌词搜索**（`t=7`）。
      *
      * 实测（2026-10）：`client_search_cp?t=7&w=让我掉下眼泪的` 返回 `data.lyric.list`，

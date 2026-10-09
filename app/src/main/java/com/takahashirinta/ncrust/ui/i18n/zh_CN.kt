@@ -626,6 +626,7 @@ val zhCN = Strings(
         search = SearchStrings(
             searchLoadMore = "加载更多",
             searchLoadingMore = "正在加载…",
+            searchSourceTotal = { n -> java.lang.String.format("共 %d 首", n) },
         ),
 
         bili = BiliStrings(

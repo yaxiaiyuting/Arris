@@ -629,6 +629,7 @@ val en = Strings(
         search = SearchStrings(
             searchLoadMore = "Load more",
             searchLoadingMore = "Loading…",
+            searchSourceTotal = { n -> java.lang.String.format("%d total", n) },
         ),
 
         bili = BiliStrings(

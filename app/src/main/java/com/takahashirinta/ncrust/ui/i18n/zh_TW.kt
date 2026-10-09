@@ -626,6 +626,7 @@ scanConnecting = "正在連接平板…",
         search = SearchStrings(
             searchLoadMore = "載入更多",
             searchLoadingMore = "正在載入…",
+            searchSourceTotal = { n -> java.lang.String.format("共 %d 首", n) },
         ),
 
         bili = BiliStrings(

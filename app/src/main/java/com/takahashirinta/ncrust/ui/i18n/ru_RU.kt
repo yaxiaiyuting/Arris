@@ -628,6 +628,7 @@ val ruRU = Strings(
         search = SearchStrings(
             searchLoadMore = "Загрузить ещё",
             searchLoadingMore = "Загрузка…",
+            searchSourceTotal = { n -> java.lang.String.format("всего %d", n) },
         ),
 
         bili = BiliStrings(

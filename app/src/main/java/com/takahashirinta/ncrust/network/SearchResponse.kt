@@ -12,7 +12,24 @@ data class SearchResponse(
 data class SearchResult(
     @SerializedName("songs") val songs: List<SongItem>?,
     @SerializedName("albums") val albums: List<AlbumSearchItem>?,
-    @SerializedName("artists") val artists: List<ArtistSearchItem>?
+    @SerializedName("artists") val artists: List<ArtistSearchItem>?,
+    /**
+     * v3.4.11：**服务端声明的总数**（这一页只是它的一小段）。
+     *
+     * 实测（2026-10-10，匿名）：`s=周杰伦&type=1` → `songCount = 273`；
+     * `type=10` → `albumCount = 592`；`type=100` → `artistCount = 83`。
+     *
+     * 为什么要它：搜索页顶部那行统计原先只能是「**这一轮取回了多少条**」，
+     * 于是「ncm 30 首」读起来像「ncm 只有 30 首」—— 用户的原话是
+     * 「最顶部哪个音源多少个歌曲也没有实时更新，建议用抓取的总曲库数字」。
+     * 有了总数，那一行才回答得了「这个关键词在两个平台各有多少」。
+     *
+     * **可空 + 默认 null 是硬要求**：不是每次响应都带它（字段名在不同 type 下不同），
+     * 而「不知道总数」与「总数是 0」是两件事 —— 缺字段时界面回落到「已载 N 首」。
+     */
+    @SerializedName("songCount") val songCount: Int? = null,
+    @SerializedName("albumCount") val albumCount: Int? = null,
+    @SerializedName("artistCount") val artistCount: Int? = null,
 )
 
 // @Immutable：Compose 视 List<T> 为 unstable 参数，会强制每次重组重新比较；

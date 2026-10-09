@@ -135,6 +135,16 @@ class SearchViewModel : ViewModel() {
      * 直接 `+` 会得到一个「第一页按会员排好、第二页按请求顺序接在后面」的列表，
      * 那是**两个排序口径拼在一起**，用户能看出来。
      */
+    /**
+     * v3.4.11：这一轮**服务端声明的总数**（逐源）。
+     *
+     * 由各 Provider 通过 `searchSongs(..., totalOut)` 填进来（实测两个音源都给：
+     * ncm `result.songCount` / QQ `data.song.totalnum`）。
+     * 界面用它显示「ncm 273 首」，而不是「这一轮取回多少条」——
+     * 后者是用户报的「没有实时更新」的根源。
+     */
+    private val lastTotals = mutableMapOf<String, Int>()
+
     private var lastSongs: List<SongItem> = emptyList()
     private var lastQqSongs: List<SongItem> = emptyList()
     private var lastBiliSongs: List<SongItem> = emptyList()
@@ -272,6 +282,7 @@ class SearchViewModel : ViewModel() {
 
     /** 新一轮搜索（关键词变了 / 换 tab / 下拉刷新）时清空累计。**与 append 成对使用**。 */
     private fun resetSongs() {
+        lastTotals.clear()
         accumulatedSongs = emptyList()
         lastSongs = emptyList()
         lastQqSongs = emptyList()
@@ -410,7 +421,10 @@ class SearchViewModel : ViewModel() {
                                     // v3.4.11：翻页靠的就是这个 offset（接口本来就是分页的）。
                                     offset = com.takahashirinta.ncrust.search.SearchPaging
                                         .offsetOf(currentPage, PAGE_SIZE),
-                                ).result?.songs
+                                ).result?.also { r ->
+                                    // v3.4.11：总数（实测 `s=周杰伦` → songCount=273）。
+                                    r.songCount?.let { lastTotals["netease"] = it }
+                                }?.songs
                             }
                             val failure = outcome.exceptionOrNull()
                             if (failure != null) {
@@ -431,6 +445,7 @@ class SearchViewModel : ViewModel() {
                                         keyword,
                                         PAGE_SIZE,
                                         page = currentPage,
+                                        totalOut = lastTotals,
                                     )
                                 }
                                 // `withTimeoutOrNull` 返回 null = 预算用完 ⇒ 记成 TIMEOUT
@@ -607,6 +622,8 @@ class SearchViewModel : ViewModel() {
                         }
                         if (_query.value == keyword) {
                             _sourceCounts.value = SourceCounts(
+                                neteaseTotal = lastTotals["netease"],
+                                qqTotal = lastTotals["qqmusic"],
                                 neteaseCount = neteaseList.size,
                                 neteaseStatus = SourceSearchStatus.DONE,
                                 qqCount = qq.size,
@@ -749,6 +766,21 @@ class SearchViewModel : ViewModel() {
                     }
                     _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
                         .hasMore(page.size, PAGE_SIZE)
+                    // v3.4.11：统计行现在**三个 tab 常驻**（用户在搜索栏下方看到的是一整条），
+                    // 所以专辑 tab 也要填它，否则切过去那一行是空的。
+                    // 专辑搜索目前**只有 ncm 这一路**（`searchAlbum` 是 ncm 独有），
+                    // QQ/B 站如实标成「未登录/未启用」，不编一个数字出来。
+                    _sourceCounts.value = SourceCounts(
+                        neteaseCount = _albums.value.size,
+                        neteaseTotal = response.result?.albumCount,
+                        neteaseStatus = SourceSearchStatus.DONE,
+                        qqCount = 0,
+                        // QQ 侧恒 SKIPPED：专辑搜索这一路**没有** QQ 的实现（如实标注，
+                        // 而不是写个 if 让它在两个相同分支里假装有区别）。
+                        qqStatus = SourceSearchStatus.SKIPPED,
+                        biliCount = 0,
+                        biliStatus = SourceSearchStatus.SKIPPED,
+                    )
                     _songs.value = emptyList()
                     _artists.value = emptyList()
                 }
@@ -770,6 +802,16 @@ class SearchViewModel : ViewModel() {
                     }
                     _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
                         .hasMore(page.size, PAGE_SIZE)
+                    // 同专辑 tab：统计行常驻，这里要填（艺人搜索同样只有 ncm 一路）。
+                    _sourceCounts.value = SourceCounts(
+                        neteaseCount = _artists.value.size,
+                        neteaseTotal = response.result?.artistCount,
+                        neteaseStatus = SourceSearchStatus.DONE,
+                        qqCount = 0,
+                        qqStatus = SourceSearchStatus.SKIPPED,
+                        biliCount = 0,
+                        biliStatus = SourceSearchStatus.SKIPPED,
+                    )
                     _songs.value = emptyList()
                     _albums.value = emptyList()
                 }

@@ -134,10 +134,12 @@ object SourceRouter {
         limit: Int,
         /** v3.4.11：**1 起**的页码。默认 1 ⇒ 既有调用点行为不变。 */
         page: Int = 1,
+        /** v3.4.11：服务端声明的总数出参（可为 null = 调用方不关心）。 */
+        totalOut: MutableMap<String, Int>? = null,
     ): List<SongItem> {
         val provider = providers[source] ?: return emptyList()
         return try {
-            provider.searchSongs(keyword, limit, page)
+            provider.searchSongs(keyword, limit, page, totalOut)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

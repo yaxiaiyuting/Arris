@@ -625,6 +625,7 @@ scanConnecting = "평판에 연결중…",
         search = SearchStrings(
             searchLoadMore = "더 불러오기",
             searchLoadingMore = "불러오는 중…",
+            searchSourceTotal = { n -> java.lang.String.format("총 %d곡", n) },
         ),
 
         bili = BiliStrings(

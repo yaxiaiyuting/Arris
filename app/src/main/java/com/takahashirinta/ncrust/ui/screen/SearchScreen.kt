@@ -143,6 +143,36 @@ fun SearchScreen(
     // 本页从来没接过，所以「没有下拉刷新」不是被跳过，而是从来没有入口。
     val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
+
+    // v3.4.11：**滚到最底部自动加载下一页**（用户要求：「加载更多不要用点击，
+    // 滚到最底部自动触发就行」）。
+    //
+    // ## 判据为什么是「最后可见项 ≥ 总数 − 2」而不是「最后可见项 == 总数 − 1」
+    //
+    // 差的这两项是**底部那两个非歌曲项**（下拉指示器与底部占位），
+    // 用 `== size - 1` 会在列表恰好差一两项时永远不触发 —— 而那正是「滚到底了却没反应」。
+    // 留 2 项余量还能让请求在用户真的滚到底之前就发出去，观感上「无缝」。
+    //
+    // ## 为什么不会「短列表把后面全部拉完」
+    //
+    // 判据只在 `lastVisible >= total - 2` 时成立，而 `total` **随加载增长** ——
+    // 12 条结果的 `lastVisible` 最大是 11，`total - 2` 是 10 ⇒ 确实会触发一次
+    // （那是对的：用户看到的就是「到底了」）；但拉回来如果仍不满一页，
+    // `hasMore` 会变成 false，循环就停在那里。真正防住死循环的是 `hasMore` 那个闸门，
+    // 不是这个下标判据。
+    LaunchedEffect(listState, hasMore, isLoadingMore, songs.size, albums.size, artists.size) {
+        if (!hasMore || isLoadingMore) return@LaunchedEffect
+        val total = when (currentType) {
+            10 -> albums.size
+            100 -> artists.size
+            else -> songs.size
+        }
+        if (total <= 0) return@LaunchedEffect
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (lastVisible >= listState.layoutInfo.totalItemsCount - 2) {
+            viewModel.loadMore()
+        }
+    }
     // 刷新何时结束：搜索这一轮跑完（isLoading 落回 false）就把指示器收掉。
     // 判据必须由**发起刷新的那一层**给（组件自己不知道网络什么时候回来）——
     // 与 LocalPlaylistDetailScreen 的 `pullState.refreshing = false` 同一个契约。
@@ -504,6 +534,29 @@ fun SearchScreen(
                     )
                 }
 
+                // ------------------------------------------------------------------
+                // v3.4.11：逐源统计行**提到三个 tab 之上**，常驻显示。
+                //
+                // 此前它只在单曲 tab 里（画在那个分支内部），于是切到专辑 / 艺人 tab
+                // 就看不到「这个关键词在两个平台各有多少」—— 而那正是用户提的建议：
+                // 「搜索界面专辑来源也和单曲界面同构吧，做成一个统一的整体在搜索栏下方」。
+                //
+                // 数字的口径也在本版改了：显示的是**服务端声明的总数**
+                // （`ncm 273 首` / `qm 999 首`），不再是「这一轮取回多少条」——
+                // 后者不随翻页变化，用户看到的就是「没有实时更新」。
+                // 服务端没给总数时如实回落成「已载 N 首」（见 `SourceCounts.sideText`）。
+                // ------------------------------------------------------------------
+                sourceCounts?.let { counts ->
+                    SearchSourceSummaryRow(
+                        counts = counts,
+                        // 重试 = 「用当前关键词再走一轮」，与 v2.5.5 的 QQ 重试同一个入口，
+                        // 不新加 ViewModel API（重复关键词本来就会重新发一轮请求）。
+                        // v3.2.0 · P0-D：判据从 `qqUnavailable` 扩到 `anyUnavailable` ——
+                        // B 站修好调度之后会**第一次真的**出现 TIMEOUT/ERROR，没有出口就是新死角。
+                        onRetry = { viewModel.onQueryChanged(viewModel.query.value) },
+                    )
+                }
+
                 when (currentType) {
                     // v3.3.0 · 需求 2：`1006`（歌词搜索）与 `1`（单曲搜索）**共用同一段渲染** ——
                     // 它返回的也是单曲（同一套 SongCard、同一套筛选与统计行），
@@ -528,16 +581,6 @@ fun SearchScreen(
                                 filters = filters,
                                 selected = sourceFilter,
                                 onSelect = { sourceFilter = it },
-                            )
-                        }
-                        sourceCounts?.let { counts ->
-                            SearchSourceSummaryRow(
-                                counts = counts,
-                                // 重试 = 「用当前关键词再走一轮」，与 v2.5.5 的 QQ 重试同一个入口，
-                                // 不新加 ViewModel API（重复关键词本来就会重新发一轮请求）。
-                                // v3.2.0 · P0-D：判据从 `qqUnavailable` 扩到 `anyUnavailable` ——
-                                // B 站修好调度之后会**第一次真的**出现 TIMEOUT/ERROR，没有出口就是新死角。
-                                onRetry = { viewModel.onQueryChanged(viewModel.query.value) },
                             )
                         }
                         // 结果区加载态（v3.2.0 · P0-D）：复用既有 `MetroProgressIndicator`，不新建组件。
@@ -625,18 +668,14 @@ fun SearchScreen(
                                             }
                                         )
                                     }
-                                    // v3.4.11：「加载更多」。**必须有这个出口** ——
-                                    // 此前搜索结果只有一页、界面上什么都没有，
-                                    // 用户无从知道是被截断了还是没有更多（报障原话：
-                                    // 「每次拉歌曲只拉三十首也太少了吧」）。
-                                    // 列表滚到底时它就在那儿，点一次取下一页（追加，不替换）。
+                                    // v3.4.11：滚动到底**自动加载**（见上面那个 LaunchedEffect），
+                                    // 这里只画状态：正在取下一页时显示「正在加载…」，
+                                    // 取完且没有更多时**什么都不显示**（不占视觉）。
                                     item(key = "load-more") {
                                         SearchLoadMoreRow(
                                             hasMore = hasMore,
                                             isLoadingMore = isLoadingMore,
-                                            label = strings.searchLoadMore,
                                             loadingLabel = strings.searchLoadingMore,
-                                            onClick = { viewModel.loadMore() },
                                         )
                                     }
                                 }
@@ -707,14 +746,12 @@ fun SearchScreen(
                                         }
                                     )
                                 }
-                                // v3.4.11：专辑 tab 同样只有一页（此前也是 30 条上限）。
+                                // v3.4.11：专辑 tab 同样分页（滚到底自动加载，同上）。
                                 item(key = "load-more") {
                                     SearchLoadMoreRow(
                                         hasMore = hasMore,
                                         isLoadingMore = isLoadingMore,
-                                        label = strings.searchLoadMore,
                                         loadingLabel = strings.searchLoadingMore,
-                                        onClick = { viewModel.loadMore() },
                                     )
                                 }
                             }
@@ -774,14 +811,12 @@ fun SearchScreen(
                                         }
                                     )
                                 }
-                                // v3.4.11：艺人 tab 同样只有一页（此前也是 30 条上限）。
+                                // v3.4.11：艺人 tab 同样分页（滚到底自动加载，同上）。
                                 item(key = "load-more") {
                                     SearchLoadMoreRow(
                                         hasMore = hasMore,
                                         isLoadingMore = isLoadingMore,
-                                        label = strings.searchLoadMore,
                                         loadingLabel = strings.searchLoadingMore,
-                                        onClick = { viewModel.loadMore() },
                                     )
                                 }
                             }
@@ -1119,33 +1154,28 @@ fun SongSearchItem(
 }
 
 /**
- * 搜索结果列表底部的「加载更多」（v3.4.11）。
+ * 搜索结果列表底部的**分页状态行**（v3.4.11）。
  *
- * ## 为什么是一个**显式按钮**而不是「滚到底自动加载」
+ * ## 它不是按钮 —— 加载由「滚到底」自动触发
  *
- * 自动加载要在 `LazyListState` 上挂一个「即将到底」的派生状态，而那个判据在
- * 「列表短于一屏」时永远为真 —— 于是短结果（比如 12 条）会**自动连点**后面的每一页，
- * 一屏都还没滚完就把后面全拉下来了。用户报的是「只有 30 首」，
- * 他想要的不是「替我把剩下的都拉完」，而是**一个能自己决定的出口**。
+ * 第一版做成了显式按钮，用户直接否掉了：「加载更多不要用点击，滚到最底部自动触发就行」。
+ * 那个意见是对的：翻页是**列表到底**这个动作的自然延续，让用户为此再点一次
+ * 是把「浏览」切成了「浏览 + 操作」。
  *
- * 而且显式按钮让「还有没有下一页」这件事**在界面上是可见的**：
- * 按钮消失 = 到底了。此前那个状态在 UI 上完全不存在。
+ * 触发判据在页面的 `LaunchedEffect` 里（见那段注释：为什么是「差两项」而不是「等于最后一项」，
+ * 以及为什么真正防死循环的是 `hasMore` 闸门而不是下标判据）。
  *
- * ## 两条状态
- *
- * - [hasMore] 来自各个音源（`MusicSourceProvider.hasMorePages`），判据是
- *   「这一页被填满」⇒ 可能还有。它会在最后一页多给一次点击，而不会漏页。
- * - [isLoadingMore] 只影响这一行的文案与可点性（正在飞时点它不该再发一次请求）。
+ * 这里只剩**状态显示**：
+ * - 正在取下一页 ⇒ 「正在加载…」（让用户知道那一秒在干什么）；
+ * - 取完且没有更多，或者没有下一页 ⇒ **什么都不画**（不占视觉、不留空行）。
  */
 @Composable
 private fun SearchLoadMoreRow(
     hasMore: Boolean,
     isLoadingMore: Boolean,
-    label: String,
     loadingLabel: String,
-    onClick: () -> Unit,
 ) {
-    if (!hasMore && !isLoadingMore) return
+    if (!isLoadingMore) return
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1153,14 +1183,9 @@ private fun SearchLoadMoreRow(
         contentAlignment = Alignment.Center,
     ) {
         MetroText(
-            text = if (isLoadingMore) loadingLabel else label,
-            color = LocalMetroColors.current.primary,
-            style = TextStyle(fontSize = 14.sp),
-            modifier = Modifier
-                // 命中区只增不减（AGENTS.md 触摸陷阱第 7 条）：文字本身只有十几 dp 高，
-                // 不给内边距的话它是一个「看得见但不好点」的入口。
-                .clickable(enabled = !isLoadingMore, onClick = onClick)
-                .padding(horizontal = 24.dp, vertical = 10.dp),
+            text = loadingLabel,
+            color = LocalMetroColors.current.onSurfaceVariant,
+            style = TextStyle(fontSize = 13.sp),
         )
     }
 }

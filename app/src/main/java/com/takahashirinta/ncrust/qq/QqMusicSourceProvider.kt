@@ -53,8 +53,20 @@ object QqMusicSourceProvider : MusicSourceProvider {
 
     override val isLoggedIn: Boolean get() = QqClient.isLoggedIn()
 
-    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> =
-        runCatching { QqApi.searchSongs(keyword, limit, page) }
+    override suspend fun searchSongs(
+        keyword: String,
+        limit: Int,
+        page: Int,
+        totalOut: MutableMap<String, Int>?,
+    ): List<SongItem> =
+        runCatching {
+            // page = 1 时顺带把服务端声明的总数取出来（`data.song.totalnum`，实测周杰伦 = 999）。
+            // 只在第 1 页问一次：翻页时那个数字不会变，每页都问只是白多一次解析。
+            if (page <= 1 && totalOut != null) {
+                QqApi.searchTotalCount(keyword)?.let { totalOut["qqmusic"] = it }
+            }
+            QqApi.searchSongs(keyword, limit, page)
+        }
             .onFailure { Log.w(TAG, "search failed", it) }
             .getOrDefault(emptyList())
             .also { results ->

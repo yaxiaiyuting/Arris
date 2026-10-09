@@ -48,14 +48,22 @@ object NeteaseSourceProvider : MusicSourceProvider {
      * `offset = (page - 1) * limit` 是这个接口的既有分页语义
      * （`docs/verification/v2.3.0/probe-copyright.md` 记的实测请求就带 `offset:0`）。
      */
-    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> =
+    override suspend fun searchSongs(
+        keyword: String,
+        limit: Int,
+        page: Int,
+        totalOut: MutableMap<String, Int>?,
+    ): List<SongItem> =
         runCatching {
-            RetrofitClient.api.search(
+            val result = RetrofitClient.api.search(
                 keyword = keyword,
                 type = 1,
                 limit = limit,
-                offset = ((page - 1).coerceAtLeast(0)) * limit.coerceAtLeast(1),
-            ).result?.songs.orEmpty()
+                offset = com.takahashirinta.ncrust.search.SearchPaging.offsetOf(page, limit),
+            ).result
+            // v3.4.11：把服务端声明的总数交出去（`songCount` 实测 273 —— 见 SearchResult 的 KDoc）。
+            result?.songCount?.let { totalOut?.put("netease", it) }
+            result?.songs.orEmpty()
         }.onFailure { Log.w(TAG, "search failed", it) }
             .getOrDefault(emptyList())
 

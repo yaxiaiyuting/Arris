@@ -30,7 +30,12 @@ class SourceRouterTest {
         /** v3.4.11：分页透传的直接证据 —— 路由必须把 `page` 原样交给 Provider。 */
         var lastSearchedPage: Int? = null
         override val isLoggedIn: Boolean = true
-        override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> {
+        override suspend fun searchSongs(
+            keyword: String,
+            limit: Int,
+            page: Int,
+            totalOut: MutableMap<String, Int>?,
+        ): List<SongItem> {
             lastSearchedKeyword = keyword
             lastSearchedPage = page
             if (throwOnSearch) throw IllegalStateException("boom")

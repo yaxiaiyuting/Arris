@@ -125,7 +125,13 @@ object BiliSourceProvider : MusicSourceProvider {
      *    只发 `page_size`）。所以 B 站的「加载更多」由 [hasMorePages] 的默认 `false`
      *    关掉 —— 界面上不会出现一个点了没反应的按钮。
      */
-    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> {
+    override suspend fun searchSongs(
+        keyword: String,
+        limit: Int,
+        page: Int,
+        /** B 站**不填**总数：这条路径（视频搜索）的响应里没有可用的总数字段。 */
+        totalOut: MutableMap<String, Int>?,
+    ): List<SongItem> {
         if (!isEnabled || keyword.isBlank() || limit <= 0) return emptyList()
         parseAuidKeyword(keyword)?.let { auid ->
             val track = biliOrNull("audio info failed: auid=$auid") { BiliApi.audioInfo(auid) }

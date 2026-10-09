@@ -626,6 +626,7 @@ val jpJP = Strings(
         search = SearchStrings(
             searchLoadMore = "さらに読み込む",
             searchLoadingMore = "読み込み中…",
+            searchSourceTotal = { n -> java.lang.String.format("全 %d 曲", n) },
         ),
 
         bili = BiliStrings(

@@ -628,6 +628,7 @@ val deDE = Strings(
         search = SearchStrings(
             searchLoadMore = "Mehr laden",
             searchLoadingMore = "Wird geladen…",
+            searchSourceTotal = { n -> java.lang.String.format("%d insgesamt", n) },
         ),
 
         bili = BiliStrings(

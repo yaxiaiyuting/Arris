@@ -39,6 +39,28 @@ import org.json.JSONObject
  */
 object QqSongMapper {
 
+    /**
+     * QQ 旧版搜索响应里的**总数**（v3.4.11）。
+     *
+     * 实测（2026-10-10，匿名）`client_search_cp?new_json=1&w=周杰伦&n=30&p=1`：
+     * `data.song.totalnum = 999`、`data.song.curnum = 30`。
+     * 注意**不在** `data.totalnum`（那一层没有这个键）—— 它在 `data.song` 里面，
+     * 而 `singer` / `album` 两个子对象各有自己的 `totalnum`。写错层的表现是
+     * 「总数恒为 null」（回落到卡片的字段名），不崩、也不报错。
+     *
+     * @param key 子对象名：`song` / `singer` / `album`。
+     * @return 总数；取不到返回 null（**不是 0** —— 「不知道」与「没有」是两件事）。
+     */
+    fun totalCountOf(json: JSONObject, key: String = "song"): Int? {
+        val data = json.optJSONObject("data") ?: return null
+        val sub = data.optJSONObject(key) ?: return null
+        // 有的响应把它放在子对象的 totalnum，有的放在 curnum 之外的同级。
+        val total = sub.optInt("totalnum", -1)
+        if (total >= 0) return total
+        val legacy = data.optInt("totalnum", -1)
+        return legacy.takeIf { it >= 0 }
+    }
+
     /** QQ 封面 URL 的固定形状（与官方 web 播放器一致）。 */
     private const val COVER_TEMPLATE = "https://y.qq.com/music/photo_new/T002R500x500M000%s.jpg"
 

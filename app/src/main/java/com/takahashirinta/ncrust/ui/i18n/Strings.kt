@@ -540,6 +540,7 @@ data class Strings(
     // 而且 `source` 组已经撞到了它自己的预警线。
     val searchLoadMore: String get() = search.searchLoadMore
     val searchLoadingMore: String get() = search.searchLoadingMore
+    val searchSourceTotal: (Int) -> String get() = search.searchSourceTotal
     val sourceQqScanLoginAction: String get() = qqScan.qqScanLoginAction
     val sourceQqScanTitle: String get() = qqScan.qqScanTitle
     val sourceQqScanNote: String get() = qqScan.qqScanNote
@@ -2042,6 +2043,13 @@ data class SearchStrings(
     val searchLoadMore: String,
     /** 「加载更多」正在飞（与首屏加载分开：两者在界面上是两种提示）。 */
     val searchLoadingMore: String,
+    /**
+     * v3.4.11：统计行里的**总曲库数**（`ncm 273 首`）。
+     *
+     * 与「已载 N 首」并存而不是替换：不知道总数时（服务端没给那个字段）
+     * 只能如实说「已载」—— 把已载量冒充总数正是用户报的那句「没有实时更新」。
+     */
+    val searchSourceTotal: (Int) -> String,
 )
 
 data class StatsStrings(

@@ -59,7 +59,23 @@ interface MusicSourceProvider {
      *   加这个参数是为了让「搜索只有 30 条、没有下一页」这件事有个出口
      *   （用户报障：「每次拉歌曲只拉三十首也太少了吧」）。
      */
-    suspend fun searchSongs(keyword: String, limit: Int, page: Int = 1): List<SongItem>
+    /**
+     * @param totalOut v3.4.11：**服务端声明的总数**的出参（可为空表 = 这个音源不给）。
+     *
+     *   为什么用出参而不是改返回类型：调用点有 5 处（三个 Provider + 聚合搜索 +
+     *   若干单测的 Fake），改返回类型会让**每一个**都必须动；而出参对
+     *   「不关心的调用方」是透明的（默认不传），并且它天然表达「不知道」
+     *   （表里没有这个 key）与「总数是 0」的区别。
+     *
+     *   实测两个音源都给：ncm 的 `result.songCount`（周杰伦 = **273**）、
+     *   QQ 的 `data.song.totalnum`（同为周杰伦 = **999**）。
+     */
+    suspend fun searchSongs(
+        keyword: String,
+        limit: Int,
+        page: Int = 1,
+        totalOut: MutableMap<String, Int>? = null,
+    ): List<SongItem>
 
     /**
      * 该音源**还有没有下一页**（v3.4.11）。
