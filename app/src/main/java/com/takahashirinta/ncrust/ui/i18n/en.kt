@@ -626,6 +626,11 @@ val en = Strings(
         ),
 
         // v3.4.8: Bilibili audio quality and subtitles (user-facing text for issues 1 / 2 / 3).
+        search = SearchStrings(
+            searchLoadMore = "Load more",
+            searchLoadingMore = "Loading…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "Bilibili quality cap",
             biliQualityCapDescription = "Limits the audio quality requested from Bilibili. Lossless and Hi-Res need a premium account, and only some videos offer them.",

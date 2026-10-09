@@ -118,7 +118,14 @@ object BiliSourceProvider : MusicSourceProvider {
      * v3.2.0 把调度挪进 `BiliApi` 之后，这条顺序**一个字没动**，
      * 由 `BiliSourceProviderTest.关掉开关之后一个请求都不发 —— 搜索返回空` 继续守着。
      */
-    override suspend fun searchSongs(keyword: String, limit: Int): List<SongItem> {
+    /**
+     * v3.4.11：`page` **有意忽略** —— 以下两种情况它都没有意义：
+     * ① `parseAuidKeyword` 命中的是「按 auid 直取一条」，本来就只有一条；
+     * ② 视频搜索接口的 `page_size` 上限是 50 且**没有页码参数**（`BiliApi.searchVideos`
+     *    只发 `page_size`）。所以 B 站的「加载更多」由 [hasMorePages] 的默认 `false`
+     *    关掉 —— 界面上不会出现一个点了没反应的按钮。
+     */
+    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> {
         if (!isEnabled || keyword.isBlank() || limit <= 0) return emptyList()
         parseAuidKeyword(keyword)?.let { auid ->
             val track = biliOrNull("audio info failed: auid=$auid") { BiliApi.audioInfo(auid) }

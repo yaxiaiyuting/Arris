@@ -449,6 +449,16 @@ data class Strings(
      * 语义相符的组、并在类体里留转发属性，不要再往主构造器直接加参数。
      */
     val bili: BiliStrings,
+
+    /**
+     * v3.4.11：**搜索分页**的文案（2 条）。
+     *
+     * 为什么不塞进 [Strings] 主构造器：那里面已经 143 个参数，而它自己的预算测试
+     * （`StringsConstructorBudgetTest`）盯得很紧 —— 每次加两条就要抬一次上限，
+     * 而抬上限是**它明确要求不要做**的事（「有意的加文案请放进嵌套组，外层一个都不要加」）。
+     * 这两条也确实是一组独立语义：它们只服务于「搜索列表还有下一页」这一件事。
+     */
+    val search: SearchStrings,
     /**
      * v3.4.9：**「QQ 音乐 App 扫码」**登录的专属文案（3 条）。
      *
@@ -528,6 +538,8 @@ data class Strings(
     // v3.4.9：扫码（QQ 音乐 App）那三条在 [QqScanStrings] 组里 —— 见那边的 KDoc，
     // 它们与 `source` 组不是同一条业务线（那条是「账号与音源」，这条是「一条登录方式」），
     // 而且 `source` 组已经撞到了它自己的预警线。
+    val searchLoadMore: String get() = search.searchLoadMore
+    val searchLoadingMore: String get() = search.searchLoadingMore
     val sourceQqScanLoginAction: String get() = qqScan.qqScanLoginAction
     val sourceQqScanTitle: String get() = qqScan.qqScanTitle
     val sourceQqScanNote: String get() = qqScan.qqScanNote
@@ -2011,6 +2023,25 @@ data class QqScanStrings(
      * 用户就没有任何理由选这一条，而选错就意味着继续一周重登一次。
      */
     val qqScanNote: String,
+)
+
+/**
+ * 搜索分页的文案（v3.4.11）。
+ *
+ * 只有两条，但它们是一个**独立语义**：结果列表底部那个「还有更多」的出口。
+ * 在 v3.4.11 之前这个出口**不存在** —— 搜索结果只有一页、界面上什么都不显示，
+ * 用户既不知道被截断了、也没有办法取下一页（报障原话：
+ * 「每次拉歌曲只拉三十首也太少了吧」）。
+ */
+data class SearchStrings(
+    /**
+     * 列表底部的「加载更多」。**显式按钮而不是滚到底自动加载**：
+     * 自动加载在「结果不足一屏」时会（判据恒真地）自动把后面每一页都拉下来 ——
+     * 用户要的不是「替我拉完」，而是「一个能自己决定的出口」。
+     */
+    val searchLoadMore: String,
+    /** 「加载更多」正在飞（与首屏加载分开：两者在界面上是两种提示）。 */
+    val searchLoadingMore: String,
 )
 
 data class StatsStrings(

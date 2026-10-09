@@ -191,12 +191,14 @@ class StringsConstructorBudgetTest {
                 "★ v3.3.0 的算式：实测基准 **138**（不是 v3.2.0 断言里写的 137 —— 那一条早就过期了）" +
                 " + 3 个**组参数**：`share`（需求第 9 条）/ `stats`（需求第 5、6 条）/ `widget`（需求第 4、8 条）" +
                 " = 141；v3.4.8 又为 `bili` 组加了一个组参数 ⇒ 142；" +
-                "v3.4.9 再为 `qqScan` 组加一个 ⇒ 143。",
-            143, primaryParams(clazz),
+                "v3.4.9 再为 `qqScan` 组加一个 ⇒ 143；" +
+                "v3.4.11 的搜索分页文案**没有**加在这里（它们进了新的 `search` 组）" +
+                " —— 但那个组本身要占一个槽位 ⇒ 144。",
+            144, primaryParams(clazz),
         )
-        // 余量：143 ⇒ 1(this) + 143 + ceil(143/32)=5(mask) + 1(marker) = 150 槽，距 255 还有 105。
-        assertEquals(150, dexSlots(143, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(143, true) >= 100)
+        // 余量：144 ⇒ 1(this) + 144 + ceil(144/32)=5(mask) + 1(marker) = 151 槽，距 255 还有 104。
+        assertEquals(151, dexSlots(144, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(144, true) >= 100)
     }
 
     /**
@@ -225,8 +227,9 @@ class StringsConstructorBudgetTest {
         assertEquals(
             "v3.2.0 只该为新的失败文案组加**一个**外层参数（136 → 137）；" +
                 "v3.3.0 又为 share / stats / widget 三个组各加了 1 个 ⇒ 138 + 3 = 141；" +
-                "v3.4.8 再为 `bili` 组加 1 个 ⇒ 142；v3.4.9 再为 `qqScan` 组加 1 个 ⇒ 143",
-            143,
+                "v3.4.8 再为 `bili` 组加 1 个 ⇒ 142；v3.4.9 再为 `qqScan` 组加 1 个 ⇒ 143；" +
+                "v3.4.11 再为 `search` 组（搜索分页两条）加 1 个 ⇒ 144",
+            144,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaybackFailureStrings")
@@ -533,11 +536,13 @@ class StringsConstructorBudgetTest {
         // v3.3.0：再 +3 个**组参数**（`share` / `stats` / `widget`）⇒ 实测基准 138 + 3 = 141。
         // v3.4.8：再 +1 个**组参数**（`bili`）⇒ 142。
         // v3.4.9：再 +1 个**组参数**（`qqScan`，扫码登录的 3 条专属文案）⇒ 143。
+        // v3.4.11：再 +1 个**组参数**（`search`，搜索分页的 2 条）⇒ 144。
+        //   同样**没有**往主构造器加文案 —— 加的是组参数本身（拆组本来就要付这个成本）。
         //   为什么必须拆新组而不是并进 `source`：`SourceStrings` 已经 77 个参数，
         //   而它的预警线是 80 —— 加那 3 条正好撞线（`AggregateStringsTest` 会红）。
         //   这 3 条也确实不属于那条业务线（`source` 是「音源与账号」，这 3 条只服务
         //   「官方 App 扫码」这一条登录方式）。
-        assertEquals(143, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        assertEquals(144, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -566,8 +571,9 @@ class StringsConstructorBudgetTest {
         assertEquals(
             "v2.8.0 的分组文案必须进 SettingsStrings —— 外层只为波形组加了一个组参数" +
                 "（v3.2.0 又只为失败文案组加了一个 ⇒ 137；v3.3.0 再为 share / stats / widget 各加一个 ⇒ 141；" +
-                "v3.4.8 再为 `bili` 组加一个 ⇒ 142；v3.4.9 再为 `qqScan` 组加一个 ⇒ 143）",
-            143,
+                "v3.4.8 再为 `bili` 组加一个 ⇒ 142；v3.4.9 再为 `qqScan` 组加一个 ⇒ 143；" +
+                "v3.4.11 再为 `search` 组加一个 ⇒ 144）",
+            144,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
@@ -662,8 +668,9 @@ class StringsConstructorBudgetTest {
             "v2.8.0 的两个外层变化：v2.5.3 的 128 + 波形组一个组参数 ⇒ 136；" +
                 "v3.2.0 再 +1 个组参数（失败文案组）⇒ 137；" +
                 "v3.3.0 再 +3 个组参数（share / stats / widget）⇒ 138 + 3 = 141；" +
-                "v3.4.8 再 +1 个组参数（bili）⇒ 142；v3.4.9 再 +1 个组参数（qqScan）⇒ 143",
-            143,
+                "v3.4.8 再 +1 个组参数（bili）⇒ 142；v3.4.9 再 +1 个组参数（qqScan）⇒ 143；" +
+                "v3.4.11 再 +1 个组参数（search）⇒ 144",
+            144,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(

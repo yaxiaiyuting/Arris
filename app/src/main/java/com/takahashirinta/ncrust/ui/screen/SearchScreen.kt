@@ -121,6 +121,10 @@ fun SearchScreen(
     val albums by viewModel.albums.collectAsState()
     val artists by viewModel.artists.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    // v3.4.11：分页。`hasMore` 由各音源给出（「这一页被填满」⇒ 可能还有），
+    // `isLoadingMore` 与首屏的 `isLoading` 分开 —— 两者在界面上是两种提示。
+    val hasMore by viewModel.hasMore.collectAsState()
+    val isLoadingMore by viewModel.isLoadingMore.collectAsState()
     // v2.1.0 · E：结果来自哪些音源（(ncm 条数, qm 条数)；null = 还没搜过）。
     val sourceCounts by viewModel.sourceCounts.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -576,7 +580,10 @@ fun SearchScreen(
                                                 listState.firstVisibleItemIndex == 0 &&
                                                     listState.firstVisibleItemScrollOffset == 0
                                             },
-                                            onRefresh = { viewModel.onQueryChanged(viewModel.query.value) },
+                                            // v3.4.11：走 `refresh()`（跳过 500ms 防抖）而不是
+                                            // `onQueryChanged(同一个词)` —— 后者让松手后再等半秒，
+                                            // 观感就是「下拉了没反应」。
+                                            onRefresh = { viewModel.refresh() },
                                         ),
                                     contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
                                     flingBehavior = rememberMetroFlingBehavior()
@@ -616,6 +623,20 @@ fun SearchScreen(
                                                     }
                                                 ))
                                             }
+                                        )
+                                    }
+                                    // v3.4.11：「加载更多」。**必须有这个出口** ——
+                                    // 此前搜索结果只有一页、界面上什么都没有，
+                                    // 用户无从知道是被截断了还是没有更多（报障原话：
+                                    // 「每次拉歌曲只拉三十首也太少了吧」）。
+                                    // 列表滚到底时它就在那儿，点一次取下一页（追加，不替换）。
+                                    item(key = "load-more") {
+                                        SearchLoadMoreRow(
+                                            hasMore = hasMore,
+                                            isLoadingMore = isLoadingMore,
+                                            label = strings.searchLoadMore,
+                                            loadingLabel = strings.searchLoadingMore,
+                                            onClick = { viewModel.loadMore() },
                                         )
                                     }
                                 }
@@ -686,6 +707,16 @@ fun SearchScreen(
                                         }
                                     )
                                 }
+                                // v3.4.11：专辑 tab 同样只有一页（此前也是 30 条上限）。
+                                item(key = "load-more") {
+                                    SearchLoadMoreRow(
+                                        hasMore = hasMore,
+                                        isLoadingMore = isLoadingMore,
+                                        label = strings.searchLoadMore,
+                                        loadingLabel = strings.searchLoadingMore,
+                                        onClick = { viewModel.loadMore() },
+                                    )
+                                }
                             }
                         }
                     }
@@ -741,6 +772,16 @@ fun SearchScreen(
                                                 }
                                             )
                                         }
+                                    )
+                                }
+                                // v3.4.11：艺人 tab 同样只有一页（此前也是 30 条上限）。
+                                item(key = "load-more") {
+                                    SearchLoadMoreRow(
+                                        hasMore = hasMore,
+                                        isLoadingMore = isLoadingMore,
+                                        label = strings.searchLoadMore,
+                                        loadingLabel = strings.searchLoadingMore,
+                                        onClick = { viewModel.loadMore() },
                                     )
                                 }
                             }
@@ -1075,4 +1116,51 @@ fun SongSearchItem(
             }
         }
     )
+}
+
+/**
+ * 搜索结果列表底部的「加载更多」（v3.4.11）。
+ *
+ * ## 为什么是一个**显式按钮**而不是「滚到底自动加载」
+ *
+ * 自动加载要在 `LazyListState` 上挂一个「即将到底」的派生状态，而那个判据在
+ * 「列表短于一屏」时永远为真 —— 于是短结果（比如 12 条）会**自动连点**后面的每一页，
+ * 一屏都还没滚完就把后面全拉下来了。用户报的是「只有 30 首」，
+ * 他想要的不是「替我把剩下的都拉完」，而是**一个能自己决定的出口**。
+ *
+ * 而且显式按钮让「还有没有下一页」这件事**在界面上是可见的**：
+ * 按钮消失 = 到底了。此前那个状态在 UI 上完全不存在。
+ *
+ * ## 两条状态
+ *
+ * - [hasMore] 来自各个音源（`MusicSourceProvider.hasMorePages`），判据是
+ *   「这一页被填满」⇒ 可能还有。它会在最后一页多给一次点击，而不会漏页。
+ * - [isLoadingMore] 只影响这一行的文案与可点性（正在飞时点它不该再发一次请求）。
+ */
+@Composable
+private fun SearchLoadMoreRow(
+    hasMore: Boolean,
+    isLoadingMore: Boolean,
+    label: String,
+    loadingLabel: String,
+    onClick: () -> Unit,
+) {
+    if (!hasMore && !isLoadingMore) return
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroText(
+            text = if (isLoadingMore) loadingLabel else label,
+            color = LocalMetroColors.current.primary,
+            style = TextStyle(fontSize = 14.sp),
+            modifier = Modifier
+                // 命中区只增不减（AGENTS.md 触摸陷阱第 7 条）：文字本身只有十几 dp 高，
+                // 不给内边距的话它是一个「看得见但不好点」的入口。
+                .clickable(enabled = !isLoadingMore, onClick = onClick)
+                .padding(horizontal = 24.dp, vertical = 10.dp),
+        )
+    }
 }

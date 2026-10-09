@@ -625,6 +625,11 @@ val ruRU = Strings(
             qqScanTitle = "Вход через приложение QQ Music",
             qqScanNote = "Отсканируйте этот код приложением QQ Music на телефоне. На этом пути сеанс продлевается автоматически до истечения, поэтому входить заново каждую неделю не нужно.",
         ),
+        search = SearchStrings(
+            searchLoadMore = "Загрузить ещё",
+            searchLoadingMore = "Загрузка…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "Предел качества Bilibili",
             biliQualityCapDescription = "Ограничивает качество звука, запрашиваемое у Bilibili. Звук без потерь и Hi-Res требуют премиум-аккаунта и есть только у части видео.",

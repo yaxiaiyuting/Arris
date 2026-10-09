@@ -9,12 +9,21 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface NcmApi {
+    /**
+     * 搜索单曲。
+     *
+     * `offset` 是 v3.4.11 加的**分页**参数：这个接口本来就是分页的
+     * （`docs/verification/v2.3.0/probe-copyright.md` 里记的实测请求就是
+     * `{"s":…,"type":1,"limit":30,"offset":0}`），只是此前**只有第一页的调用点** ——
+     * 于是用户看到的结果永远是 30 条，而界面上没有任何「还有更多」的出口。
+     */
     @FormUrlEncoded
     @POST("api/cloudsearch/pc")
     suspend fun search(
         @Field("s") keyword: String,
         @Field("type") type: Int = 1,
-        @Field("limit") limit: Int = 30
+        @Field("limit") limit: Int = 30,
+        @Field("offset") offset: Int = 0
     ): SearchResponse
 
     @FormUrlEncoded
@@ -22,7 +31,8 @@ interface NcmApi {
     suspend fun searchAlbum(
         @Field("s") keyword: String,
         @Field("type") type: Int = 10,
-        @Field("limit") limit: Int = 30
+        @Field("limit") limit: Int = 30,
+        @Field("offset") offset: Int = 0
     ): SearchResponse
 
     @FormUrlEncoded
@@ -30,7 +40,8 @@ interface NcmApi {
     suspend fun searchArtist(
         @Field("s") keyword: String,
         @Field("type") type: Int = 100,
-        @Field("limit") limit: Int = 30
+        @Field("limit") limit: Int = 30,
+        @Field("offset") offset: Int = 0
     ): SearchResponse
 
     /**
@@ -49,7 +60,8 @@ interface NcmApi {
     suspend fun searchLyric(
         @Field("s") keyword: String,
         @Field("type") type: Int = 1006,
-        @Field("limit") limit: Int = 30
+        @Field("limit") limit: Int = 30,
+        @Field("offset") offset: Int = 0
     ): SearchResponse
 
     @FormUrlEncoded

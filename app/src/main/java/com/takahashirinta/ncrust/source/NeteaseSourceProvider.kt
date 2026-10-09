@@ -42,12 +42,26 @@ object NeteaseSourceProvider : MusicSourceProvider {
     override val isLoggedIn: Boolean
         get() = !RetrofitClient.getCookie().isNullOrBlank()
 
-    override suspend fun searchSongs(keyword: String, limit: Int): List<SongItem> =
+    /**
+     * 搜索单曲。`page` **1 起**，转成接口要的 `offset`（v3.4.11）。
+     *
+     * `offset = (page - 1) * limit` 是这个接口的既有分页语义
+     * （`docs/verification/v2.3.0/probe-copyright.md` 记的实测请求就带 `offset:0`）。
+     */
+    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> =
         runCatching {
-            RetrofitClient.api.search(keyword = keyword, type = 1, limit = limit)
-                .result?.songs.orEmpty()
+            RetrofitClient.api.search(
+                keyword = keyword,
+                type = 1,
+                limit = limit,
+                offset = ((page - 1).coerceAtLeast(0)) * limit.coerceAtLeast(1),
+            ).result?.songs.orEmpty()
         }.onFailure { Log.w(TAG, "search failed", it) }
             .getOrDefault(emptyList())
+
+    /** 填满一页 ⇒ 认为还有下一页（响应里没有稳定的总条数字段可用，判据只能这样）。 */
+    override suspend fun hasMorePages(keyword: String, limit: Int, page: Int): Boolean =
+        searchSongs(keyword, limit, page).size >= limit.coerceAtLeast(1)
 
     override suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult? =
         SongUrlFetcher.fetch(song.id, level)

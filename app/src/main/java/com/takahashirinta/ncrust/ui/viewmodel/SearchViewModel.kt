@@ -90,6 +90,56 @@ class SearchViewModel : ViewModel() {
     private var searchJob: Job? = null
 
     /**
+     * **每页条数**（v3.4.11）。
+     *
+     * ## 为什么是 30（而不是原来那样「就是 30，没有下页」）
+     *
+     * 这个数字以前是「一次搜索的全部」—— `NcmApi.search` 的默认 `limit=30`、
+     * `offset` 恒为 0，界面上没有任何「还有更多」的出口。用户报障原话：
+     * 「每次拉歌曲只拉三十首也太少了吧。」
+     *
+     * 现在它是**一页**的大小：首屏仍然是 30 条（首屏延迟不变），
+     * 但列表底部会出现「加载更多」，一页一页往后取。
+     *
+     * 为什么不直接把首屏改成 100：`cloudsearch` 的 `limit` 越大首屏越慢，
+     * 而搜索是交互式功能 —— 30 + 主动加载更多比 100 + 干等更合适。
+     * 更要紧的是 **QQ 那条腿的分页粒度就是 30**（旧版 GET 的 `n=` 与 `p=` 耦合），
+     * 首屏改 100 会让「第一页 100 条、第二页 30 条」这种口径错位从一开始就存在。
+     */
+    private val PAGE_SIZE = com.takahashirinta.ncrust.search.SearchPaging.PAGE_SIZE
+
+    /**
+     * 当前累计到的页码（**1 起**）。`loadMore()` 会把它 +1 后重新取那一页。
+     */
+    private var currentPage = 1
+
+    /**
+     * 三个 tab 各自「还有没有下一页」（v3.4.11）。
+     *
+     * 判据由各个音源给出（见 `MusicSourceProvider.hasMorePages`）：
+     * 「这一页被填满」⇒ 可能还有。它会在最后一页多给用户一次点击，
+     * 而不会漏掉任何一页 —— 后者才是缺陷。
+     */
+    private val _hasMore = MutableStateFlow(false)
+    val hasMore: StateFlow<Boolean> = _hasMore
+
+    /** 「加载更多」正在飞。与 [isLoading] 分开：首屏加载与翻页在界面上是两种提示。 */
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
+
+    /**
+     * 上一轮**已发布**的逐源原始结果（未排序、未过滤）。
+     *
+     * 翻页时要靠它把「新一页的排名结果」并进「已发布的排名结果」：
+     * 两边都过同一个 [SearchRanking.order]，所以追加后的相对顺序是稳定的 ——
+     * 直接 `+` 会得到一个「第一页按会员排好、第二页按请求顺序接在后面」的列表，
+     * 那是**两个排序口径拼在一起**，用户能看出来。
+     */
+    private var lastSongs: List<SongItem> = emptyList()
+    private var lastQqSongs: List<SongItem> = emptyList()
+    private var lastBiliSongs: List<SongItem> = emptyList()
+
+    /**
      * 补充源（qm）的时间预算（v2.1.0 · hotfix 3）。
      *
      * 搜索是**交互式**功能，用户对「多久算慢」的容忍度是秒级。补充源晚到不如不到 ——
@@ -129,6 +179,27 @@ class SearchViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 下拉刷新（v3.4.11）：**用当前关键词再走一轮**，且**跳过 500ms 防抖**。
+     *
+     * 为什么不能直接复用 `onQueryChanged(当前关键词)`：那条路是给「用户正在打字」用的，
+     * 它先 `delay(500)` 再搜 —— 下拉刷新时用户已经松手了，还要再等半秒才看到反应，
+     * 观感上就是「下拉了没反应」（用户报障里那句「下拉还不刷新新的歌」有一半是这个）。
+     *
+     * 语义上它等价于 `onQueryChanged(同一个词)`：页码归 1、累计清空、
+     * 两源重新取第一页。**没有「换一批」** —— 搜索接口本身不接受随机种子，
+     * 同一个关键词在第 1 页返回的就是同一批歌。所以「下拉刷新」在这里的
+     * 真实含义是「重新取一次」，而不是「换一批」。
+     */
+    fun refresh() {
+        val keyword = _query.value
+        if (keyword.isBlank()) return
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            searchByType(_currentType.value, append = false)
+        }
+    }
+
     fun onTypeChanged(type: Int) {
         _currentType.value = type
         if (_query.value.isNotBlank()) {
@@ -151,13 +222,13 @@ class SearchViewModel : ViewModel() {
         qqList: List<SongItem>,
         // v3.1.0 · B：默认空列表 ⇒ 所有旧调用点与单测零改动，且**行为与 v3.0.0 相同**。
         biliList: List<SongItem> = emptyList(),
-    ) {
+    ): List<SongItem> {
         val (neteaseVip, qqVip) = vipFlagsProvider()
         // v2.3.0 · C：`order` = v2.1.4 的 `rank`（会员买在哪家哪家先出）
         // + 把「服务端显式声明无版权」的行沉底。两者作用在不同的层，见其 KDoc。
         // v3.1.0 · B：三源重载把 B 站**追加**在最后（B 站没有会员信号，
         // 不参与交错；`bili` 为空时与两源版本逐字相同）。
-        _songs.value = SearchRanking.order(
+        val ranked = SearchRanking.order(
             netease = neteaseList.map {
                 RankedSong(
                     it,
@@ -184,10 +255,103 @@ class SearchViewModel : ViewModel() {
             neteaseVip = neteaseVip,
             qqVip = qqVip,
         ).map { it.value }.distinctBy { it.trackKey }
+        _songs.value = ranked
+        return ranked
     }
 
-    private suspend fun searchByType(type: Int) {
-        _isLoading.value = true
+    // ---------------- v3.4.11：分页（「加载更多」）----------------
+
+    /**
+     * 翻页时要靠它把「新一页的排名结果」并进「已发布的排名结果」。
+     *
+     * 两边都过同一个 [SearchRanking.order]，所以追加后的相对顺序是稳定的 ——
+     * 直接 `+` 会得到一个「第一页按会员排好、第二页按请求顺序接在后面」的列表，
+     * 那是**两个排序口径拼在一起**，用户能看出来。
+     */
+    private var accumulatedSongs: List<SongItem> = emptyList()
+
+    /** 新一轮搜索（关键词变了 / 换 tab / 下拉刷新）时清空累计。**与 append 成对使用**。 */
+    private fun resetSongs() {
+        accumulatedSongs = emptyList()
+        lastSongs = emptyList()
+        lastQqSongs = emptyList()
+        lastBiliSongs = emptyList()
+    }
+
+    /**
+     * 把这一页的逐源结果并进累计，并返回**排名后的完整列表**（已发布到 [_songs]）。
+     *
+     * @param append `false` = 新的一轮（丢弃累计，只留这一页）；
+     *   `true` = 加载更多（追加到累计，逐源各自拼接再**整体重排**）。
+     *   注意「拼接后整体重排」而不是「把新结果接在旧列表后面」——
+     *   后者会让第二页的会员专享曲排在第一页的非会员曲之后，而按会员排序是本应用的既有契约。
+     */
+    private fun accumulateAndPublish(
+        netease: List<SongItem>,
+        qq: List<SongItem>,
+        bili: List<SongItem>,
+        append: Boolean,
+    ): List<SongItem> {
+        if (!append) {
+            lastSongs = netease
+            lastQqSongs = qq
+            lastBiliSongs = bili
+        } else {
+            lastSongs = lastSongs + netease
+            lastQqSongs = lastQqSongs + qq
+            lastBiliSongs = lastBiliSongs + bili
+        }
+        val fresh = publish(lastSongs, lastQqSongs, lastBiliSongs)
+        accumulatedSongs = if (append) dedupeSongs(accumulatedSongs + fresh) else fresh
+        _songs.value = accumulatedSongs
+        return accumulatedSongs
+    }
+
+    /** 按身份去重（跨页重复：服务端分页边界可能重发同一条）。工具方法，纯函数语义。 */
+    private fun dedupeSongs(list: List<SongItem>): List<SongItem> =
+        com.takahashirinta.ncrust.search.SearchPaging.distinct(list)
+
+    /**
+     * 「加载更多」：把页码 +1，重跑当前 tab 的搜索并以**追加**方式发布。
+     *
+     * 幂等与并发：正在飞（[isLoadingMore]）或没有下一页（[hasMore]）时直接返回 ——
+     * 「列表滚到底连点三次」不该发三次请求。
+     */
+    fun loadMore() {
+        if (_isLoadingMore.value || !_hasMore.value) return
+        if (_query.value.isBlank()) return
+        _isLoadingMore.value = true
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            currentPage += 1
+            try {
+                searchByType(_currentType.value, append = true)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 翻页失败**不回滚页码**：下一轮 loadMore 会再试同一页（页码回滚会让
+                // 「失败 → 再点」变成「重取上一页」，用户看到的还是同一批歌）。
+                android.util.Log.w("SearchViewModel", "loadMore failed page=$currentPage", e)
+            } finally {
+                _isLoadingMore.value = false
+            }
+        }
+    }
+
+    /**
+     * 跑一轮搜索。
+     *
+     * @param append v3.4.11：`true` = 这是「加载更多」，把结果**追加**到当前列表
+     *   （而不是替换）。三个 tab 共用这一个开关。
+     */
+    private suspend fun searchByType(type: Int, append: Boolean = false) {
+        if (!append) {
+            _isLoading.value = true
+            // 新一轮（关键词变了 / 换 tab / 下拉刷新）：页码归 1、累计清空。
+            // ⚠️ 这两行必须在**取数之前** —— 否则第一页会带着上一轮的 offset 发出去。
+            currentPage = 1
+            resetSongs()
+        }
         _error.value = null
         try {
             when (type) {
@@ -239,7 +403,14 @@ class SearchViewModel : ViewModel() {
                                 // 真机上**造成回归**：该网络下每通请求要 ~30s 才送出请求头，
                                 // 20s 的 callTimeout 于是拦掉了本来会成功的搜索 ⇒ ncm 恒 0 首。
                                 // 已撤销，回到共用的 `api`。根因与证据见 `RetrofitClient` 里那段撤销注释。
-                                RetrofitClient.api.search(keyword = keyword, type = 1).result?.songs
+                                RetrofitClient.api.search(
+                                    keyword = keyword,
+                                    type = 1,
+                                    limit = PAGE_SIZE,
+                                    // v3.4.11：翻页靠的就是这个 offset（接口本来就是分页的）。
+                                    offset = com.takahashirinta.ncrust.search.SearchPaging
+                                        .offsetOf(currentPage, PAGE_SIZE),
+                                ).result?.songs
                             }
                             val failure = outcome.exceptionOrNull()
                             if (failure != null) {
@@ -255,7 +426,12 @@ class SearchViewModel : ViewModel() {
                         val qqDeferred = if (qqAllowed) async {
                             try {
                                 val r = withTimeoutOrNull(QQ_SEARCH_BUDGET_MS) {
-                                    SourceRouter.searchSongs(MusicSource.QQMUSIC, keyword, 30)
+                                    SourceRouter.searchSongs(
+                                        MusicSource.QQMUSIC,
+                                        keyword,
+                                        PAGE_SIZE,
+                                        page = currentPage,
+                                    )
                                 }
                                 // `withTimeoutOrNull` 返回 null = 预算用完 ⇒ 记成 TIMEOUT
                                 // 而不是「0 首」。这两件事在界面上必须能区分。
@@ -278,6 +454,7 @@ class SearchViewModel : ViewModel() {
                         val biliDeferred = if (biliAllowed) async {
                             try {
                                 val r = withTimeoutOrNull(BILI_SEARCH_BUDGET_MS) {
+                                    // B 站不分页（接口没有页码），永远只有第一页 —— 见它的 KDoc。
                                     SourceRouter.searchSongs(MusicSource.BILIBILI, keyword, 20)
                                 }
                                 r?.let { BiliOutcome(it, timedOut = false) }
@@ -352,10 +529,12 @@ class SearchViewModel : ViewModel() {
                         // 写进去只会闪一下过期数据。补守卫**不会**留下空白 ——
                         // 新的一轮搜索自己会发布。
                         if (_query.value == keyword) {
-                            publish(
+                            // v3.4.11：`append` 时并进累计并整体重排（见 accumulateAndPublish）。
+                            accumulateAndPublish(
                                 netease.orEmpty(),
                                 qqOutcome?.songs.orEmpty(),
                                 biliOutcome?.songs.orEmpty(),
+                                append = append,
                             )
                             _albums.value = emptyList()
                             _artists.value = emptyList()
@@ -412,8 +591,19 @@ class SearchViewModel : ViewModel() {
                             qq.isNotEmpty() || bili.isNotEmpty()
                         }
                         if (shouldRepublish && _query.value == keyword) {
-                            publish(neteaseList, qq, bili)
+                            accumulateAndPublish(neteaseList, qq, bili, append = append)
                             trace.mark(SearchLatencyTrace.MARK_MERGED_PUBLISH)
+                        }
+                        // v3.4.11：单曲 tab 的「还有没有下一页」。
+                        //
+                        // 判据是**这一页有没有被填满**（三条腿任一条满就算）：
+                        // 两个音源的搜索响应都没有稳定的总条数字段可按，所以只能这样判 ——
+                        // 代价是最后一页会多给一次点击，而**不会漏页**（后者才是缺陷）。
+                        // 与 `MusicSourceProvider.hasMorePages` 是同一个判据，
+                        // 这里内联是因为答案已经在手上（不必为了问一句再发一次请求）。
+                        if (_query.value == keyword) {
+                            _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
+                                .hasMoreAny(neteaseList.size, qq.size, pageSize = PAGE_SIZE)
                         }
                         if (_query.value == keyword) {
                             _sourceCounts.value = SourceCounts(
@@ -538,17 +728,48 @@ class SearchViewModel : ViewModel() {
                     }
                 }
 
+                // v3.4.11：专辑与艺人两个 tab 同样分页（它们此前也**只有 30 条**，
+                // 与单曲 tab 是同一个缺陷形状）。`offset` 的语义与单曲一致。
                 10 -> {
                     _sourceCounts.value = null
-                    val response = RetrofitClient.api.searchAlbum(keyword = _query.value, type = 10)
-                    _albums.value = response.result?.albums ?: emptyList()
+                    val offset = com.takahashirinta.ncrust.search.SearchPaging
+                        .offsetOf(currentPage, PAGE_SIZE)
+                    val response = RetrofitClient.api.searchAlbum(
+                        keyword = _query.value,
+                        type = 10,
+                        limit = PAGE_SIZE,
+                        offset = offset,
+                    )
+                    val page = response.result?.albums ?: emptyList()
+                    // 跨页去重：服务端分页边界可能重发同一条（`id` 是它的身份）。
+                    _albums.value = if (append) {
+                        (_albums.value + page).distinctBy { it.id }
+                    } else {
+                        page
+                    }
+                    _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
+                        .hasMore(page.size, PAGE_SIZE)
                     _songs.value = emptyList()
                     _artists.value = emptyList()
                 }
                 100 -> {
                     _sourceCounts.value = null
-                    val response = RetrofitClient.api.searchArtist(keyword = _query.value, type = 100)
-                    _artists.value = response.result?.artists ?: emptyList()
+                    val offset = com.takahashirinta.ncrust.search.SearchPaging
+                        .offsetOf(currentPage, PAGE_SIZE)
+                    val response = RetrofitClient.api.searchArtist(
+                        keyword = _query.value,
+                        type = 100,
+                        limit = PAGE_SIZE,
+                        offset = offset,
+                    )
+                    val page = response.result?.artists ?: emptyList()
+                    _artists.value = if (append) {
+                        (_artists.value + page).distinctBy { it.id }
+                    } else {
+                        page
+                    }
+                    _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
+                        .hasMore(page.size, PAGE_SIZE)
                     _songs.value = emptyList()
                     _albums.value = emptyList()
                 }

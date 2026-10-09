@@ -53,8 +53,8 @@ object QqMusicSourceProvider : MusicSourceProvider {
 
     override val isLoggedIn: Boolean get() = QqClient.isLoggedIn()
 
-    override suspend fun searchSongs(keyword: String, limit: Int): List<SongItem> =
-        runCatching { QqApi.searchSongs(keyword, limit) }
+    override suspend fun searchSongs(keyword: String, limit: Int, page: Int): List<SongItem> =
+        runCatching { QqApi.searchSongs(keyword, limit, page) }
             .onFailure { Log.w(TAG, "search failed", it) }
             .getOrDefault(emptyList())
             .also { results ->
@@ -110,6 +110,21 @@ object QqMusicSourceProvider : MusicSourceProvider {
      * 但返回原对象更省一次往返，也不会让调用方误以为拿到了新数据。
      */
     override suspend fun songDetail(song: SongItem): SongItem? = song.takeIf { it.sourceId != null }
+
+    /**
+     * QQ 搜索的下一页判据（v3.4.11）：**这一页被填满了**就认为还有下一页。
+     *
+     * 实测旧版 GET 的 `p=` 是页码、`n=` 是每页条数（见 [QqRequests.legacySearchUrl]），
+     * 但它**不返回可用的总条数**，所以只能按「填满 ⇒ 可能还有」判断 ——
+     * 代价是最后一页会多给一次点击，而不会漏页。
+     *
+     * 不额外发请求：判据直接用**已经取回的那一页**的长度，由调用方传进来即可
+     * （见 `SearchViewModel` 里对 `pageSize` 的比较），这里保守地按 limit 判。
+     */
+    override suspend fun hasMorePages(keyword: String, limit: Int, page: Int): Boolean {
+        val pageItems = searchSongs(keyword, limit, page)
+        return pageItems.size >= limit.coerceIn(1, 60)
+    }
 
     /**
      * 进程启动时接线：注册 Provider（音源路由认得 QQ）并给 [QqClient] 一个 application context。

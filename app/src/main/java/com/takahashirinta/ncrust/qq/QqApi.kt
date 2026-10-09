@@ -90,6 +90,11 @@ object QqApi {
         if (keyword.isBlank()) return emptyList()
         val n = limit.coerceIn(1, 60)
         val p = page.coerceAtLeast(1)
+        // `page` 一路传到旧版 GET 的 `p=`（见 QqRequests.legacySearchUrl）。
+        // ⚠️ **`musicu` 兜底那条路不支持翻页**：它的信封是按「单曲搜索」实测出来的，
+        // 翻页语义（`page_num`）没有实测依据，所以第 2 页起**只走旧版 GET** ——
+        // 拿没验证过的通道去赌，失败形态会是「翻页翻出第一页的内容」，
+        // 那比「翻页没结果」更难查。
 
         val legacy = runCatching {
             QqClient.legacyGet(QqRequests.legacySearchUrl(keyword, n, p))

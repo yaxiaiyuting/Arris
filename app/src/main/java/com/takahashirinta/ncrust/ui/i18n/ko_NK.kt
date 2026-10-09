@@ -622,6 +622,11 @@ scanConnecting = "평판에 연결중…",
             qqScanTitle = "QQ Music 앱으로 로그인",
             qqScanNote = "휴대전화의 QQ Music 앱으로 이 코드를 스캔하십시오. 이 경로의 로그인 상태는 만료 전에 자동으로 갱신되므로 매주 다시 로그인할 필요가 없습니다.",
         ),
+        search = SearchStrings(
+            searchLoadMore = "더 불러오기",
+            searchLoadingMore = "불러오는 중…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "B站 음질 상한",
             biliQualityCapDescription = "B站에 요구하는 음질을 제한합니다. 무손실과 Hi-Res는 대회원이 필요하며 일부 동영상에만 있습니다.",

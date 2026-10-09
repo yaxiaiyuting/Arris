@@ -622,6 +622,11 @@ val jpMY = Strings(
             qqScanTitle = "QQ Music アプリにて入り",
             qqScanNote = "掌の QQ Music アプリにて此の碼を読み取れ。此の道の入りたる状は限り来らば自ずから續く、每週に入り直す事なし。",
         ),
+        search = SearchStrings(
+            searchLoadMore = "更に読み込め",
+            searchLoadingMore = "読み込み中…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "B站の音質の上限",
             biliQualityCapDescription = "B站に求むる音質を限る。可逆と Hi-Res は大会員を要し、亦一部の動画にのみ在り。",

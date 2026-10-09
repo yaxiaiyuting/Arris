@@ -454,7 +454,21 @@ object PlaylistApi {
      * 返回歌曲是老格式(artists/album/duration), 解析时新旧字段都兜底;
      * artists[].id 带出来, 供后续"转到歌手/专辑"回调直接使用。
      */
-    suspend fun getSimilarSongs(songId: Long, limit: Int = 20): List<SongItem> = withContext(Dispatchers.IO) {
+    /**
+     * 相似歌曲。
+     *
+     * ## v3.4.11：默认条数 20 → **50**
+     *
+     * 这条链路的消费者只有一个：`MainActivity.launchInfinity()` ——
+     * 「相似无限」模式下每次从**这一批**里挑下一首。
+     * 所以 20 就是**候选池的大小**，池子小 → 很快绕回听过的歌 →
+     * 用户描述的「随机感不好」（他推测是「总是落在附近三十首」，方向对、机制在池子）。
+     *
+     * 50 而不是更大：接口的 `limit` 越大单次响应越慢，而这条链路是**播放中**触发的
+     * （唱到最后一首时才补货），不能让用户等。50 是「一次网络往返能拿到的、
+     * 又明显大于一屏队列」的量级；真要更大的池子应该做**多页轮转**（未做，见发布说明）。
+     */
+    suspend fun getSimilarSongs(songId: Long, limit: Int = 50): List<SongItem> = withContext(Dispatchers.IO) {
         val payloadJson = JSONObject(
             mapOf("songid" to songId.toString(), "limit" to limit.toString(), "offset" to "0")
         ).toString()

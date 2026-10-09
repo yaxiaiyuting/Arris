@@ -52,8 +52,27 @@ interface MusicSourceProvider {
      */
     val isLoggedIn: Boolean
 
-    /** 搜索歌曲。失败返回空列表；实现方负责把 [MusicSource] 标进结果。 */
-    suspend fun searchSongs(keyword: String, limit: Int): List<SongItem>
+    /**
+     * 搜索歌曲。失败返回空列表；实现方负责把 [MusicSource] 标进结果。
+     *
+     * @param page **1 起**的页码（v3.4.11）。只有第一页时它恒为 1 ——
+     *   加这个参数是为了让「搜索只有 30 条、没有下一页」这件事有个出口
+     *   （用户报障：「每次拉歌曲只拉三十首也太少了吧」）。
+     */
+    suspend fun searchSongs(keyword: String, limit: Int, page: Int = 1): List<SongItem>
+
+    /**
+     * 该音源**还有没有下一页**（v3.4.11）。
+     *
+     * 判据只能是「这一页有没有被填满」：两个音源的搜索响应都**没有**稳定的
+     * 「总条数」字段可按（ncm 的 `result.songCount` 只在部分返回里出现，
+     * qm 旧版搜索压根不给）。所以实现是「取回 [limit] 条 ⇒ 可能还有下一页」——
+     * 它会在最后一页**多给用户一次点击**，而不会漏掉任何一页（后者才是缺陷）。
+     *
+     * 默认实现直接说「没有了」：这样**不实现分页的音源不会显示一个点了没反应的按钮**
+     * （v3.4.11 只给 ncm/qm/B站 三条路做了分页，默认值让将来的音源必须显式声明）。
+     */
+    suspend fun hasMorePages(keyword: String, limit: Int, page: Int): Boolean = false
 
     /**
      * 取该曲在 [level] 档位下的可播放 URL 与**实际**文件参数。

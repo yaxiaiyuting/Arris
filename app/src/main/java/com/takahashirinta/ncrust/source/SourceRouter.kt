@@ -128,10 +128,16 @@ object SourceRouter {
      * 契约的其余部分一个字没变：**绝不把异常抛给调用方**（取消除外），
      * 也**不引入任何重试**（失败处理有界）。
      */
-    suspend fun searchSongs(source: MusicSource, keyword: String, limit: Int): List<SongItem> {
+    suspend fun searchSongs(
+        source: MusicSource,
+        keyword: String,
+        limit: Int,
+        /** v3.4.11：**1 起**的页码。默认 1 ⇒ 既有调用点行为不变。 */
+        page: Int = 1,
+    ): List<SongItem> {
         val provider = providers[source] ?: return emptyList()
         return try {
-            provider.searchSongs(keyword, limit)
+            provider.searchSongs(keyword, limit, page)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

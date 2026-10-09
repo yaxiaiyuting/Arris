@@ -623,6 +623,11 @@ val jpJP = Strings(
             qqScanTitle = "QQ Music アプリでログイン",
             qqScanNote = "スマートフォンの QQ Music アプリでこのコードをスキャンします。この経路のログイン状態は期限前に自動更新されるため、毎週ログインし直す必要はありません。",
         ),
+        search = SearchStrings(
+            searchLoadMore = "さらに読み込む",
+            searchLoadingMore = "読み込み中…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "B站の音質上限",
             biliQualityCapDescription = "B站に要求する音質を制限します。可逆圧縮と Hi-Res は大会員が必要で、対応する動画も一部だけです。",

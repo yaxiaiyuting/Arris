@@ -623,6 +623,11 @@ scanConnecting = "正在連接平板…",
             qqScanTitle = "QQ 音樂 App 掃碼登入",
             qqScanNote = "用手機上的 QQ 音樂 App 掃這張碼。這條路的登入狀態到期會自動續期，不用每週重登一次。",
         ),
+        search = SearchStrings(
+            searchLoadMore = "載入更多",
+            searchLoadingMore = "正在載入…",
+        ),
+
         bili = BiliStrings(
             biliQualityCapLabel = "B站音質上限",
             biliQualityCapDescription = "限制向 B 站要求的音質。無損與 Hi-Res 需要大會員，而且只有部分影片提供。",
