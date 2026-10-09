@@ -442,8 +442,18 @@ android {
         //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ——
         //   最近 5 个 tag 最大 71（v3.4.9-gpl 已正式发布且被下载过 ⇒ 按纪律**不动它**）
         //   / dist 的 aapt2 实测最大 69 / 工作区 71 ⇒ 取 **72**。
-        versionCode = 72
-        versionName = "3.4.10-gpl"
+        // v3.4.11（73）：**搜索分页**与**专辑匹配**（用户连续四轮反馈的合并交付）。
+        //   ① 搜索结果此前只有一页（30 条、offset 恒为 0，界面上也没有「还有更多」的出口）
+        //      ⇒ 三个 tab 全部支持翻页，**滚到底自动加载**；
+        //   ② 逐源统计改用**服务端声明的总数**（`ncm 共 300 首 · qm 共 993 首`），
+        //      此前显示的是「这一轮取回多少条」—— 翻页后纹丝不动，用户读成「没有实时更新」；
+        //   ③ 专辑按「专辑名 + 歌手」匹配并优先原唱（`AlbumLookup`），
+        //      修掉「同名专辑配错」与「直取失败后整页只有一个音源」；
+        //   ④ 艺人与专辑两个详情页补下拉刷新；相似无限的候选池 20 → 50。
+        //   ⚠️ 不改持久化结构与包名，可直接覆盖安装 v3.4.10。
+        //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ⇒ 取 **73**。
+        versionCode = 73
+        versionName = "3.4.11-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
