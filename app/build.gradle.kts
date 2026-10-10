@@ -452,8 +452,16 @@ android {
         //   ④ 艺人与专辑两个详情页补下拉刷新；相似无限的候选池 20 → 50。
         //   ⚠️ 不改持久化结构与包名，可直接覆盖安装 v3.4.10。
         //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ⇒ 取 **73**。
-        versionCode = 73
-        versionName = "3.4.11-gpl"
+        // v3.4.12（74）：**修「QQ 音乐搜索超时」**—— v3.4.11 回归。
+        //   v3.4.11 为了显示「qm 共 993 首」加了一次 `searchTotalCount()`（单独发一个
+        //   `n=1` 请求）。真机实测（PLC110）：那次请求 **3.6 秒**，加上真正的搜索 **3.5 秒**，
+        //   串行 ≈ **7.2 秒** > QQ 那条腿 5 秒的硬预算 ⇒ 整条腿被取消、**QQ 结果全空**。
+        //   修法两条：① 总数从**同一次**搜索响应里顺手取（删掉 `searchTotalCount`）；
+        //   ② 预算 5 秒 → 8 秒（真机实测 QQ 搜索稳定在 2.8~3.4 秒，5 秒只剩 1.6 秒余量）。
+        //   ⚠️ 不改持久化结构与包名，可直接覆盖安装 v3.4.11。
+        //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ⇒ 取 **74**。
+        versionCode = 74
+        versionName = "3.4.12-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

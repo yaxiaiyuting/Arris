@@ -59,14 +59,10 @@ object QqMusicSourceProvider : MusicSourceProvider {
         page: Int,
         totalOut: MutableMap<String, Int>?,
     ): List<SongItem> =
-        runCatching {
-            // page = 1 时顺带把服务端声明的总数取出来（`data.song.totalnum`，实测周杰伦 = 999）。
-            // 只在第 1 页问一次：翻页时那个数字不会变，每页都问只是白多一次解析。
-            if (page <= 1 && totalOut != null) {
-                QqApi.searchTotalCount(keyword)?.let { totalOut["qqmusic"] = it }
-            }
-            QqApi.searchSongs(keyword, limit, page)
-        }
+        // v3.4.12：总数从**同一次**搜索响应里取（`QqApi.searchSongs` 的出参）——
+        // v3.4.11 曾为它单独发一次请求，设备实测把 QQ 这条腿顶过了 5 秒预算、
+        // 导致「只有 qq 音乐超时」。**显示用的数字不许有自己的网络往返。**
+        runCatching { QqApi.searchSongs(keyword, limit, page, totalOut) }
             .onFailure { Log.w(TAG, "search failed", it) }
             .getOrDefault(emptyList())
             .also { results ->

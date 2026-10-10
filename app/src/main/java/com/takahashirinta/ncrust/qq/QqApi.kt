@@ -86,7 +86,22 @@ object QqApi {
      * 两条通道的字段名在 `new_json=1` 下完全一致（`mid`/`file.media_mid`/`pay.pay_play`），
      * 所以共用同一套映射；哪条先成功用哪条的结果，只有第一条拿不到东西时才试第二条。
      */
-    suspend fun searchSongs(keyword: String, limit: Int, page: Int = 1): List<SongItem> {
+    suspend fun searchSongs(
+        keyword: String,
+        limit: Int,
+        page: Int = 1,
+        /**
+         * v3.4.12：**服务端声明的总数**的出参 —— 从**同一次**响应里顺手取，
+         * 绝不为了这个数字再发一次请求。
+         *
+         * 为什么专门写这条注释：v3.4.11 我为了显示「qm 共 993 首」加过一个
+         * `searchTotalCount()`（单独发一次 `n=1`）。设备实测两次请求各约 3.6 秒、
+         * 串行 ≈ **7.2 秒**，而 QQ 那条腿的硬预算是 **5 秒** ⇒ 整条腿被取消、
+         * **QQ 搜索结果全空**（用户报障原话：「搜索界面只有 qq 音乐会超时」）。
+         * 一个纯粹用于显示的计数绝不该有能力让功能失效。
+         */
+        totalOut: MutableMap<String, Int>? = null,
+    ): List<SongItem> {
         if (keyword.isBlank()) return emptyList()
         val n = limit.coerceIn(1, 60)
         val p = page.coerceAtLeast(1)
@@ -102,6 +117,8 @@ object QqApi {
         legacy?.let { json ->
             val songs = QqSongMapper.songsFromLegacySearch(json)
             if (songs.isNotEmpty()) {
+                // v3.4.12：总数就在这份响应里（`data.song.totalnum`），顺手取走。
+                QqSongMapper.totalCountOf(json, "song")?.let { totalOut?.put("qqmusic", it) }
                 if (BuildConfig.DEBUG) Log.d(TAG, "search(legacy) '$keyword' -> ${songs.size}")
                 return songs
             }
@@ -112,23 +129,11 @@ object QqApi {
         return songs
     }
 
-    /**
-     * 只问 QQ 那边这个关键词**总共有多少首**（v3.4.11）。
-     *
-     * 走的是与 [searchSongs] **同一条**旧版 GET（`client_search_cp`，`n=1` 把正文压到最小），
-     * 只读 `data.song.totalnum` —— 不新发明请求形状，也就不会引入一个没实测过的通道。
-     *
-     * 实测（2026-10-10，匿名）：`w=周杰伦` → `totalnum = 999`。
-     * 取不到返回 null（**不是 0**）：「不知道总数」与「总数是 0」是两件事，
-     * 界面在 null 时回落到「已载 N 首」。
-     */
-    suspend fun searchTotalCount(keyword: String): Int? {
-        if (keyword.isBlank()) return null
-        val json = runCatching {
-            QqClient.legacyGet(QqRequests.legacySearchUrl(keyword, limit = 1, page = 1))
-        }.getOrNull() ?: return null
-        return QqSongMapper.totalCountOf(json, "song")
-    }
+    // ⚠️ v3.4.12：这里原本有一个 `searchTotalCount(keyword)`（单独发一次 `n=1` 只为问总数）。
+    // 它已被**删除**，理由是设备实测：那次请求要 3.6 秒，加上真正的搜索 3.5 秒，
+    // 串行 ≈ 7.2 秒 > QQ 那条腿 5 秒的硬预算 ⇒ 整条腿被取消、**QQ 搜索结果全空**。
+    // 总数现在从**同一次**搜索响应里取（见 [searchSongs] 的 `totalOut`）。
+    // **不要把它加回来** —— 显示用的数字不该有自己的网络往返。
 
     /**
      * v3.3.0 · 需求 2：**按歌词搜索**（`t=7`）。
