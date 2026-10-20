@@ -30,6 +30,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -72,6 +73,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.takahashirinta.ncrust.account.EntitlementReason
+import com.takahashirinta.ncrust.account.PlaybackNotice
+import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.auth.CookieManager
@@ -95,6 +99,7 @@ import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.trackKey
 import com.takahashirinta.ncrust.player.PlayOrigin
+import com.takahashirinta.ncrust.player.PlaybackQueueLogic
 import com.takahashirinta.ncrust.player.PlaybackStateManager
 import com.takahashirinta.ncrust.player.QueueKeys
 import com.takahashirinta.ncrust.player.ShuffleRound
@@ -115,6 +120,7 @@ import com.takahashirinta.ncrust.ui.components.PlaylistCreateOutcome
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
 import com.takahashirinta.ncrust.ui.components.SongMenuSheet
 import com.takahashirinta.ncrust.ui.components.TopScrimIconButton
+import com.takahashirinta.ncrust.ui.components.UpdateNavDot
 // v2.5.0 · D：应用级 Snackbar（本仓库此前没有任何 Snackbar 设施）。
 import com.takahashirinta.ncrust.ui.components.AppSnackbarHost
 import com.takahashirinta.ncrust.ui.components.rememberAppSnackbarState
@@ -122,12 +128,17 @@ import com.takahashirinta.ncrust.ui.components.rememberAppSnackbarState
 import com.takahashirinta.ncrust.player.QueueInsert
 // v2.5.0 · D：Snackbar 要浮在底部导航/mini bar 之上，位置复用既有的叠层留白常量。
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
+import com.takahashirinta.ncrust.ui.LocalHeightClass
+import com.takahashirinta.ncrust.ui.heightClassFor
 import com.takahashirinta.ncrust.ui.navigation.MainNavGraph
 import com.takahashirinta.ncrust.ui.navigation.NavRoutes
 import com.takahashirinta.ncrust.ui.player.PlayerCardOverlay
 import com.takahashirinta.ncrust.stats.StatsRecorder
 import com.takahashirinta.ncrust.ui.screen.*
+import com.takahashirinta.ncrust.ui.components.QrLoginDialog
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.i18n.Strings
+// 临时 shim：update 文案先由 UpdateStrings.kt 提供，合并进 Strings.update 后删除。
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.initLanguageMirror
 import com.takahashirinta.ncrust.ui.i18n.saveLanguageCode
@@ -154,6 +165,7 @@ import io.github.takahashirinta.kanesumi.anim.sokuou.metroViewConfiguration
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroTheme
 import com.takahashirinta.ncrust.warmup.AppWarmup
+import com.takahashirinta.ncrust.update.UpdateService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -223,6 +235,9 @@ class MainActivity : ComponentActivity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
         RetrofitClient.init(this)
+        // 会话判定：启动时一次。必须在 RetrofitClient.init 之后（要读已加载的 cookie），
+        // 且在 AppWarmup 之前（预热里的收藏/推荐请求会带上 cookie）。
+        SessionMonitor.init(this)
         // v3.1.0 · B：B 站音源的开关镜像（默认关闭）。与 RetrofitClient.init 同处 ——
         // 两者都是「进程级的一次性配置」，分开写会让下一个读代码的人只找到一个。
         BiliPrefs.init(this)
@@ -246,6 +261,9 @@ class MainActivity : ComponentActivity() {
         // 冷启动即刻并发启动预热：Home 三条网络 + 封面 Coil 预取。
         // splash 期间跑完，进入主页时 ContentCache 已就位，无 loader 闪烁。
         AppWarmup.start(this)
+        // v3.4.13：应用内更新先把上次发现的结果读回来（24 小时窗口内不再联网，
+        // 但「用户页横幅 / 导航圆点」必须立刻能显示）。检查本身在 splash 收起后延迟触发。
+        UpdateService.init(this)
         enableEdgeToEdge()
         setContent {
             // ---------- v1.8.0 · T4：自动旋转 / 双向进出大屏 ----------
@@ -430,10 +448,25 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    // v3.4.13：更新检查在首页渲染后再等约 10 秒，避开冷启动预热与首帧。
+                    // 24 小时窗口、自动检查开关与「失败静默」都在 UpdateService.autoCheck 里；
+                    // 语言切换会重走 splash，但窗口没过就不会再发请求。
+                    LaunchedEffect(showSplash) {
+                        if (showSplash) return@LaunchedEffect
+                        delay(10_000L)
+                        UpdateService.autoCheck(this@MainActivity)
+                    }
                     }  // MetroTheme
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 回前台且距上次判定 ≥ 30 分钟才复核（登录失效最常见的时间窗就是"隔天再打开"）。
+        SessionMonitor.onResume(this)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -698,6 +731,25 @@ fun formatDuration(ms: Long): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
+/**
+ * 播放权益判定原因 → 文案。
+ *
+ * trial 的登录原因与跳过不同：试听时是「登录后**可能**可完整播放」（登录后仍可能只给到试听），
+ * 跳歌时是确定的「登录后可播放」。
+ */
+internal fun reasonText(
+    strings: Strings,
+    reason: EntitlementReason,
+    trial: Boolean = false
+): String = when (reason) {
+    EntitlementReason.VIP -> strings.playbackReasonVip
+    EntitlementReason.ALBUM -> strings.playbackReasonAlbum
+    EntitlementReason.COPYRIGHT -> strings.playbackReasonCopyright
+    EntitlementReason.LOGIN ->
+        if (trial) strings.playbackReasonLoginTrial else strings.playbackReasonLogin
+    EntitlementReason.UNKNOWN -> strings.playbackReasonUnknown
+}
+
 /** 播放模式：0=顺序循环, 1=单曲循环, 2=乱序, 3=顺序线性(播完停), 4=相似无限(FM 电台)。 */
 object QueueModes {
     const val CYCLE = 0
@@ -849,6 +901,9 @@ private fun ImmersiveEffect(
     LaunchedEffect(active) { currentOnChange.value(active) }
 }
 
+/** 「库 → 单曲」整列收藏的队列动作；三种视图共用同一份加载结果。 */
+private enum class LikedBulkAction { PLAY, INSERT, APPEND }
+
 @Composable
 fun MainScreen(
     themeIndex: Int = 0,
@@ -952,6 +1007,9 @@ fun MainScreen(
     // WindowInsets 全为 0、screenHeightDp 又对不上）；手机/平板沿用 screenHeightDp，
     // 保持车机改动之前的行为。实测前先用整屏过渡。
     val contentHeightPx = if (isAutomotive && rootHeightPx > 0f) rootHeightPx else screenHeightPx
+    // v3.4.12：高度档用与 collapsedOffsetY **同一个**高度来源（车机走根布局实测），
+    // 并在下面的主内容树统一 provide —— 页面 / 播放器 / 覆盖层共用一档。
+    val heightClass = heightClassFor(with(density) { contentHeightPx.toDp().value })
 
     // miniBar 底 = navBar 顶。手机/平板系统栏由 WindowInsets 给出；车机内容区已被系统
     // inset（WindowInsets 为 0），公式一致，区别只在 contentHeightPx 的取法。
@@ -1055,6 +1113,9 @@ fun MainScreen(
 
 
     var playbackQueue by remember { mutableStateOf<List<SongItem>>(emptyList()) }
+    // v3.4.12：整列收藏正在后台补齐（云端红心全量详情）。只用于禁用重复触发与显示反馈，
+    // 不阻塞「播放全部」的立即起播。
+    var likedBulkLoading by remember { mutableStateOf(false) }
 
     // B2/B3 共用：这次创建歌单后要往里放的歌曲 —— 队列入口用快照，加歌入口用待加列表。
     // 待加列表里的歌可能不在当前队列（如搜索结果），退化成只带 id 的占位 SongItem，
@@ -1070,6 +1131,13 @@ fun MainScreen(
     var currentQueueIndex by remember { mutableIntStateOf(-1) }
     var songEnded by remember { mutableStateOf(false) }
     var songTransitioned by remember { mutableStateOf(false) }
+    // 本次过渡是不是 ExoPlayer 自然衔接（AUTO）。手动 setMediaItem / 系统媒体控件与车机
+    // 经 media3 会话 seek 过来的过渡不是 AUTO，那时应用队列本身并没有推进，索引只能按
+    // 实际在播 identity 回查，不能拿「模式推断的下一首」兜底。
+    var transitionIsAuto by remember { mutableStateOf(false) }
+    // 续播（launchInfinity）在途时当前歌刚好播完：起播意图先记下来，由在途任务完成后起播。
+    // 声明必须早于 playFromQueue —— 用户在队列里点歌会清掉它（点歌优先于续播）。
+    val infinityNeedsPlay = remember { mutableStateOf(false) }
     // 点击 lambda / 协程里不能读 CompositionLocal，提示文案在组合期取好。
     val mainStrings = LocalStrings.current
     // v1.4.0 · 音乐人推荐：每次回到首页 / 切换设置后重算一次口味命中（纯本地，无请求）。
@@ -1123,6 +1191,33 @@ fun MainScreen(
         pendingRound = null
     }
 
+    /**
+     * 「当前曲之后该预载谁」的唯一入口（点队列切歌 / 自然衔接后 / 最后 60s 窗口共用）。
+     *
+     * 非乱序模式直接交给 [PlaybackQueueLogic.nextIndex]；乱序模式**不能**让那个函数
+     * 在轮末回绕到 0（那是正在播的这首歌）——轮末必须先按 `ShuffleRound` 开下一轮，
+     * 并把同一份 [pendingRound] 留给过渡路径消费，否则预载与过渡会走到两首不同的歌。
+     */
+    fun preloadIndex(): Int {
+        if (playbackQueue.isEmpty()) return -1
+        if (playMode == QueueModes.SHUFFLE) {
+            if (shuffledIndices.isEmpty()) return -1
+            val pos = shuffledPosition.coerceIn(0, shuffledIndices.lastIndex)
+            if (pos < shuffledIndices.lastIndex) {
+                return shuffledIndices[pos + 1].takeIf { it in playbackQueue.indices } ?: -1
+            }
+            val round = pendingRound ?: ShuffleRound.newRound(
+                size = playbackQueue.size,
+                currentIndex = currentQueueIndex,
+                keyOf = ::artistKeyOf,
+            ).also { pendingRound = it }
+            return round.getOrNull(1)?.takeIf { it in playbackQueue.indices } ?: -1
+        }
+        return PlaybackQueueLogic.nextIndex(
+            playbackQueue, currentQueueIndex, playMode, shuffledIndices, shuffledPosition,
+        )
+    }
+
     /** 切换播放模式：写盘 + 维护乱序序列（唯一入口，避免漏掉落盘）。 */
     fun applyPlayMode(mode: Int) {
         playMode = mode
@@ -1162,24 +1257,68 @@ fun MainScreen(
         }
     }
 
-    // ViewModel 确认切歌后（URL fetch 完成或 gapless 快速路径），
+    // ViewModel 确认切歌后（URL fetch 完成、gapless 快速路径、系统/车机侧切歌），
     // 从队列中找到对应 SongItem 并更新 currentSong，保证 UI 与音频同步。
-    // v2.5.3 · P1：这里只有裸 id（ViewModel 广播的是 `currentSongId`），
-    // 所以按 **TrackKey.ofSong 推断出的音源**比对，而不是"id 相等即同一首"——
-    // 后者会让「ncm 123」与「QQ 合成的 123」互相认领。
+    //
+    // 同时把 currentQueueIndex 拉回「正在响的那一首」——**队列索引只能以实际在播
+    // identity 为准**：
+    //  - playFromQueue 是乐观推进（先把索引指到用户点的那首，URL 还在异步取），若这窗口里
+    //    ExoPlayer 自己完成了无缝衔接，乐观索引就会停在错位的一格上；
+    //  - 系统媒体控件 / 车机走 media3 会话直接 seek 到别的项，绕过了我们的队列推进，
+    //    索引会一直停在上一首。
+    // 索引错位后，「下一首/预载谁」全都从错位的位置开始算，听感就是「点的歌和实际播的
+    // 不是同一首」「播了不该播的歌」（上游 issue #32）。
+    //
+    // v2.5.3 · P1：身份是 [TrackKey]（音源 + id），不是裸 id ——「ncm 123」与「QQ 123」
+    // 是两首歌，按 id 回查会互相认领。
     LaunchedEffect(vmCurrentSongId) {
         val id = vmCurrentSongId ?: return@LaunchedEffect
-        val vmSourceKey = playerViewModel.currentTrackKey?.source?.key
-        val vmKey = TrackKey.of(vmSourceKey, id)
+        val vmKey = playerViewModel.currentTrackKey ?: TrackKey.of(null, id)
+        val mapped = PlaybackQueueLogic.indexOfKey(playbackQueue, vmKey)
+        if (mapped >= 0 && mapped != currentQueueIndex) {
+            Log.d(
+                "MainScreen",
+                "queue index realigned to playing identity: $currentQueueIndex -> $mapped key=${vmKey.tag}",
+            )
+            currentQueueIndex = mapped
+            if (playMode == QueueModes.SHUFFLE) {
+                // 轮末预载的那一首属于 [pendingRound]，还不在当前 shuffledIndices 里。
+                // 先认它；认不出才回到当前轮次，最后才重洗（绝不让游标停在错位位置）。
+                val pending = pendingRound
+                val pendingPos = pending?.indexOf(mapped) ?: -1
+                if (pending != null && pendingPos >= 0) {
+                    shuffledIndices = pending
+                    shuffledPosition = pendingPos
+                    pendingRound = null
+                } else {
+                    pendingRound = null
+                    val pos = shuffledIndices.indexOf(mapped)
+                    if (pos >= 0) {
+                        shuffledPosition = pos
+                    } else {
+                        generateShuffledIndices()
+                        shuffledPosition = shuffledIndices.indexOf(mapped).coerceAtLeast(0)
+                    }
+                }
+            }
+            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+        }
         if (currentSong?.let { QueueKeys.keyOf(it) == vmKey } == true) return@LaunchedEffect
         val found = playbackQueue.firstOrNull { QueueKeys.keyOf(it) == vmKey }
         if (found != null) currentSong = found
     }
 
     fun removeFromQueue(index: Int) {
-        playbackQueue = playbackQueue.toMutableList().also { it.removeAt(index) }
-        if (currentQueueIndex >= playbackQueue.size) currentQueueIndex = playbackQueue.size - 1
-        if (playbackQueue.isEmpty()) currentQueueIndex = -1
+        // 删当前歌之前的项时必须按歌曲身份重新定位当前索引：只 clamp 索引的话它会
+        // 一格一格指向「当前歌的后一首」，不变量 `queue[current] == 正在播的歌` 当场破坏。
+        // 身份是 TrackKey（音源 + id），跨源同号不会被认成同一首。
+        val next = PlaybackQueueLogic.removeAt(playbackQueue, currentQueueIndex, index)
+        playbackQueue = next.queue
+        currentQueueIndex = next.currentIndex
+        Log.d(
+            "MainScreen",
+            "removeFromQueue $index -> index=${next.currentIndex} size=${next.queue.size}",
+        )
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
     }
@@ -1216,10 +1355,23 @@ fun MainScreen(
             // 之后的"下一首"仍按旧游标推进 ⇒ 已经播过的歌会再播一遍（"随机还会重复"的来源之一）。
             if (playMode == QueueModes.SHUFFLE) {
                 val pos = shuffledIndices.indexOf(index)
-                if (pos >= 0) shuffledPosition = pos else generateShuffledIndices()
+                if (pos >= 0) {
+                    shuffledPosition = pos
+                    // 用户手点了别的曲目：之前为「轮末」预排的下一轮已经不以新的当前曲
+                    // 为锚点，继续留着会被预载/过渡误用。清掉，需要时按当前位置重排。
+                    pendingRound = null
+                } else {
+                    generateShuffledIndices()
+                }
             }
             val song = playbackQueue[index]
             val (title, artist, artwork) = songParams(song)
+            Log.d(
+                "MainScreen",
+                "playFromQueue index=$index key=${QueueKeys.keyOf(song).tag} mode=$playMode",
+            )
+            // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
+            infinityNeedsPlay.value = false
             playerViewModel.playSong(
                 song.id,
                 title = title,
@@ -1229,25 +1381,14 @@ fun MainScreen(
                 sourceId = song.sourceId,
                 mediaId = song.mediaId,
                 origin = origin,
+                privilege = song.privilege,
             )
             PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
 
             // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
-            val nextIdx = when (playMode) {
-                QueueModes.SINGLE -> index
-                QueueModes.SHUFFLE -> shuffledIndices.getOrNull(
-                    if (shuffledPosition < shuffledIndices.size - 1) shuffledPosition + 1 else 0
-                ) ?: 0
-                QueueModes.LINE ->
-                    if (index < playbackQueue.size - 1) index + 1 else -1
-                QueueModes.INFINITY ->
-                    if (index < playbackQueue.size - 1) index + 1 else -1
-                // CYCLE: 队尾循环到队首, 但单曲队列不预载自身(避免播完自动重播=假单曲循环)
-                else ->
-                    if (playbackQueue.size > 1) {
-                        if (index < playbackQueue.size - 1) index + 1 else 0
-                    } else -1
-            }
+            // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
+            // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
+            val nextIdx = preloadIndex()
             val nextSong = playbackQueue.getOrNull(nextIdx)
             if (nextSong != null) {
                 val (nTitle, nArtist, nArtwork) = songParams(nextSong)
@@ -1257,6 +1398,7 @@ fun MainScreen(
                     sourceKey = nextSong.source,
                     sourceId = nextSong.sourceId,
                     mediaId = nextSong.mediaId,
+                    privilege = nextSong.privilege,
                 )
             }
         }
@@ -1274,9 +1416,19 @@ fun MainScreen(
      *  - 相似无限(Infinity 播放模式): 以当前歌为种子拉相似歌曲。
      * 已入队的歌会被过滤, 防止环绕重复; 数据源为空时兜底每日推荐, 避免断播。
      * in-flight 防重入:预载心跳与播完路径可能几乎同时触发。
+     *
+     * [startPlaying] = false 表示「只是在预载窗口里提前续播」：续播曲只**追加并按身份
+     * 预载**，让当前歌自然无缝交接。旧实现在预载窗口就直接 playFromQueue，把还在响的
+     * 那首歌提前一分钟掐掉——听感上就是「播着播着跳到别的歌」。
      */
-    fun launchInfinity() {
-        if (infinityJob.value?.isActive == true) return
+    fun launchInfinity(startPlaying: Boolean = true) {
+        if (infinityJob.value?.isActive == true) {
+            // 歌已经播完、续播却还在网络里：这次的起播意图不能丢，否则停在队尾不动，
+            // 再点播放键也未必能恢复（ExoPlayer 的 play() 对已结束的播放器无效）。
+            if (startPlaying) infinityNeedsPlay.value = true
+            Log.d("MainScreen", "infinity in flight, pendingPlay=$startPlaying")
+            return
+        }
         val seed = playbackQueue.getOrNull(currentQueueIndex) ?: return
         // v2.5.3 · P1：续播去重同样走身份（TrackKey），避免"跨源同号被当成已有"。
         val existingKeys = QueueKeys.keysOf(playbackQueue).toHashSet()
@@ -1294,22 +1446,50 @@ fun MainScreen(
                     PlaylistApi.getDailyRecommendSongs()
                         .filter { QueueKeys.keyOf(it) !in existingKeys }
                 }.getOrDefault(emptyList())
-            if (continuation.isEmpty()) return@launch
+            if (continuation.isEmpty()) {
+                // 数据源没给出新歌（FM 流全是已入队的重复项 / 风控返回空）：队尾确实没有
+                // 下一首可用。留日志痕，便于区分「没续播」与「续播了但没起播」。
+                Log.d("MainScreen", "infinity continuation empty: seed=${seed.id} fm=$fromFm")
+                return@launch
+            }
             withContext(Dispatchers.Main) {
                 playbackQueue = playbackQueue + continuation
                 val startIdx = playbackQueue.size - continuation.size
-                if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
-                playFromQueue(startIdx)
-                PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
-                // 为无缝衔接立即预载 infinity 首曲之后的一首
-                playbackQueue.getOrNull(startIdx + 1)?.let { next ->
-                    val (t, a, w) = songParams(next)
-                    playerViewModel.preloadNextSong(
-                        next.id, t, a, w,
-                        sourceKey = next.source,
-                        sourceId = next.sourceId,
-                        mediaId = next.mediaId,
-                    )
+                // 乱序不要在这里重洗：追加项的下标一定不在旧轮次里，playFromQueue 会自己
+                // generateShuffledIndices（以新当前曲钉 0）；「只预载不起播」时则保持旧轮次
+                // 不动，等实际过渡到 startIdx 时由进度回查再开新一轮 —— 否则新轮次会把
+                // startIdx 之后/之前的随机位置直接跳过。
+                // 在途期间当前歌播完了（playNext 走到队尾）→ 这次必须真正起播。
+                val shouldPlay = startPlaying || infinityNeedsPlay.value
+                infinityNeedsPlay.value = false
+                Log.d(
+                    "MainScreen",
+                    "infinity appended ${continuation.size} songs at $startIdx, startPlaying=$shouldPlay",
+                )
+                if (shouldPlay) {
+                    // playFromQueue 内部已按模式预载下一首。
+                    playFromQueue(startIdx)
+                } else {
+                    // 预载窗口内追加：只有在「当前曲仍是发起续播的那首」时才预载续播首曲，
+                    // 接上它的无缝交接。若网络期间用户点了别的歌 / 已自然切到下一首，
+                    // 续播首曲不再是当前曲的 next —— 绝不能把它塞进待播槽位（那会让下一首
+                    // 跳到队尾）。新当前曲的 60s 预载窗口会自己重新选正确的 next。
+                    val stillOnSeed = playbackQueue.getOrNull(currentQueueIndex)?.let {
+                        QueueKeys.keyOf(it) == QueueKeys.keyOf(seed)
+                    } == true
+                    if (stillOnSeed) {
+                        playbackQueue.getOrNull(startIdx)?.let { next ->
+                            val (t, a, w) = songParams(next)
+                            playerViewModel.preloadNextSong(
+                                next.id, t, a, w,
+                                sourceKey = next.source,
+                                sourceId = next.sourceId,
+                                mediaId = next.mediaId,
+                                privilege = next.privilege,
+                            )
+                        }
+                    }
+                    PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
                 }
             }
         }
@@ -1405,13 +1585,16 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         playerViewModel.setOnSongPreviousCallback { playPrevious() }
         playerViewModel.setOnSongEndedCallback { songEnded = true }
-        playerViewModel.setOnSongTransitionedCallback { songTransitioned = true }
+        playerViewModel.setOnSongTransitionedCallback { auto ->
+            transitionIsAuto = auto
+            songTransitioned = true
+        }
         // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
         // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
         playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
     }
 
-    // 无缝播放：当进入当前歌曲的最后 20 秒时，预取下一首的 URL 并加入 ExoPlayer 队列。
+    // 无缝播放：当进入当前歌曲的最后 60 秒时，预取下一首的 URL 并加入 ExoPlayer 队列。
     // NOTE: resetPreloadFlag() is intentionally NOT called here. Calling it resets the StateFlow
     // to false, which lets the 250ms progress ticker re-set it to true immediately, causing
     // preloadNextSong to be called every 250ms (each call cancelling the previous). The flag is
@@ -1419,44 +1602,12 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         playerViewModel.needsPreload.collect { needs ->
             if (!needs) return@collect
-            val nextSong: SongItem? = when {
-                playbackQueue.isEmpty() -> null
-                playMode == QueueModes.SINGLE -> playbackQueue.getOrNull(currentQueueIndex)
-                playMode == QueueModes.SHUFFLE -> {
-                    if (shuffledPosition < shuffledIndices.size - 1) {
-                        playbackQueue.getOrNull(shuffledIndices.getOrNull(shuffledPosition + 1) ?: 0)
-                    } else {
-                        // v2.0.0 · T1-C：轮末。旧实现回绕到 shuffledIndices[0] = 正在播的那一首
-                        // ⇒ ExoPlayer 无缝重播当前曲。改成**先把下一轮排好**（当前曲钉 0 位），
-                        // 预载它的下标 1；过渡路径读同一份 pendingRound，两边绝不会走岔。
-                        val round = pendingRound ?: ShuffleRound.newRound(
-                            size = playbackQueue.size,
-                            currentIndex = currentQueueIndex,
-                            keyOf = ::artistKeyOf,
-                        ).also { pendingRound = it }
-                        playbackQueue.getOrNull(round.getOrNull(1) ?: currentQueueIndex)
-                    }
-                }
-                playMode == QueueModes.LINE ->
-                    // 顺序线性: 队尾之后没有下一首, 不预载(否则队尾歌会 gapless 回绕队首,
-                    // 单曲队列更是会 [A,A] 自动过渡 = 假单曲循环)。
-                    playbackQueue.getOrNull(
-                        if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1 else -1
-                    )
-                playMode == QueueModes.INFINITY -> {
-                    if (currentQueueIndex < playbackQueue.size - 1)
-                        playbackQueue.getOrNull(currentQueueIndex + 1) else null
-                }
-                else -> {
-                    // CYCLE: 队尾循环到队首；单曲队列不预载自身(避免播完自动重播=假单曲循环)
-                    val nextIdx = when {
-                        playbackQueue.size <= 1 -> -1
-                        currentQueueIndex < playbackQueue.size - 1 -> currentQueueIndex + 1
-                        else -> 0
-                    }
-                    playbackQueue.getOrNull(nextIdx)
-                }
-            }
+            // 下一首由 preloadIndex() 统一决定（与「点队列切歌/自然衔接后」同一决策），
+            // 免得几处各抄一份 when(playMode) 悄悄分叉。契约：-1 = 按当前模式没有下一首，
+            // 尤其 CYCLE 的单曲队列不能预载自身（[A,A] 自动衔接 = 假单曲循环），
+            // SHUFFLE 轮末也不能回绕到 0（那是正在播的当前曲）。
+            val nextIdx = preloadIndex()
+            val nextSong: SongItem? = playbackQueue.getOrNull(nextIdx)
             if (nextSong != null) {
                 val (title, artist, artwork) = songParams(nextSong)
                 // 单曲循环模式: 预载自身是实现无缝单曲循环的手段, 显式放行
@@ -1466,73 +1617,124 @@ fun MainScreen(
                     sourceKey = nextSong.source,
                     sourceId = nextSong.sourceId,
                     mediaId = nextSong.mediaId,
+                    privilege = nextSong.privilege,
                 )
             } else if (playMode == QueueModes.INFINITY &&
                 currentQueueIndex >= playbackQueue.size - 1 && playbackQueue.isNotEmpty()
             ) {
                 // 队列尾 + Infinity: 提前拉相似歌追加, 追加完成时才来得及无缝预载——
-                // 等到自然播完才发起, 相似接口的网络往返会让衔接出现空档
-                launchInfinity()
+                // 等到自然播完才发起, 相似接口的网络往返会让衔接出现空档。
+                // startPlaying=false: 只追加+预载，当前歌照常播完（旧实现在这里就把歌掐了）。
+                launchInfinity(startPlaying = false)
             }
         }
     }
 
-    // 无缝播放：ExoPlayer 自动切换曲目后，同步队列索引和歌词。
+    // 无缝播放 / 系统切歌：ExoPlayer 切换曲目后，同步队列索引和歌词。
+    //
+    // 索引**先按实际在播 identity 回查**（TrackKey），模式推断只在「拿不到身份」时兜底：
+    // 非自然衔接（手动 setMediaItem / 系统媒体控件 / 车机 seek）时应用队列没有推进，
+    // 拿模式推断的下一首兜底等于凭空推进一格。能按身份对上就对齐；对不上
+    // （车机塞进来的队列外歌曲）保持原索引不动。
     LaunchedEffect(songTransitioned) {
         if (!songTransitioned) return@LaunchedEffect
         songTransitioned = false
         if (playbackQueue.isEmpty()) return@LaunchedEffect
-        val nextIndex = when (playMode) {
-            QueueModes.SINGLE -> currentQueueIndex
-            QueueModes.SHUFFLE -> {
-                if (shuffledPosition < shuffledIndices.size - 1) {
-                    shuffledPosition++
-                    shuffledIndices.getOrElse(shuffledPosition) { 0 }
-                } else {
-                    // v2.0.0 · T1-C：必须与预载读**同一份**序列，否则过渡会走到一首没被预载的歌。
-                    // 跳过下标 0（刚播完的这首）—— 旧实现正好把下标 0 当下一首 = 重播。
-                    val round = pendingRound ?: ShuffleRound.newRound(
-                        size = playbackQueue.size,
-                        currentIndex = currentQueueIndex,
-                        keyOf = ::artistKeyOf,
-                    )
+
+        val actualKey = playerViewModel.currentTrackKey
+        val mapped = PlaybackQueueLogic.indexOfKey(playbackQueue, actualKey)
+        if (!transitionIsAuto && mapped < 0) {
+            Log.d(
+                "MainScreen",
+                "non-auto transition key=${actualKey?.tag ?: "none"} not in queue, " +
+                    "keep index=$currentQueueIndex (no mode inference)",
+            )
+            return@LaunchedEffect
+        }
+
+        val nextIndex: Int
+        if (mapped >= 0) {
+            nextIndex = mapped
+            currentQueueIndex = mapped
+            if (playMode == QueueModes.SHUFFLE) {
+                // 轮末预载项属于 pendingRound，还不在当前 shuffledIndices 里：先认它。
+                val pending = pendingRound
+                val pendingPos = pending?.indexOf(mapped) ?: -1
+                if (pending != null && pendingPos >= 0) {
+                    shuffledIndices = pending
+                    shuffledPosition = pendingPos
                     pendingRound = null
-                    shuffledIndices = round
-                    shuffledPosition = if (round.size > 1) 1 else 0
-                    round.getOrElse(shuffledPosition) { 0 }
+                } else {
+                    pendingRound = null
+                    val pos = shuffledIndices.indexOf(mapped)
+                    if (pos >= 0) {
+                        shuffledPosition = pos
+                    } else {
+                        // 追加进队列的新歌 / 旧轮次不认识它：以实际在播曲为 0 重新开一轮。
+                        generateShuffledIndices()
+                        shuffledPosition = shuffledIndices.indexOf(mapped).coerceAtLeast(0)
+                    }
                 }
             }
-            // 顺序线性: 队尾没有预载(见 needsPreload 分支), 正常不会走到这里;
-            // 万一有竞态残留, 停在队尾而不是回绕队首。
-            QueueModes.LINE ->
-                if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1
-                else currentQueueIndex.coerceIn(0, playbackQueue.size - 1)
-            QueueModes.INFINITY ->
-                if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1
-                else if (playbackQueue.isNotEmpty()) 0 else currentQueueIndex
-            else -> if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1 else 0
+        } else if (actualKey != null) {
+            // AUTO 但身份解析成功、却不在应用队列里（车机/外部插进来的歌）：
+            // 不能拿模式推断顶一格，那会让后续预载/续播从错位处开始。
+            Log.w(
+                "MainScreen",
+                "auto transition key=${actualKey.tag} not in queue, keep index=$currentQueueIndex",
+            )
+            return@LaunchedEffect
+        } else {
+            // 拿不到身份（老形状 / 无 id 项）才退回模式推断。保留本轮 random 语义：
+            // 轮末必须开新一轮并跳过下标 0，不能回绕重播当前曲。
+            nextIndex = when (playMode) {
+                QueueModes.SINGLE -> currentQueueIndex
+                QueueModes.SHUFFLE -> {
+                    if (shuffledPosition < shuffledIndices.size - 1) {
+                        shuffledPosition++
+                        shuffledIndices.getOrElse(shuffledPosition) { 0 }
+                    } else {
+                        val round = pendingRound ?: ShuffleRound.newRound(
+                            size = playbackQueue.size,
+                            currentIndex = currentQueueIndex,
+                            keyOf = ::artistKeyOf,
+                        )
+                        pendingRound = null
+                        shuffledIndices = round
+                        shuffledPosition = if (round.size > 1) 1 else 0
+                        round.getOrElse(shuffledPosition) { 0 }
+                    }
+                }
+                // 顺序线性: 队尾没有预载(见 needsPreload 分支), 正常不会走到这里;
+                // 万一有竞态残留, 停在队尾而不是回绕队首。
+                QueueModes.LINE ->
+                    if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1
+                    else currentQueueIndex.coerceIn(0, playbackQueue.size - 1)
+                QueueModes.INFINITY ->
+                    if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1
+                    else if (playbackQueue.isNotEmpty()) 0 else currentQueueIndex
+                else -> if (currentQueueIndex < playbackQueue.size - 1) currentQueueIndex + 1 else 0
+            }
+            currentQueueIndex = nextIndex
         }
-        currentQueueIndex = nextIndex
-        currentSong = playbackQueue.getOrNull(nextIndex)
+
+        Log.d(
+            "MainScreen",
+            "transition(auto=$transitionIsAuto) key=${actualKey?.tag ?: "none"} " +
+                "mapped=$mapped resolved=$nextIndex mode=$playMode",
+        )
+        currentSong = playbackQueue.getOrNull(currentQueueIndex)
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
         currentSong?.id?.let { playerViewModel.fetchLyricsForSong(it) }
 
         // Immediately start preloading the song after this one.
-        val nnIdx = when (playMode) {
-            QueueModes.SINGLE -> nextIndex
-            QueueModes.SHUFFLE -> shuffledIndices.getOrNull(
-                if (shuffledPosition < shuffledIndices.size - 1) shuffledPosition + 1 else 0
-            ) ?: 0
-            QueueModes.LINE ->
-                if (nextIndex < playbackQueue.size - 1) nextIndex + 1 else -1
-            QueueModes.INFINITY -> {
-                if (nextIndex < playbackQueue.size - 1) nextIndex + 1
-                else { launchInfinity(); -1 }
-            }
-            // CYCLE: 单曲队列不预载自身(避免 ExoPlayer [A,A] 闭环=假单曲循环)
-            else -> if (playbackQueue.size > 1) {
-                if (nextIndex < playbackQueue.size - 1) nextIndex + 1 else 0
-            } else -1
+        // 与 needsPreload 共用 preloadIndex：乱序轮末会预排 pendingRound，绝不回绕到 0。
+        val nnIdx = preloadIndex()
+        if (nnIdx < 0 && playMode == QueueModes.INFINITY &&
+            currentQueueIndex >= playbackQueue.size - 1
+        ) {
+            // 队尾 + Infinity：提前续播追加（同样只追加+预载，别把刚起播的这首掐掉）。
+            launchInfinity(startPlaying = false)
         }
         val songToPreload = playbackQueue.getOrNull(nnIdx)
         if (songToPreload != null) {
@@ -1543,6 +1745,7 @@ fun MainScreen(
                 sourceKey = songToPreload.source,
                 sourceId = songToPreload.sourceId,
                 mediaId = songToPreload.mediaId,
+                privilege = songToPreload.privilege,
             )
         }
     }
@@ -1562,6 +1765,11 @@ fun MainScreen(
     LaunchedEffect(songEnded) {
         if (songEnded) {
             songEnded = false
+            Log.d(
+                "MainScreen",
+                "songEnded -> playNext queue=${playbackQueue.size} " +
+                    "index=$currentQueueIndex mode=$playMode",
+            )
             if (playbackQueue.isNotEmpty()) {
                 // v2.2.1 · P0：曲终接续属于**自动**跳歌，必须计入熔断。
                 playNext(PlayOrigin.AUTO_NEXT)
@@ -1724,6 +1932,7 @@ fun MainScreen(
                     sourceKey = nextSong.source,
                     sourceId = nextSong.sourceId,
                     mediaId = nextSong.mediaId,
+                    privilege = nextSong.privilege,
                 )
             }
         }
@@ -1869,6 +2078,103 @@ fun MainScreen(
                 }.orEmpty()
             }.getOrDefault(emptyList())
             if (songs.isNotEmpty()) replaceQueueAndPlay(songs)
+        }
+    }
+
+    /**
+     * 「库 → 单曲」整列收藏的三个入口（v3.4.12）。
+     *
+     * - PLAY：**先播后补**。缓存里已有的收藏立即开播（点击即出声），其余详情在后台
+     *   按云端红心顺序补齐后追加到队尾；队列被用户换掉（引用变了）就不追加，避免把
+     *   红心歌单灌进别的播放上下文。
+     * - INSERT / APPEND：必须拿到**完整有序**列表，所以等补齐后一次性插播 / 追加；
+     *   期间 `likedBulkLoading` 驱动入口禁用与「正在加载 N 首…」。
+     *
+     * 列表本身由 [LibraryManager.loadAllLikedSongsResult] 的纯逻辑
+     * [com.takahashirinta.ncrust.library.selectLikedPlayAll] 合成：本地 QQ / B 站不丢、
+     * ncm 按云端 id 顺序、tombstone 不复活。
+     */
+    fun toastLikedPartial(selection: com.takahashirinta.ncrust.library.LikedPlayAllSelection) {
+        if (selection.missingCloudIds.isEmpty()) return
+        Toast.makeText(
+            context,
+            mainStrings.likedPlayAllPartial(selection.songs.size, selection.missingCloudIds.size),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    fun loadAllLikedThen(action: LikedBulkAction) {
+        if (likedBulkLoading) return
+        likedBulkLoading = true
+        coroutineScope.launch {
+            val selection = runCatching { LibraryManager.loadAllLikedSongsResult(context) }
+                .getOrNull()
+            likedBulkLoading = false
+            if (selection == null || selection.songs.isEmpty()) {
+                Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            when (action) {
+                LikedBulkAction.PLAY -> replaceQueueAndPlay(selection.songs)
+                LikedBulkAction.INSERT -> insertAllNext(selection.songs)
+                LikedBulkAction.APPEND -> appendAllToQueue(selection.songs)
+            }
+            toastLikedPartial(selection)
+        }
+    }
+
+    fun playAllLiked() {
+        if (likedBulkLoading) return
+        val cached = LibraryManager.getSavedSongs(context)
+        if (cached.isEmpty()) {
+            // 没有本地缓存：先给 loading 反馈，再走完整加载。
+            Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
+            loadAllLikedThen(LikedBulkAction.PLAY)
+            return
+        }
+        replaceQueueAndPlay(cached)
+        // 保留 v1.3.0 的「先播后补」：上面已经出声，这里只补剩余详情。
+        likedBulkLoading = true
+        coroutineScope.launch {
+            val selection = runCatching { LibraryManager.loadAllLikedSongsResult(context) }
+                .getOrNull()
+            likedBulkLoading = false
+            if (selection == null) return@launch
+            // 队列引用仍是这次播放的列表才追加（用户换队列 / 清空都不追）。
+            if (playbackQueue === cached) {
+                val known = QueueKeys.keysOf(playbackQueue)
+                val restKeys = QueueKeys.missing(known, QueueKeys.keysOf(selection.songs))
+                val rest = QueueKeys.selectSongs(selection.songs, restKeys)
+                if (rest.isNotEmpty()) appendAllToQueue(rest)
+            }
+            toastLikedPartial(selection)
+        }
+    }
+
+    fun appendAllLiked() {
+        if (likedBulkLoading) return
+        val cached = LibraryManager.getSavedSongs(context)
+        if (cached.isEmpty()) {
+            Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
+            loadAllLikedThen(LikedBulkAction.APPEND)
+            return
+        }
+        // 追加是幂等且保序的：先把已加载的接在队尾，剩余详情补齐后再接后面。
+        appendAllToQueue(cached)
+        likedBulkLoading = true
+        coroutineScope.launch {
+            val selection = runCatching { LibraryManager.loadAllLikedSongsResult(context) }
+                .getOrNull()
+            likedBulkLoading = false
+            if (selection == null) return@launch
+            // 只要缓存里那些歌还在队列里，就继续补剩余；队列被清空 / 换掉则不追。
+            val known = QueueKeys.keysOf(playbackQueue)
+            if (QueueKeys.keysOf(cached).all { it in known }) {
+                val restKeys = QueueKeys.missing(known, QueueKeys.keysOf(selection.songs))
+                val rest = QueueKeys.selectSongs(selection.songs, restKeys)
+                if (rest.isNotEmpty()) appendAllToQueue(rest)
+            }
+            toastLikedPartial(selection)
         }
     }
 
@@ -2089,12 +2395,24 @@ fun MainScreen(
     }
 
     var showAbout by remember { mutableStateOf(false) }
+    // v3.4.13：更新页与「关于」同一套全屏覆盖层。放在关于之前判断，这样从关于页
+    // 点「检查更新 → 发现新版本」进来后，返回会落回关于页而不是直接回主界面。
+    var showUpdate by remember { mutableStateOf(false) }
+    if (showUpdate) {
+        UpdatePageOverlay(onClose = { showUpdate = false })
+        return
+    }
     if (showAbout) {
-        AboutScreen(onBack = { showAbout = false })
+        AboutScreen(
+            onBack = { showAbout = false },
+            onOpenUpdate = { showUpdate = true }
+        )
         return
     }
 
     var showWebLogin by remember { mutableStateOf(false) }
+    // 会话失效横幅点击后的登录流程：窄屏网页登录 / 宽屏扫码。
+    var showQrRelogin by remember { mutableStateOf(false) }
     // v2.1.0 · C：qm 登录浮层（与 ncm 那个**完全独立**：两份 cookie、两条登录路径）。
     var showQqLogin by remember { mutableStateOf(false) }
     /** v3.2.0 · P1：B 站扫码登录浮层（浮层本体复用 `MetroDialog` + 既有二维码渲染）。 */
@@ -2121,6 +2439,61 @@ fun MainScreen(
         if (cookieRefreshTrigger > 0) {
             LibraryManager.refreshFromCloud(context)
         }
+    }
+
+    // 播放权益提示（试听 / 音质封顶 / 跳过不可播的歌）：Toast 一级，不弹模态框、不打断播放。
+    // rememberUpdatedState：语言切换后 LaunchedEffect(Unit) 不会重启，直接闭包捕获旧 Strings
+    // 会让提示停留在上一种语言，直到进程重启。
+    val noticeStrings by rememberUpdatedState(LocalStrings.current)
+    LaunchedEffect(Unit) {
+        playerViewModel.notice.collect { notice ->
+            if (notice == null) return@collect
+            val text = when (notice) {
+                is PlaybackNotice.Trial -> noticeStrings.trialToast(
+                    notice.seconds,
+                    reasonText(noticeStrings, notice.reason, trial = true)
+                )
+                is PlaybackNotice.Capped -> if (notice.reason == EntitlementReason.LOGIN) {
+                    noticeStrings.qualityCappedLogin
+                } else {
+                    noticeStrings.qualityCapped(
+                        noticeStrings.qualityOptions.getOrElse(
+                            PlayerViewModel.QUALITY_LEVELS.indexOf(notice.level)
+                        ) { notice.level }
+                    )
+                }
+                is PlaybackNotice.Skipped -> noticeStrings.skippedSong(
+                    notice.songName,
+                    reasonText(noticeStrings, notice.reason)
+                )
+                is PlaybackNotice.SkippedMany -> noticeStrings.skippedSongs(notice.count)
+            }
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+            playerViewModel.clearNotice()
+        }
+    }
+
+    // 会话失效横幅点击 → 现有登录流程（窄屏网页登录 / 宽屏扫码）。
+    val onRelogin: () -> Unit = {
+        if (isWideLayout) showQrRelogin = true else showWebLogin = true
+    }
+    if (showQrRelogin) {
+        QrLoginDialog(
+            onLoginSuccess = { cookie ->
+                CookieManager.saveCookieMerged(context, cookie)
+                RetrofitClient.updateCookie(CookieManager.getCookie(context))
+                // 重新登录成功 → 会话回到 Valid，全局失效横幅消失。
+                SessionMonitor.onLoginSucceeded(context)
+                showQrRelogin = false
+                cookieRefreshTrigger++
+            },
+            onGenericLogin = {
+                showQrRelogin = false
+                showWebLogin = true
+            },
+            onDismiss = { showQrRelogin = false }
+        )
+        return
     }
     // v2.1.0 · C：qm 登录。
     //
@@ -2275,6 +2648,7 @@ fun MainScreen(
                         "netease login: ${com.takahashirinta.ncrust.auth.NeteaseCookie.describe(merged)}",
                     )
                 }
+                SessionMonitor.onLoginSucceeded(activity)
                 showWebLogin = false
                 cookieRefreshTrigger++
                 return@LaunchedEffect
@@ -2307,6 +2681,7 @@ fun MainScreen(
                                         RetrofitClient.updateCookie(
                                             com.takahashirinta.ncrust.auth.CookieManager.getCookie(ctx)
                                         )
+                                        SessionMonitor.onLoginSucceeded(ctx)
                                         showWebLogin = false
                                         cookieRefreshTrigger++
                                     }
@@ -2360,6 +2735,9 @@ fun MainScreen(
         selectedTab = tab
         if (!isInMain) navController.popBackStack(NavRoutes.HOME, false)
     }
+    // v3.4.12：高度档覆盖整棵主内容树（NavHost / 播放器 / 覆盖页），
+    // 后续页头 / 底栏按档调整时不必再搬 provider。
+    CompositionLocalProvider(LocalHeightClass provides heightClass) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -2506,6 +2884,8 @@ fun MainScreen(
                     when (selectedTab) {
                         0 -> HomeScreen(
                             onSongClick = { playSongItem(it) },
+                            // 会话失效横幅点击 → 现有登录流程。
+                            onRelogin = onRelogin,
                             onPlaylistClick = { playlistId ->
                                 navController.navigate(NavRoutes.playlist(playlistId))
                             },
@@ -2535,6 +2915,8 @@ fun MainScreen(
 
                         1 -> LibraryScreen(
                             onSongClick = { playSongItem(it) },
+                            // 会话失效横幅点击 → 现有登录流程。
+                            onRelogin = onRelogin,
                             // v3.3.0 · 用户建议：离线 tab 要知道哪一首在播（那一行锁删除）。
                             currentSongId = playerViewModel.currentSongId.value ?: -1L,
                             onAlbumClick = { albumId -> navController.navigate(NavRoutes.album(albumId)) },
@@ -2559,29 +2941,10 @@ fun MainScreen(
                             // 用本地已加载的收藏单曲立即开播（点击即出声、有反馈），剩余详情在
                             // 后台补齐后按红心顺序追加到队尾，避免为了"共 N 首"空等数秒网络。
                             // 也不再弹「现在播放 / 插播」——▶ 就是立即播放。
-                            onPlayAllLiked = {
-                                val cached = LibraryManager.getSavedSongs(context)
-                                if (cached.isNotEmpty()) {
-                                    replaceQueueAndPlay(cached)
-                                    coroutineScope.launch {
-                                        val all = runCatching { LibraryManager.loadAllLikedSongs(context) }
-                                            .getOrNull().orEmpty()
-                                        // 期间用户若换了队列就不追加，避免把红心歌单灌进别的播放上下文。
-                                        if (playbackQueue.firstOrNull()?.id == cached.first().id) {
-                                            val known = playbackQueue.map { it.id }.toHashSet()
-                                            val rest = all.filter { it.id !in known }
-                                            if (rest.isNotEmpty()) appendAllToQueue(rest)
-                                        }
-                                    }
-                                } else {
-                                    Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
-                                    coroutineScope.launch {
-                                        val all = runCatching { LibraryManager.loadAllLikedSongs(context) }
-                                            .getOrNull().orEmpty()
-                                        if (all.isNotEmpty()) replaceQueueAndPlay(all)
-                                    }
-                                }
-                            },
+                            onPlayAllLiked = { playAllLiked() },
+                            onInsertAllLiked = { loadAllLikedThen(LikedBulkAction.INSERT) },
+                            onAppendAllLiked = { appendAllLiked() },
+                            likedBulkLoading = likedBulkLoading,
                             onSongInsertNext = { insertNext(it) },
                             onSongAppendToQueue = { appendToQueue(it) },
                             onShowSongMenu = { song, actions -> showSongMenu(song, actions) },
@@ -2657,6 +3020,10 @@ fun MainScreen(
                             onOpenSettingsGroup = { group ->
                                 navController.navigate(NavRoutes.settingsGroup(group.id))
                             },
+                            // 失效横幅点击 → 现有登录流程。
+                            onRelogin = onRelogin,
+                            // v3.4.13：用户页顶部「发现新版本」横幅 → 更新页。
+                            onOpenUpdate = { showUpdate = true },
                         )
 
                         // v3.3.0 · 用户需求第 10 条：播放统计。
@@ -2755,6 +3122,12 @@ fun MainScreen(
                     onSelected = onNavSelected,
                     items = navTabs.map { MetroBottomNavItem(it.first, it.second) },
                     autoReserveBottomStack = false,
+                )
+                // v3.4.13：「用户」图标右上角的小圆点。Arris 的底部导航有 5 格，
+                // 用户是第 4 格（index 3）；宽屏走左侧 sidebar，不画。
+                UpdateNavDot(
+                    tabCount = navTabs.size,
+                    userTabIndex = 3,
                 )
             }
         }
@@ -2948,11 +3321,31 @@ fun MainScreen(
         // 就是在组合阶段读 progress —— 展开/收起动画每一帧都会重组整个 MainScreen
         // (实测展开时 Compose:recompose 119 次/65ms)。derivedStateOf 只在布尔值
         // 真正翻转(阈值穿越)时才通知, 动画期间零重组。
-        val backEnabled by remember { derivedStateOf { progress.value > 0.01f } }
-        BackHandler(enabled = backEnabled || bigScreen) {
-            // P1：大屏模式下 BACK = 退出大屏（回到竖屏全屏播放器），而不是收起播放器 ——
-            // 这是需求要求的第三条退出路径，也是用户在大屏里最自然的"返回"预期。
-            if (bigScreen) onToggleBigScreen() else collapseCard()
-        }
+        PlayerBackHandler(progress, bigScreen, onToggleBigScreen) { collapseCard() }
+    }
+    }
+}
+
+/**
+ * 全屏播放器展开时拦截返回键，并处理大屏模式的 BACK 语义。
+ *
+ * `enabled` 必须走 `derivedStateOf`：直接写 `progress.value > 0.01f` 就是在组合阶段读
+ * progress，展开/收起的**每一动画帧**都会重组整个 MainScreen（实测 119 次/65ms）。
+ * 而且这个读取必须待在**本函数**里：放在 MainScreen 作用域，布尔值每翻转一次
+ * （展开、收起各一次）仍会让整个 MainScreen 连同 NavHost、当前页面与列表项一起重组。
+ * 挪进这里后翻转只重组本节点，OnBackPressedDispatcher 的注册顺序不变。
+ */
+@Composable
+private fun PlayerBackHandler(
+    progress: Animatable<Float, AnimationVector1D>,
+    bigScreen: Boolean,
+    onToggleBigScreen: () -> Unit,
+    onCollapse: () -> Unit,
+) {
+    val backEnabled by remember { derivedStateOf { progress.value > 0.01f } }
+    BackHandler(enabled = backEnabled || bigScreen) {
+        // P1：大屏模式下 BACK = 退出大屏（回到竖屏全屏播放器），而不是收起播放器 ——
+        // 这是需求要求的第三条退出路径，也是用户在大屏里最自然的"返回"预期。
+        if (bigScreen) onToggleBigScreen() else onCollapse()
     }
 }

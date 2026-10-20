@@ -10,7 +10,9 @@
  *     没有时（API < 27 的 FLAC）才回退到随包分发的 FFmpeg 软件解码器。
  *   - B3-1：缓冲策略按物理内存分档，≤3.5GB 机型峰值缓冲减半。
  *   - B3-2：禁用流内嵌 ID3 元数据（封面等）解析，显示用的元数据全部来自 API。
- *   - B3-3：加入音频 offload 能力探测日志（刻意不启用，依据见 logAudioOffloadCapability）。
+ *   - B3-3 / 上游 f5593a8 / R2：音频 offload 能力探测 + 运行中兼容门控（见
+ *     logAudioOffloadCapability、applyOffloadPolicy 与 observePcmDemand：波形/动效的
+ *     实际 PCM 需求一变就立刻切回软件解码，不需要重启 Service）。
  *   - B4：playUrl 支持 startPositionMs，配合「每首歌进度记忆」实现断点续播；
  *     用 setMediaItem(item, pos) 而非 prepare 后 seekTo，保证歌词首帧即对齐。
  *   - v1.5.2 串台修复：待播槽位（PreloadSlot）至多一首预载项；预载项自带
@@ -36,6 +38,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.compose.runtime.snapshotFlow
 import androidx.core.app.NotificationCompat
 import android.net.Uri
 import androidx.media3.common.AudioAttributes
@@ -44,6 +47,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -85,7 +89,10 @@ import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.stringsForCode
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
+import com.takahashirinta.ncrust.ui.player.WaveformStore
+import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 import com.takahashirinta.ncrust.ui.theme.CoverThemeExtractor
 // v3.3.0 · 桌面播放卡片：只用到它的两个推送入口（push / pushFromPersistedState），
@@ -118,6 +125,8 @@ class PlaybackService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
+    /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
+    private var pcmDemandJob: Job? = null
     private var isServiceStarted = false
     private var currentArtworkUrl: String? = null
     /** v2.1.0 · C：当前媒体项的音源身份（车机/通知路径按它路由取链）。 */
@@ -196,20 +205,40 @@ class PlaybackService : MediaLibraryService() {
         // 于是会在一个已经坏掉的 AudioSink 上继续重试 8 次 —— 那正是用户看到的
         // 「循环切音质 + 反复抢音频焦点」。见 [PlaybackFailure]。
         var onPlaybackError: ((Long, PlaybackFailure) -> Unit)? = null
-        // Fired on the main thread when ExoPlayer auto-transitions to a preloaded next item.
-        var onSongTransitioned: (() -> Unit)? = null
         /**
-         * v2.1.5：自动接续时把**真正起播那一项的身份**交给 ViewModel。
+         * 一次曲目过渡（AUTO / 手动 setMediaItem / 系统媒体控件 / 车机 seek）完成。
          *
-         * 为什么单独一个回调而不是塞进 [onSongTransitioned]：那个回调是 v1.5.2 的既有契约
-         * （`() -> Unit`），而身份必须带载荷（QQ 的 songmid / media_mid）。
-         * 两者语义不同 —— 「切歌了」与「切到了哪一首」—— 分开后各自的调用方都读得懂。
+         * 参数 = 本次是否 ExoPlayer **自然衔接**（`MEDIA_ITEM_TRANSITION_REASON_AUTO`）。
+         * 非 AUTO 时应用队列本身没有推进，UI 层只能按实际在播 identity 回查 —— 这个布尔
+         * 就是「允许不允许拿模式推断兜底」的判据。
+         */
+        var onSongTransitioned: ((Boolean) -> Unit)? = null
+        /**
+         * 真正开始播放某一首歌（手动起播走 [playUrl]；无缝接续由 [onSongTransitioned] 那一侧
+         * 在同一帧补发）。播放上报的 startplay 只认这个回调 —— 预载 / 取链阶段都还没起播。
+         */
+        var onTrackStarted: ((Long) -> Unit)? = null
+        /**
+         * 车机 / Android Auto 路径解析出**试听片段**时回调 `(songId, seconds)`。
          *
-         * 参数：`(source, songId, sourceId, mediaId)`。
+         * 媒体库路径不经过 `PlayerViewModel.playSong` 的权益判定，但 `SongUrlResult`
+         * 里同样带 `playbackItem.freeTrialInfo`。把这一事实交给 ViewModel，才能让
+         * startplay / 80% / 自然结束的「试听不算完整播放」门控在车机路径同样成立。
+         */
+        var onTrialResolved: ((Long, Int) -> Unit)? = null
+        /**
+         * v2.1.5：把**真正起播那一项的身份**交给 ViewModel。现在所有过渡都上报，
+         * 不再只限 AUTO —— 系统媒体控件 / 车机切歌同样要让 UI 的 currentSongId 跟上音频。
+         *
+         * 为什么单独一个回调而不是塞进 [onSongTransitioned]：那个回调是「切歌了」，
+         * 而身份必须带载荷（QQ 的 songmid / media_mid）与元数据（标题/艺人/封面）。
+         * 两者语义不同，分开后各自的调用方都读得懂。
+         *
+         * 参数：`(source, songId, sourceId, mediaId, title, artist, artwork)`。
          * `songId <= 0` 表示这次 transition 没解析出可用身份（老形状 / 车机插入项），
          * 调用方应保持既有状态、不要拿它去取词。
          */
-        var onTrackTransitioned: ((MusicSource, Long, String?, String?) -> Unit)? = null
+        var onTrackTransitioned: ((MusicSource, Long, String?, String?, String, String, String) -> Unit)? = null
         var onBufferingChanged: ((Boolean) -> Unit)? = null
         // B2-C：封面 Palette 提取出的主题色（ARGB）。null = 当前歌无封面，UI 回落预设色。
         // 由 PlaybackService 静态回调推给 PlayerViewModel.coverAccentRgb。
@@ -296,18 +325,18 @@ class PlaybackService : MediaLibraryService() {
     private val LOW_RAM_TOTAL_BYTES = 3_500L * 1024 * 1024 * 1024
 
     /**
-     * B3-3：音频 offload（硬件直通解码，低功耗路径）能力探测。
+     * B3-3 / 上游 f5593a8：音频 offload（硬件直通解码，低功耗路径）能力探测。
      *
-     * **本版本刻意不启用**，依据：
-     *  1) Media3 1.5.0 的 DefaultRenderersFactory **没有** setEnableAudioOffload
-     *     （1.6+ 才提供）。要启用必须自建 DefaultAudioSink + AudioOffloadSupportProvider，
-     *     改动面大且难以在无真机的情况下验证。
-     *  2) offload 会绕过应用侧音频处理链，与本 App 的无缝预载 / 播放参数策略冲突，
-     *     可能导致「无缝播放」退化 —— 那是本 App 的核心体验，不宜用它换省电。
-     *  3) offload 只对平台原生支持的编码生效；本项目大量走 FFmpeg 软解（无损 FLAC），
-     *     软解路径本来就不经过 offload。
+     * **不是无条件启用**。media3 1.5.0 的 offload 开关是
+     * `TrackSelectionParameters.AudioOffloadPreferences`（不是 1.6+ 那套
+     * `DefaultRenderersFactory.setEnableAudioOffload`），本版用它 + 强制 gapless 支持。
      *
-     * 因此这里只做能力探测并打日志，供在目标机型上评估后续是否需要单独开关。
+     * 真正的运行中门控在 [applyOffloadPolicy] + [observePcmDemand]：本 fork 的
+     * [VisualizerRenderersFactory] 在 AudioSink 里挂了 `TeeAudioProcessor` 取 PCM 给
+     * 波形/动效，而 offload 会绕过应用侧处理链 —— 只要波形总开关或音频特征需求开着，
+     * 就显式关闭 offload；用户运行中切换开关时监听会立刻重配当前流，不需要重启 Service。
+     *
+     * 这里只做设备能力探测并打日志，便于真机上区分「设备不支持」与「被门控关掉」。
      */
     private fun logAudioOffloadCapability() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -329,7 +358,96 @@ class PlaybackService : MediaLibraryService() {
                     .build()
             )
         }.getOrDefault(false)
-        Log.i("PlaybackService", "AudioOffload: mp3 supported=" + supported + " (decision: disabled by design)")
+        Log.i(
+            "PlaybackService",
+            "AudioOffload: mp3 supported=$supported (decision: gated by PCM feature demand)",
+        )
+    }
+
+    /**
+     * R2：当前实际 PCM 需求的唯一读取点。
+     *
+     * 与 [WaveformStore] 的口径一一对应：
+     *  - `VisualizerSetting.state.value` 是波形总开关的写源（同时写 `WaveformStore.enabled`）；
+     *  - `MotionPrefs.effects.value.needsAudioFeatures` 是动效特征需求（同时写
+     *    `WaveformStore.motionFeaturesEnabled`）。
+     *
+     * 用两个 **snapshot state** 而不是两个 @Volatile 镜像，才能在运行中被监听到；
+     * 两者在设置写入的同一段代码里更新，语义不会漂移。
+     */
+    private fun currentPcmDemand(): AudioOffloadGate.PcmDemand =
+        AudioOffloadGate.PcmDemand(
+            waveformEnabled = VisualizerSetting.state.value,
+            motionNeedsAudioFeatures = MotionPrefs.effects.value.needsAudioFeatures,
+        )
+
+    /** 启动时按当前需求设置一次；之后由 [observePcmDemand] 接管运行中变化。 */
+    private fun applyOffloadPolicyForCurrentDemand() {
+        applyOffloadPolicy(currentPcmDemand())
+    }
+
+    /**
+     * R2：监听「波形总开关 / 动效音频特征需求」的**实际状态变化**。
+     *
+     * 用 `snapshotFlow` 而不是 Handler 轮询：只有 Compose snapshot state 真正变化时才
+     * 触发一次；`distinctUntilChanged` 再把「同一需求」的去重掉。收集器在主线程，
+     * 因此可以直接改 ExoPlayer 的 track selection。
+     */
+    private fun observePcmDemand() {
+        pcmDemandJob?.cancel()
+        pcmDemandJob = scope.launch(Dispatchers.Main.immediate) {
+            snapshotFlow { currentPcmDemand() }
+                .distinctUntilChanged()
+                .collect { demand -> applyOffloadPolicy(demand) }
+        }
+    }
+
+    /**
+     * 把当前需求落到播放器上。动作判定全部在 [AudioOffloadGate]（纯逻辑 + JVM 单测）。
+     *
+     * 设置 `trackSelectionParameters` 会改变 RendererConfiguration 的
+     * `offloadModePreferred`，media3 因此重新选择/配置当前流：打开 PCM 需求时从
+     * offload 切回软件解码 + AudioProcessor 链，关闭后再切回 offload。这是运行中
+     * 生效的路径，不依赖重建 Service。
+     */
+    private fun applyOffloadPolicy(demand: AudioOffloadGate.PcmDemand) {
+        val currentMode = player.trackSelectionParameters.audioOffloadPreferences.audioOffloadMode
+        val action = AudioOffloadGate.action(
+            requiredPcm = demand.requiresPcm,
+            offloadEnabled = AudioOffloadGate.isOffloadEnabled(currentMode),
+        )
+        when (action) {
+            AudioOffloadGate.Action.ENABLE -> {
+                setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                Log.i(
+                    "PlaybackService",
+                    "AudioOffload: enabled at runtime (PCM demand off, gapless required)",
+                )
+            }
+
+            AudioOffloadGate.Action.DISABLE -> {
+                setAudioOffloadMode(AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
+                Log.i(
+                    "PlaybackService",
+                    "AudioOffload: disabled at runtime because PCM demand is on " +
+                        "(waveform=${demand.waveformEnabled}, " +
+                        "motion=${demand.motionNeedsAudioFeatures})",
+                )
+            }
+
+            AudioOffloadGate.Action.KEEP -> Unit
+        }
+    }
+
+    private fun setAudioOffloadMode(mode: Int) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setAudioOffloadPreferences(
+                AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(mode)
+                    .setIsGaplessSupportRequired(true)
+                    .build()
+            )
+            .build()
     }
 
     /**
@@ -426,7 +544,28 @@ class PlaybackService : MediaLibraryService() {
             // （听感是"炒豆子"爆鸣，严重时 AudioTrack 直接死掉、进度还在跑但没声）。
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setLoadControl(buildLoadControl())
+            // 动态调度：缓冲充足时播放线程按需唤醒，而不是固定每 10ms 跑一次 doSomeWork。
+            // 实测（Xperia 10 VII，熄屏放 MP3）播放线程 + 解码线程约占一个核的 10%，是
+            // 熄屏耗电的大头；本 fork 的 PCM 可视化 tee 不依赖这个循环频率。
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build()
+
+        // 音频 offload：把 MP3/AAC 解码交给硬件 DSP，熄屏长听时 CPU 可以真正睡下去。
+        // 要求设备支持 offload 下的无缝衔接，不支持就自动退回软件解码——无缝播放不能
+        // 为省电让路。
+        //
+        // ⚠️ 不能无条件开：本 fork 的 [VisualizerRenderersFactory] 在 AudioSink 里挂了
+        // `TeeAudioProcessor`，把解码后的 PCM 旁路给波形/动效。offload 模式下音频不经过
+        // 应用侧 AudioProcessor 链，开了就等于让可视化/动效静默失效（不是省电优化，是
+        // 功能丢失）。所以只要 PCM 消费方还开着，就显式**不开** offload；两个开关都关时
+        // 才启用。
+        //
+        // R2 的关键修正：这不是一次性判断。用户运行中打开/关闭可视化或动效时，下面的
+        // snapshotFlow 监听会立刻把 trackSelectionParameters 改到目标状态；media3 的
+        // RendererConfiguration 随 offload 偏好变化 ⇒ 当前流会被重新选择/配置，PCM tee
+        // 当场恢复，不需要重启 Service。监听不是轮询。
+        applyOffloadPolicyForCurrentDemand()
+        observePcmDemand()
 
         // v2.1.6 · 会话合并：**只建这一条会话**。
         //
@@ -447,6 +586,13 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
+                    // 观测点：走到末尾时播放器里还剩几项、当前是哪一首。count==1 说明
+                    // 「没有下一首预载项」，与「回调没到 UI 层」是两种不同的故障，日志可区分。
+                    Log.d(
+                        "PlaybackService",
+                        "STATE_ENDED count=${player.mediaItemCount} " +
+                            "index=${player.currentMediaItemIndex} songId=$mediaSongId",
+                    )
                     onPlaybackEnded?.invoke()
                 }
                 onBufferingChanged?.invoke(state == Player.STATE_BUFFERING)
@@ -459,6 +605,32 @@ class PlaybackService : MediaLibraryService() {
                 PlaybackStateManager.updatePlayingState(this@PlaybackService, isPlaying)
                 updatePlaybackState()
                 updateNotify()
+                // ticker 只在播放时存在：暂停后不再每 0.5s 唤醒一次（熄屏暂停时设备能真正
+                // 进入深空闲）。停下前补发一次最终位置，免得进度条停在上一个 tick 的旧值。
+                if (isPlaying) {
+                    startProgressUpdates()
+                } else {
+                    progressJob?.cancel()
+                    progressJob = null
+                    publishProgressNow()
+                }
+            }
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                // 暂停时没有 ticker：拖动进度 / 系统媒体控件 seek 后要立刻把新位置推给
+                // 界面与媒体会话，否则暂停态拖完进度条仍停在旧值。
+                // 只看 SEEK 类原因：暂停态的曲目切换也可能走 discontinuity，但那种位置
+                // 更新会由 transition 回调把 currentSongId 一起换掉，不能拿旧歌 id 去上报。
+                if (!player.isPlaying &&
+                    (reason == Player.DISCONTINUITY_REASON_SEEK ||
+                        reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT)
+                ) {
+                    publishProgressNow()
+                    updatePlaybackState()
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 // 之前完全没有错误处理:解码/取流失败后播放器静默停在 IDLE,
@@ -490,66 +662,101 @@ class PlaybackService : MediaLibraryService() {
                 mediaItem: androidx.media3.common.MediaItem?,
                 reason: Int
             ) {
-                // Only handle automatic transitions triggered by ExoPlayer (gapless handoff).
-                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) return
-                // v2.1.5：起播项的音源**从 item 自己身上读**。item 是 ExoPlayer 真正播的那一份，
-                // 而 pendingNext* 是旁路（last-write-wins）—— 身份必须跟着 item 走，
+                // 现在**所有**过渡都上报（AUTO / 手动 setMediaItem / 系统媒体控件 / 车机
+                // seek）。只处理 AUTO 会让 UI 的 currentSongId 停在上一首，应用队列索引
+                // 再也无法按音频事实回查（上游 #32）。auto 标志随回调交给 UI，用来区分
+                // 「应用队列有没有推进」。
+                //
+                // mediaItem == null 只出现在 stop()/clearMediaItems()（播放错误清理、
+                // 停止服务）：这不是一次「起播」，不能上报给 UI —— 否则会拿上一首的
+                // identity 回查并预载下一首，等于在错误清理之后凭空恢复播放意图。
+                if (mediaItem == null) return
+                val auto = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
+                // v2.1.5：起播项的音源**从 item 自己身上读**。item 是 ExoPlayer 真正播的
+                // 那一份，而 pendingNext* 是旁路（last-write-wins）—— 身份必须跟着 item 走，
                 // 这正是跨源自动接续时会话/歌词留在上一首的接缝。
                 val itemIdentity = PreloadSlot.identityFromMediaId(mediaItem?.mediaId)
                 val itemSource = itemIdentity?.first
                 val itemSongId = itemIdentity?.second
                 val itemUrl = mediaItem?.localConfiguration?.uri?.toString()
+                val itemMetadata = mediaItem?.mediaMetadata
+                val itemTitle = itemMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
+                val itemArtist = itemMetadata?.artist?.toString()?.takeIf { it.isNotBlank() }
+                val itemArtwork = itemMetadata?.artworkUri?.toString()?.takeIf { it.isNotBlank() }
                 // v1.5.2 串台守卫：只有「ExoPlayer 真正起播的那一项」就是待播槽位里那一首，
-                // 才允许把元数据写进通知栏 / 歌词 / ViewModel。重复入队的年代，这里会把
+                // 才允许把槽位元数据写进通知栏 / 歌词 / ViewModel。重复入队的年代，这里会把
                 // 「下下首」的标题写到正在播的「上一首」上 —— 就是用户听到的串台。
-                // 现在宁可让 UI 停在原处（下一首自然会走硬切重新对齐），也绝不显示错歌。
                 // v2.1.5：判定加上音源维度（ncm 123 与 QQ 123 是不同的歌）。
-                if (!PreloadSlot.transitionMatches(
-                        pendingNextSource, pendingNextSongId, pendingNextUrl,
-                        itemSource, itemSongId, itemUrl,
-                    )
-                ) {
-                    Log.w(
-                        "PlaybackService",
-                        "AUTO transition outside the preload slot (itemId=" + mediaItem?.mediaId +
-                            " url=" + itemUrl + ", slot songId=" + pendingNextSongId +
-                            " source=" + pendingNextSource.key +
-                            ") — keep metadata in sync with audio, leave the slot for its own item"
-                    )
-                    // 刻意**不清**槽位：槽位项可能只是被排在了别的项之后（例如车机往播放列表里
-                    // 插了内容），等它真的起播时元数据仍然正确。守卫只保证「绝不把槽位元数据
-                    // 用在别的项上」——按 songId 比对，所以留着不会有谎报风险。
-                    // 已播完的项照常清掉，列表长度不会因这次异常 transition 持续增长。
-                    val playedItems = player.currentMediaItemIndex
-                    if (playedItems > 0) player.removeMediaItems(0, playedItems)
-                    return
-                }
-                // ── v3.3.0 · P0：无缝接续起播的歌**也要进离线 URL 清单** ──────────────────
+                val matchesSlot = PreloadSlot.transitionMatches(
+                    pendingNextSource, pendingNextSongId, pendingNextUrl,
+                    itemSource, itemSongId, itemUrl,
+                )
+                // ── v3.3.0 · P0：起播的歌**也要进离线 URL 清单** ──────────────────────
                 //
-                // 用户反馈第 1 条「离线播放目前还是有点不太行」的头号缺陷，用户原话形状是：
-                // 「连播一张歌单后断网，只有当初手点的那几首能放，自动接续的下一首全
-                //   『暂时无法播放』，可设置→离线缓存管理里它们都在。」
-                //
-                // 根因：URL 清单的唯一写入点是 [playUrl]（约 :929 的
-                // `OfflineUrlStore.rememberFromUrl`），而无缝接续走的是
-                // `preload_next` → `addMediaItem` → **这条 onMediaItemTransition**，
-                // 全程不经过 [playUrl]。于是：
-                //   - 音频字节**已经落盘**（播放时 CacheDataSource 写的）；
-                //   - 离线曲目索引**也已经写了**（`maybeRecordOfflineLibrary` 的心跳）；
-                //   - 唯独 URL 清单是空的。
-                // 而离线兜底 `recallOfflineCache` 要求「URL 清单命中 **且** 缓存里有片段」
-                // 两个条件同时成立 ⇒ 自动接续的歌**永远**进不了离线兜底。
-                // 管理页里看得到它们，正因为那一页读的是**曲目索引**而不是 URL 清单。
-                //
-                // 为什么放在守卫**之后**：`itemUrl` 是 ExoPlayer 真正在播的那一项的 URL，
-                // 而槽位（`pendingNextUrl`）在车机插内容等场景下可能与 item 不一致。
-                // 这份清单的语义是「最后一次**成功播放**的 URL」，所以只认真起播的那一条。
+                // 无缝接续走 `preload_next` → `addMediaItem` → 这条 transition，全程不经过
+                // [playUrl]，旧实现只在 AUTO + 槽位匹配分支写清单；非 AUTO（系统/车机切歌）
+                // 同样需要，因为这份清单的语义是「最后一次**成功播放**的 URL」。
                 runCatching {
                     itemUrl?.let { OfflineUrlStore.rememberFromUrl(this@PlaybackService, it) }
                 }
+
+                if (!matchesSlot) {
+                    // 非槽位项：不消费 pendingNext*（槽位项可能只是被排在了别的项之后，
+                    // 例如车机往播放列表里插了内容，等它真的起播时元数据仍然正确）。
+                    // 但这次起播的元数据必须以 item 为准刷新，否则 UI/会话会停在上一首。
+                    if (auto) {
+                        Log.w(
+                            "PlaybackService",
+                            "AUTO transition outside the preload slot (itemId=${mediaItem?.mediaId} " +
+                                "itemSongId=$itemSongId, slot songId=$pendingNextSongId " +
+                                "source=${pendingNextSource.key}) — report item itself, leave slot alone",
+                        )
+                    } else {
+                        Log.d(
+                            "PlaybackService",
+                            "non-auto transition itemId=${mediaItem?.mediaId} reason=$reason " +
+                                "itemSongId=$itemSongId",
+                        )
+                    }
+                    val finishedItems = player.currentMediaItemIndex
+                    if (finishedItems > 0) player.removeMediaItems(0, finishedItems)
+                    // 同一首「已经配置过」的曲目（手动 playUrl 的 normal path）不能把
+                    // QQ 的 songmid / media_mid 抹成 null —— 那是取链/取词的路由载荷。
+                    val sameAsConfigured = itemSongId != null && itemSongId > 0L &&
+                        itemSongId == mediaSongId && itemSource?.key == mediaSourceKey
+                    val payloadSourceId = if (sameAsConfigured) mediaSourceId else null
+                    val payloadMediaId = if (sameAsConfigured) mediaMediaId else null
+                    if (itemSource != null && itemSongId != null && itemSongId > 0L) {
+                        mediaSourceKey = itemSource.key
+                        mediaSourceId = payloadSourceId
+                        mediaMediaId = payloadMediaId
+                        mediaSongId = itemSongId
+                    }
+                    itemTitle?.let { mediaTitle = it }
+                    itemArtist?.let { mediaArtist = it }
+                    // 手动 playUrl 已经按原始 URL 起过封面加载，这里不要用 item 上
+                    // CoverUrls.large 后的 URI 再加载一遍（重复网络 + 改变缓存口径）。
+                    if (!sameAsConfigured && itemArtwork != null && itemArtwork != currentArtworkUrl) {
+                        currentArtworkUrl = itemArtwork
+                        artworkPreloadGeneration++
+                        loadArtwork(itemArtwork)
+                    }
+                    updatePlaybackState()
+                    updateNotify()
+                    if (itemSource != null && itemSongId != null && itemSongId > 0L) {
+                        onTrackTransitioned?.invoke(
+                            itemSource, itemSongId, payloadSourceId, payloadMediaId,
+                            itemTitle ?: mediaTitle,
+                            itemArtist ?: mediaArtist,
+                            if (sameAsConfigured) currentArtworkUrl.orEmpty()
+                            else itemArtwork ?: currentArtworkUrl.orEmpty(),
+                        )
+                    }
+                    onSongTransitioned?.invoke(auto)
+                    return
+                }
+
                 // 元数据优先取 item 自带的（与音频同源），槽位只作兜底。
-                val itemMetadata = mediaItem?.mediaMetadata
-                val itemTitle = itemMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
                 val slotTitle = pendingNextTitle
                 val slotArtist = pendingNextArtist
                 val slotArtwork = pendingNextArtwork
@@ -566,19 +773,22 @@ class PlaybackService : MediaLibraryService() {
                 mediaSourceId = nextSourceId
                 mediaMediaId = nextMediaId
                 (itemTitle ?: slotTitle)?.let { mediaTitle = it }
-                mediaArtist = itemMetadata?.artist?.toString() ?: (slotArtist ?: "")
+                mediaArtist = itemArtist ?: (slotArtist ?: "")
                 mediaSongId = itemSongId ?: slotSongId.takeIf { it > 0 }
                 Log.d(
                     "PlaybackService",
-                    "gapless transition -> songId=" + mediaSongId + " source=" + nextSource.key +
+                    "transition(auto=$auto) -> songId=" + mediaSongId + " source=" + nextSource.key +
                         " title=" + mediaTitle + " count=" + player.mediaItemCount
                 )
-                if (!slotArtwork.isNullOrEmpty()) {
-                    currentArtworkUrl = slotArtwork
+                // 槽位里那份是原始 URL，item 上的是 CoverUrls.large 后的 URI：优先用槽位，
+                // 才能命中 pendingNextArtworkBitmap 的「切换瞬间直接换图」优化。
+                val artwork = slotArtwork ?: itemArtwork
+                if (!artwork.isNullOrEmpty()) {
+                    currentArtworkUrl = artwork
                     // 使任何在途预载作废: 迟到的预载结果不能回填 pending,
                     // 否则会污染下一次切换
                     artworkPreloadGeneration++
-                    if (preloaded != null) {
+                    if (preloaded != null && slotArtwork != null) {
                         currentArtworkBitmap = preloaded
                         scope.launch(Dispatchers.Main) {
                             updatePlaybackState()
@@ -587,7 +797,7 @@ class PlaybackService : MediaLibraryService() {
                     } else {
                         // 回退异步加载; 旧位图保留到新封面加载完(用户决策),
                         // 加载完成由 metadata 位图引用比较触发换图
-                        loadArtwork(slotArtwork)
+                        loadArtwork(artwork)
                     }
                 }
                 // 播完的项统一清掉：列表收敛回「当前 + 至多一首待播」。
@@ -600,8 +810,9 @@ class PlaybackService : MediaLibraryService() {
                 // 「只有 playSong 才会更新」的音源字段，跨源自动接续时那是上一首的值。
                 onTrackTransitioned?.invoke(
                     nextSource, mediaSongId ?: -1L, nextSourceId, nextMediaId,
+                    mediaTitle, mediaArtist, currentArtworkUrl.orEmpty(),
                 )
-                onSongTransitioned?.invoke()
+                onSongTransitioned?.invoke(auto)
             }
         })
         // 音频输出层故障（听感"哒哒哒"爆鸣，严重时 AudioTrack 死掉、进度照跑但没声）
@@ -693,12 +904,12 @@ class PlaybackService : MediaLibraryService() {
                 player.addMediaItem(buildPreloadMediaItem(nextUrl, nextSongId))
                 Log.d(
                     "PlaybackService",
-                    "Queued next: $pendingNextTitle url=$nextUrl count=" + player.mediaItemCount
+                    "Queued next: $pendingNextTitle songId=$nextSongId count=" + player.mediaItemCount
                 )
                 return START_NOT_STICKY
             }
             "pause" -> { player.pause() }
-            "resume" -> { player.play() }
+            "resume" -> { resumePlayback() }
             "stop" -> {
                 PlaybackStateManager.clearState(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -811,21 +1022,36 @@ class PlaybackService : MediaLibraryService() {
             session: M3MediaSession,
             controller: M3MediaSession.ControllerInfo,
             playerCommand: Int
-        ): Int = when (MediaSessionMerge.route(playerCommand)) {
-            MediaSessionMerge.Route.APP_NEXT -> {
-                Log.i(TAG_MEDIA_PANEL, "media button NEXT -> app queue (onPlaybackEnded)")
-                onPlaybackEnded?.invoke()
-                SessionResult.RESULT_SUCCESS
+        ): Int {
+            // media3 默认的 PLAY 就是 `player.play()`：STATE_ENDED 没有分支，队尾播完后
+            // 点系统媒体卡/蓝牙的播放键什么都不会发生（上游 #29）。只在「已经播完/停在
+            // IDLE」时把这一条命令接过来做 seekTo(0)+prepare；正常暂停态的播放/暂停
+            // 仍然走 media3 默认实现（不抢它的状态机与音频焦点）。
+            if (playerCommand == Player.COMMAND_PLAY_PAUSE && !player.isPlaying &&
+                PlaybackQueueLogic.needsRestartBeforePlay(
+                    player.playbackState, player.currentMediaItem != null,
+                )
+            ) {
+                Log.i(TAG_MEDIA_PANEL, "media button PLAY at ENDED/IDLE -> restart playback")
+                resumePlayback()
+                return SessionResult.RESULT_SUCCESS
             }
+            return when (MediaSessionMerge.route(playerCommand)) {
+                MediaSessionMerge.Route.APP_NEXT -> {
+                    Log.i(TAG_MEDIA_PANEL, "media button NEXT -> app queue (onPlaybackEnded)")
+                    onPlaybackEnded?.invoke()
+                    SessionResult.RESULT_SUCCESS
+                }
 
-            MediaSessionMerge.Route.APP_PREVIOUS -> {
-                Log.i(TAG_MEDIA_PANEL, "media button PREVIOUS -> app queue (onPlaybackPrevious)")
-                onPlaybackPrevious?.invoke()
-                SessionResult.RESULT_SUCCESS
+                MediaSessionMerge.Route.APP_PREVIOUS -> {
+                    Log.i(TAG_MEDIA_PANEL, "media button PREVIOUS -> app queue (onPlaybackPrevious)")
+                    onPlaybackPrevious?.invoke()
+                    SessionResult.RESULT_SUCCESS
+                }
+
+                MediaSessionMerge.Route.MEDIA3_DEFAULT ->
+                    super.onPlayerCommandRequest(session, controller, playerCommand)
             }
-
-            MediaSessionMerge.Route.MEDIA3_DEFAULT ->
-                super.onPlayerCommandRequest(session, controller, playerCommand)
         }
 
         override fun onGetLibraryRoot(
@@ -918,6 +1144,12 @@ class PlaybackService : MediaLibraryService() {
         val ref = com.takahashirinta.ncrust.source.songRefOf(source, songId)
         val result = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
             ?: return item
+        // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
+        // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
+        result.playbackItem?.freeTrialInfo?.let { trial ->
+            val seconds = (((trial.end ?: 0) - (trial.start ?: 0)) / 1000).coerceAtLeast(0)
+            onTrialResolved?.invoke(songId, seconds)
+        }
         return item.buildUpon().setUri(result.url).build()
     }
 
@@ -965,7 +1197,11 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun playUrl(url: String, startPositionMs: Long = 0L) {
-        Log.d("PlaybackService", "Playing: $url startPositionMs=$startPositionMs")
+        // 只记 songId/标题：取链 URL 带签名参数与 authSecret，不能进 logcat（release 也会打）。
+        Log.d(
+            "PlaybackService",
+            "Playing: songId=$mediaSongId title=$mediaTitle startPositionMs=$startPositionMs",
+        )
         // v1.6.0 · D1：记下这首歌「最后一次成功播放的 URL」。断网时客户端必须先有一个 URL
         // 才会去问 CacheDataSource，而网易的 URL 20 分钟就过期 —— 这份清单就是离线回放的入口。
         runCatching { OfflineUrlStore.rememberFromUrl(this, url) }
@@ -978,6 +1214,9 @@ class PlaybackService : MediaLibraryService() {
         player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
         player.prepare()
         player.playWhenReady = true
+        // 手动起播（点歌 / 下一首 / 上一首 / 降档重试）的「开始播放」时点。
+        // 重复上报由 PlayerViewModel 按 songId 去重，这里不做业务判断。
+        mediaSongId?.takeIf { it > 0L }?.let { onTrackStarted?.invoke(it) }
     }
 
     /**
@@ -1539,21 +1778,42 @@ class PlaybackService : MediaLibraryService() {
         if (dur > 0) onProgressUpdate?.invoke(player.currentPosition, dur)
     }
 
+    /**
+     * 「播放 / 继续」。ExoPlayer 的 `play()` 只把 `playWhenReady` 置 true：media3 1.5.0 的
+     * `setPlayWhenReadyInternal` 只在 READY/BUFFERING 时启动渲染器，STATE_ENDED 没有分支
+     * ——所以队尾播完后再点播放键**什么都不会发生**（issue #29 的「点击播放键没有反应」），
+     * 必须先 `seekTo(0)+prepare` 把播放器拉回可播状态。STATE_IDLE 同理（取流失败后停在
+     * IDLE 时，prepare 才是真正的重试）。判定抽成纯函数
+     * [PlaybackQueueLogic.needsRestartBeforePlay]，已有 JVM 单测。
+     */
+    private fun resumePlayback() {
+        if (PlaybackQueueLogic.needsRestartBeforePlay(
+                player.playbackState, player.currentMediaItem != null,
+            )
+        ) {
+            Log.d("PlaybackService", "resume: player state=${player.playbackState}, restarting from 0")
+            player.seekTo(0)
+            player.prepare()
+        }
+        player.play()
+    }
+
     private fun startProgressUpdates() {
         progressJob?.cancel()
+        // 未在播放时不起循环：由 onIsPlayingChanged(true) 再启动。暂停态的位置更新
+        // 走 onPositionDiscontinuity / seek 后的 publishProgressNow，不靠空转 ticker。
+        if (!player.isPlaying) return
         progressJob = scope.launch {
-            while (isActive) {
-                if (player.isPlaying) {
-                    onProgressUpdate?.invoke(player.currentPosition, player.duration)
-                    updatePlaybackState()
-                    // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
-                    // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次；
-                    // 暂停时这个分支整个不执行，卡片自然停推（需求里的 P0 节流）。
-                    pushWidgetUpdate()
-                }
+            while (isActive && player.isPlaying) {
+                onProgressUpdate?.invoke(player.currentPosition, player.duration)
+                updatePlaybackState()
+                // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
+                // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
+                // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
+                pushWidgetUpdate()
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
-                // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降
+                // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降。
                 delay(500)
             }
         }
@@ -1883,6 +2143,9 @@ class PlaybackService : MediaLibraryService() {
         currentArtworkBitmap = null
         mediaSession?.release()
         player.release()
+        // R2：显式停掉 PCM 需求监听，避免已销毁的服务继续持有 snapshot observer。
+        pcmDemandJob?.cancel()
+        pcmDemandJob = null
         scope.cancel()
         // v3.3.0 · 桌面播放卡片：服务退出后桌面上的那张卡片必须跟着「停」下来。
         // 走**落盘状态**而不是 push()：此刻 player 已 release、位图已丢，
