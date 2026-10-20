@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val jpMY = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "入 状態 無効 押 再試",
+        qrNetworkError = "網 異常 入 状態 不知 押 再試",
+    ),
     tabHome = "登布",
     tabLibrary = "久良",
     tabSearch = "佐久知",

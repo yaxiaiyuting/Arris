@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val zhCN = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "登录状态无效, 点击重试",
+        qrNetworkError = "网络异常, 无法确认登录状态, 点击重试",
+    ),
     tabHome = "首页",
     tabLibrary = "库",
     tabSearch = "搜索",

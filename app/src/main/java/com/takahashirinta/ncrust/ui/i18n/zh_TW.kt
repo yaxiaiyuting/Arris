@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val zhTW = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "登入狀態無效, 點擊重試",
+        qrNetworkError = "網路異常, 無法確認登入狀態, 點擊重試",
+    ),
     tabHome = "首頁",
     tabLibrary = "庫房",
     tabSearch = "尋覓",

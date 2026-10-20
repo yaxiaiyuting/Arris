@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val koNK = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "로그인 상태가 유효하지 않음, 눌러서 다시 시도",
+        qrNetworkError = "네트워크 오류, 로그인 상태를 확인할 수 없음, 눌러서 다시 시도",
+    ),
     tabHome = "처음",
     tabLibrary = "저장소",
     tabSearch = "찾기",

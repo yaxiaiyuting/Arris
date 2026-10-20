@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
 import com.takahashirinta.ncrust.network.crypto.WeapiCrypto
 import com.takahashirinta.ncrust.network.crypto.XeapiCrypto
@@ -27,6 +28,10 @@ object RetrofitClient {
     internal const val API_URL = "https://interface.music.163.com"
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private const val IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+    // 扫码登录的 eapi 只认 PC 客户端身份：host 用 interfacepc，UA 用桌面客户端（协议见
+    // spec/api/endpoints.md「eapi · PC 客户端指纹」）。
+    private const val INTERFACE_PC_URL = "https://interfacepc.music.163.com"
+    private const val PC_UA = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.1.29.205117"
     // 官方 Android 9.5.61 的 UA 与设备字段，xeapi 的公钥请求与业务请求共用同一套指纹。
     private const val ANDROID_UA = "NeteaseMusic/9.5.61.260802021928(9005061);Dalvik/2.1.0 (Linux; U; Android 12; HBN-AL00 Build/cd737a2.0)"
     private const val XEAPI_OS = "android"
@@ -214,11 +219,11 @@ object RetrofitClient {
         path: String,
         payload: Map<String, String>,
         useInterface: Boolean = false,
-        // A1：追加到用户 cookie 之后的客户端身份字段（见 ClientIdentity）。服务端按 Cookie 里
-        // 的客户端身份判定音质上限，不带身份时取链的 hires 请求会被静默封顶成 lossless。
-        // 默认 null —— 其余调用点（写接口等）行为完全不变，风控面收敛在取链这一条路径。
-        extraCookie: String? = null
-    ): Response {        val host = if (useInterface) INTERFACE_URL else API_URL
+        extraCookie: String? = null,
+        // 扫码确认后校验尚未持久化的会话；其余调用保留原来的身份追加方式。
+        cookieOverride: String? = null
+    ): Response {
+        val host = if (useInterface) INTERFACE_URL else API_URL
         val fullUrl = host + path
         val anyPayload = payload.mapValues { it.value as Any }
         val params = EapiCrypto.encryptParams(fullUrl, anyPayload)
@@ -228,7 +233,7 @@ object RetrofitClient {
             .build()
 
         val cookieHeader = listOfNotNull(
-            currentCookie?.takeIf { it.isNotBlank() },
+            (cookieOverride ?: currentCookie)?.takeIf { it.isNotBlank() },
             extraCookie?.takeIf { it.isNotBlank() }
         ).joinToString("; ")
 
@@ -242,6 +247,48 @@ object RetrofitClient {
 
         return plainClient.newCall(request).execute()
     }
+
+    /**
+     * eapi + **PC 客户端身份** POST（打 interfacepc）。扫码登录专用：host、PC UA、设备字段
+     * （按 `encodeURIComponent` 同时作 Cookie）与业务里的 `type=3` 缺一都拿不到 unikey——
+     * 老通道 weapi + `type=1` 现在直接回 `-462`（协议与依据见 `spec/api/endpoints.md`）。
+     *
+     * 请求头只有 UA 与 Cookie（参考实现没带 Referer）；设备字段与信封的构造在
+     * [QrLoginProtocol] 里，是纯函数、有单测。
+     *
+     * @param path `/api/…` 形态，内部改写成 `/eapi/…`。
+     * @param fields 业务字段，值必须给原生类型（`type` 是数值）。
+     */
+    fun eapiPostPc(path: String, fields: Map<String, Any>): Response {
+        val fullUrl = INTERFACE_PC_URL + "/eapi/" + path.removePrefix("/api/")
+        val header = QrLoginProtocol.pcHeader(
+            deviceId = pcDeviceId(),
+            nowMs = System.currentTimeMillis(),
+            requestSuffix = (0..999).random()
+        )
+        val params = EapiCrypto.encryptParams(fullUrl, QrLoginProtocol.envelope(fields, header))
+
+        val request = Request.Builder()
+            .url(fullUrl)
+            .post(FormBody.Builder().add("params", params).build())
+            .header("User-Agent", PC_UA)
+            .header("Cookie", QrLoginProtocol.cookieHeader(header))
+            .build()
+
+        return plainClient.newCall(request).execute()
+    }
+
+    /**
+     * PC 身份用的设备 id：复用 xeapi 的持久设备 id（一台设备一个 id）。
+     * 没初始化 [XeapiState] 时兜底随机，但**进程内只生成一次**——逐请求换 deviceId 正是
+     * 风控画像里「非真实设备」的特征（`spec/api/xeapi.md` §3.3）。
+     */
+    private val fallbackPcDeviceId: String by lazy {
+        buildString(32) { repeat(32) { append("0123456789abcdef"[(0..15).random()]) } }
+    }
+
+    private fun pcDeviceId(): String =
+        runCatching { XeapiState.deviceId() }.getOrNull() ?: fallbackPcDeviceId
 
     /**
      * 逐行对齐官方/参考实现的 eapi 请求：
@@ -472,8 +519,8 @@ object RetrofitClient {
             .header("User-Agent", UA)
             .header("Referer", "https://music.163.com/")
             .header("Origin", "https://music.163.com")
-        // 未登录时不发空 Cookie 头, 与官方网页/参考实现一致；extraCookies 用于
-        // 扫码登录等需要携带会话(反风控/sDeviceId)cookie 的场景。
+        // 未登录时不发空 Cookie 头, 与官方网页/参考实现一致；extraCookies 供需要额外
+        // 会话 cookie 的接口追加字段（扫码登录已改走 eapiPostPc, 不再用这条通道）。
         val cookieHeader = listOfNotNull(
             currentCookie?.takeIf { it.isNotBlank() },
             extraCookies?.takeIf { it.isNotBlank() }

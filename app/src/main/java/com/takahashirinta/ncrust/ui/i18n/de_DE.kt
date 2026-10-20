@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val deDE = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "Anmeldung ungültig, zum Wiederholen tippen",
+        qrNetworkError = "Netzwerkfehler, Anmeldung nicht bestätigt, zum Wiederholen tippen",
+    ),
     tabHome = "Startseite",
     tabLibrary = "Bibliothek",
     tabSearch = "Suche",

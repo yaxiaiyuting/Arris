@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val ruRU = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "Сеанс недействителен, нажмите для повтора",
+        qrNetworkError = "Ошибка сети, не удалось подтвердить вход, нажмите для повтора",
+    ),
     tabHome = "Главная",
     tabLibrary = "Библиотека",
     tabSearch = "Поиск",

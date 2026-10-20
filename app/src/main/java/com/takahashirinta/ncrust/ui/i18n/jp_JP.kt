@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val jpJP = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "ログイン状態が無効です。タップして再試行",
+        qrNetworkError = "ネットワークエラー。ログイン状態を確認できません。タップして再試行",
+    ),
     tabHome = "ホーム",
     tabLibrary = "ライブラリ",
     tabSearch = "検索",

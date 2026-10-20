@@ -55,6 +55,7 @@ package com.takahashirinta.ncrust.ui.i18n
  * 需要新组就在类体里补转发属性。**不要**直接往主构造器加参数。
  */
 data class Strings(
+    val qrFeedback: QrFeedbackStrings,
     // Navigation tabs
     val tabHome: String,
     val tabLibrary: String,
@@ -482,6 +483,8 @@ data class Strings(
      */
     val qqScan: QqScanStrings,
 ) {
+    val qrSessionInvalid: String get() = qrFeedback.qrSessionInvalid
+    val qrNetworkError: String get() = qrFeedback.qrNetworkError
     // ---------- 转发属性（v2.0.0 · HF1）----------
     // 离线 / 缓存那一组（19 条）的构造参数已经挪进 [OfflineStrings]，这里用**成员**转发属性把
     // 调用点（strings.offlineCacheXxx / strings.cacheSizeLabel / strings.cacheCleared）原样保住。
@@ -2192,4 +2195,10 @@ data class BiliStrings(
     val biliSubtitleLangKo: String,
     /** 档位：**不抓取字幕**（真的不发请求）。 */
     val biliSubtitleLangOff: String,
+)
+
+/** 上游移植文案的独立组，避免扩大 Strings 构造器。 */
+data class QrFeedbackStrings(
+    val qrSessionInvalid: String,
+    val qrNetworkError: String,
 )

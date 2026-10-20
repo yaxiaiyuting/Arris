@@ -1,6 +1,10 @@
 package com.takahashirinta.ncrust.ui.i18n
 
 val en = Strings(
+    qrFeedback = QrFeedbackStrings(
+        qrSessionInvalid = "Login is not valid, tap to retry",
+        qrNetworkError = "Network error, could not confirm login, tap to retry",
+    ),
     tabHome = "Home",
     tabLibrary = "Library",
     tabSearch = "Search",
