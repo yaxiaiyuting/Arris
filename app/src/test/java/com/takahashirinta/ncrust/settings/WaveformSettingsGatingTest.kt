@@ -254,7 +254,7 @@ class WaveformSettingsGatingTest {
         // 所以本条断言要的「动效不在这页」仍然成立 —— 只是清单变长了。
         assertEquals(
             listOf(
-                "wifi_quality", "mobile_quality", "gapless_playback",
+                "wifi_quality", "mobile_quality", "gapless_playback", "vip_trial_playback",
                 "bilibili_quality_cap", "bilibili_prefer_flac", "keep_screen_on",
             ),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id },

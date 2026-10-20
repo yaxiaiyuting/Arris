@@ -55,6 +55,7 @@ import com.takahashirinta.ncrust.ui.components.settingsGroupSubtitle
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
 import com.takahashirinta.ncrust.ui.i18n.LanguagePreset
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.i18n.UpdateStrings
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.i18n.formatCacheBytes
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
@@ -77,6 +78,7 @@ import com.takahashirinta.ncrust.ui.theme.ThemeMode
 import com.takahashirinta.ncrust.ui.theme.systemAccentSupported
 import com.takahashirinta.ncrust.ui.theme.themeColorPresets
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
+import com.takahashirinta.ncrust.update.UpdateService
 import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
@@ -217,13 +219,17 @@ private fun SettingsPreferenceGroupPage(
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
+    val updateStrings = strings.update
     val coroutineScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences(PREFS_SETTINGS, 0) }
 
     // ── 播放与音质 ────────────────────────────────────────────────────────────────
     var wifiQuality by remember { mutableIntStateOf(prefs.getInt("wifi_quality", 3)) }
     var mobileQuality by remember { mutableIntStateOf(prefs.getInt("mobile_quality", 1)) }
-    var gaplessEnabled by remember { mutableStateOf(prefs.getBoolean("gapless_playback", true)) }
+    // v3.4.13 / d42cdf5：无缝播放默认关闭（显式写过 true 的用户保持 true）。
+    var gaplessEnabled by remember { mutableStateOf(prefs.getBoolean("gapless_playback", false)) }
+    // 移植 981e9b3：非会员遇到 VIP 歌曲（播放 45 秒试听 / 直接跳过）。
+    var vipTrialPlayback by remember { mutableStateOf(prefs.getBoolean("vip_trial_playback", true)) }
     // v2.0.0 · T2：播放时禁止熄屏（默认开）。走 KeepScreenOnSetting（唯一读写入口）。
     var keepScreenOnEnabled by remember { mutableStateOf(KeepScreenOnSetting.read(context)) }
     // v1.8.0 · T3：大屏模式音频可视化（默认开；关掉后可视化整块不挂载，零开销）。
@@ -233,6 +239,9 @@ private fun SettingsPreferenceGroupPage(
     // v1.8.0 · T4：应用内「自动旋转」。走 RotationSetting（唯一读写入口）——
     // 播放器里的旋转图标与这里共享同一份状态，"改一处另一处立刻同步"。
     var autoRotateEnabled by remember { mutableStateOf(RotationSetting.read(context)) }
+    // v3.4.13：应用内更新的自动检查开关。UpdateService.init 已在 Activity.onCreate 读过盘，
+    // 这里回显的是它初始化后的进程内状态；写入只走 UpdateService.setAutoCheckEnabled。
+    var updateAutoCheck by remember { mutableStateOf(UpdateService.state.value.autoCheckEnabled) }
     // v1.4.0 · 音乐人推荐卡片开关。默认关；目标艺人与锚点配置存在 prefs 且默认空。
     var artistRecoEnabled by remember { mutableStateOf(ArtistReco.isEnabled(context)) }
     var selectedLanguageCode by remember { mutableStateOf(getSavedLanguageCode(context)) }
@@ -359,6 +368,7 @@ private fun SettingsPreferenceGroupPage(
             // v3.4.8：三项 B 站专属设置的门控只依赖上面那个总开关，这里不必再接自己的值。
             "lyrics_ttml_enabled" -> lyricsTtmlEnabled
             "lyrics_word_animation" -> lyricsWordAnimation
+            "vip_trial_playback" -> vipTrialPlayback
             else -> prefs.all[key]
         }
     }
@@ -370,6 +380,8 @@ private fun SettingsPreferenceGroupPage(
         "keep_screen_on" -> keepScreenOnEnabled
         "audio_visualizer" -> audioVisualizerEnabled
         "auto_rotate" -> autoRotateEnabled
+        // v3.4.13：应用内更新自动检查
+        "update_auto_check" -> updateAutoCheck
         "artist_reco_enabled" -> artistRecoEnabled
         "page_transition_enabled" -> pageTransitionEnabled
         "lyrics_translation" -> lyricsTranslation
@@ -425,6 +437,11 @@ private fun SettingsPreferenceGroupPage(
             "auto_rotate" -> {
                 autoRotateEnabled = value
                 RotationSetting.write(context, value)
+            }
+            // v3.4.13：UpdateService.setAutoCheckEnabled（唯一读写入口，刷新进程内 state）
+            "update_auto_check" -> {
+                updateAutoCheck = value
+                UpdateService.setAutoCheckEnabled(context, value)
             }
             // ArtistReco.setEnabled（唯一读写入口）
             "artist_reco_enabled" -> {
@@ -539,8 +556,12 @@ private fun SettingsPreferenceGroupPage(
 
                     SettingsRowKind.SWITCH -> item(key = entry.id) {
                         SettingSwitchRow(
-                            title = rowTitle(strings, entry),
-                            description = rowSubtitle(strings, entry),
+                            title = rowTitle(strings, entry, updateStrings),
+                            description = rowSubtitle(strings, entry, updateStrings).let { base ->
+                                if (entry.id == "gapless_playback") {
+                                    listOfNotNull(base, strings.gaplessBetaNote).joinToString("\n")
+                                } else base
+                            },
                             checked = switchValueOf(entry.id),
                             // 「置灰 + 原因」而不是隐藏（隐藏会让用户以为这一项被删了）。
                             // C 档四个细分开关的「原因」写在各自的 description 里
@@ -556,7 +577,7 @@ private fun SettingsPreferenceGroupPage(
                         val flacUnsupported = !SongUrlFetcher.deviceSupportsFlac
                         val selected = if (entry.id == "wifi_quality") wifiQuality else mobileQuality
                         MetroDropdownRow(
-                            label = rowTitle(strings, entry),
+                            label = rowTitle(strings, entry, updateStrings),
                             selectedIndex = selected,
                             options = strings.qualityOptions,
                             hint = if (flacUnsupported && isFlacTierIndex(selected)) {
@@ -708,6 +729,21 @@ private fun SettingsPreferenceGroupPage(
                                     }
                                 }
                             )
+                            // 移植 981e9b3：非会员遇到 VIP 歌曲。
+                            // 读路径在 `PlayerViewModel.trialPlaybackEnabled()`，每次播放现读；
+                            // 这里只落盘，不需要通知 VM（否则等于造第二套状态同步）。
+                            "vip_trial_playback" -> MetroDropdownRow(
+                                label = strings.trialSettingTitle,
+                                selectedIndex = if (vipTrialPlayback) 0 else 1,
+                                options = listOf(
+                                    strings.trialSettingPlay,
+                                    strings.trialSettingSkip,
+                                ),
+                                onSelect = { index ->
+                                    vipTrialPlayback = index == 0
+                                    prefs.edit().putBoolean("vip_trial_playback", vipTrialPlayback).apply()
+                                }
+                            )
                             // OfflineAudioCache.setMaxMb()（唯一写入口；上限在**下次启动**生效，
                             // 淘汰器构造时固化 —— 提示文案见 offlineCacheLimitHint）
                             "offline_cache_mb" -> MetroDropdownRow(
@@ -727,7 +763,7 @@ private fun SettingsPreferenceGroupPage(
                     }
 
                     SettingsRowKind.THEME_MODE_SEGMENT -> item(key = entry.id) {
-                        SectionTitle(rowTitle(strings, entry))
+                        SectionTitle(rowTitle(strings, entry, updateStrings))
                         ThemeModeSelector(
                             selected = themeMode,
                             labels = Triple(
@@ -740,7 +776,7 @@ private fun SettingsPreferenceGroupPage(
                     }
 
                     SettingsRowKind.THEME_COLOR_SWATCHES -> item(key = entry.id) {
-                        SectionTitle(rowTitle(strings, entry))
+                        SectionTitle(rowTitle(strings, entry, updateStrings))
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                             ThemeColorSelector(
                                 selectedIndex = themeIndex,
@@ -751,7 +787,7 @@ private fun SettingsPreferenceGroupPage(
                     }
 
                     SettingsRowKind.ACCENT_SOURCE_SEGMENT -> item(key = entry.id) {
-                        SectionTitle(rowTitle(strings, entry))
+                        SectionTitle(rowTitle(strings, entry, updateStrings))
                         AccentSourceSelector(
                             selected = accentSource,
                             systemEnabled = systemAccentSupported,
@@ -816,7 +852,7 @@ private fun SettingsPreferenceGroupPage(
                             BackgroundActivity.isUnrestricted(context)
                         }
                         SettingActionRow(
-                            label = rowTitle(strings, entry),
+                            label = rowTitle(strings, entry, updateStrings),
                             trailing = if (allowed) strings.batteryStatusAllowed else strings.batteryStatusDenied,
                             onClick = {
                                 // 跳转与刷新都放进一个返回 Boolean 的块：`true` = 系统界面确实起来了。
@@ -885,7 +921,7 @@ private fun SettingsPreferenceGroupPage(
 
                     SettingsRowKind.ABOUT_OPEN -> item(key = entry.id) {
                         SettingActionRow(
-                            label = rowTitle(strings, entry),
+                            label = rowTitle(strings, entry, updateStrings),
                             onClick = onOpenAbout
                         )
                     }
@@ -997,13 +1033,15 @@ internal fun SettingsGroupHeader(group: SettingsGroup) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /** 行标题（= `entry.titleKey` 指的那个属性）。 */
-private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (entry.id) {
+private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: UpdateStrings): String = when (entry.id) {
     "wifi_quality" -> strings.wifiQualityLabel                 // titleKey = wifiQualityLabel
     "mobile_quality" -> strings.mobileQualityLabel             // titleKey = mobileQualityLabel
     "gapless_playback" -> strings.gaplessSectionTitle          // titleKey = gaplessSectionTitle
     "keep_screen_on" -> strings.keepScreenOnLabel              // titleKey = keepScreenOnLabel
     "audio_visualizer" -> strings.audioVisualizerLabel         // titleKey = audioVisualizerLabel
     "auto_rotate" -> strings.autoRotateLabel                   // titleKey = autoRotateLabel
+    // v3.4.13：文案暂住在 UpdateStrings（主 agent 并入 Strings.update 后改成 strings.update.autoCheckTitle）
+    "update_auto_check" -> updateStrings.autoCheckTitle
     "artist_reco_enabled" -> strings.artistRecoTitle           // titleKey = artistRecoTitle
     "bilibili_enabled" -> strings.bilibiliEnabledLabel         // titleKey = bilibiliEnabledLabel
     // v3.4.8：文案住在新的 `Strings.bili` 组（registry 的 titleKey 是 `bili.xxx` 裸路径）。
@@ -1055,11 +1093,13 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry): String = when (ent
 }
 
 /** 行描述（= `entry.subtitleKey` 指的那个属性；没有副标题的项返回 null）。 */
-private fun rowSubtitle(strings: Strings, entry: SettingsEntry): String? = when (entry.id) {
+private fun rowSubtitle(strings: Strings, entry: SettingsEntry, updateStrings: UpdateStrings): String? = when (entry.id) {
     "gapless_playback" -> strings.gaplessDescription
     "keep_screen_on" -> strings.keepScreenOnHint
     "audio_visualizer" -> strings.audioVisualizerDescription
     "auto_rotate" -> strings.autoRotateDescription
+    // v3.4.13：文案暂住在 UpdateStrings
+    "update_auto_check" -> updateStrings.autoCheckDescription
     "page_transition_enabled" -> strings.motion.pageTransitionDescription
     "lyrics_in_media_session" -> strings.lyricsInMediaSessionHint
     "lyrics_romanization" -> strings.lyricsRomanizationHint

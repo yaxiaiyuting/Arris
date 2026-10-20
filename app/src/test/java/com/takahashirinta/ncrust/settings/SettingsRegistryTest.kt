@@ -51,7 +51,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413
             }
             .mapNotNull { it.key }
             .toSet()
@@ -88,7 +88,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413
             }
             .mapNotNull { it.key }
             .toSet()
@@ -223,6 +223,26 @@ class SettingsRegistryTest {
         assertEquals("bilibiliEnabledDescription", entry.subtitleKey)
     }
 
+    @Test
+    fun `newV3413KeysAreExactlyTheUpdateAutoCheck`() {
+        // 机械防线：v3.4.13 只允许新增「应用内更新自动检查」这一个设置键。
+        // 它属于「关于」：版本 / 发布信息的落点；不得借机侵入通用、播放等既有分组。
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV3413 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals(setOf("update_auto_check"), actual)
+
+        val entry = SettingsRegistry.allEntries().first { it.id == "update_auto_check" }
+        assertEquals(SettingsEntryType.SWITCH, entry.type)
+        assertEquals("默认必须开：与 UpdateService 的读默认值一致", true, entry.defaultValue)
+        assertEquals(SettingsGroup.ABOUT, entry.group)
+        assertFalse("它是可见开关", entry.isInternal)
+        assertEquals("update.autoCheckTitle", entry.titleKey)
+        assertEquals("update.autoCheckDescription", entry.subtitleKey)
+        assertTrue("必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+    }
+
     /**
      * 机械防线之五：v3.4.8 只允许新增「B 站音质上限 / 优先无损 FLAC / 字幕语言」这一组。
      *
@@ -303,6 +323,35 @@ class SettingsRegistryTest {
                 assertTrue("$id 在音源开启时必须可用", on.enabled)
                 assertEquals(GatingReason.NONE, on.reason)
             }
+    }
+
+    /**
+     * 机械防线：v3.4.11 / 移植 981e9b3 只新增一条「非会员遇到 VIP 歌曲」的设置。
+     * 它必须是可见、可渲染、默认播放试听的有限枚举。
+     */
+    @Test
+    fun `newV3411KeysAreExactlyTheEntitlementSetting`() {
+        val actual = SettingsRegistry.allEntries()
+            .filter { it.isNewInV3411 }
+            .mapNotNull { it.key }
+            .toSet()
+        assertEquals(setOf("vip_trial_playback", "session_was_logged_in"), actual)
+        val entry = SettingsRegistry.allEntries().first { it.id == "vip_trial_playback" }
+        assertEquals(SettingsEntryType.CHOICE, entry.type)
+        assertEquals("默认必须播放试听（与官方客户端一致）", true, entry.defaultValue)
+        assertEquals(SettingsGroup.PLAYBACK, entry.group)
+        assertFalse("它是可见项", entry.isInternal)
+        assertTrue("必须被渲染计划覆盖", SettingsRenderPlan.isRenderedOnGroupPage(entry))
+        assertEquals("trialSettingTitle", entry.titleKey)
+        assertEquals(listOf(true, false), entry.choices)
+
+        // SessionMonitor 的持久标记同样属于本轮新增键：它必须注册为内部项，
+        // 否则「设置键全部在 registry 里」这条审计就有洞。
+        val marker = SettingsRegistry.allEntries().first { it.id == "session_was_logged_in" }
+        assertTrue("SessionMonitor 标记必须是 internal（无 UI 入口）", marker.isInternal)
+        assertEquals(SettingsGroup.ACCOUNT, marker.group)
+        assertEquals(SettingsEntryType.INFO, marker.type)
+        assertEquals(false, marker.defaultValue)
     }
 
     @Test
@@ -561,6 +610,8 @@ class SettingsRegistryTest {
         // 用仓库既有的 i18n 快照工具反射采集 `Strings` 的全部可达路径（含 `motion.pageTransitionLabel`
         // 这种嵌套组路径）——文案路径写错会在这里被抓住，而不是等到 UI 阶段才发现。
         val paths = StringsSnapshot.capture(zhCN).keys
+        // v3.4.13：update.* 已并入 Strings.update（嵌套组），StringsSnapshot 能反射到，
+        // 因此这里不再保留任何临时白名单 —— 路径写错就是红。
         val missing = SettingsRegistry.allEntries()
             .flatMap { listOfNotNull(it.titleKey, it.subtitleKey) }
             .filterNot { paths.contains(it) }
@@ -690,6 +741,8 @@ class SettingsRegistryTest {
         /** 无 UI 入口的内部项（§2.2 的 13 项 + 2 条账号凭证 + v2.8.0 的迁移水位）。 */
         val INTERNAL_PREF_KEYS: Set<String> = setOf(
             "user_cookie", "qq_cookie",
+            // v3.4.11 / 981e9b3：SessionMonitor 的「曾登录」标记（内部状态，不渲染）。
+            "session_was_logged_in",
             "lyrics_word_by_word", "lyrics_sweep_fade_em", "lyrics_sweep_inactive_alpha", "lyrics_sweep_easing",
             "session_metadata_lyrics", "live_update_enabled", "live_update_probed", "battery_prompt_done",
             "artist_reco_target_id", "artist_reco_anchor_ids", "artist_reco_auto_anchor_ids",
@@ -727,7 +780,7 @@ class SettingsRegistryTest {
         /** 没有文案路径的条目（见 `titleLessEntriesAreExactlyTheDocumentedOnes`）。 */
         val TITLE_LESS_IDS: Set<String> = setOf(
             // 内部项（except lyrics_word_by_word，它的文案 key 还在 i18n 里，只是没有 UI 入口）
-            "user_cookie", "qq_cookie", "battery_prompt_done", "artist_reco_target_id",
+            "user_cookie", "qq_cookie", "session_was_logged_in", "battery_prompt_done", "artist_reco_target_id",
             "artist_reco_anchor_ids", "artist_reco_auto_anchor_ids", "artist_reco_auto_anchor_at",
             "session_metadata_lyrics", "live_update_enabled", "live_update_probed", "quality_ladder_version",
             "lyrics_sweep_fade_em", "lyrics_sweep_inactive_alpha", "lyrics_sweep_easing",

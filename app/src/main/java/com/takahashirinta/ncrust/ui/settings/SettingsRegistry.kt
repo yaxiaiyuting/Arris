@@ -100,7 +100,7 @@ enum class SettingsGroup(
         iconName = "Storage",
     ),
 
-    /** 关于：只读入口（本分组**没有**任何 prefs 键，见 probe-settings-inventory §6.7）。 */
+    /** 关于：版本 / 自动检查更新开关 + 关于页入口（v3.4.13 起不再是纯只读组）。 */
     ABOUT(
         id = "about",
         titleKey = "settingsGroupAboutTitle",
@@ -214,6 +214,20 @@ data class SettingsEntry(
      */
     val isNewInV348: Boolean = false,
     /**
+     * v3.4.11 / 移植 981e9b3 新增项：`vip_trial_playback`（非会员遇到 VIP 歌曲时的行为）。
+     *
+     * 与前面几个「某版本新增」标志并列而不是复用：合并会让「顺手夹带无关功能项」不再被
+     * 机械挡住（`SettingsRegistryTest` 的逐版本等值断言是这条纪律的执行点）。
+     */
+    val isNewInV3411: Boolean = false,
+    /**
+     * v3.4.13「应用内更新自动检查」新增项（v3.4.12 的盘上不存在这个键）。
+     *
+     * 与前述 per-version 标志并列，而不是复用：新增项单独计数，
+     * 「顺手夹带了无关功能项」才会被机械挡住。
+     */
+    val isNewInV3413: Boolean = false,
+    /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
      * 目前只有 `motion_degrade_level` / `motion_degrade_log` 两个：它们属于 v2.9.0 的
@@ -282,6 +296,19 @@ object SettingsRegistry {
                 default = null, // qq/QqAuthStore.kt:94 getString(KEY_COOKIE, null)
                 group = SettingsGroup.ACCOUNT,
                 prefsFile = PREFS_QQ,
+                internal = true,
+            )
+        )
+        // 移植 981e9b3：SessionMonitor 的「曾登录」标记。它不是用户可编辑设置，但
+        // **必须注册** —— 否则设置审计只能看到读/写侧，漏掉这个跨启动状态键。
+        // 默认 false；登录成功置 true，主动退出移除，失效时保留（见 account/SessionMonitor.kt）。
+        add(
+            pref(
+                key = "session_was_logged_in",
+                type = SettingsEntryType.INFO,
+                default = false,
+                group = SettingsGroup.ACCOUNT,
+                newInV3411 = true,
                 internal = true,
             )
         )
@@ -792,10 +819,26 @@ object SettingsRegistry {
             pref(
                 key = "gapless_playback",
                 type = SettingsEntryType.SWITCH,
-                default = true, // UserScreen.kt:148 getBoolean("gapless_playback", true)
+                // v1.4.0：无缝播放降级为实验特性，默认关闭。显式写过的 true/false 保留，
+                // 只影响从未设过这个键的设备（与 PlayerViewModel 两处读取同一口径）。
+                default = false,
                 group = SettingsGroup.PLAYBACK,
                 titleKey = "gaplessSectionTitle",
                 subtitleKey = "gaplessDescription",
+            )
+        )
+        // 移植 981e9b3：非会员遇到 VIP 歌曲时的行为。默认播放 45 秒试听（与官方一致）；
+        // 选「直接跳过」才跳过试听片段。键的读路径在 `PlayerViewModel.trialPlaybackEnabled()`，
+        // 每次播放现读 —— 设置页改完立刻生效，不需要额外的状态同步。
+        add(
+            pref(
+                key = "vip_trial_playback",
+                type = SettingsEntryType.CHOICE,
+                default = true,
+                group = SettingsGroup.PLAYBACK,
+                titleKey = "trialSettingTitle",
+                choices = listOf(true, false),
+                newInV3411 = true,
             )
         )
         // v3.4.8 · 问题 3：**B 站音质的两个用户参数**。
@@ -1108,7 +1151,24 @@ object SettingsRegistry {
         add(action("action.storage_clear_cache", SettingsGroup.STORAGE, "clearCache"))
         add(action("action.storage_offline_manage", SettingsGroup.STORAGE, "offlineCacheManageLabel"))
 
-        // ── 关于（没有任何 prefs 项，探针 §6.7：这是正确结果而非遗漏）──────────────────
+        // ── 关于 ──────────────────────────────────────────────────────────────────────
+        // v3.4.13：应用内更新的**自动检查**开关。它属于「关于」而不是「通用」：
+        // 这一页本来就是版本 / 发布信息的落点；放进通用组会让「语言 / 旋转 / 推荐」
+        // 那一页多出一个与它们无关的网络行为开关。
+        //
+        // 默认**开**，与 UpdateService.init 的读默认值 / SettingsRegistryTest 的断言一致。
+        // 读写唯一入口是 UpdateService.setAutoCheckEnabled（设置页不得直接写 prefs）。
+        add(
+            pref(
+                key = "update_auto_check",
+                type = SettingsEntryType.SWITCH,
+                default = true,
+                group = SettingsGroup.ABOUT,
+                titleKey = "update.autoCheckTitle",
+                subtitleKey = "update.autoCheckDescription",
+                newInV3413 = true,
+            )
+        )
         add(action("action.about_open", SettingsGroup.ABOUT, "aboutButton"))
     }
 
@@ -1153,6 +1213,8 @@ object SettingsRegistry {
         newInV310: Boolean = false,
         newInV320: Boolean = false,
         newInV348: Boolean = false,
+        newInV3411: Boolean = false,
+        newInV3413: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1174,6 +1236,8 @@ object SettingsRegistry {
         isNewInV310 = newInV310,
         isNewInV320 = newInV320,
         isNewInV348 = newInV348,
+        isNewInV3411 = newInV3411,
+        isNewInV3413 = newInV3413,
         isAdvanced = advanced,
         isInternal = internal,
     )

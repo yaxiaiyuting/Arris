@@ -55,6 +55,8 @@ package com.takahashirinta.ncrust.ui.i18n
  * 需要新组就在类体里补转发属性。**不要**直接往主构造器加参数。
  */
 data class Strings(
+    val account: AccountStrings,
+    val update: UpdateStrings,
     val qrFeedback: QrFeedbackStrings,
     // Navigation tabs
     val tabHome: String,
@@ -482,7 +484,39 @@ data class Strings(
      * 那是拆组本来就要付的成本，也是 `StringsConstructorBudgetTest` 记录过的账。
      */
     val qqScan: QqScanStrings,
+    /**
+     * v3.4.12：收藏页「播放全部 / 插播 / 追加」的加载与部分反馈（2 条）。
+     *
+     * 单开一组而不是塞进 `QueueStrings`：这一组描述的是**整列收藏的加载结果**，
+     * 队列组描述的是「单曲加到哪里」；混在一起会让下一个人分不清
+     * 「N 首已加载」说的是队列还是云端红心表。外层只为组加 1 个参数。
+     */
+    val likedPlayAll: LikedPlayAllStrings,
 ) {
+    val sessionExpiredBanner: String get() = account.sessionExpiredBanner
+    val dailySongsLoginHint: String get() = account.dailySongsLoginHint
+    val vipKindSvip: String get() = account.vipKindSvip
+    val vipKindVip: String get() = account.vipKindVip
+    val vipKindPackage: String get() = account.vipKindPackage
+    val vipActiveLabel: (String, String) -> String get() = account.vipActiveLabel
+    val vipLapsedLabel: (String, String) -> String get() = account.vipLapsedLabel
+    val vipNoneLabel: String get() = account.vipNoneLabel
+    val vipUnknownLabel: String get() = account.vipUnknownLabel
+    val trialBadge: String get() = account.trialBadge
+    val trialToast: (Int, String) -> String get() = account.trialToast
+    val playbackReasonVip: String get() = account.playbackReasonVip
+    val playbackReasonAlbum: String get() = account.playbackReasonAlbum
+    val playbackReasonCopyright: String get() = account.playbackReasonCopyright
+    val playbackReasonLogin: String get() = account.playbackReasonLogin
+    val playbackReasonLoginTrial: String get() = account.playbackReasonLoginTrial
+    val playbackReasonUnknown: String get() = account.playbackReasonUnknown
+    val skippedSong: (String, String) -> String get() = account.skippedSong
+    val skippedSongs: (Int) -> String get() = account.skippedSongs
+    val qualityCapped: (String) -> String get() = account.qualityCapped
+    val qualityCappedLogin: String get() = account.qualityCappedLogin
+    val trialSettingTitle: String get() = account.trialSettingTitle
+    val trialSettingPlay: String get() = account.trialSettingPlay
+    val trialSettingSkip: String get() = account.trialSettingSkip
     val qrSessionInvalid: String get() = qrFeedback.qrSessionInvalid
     val qrNetworkError: String get() = qrFeedback.qrNetworkError
     // ---------- 转发属性（v2.0.0 · HF1）----------
@@ -653,6 +687,9 @@ data class Strings(
     // 这三个**同一个菜单里**的动作在调用点长得一样，不会有人漏掉 queue. 前缀而写错分组。
     val actionInsertNext: String get() = queue.actionInsertNext
     val actionAppendToQueue: String get() = queue.actionAppendToQueue
+    // v3.4.12：整列收藏的加载 / 部分反馈（调用点读 strings.likedPlayAllLoading / likedPlayAllPartial）。
+    val likedPlayAllLoading: (Int) -> String get() = likedPlayAll.loading
+    val likedPlayAllPartial: (Int, Int) -> String get() = likedPlayAll.partial
     val actionAddToNext: String get() = queue.actionAddToNext
 
     // ---------- 转发属性（v2.5.3 · P0）：设置页 → [SettingsStrings] ----------
@@ -671,6 +708,7 @@ data class Strings(
     val playbackSectionTitle: String get() = settings.playbackSectionTitle
     val gaplessSectionTitle: String get() = settings.gaplessSectionTitle
     val gaplessDescription: String get() = settings.gaplessDescription
+    val gaplessBetaNote: String get() = settings.gaplessBetaNote
     val lyricsTranslationLabel: String get() = settings.lyricsTranslationLabel
     val lyricsTranslationHint: String get() = settings.lyricsTranslationHint
     val lyricsWordByWordLabel: String get() = settings.lyricsWordByWordLabel
@@ -1383,6 +1421,22 @@ data class QueueStrings(
  *    不说「开启会掉帧」—— 默认是开，说明文字不该先劝退用户。
  */
 /**
+ * v3.4.12：「库 → 单曲」整列播放的加载 / 部分反馈。
+ *
+ * 两条都是 lambda（数量是运行时才知道的）：
+ *  - [loading]：已开始后台补齐，前 N 首（云端红心总数）加载中；
+ *  - [partial]：加载结束，`loaded` 首已进队列、`missing` 首取不到详情。
+ *
+ * 为什么必须有 partial：收藏量大时服务端会对部分下架/无版权 id 不返回详情。
+ * 静默少播几首而不告知，用户会以为「播放全部漏歌」——这与「只处理已加载 50 首」
+ * 是同一类**不可见的数据丢失**，必须给一句话。
+ */
+data class LikedPlayAllStrings(
+    val loading: (Int) -> String,
+    val partial: (Int, Int) -> String,
+)
+
+/**
  * v3.2.0 · P0：**取链失败的分类文案**。
  *
  * ## 为什么必须为每一类失败单独写一句话
@@ -1610,6 +1664,8 @@ data class SettingsStrings(
     val playbackSectionTitle: String,
     val gaplessSectionTitle: String,
     val gaplessDescription: String,
+    /** v1.4.0：无缝播放是实验特性；设置页在说明下再挂一行「测试中，可能不稳定」。 */
+    val gaplessBetaNote: String,
     val lyricsTranslationLabel: String,
     /**
      * v3.4.8（问题 2）：这条开关**作用于哪些音源**。
@@ -2201,4 +2257,64 @@ data class BiliStrings(
 data class QrFeedbackStrings(
     val qrSessionInvalid: String,
     val qrNetworkError: String,
+)
+
+/** 上游移植文案的独立组，避免扩大 Strings 构造器。 */
+data class AccountStrings(
+    val sessionExpiredBanner: String,
+    val dailySongsLoginHint: String,
+    val vipKindSvip: String,
+    val vipKindVip: String,
+    val vipKindPackage: String,
+    val vipActiveLabel: (String, String) -> String,
+    val vipLapsedLabel: (String, String) -> String,
+    val vipNoneLabel: String,
+    val vipUnknownLabel: String,
+    val trialBadge: String,
+    val trialToast: (Int, String) -> String,
+    val playbackReasonVip: String,
+    val playbackReasonAlbum: String,
+    val playbackReasonCopyright: String,
+    val playbackReasonLogin: String,
+    val playbackReasonLoginTrial: String,
+    val playbackReasonUnknown: String,
+    val skippedSong: (String, String) -> String,
+    val skippedSongs: (Int) -> String,
+    val qualityCapped: (String) -> String,
+    val qualityCappedLogin: String,
+    val trialSettingTitle: String,
+    val trialSettingPlay: String,
+    val trialSettingSkip: String,
+)
+
+/** 应用内更新文案（v3.4.13 / c14b1be）。28 条，字段名 = 上游 update* 去掉前缀。 */
+data class UpdateStrings(
+    val availableBanner: (String) -> String,
+    val dotDesc: String,
+    val checkNow: String,
+    val checking: String,
+    val upToDate: String,
+    val checkFailed: String,
+    val sectionTitle: String,
+    val autoCheckTitle: String,
+    val autoCheckDescription: String,
+    val title: String,
+    val releasedLabel: String,
+    val sizeLabel: String,
+    val notesLabel: String,
+    val noNotes: String,
+    val downloadAndInstall: String,
+    val openInBrowser: String,
+    val later: String,
+    val cancelDownload: String,
+    val downloading: String,
+    val downloadingPercent: (Int) -> String,
+    val verifying: String,
+    val downloadFailed: String,
+    val packageMismatch: String,
+    val versionNotHigher: String,
+    val archiveUnreadable: String,
+    val signatureMismatch: String,
+    val installBlockedHint: String,
+    val installLaunchFailed: String,
 )

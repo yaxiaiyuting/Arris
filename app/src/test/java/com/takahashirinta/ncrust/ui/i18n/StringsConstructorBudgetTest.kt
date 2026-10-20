@@ -59,7 +59,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StringsConstructorBudgetTest {
-    // 本次为网易扫码会话校验新增 qrFeedback 组：144 + 1 = 145。
+    // 本次为网易扫码会话校验新增 qrFeedback 组：144 + 1 = 146；
+    // 本轮再为账号权益（account）与更新（update）各加一个组参数 ⇒ 148。
 
     /**
      * `Strings` 主构造器的参数个数**硬上限**。
@@ -108,6 +109,12 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.StatsStrings",
         // v3.4.8：B 站音质与字幕那一组（17 条）。加组时必须同步这里，否则它是**监控盲区**。
         "com.takahashirinta.ncrust.ui.i18n.BiliStrings",
+        // v3.4.12：收藏页「播放全部」的加载 / 部分反馈（2 条）。加组时同样必须同步这里。
+        "com.takahashirinta.ncrust.ui.i18n.LikedPlayAllStrings",
+        // v3.4.11 / 981e9b3：账号权益文案（24 条）。
+        "com.takahashirinta.ncrust.ui.i18n.AccountStrings",
+        // v3.4.13 / c14b1be：应用内更新文案（28 条）。
+        "com.takahashirinta.ncrust.ui.i18n.UpdateStrings",
     )
 
     /** dex 槽位算式：`this(1) + N + ceil(N/32) 个默认值 mask + DefaultConstructorMarker(1)`。 */
@@ -195,11 +202,11 @@ class StringsConstructorBudgetTest {
                 "v3.4.9 再为 `qqScan` 组加一个 ⇒ 143；" +
                 "v3.4.11 的搜索分页文案**没有**加在这里（它们进了新的 `search` 组）" +
                 " —— 但那个组本身要占一个槽位 ⇒ 144。",
-            145, primaryParams(clazz),
+            148, primaryParams(clazz),
         )
         // 余量：144 ⇒ 1(this) + 144 + ceil(144/32)=5(mask) + 1(marker) = 151 槽，距 255 还有 104。
-        assertEquals(151, dexSlots(144, true))
-        assertTrue("余量不足 100 个槽位", 255 - dexSlots(144, true) >= 100)
+        assertEquals(155, dexSlots(148, true))
+        assertTrue("余量不足 100 个槽位", 255 - dexSlots(148, true) >= 100)
     }
 
     /**
@@ -230,7 +237,7 @@ class StringsConstructorBudgetTest {
                 "v3.3.0 又为 share / stats / widget 三个组各加了 1 个 ⇒ 138 + 3 = 141；" +
                 "v3.4.8 再为 `bili` 组加 1 个 ⇒ 142；v3.4.9 再为 `qqScan` 组加 1 个 ⇒ 143；" +
                 "v3.4.11 再为 `search` 组（搜索分页两条）加 1 个 ⇒ 144",
-            145,
+            148,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaybackFailureStrings")
@@ -351,7 +358,7 @@ class StringsConstructorBudgetTest {
             // AboutStrings / PlayerUiStrings 本版一条都没加。
             // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 87,
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 88,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -543,7 +550,7 @@ class StringsConstructorBudgetTest {
         //   而它的预警线是 80 —— 加那 3 条正好撞线（`AggregateStringsTest` 会红）。
         //   这 3 条也确实不属于那条业务线（`source` 是「音源与账号」，这 3 条只服务
         //   「官方 App 扫码」这一条登录方式）。
-        assertEquals(145, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
+        assertEquals(148, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
         // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
@@ -574,13 +581,13 @@ class StringsConstructorBudgetTest {
                 "（v3.2.0 又只为失败文案组加了一个 ⇒ 137；v3.3.0 再为 share / stats / widget 各加一个 ⇒ 141；" +
                 "v3.4.8 再为 `bili` 组加一个 ⇒ 142；v3.4.9 再为 `qqScan` 组加一个 ⇒ 143；" +
                 "v3.4.11 再为 `search` 组加一个 ⇒ 144）",
-            145,
+            148,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
             "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言" +
                 "（v3.4.8：86 → 87，+lyricsTranslationHint）",
-            87,
+            88,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
@@ -671,7 +678,7 @@ class StringsConstructorBudgetTest {
                 "v3.3.0 再 +3 个组参数（share / stats / widget）⇒ 138 + 3 = 141；" +
                 "v3.4.8 再 +1 个组参数（bili）⇒ 142；v3.4.9 再 +1 个组参数（qqScan）⇒ 143；" +
                 "v3.4.11 再 +1 个组参数（search）⇒ 144",
-            145,
+            148,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")),
         )
         assertEquals(
@@ -866,6 +873,35 @@ class StringsConstructorBudgetTest {
      * `app/src/test/java/com/takahashirinta/ncrust/ui/widget/WidgetStringsTest.kt`；
      * 这里只做**组本身的规模与槽位**记账 —— 两处分工与 [PlaybackFailureStrings] 的写法一致。
      */
+    /**
+     * v3.4.12：整列收藏的**加载 / 部分反馈**只有两条，但必须进组而不是外层。
+     *
+     * 外层因此 145 → 146（仍是「只加组参数」的正向用法）。两条都是 lambda，
+     * 这里按真实取值断言：加载文案带总数、部分文案同时带「已加载」与「缺失」。
+     */
+    @Test
+    fun `v3_4_12 的整列收藏反馈在 LikedPlayAllStrings 且八种语言都可用`() {
+        val clazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.LikedPlayAllStrings")
+        assertEquals("LikedPlayAllStrings 只该有 2 条", 2, primaryParams(clazz))
+        assertEquals(3, dexSlots(2, false))
+
+        val presets = listOf(
+            "zh-CN" to zhCN, "zh-TW" to zhTW, "en-US" to en, "ja-JP" to jpJP,
+            "ja-MY" to jpMY, "ko-KP" to koNK, "de-DE" to deDE, "ru-RU" to ruRU,
+        )
+        presets.forEach { (code, s) ->
+            val loading = s.likedPlayAll.loading(321)
+            assertTrue("$code 的加载文案为空", loading.isNotBlank())
+            assertTrue("$code 的加载文案丢了总数：$loading", loading.contains("321"))
+            val partial = s.likedPlayAll.partial(300, 21)
+            assertTrue("$code 的部分反馈为空", partial.isNotBlank())
+            assertTrue("$code 的部分反馈丢了已加载数：$partial", partial.contains("300"))
+            assertTrue("$code 的部分反馈丢了缺失数：$partial", partial.contains("21"))
+            assertEquals("$code 的转发属性与组内不一致", loading, s.likedPlayAllLoading(321))
+            assertEquals("$code 的转发属性与组内不一致", partial, s.likedPlayAllPartial(300, 21))
+        }
+    }
+
     @Test
     fun `v3_3_0 的 8 条桌面卡片文案进了 WidgetStrings`() {
         val groupClazz = Class.forName("com.takahashirinta.ncrust.ui.i18n.WidgetStrings")
