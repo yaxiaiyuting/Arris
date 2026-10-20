@@ -35,6 +35,8 @@ import coil.Coil
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.takahashirinta.ncrust.account.SessionMonitor
+import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.network.NetworkAvailability
@@ -56,6 +58,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import com.takahashirinta.ncrust.warmup.AppWarmup
 import com.takahashirinta.ncrust.ui.components.ArtistRecoCard
 import com.takahashirinta.ncrust.ui.components.PlayAllButton
+import com.takahashirinta.ncrust.ui.components.SessionExpiredBanner
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
@@ -88,9 +91,16 @@ fun HomeScreen(
     onPlayFm: (() -> Unit)? = null,
     // v1.4.0 · 音乐人推荐：非空时在推荐流里插入一张艺人卡（取值见 ArtistReco.shouldShow）。
     artistRecoArtistId: Long? = null,
-    onArtistRecoClick: (Long) -> Unit = {}
+    onArtistRecoClick: (Long) -> Unit = {},
+    // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
+    onRelogin: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
+    // 会话状态：Expired 时顶部一条失效横幅；非 Valid 时每日推荐加一行「登录后为你推荐」
+    // （登录失效后接口返回的是非个性化的通用列表，不能冒充个性化推荐）。
+    val sessionState by SessionMonitor.state.collectAsState()
+    val sessionExpired = sessionState is SessionState.Expired
+    val sessionValid = sessionState is SessionState.Valid
     // 初始 state 从 ContentCache 读取。有缓存则立即渲染，无需 spinner。
     // 后台仍会刷新——请求返回后写回缓存 + 更新 state；LazyColumn 通过 key diff 平滑替换。
     var dailySongs by remember { mutableStateOf(ContentCache.homeDailySongs ?: emptyList()) }
@@ -354,6 +364,13 @@ fun HomeScreen(
                         Spacer(Modifier.height(12.dp))
                     }
 
+                    // 登录失效横幅：放在页头之下、内容之上（列表第一个内容项），点击进登录流程。
+                    if (sessionExpired) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            SessionExpiredBanner(onRelogin = onRelogin)
+                        }
+                    }
+
                     // E：榜单入口（全宽横滑），排在所有既有分节之前 —— 首屏可见，
                     // 且复用既有 PlaylistTile，不引入新组件。
                     if (toplists.isNotEmpty()) {
@@ -396,6 +413,17 @@ fun HomeScreen(
                                     }
                                 }
                             )
+                        }
+                        // 非 Valid（含未登录/已失效）时说明这不是个性化推荐。
+                        if (!sessionValid) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                MetroText(
+                                    strings.dailySongsLoginHint,
+                                    color = LocalMetroColors.current.onSurfaceVariant,
+                                    style = LocalMetroTypography.current.bodySmall,
+                                    modifier = Modifier.padding(start = 16.dp)
+                                )
+                            }
                         }
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(

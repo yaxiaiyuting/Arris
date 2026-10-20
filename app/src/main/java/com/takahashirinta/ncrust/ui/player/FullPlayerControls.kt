@@ -52,7 +52,9 @@ import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun FullPlayerControls(
@@ -72,6 +74,8 @@ fun FullPlayerControls(
      */
     qualityBitrateFlow: StateFlow<Long>,
     qualityOptions: List<String>,
+    // 当前歌是否为试听片段（45 秒）。徽标位置改显示「试听」，不显示会误导的档位名。
+    trialFlow: StateFlow<Boolean>,
     onPlayPause: () -> Unit,
     onPlayPrevious: () -> Unit = {},
     onPlayNext: () -> Unit = {},
@@ -86,6 +90,8 @@ fun FullPlayerControls(
     previousEnabled: Boolean = true,
     // 宽屏左栏用紧凑尺寸：缩小按钮/间距，把纵向空间让给封面区。
     compact: Boolean = false,
+    // 矮屏（HeightClass.Tiny）：时间与进度压成一行，面板切换交给顶栏。
+    tiny: Boolean = false,
     // 宽屏横向布局：进度行 + 操作行扁平铺开，替代手机的竖向大按钮堆叠。
     landscape: Boolean = false,
     // P1：大屏模式把音质控件搬到左栏（就地选择器）后，控制条右端不再重复画一个
@@ -370,6 +376,7 @@ fun FullPlayerControls(
                         qualityStatusFlow = qualityStatusFlow,
                         qualityBitrateFlow = qualityBitrateFlow,
                         options = qualityOptions,
+                        trialFlow = trialFlow,
                         preferredIndexProvider = preferredQualityIndexProvider,
                         onSelect = onQualitySelect,
                         maxHeightDp = qualityPickerMaxHeightDp,
@@ -385,6 +392,40 @@ fun FullPlayerControls(
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = bottomPad)) {
+        if (tiny) {
+            // Tiny：位置 · 进度 · 时长 · 音质压成一行，把纵向空间全让给封面与传输键。
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = hPad),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PositionText(positionFlow = positionFlow, modifier = Modifier.widthIn(max = 48.dp))
+                Spacer(Modifier.width(8.dp))
+                SlimProgressBar(
+                    progressFlow = progressFlow,
+                    durationFlow = durationFlow,
+                    isBufferingFlow = isBufferingFlow,
+                    onSeek = onSeek,
+                    modifier = Modifier.weight(1f),
+                    horizontalPadding = 0.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                DurationText(durationFlow = durationFlow, modifier = Modifier.widthIn(max = 48.dp))
+                Spacer(Modifier.width(8.dp))
+                // 最长多语言音质名也只占 72dp；省略号截断，不侵占进度条的权重空间。
+                PlayerQualityChip(
+                    qualityIndexFlow = qualityIndexFlow,
+                    qualityStatusFlow = qualityStatusFlow,
+                    qualityBitrateFlow = qualityBitrateFlow,
+                    options = qualityOptions,
+                    preferredIndexProvider = preferredQualityIndexProvider,
+                    onSelect = onQualitySelect,
+                    modifier = Modifier.widthIn(max = 72.dp),
+                    maxHeightDp = qualityPickerMaxHeightDp,
+                    horizontalAlignment = Alignment.End,
+                    minHitHeightDp = 32.dp,
+                )
+            }
+        } else {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -404,6 +445,7 @@ fun FullPlayerControls(
                 qualityStatusFlow = qualityStatusFlow,
                 qualityBitrateFlow = qualityBitrateFlow,
                 options = qualityOptions,
+                trialFlow = trialFlow,
                 preferredIndexProvider = preferredQualityIndexProvider,
                 onSelect = onQualitySelect,
                 modifier = Modifier.align(Alignment.Center),
@@ -422,6 +464,7 @@ fun FullPlayerControls(
             isBufferingFlow = isBufferingFlow,
             onSeek = onSeek
         )
+        }
         Spacer(Modifier.height(gapLoose))
         Row(
             modifier = Modifier
@@ -481,93 +524,128 @@ fun FullPlayerControls(
                 )
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(toggleBtn)
-                    .clickable(enabled = !lyricsUnavailable) {
-                        tick()
-                        onToggleLyrics()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                MetroIcon(
-                    imageVector = Icons.Default.Lyrics,
-                    contentDescription = strings.lyricsButton,
-                    // 无歌词/未加载时置灰, 语义是该歌不可展开歌词
-                    tint = if (lyricsUnavailable) LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f)
-                    else if (showLyrics) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
-                    sizeDp = toggleIcon
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(toggleBtn)
-                    .clickable {
-                        tick()
-                        onToggleQueue()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                MetroIcon(
-                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
-                    contentDescription = strings.queueButton,
-                    tint = if (showQueue) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
-                    sizeDp = toggleIcon
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(toggleBtn)
-                    .clickable {
-                        tick()
-                        onAddToLibrary()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                // 已在库 → 对号(按动移出); 不在库 → 加号(按动收藏)
-                MetroIcon(
-                    imageVector = if (isInLibrary) Icons.Default.Check else Icons.Default.Add,
-                    contentDescription = strings.addToLibraryButton,
-                    tint = if (isInLibrary) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
-                    sizeDp = toggleIcon
-                )
-            }
-            // P1：大屏幕模式入口。同一槽位在横屏大屏下变成"退出大屏"。
-            Box(
-                modifier = Modifier
-                    .size(toggleBtn)
-                    .clickable {
-                        tick()
-                        onToggleBigScreen()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                MetroIcon(
-                    imageVector = if (bigScreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
-                    contentDescription = if (bigScreen) strings.bigScreenExit else strings.bigScreenEnter,
-                    tint = if (bigScreen) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
-                    sizeDp = toggleIcon
-                )
-            }
-            // v1.8.0 · T4：自动旋转开关（竖屏入口）。
-            // 开 = 跟随传感器（在播放器里转横屏 → 自动进大屏；转回竖屏 → 自动退出）；
-            // 关 = 锁定竖屏，进出大屏只走 ⤢ 按钮。图标用"两态"而不是"高亮/置灰"：
-            // 高亮只能表达开/关，表达不了"开着的时候会跟随旋转"。
-            RotationToggleButton(
-                autoRotate = autoRotate,
-                onToggle = {
-                    tick()
-                    onToggleAutoRotate()
+        if (!tiny) {
+            PlayerPanelToggles(
+                showLyrics = showLyrics,
+                showQueue = showQueue,
+                isInLibrary = isInLibrary,
+                lyricsUnavailable = lyricsUnavailable,
+                onToggleLyrics = onToggleLyrics,
+                onToggleQueue = onToggleQueue,
+                onAddToLibrary = onAddToLibrary,
+                toggleBtn = toggleBtn,
+                toggleIcon = toggleIcon,
+                modifier = Modifier.fillMaxWidth(),
+                extraContent = {
+                    // P1：大屏幕模式入口。同一槽位在横屏大屏下变成"退出大屏"。
+                    Box(
+                        modifier = Modifier
+                            .size(toggleBtn)
+                            .clickable {
+                                tick()
+                                onToggleBigScreen()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        MetroIcon(
+                            imageVector = if (bigScreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                            contentDescription = if (bigScreen) strings.bigScreenExit else strings.bigScreenEnter,
+                            tint = if (bigScreen) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
+                            sizeDp = toggleIcon
+                        )
+                    }
+                    // v1.8.0 · T4：自动旋转开关（竖屏入口）。
+                    RotationToggleButton(
+                        autoRotate = autoRotate,
+                        onToggle = {
+                            tick()
+                            onToggleAutoRotate()
+                        },
+                        size = toggleBtn,
+                        iconSize = toggleIcon,
+                        contentDescription = if (autoRotate) strings.autoRotateOn else strings.autoRotateOff,
+                    )
                 },
-                size = toggleBtn,
-                iconSize = toggleIcon,
-                contentDescription = if (autoRotate) strings.autoRotateOn else strings.autoRotateOff,
             )
         }
+    }
+}
+
+/**
+ * 歌词 / 队列 / 收藏三个面板切换，底部切换行与 Tiny 顶栏**共用同一实现**。
+ *
+ * 拆出来的理由：Tiny 把这一行移进顶栏后，如果复制一份，图标尺寸/命中区/歌词不可用
+ * 置灰语义就会两处分叉 —— 那正是「小屏不裁按钮」最容易退化成「小屏少功能」的地方。
+ */
+@Composable
+fun PlayerPanelToggles(
+    showLyrics: Boolean,
+    showQueue: Boolean,
+    isInLibrary: Boolean,
+    lyricsUnavailable: Boolean,
+    onToggleLyrics: () -> Unit,
+    onToggleQueue: () -> Unit,
+    onAddToLibrary: () -> Unit,
+    toggleBtn: Dp,
+    toggleIcon: Dp,
+    modifier: Modifier = Modifier,
+    /** 常规底栏额外挂载的入口（大屏 / 自动旋转）；Tiny 顶栏不传，避免挤掉标题。 */
+    extraContent: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null,
+) {
+    val strings = LocalStrings.current
+    val haptic = LocalHapticFeedback.current
+    fun tick() = haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    Row(modifier, horizontalArrangement = Arrangement.SpaceEvenly) {
+        Box(
+            modifier = Modifier
+                .size(toggleBtn)
+                .clickable(enabled = !lyricsUnavailable) {
+                    tick()
+                    onToggleLyrics()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            MetroIcon(
+                imageVector = Icons.Default.Lyrics,
+                contentDescription = strings.lyricsButton,
+                tint = if (lyricsUnavailable) LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f)
+                else if (showLyrics) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
+                sizeDp = toggleIcon
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(toggleBtn)
+                .clickable {
+                    tick()
+                    onToggleQueue()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            MetroIcon(
+                imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                contentDescription = strings.queueButton,
+                tint = if (showQueue) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
+                sizeDp = toggleIcon
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(toggleBtn)
+                .clickable {
+                    tick()
+                    onAddToLibrary()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            MetroIcon(
+                imageVector = if (isInLibrary) Icons.Default.Check else Icons.Default.Add,
+                contentDescription = strings.addToLibraryButton,
+                tint = if (isInLibrary) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
+                sizeDp = toggleIcon
+            )
+        }
+        extraContent?.invoke(this)
     }
 }
 
@@ -635,6 +713,8 @@ fun PlayerQualityChip(
     maxHeightDp: Dp = 400.dp,
     horizontalAlignment: Alignment.Horizontal = Alignment.End,
     minHitHeightDp: Dp = 48.dp,
+    // 可空以保持玩家大屏左栏等既有调用点零改动；传了就显示「试听」。
+    trialFlow: StateFlow<Boolean>? = null,
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -664,7 +744,8 @@ fun PlayerQualityChip(
                 qualityIndexFlow = qualityIndexFlow,
                 qualityStatusFlow = qualityStatusFlow,
                 qualityBitrateFlow = qualityBitrateFlow,
-                options = options
+                options = options,
+                trialFlow = trialFlow,
             )
         }
         MetroSelectorFlyout(
@@ -694,7 +775,7 @@ private fun shouldHintFlacUnsupported(index: Int): Boolean {
 
 @Composable
 private fun PositionText(positionFlow: StateFlow<Long>, modifier: Modifier) {
-    val position by positionFlow.collectAsState()
+    val position by positionFlow.collectAsStateWithLifecycle()
     MetroText(
         formatDuration(position),
         color = LocalMetroColors.current.onSurfaceVariant,
@@ -705,7 +786,7 @@ private fun PositionText(positionFlow: StateFlow<Long>, modifier: Modifier) {
 
 @Composable
 private fun DurationText(durationFlow: StateFlow<Long>, modifier: Modifier) {
-    val duration by durationFlow.collectAsState()
+    val duration by durationFlow.collectAsStateWithLifecycle()
     MetroText(
         formatDuration(duration),
         color = LocalMetroColors.current.onSurfaceVariant,
@@ -726,14 +807,19 @@ fun PlayerQualityLabel(
     qualityIndexFlow: StateFlow<Int>,
     qualityStatusFlow: StateFlow<QualityStatus>,
     qualityBitrateFlow: StateFlow<Long>,
-    options: List<String>
+    options: List<String>,
+    trialFlow: StateFlow<Boolean>? = null,
 ) {
-    val qualityIndex by qualityIndexFlow.collectAsState()
-    val status by qualityStatusFlow.collectAsState()
+    val qualityIndex by qualityIndexFlow.collectAsStateWithLifecycle()
+    // 试听片段没有"实际档位"可言：显示档位名会让用户以为音质设置生效了。
+    val trialStateFlow = remember(trialFlow) { trialFlow ?: MutableStateFlow(false) }
+    val isTrial by trialStateFlow.collectAsStateWithLifecycle()
+    val status by qualityStatusFlow.collectAsStateWithLifecycle()
     // 码率是**叶子自己** collect 的第三个流（不是从上层传值下来的）：
     // 换歌时只有这一小块文字重组，控制栏的按钮 / 进度条一行都不动。
-    val bitrate by qualityBitrateFlow.collectAsState()
-    val label = options.getOrElse(qualityIndex) { options.getOrElse(3) { "" } }
+    val bitrate by qualityBitrateFlow.collectAsStateWithLifecycle()
+    val label = if (isTrial) LocalStrings.current.trialBadge
+    else options.getOrElse(qualityIndex) { options.getOrElse(3) { "" } }
     // A3：状态按实际文件参数（br/type）判定，不再按 level 序号 —— 明确区分
     // 「无权限」「该曲无此档位」「真实降级」，避免把"其实在播 Hi-Res"或
     // "沉浸声换格式"误报成「已降级」。
@@ -783,4 +869,25 @@ fun PlayerQualityLabel(
             )
         }
     }
+}
+
+
+/**
+ * 迷你条上的音质徽标位：只在试听片段时显示「试听」。
+ *
+ * 单独做成叶子 Composable 让 [trialFlow] 的订阅只重组这一个 Text——
+ * 迷你条挂在 PlayerCard 的常驻子树上，在那里 collect 会让整条随切歌重组。
+ */
+@Composable
+fun TrialBadge(trialFlow: StateFlow<Boolean>, modifier: Modifier = Modifier) {
+    val isTrial by trialFlow.collectAsState()
+    if (!isTrial) return
+    MetroText(
+        LocalStrings.current.trialBadge,
+        color = LocalMetroColors.current.primary,
+        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier
+    )
 }

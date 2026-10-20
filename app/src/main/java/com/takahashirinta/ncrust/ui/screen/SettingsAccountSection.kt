@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.BuildConfig
+import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
@@ -53,6 +54,7 @@ import com.takahashirinta.ncrust.ui.components.QrLoginDialog
 import com.takahashirinta.ncrust.ui.components.SectionTitle
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
+import com.takahashirinta.ncrust.ui.components.vipStatusText
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
 import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
@@ -103,6 +105,10 @@ internal fun SettingsAccountPage(
     val context = LocalContext.current
     val strings = LocalStrings.current
     val coroutineScope = rememberCoroutineScope()
+    // 账号二级页是扫码登录 / 主动退出的真实入口，必须与全局会话状态同源：
+    // 否则从这一页扫码成功后首页横幅仍显示「登录已失效」。
+    val sessionState by SessionMonitor.state.collectAsState()
+    val vipText = vipStatusText(strings, sessionState)
 
     var showAccountDialog by remember { mutableStateOf(false) }
     var showQrLogin by remember { mutableStateOf(false) }
@@ -129,6 +135,8 @@ internal fun SettingsAccountPage(
                 if (profile.userId == 0L) {
                     CookieManager.clearCookie(context)
                     RetrofitClient.updateCookie(null)
+                    // cookie 判定过期 = 301 语义：让 SessionMonitor 一并转 Expired。
+                    SessionMonitor.reportApiCode(301)
                     // v2.1.4：cookie 判定过期时会员缓存同样失效（理由见下方登出处）。
                     com.takahashirinta.ncrust.auth.NeteaseVipStore.clear(context)
                     hasCookie = false
@@ -176,6 +184,7 @@ internal fun SettingsAccountPage(
                             notLoggedInText = strings.notLoggedIn,
                             loginHintText = strings.loginHint,
                             uidLabel = strings.uidLabel(userProfile?.userId?.toString() ?: ""),
+                            vipText = vipText,
                             onClick = {
                                 when {
                                     hasCookie -> showAccountDialog = true
@@ -284,6 +293,7 @@ internal fun SettingsAccountPage(
             onLogout = {
                 CookieManager.clearCookie(context)
                 RetrofitClient.updateCookie(null)
+                SessionMonitor.onLoggedOut(context)
                 // v2.1.4：会员缓存也必须一起清 —— 它决定搜索排序，
                 // 留着会让下一个登录的账号按**上一个账号**的会员状态排序。
                 com.takahashirinta.ncrust.auth.NeteaseVipStore.clear(context)
@@ -304,6 +314,7 @@ internal fun SettingsAccountPage(
             onLoginSuccess = { cookie ->
                 CookieManager.saveCookie(context, cookie)
                 RetrofitClient.updateCookie(cookie)
+                SessionMonitor.onLoginSucceeded(context)
                 hasCookie = true
                 showQrLogin = false
                 loadProfile()
@@ -325,6 +336,7 @@ internal fun ProfileBlock(
     notLoggedInText: String,
     loginHintText: String,
     uidLabel: String,
+    vipText: String? = null,
     onClick: () -> Unit
 ) {
     val strings = LocalStrings.current
@@ -389,6 +401,16 @@ internal fun ProfileBlock(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (vipText != null) {
+                        Spacer(Modifier.height(2.dp))
+                        MetroText(
+                            vipText,
+                            color = LocalMetroColors.current.onSurfaceVariant,
+                            style = LocalMetroTypography.current.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 else -> {
                     MetroText(

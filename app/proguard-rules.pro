@@ -31,6 +31,10 @@
 -keep class com.takahashirinta.ncrust.network.** { *; }
 -keep class com.takahashirinta.ncrust.network.model.** { *; }
 -keep class com.takahashirinta.ncrust.lyric.** { *; }
+# 权益模型（移植 981e9b3）：AccountGetResponse / VipInfoResponse / PlaybackItem 由 Gson 解析；
+# SongPrivilege 随队列 / 收藏经 Gson 落盘（network.** 已整包 keep，这里 keep 判定与响应模型，
+# 免得 R8 剪掉反射字段后判定永远读到 null）。
+-keep class com.takahashirinta.ncrust.account.** { *; }
 # v2.2.0：歌单缓存 DTO 与编解码。**这一条是真的踩过坑才加的** ——
 # playlist.** 在没有 keep 时，R8 会丢掉 DTO 字段的泛型签名 attribute，
 # 导致 Gson 把 List<PlaylistDto> 当成裸 List、元素反序列化成 LinkedTreeMap，

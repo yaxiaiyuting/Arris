@@ -88,6 +88,7 @@ internal fun PlayerCardTray(
     haptic: HapticFeedback,
     lyricsFlow: StateFlow<List<LrcLine>>,
     positionFlow: StateFlow<Long>,
+    trialFlow: StateFlow<Boolean>,
     onExpand: () -> Unit,
     onExpandToLyrics: () -> Unit,
     onPlayPrevious: () -> Unit,
@@ -143,6 +144,7 @@ internal fun PlayerCardTray(
                     strings = strings,
                     lyricsFlow = lyricsFlow,
                     positionFlow = positionFlow,
+                    trialFlow = trialFlow,
                     onExpandToLyrics = onExpandToLyrics,
                     onArtistClick = onArtistClick,
                 )
@@ -180,6 +182,7 @@ private fun RowScope.TrayInfoColumn(
     strings: Strings,
     lyricsFlow: StateFlow<List<LrcLine>>,
     positionFlow: StateFlow<Long>,
+    trialFlow: StateFlow<Boolean>,
     onExpandToLyrics: () -> Unit,
     onArtistClick: (SongItem) -> Unit,
 ) {
@@ -247,6 +250,9 @@ private fun RowScope.TrayInfoColumn(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 试听片段在迷你条也要可见：只靠展开态角标会让「为什么 45 秒就停」
+            // 在收起态完全无解释。TrialBadge 自己 collect，false 时不挂节点。
+            TrialBadge(trialFlow = trialFlow, modifier = Modifier.padding(end = 6.dp))
             val artist = song.artists?.firstOrNull()
             if (artist != null) {
                 MetroText(

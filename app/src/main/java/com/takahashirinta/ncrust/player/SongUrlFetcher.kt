@@ -18,6 +18,9 @@ import android.os.Build
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
+import com.takahashirinta.ncrust.account.FreeTrialInfo
+import com.takahashirinta.ncrust.account.FreeTrialPrivilege
+import com.takahashirinta.ncrust.account.PlaybackItem
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.network.ClientIdentity
 import com.takahashirinta.ncrust.network.RetrofitClient
@@ -73,6 +76,19 @@ data class SongUrlResult(
      * 缓存仍按既有的 5 分钟常量判新鲜。
      */
     val expiresAtMs: Long? = null,
+    /**
+     * 一次取链的**权益判定字段**（移植 981e9b3）。
+     *
+     * 只在 ncm 取链成功时非空；QQ / B 站 / 离线缓存兜底都为 null。上层据此区分
+     * 「45 秒试听」「可完整播放」「账号封顶」，拿不到就**不判定**（保持既有行为）。
+     */
+    val playbackItem: PlaybackItem? = null,
+    /**
+     * FLAC 门控之后**实际会发出去的第一档**。与 [actualLevel]（服务端标签）不同：
+     * 设备解不了 FLAC 时请求 lossless 会从 exhigh 起，判定 capped 必须用这一档，
+     * 否则设备原因会被误算成账号权限不足。
+     */
+    val requestedLevel: String? = null,
 )
 
 object SongUrlFetcher {
@@ -81,6 +97,18 @@ object SongUrlFetcher {
     private const val SONG_DETAIL_PATH = "/eapi/v3/song/detail"
 
     private val FLAC_TIERS = setOf("lossless", "hires", "jyeffect", "jymaster")
+
+    /**
+     * 每个 songId 的**最后一次**取链响应项。所有档位都失败时 `fetch` 仍按 Arris 既有契约
+     * 返回 null（SourceRouter / ResolveFailure 都依赖这个契约），但上层需要原因，
+     * 所以把最后一项留在这里供 [lastPlaybackItem] 读取。
+     *
+     * 只保留最近 128 首：这是诊断/判定辅助，不是播放状态，不参与持久化。
+     */
+    private val lastItems = java.util.concurrent.ConcurrentHashMap<Long, PlaybackItem>()
+
+    /** 最近一次取链的响应项；没有（纯网络失败）返回 null。 */
+    fun lastPlaybackItem(songId: Long): PlaybackItem? = lastItems[songId]
 
     /**
      * 平台自带的 FLAC **解码**器（API 27+ 才有）。
@@ -152,6 +180,9 @@ object SongUrlFetcher {
             "standard" -> listOf("standard")
             else       -> listOf(level, "lossless", "exhigh", "higher", "standard")
         }
+        // 门控之后真正会发出去的第一档（判定 capped 用它，不用用户偏好档位）。
+        val requestedLevel = fallbackLevels.firstOrNull { it !in FLAC_TIERS || deviceCanDecodeFlac }
+            ?: level
 
         for (tryLevel in fallbackLevels) {
             // 设备解不了 FLAC 时,flac 档位取来也是无声,直接跳到 mp3 档。
@@ -168,14 +199,19 @@ object SongUrlFetcher {
                     extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie())
                 )
                 val body = response.body?.string() ?: continue
-                Log.d(TAG, "eapi response ($tryLevel): $body")
+                // 不再打印响应体：里面带签名的 URL 不该进 logcat（移植 981e9b3）。
+                Log.d(TAG, "eapi response level=$tryLevel len=${body.length}")
                 val json = JSONObject(body)
                 val data = json.optJSONArray("data") ?: continue
                 if (data.length() > 0) {
                     val obj = data.getJSONObject(0)
-                    val code = obj.optInt("code", 200)
-                    val url = obj.optString("url")
-                    val actualLevel = obj.optString("level", tryLevel)
+                    val item = parseItem(obj)
+                    // 最后一次响应项：全档位失败时上层靠它区分版权/会员/登录。
+                    if (lastItems.size > 128) lastItems.clear()
+                    lastItems[songId] = item
+                    val code = item.code ?: 200
+                    val url = item.url
+                    val actualLevel = item.level ?: tryLevel
                     // type/br 用于诊断:type 是实际容器(mp3/flac/mp4),br 是码率,
                     // 出现"有进度没声音"时靠这两项判断拿到的到底是不是预期的文件。
                     val type = obj.optString("type", "")
@@ -197,6 +233,8 @@ object SongUrlFetcher {
                     // 才能把「同一首歌 + 同一档位」的所有轮换 URL 认成同一份缓存。
                     return@withContext SongUrlResult(
                         OfflineKeys.withKey(url, songId, actualLevel), actualLevel, br, type, songMaxLevel,
+                        playbackItem = item,
+                        requestedLevel = requestedLevel,
                     )
                 }
             } catch (e: Exception) {
@@ -242,6 +280,44 @@ object SongUrlFetcher {
     }
 
     private val songMaxLevelCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
+
+    /**
+     * `data[0]` → 判定模型。只取判定用得上的字段。
+     *
+     * 字符串字段必须走 [optStringOrNull]：无版权响应里是 `"url": null`，而 `optString`
+     * 对 JSON null 的处理在不同 org.json 实现下并不一致（有的回退默认值，有的返回字面量
+     * "null"）。一旦读成 "null"，判定就把"没有 url"看成"有 url"，无版权的歌会被当可播。
+     */
+    private fun parseItem(obj: JSONObject): PlaybackItem {
+        val trial = if (obj.isNull("freeTrialInfo")) null else obj.optJSONObject("freeTrialInfo")?.let {
+            FreeTrialInfo(start = it.optInt("start", 0), end = it.optInt("end", 0))
+        }
+        val trialPrivilege = if (obj.isNull("freeTrialPrivilege")) null else
+            obj.optJSONObject("freeTrialPrivilege")?.let {
+                FreeTrialPrivilege(
+                    resConsumable = it.optBoolean("resConsumable", false),
+                    userConsumable = it.optBoolean("userConsumable", false),
+                    cannotListenReason = if (it.isNull("cannotListenReason")) null
+                        else it.optInt("cannotListenReason", 0),
+                    freeLimitTagType = optStringOrNull(it, "freeLimitTagType")
+                )
+            }
+        return PlaybackItem(
+            url = optStringOrNull(obj, "url"),
+            code = obj.optInt("code", 200),
+            level = optStringOrNull(obj, "level"),
+            // 缺 fee 与 fee=0 是两件事：缺字段时不要伪造一个"免费"结论。
+            fee = if (obj.isNull("fee")) null else obj.optInt("fee", 0),
+            freeTrialInfo = trial,
+            freeTrialPrivilege = trialPrivilege
+        )
+    }
+
+    /** JSON null / 缺字段 / 空串 / 字面量 "null" 一律返回 null。 */
+    private fun optStringOrNull(obj: JSONObject, key: String): String? {
+        if (obj.isNull(key)) return null
+        return obj.optString(key, "").takeIf { it.isNotEmpty() && it != "null" }
+    }
 
     /**
      * A1：把「请求档位 / 服务端给的 level 字符串 / 实际文件参数」分开打出来，供真机实测比对

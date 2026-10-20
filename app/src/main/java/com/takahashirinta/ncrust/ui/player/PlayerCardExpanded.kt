@@ -95,6 +95,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.player.SongUrlFetcher
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.musicSource
+import com.takahashirinta.ncrust.ui.HeightClass
+import com.takahashirinta.ncrust.ui.LocalHeightClass
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
 import com.takahashirinta.ncrust.ui.player.motion.MotionClock
@@ -163,10 +165,57 @@ internal fun ColumnScope.PlayerCardExpanded(
     screenWidthPx: Float,
     /** 自动旋转开关（大屏左栏那一行的入口）。 */
     autoRotate: Boolean,
+    /** 卡片收起时冻结的位置 / 进度（PlayerCard 的 rememberGatedFlow）。 */
+    positionFlow: kotlinx.coroutines.flow.StateFlow<Long>,
+    progressFlow: kotlinx.coroutines.flow.StateFlow<Float>,
 ) {
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
             val s = song!!
+            val heightClass = LocalHeightClass.current
+            val tinyPlayer = !geo.usesSideCover && heightClass == HeightClass.Tiny
+            // 底部切换行与 Tiny 顶栏使用同一组回调，保留歌词重试与收藏即时刷新行为。
+            val onToggleLyricsAction: () -> Unit = {
+                val nowReady = lyricsReady
+                ui.showLyrics = !ui.showLyrics
+                ui.showQueue = false
+                // 未就绪(失败/尚未成功)时点击 = 触发一次重新加载，不必切歌才能恢复歌词。
+                if (!nowReady && !lyricsLoading) playerViewModel.retryLyrics()
+            }
+            val onToggleQueueAction: () -> Unit = {
+                ui.showQueue = !ui.showQueue
+                ui.showLyrics = false
+            }
+            val onAddToLibraryAction: () -> Unit = {
+                val cur = song
+                if (cur != null) {
+                    // 已在库 → 移出; 不在库 → 收藏。本地即时生效, 云端异步同步。
+                    // v2.6.0 · P0：两个动作都按**真实结果**提示，不再无条件弹成功。
+                    if (LibraryManager.isSongSaved(context, cur.id)) {
+                        if (LibraryManager.removeSong(context, cur.id)) {
+                            Toast.makeText(context, strings.removedFromLibrary, Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        if (LibraryManager.saveSong(context, cur).isSuccess) {
+                            Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    ui.libraryTick++
+                }
+            }
+            val panelToggles: @Composable (Dp, Dp) -> Unit = { btn, icon ->
+                PlayerPanelToggles(
+                    showLyrics = ui.showLyrics,
+                    showQueue = ui.showQueue,
+                    isInLibrary = isSongSaved,
+                    lyricsUnavailable = lyricsUnavailable,
+                    onToggleLyrics = onToggleLyricsAction,
+                    onToggleQueue = onToggleQueueAction,
+                    onAddToLibrary = onAddToLibraryAction,
+                    toggleBtn = btn,
+                    toggleIcon = icon,
+                )
+            }
 
             // 底部播放控件（窄屏整宽 / 宽屏左栏共用）。常挂载，alpha 只在 draw 阶段调。
             val playerControls: @Composable () -> Unit = {
@@ -188,46 +237,20 @@ internal fun ColumnScope.PlayerCardExpanded(
                     isPlaying = isPlaying,
                     showLyrics = ui.showLyrics,
                     showQueue = ui.showQueue,
-                    progressFlow = playerViewModel.progress,
-                    positionFlow = playerViewModel.currentPosition,
+                    progressFlow = progressFlow,
+                    positionFlow = positionFlow,
                     durationFlow = playerViewModel.duration,
                     qualityIndexFlow = playerViewModel.currentQualityIndex,
                     qualityStatusFlow = playerViewModel.qualityStatus,
                     qualityBitrateFlow = playerViewModel.currentBitrate,
                     qualityOptions = strings.qualityOptions,
+                    trialFlow = playerViewModel.currentIsTrial,
                     onPlayPause = callbacks.onPlayPause,
                     onPlayPrevious = callbacks.onPlayPrevious,
                     onPlayNext = callbacks.onPlayNext,
-                    onToggleLyrics = {
-                        val nowReady = lyricsReady
-                        ui.showLyrics = !ui.showLyrics
-                        ui.showQueue = false
-                        // 未就绪(失败/尚未成功)时点击 = 触发一次重新加载，
-                        // 不必切歌才能恢复歌词。
-                        if (!nowReady && !lyricsLoading) playerViewModel.retryLyrics()
-                    },
-                    onToggleQueue = {
-                        ui.showQueue = !ui.showQueue
-                        ui.showLyrics = false
-                    },
-                    onAddToLibrary = {
-                        val cur = song
-                        if (cur != null) {
-                            // 已在库 → 移出; 不在库 → 收藏。本地即时生效, 云端异步同步。
-                            // v2.6.0 · P0：两个动作都按**真实结果**提示，不再无条件弹成功
-                            // （旧代码里 removeSong/saveSong 都返回 Unit，提示与事实脱钩）。
-                            if (LibraryManager.isSongSaved(context, cur.id)) {
-                                if (LibraryManager.removeSong(context, cur.id)) {
-                                    Toast.makeText(context, strings.removedFromLibrary, Toast.LENGTH_SHORT).show()
-                                }
-                            } else {
-                                if (LibraryManager.saveSong(context, cur).isSuccess) {
-                                    Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            ui.libraryTick++
-                        }
-                    },
+                    onToggleLyrics = onToggleLyricsAction,
+                    onToggleQueue = onToggleQueueAction,
+                    onAddToLibrary = onAddToLibraryAction,
                     isInLibrary = isSongSaved,
                     isBufferingFlow = playerViewModel.isBuffering,
                     onSeek = { fraction ->
@@ -240,7 +263,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                     previousEnabled = playMode != QueueModes.INFINITY,
                     // 大屏模式也用扁平横向控制条（竖屏那套大按钮堆叠在 300dp 高里放不下）。
                     landscape = geo.usesSideCover,
-                    compact = geo.usesSideCover,
+                    compact = geo.usesSideCover || heightClass != HeightClass.Regular,
+                    tiny = tinyPlayer,
                     // 大屏把音质搬到左栏就地选择器，控制条右端不再重复一个音质角标。
                     showQuality = !geo.bigScreenActive,
                     // 大屏幕模式开关（入口/出口同一个回调、同一个图标语义）。
@@ -318,7 +342,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 showTranslation = showLyricsTranslation,
                                 romanizedLyrics = romanizedLyrics,
                                 showRomanization = showLyricsRomanization,
-                                positionFlow = playerViewModel.currentPosition,
+                                positionFlow = positionFlow,
                                 isPlaying = isPlaying,
                                 isVisible = ui.showLyrics,
                                 forcedLocateTrigger = ui.lyricLocateTrigger,
@@ -471,6 +495,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                     strings = strings,
                     progress = progress,
                     isPlaying = isPlaying,
+                    tiny = tinyPlayer,
+                    panelToggles = panelToggles,
                     haptic = haptic,
                     gestureNavLiftDp = gestureNavLiftDp,
                     controlsCollapseDrag = controlsCollapseDrag,

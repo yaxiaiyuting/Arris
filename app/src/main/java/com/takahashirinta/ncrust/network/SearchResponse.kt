@@ -147,6 +147,14 @@ data class SongItem(
 data class SongPrivilege(
     @SerializedName("st") val st: Int? = null,
     @SerializedName("pl") val pl: Int? = null,
+    /**
+     * 付费类型（v3.5 / 移植 981e9b3）：`1` = VIP 专享，`4` = 数字专辑。
+     *
+     * 可空 + 默认值：Gson 走 Unsafe 反序列化，老队列里的 `privilege` 没有这个 key。
+     * 判定时优先用歌曲详情的 `privilege.fee`，没有才退回取链响应项的 `fee`
+     * （见 `account.classifyPlayback`）。
+     */
+    @SerializedName("fee") val fee: Int? = null,
 )
 
 /**
