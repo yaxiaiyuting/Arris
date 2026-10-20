@@ -20,6 +20,7 @@ import com.takahashirinta.ncrust.player.SongUrlResult
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.MusicSourceProvider
 import com.takahashirinta.ncrust.source.SourceRouter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,41 +59,52 @@ object QqMusicSourceProvider : MusicSourceProvider {
         limit: Int,
         page: Int,
         totalOut: MutableMap<String, Int>?,
-    ): List<SongItem> =
+    ): List<SongItem> {
         // v3.4.12：总数从**同一次**搜索响应里取（`QqApi.searchSongs` 的出参）——
         // v3.4.11 曾为它单独发一次请求，设备实测把 QQ 这条腿顶过了 5 秒预算、
         // 导致「只有 qq 音乐超时」。**显示用的数字不许有自己的网络往返。**
-        runCatching { QqApi.searchSongs(keyword, limit, page, totalOut) }
-            .onFailure { Log.w(TAG, "search failed", it) }
-            .getOrDefault(emptyList())
-            .also { results ->
-                // v2.1.5 · 探针：把 QQ 侧的搜索结果（身份三件套 + 标题）打到 logcat。
-                //
-                // 存在的理由：跨源切歌的验收要求「QQ ↔ ncm 混合队列连续切换」，
-                // 而**构造这样一条队列需要真实的 (songid, songmid, media_mid)** ——
-                // songmid 只从 QQ 服务端来，界面上又不显示。没有这条日志，
-                // 真机验证就只能靠反复点搜索结果猜哪一条是 QQ 的（列表只有 QQ 行带角标，
-                // 且聚合结果里 QQ 的 30 条排在 ncm 的 30 条之后）。
-                //
-                // 它与 [com.takahashirinta.ncrust.source.TrackKey] 的 `toString()` 同形，
-                // 所以日志里一眼就能对上「起播的是谁 / 请求为谁发的」。
-                // 只读、只在 debug 包出现、不改变任何行为（`also` 不碰返回值）。
-                if (BuildConfig.DEBUG) {
-                    Log.d(
-                        TAG,
-                        "search '$keyword' -> ${results.size} hits: " + results.take(8).joinToString(
-                            " | "
-                        ) { s ->
-                            "qqmusic:${s.id} mid=${s.sourceId} media=${s.mediaId} '${s.name}'"
-                        }
-                    )
+        val results = try {
+            QqApi.searchSongs(keyword, limit, page, totalOut)
+        } catch (e: CancellationException) {
+            // 取消是控制流，不是「搜索失败」。吞掉会让上层把取消当成空结果/异常。
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "search failed", e)
+            emptyList()
+        }
+        // v2.1.5 · 探针：把 QQ 侧的搜索结果（身份三件套 + 标题）打到 logcat。
+        //
+        // 存在的理由：跨源切歌的验收要求「QQ ↔ ncm 混合队列连续切换」，
+        // 而**构造这样一条队列需要真实的 (songid, songmid, media_mid)** ——
+        // songmid 只从 QQ 服务端来，界面上又不显示。没有这条日志，
+        // 真机验证就只能靠反复点搜索结果猜哪一条是 QQ 的（列表只有 QQ 行带角标，
+        // 且聚合结果里 QQ 的 30 条排在 ncm 的 30 条之后）。
+        //
+        // 它与 [com.takahashirinta.ncrust.source.TrackKey] 的 `toString()` 同形，
+        // 所以日志里一眼就能对上「起播的是谁 / 请求为谁发的」。
+        // 只读、只在 debug 包出现、不改变任何行为。
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "search '$keyword' -> ${results.size} hits: " + results.take(8).joinToString(
+                    " | "
+                ) { s ->
+                    "qqmusic:${s.id} mid=${s.sourceId} media=${s.mediaId} '${s.name}'"
                 }
-            }
+            )
+        }
+        return results
+    }
 
     override suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult? =
-        runCatching { QqApi.fetchPlayUrl(song, level) }
-            .onFailure { Log.w(TAG, "resolveUrl failed for id=${song.id}", it) }
-            .getOrNull()
+        try {
+            QqApi.fetchPlayUrl(song, level)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveUrl failed for id=${song.id}", e)
+            null
+        }
 
     /**
      * v3.2.0 · P0：**带失败分类**的取链。播放链走这一条。
@@ -105,11 +117,14 @@ object QqMusicSourceProvider : MusicSourceProvider {
      * 绝不归 [ResolveFailureKind.UNRESOLVABLE]（会跳歌）。
      */
     override suspend fun resolveUrlOutcome(song: SongItem, level: String): ResolveOutcome =
-        runCatching { QqApi.resolveOutcome(song, level) }
-            .onFailure { Log.w(TAG, "resolveUrlOutcome failed for id=${song.id}", it) }
-            .getOrElse {
-                ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, MusicSource.QQMUSIC)
-            }
+        try {
+            QqApi.resolveOutcome(song, level)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveUrlOutcome failed for id=${song.id}", e)
+            ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, MusicSource.QQMUSIC)
+        }
 
     /**
      * 元数据补全：QQ 侧没有「按 id 批量取详情」的轻量端点（取详情要走完整曲库接口），
@@ -186,12 +201,18 @@ object QqMusicSourceProvider : MusicSourceProvider {
     private fun maybeRefreshLogin(context: Context) {
         if (!QqTokenRefresher.canRefresh(context)) return
         // 同步的窗口检查：把「每次冷启动都起一个协程去发现无事可做」也省掉。
-        val remaining = QqTokenRefresher.remainingSeconds(context) ?: return
-        if (remaining > QqRefreshCredential.REFRESH_MARGIN_SECONDS) return
+        if (!QqTokenRefresher.needsRefresh(context)) return
         val app = context.applicationContext
         refreshScope.launch {
-            runCatching { QqTokenRefresher.refreshIfNeeded(app) }
-                .onFailure { Log.w(TAG, "冷启动续期失败", it) }
+            try {
+                QqTokenRefresher.refreshIfNeeded(app)
+            } catch (e: CancellationException) {
+                // 取消不是失败，必须继续向上传播；吞掉会让「退出/销毁」变成一条错误日志，
+                // 还会让调用方误以为网络出了问题。
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "冷启动续期失败", e)
+            }
         }
     }
 }

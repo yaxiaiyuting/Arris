@@ -71,6 +71,39 @@ object QqAuthStore {
     /** 会员资料的内存缓存 TTL：10 分钟。UI 每次组合都读它，不能每次都发请求。 */
     private const val PROFILE_TTL_MS = 10 * 60 * 1000L
 
+    /**
+     * 登录态版本的单调计数器（进程内）。**只用于拒绝迟到的续期响应。**
+     *
+     * 为什么不是时间戳：时间戳只能表达「先后」，不能表达「是否发生过写」。一次续期请求
+     * 发出后，用户可能登出、同账号重登、换号 —— 这些都应当让旧响应作废；而如果只是
+     * 过了几秒，旧响应仍然可能是有效的。这里要的是「有没有人动过登录态」这个事实。
+     *
+     * 为什么不落盘：它保护的是**本进程内正在飞的请求**。进程被杀，请求与响应一起消失，
+     * 不存在「上一个进程的迟到响应」；重启后从 0 开始即可。
+     *
+     * 所有 cookie / 续期凭证的写入都必须经过 [withAuthLock] 并调用
+     * [noteAuthMutationLocked]。读写同一把锁 ⇒ 「检查当前状态 + 写入」是一个原子动作，
+     * 不会在两者之间被登录线程插进来。
+     */
+    private val authLock = Any()
+
+    @Volatile
+    private var authRevision: Long = 0L
+
+    /** 在登录态锁内执行一段代码（可重入）。 */
+    internal fun <T> withAuthLock(block: () -> T): T = synchronized(authLock, block)
+
+    /** 当前登录态版本（线程安全）。 */
+    fun currentAuthRevision(): Long = synchronized(authLock) { authRevision }
+
+    /** 已持有 [authLock] 时读取版本，避免在锁内再次同步。 */
+    internal fun authRevisionLocked(): Long = authRevision
+
+    /** 已持有 [authLock] 时登记一次登录态写入。 */
+    internal fun noteAuthMutationLocked() {
+        authRevision++
+    }
+
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -84,15 +117,20 @@ object QqAuthStore {
      * 与 `QqLoginOverlay` 的调用点）。续期凭证与 cookie 是同一个账号的两半，
      * 换了账号却留着上一份凭证，会让下一次续期把新账号的登录态换成旧账号的，
      * 而**全程不报任何错**。
+     *
+     * v3.4.13：写入在 [authLock] 内完成并推进 [authRevision]，让正在飞的续期响应
+     * 能被 [QqRefreshCommitGuard] 判成迟到。
      */
-    fun saveCookie(context: Context, cookie: String) {
+    fun saveCookie(context: Context, cookie: String) = withAuthLock {
         val merged = QqCookie.merge(getCookie(context), cookie)
         prefs(context).edit().putString(KEY_COOKIE, merged).apply()
+        noteAuthMutationLocked()
     }
 
     /** 覆盖式写入。只在「确认这份 cookie 就是完整登录态」（例如从备份导入）时用。 */
-    fun replaceCookie(context: Context, cookie: String) {
+    fun replaceCookie(context: Context, cookie: String) = withAuthLock {
         prefs(context).edit().putString(KEY_COOKIE, cookie).apply()
+        noteAuthMutationLocked()
     }
 
     fun getCookie(context: Context): String? =
@@ -110,8 +148,11 @@ object QqAuthStore {
      * 留着它等于给下一个账号留了一把上一个账号的钥匙 —— 而误用它的表现是
      * 「登录着 B、数据全是 A」，没有任何一行日志会提示这件事。
      * 两个清理写在同一个函数里，是为了让这条不变量由**结构**保证、而不是靠调用方记得。
+     *
+     * v3.4.13：整段清理在同一把锁内完成并推进版本；并发中的续期响应要么看到「已登出」，
+     * 要么看到「版本已变」，两条都会拒绝落盘。
      */
-    fun clear(context: Context) {
+    fun clear(context: Context) = withAuthLock {
         QqRefreshStore.clear(context)
         prefs(context).edit()
             .remove(KEY_COOKIE)
@@ -121,6 +162,7 @@ object QqAuthStore {
             .remove(KEY_VIP_EXPIRE)
             .remove(KEY_PROFILE_AT)
             .apply()
+        noteAuthMutationLocked()
     }
 
     // ---------- 资料 / 会员 ----------

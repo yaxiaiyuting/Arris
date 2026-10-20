@@ -34,7 +34,9 @@ import org.junit.Test
  *
  * 所以这里的判据全部是**协议契约**（字段名、参数名、码表），
  * 来源是 `L-1124/QQMusicApi` 的 `Credential` 模型与 `refresh_credential()` 的三套参数分支，
- * 以及本仓库已经落盘的真实 cookie 形状（`ncrust_qq_prefs` 样本，见 `QqCookieTest`）。
+ * 以及本仓库 `QqPhoneLoginTest` 里逐字保存的真实响应骨架。真实骨架用的是
+ * snake_case（`refresh_token` / `access_token` / `expired_at` / `refresh_key`），
+ * 旧版解析器只读 camelCase 的缺陷由下面的 snake_case / 两轮轮换用例钉住。
  */
 class QqRefreshCredentialTest {
 
@@ -55,6 +57,27 @@ class QqRefreshCredentialTest {
         .put("keyExpiresIn", 604800L)
         .put("needRefreshKeyIn", 86400L)
         .put("encryptUin", "encrypt-uin-value")
+
+    /**
+     * 服务端**真实响应骨架**的命名（与 `QqPhoneLoginTest` 的 35 字段样本同形）。
+     *
+     * 这里故意不写任何 camelCase 字段，确保解析器不是靠旧名字碰巧通过。
+     */
+    private fun snakeData(): JSONObject = JSONObject()
+        .put("musicid", 1152921504891728649L)
+        .put("str_musicid", "str-musicid-value")
+        .put("musickey", "musickey-snake")
+        .put("refresh_key", "refresh-key-snake")
+        .put("refresh_token", "refresh-token-snake")
+        .put("access_token", "access-token-snake")
+        .put("openid", "openid-snake")
+        .put("unionid", "unionid-snake")
+        .put("loginType", 1)
+        .put("expired_at", 1790882158L)
+        .put("musickeyCreateTime", 1790277358L)
+        .put("keyExpiresIn", 604800L)
+        .put("needRefreshKeyIn", 86400L)
+        .put("encryptUin", "encrypt-uin-snake")
 
     @Test
     fun `完整凭证的每个字段都被读出来`() {
@@ -79,6 +102,69 @@ class QqRefreshCredentialTest {
     @Test
     fun `data 为 null 返回 null——不存在半份凭证`() {
         assertNull(QqRefreshCredential.fromLoginData(null))
+    }
+
+    /**
+     * **真实响应骨架是 snake_case**（`QqPhoneLoginTest` 逐字保存的 35 字段样本）：
+     * `refresh_token` / `access_token` / `expired_at` / `refresh_key` / `str_musicid`。
+     *
+     * 旧解析器只读 camelCase，于是服务端下发的轮换 `refresh_token` 被丢掉；
+     * 第一次续期也许能成，下一次又拿旧值，最后照样掉登录。这条用例钉住两种命名都认。
+     */
+    @Test
+    fun `真实 snake_case 响应里的续期字段都能读出来`() {
+        val c = QqRefreshCredential.fromLoginData(snakeData())!!
+        assertEquals(1152921504891728649L, c.musicId)
+        assertEquals("str-musicid-value", c.strMusicId)
+        assertEquals("musickey-snake", c.musicKey)
+        assertEquals("refresh-key-snake", c.refreshKey)
+        assertEquals("refresh-token-snake", c.refreshToken)
+        assertEquals("access-token-snake", c.accessToken)
+        assertEquals("openid-snake", c.openId)
+        assertEquals("unionid-snake", c.unionId)
+        assertEquals(1790882158L, c.expiredAt)
+        assertEquals(1790277358L, c.keyCreatedAt)
+        assertEquals(604800L, c.keyExpiresIn)
+        assertEquals(QqRefreshCredential.LOGIN_TYPE_WECHAT, c.loginType)
+        assertTrue(c.loginTypeResolved)
+    }
+
+    /**
+     * 显式 `loginType=0`（手机号）是**一个确定的值**，不是「字段缺失」。
+     *
+     * 旧实现用 `takeIf { it > 0 } ?: infer`，把 0 推成 2（QQ），于是续期请求的
+     * `comm.tmeLoginType` 与参数分支一起错。参考实现只在键不存在时才推断。
+     */
+    @Test
+    fun `显式 loginType 0 原样保留而不是推成 QQ`() {
+        val c = QqRefreshCredential.fromLoginData(fullData().put("loginType", 0))!!
+        assertEquals(0, c.loginType)
+        assertTrue(c.loginTypeResolved)
+    }
+
+    @Test
+    fun `刷新响应缺 loginType 时保留 previous 的显式 0 而不是推成 QQ`() {
+        val c = QqRefreshCredential.fromLoginData(
+            fullData().apply { remove("loginType") },
+            previousLoginType = 0,
+        )!!
+        assertEquals(0, c.loginType)
+        assertTrue(c.loginTypeResolved)
+    }
+
+    @Test
+    fun `既无 loginType 又无 musickey 时不凭空推断成 QQ`() {
+        val c = QqRefreshCredential.fromLoginData(JSONObject())!!
+        assertEquals(0, c.loginType)
+    }
+
+    @Test
+    fun `loginType 是空串时按缺失处理而不是显式 0`() {
+        val c = QqRefreshCredential.fromLoginData(
+            fullData().put("loginType", ""),
+            previousLoginType = QqRefreshCredential.LOGIN_TYPE_QQ,
+        )!!
+        assertEquals(QqRefreshCredential.LOGIN_TYPE_QQ, c.loginType)
     }
 
     /**
@@ -241,6 +327,37 @@ class QqRefreshCredentialTest {
         assertFalse(c.isExpired(nowSeconds = expiry - margin))
     }
 
+    /**
+     * `needRefreshKeyIn` **不参与**主动续期调度。
+     *
+     * 它继续落盘/合并（`missingFields()` 仍用它判断服务端是否明确索要 refreshKey），
+     * 但「过 N 秒该换 refreshKey」没有服务端保证，参考实现也没有据此调度。
+     * 这条用例防止下一个人把字段名当协议：即使 hint 很早，也只有票据寿命的
+     * 12 小时窗口能触发主动刷新。
+     */
+    @Test
+    fun `needRefreshKeyIn 不参与主动续期调度`() {
+        val created = 1_000_000L
+        val sevenDays = 7L * 24 * 3600
+        val c = QqRefreshCredential(
+            keyCreatedAt = created,
+            keyExpiresIn = sevenDays,
+            needRefreshKeyIn = 3600L,
+        )
+        assertFalse(
+            "hint 到点不是调度依据",
+            c.needsRefresh(nowSeconds = created + 3600),
+        )
+        assertFalse(
+            "hint 远早于票据窗口也不刷",
+            c.needsRefresh(nowSeconds = created + sevenDays - QqRefreshCredential.REFRESH_MARGIN_SECONDS - 1),
+        )
+        assertTrue(
+            "仍按票据寿命的 12 小时窗口刷",
+            c.needsRefresh(nowSeconds = created + sevenDays - QqRefreshCredential.REFRESH_MARGIN_SECONDS),
+        )
+    }
+
     // ---------------- 合并 ----------------
 
     /**
@@ -306,17 +423,89 @@ class QqRefreshCredentialTest {
         assertEquals("new-k", merged.musicKey)
     }
 
+    /**
+     * **两轮回归**：第一轮响应轮换了 `refresh_token`，第二轮请求必须带**新值**。
+     *
+     * 这条不测「自己编的 camelCase」：输入用的是 `QqPhoneLoginTest` 里真实骨架的
+     * snake_case 命名。旧解析器读不到 `refresh_token`，第二轮会拿旧值 —— 也就是
+     * 用户报的「能续一次、之后照样掉」。
+     */
+    @Test
+    fun `两轮刷新：第一轮轮换的 snake_case refresh_token 会进入第二轮请求`() {
+        val first = QqRefreshCredential.fromLoginData(
+            snakeData().put("loginType", 0).put("refresh_token", "round-1-token"),
+        )!!
+        val second = QqRefreshCredential.fromLoginData(
+            snakeData()
+                .put("loginType", 0)
+                .put("musickey", "musickey-round-2")
+                .put("refresh_token", "round-2-token")
+                .put("access_token", "round-2-access")
+                .apply { remove("musickeyCreateTime") },
+            first.loginType,
+        )!!.withRefreshTimestamp(first, nowSeconds = 1_800_000_000L)
+        val merged = QqRefreshCredential.mergeWith(first, second)
+        val param = QqRequests.refreshCredential(merged, null).getJSONObject("param")
+        assertEquals("round-2-token", param.getString("refresh_token"))
+        assertEquals("round-2-access", param.getString("access_token"))
+        // 第二轮没给 refresh_key ⇒ 第一轮的值必须保留，否则下一次刷新就没钥匙了。
+        assertEquals("refresh-key-snake", param.getString("refresh_key"))
+        assertEquals(1_800_000_000L, merged.keyCreatedAt)
+    }
+
+    @Test
+    fun `显式 loginType 0 在合并时原样覆盖旧值`() {
+        val old = QqRefreshCredential(
+            musicId = 1L,
+            musicKey = "old",
+            loginType = QqRefreshCredential.LOGIN_TYPE_WECHAT,
+            loginTypeResolved = true,
+        )
+        val new = QqRefreshCredential.fromLoginData(fullData().put("loginType", 0))!!
+        val merged = QqRefreshCredential.mergeWith(old, new)
+        assertEquals(0, merged.loginType)
+        assertTrue(merged.loginTypeResolved)
+    }
+
+    /**
+     * 成功响应缺 `musickeyCreateTime` 时，只有**票据真的轮换**才允许把签发时间补成
+     * 本次完成时刻；同一张票原样返回时不许凭空延长寿命。
+     */
+    @Test
+    fun `缺签发时间时只在 musickey 轮换后补时间——同票不延寿`() {
+        val old = QqRefreshCredential(
+            musicId = 1L,
+            musicKey = "same-key",
+            keyCreatedAt = 1_000L,
+            keyExpiresIn = 600L,
+        )
+        val noTime = JSONObject()
+            .put("musicid", 1L)
+            .put("musickey", "same-key")
+            .put("loginType", 0)
+        val same = QqRefreshCredential.fromLoginData(noTime, 0)!!
+            .withRefreshTimestamp(old, nowSeconds = 9_999L)
+        assertEquals(0L, same.keyCreatedAt) // 不猜
+        assertEquals(1_000L, QqRefreshCredential.mergeWith(old, same).keyCreatedAt)
+
+        val rotated = QqRefreshCredential.fromLoginData(
+            noTime.put("musickey", "new-key"),
+            0,
+        )!!.withRefreshTimestamp(old, nowSeconds = 9_999L)
+        assertEquals(9_999L, rotated.keyCreatedAt)
+    }
+
+
     // ---------------- 请求体 ----------------
 
     /**
      * 续期请求的**形状契约**：同一个 `Login` 方法，只有 `loginMode` 从 1 换成 2。
      *
-     * 每个参数名都在这里钉死，因为写错了**服务端不会报参数错**，
-     * 只会回一个换不出票的 `data`（或者 `code=1000`）——
-     * 表现是「续期静默失败」，也就是用户报的那个 bug 换了个形式继续存在。
+     * 参考实现按 `login_type` 分三支；这里逐支断言「有自己那套、**没有**别人那套」。
+     * 写错参数名服务端不会报参数错，只会回一个换不出票的 `data`。
      */
     @Test
-    fun `续期请求体带齐并集参数且 loginMode 为 2`() {
+    fun `微信分支只带微信那一套参数`() {
         val cookie = "uin=1152921504891728649; qqmusic_uin=1152921504891728649; " +
             "qqmusic_key=W_X_abc; qm_keyst=W_X_abc; psrf_musickey_createtime=1790277358; " +
             "psrf_access_token_expiresAt=604800"
@@ -326,22 +515,62 @@ class QqRefreshCredentialTest {
         assertEquals(QqRequests.LOGIN_MODULE, request.getString("module"))
         assertEquals(QqRequests.LOGIN_METHOD, request.getString("method"))
         val param = request.getJSONObject("param")
-        // —— 开关：整条链路的关键 ——
         assertEquals(2, param.getInt("loginMode"))
         assertEquals(2, QqRequests.LOGIN_MODE_REFRESH)
-        // —— 身份 ——
+        assertEquals("openid-value", param.getString("openid"))
+        assertEquals("1152921504891728649", param.getString("str_musicid"))
+        assertEquals("unionid-value", param.getString("unionid"))
+        assertEquals(credential.musicKey, param.getString("musickey"))
+        assertEquals("refresh-key-value", param.getString("refresh_key"))
+        assertEquals("refresh-token-value", param.getString("refresh_token"))
+        // 微信支**不带**这三项；旧实现的「并集」会把它们一起发出去。
+        assertFalse(param.has("musicid"))
+        assertFalse(param.has("access_token"))
+        assertFalse(param.has("expired_in"))
+    }
+
+    @Test
+    fun `QQ 分支带 musicid 与 expired_in，不带 str_musicid 与 unionid`() {
+        val credential = QqRefreshCredential.fromLoginData(
+            fullData().put("loginType", 2).put("expired_at", 1790882158L),
+        )!!
+        val param = QqRequests.refreshCredential(credential, null).getJSONObject("param")
+        assertEquals(2, param.getInt("loginMode"))
+        assertEquals(1152921504891728649L, param.getLong("musicid"))
+        assertEquals("access-token-value", param.getString("access_token"))
+        assertEquals(1790882158L, param.getLong("expired_in"))
+        assertEquals("refresh-key-value", param.getString("refresh_key"))
+        assertFalse(param.has("str_musicid"))
+        assertFalse(param.has("unionid"))
+    }
+
+    @Test
+    fun `手机号 loginType 0 走参考实现的并集分支`() {
+        val credential = QqRefreshCredential.fromLoginData(fullData().put("loginType", 0))!!
+        val param = QqRequests.refreshCredential(
+            credential,
+            "uin=1152921504891728649; psrf_access_token_expiresAt=604800",
+        ).getJSONObject("param")
+        assertEquals(2, param.getInt("loginMode"))
         assertEquals(1152921504891728649L, param.getLong("musicid"))
         assertEquals("1152921504891728649", param.getString("str_musicid"))
         assertEquals("openid-value", param.getString("openid"))
         assertEquals("unionid-value", param.getString("unionid"))
-        // —— 上一张票 ——
-        assertEquals(credential.musicKey, param.getString("musickey"))
-        // —— 续期凭证 ——
-        assertEquals("refresh-key-value", param.getString("refresh_key"))
-        assertEquals("refresh-token-value", param.getString("refresh_token"))
         assertEquals("access-token-value", param.getString("access_token"))
-        // —— expired_in 是**绝对到期时刻**：签发时间 + access_token 寿命 ——
+        assertEquals("refresh-token-value", param.getString("refresh_token"))
+        assertEquals("refresh-key-value", param.getString("refresh_key"))
+        // 响应没给 expired_at ⇒ 才回落到「签发时间 + psrf_access_token_expiresAt」。
         assertEquals(1790277358L + 604800L, param.getLong("expired_in"))
+    }
+
+    @Test
+    fun `expired_at 是绝对到期时刻并优先于 cookie 反推`() {
+        val credential = QqRefreshCredential.fromLoginData(
+            fullData().put("loginType", 0).put("expired_at", 1790882158L),
+        )!!
+        val cookie = "uin=1152921504891728649; psrf_access_token_expiresAt=604800"
+        val param = QqRequests.refreshCredential(credential, cookie).getJSONObject("param")
+        assertEquals(1790882158L, param.getLong("expired_in"))
     }
 
     /**

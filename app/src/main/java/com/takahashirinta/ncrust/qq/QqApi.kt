@@ -381,6 +381,19 @@ object QqApi {
         /** 只用于日志（v2.1.4）：诊断时打的是用户请求档位，正常路径打的是同一个值。 */
         requestedLevel: String = "",
     ): VkeyBatch {
+        // v3.4.13：**使用时**主动续期。旧实现只在冷启动（`QqMusicSourceProvider.install`）
+        // 检查一次；进程/后台活过整个到期窗口时，第二次机会永远不出现，用户只能撞上
+        // 一次取链失败甚至被 104003 误判成「权益不足」。这里在**每次取链前**做一次
+        // 同步窗口检查（票据还早就直接返回，不发请求），把触发点从「Activity 创建」
+        // 扩展到「用户真的在播放」。没有定时器、没有心跳。
+        val preflight = QqTokenRefresher.refreshIfNeeded(QqClient.appContextOrNull())
+        if (preflight == QqTokenRefresher.RefreshResult.REFRESHED) {
+            Log.i(TAG, "取链前主动续期成功，本次使用新票据")
+        } else if (preflight == QqTokenRefresher.RefreshResult.AUTH_EXPIRED) {
+            // 终态：不再由本进程自动重试。继续发这次取链请求，让服务端给出最终结论；
+            // 调用方看到的是「需要重新登录」，而不是一个被吞掉的刷新失败。
+            Log.i(TAG, "取链前主动续期被服务端判为凭证失效（本进程不再重试）")
+        }
         val first = requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel)
         if (!isAuthRejection(first)) return first
         // 走到这里 = 本地有票据、服务端却把我们当成没登录（或直接 401/403）。

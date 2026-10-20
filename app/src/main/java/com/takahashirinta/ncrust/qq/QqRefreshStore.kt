@@ -80,15 +80,22 @@ object QqRefreshStore {
      *
      * 合并规则见 [QqRefreshCredential.mergeWith]：刷新响应里缺的字段**保留旧值**，
      * 否则一次「响应只回了一半字段」的刷新会把下一次刷新的能力也带走。
+     *
+     * v3.4.13：与 cookie 共用 [QqAuthStore.withAuthLock]，并在写入后推进登录态版本。
+     * 这样「续期提交前检查版本 → 写 cookie → 写凭证」不会在中间被登录线程插进来；
+     * 登录路径写这一份凭证时，也会让正在飞的旧续期响应作废。
      */
-    fun save(context: Context, credential: QqRefreshCredential): QqRefreshCredential {
-        val merged = QqRefreshCredential.mergeWith(get(context), credential)
-        prefs(context).edit().putString(KEY_CREDENTIAL, encode(merged)).apply()
-        return merged
-    }
+    fun save(context: Context, credential: QqRefreshCredential): QqRefreshCredential =
+        QqAuthStore.withAuthLock {
+            val merged = QqRefreshCredential.mergeWith(get(context), credential)
+            prefs(context).edit().putString(KEY_CREDENTIAL, encode(merged)).apply()
+            QqAuthStore.noteAuthMutationLocked()
+            merged
+        }
 
     /** 只清续期凭证（登出时与 cookie 一起清，见 [QqAuthStore.clear]）。 */
-    fun clear(context: Context) {
+    fun clear(context: Context) = QqAuthStore.withAuthLock {
         prefs(context).edit().remove(KEY_CREDENTIAL).apply()
+        QqAuthStore.noteAuthMutationLocked()
     }
 }

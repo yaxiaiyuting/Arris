@@ -276,32 +276,38 @@ internal object QqRequests {
     /**
      * 用已落盘的凭证换一张新票据。**同一个端点、同一个方法，只有 `loginMode` 不同。**
      *
-     * ## 参数为什么是「并集」而不是按 `loginType` 挑一套
+     * ## 参数按 `loginType` 分三支（不是固定并集）
      *
-     * 参考实现（`L-1124/QQMusicApi` 的 `refresh_credential()`）按登录类型分了三支，
-     * 三支的参数集**互有出入**（微信支没有 `musicid`，QQ 支没有 `str_musicid`）。
-     * 本客户端能拿到凭证的那条路只有手机验证码登录，它的
-     * `comm.tmeLoginType = 0` —— **既不是微信(1) 也不是 QQ(2)**，落在参考实现的
-     * `case _` 那一支，也就是**并集**。所以这里照并集构造：
-     * 多带的字段服务端会忽略，**少带一个却只会静默失败**（回一个空 data），
-     * 而静默失败正是这条链路最难查的形态。
+     * 参考实现（`L-1124/QQMusicApi` 的 `modules/login.py::refresh_credential()`）
+     * 按 `target.login_type` 分三支，参数集互有出入：
      *
-     * ## 三个不在凭证里的字段
+     * | `loginType` | 参数集 |
+     * |---|---|
+     * | 1（微信） | `openid` `refresh_token` `str_musicid` `musickey` `unionid` `refresh_key` |
+     * | 2（QQ） | `openid` `access_token` `refresh_token` `expired_in` `musicid` `musickey` `refresh_key` |
+     * | 其它 / 0（手机号） | 上面两套的并集 |
      *
-     * - `refresh_key`：v3.4.9 的凭证里**没有**它（手机号登录的响应里叫 `refreshKey`，
-     *   只有走到刷新那一步才会下发）；传空串与参考实现一致（它传的是字段的默认值 `""`）；
+     * 三支都带 `loginMode=2`；`comm.tmeLoginType` 由 [QqClient.musicuRefresh] 按
+     * 同一个 `loginType` 注入。旧实现无论类型都发并集，并且把显式 `loginType=0`
+     * 推成了 2 —— 那是「旧 JSON 缺字段」与「字段显式等于 0」混为一谈
+     * （见 [QqRefreshCredential.fromLoginData]）。多带字段是否会失败没有响应证据；
+     * 参考实现能给出的兼容性证据是**每个分支只带自己那一套**，这里按证据收敛。
+     *
+     * ## 字段来源
+     *
+     * - `refresh_key` / `refresh_token`：凭证里没有就传空串（与参考实现传字段默认值一致）；
      * - `str_musicid`：凭证里没有时用数字 `musicid` 的字符串形态补齐（参考实现的
-     *   `target.str_musicid or str(target.musicid)` 就是这个语义）；
-     * - `expired_in`：**不是**「从现在起多久过期」，而是**绝对到期时刻**
-     *   （参考实现传的是 `expired_at`，`Credential` 的注释写的是「到期时间」）。
-     *   首次登录时它等于「签发时间 + `psrf_access_token_expiresAt`」，
-     *   那两个值我们都有（cookie 里有后者），所以这里按那个式子**还原**；
-     *   还原不出来就传 `0`（参考实现在同样情况下传的也是 `0`）。
-     *   ⚠️ 传 `now` 或一个猜出来的未来时刻是**错的**：服务端可能拿它判「这个 access_token
-     *   是不是已经过期了」，报一个假值会让一次本来能成功的续期被判失败。
+     *   `target.str_musicid or str(target.musicid)`）；
+     * - `expired_in`：**不是**「从现在起多久过期」，而是**绝对到期时刻**。
+     *   参考实现传的是 `target.expired_at`，也就是登录/刷新响应里的 `expired_at`。
+     *   旧实现丢掉了这个字段，改用「`musickeyCreateTime` + `psrf_access_token_expiresAt`」
+     *   反推；反推只在凭证里没有 `expiredAt` 时兜底，且 `psrf_access_token_expiresAt`
+     *   的语义（寿命还是绝对时刻）**没有响应证据**，不能当主路径。
+     *   两个来源都拿不到就传 `0`（参考实现同样情况下也是 0）。
+     *   ⚠️ 传 `now` 或一个猜出来的未来时刻是**错的**：服务端可能拿它判
+     *   「这个 access_token 是不是已经过期了」。
      *
-     * @param cookie 当前落盘的 cookie。**只用来兜底 `str_musicid` 与 `expired_in`** ——
-     *   这两个值来自同一份凭证，凭证里缺了才回头问 cookie。
+     * @param cookie 当前落盘的 cookie。**只用来兜底 `str_musicid` 与 `expired_in`**。
      */
     fun refreshCredential(
         credential: QqRefreshCredential,
@@ -312,35 +318,61 @@ internal object QqRequests {
             ?: fallbackMusicId
             ?: credential.musicId.takeIf { it > 0L }?.toString()
             ?: ""
-        // 「签发时间 + access_token 寿命」。两个值缺任何一个都只能是 0（未知）。
-        val accessTtl = QqCookie.parse(cookie)[KEY_ACCESS_TOKEN_TTL]?.toLongOrNull()
-        val expiresAt = if (credential.keyCreatedAt > 0L && accessTtl != null && accessTtl > 0L) {
-            credential.keyCreatedAt + accessTtl
-        } else {
-            0L
+        val param = when (credential.loginType) {
+            QqRefreshCredential.LOGIN_TYPE_WECHAT -> JSONObject()
+                .put("openid", credential.openId.orEmpty())
+                .put("refresh_token", credential.refreshToken.orEmpty())
+                .put("str_musicid", strMusicId)
+                .put("musickey", credential.musicKey.orEmpty())
+                .put("unionid", credential.unionId.orEmpty())
+                .put("refresh_key", credential.refreshKey.orEmpty())
+                .put("loginMode", LOGIN_MODE_REFRESH)
+
+            QqRefreshCredential.LOGIN_TYPE_QQ -> JSONObject()
+                .put("openid", credential.openId.orEmpty())
+                .put("access_token", credential.accessToken.orEmpty())
+                .put("refresh_token", credential.refreshToken.orEmpty())
+                .put("expired_in", expiredIn(credential, cookie))
+                .put("musicid", credential.musicId)
+                .put("musickey", credential.musicKey.orEmpty())
+                .put("refresh_key", credential.refreshKey.orEmpty())
+                .put("loginMode", LOGIN_MODE_REFRESH)
+
+            // 0 / 未知：手机号登录走这一支。保留并集是参考实现 `case _` 的形状，
+            // 不是「多带点总没错」的猜测。
+            else -> JSONObject()
+                .put("openid", credential.openId.orEmpty())
+                .put("access_token", credential.accessToken.orEmpty())
+                .put("refresh_token", credential.refreshToken.orEmpty())
+                .put("expired_in", expiredIn(credential, cookie))
+                .put("str_musicid", strMusicId)
+                .put("musicid", credential.musicId)
+                .put("musickey", credential.musicKey.orEmpty())
+                .put("unionid", credential.unionId.orEmpty())
+                .put("refresh_key", credential.refreshKey.orEmpty())
+                .put("loginMode", LOGIN_MODE_REFRESH)
         }
 
         return JSONObject()
             .put("module", LOGIN_MODULE)
             .put("method", LOGIN_METHOD)
-            .put(
-                "param",
-                JSONObject()
-                    // —— 身份 ——
-                    .put("musicid", credential.musicId)
-                    .put("str_musicid", strMusicId)
-                    .put("openid", credential.openId.orEmpty())
-                    .put("unionid", credential.unionId.orEmpty())
-                    // —— 上一张票（服务端据此判断「是续期而不是新登录」）——
-                    .put("musickey", credential.musicKey.orEmpty())
-                    // —— 续期凭证本体 ——
-                    .put("refresh_key", credential.refreshKey.orEmpty())
-                    .put("refresh_token", credential.refreshToken.orEmpty())
-                    .put("access_token", credential.accessToken.orEmpty())
-                    .put("expired_in", expiresAt)
-                    // —— 开关 ——
-                    .put("loginMode", LOGIN_MODE_REFRESH),
-            )
+            .put("param", param)
+    }
+
+    /**
+     * `expired_in` 的取值：**响应里的 `expired_at` 优先**，没有才用旧的反推式兜底。
+     *
+     * 反推式的前提（`psrf_access_token_expiresAt` 是寿命、且与 `musickeyCreateTime`
+     * 同一时基）没有响应证据，所以它只能做 fallback，不能覆盖服务端下发的绝对值。
+     */
+    private fun expiredIn(credential: QqRefreshCredential, cookie: String?): Long {
+        if (credential.expiredAt > 0L) return credential.expiredAt
+        val accessTtl = QqCookie.parse(cookie)[KEY_ACCESS_TOKEN_TTL]?.toLongOrNull()
+        return if (credential.keyCreatedAt > 0L && accessTtl != null && accessTtl > 0L) {
+            credential.keyCreatedAt + accessTtl
+        } else {
+            0L
+        }
     }
 
     /** `psrf_access_token_expiresAt` 的 cookie 字段名（[refreshCredential] 的 `expired_in` 兜底来源）。 */

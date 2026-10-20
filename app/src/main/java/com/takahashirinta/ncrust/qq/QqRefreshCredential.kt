@@ -47,9 +47,11 @@ import org.json.JSONObject
  * | 2（QQ） | `openid` `access_token` `refresh_token` `expired_in` `musicid` `musickey` `refresh_key` `loginMode=2` |
  * | 其它/未知（**手机号登录走这一支**） | 上面两套的**并集** |
  *
- * 本客户端只有手机号验证码登录这一条路能拿到凭证 JSON，而它发出的
- * `comm.tmeLoginType` 是 0（既不是微信 1 也不是 QQ 2）⇒ 走**并集**那一支。
- * 并集是最稳的选择：多带的字段服务端会忽略，少带一个却会静默失败。
+ * 本客户端拿到凭证的入口不止一条（手机号、官方 App 扫码、历史微信票据），
+ * `loginType` 由响应或 `musickey` 前缀确定；[QqRequests.refreshCredential]
+ * 与 [QqClient.musicuRefresh] 都按这同一个值分叉。手机号的显式 0
+ * （既不是微信 1 也不是 QQ 2）走上面的**并集**分支 —— 这是参考实现 `case _`
+ * 的形状，不是「多带点总没错」的猜测。
  *
  * ## 敏感性（与 cookie 同级的账号凭证）
  *
@@ -98,13 +100,45 @@ data class QqRefreshCredential(
     @SerializedName("unionid") val unionId: String? = null,
     /** `str_musicid`：字符串形态的 musicid（部分账号只有这个）。 */
     @SerializedName("strMusicId") val strMusicId: String? = null,
-    /** 服务端给的登录类型：1 = 微信，2 = QQ，0/缺失 = 手机号。 */
+    /** 服务端给的登录类型：1 = 微信，2 = QQ，0 = 手机号。**显式 0 不能被推断成 2。** */
     @SerializedName("loginType") val loginType: Int = 0,
+    /**
+     * [loginType] 是否由**本次解析**确定（服务端显式给了，或按 [previousLoginType] 补了缺失）。
+     *
+     * 这个布尔解决的是「0 到底是手机号还是未知」：`Int` 默认值 0 同时承担两种语义，
+     * 合并时用 `> 0` 判断会把显式 `loginType=0` 丢掉。解析器给出 `true` 后，
+     * 合并就原样采用它（包括 0）；直接构造的数据类实例（测试/迁移）默认 `false`，
+     * 合并时仍保留旧值，不会把已知类型降级成未知。
+     *
+     * 旧版本落盘的 JSON 没有这个键 ⇒ false，行为与旧版一致；下一次真实刷新会补上。
+     */
+    @SerializedName("loginTypeResolved") val loginTypeResolved: Boolean = false,
+    /**
+     * `expired_at`：登录时下发的 access_token **绝对到期时刻**（秒级）。
+     *
+     * v3.4.9 的第一版丢掉了这个字段，改用 `musickeyCreateTime + psrf_access_token_expiresAt`
+     * 在请求时反推。反推的两个前提没有响应证据：`psrf_access_token_expiresAt` 究竟是
+     * 「寿命」还是「绝对时刻」、以及它与 `musickeyCreateTime` 是否同一时基。参考实现的
+     * `Credential.expired_at` 就是登录响应的原字段，`refresh_credential()` 直接把它
+     * 当作 `expired_in` 发出（`models/request.py` 与 `modules/login.py`）。
+     *
+     * 本机实测的 `Login` 失败骨架里 `expired_at` **键存在、值为 0**
+     * （见 `QqPhoneLoginTest` 的 35 字段样本），所以这是响应里真实存在的字段，
+     * 不是从别处推断出来的。
+     *
+     * 默认 0 = 未知；请求侧只在它 > 0 时优先使用，否则回落到旧的反推式。
+     */
+    @SerializedName("expired_at") val expiredAt: Long = 0L,
     /** `musickeyCreateTime`：票据签发时间（秒级时间戳）。 */
     @SerializedName("keyCreatedAt") val keyCreatedAt: Long = 0L,
     /** `keyExpiresIn`：票据寿命（秒）。有了它才能在**到期前**主动续期。 */
     @SerializedName("keyExpiresIn") val keyExpiresIn: Long = 0L,
-    /** `needRefreshKeyIn`：服务端建议的「多久之后该换 refreshKey」。 */
+    /**
+     * `needRefreshKeyIn`：服务端下发的 refreshKey 轮换提示字段。
+     *
+     * 本仓库只落盘/合并它，并用它判断「服务端是否明确索要 refreshKey」；
+     * **不**据此调度主动续期（语义没有服务端保证，参考实现也未这样用）。
+     */
     @SerializedName("needRefreshKeyIn") val needRefreshKeyIn: Long = 0L,
     /** `encryptUin`：收藏歌单接口要的加密 uin（与登录态同源，顺手留下）。 */
     @SerializedName("encryptUin") val encryptUin: String? = null,
@@ -125,8 +159,15 @@ data class QqRefreshCredential(
     /**
      * 是否**该主动**续期（v3.4.9）。
      *
-     * 提前 [REFRESH_MARGIN_SECONDS] 就换，而不是等到过期那一刻 —— 到期瞬间用户正在
-     * 播歌，那时再换会多一次「取链失败 → 刷新 → 重取」的可见停顿。
+     * 判据只有一条：`keyCreatedAt + keyExpiresIn`（服务端给的票据寿命）提前
+     * [REFRESH_MARGIN_SECONDS] 换，而不是等到过期那一刻 —— 到期瞬间用户正在播歌，
+     * 那时再换会多一次「取链失败 → 刷新 → 重取」的可见停顿。
+     *
+     * ⚠️ `needRefreshKeyIn` **不参与**这个调度。它继续落盘/合并（诊断与续期门槛用），
+     * 但「从签发时间起过 N 秒就该换 refreshKey」这个语义没有服务端保证，
+     * 参考实现也没有依据它调度（只在 `Credential` 模型里保存字段）。
+     * 本仓库不为猜测的调度增加请求：多刷新一次是风控风险，晚刷新一次还能靠
+     * 被动路径兜底。
      *
      * 寿命未知（老凭证）时返回 `false`：没有依据就不主动发请求，
      * 交给被动路径（服务端明确拒绝时再刷新）。
@@ -140,6 +181,32 @@ data class QqRefreshCredential(
     fun remainingSeconds(nowSeconds: Long = System.currentTimeMillis() / 1000L): Long? {
         if (keyCreatedAt <= 0L || keyExpiresIn <= 0L) return null
         return (keyCreatedAt + keyExpiresIn) - nowSeconds
+    }
+
+    /**
+     * 刷新成功、但响应没给 `musickeyCreateTime` 时的**有界**时间补全。
+     *
+     * ## 只在一个有响应证据的前提下补
+     *
+     * `code=0` 本身只说明「这次刷新被接受」，**不**说明签发了一张新票：服务端可能把
+     * 同一张 `musickey` 原样返回。无条件把 `keyCreatedAt` 改成「现在」会凭空延长
+     * 本地判定的寿命（用户会在真正过期后才发现），所以这里要求
+     * **响应里的 `musickey` 与刷新前不同** —— 那才是「签发了一张新票」的证据。
+     *
+     * 同 key + 缺时间：保持原值（不猜）。[QqTokenRefresher] 另有一小段成功静默窗口，
+     * 防止「刷新成功但本地仍判需续期」退化成每首歌一次网络请求。
+     *
+     * @param previous 刷新前那份凭证。
+     * @param nowSeconds 本次刷新的完成时刻（只在检测到新 key 时使用）。
+     */
+    fun withRefreshTimestamp(
+        previous: QqRefreshCredential,
+        nowSeconds: Long = System.currentTimeMillis() / 1000L,
+    ): QqRefreshCredential {
+        if (keyCreatedAt > 0L) return this
+        if (musicKey == null) return this
+        val keyRotated = previous.musicKey == null || previous.musicKey != musicKey
+        return if (keyRotated) copy(keyCreatedAt = nowSeconds) else this
     }
 
     /**
@@ -185,10 +252,12 @@ data class QqRefreshCredential(
     fun describe(): String = buildString {
         append("musicid=").append(if (musicId > 0L) "set" else "empty")
         append(" loginType=").append(loginType)
+        append(" loginTypeResolved=").append(loginTypeResolved)
         append(" refreshKey=").append(len(refreshKey))
         append(" refreshToken=").append(len(refreshToken))
         append(" accessToken=").append(len(accessToken))
         append(" musickey=").append(len(musicKey))
+        append(" expiredAt=").append(expiredAt)
         append(" keyCreatedAt=").append(keyCreatedAt)
         append(" keyExpiresIn=").append(keyExpiresIn)
         append(" refreshable=").append(isRefreshable())
@@ -220,45 +289,125 @@ data class QqRefreshCredential(
         /**
          * 从 `Login` 响应的 `req.data` 里解析续期凭证。
          *
-         * 字段名全部是服务端原样下发的 camelCase（`refresh_key` 之类是**参数**侧的名字，
-         * 响应侧是 `refreshKey` / `refreshToken` / `accessToken` / `str_musicid` / `loginType`
-         * / `musickeyCreateTime` / `keyExpiresIn` / `needRefreshKeyIn` / `musicid` / `musickey`），
-         * 与 `L-1124/QQMusicApi` 的 `Credential` 模型逐项对齐。
+         * ## 字段名必须同时认 snake_case 与旧 camelCase
          *
-         * 解析**不设最低门槛**：字段缺了也照常返回对象，由 [isRefreshable] 判定能不能用。
-         * 理由是这里多一条「不完整就返回 null」，日志里就少一次「到底缺哪个字段」的证据 ——
-         * 而缺字段正是这条链路唯一会失败的原因。
+         * 本仓库 `QqPhoneLoginTest` 里逐字保存的**真实响应骨架**（`Login` 回 `code=1000`
+         * 时的 35 字段样本）用的是服务端原始的 snake_case：
+         * `refresh_token` / `access_token` / `expired_at` / `refresh_key` / `str_musicid`。
+         * 参考实现 `models/request.py::Credential` 的字段名同样是 snake_case。
+         *
+         * v3.4.9 的解析器只读 camelCase（`refreshToken` / `refreshKey` / …），于是真实
+         * 响应里的轮换凭证**一个都没读进来** —— 这不只是「旧 JSON 缺字段」，而是
+         * 「字段在、名字不匹配」。表现是第一次续期也许能成，但响应轮换的新
+         * `refresh_token` 被丢掉，下一次续期又拿旧值，最终掉登录。
+         *
+         * 这里对每个字段同时认两种写法：snake_case 优先（服务端原始响应），camelCase
+         * 作为旧版本/旧落盘 JSON 的兼容。字段**缺失**返回 null / 0，与「字段存在但
+         * 值为空串」在合并时都按「本次没给」处理（`mergeWith` 保留旧值）。
+         *
+         * ## 解析不设最低门槛
+         *
+         * 字段缺了也照常返回对象，由 [isRefreshable] 判定能不能用。
+         * 理由是这里多一条「不完整就返回 null」，日志里就少一次「到底缺哪个字段」的证据。
+         *
+         * ## 显式 `loginType = 0` 与「字段缺失」是两种语义
+         *
+         * 参考实现的 `Credential._infer_login_type()` 只在 **`loginType` 键不存在** 时
+         * 才按 `musickey` 前缀推断；显式下发的 `0` 会原样保留。旧实现写的是
+         * `rawLoginType.takeIf { it > 0 } ?: infer`，于是手机号登录的显式 `0`
+         * 被推成 `2`（QQ），续期请求的 `comm.tmeLoginType` 与参数分支一起错。
+         *
+         * @param previousLoginType 刷新响应没给 `loginType` 时保留的旧值。
+         *   仅由 [QqTokenRefresher] 传入 —— 它手里有「刷新前那份凭证」这个事实；
+         *   登录路径传 `null`，仍按参考实现从 `musickey` 推断。
          */
-        fun fromLoginData(data: JSONObject?): QqRefreshCredential? {
+        fun fromLoginData(
+            data: JSONObject?,
+            previousLoginType: Int? = null,
+        ): QqRefreshCredential? {
             if (data == null) return null
             val musicId = data.optLong("musicid", 0L).takeIf { it > 0L }
-                ?: data.optString("str_musicid").toLongOrNull()?.takeIf { it > 0L }
+                ?: stringField(data, "str_musicid", "strMusicId")?.toLongOrNull()?.takeIf { it > 0L }
                 ?: 0L
-            val musicKey = data.optString("musickey").takeIf { it.isNotEmpty() }
-            val rawLoginType = data.optInt("loginType", 0)
+            val musicKey = stringField(data, "musickey")
+            // 参考实现同时接受 `loginType` 与 `login_type`（pydantic populate_by_name）；
+            // 服务端真实响应骨架是 `loginType`，旧落盘 JSON 也可能是 camelCase。
+            // 空串/null 按「本次没给」处理（用 previous 补），只有数字 0 才是「显式手机号」。
+            val explicitLoginType = intField(data, "loginType", "login_type")
+            val loginType = when {
+                explicitLoginType != null -> explicitLoginType
+                previousLoginType != null -> previousLoginType
+                // 与参考实现一致：只有 musickey 存在时才推断。没有票据的失败骨架
+                // 保持 0（未知），不要凭空造出一个「QQ 账号」。
+                musicKey?.startsWith(WECHAT_KEY_PREFIX) == true -> LOGIN_TYPE_WECHAT
+                musicKey != null -> LOGIN_TYPE_QQ
+                else -> 0
+            }
             return QqRefreshCredential(
                 musicId = musicId,
                 musicKey = musicKey,
-                refreshKey = data.optString("refreshKey").takeIf { it.isNotEmpty() },
-                refreshToken = data.optString("refreshToken").takeIf { it.isNotEmpty() },
-                accessToken = data.optString("accessToken").takeIf { it.isNotEmpty() },
-                openId = data.optString("openid").takeIf { it.isNotEmpty() },
-                unionId = data.optString("unionid").takeIf { it.isNotEmpty() },
-                strMusicId = data.optString("str_musicid").takeIf { it.isNotEmpty() },
-                // 响应没给 loginType 时按 musickey 前缀推断 —— 与参考实现的
-                // `_infer_login_type` 逐字一致（`W_X` 开头是微信，其余是 QQ）。
-                // 不推断的话，微信账号会被当成 QQ 账号去刷新，参数集就错了。
-                loginType = rawLoginType.takeIf { it > 0 }
-                    ?: if (musicKey?.startsWith(WECHAT_KEY_PREFIX) == true) {
-                        LOGIN_TYPE_WECHAT
-                    } else {
-                        LOGIN_TYPE_QQ
-                    },
-                keyCreatedAt = data.optLong("musickeyCreateTime", 0L).coerceAtLeast(0L),
-                keyExpiresIn = data.optLong("keyExpiresIn", 0L).coerceAtLeast(0L),
-                needRefreshKeyIn = data.optLong("needRefreshKeyIn", 0L).coerceAtLeast(0L),
-                encryptUin = data.optString("encryptUin").takeIf { it.isNotEmpty() },
+                refreshKey = stringField(data, "refresh_key", "refreshKey"),
+                refreshToken = stringField(data, "refresh_token", "refreshToken"),
+                accessToken = stringField(data, "access_token", "accessToken"),
+                openId = stringField(data, "openid"),
+                unionId = stringField(data, "unionid"),
+                strMusicId = stringField(data, "str_musicid", "strMusicId"),
+                loginType = loginType,
+                // loginType 这一项由本次解析确定（显式值 / previous 补缺失 / 前缀推断），
+                // 合并时原样采用，包括显式的 0。直接构造的实例默认 false。
+                loginTypeResolved = true,
+                // 响应侧的 `expired_at` 是绝对值；`expiredAt` 是同一语义的另一种写法。
+                // 只把它当「有值才用」的权威来源，0 继续表示未知。
+                expiredAt = longField(data, "expired_at", "expiredAt").coerceAtLeast(0L),
+                keyCreatedAt = longField(data, "musickeyCreateTime", "musickey_create_time")
+                    .coerceAtLeast(0L),
+                keyExpiresIn = longField(data, "keyExpiresIn", "key_expires_in")
+                    .coerceAtLeast(0L),
+                needRefreshKeyIn = longField(data, "needRefreshKeyIn", "need_refresh_key_in")
+                    .coerceAtLeast(0L),
+                encryptUin = stringField(data, "encryptUin", "encrypt_uin"),
             )
+        }
+
+        /**
+         * 读字符串字段：先认第一个名字，再认第二个；空串与缺失都返回 null。
+         *
+         * 空串在这里的语义是「本次没有下发这个值」，由 [mergeWith] 保留旧值。
+         * 不能把空串当作「服务端明确要求清空」—— 服务端把键给全、值全空是它的
+         * 失败骨架（35 字段样本），不是一次轮换。
+         */
+        private fun stringField(data: JSONObject, vararg names: String): String? {
+            for (name in names) {
+                if (!data.has(name)) continue
+                val value = data.optString(name)
+                if (value.isNotEmpty()) return value
+            }
+            return null
+        }
+
+        /**
+         * 读整数字段：同时认 snake_case 与 camelCase。
+         *
+         * 返回 `null` = 缺失 / null / 空串 / 非数字；**数字 0 是确定值**。
+         * 这正是「显式 loginType=0」与「字段没给」的分界。
+         */
+        private fun intField(data: JSONObject, vararg names: String): Int? {
+            for (name in names) {
+                if (!data.has(name) || data.isNull(name)) continue
+                when (val raw = data.opt(name)) {
+                    is Number -> return raw.toInt()
+                    is String -> raw.trim().toIntOrNull()?.let { return it }
+                }
+            }
+            return null
+        }
+
+        /** 读长整数字段：同时认 snake_case 与 camelCase；缺失/非数字返回 0。 */
+        private fun longField(data: JSONObject, vararg names: String): Long {
+            for (name in names) {
+                if (data.has(name)) return data.optLong(name, 0L)
+            }
+            return 0L
         }
 
         /**
@@ -272,9 +421,24 @@ data class QqRefreshCredential(
          *
          * 规则：**新值非空就用新值，为空就保留旧值**；[keyCreatedAt] 以本次响应为准
          * （它是这次签发的证据）。旧值为 null 时 [old] 为 null，直接返回 [this]。
+         *
+         * `loginType` 的「0 是手机号、不是缺失」同样适用于合并：旧实现写
+         * `if (new.loginType > 0) new else old`，于是新响应显式给 0 时会被旧值
+         * 覆盖。现在用 [loginTypeResolved] 区分「解析器确定的值（含显式 0）」与
+         * 「数据类默认值 0（未知）」：
+         * - 解析器确定 ⇒ **原样采用，包括 0**；
+         * - 直接构造且非 0 ⇒ 采用新值；
+         * - 直接构造且为 0 ⇒ 保留旧值，避免把已知类型降级成未知。
          */
         fun mergeWith(old: QqRefreshCredential?, new: QqRefreshCredential): QqRefreshCredential {
             if (old == null) return new
+            val useNewLoginType = new.loginTypeResolved || new.loginType != 0
+            val mergedLoginTypeResolved = when {
+                new.loginTypeResolved -> true
+                new.loginType != 0 -> true
+                new.loginType == old.loginType -> old.loginTypeResolved
+                else -> false
+            }
             return new.copy(
                 musicId = if (new.musicId > 0L) new.musicId else old.musicId,
                 musicKey = new.musicKey ?: old.musicKey,
@@ -284,9 +448,11 @@ data class QqRefreshCredential(
                 openId = new.openId ?: old.openId,
                 unionId = new.unionId ?: old.unionId,
                 strMusicId = new.strMusicId ?: old.strMusicId,
-                loginType = if (new.loginType > 0) new.loginType else old.loginType,
+                loginType = if (useNewLoginType) new.loginType else old.loginType,
+                loginTypeResolved = mergedLoginTypeResolved,
                 // 时间字段的意义是「这一版票是什么时候签的」，所以**以新响应为准**；
                 // 新响应没给（0）时才保留旧的，免得把有依据的判断退化成「不知道」。
+                expiredAt = if (new.expiredAt > 0L) new.expiredAt else old.expiredAt,
                 keyCreatedAt = if (new.keyCreatedAt > 0L) new.keyCreatedAt else old.keyCreatedAt,
                 keyExpiresIn = if (new.keyExpiresIn > 0L) new.keyExpiresIn else old.keyExpiresIn,
                 needRefreshKeyIn = if (new.needRefreshKeyIn > 0L) {

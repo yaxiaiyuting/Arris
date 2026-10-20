@@ -13,6 +13,7 @@ package com.takahashirinta.ncrust.qq
 import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -249,8 +250,19 @@ object QqClient {
      * 也就是说：走错通道的续期**每一次都会被拒**，而票据本身完全有效 ——
      * 症状是「明明登录着，到期还是掉」，也就是用户最初报的那个 bug 原样复发。
      *
-     * @param loginType 凭证里的 `loginType`（1 = 微信，2 = QQ）。参考实现续期时
-     *   带的就是它（`comm={"tmeLoginType": target.login_type}`）。
+     * ## Cookie：保持 `sendCookie = false`（已核对完整 CGI 路径）
+     *
+     * v3.4.13 曾据 `core/executor.py::HttpExecutor.prepare()` 的 4 项 Cookie
+     * 想把这里改成发 Cookie，但续期走的是 **`CgiExecutor`**，不是 `HttpExecutor`。
+     * `CgiExecutor._prepare_batch()` 组装的是
+     * `{"comm": …, "req_0": …}`，`PreparedRequest` 只带 `json` / `params` /
+     * `User-Agent`，**没有 cookies**。也就是说参考实现的 CGI 续期并不带 Cookie，
+     * 本仓库原来的 `sendCookie = false` 与它一致；v3.4.10 的真机成功样本
+     * 也是在这个形状下取得的。所以这里**不改协议**，也不把 Cookie 当成故障原因。
+     *
+     * @param loginType 凭证里的 `loginType`（1 = 微信，2 = QQ，0 = 手机号）。
+     *   参考实现续期时带的就是它（`comm={"tmeLoginType": target.login_type}`，
+     *   0 在参考实现里因为 `or None` 被省略，与本函数 `if (loginType > 0)` 一致）。
      */
     suspend fun musicuRefresh(request: JSONObject, loginType: Int): JSONObject? =
         withContext(Dispatchers.IO) {
@@ -260,6 +272,7 @@ object QqClient {
                     "comm",
                     appComm(ctx).apply {
                         // 只带 tmeLoginType，**绝不带 tmeLoginMethod**（见上表的 A/B）。
+                        // 0（手机号）与参考实现一样省略，而不是写成 2。
                         if (loginType > 0) put("tmeLoginType", loginType)
                     },
                 )
@@ -374,6 +387,13 @@ object QqClient {
                 // 信封 key 可能是 "req"，也可能是 module 名本身；两者都认。
                 json.optJSONObject("req") ?: json.optJSONObject(module)
             }
+        } catch (e: CancellationException) {
+            // 协程取消必须传播：吞成 null 会让上层把「用户离开了」当成网络失败，
+            // 继续走重试/分类，甚至把取消写进 lastTransportError。
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw CancellationException("musicu cancelled").apply { initCause(e) }
         } catch (e: Exception) {
             // v3.2.0：异常也记账 —— 否则「连不上」在分类里会退化成「读不懂的拒绝」。
             lastHttpStatus = null
@@ -412,6 +432,11 @@ object QqClient {
                 if (!response.isSuccessful || text.isNullOrEmpty()) return@use null
                 JSONObject(text)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw CancellationException("legacyGet cancelled").apply { initCause(e) }
         } catch (e: Exception) {
             Log.w(TAG, "legacyGet failed", e)
             null
