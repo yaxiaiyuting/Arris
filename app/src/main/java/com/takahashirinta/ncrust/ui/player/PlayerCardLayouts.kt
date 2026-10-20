@@ -57,6 +57,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -388,6 +390,8 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
     strings: Strings,
     progress: Animatable<Float, AnimationVector1D>,
     isPlaying: Boolean,
+    tiny: Boolean,
+    panelToggles: @Composable (Dp, Dp) -> Unit,
     haptic: HapticFeedback,
     gestureNavLiftDp: Dp,
     controlsCollapseDrag: () -> Modifier,
@@ -402,6 +406,11 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
     val controlsCollapse = ui.controlsCollapse
     val controlsCollapsedForInput = ui.controlsCollapsedForInput
     val cardRootOrigin = ui.cardRootOrigin
+    // 顶栏歌名只在「展开 + 歌词模式」时可见（大封面模式被 lyricAnimProgress 淡出）。
+    // 跑马灯不可见时仍以 60fps 驱动重绘，所以只在真正可见时挂。
+    val topTitleVisible = remember { derivedStateOf {
+        progress.value > 0.7f && lyricAnimProgress.value > 0.5f
+    } }
     // 顶部标题栏
     Box(
         modifier = Modifier
@@ -410,7 +419,9 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // 封面 overlay 的落点就是用这两个数算出来的，写死字面量必然漂移。
             .height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)
             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
-            .padding(start = TrayLayout.topBarTextStartDp().dp, end = 56.dp),
+            .onSizeChanged { ui.narrowTopBarHeightPx = it.height.toFloat() }
+            // Tiny 顶栏右侧要放 3 个面板切换 + 收起键；标题区让出这段（长歌名仍可跑马灯）。
+            .padding(start = TrayLayout.topBarTextStartDp().dp, end = if (tiny) 196.dp else 56.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Column(
@@ -420,20 +431,22 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 // 歌名区域可点: 上拉"转到歌手/转到专辑"菜单(类 Apple Music)
                 .clickable { onSongInfoClick() }
         ) {
-            MetroText(
-                song.name,
-                color = LocalMetroColors.current.onBackground,
-                style = LocalMetroTypography.current.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    animationMode = MarqueeAnimationMode.Immediately,
-                    initialDelayMillis = 2000,
-                    repeatDelayMillis = 2500,
-                    velocity = 48.dp
+            ThresholdScope({ topTitleVisible.value }) { visible ->
+                MetroText(
+                    song.name,
+                    color = LocalMetroColors.current.onBackground,
+                    style = LocalMetroTypography.current.titleMedium,
+                    maxLines = 1,
+                    overflow = if (visible) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (visible) Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        animationMode = MarqueeAnimationMode.Immediately,
+                        initialDelayMillis = 2000,
+                        repeatDelayMillis = 2500,
+                        velocity = 48.dp
+                    ) else Modifier
                 )
-            )
+            }
             // v2.1.0 · F：音源角标（窄屏顶栏，两个音源都标）。同一行的另一段
             // 是 basicMarquee 的歌名，这里不参与跑马灯。
             ArtistLineWithSource(
@@ -442,6 +455,16 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 style = LocalMetroTypography.current.bodyMedium,
                 badgeStyle = LocalMetroTypography.current.bodySmall
             )
+        }
+        if (tiny) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                panelToggles(36.dp, 20.dp)
+            }
         }
     }
     // 面板区（吃掉剩余高度）
@@ -485,6 +508,8 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
+                // 大封面模式标题块的实测高：从封面可用带里扣除，矮屏才不会压住控件。
+                .onSizeChanged { ui.narrowTitleHeightPx = it.height.toFloat() }
                 .padding(horizontal = 24.dp, vertical = 8.dp)
                 .graphicsLayer {
                     alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) *
@@ -493,13 +518,27 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 // 歌名区域可点: 上拉"转到歌手/转到专辑"菜单(类 Apple Music)
                 .clickable { onSongInfoClick() }
         ) {
-            MetroText(
-                song.name,
-                color = LocalMetroColors.current.onBackground,
-                style = LocalMetroTypography.current.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // 跑马灯只在标题真正可见时挂：这一层常驻、只在 graphicsLayer 里调 alpha，
+            // 卡片收起或处于歌词模式时标题看不见，但无限跑马灯照样以 60fps 驱动重绘。
+            val titleVisible = remember { derivedStateOf {
+                progress.value > 0.7f && lyricAnimProgress.value > 0.5f
+            } }
+            ThresholdScope({ titleVisible.value }) { visible ->
+                MetroText(
+                    song.name,
+                    color = LocalMetroColors.current.onBackground,
+                    style = LocalMetroTypography.current.titleLarge,
+                    maxLines = 1,
+                    overflow = if (visible) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = if (visible) Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        animationMode = MarqueeAnimationMode.Immediately,
+                        initialDelayMillis = 2000,
+                        repeatDelayMillis = 2500,
+                        velocity = 48.dp
+                    ) else Modifier
+                )
+            }
             // v2.1.0 · F：音源角标（窄屏大封面 overlay，两个音源都标）。
             ArtistLineWithSource(
                 song = song,

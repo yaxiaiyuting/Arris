@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -48,6 +49,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedback
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.i18n.Strings
@@ -83,6 +85,7 @@ internal fun PlayerCardCoverOverlay(
     largeCoverCenterY: Float,
     boundsCenter: Float,
     coverFloatPx: Float,
+    narrowCover: androidx.compose.runtime.State<CoverGeometry>,
     onCoverBitmap: (key: String?, bitmap: Bitmap?) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -98,10 +101,30 @@ internal fun PlayerCardCoverOverlay(
         modifier = Modifier
             .then(
                 if (usesSideCover) Modifier.size(coverSizeDp)
-                else Modifier.fillMaxWidth().aspectRatio(1f)
+                else Modifier.layout { measurable, _ ->
+                    // 窄屏大图按实测可用带收缩并水平居中。首帧测量前用
+                    // narrowCover 的兜底（屏幕宽 / 原锚点），不会以 1px 请求封面。
+                    val side = narrowCover.value.sizePx.roundToInt().coerceAtLeast(1)
+                    val placeable = measurable.measure(
+                        androidx.compose.ui.unit.Constraints.fixed(side, side)
+                    )
+                    layout(side, side) { placeable.place(0, 0) }
+                }
             )
             .graphicsLayer {
                 val p = progress.value
+                // 窄屏封面尺寸会随高度档变化：miniScale / 落点 / boundsCenter 必须用
+                // **当前实际边长**重算，不能沿用按整屏宽算出的 geo 值（否则 mini 封面
+                // 会跟着缩小）。宽屏/大屏仍用实测封面区的 geo 值。
+                val narrow = narrowCover.value
+                val actualCoverSizePx = if (usesSideCover) {
+                    coverSizeDp.value * density.density
+                } else size.width.coerceAtLeast(1f)
+                val actualMiniScale = if (usesSideCover) miniScale else
+                    with(density) { TrayLayout.coverHalfDp().dp.toPx() } * 2f / actualCoverSizePx
+                val actualBoundsCenter = if (usesSideCover) boundsCenter else actualCoverSizePx / 2f
+                val actualLargeCenterX = if (usesSideCover) largeCoverCenterX else narrow.centerXPx
+                val actualLargeCenterY = if (usesSideCover) largeCoverCenterY else narrow.centerYPx
                 val normalizedP = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
                 // v2.9.0 · B/C 档：随节拍的量。**只在 graphicsLayer 块里读**
                 // （`MotionClock.generation` 是一个 Compose 状态，读它只让这一层失效，
@@ -121,27 +144,27 @@ internal fun PlayerCardCoverOverlay(
                 // "大封面↔歌词"切换的语义）；它随分栏进度在左栏与居中之间平滑移动。
                 val lyricAnimValue = if (usesSideCover) 0f else lyricAnimProgress.value
 
-                val targetCenterX = largeCoverCenterX + lyricAnimValue * (miniCoverCenterX - largeCoverCenterX)
+                val targetCenterX = actualLargeCenterX + lyricAnimValue * (miniCoverCenterX - actualLargeCenterX)
                 // v3.2.0 · P0-A：歌词全屏时封面缩到的是**顶栏**的中心（56dp 容器），
                 // 不是托盘的中心（80dp 容器）。两者在展开态相差 12dp ——
                 // 用错的那一个会让封面挂在顶栏下沿之外（真机截图可见）。
                 val shrinkCenterY = topBarCoverCenterY
-                val targetCenterY = largeCoverCenterY + lyricAnimValue * (shrinkCenterY - largeCoverCenterY)
-                val targetScale = miniScale + (1f - lyricAnimValue) * (1f - miniScale)
+                val targetCenterY = actualLargeCenterY + lyricAnimValue * (shrinkCenterY - actualLargeCenterY)
+                val targetScale = actualMiniScale + (1f - lyricAnimValue) * (1f - actualMiniScale)
 
                 val currentCenterX = miniCoverCenterX + normalizedP * (targetCenterX - miniCoverCenterX)
                 val currentCenterY = miniCoverCenterY + normalizedP * (targetCenterY - miniCoverCenterY)
-                val currentBaseScale = miniScale + normalizedP * (targetScale - miniScale)
+                val currentBaseScale = actualMiniScale + normalizedP * (targetScale - actualMiniScale)
 
                 scaleX = currentBaseScale
                 scaleY = currentBaseScale
-                translationX = currentCenterX - boundsCenter
+                translationX = currentCenterX - actualBoundsCenter
                 // A 档（精致起）：随节拍**上浮**最多 ±2dp（任务书 §4.3）。用位移而不是缩放：
                 // 缩放会与上面那条展开/收起动画的 scale 叠加，出问题时无法归因。
                 val floatPx = if (motion.coverFloat) {
                     beatPulse * coverFloatPx
                 } else 0f
-                translationY = currentCenterY - boundsCenter - floatPx
+                translationY = currentCenterY - actualBoundsCenter - floatPx
                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                 // C 档：3D 旋转（竖屏为主）。角度很小（≤6°），读起来是"封面被推了一下"，
                 // 不是"封面在转圈"；相机距离跟着 density 走，避免高分屏上透视夸张。
@@ -230,22 +253,25 @@ internal fun BoxScope.PlayerCardOverlayLayers(
     playerViewModel: PlayerViewModel,
     ui: PlayerCardUiState,
     geo: PlayerCardGeometry,
+    narrowCover: androidx.compose.runtime.State<CoverGeometry>,
     coroutineScope: CoroutineScope,
 ) {
     // 托盘的两个点击回调仍在这里构造（动画参数只有一份）：
     //  · onExpand        —— 整条托盘：展开播放器；
     //  · onExpandToLyrics —— 点第一行歌词：展开**并直接看歌词**。
+    ThresholdScope({ ui.miniBarEnabled }) { miniBarEnabled ->
     PlayerCardTray(
         song = song,
         hasSong = hasSong,
         isPlaying = isPlaying,
-        miniBarEnabled = ui.miniBarEnabled,
+        miniBarEnabled = miniBarEnabled,
         miniBarInteractionSource = ui.miniBarInteractionSource,
         progress = progress,
         strings = strings,
         haptic = haptic,
         lyricsFlow = playerViewModel.lyrics,
         positionFlow = playerViewModel.currentPosition,
+        trialFlow = playerViewModel.currentIsTrial,
         onExpand = {
             coroutineScope.launch {
                 progress.animateTo(
@@ -270,6 +296,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
         onPlayNothing = callbacks.onPlayNothing,
         onArtistClick = callbacks.onArtistClick,
     )
+    }
 
     // 唯一封面叠加层：全屏 ↔ miniBar 共用这一个 cover，随 progress 平滑位移/缩放。
     // 窄屏大图=整屏宽居中；宽屏大图=左栏封面区实测中心与尺寸。
@@ -289,6 +316,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
             largeCoverCenterY = geo.largeCoverCenterY,
             boundsCenter = geo.boundsCenter,
             coverFloatPx = geo.coverFloatPx,
+            narrowCover = narrowCover,
             onCoverBitmap = { key, bitmap ->
                 // 只在真的换了图/键时写 state（这个回调会在每次 Coil 状态变化时被调到，
                 // 无条件赋值会让每次状态变化都触发一次背景层重组）。
@@ -303,11 +331,13 @@ internal fun BoxScope.PlayerCardOverlayLayers(
     // 收起按钮叠加层：z 序最高，保证触摸事件不被任何下层元素拦截。
     // 大屏幕模式下整层不挂载（判据在下面这一行，理由见 PlayerCardDismissButton 的 KDoc）。
     if (hasSong && !geo.bigScreenActive) {
-        PlayerCardDismissButton(
-            progress = progress,
-            dismissEnabled = ui.dismissEnabled,
-            strings = strings,
-            onDismiss = callbacks.onDismiss,
-        )
+        ThresholdScope({ ui.dismissEnabled }) { dismissEnabled ->
+            PlayerCardDismissButton(
+                progress = progress,
+                dismissEnabled = dismissEnabled,
+                strings = strings,
+                onDismiss = callbacks.onDismiss,
+            )
+        }
     }
 }

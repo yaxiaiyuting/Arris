@@ -44,6 +44,7 @@ import com.takahashirinta.ncrust.formatDuration
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -67,10 +68,10 @@ fun SlimProgressBar(
 ) {
     // isBufferingFlow 由内部叶子 collect：SlimProgressBar 常驻在 FullPlayerControls，
     // isBuffering 每次抖动都会走到这里，避免让父层因布尔值变化而重组
-    val isBuffering by isBufferingFlow.collectAsState()
+    val isBuffering by isBufferingFlow.collectAsStateWithLifecycle()
     // collectAsState 创建 State 引用，只有 .value 被读的作用域才订阅
-    val progressState = progressFlow.collectAsState()
-    val durationState = durationFlow.collectAsState()
+    val progressState = progressFlow.collectAsStateWithLifecycle()
+    val durationState = durationFlow.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
     val textMeasurer = rememberTextMeasurer()
     var barWidth by remember { mutableFloatStateOf(1f) }

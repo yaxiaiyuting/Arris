@@ -573,52 +573,75 @@ object LibraryManager {
     }
 
     /**
-     * 「播放全部」用：按红心歌单顺序返回**全部**收藏单曲详情（Bug2-⑤）。
+     * 「播放全部」用：返回**整列**收藏单曲（Bug2-⑤）。
      *
      * 与 loadMoreLikedSongs 的分页懒加载不同，这里一次性补齐所有缺失详情，
      * 因此按 PLAY_ALL_BATCH_SIZE 分批、批间 delay(PLAY_ALL_BATCH_DELAY_MS) 限流，
      * 避免收藏量很大时触发服务端风控。已在缓存中的歌曲直接复用，不重复请求。
-     * 返回结果按红心歌单顺序且已去重；服务端已删除 / 无版权的 id 自然被跳过。
      *
-     * v2.6.0：tombstone 的 id **跳过**（用户删掉的歌不该被「播放全部」播出来），
-     * 并且补到的详情只**追加**进表里、不触发重排。
+     * ## v3.4.12 · 多音源：ncm 云端顺序 + 本地手动条目
+     *
+     * 顺序与 tombstone 口径全部收进 [selectLikedPlayAll]（纯函数、有单测）：
+     *  - **本地手动收藏的 QQ / B 站条目**（它们永远不会出现在 ncm likedIds 里）排在最前，不丢；
+     *  - ncm 条目按**云端红心 id 顺序**补全，缺详情的 id 跳过并计入 `missingCloudIds`；
+     *  - tombstone 的 ncm id 即使云端仍返回也**不复活**；
+     *  - 云端没有、但本地手动收藏的 ncm 条目追在最后。
+     *
+     * 批量严格按 `allIds` 全量补齐（不是只处理已加载的前 50 首）；单批失败只丢该批，
+     * 不影响其它批与本地条目。
      */
-    suspend fun loadAllLikedSongs(context: Context): List<SongItem> = withContext(Dispatchers.IO) {
-        val allIds = ensureLikedIdsLoaded(context).distinct()
-        if (allIds.isEmpty()) return@withContext emptyList()
-        val byId = LinkedHashMap<Long, SongItem>()
-        val tombstoned = HashSet<Long>()
-        synchronized(songsLock) {
-            cachedEntries?.forEach {
-                if (it.trackKey.source == MusicSource.NETEASE) {
-                    if (it.tombstoned) tombstoned.add(it.trackKey.id) else byId[it.trackKey.id] = it.song
+    suspend fun loadAllLikedSongs(context: Context): List<SongItem> =
+        loadAllLikedSongsResult(context).songs
+
+    /** 同 [loadAllLikedSongs]，但额外返回「云端取不到详情」的 id，供 UI 做部分反馈。 */
+    suspend fun loadAllLikedSongsResult(context: Context): LikedPlayAllSelection =
+        withContext(Dispatchers.IO) {
+            val allIds = ensureLikedIdsLoaded(context).distinct()
+            var localVisible: List<SavedSongEntry>
+            var tombstoned: Set<Long>
+            val byId = LinkedHashMap<Long, SongItem>()
+            synchronized(songsLock) {
+                val entries = cachedEntries ?: mutableListOf()
+                localVisible = entries.filter { it.isVisible }
+                tombstoned = entries.asSequence()
+                    .filter { it.tombstoned && it.trackKey.source == MusicSource.NETEASE }
+                    .mapTo(HashSet()) { it.trackKey.id }
+                entries.asSequence()
+                    .filter { it.isVisible && it.trackKey.source == MusicSource.NETEASE }
+                    .forEach { byId[it.trackKey.id] = it.song }
+            }
+            val wanted = allIds.filter { it !in tombstoned }
+            val missing = wanted.filter { it !in byId }
+            for (start in missing.indices step PLAY_ALL_BATCH_SIZE) {
+                val batch = missing.subList(start, minOf(start + PLAY_ALL_BATCH_SIZE, missing.size))
+                val fetched = try {
+                    PlaylistApi.getSongsByIds(batch)
+                } catch (e: Exception) {
+                    Log.e(TAG, "loadAllLikedSongs batch failed: ${e.message}")
+                    emptyList()
                 }
-            }
-        }
-        val wanted = allIds.filter { it !in tombstoned }
-        val missing = wanted.filter { it !in byId }
-        for (start in missing.indices step PLAY_ALL_BATCH_SIZE) {
-            val batch = missing.subList(start, minOf(start + PLAY_ALL_BATCH_SIZE, missing.size))
-            val fetched = try {
-                PlaylistApi.getSongsByIds(batch)
-            } catch (e: Exception) {
-                Log.e(TAG, "loadAllLikedSongs batch failed: ${e.message}")
-                emptyList()
-            }
-            // 去重：同 id 覆盖写入，不会产生重复项。
-            for (s in fetched) byId[s.id] = s
-            if (fetched.isNotEmpty()) {
-                synchronized(songsLock) {
-                    val before = cachedEntries ?: mutableListOf()
-                    cachedEntries = SavedSongSync
-                        .appendRemote(before, fetched, System.currentTimeMillis())
-                        .toMutableList()
+                // 去重：同 id 覆盖写入，不会产生重复项。
+                for (s in fetched) byId[s.id] = s
+                if (fetched.isNotEmpty()) {
+                    synchronized(songsLock) {
+                        val before = cachedEntries ?: mutableListOf()
+                        cachedEntries = SavedSongSync
+                            .appendRemote(before, fetched, System.currentTimeMillis())
+                            .toMutableList()
+                    }
                 }
+                if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
             }
-            if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
+            synchronized(songsLock) {
+                localVisible = cachedEntries?.filter { it.isVisible } ?: localVisible
+            }
+            selectLikedPlayAll(
+                localVisible = localVisible,
+                cloudIds = allIds,
+                details = byId,
+                tombstoned = tombstoned,
+            )
         }
-        wanted.mapNotNull { byId[it] }
-    }
 
     /** 「播放全部」补齐详情时的批大小与批间隔（限流，见 loadAllLikedSongs）。 */
     private const val PLAY_ALL_BATCH_SIZE = 500

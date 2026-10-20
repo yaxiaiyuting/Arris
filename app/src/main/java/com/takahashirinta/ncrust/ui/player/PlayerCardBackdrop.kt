@@ -64,7 +64,7 @@ internal fun BoxScope.PlayerCardBackdrop(
     screenHeightPx: Float,
     isPlaying: Boolean,
     hasSong: Boolean,
-    expandedMounted: Boolean,
+    expandedMounted: () -> Boolean,
     visualizerSlot: Boolean,
     waveBackdropHeightDp: androidx.compose.ui.unit.Dp,
     /** 缓冲状态**传引用**：订阅发生在帧循环内部，不在组合期（见 AudioVisualizerSlot 的 KDoc）。 */
@@ -129,7 +129,7 @@ internal fun BoxScope.PlayerCardBackdrop(
         // —— 不把「波形挂载」单独告诉帧时钟，简洁档的波形会冻住（探针 §2 的连带发现）。
         MotionFrameClock(
             activeProvider = { isPlaying && !isBufferingFlow.value },
-            enabled = hasSong && expandedMounted,
+            enabled = hasSong && expandedMounted(),
             waveformMounted = visualizerSlot || motion.fullScreenWaveform,
         )
 

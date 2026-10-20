@@ -42,6 +42,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.takahashirinta.ncrust.account.SessionMonitor
+import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.defaultPlaylistName
 import com.takahashirinta.ncrust.library.AlbumInfo
@@ -68,6 +70,10 @@ import com.takahashirinta.ncrust.ui.components.AlbumSourceFilterRow
 import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.CreatePlaylistDialog
 import com.takahashirinta.ncrust.ui.components.PlayAllButton
+import com.takahashirinta.ncrust.ui.components.SessionExpiredBanner
+import io.github.takahashirinta.kanesumi.controls.MetroDropdownMenu
+import io.github.takahashirinta.kanesumi.controls.MetroDropdownMenuItem
+import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import com.takahashirinta.ncrust.ui.components.SourceFilter
 import com.takahashirinta.ncrust.ui.components.PlaylistCreateOutcome
 import com.takahashirinta.ncrust.ui.components.SongCard
@@ -90,6 +96,11 @@ fun LibraryScreen(
     onPlayPlaylist: (Long) -> Unit = {},
     // Bug2-④：收藏单曲「播放全部」。由上层 loadAllLikedSongs 覆盖整个红心歌单。
     onPlayAllLiked: () -> Unit = {},
+    // v3.4.12：整列收藏的「插播 / 追加」入口与后台补齐的 loading 反馈。
+    // 播放全部仍是**先播后补**（点击即出声），不弹二次确认。
+    onInsertAllLiked: () -> Unit = {},
+    onAppendAllLiked: () -> Unit = {},
+    likedBulkLoading: Boolean = false,
     onSongInsertNext: (SongItem) -> Unit = {},
     onSongAppendToQueue: (SongItem) -> Unit = {},
     onShowSongMenu: (SongItem, List<SongMenuAction>) -> Unit = { _, _ -> },
@@ -107,15 +118,25 @@ fun LibraryScreen(
      * 默认 -1 = 没有在播，既有调用点因此零改动即可编译。
      */
     currentSongId: Long = -1L,
+    // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
+    onRelogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val strings = LocalStrings.current
+    // 会话失效时顶部一条横幅：收藏刷不出来/只给试听的直接原因就在这里。
+    // 必须 collectAsState 订阅：直接读 StateFlow.value 不会建立快照依赖，横幅永远不刷新。
+    val sessionState by SessionMonitor.state.collectAsState()
+    val sessionExpired = sessionState is SessionState.Expired
 
     var savedSongs by remember { mutableStateOf(LibraryManager.getSavedSongs(context)) }
     var savedAlbums by remember { mutableStateOf(LibraryManager.getSavedAlbums(context)) }
     // 红心歌单总数（含尚未分页加载的部分），供「播放全部」入口显示规模。
-    var likedTotal by remember { mutableIntStateOf(LibraryManager.getLikedSongIds(context).size) }
+    // 云端红心总数与本地可见条目取大者：本地手动收藏的 QQ / B 站不在红心 id 表里，
+    // 只显示云端数会让「整列播放」的规模看起来漏了它们。
+    var likedTotal by remember { mutableIntStateOf(
+        maxOf(LibraryManager.getLikedSongIds(context).size, LibraryManager.getSavedSongs(context).size)
+    ) }
     var selectedCategory by remember { mutableIntStateOf(0) }
     // v3.4.0：专辑 tab 的**音源筛选档**（全部 / 只看 ncm / 只看 qm）。
     //
@@ -184,7 +205,10 @@ fun LibraryScreen(
     fun reloadLocal() {
         savedSongs = LibraryManager.getSavedSongs(context)
         savedAlbums = LibraryManager.getSavedAlbums(context)
-        likedTotal = LibraryManager.getLikedSongIds(context).size
+        likedTotal = maxOf(
+            LibraryManager.getLikedSongIds(context).size,
+            LibraryManager.getSavedSongs(context).size,
+        )
         localPlaylists = LocalPlaylistStore.readPlaylists(context)
     }
 
@@ -292,6 +316,10 @@ fun LibraryScreen(
                 )
             }
             Spacer(Modifier.height(4.dp))
+            if (sessionExpired) {
+                SessionExpiredBanner(onRelogin = onRelogin)
+                Spacer(Modifier.height(4.dp))
+            }
             MetroTabRow(
                 selectedTabIndex = selectedCategory,
                 items = categories.map { MetroTabItem(it) },
@@ -346,8 +374,57 @@ fun LibraryScreen(
                                         color = LocalMetroColors.current.onSurfaceVariant,
                                         style = LocalMetroTypography.current.bodySmall
                                     )
+                                    if (likedBulkLoading) {
+                                        Spacer(Modifier.width(8.dp))
+                                        MetroText(
+                                            strings.likedPlayAllLoading(likedTotal),
+                                            color = LocalMetroColors.current.primary,
+                                            style = LocalMetroTypography.current.bodySmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                     Spacer(Modifier.weight(1f))
-                                    PlayAllButton(onClick = onPlayAllLiked)
+                                    PlayAllButton(onClick = {
+                                        // 后台补齐期间不重复触发；播放本身已经在第一次点击时开始。
+                                        if (!likedBulkLoading) onPlayAllLiked()
+                                    })
+                                    // v3.4.12：旁边的「插播 / 追加」入口。单独放到菜单里而不是
+                                    // 再摆两个按钮：这一行同时要放计数与 loading 文案，320dp 宽
+                                    // 再塞两个按钮必然把歌名/计数挤没。
+                                    Box {
+                                        var showBulkMenu by remember { mutableStateOf(false) }
+                                        MetroIconButton(onClick = { showBulkMenu = true }) {
+                                            MetroIcon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = strings.actionAppendToQueue,
+                                                tint = LocalMetroColors.current.onBackground,
+                                                sizeDp = 22.dp
+                                            )
+                                        }
+                                        MetroDropdownMenu(
+                                            expanded = showBulkMenu,
+                                            onDismissRequest = { showBulkMenu = false },
+                                            containerColor = LocalMetroColors.current.surface,
+                                        ) {
+                                            MetroDropdownMenuItem(
+                                                text = strings.insertNextTitle,
+                                                textColor = LocalMetroColors.current.onBackground,
+                                                onClick = {
+                                                    showBulkMenu = false
+                                                    if (!likedBulkLoading) onInsertAllLiked()
+                                                },
+                                            )
+                                            MetroDropdownMenuItem(
+                                                text = strings.actionAppendToQueue,
+                                                textColor = LocalMetroColors.current.onBackground,
+                                                onClick = {
+                                                    showBulkMenu = false
+                                                    if (!likedBulkLoading) onAppendAllLiked()
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed 只为拿下标，

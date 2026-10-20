@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.Coil
 import coil.compose.AsyncImagePainter
@@ -92,6 +93,9 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -184,24 +188,24 @@ internal fun PlayerCard(
 
     val strings = LocalStrings.current
     val playerViewModel: PlayerViewModel = viewModel()
-    val lyrics by playerViewModel.lyrics.collectAsState()
-    val translatedLyrics by playerViewModel.translatedLyrics.collectAsState()
-    val lyricsLoading by playerViewModel.lyricsLoading.collectAsState()
-    val lyricsSongId by playerViewModel.lyricsSongId.collectAsState()
-    val lyricsNoContentSongId by playerViewModel.lyricsNoContentSongId.collectAsState()
-    val showLyricsTranslation by playerViewModel.showLyricsTranslation.collectAsState()
+    val lyrics by playerViewModel.lyrics.collectAsStateWithLifecycle()
+    val translatedLyrics by playerViewModel.translatedLyrics.collectAsStateWithLifecycle()
+    val lyricsLoading by playerViewModel.lyricsLoading.collectAsStateWithLifecycle()
+    val lyricsSongId by playerViewModel.lyricsSongId.collectAsStateWithLifecycle()
+    val lyricsNoContentSongId by playerViewModel.lyricsNoContentSongId.collectAsStateWithLifecycle()
+    val showLyricsTranslation by playerViewModel.showLyricsTranslation.collectAsStateWithLifecycle()
     // v1.9.3：音译显示开关（默认关）+ 音译轨（v1.9.2 的音译数据，渲染层只读不重合并）。
-    val showLyricsRomanization by playerViewModel.showLyricsRomanization.collectAsState()
+    val showLyricsRomanization by playerViewModel.showLyricsRomanization.collectAsStateWithLifecycle()
     // v2.0.0 · T4：动态字号（实验性，默认关）。
-    val showDynamicLyricFont by playerViewModel.showDynamicLyricFont.collectAsState()
-    val romanizedLyrics by playerViewModel.romanizedLyrics.collectAsState()
+    val showDynamicLyricFont by playerViewModel.showDynamicLyricFont.collectAsStateWithLifecycle()
+    val romanizedLyrics by playerViewModel.romanizedLyrics.collectAsStateWithLifecycle()
     // v1.5.1 · A：逐字动画模式（0 渐变扫过 / 1 逐字硬切 / 2 关闭逐字）。
     // 模式 2 时 karaokeEnabled=false，行内渲染退回 v1.4.1 的整行路径。
-    val lyricsWordAnimation by playerViewModel.lyricsWordAnimation.collectAsState()
+    val lyricsWordAnimation by playerViewModel.lyricsWordAnimation.collectAsStateWithLifecycle()
     // v1.5.1 · E：歌词字号倍率（设置页与歌词界面的 A-/A+ 都改它）。
-    val lyricsFontScale by playerViewModel.lyricsFontScale.collectAsState()
+    val lyricsFontScale by playerViewModel.lyricsFontScale.collectAsStateWithLifecycle()
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。
-    val lyricsSweepQuality by playerViewModel.lyricsSweepQuality.collectAsState()
+    val lyricsSweepQuality by playerViewModel.lyricsSweepQuality.collectAsStateWithLifecycle()
     // 收藏库状态: 当前歌是否已收藏(右下角 加号/对号 切换用)。切歌或操作后刷新。
     // ⚠️ 这个 remember **有意留在 PlayerCard**：键是 `(song?.id, libraryTick)`，
     // 搬进持有者会让「切歌后重新查一次」的语义消失。
@@ -247,6 +251,36 @@ internal fun PlayerCard(
         wideCoverSizePx = ui.wideCoverSizePx,
         statusBarPx = statusBarPx,
     )
+
+    // v3.4.12：窄屏封面按可用高度收缩（高度档由 PlayerCardExpanded / LyricsView 各自读取，
+    // 这里只负责封面几何，避免把档位变化带进整卡组合）。
+    // 窄屏封面可用带：控件 / 标题都是 layout 阶段测量，读取放在 derivedStateOf 里；
+    // 测量变化只让封面那一层的 layout / graphicsLayer 失效，不重组 PlayerCard。
+    val narrowGapPx = with(density) { 16.dp.toPx() }
+    val narrowHandlePx = with(density) { 24.dp.toPx() }
+    val narrowMinGapPx = with(density) { 12.dp.toPx() }
+    val narrowFallbackTopBarPx = with(density) { TrayLayout.TOP_BAR_HEIGHT_DP.dp.toPx() }
+    val narrowFallbackControlsPx = with(density) { 280.dp.toPx() }
+    val narrowCover = remember(statusBarPx, screenHeightPx, screenWidthPx) {
+        derivedStateOf {
+            narrowCoverGeometry(
+                availableWidthPx = screenWidthPx,
+                contentHeightPx = screenHeightPx,
+                topBarBottomPx = statusBarPx +
+                    ui.narrowTopBarHeightPx.takeIf { it > 0f }.let { it ?: narrowFallbackTopBarPx },
+                controlsHeightPx = ui.controlsHeightPx.takeIf { it > 0f }
+                    .let { it ?: narrowFallbackControlsPx } + narrowGapPx + narrowHandlePx,
+                titleReservePx = ui.narrowTitleHeightPx,
+                minGapPx = narrowMinGapPx,
+                preferredCenterYPx = screenHeightPx * 0.3f + with(density) { 24.dp.toPx() },
+            )
+        }
+    }
+    // 卡片收起时歌词 / 进度条 / 时间文本都看不见，但它们常挂载在整屏图层里：2Hz 位置更新
+    // 会让歌词滚动、进度条重绘。收起时冻结喂给它们的位置 / 进度，展开越过 0.01 立刻追上。
+    val cardShown = remember { derivedStateOf { progress.value > 0.01f } }
+    val shownPosition = rememberGatedFlow(playerViewModel.currentPosition, cardShown)
+    val shownProgress = rememberGatedFlow(playerViewModel.progress, cardShown)
 
     // v2.9.0：换歌时清掉**界面动效那一层**的包络与特效池（基线 / 脉冲 / 光晕 / 粒子）。
     // 不清波形环形缓冲：那会让新歌开头几帧的波形是空的（上一首的柱子滚出去是既有的换歌观感）。
@@ -488,7 +522,7 @@ internal fun PlayerCard(
             screenHeightPx = screenHeightPx,
             isPlaying = isPlaying,
             hasSong = hasSong,
-            expandedMounted = ui.expandedMounted,
+            expandedMounted = { ui.expandedMounted },
             visualizerSlot = geo.visualizerSlot,
             waveBackdropHeightDp = geo.waveBackdropHeightDp,
             isBufferingFlow = playerViewModel.isBuffering,
@@ -500,7 +534,10 @@ internal fun PlayerCard(
                 .systemBarsPadding()
         ) {
             // B-1：折叠态不挂载展开态子树（mini bar 在下面、永远挂载）。见 expandedMounted 注释。
-            if (hasSong && ui.expandedMounted) {
+            // 阈值读取收进 ThresholdScope：展开/收起各翻转一次，不再重组整张 PlayerCard。
+            if (hasSong) {
+              ThresholdScope({ ui.expandedMounted }) { expanded ->
+              if (expanded) {
                 // v3.2.1 · P0：展开态子树（两个槽位 lambda + 三个布局分支的分发）
                 // 搬进 PlayerCardExpanded.kt。挂载判据与组合树位置逐节点不变。
                 PlayerCardExpanded(
@@ -535,7 +572,11 @@ internal fun PlayerCard(
                     playMode = playMode,
                     screenWidthPx = screenWidthPx,
                     autoRotate = autoRotate,
+                    positionFlow = shownPosition,
+                    progressFlow = shownProgress,
                 )
+              }
+              }
             }
         }
 
@@ -553,9 +594,25 @@ internal fun PlayerCard(
             playerViewModel = playerViewModel,
             ui = ui,
             geo = geo,
+            narrowCover = narrowCover,
             coroutineScope = coroutineScope,
         )
     }
+}
+
+/**
+ * [open] 为真时把 [source] 原样转发，为假时停在最后一个值：给看不见的子树一份「冻结」的流，
+ * 它们就既不重组也不重绘。重新打开时立即从 [source] 的当前值继续。
+ */
+@Composable
+private fun <T> rememberGatedFlow(source: StateFlow<T>, open: State<Boolean>): StateFlow<T> {
+    val gated = remember(source) { MutableStateFlow(source.value) }
+    LaunchedEffect(source, open) {
+        snapshotFlow { open.value }.collectLatest { isOpen ->
+            if (isOpen) source.collect { gated.value = it }
+        }
+    }
+    return gated
 }
 
 /**

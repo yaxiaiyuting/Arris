@@ -47,6 +47,8 @@ import com.takahashirinta.ncrust.lyric.SweepTrack
 import com.takahashirinta.ncrust.share.LyricShareLine
 import com.takahashirinta.ncrust.share.LyricShareTrack
 import com.takahashirinta.ncrust.ui.components.LyricShareSheet
+import com.takahashirinta.ncrust.ui.HeightClass
+import com.takahashirinta.ncrust.ui.LocalHeightClass
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
@@ -54,6 +56,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 歌词面板 —— 渲染交给 Kanesumi 的 MetroLyricsPanel(左对齐大字,每行独立
@@ -116,6 +119,27 @@ fun LyricsView(
     centeredLayout: Boolean = false,
 ) {
     val strings = LocalStrings.current
+    // v3.4.12：歌词字号按高度档缩放（A- / A+ 的 fontScale 仍在其上乘算，层级比例不变）。
+    val baseFontSp = when (LocalHeightClass.current) {
+        HeightClass.Regular -> 32f
+        HeightClass.Compact -> 24f
+        HeightClass.Tiny -> 20f
+    }
+    val baseLineHeightSp = when (LocalHeightClass.current) {
+        HeightClass.Regular -> 42f
+        HeightClass.Compact -> 32f
+        HeightClass.Tiny -> 27f
+    }
+    val baseTranslationSp = when (LocalHeightClass.current) {
+        HeightClass.Regular -> 20f
+        HeightClass.Compact -> 16f
+        HeightClass.Tiny -> 14f
+    }
+    val baseTranslationLineSp = when (LocalHeightClass.current) {
+        HeightClass.Regular -> 26f
+        HeightClass.Compact -> 21f
+        HeightClass.Tiny -> 18f
+    }
     if (lyrics.isEmpty()) {
         if (!isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -142,7 +166,7 @@ fun LyricsView(
     }
     // 基准字号（px）：判定折行数用，与面板拿到的 sp 同源（用户 A-/A+ 是"基准"，
     // 动态倍率在它之上浮动，不替换它）。
-    val baseOriginalFontPx = with(LocalDensity.current) { (32f * fontScale).sp.toPx() }
+    val baseOriginalFontPx = with(LocalDensity.current) { (baseFontSp * fontScale).sp.toPx() }
     // 每行的字号倍率。键里带上宽度与 fontScale：换歌/旋转/A-/A+ 才重算；面板宽度变化会
     // 触发一次重算（首帧一次，之后稳定）。刻意**不**写进歌词缓存 —— 它是派生显示量
     // （AGENTS.md：能不加缓存字段就不加）。
@@ -159,7 +183,7 @@ fun LyricsView(
                         availWidthPx = dynamicFontAvailablePx,
                         fontSizePx = baseOriginalFontPx,
                     ),
-                    baseFontSizeSp = 32f * fontScale,
+                    baseFontSizeSp = baseFontSp * fontScale,
                 )
             }
         }
@@ -189,7 +213,7 @@ fun LyricsView(
 
     // 订阅位置流:collectAsState 建 State;displayPosition 只在面板 draw/derived
     // 阶段被读,按需写一次也只重算当前行,不触发本 Composable 重组。
-    val positionState = positionFlow.collectAsState()
+    val positionState = positionFlow.collectAsStateWithLifecycle()
     // 初值取当前流值而非 0:否则面板首次出现时会先按"位置 0"高亮第一行/吸顶,
     // 等锚点被采样纠正后才跳回真实行。按需唤醒把纠错窗口拉长到最多 1s, 这个初值
     // 尤为重要。
@@ -434,10 +458,10 @@ fun LyricsView(
             // v1.5.1 · E：字号倍率乘在基础字号上（行高同步乘，行距比例不变）。
             // 当前行的放大动画是紧跟在渲染里的 scale，与基础字号是乘数关系，所以字号变了
             // 缩放动画不需要任何额外处理。
-            fontSize = (32 * fontScale).sp,
-            lineHeight = (42 * fontScale).sp,
-            translationFontSize = (20 * fontScale).sp,
-            translationLineHeight = (26 * fontScale).sp,
+            fontSize = (baseFontSp * fontScale).sp,
+            lineHeight = (baseLineHeightSp * fontScale).sp,
+            translationFontSize = (baseTranslationSp * fontScale).sp,
+            translationLineHeight = (baseTranslationLineSp * fontScale).sp,
             // v1.9.3：音译字号同样乘 fontScale（A- / A+ 三档一起缩放，层级比例恒定）。
             romanizationFontSize = (LyricsDisplayPrefs.ROMANIZATION_FONT_SP * fontScale).sp,
             romanizationLineHeight = (LyricsDisplayPrefs.ROMANIZATION_LINE_HEIGHT_SP * fontScale).sp,

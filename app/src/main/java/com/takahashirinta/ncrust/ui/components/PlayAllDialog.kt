@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +26,12 @@ fun PlayAllDialog(
     songCount: Int,
     onDismiss: () -> Unit,
     onReplaceAndPlay: () -> Unit,
-    onInsertNext: () -> Unit
+    onInsertNext: () -> Unit,
+    /**
+     * v3.4.12：可选的第三项「最后播放」。**默认 null ⇒ 既有调用点保持两项**，
+     * 行为与布局逐字节不变；只有明确需要「追加到队尾」的调用点才传。
+     */
+    onAppendToQueue: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     MetroDialog(onDismissRequest = onDismiss) {
@@ -98,6 +104,30 @@ fun PlayAllDialog(
                 )
             }
         }
+        if (onAppendToQueue != null) {
+            MetroDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAppendToQueue(); onDismiss() }
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MetroIcon(
+                    imageVector = Icons.Default.PlaylistAdd,
+                    contentDescription = null,
+                    tint = LocalMetroColors.current.onBackground,
+                    sizeDp = 26.dp
+                )
+                Spacer(Modifier.width(16.dp))
+                MetroText(
+                    text = strings.actionAppendToQueue,
+                    color = LocalMetroColors.current.onBackground,
+                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                )
+            }
+        }
+
         MetroDivider()
 
         Box(

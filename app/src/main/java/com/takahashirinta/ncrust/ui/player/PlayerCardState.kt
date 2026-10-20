@@ -90,6 +90,15 @@ internal class PlayerCardUiState(
     var controlsHeightPx by mutableFloatStateOf(0f)
     var controlsTopInCardPx by mutableFloatStateOf(Float.MAX_VALUE)
 
+    /**
+     * 窄屏顶栏 / 大封面标题块的实测高（v3.4.12 高度适配）。
+     *
+     * 只在 layout 回调里写、在 derivedStateOf 里读；不参与 `PlayerCard` 组合期参数，
+     * 所以测量变化只让封面那一层的 layout / graphicsLayer 失效。
+     */
+    var narrowTopBarHeightPx by mutableFloatStateOf(0f)
+    var narrowTitleHeightPx by mutableFloatStateOf(0f)
+
     /** 展开动作触发的歌词定位计数（每次展开 +1）。 */
     var lyricLocateTrigger by mutableIntStateOf(0)
 

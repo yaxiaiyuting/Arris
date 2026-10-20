@@ -165,7 +165,8 @@ class SettingsDefaultsTest {
 
     @Test
     fun `barePrefDefaultsMatchTheInlineReadDefaults`() {
-        assertEquals(true, default("gapless_playback")) // ui/screen/UserScreen.kt:148
+        // v1.4.0：无缝播放降级为实验特性，缺键默认关闭（显式 true/false 保留）。
+        assertEquals(false, default("gapless_playback"))
         assertEquals(true, default("lyrics_translation")) // ui/screen/UserScreen.kt:156
         assertEquals(false, default("lyrics_in_media_session")) // ui/screen/UserScreen.kt:164
         assertEquals(false, default("custom_bg_enabled")) // ui/theme/BackgroundImageManager.kt:57
