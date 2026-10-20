@@ -8,7 +8,9 @@
 
 package com.takahashirinta.ncrust.player
 
+import androidx.annotation.OptIn
 import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
+import androidx.media3.common.util.UnstableApi
 
 /**
  * v3.4.12 · R2：audio offload 与本地 PCM 链路的**运行中门控**（纯逻辑，JVM 可单测）。
@@ -35,6 +37,7 @@ import androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences
  *
  * 不轮询：监听由 `snapshotFlow` 完成，见 [PlaybackService.observePcmDemand]。
  */
+@OptIn(UnstableApi::class)
 object AudioOffloadGate {
 
     /** 当前实际的 PCM 消费需求。两个字段互不包含，必须分别判断。 */
@@ -62,6 +65,7 @@ object AudioOffloadGate {
     }
 
     /** media3 的 mode 是否为「开了 offload」（ENABLED / REQUIRED 都算开）。 */
+    @OptIn(UnstableApi::class)
     fun isOffloadEnabled(mode: Int): Boolean =
         mode != AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
 
