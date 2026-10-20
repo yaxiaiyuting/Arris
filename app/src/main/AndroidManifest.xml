@@ -19,6 +19,10 @@
     <!-- 手机端扫码授权其他设备时用相机识别二维码（非必装硬件，故 required=false）。 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- v3.4.13：应用内更新把下载好的 APK 交给系统安装器（Android 8+ 还需用户在系统设置里
+         为本应用打开「安装未知应用」，见 update/UpdateService.canInstallPackages）。
+         只调起系统安装器，不静默安装。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".NcrustApplication"
@@ -143,7 +147,8 @@
             · grantUriPermissions="true"：少了它，接收方打开 content:// 会
               SecurityException —— 症状是「分享出去是空白图」。
 
-            路径白名单在同目录的 res/xml/file_paths.xml（只放开了 cache/share/）。
+            路径白名单在同目录的 res/xml/file_paths.xml：cache/share/ 用于歌词分享，
+            cache/updates/ 用于应用内更新的 APK。
         -->
         <provider
             android:name="androidx.core.content.FileProvider"

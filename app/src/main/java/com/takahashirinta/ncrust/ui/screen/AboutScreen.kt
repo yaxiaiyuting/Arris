@@ -20,12 +20,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,16 +49,22 @@ import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import com.takahashirinta.ncrust.ui.components.TopScrimIconButton
+import com.takahashirinta.ncrust.ui.components.rememberManualUpdateCheck
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.update.UpdateService
 
 // 版本号动态读取 BuildConfig.VERSION_NAME（对应 build.gradle.kts 的 versionName），
 // 避免发版时忘记同步。
 private val VERSION = "v${BuildConfig.VERSION_NAME}"
 
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
     val s = LocalStrings.current
+    val updateStrings = LocalStrings.current.update
     val accent = LocalMetroColors.current.primary
+    // 关于页的手动检查与用户页横幅共用同一份逻辑；检查中禁止重复点。
+    val updateState by UpdateService.state.collectAsState()
+    val manualUpdateCheck = rememberManualUpdateCheck(onFound = onOpenUpdate)
     BackHandler { onBack() }
     // Groove 无边框：不再套 M3 TopAppBar Surface，返回箭头浮在内容上方共用 TopScrimIconButton。
     Box(
@@ -99,6 +108,13 @@ fun AboutScreen(onBack: () -> Unit) {
                     Column {
                         AboutSection(s.aboutSectionProject.uppercase(), accent)
                         AboutRow(s.aboutVersion, VERSION)
+                        // v3.4.13：手动检查更新（不受自动检查 24 小时窗口限制）。
+                        AboutActionRow(
+                            label = updateStrings.checkNow,
+                            value = if (updateState.checking) updateStrings.checking else "",
+                            enabled = !updateState.checking,
+                            onClick = manualUpdateCheck
+                        )
                         AboutRow(s.aboutDeveloperOriginal, "Takahashi_Rinta")
                         AboutRow(s.aboutDeveloperFork, "yaxiaiyuting")
                         AboutRow(s.aboutLicense, s.aboutLicenseGplWithMit)
@@ -201,6 +217,40 @@ private fun AboutRow(label: String, value: String) {
         MetroText(
             value,
             color = LocalMetroColors.current.onBackground,
+            style = TextStyle(fontSize = 13.sp, textAlign = TextAlign.End),
+            modifier = Modifier.weight(1.5f)
+        )
+    }
+}
+
+/**
+ * 可点的 About 行：右侧值用主题色，整行可点。
+ * 与 [AboutRow] 同排版，差别只在「这是一个动作」而不是一条只读信息。
+ */
+@Composable
+private fun AboutActionRow(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MetroText(
+            label,
+            color = LocalMetroColors.current.primary,
+            style = TextStyle(fontSize = 13.sp),
+            modifier = Modifier.weight(1f)
+        )
+        MetroText(
+            value,
+            color = LocalMetroColors.current.onSurfaceVariant,
             style = TextStyle(fontSize = 13.sp, textAlign = TextAlign.End),
             modifier = Modifier.weight(1.5f)
         )

@@ -1,0 +1,536 @@
+[
+  {
+    "id": "update.fork.higher-version",
+    "description": "严格更高版本被发现",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.13",
+      "assetName": "Ncrust-v3.4.13-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.4.13-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.same-version",
+    "description": "同版本不算更新",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.12-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.12-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.12-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.12-gpl/Ncrust-v3.4.12-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.lower-version",
+    "description": "更低版本不算更新",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.11-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.11-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.11-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.11-gpl/Ncrust-v3.4.11-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.draft-ignored",
+    "description": "draft 忽略",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": true,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.prerelease-ignored",
+    "description": "prerelease 忽略",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": false,
+          "prerelease": true,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.debug-asset-ignored-for-release",
+    "description": "release 构建只能挑 release 资产；同 release 里更高的 debug 资产必须忽略",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.14-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.14-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.14-gpl-debug.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.14-gpl/Ncrust-v3.4.14-gpl-debug.apk",
+              "size": 10000000
+            },
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.14-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.13",
+      "assetName": "Ncrust-v3.4.13-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.14-gpl/Ncrust-v3.4.13-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.4.14-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.14-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.debug-variant-selects-debug",
+    "description": "debug 构建挑 debug 资产（签名匹配）",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "debug",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            },
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.14-gpl-debug.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.14-gpl-debug.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.14",
+      "assetName": "Ncrust-v3.4.14-gpl-debug.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.14-gpl-debug.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.4.13-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.checksum-asset-ignored",
+    "description": "校验文件不是安装包，不能因版本段更高而被挑中",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.15-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.15-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.15-gpl-release.apk.sha256",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.15-gpl/Ncrust-v3.4.15-gpl-release.apk.sha256",
+              "size": 10000000
+            },
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.15-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.13",
+      "assetName": "Ncrust-v3.4.13-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.15-gpl/Ncrust-v3.4.13-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.4.15-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.15-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.upstream-asset-ignored",
+    "description": "上游命名不能命中本 Fork 的更新规则",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "CrateStack-20261021A",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/CrateStack-20261021A",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "ncrust-android-universal-9.9.9.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/CrateStack-20261021A/ncrust-android-universal-9.9.9.apk",
+              "size": 10000000
+            },
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/CrateStack-20261021A/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.13",
+      "assetName": "Ncrust-v3.4.13-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/CrateStack-20261021A/Ncrust-v3.4.13-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "CrateStack-20261021A",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/CrateStack-20261021A",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.highest-across-releases",
+    "description": "跨 release 取最高，不依赖数组顺序",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13-gpl/Ncrust-v3.4.13-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        },
+        {
+          "tag_name": "v3.5.0-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.5.0-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.5.0-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5.0-gpl/Ncrust-v3.5.0-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.5.0",
+      "assetName": "Ncrust-v3.5.0-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5.0-gpl/Ncrust-v3.5.0-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.5.0-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.5.0-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.malformed-version-ignored",
+    "description": "非法版本段忽略",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.x-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.x-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.x-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.x-gpl/Ncrust-v3.4.x-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.no-assets",
+    "description": "没有资产不算更新",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": []
+        }
+      ]
+    },
+    "expect": null
+  },
+  {
+    "id": "update.fork.tag-version-differs-from-asset",
+    "description": "版本以资产名为准；tag 只用于展示 / 跳转",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v9.9.9-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v9.9.9-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.16-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v9.9.9-gpl/Ncrust-v3.4.16-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.16",
+      "assetName": "Ncrust-v3.4.16-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v9.9.9-gpl/Ncrust-v3.4.16-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v9.9.9-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v9.9.9-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.two-segment-version",
+    "description": "缺段按 0 补（3.5 = 3.5.0）",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.5-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.5-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.5-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5-gpl/Ncrust-v3.5-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.5.0",
+      "assetName": "Ncrust-v3.5-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5-gpl/Ncrust-v3.5-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.5-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.5-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  },
+  {
+    "id": "update.fork.four-segment-version",
+    "description": "四段版本可比较；显示仍为三段",
+    "source": "Arris 发布契约：tag vX-gpl / Ncrust-v<version>-gpl-<release|debug>.apk",
+    "input": {
+      "currentVersion": "3.4.12-gpl",
+      "variant": "release",
+      "releases": [
+        {
+          "tag_name": "v3.4.13.1-gpl",
+          "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13.1-gpl",
+          "draft": false,
+          "prerelease": false,
+          "published_at": "2026-10-21T09:30:00Z",
+          "body": "notes",
+          "assets": [
+            {
+              "id": 100,
+              "name": "Ncrust-v3.4.13.1-gpl-release.apk",
+              "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13.1-gpl/Ncrust-v3.4.13.1-gpl-release.apk",
+              "size": 10000000
+            }
+          ]
+        }
+      ]
+    },
+    "expect": {
+      "version": "3.4.13",
+      "assetName": "Ncrust-v3.4.13.1-gpl-release.apk",
+      "assetUrl": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.13.1-gpl/Ncrust-v3.4.13.1-gpl-release.apk",
+      "assetSize": 10000000,
+      "releaseTag": "v3.4.13.1-gpl",
+      "releasePageUrl": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.13.1-gpl",
+      "publishedAt": "2026-10-21T09:30:00Z",
+      "body": "notes"
+    }
+  }
+]
