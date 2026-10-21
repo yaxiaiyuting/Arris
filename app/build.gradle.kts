@@ -460,8 +460,15 @@ android {
         //   ② 预算 5 秒 → 8 秒（真机实测 QQ 搜索稳定在 2.8~3.4 秒，5 秒只剩 1.6 秒余量）。
         //   ⚠️ 不改持久化结构与包名，可直接覆盖安装 v3.4.11。
         //   版本号出处：`tools/next-version.sh --no-fetch` 三源交叉验证 ⇒ 取 **74**。
-        versionCode = 74
-        versionName = "3.4.12-gpl"
+        // v3.5.0（75）：整合上游 142e908 的既有功能（xeapi 收藏 / PC 扫码登录、
+        //   队列 TrackKey 与 clientlog 上报、QQ 续期提交闸门、账号权益与试听、
+        //   收藏全量播放、矮屏播放器与 offload 门控、应用内更新），本版不再加入
+        //   新功能或重构。
+        //   版本号出处：`tools/next-version.sh`（**带 fetch**）三源交叉验证 ——
+        //   最近 5 个 tag 最大 74（v3.4.12-gpl）；已发布 v3.4.12 APK 的 aapt2 实测
+        //   versionCode=74；工作区 74 ⇒ 三源一致，取 **75**。v3.5.0 tag/release 未占用。
+        versionCode = 75
+        versionName = "3.5.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
