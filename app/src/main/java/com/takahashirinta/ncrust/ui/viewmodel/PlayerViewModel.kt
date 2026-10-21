@@ -242,6 +242,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // 防止同一首歌重复上报播放行为。
     private var lastReportedSongId = -1L
+    private val listeningClock = com.takahashirinta.ncrust.player.ListeningClock(android.os.SystemClock::elapsedRealtime)
+    private var pendingListeningRestart: Long? = null
     // 同理防止同一首歌重复上报「开始播放」（startplay）。
     private var lastStartReportedSongId = -1L
 
@@ -665,14 +667,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 QqProbeCounters.onPlaybackTick(currentSongId.value ?: -1L, currentTrack?.sourceId)
             }
 
-            // 播放行为上报: 进度达 80% 视为"听完",每首歌只上报一次。
+            // 实际处于 isPlaying 的累计时长达到 80% 才上报；seek/恢复位置不增加时长。
             val sid = currentSongId.value ?: -1L
+            val listenedMs = listeningClock.playedMs(sid)
             // 试听片段（45 秒）不算听完——否则"只听了半首"也会喂给推荐体系。
             if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value &&
-                PlayReporter.reachedCompletion(pos, dur)
+                PlayReporter.reachedCompletion(listenedMs, dur)
             ) {
                 lastReportedSongId = sid
-                PlayReporter.reportPlay(sid, pos, isWifi = isOnWifi())
+                PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
 
             // B4：每 5s 落盘一次本歌进度，供断点续播；播完会由 onPlaybackEnded 清除。
@@ -694,20 +697,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val sid = currentSongId.value ?: -1L
             // B4：正常播完 = 这首歌已「听完」，清除进度记录，重播时从 0 分 0 秒对齐。
             if (sid > 0) PlaybackStateManager.clearSongPosition(getApplication(), sid)
-            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value) {
+            val listenedMs = listeningClock.playedMs(sid)
+            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && PlayReporter.reachedCompletion(listenedMs, duration.value)) {
                 lastReportedSongId = sid
-                PlayReporter.reportPlay(sid, duration.value, isWifi = isOnWifi())
+                PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
             onSongEndedCallback?.invoke()
         }
         PlaybackService.onPlaybackPrevious = { onSongPreviousCallback?.invoke() }
         PlaybackService.onIsPlayingChanged = { playing ->
+            listeningClock.setPlaying(playing)
             isPlaying.value = playing
             // 兜底：车机 / 媒体键等不经过 playUrl 的起播路径也补一次 startplay。
             // 同曲去重由 reportStartplay 负责，playUrl 已经报过时这里是空操作。
             if (playing) reportStartplay(currentSongId.value ?: -1L)
         }
-        PlaybackService.onTrackStarted = { sid -> reportStartplay(sid) }
+        PlaybackService.onTrackStarted = { sid ->
+            beginListening(sid, restart = pendingListeningRestart == sid)
+            if (pendingListeningRestart == sid) pendingListeningRestart = null
+            reportStartplay(sid)
+        }
         // 车机 / Android Auto 的取链不经过 playSong 的权益判定，但响应里同样带
         // freeTrialInfo。这里只记「这是试听」，让 startplay / 80% / 自然结束同一道
         // 门控生效；reason 用 LOGIN 是因为车机路径没有歌曲 privilege 可判，只影响
@@ -808,6 +817,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 clearPreloadedState()
                 needsPreload.value = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
+                beginListening(nextTrack.id, restart = auto && !changed)
                 reportStartplay(nextTrack.id)
             }
             transitionedTrack = null
@@ -1350,6 +1360,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 试听标记由账号侧接线（`currentIsTrial`），本函数只留出这一个判定位置，
      * 不另立一套判据。
      */
+    private fun beginListening(songId: Long, restart: Boolean = false) {
+        if (listeningClock.begin(songId, restart)) {
+            lastReportedSongId = -1L
+            lastStartReportedSongId = -1L
+        }
+    }
+
     private fun reportStartplay(songId: Long) {
         // 试听片段不是一次完整播放：与 80% / 自然结束同一条门控，绝不进「最近播放」。
         // 车机路径的试听标记由 PlaybackService.onTrialResolved 在解析媒体项时回填。
@@ -1387,6 +1404,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 移植 981e9b3：歌曲详情的 privilege（无版权判定靠 st）。默认 null 让既有调用点零改动。
         privilege: SongPrivilege? = null,
     ) {
+        if (origin == PlayOrigin.USER || origin == PlayOrigin.AUTO_NEXT) pendingListeningRestart = songId
         val fetchVersion = playGate.next()
         latestPlaySongId = songId
         lastPlayOrigin = origin

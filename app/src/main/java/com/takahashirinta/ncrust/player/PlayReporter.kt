@@ -30,7 +30,7 @@ object PlayReporter {
     /** 业务路径按 `/api/…` 形态书写（请求走 `/eapi/…`，签名用这个）。 */
     const val WEBLOG_PATH = "/api/feedback/weblog"
 
-    /** 判定"听完"的进度阈值。 */
+    /** 判定"听完"的实际收听时长比例。 */
     private const val COMPLETION_THRESHOLD = 0.8f
 
     // Gson 默认会把 HTML 字符转义（`id=` 会变成 `id\u003d`）。参考实现用 JSON.stringify，
@@ -92,7 +92,7 @@ object PlayReporter {
     }
 
     /**
-     * 听完一首歌：发 play。触发时机（自然结束 / 进度 ≥ 80%）与每首一次的判定都在调用方
+     * 听完一首歌：发 play。触发时机（实际收听 ≥ 80%，含自然结束时结算）与每首一次的判定都在调用方
      * （`PlayerViewModel`）。
      */
     fun reportPlay(
@@ -105,8 +105,8 @@ object PlayReporter {
     }
 
     /** 是否已达到"听完"阈值。 */
-    fun reachedCompletion(positionMs: Long, durationMs: Long): Boolean {
-        return durationMs > 0 && positionMs.toFloat() / durationMs.toFloat() >= COMPLETION_THRESHOLD
+    fun reachedCompletion(playedMs: Long, durationMs: Long): Boolean {
+        return durationMs > 0 && playedMs.toFloat() / durationMs.toFloat() >= COMPLETION_THRESHOLD
     }
 
     /**
