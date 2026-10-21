@@ -15,8 +15,6 @@ package com.takahashirinta.ncrust.network
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -55,18 +53,8 @@ object PlaylistWriteGate {
     /** 实测：create 连发会触发 405「操作过于频繁」，串行且间隔 ≥1.5s 稳定通过。 */
     private const val MIN_INTERVAL_MS = 2_000L
 
-    private val mutex = Mutex()
-    private var lastWriteAt = 0L
-
-    suspend fun <T> run(block: suspend () -> T): T = mutex.withLock {
-        val wait = MIN_INTERVAL_MS - (System.currentTimeMillis() - lastWriteAt)
-        if (wait > 0) delay(wait)
-        try {
-            block()
-        } finally {
-            lastWriteAt = System.currentTimeMillis()
-        }
-    }
+    private val gate=MonotonicWriteGate(android.os.SystemClock::elapsedRealtime, { delay(it) }, MIN_INTERVAL_MS)
+    suspend fun <T> run(block: suspend () -> T): T = gate.run(block)
 }
 
 object PlaylistEditApi {
