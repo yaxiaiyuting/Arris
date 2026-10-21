@@ -1,0 +1,34 @@
+method_size —— 单方法 code unit 监控（阈值 2000）
+  输入: /home/duanjb666/deepseek/dist/v3.6.0-gpl/Ncrust-v3.6.0-gpl-release.apk
+  方法总数（含代码）: 340
+  超阈值: 1   预警(>1200): 0
+  ---- Top 25 ----
+  codeUnit   regs  method
+      2050     38  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)
+      1122     41  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.needsPreload (+2 inline/overload)
+      1076     21  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.<init> (+33 inline/overload)
+      1049     60  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentTrack (+14 inline/overload)
+      1010     35  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsSongId (+16 inline/overload)
+       950     25  com.takahashirinta.ncrust.qq.QqApi.searchCounter (+29 inline/overload)
+       828     26  com.takahashirinta.ncrust.qq.QqTokenRefresher.mutex (+12 inline/overload)
+       669     42  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1.invokeSuspend (+20 inline/overload)
+       632     37  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1$3.invokeSuspend (+34 inline/overload)
+       544     20  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.getCurrentIsTrial (+26 inline/overload)
+       527     27  com.takahashirinta.ncrust.qq.QqApi.requestVkeyBatchOnce (+14 inline/overload)
+       506     23  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongArtwork (+10 inline/overload)
+       463     35  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$playSong$3.invokeSuspend (+14 inline/overload)
+       459     16  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.progress (+6 inline/overload)
+       438     15  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.isBuffering (+6 inline/overload)
+       436     19  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.showDynamicLyricFont (+8 inline/overload)
+       423     20  com.takahashirinta.ncrust.qq.QqApi.lastRejection (+3 inline/overload)
+       397     24  com.takahashirinta.ncrust.qq.QqApi.requestVkeyBatch (+4 inline/overload)
+       390     12  com.takahashirinta.ncrust.qq.QqRefreshCommitGuard.decide (+12 inline/overload)
+       383     22  com.takahashirinta.ncrust.qq.QqApi.searchViaMusicu (+8 inline/overload)
+       361     13  com.takahashirinta.ncrust.qq.QqApi.loginWithScanCode (+8 inline/overload)
+       334     23  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.onSongPreviousCallback (+7 inline/overload)
+       331     13  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongName (+7 inline/overload)
+       313     12  com.takahashirinta.ncrust.qq.QqApi.sendPhoneAuthCode (+8 inline/overload)
+       311      9  com.takahashirinta.ncrust.qq.QqApi.requestScanQrCode (+2 inline/overload)
+  ---- 超阈值（必须拆分，铁律 24）----
+      2050     38  com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)
+  报告已写入 /home/duanjb666/deepseek/dist/v3.6.1-gpl/method-sizes-baseline.json

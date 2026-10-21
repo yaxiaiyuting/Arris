@@ -1,0 +1,219 @@
+{
+  "source": "/home/duanjb666/deepseek/dist/v3.6.0-gpl/Ncrust-v3.6.0-gpl-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 340,
+  "violations": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.W.l",
+      "class": "b5.W",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    }
+  ],
+  "warnings": [],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.W.l",
+      "class": "b5.W",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.needsPreload (+2 inline/overload)",
+      "obfuscated": "b5.W.z",
+      "class": "b5.W",
+      "codeUnits": 1122,
+      "registers": 41,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.<init> (+33 inline/overload)",
+      "obfuscated": "b5.W.<init>",
+      "class": "b5.W",
+      "codeUnits": 1076,
+      "registers": 21,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentTrack (+14 inline/overload)",
+      "obfuscated": "b5.W.E",
+      "class": "b5.W",
+      "codeUnits": 1049,
+      "registers": 60,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsSongId (+16 inline/overload)",
+      "obfuscated": "b5.W.h",
+      "class": "b5.W",
+      "codeUnits": 1010,
+      "registers": 35,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.searchCounter (+29 inline/overload)",
+      "obfuscated": "K4.J.d",
+      "class": "K4.J",
+      "codeUnits": 950,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqTokenRefresher.mutex (+12 inline/overload)",
+      "obfuscated": "K4.C1.b",
+      "class": "K4.C1",
+      "codeUnits": 828,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1.invokeSuspend (+20 inline/overload)",
+      "obfuscated": "b5.O.invokeSuspend",
+      "class": "b5.O",
+      "codeUnits": 669,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1$3.invokeSuspend (+34 inline/overload)",
+      "obfuscated": "b5.N.invokeSuspend",
+      "class": "b5.N",
+      "codeUnits": 632,
+      "registers": 37,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.getCurrentIsTrial (+26 inline/overload)",
+      "obfuscated": "b5.d.invoke",
+      "class": "b5.d",
+      "codeUnits": 544,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.requestVkeyBatchOnce (+14 inline/overload)",
+      "obfuscated": "K4.J.k",
+      "class": "K4.J",
+      "codeUnits": 527,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongArtwork (+10 inline/overload)",
+      "obfuscated": "b5.W.D",
+      "class": "b5.W",
+      "codeUnits": 506,
+      "registers": 23,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$playSong$3.invokeSuspend (+14 inline/overload)",
+      "obfuscated": "b5.G.invokeSuspend",
+      "class": "b5.G",
+      "codeUnits": 463,
+      "registers": 35,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.progress (+6 inline/overload)",
+      "obfuscated": "b5.W.f",
+      "class": "b5.W",
+      "codeUnits": 459,
+      "registers": 16,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.isBuffering (+6 inline/overload)",
+      "obfuscated": "b5.W.y",
+      "class": "b5.W",
+      "codeUnits": 438,
+      "registers": 15,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.showDynamicLyricFont (+8 inline/overload)",
+      "obfuscated": "b5.W.o",
+      "class": "b5.W",
+      "codeUnits": 436,
+      "registers": 19,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.lastRejection (+3 inline/overload)",
+      "obfuscated": "K4.J.c",
+      "class": "K4.J",
+      "codeUnits": 423,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.requestVkeyBatch (+4 inline/overload)",
+      "obfuscated": "K4.J.j",
+      "class": "K4.J",
+      "codeUnits": 397,
+      "registers": 24,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshCommitGuard.decide (+12 inline/overload)",
+      "obfuscated": "K4.z1.invoke",
+      "class": "K4.z1",
+      "codeUnits": 390,
+      "registers": 12,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.searchViaMusicu (+8 inline/overload)",
+      "obfuscated": "K4.J.o",
+      "class": "K4.J",
+      "codeUnits": 383,
+      "registers": 22,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.loginWithScanCode (+8 inline/overload)",
+      "obfuscated": "K4.J.g",
+      "class": "K4.J",
+      "codeUnits": 361,
+      "registers": 13,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.onSongPreviousCallback (+7 inline/overload)",
+      "obfuscated": "b5.W.H",
+      "class": "b5.W",
+      "codeUnits": 334,
+      "registers": 23,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongName (+7 inline/overload)",
+      "obfuscated": "b5.W.B",
+      "class": "b5.W",
+      "codeUnits": 331,
+      "registers": 13,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.sendPhoneAuthCode (+8 inline/overload)",
+      "obfuscated": "K4.J.p",
+      "class": "K4.J",
+      "codeUnits": 313,
+      "registers": 12,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.requestScanQrCode (+2 inline/overload)",
+      "obfuscated": "K4.J.i",
+      "class": "K4.J",
+      "codeUnits": 311,
+      "registers": 9,
+      "dex": "classes.dex"
+    }
+  ]
+}

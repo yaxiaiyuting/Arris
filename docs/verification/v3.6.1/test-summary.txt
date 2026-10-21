@@ -1,0 +1,9 @@
+suites=233
+tests=2968
+failures=0
+errors=0
+skipped=0
+
+com.takahashirinta.ncrust.network.MonotonicWriteGateTest: tests=4 failures=0 errors=0 skipped=0
+com.takahashirinta.ncrust.player.ListeningClockTest: tests=6 failures=0 errors=0 skipped=0
+com.takahashirinta.ncrust.qq.QqRefreshFlightTest: tests=8 failures=0 errors=0 skipped=0

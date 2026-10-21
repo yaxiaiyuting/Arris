@@ -1,0 +1,59 @@
+{
+  "versionName": "3.6.1-gpl",
+  "versionCode": 77,
+  "buildCommit": "aa24843eb1fbcff075931a36ba6212538cd5932e",
+  "appTree": "4651b668a9432888757750db55fbff8dde3b69de",
+  "kanesumiCommit": "acddf3e53d6a90f6b7d19d6a0445631457c3bda5",
+  "buildResult": "BUILD SUCCESSFUL in 4m 30s",
+  "tests": {
+    "suites": 233,
+    "tests": 2968,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "newTests": 18
+  },
+  "lint": {
+    "Information": 5,
+    "Warning": 61
+  },
+  "certificateSha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "apkEmbeddedVcs": "generate_error_reason: NO_VALID_GIT_FOUND",
+  "methodSize": {
+    "scope": "QQ refresh/vkey, playlist gate, reporting, PlayerViewModel",
+    "methods": 376,
+    "preexistingOverLimit": [
+      {
+        "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+        "obfuscated": "b5.X.l",
+        "class": "b5.X",
+        "codeUnits": 2050,
+        "registers": 38,
+        "dex": "classes.dex"
+      }
+    ],
+    "newHelperMethods": 17,
+    "newHelperMaximum": 319,
+    "newHelperViolations": []
+  },
+  "artifacts": {
+    "Ncrust-v3.6.1-gpl-release.apk": {
+      "size": 10527585,
+      "sha256": "02fe3c1f7cf8efcc19a8c12d844a06339c1dd30a9fe1a13da7c1e969ef5f6596"
+    },
+    "Ncrust-v3.6.1-gpl-debug.apk": {
+      "size": 32331973,
+      "sha256": "5aab2d83c9555f07ffbce27d2d25aa093fac7f07e6f2a993f46ebb538d44d0d5"
+    },
+    "mapping-v3.6.1.txt.gz": {
+      "size": 5639162,
+      "sha256": "7aadd4497ffef50270e6d6488799dd197a1037cea9fac88816c3c98625717742"
+    },
+    "mapping-v3.6.1.txt.gz.sha256": {
+      "size": 88,
+      "sha256": "4eaadc255a0ffc51a8912bc1ebc9c948bfe8685238f685a7cae63c3a485eef40"
+    }
+  },
+  "deviceTesting": false,
+  "birthdayAnimationChanges": false
+}

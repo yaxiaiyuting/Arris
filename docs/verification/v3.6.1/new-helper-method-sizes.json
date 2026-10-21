@@ -1,0 +1,146 @@
+{
+  "source": "/home/duanjb666/deepseek/dist/v3.6.1-gpl/Ncrust-v3.6.1-gpl-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 17,
+  "violations": [],
+  "warnings": [],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshRetry.INSTANCE (+1 inline/overload)",
+      "obfuscated": "K4.y1.a",
+      "class": "K4.y1",
+      "codeUnits": 319,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.MonotonicWriteGate.run (+2 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.network.MonotonicWriteGate.run",
+      "class": "com.takahashirinta.ncrust.network.MonotonicWriteGate",
+      "codeUnits": 269,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.exoplayer.StandaloneMediaClock.getPositionUs (+2 inline/overload)",
+      "obfuscated": "J4.g.c",
+      "class": "J4.g",
+      "codeUnits": 44,
+      "registers": 8,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.ListeningClock.settle",
+      "obfuscated": "J4.g.d",
+      "class": "J4.g",
+      "codeUnits": 38,
+      "registers": 7,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>",
+      "obfuscated": "com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>",
+      "class": "com.takahashirinta.ncrust.network.MonotonicWriteGate",
+      "codeUnits": 26,
+      "registers": 6,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshRetry$request$1.invokeSuspend",
+      "obfuscated": "K4.x1.invokeSuspend",
+      "class": "K4.x1",
+      "codeUnits": 22,
+      "registers": 9,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.exoplayer.StandaloneMediaClock.start (+1 inline/overload)",
+      "obfuscated": "J4.g.e",
+      "class": "J4.g",
+      "codeUnits": 21,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.exoplayer.StandaloneMediaClock.resetPosition (+1 inline/overload)",
+      "obfuscated": "J4.g.b",
+      "class": "J4.g",
+      "codeUnits": 20,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshFlight$run$1.invokeSuspend",
+      "obfuscated": "K4.w1.invokeSuspend",
+      "class": "K4.w1",
+      "codeUnits": 17,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;",
+      "obfuscated": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.invokeSuspend",
+      "class": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1",
+      "codeUnits": 17,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.exoplayer.StandaloneMediaClock.setPlaybackParameters",
+      "obfuscated": "J4.g.l",
+      "class": "J4.g",
+      "codeUnits": 14,
+      "registers": 4,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>",
+      "obfuscated": "com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>",
+      "class": "com.takahashirinta.ncrust.network.MonotonicWriteGate",
+      "codeUnits": 10,
+      "registers": 7,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshRetry.<init> (+1 inline/overload)",
+      "obfuscated": "K4.y1.<clinit>",
+      "class": "K4.y1",
+      "codeUnits": 8,
+      "registers": 1,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshFlight$run$1.<init>",
+      "obfuscated": "K4.w1.<init>",
+      "class": "K4.w1",
+      "codeUnits": 6,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqRefreshRetry$request$1.<init>",
+      "obfuscated": "K4.x1.<init>",
+      "class": "K4.x1",
+      "codeUnits": 6,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.<init>",
+      "obfuscated": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.<init>",
+      "class": "com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1",
+      "codeUnits": 6,
+      "registers": 3,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.exoplayer.StandaloneMediaClock.getPlaybackParameters",
+      "obfuscated": "J4.g.k",
+      "class": "J4.g",
+      "codeUnits": 5,
+      "registers": 2,
+      "dex": "classes.dex"
+    }
+  ]
+}

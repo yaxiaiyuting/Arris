@@ -1,0 +1,26 @@
+method_size —— 单方法 code unit 监控（阈值 2000）
+  输入: /home/duanjb666/deepseek/dist/v3.6.1-gpl/Ncrust-v3.6.1-gpl-release.apk
+  方法总数（含代码）: 17
+  超阈值: 0   预警(>1200): 0
+  ---- Top 17 ----
+  codeUnit   regs  method
+       319     27  com.takahashirinta.ncrust.qq.QqRefreshRetry.INSTANCE (+1 inline/overload)
+       269     26  com.takahashirinta.ncrust.network.MonotonicWriteGate.run (+2 inline/overload)
+        44      8  androidx.media3.exoplayer.StandaloneMediaClock.getPositionUs (+2 inline/overload)
+        38      7  com.takahashirinta.ncrust.player.ListeningClock.settle
+        26      6  com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>
+        22      9  com.takahashirinta.ncrust.qq.QqRefreshRetry$request$1.invokeSuspend
+        21      3  androidx.media3.exoplayer.StandaloneMediaClock.start (+1 inline/overload)
+        20      3  androidx.media3.exoplayer.StandaloneMediaClock.resetPosition (+1 inline/overload)
+        17      3  com.takahashirinta.ncrust.qq.QqRefreshFlight$run$1.invokeSuspend
+        17      3  com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
+        14      4  androidx.media3.exoplayer.StandaloneMediaClock.setPlaybackParameters
+        10      7  com.takahashirinta.ncrust.network.MonotonicWriteGate.<init>
+         8      1  com.takahashirinta.ncrust.qq.QqRefreshRetry.<init> (+1 inline/overload)
+         6      3  com.takahashirinta.ncrust.qq.QqRefreshFlight$run$1.<init>
+         6      3  com.takahashirinta.ncrust.qq.QqRefreshRetry$request$1.<init>
+         6      3  com.takahashirinta.ncrust.network.MonotonicWriteGate$run$1.<init>
+         5      2  androidx.media3.exoplayer.StandaloneMediaClock.getPlaybackParameters
+  ✅ 全部方法 <= 2000 code unit
+  报告已写入 docs/verification/v3.6.1/new-helper-method-sizes.json
+✅ 全部方法 <= 2000 code unit
