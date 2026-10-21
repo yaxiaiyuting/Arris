@@ -4,6 +4,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ListeningClockTest {
+    @Test fun manualReplayIsConsumedOnceAcrossTransitionAndTrackStartedCallbacks() {
+        var time = 0L
+        val clock = ListeningClock { time }
+        clock.begin(1)
+        clock.setPlaying(true)
+        time = 5_000
+        clock.restartOnNextBegin(1)
+        assertTrue(clock.begin(1))
+        time += 100
+        assertFalse(clock.begin(1))
+        assertEquals(100L, clock.playedMs(1))
+
+        // The first callback for a different track also consumes its pending restart.
+        clock.restartOnNextBegin(2)
+        assertTrue(clock.begin(2))
+        time += 100
+        assertFalse(clock.begin(2))
+        assertEquals(100L, clock.playedMs(2))
+    }
+
     @Test fun pausedSeekAndRestoredPositionCannotCountAsListening() {
         var elapsed=0L;val clock=ListeningClock {elapsed}
         clock.begin(1);elapsed+=210_000

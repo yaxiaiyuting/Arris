@@ -243,7 +243,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 防止同一首歌重复上报播放行为。
     private var lastReportedSongId = -1L
     private val listeningClock = com.takahashirinta.ncrust.player.ListeningClock(android.os.SystemClock::elapsedRealtime)
-    private var pendingListeningRestart: Long? = null
     // 同理防止同一首歌重复上报「开始播放」（startplay）。
     private var lastStartReportedSongId = -1L
 
@@ -713,8 +712,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (playing) reportStartplay(currentSongId.value ?: -1L)
         }
         PlaybackService.onTrackStarted = { sid ->
-            beginListening(sid, restart = pendingListeningRestart == sid)
-            if (pendingListeningRestart == sid) pendingListeningRestart = null
+            beginListening(sid)
             reportStartplay(sid)
         }
         // 车机 / Android Auto 的取链不经过 playSong 的权益判定，但响应里同样带
@@ -1349,6 +1347,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         onQualityPreferenceChanged()
     }
 
+    /** Actual track changes and explicit replays reset report deduplication together. */
+    private fun beginListening(songId: Long, restart: Boolean = false) {
+        if (listeningClock.begin(songId, restart)) {
+            lastReportedSongId = -1L
+            lastStartReportedSongId = -1L
+        }
+    }
+
     /**
      * 开始播一首就发 startplay（听歌打卡的第一步，让这首歌进「最近播放」）。
      *
@@ -1360,13 +1366,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 试听标记由账号侧接线（`currentIsTrial`），本函数只留出这一个判定位置，
      * 不另立一套判据。
      */
-    private fun beginListening(songId: Long, restart: Boolean = false) {
-        if (listeningClock.begin(songId, restart)) {
-            lastReportedSongId = -1L
-            lastStartReportedSongId = -1L
-        }
-    }
-
     private fun reportStartplay(songId: Long) {
         // 试听片段不是一次完整播放：与 80% / 自然结束同一条门控，绝不进「最近播放」。
         // 车机路径的试听标记由 PlaybackService.onTrialResolved 在解析媒体项时回填。
@@ -1404,7 +1403,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 移植 981e9b3：歌曲详情的 privilege（无版权判定靠 st）。默认 null 让既有调用点零改动。
         privilege: SongPrivilege? = null,
     ) {
-        if (origin == PlayOrigin.USER || origin == PlayOrigin.AUTO_NEXT) pendingListeningRestart = songId
+        if (origin == PlayOrigin.USER || origin == PlayOrigin.AUTO_NEXT) {
+            listeningClock.restartOnNextBegin(songId)
+        }
         val fetchVersion = playGate.next()
         latestPlaySongId = songId
         lastPlayOrigin = origin
