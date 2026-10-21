@@ -394,20 +394,17 @@ object QqApi {
             // 调用方看到的是「需要重新登录」，而不是一个被吞掉的刷新失败。
             Log.i(TAG, "取链前主动续期被服务端判为凭证失效（本进程不再重试）")
         }
-        val first = requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel)
-        if (!isAuthRejection(first)) return first
-        // 走到这里 = 本地有票据、服务端却把我们当成没登录（或直接 401/403）。
-        // v3.4.9 之前这里就是终点：用户看到「此源无版权/要会员」，然后被迫重新登录。
-        Log.i(TAG, "vkey 被服务端拒绝（$first.transportRejection），尝试静默续期登录态")
-        val refreshed = QqTokenRefresher.refreshAfterRejection(QqClient.appContextOrNull())
-        if (refreshed != QqTokenRefresher.RefreshResult.REFRESHED) {
-            Log.i(TAG, "静默续期未成功：${refreshed}（不重试，按原结论上报）")
-            return first
-        }
-        Log.i(TAG, "静默续期成功，用新票据重试一次取链")
-        // 递归的**出口**：这里调的是 `...Once`（不带重试的那一层），
-        // 所以「拒绝 → 刷新 → 再拒绝」不可能变成循环。
-        return requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel)
+        return QqRefreshRetry.request(
+            once = { requestVkeyBatchOnce(songMid, mediaMid, types, requestedLevel) },
+            rejected = ::isAuthRejection,
+            refresh = {
+                val outcome=QqTokenRefresher.refreshAfterRejection(QqClient.appContextOrNull())
+                Log.i(TAG, "取链后的续期结果：$outcome")
+                outcome==QqTokenRefresher.RefreshResult.REFRESHED
+            },
+            revision = QqAuthStore::currentAuthRevision,
+            loggedIn = QqClient::isLoggedIn,
+        )
     }
 
     /**

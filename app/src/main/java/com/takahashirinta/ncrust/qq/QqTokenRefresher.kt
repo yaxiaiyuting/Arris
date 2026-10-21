@@ -14,8 +14,6 @@ package com.takahashirinta.ncrust.qq
 import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 /**
@@ -164,7 +162,7 @@ object QqTokenRefresher {
         /** `code=0` 但响应里没有可落盘的 cookie（半份凭证），本次不覆盖旧登录态。 */
         INVALID_RESPONSE,
 
-        /** 有另一次刷新正在飞 —— 这次什么都没做（不是失败）。 */
+        /** 兼容历史结果；当前调用会等待在飞续期完成，不再产生此值。 */
         SKIPPED_IN_FLIGHT,
 
         /** 刚失败过，还在冷却里。 */
@@ -180,7 +178,7 @@ object QqTokenRefresher {
         NOT_NEEDED,
     }
 
-    private val mutex = Mutex()
+    private val flight = QqRefreshFlight()
 
     @Volatile
     private var lastFailedAtMs: Long = 0L
@@ -270,16 +268,16 @@ object QqTokenRefresher {
         // 冷却检查放在抢锁**之前**：并发调用里排在后面的那些应当立刻得到 SKIPPED_COOLDOWN，
         // 而不是排队等到拿到锁之后再发现「刚失败过」。
         if (!force && isCoolingDown()) return RefreshResult.SKIPPED_COOLDOWN
-        if (mutex.isLocked) return RefreshResult.SKIPPED_IN_FLIGHT
-        return mutex.withLock {
+        return flight.run {
             // 拿到锁之后再读一次：等锁期间别人可能已经刷成功了。
-            if (isAuthRejectedForCurrentSession()) return@withLock RefreshResult.AUTH_EXPIRED
-            if (!QqAuthStore.isLoggedIn(ctx)) return@withLock RefreshResult.NO_CREDENTIAL
-            if (isRecentlySucceeded()) return@withLock RefreshResult.SKIPPED_RECENT_SUCCESS
-            val stored = QqRefreshStore.get(ctx) ?: return@withLock RefreshResult.NO_CREDENTIAL
-            if (!isUsableFor(ctx, stored)) return@withLock RefreshResult.NO_CREDENTIAL
+            if (isAuthRejectedForCurrentSession()) return@run RefreshResult.AUTH_EXPIRED
+            if (!QqAuthStore.isLoggedIn(ctx)) return@run RefreshResult.NO_CREDENTIAL
+            if (isRecentlySucceeded()) return@run RefreshResult.SKIPPED_RECENT_SUCCESS
+            val stored = QqRefreshStore.get(ctx) ?: return@run RefreshResult.NO_CREDENTIAL
+            if (!isUsableFor(ctx, stored)) return@run RefreshResult.NO_CREDENTIAL
+            if (!force && !stored.needsRefresh()) return@run RefreshResult.NOT_NEEDED
             // force 路径也要尊重冷却：否则「一首歌失败 → 每首歌都再试一次」。
-            if (isCoolingDown()) return@withLock RefreshResult.SKIPPED_COOLDOWN
+            if (isCoolingDown()) return@run RefreshResult.SKIPPED_COOLDOWN
             // 版本必须在**发请求前**取。任何登录/登出/另一份凭证写入都会推进它。
             val startedRevision = QqAuthStore.currentAuthRevision()
             doRefresh(ctx, stored, startedRevision)
@@ -448,7 +446,7 @@ object QqTokenRefresher {
             QqAuthStore.saveCookie(ctx, newCookie)
             val saved = QqRefreshStore.save(ctx, newCredential)
             lastFailedAtMs = 0L
-            lastSuccessAtMs = System.currentTimeMillis()
+            lastSuccessAtMs = android.os.SystemClock.elapsedRealtime()
             lastSuccessRevision = QqAuthStore.currentAuthRevision()
             authRejectedRevision = -1L
             Log.i(
@@ -519,7 +517,7 @@ object QqTokenRefresher {
         if (at <= 0L) return false
         // 版本变了 = 这是另一份登录态；旧会话的冷却不能挡住新会话。
         if (lastFailedRevision != QqAuthStore.currentAuthRevision()) return false
-        return System.currentTimeMillis() - at < FAILED_COOLDOWN_MS
+        return android.os.SystemClock.elapsedRealtime() - at < FAILED_COOLDOWN_MS
     }
 
     /**
@@ -531,12 +529,12 @@ object QqTokenRefresher {
     private fun isRecentlySucceeded(): Boolean {
         val at = lastSuccessAtMs
         if (at <= 0L) return false
-        if (System.currentTimeMillis() - at >= SUCCESS_QUIET_MS) return false
+        if (android.os.SystemClock.elapsedRealtime() - at >= SUCCESS_QUIET_MS) return false
         return lastSuccessRevision == QqAuthStore.currentAuthRevision()
     }
 
     private fun markFailed() {
-        lastFailedAtMs = System.currentTimeMillis()
+        lastFailedAtMs = android.os.SystemClock.elapsedRealtime()
         lastFailedRevision = QqAuthStore.currentAuthRevision()
     }
 }
