@@ -5057,3 +5057,9 @@ S6 简洁档的帧时间复测过（`docs/verification/v3.2.2/probe-perf-tier.md
 Microphone input is optional and only starts after the user explicitly taps the puff action and grants RECORD_AUDIO. It uses a short foreground `AudioRecord` session with calibration, a bounded window, and `finally` stop/release. Manual extinction remains available. Do not request audio focus, start SCO, pause playback or change the output route. No audio is persisted or uploaded. Detection thresholds require real-device validation; synthetic samples are not an accuracy claim.
 
 `CelebrationArtView` owns its vsync clock and cached vectors/gradients outside Compose state. `FireworkSimulation` uses a fixed 3000-slot pool and a finite seven-shell choreography. `FireworkPainter` uses cached glow sprites and a bounded trail bitmap. Close/background/disabled motion releases the renderer; draw failure falls back to a static greeting. Birthday motion deliberately follows time, and is never described as reacting to music. The approved celebration artwork may use warm gradients and rounded action buttons; this exception does not change player design rules.
+
+## v3.6.1 审查修复
+
+QQ 的 `QqRefreshFlight` 串行等待在飞提交，锁内重查会话、寿命和冷却。`QqRefreshRetry` 绑定请求开始时的 auth revision，在旧票被拒且已换票时只重试一次；不得把“刚成功刷新”当作禁止使用新票重试的理由。QQ 冷却与 `MonotonicWriteGate` 使用 elapsedRealtime，不用日期时间。
+
+`ListeningClock` 只接受实际 isPlaying 状态和单调时间，seek/恢复位置不是它的输入。80% 触发与曲终补报都传实际累计值；真实换歌/用户重播开启新会话，音质重载保留会话。不得重新把 position 或 duration 当作 playedMs。
