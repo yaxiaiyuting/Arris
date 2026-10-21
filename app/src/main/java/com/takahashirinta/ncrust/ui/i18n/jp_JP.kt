@@ -416,6 +416,8 @@ val jpJP = Strings(
     insertNextDesc = "現在の曲の直後に再生",
 
     about = AboutStrings(
+        celebration = celebrationFor("ja-JP"),
+
         aboutTitle = "Arrisについて",
         aboutAppSubtitle = "ncm 非公式クライアント",
         aboutSectionProject = "プロジェクト情報",

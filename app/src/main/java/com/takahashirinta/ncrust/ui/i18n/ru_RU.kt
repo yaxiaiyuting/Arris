@@ -417,6 +417,8 @@ val ruRU = Strings(
     insertNextDesc = "Играть сразу после текущего трека",
 
     about = AboutStrings(
+        celebration = celebrationFor("ru-RU"),
+
         aboutTitle = "О Arris",
         aboutAppSubtitle = "Неофициальный клиент ncm",
         aboutSectionProject = "О проекте",

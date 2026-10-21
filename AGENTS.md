@@ -5048,3 +5048,12 @@ S6 简洁档的帧时间复测过（`docs/verification/v3.2.2/probe-perf-tier.md
 - **S6（SM-G9209 / Android 7.0）未验证**：本轮该设备不在线（`adb devices` 只有两台 API 33 模拟器）。
 - **B 站登录态播放未验证**（无账号；B 站不在登录音源列表里）。
 - **PCDN 第三方域名**本轮没抓到实流（取到的都是 `*.bilivideo.com`），判据由单测钉住。
+# v3.6.0: birthday celebration and Tux Easter egg
+
+`celebration/` is an isolated native overlay: `BirthdayRule` / `VersionTapGate` / `BlowGate` are pure logic; `CelebrationPrefs` owns local month/day, opt-in, motion switch and bounded annual shown-year markers. Visible settings and internal keys are registered as `isNewInV360`. `AboutStrings.celebration` keeps the `Strings` root constructor at 148 parameters.
+
+`CelebrationHost` waits for the unobstructed home route, collapsed player, finished splash and first-run prompts, and a RESUMED lifecycle. It marks the year only after a visible overlay frame. Settings previews do not consume that year. February 29 is observed on February 28 in non-leap years.
+
+Microphone input is optional and only starts after the user explicitly taps the puff action and grants RECORD_AUDIO. It uses a short foreground `AudioRecord` session with calibration, a bounded window, and `finally` stop/release. Manual extinction remains available. Do not request audio focus, start SCO, pause playback or change the output route. No audio is persisted or uploaded. Detection thresholds require real-device validation; synthetic samples are not an accuracy claim.
+
+`CelebrationArtView` owns its vsync clock and cached vectors/gradients outside Compose state. `FireworkSimulation` uses a fixed 3000-slot pool and a finite seven-shell choreography. `FireworkPainter` uses cached glow sprites and a bounded trail bitmap. Close/background/disabled motion releases the renderer; draw failure falls back to a static greeting. Birthday motion deliberately follows time, and is never described as reacting to music. The approved celebration artwork may use warm gradients and rounded action buttons; this exception does not change player design rules.

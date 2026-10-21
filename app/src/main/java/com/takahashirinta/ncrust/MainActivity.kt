@@ -374,8 +374,10 @@ class MainActivity : ComponentActivity() {
                     val metroColors = remember(ncrust, isDark) { ncrust.toMetroColors(isDark) }
                     MetroTheme(colors = metroColors) {
                     var showSplash by remember { mutableStateOf(true) }
+                    var showBatteryPrompt by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.fillMaxSize()) {
                         MainScreen(
+                            celebrationsReady = !showSplash && !showBatteryPrompt,
                             themeIndex = themeIndex,
                             onThemeChange = { newIndex ->
                                 themeIndex = newIndex
@@ -417,7 +419,6 @@ class MainActivity : ComponentActivity() {
 
                     // 首次启动（splash 结束后）申请后台活动白名单：ColorOS/MIUI 等
                     // 会在熄屏后清理后台，导致播放服务被杀、重进又走一遍 splash。
-                    var showBatteryPrompt by remember { mutableStateOf(false) }
                     val batteryPrefs = remember {
                         getSharedPreferences("ncrust_settings", 0)
                     }
@@ -906,6 +907,7 @@ private enum class LikedBulkAction { PLAY, INSERT, APPEND }
 
 @Composable
 fun MainScreen(
+    celebrationsReady: Boolean = true,
     themeIndex: Int = 0,
     onThemeChange: (Int) -> Unit = {},
     themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -3322,6 +3324,12 @@ fun MainScreen(
         // (实测展开时 Compose:recompose 119 次/65ms)。derivedStateOf 只在布尔值
         // 真正翻转(阈值穿越)时才通知, 动画期间零重组。
         PlayerBackHandler(progress, bigScreen, onToggleBigScreen) { collapseCard() }
+        com.takahashirinta.ncrust.celebration.CelebrationHost(
+            allowed = celebrationsReady && isInMain && menuSong == null &&
+                !showWebLogin && !showQrRelogin && !showQqLogin && !showQqQr && !showQqPhone && !showQqScan && !showBiliLogin &&
+                !showCreatePlaylist && !showAddToPlaylist && !showAddToLocalPlaylist,
+            playerProgress = { progress.value },
+        )
     }
     }
 }

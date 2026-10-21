@@ -417,6 +417,8 @@ val en = Strings(
     insertNextDesc = "Play immediately after the current track",
 
     about = AboutStrings(
+        celebration = celebrationFor("en-US"),
+
         aboutTitle = "About Arris",
         aboutAppSubtitle = "Unofficial ncm client",
         aboutSectionProject = "Project Info",

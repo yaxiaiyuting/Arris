@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Optional, foreground-only birthday puff detection, requested only on user action. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <!-- v1.6.0 · D3：Android 16 的实时更新（Live Updates）。真机实测权限名就是这个
          （不是文档里常见的 ..._ONGOING_NOTIFICATIONS）；只有 API 36+ 会用到，
          运行时还要 NotificationManager.canPostPromotedNotifications() 通过才发。 -->

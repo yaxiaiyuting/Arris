@@ -416,6 +416,8 @@ val jpMY = Strings(
     insertNextDesc = "現在曲 直後 奏",
 
     about = AboutStrings(
+        celebration = celebrationFor("ja-MY"),
+
         aboutTitle = "Arris 紹介",
         aboutAppSubtitle = "王易雲音楽 第三者 客",
         aboutSectionProject = "項目 情報",

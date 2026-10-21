@@ -167,3 +167,10 @@ gradle.projectsEvaluated {
   }
 }
 ```
+# Tux celebration artwork
+
+Tux was originally created by Larry Ewing using The GIMP. Arris includes newly drawn vector scenes and accessories based on Tux, credited in the About screen. The original character is shared with the Linux community; Arris does not claim exclusive ownership of Tux.
+
+Source and attribution guidance: https://www.kernel.org/faq.html#can-i-use-the-word-linux-or-the-tux-logo
+
+The Arris scene paths and native celebration renderer are distributed with this fork under GPL-3.0. No remote image or third-party JavaScript fireworks runtime is bundled.

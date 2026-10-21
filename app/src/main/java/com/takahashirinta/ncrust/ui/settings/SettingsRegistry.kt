@@ -227,6 +227,7 @@ data class SettingsEntry(
      * 「顺手夹带了无关功能项」才会被机械挡住。
      */
     val isNewInV3413: Boolean = false,
+    val isNewInV360: Boolean = false,
     /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
@@ -793,6 +794,17 @@ object SettingsRegistry {
                 newInV320 = true,
             )
         )
+
+        // Birthday month/day are local only. All persisted keys and action rows are registered.
+        add(action("action.birthday_date", SettingsGroup.APPEARANCE, "about.celebration.dateTitle"))
+        add(SettingsEntry("birthday_celebration_enabled", "birthday_celebration_enabled", SettingsEntryType.SWITCH, false, SettingsGroup.APPEARANCE,
+            titleKey="about.celebration.enabledTitle", subtitleKey="about.celebration.enabledHint", isNewInV360=true))
+        add(SettingsEntry("easter_egg_animation_enabled", "easter_egg_animation_enabled", SettingsEntryType.SWITCH, true, SettingsGroup.APPEARANCE,
+            titleKey="about.celebration.animationTitle", subtitleKey="about.celebration.animationHint", isNewInV360=true))
+        add(action("action.birthday_preview", SettingsGroup.APPEARANCE, "about.celebration.previewTitle"))
+        for ((key, default) in listOf("birthday_month" to 0, "birthday_day" to 0, "birthday_shown_years" to emptySet<String>())) {
+            add(SettingsEntry(key,key,SettingsEntryType.INFO,default,SettingsGroup.APPEARANCE,isInternal=true,isNewInV360=true))
+        }
 
         // ── 播放与音质 ────────────────────────────────────────────────────────────────
         add(

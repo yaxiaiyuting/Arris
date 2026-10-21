@@ -417,6 +417,8 @@ val deDE = Strings(
     insertNextDesc = "Sofort nach dem aktuellen Titel abspielen",
 
     about = AboutStrings(
+        celebration = celebrationFor("de-DE"),
+
         aboutTitle = "Über Arris",
         aboutAppSubtitle = "Inoffizieller ncm Client",
         aboutSectionProject = "Projektinfo",

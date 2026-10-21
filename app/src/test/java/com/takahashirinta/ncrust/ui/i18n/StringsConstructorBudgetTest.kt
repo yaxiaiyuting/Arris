@@ -100,6 +100,7 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.MotionStrings",
         "com.takahashirinta.ncrust.ui.i18n.SettingsStrings",
         "com.takahashirinta.ncrust.ui.i18n.AboutStrings",
+        "com.takahashirinta.ncrust.ui.i18n.CelebrationStrings",
         "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings",
         // v2.8.0：波形效果分级那一组（16 条）。加组时必须同步这里，否则它是**监控盲区**。
         "com.takahashirinta.ncrust.ui.i18n.WaveformStrings",
@@ -359,7 +360,7 @@ class StringsConstructorBudgetTest {
             // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
             "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 88,
-            "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 25,
+            "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 26,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
         expected.forEach { (name, n) ->

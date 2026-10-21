@@ -107,7 +107,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                 CascadeBlock(delayMillis = 40) {
                     Column {
                         AboutSection(s.aboutSectionProject.uppercase(), accent)
-                        AboutRow(s.aboutVersion, VERSION)
+                        com.takahashirinta.ncrust.celebration.VersionEggRow(s.aboutVersion, VERSION)
                         // v3.4.13：手动检查更新（不受自动检查 24 小时窗口限制）。
                         AboutActionRow(
                             label = updateStrings.checkNow,
@@ -153,6 +153,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                         AboutRow(s.aboutCreditCli, "Suxiaoqinx/Netease_url (MIT)")
                         AboutRow(s.aboutCreditAnim, "SaltPlayerSource")
                         AboutRow(s.aboutCreditDesign, "Apple Music for Android")
+                        AboutRow("Tux", "Larry Ewing / The GIMP · Arris")
                         Spacer(Modifier.height(32.dp))
                     }
                 }

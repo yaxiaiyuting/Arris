@@ -844,6 +844,7 @@ data class Strings(
     val aboutAppSubtitle: String get() = about.aboutAppSubtitle
     val aboutSectionProject: String get() = about.aboutSectionProject
     val aboutVersion: String get() = about.aboutVersion
+    val celebration: CelebrationStrings get() = about.celebration
     val aboutDeveloperOriginal: String get() = about.aboutDeveloperOriginal
     val aboutDeveloperFork: String get() = about.aboutDeveloperFork
     val aboutLicense: String get() = about.aboutLicense
@@ -1933,6 +1934,7 @@ data class WaveformStrings(
  * 参数数量监控见 `StringsConstructorBudgetTest`。
  */
 data class AboutStrings(
+    val celebration: CelebrationStrings,
 
     // About
     val aboutTitle: String,

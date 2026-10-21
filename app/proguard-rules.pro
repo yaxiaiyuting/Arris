@@ -111,3 +111,8 @@
 # （表现是「每次进页面都重新匹配一次」，用户感知为「变慢了」而不是「坏了」——
 #  正因为它不崩，这类问题更难被发现，所以 keep + 断言 key 名的单测两条都要）。
 -keep class com.takahashirinta.ncrust.crosssource.** { *; }
+
+# Keep the new, isolated celebration renderer and Compose lambdas below the DEX
+# method-size budget. R8 otherwise merges/inlines the whole drawing pipeline and
+# dialog contents into >2000-code-unit bodies. Shrinking and renaming stay on.
+-keep,allowshrinking,allowobfuscation class com.takahashirinta.ncrust.celebration.** { *; }

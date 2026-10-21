@@ -416,6 +416,8 @@ scanConnecting = "正在連接平板…",
     insertNextDesc = "於本曲後即奏",
 
     about = AboutStrings(
+        celebration = celebrationFor("zh-TW"),
+
         aboutTitle = "關於 Arris",
         aboutAppSubtitle = "ncm 第三方客戶端",
         aboutSectionProject = "專案資訊",

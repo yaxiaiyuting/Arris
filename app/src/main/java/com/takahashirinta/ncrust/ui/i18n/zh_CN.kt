@@ -416,6 +416,8 @@ val zhCN = Strings(
     insertNextDesc = "在当前曲目之后立即播放",
 
     about = AboutStrings(
+        celebration = celebrationFor("zh-CN"),
+
         aboutTitle = "关于 Arris",
         aboutAppSubtitle = "ncm 第三方客户端",
         aboutSectionProject = "项目信息",

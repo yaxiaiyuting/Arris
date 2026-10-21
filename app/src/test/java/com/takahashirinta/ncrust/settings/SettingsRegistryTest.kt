@@ -51,7 +51,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360
             }
             .mapNotNull { it.key }
             .toSet()
@@ -88,7 +88,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360
             }
             .mapNotNull { it.key }
             .toSet()
@@ -740,6 +740,7 @@ class SettingsRegistryTest {
 
         /** 无 UI 入口的内部项（§2.2 的 13 项 + 2 条账号凭证 + v2.8.0 的迁移水位）。 */
         val INTERNAL_PREF_KEYS: Set<String> = setOf(
+            "birthday_month", "birthday_day", "birthday_shown_years",
             "user_cookie", "qq_cookie",
             // v3.4.11 / 981e9b3：SessionMonitor 的「曾登录」标记（内部状态，不渲染）。
             "session_was_logged_in",
@@ -772,6 +773,7 @@ class SettingsRegistryTest {
 
         /** 无 prefs key 的行为行（结构探针 §1「非 prefs 行」全表，一条都不能丢）。 */
         val ACTION_IDS: Set<String> = setOf(
+            "action.birthday_date", "action.birthday_preview",
             "action.account_netease", "action.account_qq", "action.account_bili",
             "action.background_activity",
             "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
@@ -779,6 +781,7 @@ class SettingsRegistryTest {
 
         /** 没有文案路径的条目（见 `titleLessEntriesAreExactlyTheDocumentedOnes`）。 */
         val TITLE_LESS_IDS: Set<String> = setOf(
+            "birthday_month", "birthday_day", "birthday_shown_years",
             // 内部项（except lyrics_word_by_word，它的文案 key 还在 i18n 里，只是没有 UI 入口）
             "user_cookie", "qq_cookie", "session_was_logged_in", "battery_prompt_done", "artist_reco_target_id",
             "artist_reco_anchor_ids", "artist_reco_auto_anchor_ids", "artist_reco_auto_anchor_at",

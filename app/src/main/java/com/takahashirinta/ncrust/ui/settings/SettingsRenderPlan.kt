@@ -20,6 +20,7 @@ package com.takahashirinta.ncrust.ui.settings
  * 「这个条目到底渲不渲染、在哪渲染」只有一个问题、一处答案。
  */
 enum class SettingsRowKind {
+    CELEBRATION,
     /** ncm 账号块（头像 / 昵称 / UID + 登录、登出、扫码授权）。 */
     ACCOUNT_PROFILE,
 
@@ -181,6 +182,7 @@ object SettingsRenderPlan {
 
             // 关于
             "action.about_open" -> SettingsRowKind.ABOUT_OPEN
+            "action.birthday_date", "action.birthday_preview", "birthday_celebration_enabled", "easter_egg_animation_enabled" -> SettingsRowKind.CELEBRATION
 
             else -> when (entry.type) {
                 SettingsEntryType.SWITCH -> SettingsRowKind.SWITCH

@@ -554,6 +554,9 @@ private fun SettingsPreferenceGroupPage(
                     SettingsRowKind.ACCOUNT_BILI,
                     SettingsRowKind.INTERNAL, SettingsRowKind.HOSTED_ELSEWHERE -> Unit
 
+                    SettingsRowKind.CELEBRATION -> item(key = entry.id) {
+                        com.takahashirinta.ncrust.celebration.CelebrationSettingsRow(entry.id)
+                    }
                     SettingsRowKind.SWITCH -> item(key = entry.id) {
                         SettingSwitchRow(
                             title = rowTitle(strings, entry, updateStrings),

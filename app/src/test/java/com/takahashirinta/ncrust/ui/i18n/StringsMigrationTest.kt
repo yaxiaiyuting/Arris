@@ -231,7 +231,8 @@ class StringsMigrationTest {
         // settings 86 → 87（+`lyricsTranslationHint`）。两个数各自按**自己那条链路**实测。
         // v3.4.12：settings 87 → 88（+`gaplessBetaNote`：无缝播放的「测试中」提示）。
         val expectedSizes = mapOf(
-            "settings" to 88, "about" to 25, "playerUi" to 31, "waveform" to 38, "bili" to 17,
+            // about now contains CelebrationStrings, preserving the 148-slot root constructor.
+            "settings" to 88, "about" to 57, "playerUi" to 31, "waveform" to 38, "bili" to 17,
         )
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)
@@ -304,11 +305,11 @@ class StringsMigrationTest {
             declared.any { it.isSynthetic },
         )
         val primary = declared.filter { !it.isSynthetic }.maxByOrNull { it.parameterCount }!!
-        assertEquals("AboutStrings 主构造参数数", 25, primary.parameterCount)
+        assertEquals("AboutStrings 主构造参数数", 26, primary.parameterCount)
         val synthetic = declared.first { it.isSynthetic }
         assertEquals(
-            "合成构造器参数数应当 = 25 + ceil(25/32)=1 个 mask + 1 个 DefaultConstructorMarker",
-            27, synthetic.parameterCount,
+            "合成构造器参数数应当 = 26 + ceil(26/32)=1 个 mask + 1 个 DefaultConstructorMarker",
+            28, synthetic.parameterCount,
         )
         // 反过来：另外两个新组**没有**默认值，因此不该有合成构造器。
         listOf(SettingsStrings::class.java, PlayerUiStrings::class.java).forEach { c ->

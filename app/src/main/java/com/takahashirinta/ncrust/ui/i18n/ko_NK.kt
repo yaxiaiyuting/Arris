@@ -416,6 +416,8 @@ scanConnecting = "평판에 연결중…",
     insertNextDesc = "현재곡 바로 다음에 재생",
 
     about = AboutStrings(
+        celebration = celebrationFor("ko-KP"),
+
         aboutTitle = "Arris 소개",
         aboutAppSubtitle = "ncm 비공식 클라이언트",
         aboutSectionProject = "프로젝트 정보",
