@@ -1,0 +1,3 @@
+b99e938db132ea612030a9c59708d51c08fe16d46666630ae0c113b1e817b9a5  Ncrust-v3.6.0-gpl-release.apk
+7d2f7b39cbed1fef5a4eaca9a7a1344cfc3514a4b5b54ffc44aac5291d848960  Ncrust-v3.6.0-gpl-debug.apk
+d163027fc832d2a4fb4eb71a79caab92a93f0a4186480c5ad3b5c3d4d337c15a  mapping-v3.6.0.txt.gz

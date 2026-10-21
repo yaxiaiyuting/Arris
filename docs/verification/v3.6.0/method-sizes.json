@@ -1,0 +1,130 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 468,
+  "violations": [],
+  "warnings": [],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BlowRecorder$listen$3.invokeSuspend (+2 inline/overload)",
+      "obfuscated": "H4.c$a.invokeSuspend",
+      "class": "H4.c$a",
+      "codeUnits": 942,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawBirthday",
+      "obfuscated": "H4.f.c",
+      "class": "H4.f",
+      "codeUnits": 749,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$1.invoke (+18 inline/overload)",
+      "obfuscated": "H4.l$o.a",
+      "class": "H4.l$o",
+      "codeUnits": 718,
+      "registers": 54,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawScene",
+      "obfuscated": "H4.f.d",
+      "class": "H4.f",
+      "codeUnits": 716,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.VersionEggRowKt.VersionEggRow (+27 inline/overload)",
+      "obfuscated": "H4.v.a",
+      "class": "H4.v",
+      "codeUnits": 712,
+      "registers": 49,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationOverlay (+14 inline/overload)",
+      "obfuscated": "H4.l.c",
+      "class": "H4.l",
+      "codeUnits": 701,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationButton-V-9fs2A (+22 inline/overload)",
+      "obfuscated": "H4.l.b",
+      "class": "H4.l",
+      "codeUnits": 645,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.FireworkSimulation.Companion (+1 inline/overload)",
+      "obfuscated": "H4.u.i",
+      "class": "H4.u",
+      "codeUnits": 617,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationSettingsKt.CelebrationSettingsRow (+17 inline/overload)",
+      "obfuscated": "H4.s.f",
+      "class": "H4.s",
+      "codeUnits": 598,
+      "registers": 22,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationSettingsKt$BirthdayPicker$1.invoke (+22 inline/overload)",
+      "obfuscated": "H4.s$a.a",
+      "class": "H4.s$a",
+      "codeUnits": 554,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$2.invoke (+16 inline/overload)",
+      "obfuscated": "H4.l$p.a",
+      "class": "H4.l$p",
+      "codeUnits": 507,
+      "registers": 49,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.FireworkPainter.height (+1 inline/overload)",
+      "obfuscated": "H4.t.a",
+      "class": "H4.t",
+      "codeUnits": 416,
+      "registers": 24,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationOverlay$8.invoke (+13 inline/overload)",
+      "obfuscated": "H4.l$l.a",
+      "class": "H4.l$l",
+      "codeUnits": 376,
+      "registers": 23,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationLayoutKt$CelebrationFrame$1.invoke (+13 inline/overload)",
+      "obfuscated": "H4.j$a.a",
+      "class": "H4.j$a",
+      "codeUnits": 367,
+      "registers": 22,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationHostKt.CelebrationHost (+8 inline/overload)",
+      "obfuscated": "H4.g.a",
+      "class": "H4.g",
+      "codeUnits": 337,
+      "registers": 22,
+      "dex": "classes.dex"
+    }
+  ]
+}

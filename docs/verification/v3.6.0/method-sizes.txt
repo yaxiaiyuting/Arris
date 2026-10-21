@@ -1,0 +1,24 @@
+method_size —— 单方法 code unit 监控（阈值 2000）
+  输入: /home/duanjb666/deepseek/Arris/app/build/outputs/apk/release/app-release.apk
+  方法总数（含代码）: 468
+  超阈值: 0   预警(>1200): 0
+  ---- Top 15 ----
+  codeUnit   regs  method
+       942     31  com.takahashirinta.ncrust.celebration.BlowRecorder$listen$3.invokeSuspend (+2 inline/overload)
+       749     27  com.takahashirinta.ncrust.celebration.CelebrationArtView.drawBirthday
+       718     54  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$1.invoke (+18 inline/overload)
+       716     25  com.takahashirinta.ncrust.celebration.CelebrationArtView.drawScene
+       712     49  com.takahashirinta.ncrust.celebration.VersionEggRowKt.VersionEggRow (+27 inline/overload)
+       701     42  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationOverlay (+14 inline/overload)
+       645     46  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationButton-V-9fs2A (+22 inline/overload)
+       617     25  com.takahashirinta.ncrust.celebration.FireworkSimulation.Companion (+1 inline/overload)
+       598     22  com.takahashirinta.ncrust.celebration.CelebrationSettingsKt.CelebrationSettingsRow (+17 inline/overload)
+       554     27  com.takahashirinta.ncrust.celebration.CelebrationSettingsKt$BirthdayPicker$1.invoke (+22 inline/overload)
+       507     49  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$2.invoke (+16 inline/overload)
+       416     24  com.takahashirinta.ncrust.celebration.FireworkPainter.height (+1 inline/overload)
+       376     23  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationOverlay$8.invoke (+13 inline/overload)
+       367     22  com.takahashirinta.ncrust.celebration.CelebrationLayoutKt$CelebrationFrame$1.invoke (+13 inline/overload)
+       337     22  com.takahashirinta.ncrust.celebration.CelebrationHostKt.CelebrationHost (+8 inline/overload)
+  ✅ 全部方法 <= 2000 code unit
+  报告已写入 docs/verification/v3.6.0/method-sizes.json
+✅ 全部方法 <= 2000 code unit
