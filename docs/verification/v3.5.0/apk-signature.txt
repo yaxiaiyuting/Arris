@@ -1,0 +1,20 @@
+===== Ncrust-v3.5.0-gpl-release.apk =====
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Number of signers: 1
+Signer #1 certificate DN: CN=Ncrust, OU=Dev, O=Ncrust, L=changji, ST=xinjiang, C=CN
+Signer #1 certificate SHA-256 digest: e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82
+===== Ncrust-v3.5.0-gpl-debug.apk =====
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Number of signers: 1
+Signer #1 certificate DN: C=US, O=Android, CN=Android Debug
+Signer #1 certificate SHA-256 digest: ae74dadb83dab08ac5a673879558886b15d89075bb9fdb2b9c0002f2ec3d27f4
+Signer #1 certificate DN: CN=Ncrust, OU=Dev, O=Ncrust, L=changji, ST=xinjiang, C=CN
+Signer #1 certificate SHA-256 digest: e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82

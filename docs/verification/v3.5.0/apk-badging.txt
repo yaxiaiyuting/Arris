@@ -1,0 +1,6 @@
+===== Ncrust-v3.5.0-gpl-release.apk =====
+package: name='com.takahashirinta.ncrust' versionCode='75' versionName='3.5.0-gpl' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+launchable-activity: name='com.takahashirinta.ncrust.MainActivity'  label='' icon=''
+===== Ncrust-v3.5.0-gpl-debug.apk =====
+package: name='com.takahashirinta.ncrust' versionCode='75' versionName='3.5.0-gpl' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+launchable-activity: name='com.takahashirinta.ncrust.MainActivity'  label='' icon=''

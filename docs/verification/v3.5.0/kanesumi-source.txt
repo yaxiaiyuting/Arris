@@ -1,0 +1,6 @@
+sibling_source=/home/duanjb666/deepseek/Kanesumi-sec-a
+sibling_head=acddf3e53d6a90f6b7d19d6a0445631457c3bda5
+sibling_status_empty=0
+mirror=/home/duanjb666/deepseek/Arris/.release-v3.5.0/Kanesumi-sec-a
+mirror_note=copy of sibling source excluding .git/.gradle/build (sandbox makes sibling cache read-only)
+source_diff=identical

@@ -1,0 +1,1 @@
+package: name='com.takahashirinta.ncrust' versionCode='74' versionName='3.4.12-gpl' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
