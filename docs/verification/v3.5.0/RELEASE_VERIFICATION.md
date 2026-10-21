@@ -140,8 +140,21 @@ release 证书与线上已发布 v3.4.12 APK 的证书 **逐字节相同**（同
 4. `git status --porcelain` 中只有用户原有的
    `docs/verification/v3.2.2/probe/curve-smoothing-measurements.md` 修改。
 
-实际复核结果记录在 `/tmp/arris-release-final.json` 与
-`/tmp/arris-release-report.md`；tag 只在该复核通过后创建。
+### 7.1 实际复核结果（最终 HEAD）
+
+- `git rev-parse HEAD:app` = `e6517c231a4b8a0be3213b91de8b3491839f61af`
+  （与构建时 `0c92f89:app` 完全相同）；
+- `git diff 0c92f89..HEAD -- app` 输出 **0 行**；
+- 在最终 HEAD（tag `v3.5.0-gpl` 指向的提交）上执行 `:app:assembleRelease`：
+  **BUILD SUCCESSFUL in 11s**，`:app:packageRelease` 为 **UP-TO-DATE**；
+- release APK / debug APK / mapping 的 SHA-256 均与第 5、6 节 **逐字节相同**；
+- 构建 worktree `git status --porcelain` 为空；
+- 原 checkout 仅保留用户原有的
+  `docs/verification/v3.2.2/probe/curve-smoothing-measurements.md` 修改。
+
+实际复核原始值见 `.release-v3.5.0/logs/final-check.txt`（发布时另存到 dist 发布目录）。
+tag 只在该复核通过后创建；最终值同时记录在 `/tmp/arris-release-final.json` 与
+`/tmp/arris-release-report.md`。
 
 ## 8. 用户文档保护
 
