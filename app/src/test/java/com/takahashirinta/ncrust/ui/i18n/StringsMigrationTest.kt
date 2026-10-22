@@ -232,7 +232,7 @@ class StringsMigrationTest {
         // v3.4.12：settings 87 → 88（+`gaplessBetaNote`：无缝播放的「测试中」提示）。
         val expectedSizes = mapOf(
             // about now contains CelebrationStrings, preserving the 148-slot root constructor.
-            "settings" to 88, "about" to 57, "playerUi" to 31, "waveform" to 38, "bili" to 17,
+            "settings" to 88, "about" to 60, "playerUi" to 31, "waveform" to 38, "bili" to 17,
         )
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)

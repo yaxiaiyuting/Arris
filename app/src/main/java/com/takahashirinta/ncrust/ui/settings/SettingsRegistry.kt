@@ -802,7 +802,7 @@ object SettingsRegistry {
         add(SettingsEntry("easter_egg_animation_enabled", "easter_egg_animation_enabled", SettingsEntryType.SWITCH, true, SettingsGroup.APPEARANCE,
             titleKey="about.celebration.animationTitle", subtitleKey="about.celebration.animationHint", isNewInV360=true))
         add(action("action.birthday_preview", SettingsGroup.APPEARANCE, "about.celebration.previewTitle"))
-        for ((key, default) in listOf("birthday_month" to 0, "birthday_day" to 0, "birthday_shown_years" to emptySet<String>())) {
+        for ((key, default) in listOf("birthday_month" to 0, "birthday_day" to 0, "birthday_shown_years" to emptySet<String>(), "birthday_opened_years" to emptySet<String>())) {
             add(SettingsEntry(key,key,SettingsEntryType.INFO,default,SettingsGroup.APPEARANCE,isInternal=true,isNewInV360=true))
         }
 
