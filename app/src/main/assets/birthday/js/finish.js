@@ -15,6 +15,7 @@
 (function () {
   'use strict';
 
+  const APP = new URLSearchParams(location.search).has('app');
   const WARM_BASE = 0.62;      // .fin-tone-warm 基础不透明度（实测 ≈ 高光 R+6 G+2 B-4）
   const last = { t: -99, warm: -1, hx: -1, hy: -1, lift: -1 };
   let root = null, elLift = null, elWarm = null, elHal = null;
@@ -147,6 +148,9 @@
   function boot() {
     const b = window.BDAY;
     if (!b) { window.addEventListener('bday-ready', boot, { once: true }); return; }
+    // v3.6.4：应用内不建这三层全屏 mix-blend-mode 合成层 —— 它们各占一整屏图块，
+    // 与 tile memory 超限直接相关。基础 .grade 暗角/雾仍在，浏览器预览保留完整调色。
+    if (APP) { Finish.enabled = false; return; }
     // 包一层 seek：每帧截图/拖拽后同步一次（内部 0.5s 门闩，不会每帧写）
     const origSeek = b.seek;
     if (typeof origSeek === 'function' && !b.__finishWrapped) {

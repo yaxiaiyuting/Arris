@@ -21,6 +21,11 @@
   const STILL = param.has('still') || param.has('t');
   const CLEAN = param.has('clean');
   const FORCE_MOTION = param.has('motion');
+  // v3.6.4：WebView 的 tile memory 有硬预算。应用内不再把 9 个整幅 SVG 图层逐帧
+  // 改 transform（那会把每层都提成 1080×1856 的合成层，Chromium 直接报
+  // “tile memory limits exceeded”，画面成块消失再补上）。静态舞台 + Tux/蛋糕
+  // 自身的 GSAP 动画保留；浏览器预览仍走完整相机/视差。
+  const APP = param.has('app');
   // 调试开关：定位性能/图层问题（不影响正常打开）
   const NO_VFX = param.has('novfx');
   const NO_LIGHT = param.has('nolight');
@@ -71,7 +76,7 @@
   /* 两个 SVG 共用一套 data-depth 契约：背层在 #svg-env，主体在 #svg-scene */
   document.querySelectorAll('#stage g[data-depth]').forEach((g) => {
     layers[g.id.replace('layer-', '')] = { el: g, depth: parseFloat(g.dataset.depth) || 0 };
-    g.style.willChange = 'transform';
+    if (!APP) g.style.willChange = 'transform';
   });
 
   /* ── 相机 ── */
@@ -128,6 +133,8 @@
   function applyCamera(t) {
     const c = rig.at(t);
     cam.x = c.x; cam.y = c.y; cam.z = c.z;
+    // v3.6.4：应用内舞台保持静态（见文件头注释），只保留角色/道具自身的动画。
+    if (APP) return;
     const handheldX = Math.sin(t * 0.29) * 1.5 + Math.sin(t * 0.163 + 1.7) * 1.1;
     const handheldY = Math.cos(t * 0.241 + 0.6) * 1.3 + Math.sin(t * 0.107 + 2.4) * 0.9;
 

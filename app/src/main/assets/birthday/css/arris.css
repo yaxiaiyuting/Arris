@@ -4,6 +4,15 @@ body.arris { background:#08160f; }
 body.arris #stage { box-shadow:none; }
 body.arris .blessing .line > span { white-space:normal;text-wrap:pretty;overflow-wrap:anywhere; }
 body.arris .ui { display:none !important; }
+/* v3.6.4：应用内去掉整屏混合/颗粒合成层，避免 WebView tile memory 超限。 */
+body.arris .grain { display:none !important; }
+body.arris .fin-tone-lift, body.arris .fin-tone-warm, body.arris .fin-halation { display:none !important; }
+/* v3.6.4：场景 + 灯光层里所有 screen / soft-light / lighten 在 WebView 上都要
+   额外的全屏合成图块；模拟器实测 tile memory 超限（画面成块消失再补上）。
+   应用内改为普通 alpha 合成：渐变本身带透明度，光感仍在，但不再为混合模式
+   分配整屏图块。浏览器预览（无 body.arris）保留原混合效果。 */
+body.arris #svg-env *, body.arris #svg-scene *,
+body.arris #lx-light, body.arris #lx-ember { mix-blend-mode: normal !important; }
 body.arris.portrait #stage { width:100vw; height:100vh; aspect-ratio:auto; }
 body.arris.portrait #svg-scene {
   width:210.526vw; height:118.421vw; left:50%; top:calc(44vh - 59.2105vw);
