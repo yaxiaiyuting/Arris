@@ -479,8 +479,11 @@ android {
         //   + scene/lighting 的 screen/soft-light 混合 + 全屏 finish/grain 合成层。
         //   应用内改为静态舞台 + 普通 alpha 合成 + 去掉 finish/grain（浏览器预览保留）；
         //   模拟器同一份录像的 tile 警告 120+ → 2，画面不再缺块。
-        versionCode = 80
-        versionName = "3.6.4-gpl"
+        // v3.6.5：① 波形缺样列不再继承上一格速度/峰值/短横，修「小球与横条闪现」；
+        //   ② 歌词外推增加缓冲门控，音频没出声前不先唱；③ 切歌时队列找不到当前项
+        //   （预载槽位/跨源接续）用 ViewModel 身份兜底，横屏播放界面不再停上一首。
+        versionCode = 81
+        versionName = "3.6.5-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

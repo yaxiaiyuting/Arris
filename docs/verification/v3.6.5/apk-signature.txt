@@ -1,0 +1,4 @@
+Signer #1 certificate DN: CN=Ncrust, OU=Dev, O=Ncrust, L=changji, ST=xinjiang, C=CN
+Signer #1 certificate SHA-256 digest: e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82
+Signer #1 certificate SHA-1 digest: 7cbd4b29c9fb839cc7448e066053d529a305baa0
+Signer #1 certificate MD5 digest: d1ef1a28a743eaf210d2c3774878428f
