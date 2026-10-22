@@ -356,7 +356,7 @@ class SearchViewModel : ViewModel() {
      * 「列表滚到底连点三次」不该发三次请求。
      */
     fun loadMore() {
-        if (_isLoadingMore.value || !_hasMore.value) return
+        if (_isLoading.value || _isLoadingMore.value || !_hasMore.value) return
         if (_query.value.isBlank()) return
         _isLoadingMore.value = true
         searchJob?.cancel()
@@ -388,6 +388,7 @@ class SearchViewModel : ViewModel() {
             resetSongs()
         }
         _error.value = null
+        var pageSucceeded = true
         try {
             when (type) {
                 1 -> {
@@ -665,6 +666,8 @@ class SearchViewModel : ViewModel() {
                         // 而不是一块什么都没有的空白。
                         if (neteaseList.isEmpty() && qq.isEmpty() && bili.isEmpty() && neteaseError != null) {
                             _error.value = neteaseError?.message
+                            pageSucceeded = false
+                            if (append) _hasMore.value = true
                         }
                         val (nVip, qVip) = vipFlagsProvider()
                         trace.mark(SearchLatencyTrace.MARK_DONE)
@@ -845,7 +848,7 @@ class SearchViewModel : ViewModel() {
                     _albums.value = emptyList()
                 }
             }
-            return true
+            return pageSucceeded
         } catch (e: kotlinx.coroutines.CancellationException) {
             // ★ v2.5.5 · G：**取消必须原样抛出**，不能落进下面的 `catch (e: Exception)`。
             //
