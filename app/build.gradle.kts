@@ -469,8 +469,8 @@ android {
         //   versionCode=74；工作区 74 ⇒ 三源一致，取 **75**。v3.5.0 tag/release 未占用。
         // v3.6.0：生日庆祝、前台吹气与 Tux 隐藏彩蛋。三源核验最大值 75 ⇒ 76。
         // v3.6.1：三项审查修复；带 fetch 三源核验最大 76，下一号 77。
-        versionCode = 77
-        versionName = "3.6.1-gpl"
+        versionCode = 78
+        versionName = "3.6.2-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

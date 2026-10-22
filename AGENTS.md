@@ -5063,3 +5063,11 @@ Microphone input is optional and only starts after the user explicitly taps the 
 QQ 的 `QqRefreshFlight` 串行等待在飞提交，锁内重查会话、寿命和冷却。`QqRefreshRetry` 绑定请求开始时的 auth revision，在旧票被拒且已换票时只重试一次；不得把“刚成功刷新”当作禁止使用新票重试的理由。QQ 冷却与 `MonotonicWriteGate` 使用 elapsedRealtime，不用日期时间。
 
 `ListeningClock` 只接受实际 isPlaying 状态和单调时间，seek/恢复位置不是它的输入。80% 触发与曲终补报都传实际累计值；真实换歌/用户重播开启新会话，音质重载保留会话。不得重新把 position 或 duration 当作 playedMs。
+
+## v3.6.2 集成约束
+
+生日 BIRTHDAY 使用离线 assets/birthday 页面；LISTENER 七击彩蛋与关闭动效/系统减少动画时保留原生层。主时间线仍为 48 秒，在 26.2 秒停住等待原生 AudioRecord 或点按，禁止页面自行申请麦克风。音频依旧只在用户操作、获授权且 RESUMED 时短时读取，不保存、不上传、不改音频焦点/路由。关闭/后台移除 WebView 和录音；加载失败回退原生层。
+
+网页仅从拦截的本地 HTTPS origin 读取打包资产，网络/文件访问关闭，原生桥只接受有限状态事件。竖屏重排前景，烟花画布按实际比例扩展高度以保持圆形，横屏保留成片构图。勿把固定 MP4 当成互动流程替代品。
+
+SearchPageCursor 只在搜索函数明确成功后提交候选页，取消/失败/查询重置不得推进。LocalPlaylistStore 的元数据、曲目和容量淘汰要在同一个 Editor 中提交；失败上报 Failed，并还原 SharedPreferences 的内存快照，防止失败同步被 TTL 视为新鲜。
