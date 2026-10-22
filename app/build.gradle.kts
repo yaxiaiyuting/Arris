@@ -469,8 +469,13 @@ android {
         //   versionCode=74；工作区 74 ⇒ 三源一致，取 **75**。v3.5.0 tag/release 未占用。
         // v3.6.0：生日庆祝、前台吹气与 Tux 隐藏彩蛋。三源核验最大值 75 ⇒ 76。
         // v3.6.1：三项审查修复；带 fetch 三源核验最大 76，下一号 77。
-        versionCode = 78
-        versionName = "3.6.2-gpl"
+        // v3.6.3：① 波形滚动改成「波形自己的播放队列」—— 音频链路把多根柱放进同一次回调时，
+        //   旧模型会「一帧冲 N 格、然后等 N 格」；现在按批折算每根柱间隔、按时间逐根消费。
+        //   ② 生日庆祝页入场淡入（首帧硬切实测 Δ亮度 +10.4/142ms），resize 不再 seek(0)
+        //   重放烟花闪光。③ Tux 彩蛋/生日页布局：footer 预留高度跨阶段动画、插画地板
+        //   200→72dp、首帧不再用未测量的兜底位置。三源核验最大 78（v3.6.2 tag）⇒ 79。
+        versionCode = 79
+        versionName = "3.6.3-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

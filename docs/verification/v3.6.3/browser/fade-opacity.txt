@@ -1,0 +1,18 @@
+生日页 #stage 入场透明度（360x640，CSS animation .35s，?app=1&still=1&motion=1）
+2ms  opacity=0
+44ms  opacity=0.171
+86ms  opacity=0.274
+127ms  opacity=0.655
+169ms  opacity=0.721
+211ms  opacity=0.898
+253ms  opacity=0.947
+294ms  opacity=0.988
+335ms  opacity=0.999
+376ms  opacity=1
+417ms  opacity=1
+459ms  opacity=1
+500ms  opacity=1
+541ms  opacity=1
+582ms  opacity=1
+624ms  opacity=1
+初值=0、终值=1，单调上升、无单帧硬切；pageerror=[]

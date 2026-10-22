@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.4.8--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-9.83%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.6.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-11.95%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -54,8 +54,9 @@
 | 🎤 **逐字歌词** | ncm `yrc` + AMLL TTML + **qm QRC** 三源，TTML → YRC → LRC 三级回退，逐字渐变三档质量。QRC 那套是 QQ 自研的非标准 3DES，本仓库自实现并与独立实现逐字节比对验证 |
 | 🔀 **5 种播放模式** | 顺序循环 / 单曲循环 / 乱序 / 顺序线性 / 相似无限（私人 FM 电台） |
 | 🚗 **车机就绪** | Android Auto / Automotive 媒体源与浏览树，车机系统栏 inset 专项适配 |
-| 🪶 **9.4 MB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来 API 24–26 的真无损）。冷启动预热，进程被杀也能恢复队列 |
+| 🪶 **11.4 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来 API 24–26 的真无损）。冷启动预热，进程被杀也能恢复队列 |
 | 🌐 **8 语言** | 运行时切换，不依赖系统 locale |
+| 🎂 **生日庆祝** | 在「外观与动效」里设置本地生日月日，生日当天打开首页播放 48 秒离线动画：Tux 端来蛋糕、点灯许愿，真实吹气或点按吹灭，黑场后七组烟花与三句祝福。错过可补 7 天；关于页版本号连点七次打开 Tux「自由听众席」，支持辅助功能操作。麦克风仅在前台本次许愿的短窗口使用，不保存不上传 |
 
 > **合规边界**：本项目**不破解 DRM、不做「解灰」、不绕过平台鉴权**。
 > 能否播放某首歌完全取决于你自己账号的权限 —— 服务端说不行就是不行，播放器跳歌。
@@ -176,11 +177,11 @@ UI 上是一套 8 级档位，两个音源各自映射到自己平台的文件�
 
 ## 📦 安装
 
-1. 打开 [Releases](https://github.com/yaxiaiyuting/Arris/releases)，下载最新的 release APK（约 **9.83 MB**）
+1. 打开 [Releases](https://github.com/yaxiaiyuting/Arris/releases)，下载最新的 release APK（约 **11.95 MB**）
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v1.9.3 release APK **实测 9,794,320 字节 ≈ 9.79 MB**，debug 30,057,644 字节。
+> 体积说明（最新）：v3.6.3 release APK **实测 11,946,560 字节 ≈ 11.95 MB**，debug 33,396,911 字节。
 > 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
 
 ### 🔐 登录
@@ -335,7 +336,16 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.4.5-gpl | 2026-10-05 | 修 B站曲目收藏 / 上报被发给网易云（判据改为正向「是 ncm」）；红心歌单读端三处修复 |
 | v3.4.6-gpl | 2026-10-06 | 小球脱离地面 + 解析碰撞 + 重标定（g=10、e=0.7）；短横改真峰值保持；音质旁显示实际码率 |
 | v3.4.7-gpl | 2026-10-06 | 修波形横向抽搐：相位改用两个真实时间戳相减、删掉累加帧时钟（抖动率降到 1/3） |
-| v3.4.8-gpl |  | **改名 Arris + 新图标**（正圆唱片 + 直角播放三角 + 圆心孔；三层自适应含 Android 13 主题图标，并补上 **API 24/25 的密度桶回落**）；**B站大会员 Hi-Res 无损**（读 `dash.flac.audio` —— 此前从没被读，所以永远是普通音质）、字幕语言可选（此前写死中文优先）、音质上限与优先 FLAC 两个用户参数 |
+| v3.4.8-gpl | 2026-10-08 | **改名 Arris + 新图标**（正圆唱片 + 直角播放三角 + 圆心孔；三层自适应含 Android 13 主题图标，并补上 **API 24/25 的密度桶回落**）；**B站大会员 Hi-Res 无损**（读 `dash.flac.audio` —— 此前从没被读，所以永远是普通音质）、字幕语言可选（此前写死中文优先）、音质上限与优先 FLAC 两个用户参数 |
+| v3.4.9-gpl | 2026-10-09 | qm 官方 App 扫码登录（MQTT 六步协议、CONNACK 重定向）+ 续期凭证落盘；四条登录路里哪两条可续期写进 README |
+| v3.4.10-gpl | 2026-10-09 | 修 v3.4.9 真机试用抓出的三个扫码登录 bug：cookie 未落盘、续期判据把唯一能续的路挡在门外、续期走错通道 |
+| v3.4.11-gpl | 2026-10-10 | 搜索分页、服务端总数口径、专辑按「专辑名 + 歌手」匹配、歌单与专辑页下拉刷新 |
+| v3.4.12-gpl | 2026-10-10 | 修 v3.4.11 引入的 QQ 搜索超时回归：总数改从同一次搜索响应顺带取，预算 5→8 秒 |
+| v3.5.0-gpl | 2026-10-21 | 整合上游 142e908：xeapi 收藏 / PC 扫码登录、队列 TrackKey、clientlog 上报、QQ 续期提交闸门、应用内更新 |
+| v3.6.0-gpl | 2026-10-22 | 生日庆祝 + Tux 七击彩蛋：48 秒动画、吹气 / 点按、七组烟花、八语言文案与原生回退 |
+| v3.6.1-gpl | 2026-10-22 | QQ 并发续期等待在飞请求、歌单节流改单调时间；播放上报按实际 isPlaying 时长结算 |
+| v3.6.2-gpl | 2026-10-22 | 搜索翻页失败保持原页、本地歌单一次提交；接入 48 秒生日网页动画与 1~7 天迟到祝福 |
+| v3.6.3-gpl | 2026-10-23 | 波形滚动改成「播放队列」（成批到达摊平、0 顿帧）；生日页 350ms 淡入、resize 不再重放闪光；Tux 布局跨阶段预留、插画地板 72dp |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 
