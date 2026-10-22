@@ -2,6 +2,7 @@
 package com.takahashirinta.ncrust.ui.player
 
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerTier
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -56,4 +57,31 @@ class WaveformScrollUnderrunTest {
         assertEquals(columns, ring.shiftedCellsForTest())
         assertEquals(phase, ring.scrollPhase01(), 0f)
     }
+    @Test
+    fun `blank underrun column carries no stale ball or dash`() {
+        val ring = WaveformRing(capacity = 64, barCount = 16)
+        val refined = VisualizerEffects.of(
+            tier = VisualizerTier.REFINED,
+            showcase = false,
+            shockwave = false,
+            particles = false,
+            perspective = false,
+            tapInteraction = false,
+        )
+        var now = 1_000L
+        ring.push(.9f, .9f, .8f, .7f, now)
+        // 先让小球/短横在最后一格稳定到柱顶附近（首帧会把这根柱填进窗口）。
+        repeat(5) {
+            now += 16
+            ring.pump(true, 16f, refined, now)
+        }
+        assertTrue("前置条件：末格小球应在柱顶附近", ring.bandPeakAt(0, 15) > .2f)
+        // 再跨过一个格周期但**没有新数据**：应追加一列空白，而不是继承旧峰值。
+        now += 200
+        ring.pump(true, 16f, refined, now)
+        assertEquals("缺样列的目标值必须是 0", 0f, ring.bandAt(0, 15), 0f)
+        assertEquals("缺样列不能继承上一格的小球", 0f, ring.bandPeakAt(0, 15), 0f)
+        assertEquals("缺样列不能继承上一格的短横", 0f, ring.bandDashAt(0, 15), 0f)
+    }
+
 }

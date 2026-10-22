@@ -1307,7 +1307,34 @@ fun MainScreen(
         }
         if (currentSong?.let { QueueKeys.keyOf(it) == vmKey } == true) return@LaunchedEffect
         val found = playbackQueue.firstOrNull { QueueKeys.keyOf(it) == vmKey }
-        if (found != null) currentSong = found
+        if (found != null) {
+            currentSong = found
+        } else {
+            // v3.6.5：音频已经切到下一首、但队列里找不到它（预载槽位 / 跨源接续 /
+            // 队列还没追加）时，UI 绝不能停在上一首。用 ViewModel 的当前曲目身份与
+            // 元数据兜底构造一首，至少让播放界面与音频一致；队列索引保持原样，
+            // 下一次正常队列推进时会自行对齐。
+            val key = playerViewModel.currentTrackKey
+            if (key != null && key.id == id && id > 0L) {
+                currentSong = SongItem(
+                    id = id,
+                    name = playerViewModel.currentSongName.value.orEmpty(),
+                    artists = playerViewModel.currentSongArtist.value
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { listOf(ArtistItem(name = it)) },
+                    album = AlbumItem(id = null, name = "", picUrl = playerViewModel.currentSongArtwork.value),
+                    duration = null,
+                    source = key.source.key,
+                    sourceId = key.sourceId,
+                    mediaId = key.mediaId,
+                )
+                Log.d(
+                    "MainScreen",
+                    "current song not in queue, fallback from VM key=${key.tag} " +
+                        "index=$currentQueueIndex queue=${playbackQueue.size}",
+                )
+            }
+        }
     }
 
     fun removeFromQueue(index: Int) {

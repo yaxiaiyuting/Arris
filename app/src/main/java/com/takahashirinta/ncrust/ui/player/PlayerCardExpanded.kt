@@ -344,6 +344,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 showRomanization = showLyricsRomanization,
                                 positionFlow = positionFlow,
                                 isPlaying = isPlaying,
+                                isBufferingFlow = playerViewModel.isBuffering,
                                 isVisible = ui.showLyrics,
                                 forcedLocateTrigger = ui.lyricLocateTrigger,
                                 onSeekToMs = { ms -> playerViewModel.seekTo(ms) },

@@ -55,8 +55,12 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+/** 没有缓冲信息的老调用点：等价于「不缓冲」，行为与旧版一致。 */
+private val NeverBuffering = MutableStateFlow(false)
 
 /**
  * 歌词面板 —— 渲染交给 Kanesumi 的 MetroLyricsPanel(左对齐大字,每行独立
@@ -89,6 +93,10 @@ fun LyricsView(
     showRomanization: Boolean = false,
     positionFlow: StateFlow<Long>,
     isPlaying: Boolean,
+    // v3.6.5：音频还在缓冲 / 尚未真正出声时，歌词外推必须停住。
+    // 传 StateFlow 引用而不是 Boolean：订阅发生在 LyricsView 内部，
+    // 缓冲状态翻转不会让整棵播放器子树重组。
+    isBufferingFlow: StateFlow<Boolean> = NeverBuffering,
     isVisible: Boolean,
     forcedLocateTrigger: Int = 0,
     onSeekToMs: (Long) -> Unit,
@@ -214,6 +222,7 @@ fun LyricsView(
     // 订阅位置流:collectAsState 建 State;displayPosition 只在面板 draw/derived
     // 阶段被读,按需写一次也只重算当前行,不触发本 Composable 重组。
     val positionState = positionFlow.collectAsStateWithLifecycle()
+    val isBuffering by isBufferingFlow.collectAsStateWithLifecycle()
     // 初值取当前流值而非 0:否则面板首次出现时会先按"位置 0"高亮第一行/吸顶,
     // 等锚点被采样纠正后才跳回真实行。按需唤醒把纠错窗口拉长到最多 1s, 这个初值
     // 尤为重要。
@@ -340,12 +349,21 @@ fun LyricsView(
     //    行/词边界再写一次。静态时零状态写入、零帧调度，不会让渲染管线在整首歌里 60fps 空转。
     //
     // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
-    LaunchedEffect(isPlaying, isVisible, enabled, boundaries, sweepWindows, trackKey) {
-        if (!isPlaying || !isVisible || !enabled) {
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, trackKey) {
+        // v3.6.5：缓冲中 / 还没出声时不外推。旧实现只看 isPlaying —— 用户按下播放、
+        // 音频还在加载时 isPlaying 已经是 true，外推从 0 开始跑，歌词就先唱了。
+        if (!isPlaying || isBuffering || !isVisible || !enabled) {
             displayPosition.longValue = positionState.value
             return@LaunchedEffect
         }
         while (true) {
+            // 首条位置采样到达前（position 仍为 0）也不要外推：宁可让第一句晚 100~500ms，
+            // 也不要让它在音频真正开始前先滚过去。
+            if (positionState.value <= 0L) {
+                displayPosition.longValue = positionState.value
+                delay(100)
+                continue
+            }
             // 锚点必须属于当前曲目才允许外推：迟到的旧采样可能把锚点重新指向上一首的位置，
             // 那种值一旦参与外推就会让新歌的歌词跳到错误的行（见上面「换歌作废锚点」）。
             // 不匹配时退化成"用画面上的值"，等第一条属于本曲的采样到达即可。
