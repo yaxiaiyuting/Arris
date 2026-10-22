@@ -141,7 +141,9 @@ class WaveformScrollJitterHarness(
             //   以前只喂 `dtMs`，于是量的是「环自己攒的时钟」，与真机不是一回事。
             nowMs = if (feedFrameClock) tMs.toLong() else 0L,
         )
-        val shifted = ring.shiftedCellsForTest()
+        // 历史实现当帧消费全部已到达输入；不能借用新队列延迟消费/补空格后的游标，
+        // 否则对照变成「新消费时序 + 旧相位」而不再复现原缺陷。生产判据始终读真实窗口。
+        val shifted = if (legacyAnchor || legacyPhase) barsPushed.toLong() else ring.shiftedCellsForTest()
         val phase = when {
             legacyAnchor -> legacyAnchorPhase(dtMs, shifted)
             legacyPhase -> legacyPhase(shifted, dtMs)

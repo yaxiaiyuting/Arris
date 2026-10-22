@@ -302,6 +302,7 @@ class WaveformRing(
     /** 单测 / 诊断：累计平移格数（见 [shiftedCells] 的注释，生产路径零调用）。 */
     internal fun shiftedCellsForTest(): Long = shiftedCells
 
+
     /**
      * v3.4.7：相位斜坡**实际使用的分母**（毫秒）—— 诊断 / 单测 / 真机探针用（生产渲染路径零调用）。
      *
@@ -359,6 +360,7 @@ class WaveformRing(
 
     /** v3.6.3：首帧是否已经用环里的历史填过窗口（见 [pump] 的说明）。 */
     private var windowPrimed: Boolean = false
+    private var timestampedInput = false
 
     /**
      * 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。
@@ -554,6 +556,7 @@ class WaveformRing(
         sinceBarMs = 0f
         lastPumpNowMs = 0L
         windowPrimed = false
+        timestampedInput = false
         bars.fill(0f)
         barVel.fill(0f)
         targets.fill(0f)
@@ -659,20 +662,23 @@ class WaveformRing(
             if (!primedThisFrame) sinceBarMs += dtForPhase
             val interval = phaseIntervalMs()
             var consumed = false
-            if (sinceBarMs >= interval) {
+            if (windowPrimed && sinceBarMs >= interval) {
                 // 跨过一格：**只消费一根**。一批 N 根柱会在 N 个格周期里被逐根取走，
                 // 画面因此匀速 —— 而不是把 N 格位移堆在同一帧里（那正是「一阵子动一下」）。
                 consumed = consumeOne()
-                if (consumed) {
-                    sinceBarMs -= interval
-                    // 一帧的 dt 大于一个格周期时（长卡顿 / 低帧率），最多保留一格余量：
-                    // 多出来的时间直接丢掉，宁可慢一点，也不要把好几格位移压进同一帧。
-                    if (sinceBarMs > interval) sinceBarMs = interval
-                } else {
-                    // 没有下一根柱：停在格边界等。这是「真的没有数据」的诚实表达。
-                    // 下一根柱到达后会在这里被消费，相位从 0 继续 —— 位移不跳变。
-                    sinceBarMs = interval
+                val canAdvanceGap = timestampedInput && nowMs > 0L
+                if (!consumed && canAdvanceGap) {
+                    // 数据短暂迟到不等于播放暂停。历史仍按时间滚动，缺失位置留空，
+                    // 不重复上一根峰值来编造新的音频响应，也不向音频线程补写数据。
+                    val visibleHistory = windowHasSignal()
+                    appendColumn(0f, 0f, 0f, 0f)
+                    consumed = visibleHistory
                 }
+                if (consumed || canAdvanceGap) {
+                    sinceBarMs -= interval
+                    // 保留既有低帧率边界；整窗已空时也不积攒等待时间或持续重绘。
+                    if (sinceBarMs > interval) sinceBarMs = interval
+                } else sinceBarMs = interval // 没有到达时间的旧宿主不推断数据缺失。
             }
             // 信号门槛**保留**在它该在的地方 —— 「要不要为这一帧排重绘」：静音段既不
             // 排帧也不白烧 GPU，v1.8.1 的「不空转」契约与暂停即停帧契约都没有变。
@@ -771,15 +777,20 @@ class WaveformRing(
         // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
         // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
         val slot = readIndex % capacity
-        shiftIn(ring[slot])
+        if (arriveStampMs[slot] > 0L) timestampedInput = true
+        appendColumn(ring[slot], lowRing[slot], midRing[slot], highRing[slot])
+        readIndex += 1
+        return true
+    }
+
+    /** UI-only history shift. A missing visual sample is blank; the audio ring is untouched. */
+    private fun appendColumn(value: Float, low: Float, mid: Float, high: Float) {
+        shiftIn(value)
         // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
         // 它要的是"当下这一刻"的低频能量，不是历史窗口。
-        val low = lowRing[slot]
         val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
         bassTarget = lowValue
-        val mid = midRing[slot]
         val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
-        val high = highRing[slot]
         val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
         // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
         // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
@@ -787,11 +798,9 @@ class WaveformRing(
         shiftBandIn(lowTargets, lowBars, lowPeaks, lowPeakVel, lowPeakRest, lowValue)
         shiftBandIn(midTargets, midBars, midPeaks, midPeakVel, midPeakRest, midValue)
         shiftBandIn(highTargets, highBars, highPeaks, highPeakVel, highPeakRest, highValue)
-        readIndex += 1
         // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
         // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
         shiftedCells += 1
-        return true
     }
 
     /**
