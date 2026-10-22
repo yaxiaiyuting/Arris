@@ -1,5 +1,9 @@
 # 第三方依赖许可证审计（GPLv3 兼容性）
 
+## v3.6.2 随附的生日网页动画
+
+`app/src/main/assets/birthday/vendor/` 来自维护者交付的生日动画，包含 GSAP 3.13.0、CustomEase 和 MotionPathPlugin；保留其版权头和 [Standard "no charge" License](https://gsap.com/standard-license) 标识，不将这些 vendor 文件重新声明为 GPL。来源和声明见同目录上级 `NOTICE.txt`。下文历史的 Gradle classpath 审计不涵盖新增的网页资产，也不用于声称该 Standard License 本身是 GPL 许可。
+
 审计对象：`Arris`（Ncrust 的 GPLv3 fork）的 **app 模块 debug 运行时 classpath**（即真正会被编译进 APK 并随 GPLv3 分发的代码集合）。
 
 - 审计日期：2026-09-20

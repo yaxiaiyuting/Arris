@@ -1,0 +1,116 @@
+/* ─────────────────────────────────────────────────────────────
+   css/type.css · 版式（type-polish / task-13）
+   只在 base.css、art-direction.css 之后覆盖**字体属性**：
+   字号、字重、字距、行距、颜色、描边、装饰线。
+   不写动画（transform/opacity/filter 归 GSAP），不改 .blessing / .caption 的
+   top / right 定位（那是 art-direction 调好的）。
+
+   目标帧：H8（44.5s）——"祝福"这一帧要能当电影海报。
+   层级设计：标题 3.27× 正文 ＞ 末行 3.09× 正文 ＞ 正文 1× ＞ 字幕 0.57×
+   ───────────────────────────────────────────────────────────── */
+
+/* ═══ 1. 标题「生日快乐。」═══════════════════════════════════
+   行高 1.22 是任务给的硬值，但 base.css 警告过：Noto Serif CJK 的 ink 高度
+   > 1em，line-height < 1.25 且父级 overflow:hidden 时会切掉字头。
+   所以这里把 .line 自带的 padding-top .06em 提到 .10em 补回来——
+   这是"同一条排版规则的两半"，不是另加一层。 */
+.blessing .line.title{
+  letter-spacing: .02em;
+  line-height: 1.22;
+  font-weight: 600;
+  padding-top: .10em;
+  margin-bottom: clamp(14px, 2.2vh, 26px);
+}
+
+/* 渐变必须挂在被 GSAP 动的 span 上（挂父级会让标题 0s 就出现）。 */
+.blessing .line.title > span{
+  background: linear-gradient(178deg,
+      #FFFDF7 4%,      /* 顶部近白 */
+      #FFEFD6 49%,     /* 中段暖米 */
+      #E8C79A 100%);   /* 下缘柔金 */
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  /* 1px 极淡高光描边：0 偏移 + 极小 blur，只在字形**外缘**留一圈，
+     不会把字芯糊掉（字芯由 background-clip 的渐变负责）。 */
+  text-shadow:
+    0 0 1px rgba(255, 253, 244, .42),
+    0 0 2px rgba(255, 236, 200, .20);
+}
+
+/* ═══ 2. 正文三行 ═══════════════════════════════════════════
+   行距用 margin（0.85em 上边距），不靠 line-height 硬撑——
+   line-height 1.85 只负责行内的呼吸，行与行的关系交给 margin。 */
+.blessing .body{
+  letter-spacing: .045em;
+  line-height: 1.85;
+  font-weight: 380;
+  margin-top: .85em;
+  color: #F4ECDD;
+  /* 深底上保证可读（实测对比 ≥ 7:1，见 docs/TYPE-POLISH.md） */
+  text-shadow: 0 2px 10px rgba(2,10,6,.90), 0 8px 34px rgba(2,10,6,.66);
+}
+.blessing .body:first-of-type{
+  margin-top: .22em;   /* 紧跟标题下方：这里由装饰细线负责分隔，不再吃 .85em */
+}
+
+/* 末行：抬高半级，成为"落款" */
+.blessing .body.last{
+  font-weight: 500;
+  color: #FFE3B8;
+  letter-spacing: .045em;                 /* 覆盖 base 的 .12em：太散会掉层级 */
+  font-size: calc(clamp(14px, 1.42vw, 22px) * 1.06);
+  margin-top: .85em;
+}
+
+/* ═══ 3. 标题与正文之间的 96px 右对齐细线 ═══════════════════
+   必须是 ::after 且绝对定位：.line 带 overflow:hidden（遮罩动画要用），
+   放在任何 .line 内部都会被裁掉。top 用与标题同一条 clamp 推算，
+   不碰 .blessing 自身的 top/right。 */
+.blessing::after{
+  content: "";
+  position: absolute;
+  right: 0;
+  top: calc(clamp(34px, 4.9vw, 72px) * (1.22 + .10) + 9px);
+  width: 96px;
+  height: 1px;
+  background: linear-gradient(270deg,
+      rgba(255, 217, 163, .98) 0%,
+      rgba(255, 217, 163, .55) 58%,
+      rgba(255, 217, 163, 0) 100%);
+  opacity: 0;               /* 默认不可见：见下方 .on 开关 */
+  pointer-events: none;
+}
+/* 和底衬（.blessing::before）共用同一个 .on 开关——只有祝福真正入场才出现。
+   不挂 transition：seek 逐帧渲染时 transition 不推进，会把这一帧的线判成"不存在"；
+   而在 41.95 那一瞬终章正在爆，1px 线的"出现"看不见。 */
+.blessing.on::after{ opacity: .35; }
+
+/* ═══ 4. 字幕：做成"场记标" ═════════════════════════════════
+   2×18px 实心小方块 + 8px 间距，字距 .40em（片头字幕的呼吸）。 */
+.caption{
+  font-size: 12.5px;
+  letter-spacing: .40em;
+  font-weight: 500;
+  color: #F4F9F1;
+  line-height: 1.2;
+}
+.caption::before{
+  width: 18px;
+  height: 2px;
+  margin-right: 8px;
+  border-radius: 1px;
+  background: #F4F9F1;          /* 实心方块，不再是渐变细线 */
+  opacity: .92;
+  vertical-align: .12em;        /* 与 12.5px 的基线对齐 */
+}
+
+/* ═══ 5. 断行与孤字防护 ═════════════════════════════════════
+   正文单行字数 12–14（内容侧给定，HTML 不可改），靠字距与容器宽度
+   保证**不折行、不出现孤字**。560px 容器 @22px 正文，14 字 ≈ 341px，
+   余量充足；这里再加一道保险：禁止在标点处断行。 */
+.blessing .line > span{
+  white-space: nowrap;          /* 每行一句，物理上不可能折行 */
+  text-wrap: nowrap;
+}

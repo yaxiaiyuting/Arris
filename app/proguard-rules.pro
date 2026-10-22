@@ -116,3 +116,6 @@
 # method-size budget. R8 otherwise merges/inlines the whole drawing pipeline and
 # dialog contents into >2000-code-unit bodies. Shrinking and renaming stay on.
 -keep,allowshrinking,allowobfuscation class com.takahashirinta.ncrust.celebration.** { *; }
+-keepclassmembers class com.takahashirinta.ncrust.celebration.BirthdayWebView$Bridge {
+    @android.webkit.JavascriptInterface <methods>;
+}

@@ -44,7 +44,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 
 @Composable
-private fun rememberMotionAllowed(): Boolean {
+internal fun rememberMotionAllowed(): Boolean {
     val context=LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     DisposableEffect(context) {
@@ -63,7 +63,7 @@ private fun rememberMotionAllowed(): Boolean {
 
 /** Fullscreen native layer. Closing/backgrounding removes both View clock and AudioRecord. */
 @Composable
-fun CelebrationOverlay(kind:CelebrationKind,onClose:()->Unit,onVisible:()->Unit = {}) {
+internal fun NativeCelebrationOverlay(kind:CelebrationKind,onClose:()->Unit,onVisible:()->Unit = {}) {
     val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val s=LocalStrings.current.celebration

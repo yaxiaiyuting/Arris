@@ -1,0 +1,80 @@
+/* ─────────────────────────────────────────────────────────────
+   css/art-direction.css · 美术指导的覆盖补丁（v1）
+   ─────────────────────────────────────────────────────────────
+   用法：在 index.html 的 <link href="css/base.css"> 之后加一行
+         <link rel="stylesheet" href="css/art-direction.css">
+   （index.html 由 Lead 维护，我不改；本文件只覆盖样式，不动结构、不动别人的 js。）
+
+   与 base.css 的差异全部记录在 docs/CRITIQUE.md，逐条给 before/after。
+   设计依据：docs/ART-BIBLE.md §1.5 / §2 / §4.2 / §7。
+
+   本文件解决 3 个 P0：
+   1) 祝福标题「生日快乐。」在 0s 就整段可见（background-clip:text 让 h1 的渐变
+      不受内部 span 的 opacity:0 影响）→ 把渐变搬到被动画的 span 上。
+   2) 祝福块右缘 1480 越出安全区 1420 → 收到 1420。
+   3) 章节字幕局部对比 ΔL*≈10，读不出来 → 提亮 + 加 scrim。
+   另附两处美术值：暗角减一档（§2.1 台阶被双重压暗压平了）、颗粒降到 .07 并换 soft-light。
+   ───────────────────────────────────────────────────────────── */
+
+/* ── 1. 祝福标题：渐变必须在被 GSAP 动的 span 上 ─────────────── */
+.blessing .line.title{
+  background: none;          /* 关键：h1 不再自带 gradient，否则 opacity:0 的 span 也照样显示字形 */
+  -webkit-text-fill-color: currentColor;
+  color: transparent;
+}
+.blessing .line.title > span{
+  background: linear-gradient(178deg, #fffdf6 12%, #fff0d8 62%, #ebc994 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── 2. 祝福块：收进 1420 安全区（原 right 7.5% = 120 → 右缘 1480） ── */
+.blessing{
+  right: clamp(40px, 11.25%, 180px);   /* 1600 宽下 = 180 → 右缘 1420 */
+  width: min(43vw, 560px);             /* 原 min(46vw,620px)，收窄避免压住主体上方 */
+  top: clamp(120px, 25%, 288px);
+}
+.blessing .body{ text-shadow: 0 4px 26px #020a06cc, 0 0 40px #02100a66; }
+
+/* ── 3. 章节字幕：ΔL* ≥ 22（实测只有 10）───────────────────── */
+.caption{
+  color: #cfe0cc;                 /* L*87，原 #b4c6b7 在 opacity 半途时只剩 L*38 */
+  font-size: clamp(11.5px, .94vw, 13.5px);
+  letter-spacing: .34em;
+  padding: 9px 26px 9px 0;
+  background: linear-gradient(90deg,
+      rgba(4, 16, 11, .62) 0%,
+      rgba(4, 16, 11, .26) 52%,
+      rgba(4, 16, 11, 0) 100%);
+  text-shadow: 0 2px 14px rgba(2, 12, 8, .85);
+}
+.caption::before{
+  background: linear-gradient(90deg, transparent, #9fd8b7);
+  opacity: .78;
+}
+
+/* ── 4. 暗角减一档：base.css 的两层暗角把 L* 30–45 的中调压没了 ── */
+.grade{
+  background:
+    radial-gradient(150% 110% at 50% 46%, transparent 46%, #050d0985 84%, #030906b8 100%),
+    radial-gradient(62% 46% at 50% 30%, rgba(124, 175, 150, .15) 0%, transparent 70%),
+    linear-gradient(180deg, #0a1a1244 0%, transparent 26%, transparent 74%, #040b0766 100%);
+}
+
+/* ── 5. 颗粒：overlay .13 在深绿上等于二次压暗 → soft-light .07 ── */
+.grain{
+  opacity: .07;
+  mix-blend-mode: soft-light;
+}
+
+/* ── 6. 全局 bloom：中心从 50%/66% 移到火焰簇 50%/58%，并给足半径 ── */
+.bloom{
+  background: radial-gradient(34% 24% at 50% 58%,
+      #ffd9a355 0%, #ffb06622 46%, transparent 78%);
+  mix-blend-mode: screen;
+}
+
+/* ── 7. 黑场：只到 0.94，留 6% 底，避免死黑（CONTRACT §5）──── */
+.blackout{ background: #020604; }

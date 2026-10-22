@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>生日快乐 · A Birthday in the Night Green</title>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/art-direction.css">
+<link rel="stylesheet" href="css/type.css">
+<link rel="stylesheet" href="css/arris.css">
+</head>
+<body>
+<div id="stage" data-beat="awake" data-time="0">
+  <!-- 场景背层：天空 / 极光 / 远景 / 中景（烟花要画在它们前面、角色后面） -->
+  <svg id="svg-env" class="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g id="layer-sky" data-depth="0.02"></g>
+    <g id="layer-aurora" data-depth="0.06"></g>
+    <g id="layer-far" data-depth="0.14"></g>
+    <g id="layer-mid" data-depth="0.28"></g>
+  </svg>
+
+  <!-- 后景特效：烟花、轻烟、远浮尘（在环境之上、角色之下） -->
+  <canvas id="fx-back" class="fx fx-back" width="1600" height="900"></canvas>
+
+  <!-- 主体层：地面 / 蛋糕 / Tux / 近景 / 极近景 -->
+  <svg id="svg-scene" class="scene scene-main" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-label="夜森林温室里的生日祝福">
+    <g id="layer-ground" data-depth="0.55"></g>
+    <!-- 蛋糕在 Tux 之后：端在胸前时不会被身体挡住（motion 会按顺序自己切 CARRY_X） -->
+    <g id="layer-tux" data-depth="0.64"></g>
+    <g id="layer-cake" data-depth="0.58"></g>
+    <g id="layer-near" data-depth="1.35"></g>
+    <g id="layer-fg" data-depth="2.2"></g>
+  </svg>
+
+  <canvas id="fx-front" class="fx fx-front" width="1600" height="900"></canvas>
+
+  <div class="grade"></div>
+  <div class="grain"></div>
+  <div class="bloom" id="bloom"></div>
+  <div class="blackout" id="blackout"></div>
+
+  <div id="titles" class="titles">
+    <p class="caption" id="caption"></p>
+    <div class="blessing" id="blessing">
+      <h1 class="line title" data-line><span>生日快乐。</span></h1>
+      <p class="line body" data-line><span>愿你耳边，常有喜欢的歌。</span></p>
+      <p class="line body" data-line><span>愿你心里，常有值得期待的事。</span></p>
+      <p class="line body last" data-line><span>新的一岁，按自己的节奏发光。</span></p>
+    </div>
+  </div>
+
+  <div class="ui" id="ui">
+    <button class="ui-play" id="ui-play" aria-label="播放 / 暂停">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="ico-play" d="M8 5.5v13l11-6.5z"/><g class="ico-pause"><rect x="7" y="5.5" width="3.4" height="13" rx="1"/><rect x="13.6" y="5.5" width="3.4" height="13" rx="1"/></g></svg>
+    </button>
+    <div class="ui-track" id="ui-track" role="slider" aria-label="时间轴" tabindex="0">
+      <div class="ui-fill" id="ui-fill"></div>
+      <div class="ui-marks" id="ui-marks"></div>
+      <div class="ui-knob" id="ui-knob"></div>
+    </div>
+    <span class="ui-time" id="ui-time">00.0 / 48.0</span>
+    <span class="ui-beat" id="ui-beat">夜森苏醒</span>
+    <button class="ui-btn" id="ui-replay" aria-label="重播">重播</button>
+    <button class="ui-btn" id="ui-skip" aria-label="跳到烟花">烟花</button>
+  </div>
+</div>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/CustomEase.min.js"></script>
+<script src="vendor/MotionPathPlugin.min.js"></script>
+<script src="js/cues.js"></script>
+<script src="js/assets.env.js"></script>
+<script src="js/assets.tux.js"></script>
+<script src="js/assets.cake.js"></script>
+<script src="js/lighting.js"></script>
+<script src="js/vfx.js"></script>
+<script src="js/motion.js"></script>
+<script src="js/main.js"></script>
+<script src="js/finish.js"></script>
+<script src="js/arris.js"></script>
+</body>
+</html>

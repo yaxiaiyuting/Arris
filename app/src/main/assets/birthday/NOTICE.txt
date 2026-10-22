@@ -1,0 +1,15 @@
+Birthday motion artwork and HTML/SVG/CSS/JavaScript supplied by the Arris project
+maintainer, imported from birthday-motion on 2026-10-22. Android integration and
+portrait layout changes belong to Arris. See docs/verification/v3.6.2 for the
+source-file manifest and integration verification.
+
+The vendor/ directory contains GSAP 3.13.0, CustomEase and MotionPathPlugin.
+Copyright 2025, GreenSock. All rights reserved.
+These vendor files retain their original copyright and license headers and are
+provided under GreenSock's Standard "no charge" License, not relicensed as GPL.
+License: https://gsap.com/standard-license
+Upstream: https://github.com/greensock/GSAP
+
+No remote script, font, audio or video is loaded by the in-app page. The supplied
+MP4 is a reference film; the app renders the interactive source rather than
+playing the fixed video, so the wish scene can wait for an actual puff or tap.

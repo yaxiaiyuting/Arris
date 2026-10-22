@@ -1,0 +1,288 @@
+/* 生日动画重构 · 舞台样式
+   基色与排版见 docs/CONTRACT.md §5。 */
+
+:root{
+  --ink:#fff7e7;
+  --muted:#b4c6b7;
+  --gold:#ffb066;
+  --champagne:#ffe8c7;
+  --spark:#f8ce86;
+  --green-core:#1c4a35;
+  --green-deep:#08160f;
+  --sage:#6eaf7e;
+  --coral:#f0a99b;
+  --serif:"Noto Serif CJK SC","Source Han Serif SC","Songti SC",serif;
+  --sans:"Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+html{background:#040a07}
+body{
+  margin:0;background:
+    radial-gradient(1200px 800px at 50% 30%, #0b1c14 0%, #040a07 70%);
+  color:var(--ink);font-family:var(--sans);
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+#stage{
+  position:relative;
+  width:min(100vw, calc(100vh * 16 / 9));
+  height:min(100vh, calc(100vw * 9 / 16));
+  aspect-ratio:16 / 9;
+  overflow:hidden;
+  isolation:isolate;
+  /* 底色只做"最远的那一层"，别再抢环境层的明度：过亮会把整片压成绿汤 */
+  background:
+    radial-gradient(128% 108% at 50% 44%, #0d2a1e 0%, #081a13 36%, #040d09 72%, #020705 100%),
+    #020705;
+  box-shadow:0 40px 120px -30px #000, 0 0 0 1px #ffffff08;
+}
+
+/* 合成顺序：环境背层 → 后景特效 → 主体 → 前景特效 */
+.scene{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:3}
+.scene-main{z-index:5}
+.fx{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+.fx-back{z-index:4}
+.fx-front{z-index:6}
+
+/* ── 调色 / 颗粒 / 暗角 ───────────────────────────── */
+.grade,.grain,.bloom,.blackout{position:absolute;inset:0;pointer-events:none}
+/* 合成 finish（comp-polish）：
+   影调靠两层混合，雾/暗角挂在 .grade 上 —— 不新增 DOM，不写 SVG filter。
+   暗角目标：四角 = 中心 55–70%，四角无亮斑。 */
+/* 用 #stage 提权：art-direction.css 在本文件之后加载并重定义了 .grade/.grain/.bloom，
+   而暗角是 comp 这一轮的验收项，所以这里以 #stage .grade 的形式接管（已同步 Lead/art-director）。 */
+#stage .grade{
+  z-index:7;
+  background:
+    /* ① 暗角：中心 44% 完全透明，边角只压到 0.22（压太狠会掉到 40% 以下） */
+    radial-gradient(86% 76% at 50% 47%, transparent 34%, rgba(4,12,8,.18) 66%, rgba(3,9,6,.40) 100%),
+    /* ② 远层雾：上半幅 5% 冷绿，把 sky/far 的对比压下来（不是全屏叠加） */
+    linear-gradient(180deg, rgba(124,175,150,.055) 0%, rgba(124,175,150,.022) 28%, rgba(124,175,150,0) 46%),
+    /* ③ 底部收口 */
+    linear-gradient(180deg, transparent 64%, rgba(4,11,7,.30) 100%);
+  mix-blend-mode:normal;
+}
+
+/* ── finish 三层（JS 在 init 时插入 .grade 之后，同 z-index 靠 DOM 顺序叠放） ── */
+.fin-tone-lift,.fin-tone-warm,.fin-halation{
+  position:absolute;inset:0;pointer-events:none;z-index:7;
+}
+/* ① 暗部抬起 + 青绿：lighten = 给黑位设一个地板，中间调以上完全不动 */
+.fin-tone-lift{ background:#081911; mix-blend-mode:lighten; }  /* 地板 0.06→0.10，只抬暗部下限 */
+/* ② 高光偏暖：soft-light 在 0.5 附近位移最小，配合上强下弱的渐变只暖高光 */
+.fin-tone-warm{
+  background:linear-gradient(180deg,
+    rgba(255,140,26,.64) 0%,
+    rgba(255,152,44,.38) 44%,
+    rgba(255,182,110,.12) 100%);
+  mix-blend-mode:soft-light;
+  opacity:.25;
+}
+/* ③ 光晕：局部径向（蜡烛 + 当前烟花），screen 叠加，无 blur */
+.fin-halation{
+  background:
+    radial-gradient(17% 13% at var(--hx1,50%) var(--hy1,58%), rgba(255,116,58,.055) 0%, rgba(255,88,38,0) 70%),
+    radial-gradient(34% 26% at var(--hx2,50%) var(--hy2,58%), rgba(255,140,80,.040) 0%, rgba(255,120,60,0) 76%);
+  mix-blend-mode:screen;
+}
+/* 远景软焦：极近景枝叶轻微失焦（0.7px，只有一层，不叠） */
+#layer-fg{ filter:blur(.7px); }
+/* 颗粒：静态噪声 + 极轻的合成位移。
+   注意：整屏 mix-blend-mode + 逐帧 background-position 在软件光栅下会把帧率
+   打到个位数（实测 3fps），所以这里用普通混合 + transform 位移（合成层，不重绘）。 */
+/* 颗粒：用 128px 噪声 PNG 平铺（SVG feTurbulence 每帧重栅格化太贵，实测 4.7fps）。
+   静态不平移——质感优先，帧率不能拿来换。 */
+.grain{
+  z-index:9;opacity:.085;mix-blend-mode:normal;
+  background-image:url("../assets/grain-full.png");
+  background-repeat:no-repeat;
+  background-size:100% 100%;
+  /* 关键：整屏平铺图层必须提成独立合成层，否则每帧重栅格化（60fps → 18fps） */
+  will-change:transform;
+  transform:translateZ(0);
+  contain:paint;
+}
+.bloom{
+  z-index:8;opacity:0;left:auto;right:auto;
+  width:56%;height:52%;left:22%;top:44%;
+  background:radial-gradient(50% 50% at 50% 50%, #ffd9a344 0%, #ffb0661c 52%, transparent 76%);
+  mix-blend-mode:normal;transition:opacity .5s linear;
+}
+.blackout{z-index:10;background:#000;opacity:0}
+
+/* ── 文字 ─────────────────────────────────────────── */
+.titles{position:absolute;inset:0;z-index:12;pointer-events:none}
+.caption{
+  position:absolute;left:clamp(28px,4.2%,72px);top:clamp(24px,5.2vh,54px);
+  margin:0;font-size:clamp(11px,.92vw,13px);letter-spacing:.34em;
+  color:#b4c6b7;opacity:0;font-weight:400;
+  text-transform:uppercase;
+  text-shadow:0 2px 18px #03090680;
+}
+.caption::before{
+  content:"";display:inline-block;width:26px;height:1px;margin-right:14px;
+  vertical-align:middle;background:linear-gradient(90deg,transparent,#8fb79a99);
+}
+.blessing{
+  position:absolute;right:clamp(48px,8.75%,140px);top:clamp(120px,25%,280px);
+  width:min(44vw,600px);text-align:right;
+  isolation:isolate;
+}
+/* 文字底衬：极柔的暗色径向渐变，只为把字从背景里"托"出来，不要看成一块板 */
+.blessing::before{
+  content:"";position:absolute;z-index:-1;
+  inset:-16% -22% -18% -26%;
+  /* 柔边遮罩：radial 的 0 点落在元素外，再叠一层 blur，彻底没有矩形边 */
+  background:radial-gradient(closest-side at 50% 50%,
+    rgba(2,10,6,.72) 0%,
+    rgba(2,10,6,.52) 42%,
+    rgba(2,10,6,.22) 68%,
+    rgba(2,10,6,0) 100%);
+  filter:blur(26px);
+  pointer-events:none;
+  opacity:0;
+  /* 不要 transition：逐帧 seek 时 CSS 过渡不推进，截图里底衬会恒为 0 */
+}
+/* 只有祝福真正入场时才画底衬；否则它会从 0s 起把右半边的烟花压暗 60% */
+.blessing.on::before{opacity:1;}
+.line{margin:0;overflow:hidden;padding-top:.06em}
+.line > span{display:block;opacity:0;will-change:transform,opacity,filter}
+.blessing .title{
+  font-family:var(--serif);font-weight:600;
+  /* Noto Serif CJK 的实际 ink 高度 > 1em，line-height 低于 1.25 会被 overflow:hidden 切掉字头 */
+  font-size:clamp(34px,4.9vw,72px);line-height:1.3;letter-spacing:.04em;
+  color:transparent;
+  margin-bottom:clamp(14px,2.2vh,26px);
+}
+/* 渐变字必须挂在会变换的 span 上：挂在父级时 background-clip:text 会把
+   子元素变换前的原位再画一遍（标题会提前出现在画面里）。 */
+.blessing .title > span{
+  background:linear-gradient(178deg,#fffdf6 12%,#ffefd6 58%,#eccb9b 100%);
+  -webkit-background-clip:text;background-clip:text;
+  color:transparent;
+  filter:drop-shadow(0 14px 46px rgba(0,0,0,.42));
+}
+.blessing .body{
+  font-size:clamp(14px,1.42vw,22px);line-height:1.95;font-weight:350;
+  color:#f8f0e1;letter-spacing:.06em;margin-top:.5em;
+  text-shadow:0 2px 10px #020a06e6, 0 8px 34px #020a06aa;
+}
+.blessing .body.last{
+  font-weight:400;color:#ffe6bd;letter-spacing:.12em;
+  font-size:clamp(15px,1.52vw,24px);
+}
+.blessing .rule{
+  height:1px;width:0;margin:clamp(16px,2.4vh,28px) 0 0 auto;
+  background:linear-gradient(270deg,#ffd9a3aa,#ffd9a300);
+}
+
+/* ── 控制条 ───────────────────────────────────────── */
+.ui{
+  position:absolute;z-index:20;left:0;right:0;bottom:0;
+  display:flex;align-items:center;gap:clamp(8px,1.1vw,16px);
+  padding:clamp(10px,1.6vh,18px) clamp(14px,2.2%,34px);
+  background:linear-gradient(180deg,transparent,#04100bcc 58%,#030b08ee);
+  opacity:0;transform:translateY(8px);transition:opacity .45s ease,transform .45s ease;
+  font-size:12px;color:#cfdccf;
+}
+#stage.ui-live .ui, .ui:hover{opacity:1;transform:none}
+.ui button{
+  appearance:none;border:1px solid #ffffff1f;background:#ffffff0d;color:#e7f0e6;
+  border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;letter-spacing:.08em;
+  cursor:pointer;transition:background .2s ease,border-color .2s ease,color .2s ease;
+}
+.ui button:hover{background:#ffffff1c;border-color:#ffffff38}
+.ui-play{width:34px;height:34px;padding:0!important;display:grid;place-items:center}
+.ui-play svg{width:16px;height:16px;fill:#eaf5e8}
+.ui-play .ico-pause{display:none}
+#stage.playing .ui-play .ico-play{display:none}
+#stage.playing .ui-play .ico-pause{display:block}
+.ui-track{
+  position:relative;flex:1;height:26px;cursor:pointer;display:flex;align-items:center;
+  outline:none;
+}
+.ui-track::before{
+  content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:#ffffff1c;
+}
+.ui-fill{
+  position:absolute;left:0;height:2px;width:0;border-radius:2px;
+  background:linear-gradient(90deg,#8fc9a4,#ffd9a3);
+  box-shadow:0 0 12px #ffd9a366;
+}
+.ui-knob{
+  position:absolute;left:0;width:9px;height:9px;border-radius:50%;
+  background:#fff6e6;box-shadow:0 0 10px #ffd9a3aa;transform:translateX(-50%);
+  opacity:0;transition:opacity .2s ease;
+}
+.ui-track:hover .ui-knob,.ui-track:focus-visible .ui-knob{opacity:1}
+.ui-marks{position:absolute;inset:0;pointer-events:none}
+.ui-marks i{
+  position:absolute;top:50%;width:1px;height:7px;margin-top:-3.5px;background:#ffffff33;
+}
+.ui-time{font-variant-numeric:tabular-nums;color:#a9bba9;min-width:98px;text-align:right}
+.ui-beat{color:#e6d6b6;letter-spacing:.12em;min-width:80px}
+
+/* ── 减少动态效果 ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce){
+  .grain{animation:none;display:none}
+  .fin-tone-lift,.fin-tone-warm,.fin-halation{display:none}
+}
+
+/* ── 小屏 / 竖屏：裁切而非缩放，保证主体在画面内 ───── */
+@media (max-aspect-ratio: 4/3){
+  #stage{width:100vw;height:100vh;aspect-ratio:auto}
+  .blessing{right:6%;width:auto;text-align:left;left:6%;top:auto;bottom:12%}
+}
+
+/* ── 角色质感微调（Lead 合成阶段）─────────────────────────────
+   资产里 body / head 各有一条 2u、opacity .7 的轮廓描边（#2F5341）。
+   在深色背景上它会读成"套了一层玻璃泡"——整只企鹅像在水晶球里。
+   这里把它压成很轻的边缘定义，体积交给渐变与 rim light。 */
+#tux-body > path:first-of-type,
+#tux-head > path:first-of-type{
+  stroke-opacity:.24;
+  stroke-width:1.5;
+}
+/* 肚子的高光描边同样收一档，避免"贴纸描边" */
+#tux-belly path{stroke-opacity:.4;}
+
+/* ── 章节字幕对比度（QA P1：t=6s 最低 3.77:1）──────────────
+   提高选择器权重覆盖 art-direction.css 里的同名规则。 */
+#stage .caption{
+  color:#ffffff;
+  font-weight:600;
+  background:none;
+  text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 14px rgba(0,0,0,.75), 0 0 30px rgba(0,0,0,.5);
+}
+
+
+/* ── 温室结构线：细而亮的几何线在夜景里会读成"镜头划痕"（审片 M2） ──
+   压到 55% 并略降对比，让它退回"结构"而不是"划痕"。 */
+#e-mid-sheen, #e-mid-arch, #e-mid-mullions-l, #e-mid-mullions-r{
+  opacity:.55;
+}
+
+/* ── 性能：整屏混合层是唯一的帧率杀手 ─────────────────────────
+   art-direction.css 把 .grain 改成 mix-blend-mode:soft-light（整屏混合），
+   实测把播放从 54fps 打到 6.7fps。这里用更高优先级改回普通混合：
+   颗粒是质感，不该拿全片帧率换。 */
+#stage .grain{
+  mix-blend-mode:normal;
+  opacity:.09;
+  /* 颗粒是整屏位图叠加：软件光栅下它一个人就吃掉 34fps（54.5 → 20.6）。
+     默认关闭，颗粒改在导出视频时用 ffmpeg 加；需要页面里看颗粒时用 ?grain=1。 */
+  display:none;
+}
+#stage.with-grain .grain{display:block;}
+#stage .bloom{
+  mix-blend-mode:normal;
+}
+
+/* ── 轻量档（自动兜底）：低帧率设备上关掉三层合成叠加与前景粒子 ── */
+#stage.lite [class^=fin-]{display:none;}
+#stage.lite #fx-front{display:none;}
+#stage.lite #svg-scene{filter:none;}
