@@ -1,0 +1,14 @@
+{
+  "tests": {
+    "suites": 236,
+    "tests": 2983,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "newTests": 15
+  },
+  "lint": {
+    "Information": 5,
+    "Warning": 61
+  }
+}

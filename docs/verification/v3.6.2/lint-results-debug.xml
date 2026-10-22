@@ -1,0 +1,1078 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.5.0">
+
+    <issue
+        id="LintBaseline"
+        severity="Information"
+        message="18 errors and 60 warnings were filtered out because they are listed in the baseline file, lint-baseline.xml"
+        category="Lint"
+        priority="10"
+        summary="Baseline Applied"
+        explanation="Lint can be configured with a &quot;baseline&quot;; a set of current issues found in a codebase, which future runs of lint will silently ignore. Only new issues not found in the baseline are reported.&#xA;&#xA;Note that while opening files in the IDE, baseline issues are not filtered out; the purpose of baselines is to allow you to get started using lint and break the build on all newly introduced errors, without having to go back and fix the entire codebase up front. However, when you open up existing files you still want to be aware of and fix issues as you come across them.&#xA;&#xA;This issue type is used to emit an informational-only warning if any issues were filtered out due to baseline matching. That way, you don&apos;t have a false sense of security if you forgot that you&apos;ve checked in a baseline file.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/lint-baseline.xml"/>
+    </issue>
+
+    <issue
+        id="LintBaselineFixed"
+        severity="Information"
+        message="81 errors/warnings were listed in the baseline file (lint-baseline.xml) but not found in the project; perhaps they have been fixed? Another possible explanation is that lint recently stopped analyzing (and including results from) dependent projects by default. You can turn this back on with `android.lintOptions.checkDependencies=true`. Unmatched issue types: AndroidGradlePluginVersion (3), AutoboxingStateCreation (2), GradleDependency (35), KtxExtensionAvailable, MissingOnPlayFromSearch, MonochromeLauncherIcon, UnsafeOptInUsageError (38)"
+        category="Lint"
+        priority="10"
+        summary="Baselined Issues Fixed"
+        explanation="If a lint baseline describes a problem which is no longer reported, then the problem has either been fixed, or perhaps the issue type has been disabled. In any case, the entry can be removed from the baseline (such that if the issue is reintroduced at some point, lint will complain rather than just silently starting to match the old baseline entry again.)">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/lint-baseline.xml"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="        editor.commit()"
+        errorLine2="               ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt"
+            line="92"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="            .commit()"
+        errorLine2="             ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt"
+            line="110"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="        prefs(context).edit().remove(tracksKey(key)).commit()"
+        errorLine2="                                                     ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt"
+            line="116"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="        e.commit()"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt"
+            line="159"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="        prefs(context).edit().clear().commit()"
+        errorLine2="                                      ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt"
+            line="164"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        severity="Warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        category="Correctness"
+        priority="6"
+        summary="Use `apply()` on `SharedPreferences`"
+        explanation="Consider using `apply()` instead of `commit` on shared preferences. Whereas `commit` blocks and writes its data to persistent storage immediately, `apply` will handle it in the background."
+        errorLine1="        e.commit()"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt"
+            line="181"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;%d insgesamt&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt"
+            line="694"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;Alle %d Titel werden geladen…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt"
+            line="717"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;%1\$d Titel geladen, %2\$d nicht verfügbar&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt"
+            line="718"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;%d total&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt"
+            line="695"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;Loading all %d tracks…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt"
+            line="718"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;Loaded %1\$d tracks; %2\$d unavailable&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt"
+            line="719"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;全 %d 曲&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt"
+            line="692"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;全%d曲を読み込み中…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt"
+            line="715"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;%1\$d曲を読み込みました（%2\$d曲は取得できません）&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt"
+            line="716"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;都 %d 曲&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt"
+            line="691"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;全 %d 曲 読込中…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt"
+            line="714"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;%1\$d 曲 読了、%2\$d 曲 取得不能&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt"
+            line="715"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;총 %d곡&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt"
+            line="691"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;전체 %d곡 불러오는 중…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt"
+            line="714"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;%1\$d곡을 불러왔고 %2\$d곡은 사용할 수 없습니다&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt"
+            line="715"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;всего %d&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt"
+            line="694"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;Загрузка всех треков: %d…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt"
+            line="717"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;Загружено %1\$d, недоступно %2\$d&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt"
+            line="718"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;共 %d 首&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt"
+            line="692"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;正在加载全部 %d 首…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt"
+            line="715"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;已加载 %1\$d 首，%2\$d 首暂不可用&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt"
+            line="716"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            searchSourceTotal = { n -> java.lang.String.format(&quot;共 %d 首&quot;, n) },"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt"
+            line="692"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            loading = { n -> java.lang.String.format(&quot;正在載入全部 %d 首…&quot;, n) },"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt"
+            line="715"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        severity="Warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        category="Correctness"
+        priority="6"
+        summary="Implied default locale in case conversion"
+        explanation="Calling `String#toLowerCase()` or `#toUpperCase()` **without specifying an explicit locale** is a common source of bugs. The reason for that is that those methods will use the current locale on the user&apos;s device, and even though the code appears to work correctly when you are developing the app, it will fail in some locales. For example, in the Turkish locale, the uppercase replacement for `i` is **not** `I`.&#xA;&#xA;If you want the methods to just perform ASCII replacement, for example to convert an enum name, call `String#toUpperCase(Locale.ROOT)` instead. If you really want to use the current locale, call `String#toUpperCase(Locale.getDefault())` instead."
+        url="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        urls="https://developer.android.com/reference/java/util/Locale.html#default_locale"
+        errorLine1="            partial = { loaded, missing -> java.lang.String.format(&quot;已載入 %1\$d 首，%2\$d 首暫時無法取得&quot;, loaded, missing) },"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt"
+            line="716"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        severity="Warning"
+        message="Field requires API level 26 (current min is 24): `android.provider.Settings#ACTION_MANAGE_UNKNOWN_APP_SOURCES`"
+        category="Correctness"
+        priority="6"
+        summary="Using inlined constants on older versions"
+        explanation="This check scans through all the Android API field references in the application and flags certain constants, such as static final integers and Strings, which were introduced in later versions. These will actually be copied into the class files rather than being referenced, which means that the value is available even when running on older devices. In some cases that&apos;s fine, and in other cases it can result in a runtime crash or incorrect behavior. It depends on the context, so consider the code carefully and decide whether it&apos;s safe and can be suppressed or whether the code needs to be guarded.&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level."
+        errorLine1="            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/update/UpdateService.kt"
+            line="351"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        severity="Warning"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        category="Correctness"
+        priority="5"
+        summary="Vector Image Generation"
+        explanation="Vector icons require API 21 or API 24 depending on used features, but when `minSdkVersion` is less than 21 or 24 and Android Gradle plugin 1.4 or higher is used, a vector drawable placed in the `drawable` folder is automatically moved to `drawable-anydpi-v21` or `drawable-anydpi-v24` and bitmap images are generated for different screen resolutions for backwards compatibility.&#xA;&#xA;However, there are some limitations to this raster image generation, and this lint check flags elements and attributes that are not fully supported. You should manually check whether the generated output is acceptable for those older devices."
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; android:width=&quot;360dp&quot; android:height=&quot;380dp&quot; android:viewportWidth=&quot;360&quot; android:viewportHeight=&quot;380&quot;>&lt;group android:translateY=&quot;70&quot;>&lt;group>&lt;path android:pathData=&quot;M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z&quot; android:fillColor=&quot;#13251c&quot; android:fillAlpha=&quot;.1&quot; />&lt;path android:pathData=&quot;M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z&quot; android:fillColor=&quot;#F4E8C9&quot; />&lt;path android:pathData=&quot;M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;group>&lt;path android:pathData=&quot;M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;group>&lt;path android:pathData=&quot;M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;path android:pathData=&quot;M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;/group>&lt;/group>&lt;path android:pathData=&quot;M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M117 108Q141 117 166 107&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#f8ce86&quot; android:strokeWidth=&quot;2&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M61 81Q60 1 140 0Q219 1 218 81&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#6eaf7e&quot; android:strokeWidth=&quot;13&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M70 70Q69 10 140 9Q210 10 209 70&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;path android:pathData=&quot;M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M81 143Q140 163 198 142L200 157Q140 181 79 157Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M169 158L166 197L187 193L189 154Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M168 182L185 178&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;group android:rotation=&quot;-9&quot; android:pivotX=&quot;138&quot; android:pivotY=&quot;18&quot;>&lt;path android:pathData=&quot;M99 22L137 -53L174 23Z&quot; android:fillColor=&quot;#e8ac9e&quot; />&lt;path android:pathData=&quot;M113 -5L160 -10M122 -26L149 -29&quot; android:fillColor=&quot;#000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;9&quot; />&lt;path android:pathData=&quot;M97 24Q136 14 176 25&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;10&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;/group>&lt;path android:pathData=&quot;M206 146Q231 183 294 170Q317 163 327 175Q325 197 290 200Q230 210 201 184Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;/group>&lt;/group>&lt;/vector>"
+        errorLine2="                                                                                  ~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/drawable/tux_carry.xml"
+            line="2"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        severity="Warning"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        category="Correctness"
+        priority="5"
+        summary="Vector Image Generation"
+        explanation="Vector icons require API 21 or API 24 depending on used features, but when `minSdkVersion` is less than 21 or 24 and Android Gradle plugin 1.4 or higher is used, a vector drawable placed in the `drawable` folder is automatically moved to `drawable-anydpi-v21` or `drawable-anydpi-v24` and bitmap images are generated for different screen resolutions for backwards compatibility.&#xA;&#xA;However, there are some limitations to this raster image generation, and this lint check flags elements and attributes that are not fully supported. You should manually check whether the generated output is acceptable for those older devices."
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; android:width=&quot;360dp&quot; android:height=&quot;380dp&quot; android:viewportWidth=&quot;360&quot; android:viewportHeight=&quot;380&quot;>&lt;group android:translateY=&quot;70&quot;>&lt;group>&lt;path android:pathData=&quot;M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z&quot; android:fillColor=&quot;#13251c&quot; android:fillAlpha=&quot;.1&quot; />&lt;path android:pathData=&quot;M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z&quot; android:fillColor=&quot;#F4E8C9&quot; />&lt;path android:pathData=&quot;M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;group>&lt;path android:pathData=&quot;M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;group>&lt;path android:pathData=&quot;M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;path android:pathData=&quot;M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;/group>&lt;/group>&lt;path android:pathData=&quot;M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M117 108Q141 117 166 107&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#f8ce86&quot; android:strokeWidth=&quot;2&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M61 81Q60 1 140 0Q219 1 218 81&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#6eaf7e&quot; android:strokeWidth=&quot;13&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M70 70Q69 10 140 9Q210 10 209 70&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;path android:pathData=&quot;M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M81 143Q140 163 198 142L200 157Q140 181 79 157Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M169 158L166 197L187 193L189 154Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M168 182L185 178&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;group android:rotation=&quot;-9&quot; android:pivotX=&quot;138&quot; android:pivotY=&quot;18&quot;>&lt;path android:pathData=&quot;M99 22L137 -53L174 23Z&quot; android:fillColor=&quot;#e8ac9e&quot; />&lt;path android:pathData=&quot;M113 -5L160 -10M122 -26L149 -29&quot; android:fillColor=&quot;#000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;9&quot; />&lt;path android:pathData=&quot;M97 24Q136 14 176 25&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;10&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;/group>&lt;/group>&lt;/group>&lt;/vector>"
+        errorLine2="                                                                                  ~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/drawable/tux_light.xml"
+            line="2"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        severity="Warning"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        category="Correctness"
+        priority="5"
+        summary="Vector Image Generation"
+        explanation="Vector icons require API 21 or API 24 depending on used features, but when `minSdkVersion` is less than 21 or 24 and Android Gradle plugin 1.4 or higher is used, a vector drawable placed in the `drawable` folder is automatically moved to `drawable-anydpi-v21` or `drawable-anydpi-v24` and bitmap images are generated for different screen resolutions for backwards compatibility.&#xA;&#xA;However, there are some limitations to this raster image generation, and this lint check flags elements and attributes that are not fully supported. You should manually check whether the generated output is acceptable for those older devices."
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; android:width=&quot;360dp&quot; android:height=&quot;380dp&quot; android:viewportWidth=&quot;360&quot; android:viewportHeight=&quot;380&quot;>&lt;group android:translateY=&quot;70&quot;>&lt;group>&lt;path android:pathData=&quot;M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z&quot; android:fillColor=&quot;#13251c&quot; android:fillAlpha=&quot;.1&quot; />&lt;path android:pathData=&quot;M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M207 138C237 146 259 194 252 229Q247 244 229 229L194 189Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z&quot; android:fillColor=&quot;#F4E8C9&quot; />&lt;path android:pathData=&quot;M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;group>&lt;path android:pathData=&quot;M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;group>&lt;path android:pathData=&quot;M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;path android:pathData=&quot;M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;/group>&lt;/group>&lt;path android:pathData=&quot;M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M117 108Q141 117 166 107&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#f8ce86&quot; android:strokeWidth=&quot;2&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M61 81Q60 1 140 0Q219 1 218 81&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#6eaf7e&quot; android:strokeWidth=&quot;13&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M70 70Q69 10 140 9Q210 10 209 70&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;path android:pathData=&quot;M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M81 143Q140 163 198 142L200 157Q140 181 79 157Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M169 158L166 197L187 193L189 154Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M168 182L185 178&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;/group>&lt;path android:fillColor=&quot;#0B1710&quot; android:pathData=&quot;M182,210a48,48 0 1,0 96,0a48,48 0 1,0 -96,0Z&quot; />&lt;path android:fillColor=&quot;#243D2C&quot; android:pathData=&quot;M194,210a36,36 0 1,0 72,0a36,36 0 1,0 -72,0Z&quot; />&lt;path android:fillColor=&quot;#8CBD86&quot; android:pathData=&quot;M209,210a21,21 0 1,0 42,0a21,21 0 1,0 -42,0Z&quot; />&lt;path android:fillColor=&quot;#0B1710&quot; android:pathData=&quot;M226,210a4,4 0 1,0 8,0a4,4 0 1,0 -8,0Z&quot; />&lt;/group>&lt;/vector>"
+        errorLine2="                                                                                  ~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/drawable/tux_listener.xml"
+            line="2"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="VectorRaster"
+        severity="Warning"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more"
+        category="Correctness"
+        priority="5"
+        summary="Vector Image Generation"
+        explanation="Vector icons require API 21 or API 24 depending on used features, but when `minSdkVersion` is less than 21 or 24 and Android Gradle plugin 1.4 or higher is used, a vector drawable placed in the `drawable` folder is automatically moved to `drawable-anydpi-v21` or `drawable-anydpi-v24` and bitmap images are generated for different screen resolutions for backwards compatibility.&#xA;&#xA;However, there are some limitations to this raster image generation, and this lint check flags elements and attributes that are not fully supported. You should manually check whether the generated output is acceptable for those older devices."
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; android:width=&quot;360dp&quot; android:height=&quot;380dp&quot; android:viewportWidth=&quot;360&quot; android:viewportHeight=&quot;380&quot;>&lt;group android:translateY=&quot;70&quot;>&lt;group>&lt;path android:pathData=&quot;M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z&quot; android:fillColor=&quot;#13251c&quot; android:fillAlpha=&quot;.1&quot; />&lt;path android:pathData=&quot;M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M207 138C237 146 259 194 252 229Q247 244 229 229L194 189Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z&quot; android:fillColor=&quot;#F4E8C9&quot; />&lt;path android:pathData=&quot;M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z&quot; android:fillColor=&quot;#1C2A24&quot; />&lt;path android:pathData=&quot;M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;group>&lt;path android:pathData=&quot;M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;path android:pathData=&quot;M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#13251c&quot; />&lt;group>&lt;path android:pathData=&quot;M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;path android:pathData=&quot;M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z&quot; android:fillColor=&quot;#fff6dd&quot; />&lt;/group>&lt;/group>&lt;path android:pathData=&quot;M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M117 108Q141 117 166 107&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#f8ce86&quot; android:strokeWidth=&quot;2&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;path android:pathData=&quot;M61 81Q60 1 140 0Q219 1 218 81&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#6eaf7e&quot; android:strokeWidth=&quot;13&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M70 70Q69 10 140 9Q210 10 209 70&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;path android:pathData=&quot;M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M81 143Q140 163 198 142L200 157Q140 181 79 157Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M169 158L166 197L187 193L189 154Z&quot; android:fillColor=&quot;#6eaf7e&quot; />&lt;path android:pathData=&quot;M168 182L185 178&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#658e5e&quot; android:strokeWidth=&quot;3&quot; />&lt;group android:rotation=&quot;-9&quot; android:pivotX=&quot;138&quot; android:pivotY=&quot;18&quot;>&lt;path android:pathData=&quot;M99 22L137 -53L174 23Z&quot; android:fillColor=&quot;#e8ac9e&quot; />&lt;path android:pathData=&quot;M113 -5L160 -10M122 -26L149 -29&quot; android:fillColor=&quot;#000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;9&quot; />&lt;path android:pathData=&quot;M97 24Q136 14 176 25&quot; android:fillColor=&quot;#00000000&quot; android:strokeColor=&quot;#fff0d3&quot; android:strokeWidth=&quot;10&quot; android:strokeLineCap=&quot;round&quot; />&lt;path android:pathData=&quot;M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z&quot; android:fillColor=&quot;#e9b64d&quot; />&lt;/group>&lt;/group>&lt;/group>&lt;/vector>"
+        errorLine2="                                                                                  ~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/drawable/tux_rest.xml"
+            line="2"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.13.0 is available: 1.18.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    implementation(&quot;androidx.core:core-ktx:1.13.0&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/build.gradle.kts"
+            line="544"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="    androidTestImplementation(&quot;androidx.test.ext:junit:1.1.5&quot;)"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/build.gradle.kts"
+            line="615"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.10.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.10.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="coreKtx = &quot;1.10.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="3"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="junitVersion = &quot;1.1.5&quot;"
+        errorLine2="               ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="5"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="junitVersion = &quot;1.1.5&quot;"
+        errorLine2="               ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="5"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="junitVersion = &quot;1.1.5&quot;"
+        errorLine2="               ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="5"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="activity = &quot;1.8.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="activity = &quot;1.8.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        severity="Warning"
+        message="A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0"
+        category="Correctness"
+        priority="4"
+        summary="Obsolete Gradle Dependency"
+        explanation="This detector looks for usages of libraries where the version you are using is not the current stable release. Using older versions is fine, and there are cases where you deliberately want to stick with an older version. However, you may simply not be aware that a more recent version is available, and that is what this lint check helps find."
+        errorLine1="activity = &quot;1.8.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/gradle/libs.versions.toml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="ModifierFactoryExtensionFunction"
+        severity="Warning"
+        message="Modifier factory functions should be extensions on Modifier"
+        category="Correctness"
+        priority="3"
+        summary="Modifier factory functions should be extensions on Modifier"
+        explanation="Modifier factory functions should be defined as extension functions on Modifier to allow modifiers to be fluently chained."
+        errorLine1="internal fun controlsCollapseDragModifier("
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt"
+            line="956"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        severity="Warning"
+        message="Modifier parameter should be named modifier"
+        category="Correctness"
+        priority="3"
+        summary="Guidelines for Modifier parameters in a Composable function"
+        explanation="The first (or only) Modifier parameter in a Composable function should follow the following rules:&#xA;- Be named `modifier`&#xA;- Have a type of `Modifier`&#xA;- Either have no default value, or have a default value of `Modifier`&#xA;- If optional, be the first optional parameter in the parameter list"
+        errorLine1="    contentModifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt"
+            line="88"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        severity="Warning"
+        message="Modifier parameter should be the first optional parameter"
+        category="Correctness"
+        priority="3"
+        summary="Guidelines for Modifier parameters in a Composable function"
+        explanation="The first (or only) Modifier parameter in a Composable function should follow the following rules:&#xA;- Be named `modifier`&#xA;- Have a type of `Modifier`&#xA;- Either have no default value, or have a default value of `Modifier`&#xA;- If optional, be the first optional parameter in the parameter list"
+        errorLine1="    contentModifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt"
+            line="88"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="GetInstance"
+        severity="Warning"
+        message="ECB encryption mode should not be used (was &quot;AES/ECB/PKCS5Padding&quot;)"
+        category="Security"
+        priority="9"
+        summary="Cipher.getInstance with ECB"
+        explanation="`Cipher#getInstance` should not be called with ECB as the cipher mode or without setting the cipher mode because the default mode on android is ECB, which is insecure."
+        url="https://goo.gle/GetInstance"
+        urls="https://goo.gle/GetInstance"
+        errorLine1="        val cipher = Cipher.getInstance(&quot;AES/ECB/PKCS5Padding&quot;)"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/network/crypto/XeapiCrypto.kt"
+            line="352"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="UseCompoundDrawables"
+        severity="Warning"
+        message="This tag and its children can be replaced by one `&lt;TextView/>` and a compound drawable"
+        category="Performance"
+        priority="6"
+        summary="Node can be replaced by a `TextView` with compound drawables"
+        explanation="A `LinearLayout` which contains an `ImageView` and a `TextView` can be more efficiently handled as a compound drawable (a single TextView, using the `drawableTop`, `drawableLeft`, `drawableRight` and/or `drawableBottom` attributes to draw one or more images adjacent to the text).&#xA;&#xA;If the two widgets are offset from each other with margins, this can be replaced with a `drawablePadding` attribute.&#xA;&#xA;There&apos;s a lint quickfix to perform this conversion in the Eclipse plugin."
+        errorLine1="    &lt;LinearLayout"
+        errorLine2="     ~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/layout/widget_player_empty.xml"
+            line="41"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        severity="Information"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        category="Performance"
+        priority="3"
+        summary="`State&lt;T>` will autobox values assigned to this state. Use a specialized state type instead."
+        explanation="Calling `mutableStateOf&lt;T>()` when `T` is either backed by a primitive type on the JVM or is a value class results in a state implementation that requires all state values to be boxed. This usually causes an additional allocation for each state write, and adds some additional work to auto-unbox values when reading the value of the state. Instead, prefer to use a specialized primitive state implementation for `Int`, `Long`, `Float`, and `Double` when the state does not need to track null values and does not override the default `SnapshotMutationPolicy`. See `mutableIntStateOf()`, `mutableLongStateOf()`, `mutableFloatStateOf()`, and `mutableDoubleStateOf()` for more information."
+        errorLine1="    var generation by remember { mutableStateOf(0) }"
+        errorLine2="                                 ~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliQrLoginDialog.kt"
+            line="150"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        severity="Information"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        category="Performance"
+        priority="3"
+        summary="`State&lt;T>` will autobox values assigned to this state. Use a specialized state type instead."
+        explanation="Calling `mutableStateOf&lt;T>()` when `T` is either backed by a primitive type on the JVM or is a value class results in a state implementation that requires all state values to be boxed. This usually causes an additional allocation for each state write, and adds some additional work to auto-unbox values when reading the value of the state. Instead, prefer to use a specialized primitive state implementation for `Int`, `Long`, `Float`, and `Double` when the state does not need to track null values and does not override the default `SnapshotMutationPolicy`. See `mutableIntStateOf()`, `mutableLongStateOf()`, `mutableFloatStateOf()`, and `mutableDoubleStateOf()` for more information."
+        errorLine1="    var reload by remember { mutableStateOf(0) }"
+        errorLine2="                             ~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/OfflineCacheOverlay.kt"
+            line="532"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        severity="Information"
+        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
+        category="Performance"
+        priority="3"
+        summary="`State&lt;T>` will autobox values assigned to this state. Use a specialized state type instead."
+        explanation="Calling `mutableStateOf&lt;T>()` when `T` is either backed by a primitive type on the JVM or is a value class results in a state implementation that requires all state values to be boxed. This usually causes an additional allocation for each state write, and adds some additional work to auto-unbox values when reading the value of the state. Instead, prefer to use a specialized primitive state implementation for `Int`, `Long`, `Float`, and `Double` when the state does not need to track null values and does not override the default `SnapshotMutationPolicy`. See `mutableIntStateOf()`, `mutableLongStateOf()`, `mutableFloatStateOf()`, and `mutableDoubleStateOf()` for more information."
+        errorLine1="    var lyricsFontScale by remember { mutableStateOf(LyricsDisplayPrefs.readFontScale(prefs)) }"
+        errorLine2="                                      ~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsGroupScreen.kt"
+            line="255"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="NestedWeights"
+        severity="Warning"
+        message="Nested weights are bad for performance"
+        category="Performance"
+        priority="3"
+        summary="Nested layout weights"
+        explanation="Layout weights require a widget to be measured twice. When a `LinearLayout` with non-zero weights is nested inside another `LinearLayout` with non-zero weights, then the number of measurements increase exponentially."
+        errorLine1="            android:layout_weight=&quot;1&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/layout/widget_player_empty.xml"
+            line="64"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NestedWeights"
+        severity="Warning"
+        message="Nested weights are bad for performance"
+        category="Performance"
+        priority="3"
+        summary="Nested layout weights"
+        explanation="Layout weights require a widget to be measured twice. When a `LinearLayout` with non-zero weights is nested inside another `LinearLayout` with non-zero weights, then the number of measurements increase exponentially."
+        errorLine1="            android:layout_weight=&quot;1&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/layout/widget_player_large.xml"
+            line="83"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NestedWeights"
+        severity="Warning"
+        message="Nested weights are bad for performance"
+        category="Performance"
+        priority="3"
+        summary="Nested layout weights"
+        explanation="Layout weights require a widget to be measured twice. When a `LinearLayout` with non-zero weights is nested inside another `LinearLayout` with non-zero weights, then the number of measurements increase exponentially."
+        errorLine1="            android:layout_weight=&quot;1&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/layout/widget_player_medium.xml"
+            line="72"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NestedWeights"
+        severity="Warning"
+        message="Nested weights are bad for performance"
+        category="Performance"
+        priority="3"
+        summary="Nested layout weights"
+        explanation="Layout weights require a widget to be measured twice. When a `LinearLayout` with non-zero weights is nested inside another `LinearLayout` with non-zero weights, then the number of measurements increase exponentially."
+        errorLine1="            android:layout_weight=&quot;1&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/layout/widget_player_small.xml"
+            line="82"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.mipmap.ic_launcher_round` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-hdpi/ic_launcher_round.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        severity="Warning"
+        message="Launcher icon used as round icon did not have a circular shape"
+        category="Usability:Icons"
+        priority="6"
+        summary="The launcher icon shape should use a distinct silhouette"
+        explanation="According to the Android Design Guide (https://d.android.com/r/studio-ui/designer/material/iconography) your launcher icons should &quot;use a distinct silhouette&quot;, a &quot;three-dimensional, front view, with a slight perspective as if viewed from above, so that users perceive some depth.&quot;&#xA;&#xA;The unique silhouette implies that your launcher icon should not be a filled square.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-hdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        severity="Warning"
+        message="Launcher icon used as round icon did not have a circular shape"
+        category="Usability:Icons"
+        priority="6"
+        summary="The launcher icon shape should use a distinct silhouette"
+        explanation="According to the Android Design Guide (https://d.android.com/r/studio-ui/designer/material/iconography) your launcher icons should &quot;use a distinct silhouette&quot;, a &quot;three-dimensional, front view, with a slight perspective as if viewed from above, so that users perceive some depth.&quot;&#xA;&#xA;The unique silhouette implies that your launcher icon should not be a filled square.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-mdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        severity="Warning"
+        message="Launcher icon used as round icon did not have a circular shape"
+        category="Usability:Icons"
+        priority="6"
+        summary="The launcher icon shape should use a distinct silhouette"
+        explanation="According to the Android Design Guide (https://d.android.com/r/studio-ui/designer/material/iconography) your launcher icons should &quot;use a distinct silhouette&quot;, a &quot;three-dimensional, front view, with a slight perspective as if viewed from above, so that users perceive some depth.&quot;&#xA;&#xA;The unique silhouette implies that your launcher icon should not be a filled square.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-xhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        severity="Warning"
+        message="Launcher icon used as round icon did not have a circular shape"
+        category="Usability:Icons"
+        priority="6"
+        summary="The launcher icon shape should use a distinct silhouette"
+        explanation="According to the Android Design Guide (https://d.android.com/r/studio-ui/designer/material/iconography) your launcher icons should &quot;use a distinct silhouette&quot;, a &quot;three-dimensional, front view, with a slight perspective as if viewed from above, so that users perceive some depth.&quot;&#xA;&#xA;The unique silhouette implies that your launcher icon should not be a filled square.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-xxhdpi/ic_launcher.png"/>
+    </issue>
+
+    <issue
+        id="IconLauncherShape"
+        severity="Warning"
+        message="Launcher icon used as round icon did not have a circular shape"
+        category="Usability:Icons"
+        priority="6"
+        summary="The launcher icon shape should use a distinct silhouette"
+        explanation="According to the Android Design Guide (https://d.android.com/r/studio-ui/designer/material/iconography) your launcher icons should &quot;use a distinct silhouette&quot;, a &quot;three-dimensional, front view, with a slight perspective as if viewed from above, so that users perceive some depth.&quot;&#xA;&#xA;The unique silhouette implies that your launcher icon should not be a filled square.">
+        <location
+            file="/home/duanjb666/deepseek/Arris-review-fixes/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"/>
+    </issue>
+
+</issues>

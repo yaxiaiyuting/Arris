@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Ncrust, OU=Dev, O=Ncrust, L=changji, ST=xinjiang, C=CN
+Signer #1 certificate SHA-256 digest: e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82
+Signer #1 certificate SHA-1 digest: 7cbd4b29c9fb839cc7448e066053d529a305baa0
+Signer #1 certificate MD5 digest: d1ef1a28a743eaf210d2c3774878428f
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: 6fe17a46cd32cebfa8e214b5b8a332dc3a80411ed2b3a3f3745ebc9764bb38ca
+Signer #1 public key SHA-1 digest: dbfd0c55e57920d43fc6449acb7da688e3e7415c
+Signer #1 public key MD5 digest: 70e23db42440b09202bdc972283607fa

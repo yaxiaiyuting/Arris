@@ -1,0 +1,22 @@
+method_size —— 单方法 code unit 监控（阈值 2000）
+  输入: /home/duanjb666/deepseek/dist/v3.6.2-gpl/Ncrust-v3.6.2-gpl-release.apk
+  方法总数（含代码）: 788
+  超阈值: 0   预警(>1200): 1
+  ---- Top 12 ----
+  codeUnit   regs  method
+      1642     39  com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+22 inline/overload)
+      1064     53  com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayActions (+29 inline/overload)
+       942     31  com.takahashirinta.ncrust.celebration.BlowRecorder$listen$3.invokeSuspend (+2 inline/overload)
+       843     35  com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel._isLoading (+9 inline/overload)
+       749     27  com.takahashirinta.ncrust.celebration.CelebrationArtView.drawBirthday
+       718     54  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$1.invoke (+18 inline/overload)
+       716     25  com.takahashirinta.ncrust.celebration.CelebrationArtView.drawScene
+       712     49  com.takahashirinta.ncrust.celebration.VersionEggRowKt.VersionEggRow (+27 inline/overload)
+       689     42  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.NativeCelebrationOverlay (+13 inline/overload)
+       645     46  com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationButton-V-9fs2A (+22 inline/overload)
+       634     32  com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayWebOverlay (+13 inline/overload)
+       617     25  com.takahashirinta.ncrust.celebration.FireworkSimulation.Companion (+1 inline/overload)
+  ---- 预警（接近阈值，留出余量）----
+      1642     39  com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+22 inline/overload)
+  报告已写入 docs/verification/v3.6.2/method-sizes.json
+✅ 全部方法 <= 2000 code unit

@@ -1,0 +1,74 @@
+{
+  "assets/grain-full.png": {
+    "sha256": "a57c63145046eade5d4d3792d435544f79b28690a15bff30d2ff173d0413ef93",
+    "size": 1216175
+  },
+  "assets/grain.png": {
+    "sha256": "0821a6870f6a3299f3ddd5139e96cce321fe81b38517134f23054d1a40e6d6d9",
+    "size": 15527
+  },
+  "css/art-direction.css": {
+    "sha256": "c365a4035b99bc21c29bfd4020d81628b2e98eb45c14261c98b26a45ed928b95",
+    "size": 3998
+  },
+  "css/base.css": {
+    "sha256": "25acfe8421c3ad2878e2d4a5cd87b3409cfcefd4bf0feccec1b94f6fbed78e1e",
+    "size": 12799
+  },
+  "css/type.css": {
+    "sha256": "356d1e73c1197f8ad75c3bc608b804356af10997a6ad8a0db37efeddb80ea237",
+    "size": 5413
+  },
+  "index.html": {
+    "sha256": "ae194fefaaf73e8ffa311ef442859b3c268cf898be3328e1747bd5019e3301ee",
+    "size": 3690
+  },
+  "js/assets.cake.js": {
+    "sha256": "9a80f6bb8bb8d6747547156e80bdb6b72464d0c1ed964abbf64ea55d268f64d0",
+    "size": 22841
+  },
+  "js/assets.env.js": {
+    "sha256": "dc599c66d861c8b51c8f177a55d3d8c8090ca2341dd638b7acc7e6ddbe5a9a26",
+    "size": 71154
+  },
+  "js/assets.tux.js": {
+    "sha256": "371f83afe1e0db163b2f76a0ed76afa44dc62d76a998f969d0156ce9a266ad02",
+    "size": 29214
+  },
+  "js/cues.js": {
+    "sha256": "a8a6ee1011603fb509074827abb280a83620b456207cf2b0c913739374b93000",
+    "size": 6988
+  },
+  "js/finish.js": {
+    "sha256": "3c6c65195b544e22dfaa7f03883d3d93b6c1fdc2d410771adbb0891b43dca0d5",
+    "size": 7158
+  },
+  "js/lighting.js": {
+    "sha256": "711d656f21f4395d5e7c52433ab633b11f6461bc23b906a4b82d58c77834231e",
+    "size": 63837
+  },
+  "js/main.js": {
+    "sha256": "d9e42241aaafbc01604615bafa9ff1fb619c307c855beda1274c1314a11fc64c",
+    "size": 21043
+  },
+  "js/motion.js": {
+    "sha256": "59ad98306efed2d6b650013836e396e7f1d01bde02d2e00cd2446641c1351e34",
+    "size": 48743
+  },
+  "js/vfx.js": {
+    "sha256": "7d3b63b53005e012f2eaeec56b4d609953f5a9fa8e25a3794c18969084701694",
+    "size": 68739
+  },
+  "vendor/CustomEase.min.js": {
+    "sha256": "1cb16222708d6c44d20bfdd6b512ea968f3a71f4d0b2f43b27cd2476349845a0",
+    "size": 7069
+  },
+  "vendor/MotionPathPlugin.min.js": {
+    "sha256": "f984711c76037a734baf4dcaca214b381848bd6965ecd7d71491c57d7407b44f",
+    "size": 21712
+  },
+  "vendor/gsap.min.js": {
+    "sha256": "96c01b81f44a3290e2b4532f55e2c9534b2adc43273a19f3756b2cb41f0fd0b6",
+    "size": 72435
+  }
+}

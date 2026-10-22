@@ -1,0 +1,115 @@
+{
+  "source": "/home/duanjb666/deepseek/dist/v3.6.2-gpl/Ncrust-v3.6.2-gpl-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 788,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+22 inline/overload)",
+      "obfuscated": "b5.n0.invokeSuspend",
+      "class": "b5.n0",
+      "codeUnits": 1642,
+      "registers": 39,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+22 inline/overload)",
+      "obfuscated": "b5.n0.invokeSuspend",
+      "class": "b5.n0",
+      "codeUnits": 1642,
+      "registers": 39,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayActions (+29 inline/overload)",
+      "obfuscated": "H4.d.a",
+      "class": "H4.d",
+      "codeUnits": 1064,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BlowRecorder$listen$3.invokeSuspend (+2 inline/overload)",
+      "obfuscated": "H4.k$a.invokeSuspend",
+      "class": "H4.k$a",
+      "codeUnits": 942,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel._isLoading (+9 inline/overload)",
+      "obfuscated": "b5.t0.k",
+      "class": "b5.t0",
+      "codeUnits": 843,
+      "registers": 35,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawBirthday",
+      "obfuscated": "H4.m.c",
+      "class": "H4.m",
+      "codeUnits": 749,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$1.invoke (+18 inline/overload)",
+      "obfuscated": "H4.s$e.a",
+      "class": "H4.s$e",
+      "codeUnits": 718,
+      "registers": 54,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawScene",
+      "obfuscated": "H4.m.d",
+      "class": "H4.m",
+      "codeUnits": 716,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.VersionEggRowKt.VersionEggRow (+27 inline/overload)",
+      "obfuscated": "H4.B.a",
+      "class": "H4.B",
+      "codeUnits": 712,
+      "registers": 49,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.NativeCelebrationOverlay (+13 inline/overload)",
+      "obfuscated": "H4.s.d",
+      "class": "H4.s",
+      "codeUnits": 689,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt.CelebrationButton-V-9fs2A (+22 inline/overload)",
+      "obfuscated": "H4.s.b",
+      "class": "H4.s",
+      "codeUnits": 645,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayWebOverlay (+13 inline/overload)",
+      "obfuscated": "H4.d.b",
+      "class": "H4.d",
+      "codeUnits": 634,
+      "registers": 32,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.FireworkSimulation.Companion (+1 inline/overload)",
+      "obfuscated": "H4.A.i",
+      "class": "H4.A",
+      "codeUnits": 617,
+      "registers": 25,
+      "dex": "classes.dex"
+    }
+  ]
+}

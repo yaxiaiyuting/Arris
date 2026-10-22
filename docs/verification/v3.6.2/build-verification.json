@@ -1,0 +1,70 @@
+{
+  "versionName": "3.6.2-gpl",
+  "versionCode": 78,
+  "buildCommit": "60951ca6c26e1405bd6a304710f622c273fb344a",
+  "appTree": "7fcc1d5de9df063460f57943cdfc9a50b4296294",
+  "kanesumiCommit": "acddf3e53d6a90f6b7d19d6a0445631457c3bda5",
+  "buildResult": "BUILD SUCCESSFUL in 2m 14s",
+  "tests": {
+    "suites": 236,
+    "tests": 2983,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "newTests": 15
+  },
+  "lint": {
+    "Information": 5,
+    "Warning": 61
+  },
+  "certificateSha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "apkEmbeddedVcs": "generate_error_reason: NO_VALID_GIT_FOUND",
+  "methodSize": {
+    "scope": "celebration, SearchPageCursor, LocalPlaylistStore, SearchViewModel",
+    "methods": 788,
+    "violations": [],
+    "warnings": [
+      {
+        "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchViewModel$searchByType$2.invokeSuspend (+22 inline/overload)",
+        "obfuscated": "b5.n0.invokeSuspend",
+        "class": "b5.n0",
+        "codeUnits": 1642,
+        "registers": 39,
+        "dex": "classes.dex"
+      }
+    ]
+  },
+  "browserQA": {
+    "viewports": 6,
+    "keyframesPerViewport": 8,
+    "consoleErrors": 0,
+    "localizedPortraitLayouts": 14,
+    "manualPuffGateAndLifecycle": true
+  },
+  "physicalDeviceTesting": false,
+  "microphoneAccuracyTested": false,
+  "emulator": {
+    "serial": "emulator-5554",
+    "api": 33,
+    "webView": "109.0.5414.123",
+    "releaseSmoke": "Release signed APK cover-install, cold start, preview WAITING native buttons, manual puff, DONE native buttons and continue/close passed; no microphone used"
+  },
+  "artifacts": {
+    "Ncrust-v3.6.2-gpl-release.apk": {
+      "size": 11945532,
+      "sha256": "79163686ab33ba8bf5cdab0f6f9bf91c67dd602d99b941b8473ed2fdc4b05785"
+    },
+    "Ncrust-v3.6.2-gpl-debug.apk": {
+      "size": 33841734,
+      "sha256": "96c047034c28d8cdf9b340febd60e1b844fb1b91f0e96b84da377eba0917cef1"
+    },
+    "mapping-v3.6.2-gpl.txt.gz": {
+      "size": 5655391,
+      "sha256": "b4fc26fd9cabbe2813c5a90f0f06b9f4491be0358d853390b428d00da66a45d5"
+    },
+    "mapping-v3.6.2-gpl.txt.gz.sha256": {
+      "size": 92,
+      "sha256": "1d777b46792fce188545e616e682a9863067907e4f34719075fcd5014905df08"
+    }
+  }
+}

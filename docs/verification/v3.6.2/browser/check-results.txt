@@ -1,0 +1,7 @@
+390x844: 8 frames, no console errors, puff gate and lifecycle commands passed
+360x640: 8 frames, no console errors, puff gate and lifecycle commands passed
+430x932: 8 frames, no console errors, puff gate and lifecycle commands passed
+844x390: 8 frames, no console errors, puff gate and lifecycle commands passed
+1600x900: 8 frames, no console errors, puff gate and lifecycle commands passed
+320x568: 8 frames, no console errors, puff gate and lifecycle commands passed
+14 localized portrait layouts passed
