@@ -27,6 +27,16 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 
+
+/* v3.6.3：入场**淡入**，不要一帧硬切。
+   真机 / 无头浏览器都能量到：首帧只有底色（mean 21.4），次帧整幅场景（31.9），
+   142ms 内亮度 +10.4 —— 用户读到的就是「打开就闪一下」。
+   用 CSS 动画而不是「加 class 再 transition」：class 与首帧谁先到取决于 WebView 的
+   第一次合成时机，动画则从**第一次绘制**开始就一定有 0 → 1 的斜坡。
+   底色与 WebView 的 #08160f 相同，所以过渡是「从夜色里亮起来」而不是白闪。 */
+#stage{animation:bday-fade-in .35s ease both}
+@keyframes bday-fade-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){#stage{animation:none}}
 #stage{
   position:relative;
   width:min(100vw, calc(100vh * 16 / 9));

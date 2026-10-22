@@ -42,6 +42,7 @@ internal class CelebrationArtView(context: Context) : View(context) {
     private var failed=false
     private val scene=RectF()
     fun placeScene(x:Float,y:Float,w:Float,h:Float) {
+        if(w<=0f || h<=0f || !x.isFinite() || !y.isFinite()) return
         scene.set(x,y,x+w,y+h)
         invalidate()
     }
@@ -73,11 +74,16 @@ internal class CelebrationArtView(context: Context) : View(context) {
         val scale=min(width/400f,height/600f).coerceAtLeast(.1f)
         canvas.drawColor(0xff08160f.toInt());canvas.save();canvas.translate((width-400*scale)/2,0f);canvas.scale(scale,scale)
         val h=logicalHeight;paint.shader=background;paint.alpha=255;canvas.drawRect(-2000f,0f,2400f,h,paint);paint.shader=null
+        // v3.6.3：首帧**还没有量到舞台**时只画底色，不画插画。
+        // 旧代码在这里用「屏幕居中 400×360」兜底，第一次 onGloballyPositioned 之后
+        // 整幅画瞬移到标题与按钮之间 —— 用户读到的就是「打开时错位/跳一下」。
+        // 舞台由 Compose 在同一个首帧布局里写入，最迟下一帧就会 invalidate。
+        if(scene.isEmpty || scene.width()<=0f || scene.height()<=0f) {canvas.restore();return}
         // Fit the 400 x 360 drawing into the measured space between heading and actions.
-        val left=if(scene.isEmpty)0f else scene.left/scale-(width/scale-400f)/2
-        val top=if(scene.isEmpty)(h-360)/2 else scene.top/scale
-        val sceneWidth=if(scene.isEmpty)400f else scene.width()/scale
-        val sceneHeight=if(scene.isEmpty)360f else scene.height()/scale
+        val left=scene.left/scale-(width/scale-400f)/2
+        val top=scene.top/scale
+        val sceneWidth=scene.width()/scale
+        val sceneHeight=scene.height()/scale
         val artScale=min(sceneWidth/400f,sceneHeight/360f)
         val artX=left+(sceneWidth-400*artScale)/2
         val artY=top+(sceneHeight-360*artScale)/2

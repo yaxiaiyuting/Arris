@@ -8,8 +8,13 @@
     if (!disposed && window.ArrisHost) window.ArrisHost.event(value);
     window.dispatchEvent(new CustomEvent('arris-state', { detail: value }));
   }
-  function layout() {
+  let layoutW = 0, layoutH = 0, layoutTimer = 0;
+  function layout(force) {
     if (!b) return;
+    // v3.6.3：尺寸没变就直接返回。Android 上 Dialog / IME / 系统栏抖动会连发 resize，
+    // 每次重排都跑一遍「重建画布 + 重新锚定」，看起来就是一闪。
+    if (!force && innerWidth === layoutW && innerHeight === layoutH) return;
+    layoutW = innerWidth; layoutH = innerHeight;
     const portrait = innerHeight > innerWidth;
     document.body.classList.toggle('portrait', portrait);
     const height = portrait ? 1600 * innerHeight / innerWidth : 900;
@@ -19,8 +24,17 @@
       if (s._originalY === undefined) s._originalY = s.y;
       s.y = portrait ? s._originalY / 900 * height * .75 : s._originalY;
     });
-    if (window.VFX) { window.VFX.resize(); window.VFX.seek(0); window.VFX.seek(b.time()); }
+    // 只重绘、**不 seek**：seek(0)+seek(t) 会 resetSim/清空 flashes，
+    // 重放时给每一朵烟花再补一次 Lighting.flash（实测 extFlashes 0→2，整屏变亮）。
+    if (window.VFX) {
+      window.VFX.resize();
+      if (window.VFX.repaint) window.VFX.repaint(b.time());
+    }
     fitBlessing();
+  }
+  function scheduleLayout() {
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(function () { layout(false); }, 120);
   }
   function fitBlessing() {
     const box = document.getElementById('blessing');
@@ -60,8 +74,8 @@
         e.preventDefault(); e.stopImmediatePropagation();
       }
     }, true);
-    layout();
-    window.addEventListener('resize', layout);
+    layout(true);
+    window.addEventListener('resize', scheduleLayout);
     emit('READY');
   }
   window.ArrisBirthday = {

@@ -152,6 +152,15 @@ private fun CelebrationText(kind:CelebrationKind,phase:CelebrationPhase,animated
     val done=phase==CelebrationPhase.DONE
     val wishes=phase==CelebrationPhase.BLESSING || done
     val ink=Color(0xfffff3df)
+    // v3.6.3：footer 的预留高度按阶段给，CelebrationFrame 用 320ms 动画过渡。
+    // 旧版 footer 从 12dp 直接涨到 152~176dp，插画在同一个 layout pass 里被挤小 43%
+    // —— 用户看到的是「Tux 错位/跳了一下」。数字来源见 CelebrationLayout 的 KDoc。
+    val footerReserve=when {
+        kind==CelebrationKind.LISTENER -> if(done)88.dp else 12.dp
+        phase==CelebrationPhase.WAITING -> 200.dp
+        wishes -> 216.dp
+        else -> 12.dp
+    }
     CelebrationFrame(placement,heading={
         Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
@@ -185,7 +194,7 @@ private fun CelebrationText(kind:CelebrationKind,phase:CelebrationPhase,animated
             }
             Spacer(Modifier.height(12.dp))
         }
-    })
+    }, footerReserve=footerReserve)
 }
 
 @Composable

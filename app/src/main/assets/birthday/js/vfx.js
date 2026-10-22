@@ -1643,6 +1643,9 @@
 
   window.VFX = {
     init, resize, seek, play, pause,
+    // v3.6.3：只按当前模拟状态重绘一帧，**不 step、不 reset**。
+    // 供 resize / 布局变化后刷新画布；seek 会重置模拟并重放事件（会重复触发闪光）。
+    repaint: render,
     puff, burst: (c) => burst(c), dust: dustPuff,
     stats, bench,
     version: '2.0.0'
