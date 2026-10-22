@@ -363,3 +363,27 @@ versionCode **79**。三条用户反馈的修复，均为**显示层**改动，�
 ③ **Tux 七击彩蛋错位 / 按钮出屏**。320×568dp（系统栏 92dp ⇒ 视口 476dp）实测：标题 153 + WAITING footer 152~176 + 旧代码的 **200dp 插画硬地板** = 505~529dp，溢出 29~53dp，「手动吹灭」掉到折线以下；同时 footer 从 12dp 长到 176dp 时，插画在同一个 layout pass 里被挤小 43%（383→219dp），标题不动 —— 这就是「错位」。修法：footer 预留高度按阶段给（Tux 彩蛋 88dp；生日 WAITING 200dp / 祝福与完成 216dp）并用 320ms 动画过渡，内容底对齐（按钮留在原地、插画让空间）；插画地板 200→**72dp**（`celebrationArtHeightPx` 纯函数 + 单测：320×568 上插画 123dp、总高恰好 476）；`CelebrationArtView` 首帧不再用「屏幕居中 400×360」兜底，未量到舞台时只画底色，消除第一次 `onGloballyPositioned` 后的整幅瞬移。⚠️ 未做真机验证（本环境无 adb 设备）：几何有单测，动画观感需用户确认。
 
 验收：全量 JVM 单测 **2994 用例 / 0 失败 / 238 个测试类**；`assembleRelease` 通过（R8 + lintVital），`aapt2` 复核 `versionCode='79' versionName='3.6.3-gpl'`；生日页集成检查（Playwright）覆盖 320×568 / 360×640 / 390×844 / 430×932 / 844×390 / 1600×900 六档与 14 个本地化布局。**未验证**：真机波形观感、真机 WebView surface 重建（Compose Dialog inset 抖动导致的黑闪）、真机 Tux 动画观感 —— 按用户要求本轮不做真机测试。
+
+## v3.6.4-gpl — 2026-10-23
+
+versionCode **80**。只修生日庆祝页在 WebView 上的**成块缺画**（用户录像：右上角「关闭」稳定、字幕继续，但背景成块消失再出现）。v3.6.3 的淡入与 resize 去抖没有触及这一层。
+
+**根因（模拟器复现 + Chromium 日志）**：生日页在应用内被 WebView 渲染时，`logcat` 持续报
+`chromium: tile_manager.cc: WARNING: tile memory limits exceeded, some content may not draw`。
+逐层量到 9 个 **1082×1859 的整屏合成层** + 一个 **2391×1500 的场景层**：`main.js` 给 9 个 `data-depth` SVG 组
+逐帧写 CSS transform（每层都提成合成层），`lighting.js` 的两层全屏 SVG 用 `mix-blend-mode: screen`，
+`finish.js` 的三层全屏 `lighten/soft-light/screen` 再叠一层，`.grain` 又是整屏。图块预算被击穿后
+Chromium 丢弃部分 tile、后续帧再补 —— 就是录像里的矩形缺块。
+
+**修法（只在应用内 `?app=1`；浏览器预览保持原效果）**：
+① `main.js`：应用内**不再逐帧变换 9 个舞台层**，去掉 `will-change`；舞台静态，Tux / 蛋糕自身的 GSAP 动画、
+字幕、吹气、烟花全部保留。
+② `arris.css`：`#svg-env` / `#svg-scene` 所有后代与 `#lx-light` / `#lx-ember` 的
+`mix-blend-mode` 改为 `normal`（渐变本身带 alpha，光感仍在，但不再为每层分配整屏混合图块）；
+隐藏 `.grain` 与 `.fin-*`。
+③ `finish.js`：应用内不创建三层全屏调色层。
+模拟器同一份 10 秒录像：tile 警告 **120+ → 2**（两次独立复测均为 2），画面不再缺块；Tux 仍从右侧走入。
+浏览器 QA（6 种尺寸 × 8 个时间点 + 14 组本地化竖屏布局）仍全绿，puff/hold/replay/dispose 生命周期不变。
+
+**代价 / 未验证**：应用内舞台的相机视差与手持漂移被去掉（背景改为静态），这是拿「不闪」换「不晃」；
+浏览器预览不受影响。真机（PLC110）本轮只通过录像确认现象，未在真机上做逐帧复测；模拟器为 API 33 / 1080×1920。

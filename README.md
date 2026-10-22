@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.6.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.6.4--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-11.95%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -181,7 +181,7 @@ UI 上是一套 8 级档位，两个音源各自映射到自己平台的文件�
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v3.6.3 release APK **实测 11,946,560 字节 ≈ 11.95 MB**，debug 33,860,076 字节。
+> 体积说明（最新）：v3.6.4 release APK **实测 11,947,560 字节 ≈ 11.95 MB**，debug 33,397,947 字节。
 > 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
 
 ### 🔐 登录
@@ -346,6 +346,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.6.1-gpl | 2026-10-22 | QQ 并发续期等待在飞请求、歌单节流改单调时间；播放上报按实际 isPlaying 时长结算 |
 | v3.6.2-gpl | 2026-10-22 | 搜索翻页失败保持原页、本地歌单一次提交；接入 48 秒生日网页动画与 1~7 天迟到祝福 |
 | v3.6.3-gpl | 2026-10-23 | 波形滚动改成「播放队列」（成批到达摊平、0 顿帧）；生日页 350ms 淡入、resize 不再重放闪光；Tux 布局跨阶段预留、插画地板 72dp |
+| v3.6.4-gpl | 2026-10-23 | 修生日页 WebView 成块缺画：应用内静态舞台 + 关闭全屏混合/调色层（tile 警告 120+→2） |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 

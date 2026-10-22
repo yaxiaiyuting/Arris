@@ -474,8 +474,13 @@ android {
         //   ② 生日庆祝页入场淡入（首帧硬切实测 Δ亮度 +10.4/142ms），resize 不再 seek(0)
         //   重放烟花闪光。③ Tux 彩蛋/生日页布局：footer 预留高度跨阶段动画、插画地板
         //   200→72dp、首帧不再用未测量的兜底位置。三源核验最大 78（v3.6.2 tag）⇒ 79。
-        versionCode = 79
-        versionName = "3.6.3-gpl"
+        // v3.6.4：生日页在真机 / 模拟器 WebView 上「背景成块消失再补上」。根因是
+        //   Chromium “tile memory limits exceeded”：9 个整幅 SVG 图层逐帧改 transform
+        //   + scene/lighting 的 screen/soft-light 混合 + 全屏 finish/grain 合成层。
+        //   应用内改为静态舞台 + 普通 alpha 合成 + 去掉 finish/grain（浏览器预览保留）；
+        //   模拟器同一份录像的 tile 警告 120+ → 2，画面不再缺块。
+        versionCode = 80
+        versionName = "3.6.4-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
