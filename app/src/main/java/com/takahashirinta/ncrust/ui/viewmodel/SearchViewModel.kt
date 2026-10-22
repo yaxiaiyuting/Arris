@@ -111,7 +111,7 @@ class SearchViewModel : ViewModel() {
     /**
      * 当前累计到的页码（**1 起**）。`loadMore()` 会把它 +1 后重新取那一页。
      */
-    private var currentPage = 1
+    private val pages = com.takahashirinta.ncrust.search.SearchPageCursor()
 
     /**
      * 三个 tab 各自「还有没有下一页」（v3.4.11）。
@@ -350,7 +350,7 @@ class SearchViewModel : ViewModel() {
         com.takahashirinta.ncrust.search.SearchPaging.distinct(list)
 
     /**
-     * 「加载更多」：把页码 +1，重跑当前 tab 的搜索并以**追加**方式发布。
+     * 「加载更多」：请求候选下一页，以**追加**方式发布成功后才推进页码。
      *
      * 幂等与并发：正在飞（[isLoadingMore]）或没有下一页（[hasMore]）时直接返回 ——
      * 「列表滚到底连点三次」不该发三次请求。
@@ -361,15 +361,12 @@ class SearchViewModel : ViewModel() {
         _isLoadingMore.value = true
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            currentPage += 1
             try {
-                searchByType(_currentType.value, append = true)
+                pages.loadNext { page -> searchByType(_currentType.value, append = true, page = page) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // 翻页失败**不回滚页码**：下一轮 loadMore 会再试同一页（页码回滚会让
-                // 「失败 → 再点」变成「重取上一页」，用户看到的还是同一批歌）。
-                android.util.Log.w("SearchViewModel", "loadMore failed page=$currentPage", e)
+                android.util.Log.w("SearchViewModel", "loadMore failed; keep the last successful page", e)
             } finally {
                 _isLoadingMore.value = false
             }
@@ -382,12 +379,12 @@ class SearchViewModel : ViewModel() {
      * @param append v3.4.11：`true` = 这是「加载更多」，把结果**追加**到当前列表
      *   （而不是替换）。三个 tab 共用这一个开关。
      */
-    private suspend fun searchByType(type: Int, append: Boolean = false) {
+    private suspend fun searchByType(type: Int, append: Boolean = false, page: Int = 1): Boolean {
         if (!append) {
             _isLoading.value = true
             // 新一轮（关键词变了 / 换 tab / 下拉刷新）：页码归 1、累计清空。
             // ⚠️ 这两行必须在**取数之前** —— 否则第一页会带着上一轮的 offset 发出去。
-            currentPage = 1
+            pages.reset()
             resetSongs()
         }
         _error.value = null
@@ -447,7 +444,7 @@ class SearchViewModel : ViewModel() {
                                     limit = PAGE_SIZE,
                                     // v3.4.11：翻页靠的就是这个 offset（接口本来就是分页的）。
                                     offset = com.takahashirinta.ncrust.search.SearchPaging
-                                        .offsetOf(currentPage, PAGE_SIZE),
+                                        .offsetOf(page, PAGE_SIZE),
                                 ).result?.also { r ->
                                     // v3.4.11：总数（实测 `s=周杰伦` → songCount=273）。
                                     r.songCount?.let { lastTotals["netease"] = it }
@@ -471,7 +468,7 @@ class SearchViewModel : ViewModel() {
                                         MusicSource.QQMUSIC,
                                         keyword,
                                         PAGE_SIZE,
-                                        page = currentPage,
+                                        page = page,
                                         totalOut = lastTotals,
                                     )
                                 }
@@ -782,7 +779,7 @@ class SearchViewModel : ViewModel() {
                 10 -> {
                     _sourceCounts.value = null
                     val offset = com.takahashirinta.ncrust.search.SearchPaging
-                        .offsetOf(currentPage, PAGE_SIZE)
+                        .offsetOf(page, PAGE_SIZE)
                     val response = RetrofitClient.api.searchAlbum(
                         keyword = _query.value,
                         type = 10,
@@ -819,7 +816,7 @@ class SearchViewModel : ViewModel() {
                 100 -> {
                     _sourceCounts.value = null
                     val offset = com.takahashirinta.ncrust.search.SearchPaging
-                        .offsetOf(currentPage, PAGE_SIZE)
+                        .offsetOf(page, PAGE_SIZE)
                     val response = RetrofitClient.api.searchArtist(
                         keyword = _query.value,
                         type = 100,
@@ -848,6 +845,7 @@ class SearchViewModel : ViewModel() {
                     _albums.value = emptyList()
                 }
             }
+            return true
         } catch (e: kotlinx.coroutines.CancellationException) {
             // ★ v2.5.5 · G：**取消必须原样抛出**，不能落进下面的 `catch (e: Exception)`。
             //
@@ -864,6 +862,7 @@ class SearchViewModel : ViewModel() {
             if (_songs.value.isEmpty() && _albums.value.isEmpty() && _artists.value.isEmpty()) {
                 clearResults()
             }
+            return false
         } finally {
             _isLoading.value = false
         }
