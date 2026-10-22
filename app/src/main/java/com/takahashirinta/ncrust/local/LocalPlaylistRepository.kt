@@ -125,7 +125,7 @@ object LocalPlaylistRepository {
             playlist = playlist.copy(lastSyncedAt = now),
             tracks = merged.tracks,
             now = now,
-        )
+        ) ?: return LocalSyncOutcome.Failed
         return LocalSyncOutcome.Success(
             added = merged.added,
             skipped = merged.skipped,

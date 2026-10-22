@@ -78,6 +78,7 @@ object LocalPlaylistStore {
      * （按 [LocalPlaylist.updatedAt] 降序），旧的连同它们的曲目表一起删掉 ——
      * 只删列表项会把曲目表变成永远读不到的垃圾（`SharedPreferences` 不会自己回收）。
      */
+    @Synchronized
     fun writePlaylists(context: Context, playlists: List<LocalPlaylist>) {
         val kept = if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) {
             playlists
@@ -97,6 +98,7 @@ object LocalPlaylistStore {
         LocalPlaylistCodec.decodeTracks(prefs(context).getString(tracksKey(key), null))
 
     /** 覆盖写一张歌单的曲目表（写入前先过容量闸）。 */
+    @Synchronized
     fun writeTracks(
         context: Context,
         key: com.takahashirinta.ncrust.source.PlaylistKey,
@@ -109,6 +111,7 @@ object LocalPlaylistStore {
     }
 
     /** 删掉一张歌单的曲目表（删除歌单 / 列表裁剪时用）。 */
+    @Synchronized
     fun removeTracks(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
         prefs(context).edit().remove(tracksKey(key)).commit()
     }
@@ -119,18 +122,46 @@ object LocalPlaylistStore {
      * 抽成一个函数是为了让「元数据与曲目表必须一起更新」这件事只有一个落点 ——
      * 分两次调用迟早会出现「歌单在那儿、歌是空的」的中间态。
      */
+    @Synchronized
     fun writePlaylistWithTracks(
         context: Context,
         playlist: LocalPlaylist,
         tracks: List<LocalPlaylistTrack>,
         now: Long,
-    ): LocalPlaylist {
+    ): LocalPlaylist? = writePlaylistWithTracks(prefs(context), playlist, tracks, now)
+
+    @Synchronized
+    internal fun writePlaylistWithTracks(
+        storage: SharedPreferences,
+        playlist: LocalPlaylist,
+        tracks: List<LocalPlaylistTrack>,
+        now: Long,
+    ): LocalPlaylist? {
         val updated = playlist.copy(updatedAt = now)
-        val list = readPlaylists(context)
+        val list = LocalPlaylistCodec.decodePlaylists(storage.getString(KEY_PLAYLISTS, null))
         val idx = list.indexOfFirst { it.key == updated.key }
         val next = if (idx < 0) list + updated else list.toMutableList().also { it[idx] = updated }
-        writePlaylists(context, next)
-        writeTracks(context, updated.key, tracks)
+        val kept = if (next.size <= LocalPlaylistSync.MAX_PLAYLISTS) next
+            else next.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
+        if (kept.none { it.key == updated.key }) return null
+        val dropped = next.filterNot { item -> kept.any { it.key == item.key } }
+        val changes = linkedMapOf<String, String?>(KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept))
+        dropped.forEach { changes[tracksKey(it.key)] = null }
+        if (kept.any { it.key == updated.key }) {
+            changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
+        }
+        val before = changes.keys.associateWith { storage.getString(it, null) }
+        fun commit(values: Map<String, String?>): Boolean {
+            val editor = storage.edit()
+            values.forEach { (key, value) -> if (value == null) editor.remove(key) else editor.putString(key, value) }
+            return editor.commit()
+        }
+        if (!commit(changes)) {
+            // SharedPreferences changes memory even when disk commit fails. Restore the previous
+            // snapshot too, so reload/TTL cannot treat the failed sync as fresh in this process.
+            commit(before)
+            return null
+        }
         return updated
     }
 
@@ -140,6 +171,7 @@ object LocalPlaylistStore {
      * 与「清空歌单」不同：删除会连 tombstone 一起丢掉（[LocalPlaylistSync.clearAll] 之后再删），
      * 也就是**放弃这个歌单的同步来源关联**。
      */
+    @Synchronized
     fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
         val list = readPlaylists(context)
         writePlaylists(context, list.filterNot { it.key == key })
@@ -153,6 +185,7 @@ object LocalPlaylistStore {
      *   纯手动的用 [LocalPlaylistSync.localOnlyKey]。
      * @return 新建的歌单；同名同 key 已存在时返回**已存在的那一个**（幂等，不覆盖用户的歌）。
      */
+    @Synchronized
     fun createPlaylist(
         context: Context,
         key: com.takahashirinta.ncrust.source.PlaylistKey,
