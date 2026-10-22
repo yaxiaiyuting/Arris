@@ -294,9 +294,10 @@ class WaveformFrameRateTest {
         var backJumps = 0
         var ceilingDwell = 0
         while (t < origin + 20_000.0) {
-            // 第一帧就要有内容（空窗口时相位不排帧，与「不空转」契约一致）。
-            if (last < 0) ring.push(0.7f, arrivalAtMs = origin.toLong())
-            // v3.4.7：柱的到达时刻用**它自己的计划时刻**（不是「处理它的那一帧」）——
+            // 第一帧就有内容：下面的 while 会在 t == origin 时推入第一根柱。
+            // （v3.6.3 修掉一处重复 push：旧版在 while 之前又推了一根同样时间戳的柱，
+            //  于是「每根柱间隔」被读成 50ms，画面消费得比音频快、边界上反复撞顶棚。）
+            // 柱的到达时刻用**它自己的计划时刻**（不是「处理它的那一帧」）——
             // 真实缓冲回调在它自己的节拍上打时间戳，UI 只是稍后才看到它。
             while (nextBar <= t) {
                 ring.push(0.7f, arrivalAtMs = nextBar.toLong())
@@ -304,16 +305,16 @@ class WaveformFrameRateTest {
             }
             val dt = if (last < 0) 16.667f else (t - last).toFloat()
             last = t
-            // v3.4.7：帧循环把**这一帧自己的时间戳**一并交下去（相位的分子 = 它与
-            // 最后一根被消费的柱的到达时刻之差）。这条链上不允许任何一方自攒时钟。
+            // v3.6.3：帧循环把**这一帧自己的时间戳**一并交下去。画面时间只取相邻两帧
+            // 时间戳之差，不与柱的到达时刻相减（那正是「成批到达就一顿一冲」的旧模型）。
             ring.pump(true, dt, VisualizerEffects.BASELINE, nowMs = t.toLong())
             val phase = ring.scrollPhase01()
-            // 判据（v3.4.7 修订）：
+            // 判据（v3.6.3 修订）：
             //  · 相位在格内单调不减；
             //  · 变小 = 回绕，此时必须**明显变小**（回跳到接近 0 一侧），
-            //    而不是在顶棚附近抖一下 —— 后者正是 v3.2.4 的「顿-冲」形状；
-            //  · 不许在 1.0 顶棚上停留：停了 = 相位爬不满一格、画面原地冻住。
-            //    锚到真实到达时刻之后这一条是**严格**的（分子/分母同源），不是「尽量不要」。
+            //    而不是在顶棚附近抖一下 —— 后者正是旧的「顿-冲」形状；
+            //  · 数据按 100ms 稳定到达时，画面不该在任何一帧停在 1.0 顶棚：
+            //    停了 = 画面时钟比音频节拍早、边界上在等下一根柱。
             if (phase < lastPhase - 1e-6f) {
                 wraps++
                 if (phase > lastPhase - 0.5f && lastPhase > 0.5f) backJumps++
@@ -324,10 +325,10 @@ class WaveformFrameRateTest {
         }
         assertTrue("回绕样本 $wraps", wraps > 100)
         assertEquals("回绕后相位必须明显变小（否则曲线在顶棚附近抖）", 0, backJumps)
-        // 20 秒、柱间隔 100ms ⇒ 200 根柱、1200 帧。相位由真实时间戳相减得到，
-        // 永远不会「爬过头」⇒ 顶棚停留应当是 0 帧。
+        // 20 秒、柱间隔 100ms ⇒ 200 根柱、1200 帧。画面时钟在首帧对齐到第一根柱，
+        // 之后每 100ms 跨一格、同时消费一根 ⇒ 稳定到达时一帧都不该停在顶棚。
         assertTrue(
-            "相位在 1.0 顶棚停留了 $ceilingDwell 帧 —— 任何一帧都说明分子/分母不同源",
+            "相位在 1.0 顶棚停留了 $ceilingDwell 帧 —— 说明画面时钟与音频节拍有系统性偏移",
             ceilingDwell == 0,
         )
     }

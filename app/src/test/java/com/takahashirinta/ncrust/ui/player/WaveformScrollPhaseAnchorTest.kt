@@ -14,30 +14,30 @@ import org.junit.Test
 import kotlin.math.abs
 
 /**
- * v3.4.7：相位的分子与分母**必须同源** —— 「波形滚动抽搐」的最终根因判据。
+ * v3.6.3：波形滚动是一列**画面时钟**，不是「距最后一根柱过了多久」。
  *
- * ## 真机探针量到的指纹（改前的 v3.4.6）
+ * ## 为什么换掉 v3.4.7 的闭式
  *
- * | 量 | 实测 |
- * |---|---|
- * | `sinceBarMs` | 只在 `{0.00, 41.18}` 两个值之间跳 |
- * | 相位 | 每 5 帧走 `0.206 × 5`，第 6 帧被锚点**覆盖回 0** |
- * | 逐帧位移 | 到达帧一次冲出 `1.176` 格（名义 `0.206`），其余帧按名义走 |
+ * v3.4.7 的相位是 `nowMs − 最后一根被消费的柱的到达时刻`。它在「一根柱一格」时是准的，
+ * 但真实音频链路会把**多根柱放进同一次回调**：窗口一次平移 N 格、相位只按最后一根算，
+ * 下一批又要等 N 个格周期 ⇒ 画面「一顿一冲」（用户 v3.6.2 的反馈）。3 根/300ms 的批
+ * 在 60Hz 上量到 **8 帧位移 0.00 + 一帧 2.00 格**；v3.6.3 按时间铺开后是 **0.16~0.17 格/帧**。
  *
- * 根因是 v3.3.2 的锚点式子 `frameClockMs − clockOffsetMs − pendingArrivalMs`：
- * `frameClockMs` 是**本类自己按 `dt` 累加**的帧时钟，且逐帧 `+= dt.toLong()` 截断 ——
- * 60Hz 每帧丢 0.667ms、120Hz 每帧丢 0.333ms（都是 **4%/秒**）。拿它去减音频线程的
- * `SystemClock.uptimeMillis()`，差值系统性跑负 ⇒ 相位被钉死、每格丢一帧位移。
+ * 现在的模型是波形自己的播放队列：
  *
- * ## 这个文件钉住三条（都对「旧模型」有区分度）
+ * ```
+ * sinceBarMs += 本帧真实经过的时间
+ * if (sinceBarMs >= 间隔 && 还有柱) { 消费一根; 窗口左移一格; sinceBarMs -= 间隔 }
+ * else if (sinceBarMs >= 间隔) sinceBarMs = 间隔   // 没有数据：停在格边界等
+ * ```
  *
- * 1. **到达帧的位移 ≈ 名义步长**：这一帧相位 = 「这一帧比那根柱晚了多少」÷ 柱间隔，
- *    本来就是个小正数；要求它严格为 0 就等于把这一帧的位移丢掉。
- *    [到达帧的位移必须是名义步长 —— 不许把这一帧的位移丢掉]（旧模型量到 **0%**）
- * 2. **相位是一条闭式**：`(帧时间戳 − 最后一根被消费的柱的到达时刻) ÷ 分母`。
- *    [相位恰好等于 帧时间戳减最后一根柱的到达时刻 除以柱间隔]
- * 3. **相位不来自任何累加量**：把 `dt` 整体放大 3 倍，相位序列必须**逐帧不变**。
- *    [相位不来自任何累加时钟 —— dt 放大三倍相位逐帧不变]（任何自攒时钟都会在这里翻红）
+ * ## 这个文件钉住三条
+ *
+ * 1. **消费/到达帧的位移 ≈ 名义步长**：窗口平移一格时相位恰好回绕一格，净位移就是
+ *    `dt ÷ 间隔`，不存在「这一帧位移被丢掉」。
+ * 2. **相位只按帧时间线性推进**：逐帧满足
+ *    `Δ窗口平移格 + Δ相位 = dt ÷ 间隔`；稳定到达时一帧最多平移一格。
+ * 3. **`dt` 缩放不影响相位**：`nowMs` 在时相位只读相邻帧时间戳之差，弹道参数（dt）不参与。
  *
  * 另外把 v3.3.2 的跨时钟锚点在同一份时间线上复刻一遍（[WaveformScrollJitterHarness.legacyAnchor]），
  * 作为**改前对照** —— 不是为了守住旧实现，而是为了让「这条判据有区分度」这句话有数可查。
@@ -117,31 +117,38 @@ class WaveformScrollPhaseAnchorTest {
         }
     }
 
-    /** 相位必须**恰好**是那条闭式（分子分母同源 ⇒ 可以逐帧等号，不是「差不多」）。 */
+    /**
+     * **画面时间是可加的**：每帧的「窗口平移 + 相位增量」必须等于这一帧的真实时间占比。
+     *
+     * 这条把「回绕」写进了同一个式子：跨格那一帧平移 +1、相位 −(1 − dt/间隔)，
+     * 净位移仍是 dt/间隔。任何「到达时清零相位 / 一帧消费一批」都会在这里多出或少掉位移。
+     */
     @Test
-    fun `相位恰好等于 帧时间戳减最后一根柱的到达时刻 除以柱间隔`() {
-        val h = run(146.2, 82.6, seconds = 6.0)
-        val arr = h.barArrivalsMs
+    fun `相位只按帧时间线性推进 —— 跨格时恰好回绕一格`() {
+        val h = run(60.0, 100.0, seconds = 8.0)
         var checked = 0
-        h.frames.drop(WaveformScrollJitterHarness.SKIP_FRAMES).forEach { f ->
-            val consumed = f.shiftedCells
-            if (consumed <= 0) return@forEach
-            // 两个时间戳都是**毫秒整数**（环收到的就是 Long）：先各自截断再相减，
-            // 与 `pump` 里那两行逐字一致 —— 不这样写会引入 0.4ms 的假误差。
-            val nowMs = f.tMs.toLong()
-            val lastArrival = arr[(consumed - 1).toInt()].toLong()
-            val expected = ((nowMs - lastArrival).toFloat() / f.intervalMs).coerceIn(0f, 1f)
+        var wraps = 0
+        for (i in WaveformScrollJitterHarness.SKIP_FRAMES until h.frames.size) {
+            val prev = h.frames[i - 1]
+            val f = h.frames[i]
+            val cells = (f.shiftedCells - prev.shiftedCells).toFloat()
+            assertTrue("t=%.3f 一帧平移了 %.0f 格（稳定到达时最多一格）".format(f.tMs, cells), cells <= 1f)
+            if (cells > 0f) wraps++
+            // 生产里 pump 用的是**相邻帧时间戳之差**（`nowMs`），不是调用方另给的 dtMs。
+            // 这里必须按同一口径算：帧时间戳是毫秒整数，16.667ms 的帧会交替成 16/17ms。
+            val frameDelta = (f.tMs.toLong() - prev.tMs.toLong()).toFloat()
+            val expected = frameDelta / f.intervalMs
+            val actual = cells + (f.phase - prev.phase)
             assertEquals(
-                "t=%.3f 的相位与闭式不符（最后一根柱到达于 %d，分母 %.3f）".format(
-                    f.tMs, lastArrival, f.intervalMs,
-                ),
+                "t=%.3f：Δ平移 %.0f + Δ相位 %.4f 应等于 dt/间隔 %.4f".format(f.tMs, cells, f.phase - prev.phase, expected),
                 expected,
-                f.phase,
+                actual,
                 1e-6f,
             )
             checked++
         }
-        assertTrue("检查的帧太少（$checked）", checked > 500)
+        assertTrue("检查的帧太少（$checked）", checked > 300)
+        assertTrue("跨格样本太少（$wraps）", wraps > 30)
     }
 
     /**

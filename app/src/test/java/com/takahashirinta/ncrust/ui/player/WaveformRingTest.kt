@@ -48,7 +48,9 @@ class WaveformRingTest {
         assertEquals(0.4f, ring.targetAt(3), 1e-6f)
 
         ring.push(0.9f)
-        assertTrue(ring.pump(active = true, dtMs = 16f))
+        // v3.6.3：新柱不再在下一帧立刻搬进窗口 —— 画面按时间节拍一格一格走。
+        // 一格 = 默认柱间隔 100ms ⇒ 16ms 帧要泵满 7 帧才跨过边界。
+        repeat(7) { ring.pump(active = true, dtMs = 16f) }
         assertEquals(0.2f, ring.targetAt(0), 1e-6f)
         assertEquals(0.9f, ring.targetAt(3), 1e-6f)
     }

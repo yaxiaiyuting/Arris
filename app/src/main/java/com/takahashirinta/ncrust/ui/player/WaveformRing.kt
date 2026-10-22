@@ -57,7 +57,39 @@ import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
  * （静音时既没有色带要流、也不该呼吸）。
  */
 /**
- * ## ⚠️ v3.3.2：滚动抖动的**真实机制**（改这个类之前请先读完这一段）
+ * ## ⚠️ v3.6.3：**先读这一节** —— 滚动模型是「波形自己的播放队列」
+ *
+ * 用户 v3.6.2 的反馈是「一阵子动一下一阵子停止」。根因不是刷新率、也不是插值：
+ * 真实音频链路会把**多根柱放进同一次回调**（同一个 `uptimeMillis()`），而 v3.4.7 的模型
+ * 有两个隐含前提 —— 窗口一帧最多平移一格、相位按「距最后一根柱的到达时刻」算。
+ * 成批到达把两个前提都破了：
+ *
+ * ```
+ * 3 根/300ms（60Hz）：8 帧位移 0.0000 → 一帧 2.00 格 → 0.05 … → 再 8 帧 0.0000
+ * 2 根/200ms（60Hz）：3 帧位移 0.0000 → 一帧 1.08 格 → 0.08 …
+ * ```
+ *
+ * 现在的模型（见 [sinceBarMs] / [consumeOne] / [recordBatch]）：
+ *
+ *  1. **每根柱的间隔按批折算**：`(最新批起点 − 最早批起点) ÷ 中间各批柱数之和`。
+ *     3 根/300ms 读出 100ms/根（不是 300ms，也不是 50ms），由 [recordBatch] 发布。
+ *  2. **画面按时间铺开**：`sinceBarMs` 每帧只加真实帧间隔；跨过一个格周期才消费**一根**。
+ *     一批 3 根会在 3 个格周期里被逐根取走 ⇒ 0.16~0.17 格/帧、0 停顿帧。
+ *  3. **重绘门槛看整个窗口**，不看最新一格：一个安静缓冲落在最右格时，左边还有内容在滚动，
+ *     旧判据会停止重绘 1~3 帧（另一种「顿住」）。
+ *
+ * ### 不要退回去的四件事
+ *
+ *  - 不要把「画面时间」与柱的到达时间戳相减：成批到达时两者不是一一对应的。
+ *  - 不要在一帧里消费所有 pending：那正是「一帧冲 N 格、然后等 N 格」。
+ *  - 不要用「最新一根的间隔」当分母：它是回调间隔，不是每根柱的时间。
+ *  - 不要只看 `targets[barCount-1]` 决定要不要重绘（见 [windowHasSignal]）。
+ *
+ * 下面两节（v3.3.2 / v3.4.7）保留为历史：它们修的是「一根柱一格」稳态下的分母量化与
+ * 跨时钟相减，那些结论仍然成立；只是**相位不再锚在到达时刻**上。
+ */
+/**
+ * ## ⚠️ v3.3.2：滚动抖动的**真实机制**（历史模型；生产代码已改为上面的播放队列）
  *
  * 前六次尝试全部失败，根因是**判据口径**与**归因**都错了。这一节记录的是
  * 用「与渲染层同源的口径」（`位移 = Δ窗口平移格 + ΔscrollPhase01()`）量出来的事实，
@@ -179,41 +211,68 @@ class WaveformRing(
     private val highRing = FloatArray(capacity)
 
     /**
-     * v3.3.2：与 [ring] 逐槽对齐的**柱间隔**（毫秒）—— 这一根柱与**前一根柱**之间实际过了多久。
+     * v3.3.2 / v3.6.3：与 [ring] 逐槽对齐的**到达时刻**（调用方的时间基准，毫秒；0 = 没给）。
      *
-     * ## 为什么分母必须记在 push 这一侧（这是「抖动」的真正根因）
+     * ## 为什么柱间隔必须在 push 这一侧测
      *
-     * 相位斜坡的分子是「距上一根柱过了多久」（帧时间累加，精确），分母是「柱间隔」。
-     * 旧写法在 **UI 消费处**倒推分母（`sinceBarMs / 消费根数`），而消费只能发生在帧上：
+     * 旧写法在 **UI 消费处**倒推间隔（`sinceBarMs / 消费根数`），而消费只能发生在帧上：
      * 一根真实 100ms 的柱会被量成 100 / 116.7 / 133.3ms 三者之一（60Hz），
      * 滑动平均因此**永远收敛不到真值** —— 真机同口径实测从 100ms 一路爬到 155ms 且不停。
+     * 在 push 处测的是**音频缓冲自己的节拍**，与 vsync 无关。
      *
-     * 分母偏大 55% ⇒ 相位按 0.65 倍速爬 ⇒ 爬满一格之前下一根柱就到了：
-     * 相位撞上 `scrollPhase01()` 的 `coerceIn(0,1)` **顶棚停在 1.0**，
-     * 连续 2~4 帧位移 `0.0000`（画面**原地不动**），随后被折回、位移一次性冲出 `1.14` 格。
-     * 量到的形状：`0.0000, 0.1391, 0.0000, 1.1399, 0.4903, …` —— 就是用户报的「顿-冲 / 抽搐」。
-     *
-     * 在 push 处测就没有量子化：那是**音频缓冲自己的节拍**，与 vsync 无关，
-     * 也正是「一根柱代表多久的音乐」的真值（约 100ms）。同一根柱的分子/分母因此同源，
-     * 相位在一个柱周期内**正好**爬到 1.0：既不撞顶棚，也不在到达帧上多摊或少摊位移。
+     * v3.6.3 又补了一层：真实链路会把多根柱放进**同一次回调**（同一个时间戳）。
+     * 按「相邻两根」测会得到 `0, 0, 300ms`，把每根 100ms 读成 300ms ⇒ 画面一顿一冲。
+     * 现在按批折算（见 [batchStarts] / [batchSizes]），并把结果发布给 [publishedGapMs]。
      *
      * ## 代价（音频线程）
      *
-     * 三次数组写（`arrivalMs` long、`arriveGapMs` float）与一次 volatile long 读，
+     * 两次数组写（stamp、gap 不需要逐槽了，只发布标量）与两次 volatile 写，
      * **没有分配、没有锁、没有系统调用** —— 与既有的四个 float 写同级。
      * 时间戳由调用方传入（`SystemClock.uptimeMillis()`），所以本类仍然不依赖 Android。
      */
-    private val arriveGapMs = FloatArray(capacity)
-
-    /** v3.3.2：与 [ring] 逐槽对齐的**到达时刻**（调用方的时间基准，毫秒；0 = 没给）。 */
     private val arriveStampMs = LongArray(capacity)
 
-    /** 上一根柱的到达时刻（音频线程独占读写；用来算 [arriveGapMs]）。 */
-    private var lastPushArrivalMs: Long = 0L
-
-    /** 最近一根柱的柱间隔（volatile：音频线程写、UI 线程读，单写者）。 */
+    /**
+     * v3.6.3：**已经按每根柱折算过**的到达间隔（毫秒），音频线程写、UI 线程读。
+     *
+     * 为什么要一个单独的发布通道，而不是只在消费柱时更新：
+     * [barIntervalMs] 是画面时间的节拍。如果它只在「消费了一根」时更新，一个偏小的估计
+     * 会让画面消费得比音频到达快 ⇒ 很快没有柱可消费 ⇒ 帧停在格边界 ⇒ 估计没机会被修正。
+     * 现在音频线程每测到一个新样本就发布一次（值 + 自增序号），UI 每帧最多吸收一个新样本，
+     * 与消费节奏无关。
+     */
     @Volatile
-    private var latestArriveGapMs: Float = 0f
+    private var publishedGapMs: Float = 0f
+
+    /** 与 [publishedGapMs] 配套的序号：**最后写**，读者看到新序号时值一定已写好。 */
+    @Volatile
+    private var publishedGapSeq: Long = 0L
+
+    /** UI 线程已经吸收到的 [publishedGapSeq]（避免同一个样本被平滑多次）。 */
+    private var appliedGapSeq: Long = 0L
+
+    /** 已吸收的间隔样本数（前几个直接采纳，见 [absorbPublishedGap]）。 */
+    private var gapSamples: Int = 0
+
+    /**
+     * v3.6.3：最近 [GAP_BATCHES] 个**到达批次**的起点（音频线程独占读写）。
+     *
+     * 为什么要按「批」而不是按「根」记：真实链路会把多根柱放进同一次回调（同一个时间戳）。
+     * 按相邻两根测会得到 `0, 0, 300ms`；只按上一批柱数折算，又会在批次大小变化时失真。
+     * 记下最近 8 批的「起点 + 柱数」，就能算
+     * `(最新批起点 − 最早批起点) ÷ 中间各批柱数之和` —— 这是**每根柱真正占用的时间**，
+     * 对「每批 1 根」「每批 3 根」「批大小变化」都成立。
+     */
+    private val batchStarts = LongArray(GAP_BATCHES)
+
+    /** 与 [batchStarts] 对齐：这一批里有几根柱。 */
+    private val batchSizes = IntArray(GAP_BATCHES)
+
+    /** [batchStarts] 里有效批次数（≤ [GAP_BATCHES]）。 */
+    private var batchCount: Int = 0
+
+    /** 下一批写入 [batchStarts] 的下标（环）。 */
+    private var batchNext: Int = 0
 
     /**
      * 写入游标 = 累计写入的柱数（不是下标）。
@@ -246,53 +305,60 @@ class WaveformRing(
     /**
      * v3.4.7：相位斜坡**实际使用的分母**（毫秒）—— 诊断 / 单测 / 真机探针用（生产渲染路径零调用）。
      *
-     * 存在的理由：[barIntervalMs] 只是**滑动平均**，而 [phaseIntervalMs] 有三级回落
-     * （最新一根的间隔 → 滑动平均 → 默认值）。探针若报滑动平均，就可能在分母不是它的时候
-     * 把「相位算错了」读成「分母漂了」—— 诊断必须读**被判据实际消费的那个量**。
+     * v3.6.3 起分母只有一个来源（[barIntervalMs]，由 [recordBatch] 按批折算后平滑）。
+     * 探针仍必须读**被判据实际消费的那个量**：中间还有 `isFinite` / `> 1f` 的回落，
+     * 读发布值或读默认值都可能把「分母不对」读成「相位不对」。
      */
     internal fun phaseIntervalMsForTest(): Float = phaseIntervalMs()
 
     /**
-     * v3.2.3：**两条柱之间的推进相位**（0..1），让画面按帧率连续滚动。
+     * v3.2.3 / v3.6.3：**画面滚动累计量**（毫秒，区间 `[0, 柱间隔]`）。
      *
-     * ## 为什么必须补这一层（用户实测反馈「刷新率好低」）
+     * ## 为什么不是「这一帧比最后一根柱晚了多久」
      *
-     * 音频缓冲只有 ~10 Hz（真机实测 100ms），而滚动窗口是**按缓冲位移**的：
-     * 每 100ms 整条形状"跳"一格。帧循环哪怕是 60fps，看到的也是**10 Hz 的阶跃**——
-     * 用户读到的就是"刷新率低"。柱高那一层有 22/130ms 的时间常数在抹平，
-     * 而**三条泳道的形状**（历史窗口本身）没有任何抹平：它一格一格跳。
+     * v3.4.7 把相位改成 `nowMs − 最后一根被消费的柱的到达时刻`，解决了「自攒帧时钟跨时钟相减」
+     * 的漂移。但它仍有一个前提：**一根柱必须在一格时间内只到达一根**。一旦音频链路把多根柱
+     * 放进同一次回调（或 UI 一帧里消费了一批），这个前提就破了：
      *
-     * 所以这里记两个量：距上一根柱过了多久（[sinceBarMs]）与柱间隔的滑动平均
-     * （[barIntervalMs]），渲染层用它们的比值做**相邻两格之间的线性插值**——
-     * 形状因此按帧率连续左移，而数据仍然是 10 Hz 的真实值（没有插值出假数据：
-     * 插的是"两格之间"的位置，不是"未来"的值）。
+     *  - 窗口在一帧里平移 N 格（N = 这一批的柱数），而相位只按「距最后一根」算 ⇒ 画面一次冲 N 格；
+     *  - 下一批要等 N×柱间隔才到 ⇒ 相位先撞顶棚、画面**停住**，再重复上面那一步。
+     *
+     * 这就是用户在 v3.6.2 报的「一阵子动一下一阵子停止」。同一份仿真里，3 根柱 / 300ms 的批
+     * 在 60Hz 上量到 **8 帧位移 0.00 + 一帧 2.00 格**；按时间铺开后是 0.16~0.17 格/帧。
+     *
+     * ## 现在的模型：波形自己的**播放队列**（playout）
+     *
+     * [sinceBarMs] 是**画面时间**，每帧只按真实帧间隔推进（[pump] 的 `nowMs` 差，或回落 `dtMs`）。
+     * 它跨过一格（[phaseIntervalMs]）时才**消费一根柱**、窗口平移一格、再减去一格：
+     *
+     * ```
+     * sinceBarMs += 本帧真实经过的时间
+     * if (sinceBarMs >= 间隔 && 还有待消费的柱) { 消费一根; 窗口左移一格; sinceBarMs -= 间隔 }
+     * else if (sinceBarMs >= 间隔) sinceBarMs = 间隔   // 没有数据：停在格边界等
+     * ```
+     *
+     * 两个后果，都是想要的：
+     *
+     *  1. **成批到达被摊开**：一批 3 根柱会在 3 个格周期里各消费一根，画面匀速；
+     *  2. **早到/晚到不再改变位移**：数据早到就在环里等，晚到就让画面在格边界停一下
+     *     （那是「真的没有下一格」的诚实表达，而不是跳一下补回来）。
+     *
+     * ⚠️ 这**不是**把 v3.4.7 的修复退回去：这里只有一根本类自己攒的**时间量**，它从不与
+     * 音频线程的到达时间戳相减；时间量用 Float 累加，也没有 `.toLong()` 的逐帧截断。
+     * 到达时间戳现在只用来测「一根柱代表多久」（[batchStarts]），不参与相位计算。
      */
     private var sinceBarMs: Float = 0f
 
     /**
-     * v3.4.7：**最后一根被消费的柱的到达时刻**（调用方的时钟，毫秒；0 = 还没有带时间戳的柱被消费）。
+     * v3.6.3：上一帧的时间戳（毫秒，与柱到达同一时钟；0 = 还没收到帧时钟）。
      *
-     * ## 为什么不能自己攒一个帧时钟（v3.3.2 ~ v3.4.6 的缺陷，真机探针量到）
-     *
-     * 相位的分子是「距上一根柱过了多久」。上一版把它算成
-     * `frameClockMs − clockOffsetMs − pendingArrivalMs`：前者是**本类自己按 `dt` 累加**的帧时钟
-     * （`frameClockMs += dtForPhase.toLong()`），后者是调用方（音频线程）用
-     * `SystemClock.uptimeMillis()` 打的到达时刻。
-     *
-     * 这是**两个时钟相减**，而累加出来的那个每帧都被 `.toLong()` 截断：
-     * 60Hz 的 `dt = 16.667ms` 每帧丢 0.667ms（4%），120Hz 的 `8.333ms` 每帧丢 0.333ms（4%）。
-     * 差值于是**系统性地单调跑负** —— 真机探针量到的形状是 `sinceBarMs` 只在
-     * `{0.00, 41.18}` 两个值之间跳、相位每 5 帧走 `0.206 × 5`，第 6 帧被锚点覆盖回 0：
-     * 每一格都丢掉一帧的位移，下一格再补回来 —— 用户读到的就是「抽搐」。
-     *
-     * ## 修法：**根本不攒帧时钟**
-     *
-     * [pump] 收一个 `nowMs` —— 帧循环把**它自己那一帧的时间戳**原样传进来
-     * （`withFrameNanos` 的 `frameTimeNanos / 1e6`，与 `SystemClock.uptimeMillis()` 同一个
-     * 单调时钟基准）。相位就是 `nowMs − 本值`：两个量**同源**，且都**不经过本类累加**，
-     * 于是没有截断、没有跨时钟标定、也没有漂移。
+     * 只用来算「这一帧真实经过了多久」。它每帧被**覆盖**而不是累加，所以不会漂。
+     * 传 0（单测 / 老调用点）时回落到调用方给的 `dtMs`。
      */
-    private var lastConsumedArrivalMs: Long = 0L
+    private var lastPumpNowMs: Long = 0L
+
+    /** v3.6.3：首帧是否已经用环里的历史填过窗口（见 [pump] 的说明）。 */
+    private var windowPrimed: Boolean = false
 
     /**
      * 柱间隔的滑动平均（毫秒）。硬件缓冲粒度是运行时行为，所以只能测、不能假设。
@@ -431,26 +497,63 @@ class WaveformRing(
         lowRing[slot] = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
         midRing[slot] = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
         highRing[slot] = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
-        // v3.3.2：柱间隔**在这里**测（见 [arriveGapMs] 的 KDoc）—— 音频缓冲自己的节拍。
+        // v3.3.2 / v3.6.3：柱间隔**在这里**测（见 [batchStarts] 的 KDoc）—— 音频缓冲自己的节拍。
         // 槽位与 writeIndex 一次自增绑定，非 volatile；但 UI 侧永远读 `[0, snapshot)`，
         // 而 snapshot 是**自增之后**才发布的，所以这一槽对读者一定已经写完。
-        // 这里存**原始**到达间隔（不做平滑）：平滑只在 [pump] 里做一次，
-        // 免得同一份系数被套两层、`barIntervalMs` 的读数也就不可解释了。
-        var rawGap = 0f
-        if (arrivalAtMs > 0L && lastPushArrivalMs > 0L && arrivalAtMs > lastPushArrivalMs) {
-            val raw = (arrivalAtMs - lastPushArrivalMs).toFloat()
-            if (raw in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) rawGap = raw
-        }
-        arriveGapMs[slot] = rawGap
+        if (arrivalAtMs > 0L) recordBatch(arrivalAtMs)
         arriveStampMs[slot] = arrivalAtMs
-        if (arrivalAtMs > 0L) lastPushArrivalMs = arrivalAtMs
-        if (rawGap > 0f) latestArriveGapMs = rawGap
         writeIndex += 1
+    }
+
+    /**
+     * v3.6.3：记一个到达批次，并把「每根柱占多久」发布给 UI（音频线程，零分配）。
+     *
+     * 同一批的判定是 `arrival − 本批起点 ≤ [BATCH_WINDOW_MS]`：同一次回调里的多次 push
+     * 时间戳相同（或差 1~2ms），它们属于同一批；真实的柱间隔最小 20ms，不会被误并。
+     *
+     * 每根柱的间隔 = `(最新批起点 − 最早批起点) ÷ 中间各批柱数之和`。
+     * 这个式子对「每批 1 根」「每批 3 根」「批次大小变化」都成立 —— 见 [batchStarts]。
+     */
+    private fun recordBatch(arrivalAtMs: Long) {
+        val last = (batchNext - 1 + GAP_BATCHES) % GAP_BATCHES
+        if (batchCount > 0 && arrivalAtMs - batchStarts[last] <= BATCH_WINDOW_MS) {
+            // 同一批：只加柱数。最新批自己的柱数不进分母（它还没走完），所以不重新发布。
+            batchSizes[last] += 1
+            return
+        }
+        batchStarts[batchNext] = arrivalAtMs
+        batchSizes[batchNext] = 1
+        batchNext = (batchNext + 1) % GAP_BATCHES
+        if (batchCount < GAP_BATCHES) batchCount += 1
+        if (batchCount < 2) return
+        val newest = (batchNext - 1 + GAP_BATCHES) % GAP_BATCHES
+        val oldest = (batchNext - batchCount + GAP_BATCHES) % GAP_BATCHES
+        var slots = 0
+        var i = oldest
+        while (i != newest) {
+            slots += batchSizes[i]
+            i = (i + 1) % GAP_BATCHES
+        }
+        if (slots <= 0) return
+        val span = batchStarts[newest] - batchStarts[oldest]
+        if (span <= 0L) return
+        val perBar = span.toFloat() / slots
+        if (perBar.isFinite() && perBar in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) {
+            // 先写值、**最后**写序号：UI 看到新序号时一定读得到配套的值。
+            publishedGapMs = perBar
+            publishedGapSeq += 1
+        }
     }
 
     /** UI 线程：清空（换歌 / 停止时用）。 */
     fun clear() {
         readIndex = writeIndex
+        // v3.6.3：画面时间与帧时钟一起归零。不清的话，上一首留下的相位会让新歌开头
+        // 先平移一段空窗口（换歌观感会变成「先空滑一格」）。柱间隔**不清**：缓冲粒度是
+        // 设备/编码器的属性，换歌不会变，留着可以少一次重新收敛。
+        sinceBarMs = 0f
+        lastPumpNowMs = 0L
+        windowPrimed = false
         bars.fill(0f)
         barVel.fill(0f)
         targets.fill(0f)
@@ -505,41 +608,80 @@ class WaveformRing(
         var changed = false
         if (active) {
             // v3.3.2：`sinceBarMs` 是时间量，与信号无关。它现在**每帧由两个真实时间戳相减**
-            // 得到（见下），不再由本类累加 —— 累加出来的帧时钟会被 `.toLong()` 逐帧截断，
-            // 与调用方的到达时间戳不是同一个时钟，差值 4%/秒地漂（v3.4.7 定位并修掉）。
-            val dtForPhase = dtMs.coerceIn(0f, 200f)
-            val consumed = consumePending()
-            if (consumed) {
-                // 分母：**到达处实测**的柱间隔（原始值），平滑只在这里做一次。
-                if (pendingGapMs > 0f) {
-                    barIntervalMs += (pendingGapMs - barIntervalMs) * BAR_INTERVAL_EMA
+            // ★ v3.6.3：画面时间只由**真实帧间隔**推进。
+            //
+            //   `nowMs` 是帧循环自己的时间戳（`withFrameNanos / 1e6`，与音频线程的
+            //   `uptimeMillis()` 同一个单调时钟基准）。这里只取它与**上一帧**的差 ——
+            //   两个同源时间戳相减，不存在跨时钟标定；`lastPumpNowMs` 每帧被覆盖、不累加，
+            //   所以也不会像 v3.3.2 那样逐帧截断出 4%/秒的漂移。
+            //
+            //   没有帧时钟（老调用点 / 单测）时回落到调用方给的 `dtMs`：它同样是真实帧间隔。
+            val rawDelta = if (nowMs > 0L && lastPumpNowMs > 0L) nowMs - lastPumpNowMs else -1L
+            val dtForPhase = if (rawDelta >= 0L) {
+                rawDelta.coerceIn(0L, MAX_FRAME_DELTA_MS).toFloat()
+            } else {
+                dtMs.coerceIn(0f, MAX_FRAME_DELTA_MS.toFloat())
+            }
+            if (nowMs > 0L) lastPumpNowMs = nowMs
+            // v3.6.3：长时间卡顿 / 后台回来 / 旋转后重新挂载时，环里可能积了几十根柱。
+            // 按「一格一根」播完要好几秒，最新一格会一直落后于耳朵（旧实现是一帧全消费，
+            // 不落后但会一次冲很多格）。这里改成**重建**：丢掉一屏以外的积压，用最新的一屏
+            // 重新填满窗口 —— 视觉上是一次「追上现在」，之后继续匀速。
+            if (rawDelta > RESYNC_AFTER_MS || writeIndex - readIndex > barCount) {
+                windowPrimed = false
+            }
+            // v3.6.3：吸收音频线程发布的最新「每根柱间隔」。**放在消费之前**、且与这一帧
+            // 有没有柱可消费无关 —— 否则一个偏小的估计会让画面先消费过快、随后没柱可消费，
+            // 估计就永远停在错的值上（帧停在格边界，却再也没机会被修正）。
+            absorbPublishedGap()
+            // v3.6.3：**首帧把已有的历史一次填满**。挂载时环里可能已经积了半秒到几秒的柱
+            // （用户先播放、后展开播放器），按「一格一根」慢慢填会先看到一段空窗口。
+            // 只填一次；之后全部走时间节拍，成批到达不会再变成一次大跳。
+            var primedThisFrame = false
+            if (!windowPrimed) {
+                // 只保留最新的一屏；更老的柱是「已经滚过去的历史」，再播只会让画面滞后。
+                val backlog = writeIndex - readIndex
+                if (backlog > barCount) readIndex = writeIndex - barCount
+                var filled = 0
+                while (filled < barCount && consumeOne()) filled++
+                // 只有真的填到东西才算「首帧已就绪」：挂载早于起播时第一帧没有数据，
+                // 不能把这次机会浪费掉 —— 起播后的第一帧才应该一次填满已有历史。
+                if (filled > 0) {
+                    windowPrimed = true
+                    sinceBarMs = 0f
+                    primedThisFrame = true
+                    changed = true
                 }
             }
+            // 首帧**不推进**画面时间：这一帧就是「第 0 格」。否则画面时钟会比第一根柱的
+            // 到达时刻提前一个 dt，之后每个格边界都早到几毫秒 —— 数据还没到，相位先撞顶棚，
+            // 于是每隔一格停一帧（实测 60Hz / 100ms 柱上 5.8% 的帧停在 1.0）。
+            if (!primedThisFrame) sinceBarMs += dtForPhase
             val interval = phaseIntervalMs()
-            // ★ v3.4.7：相位 = 「这一帧比最后一根**已消费**的柱晚了多少」÷「柱间隔」。
-            //
-            //   分子是 `nowMs − lastConsumedArrivalMs` —— 两个时间戳都由调用方给、同一个时钟，
-            //   本类一次都不累加。旧的 `frameClockMs − clockOffsetMs − pendingArrivalMs`
-            //   是**跨时钟相减**（自攒的、被 `.toLong()` 截断的帧时钟 vs 音频线程的
-            //   uptimeMillis），差值系统性跑负 ⇒ 相位被钉在 0 或顶棚上跳，每格丢一帧位移。
-            //
-            //   ⚠️ 到达帧上这个量本来就是**一个小小的正数**（这一帧比那根柱晚了多久，
-            //   0 ≤ ε < 一个帧间隔），**不是 0**。强行把它弄成 0 会把这一帧的位移丢掉
-            //   （少一截、下一帧再补回来）—— 那正是「顿-冲」。所以这里只做「不为负」的
-            //   防御，**不折回、不清零**：整数部分已经由窗口平移承担，小数部分就该留在这儿。
-            sinceBarMs = if (nowMs > 0L && lastConsumedArrivalMs > 0L) {
-                val elapsed = nowMs - lastConsumedArrivalMs
-                if (elapsed > 0L) elapsed.toFloat() else 0f
-            } else {
-                // 回落口径（老调用点 / 单测没给帧时钟）：按 dt 累加 + 消费时折回余量，
-                // 与 v3.3.2 逐字相同。生产路径不走这里。
-                val advanced = sinceBarMs + dtForPhase
-                if (consumed) foldScrollPhase(advanced, interval, pendingConsumed) else advanced
+            var consumed = false
+            if (sinceBarMs >= interval) {
+                // 跨过一格：**只消费一根**。一批 N 根柱会在 N 个格周期里被逐根取走，
+                // 画面因此匀速 —— 而不是把 N 格位移堆在同一帧里（那正是「一阵子动一下」）。
+                consumed = consumeOne()
+                if (consumed) {
+                    sinceBarMs -= interval
+                    // 一帧的 dt 大于一个格周期时（长卡顿 / 低帧率），最多保留一格余量：
+                    // 多出来的时间直接丢掉，宁可慢一点，也不要把好几格位移压进同一帧。
+                    if (sinceBarMs > interval) sinceBarMs = interval
+                } else {
+                    // 没有下一根柱：停在格边界等。这是「真的没有数据」的诚实表达。
+                    // 下一根柱到达后会在这里被消费，相位从 0 继续 —— 位移不跳变。
+                    sinceBarMs = interval
+                }
             }
             // 信号门槛**保留**在它该在的地方 —— 「要不要为这一帧排重绘」：静音段既不
             // 排帧也不白烧 GPU，v1.8.1 的「不空转」契约与暂停即停帧契约都没有变。
-            // 相位已经爬到一格顶（柱子迟到，画面本来就不动）时同样不必重绘。
-            if (consumed || (sinceBarMs < interval && targets[barCount - 1] > ANIMATION_MIN_SIGNAL)) {
+            //
+            // ⚠️ v3.6.3 修掉一个隐蔽的「顿住」：旧判据只看**最新一根**柱
+            // （`targets[barCount - 1]`）。音乐里一个安静缓冲落到最右格时，整条还在滚动、
+            // 左边还有内容的波形会**停止重绘** 1~3 帧，下一根有声柱到达时才一次补上 ——
+            // 那也是一顿一停。现在只要**可见窗口里还有任何内容**就继续重绘。
+            if (consumed || (sinceBarMs < interval && windowHasSignal())) {
                 changed = true
             }
         } else if (targets.any { it != 0f }) {
@@ -569,68 +711,87 @@ class WaveformRing(
         return animated || changed || phaseAdvanced
     }
 
-    /** 把环形缓冲里 UI 还没消费的柱搬进 [targets]。 */
-    private fun consumePending(): Boolean = consumePendingCount() > 0
+    /**
+     * v3.6.3：把音频线程发布的「每根柱间隔」吸收进 [barIntervalMs]（UI 线程，每帧最多一次）。
+     *
+     * 发布通道用「值 + 自增序号」而不是直接读 [publishedGapMs]：同一个数值可能连续出现
+     * （稳定 100ms 的流每批都是 100.0），只比值会把后续样本全丢掉，估计就卡在旧的错误上。
+     */
+    private fun absorbPublishedGap() {
+        val seq = publishedGapSeq
+        if (seq == appliedGapSeq) return
+        appliedGapSeq = seq
+        val sample = publishedGapMs
+        if (!sample.isFinite() || sample !in MIN_BAR_INTERVAL_MS..MAX_BAR_INTERVAL_MS) return
+        if (gapSamples < 3) {
+            // 前 3 个样本直接采纳：默认值 100ms 只是猜测（实测有 82.6ms 的机型）。
+            // 若按 EMA 慢跑，头几秒画面会比音频慢、积压一直涨，最后触发一次重建跳变。
+            // 首样本可能带启动抖动，所以夹到更窄的 [50, 200]；真实的大缓冲随后会被 EMA 修正。
+            barIntervalMs = sample.coerceIn(50f, 200f)
+            gapSamples += 1
+            return
+        }
+        barIntervalMs += (sample - barIntervalMs) * BAR_INTERVAL_EMA
+        gapSamples += 1
+    }
 
-    /** v3.2.3：消费了多少根柱（相位推进要用它换算平均柱间隔）。 */
-    private var pendingConsumed: Int = 0
+    /**
+     * 可见窗口里是否还有内容（含三条频带）。
+     *
+     * 重绘门槛用**整个窗口**而不是最新一格：波形是滚动的时间轴，最右格恰好是一个安静
+     * 缓冲时，左边还有大半个屏幕的内容在移动 —— 只看最右格会让画面停止重绘（v3.6.3 修）。
+     * 全窗口都静音时返回 false，帧就真的停下来（v1.8.1 的「不空转」契约）。
+     */
+    private fun windowHasSignal(): Boolean {
+        for (i in 0 until barCount) {
+            if (targets[i] > ANIMATION_MIN_SIGNAL) return true
+        }
+        if (lowTargets.any { it > ANIMATION_MIN_SIGNAL }) return true
+        if (midTargets.any { it > ANIMATION_MIN_SIGNAL }) return true
+        return highTargets.any { it > ANIMATION_MIN_SIGNAL }
+    }
 
-    /** v3.3.2：本批消费到的柱间隔（毫秒）；0 = 这批柱没有可用的到达时间戳。 */
-    private var pendingGapMs: Float = 0f
-
-    private fun consumePendingCount(): Int {
-        pendingConsumed = 0
-        pendingGapMs = 0f
+    /**
+     * v3.6.3：消费**恰好一根**柱 —— 画面每跨过一个格周期调用一次。
+     *
+     * 旧实现 [consumePending] 会把这一帧里所有新到的柱一次搬进窗口：一批 N 根 ⇒ 窗口
+     * 平移 N 格，相位只按最后一根算 ⇒ 画面一次冲 N 格、接着等下一批。现在由调用方按
+     * 时间节拍一根一根取，批与批之间的抖动被**摊平**成匀速滚动。
+     *
+     * @return 是否真的消费了一根（false = 环里没有可消费的柱）。
+     */
+    private fun consumeOne(): Boolean {
         val snapshot = writeIndex
         var pending = snapshot - readIndex
-        if (pending <= 0) return 0
+        if (pending <= 0) return false
         if (pending > capacity) {
             // 溢出：丢掉最旧的，绝不阻塞写者。
             readIndex = snapshot - capacity
-            pending = capacity
         }
-        var changed = false
-        repeat(pending) {
-            // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
-            // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
-            val slot = readIndex % capacity
-            if (shiftIn(ring[slot])) changed = true
-            // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
-            // 它要的是"当下这一刻"的低频能量，不是历史窗口。
-            val low = lowRing[slot]
-            val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
-            bassTarget = lowValue
-            val mid = midRing[slot]
-            val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
-            val high = highRing[slot]
-            val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
-            // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
-            // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
-            // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
-            if (shiftBandIn(lowTargets, lowBars, lowPeaks, lowPeakVel, lowPeakRest, lowValue)) {
-                changed = true
-            }
-            if (shiftBandIn(midTargets, midBars, midPeaks, midPeakVel, midPeakRest, midValue)) {
-                changed = true
-            }
-            if (shiftBandIn(highTargets, highBars, highPeaks, highPeakVel, highPeakRest, highValue)) {
-                changed = true
-            }
-            // v3.3.2：这一根柱自己的柱间隔（= 它与前一根柱之间实际过了多久）。
-            // 成为相位斜坡的**分母**，与分子 `sinceBarMs` 同源。
-            val gap = arriveGapMs[slot]
-            if (gap > 0f) pendingGapMs = gap
-            // v3.4.7：记住**这一根**（本批最后一根）的到达时刻 —— 相位就锚在它上面
-            // （`sinceBarMs = nowMs − 本值`）。只认**被消费的这一槽**自己的时间戳，
-            // 不碰任何"最新推送"的 volatile 值：那可能是还没被消费的下一根柱。
-            if (arriveStampMs[slot] > 0L) lastConsumedArrivalMs = arriveStampMs[slot]
-            readIndex += 1
-            // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
-            // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
-            shiftedCells += 1
-        }
-        pendingConsumed = pending
-        return pending
+        // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
+        // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
+        val slot = readIndex % capacity
+        shiftIn(ring[slot])
+        // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
+        // 它要的是"当下这一刻"的低频能量，不是历史窗口。
+        val low = lowRing[slot]
+        val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
+        bassTarget = lowValue
+        val mid = midRing[slot]
+        val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
+        val high = highRing[slot]
+        val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
+        // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
+        // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
+        // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
+        shiftBandIn(lowTargets, lowBars, lowPeaks, lowPeakVel, lowPeakRest, lowValue)
+        shiftBandIn(midTargets, midBars, midPeaks, midPeakVel, midPeakRest, midValue)
+        shiftBandIn(highTargets, highBars, highPeaks, highPeakVel, highPeakRest, highValue)
+        readIndex += 1
+        // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
+        // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
+        shiftedCells += 1
+        return true
     }
 
     /**
@@ -843,14 +1004,13 @@ class WaveformRing(
     }
 
     /**
-     * 相位斜坡的**分母**（毫秒）：优先用「最新一根柱自己的间隔」（到达处实测），
-     * 拿不到时回落 [barIntervalMs]（旧口径），再拿不到用 [DEFAULT_BAR_INTERVAL_MS]。
+     * 相位斜坡的**分母**（毫秒）：一根柱代表多久。
      *
-     * 三级回落的理由：`latestArriveGapMs` 只在调用方给了到达时间戳时才有值；
-     * 老调用点（单测 / 没有时钟的宿主）走 `arrivalAtMs = 0`，此时退回旧口径仍然可用。
+     * v3.6.3：只认 [barIntervalMs]（在 [consumeOne] 里按「每根柱」平滑过的到达间隔）。
+     * 旧实现优先用「最新一根柱的间隔」—— 成批到达时那是一次回调的间隔（例如 300ms），
+     * 会让画面按 3 倍慢速爬、然后撞顶棚。现在不再有「最新一根」这个概念。
      */
     private fun phaseIntervalMs(): Float = when {
-        latestArriveGapMs.isFinite() && latestArriveGapMs > 1f -> latestArriveGapMs
         barIntervalMs.isFinite() && barIntervalMs > 1f -> barIntervalMs
         else -> DEFAULT_BAR_INTERVAL_MS
     }
@@ -955,8 +1115,9 @@ class WaveformRing(
     fun newestTarget(): Float = targets[barCount - 1]
 
     /**
-     * v3.2.3：两条柱之间的推进相位（0..1）。渲染层用它把历史窗口**连续左移**一格，
-     * 而不是每 100ms 跳一格。**不产生新数据**：插的是相邻两格之间的位置。
+     * v3.2.3 / v3.6.3：画面时间在一格内的进度（0..1）。渲染层用它把历史窗口**连续左移**
+     * 一格（v3.4.1 起是几何平移，不是对取值插值），而不是每 100ms 跳一格。
+     * **不产生新数据**：移的是位置，不是未来那一格的值。
      */
     fun scrollPhase01(): Float {
         val p = sinceBarMs / phaseIntervalMs()
@@ -1102,6 +1263,41 @@ class WaveformRing(
         /** 柱间隔样本的合法区间：超出就丢弃（卡顿 / 暂停恢复不该污染滑动平均）。 */
         const val MIN_BAR_INTERVAL_MS = 20f
         const val MAX_BAR_INTERVAL_MS = 500f
+
+        /**
+         * v3.6.3：同一批柱的判定窗口（毫秒）。
+         *
+         * 音频链路会把多根柱放进同一次回调，时间戳通常**完全相同**；少数实现会差 1~2ms。
+         * 10ms 足够把这些算作一批，又远小于真实柱间隔（最小 20ms），不会把两根正常的柱
+         * 误并成一批（那会把间隔读成一半，画面变成 2 倍速）。
+         */
+        const val BATCH_WINDOW_MS = 10L
+
+        /**
+         * v3.6.3：参与「每根柱间隔」平均的批次数。
+         *
+         * 8 批在 100ms/根的流上是 0.8s 的窗口：既能抹掉单次回调的抖动，又能在换编码器 /
+         * seek 之后 1 秒内跟上新节奏。**不按根数**取窗口 —— 每批几根是运行时才知道的。
+         */
+        const val GAP_BATCHES = 8
+
+        /**
+         * v3.6.3：单帧允许推进的**画面时间**上限（毫秒）。
+         *
+         * 长卡顿（后台切回 / GC / 首帧）后的 `dt` 可能有几百毫秒。把它整段算进滚动会让画面
+         * 一次跨好几格（再被一格上限截断），看起来就是「猛跳一下」。截到 200ms 等于
+         * 「卡顿期间画面慢一点」，与 `dtMs` 一贯的 200ms 上限一致。
+         */
+        const val MAX_FRAME_DELTA_MS = 200L
+
+        /**
+         * v3.6.3：超过这么久没有推进过帧，就认为 UI 刚经历了一次长卡顿 / 后台 / 重新挂载，
+         * 下一帧直接用环里最新的一屏**重建**窗口，而不是把积压的柱一格一格慢慢播。
+         *
+         * 250ms ≈ 15 帧：正常 vsync 抖动远低于它；超过它时用户已经能看到画面停住了，
+         * 此时「追上现在」比「保住中间那几格连续」更重要。
+         */
+        const val RESYNC_AFTER_MS = 250L
 
         /**
          * v3.3.2：把「距上一根柱过了多久」**折回**到一格之内（纯函数，JVM 单测直测）。

@@ -61,8 +61,10 @@ class WaveformPhaseWiringProbeTest {
         }
 
         // 帧那一侧：喂一个**远大于真实柱间隔**的 dt（200ms）。
-        //  · 锚点生效 ⇒ 相位 =（这一帧的时间戳 − 最后一根柱的到达时刻）÷ 柱间隔 ≈ 30/80；
-        //  · 累加口径 ⇒ 相位被这 200ms 直接顶到 1.0。
+        // v3.6.3 的模型：第一帧用环里的历史填窗口、画面时间从 0 起（phase = 0）；
+        // 第二帧只认 nowMs 之差（≈30ms），不认调用方给的 dt=200ms。
+        //  · nowMs 生效 ⇒ 第二帧 phase ≈ 30/柱间隔；
+        //  · 若退回「按 dt 累加」⇒ 被这 200ms 直接顶到 1.0。
         val now = SystemClock.uptimeMillis()
         MotionClock.frame(
             active = true,
@@ -93,5 +95,9 @@ class WaveformPhaseWiringProbeTest {
         val phase2 = WaveformStore.scrollPhase01()
         emit("WIRING 第二帧: elapsed=%dms dt=200ms phase=%.4f".format(now2 - arrivals.last(), phase2))
         assertTrue("相位必须随真实时间前进：%.4f -> %.4f".format(phase, phase2), phase2 > phase)
+        assertTrue(
+            "第二帧相位 %.4f —— 它该由 nowMs 之差（≈30ms）决定，而不是被 dt=200ms 顶到 1.0".format(phase2),
+            phase2 < 0.6f,
+        )
     }
 }
