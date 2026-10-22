@@ -95,9 +95,9 @@ class CelebrationRulesTest {
             assertTrue(s.remaining(3).contains("3"));assertFalse(s.micCalibrating.isBlank())
         }
     }
-    @Test fun registryHasExactlyTheFiveNewKeysAndFourVisibleControls() {
+    @Test fun registryHasExactlyTheSixBirthdayKeysAndFourVisibleControls() {
         val keys=SettingsRegistry.allEntries().filter {it.isNewInV360}.map {it.key}.toSet()
-        assertEquals(setOf("birthday_month","birthday_day","birthday_shown_years","birthday_celebration_enabled","easter_egg_animation_enabled"),keys)
+        assertEquals(setOf("birthday_month","birthday_day","birthday_shown_years","birthday_opened_years","birthday_celebration_enabled","easter_egg_animation_enabled"),keys)
         val rows=SettingsRegistry.allEntries().filter {SettingsRenderPlan.rowKindOf(it)==SettingsRowKind.CELEBRATION}
         assertEquals(setOf("action.birthday_date","action.birthday_preview","birthday_celebration_enabled","easter_egg_animation_enabled"),rows.map {it.id}.toSet())
     }

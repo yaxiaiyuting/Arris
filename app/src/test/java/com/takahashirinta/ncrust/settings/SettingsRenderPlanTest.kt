@@ -108,15 +108,15 @@ class SettingsRenderPlanTest {
         // v3.4.11 / 981e9b3：75 → 76（非会员遇到 VIP 歌曲，可见项）。
         // v3.4.13：再 +1（update_auto_check）⇒ 77；同轮注册 SessionMonitor 的
         // session_was_logged_in（内部项）⇒ 78。
-        assertEquals(85, SettingsRegistry.allEntries().size)
+        assertEquals(86, SettingsRegistry.allEntries().size)
         // 内部项 26 → 27（新增 session_was_logged_in；v3.0.0 的 5 个动效键与
         // v3.1.0 的 B 站开关**都是可见开关**）。
-        assertEquals(30, SettingsRegistry.allEntries().count { it.isInternal })
+        assertEquals(31, SettingsRegistry.allEntries().count { it.isInternal })
         assertEquals(4, SettingsRenderPlan.HOSTED_ELSEWHERE.size)
         assertEquals(
             "内部项 + 库页承载 + 二级页渲染必须等于全部条目（不丢项）",
             SettingsRegistry.allEntries().size,
-            30 + 4 + counts.values.sum(),
+            31 + 4 + counts.values.sum(),
         )
     }
 
