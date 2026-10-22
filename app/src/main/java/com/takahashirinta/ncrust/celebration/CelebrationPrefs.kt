@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
-data class CelebrationOptions(val month: Int, val day: Int, val enabled: Boolean, val animated: Boolean, val shown: Set<String>)
+data class CelebrationOptions(val month: Int, val day: Int, val enabled: Boolean, val animated: Boolean, val shown: Set<String>, val openedOnBirthday: Set<String> = emptySet())
 
 object CelebrationPrefs {
     const val MONTH = "birthday_month"
@@ -17,6 +17,7 @@ object CelebrationPrefs {
     const val ENABLED = "birthday_celebration_enabled"
     const val ANIMATED = "easter_egg_animation_enabled"
     const val SHOWN = "birthday_shown_years"
+    const val OPENED = "birthday_opened_years"
     fun prefs(context: Context): SharedPreferences = context.getSharedPreferences("ncrust_settings", Context.MODE_PRIVATE)
     fun read(context: Context): CelebrationOptions {
         val p = prefs(context)
@@ -24,7 +25,8 @@ object CelebrationPrefs {
         fun bool(key: String, fallback: Boolean) = runCatching { p.getBoolean(key, fallback) }.getOrDefault(fallback)
         val month = int(MONTH); val day = int(DAY)
         return CelebrationOptions(month, day, bool(ENABLED, false) && BirthdayRule.valid(month, day), bool(ANIMATED, true),
-            runCatching { p.getStringSet(SHOWN, emptySet())!!.toSet() }.getOrDefault(emptySet()))
+            runCatching { p.getStringSet(SHOWN, emptySet())!!.toSet() }.getOrDefault(emptySet()),
+            runCatching { p.getStringSet(OPENED, emptySet())!!.toSet() }.getOrDefault(emptySet()))
     }
     fun setDate(context: Context, month: Int, day: Int) {
         require(BirthdayRule.valid(month, day))
@@ -33,6 +35,16 @@ object CelebrationPrefs {
     fun clearDate(context: Context) { prefs(context).edit().remove(MONTH).remove(DAY).putBoolean(ENABLED, false).apply() }
     fun setEnabled(context: Context, enabled: Boolean) { prefs(context).edit().putBoolean(ENABLED, enabled).apply() }
     fun setAnimated(context: Context, enabled: Boolean) { prefs(context).edit().putBoolean(ANIMATED, enabled).apply() }
+    fun noteAppOpened(context: Context) {
+        val options = read(context)
+        if (!options.enabled) return
+        val now = java.util.Calendar.getInstance()
+        val year = now.get(java.util.Calendar.YEAR)
+        if (!BirthdayRule.matches(options.month, options.day, year, now.get(java.util.Calendar.MONTH) + 1, now.get(java.util.Calendar.DAY_OF_MONTH))) return
+        if (year.toString() in options.openedOnBirthday) return
+        val opened = options.openedOnBirthday + year.toString()
+        prefs(context).edit().putStringSet(OPENED, opened.sortedBy { it.toIntOrNull() ?: 0 }.takeLast(32).toSet()).apply()
+    }
     fun markShown(context: Context, year: Int) {
         val shown = read(context).shown + year.toString()
         prefs(context).edit().putStringSet(SHOWN, shown.sortedBy { it.toIntOrNull() ?: 0 }.takeLast(32).toSet()).apply()

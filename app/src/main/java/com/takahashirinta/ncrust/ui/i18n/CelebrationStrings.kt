@@ -11,7 +11,9 @@ data class CelebrationStrings(
     val eggTitle: String, val eggCaption: String, val openEgg: String, val taps: String,
     val titles: List<String>, val captions: List<String>, val wishes: List<String>,
     val micCalibrating: String,
+    val lateTitle: String, val lateMessage: String, val lateContinue: String,
 ) {
+    fun lateMessage(days: Int) = lateMessage.replace("%d", days.toString())
     fun remaining(count: Int) = taps.replace("%d", count.toString())
 }
 
@@ -69,7 +71,17 @@ fun celebrationFor(code: String): CelebrationStrings {
             wishes = "May your favourite songs stay close.|May there always be something to look forward to.|A new year, shining at your own pace."
         }
     }
+    val late = when (code) {
+        "zh-CN" -> listOf("迟来的生日祝福", "你的生日已经过去 %d 天了。\n请收下这份迟来的祝福。", "收下祝福")
+        "zh-TW" -> listOf("遲來的生日祝福", "你的生日已經過去 %d 天了。\n請收下這份遲來的祝福。", "收下祝福")
+        "ja-JP" -> listOf("遅れて届いた誕生日のお祝い", "お誕生日から%d日が過ぎました。\n少し遅くなりましたが、お祝いさせてください。", "お祝いを受け取る")
+        "ja-MY" -> listOf("遲來之賀", "壽辰已過%d日，薄祝雖遲，願君笑納。", "笑納此賀")
+        "ko-KP" -> listOf("늦게 전하는 생일 축하", "생일이 지난 지 %d일이 되었습니다.\n조금 늦었지만 이 축하를 받아 주세요.", "축하 받기")
+        "de-DE" -> listOf("Ein verspäteter Geburtstagsgruß", "Dein Geburtstag liegt %d Tage zurück.\nNimm diese verspäteten Glückwünsche entgegen.", "Glückwünsche ansehen")
+        "ru-RU" -> listOf("Поздравление с опозданием", "Со дня рождения прошло %d дн.\nПрими это немного запоздалое поздравление.", "Принять поздравление")
+        else -> listOf("A belated birthday wish", "Your birthday was %d days ago.\nPlease accept this little belated celebration.", "Accept your wishes")
+    }
     val l = labels.split('|')
     val calibration=when(code) {"zh-CN"->"请先安静片刻，正在准备麦克风…";"zh-TW"->"請先安靜片刻，正在準備麥克風…";"ja-JP"->"少し静かにお待ちください…";"ja-MY"->"暫 靜 待…";"ko-KP"->"잠시 조용히 기다려 주세요…";"de-DE"->"Einen Moment bitte still sein…";"ru-RU"->"Немного тишины, готовим микрофон…";else->"A quiet moment — preparing the microphone…"}
-    return CelebrationStrings(l[0],l[1],l[2],l[3],l[4],l[5],l[6],l[7],l[8],l[9],l[10],l[11],l[12],l[13],l[14],l[15],l[16],l[17],l[18],l[19],l[20],l[21],l[22],l[23],l[24],l[25],l[26],titles.split('|'),captions.split('|'),wishes.split('|'),calibration)
+    return CelebrationStrings(l[0],l[1],l[2],l[3],l[4],l[5],l[6],l[7],l[8],l[9],l[10],l[11],l[12],l[13],l[14],l[15],l[16],l[17],l[18],l[19],l[20],l[21],l[22],l[23],l[24],l[25],l[26],titles.split('|'),captions.split('|'),wishes.split('|'),calibration,late[0],late[1],late[2])
 }
