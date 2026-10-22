@@ -22,11 +22,15 @@ internal class BirthdayWebView(context: Context, private val config: JSONObject)
         @JavascriptInterface
         fun event(value: String) {
             if (value !in setOf("READY", "PLAYING", "WAITING", "DONE", "ERROR")) return
-            post { if (!disposed) onEvent(value) }
+            post { if (!disposed) {
+                if (value == "READY") configurePage()
+                onEvent(value)
+            } }
         }
     }
 
     init {
+        if (com.takahashirinta.ncrust.BuildConfig.DEBUG) setWebContentsDebuggingEnabled(true)
         setBackgroundColor(Color.rgb(8, 22, 15))
         settings.apply {
             javaScriptEnabled = true
@@ -61,7 +65,7 @@ internal class BirthdayWebView(context: Context, private val config: JSONObject)
 
             override fun onPageFinished(view: WebView, url: String) {
                 if (!disposed && url.startsWith("https://arris-celebration.invalid/birthday/index.html")) {
-                    evaluateJavascript("window.ArrisBirthday && window.ArrisBirthday.configure($config)", null)
+                    configurePage()
                 }
             }
 
@@ -71,6 +75,10 @@ internal class BirthdayWebView(context: Context, private val config: JSONObject)
             }
         }
         loadUrl("https://arris-celebration.invalid/birthday/index.html?app=1&still=1&t=0&clean=1&motion=1")
+    }
+
+    private fun configurePage() {
+        evaluateJavascript("window.ArrisBirthday && window.ArrisBirthday.configure($config)", null)
     }
 
     private fun denied() = WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", emptyMap(), ByteArrayInputStream(byteArrayOf()))

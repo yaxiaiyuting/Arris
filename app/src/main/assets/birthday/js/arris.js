@@ -66,7 +66,7 @@
   }
   window.ArrisBirthday = {
     configure: function (config) {
-      if (configured || disposed) return;
+      if (configured || disposed || !b || !b.ready) return;
       configured = true;
       const lines = document.querySelectorAll('#blessing .line span');
       [config.title].concat(config.wishes || []).forEach(function (text, i) {
@@ -92,7 +92,10 @@
   };
   window.addEventListener('error', function () { emit('ERROR'); });
   window.addEventListener('unhandledrejection', function () { emit('ERROR'); });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stop();
+    else if (configured && !waiting && !disposed && b.time() < b.dur) b.play();
+  });
   if (window.BDAY && window.BDAY.ready) boot();
   else window.addEventListener('bday-ready', boot, { once: true });
 })();
