@@ -879,6 +879,10 @@
   const FILTER_CACHE = {};
   const SHADE_ELS = {};
   function setBrightness(id, key, v, contrast) {
+    /* 逐帧给元素换 CSS filter:brightness() 会让它每帧重新栅格化 —— 在 GPU 合成下
+       就是"亮度抖动/闪烁"，这是闪烁的主因。这里改为完全不写：明暗全部交给 #lx-* 光晕叠层。 */
+    return;
+    /* eslint-disable no-unreachable */
     let el = SHADE_ELS[key];
     if (el === undefined) el = SHADE_ELS[key] = document.getElementById(id) || null;
     if (!el) return;

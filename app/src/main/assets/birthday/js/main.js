@@ -21,13 +21,11 @@
   const STILL = param.has('still') || param.has('t');
   const CLEAN = param.has('clean');
   const FORCE_MOTION = param.has('motion');
-  // v3.6.4：WebView 的 tile memory 有硬预算。应用内不再把 9 个整幅 SVG 图层逐帧
-  // 改 transform（那会把每层都提成 1080×1856 的合成层，Chromium 直接报
-  // “tile memory limits exceeded”，画面成块消失再补上）。静态舞台 + Tux/蛋糕
-  // 自身的 GSAP 动画保留；浏览器预览仍走完整相机/视差。
   const APP = param.has('app');
   // 调试开关：定位性能/图层问题（不影响正常打开）
   const NO_VFX = param.has('novfx');
+  /* 质量档：默认 high（全效果）；?q=low 直接进轻量档（关合成叠加/前景粒子/30Hz 视差） */
+  const QUALITY = param.get('q') || 'high';
   const NO_LIGHT = param.has('nolight');
   const REDUCED = !FORCE_MOTION &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -130,35 +128,27 @@
   ];
   const layerList = Object.keys(layers).map((k, i) => Object.assign({ name: k }, layers[k], driftCfg[i % driftCfg.length]));
 
-  function applyCamera(t) {
-    const c = rig.at(t);
-    cam.x = c.x; cam.y = c.y; cam.z = c.z;
-    // v3.6.4：应用内舞台保持静态（见文件头注释），只保留角色/道具自身的动画。
-    if (APP) return;
-    const handheldX = Math.sin(t * 0.29) * 1.5 + Math.sin(t * 0.163 + 1.7) * 1.1;
-    const handheldY = Math.cos(t * 0.241 + 0.6) * 1.3 + Math.sin(t * 0.107 + 2.4) * 0.9;
-
+  /* ── 固定机位 ───────────────────────────────────────────────
+     这一版把镜头推拉与多层视差关掉了。原因不是"不好看"，是物理限制：
+     SVG 元素没有独立的合成层，transform 一变就整层重栅格化；
+     1px 的竖梃/拱线在亚像素上反复重采样，整片背景就会闪。
+     想同时要"视差"和"不闪"，必须把 9 层拆成 9 个独立 <svg>（各自成层），
+     那是下一轮的结构改动。这一版优先保证"能用"。
+     景深仍在：每层按 depth 做固定的缩放差，只是不再随时间移动。 */
+  const FIXED_CAM = { x: 0, y: 0, z: 0.030 };
+  function applyCamera() {
     for (let i = 0; i < layerList.length; i++) {
       const L = layerList[i];
       const d = L.depth;
-      const ph = i * 1.37;
-      const dx = Math.sin(t * L.f1 + ph) * L.a + Math.cos(t * L.f2 * 1.618 + ph * 2.1) * L.a * 0.45;
-      const dy = Math.cos(t * L.f2 + ph * 0.7) * L.a * 0.55 + Math.sin(t * L.f1 * 1.414 + ph) * L.a * 0.3;
-      const sc = (1 + c.z) * (1 + c.z * d * 0.34);
-      /* 用 CSS transform 而不是 SVG transform 属性：
-         属性写法会让浏览器每帧重新栅格化整块 SVG（软件光栅下 60fps → 4fps）；
-         CSS transform 可以把每一层提到独立合成层，只做位移/缩放合成。 */
-      /* 量化 + 变化才写：视差每帧只动几十分之一像素时就跳过，
-         避免为了不可见的位移去失效整块图层（这是低帧率的主要来源）。 */
-      const tx = Math.round((-c.x * d + dx + handheldX * 0.6) * 4) / 4;
-      const ty = Math.round((-c.y * d + dy + handheldY * 0.6) * 4) / 4;
-      const qs = Math.round(sc * 3000) / 3000;
-      if (L._tx !== tx || L._ty !== ty || L._sc !== qs) {
-        L._tx = tx; L._ty = ty; L._sc = qs;
-        L.el.style.transformOrigin = '800px 450px';
-        L.el.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${qs})`;
-      }
+      const sc = Math.round((1 + FIXED_CAM.z) * (1 + FIXED_CAM.z * d * 0.34) * 3000) / 3000;
+      const key = sc + '|' + d;
+      if (L._key === key) continue;
+      L._key = key;
+      L.el.style.transformOrigin = '0 0';
+      L.el.style.transform =
+        `translate(800px, 450px) scale(${sc}) translate(-800px, -450px)`;
     }
+    cam.x = FIXED_CAM.x; cam.y = FIXED_CAM.y; cam.z = FIXED_CAM.z;
   }
 
   /* ── 资产注入 ── */
@@ -269,7 +259,7 @@
      （页面在无头/软件光栅下测得的帧率不代表真机，所以只在播放态、连续 2s 低于阈值时触发。） */
   let liteChecked = false;
   function watchFps() {
-    if (liteChecked || param.has('app')) return;
+    if (liteChecked) return;
     liteChecked = true;
     let frames = 0; const t0 = performance.now();
     const tick = () => {
@@ -277,7 +267,9 @@
       const dt = performance.now() - t0;
       if (dt < 2000) return requestAnimationFrame(tick);
       const fps = frames / (dt / 1000);
-      if (fps < 20 && !REDUCED) { stage.classList.add('lite'); console.warn('BDAY lite mode', fps.toFixed(1) + 'fps'); }
+      /* 不再自动切档：切档是一次"整层消失"的跳变，会被看成闪烁。
+         低配机器请手动用 ?q=low（README 里写了）。 */
+      void fps;
     };
     requestAnimationFrame(tick);
   }
@@ -397,7 +389,7 @@
   /* ── Canvas DPR ── */
   function fitCanvas() {
     /* 特效用 1× 背板（与成片一致）。降分辨率对帧率没有实测收益，只会让烟火变糊。 */
-    const ratio = param.has('app') ? Math.max(.25, Math.min(1.25, innerWidth * (devicePixelRatio || 1) / 1600)) : Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    const ratio = APP ? Math.max(.25, Math.min(1.25, innerWidth * (devicePixelRatio || 1) / 1600)) : Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     [canvasBack, canvasFront].forEach((c) => {
       if (!c) return;
       const w = Math.round(1600 * ratio), h = Math.round(900 * ratio);
@@ -442,6 +434,7 @@
 
     if (CLEAN) stage.classList.add('clean');
     if (param.has('grain')) stage.classList.add('with-grain');
+    if (QUALITY === 'low') { stage.classList.add('lite'); liteChecked = true; }
     if (REDUCED) {
       BDAY.seek(CUES.dur - 0.35);
       status(false);

@@ -367,20 +367,16 @@
        全部由时间线驱动（不动 CSS、不碰 main.js 的图层 transform）
        ══════════════════════════════════════════════════ */
     (function opening() {
-      // ① 中景雾：±3px，14s 主周期 + 9.3s 副周期（不可公约），一帧都不同
+      /* ① 中景"雾漂移"已移除。
+         原因：它每帧给 #e-mid（整层温室结构）写一次 subpixel 的 transform，
+         1px 竖梃/拱线在亚像素上反复重采样 → 背景整片闪烁。
+         景深感由 #layer-mid 的相机视差 + 极光形变 + 萤火提供，不需要这一层。 */
       const mid = document.getElementById('e-mid');
       if (mid) {
-        const base = mid.getAttribute('transform') || '';
         const fog = { _p: 0 };
         Object.defineProperty(fog, 'p', {
           get() { return this._p; },
-          set(v) {
-            this._p = v;
-            const t = v * (C.dur || 48);
-            const dy = 3.0 * Math.sin(TAU * t / 14) + 1.6 * Math.sin(TAU * t / 9.3 + 1.1);
-            const dx = 1.4 * Math.sin(TAU * t / 19 + 0.4);
-            mid.setAttribute('transform', 'translate(' + dx.toFixed(2) + ' ' + dy.toFixed(2) + ') ' + base);
-          }
+          set(v) { this._p = v; }        // 只推进时间，不再写 DOM
         });
         tl.fromTo(fog, { p: 0 }, { p: 1, duration: (C.dur || 48), ease: 'none', immediateRender: false }, 0);
         tl.set(fog, { p: 0 }, 0);
@@ -407,9 +403,11 @@
       // ③ 星空二次闪烁：5.20 一次亮起（filter 亮度，不抢 lighting 的 opacity）
       const stars = document.getElementById('e-sky-stars');
       if (stars) {
-        S(stars, 0, { filter: 'brightness(1)' });
-        F(stars, 5.20, { filter: 'brightness(1)' }, { filter: 'brightness(1.45)' }, 0.18, E.power2Out);
-        T(stars, 5.40, { filter: 'brightness(1.08)' }, 1.6, E.drift);
+        /* 星空二次闪烁：原来用 CSS filter:brightness()，那是整组重栅格化 —— 会闪。
+           改成 opacity 脉冲（合成层，只改透明度）。 */
+        S(stars, 0, { opacity: 1 });
+        F(stars, 5.20, { opacity: 1 }, { opacity: 1.35 }, 0.18, E.power2Out);
+        T(stars, 5.40, { opacity: 1.08 }, 1.6, E.drift);
       }
     })();
 

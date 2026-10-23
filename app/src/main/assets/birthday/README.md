@@ -1,5 +1,20 @@
 # 生日快乐 · A Birthday in the Night Green
 
+## Arris 接入版（2026-10-23）
+
+已合入本地 birthday-motion 当晚修订的 cues / motion / lighting / main / base。
+新版为固定机位：保留按景深设置的静态缩放、角色表演、烛光、黑场、七发烟花和祝福，
+去掉动态推拉、环境细线的逐帧位移、逐帧 brightness 滤镜与运行中自动切档。
+下文的旧版多层动态视差说明属于制作历史，不代表当前运行效果。
+
+原成片为 1600×900、60fps、48 秒。应用使用同套离线 HTML 源码，继续在 26.2 秒
+等待原生吹气或点按，不把视频直接自动播完。保留 Arris 的竖屏前景重排、等比烟花、
+本地化文案、祝福下方结束按钮、首帧淡入、合成层与画布分辨率限制、resize 只重绘不重放。
+没有新增网络请求或麦克风访问入口。横屏保留新版固定机位构图。
+
+可复跑检查：`tools/celebration/verify-layout.cjs`（八种尺寸、结束按钮）与
+`tools/celebration/verify-motion.cjs`（九个时刻、静态相机、SVG 滤镜、吹气门控）。
+
 一支约 48 秒的生日动画短片，纯 HTML / SVG / CSS / JavaScript + GSAP 3.13，离线可跑。
 叙事：夜森林温室苏醒 → Tux 端来蛋糕 → 放下 → 逐支点灯 → 许愿 → 吹灭 → 黑场 → 七发升空烟花 → 祝福浮现 → 余韵。
 
