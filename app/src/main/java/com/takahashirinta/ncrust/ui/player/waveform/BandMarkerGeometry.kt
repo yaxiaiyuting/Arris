@@ -42,6 +42,27 @@ import kotlin.math.max
 object BandMarkerGeometry {
 
     /**
+     * v3.6.9：峰值标记（小球 / 短横）的**采样起点**。
+     *
+     * 三泳道为了密度用 `markerStride = 2`（隔一格画一个）。旧实现的起点固定为 0，
+     * 而窗口每滚动一格，同一格数据就会从偶数下标变成奇数下标 —— 它的小球/短横
+     * 会**灭掉**，邻居的又亮起来。滚动慢时每 100ms 灭一次，肉眼就是「小球闪现」；
+     * 滚动快时变化太快，反而不容易察觉（用户实测：滚得快正常、滚得慢闪）。
+     *
+     * 修法：起点跟着窗口平移数走，`start = shiftedCells % stride`。设数据格在窗口里的
+     * 下标为 i，平移 S 格后同一数据格的下标是 i-1；取 `start = S % stride` 后
+     * 采样到的数据格奇偶性保持不变，小球因此**跟着同一格数据走**，不再被重新采样。
+     *
+     * @param shiftedCells 窗口累计平移格数（[WaveformRing.shiftedCellsForTest]）
+     * @param stride 采样步长（1 = 每格都画，起点恒 0）
+     */
+    fun markerStart(shiftedCells: Long, stride: Int): Int {
+        if (stride <= 1) return 0
+        val m = shiftedCells % stride
+        return ((m + stride) % stride).toInt()
+    }
+
+    /**
      * 短横相对**小球**要额外抬高的量（像素）。
      *
      * 取 **`2·dotRadius + cap`**。推导（屏幕坐标，y 向下，越小越高）：

@@ -452,6 +452,9 @@ object WaveformStore {
      */
     fun scrollPhase01(): Float = ring.scrollPhase01()
 
+    /** v3.6.9：窗口累计平移格数（峰值标记采样起点的唯一来源）。 */
+    fun shiftedCells(): Long = ring.shiftedCellsForTest()
+
     /**
      * v3.2.2：曲线绘制**丢帧计数**（只增不减，UI 线程单写者）。
      *
@@ -912,6 +915,9 @@ fun AudioVisualizerBars(
                     xShift = xShiftPx, step = step, firstX = 0f, heightPx = heightPx,
                     minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                     breath = breath, dashHeights = dash, markerStride = LANE_MARKER_STRIDE,
+                    markerStart = BandMarkerGeometry.markerStart(
+                        WaveformStore.shiftedCells(), LANE_MARKER_STRIDE,
+                    ),
                 )
                 // 渐变流动（精致档）：**叠一层**同路径的移动 alpha 波，而不是把色带推到泳道上 ——
                 // 泳道色带按横轴固定在"低/中/高"三段上，推着走会与那个空间语义打架。
@@ -1175,6 +1181,8 @@ private fun DrawScope.drawWaveformCurve(
     dashHeights: FloatArray = FloatArray(0),
     /** v3.2.2：光点 / 峰值标记的采样步长（三频带模式用 2，单带模式用 1）。 */
     markerStride: Int = 1,
+    /** v3.6.9：采样起点（`shiftedCells % stride`）—— 让同一格数据的标记不被重新采样。 */
+    markerStart: Int = 0,
 ) {
     val n = minOf(count, heights.size, tangents.size)
     if (n < 2 || step <= 0f || heightPx <= 0f) return
@@ -1211,7 +1219,7 @@ private fun DrawScope.drawWaveformCurve(
     val peakVisibleDelta = peakCapPx / 2f
     val stride = if (markerStride < 1) 1 else markerStride
     val markerWidth = (step * 0.6f * stride).coerceAtLeast(1f)
-    var i = 0
+    var i = if (markerStart in 0 until stride) markerStart else 0
     while (i < n) {
         val x = firstX + i * step + xShift
         // v3.4.5：传进来的 `peaks[]` 已经是**像素半高**（与 `heights[]` 同一量纲），

@@ -218,4 +218,43 @@ class BandMarkerGeometryTest {
             1e-4f,
         )
     }
+    /**
+     * v3.6.9：峰值标记采样起点必须跟着窗口平移走。
+     *
+     * 旧实现固定从 0 开始、步长 2；窗口每平移一格，同一格数据就从偶数下标变成
+     * 奇数下标，标记被重新采样（灭掉/亮起）。滚动慢时每 100ms 一次，肉眼就是闪现。
+     * 判据：`start = S % stride` 时，同一数据格的采样奇偶性保持不变。
+     */
+    @Test
+    fun `标记采样起点跟随窗口平移`() {
+        assertEquals(0, BandMarkerGeometry.markerStart(0, 2))
+        assertEquals(1, BandMarkerGeometry.markerStart(1, 2))
+        assertEquals(0, BandMarkerGeometry.markerStart(2, 2))
+        assertEquals(1, BandMarkerGeometry.markerStart(3, 2))
+        assertEquals(2, BandMarkerGeometry.markerStart(2, 3))
+        assertEquals(0, BandMarkerGeometry.markerStart(3, 3))
+        assertEquals(0, BandMarkerGeometry.markerStart(12345, 1))
+    }
+
+    /**
+     * 核心不变量：对任意平移量 S，数据格 (S + i) 在窗口下标 i 上被采样，
+     * 当且仅当它的数据下标是 stride 的倍数 —— 与 S 无关。
+     */
+    @Test
+    fun `同一数据格跨平移保持采样状态`() {
+        val stride = 2
+        for (s in 0L..20L) {
+            val start = BandMarkerGeometry.markerStart(s, stride)
+            for (i in 0 until 8) {
+                val sampled = i >= start && (i - start) % stride == 0
+                val dataIndex = s + i
+                assertEquals(
+                    "S=$s i=$i data=$dataIndex 采样状态必须只由数据下标决定",
+                    dataIndex % stride == 0L,
+                    sampled,
+                )
+            }
+        }
+    }
+
 }
