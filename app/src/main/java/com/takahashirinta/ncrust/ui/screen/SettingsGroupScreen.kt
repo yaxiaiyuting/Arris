@@ -61,6 +61,8 @@ import com.takahashirinta.ncrust.ui.i18n.formatCacheBytes
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.languagePresets
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
+import com.takahashirinta.ncrust.ui.player.WaveformStore
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefs
 import com.takahashirinta.ncrust.ui.settings.PREFS_SETTINGS
 import com.takahashirinta.ncrust.ui.settings.SettingsEntry
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
@@ -281,6 +283,7 @@ private fun SettingsPreferenceGroupPage(
         mutableIntStateOf(MotionPrefs.readTier(prefs, MotionPrefs.deviceDefaultTier(context)))
     }
     var uiMotionEnabled by remember { mutableStateOf(MotionPrefs.readUiMotionEnabled(prefs)) }
+    var visualizerSpeedStep by remember { mutableIntStateOf(VisualizerPrefs.readSpeedStep(prefs)) }
     // v3.0.0：五个「每个动效独立开关」（铁律 26）。初值走 MotionPrefs 的解析（缺 key = 开）。
     val motionSwitches = MotionPrefs.readSwitches(prefs)
     var motionShockwave by remember { mutableStateOf(motionSwitches.shockwave) }
@@ -640,6 +643,18 @@ private fun SettingsPreferenceGroupPage(
 
                     SettingsRowKind.DROPDOWN -> item(key = entry.id) {
                         when (entry.id) {
+                            // v3.6.9：波形滚动倍速（0.5× / 0.75× / 1× / 1.5× / 2×）
+                            "visualizer_speed_step" -> MetroDropdownRow(
+                                label = strings.waveform.visualizerSpeedLabel,
+                                selectedIndex = visualizerSpeedStep,
+                                options = VisualizerPrefs.SPEED_LABELS,
+                                hint = strings.waveform.visualizerSpeedDescription,
+                                onSelect = { index ->
+                                    visualizerSpeedStep = index
+                                    VisualizerPrefs.writeSpeedStep(prefs, index)
+                                    WaveformStore.setSpeed(VisualizerPrefs.speedFactorForStep(index))
+                                }
+                            )
                             // PlayerViewModel.setLyricsWordAnimation()（写 LyricsDisplayPrefs）
                             "lyrics_word_animation" -> MetroDropdownRow(
                                 label = strings.lyricsWordAnimationLabel,

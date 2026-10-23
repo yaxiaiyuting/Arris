@@ -71,12 +71,29 @@ object VisualizerPrefs {
     const val KEY_AUTO_DOWNGRADED = "visualizer_auto_downgraded"
     const val KEY_TIER_VERSION = "visualizer_tier_version"
 
+    /** v3.6.9：波形横向滚动速度（0..4 档，见 [SPEED_FACTORS]）。 */
+    const val KEY_SPEED_STEP = "visualizer_speed_step"
+
     // ---- 默认值 ----
     const val DEFAULT_SHOWCASE = false
     const val DEFAULT_AUTO_DOWNGRADED = false
 
     /** 本版波形分级的迁移水位（首次引入 = 1）。 */
     const val DEFAULT_TIER_VERSION = 1
+
+    /**
+     * v3.6.9：可选的波形滚动倍速。
+     *
+     * 1× 跟随音频数据；>1× 时数据不够会**重复最后一列**（见 WaveformRing 的 hold 分支），
+     * 画面更快但形状会拉伸；<1× 只把历史滚慢，不改变数据。
+     */
+    val SPEED_FACTORS = floatArrayOf(0.5f, 0.75f, 1f, 1.5f, 2f)
+
+    /** 默认 1.5×：用户反馈「波形条太慢」；仍可在设置里选回 1×。 */
+    const val DEFAULT_SPEED_STEP = 3
+
+    /** 设置页显示的倍速文案（语言无关）。 */
+    val SPEED_LABELS: List<String> = listOf("0.5×", "0.75×", "1×", "1.5×", "2×")
 
     /** 当前水位。加语义 ⇒ 把它 +1 并在 [migrate] 里补一段搬运逻辑（照 QualityLadder 的范式）。 */
     const val CURRENT_TIER_VERSION = 1
@@ -119,6 +136,17 @@ object VisualizerPrefs {
     fun readTierVersion(prefs: SharedPreferences): Int =
         intOrNull(prefs, KEY_TIER_VERSION) ?: DEFAULT_TIER_VERSION
 
+    /** v3.6.9：滚动倍速档位（0..4）。坏值/越界一律夹回合法区间。 */
+    fun readSpeedStep(prefs: SharedPreferences): Int =
+        (intOrNull(prefs, KEY_SPEED_STEP) ?: DEFAULT_SPEED_STEP)
+            .coerceIn(0, SPEED_FACTORS.lastIndex)
+
+    fun speedFactorForStep(step: Int): Float =
+        SPEED_FACTORS[step.coerceIn(0, SPEED_FACTORS.lastIndex)]
+
+    fun readSpeedFactor(prefs: SharedPreferences): Float =
+        speedFactorForStep(readSpeedStep(prefs))
+
     /** 一次读全（组合期只读一次盘/一次内存快照；避免 8 次分散的 state 读）。 */
     fun readEffects(prefs: SharedPreferences, deviceDefault: Int): VisualizerEffects =
         VisualizerEffects.of(
@@ -157,6 +185,13 @@ object VisualizerPrefs {
 
     fun writeTapInteraction(prefs: SharedPreferences, enabled: Boolean) {
         safeEdit(prefs) { it.putBoolean(KEY_DRAG, enabled) }
+    }
+
+    /** v3.6.9：写滚动倍速档位。 */
+    fun writeSpeedStep(prefs: SharedPreferences, step: Int) {
+        safeEdit(prefs) {
+            it.putInt(KEY_SPEED_STEP, step.coerceIn(0, SPEED_FACTORS.lastIndex))
+        }
     }
 
     /**

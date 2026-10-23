@@ -810,6 +810,9 @@ data class Strings(
     val visualizerDragLabel: String get() = waveform.visualizerDragLabel
     val visualizerDragDescription: String get() = waveform.visualizerDragDescription
     val visualizerNotSpectrumHint: String get() = waveform.visualizerNotSpectrumHint
+    // v3.6.9：波形滚动倍速
+    val visualizerSpeedLabel: String get() = waveform.visualizerSpeedLabel
+    val visualizerSpeedDescription: String get() = waveform.visualizerSpeedDescription
 
     // ---------- 转发属性（v2.9.0 / v3.0.0）：统一「动效强度」与独立开关 ----------
     // 与上面同一套做法：搬家不改调用点。**计算属性不占构造参数**，
@@ -1858,6 +1861,12 @@ data class WaveformStrings(
 
     /** 「亮度 = 时间新旧，不是频谱」的说明。 */
     val visualizerNotSpectrumHint: String,
+
+    // v3.6.9：波形横向滚动倍速。
+    /** 倍速设置标题。 */
+    val visualizerSpeedLabel: String,
+    /** 倍速说明。必须写清 >1 时数据不够会重复最后一列（形状拉伸）。 */
+    val visualizerSpeedDescription: String,
 
     // v2.9.0：统一「动效强度」——一个档位同时驱动波形与界面动效。
     /** 档位标题：v2.8.0 的「波形效果档位」升级为「动效强度」。 */

@@ -184,6 +184,8 @@ val zhTW = Strings(
         visualizerDragLabel = "點按切換著色",
         visualizerDragDescription = "點一下波形條，在「漸層流動」與「按時序著色」之間切換。本版未實作拖曳（手勢與播放器衝突風險未在真機驗證）。",
         visualizerNotSpectrumHint = "波形亮度表示時間新舊，不是頻譜：本版沒有頻域資料，不區分低/中/高頻。",
+        visualizerSpeedLabel = "波形捲動速度",
+        visualizerSpeedDescription = "1× 跟隨音訊資料；更快時資料不夠會重複最後一欄（畫面更快，形狀會拉伸），更慢則只把歷史滾慢。",
         // v2.9.0：動效強度（統一檔位）+ 介面動效總開關。
         motionIntensityLabel = "動效強度",
         motionIntensityDescription = "一個檔位同時決定波形與介面動效。簡潔：圓角柱與峰值保持，介面動效只保留靜態項（封面背景模糊、封面浮起陰影、切歌淡入），不隨節拍抖動；精緻：再加漸層流動、柱頂光點與呼吸，介面動效再加全螢幕波形、歌詞律動、封面浮動、控制條脈衝與視差；炫技：再加衝擊波、粒子、3D 與點按，介面動效再加背景粒子、光暈擴散與封面 3D 旋轉。低階裝置（低記憶體 / 3 GB 級 / Android 7.x）預設簡潔檔。",

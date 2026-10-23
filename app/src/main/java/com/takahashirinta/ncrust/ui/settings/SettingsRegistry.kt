@@ -228,6 +228,7 @@ data class SettingsEntry(
      */
     val isNewInV3413: Boolean = false,
     val isNewInV360: Boolean = false,
+    val isNewInV369: Boolean = false,
     /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
@@ -489,6 +490,18 @@ object SettingsRegistry {
         // （docs/verification/v2.8.0/probe-waveform-tier.md §3.3）；本文件**只定义条目**，
         // 不实现任何读写。⚠️ 除 visualizer_tier（默认 1，probe §3.3）外的默认值
         // 在探针里没有给出，这里取保守值（C 档炫技一律默认关），以波形任务落地为准。
+        add(
+            pref(
+                key = "visualizer_speed_step",
+                type = SettingsEntryType.CHOICE,
+                default = 3, // v3.6.9：默认 1.5×；0.5/0.75/1/1.5/2
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "visualizerSpeedLabel",
+                subtitleKey = "visualizerSpeedDescription",
+                choices = listOf(0, 1, 2, 3, 4),
+                newInV369 = true,
+            )
+        )
         add(
             pref(
                 key = "visualizer_tier",
@@ -1227,6 +1240,7 @@ object SettingsRegistry {
         newInV348: Boolean = false,
         newInV3411: Boolean = false,
         newInV3413: Boolean = false,
+        newInV369: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1250,6 +1264,7 @@ object SettingsRegistry {
         isNewInV348 = newInV348,
         isNewInV3411 = newInV3411,
         isNewInV3413 = newInV3413,
+        isNewInV369 = newInV369,
         isAdvanced = advanced,
         isInternal = internal,
     )

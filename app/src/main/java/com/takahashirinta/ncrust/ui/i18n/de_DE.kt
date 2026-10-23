@@ -185,6 +185,8 @@ val deDE = Strings(
         visualizerDragLabel = "Tippen wechselt die Färbung",
         visualizerDragDescription = "Ein Tippen auf den Streifen wechselt zwischen fließendem Verlauf und zeitlich geordneter Färbung. Ziehen ist in dieser Version nicht umgesetzt (Gestenkonflikte wurden nicht auf einem Gerät geprüft).",
         visualizerNotSpectrumHint = "Die Helligkeit zeigt die Aktualität, kein Spektrum: Diese Version hat keine Frequenzdaten und trennt keine Tiefen, Mitten oder Höhen.",
+        visualizerSpeedLabel = "Wellenform-Scrollgeschwindigkeit",
+        visualizerSpeedDescription = "1× folgt den Audiodaten. Schneller wiederholt bei Datenmangel die letzte Spalte (schnellere Bewegung, gestreckte Form); langsamer verlangsamt nur den Verlauf.",
         // v2.9.0: Bewegungsintensität (vereinte Stufe) + Hauptschalter für die Oberflächenanimation.
         motionIntensityLabel = "Bewegungsintensität",
         motionIntensityDescription = "Eine Stufe steuert sowohl die Wellenform als auch die Interface-Effekte. Schlicht: abgerundete Balken mit Spitzenhalteung, Interface nur statisch (unscharfer Cover-Hintergrund, Cover-Schatten, Überblendung) — nichts bewegt sich zum Beat. Feinschliff: zusätzlich fließender Verlauf, Lichtpunkte und Atmung in der Wellenform sowie Vollbild-Wellenform, Text-Puls, Cover-Schweben, Steuerleisten-Puls und Parallaxe im Interface. Effektvoll: zusätzlich Schockwelle, Partikel, 3D und Tippen in der Wellenform sowie Hintergrundpartikel, Halo und 3D-Coverdrehung im Interface. Schwache Geräte (wenig RAM / 3-GB-Klasse / Android 7.x) starten bei Schlicht.",

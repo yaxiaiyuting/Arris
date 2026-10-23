@@ -184,6 +184,8 @@ val zhCN = Strings(
         visualizerDragLabel = "点按切换着色",
         visualizerDragDescription = "点一下波形条，在「渐变流动」与「按时序着色」之间切换。本版未实现拖拽（手势与播放器冲突风险未在真机验证）。",
         visualizerNotSpectrumHint = "波形亮度表示时间新旧，不是频谱：本版没有频域数据，不区分低/中/高频。",
+        visualizerSpeedLabel = "波形滚动速度",
+        visualizerSpeedDescription = "1× 跟随音频数据；更快时数据不够会重复最后一列（画面更快，形状会拉伸），更慢则只把历史滚慢。",
         // v2.9.0：动效强度（统一档位）+ 界面动效总开关。
         motionIntensityLabel = "动效强度",
         motionIntensityDescription = "一个档位同时决定波形与界面动效。简洁：圆角柱与峰值保持，界面动效只保留静态项（封面背景模糊、封面浮起阴影、切歌淡入），不随节拍抖动；精致：再加渐变流动、柱顶光点与呼吸，界面动效再加全屏波形、歌词律动、封面浮动、控制条脉冲与视差；炫技：再加冲击波、粒子、3D 与点按，界面动效再加背景粒子、光晕扩散与封面 3D 旋转。低端设备（低内存 / 3 GB 级 / Android 7.x）默认简洁档。",

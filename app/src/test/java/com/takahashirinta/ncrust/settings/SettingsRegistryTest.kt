@@ -51,7 +51,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369
             }
             .mapNotNull { it.key }
             .toSet()
@@ -88,7 +88,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369
             }
             .mapNotNull { it.key }
             .toSet()

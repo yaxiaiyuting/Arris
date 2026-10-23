@@ -215,7 +215,7 @@ class WaveformSettingsGatingTest {
             "v2.8.0 的 8 个键一个都不能出现在二级页上（全部由迁移逻辑消费）",
             emptyList<String>(),
             SettingsRenderPlan.plannedRowsOf("appearance").map { it.id }
-                .filter { it.startsWith("visualizer_") },
+                .filter { it.startsWith("visualizer_") && it != "visualizer_speed_step" },
         )
         // 接替它们的两个可见项。
         assertEquals(

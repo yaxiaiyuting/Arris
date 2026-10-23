@@ -302,6 +302,14 @@ class WaveformRing(
     /** 单测 / 诊断：累计平移格数（见 [shiftedCells] 的注释，生产路径零调用）。 */
     internal fun shiftedCellsForTest(): Long = shiftedCells
 
+    /** v3.6.9：设置横向滚动倍速（0.25..4；非有限值忽略）。 */
+    fun setScrollSpeedFactor(factor: Float) {
+        if (factor.isFinite()) scrollSpeedFactor = factor.coerceIn(0.25f, 4f)
+    }
+
+    /** 测试 / 诊断：当前滚动倍速。 */
+    fun scrollSpeedFactor(): Float = scrollSpeedFactor
+
 
     /**
      * v3.4.7：相位斜坡**实际使用的分母**（毫秒）—— 诊断 / 单测 / 真机探针用（生产渲染路径零调用）。
@@ -370,6 +378,15 @@ class WaveformRing(
      * 头几百毫秒的相位会略微偏慢（0.96 倍速），EMA（α=0.15，约 7 根柱收敛）随后把它拉正。
      */
     private var barIntervalMs: Float = DEFAULT_BAR_INTERVAL_MS
+
+    /**
+     * v3.6.9：横向滚动倍速（1 = 跟随音频数据）。
+     *
+     * 只影响 **UI 消费节拍**，不改变音频线程写入；>1 时数据会更快被取完，
+     * [pump] 的缺样分支改为重复最后一列（hold），避免空白格。
+     */
+    @Volatile
+    private var scrollSpeedFactor: Float = 1f
 
     /** 最新数据（阶跃）。UI 线程原地更新，绝不重新分配。 */
     private val targets = FloatArray(barCount)
@@ -667,7 +684,7 @@ class WaveformRing(
             // 首帧**不推进**画面时间：这一帧就是「第 0 格」。否则画面时钟会比第一根柱的
             // 到达时刻提前一个 dt，之后每个格边界都早到几毫秒 —— 数据还没到，相位先撞顶棚，
             // 于是每隔一格停一帧（实测 60Hz / 100ms 柱上 5.8% 的帧停在 1.0）。
-            if (!primedThisFrame) sinceBarMs += dtForPhase
+            if (!primedThisFrame) sinceBarMs += dtForPhase * scrollSpeedFactor
             val interval = phaseIntervalMs()
             var consumed = false
             if (windowPrimed && sinceBarMs >= interval) {
@@ -676,10 +693,16 @@ class WaveformRing(
                 consumed = consumeOne()
                 val canAdvanceGap = timestampedInput && nowMs > 0L
                 if (!consumed && canAdvanceGap) {
-                    // 数据短暂迟到不等于播放暂停。历史仍按时间滚动，缺失位置留空，
-                    // 不重复上一根峰值来编造新的音频响应，也不向音频线程补写数据。
+                    // 数据短暂迟到不等于播放暂停。历史仍按时间滚动。
                     val visibleHistory = windowHasSignal()
-                    appendColumn(0f, 0f, 0f, 0f, blank = true)
+                    if (scrollSpeedFactor > 1.001f && visibleHistory) {
+                        // v3.6.9：倍速 > 1 时数据会先被取完；重复最后一列保持滚动，
+                        // 而不是插空列（空列会让「加速」看起来像掉帧/断层）。
+                        appendColumn(0f, 0f, 0f, 0f, blank = false, hold = true)
+                    } else {
+                        // 1× 及以下保持「缺失位置留空」的诚实语义，不重复编造峰值。
+                        appendColumn(0f, 0f, 0f, 0f, blank = true)
+                    }
                     consumed = visibleHistory
                 }
                 if (consumed || canAdvanceGap) {
@@ -792,20 +815,29 @@ class WaveformRing(
     }
 
     /** UI-only history shift. A missing visual sample is blank; the audio ring is untouched. */
-    private fun appendColumn(value: Float, low: Float, mid: Float, high: Float, blank: Boolean) {
-        shiftIn(value, blank)
+    private fun appendColumn(
+        value: Float,
+        low: Float,
+        mid: Float,
+        high: Float,
+        blank: Boolean,
+        hold: Boolean = false,
+    ) {
+        shiftIn(value, blank, hold)
         // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
         // 它要的是"当下这一刻"的低频能量，不是历史窗口。
         val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
-        bassTarget = lowValue
+        // hold 是 UI 层重复历史，不是新的音频样本：newestBass 必须保持上一根真实值，
+        // 否则节拍/粒子会被这列 0 判成静音。
+        if (!hold) bassTarget = lowValue
         val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
         val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
         // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
         // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
         // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
-        shiftBandIn(lowTargets, lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, lowDash, lowValue, blank)
-        shiftBandIn(midTargets, midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, midDash, midValue, blank)
-        shiftBandIn(highTargets, highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, highDash, highValue, blank)
+        shiftBandIn(lowTargets, lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, lowDash, lowValue, blank, hold)
+        shiftBandIn(midTargets, midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, midDash, midValue, blank, hold)
+        shiftBandIn(highTargets, highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, highDash, highValue, blank, hold)
         // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
         // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
         shiftedCells += 1
@@ -829,6 +861,7 @@ class WaveformRing(
         dash: FloatArray,
         value: Float,
         blank: Boolean,
+        hold: Boolean = false,
     ): Boolean {
         var changed = false
         for (i in 0 until barCount - 1) {
@@ -855,6 +888,9 @@ class WaveformRing(
             dash[i] = dash[i + 1]
         }
         val last = barCount - 1
+        // 倍速缺样：只平移，不写新值、不重置球/短横 —— 最后一格保留上一格的状态，
+        // 形成一列「重复的历史」。这样小球/短横不会像缺样列那样归零再起。
+        if (hold) return changed
         if (window[last] != value) {
             window[last] = value
             changed = true
@@ -875,7 +911,7 @@ class WaveformRing(
     }
 
     /** @return 这一根新柱是否真的改变了窗口内容（全等值时不必重绘）。 */
-    private fun shiftIn(value: Float, blank: Boolean): Boolean {
+    private fun shiftIn(value: Float, blank: Boolean, hold: Boolean = false): Boolean {
         var changed = false
         for (i in 0 until barCount - 1) {
             if (targets[i] != targets[i + 1]) {
@@ -883,6 +919,7 @@ class WaveformRing(
                 changed = true
             }
         }
+        if (hold) return changed
         val last = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
         if (targets[barCount - 1] != last) {
             targets[barCount - 1] = last

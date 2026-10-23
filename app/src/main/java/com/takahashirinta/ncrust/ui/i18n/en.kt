@@ -185,6 +185,8 @@ val en = Strings(
         visualizerDragLabel = "Tap to switch colouring",
         visualizerDragDescription = "Tap the strip to switch between the flowing gradient and time-ordered tinting. Dragging is not implemented in this version (gesture conflicts were not verified on a device).",
         visualizerNotSpectrumHint = "Brightness shows recency, not frequency: this version has no frequency data and does not separate lows/mids/highs.",
+        visualizerSpeedLabel = "Waveform scroll speed",
+        visualizerSpeedDescription = "1× follows the audio data. Faster speeds repeat the last column when data runs out (faster motion, stretched shape); slower speeds only slow the history down.",
         // v2.9.0: motion intensity (unified tier) + interface motion master switch.
         motionIntensityLabel = "Motion intensity",
         motionIntensityDescription = "One setting drives both the waveform and the interface motion. Simple: rounded bars with peak hold, and only the static interface motion (blurred cover backdrop, cover elevation shadow, cross-fade) — nothing moves with the beat. Refined: adds a flowing gradient, top dots and breathing to the waveform, plus a full-screen waveform, lyric pulse, cover float, control-bar pulse and parallax to the interface. Showcase: adds shockwave, particles, 3D and tap to the waveform, plus background particles, halo bloom and 3D cover rotation to the interface. Low-end devices (low RAM / 3 GB class / Android 7.x) start at Simple.",

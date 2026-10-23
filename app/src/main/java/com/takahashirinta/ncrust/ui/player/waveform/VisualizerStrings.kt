@@ -66,6 +66,10 @@ object VisualizerStrings {
         const val DRAG_DESCRIPTION = "visualizerDragDescription"
         const val NOT_SPECTRUM_HINT = "visualizerNotSpectrumHint"
 
+        // v3.6.9：波形滚动倍速
+        const val SPEED_LABEL = "visualizerSpeedLabel"
+        const val SPEED_DESCRIPTION = "visualizerSpeedDescription"
+
         // v2.9.0：统一「动效强度」——一个档位同时驱动波形与界面动效。
         const val MOTION_INTENSITY_LABEL = "motionIntensityLabel"
         const val MOTION_INTENSITY_DESCRIPTION = "motionIntensityDescription"
@@ -81,6 +85,7 @@ object VisualizerStrings {
             PERSPECTIVE_LABEL, PERSPECTIVE_DESCRIPTION,
             DRAG_LABEL, DRAG_DESCRIPTION,
             NOT_SPECTRUM_HINT,
+            SPEED_LABEL, SPEED_DESCRIPTION,
             MOTION_INTENSITY_LABEL, MOTION_INTENSITY_DESCRIPTION,
             UI_MOTION_LABEL, UI_MOTION_DESCRIPTION,
         )
@@ -105,6 +110,8 @@ object VisualizerStrings {
         const val DRAG_LABEL = "点按切换着色"
         const val DRAG_DESCRIPTION = "点一下波形条，在「渐变流动」与「按时序着色」之间切换。本版未实现拖拽（手势与播放器冲突风险未在真机验证）。"
         const val NOT_SPECTRUM_HINT = "波形亮度表示时间新旧，不是频谱：本版没有频域数据，不区分低/中/高频。"
+        const val SPEED_LABEL = "波形滚动速度"
+        const val SPEED_DESCRIPTION = "1× 跟随音频数据；更快时数据不够会重复最后一列（画面更快，形状会拉伸），更慢则只把历史滚慢。"
         const val MOTION_INTENSITY_LABEL = "动效强度"
         const val MOTION_INTENSITY_DESCRIPTION =
             "一个档位同时决定波形与界面动效。简洁：圆角柱与峰值保持，界面动效只保留基础项（封面背景模糊、背景呼吸、封面浮起与切歌淡入）；精致：再加渐变流动、柱顶光点与呼吸，界面动效再加全屏波形、歌词律动、节拍脉冲与视差；炫技：再加冲击波、粒子、3D 与点按，界面动效再加背景粒子、光晕扩散与封面 3D 旋转。低端设备（低内存 / 3 GB 级 / Android 7.x）默认简洁档。"
@@ -132,6 +139,8 @@ object VisualizerStrings {
         const val DRAG_LABEL = "Tap to switch colouring"
         const val DRAG_DESCRIPTION = "Tap the strip to switch between the flowing gradient and time-ordered tinting. Dragging is not implemented in this version (gesture conflicts were not verified on a device)."
         const val NOT_SPECTRUM_HINT = "Brightness shows recency, not frequency: this version has no frequency data and does not separate lows/mids/highs."
+        const val SPEED_LABEL = "Waveform scroll speed"
+        const val SPEED_DESCRIPTION = "1× follows the audio data. Faster speeds repeat the last column when data runs out (faster motion, stretched shape); slower speeds only slow the history down."
         const val MOTION_INTENSITY_LABEL = "Motion intensity"
         const val MOTION_INTENSITY_DESCRIPTION =
             "One setting drives both the waveform and the interface motion. Simple: rounded bars with peak hold, and only the basic interface motion (blurred cover backdrop, breathing background, cover elevation and cross-fade). Refined: adds a flowing gradient, top dots and breathing to the waveform, plus a full-screen waveform, lyric pulse, beat pulse and parallax to the interface. Showcase: adds shockwave, particles, 3D and tap to the waveform, plus background particles, halo bloom and 3D cover rotation to the interface. Low-end devices (low RAM / 3 GB class / Android 7.x) start at Simple."

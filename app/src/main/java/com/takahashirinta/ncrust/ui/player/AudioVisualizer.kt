@@ -86,6 +86,8 @@ object VisualizerSetting {
         // 都已经在读总开关，多一个 Application 改动只会多一处「谁先谁后」的不确定性。
         // ensureLoaded 自身幂等，重复调用只是多一次布尔判断。
         VisualizerPrefs.ensureLoaded(context)
+        // v3.6.9：滚动倍速是进程内 volatile，启动时从盘上恢复；设置页改动会直接 setSpeed。
+        WaveformStore.setSpeed(VisualizerPrefs.readSpeedFactor(prefs(context)))
         return stateHolder.value
     }
 
@@ -454,6 +456,9 @@ object WaveformStore {
 
     /** v3.6.9：窗口累计平移格数（峰值标记采样起点的唯一来源）。 */
     fun shiftedCells(): Long = ring.shiftedCellsForTest()
+
+    /** v3.6.9：设置横向滚动倍速（设置页写入后立即生效）。 */
+    fun setSpeed(factor: Float) = ring.setScrollSpeedFactor(factor)
 
     /**
      * v3.2.2：曲线绘制**丢帧计数**（只增不减，UI 线程单写者）。

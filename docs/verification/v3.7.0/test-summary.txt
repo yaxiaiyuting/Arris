@@ -1,0 +1,8 @@
+v3.7.0 全量 JVM 单测
+
+测试用例: 3007
+失败: 0
+错误: 0
+跳过: 0
+测试类: 240
+命令: ./gradlew :app:testDebugUnitTest
