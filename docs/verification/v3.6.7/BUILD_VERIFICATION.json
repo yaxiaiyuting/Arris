@@ -1,0 +1,35 @@
+{
+  "versionName": "3.6.7-gpl",
+  "versionCode": 83,
+  "builtCommit": "b2b18a1ee8e07603362bb832f5ce9083ca0ab525",
+  "appTree": "860c0e4856775565a91197ecaa46aca71f47ca3d",
+  "tests": {
+    "suites": 239,
+    "tests": 3001,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Information": 5,
+    "Warning": 55
+  },
+  "physicalDeviceTested": false,
+  "artifacts": [
+    {
+      "name": "Ncrust-v3.6.7-gpl-debug.apk",
+      "bytes": 33455905,
+      "sha256": "d6e62d32627a7c4c97cccede3fa7ebc49cc58ba7ccba5bd267c1609a8a75cd04"
+    },
+    {
+      "name": "Ncrust-v3.6.7-gpl-release.apk",
+      "bytes": 12022660,
+      "sha256": "dd8f4fe36666597e5bc34fdde1c3df38fd825dfcfb9a4355b3966ac8d54f3810"
+    },
+    {
+      "name": "mapping-v3.6.7-gpl.txt.gz",
+      "bytes": 5747925,
+      "sha256": "fcf1da46a29fe8228868d181e0df7c64f71ec10ee781e4cd36714bd0485f0680"
+    }
+  ]
+}
