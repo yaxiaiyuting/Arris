@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- The media-search finding is already tracked for the main application in
+         lint-baseline.xml. This overlay only adds a rendering probe, not a car entry. -->
+    <application tools:ignore="MissingIntentFilterForMediaSearch">
         <activity android:name=".celebration.CelebrationProbeActivity" android:exported="true" />
     </application>
 </manifest>
