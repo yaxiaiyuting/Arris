@@ -482,8 +482,8 @@ android {
         // v3.6.5：① 波形缺样列不再继承上一格速度/峰值/短横，修「小球与横条闪现」；
         //   ② 歌词外推增加缓冲门控，音频没出声前不先唱；③ 切歌时队列找不到当前项
         //   （预载槽位/跨源接续）用 ViewModel 身份兜底，横屏播放界面不再停上一首。
-        versionCode = 83
-        versionName = "3.6.7-gpl"
+        versionCode = 84
+        versionName = "3.6.8-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
