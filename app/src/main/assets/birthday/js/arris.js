@@ -39,12 +39,15 @@
   function fitBlessing() {
     const box = document.getElementById('blessing');
     box.style.setProperty('--wish-scale', '1');
-    if (innerHeight <= innerWidth) return;
+    // Include the real end actions in measurement even while the film is playing.
+    // Their native predecessor was pinned to the viewport, detached from the wishes.
+    box.classList.add('measure-actions');
     let scale = 1;
-    for (let i = 0; i < 7 && box.getBoundingClientRect().bottom > innerHeight - 120; i++) {
+    for (let i = 0; i < 12 && box.getBoundingClientRect().bottom > innerHeight - 32; i++) {
       scale *= .94;
       box.style.setProperty('--wish-scale', scale.toFixed(3));
     }
+    box.classList.remove('measure-actions');
   }
   function stop() {
     if (!b) return;
@@ -64,13 +67,25 @@
         stop(); b.seek(WAIT); emit('WAITING');
       }
     });
-    b.master.eventCallback('onComplete', function () { stop(); emit('DONE'); });
+    const actions = document.createElement('div');
+    actions.className = 'arris-actions';
+    const closeButton = document.createElement('button');
+    const replayButton = document.createElement('button');
+    closeButton.type = replayButton.type = 'button';
+    closeButton.textContent = '继续听歌'; replayButton.textContent = '再看一遍';
+    closeButton.addEventListener('click', function (e) { e.stopPropagation(); emit('CLOSE'); });
+    replayButton.addEventListener('click', function (e) { e.stopPropagation(); window.ArrisBirthday.replay(); });
+    actions.append(closeButton, replayButton);
+    document.getElementById('blessing').appendChild(actions);
+    b.master.eventCallback('onComplete', function () {
+      stop(); document.body.classList.add('arris-done'); fitBlessing(); emit('DONE');
+    });
     // A touch on the artwork must never bypass the native puff gate.
     document.getElementById('stage').addEventListener('click', function (e) {
-      e.stopImmediatePropagation();
+      if (!e.target.closest('.arris-actions')) e.stopImmediatePropagation();
     }, true);
     document.addEventListener('keydown', function (e) {
-      if ([' ', 'r', 'R', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) >= 0) {
+      if (!e.target.closest('.arris-actions') && [' ', 'r', 'R', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) >= 0) {
         e.preventDefault(); e.stopImmediatePropagation();
       }
     }, true);
@@ -89,6 +104,8 @@
       if (config.captions) b.cue.captions.forEach(function (caption, i) {
         caption.text = config.captions[[0,0,2,3,4,6,7][i]] || caption.text;
       });
+      document.querySelector('.arris-actions button:first-child').textContent = config.continueLabel || '继续听歌';
+      document.querySelector('.arris-actions button:last-child').textContent = config.replayLabel || '再看一遍';
       fitBlessing();
       b.seek(0); b.play(); emit('PLAYING');
     },
@@ -98,6 +115,7 @@
     },
     replay: function () {
       if (disposed) return;
+      document.body.classList.remove('arris-done');
       blown = false; waiting = false; stop(); b.seek(0); b.play(); emit('PLAYING');
     },
     stop: function () { disposed = true; stop(); },

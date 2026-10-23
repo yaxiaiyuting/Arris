@@ -21,7 +21,7 @@ internal class BirthdayWebView(context: Context, private val config: JSONObject)
     private inner class Bridge {
         @JavascriptInterface
         fun event(value: String) {
-            if (value !in setOf("READY", "PLAYING", "WAITING", "DONE", "ERROR")) return
+            if (value !in setOf("READY", "PLAYING", "WAITING", "DONE", "ERROR", "CLOSE")) return
             post { if (!disposed) {
                 if (value == "READY") configurePage()
                 onEvent(value)

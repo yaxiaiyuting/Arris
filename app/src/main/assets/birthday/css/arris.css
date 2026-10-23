@@ -34,3 +34,21 @@ body.arris.portrait .blessing::after { display:none; }
   body.arris.portrait .blessing .line.title { font-size:calc(24px * var(--wish-scale,1)); }
   body.arris.portrait .blessing .body { font-size:calc(12px * var(--wish-scale,1));line-height:1.45; }
 }
+
+/* The final actions belong to the wishes' flow, including their measured height. */
+body.arris .arris-actions { pointer-events:auto; display:none; gap:12px; margin-top:24px; text-align:center; }
+body.arris.arris-done .arris-actions,
+body.arris .measure-actions .arris-actions { display:flex; }
+body.arris .measure-actions .arris-actions { visibility:hidden; }
+body.arris .arris-actions button {
+  flex:1; min-width:0; min-height:48px; padding:10px 12px;
+  border:0; border-radius:0; cursor:pointer; font:500 14px/1.5 system-ui,sans-serif;
+  overflow-wrap:anywhere; color:#303626; background:linear-gradient(135deg,#ffe8c7,#f5c98e);
+  -webkit-tap-highlight-color:transparent;
+}
+body.arris .arris-actions button + button { color:#c4ccb9; background:transparent; }
+body.arris .arris-actions button:focus-visible { outline:2px solid #ffe8c7; outline-offset:3px; }
+body.arris .arris-actions button:active { opacity:.75; }
+body.arris:not(.portrait) .blessing .line.title { font-size:calc(clamp(28px,3.2vw,52px) * var(--wish-scale,1)); }
+body.arris:not(.portrait) .blessing .body { font-size:calc(clamp(12px,1.15vw,19px) * var(--wish-scale,1)); }
+body.arris:not(.portrait) .blessing .body.last { font-size:calc(clamp(14px,1.35vw,22px) * var(--wish-scale,1)); }

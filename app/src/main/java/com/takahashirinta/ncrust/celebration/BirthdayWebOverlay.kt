@@ -95,7 +95,13 @@ private fun BirthdayWebOverlay(onClose: () -> Unit, onVisible: () -> Unit) {
             AndroidView(
                 factory = { ctx -> android.widget.FrameLayout(ctx).apply {
                     try {
-                        val web = BirthdayWebView(ctx, JSONObject().put("title", strings.titles.last()).put("wishes", JSONArray(strings.wishes)).put("captions", JSONArray(strings.captions)))
+                        val config = JSONObject()
+                            .put("title", strings.titles.last())
+                            .put("wishes", JSONArray(strings.wishes))
+                            .put("captions", JSONArray(strings.captions))
+                            .put("continueLabel", strings.continueListening)
+                            .put("replayLabel", strings.replay)
+                        val web = BirthdayWebView(ctx, config)
                         view = web
                         addView(web, android.widget.FrameLayout.LayoutParams(-1, -1))
                     } catch (_: Exception) { post { failed = true } }
@@ -106,6 +112,8 @@ private fun BirthdayWebOverlay(onClose: () -> Unit, onVisible: () -> Unit) {
                     when (event) {
                         "READY" -> ready = true
                         "ERROR" -> { mic = false; failed = true }
+                        "CLOSE" -> { mic = false; close() }
+                        "PLAYING" -> { state = event; mic = false; feedback = "" }
                         else -> { state = event; if (event != "WAITING") mic = false }
                     }
                 } },
@@ -122,8 +130,6 @@ private fun BirthdayWebOverlay(onClose: () -> Unit, onVisible: () -> Unit) {
                         else permission.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 }, onBlow = ::extinguish,
-                onReplay = { mic = false; feedback = ""; state = "PLAYING"; view?.command("replay") },
-                onClose = { mic = false; close() },
             )
         }
     }
@@ -131,23 +137,22 @@ private fun BirthdayWebOverlay(onClose: () -> Unit, onVisible: () -> Unit) {
 
 @Composable
 private fun BirthdayActions(state: String, mic: Boolean, armed: Boolean, feedback: String,
-    modifier: Modifier, onMic: () -> Unit, onBlow: () -> Unit, onReplay: () -> Unit, onClose: () -> Unit) {
-    if (state != "WAITING" && state != "DONE") return
+    modifier: Modifier, onMic: () -> Unit, onBlow: () -> Unit) {
+    // End actions live in the same DOM flow as the wishes, so their positions cannot drift.
+    if (state != "WAITING") return
     val s = LocalStrings.current.celebration
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Column(modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (state == "WAITING") {
-            MetroText(feedback.ifBlank { s.micHint }, color = Color(0xffe8cfa9), style = TextStyle(fontSize = 12.sp, textAlign = TextAlign.Center))
-            Spacer(Modifier.height(8.dp))
-        }
-        if (landscape || state == "DONE") {
+        MetroText(feedback.ifBlank { s.micHint }, color = Color(0xffe8cfa9), style = TextStyle(fontSize = 12.sp, textAlign = TextAlign.Center))
+        Spacer(Modifier.height(8.dp))
+        if (landscape) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { CelebrationButton(if (state == "DONE") s.continueListening else if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, if (state == "DONE") onClose else onMic, enabled = !mic) }
-                Box(Modifier.weight(1f)) { CelebrationButton(if (state == "DONE") s.replay else s.manualBlow, if (state == "DONE") onReplay else onBlow, primary = false) }
+                Box(Modifier.weight(1f)) { CelebrationButton(if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, onMic, enabled = !mic) }
+                Box(Modifier.weight(1f)) { CelebrationButton(s.manualBlow, onBlow, primary = false) }
             }
         } else {
-            CelebrationButton(if (state == "DONE") s.continueListening else if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, if (state == "DONE") onClose else onMic, enabled = !mic)
-            CelebrationButton(if (state == "DONE") s.replay else s.manualBlow, if (state == "DONE") onReplay else onBlow, primary = false)
+            CelebrationButton(if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, onMic, enabled = !mic)
+            CelebrationButton(s.manualBlow, onBlow, primary = false)
         }
     }
 }
