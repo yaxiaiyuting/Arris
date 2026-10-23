@@ -119,3 +119,10 @@
 -keepclassmembers class com.takahashirinta.ncrust.celebration.BirthdayWebView$Bridge {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# Keep the UI history pump as one small method. Inlining it (and its helpers)
+# into MotionClock.frame merged the wave/motion pipelines into 2176 DEX units.
+# Preserve this boundary; unused overloads may still shrink and names may change.
+-keepclassmembers,allowshrinking,allowobfuscation class com.takahashirinta.ncrust.ui.player.WaveformRing {
+    public boolean pump(boolean, float, com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects, long, boolean);
+}
