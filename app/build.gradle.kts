@@ -482,8 +482,12 @@ android {
         // v3.6.5：① 波形缺样列不再继承上一格速度/峰值/短横，修「小球与横条闪现」；
         //   ② 歌词外推增加缓冲门控，音频没出声前不先唱；③ 切歌时队列找不到当前项
         //   （预载槽位/跨源接续）用 ViewModel 身份兜底，横屏播放界面不再停上一首。
-        versionCode = 84
-        versionName = "3.6.8-gpl"
+        // v3.6.9：波形峰值标记（小球/短横）每滚动一格就被重新采样 —— 三泳道
+        //   markerStride=2、起点固定 0，同一格数据在偶数/奇数下标之间翻转，标记
+        //   灭掉/亮起。滚动慢（100ms/格）时肉眼是「小球闪现」，滚动快时变化太快
+        //   不易察觉。修法：采样起点 = 窗口累计平移数 % stride，同一格数据始终被采样。
+        versionCode = 85
+        versionName = "3.6.9-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
