@@ -626,7 +626,7 @@ class WaveformRing(
             //
             //   没有帧时钟（老调用点 / 单测）时回落到调用方给的 `dtMs`：它同样是真实帧间隔。
             val rawDelta = if (nowMs > 0L && lastPumpNowMs > 0L) nowMs - lastPumpNowMs else -1L
-            val dtForPhase = if (rawDelta >= 0L) {
+            var dtForPhase = if (rawDelta >= 0L) {
                 rawDelta.coerceIn(0L, MAX_FRAME_DELTA_MS).toFloat()
             } else {
                 dtMs.coerceIn(0f, MAX_FRAME_DELTA_MS.toFloat())
@@ -639,6 +639,7 @@ class WaveformRing(
                 val latest = writeIndex
                 if (latest - readIndex > 1) readIndex = latest - 1
                 sinceBarMs = 0f
+                dtForPhase = 0f // The stall predates the new anchor; never replay its elapsed time.
             }
             // v3.6.3：吸收音频线程发布的最新「每根柱间隔」。**放在消费之前**、且与这一帧
             // 有没有柱可消费无关 —— 否则一个偏小的估计会让画面先消费过快、随后没柱可消费，
