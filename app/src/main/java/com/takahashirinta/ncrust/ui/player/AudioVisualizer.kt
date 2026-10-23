@@ -350,8 +350,8 @@ object WaveformStore {
      *   所以这条链上**不允许**任何一方自己攒时钟（见 [WaveformRing.pump] 的 `nowMs`）。
      *   传 0 = 没有帧时钟（老调用点 / 单测），ring 会回落到旧的累加口径。
      */
-    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L) {
-        var changed = ring.pump(active, dtMs, effects, nowMs)
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false) {
+        var changed = ring.pump(active, dtMs, effects, nowMs, holdHistory)
         // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
         // 关掉（用户关了多频段开关）时音频线程根本不发布特征值，
         // 此时若还去读 `featureLow()` 会把「上一首残留的」或初值 0 当数据用。

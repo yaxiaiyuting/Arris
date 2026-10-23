@@ -129,6 +129,8 @@ internal fun BoxScope.PlayerCardBackdrop(
         // —— 不把「波形挂载」单独告诉帧时钟，简洁档的波形会冻住（探针 §2 的连带发现）。
         MotionFrameClock(
             activeProvider = { isPlaying && !isBufferingFlow.value },
+            // ExoPlayer reports isPlaying=false during rebuffering too.
+            bufferingProvider = { isBufferingFlow.value },
             enabled = hasSong && expandedMounted(),
             waveformMounted = visualizerSlot || motion.fullScreenWaveform,
         )

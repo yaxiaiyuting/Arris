@@ -102,8 +102,9 @@ object MotionClock {
         waveform: VisualizerEffects,
         motion: MotionEffects,
         nowMs: Long = 0L,
+        holdWaveform: Boolean = false,
     ): Boolean {
-        WaveformStore.pump(active, dtMs, waveform, nowMs)
+        WaveformStore.pump(active, dtMs, waveform, nowMs, holdHistory = holdWaveform)
         // 特征快照：优先用音频线程发布的真值；链路不可用时它对消费方呈现 available=false。
         featureBindings.update(
             rms = WaveformStore.featureRms(),
@@ -213,9 +214,11 @@ fun MotionFrameClock(
     activeProvider: () -> Boolean,
     enabled: Boolean,
     waveformMounted: Boolean,
+    bufferingProvider: () -> Boolean = { false },
 ) {
     val context = LocalContext.current
     val currentActive = rememberUpdatedState(activeProvider)
+    val currentBuffering = rememberUpdatedState(bufferingProvider)
     // 组合期读一次（改设置 / 换面板刷新率时才会重组一次）。帧路径里零 state 读。
     val motion = MotionPrefs.effects.value
     val waveform = VisualizerPrefs.effects.value
@@ -262,6 +265,7 @@ fun MotionFrameClock(
                 pacer.reset()
                 MotionClock.frame(
                     active = false,
+                    holdWaveform = currentBuffering.value(),
                     dtMs = frameIntervalMs,
                     waveform = waveform,
                     motion = motion,

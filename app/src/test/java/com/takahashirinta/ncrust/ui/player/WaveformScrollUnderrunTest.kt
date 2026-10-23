@@ -84,4 +84,38 @@ class WaveformScrollUnderrunTest {
         assertEquals("缺样列不能继承上一格的短横", 0f, ring.bandDashAt(0, 15), 0f)
     }
 
+    @Test
+    fun `buffering preserves measured history and resume does not drain it at once`() {
+        val ring = WaveformRing(capacity = 128, barCount = 16)
+        for (i in 0..15) ring.push(.3f + i * .02f, .4f, .3f, .2f, 1_000L + i * 100)
+        ring.pump(true, 16f, VisualizerEffects.BASELINE, 2_500)
+        val history = FloatArray(16) { ring.targetAt(it) }
+        val columns = ring.shiftedCellsForTest()
+        val phase = ring.scrollPhase01()
+        for (t in 2_516L..4_000L step 16) {
+            assertFalse(ring.pump(false, 16f, VisualizerEffects.BASELINE, t, holdHistory = true))
+        }
+        assertArrayEquals(history, FloatArray(16) { ring.targetAt(it) }, 0f)
+        assertEquals(columns, ring.shiftedCellsForTest())
+        assertEquals(phase, ring.scrollPhase01(), 0f)
+        ring.push(.7f, .6f, .4f, .3f, 4_100)
+        ring.pump(true, 16f, VisualizerEffects.BASELINE, 4_100)
+        assertArrayEquals(history, FloatArray(16) { ring.targetAt(it) }, 0f)
+        assertEquals(columns, ring.shiftedCellsForTest())
+    }
+
+    @Test
+    fun `frame stall keeps existing history instead of replacing a whole screen`() {
+        val ring = WaveformRing(capacity = 128, barCount = 16)
+        repeat(16) { ring.push(.5f, .4f, .3f, .2f, 1_000L + it * 100) }
+        ring.pump(true, 16f, VisualizerEffects.BASELINE, 2_500)
+        val columns = ring.shiftedCellsForTest()
+        // UI stalled for > one screen of audio, then resumes with a large pending batch.
+        repeat(24) { ring.push(.7f, .6f, .4f, .3f, 2_600L + it * 100) }
+        ring.pump(true, 16f, VisualizerEffects.BASELINE, 5_000)
+        assertTrue("a single frame must not replace all visible columns", ring.shiftedCellsForTest() - columns <= 1)
+        assertEquals(.5f, ring.targetAt(0), 0f)
+        assertTrue("obsolete pending data must be dropped without replaying seconds of backlog", ring.pendingCount <= 1)
+    }
+
 }

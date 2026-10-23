@@ -118,7 +118,7 @@ class WaveformScrollBatchArrivalTest {
     }
 
     @Test
-    fun `长卡顿后重建窗口，不留下几十格的播放积压`() {
+    fun `长卡顿后保留可见历史，丢弃积压而不整窗跳变`() {
         val h = WaveformScrollJitterHarness(capacity = 256, barCount = 16)
         val base = 1_000_000.0
         repeat(20) { h.pushBar(base + it * 100.0, 0.5f) }
@@ -127,13 +127,10 @@ class WaveformScrollBatchArrivalTest {
         // 卡顿 1 秒，期间音频线程又推了 10 根柱
         repeat(10) { h.pushBar(base + 2_000.0 + it * 100.0, 0.8f) }
         h.advanceTo(base + 1_020.0)
-        // 卡顿期间只新到了 10 根柱：重建会把**所有**新柱一次搬进窗口（+10），
-        // 而不是只前进一格、把剩下 9 根留在队列里慢慢播（那会永久落后 0.9 秒）。
-        assertEquals(
-            "长卡顿后应吃掉全部积压，而不是只前进一格",
-            afterPrime + 10,
-            h.ring.shiftedCellsForTest(),
-        )
+        // 不重播过时的 9 根柱，也不在一帧内把历史推进 10 格。
+        assertTrue("单帧最多移一格", h.ring.shiftedCellsForTest() - afterPrime <= 1)
+        assertEquals("已有的左侧历史必须保留", .5f, h.ring.targetAt(0), 0f)
+        for (t in 1_040..1_140 step 20) h.advanceTo(base + t)
         assertEquals(0, h.ring.pendingCount)
         assertEquals(0.8f, h.ring.targetAt(15), 1e-6f)
     }

@@ -607,7 +607,13 @@ class WaveformRing(
      * @return 画面是否需要重绘。**完全静止（没有新数据、已收敛、峰值已落、相位已停）时
      *   返回 false** —— 这是"暂停后不再白烧 GPU"的保证。
      */
-    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L): Boolean {
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false): Boolean {
+        // Buffering is a temporary hold, not silence. Keep the measured window and its
+        // ballistics intact, and re-anchor the frame clock when real playback resumes.
+        if (!active && holdHistory) {
+            lastPumpNowMs = 0L
+            return false
+        }
         var changed = false
         if (active) {
             // v3.3.2：`sinceBarMs` 是时间量，与信号无关。它现在**每帧由两个真实时间戳相减**
@@ -626,12 +632,13 @@ class WaveformRing(
                 dtMs.coerceIn(0f, MAX_FRAME_DELTA_MS.toFloat())
             }
             if (nowMs > 0L) lastPumpNowMs = nowMs
-            // v3.6.3：长时间卡顿 / 后台回来 / 旋转后重新挂载时，环里可能积了几十根柱。
-            // 按「一格一根」播完要好几秒，最新一格会一直落后于耳朵（旧实现是一帧全消费，
-            // 不落后但会一次冲很多格）。这里改成**重建**：丢掉一屏以外的积压，用最新的一屏
-            // 重新填满窗口 —— 视觉上是一次「追上现在」，之后继续匀速。
-            if (rawDelta > RESYNC_AFTER_MS || writeIndex - readIndex > barCount) {
-                windowPrimed = false
+            // A stall must not replace a visible screen in one frame. Discard obsolete
+            // pending samples, keep the measured history, and resume from the newest
+            // pending column on the normal grid. Only the initial mount primes a window.
+            if (windowPrimed && (rawDelta > RESYNC_AFTER_MS || writeIndex - readIndex > barCount)) {
+                val latest = writeIndex
+                if (latest - readIndex > 1) readIndex = latest - 1
+                sinceBarMs = 0f
             }
             // v3.6.3：吸收音频线程发布的最新「每根柱间隔」。**放在消费之前**、且与这一帧
             // 有没有柱可消费无关 —— 否则一个偏小的估计会让画面先消费过快、随后没柱可消费，
