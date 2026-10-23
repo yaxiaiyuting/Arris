@@ -486,8 +486,11 @@ android {
         //   markerStride=2、起点固定 0，同一格数据在偶数/奇数下标之间翻转，标记
         //   灭掉/亮起。滚动慢（100ms/格）时肉眼是「小球闪现」，滚动快时变化太快
         //   不易察觉。修法：采样起点 = 窗口累计平移数 % stride，同一格数据始终被采样。
-        versionCode = 85
-        versionName = "3.6.9-gpl"
+        // v3.7.0：波形滚动倍速改为用户可选（0.5 / 0.75 / 1 / 1.5 / 2×，默认 1.5×）。
+        //   >1× 时数据不够会重复最后一列（hold），避免把加速做成空白断层；1× 仍是
+        //   「缺样留空」的诚实语义。设置页「外观与动效 → 波形滚动速度」。
+        versionCode = 86
+        versionName = "3.7.0-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

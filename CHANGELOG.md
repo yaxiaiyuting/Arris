@@ -430,3 +430,23 @@ versionCode **85**。只修波形「小球 / 短横闪现」，这次把**滚动
 
 **未验证**：真机 PLC110 不在线；模拟器上未做慢速滚动的逐帧放大对比。该修复只改
 采样起点，不改峰值数据、球物理或音频链路，风险面限定在标记绘制。
+
+## v3.7.0-gpl — 2026-10-23
+
+versionCode **86**。v3.6.9 修了峰值标记的采样相位；本版按用户要求把**横向滚动速度**
+做成可选项：0.5× / 0.75× / 1× / 1.5× / 2×，默认 **1.5×**。
+
+**实现**：
+- 设置页「外观与动效 → 波形滚动速度」（`visualizer_speed_step`，0..4，默认 1.5×）。
+  `VisualizerPrefs.SPEED_FACTORS` 是唯一倍速表；`WaveformRing.setScrollSpeedFactor`
+  只改 UI 消费节拍，不碰音频线程。
+- >1× 时数据会先被取完；`pump` 的缺样分支改为**重复最后一列**（hold），避免把加速
+  做成空白断层；`bassTarget` 在 hold 列保持上一根真实值，节拍/粒子不会误判静音。
+  1× 及以下仍保持「缺失位置留空」。
+- 倍速写入后立即 `WaveformStore.setSpeed`，启动时由 `VisualizerSetting.read` 从盘恢复。
+
+**文案**：`WaveformStrings` 新增 `visualizerSpeedLabel` / `visualizerSpeedDescription`
+（8 种语言），说明写清 >1× 会重复最后一列、形状会拉伸；单测预算从 38 条更新到 40 条。
+
+验证：**3007 JVM tests / 0 失败 / 240 类**；新增倍速夹取、二倍速消费约两倍历史、
+缺样 hold 与设置默认/往返读写回归。真机未复测（PLC110 不在线）；模拟器 5554 已断开。
