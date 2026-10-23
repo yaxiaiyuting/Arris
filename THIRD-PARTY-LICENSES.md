@@ -177,4 +177,6 @@ Tux was originally created by Larry Ewing using The GIMP. Arris includes newly d
 
 Source and attribution guidance: https://www.kernel.org/faq.html#can-i-use-the-word-linux-or-the-tux-logo
 
+The launcher portrait and monochrome notification icon reuse the native `tux_listener.xml` face and headphones. Their generator and SVG masters are in `tools/icons/` and `artwork/launcher/`.
+
 The Arris scene paths and native celebration renderer are distributed with this fork under GPL-3.0. No remote image or third-party JavaScript fireworks runtime is bundled.

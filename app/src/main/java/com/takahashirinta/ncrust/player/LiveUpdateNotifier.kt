@@ -100,7 +100,7 @@ object LiveUpdateNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             val n = Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_music_note)
+                .setSmallIcon(R.drawable.ic_tux_notification)
                 .setContentTitle(title)
                 .setContentText(artist)
                 .setContentIntent(contentIntent)

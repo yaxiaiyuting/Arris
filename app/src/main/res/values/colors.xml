@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- 应用图标的自适应背景层颜色。改它**只影响图标**。 -->
-    <color name="ic_launcher_background">#12141A</color>
+    <color name="ic_launcher_background">#103126</color>
 
     <!-- 冷启动窗口底色。与图标底色**刻意分开**：
          两者曾经是同一个 color，于是「把图标换成深色」会连带把 OLED 纯黑的启动底

@@ -2017,7 +2017,7 @@ class PlaybackService : MediaLibraryService() {
         val builder = NotificationCompat.Builder(this, "ncrust_playback")
             .setContentTitle(display.title)
             .setContentText(display.subtitle)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(com.takahashirinta.ncrust.R.drawable.ic_tux_notification)
             .setOngoing(false)
             // v1.8.0 · T5：逐行重 post 时不要再次提醒。媒体通知本身在 S6 上
             // defaults/sound/vibrate 全为空，但其它 ROM 未必 —— 显式声明，

@@ -1,0 +1,4 @@
+Source: app/src/main/res/drawable/tux_listener.xml
+Foreground maximum alpha radius: 33.261dp
+Safety threshold: 34dp
+Generated with rsvg-convert and Pillow.
