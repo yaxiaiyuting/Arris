@@ -120,9 +120,12 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# Keep the UI history pump as one small method. Inlining it (and its helpers)
-# into MotionClock.frame merged the wave/motion pipelines into 2176 DEX units.
-# Preserve this boundary; unused overloads may still shrink and names may change.
--keepclassmembers,allowshrinking,allowobfuscation class com.takahashirinta.ncrust.ui.player.WaveformRing {
+# Keep the two live UI pump boundaries. R8 otherwise merges wave history and
+# MotionClock.frame into a >2000-unit body. Keep these called methods (including
+# their optimization boundaries); all other members may still shrink and rename.
+-keepclassmembers,allowobfuscation class com.takahashirinta.ncrust.ui.player.WaveformRing {
     public boolean pump(boolean, float, com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects, long, boolean);
+}
+-keepclassmembers,allowobfuscation class com.takahashirinta.ncrust.ui.player.WaveformStore {
+    public void pump(boolean, float, com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects, long, boolean);
 }
