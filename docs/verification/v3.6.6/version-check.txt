@@ -1,0 +1,13 @@
+next-version.sh —— versionCode 三源交叉校验
+  仓库: /home/duanjb666/deepseek/Arris-finalfixes   (fetch: yes)
+  ① 最近 5 个 tag 指向的 build.gradle.kts:
+       win-v1.0.0=6
+       v3.6.5-gpl=81
+       v3.6.4-gpl=80
+       v3.6.3-gpl=79
+       v3.6.2-gpl=78
+  ② 已发布 APK 的 aapt2 dump badging 实测（红线 19：不看 release 标题）:
+       Ncrust-v2.6.2-gpl-release.apk=50
+  ③ 工作区 build.gradle.kts: versionCode=81 versionName=3.6.5-gpl
+  ----
+  三源最大值 = 81  ⇒ 下一个可用 versionCode = 82

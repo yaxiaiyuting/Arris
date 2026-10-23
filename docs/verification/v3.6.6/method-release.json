@@ -1,0 +1,67 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-finalfixes/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 160,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+36 inline/overload)",
+      "obfuscated": "V4.i.a",
+      "class": "V4.i",
+      "codeUnits": 1231,
+      "registers": 33,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+36 inline/overload)",
+      "obfuscated": "V4.i.a",
+      "class": "V4.i",
+      "codeUnits": 1231,
+      "registers": 33,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayActions (+27 inline/overload)",
+      "obfuscated": "H4.d.a",
+      "class": "H4.d",
+      "codeUnits": 913,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformStore.ring (+17 inline/overload)",
+      "obfuscated": "U4.r2.b",
+      "class": "U4.r2",
+      "codeUnits": 908,
+      "registers": 33,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayWebOverlay (+13 inline/overload)",
+      "obfuscated": "H4.d.b",
+      "class": "H4.d",
+      "codeUnits": 634,
+      "registers": 32,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.publishedGapMs (+6 inline/overload)",
+      "obfuscated": "U4.q2.f",
+      "class": "U4.q2",
+      "codeUnits": 629,
+      "registers": 28,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$7.invoke (+16 inline/overload)",
+      "obfuscated": "H4.d$i.a",
+      "class": "H4.d$i",
+      "codeUnits": 562,
+      "registers": 37,
+      "dex": "classes.dex"
+    }
+  ]
+}

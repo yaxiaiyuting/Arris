@@ -1,0 +1,20 @@
+Applications Graphics Acceleration Info:
+Uptime: 27061990 Realtime: 27061990
+
+** Graphics info for pid 21776 [com.takahashirinta.ncrust] **
+
+Stats since: 27041778008877ns
+Total frames rendered: 1210
+Janky frames: 2 (0.17%)
+Janky frames (legacy): 72 (5.95%)
+50th percentile: 17ms
+90th percentile: 17ms
+95th percentile: 18ms
+99th percentile: 19ms
+Number Missed Vsync: 0
+Number High input latency: 2416
+Number Slow UI thread: 0
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 1
+Number Frame deadline missed: 2
+Number Frame deadline missed (legacy): 2
