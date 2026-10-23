@@ -1,0 +1,441 @@
+{
+  "physicalDevice": false,
+  "method": "debug84 API33/WebView109 with host GPU; real playback and native manual puff tap",
+  "tapped": true,
+  "done": true,
+  "seconds": 49.148,
+  "samples": [
+    {
+      "elapsed": 0.065,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 0.013,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 1.081,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 1.03,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 2.088,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 2.03,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 3.103,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 3.048,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 4.115,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 4.065,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 5.122,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 5.063,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 6.132,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 6.08,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 7.196,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 7.134,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 8.203,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 8.146,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 9.26,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 9.194,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 10.334,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 10.249,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 11.389,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 11.319,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 12.406,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 12.351,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 13.445,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 13.387,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 14.516,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 14.433,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 15.56,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 15.48,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 16.666,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 16.548,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 17.726,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 17.649,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 18.781,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 18.715,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 19.847,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 19.776,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 20.889,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 20.831,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 21.954,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 21.885,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 22.995,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 22.923,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 24.04,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 23.98,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 25.053,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 24.997,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 26.104,
+      "waiting": false,
+      "blown": false,
+      "disposed": false,
+      "time": 26.042,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 27.11,
+      "waiting": true,
+      "blown": false,
+      "disposed": false,
+      "time": 26.2,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 28.201,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 27.237,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 29.247,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 28.276,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 30.307,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 29.331,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 31.322,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 30.371,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 32.403,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 31.41,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 33.488,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 32.51,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 34.564,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 33.58,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 35.619,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 34.615,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 36.632,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 35.637,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 37.679,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 36.699,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 38.686,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 37.708,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 39.72,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 38.75,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 40.797,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 39.775,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 41.807,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 40.831,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 42.872,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 41.912,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 43.928,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 42.973,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 44.943,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 43.988,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 46.01,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 45.041,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 47.074,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 46.09,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 48.141,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 47.192,
+      "done": false,
+      "errors": []
+    },
+    {
+      "elapsed": 49.148,
+      "waiting": false,
+      "blown": true,
+      "disposed": false,
+      "time": 48,
+      "done": true,
+      "errors": []
+    }
+  ]
+}

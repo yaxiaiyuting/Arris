@@ -1,0 +1,179 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-finalfixes/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 160,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+36 inline/overload)",
+      "obfuscated": "V4.i.a",
+      "class": "V4.i",
+      "codeUnits": 1231,
+      "registers": 33,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClock.generationState (+36 inline/overload)",
+      "obfuscated": "V4.i.a",
+      "class": "V4.i",
+      "codeUnits": 1231,
+      "registers": 33,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayActions (+27 inline/overload)",
+      "obfuscated": "H4.d.a",
+      "class": "H4.d",
+      "codeUnits": 913,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformStore.ring (+17 inline/overload)",
+      "obfuscated": "U4.r2.b",
+      "class": "U4.r2",
+      "codeUnits": 908,
+      "registers": 33,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayWebOverlay (+13 inline/overload)",
+      "obfuscated": "H4.d.b",
+      "class": "H4.d",
+      "codeUnits": 634,
+      "registers": 32,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.publishedGapMs (+6 inline/overload)",
+      "obfuscated": "U4.q2.f",
+      "class": "U4.q2",
+      "codeUnits": 629,
+      "registers": 28,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$7.invoke (+16 inline/overload)",
+      "obfuscated": "H4.d$i.a",
+      "class": "H4.d$i",
+      "codeUnits": 562,
+      "registers": 37,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.appliedGapSeq (+5 inline/overload)",
+      "obfuscated": "U4.q2.h",
+      "class": "U4.q2",
+      "codeUnits": 374,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.lowRing (+2 inline/overload)",
+      "obfuscated": "U4.q2.b",
+      "class": "U4.q2",
+      "codeUnits": 202,
+      "registers": 19,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClockKt$MotionFrameClock$2$1.invokeSuspend (+2 inline/overload)",
+      "obfuscated": "V4.k.invokeSuspend",
+      "class": "V4.k",
+      "codeUnits": 188,
+      "registers": 16,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.<init> (+1 inline/overload)",
+      "obfuscated": "U4.q2.<init>",
+      "class": "U4.q2",
+      "codeUnits": 187,
+      "registers": 4,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.CelebrationOverlay (+3 inline/overload)",
+      "obfuscated": "H4.d.v",
+      "class": "H4.d",
+      "codeUnits": 182,
+      "registers": 18,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.batchStarts (+2 inline/overload)",
+      "obfuscated": "U4.q2.j",
+      "class": "U4.q2",
+      "codeUnits": 154,
+      "registers": 19,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$7$1$3$1$1.invoke (+1 inline/overload)",
+      "obfuscated": "H4.d$i$c$a.a",
+      "class": "H4.d$i$c$a",
+      "codeUnits": 138,
+      "registers": 5,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.motion.MotionClockKt$MotionFrameClock$2$1$onFrame$1.invoke (+3 inline/overload)",
+      "obfuscated": "V4.j.invoke",
+      "class": "V4.j",
+      "codeUnits": 138,
+      "registers": 21,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$5$1.invokeSuspend (+2 inline/overload)",
+      "obfuscated": "H4.d$g$a.invokeSuspend",
+      "class": "H4.d$g$a",
+      "codeUnits": 128,
+      "registers": 8,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$7$1$1.invoke (+5 inline/overload)",
+      "obfuscated": "H4.d$i$a.c",
+      "class": "H4.d$i$a",
+      "codeUnits": 106,
+      "registers": 10,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$5.invokeSuspend",
+      "obfuscated": "H4.d$g.invokeSuspend",
+      "class": "H4.d$g",
+      "codeUnits": 95,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.batchSizes (+1 inline/overload)",
+      "obfuscated": "U4.q2.k",
+      "class": "U4.q2",
+      "codeUnits": 72,
+      "registers": 8,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt$BirthdayWebOverlay$3$1.invokeSuspend (+1 inline/overload)",
+      "obfuscated": "H4.d$e.invokeSuspend",
+      "class": "H4.d$e",
+      "codeUnits": 71,
+      "registers": 5,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.WaveformRing.publishedGapSeq (+1 inline/overload)",
+      "obfuscated": "U4.q2.g",
+      "class": "U4.q2",
+      "codeUnits": 70,
+      "registers": 14,
+      "dex": "classes.dex"
+    }
+  ]
+}

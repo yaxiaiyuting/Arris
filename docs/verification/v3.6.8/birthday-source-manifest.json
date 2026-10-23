@@ -1,0 +1,53 @@
+{
+  "sourceDirectory": "/home/duanjb666/deepseek/birthday-motion",
+  "sourceVideo": {
+    "path": "out/reel/birthday.mp4",
+    "sha256": "21531fb9384a7972cfa29fa3fbb87a65e0668f42f0fa48c85f4da735ea00784a",
+    "bytes": 9061018,
+    "width": 1600,
+    "height": 900,
+    "fps": 60,
+    "frames": 2880,
+    "seconds": 48
+  },
+  "imports": [
+    {
+      "path": "js/cues.js",
+      "sourceSha256": "f1343950cde98f41c3ddd3c23b18eafb527d606712bd2b590450a0e49203b420",
+      "appSha256": "f1343950cde98f41c3ddd3c23b18eafb527d606712bd2b590450a0e49203b420",
+      "identical": true
+    },
+    {
+      "path": "js/motion.js",
+      "sourceSha256": "9ed0ecf0e52adc614d3412e0716008e71703b9ded4c4af4807a03516f2496063",
+      "appSha256": "9ed0ecf0e52adc614d3412e0716008e71703b9ded4c4af4807a03516f2496063",
+      "identical": true
+    },
+    {
+      "path": "js/lighting.js",
+      "sourceSha256": "efd7347f1bcb64915eefe0451c8a0b8d507b31ccaa611b0b49507394bb215e86",
+      "appSha256": "efd7347f1bcb64915eefe0451c8a0b8d507b31ccaa611b0b49507394bb215e86",
+      "identical": true
+    },
+    {
+      "path": "js/main.js",
+      "sourceSha256": "1d57aa42fbbbd8424ccc342b2ce248a5b6ff7a1b164235f3a9379e37103d4bbf",
+      "appSha256": "81573d216ada8c3b43b9904fec9da3606584c13886bab9e615d0c49bfa673581",
+      "identical": false
+    },
+    {
+      "path": "css/base.css",
+      "sourceSha256": "09948d144055eaf44176d4dbbe7e276e159e0987b24719381bd087ecc40a720b",
+      "appSha256": "a35986556280c3689b56a4120f12dbcf8af94e325b0c88fdd92dfff85cb052f6",
+      "identical": false
+    }
+  ],
+  "retainedAndroidFiles": [
+    "js/arris.js",
+    "css/arris.css",
+    "js/vfx.js",
+    "js/finish.js",
+    "index.html"
+  ],
+  "physicalDeviceTested": false
+}
