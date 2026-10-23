@@ -99,10 +99,10 @@ def main():
     colors.write_text(re.sub(r'(<color name="ic_launcher_background">).*?(</color>)',r'\g<1>'+BG+r'\g<2>',colors.read_text()))
     fg=group(face());mono=group(monochrome())
     vector(fg,'ic_launcher_foreground');vector(mono,'ic_launcher_monochrome')
-    vector(path('M0 0H108V108H0Z',BG),'ic_launcher_background')
+    vector(path('M0 0H108V108H0Z','@color/ic_launcher_background'),'ic_launcher_background')
     # About/splash use the same centre 72dp framing as an adaptive mask.
     about=E.Element('group',{A+'scaleX':'1.5',A+'scaleY':'1.5',A+'translateX':'-27',A+'translateY':'-27'})
-    about.append(path('M18 54a36 36 0 1 0 72 0a36 36 0 1 0 -72 0Z',BG));about.append(copy.deepcopy(fg))
+    about.append(path('M18 54a36 36 0 1 0 72 0a36 36 0 1 0 -72 0Z','@color/ic_launcher_background'));about.append(copy.deepcopy(fg))
     vector(about,'ic_launcher',width=192,height=192)
     small=E.Element('group',{A+'scaleX':str(1/3),A+'scaleY':str(1/3),A+'translateX':'-6',A+'translateY':'-6'})
     small.append(copy.deepcopy(mono));vector(small,'ic_tux_notification',width=24,height=24,viewport=24)
