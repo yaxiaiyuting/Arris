@@ -62,7 +62,11 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- Current: `versionName = "2.1.4-gpl"`, `versionCode = 34`. Latest release: `v2.1.4-gpl`.
+- **Current: `versionName = "3.7.3-gpl"`, `versionCode = 89`.** Latest release: `v3.7.3-gpl`（draft）。
+  定号依据：`tools/next-version.sh --no-fetch` 三源交叉 —— ① 最近 5 个 tag 的 `versionCode`
+  （v3.7.3=89 / 87.2=88 / 87.1=87 / 87.0=86）② `dist/*.apk` 的 `aapt2 dump badging`
+  ③ 工作区 `build.gradle.kts`；最大值 89 ⇒ 下一个可用 **90**。
+  打 tag 前已用 `git show v3.7.3-gpl:app/build.gradle.kts | grep version` 自证：89 / 3.7.3-gpl。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）
   （v2.1.4 定号：`tools/next-version.sh` 三源交叉验证最大值 = 33 ⇒ **34**；
@@ -146,9 +150,9 @@ Under `com.takahashirinta.ncrust/`:
 | `network/` | Retrofit interface (`NcmApi`), eapi/weapi endpoints (`PlaylistApi`), `RetrofitClient` gateway, `CoverUrls`, response models |
 | `network/crypto/` | `EapiCrypto` (AES-128-ECB + MD5 sign), `WeapiCrypto` (double AES-CBC + RSA) |
 | `player/` | `PlaybackService` (MediaLibraryService + ExoPlayer), `PlaybackStateManager`, `SongUrlFetcher`, `PlayReporter` |
-| `auth/` | `CookieManager` (SharedPreferences), `QrPair` / `QrPairClient` / `QrPairServer` (LAN QR handoff) |
+| `auth/` | `CookieManager` (SharedPreferences, **单一凭证来源**), `NeteaseSessionGuard` (revision + login generation), `NeteaseTokenRefresher` (on-demand renewal), `NeteaseSessionRequests` (one-retry read seam), `NeteaseVipStore`, `QrPair` / `QrPairClient` / `QrPairServer` (LAN QR handoff) |
 | `library/` | `LibraryManager` (cloud-synced liked songs + subscribed albums), `SearchHistoryManager` |
-| `cache/` | `ContentCache` — in-memory network snapshot (home + LRU detail caches + user profile)；**v1.6.0 · D1 / v2.0.0 · T3**：`OfflineKeys`（cache key 纯逻辑）、`OfflineUrlStore`（key→最后成功播放的 URL，≤300 LRU）、`OfflineAudioCache`（media3 `SimpleCache`，`filesDir/offline/audio`）、`OfflineLibrary`（离线曲目索引，≤300 LRU） |
+| `cache/` | `ContentCache` — in-memory network snapshot (home + LRU detail caches + user profile)；**v1.6.0 · D1 / v2.0.0 · T3**：`OfflineKeys`（cache key 纯逻辑）、`OfflineUrlStore`（key→最后成功播放的 URL，≤300 LRU）、`OfflineAudioCache`（media3 `SimpleCache`，`filesDir/offline/audio`）、`OfflineLibrary`（离线曲目索引，≤300 LRU）；**v3.7.3**：`OfflineContent`（full / trial 归属随文件持久化，FULL 沿用历史 key，只有试听加 `~trial_<start>_<end>`） |
 | `lyric/` | `LrcParser` (`[MM:SS.mm]` → `LrcLine.timeMs`), `YrcParser` / `YrcAligner` (word-level), `SweepTrack` (sweep cursor), `LyricsDisplayPrefs`; **v1.9.0**: `TtmlParser` / `TtmlScanner` (AMLL TTML), `AmllTtmlClient`, `LyricSourceChain`, `LyricRequestGate`; `LyricsCache` (200-entry persistent cache, LRC + TTML) |
 | `warmup/` | `AppWarmup` — cold-start preload singleton |
 | `power/` | `BackgroundActivity` — battery-optimisation whitelist intents |
@@ -237,7 +241,8 @@ Two API styles coexist:
 | `API_URL` | `https://interface.music.163.com` (default eapi host) |
 | `INTERFACE_URL` | `https://interface3.music.163.com` (eapi when `useInterface = true`, i.e. song URL fetch) |
 
-- `init(context)` loads the cookie from `CookieManager`; `updateCookie(...)` replaces it (login/logout).
+- `init(context)` loads the cookie from `CookieManager`; `updateCookie(...)` only drops the xeapi memory session — the cookie itself has **one** source, `CookieManager.snapshot()`, so there is nothing to copy in.
+- Every request carries its `NeteaseSessionSnapshot` tag (except `cookieOverride` requests, which must NOT claim to be the current session). Response-side side effects (`reportApiCode`, VIP writes, cookie clears) must run inside `CookieManager.ifCurrent(snapshot)`.
 - `eapiPost(path, payload, useInterface)` encrypts via `EapiCrypto`, sends form `params=<hex>`, PC UA + Referer + Cookie.
 - `eapiPostOfficial(path, payload)` mimics the official iPhone client (header with `os=iphone`, `appver=8.9.60`, deviceId/osver from cookie, random `requestId`); used for `likeSong`. Encrypted write responses are decrypted with `EapiCrypto.decryptResponse`.
 - `weapiPost(path, payloadJson, extraCookies)` produces `params` + `encSecKey` via `WeapiCrypto`.
@@ -427,6 +432,19 @@ SharedPreferences files:
 3. **Phone-scanning-tablet handoff** — `QrAuthorizeScreen` (CameraX + ZXing) scans the tablet's QR, extracts the unikey, and sends the phone's cookie over the LAN. Protocol in `QrPair`: UDP broadcast on port `47821` (prefix `NCRUSTPAIR1?` / `NCRUSTPAIR1!`) to discover the tablet, then a TCP connection carrying a length-prefixed AES-128-CBC payload (key = `SHA-256(unikey)[0:16]`, random IV prepended). `cleartextTraffic` is enabled for this.
 
 **Manual cookie paste no longer exists** — it was removed in `a16e381`. Do not reintroduce it in docs.
+
+#### 会话代次（v3.7.3 起的不变量）
+
+1. `CookieManager` 是凭证的唯一来源；内存快照 = `cookie + revision + loginGeneration`。
+   登录 / 登出 / 同号重登推进 **loginGeneration**；续期换票只推进 **revision**。
+2. 任何响应只能更新它发出时所属的会话：写 Cookie、清 Cookie、写会员缓存前都要过 `ifCurrent(started)`。
+   迟到的 301 不允许清掉新登录态，迟到的会员结果不允许覆盖新账号。
+3. 续期是**按需**的：启动 / 回前台 / 真正用到登录态的请求触发；`Mutex` 共享在飞刷新；失败 60 s、成功 10 min 冷却；
+   续期后先用 `account/get` 验票再落盘。网络失败一律 `RETRYABLE`，只有业务码 301 判 `AUTH_EXPIRED`。
+4. 读取最多重试一次；换号期间抛 `NeteaseSessionChangedException`（`IOException` 子类）。
+   **不要**用 `CancellationException` 表达业务状态 —— 调用方会当成协程取消吞掉它。
+5. qm 侧同理：`qq/QqPlaylistAuth` 保留 `Network` / 业务失败 / `NeedLogin` 三类，
+   只有 `NeedLogin` 才进续期与重登提示；写缓存前在 `QqAuthStore.withAuthLock` 内复核 owner。
 
 ### i18n System
 

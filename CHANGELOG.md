@@ -450,3 +450,79 @@ versionCode **86**。v3.6.9 修了峰值标记的采样相位；本版按用户�
 
 验证：**3007 JVM tests / 0 失败 / 240 类**；新增倍速夹取、二倍速消费约两倍历史、
 缺样 hold 与设置默认/往返读写回归。真机未复测（PLC110 不在线）；模拟器 5554 已断开。
+
+## v3.7.1-gpl — 2026-10-24
+
+versionCode **87**。五组修复，主题是「别把等待当成播放、别把估算当事实」。
+
+- **歌词计时**：断网缓冲、暂停或后台恢复期间不再把等待时间计入播放进度。恢复后以真实播放位置重新锚定，
+  过期采样最多外推 750 ms；迟到的旧曲目取词任务在开始前必须确认完整 `TrackKey`，不得重新取得当前请求身份。
+- **会员到期显示**：账号页显示 qm 绿钻 / SVIP 与 B站大会员到期日期。qm 保留完整时分秒并按北京时间解析，
+  普通绿钻取 `identity.overdate`、SVIP 取 `data.send`，缺失时不借用另一种权益；B站 `vip.due_date` 归一为毫秒
+  并新增日期缓存，旧数据缺失显示「未知」。资料刷新失败保留缓存，qm 写回受当前会话版本保护。
+- **码率补齐**：除接口值外，使用当前选中音频轨道、完整文件长度与时长补齐，覆盖离线播放等接口不返回码率的路径；
+  禁止用缓存片段长度或 PCM 输出参数冒充文件码率。预载下一首不覆盖当前歌曲。接口与流都缺元数据时仍省略。
+- **缓存容量**：默认 512 MiB → **1 GiB**，新增 12 / 16 GiB 档位，上限 16 GiB；用户明确设过的容量保留，
+  设置页与缓存浮层共用候选，容量调整下次启动生效。
+- **随机播放**：改为按可选歌曲数随机抽取，必要时才优先占多数的艺人，减少每轮开头偏向同一批艺人；
+  按完整队列身份保存整轮顺序与游标（`shuffle_round_v1`，字段全部 `SerializedName`），重启后继续未播完的一轮；
+  轮末手动下一首复用已预排顺序，与无缝预载一致。
+
+验证：**3027 JVM tests / 245 类 / 0 失败**；Lint 0 error（55 warning）；debug/release 构建成功，版本号与正式签名核对通过。未做真机测试。
+
+## v3.7.2-gpl — 2026-10-24
+
+versionCode **88**。只改庆祝页布局，不动播放链路。
+
+- Tux 彩蛋与原生生日结束页的「继续听歌」在空间允许时**上移 48dp**，短屏按可用空间缩小间距，
+  不新增溢出；标题、插画与按钮的相对关系保持。
+- 网页生日结束区同步上移：祝福组略上移、动作行间距缩小，底部至少保留 48–72 px，
+  竖屏 / 横屏 / 短屏三种形态都复核过。
+- 继续 / 重播交互、生日时间线与吹气门控保持既有行为。
+- 模拟器 720×1560 实测：按钮距底部导航栏 132 px，点击后正常退出彩蛋。
+
+验证：**3029 JVM tests / 0 失败**；Lint 0 error（55 warning）；正式包签名、版本、对齐检查通过。未做真机测试。
+
+## v3.7.3-gpl — 2026-10-25
+
+versionCode **89**。会话与鉴权修复版，不加新功能。
+
+**① 会话代次隔离（P1）**
+`auth/NeteaseSessionGuard` 给凭证加单调 `revision` 与「登录代次」：登录、登出、同号重登都推进登录代次，
+**续期只推进 revision**（换票不算换人，同账号的在飞读取不作废）。`CookieManager` 的 `snapshot / ifCurrent /
+advanceGeneration / commitRefresh` 与 Cookie 落盘在同一把锁内完成，写失败回滚。
+`network/RetrofitClient` 给请求打上会话快照标签（`cookieOverride` 路径不打，避免把「验票请求」误认成当前会话）；
+`PlaylistApi.reportBusinessCode(code, response)` 必须携带请求身份；`SessionMonitor.markExpired` 只在
+`ifCurrent(started)` 内清 Cookie。于是：A 的迟到 301 不会清掉 B 的登录态；A 的会员查询结果也不会写回
+`NeteaseVipStore` 影响 B 的搜索排序判据。
+
+**② ncm 按需续期**
+`auth/NeteaseTokenRefresher`：启动 / 回前台 / 实际使用时按需触发；`Mutex` 共享在飞刷新（同一时刻只有一个）；
+会话级冷却（失败 60 s、成功 10 min）；**续期后先用 `w/nuser/account/get` 验证返回的票据再落盘**，
+落盘前再校验一次请求身份；只有业务码 301 判 `AUTH_EXPIRED`，其余失败一律按可重试处理 —— 断网不再清凭证。
+`auth/NeteaseSessionRequests.renewRead` 是纯编排缝：首次读取 → 判定是否被拒 → 共享续期 → 最多重试一次；
+换号期间抛 `NeteaseSessionChangedException`（**不是** `CancellationException` —— 后者会被调用方当成协程取消吞掉，
+让会话监视器停摆）。
+
+**③ qm 歌单鉴权续期（P2）**
+`qq/QqPlaylistAuth.playlistAuthFailure` 保留完整分类：`Network` / 未知业务码 → `OFFLINE`，
+只有 `NeedLogin` → `NEED_LOGIN`。列表与详情两条路径都改用它，断网刷新歌单不再误报「需要重新登录」。
+`checkLoginValid()` 返回完整结果而不是 Boolean；`fetchUserInfo` 走既有的 `QqRefreshRetry`（共享在飞、冷却、
+成功静默期、迟到响应保护），只对明确的 `NeedLogin` 续期并重试一次。写缓存前在 `QqAuthStore.withAuthLock`
+内复核 owner。
+
+**④ 队列编辑即时撤销旧预载**
+`player/PreloadGeneration` 给「下一首计划」一个单调代次；12 处队列变更都在改队列前调用 `invalidatePreload()`
+（取消在飞任务、清空槽位、`PlaybackService.discardPreload()` 清待播项与封面预取），Service 处理
+`preload_next` 时核对 Intent 里的代次，过期直接丢弃。队列 / 播放模式变化后按最新计划重排一次预载。
+
+**⑤ 离线回退与试听归属**
+`OfflineUrlIndex.recallRecord` 按「请求档位优先 → 同曲其它档位」排序，并对每个候选做可用性判定
+（本会话失败过的不再喂、`coversStart` 覆盖 position 0），首选档位失效不再放弃整首歌。
+`cache/OfflineContent` 把 full / 试听（含起止秒）随文件持久化，冷启动命中离线文件时能还原 `Trial` 徽标与提示。
+**兼容性取舍**：`FULL` 沿用历史 key `song:<id>:<level>`，只有试听才加 `~trial_<start>_<end>` ——
+否则升级后既有下载全部 miss；旧清单（纯字符串）迁移为「未标注」，仍可播放，但不计入完整收听的证据。
+
+验证：**3058 JVM tests / 249 类 / 0 失败**（新增 4 个测试类 20 例）；Lint **0 error**（60 warning，17 条按 baseline 过滤）；
+release/debug 构建成功，`versionCode` 89，签名证书 SHA-256 与 v3.7.2 相同（`e62eca39…bbec82`），`zipalign` 通过。
+**未做真机测试**，也没有向真实账号发送续期、收藏或播放上报请求；以上结论来自源码构造状态的单元测试与静态检查。

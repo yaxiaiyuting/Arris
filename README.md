@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.6.5--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-11.95%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.7.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-12.04%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -64,7 +64,7 @@
 
 ---
 
-## 🎵 两个音源，一个队列
+## 🎵 三个音源，一个队列
 
 | | ncm | qm |
 |---|---|---|
@@ -77,13 +77,23 @@
 | 搜索 | 主源 | 聚合追加，列表顶部标注「ncm N 首 · qm M 首」 |
 | 会员 | 独立显示 | 独立显示（**只用于展示，不参与播放决策**） |
 
+**B站（v3.1.0 起，默认关闭）**：设置里打开后才出现在搜索与播放链路里。
+
+| | B站 |
+|---|---|
+| 登录 | 可选：B站扫码登录（v3.2.0）；不登录也能播**匿名 320K** |
+| 取链 | Wbi 签名 + `playurl` 直连；大会员账号可拿到 Hi-Res 无损（v3.4.8 起读 `dash.flac.audio`） |
+| 歌词 | 取视频字幕轨（cc），**不是逐字**；没有字幕就没有歌词 |
+| 边界 | 不参与 ncm/qm 的歌单与收藏；直链 2 小时轮换，因此**不承诺离线下载** |
+
 **队列怎么混**：队列里每首歌都带 `source` 字段，播放时按它路由到对应音源取链与歌词。
-两个平台的数字 id 用**高位标志位隔离**（QQ 的 id 抬到 `1 shl 62` 以上），
+三个平台的数字 id 用**高位标志位隔离**（qm 抬到 `1 shl 62`、B站 `1 shl 61`），
 所以离线缓存、歌词缓存、续播进度、队列判重这些既有结构一个都没改，也没有任何数据迁移 ——
 「撞号串歌」在结构上不可能发生。
 
-**未做的三件事**（写清楚，免得误解）：QQ 曲目**不进 ncm 歌单/收藏**（需要「本地歌单」这个尚不存在的概念）；
-QQ 曲目的歌词**不落盘缓存**（断网时没有歌词）；QQ 曲目**不参与播放上报**（QQ 侧没有等价机制，也不该伪造）。
+**未做的三件事**（写清楚，免得误解）：qm / B站曲目**不进 ncm 歌单/收藏**（跨源写库需要「本地歌单」这个概念，
+它到 v2.3.0 才有）；qm 曲目的歌词**不落盘缓存**（断网时没有歌词）；qm 曲目**不参与播放上报**
+（qm 侧没有等价机制，也不该伪造）。
 
 ---
 
@@ -120,7 +130,7 @@ QQ 曲目的歌词**不落盘缓存**（断网时没有歌词）；QQ 曲目**�
 - **播放上报**：复刻官方 `webLog`，本地收听计入推荐与听歌指数
 - **底部控制栏可收起**（v1.4.0）：窄屏全屏播放器下向上拖控制栏 → 控制栏滑出、歌词 / 队列面板长高到全屏，右下角悬浮播放键向下拖恢复；`Animatable` + `graphicsLayer` 平移，动画帧零重组。v1.4.2 起常驻把手（上拖收起 / 下拖恢复 / 点按切换），v1.5.0 起触摸区与无障碍语义达 48×24 dp
 - **音质就地切换**（v1.8.0）：竖屏控制栏 / 宽屏控制条 / 横屏大屏共用同一个音质 chip，点开就是 8 档二级菜单，不再跳设置页；档位真变了才重新取链续播
-- **离线缓存**（v1.6.0 Phase 1 → **v2.0.0 Phase 2**）：**已经播放过**的音频流按 media3 `SimpleCache` / `CacheDataSource` 语义自动落盘 `filesDir/offline/audio`（LRU，上限 64 MB–8 GB 可调，默认 512 MiB），断网时可回放；未播放过的歌不产生任何本地文件。**Phase 2 起可在设置 →「离线缓存」里看到缓存了哪些歌（标题 / 歌手 / 档位 / 占用）、单曲删除、调整上限并看到分项占用**。⚠️ 仍然**没有显式「下载」入口** —— 离线可播范围严格等于「这台设备上真正播过的歌」（合规定位见下方「离线缓存的范围」）
+- **离线缓存**（v1.6.0 Phase 1 → **v2.0.0 Phase 2**）：**已经播放过**的音频流按 media3 `SimpleCache` / `CacheDataSource` 语义自动落盘 `filesDir/offline/audio`（LRU，默认 **1 GiB**，12 / 16 GiB 可选，上限 16 GiB —— v3.7.1 起从 512 MiB 扩容），断网时可回放；未播放过的歌不产生任何本地文件。**Phase 2 起可在设置 →「离线缓存」里看到缓存了哪些歌（标题 / 歌手 / 档位 / 占用）、单曲删除、调整上限并看到分项占用**。⚠️ 仍然**没有显式「下载」入口** —— 离线可播范围严格等于「这台设备上真正播过的歌」（合规定位见下方「离线缓存的范围」）
 
 ### 🎨 界面
 
@@ -154,7 +164,7 @@ QQ 曲目的歌词**不落盘缓存**（断网时没有歌词）；QQ 曲目**�
 
 ## 🎼 支持音质
 
-UI 上是一套 8 级档位，两个音源各自映射到自己平台的文件档位：
+UI 上是一套 8 级档位，各音源映射到自己平台的文件档位：
 
 | 档位（UI） | ncm `level` | qm 文件前缀 | 容器 | 要求 |
 |---|---|---|---|:--:|
@@ -177,11 +187,11 @@ UI 上是一套 8 级档位，两个音源各自映射到自己平台的文件�
 
 ## 📦 安装
 
-1. 打开 [Releases](https://github.com/yaxiaiyuting/Arris/releases)，下载最新的 release APK（约 **11.95 MB**）
+1. 打开 [Releases](https://github.com/yaxiaiyuting/Arris/releases)，下载最新的 release APK（约 **12.04 MB**）
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v3.7.0 release APK **实测 12,039,856 字节 ≈ 12.04 MB**，debug 33,454,245 字节。
+> 体积说明（最新）：v3.7.3 release APK **实测 12,039,884 字节 ≈ 12.04 MB**，debug 34,197,075 字节。
 > 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
 
 ### 🔐 登录
@@ -193,6 +203,17 @@ App 不提供手动粘贴 Cookie，登录方式：
 - **手机扫码授权平板** — 平板显示二维码后，用已登录 Arris 的手机扫描，经局域网把凭证加密传给平板
 
 登录成功后自动同步云端收藏。
+
+#### 登录态怎么维持（v3.7.3）
+
+- **ncm 会话按需续期**：启动、回到前台、以及真正要用到登录态的请求（取链、读资料、写收藏）会先检查一次；
+  票还新就直接放行，不额外打网络。需要续期时**同一时刻只有一个刷新在飞**，其余请求等它的结果。
+- **断网不等于掉登录**：只有服务端明确回「未登录」才会判定失效并让界面提示重登；超时、DNS 失败、
+  5xx 一律按可重试处理，凭证原样保留。判定失效后 60 秒内不会重复请求，续期成功则 10 分钟内不再刷。
+- **换号不串状态**：每个请求都带着它发出时的会话身份，迟到的响应只能更新它自己那份会话。
+  所以「A 的请求 301 把 B 顶下线」「A 的会员结果写进 B 的排序」这两种串号在 v3.7.3 已被堵住。
+- **qm 歌单区分「没网」和「没登录」**：断网刷新歌单只提示离线/稍后重试，不再弹「请重新登录」；
+  只有明确的鉴权拒绝才走续期与重登入口。
 
 ---
 
@@ -237,9 +258,10 @@ benchmark/run_benchmark.sh all     # Macrobenchmark：冷启动 / 滚动 / 播�
 | **歌词引擎** | `LrcParser`（行级）/ `YrcParser` + `YrcAligner`（ncm 逐字，LCS 保序对齐）/ `SweepTrack`（连续光标）/ `TtmlParser` + `TtmlScanner`（自研纯 Kotlin 扫描器，零依赖、JVM 可单测）/ `AmllTtmlClient`（AMLL 镜像拉取）/ `LyricSourceChain`（三级回退）/ `LyricRequestGate`（防快速切歌竞态）/ `LyricsCache`（200 条持久化） |
 | **网络直连** | 自有 `EapiCrypto`（AES-128-ECB + MD5 签名）与 `WeapiCrypto`（双 AES-CBC + 原始 RSA），直连 ncm，无中间服务器 |
 | **ContentCache** | 内存网络快照 + Crossfade，消除「空屏 → spinner → 跳变」；LRU-32 详情缓存 |
-| **离线缓存** | `cache/OfflineAudioCache`（media3 `SimpleCache` + `CacheDataSource`，`filesDir/offline/audio`，512 MiB LRU；自定义 key `ncrustkey=song:<id>:<level>`，否则 URL 每次轮换永远不命中）+ `OfflineUrlStore`（离线回放 URL 清单，300 条 LRU） |
+| **离线缓存** | `cache/OfflineAudioCache`（media3 `SimpleCache` + `CacheDataSource`，`filesDir/offline/audio`，默认 1 GiB、上限 16 GiB；自定义 key `ncrustkey=song:<id>:<level>`，否则 URL 每次轮换永远不命中）+ `OfflineUrlStore`（离线回放 URL 清单，300 条 LRU） |
+| **会话与鉴权（v3.7.3）** | `auth/NeteaseSessionGuard`（凭证 + 单调 revision + 登录代次）、`NeteaseTokenRefresher`（共享在飞续期 / 会话级冷却 / 续期后先验票）、`NeteaseSessionRequests`（读取最多重试一次，换号即弃响应）、`qq/QqPlaylistAuth`（保留网络/业务/鉴权三类失败）；所有写操作都受同一代次闸门保护 |
 | **持久化** | 全部 SharedPreferences + Gson，无 Room |
-| **性能** | R8 全量混淆 + 资源 shrink（release 9.76 MB，v1.8.1 实测）、`AppWarmup` 冷启动预热、状态订阅下推至叶子组件、播放器折叠态子树 gating、大屏可视化 60fps 增量重绘 |
+| **性能** | R8 全量混淆 + 资源 shrink（release 12.04 MB，v3.7.3 实测）、`AppWarmup` 冷启动预热、状态订阅下推至叶子组件、播放器折叠态子树 gating、大屏可视化 60fps 增量重绘 |
 | **动效强度（v3.0.0）** | `ui/player/motion/`：`MotionEffects`（统一档位 / 能力位矩阵 / 五个独立开关，**纯逻辑且不含任何降级水位**——自动降级已删除，有反射断言守着）、`MotionPrefs`（10 个键 + 迁移水位 4）、`MotionBindings`（**特征 → 动效参数**的唯一映射层）、`MotionEnvelope` + `MotionBackdropState`（响度包络 / 瞬态脉冲 / 冲击波 / 光晕 / 粒子的定长 SoA 池）、`CoverBlur`（32px 降采样 + 三遍盒式模糊 + 按封面 URL 缓存的纯 Kotlin 实现）、`MotionClock`（全仓库唯一的帧时钟）、`MotionBackdrop`（全屏背景层：模糊 / 呼吸 / 视差 / 冲击波 / 光晕 / 粒子） |
 | **音频特征（v3.0.0）** | `player/AudioFeatureExtractor.kt`：两个一阶低通（150 Hz / 2 kHz）在**同一次逐样本遍历**里算出全带 RMS + 低 / 中 / 高频带 + 质心近似 + 瞬态（**每声道一份滤波状态** + **10 ms 子帧结算**）；`player/TransparentWaveformSink.kt` 负责两个开关（画不画波形 / 界面动效要不要特征）与「失败回落 RMS-only」；`ui/player/WaveformStore` 用 volatile 标量 + **单调瞬态计数**发布到 UI 线程。**全程无 FFT**，音频线程零分配 |
 
@@ -350,6 +372,9 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.6.5-gpl | 2026-10-23 | 波形缺样列不再继承峰值/速度（小球横条闪现）；歌词缓冲期不外推；切歌 UI 队列外兜底 |
 | v3.6.9-gpl | 2026-10-23 | 波形峰值标记采样相位跟随滚动：修慢速滚动时小球/短横闪现 |
 | v3.7.0-gpl | 2026-10-23 | 波形滚动倍速用户可选（0.5/0.75/1/1.5/2×，默认 1.5×）；>1× 缺样重复最后一列 |
+| v3.7.1-gpl | 2026-10-24 | 歌词不再把断网等待计入播放进度；账号页显示 ncm/qm/B站权益到期；码率补齐到实际音频轨道与文件元数据；缓存默认 1 GiB；随机播放按队列身份保存整轮顺序与游标 |
+| v3.7.2-gpl | 2026-10-24 | Tux 彩蛋与生日结束页的「继续听歌」上移 48dp（短屏按可用空间收间距），网页生日结束区同步；8 种尺寸的继续/重播/吹气门控复核 |
+| v3.7.3-gpl | 2026-10-25 | 会话代次隔离（迟到 301 不再清掉新登录）+ ncm 按需续期（共享在飞、限次重试、续期后先验票）+ qm 歌单鉴权保留完整失败分类；编辑队列即时撤销旧预载；离线逐档回退、试听归属随文件持久化 |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 
