@@ -1,0 +1,58 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-playback-fixes/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 684,
+  "violations": [],
+  "warnings": [],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BlowRecorder$listen$3.invokeSuspend (+2 inline/overload)",
+      "obfuscated": "H4.k$a.invokeSuspend",
+      "class": "H4.k$a",
+      "codeUnits": 942,
+      "registers": 31,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.BirthdayWebOverlayKt.BirthdayActions (+27 inline/overload)",
+      "obfuscated": "H4.d.a",
+      "class": "H4.d",
+      "codeUnits": 913,
+      "registers": 53,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawBirthday",
+      "obfuscated": "H4.m.c",
+      "class": "H4.m",
+      "codeUnits": 749,
+      "registers": 27,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationOverlayKt$CelebrationText$1.invoke (+18 inline/overload)",
+      "obfuscated": "H4.s$e.a",
+      "class": "H4.s$e",
+      "codeUnits": 718,
+      "registers": 54,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.CelebrationArtView.drawScene",
+      "obfuscated": "H4.m.d",
+      "class": "H4.m",
+      "codeUnits": 713,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.celebration.VersionEggRowKt.VersionEggRow (+27 inline/overload)",
+      "obfuscated": "H4.B.a",
+      "class": "H4.B",
+      "codeUnits": 712,
+      "registers": 49,
+      "dex": "classes.dex"
+    }
+  ]
+}

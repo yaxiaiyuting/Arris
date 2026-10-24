@@ -1,0 +1,17 @@
+{
+  "serial": "emulator-5556",
+  "size": [
+    720,
+    1560
+  ],
+  "densityDpi": 300,
+  "button": [
+    45,
+    1293,
+    675,
+    1383
+  ],
+  "gapToNavigationBarPx": 132,
+  "fontScale": 1,
+  "physicalDeviceTest": false
+}

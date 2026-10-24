@@ -1,0 +1,27 @@
+{
+  "source_commit": "88e4a6b557c4fc4ab941b31cea72ebcfab8c48e9",
+  "versionName": "3.7.2-gpl",
+  "versionCode": 88,
+  "files": {
+    "Ncrust-v3.7.2-gpl-release.apk": {
+      "bytes": 12039884,
+      "sha256": "e95c8a6d2f2138a398e67c46125360880f38a772f0b25eeb2c5a045ee20a1053",
+      "zipalign": true
+    },
+    "Ncrust-v3.7.2-gpl-debug.apk": {
+      "bytes": 33470677,
+      "sha256": "0d4c4e0b662b26e1590adf86e732a02bf57bd47ef463f2b5b200193aa8ccb9e7",
+      "zipalign": true
+    },
+    "mapping-v3.7.2-gpl.txt.gz": {
+      "bytes": 5665516,
+      "sha256": "325bc9f89e4a955c930c55a022040984e45eefe3636acf13d70bbdd805a1d0a0"
+    },
+    "RELEASE_NOTES.md": {
+      "bytes": 721,
+      "sha256": "45f66315c463a34e5d6b6303f76ad215484e1a88c2b8419a7db6b4951dba1e6d"
+    }
+  },
+  "package": "package: name='com.takahashirinta.ncrust' versionCode='88' versionName='3.7.2-gpl' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+  "release_signature_verified": true
+}
