@@ -758,7 +758,10 @@ object QqApi {
         val svip = data.optInt("svip", identity.optInt("svip", 0))
         return QqProfile(
             vipType = if (svip > 0) 2 else if (vip > 0) 1 else 0,
-            vipExpireAt = QqMembershipExpiry.parse(identity.optString("overdate")),
+            // SVIP 的日期是 data.send；identity.overdate 属于绿钻，不能互相冒充。
+            vipExpireAt = QqMembershipExpiry.parse(
+                if (svip > 0) data.optString("send") else identity.optString("overdate"),
+            ),
         )
     }
 
