@@ -489,8 +489,8 @@ android {
         // v3.7.0：波形滚动倍速改为用户可选（0.5 / 0.75 / 1 / 1.5 / 2×，默认 1.5×）。
         //   >1× 时数据不够会重复最后一列（hold），避免把加速做成空白断层；1× 仍是
         //   「缺样留空」的诚实语义。设置页「外观与动效 → 波形滚动速度」。
-        versionCode = 86
-        versionName = "3.7.0-gpl"
+        versionCode = 87
+        versionName = "3.7.1-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
