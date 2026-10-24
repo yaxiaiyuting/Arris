@@ -194,7 +194,7 @@ private fun CelebrationText(kind:CelebrationKind,phase:CelebrationPhase,animated
             }
             Spacer(Modifier.height(12.dp))
         }
-    }, footerReserve=footerReserve)
+    }, footerReserve=footerReserve, footerLift=if(done)48.dp else 0.dp)
 }
 
 @Composable

@@ -22,7 +22,7 @@ fs.mkdirSync(out,{recursive:true});
    const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}};
    return {text:rect(document.querySelector('.body.last')),actions:rect(document.querySelector('.arris-actions')),buttons:[...document.querySelectorAll('.arris-actions button')].map(rect),duration:BDAY.master.duration(),errors:BDAY.errors};
   });
-  for(const b of geometry.buttons)if(b.x<0||b.right>width+.5||b.y<geometry.text.bottom||b.bottom>height-24||b.height<48)throw Error(JSON.stringify({width,height,geometry}));
+  for(const b of geometry.buttons)if(b.x<0||b.right>width+.5||b.y<geometry.text.bottom||b.bottom>height-Math.max(48,Math.min(72,height*.08))+.5||b.height<48)throw Error(JSON.stringify({width,height,geometry}));
   await page.screenshot({path:`${out}/birthday-${width}x${height}.png`});
   await page.locator('.arris-actions button:last-child').click();
   if(await page.evaluate(()=>document.body.classList.contains('arris-done')))throw Error('replay did not hide actions');

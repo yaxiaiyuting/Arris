@@ -43,7 +43,8 @@
     // Their native predecessor was pinned to the viewport, detached from the wishes.
     box.classList.add('measure-actions');
     let scale = 1;
-    for (let i = 0; i < 12 && box.getBoundingClientRect().bottom > innerHeight - 32; i++) {
+    const bottomGap = Math.max(48, Math.min(72, innerHeight * .08));
+    for (let i = 0; i < 12 && box.getBoundingClientRect().bottom > innerHeight - bottomGap; i++) {
       scale *= .94;
       box.style.setProperty('--wish-scale', scale.toFixed(3));
     }

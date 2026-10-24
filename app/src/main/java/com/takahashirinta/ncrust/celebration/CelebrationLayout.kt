@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
+import kotlin.math.min
 
 /** Both native art and Compose copy use the measured stage, including system insets. */
 internal class CelebrationPlacement {
@@ -66,11 +67,17 @@ internal fun CelebrationFrame(
     heading: @Composable () -> Unit,
     footer: @Composable () -> Unit,
     footerReserve: Dp = 12.dp,
+    footerLift: Dp = 0.dp,
 ) {
     val reserve by animateDpAsState(
         targetValue = footerReserve,
         animationSpec = tween(durationMillis = 320),
         label = "celebrationFooterReserve",
+    )
+    val lift by animateDpAsState(
+        targetValue = footerLift,
+        animationSpec = tween(durationMillis = 320),
+        label = "celebrationFooterLift",
     )
     BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(horizontal=24.dp, vertical=10.dp)) {
         Layout(
@@ -93,9 +100,11 @@ internal fun CelebrationFrame(
             val top=children[0].measure(loose)
             val bottom=children[2].measure(loose)
             val viewport = if (constraints.minHeight == Constraints.Infinity) 0 else constraints.minHeight
-            val artHeight=celebrationArtHeightPx(viewport, top.height, bottom.height, ART_MIN_HEIGHT.roundToPx())
+            val minArt = ART_MIN_HEIGHT.roundToPx()
+            val bottomGap = celebrationFooterLiftPx(viewport, top.height, bottom.height, minArt, lift.roundToPx())
+            val artHeight=celebrationArtHeightPx(viewport-bottomGap, top.height, bottom.height, minArt)
             val art=children[1].measure(Constraints.fixed(constraints.maxWidth,artHeight))
-            layout(constraints.maxWidth,top.height+art.height+bottom.height) {
+            layout(constraints.maxWidth,top.height+art.height+bottom.height+bottomGap) {
                 top.placeRelative(0,0)
                 art.placeRelative(0,top.height)
                 bottom.placeRelative(0,top.height+art.height)
@@ -117,3 +126,7 @@ internal val ART_MIN_HEIGHT = 72.dp
  */
 internal fun celebrationArtHeightPx(viewportPx: Int, topPx: Int, bottomPx: Int, minArtPx: Int): Int =
     max(minArtPx, viewportPx - topPx - bottomPx)
+
+/** 为结束按钮留出底部呼吸空间，只使用插画可让出的高度；小屏不得因此新增溢出。 */
+internal fun celebrationFooterLiftPx(viewportPx: Int, topPx: Int, bottomPx: Int, minArtPx: Int, requestedPx: Int): Int =
+    min(max(0, requestedPx), max(0, viewportPx - topPx - bottomPx - minArtPx))

@@ -42,4 +42,17 @@ class CelebrationLayoutGeometryTest {
     fun `视口未知时不产生负数`() {
         assertEquals(artMin, celebrationArtHeightPx(0, 153, 200, artMin))
     }
+
+    @Test fun `end action rises without changing the overall viewport height`() {
+        val gap = celebrationFooterLiftPx(720, 153, 88, artMin, 48)
+        val art = celebrationArtHeightPx(720-gap, 153, 88, artMin)
+        assertEquals(48, gap)
+        assertEquals(720, 153 + art + 88 + gap)
+        assertEquals(672, 153 + art + 88)
+    }
+    @Test fun `short screen only gives the action the spare art height`() {
+        assertEquals(19, celebrationFooterLiftPx(332, 153, 88, artMin, 48))
+        assertEquals(0, celebrationFooterLiftPx(300, 153, 88, artMin, 48))
+        assertEquals(0, celebrationFooterLiftPx(0, 153, 88, artMin, 48))
+    }
 }
