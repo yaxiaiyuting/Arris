@@ -2574,6 +2574,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 「这次请求为谁发的」与「现在播的是谁」在同一个值上比较，串台没有生存空间。
      */
     private suspend fun fetchLyrics(track: TrackKey) {
+        // 迟到的旧辅助任务不得重新领号，把协调器的当前曲目切回旧歌。
+        if (track != currentTrack) return
         // 去重必须排在 begin() 之前：同歌并发时第二次直接返回；若先 begin()，第二次会把第一次
         // 的号作废 —— 第一次的结果整包丢弃、第二次又不干活，歌词反而永远出不来。
         // v2.1.5：判重的键含音源（跨源同号不会再互相吞掉请求），且必须**仍是当前世代** ——

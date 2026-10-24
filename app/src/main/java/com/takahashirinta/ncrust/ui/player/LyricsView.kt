@@ -292,13 +292,14 @@ fun LyricsView(
     // `trackKey` 用 rememberUpdatedState 读取：本效果以 Unit 为 key（只订阅一次位置流），
     // 直接捕获 `trackKey` 会永远读到首次组合时的那个值，于是「这条采样属于哪一首」永远错。
     val currentTrackKey = rememberUpdatedState(trackKey)
+    val currentPlaying = rememberUpdatedState(isPlaying)
     LaunchedEffect(Unit) {
         snapshotFlow { positionState.value }.collect { pos ->
             anchor.anchorPosMs = pos
             anchor.anchorNanos = System.nanoTime()
             anchor.anchorTrackKey = currentTrackKey.value
             val drift = kotlin.math.abs(pos - displayPosition.longValue)
-            if (!isPlaying || drift > 1_500L) {
+            if (!currentPlaying.value || drift > 1_500L) {
                 displayPosition.longValue = pos
             }
         }
@@ -350,6 +351,11 @@ fun LyricsView(
     //
     // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
     LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, trackKey) {
+        // 恢复播放/联网时重新计时，不把缓冲、暂停或后台停留算成已播放时间。
+        anchor.anchorPosMs = positionState.value
+        anchor.anchorNanos = System.nanoTime()
+        anchor.anchorTrackKey = trackKey
+        displayPosition.longValue = positionState.value
         // v3.6.5：缓冲中 / 还没出声时不外推。旧实现只看 isPlaying —— 用户按下播放、
         // 音频还在加载时 isPlaying 已经是 true，外推从 0 开始跑，歌词就先唱了。
         if (!isPlaying || isBuffering || !isVisible || !enabled) {
@@ -369,7 +375,7 @@ fun LyricsView(
             // 不匹配时退化成"用画面上的值"，等第一条属于本曲的采样到达即可。
             val anchorValid = anchor.anchorTrackKey == trackKey
             val nowMs = if (anchorValid) {
-                anchor.anchorPosMs + (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
+                anchor.positionAt(System.nanoTime())
             } else {
                 displayPosition.longValue
             }
@@ -382,8 +388,7 @@ fun LyricsView(
             if (inSweepWindow(nowMs, sweepWindows, timestamps)) {
                 withFrameNanos { }
                 if (anchorValid) {
-                    val t = anchor.anchorPosMs +
-                        (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
+                    val t = anchor.positionAt(System.nanoTime())
                     if (t > displayPosition.longValue) displayPosition.longValue = t
                 }
                 continue
@@ -400,7 +405,7 @@ fun LyricsView(
             if (waitMs > 0) delay(waitMs.coerceAtMost(1_000L))
             if (!anchorValid) continue
             val extrapolated =
-                anchor.anchorPosMs + (System.nanoTime() - anchor.anchorNanos) / 1_000_000L
+                anchor.positionAt(System.nanoTime())
             // 只在真正越过该边界时写,长间隔里不会每秒写一次状态。
             if (extrapolated >= next && extrapolated > displayPosition.longValue) {
                 displayPosition.longValue = extrapolated
@@ -671,6 +676,10 @@ private fun buildShareLines(
 }
 
 private class PositionAnchor {
+    fun positionAt(nowNanos: Long): Long = com.takahashirinta.ncrust.lyric.LyricClock.positionAt(
+        anchorPosMs, anchorNanos, nowNanos,
+    )
+
     var anchorPosMs: Long = 0L
     var anchorNanos: Long = 0L
 
