@@ -240,6 +240,7 @@ class PlaybackService : MediaLibraryService() {
          */
         var onTrackTransitioned: ((MusicSource, Long, String?, String?, String, String, String) -> Unit)? = null
         var onBufferingChanged: ((Boolean) -> Unit)? = null
+        var onBitrateChanged: ((MusicSource, Long, Long) -> Unit)? = null
         // B2-C：封面 Palette 提取出的主题色（ARGB）。null = 当前歌无封面，UI 回落预设色。
         // 由 PlaybackService 静态回调推给 PlayerViewModel.coverAccentRgb。
         var onCoverAccent: ((Int?) -> Unit)? = null
@@ -584,7 +585,11 @@ class PlaybackService : MediaLibraryService() {
         mediaSession = MediaLibrarySession.Builder(this, player, libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                publishStreamBitrate()
+            }
             override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) publishStreamBitrate()
                 if (state == Player.STATE_ENDED) {
                     // 观测点：走到末尾时播放器里还剩几项、当前是哪一首。count==1 说明
                     // 「没有下一首预载项」，与「回调没到 UI 层」是两种不同的故障，日志可区分。
@@ -1765,6 +1770,25 @@ class PlaybackService : MediaLibraryService() {
         return bytes
     }
 
+    /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
+    fun publishStreamBitrate() {
+        if (!::player.isInitialized) return
+        val item = player.currentMediaItem ?: return
+        val identity = PreloadSlot.identityFromMediaId(item.mediaId) ?: return
+        val selected = player.currentTracks.groups.firstOrNull {
+            it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        }
+        val format = selected?.let { group ->
+            (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
+        }
+        val bitrate = StreamBitrate.resolve(
+            format?.averageBitrate ?: -1,
+            item.localConfiguration?.uri?.toString()?.let { OfflineAudioCache.contentLengthForUrl(it) } ?: 0L,
+            player.duration,
+        )
+        if (bitrate > 0L) onBitrateChanged?.invoke(identity.first, identity.second, bitrate)
+    }
+
     /**
      * 立刻广播一次当前进度。
      *
@@ -1805,6 +1829,7 @@ class PlaybackService : MediaLibraryService() {
         if (!player.isPlaying) return
         progressJob = scope.launch {
             while (isActive && player.isPlaying) {
+                publishStreamBitrate()
                 onProgressUpdate?.invoke(player.currentPosition, player.duration)
                 updatePlaybackState()
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。

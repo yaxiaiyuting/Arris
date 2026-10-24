@@ -299,7 +299,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * `qualityStatus.value = …` 成对出现，读的时候一起看。
      *
      * 拿不到的情形（如实留 0，UI 侧由 `QualityAssessment.bitrateLabel` 决定不显示）：
-     * 离线缓存兜底 / B 站音频区 / 取链失败 / 老缓存条目。
+     * 接口与实际音频轨道、缓存文件长度都无法提供信息时。
      */
     val currentBitrate = MutableStateFlow(0L)
 
@@ -726,6 +726,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         PlaybackService.onBufferingChanged = { buffering -> isBuffering.value = buffering }
+        PlaybackService.onBitrateChanged = { source, id, bitrate ->
+            if (currentTrack?.source == source && currentTrack?.id == id && bitrate > 0L) {
+                currentBitrate.value = bitrate
+            }
+        }
         // B2-C：封面 Palette 提取出的主题色（null = 无封面 / 提取失败 → UI 回落预设色）。
         PlaybackService.onCoverAccent = { rgb -> coverAccentRgb.value = rgb }
         // v2.5.0 · A（色调）：同一张封面的 HCT 多角色调色板（深/浅两套）。
@@ -784,6 +789,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     currentSongName.value = nextTitle.ifBlank { currentSongName.value.orEmpty() }
                     currentSongArtist.value = nextArtist.ifBlank { currentSongArtist.value.orEmpty() }
                     currentSongArtwork.value = nextArtwork
+                    currentBitrate.value = 0L
                     if (wasPreloaded) {
                         preloadedResult?.let { applyQualityVerdict(preloadedRequestedLevel, it) }
                         // 降档重试 / 换档重播要用**当前歌**的 privilege，不能留在上一首上。
@@ -862,6 +868,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 runCatching {
                     val p = svc.player
                     isPlaying.value = p.isPlaying
+                    isBuffering.value = p.playbackState == androidx.media3.common.Player.STATE_BUFFERING
+                    svc.publishStreamBitrate()
                     val livePos = p.currentPosition
                     val liveDur = p.duration
                     if (liveDur > 0) {
@@ -3052,6 +3060,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onTrackStarted = null
         PlaybackService.onTrialResolved = null
         PlaybackService.onBufferingChanged = null
+        PlaybackService.onBitrateChanged = null
         PlaybackService.onCoverAccent = null
         PlaybackService.onPlaybackError = null
         super.onCleared()
