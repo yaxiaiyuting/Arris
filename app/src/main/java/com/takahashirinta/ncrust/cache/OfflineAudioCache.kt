@@ -44,7 +44,7 @@ import java.io.File
  * 3. **FLAG_IGNORE_CACHE_ON_ERROR**：写缓存失败（空间不足 / 目录被占）绝不能影响播放，
  *    出错就退化成纯网络播放。
  *
- * 上限默认 512 MiB，可在 prefs 里改（`ncrust_settings` 的 `offline_cache_mb`）。
+ * 上限默认 1 GiB，可在 prefs 里改（`ncrust_settings` 的 `offline_cache_mb`）。
  * LRU 淘汰由 media3 的 [LeastRecentlyUsedCacheEvictor] 负责。
  */
 // v3.1.0 · B：本文件用到 media3 的 `@UnstableApi`（`ResolvingDataSource` /
@@ -57,12 +57,12 @@ object OfflineAudioCache {
     /** 缓存目录名（相对 filesDir）。 */
     private const val DIR = "offline/audio"
 
-    /** 默认上限：512 MiB。 */
-    const val DEFAULT_MAX_BYTES = 512L * 1024 * 1024
+    /** 默认上限：1 GiB。 */
+    const val DEFAULT_MAX_BYTES = 1024L * 1024 * 1024
 
     /** 上限的合法区间（MB）。设置页的选择器与 [maxBytes] 的夹取共用这一处定义。 */
     const val MIN_MB = 64
-    const val MAX_MB = 8192
+    const val MAX_MB = 16384
 
     private const val MB = 1024L * 1024L
 

@@ -498,7 +498,7 @@ private fun coverPlaceholder(songId: Long): Color {
 }
 
 /** 上限候选（MB）。合法区间 64..8192，与 [OfflineAudioCache.maxBytes] 的夹取范围一致。 */
-private val OFFLINE_CACHE_LIMIT_MB = listOf(64, 128, 256, 384, 512, 768, 1024, 2048, 4096, 8192)
+private val OFFLINE_CACHE_LIMIT_MB = com.takahashirinta.ncrust.ui.settings.SettingsRegistry.OFFLINE_CACHE_MB_CHOICES
 
 /**
  * v3.3.0 · 用户建议：**库页的「离线」tab**。

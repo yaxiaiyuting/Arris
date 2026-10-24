@@ -260,12 +260,11 @@ object SettingsRegistry {
     val QUALITY_CHOICES: List<Int> = QualityLadder.LEVELS.indices.toList()
 
     /**
-     * 离线缓存上限候选（MB）。逐字抄自 `ui/screen/OfflineCacheOverlay.kt:474`
-     * （`OFFLINE_CACHE_LIMIT_MB` 是 private，无法引用），合法区间 64..8192
-     * 与 `OfflineAudioCache.MIN_MB/MAX_MB` 一致、默认 512 与 `DEFAULT_MAX_BYTES` 一致。
+     * 离线缓存上限候选（MB），设置页与缓存浮层共用。合法区间 64..16384
+     * 与 `OfflineAudioCache.MIN_MB/MAX_MB` 一致、默认 1024 与 `DEFAULT_MAX_BYTES` 一致。
      */
     val OFFLINE_CACHE_MB_CHOICES: List<Int> =
-        listOf(64, 128, 256, 384, 512, 768, 1024, 2048, 4096, 8192)
+        listOf(64, 128, 256, 384, 512, 768, 1024, 2048, 4096, 8192, 12288, 16384)
 
     /**
      * 全部条目，顺序 = **UI 渲染顺序**（分组顺序 = [SettingsGroup] 声明顺序，
@@ -1123,7 +1122,7 @@ object SettingsRegistry {
             pref(
                 key = "offline_cache_mb",
                 type = SettingsEntryType.CHOICE,
-                default = 512, // cache/OfflineAudioCache.kt:70（DEFAULT_MAX_BYTES / 1MiB，合法 64..8192）
+                default = 1024, // cache/OfflineAudioCache.kt:70（DEFAULT_MAX_BYTES / 1MiB，合法 64..16384）
                 group = SettingsGroup.STORAGE,
                 titleKey = "offlineCacheLimitLabel",
                 choices = OFFLINE_CACHE_MB_CHOICES,
