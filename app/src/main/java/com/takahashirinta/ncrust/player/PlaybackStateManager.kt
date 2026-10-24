@@ -48,6 +48,8 @@ object PlaybackStateManager {
     // 非法值一律回落 CYCLE —— prefs 是跨版本存活的，别让它变成一个能越界的脏值。
     private const val KEY_PLAY_MODE = "play_mode"
 
+    private const val KEY_SHUFFLE = "shuffle_round_v1"
+
     // 每首歌曲进度记忆 key（B4）
     private const val KEY_SONG_POSITIONS = "song_positions"
     // 上限：超出后按保存时间淘汰最旧的，避免 SharedPreferences 无限膨胀。
@@ -317,6 +319,17 @@ object PlaybackStateManager {
         getPrefs(context).edit().putInt(KEY_PLAY_MODE, mode).apply()
     }
 
+    fun saveShuffle(context: Context, keys: List<String>, order: List<Int>, position: Int, current: Int) {
+        val snapshot = ShuffleSnapshot(keys, order, position)
+        if (!snapshot.matches(keys, current)) return
+        getPrefs(context).edit().putString(KEY_SHUFFLE, gson.toJson(snapshot)).apply()
+    }
+
+    fun restoreShuffle(context: Context, keys: List<String>, current: Int): ShuffleSnapshot? = runCatching {
+        gson.fromJson(getPrefs(context).getString(KEY_SHUFFLE, null), ShuffleSnapshot::class.java)
+            ?.takeIf { it.matches(keys, current) }
+    }.getOrNull()
+
     fun clearQueue(context: Context) {
         // 也取消任何飞行中的 debounce 写，避免 clearQueue 之后又被延迟写覆盖回去
         synchronized(flushLock) {
@@ -327,6 +340,7 @@ object PlaybackStateManager {
         getPrefs(context).edit()
             .remove(KEY_QUEUE)
             .remove(KEY_QUEUE_INDEX)
+            .remove(KEY_SHUFFLE)
             .apply()
     }
 }

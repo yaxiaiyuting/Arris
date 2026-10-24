@@ -1193,6 +1193,15 @@ fun MainScreen(
         pendingRound = null
     }
 
+    LaunchedEffect(playbackQueue, shuffledIndices, shuffledPosition, currentQueueIndex, playMode) {
+        if (playMode == QueueModes.SHUFFLE && playbackQueue.isNotEmpty()) {
+            PlaybackStateManager.saveShuffle(
+                context, playbackQueue.map { QueueKeys.keyOf(it).tag },
+                shuffledIndices, shuffledPosition, currentQueueIndex,
+            )
+        }
+    }
+
     /**
      * 「当前曲之后该预载谁」的唯一入口（点队列切歌 / 自然衔接后 / 最后 60s 窗口共用）。
      *
@@ -1240,7 +1249,13 @@ fun MainScreen(
             playbackQueue = savedQueue.first.toMutableList()
             currentQueueIndex = savedQueue.second.coerceIn(0, playbackQueue.size - 1)
             if (playMode == QueueModes.SHUFFLE) {
-                generateShuffledIndices()
+                val savedRound = PlaybackStateManager.restoreShuffle(
+                    context, playbackQueue.map { QueueKeys.keyOf(it).tag }, currentQueueIndex,
+                )
+                if (savedRound != null) {
+                    shuffledIndices = savedRound.order.orEmpty()
+                    shuffledPosition = savedRound.position
+                } else generateShuffledIndices()
             }
             // v2.2.1 · P0：把**队列里那一份**身份补给正在播的这首。
             //
@@ -1537,7 +1552,7 @@ fun MainScreen(
                     // v2.0.0 · T1-C：一轮播完 ⇒ 开新一轮，**跳过下标 0**（那是刚播完的这首）。
                     // 旧实现在这里重洗整池后播 fresh[0]，可能立刻重播刚播完的歌；
                     // 无缝路径更糟：把当前曲钉在 0 位再播下标 0 = 直接重播。
-                    val fresh = ShuffleRound.newRound(
+                    val fresh = pendingRound ?: ShuffleRound.newRound(
                         size = playbackQueue.size,
                         currentIndex = currentQueueIndex,
                         keyOf = ::artistKeyOf,

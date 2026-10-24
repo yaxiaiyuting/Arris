@@ -115,4 +115,14 @@ class ShuffleRoundTest {
             }
         }
     }
+
+    @Test fun `first pick is not locked to the most frequent artist when dispersion allows choice`() {
+        val groups = intArrayOf(9, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4)
+        val picks = (0 until 300).map { seed ->
+            val order = ShuffleRound.newRound(groups.size, 0, keys(*groups), Random(seed))
+            for (n in 1 until order.size) assertNotEquals(groups[order[n - 1]], groups[order[n]])
+            groups[order[1]]
+        }.toSet()
+        assertEquals(setOf(1, 2, 3, 4), picks)
+    }
 }

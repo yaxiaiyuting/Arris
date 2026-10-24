@@ -68,10 +68,8 @@ object ShuffleRound {
     /**
      * 防扎堆排列：把「相邻两首同主艺人」的相邻对拆开。
      *
-     * 算法是经典的「最多剩余优先」（同 LeetCode `reorganizeString` 的贪心）：
-     * 每一步从**剩余数量最多的、且与上一首不同艺人**的桶里随机取一首；
-     * 同数量桶之间随机打破平局，桶内取哪一首也随机 —— 所以结果依旧是随机的，
-     * 只是把"同艺人挤在一起"这件事压掉。
+     * 算法在与上一首不同艺人的歌曲中按歌曲数加权抽取。仅当某艺人占剩余池
+     * 一半以上、延后就必然造成扎堆时优先取它；桶内歌曲继续随机。
      *
      * **下标 0 保持不动**：本应用的契约是 `shuffledIndices[0]` 恒等于正在播的那一首，
      * 预载/无缝过渡都依赖它，所以只重排 1..n-1。
@@ -101,17 +99,21 @@ object ShuffleRound {
         while (remaining > 0) {
             var best: MutableList<Int>? = null
             var bestKey: Long? = null
-            var bestSize = 0
-            var ties = 0
-            for ((key, list) in buckets) {
-                if (list.isEmpty()) continue
-                // null 桶（缺艺人信息）永不与 prev 相撞
-                if (prev != null && key == prev) continue
-                if (best == null || list.size > bestSize) {
-                    best = list; bestKey = key; bestSize = list.size; ties = 1
-                } else if (list.size == bestSize) {
-                    ties++
-                    if (random.nextInt(ties) == 0) { best = list; bestKey = key }
+            var candidates = 0
+            // 只有某艺人占剩余池一半以上时才强制先取，以免末尾无法分散。
+            // 其他时候按可选歌曲数加权抽取，避免“最多剩余优先”把每轮开头锁在同一批艺人。
+            val forced = buckets.entries.firstOrNull {
+                it.key != null && it.key != prev && it.value.size > remaining / 2
+            }
+            if (forced != null) {
+                best = forced.value
+                bestKey = forced.key
+            } else for ((key, list) in buckets) {
+                if (list.isEmpty() || (prev != null && key == prev)) continue
+                candidates += list.size
+                if (random.nextInt(candidates) < list.size) {
+                    best = list
+                    bestKey = key
                 }
             }
             if (best == null) {
