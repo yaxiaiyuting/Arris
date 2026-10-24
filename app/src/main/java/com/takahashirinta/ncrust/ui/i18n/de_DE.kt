@@ -32,6 +32,9 @@ val deDE = Strings(
     installLaunchFailed = "Der Installer konnte nicht gestartet werden",
 ),
     account = AccountStrings(
+        biliVipName = "Premium",
+        membershipExpiredLabel = { kind, date -> "$kind · Abgelaufen am $date" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · Ablaufdatum unbekannt" },
         sessionExpiredBanner = "Anmeldung abgelaufen – manche Titel sind nur als Hörprobe verfügbar, Empfehlungen und Bibliothek fehlen · Erneut anmelden",
         dailySongsLoginHint = "Melde dich an für persönliche Empfehlungen",
         vipKindSvip = "Vinyl SVIP",

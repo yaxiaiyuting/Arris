@@ -104,6 +104,7 @@ data class BiliProfile(
     val mid: Long = 0L,
     val vipType: Int = 0,
     val vipStatus: Int = 0,
+    val vipExpireAtMs: Long = 0L,
 ) {
     /**
      * 是否大会员。
@@ -171,6 +172,7 @@ object BiliAuthStore {
     const val KEY_MID = "mid"
     const val KEY_VIP_TYPE = "vip_type"
     const val KEY_VIP_STATUS = "vip_status"
+    const val KEY_VIP_EXPIRE = "vip_expire_at_ms"
 
     /** 资料最后一次拉取的时刻（毫秒）。 */
     const val KEY_PROFILE_AT = "profile_at"
@@ -240,6 +242,7 @@ object BiliAuthStore {
             .remove(KEY_MID)
             .remove(KEY_VIP_TYPE)
             .remove(KEY_VIP_STATUS)
+            .remove(KEY_VIP_EXPIRE)
             .remove(KEY_PROFILE_AT)
             .apply()
         mirror = null
@@ -284,6 +287,7 @@ object BiliAuthStore {
             .putLong(KEY_MID, profile.mid)
             .putInt(KEY_VIP_TYPE, profile.vipType)
             .putInt(KEY_VIP_STATUS, profile.vipStatus)
+            .putLong(KEY_VIP_EXPIRE, profile.vipExpireAtMs)
             .putLong(KEY_PROFILE_AT, System.currentTimeMillis())
             .apply()
     }
@@ -293,6 +297,7 @@ object BiliAuthStore {
         mid = prefs(context).getLong(KEY_MID, 0L),
         vipType = prefs(context).getInt(KEY_VIP_TYPE, 0),
         vipStatus = prefs(context).getInt(KEY_VIP_STATUS, 0),
+        vipExpireAtMs = prefs(context).getLong(KEY_VIP_EXPIRE, 0L),
     )
 
     fun uname(context: Context): String? = profile(context).uname?.takeIf { it.isNotBlank() }

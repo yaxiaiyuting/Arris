@@ -32,6 +32,9 @@ val jpJP = Strings(
     installLaunchFailed = "インストーラーを起動できません",
 ),
     account = AccountStrings(
+        biliVipName = "プレミアム会員",
+        membershipExpiredLabel = { kind, date -> "$kind · $date に期限切れ" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · 有効期限不明" },
         sessionExpiredBanner = "ログインの有効期限が切れました。一部の曲は試聴のみ、おすすめとライブラリは利用できません · 再ログイン",
         dailySongsLoginHint = "ログインするとあなた向けのおすすめを表示します",
         vipKindSvip = "黒膠 SVIP",

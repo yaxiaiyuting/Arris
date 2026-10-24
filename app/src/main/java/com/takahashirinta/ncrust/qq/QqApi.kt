@@ -747,33 +747,19 @@ object QqApi {
     suspend fun fetchProfile(): QqProfile? {
         val request = QqRequests.vip()
         val response = QqClient.musicu(request, appIdentity = true) ?: return null
-        if (response.optInt("code", -1) != 0) return null
-        val identity = response.optJSONObject("data")?.optJSONObject("identity") ?: return null
-        val vip = identity.optInt("vip", 0)
-        val svip = identity.optInt("svip", 0)
-        return QqProfile(
-            nick = null,
-            uid = 0L,
-            // 只区分「有没有会员」与原始档位，不把具体数字写死进业务判断
-            // （见 QqProfile 的注释：腾讯加一档会员就会让写死的判断全错）。
-            vipType = if (svip > 0) 2 else if (vip > 0) 1 else 0,
-            vipExpireAt = parseOverdate(identity.optString("overdate")),
-        )
+        return parseProfile(response)
     }
 
-    /**
-     * `overdate` 实测是**日期字符串**（形如 `2026-09-25`），不是时间戳。
-     * 解析成秒级时间戳；解析不出返回 0（= 未知，[QqProfile.isVip] 会按「不过期」处理 ——
-     * 服务端既然说了 vip=1，就不该因为我们看不懂日期而把它判成非会员）。
-     */
-    private fun parseOverdate(text: String?): Long {
-        if (text.isNullOrBlank()) return 0L
-        // 已经是纯数字时间戳时直接用（腾讯侧字段格式历史上变过）
-        text.toLongOrNull()?.let { return if (it > 100_000_000_000L) it / 1000L else it }
-        return runCatching {
-            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-            fmt.parse(text)?.time?.div(1000L) ?: 0L
-        }.getOrDefault(0L)
+    internal fun parseProfile(response: JSONObject): QqProfile? {
+        if (response.optInt("code", -1) != 0) return null
+        val data = response.optJSONObject("data") ?: return null
+        val identity = data.optJSONObject("identity") ?: return null
+        val vip = identity.optInt("vip", 0)
+        val svip = data.optInt("svip", identity.optInt("svip", 0))
+        return QqProfile(
+            vipType = if (svip > 0) 2 else if (vip > 0) 1 else 0,
+            vipExpireAt = QqMembershipExpiry.parse(identity.optString("overdate")),
+        )
     }
 
     /**

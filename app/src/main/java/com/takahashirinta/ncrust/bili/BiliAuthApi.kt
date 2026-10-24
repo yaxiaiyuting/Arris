@@ -90,10 +90,11 @@ data class BiliNav(
     val mid: Long = 0L,
     val vipType: Int = 0,
     val vipStatus: Int = 0,
+    val vipExpireAtMs: Long = 0L,
     val wbiImgUrl: String? = null,
     val wbiSubUrl: String? = null,
 ) {
-    fun profile(): BiliProfile = BiliProfile(uname = uname, mid = mid, vipType = vipType, vipStatus = vipStatus)
+    fun profile(): BiliProfile = BiliProfile(uname = uname, mid = mid, vipType = vipType, vipStatus = vipStatus, vipExpireAtMs = vipExpireAtMs)
 }
 
 /** 一次 `nav` 的结局。**它只回答一件事：这份 cookie 现在还算不算登录态。** */
@@ -319,6 +320,8 @@ object BiliAuthApi : BiliAuthEndpoints {
                     mid = data?.optLong("mid", 0L) ?: 0L,
                     vipType = data?.optInt("vipType", 0) ?: 0,
                     vipStatus = data?.optInt("vipStatus", 0) ?: 0,
+                    vipExpireAtMs = (data?.optJSONObject("vip")?.optLong("due_date", 0L)
+                        ?: 0L).let { if (it in 1_000_000_000L..99_999_999_999L) it * 1000L else it.coerceAtLeast(0L) },
                     wbiImgUrl = wbi?.optString("img_url")?.takeIf { it.isNotBlank() },
                     wbiSubUrl = wbi?.optString("sub_url")?.takeIf { it.isNotBlank() },
                 ),

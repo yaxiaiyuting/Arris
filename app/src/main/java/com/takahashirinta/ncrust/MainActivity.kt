@@ -2533,8 +2533,9 @@ fun MainScreen(
         if (qqLoginTrigger > 0) {
             // 登录成功后拉一次会员状态（失败不影响登录态本身：cookie 已经在本地了）。
             runCatching {
+                val revision = com.takahashirinta.ncrust.qq.QqAuthStore.currentAuthRevision()
                 com.takahashirinta.ncrust.qq.QqApi.fetchProfile()?.let {
-                    com.takahashirinta.ncrust.qq.QqAuthStore.saveProfile(context, it)
+                    com.takahashirinta.ncrust.qq.QqAuthStore.saveProfileIfCurrent(context, revision, it)
                 }
             }
         }

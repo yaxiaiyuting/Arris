@@ -35,3 +35,10 @@ private fun vipKindName(strings: Strings, kind: VipKind): String = when (kind) {
 /** 到期时间按 yyyy-MM-dd 显示（规格里的文案就是「有效期至 2026-12-01」）。 */
 private fun vipDate(ms: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(ms))
+
+/** 其他音源仅展示会员信息，不复用网易“仅可试听”的权益文案。 */
+internal fun membershipStatusText(strings: Strings, kind: String, expiresMs: Long): String = when {
+    expiresMs <= 0L -> strings.account.membershipExpiryUnknownLabel(kind)
+    expiresMs <= System.currentTimeMillis() -> strings.account.membershipExpiredLabel(kind, vipDate(expiresMs))
+    else -> strings.vipActiveLabel(kind, vipDate(expiresMs))
+}

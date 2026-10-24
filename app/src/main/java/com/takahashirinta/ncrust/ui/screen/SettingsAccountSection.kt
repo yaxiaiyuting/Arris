@@ -55,6 +55,7 @@ import com.takahashirinta.ncrust.ui.components.SectionTitle
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
 import com.takahashirinta.ncrust.ui.components.vipStatusText
+import com.takahashirinta.ncrust.ui.components.membershipStatusText
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.settings.SettingsGroup
 import com.takahashirinta.ncrust.ui.settings.SettingsRenderPlan
@@ -621,6 +622,17 @@ internal fun QqAccountBlock(
     val context = LocalContext.current
     var loggedIn by remember { mutableStateOf(QqAuthStore.isLoggedIn(context)) }
     var profile by remember { mutableStateOf(QqAuthStore.profile(context)) }
+    val accountStrings = LocalStrings.current
+    LaunchedEffect(loggedIn) {
+        if (loggedIn && QqAuthStore.needsProfileRefresh(context)) {
+            val revision = QqAuthStore.currentAuthRevision()
+            val fresh = com.takahashirinta.ncrust.qq.QqApi.fetchProfile()
+            if (fresh != null && QqAuthStore.saveProfileIfCurrent(context, revision, fresh)) {
+                profile = fresh
+            }
+        }
+    }
+
 
     SectionTitle(accountTitle)
     Row(
@@ -637,7 +649,11 @@ internal fun QqAccountBlock(
                 !loggedIn -> notLoggedInText
                 // 会员状态只是**显示**：判据来自服务端，取不到就不显示角标
                 // （宁可不显示，也不要写一个猜出来的「非会员」）。
-                profile.isVip() -> "VIP"
+                profile.vipType > 0 -> membershipStatusText(
+                    accountStrings,
+                    if (profile.vipType > 1) "SVIP" else "VIP",
+                    profile.vipExpireAt * 1000L,
+                )
                 QqAuthStore.uin(context) != null -> "uin " + QqAuthStore.uin(context)
                 else -> ""
             }

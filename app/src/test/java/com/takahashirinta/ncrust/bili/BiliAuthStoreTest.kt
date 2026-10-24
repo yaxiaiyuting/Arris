@@ -65,6 +65,7 @@ class BiliAuthStoreTest {
             "KEY_MID" to "mid",
             "KEY_VIP_TYPE" to "vip_type",
             "KEY_VIP_STATUS" to "vip_status",
+            "KEY_VIP_EXPIRE" to "vip_expire_at_ms",
             "KEY_PROFILE_AT" to "profile_at",
         )
 

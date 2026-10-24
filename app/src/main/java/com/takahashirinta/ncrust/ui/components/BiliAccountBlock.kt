@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.bili.BiliAuthApi
+import com.takahashirinta.ncrust.bili.BiliNavResult
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +46,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
  *
  * 1. **没有「手机号登录 / 网页登录」第二个入口**：B 站侧本轮只做扫码
  *    （探针 `probe-bili-login.md` 只实测了二维码那一条路）。
- * 2. **状态行不显示会员角标**：`isVip` 的数据来自 `nav` 的 `vipStatus/vipType`，
- *    而**登录态**下这两个字段的形状本轮未实测（无大会员账号）⇒ 不显示比显示一个
- *    可能错的角标好（与 QQ 块「取不到就不显示」同一条纪律）。
+ * 2. **会员信息只用于展示**：nav 的会员字段与到期时间持久化，缺失日期如实显示未知。
  * 3. **未登录时的说明是「音质上限」而不是「扫码可用性」**：B 站扫码不依赖腾讯网关，
  *    没有 QQ 那类「服务不可用就换网页登录」的问题；用户真正需要知道的是
  *    「登录能换来什么」——而这件事本轮**只验证了一半**，所以文案如实写「未验证」。
@@ -66,6 +68,20 @@ internal fun BiliAccountBlock(
     // 读的是进程内镜像（`BiliAuthStore.init` 在冷启动时播过种），组合期零 IO。
     var loggedIn by remember { mutableStateOf(BiliAuthStore.isLoggedIn(context)) }
     var uname by remember { mutableStateOf(BiliAuthStore.uname(context)) }
+    var profile by remember { mutableStateOf(BiliAuthStore.profile(context)) }
+    val strings = LocalStrings.current
+    LaunchedEffect(loggedIn) {
+        if (loggedIn && BiliAuthStore.needsProfileRefresh(context)) {
+            val cookie = BiliAuthStore.cookieHeader(context) ?: return@LaunchedEffect
+            val result = BiliAuthApi.navWithCookie(cookie)
+            if (result is BiliNavResult.LoggedIn && cookie == BiliAuthStore.cookieHeader(context)) {
+                profile = result.nav.profile()
+                BiliAuthStore.saveProfile(context, profile)
+                uname = profile.uname
+            }
+        }
+    }
+
 
     SectionTitle(accountTitle)
     Row(
@@ -87,6 +103,13 @@ internal fun BiliAccountBlock(
             if (status.isNotEmpty()) {
                 MetroText(
                     text = status,
+                    style = LocalMetroTypography.current.bodySmall,
+                    color = LocalMetroColors.current.onSurfaceVariant,
+                )
+            }
+            if (loggedIn && (profile.isVip() || profile.vipExpireAtMs > 0L)) {
+                MetroText(
+                    text = membershipStatusText(strings, strings.account.biliVipName, profile.vipExpireAtMs),
                     style = LocalMetroTypography.current.bodySmall,
                     color = LocalMetroColors.current.onSurfaceVariant,
                 )

@@ -32,6 +32,9 @@ val zhCN = Strings(
     installLaunchFailed = "无法调起安装程序",
 ),
     account = AccountStrings(
+        biliVipName = "大会员",
+        membershipExpiredLabel = { kind, date -> "$kind · 已于 $date 到期" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · 到期时间未知" },
         sessionExpiredBanner = "登录已失效，部分歌曲只能试听，推荐与收藏不可用 · 重新登录",
         dailySongsLoginHint = "登录后为你推荐",
         vipKindSvip = "黑胶 SVIP",

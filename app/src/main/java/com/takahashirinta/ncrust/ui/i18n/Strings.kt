@@ -2272,6 +2272,9 @@ data class QrFeedbackStrings(
 
 /** 上游移植文案的独立组，避免扩大 Strings 构造器。 */
 data class AccountStrings(
+    val membershipExpiredLabel: (String, String) -> String,
+    val membershipExpiryUnknownLabel: (String) -> String,
+    val biliVipName: String,
     val sessionExpiredBanner: String,
     val dailySongsLoginHint: String,
     val vipKindSvip: String,

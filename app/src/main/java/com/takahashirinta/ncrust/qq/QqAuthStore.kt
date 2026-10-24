@@ -177,6 +177,13 @@ object QqAuthStore {
             .apply()
     }
 
+    /** 请求开始时的会话已变更则丢弃资料，不能把旧账号的会员日期写给新账号。 */
+    fun saveProfileIfCurrent(context: Context, revision: Long, profile: QqProfile): Boolean = withAuthLock {
+        if (revision != authRevisionLocked() || !isLoggedIn(context)) return@withAuthLock false
+        saveProfile(context, profile)
+        true
+    }
+
     fun profile(context: Context): QqProfile = QqProfile(
         nick = prefs(context).getString(KEY_NICK, null),
         uid = prefs(context).getLong(KEY_UID, 0L),

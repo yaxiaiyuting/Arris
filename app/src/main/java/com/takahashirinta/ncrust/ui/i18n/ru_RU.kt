@@ -32,6 +32,9 @@ val ruRU = Strings(
     installLaunchFailed = "Не удалось запустить установщик",
 ),
     account = AccountStrings(
+        biliVipName = "Премиум",
+        membershipExpiredLabel = { kind, date -> "$kind · Срок истёк $date" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · Дата окончания неизвестна" },
         sessionExpiredBanner = "Вход больше не действует — часть песен доступна только фрагментом, рекомендации и медиатека недоступны · Войти снова",
         dailySongsLoginHint = "Войдите, чтобы получать персональные рекомендации",
         vipKindSvip = "Vinyl SVIP",

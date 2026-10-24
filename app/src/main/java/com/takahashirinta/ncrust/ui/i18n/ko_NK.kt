@@ -32,6 +32,9 @@ val koNK = Strings(
     installLaunchFailed = "설치기동을 시작할수 없습니다",
 ),
     account = AccountStrings(
+        biliVipName = "프리미엄",
+        membershipExpiredLabel = { kind, date -> "$kind · $date 만료" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · 만료일 미상" },
         sessionExpiredBanner = "로그인이 실효되였습니다. 일부 곡은 시청만 가능하고 추천과 보관함을 리용할수 없습니다 · 다시 로그인",
         dailySongsLoginHint = "로그인하면 당신을 위한 추천",
         vipKindSvip = "흑교 SVIP",

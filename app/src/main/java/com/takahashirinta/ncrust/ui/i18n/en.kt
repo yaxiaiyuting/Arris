@@ -32,6 +32,9 @@ val en = Strings(
     installLaunchFailed = "Could not launch the installer",
 ),
     account = AccountStrings(
+        biliVipName = "Premium",
+        membershipExpiredLabel = { kind, date -> "$kind · Expired on $date" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · Expiry date unknown" },
         sessionExpiredBanner = "Your session expired — some songs are preview only, recommendations and library are unavailable · Sign in again",
         dailySongsLoginHint = "Sign in for personalised picks",
         vipKindSvip = "Vinyl SVIP",

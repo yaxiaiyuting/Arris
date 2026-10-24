@@ -32,6 +32,9 @@ val jpMY = Strings(
     installLaunchFailed = "設 器 起 不 可",
 ),
     account = AccountStrings(
+        biliVipName = "大會員",
+        membershipExpiredLabel = { kind, date -> "$kind · $date 期限切" },
+        membershipExpiryUnknownLabel = { kind -> "$kind · 期限不明" },
         sessionExpiredBanner = "入 効 失 一部曲 試聴 のみ 推奨 庫 用 不 可 · 再入",
         dailySongsLoginHint = "入 後 汝 爲 推奨",
         vipKindSvip = "黒膠 SVIP",

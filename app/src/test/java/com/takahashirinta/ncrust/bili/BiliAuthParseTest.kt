@@ -335,4 +335,14 @@ class BiliAuthParseTest {
         // 数据类的 equals/hashCode 不受影响。
         assertEquals(cred, cred.copy())
     }
+
+    @Test fun `premium expiry survives nav to profile and legacy field absence is unknown`() {
+        // 构造样本；不声称在线会员账号实测。
+        val result = BiliAuthApi.parseNav("""{"code":0,"data":{"isLogin":true,"mid":1,"vipType":2,"vipStatus":1,"vip":{"due_date":1800000000000}}}""") as BiliNavResult.LoggedIn
+        assertEquals(1800000000000L, result.nav.profile().vipExpireAtMs)
+        val seconds = BiliAuthApi.parseNav("""{"code":0,"data":{"isLogin":true,"vip":{"due_date":1800000000}}}""") as BiliNavResult.LoggedIn
+        assertEquals(1800000000000L, seconds.nav.profile().vipExpireAtMs)
+        assertEquals(0L, BiliProfile().vipExpireAtMs)
+        assertEquals(0L, BiliNav(isLogin = true).profile().vipExpireAtMs)
+    }
 }
