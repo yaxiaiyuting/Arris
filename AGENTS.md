@@ -390,7 +390,7 @@ SharedPreferences files:
 | File | Owner(s) | Contents |
 |---|---|---|
 | `ncrust_prefs` | `CookieManager` | `user_cookie` |
-| `ncrust_settings` | `ThemeManager`, `LanguageManager`, `PlayerViewModel`, `UserScreen`, `MainActivity` | theme index/mode, language, quality, gapless, lyrics translation, `lyrics_word_by_word`, `lyrics_word_animation` / `lyrics_font_scale` / `lyrics_sweep_quality` (v1.5.1/2), `lyrics_ttml_enabled` / `lyrics_ttml_first` (v1.9.0), `lyrics_romanization` (v1.9.3), `battery_prompt_done`, **`offline_cache_mb`（v1.6.0 · D1 写入 / v2.0.0 · T3 起设置页可改：离线音频缓存上限 MB，合法 64..8192，默认 512，非法值回落默认）** |
+| `ncrust_settings` | `ThemeManager`, `LanguageManager`, `PlayerViewModel`, `UserScreen`, `MainActivity` | theme index/mode, language, quality, gapless, lyrics translation, `lyrics_word_by_word`, `lyrics_word_animation` / `lyrics_font_scale` / `lyrics_sweep_quality` (v1.5.1/2), `lyrics_ttml_enabled` / `lyrics_ttml_first` (v1.9.0), `lyrics_romanization` (v1.9.3), `battery_prompt_done`, **`offline_cache_mb`（v1.6.0 · D1 写入 / v2.0.0 · T3 起设置页可改：离线音频缓存上限 MB，合法 64..16384，默认 1024，非法值回落默认）** |
 | `ncrust_library` | `LibraryManager` | `saved_songs`, `saved_albums`, `liked_ids` |
 | `ncrust_playback_state` | `PlaybackStateManager` | last song + `queue` / `queue_index` |
 | `ncrust_lyrics_cache` | `LyricsCache` | `entries` (≤ 200；LRC/译文/逐字与 TTML 共用同一张表，TTML 另有 7 天 TTL) |
@@ -5073,3 +5073,13 @@ QQ 的 `QqRefreshFlight` 串行等待在飞提交，锁内重查会话、寿命�
 SearchPageCursor 只在搜索函数明确成功后提交候选页，取消/失败/查询重置不得推进。LocalPlaylistStore 的元数据、曲目和容量淘汰要在同一个 Editor 中提交；失败上报 Failed，并还原 SharedPreferences 的内存快照，防止失败同步被 TTL 视为新鲜。
 
 迟到生日窗口为当地日期差 1..7，BirthdayWindow 用显式日历输入和 UTC 日序计算避免 DST 误差，跨年以生日所属年作为去重 key。birthday_opened_years 是新增的本地有界集合（默认空、保留32年），RESUMED 时记录生日当天打开；旧 SHOWN 继续有效。迟到说明先显示，再进入原来的生日流程，不在预览入口伪造迟到天数；未完成说明时后台中断不提前标记，显式关闭和动画第一帧可见会标记。
+
+## v3.7.1 播放恢复与资料展示
+
+歌词外推仅允许使用采样后的 750ms；暂停、缓冲、隐藏恢复时重新以真实音频位置计时，不能把断网等待算成播放。请求开始前也必须确认 TrackKey 仍是当前曲目。
+
+码率来自接口、当前选中音频 Format 或完整文件长度/时长，不能用请求档位或 PCM 输出规格冒充。只按当前 MediaItem 的音源与 id 发布；预载项不得覆盖当前曲目。缓存默认 1024 MiB、范围 64..16384 MiB；两个选择器共用 SettingsRegistry 候选，明确设置的旧容量不迁移。
+
+QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串按当天末秒。会员资料写回绑定 auth revision。B站 vip_expire_at_ms 为新字段，缺失默认 0，界面如实显示未知。两平台资料失败保留旧缓存，不把失败解释成未开会员。
+
+洗牌在满足剩余池分散条件时按歌曲数加权抽取，不能一律优先最多曲目的艺人。shuffle_round_v1 保存完整音源曲目身份、顺序与游标，全部字段使用 SerializedName；队列身份、排列或当前项不匹配即重建。手动下一首与无缝预载共用已预排的 pendingRound。
