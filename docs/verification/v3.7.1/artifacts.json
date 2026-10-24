@@ -1,0 +1,39 @@
+{
+  "version": "3.7.1-gpl",
+  "versionCode": 87,
+  "sourceCommit": "02c7df281185e03f730face9372e4845c33fe923",
+  "appTree": "63b7ac6b9eb7544aa27ac7101793aac3c994447f",
+  "kanesumiCommit": "acddf3e53d6a90f6b7d19d6a0445631457c3bda5",
+  "certificateSha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "tests": {
+    "tests": 3027,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes": 245
+  },
+  "lint": {
+    "Error": 0,
+    "Fatal": 0,
+    "Warning": 55
+  },
+  "physicalDeviceTest": false,
+  "artifacts": {
+    "Ncrust-v3.7.1-gpl-release.apk": {
+      "bytes": 12039856,
+      "sha256": "bf18ec647063053d4f92349af4a0f802ca26004729baf2f97e6be8fc84651497"
+    },
+    "Ncrust-v3.7.1-gpl-debug.apk": {
+      "bytes": 33652209,
+      "sha256": "6a7b9632058b8f45ad67fc98f9764ca1af0d83fce1204511c67c7cf222aa8a29"
+    },
+    "mapping-v3.7.1-gpl.txt.gz": {
+      "bytes": 5665351,
+      "sha256": "ec21ac6e7c9722e2ef22e3b8254f652bd9c71f7f202c3394822f0f111988ec5d"
+    },
+    "RELEASE_NOTES.md": {
+      "bytes": 1593,
+      "sha256": "0169df03dad28e471da99e4d053bcab17111b34a8c6295d0eeee358e5c469560"
+    }
+  }
+}

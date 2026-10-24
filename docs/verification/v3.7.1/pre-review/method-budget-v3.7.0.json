@@ -1,0 +1,132 @@
+{
+  "source": "/home/duanjb666/deepseek/dist/v3.7.0-gpl/Ncrust-v3.7.0-gpl-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 803,
+  "violations": [
+    {
+      "name": "com.takahashirinta.ncrust.player.QualityLadder.getLEVELS (+6 inline/overload)",
+      "obfuscated": "Y4.g.<clinit>",
+      "class": "Y4.g",
+      "codeUnits": 5629,
+      "registers": 922,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.MainActivityKt$MainScreen$55.invoke (+91 inline/overload)",
+      "obfuscated": "D4.U0.invoke",
+      "class": "D4.U0",
+      "codeUnits": 4297,
+      "registers": 108,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.LyricsViewKt.LyricsView (+54 inline/overload)",
+      "obfuscated": "U4.C.c",
+      "class": "U4.C",
+      "codeUnits": 3160,
+      "registers": 94,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.X.l",
+      "class": "b5.X",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    }
+  ],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+38 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1558,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsAccountSectionKt.QqAccountBlock (+26 inline/overload)",
+      "obfuscated": "X4.o3.e",
+      "class": "X4.o3",
+      "codeUnits": 1394,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+54 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.player.QualityLadder.getLEVELS (+6 inline/overload)",
+      "obfuscated": "Y4.g.<clinit>",
+      "class": "Y4.g",
+      "codeUnits": 5629,
+      "registers": 922,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.MainActivityKt$MainScreen$55.invoke (+91 inline/overload)",
+      "obfuscated": "D4.U0.invoke",
+      "class": "D4.U0",
+      "codeUnits": 4297,
+      "registers": 108,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.player.LyricsViewKt.LyricsView (+54 inline/overload)",
+      "obfuscated": "U4.C.c",
+      "class": "U4.C",
+      "codeUnits": 3160,
+      "registers": 94,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.X.l",
+      "class": "b5.X",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+38 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1558,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.SettingsAccountSectionKt.QqAccountBlock (+26 inline/overload)",
+      "obfuscated": "X4.o3.e",
+      "class": "X4.o3",
+      "codeUnits": 1394,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+54 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongId (+2 inline/overload)",
+      "obfuscated": "b5.X.A",
+      "class": "b5.X",
+      "codeUnits": 1122,
+      "registers": 41,
+      "dex": "classes.dex"
+    }
+  ]
+}

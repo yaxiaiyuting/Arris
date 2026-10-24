@@ -1,0 +1,67 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-playback-fixes/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 239,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+39 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1558,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+56 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+39 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1558,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+56 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi.lastSip (+29 inline/overload)",
+      "obfuscated": "K4.M.e",
+      "class": "K4.M",
+      "codeUnits": 950,
+      "registers": 25,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.stats.StatsRecorder.onSample (+44 inline/overload)",
+      "obfuscated": "J4.E.h",
+      "class": "J4.E",
+      "codeUnits": 848,
+      "registers": 24,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqApi$requestVkeyBatch$3.invoke (+35 inline/overload)",
+      "obfuscated": "K4.E.invoke",
+      "class": "K4.E",
+      "codeUnits": 782,
+      "registers": 13,
+      "dex": "classes.dex"
+    }
+  ]
+}
