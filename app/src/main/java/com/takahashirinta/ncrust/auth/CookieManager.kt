@@ -6,6 +6,37 @@ import android.content.SharedPreferences
 object CookieManager {
     private const val PREFS_NAME = "ncrust_prefs"
     private const val KEY_COOKIE = "user_cookie"
+    private const val KEY_REFRESHED_AT = "session_refreshed_at"
+    private val guard = NeteaseSessionGuard()
+    private var app: Context? = null
+
+    fun init(context: Context) = synchronized(guard) {
+        if (app == null) {
+            app = context.applicationContext
+            guard.replace(getPrefs(context).getString(KEY_COOKIE, null))
+        }
+    }
+    fun snapshot(): NeteaseSessionSnapshot = synchronized(guard) { guard.snapshot() }
+    fun isCurrent(s: NeteaseSessionSnapshot): Boolean = synchronized(guard) { guard.isCurrent(s) }
+    fun <T> ifCurrent(s: NeteaseSessionSnapshot, block: () -> T): T? = synchronized(guard) {
+        guard.ifCurrent(s, block)
+    }
+    fun advanceGeneration(context: Context) = synchronized(guard) {
+        init(context)
+        guard.replace(guard.snapshot().cookie)
+    }
+    fun lastRefreshedAt(context: Context): Long = getPrefs(context).getLong(KEY_REFRESHED_AT, 0L)
+    fun commitRefresh(context: Context, started: NeteaseSessionSnapshot, cookie: String, now: Long): Boolean =
+        synchronized(guard) {
+            if (!guard.isCurrent(started) || !NeteaseCookie.isUsable(cookie)) return@synchronized false
+            // Publish the persistent credential and generation under the same lock as login/logout.
+            val ok = getPrefs(context).edit().putString(KEY_COOKIE, cookie).putLong(KEY_REFRESHED_AT, now).commit()
+            if (!ok) { getPrefs(context).edit().putString(KEY_COOKIE, started.cookie).remove(KEY_REFRESHED_AT).commit(); return@synchronized false }
+            guard.replace(cookie, renewal = true)
+            com.takahashirinta.ncrust.network.XeapiState.clearSession()
+            true
+        }
+
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -21,7 +52,12 @@ object CookieManager {
      * 保留这个函数是为了让「登出」「清空」以及既有单测仍有一个明确的整体写入点。
      */
     fun saveCookie(context: Context, cookie: String) {
-        getPrefs(context).edit().putString(KEY_COOKIE, cookie).apply()
+        synchronized(guard) {
+            init(context)
+            getPrefs(context).edit().putString(KEY_COOKIE, cookie).remove(KEY_REFRESHED_AT).apply()
+            guard.replace(cookie)
+            NeteaseVipStore.clear(context)
+        }
     }
 
     /**
@@ -31,18 +67,18 @@ object CookieManager {
      * 也会读到「页面还没写入 `__csrf`」的中间态 —— 而 [NeteaseCookie.shouldReplace]
      * 会拒绝用半截会话覆盖完整会话。没有变化就不写盘，避免每次轮询都触发一次 prefs 写。
      */
-    fun saveCookieMerged(context: Context, incoming: String?): Boolean {
-        if (incoming.isNullOrBlank()) return false
+    fun saveCookieMerged(context: Context, incoming: String?): Boolean = synchronized(guard) {
+        if (incoming.isNullOrBlank()) return@synchronized false
         val old = getCookie(context)
-        if (!NeteaseCookie.shouldReplace(old, incoming)) return false
+        if (!NeteaseCookie.shouldReplace(old, incoming)) return@synchronized false
         val merged = NeteaseCookie.merge(old, incoming)
-        if (merged == old) return false
+        if (merged == old) return@synchronized false
         saveCookie(context, merged)
-        return true
+        true
     }
 
     fun getCookie(context: Context): String? {
-        return getPrefs(context).getString(KEY_COOKIE, null)
+        return synchronized(guard) { init(context); guard.snapshot().cookie }
     }
 
     fun hasCookie(context: Context): Boolean {
@@ -62,6 +98,11 @@ object CookieManager {
     fun isLoggedIn(context: Context): Boolean = NeteaseCookie.isUsable(getCookie(context))
 
     fun clearCookie(context: Context) {
-        getPrefs(context).edit().remove(KEY_COOKIE).apply()
+        synchronized(guard) {
+            init(context)
+            getPrefs(context).edit().remove(KEY_COOKIE).remove(KEY_REFRESHED_AT).apply()
+            guard.replace(null)
+            NeteaseVipStore.clear(context)
+        }
     }
 }

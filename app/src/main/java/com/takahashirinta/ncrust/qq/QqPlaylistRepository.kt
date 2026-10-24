@@ -102,17 +102,21 @@ object QqPlaylistRepository {
         //
         // 代价：缓存过期/手动刷新时多一次请求。缓存新鲜时**一个请求都不发**（上面已提前返回），
         // 所以日常浏览不受影响。
-        if (!QqPlaylistApi.checkLoginValid()) {
-            return degradedOrFail(
-                cachedList?.playlists, PlaylistDegradation.NEED_LOGIN, PlaylistHardFailure.NeedLogin,
-            )
+        playlistAuthFailure(QqPlaylistApi.checkLoginValid())?.let { (degradation, failure) ->
+            return degradedOrFail(cachedList?.playlists, degradation, failure)
         }
+        if (currentOwnerId(ctx) != ownerId) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
 
         return when (val r = QqPlaylistApi.fetchOwnedPlaylists(ownerId)) {
             is QqPlaylistResult.Ok -> {
                 val fav = fetchFavoritesSafely(ownerId, r.value)
                 val merged = r.value + fav
-                QqPlaylistStore.writeList(ctx, ownerId, merged, now())
+                val stored = QqAuthStore.withAuthLock {
+                    if (currentOwnerId(ctx) != ownerId) false else {
+                        QqPlaylistStore.writeList(ctx, ownerId, merged, now()); true
+                    }
+                }
+                if (!stored) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
                 PlaylistResult.Data(
                     PlaylistLoadOutcome(merged, fromCache = false, fresh = true, degradation = null)
                 )
@@ -220,11 +224,10 @@ object QqPlaylistRepository {
 
         // 同 loadList：详情接口同样是公开可读的（探针 §5.3 实测 dirid=201 无 cookie 也返回数据），
         // 所以联网前必须单独验一次登录态，否则「登录过期」在详情页永远不会出现。
-        if (!QqPlaylistApi.checkLoginValid()) {
-            return detailDegradedOrFail(
-                cachedDetail, PlaylistDegradation.NEED_LOGIN, PlaylistHardFailure.NeedLogin,
-            )
+        playlistAuthFailure(QqPlaylistApi.checkLoginValid())?.let { (degradation, failure) ->
+            return detailDegradedOrFail(cachedDetail, degradation, failure)
         }
+        if (currentOwnerId(ctx) != key.ownerId) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
 
         val disstid = key.id.toLongOrNull() ?: 0L
         return when (

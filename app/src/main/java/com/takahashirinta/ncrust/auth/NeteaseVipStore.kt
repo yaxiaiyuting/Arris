@@ -95,10 +95,12 @@ object NeteaseVipStore {
      */
     suspend fun refresh(context: Context): Boolean = withContext(Dispatchers.IO) {
         if (!CookieManager.hasCookie(context)) return@withContext false
-        val level = runCatching { fetchRedVipLevel() }
+        val started = CookieManager.snapshot()
+        val level = runCatching { fetchRedVipLevel(started.cookie) }
             .onFailure { Log.w(TAG, "vip info failed", it) }
             .getOrNull() ?: return@withContext false
 
+        CookieManager.ifCurrent(started) {
         prefs(context).edit()
             .putInt(KEY_IS_VIP, if (level > 0) 1 else 0)
             .putInt(KEY_LEVEL, level)
@@ -106,6 +108,7 @@ object NeteaseVipStore {
             .apply()
         if (BuildConfig.DEBUG) Log.d(TAG, "redVipLevel=$level => isVip=${level > 0}")
         true
+        } ?: false
     }
 
     /** 登录/登出时清掉，避免把上一个账号的会员状态带给下一个账号。 */
@@ -124,8 +127,8 @@ object NeteaseVipStore {
     private const val VIP_INFO_PATH = "/api/music-vip-membership/front/vip/info"
 
     /** 取 `data.redVipLevel`。结构不认识时抛异常（由 [refresh] 统一吞掉并保留旧缓存）。 */
-    private suspend fun fetchRedVipLevel(): Int {
-        val body = RetrofitClient.get(VIP_INFO_PATH)
+    private suspend fun fetchRedVipLevel(cookie: String?): Int {
+        val body = RetrofitClient.get(VIP_INFO_PATH, cookieOverride = cookie)
         if (body.isEmpty()) throw IllegalStateException("empty vip info response")
         val json = JSONObject(body)
         if (json.optInt("code", -1) != 200) {

@@ -868,6 +868,7 @@ class PlaybackService : MediaLibraryService() {
 
         when (intent?.getStringExtra("action")) {
             "preload_next" -> {
+                if (!preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L))) return START_NOT_STICKY
                 val nextUrl = intent.getStringExtra("url") ?: return START_NOT_STICKY
                 val nextSongId = intent.getLongExtra("songId", -1L)
                 // v1.5.2 串台修复：同一首下一曲会被预载两次（切歌瞬间 + 进入最后 60s 窗口），
@@ -1149,6 +1150,7 @@ class PlaybackService : MediaLibraryService() {
         val ref = com.takahashirinta.ncrust.source.songRefOf(source, songId)
         val result = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
             ?: return item
+        OfflineUrlStore.rememberResult(this, result)
         // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
         // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
         result.playbackItem?.freeTrialInfo?.let { trial ->
@@ -1200,6 +1202,9 @@ class PlaybackService : MediaLibraryService() {
             causeMessage = root.message,
         )
     }
+
+    fun currentOfflineContent(): com.takahashirinta.ncrust.cache.OfflineContent? =
+        player.currentMediaItem?.localConfiguration?.uri?.toString()?.let { OfflineUrlStore.contentForUrl(this, it) }
 
     private fun playUrl(url: String, startPositionMs: Long = 0L) {
         // 只记 songId/标题：取链 URL 带签名参数与 authSecret，不能进 logcat（release 也会打）。
@@ -1336,6 +1341,13 @@ class PlaybackService : MediaLibraryService() {
      * 之所以是「当前项之后」而不是固定的 index 1：历史版本留下过重复待播项，
      * 这里顺手把任何多余项一并清掉，恢复不变量。
      */
+    fun discardPreload() {
+        removePendingItems()
+        clearPendingNext()
+        pendingNextArtworkBitmap = null
+        artworkPreloadGeneration++
+    }
+
     private fun removePendingItems() {
         val from = player.currentMediaItemIndex + 1
         val count = player.mediaItemCount

@@ -21,12 +21,12 @@ import com.google.gson.reflect.TypeToken
  */
 internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
     // LinkedHashMap 的迭代顺序 = 插入顺序，put 前先 remove 即得到 LRU。
-    private val map = LinkedHashMap<String, String>()
+    private val map = LinkedHashMap<String, OfflineUrlRecord>()
 
-    fun put(key: String, url: String) {
+    fun put(key: String, url: String, content: OfflineContent = OfflineContent()) {
         if (key.isEmpty() || url.isEmpty()) return
-        map.remove(key)
-        map[key] = url
+        val old = map.remove(key)
+        map[key] = OfflineUrlRecord(url, if (!content.known && old?.url == url) old.content else content)
         while (map.size > maxEntries) {
             val it = map.keys.iterator()
             if (it.hasNext()) {
@@ -38,7 +38,8 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         }
     }
 
-    fun get(key: String): String? = map[key]
+    fun get(key: String): String? = map[key]?.url
+    fun record(key: String): OfflineUrlRecord? = map[key]
 
     /**
      * 删掉这首曲子在清单里的**所有档位**条目（v2.0.0 · T3 联动删除）。返回删掉的条数。
@@ -68,11 +69,16 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
      * 离线兜底用：先按 [preferredKeys] 的顺序找，再退化成「这首歌的**任意**档位」。
      * 离线时能放出来比「档位严格一致」重要得多（缓存里是什么档就放什么档）。
      */
-    fun recall(preferredKeys: List<String>, songId: Long): Pair<String, String>? {
-        for (k in preferredKeys) map[k]?.let { return k to it }
-        for ((k, v) in map) {
-            if (OfflineKeys.songIdOf(k) == songId) return k to v
-        }
+    fun recall(preferredKeys: List<String>, songId: Long): Pair<String, String>? =
+        recallRecord(preferredKeys, songId) { true }?.let { it.first to it.second.url }
+
+    fun recallRecord(preferredKeys: List<String>, songId: Long, usable: (String) -> Boolean): Pair<String, OfflineUrlRecord>? {
+        val levels = preferredKeys.mapNotNull(OfflineKeys::levelOf)
+        val candidates = map.entries.filter { OfflineKeys.songIdOf(it.key) == songId }
+            .sortedWith(compareBy<Map.Entry<String, OfflineUrlRecord>> { e ->
+                levels.indexOf(OfflineKeys.levelOf(e.key)).let { if (it < 0) levels.size else it }
+            }.thenBy { when(it.value.content.kind) { OfflineContent.FULL -> 0; OfflineContent.TRIAL -> 1; else -> 2 } })
+        for ((k, v) in candidates) if (usable(k)) return k to v
         return null
     }
 
@@ -87,9 +93,16 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
             val idx = OfflineUrlIndex()
             if (json.isNullOrEmpty()) return idx
             runCatching {
-                val type = object : TypeToken<LinkedHashMap<String, String>>() {}.type
-                val loaded: LinkedHashMap<String, String>? = Gson().fromJson(json, type)
-                loaded?.forEach { (k, v) -> idx.put(k, v) }
+                val root = com.google.gson.JsonParser.parseString(json).asJsonObject
+                root.entrySet().forEach { (k, v) ->
+                    runCatching {
+                        if (v.isJsonPrimitive && v.asJsonPrimitive.isString) idx.put(k, v.asString)
+                        else {
+                            val record = Gson().fromJson(v, OfflineUrlRecord::class.java)
+                            idx.put(k, record.url, record.content ?: OfflineContent())
+                        }
+                    }
+                }
             }
             return idx
         }
@@ -162,6 +175,20 @@ object OfflineUrlStore {
         synchronized(this) {
             index(context).recall(preferredLevels.map { OfflineKeys.key(songId, it) }, songId)
         }
+
+    fun rememberResult(context: Context, result: com.takahashirinta.ncrust.player.SongUrlResult) {
+        OfflineKeys.keyOf(result.url)?.let { key ->
+            mutate(context) { it.put(key, result.url, result.cachedContent ?: OfflineContent.from(result.playbackItem)) }
+        }
+    }
+    /** `null` = this file has no offline record (an online stream), which is NOT the same as
+     *  a legacy record whose full/trial classification is still [OfflineContent.UNKNOWN]. */
+    fun contentForUrl(context: Context, url: String): OfflineContent? = synchronized(this) {
+        val key = OfflineKeys.keyOf(url) ?: return@synchronized null
+        index(context).record(key)?.takeIf { it.url == url }?.content
+    }
+    fun recallRecord(context: Context, songId: Long, levels: List<String>, usable: (String) -> Boolean): Pair<String, OfflineUrlRecord>? =
+        synchronized(this) { index(context).recallRecord(levels.map { OfflineKeys.key(songId, it) }, songId, usable) }
 
     fun clear(context: Context) {
         mutate(context) { it.clear() }

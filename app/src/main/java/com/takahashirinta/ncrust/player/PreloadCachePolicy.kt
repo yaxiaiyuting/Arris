@@ -102,4 +102,5 @@ data class PreloadCacheEntry(
      * （B 站那条从 URL 的 `deadline` 反推）。
      */
     val expiresAtMs: Long? = null,
+    val cachedContent: com.takahashirinta.ncrust.cache.OfflineContent? = null,
 )

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
 import com.takahashirinta.ncrust.network.crypto.WeapiCrypto
@@ -49,16 +50,15 @@ object RetrofitClient {
     /** 易盾响应形如 `null([200,<n>,"<token>"])`（xeapi.md §5）。 */
     private val ANTI_CHEAT_RE = Regex("""null\(\[(\d+),\d+,"([^"]+)"\]\)""")
 
-    private var currentCookie: String? = null
+    private val currentCookie: String? get() = CookieManager.snapshot().cookie
 
     fun init(context: Context) {
-        currentCookie = CookieManager.getCookie(context)
+        CookieManager.init(context)
         // deviceId / 公钥状态 / xeapi 会话；只读盘，不发网络（首次业务请求时才取公钥）。
         XeapiState.init(context)
     }
 
     fun updateCookie(cookie: String?) {
-        currentCookie = cookie
         // 换登录态后旧的内存会话不再属于当前 cookie，清掉重取。
         XeapiState.clearSession()
     }
@@ -229,6 +229,7 @@ object RetrofitClient {
         // 扫码确认后校验尚未持久化的会话；其余调用保留原来的身份追加方式。
         cookieOverride: String? = null
     ): Response {
+        val session = CookieManager.snapshot()
         val host = if (useInterface) INTERFACE_URL else API_URL
         val fullUrl = host + path
         val anyPayload = payload.mapValues { it.value as Any }
@@ -239,11 +240,11 @@ object RetrofitClient {
             .build()
 
         val cookieHeader = listOfNotNull(
-            (cookieOverride ?: currentCookie)?.takeIf { it.isNotBlank() },
+            (cookieOverride ?: session.cookie)?.takeIf { it.isNotBlank() },
             extraCookie?.takeIf { it.isNotBlank() }
         ).joinToString("; ")
 
-        val request = Request.Builder()
+        val request = Request.Builder().tag(NeteaseSessionSnapshot::class.java, if (cookieOverride == null) session else null)
             .url(fullUrl)
             .post(requestBody)
             .header("User-Agent", UA)
@@ -272,6 +273,14 @@ object RetrofitClient {
             requestSuffix = (0..999).random()
         )
         return eapiPostWithIdentity(INTERFACE_PC_URL, PC_UA, path, fields, header)
+    }
+
+    /** Token refresh uses the same PC envelope as the reference client's default eapi path. */
+    internal fun refreshNeteaseSession(cookie: String): Response {
+        val header = QrLoginProtocol.pcHeader(pcDeviceId(), System.currentTimeMillis(), (0..999).random()).toMutableMap()
+        val saved = cookieValues(cookie)
+        listOf("MUSIC_U", "MUSIC_A", "__csrf").forEach { key -> saved[key]?.let { header[key] = it } }
+        return eapiPostWithIdentity(INTERFACE_PC_URL, PC_UA, "/api/login/token/refresh", emptyMap(), header)
     }
 
     /**
@@ -392,9 +401,10 @@ object RetrofitClient {
      * 用于写接口(如 /eapi/radio/like)以彻底对齐客户端指纹,排除 -460 风控的字段形态差异。
      */
     fun eapiPostOfficial(path: String, payload: Map<String, String>): Response {
+        val session = CookieManager.snapshot()
         val fullUrl = API_URL + path
-        val csrf = getCsrfToken().orEmpty()
-        val mus: Map<String, String> = (currentCookie ?: "")
+        val csrf = getCsrfToken(session.cookie).orEmpty()
+        val mus: Map<String, String> = (session.cookie ?: "")
             .split(';')
             .asSequence()
             .map { it.trim() }
@@ -430,7 +440,7 @@ object RetrofitClient {
 
         val requestBody = FormBody.Builder().add("params", params).build()
 
-        val request = Request.Builder()
+        val request = Request.Builder().tag(NeteaseSessionSnapshot::class.java, session)
             .url(fullUrl)
             .post(requestBody)
             .header("User-Agent", IOS_UA)
@@ -470,19 +480,21 @@ object RetrofitClient {
      * @param antiCheat 是否现取易盾 token 放 `X-antiCheatToken`（写入类接口需要；取不到发空串）。
      */
     fun xeapiPost(uri: String, pairs: List<Pair<String, String>>, antiCheat: Boolean): String {
+        val session = CookieManager.snapshot()
         val url = XEAPI_URL + "/xeapi/" + uri.removePrefix("/api/")
         // 易盾 token 每次写入现取、不缓存（xeapi.md §5）。
         val antiCheatToken = if (antiCheat) fetchAntiCheatToken() else null
 
         val bodyPairs = if (antiCheatToken != null) pairs + ("checkToken" to antiCheatToken) else pairs
-        val first = executeXeapi(url, bodyPairs, XeapiState.ensureKeyState(), antiCheatToken)
+        val first = executeXeapi(url, bodyPairs, XeapiState.ensureKeyState(), antiCheatToken, session)
         decryptXeapiBody(first)?.let { return it }
 
         // 解不开通常意味着服务端换了公钥：按「旧 version」重取一次再试。只重试一次——
         // 写入接口的重放本身就是风控特征，不能在这里死磕。
+        if (!CookieManager.isCurrent(session)) throw IOException("xeapi session changed")
         Log.w(TAG, "xeapi response decrypt failed, refreshing public key (uri=$uri)")
         XeapiState.invalidateKeyState()
-        val second = executeXeapi(url, bodyPairs, XeapiState.ensureKeyState(), antiCheatToken)
+        val second = executeXeapi(url, bodyPairs, XeapiState.ensureKeyState(), antiCheatToken, session)
         return decryptXeapiBody(second) ?: throw IOException("xeapi response decrypt failed: $uri")
     }
 
@@ -490,7 +502,8 @@ object RetrofitClient {
         url: String,
         pairs: List<Pair<String, String>>,
         keyState: XeapiCrypto.KeyState,
-        antiCheatToken: String?
+        antiCheatToken: String?,
+        session: NeteaseSessionSnapshot,
     ): ByteArray {
         val deviceId = XeapiState.deviceId()
         val buildver = (System.currentTimeMillis() / 1000).toString().take(10)
@@ -505,7 +518,7 @@ object RetrofitClient {
         // 设备字段要「同名以后者为准」地压过登录 cookie 里的旧值：先收成 map 再覆盖，
         // 同一个键只出现一次，免得服务端读到登录时留下的旧 os/appver/deviceId。
         val cookiePairs = LinkedHashMap<String, String>()
-        (currentCookie ?: "").split(';').forEach { part ->
+        (session.cookie ?: "").split(';').forEach { part ->
             val sep = part.indexOf('=')
             if (sep > 0) cookiePairs[part.substring(0, sep).trim()] = part.substring(sep + 1).trim()
         }
@@ -536,7 +549,9 @@ object RetrofitClient {
 
         return plainClient.newCall(builder.build()).execute().use { response ->
             // 响应头带 x-encr-ssid/x-encr-sskey 时记下，之后的请求走会话模式（只存内存）。
-            XeapiState.updateSession(response.header("x-encr-ssid"), response.header("x-encr-sskey"))
+            CookieManager.ifCurrent(session) {
+                XeapiState.updateSession(response.header("x-encr-ssid"), response.header("x-encr-sskey"))
+            }
             val raw = response.body?.bytes() ?: ByteArray(0)
             // 脱敏日志：只记路径、HTTP 码与长度，不记 cookie / 易盾 token / 加密体。
             Log.i(TAG, "xeapi $url http=${response.code} bytes=${raw.size}")
@@ -593,10 +608,13 @@ object RetrofitClient {
     fun weapiPost(
         path: String,
         payloadJson: String,
-        extraCookies: String? = null
+        extraCookies: String? = null,
+        cookieOverride: String? = null
     ): okhttp3.Response {
+        val session = CookieManager.snapshot()
+        val credential = cookieOverride ?: session.cookie
         val rawPayload = try { JSONObject(payloadJson) } catch (_: Exception) { JSONObject() }
-        getCsrfToken()?.let {
+        getCsrfToken(credential)?.let {
             if (it.isNotEmpty() && !rawPayload.has("csrf_token")) rawPayload.put("csrf_token", it)
         }
         val (params, encSecKey) = WeapiCrypto.encryptParams(rawPayload.toString())
@@ -606,7 +624,7 @@ object RetrofitClient {
             .add("params", params)
             .add("encSecKey", encSecKey)
             .build()
-        val builder = Request.Builder()
+        val builder = Request.Builder().tag(NeteaseSessionSnapshot::class.java, if (cookieOverride == null) session else null)
             .url(fullUrl)
             .post(requestBody)
             .header("User-Agent", UA)
@@ -615,21 +633,22 @@ object RetrofitClient {
         // 未登录时不发空 Cookie 头, 与官方网页/参考实现一致；extraCookies 供需要额外
         // 会话 cookie 的接口追加字段（扫码登录已改走 eapiPostPc, 不再用这条通道）。
         val cookieHeader = listOfNotNull(
-            currentCookie?.takeIf { it.isNotBlank() },
+            credential?.takeIf { it.isNotBlank() },
             extraCookies?.takeIf { it.isNotBlank() }
         ).joinToString("; ")
         if (cookieHeader.isNotEmpty()) builder.header("Cookie", cookieHeader)
         return plainClient.newCall(builder.build()).execute()
     }
 
-    fun get(path: String, useInterface: Boolean = false): String {
+    fun get(path: String, useInterface: Boolean = false, cookieOverride: String? = null): String {
+        val session = CookieManager.snapshot()
         val host = if (useInterface) INTERFACE_URL else BASE_URL
-        val request = Request.Builder()
+        val request = Request.Builder().tag(NeteaseSessionSnapshot::class.java, if (cookieOverride == null) session else null)
             .url(host + path)
             .get()
             .header("User-Agent", UA)
             .header("Referer", "https://music.163.com/")
-            .header("Cookie", currentCookie ?: "")
+            .header("Cookie", cookieOverride ?: session.cookie.orEmpty())
             .build()
 
         return plainClient.newCall(request).execute().body?.string() ?: throw Exception("empty response")
@@ -653,8 +672,8 @@ object RetrofitClient {
     }
 
     /** 从当前 Cookie 串中提取 __csrf token,用于 weblog 上报。 */
-    fun getCsrfToken(): String? {
-        val cookie = currentCookie ?: return null
+    fun getCsrfToken(cookie: String? = currentCookie): String? {
+        cookie ?: return null
         return cookie.split(';')
             .asSequence()
             .map { it.trim() }
@@ -666,9 +685,11 @@ object RetrofitClient {
     private class CookieInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val originalRequest = chain.request()
-            val cookie = currentCookie
+            val session = CookieManager.snapshot()
+            val cookie = session.cookie
             val newRequest = if (!cookie.isNullOrBlank()) {
                 originalRequest.newBuilder()
+                    .tag(NeteaseSessionSnapshot::class.java, session)
                     .header("Cookie", cookie)
                     .header("User-Agent", UA)
                     .header("Referer", "https://music.163.com/")

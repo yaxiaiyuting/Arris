@@ -65,14 +65,22 @@ object QqPlaylistApi {
      * 表示票据已失效，UI 应给「重新登录」入口。
      */
     suspend fun fetchUserInfo(): QqPlaylistResult<QqUserBrief> {
-        val resp = QqClient.musicu(QqRequests.loginUserInfo(), appIdentity = true)
-            ?: return QqPlaylistResult.Network
-        return QqPlaylistParser.parseUserInfo(resp)
+        QqTokenRefresher.refreshIfNeeded(QqClient.appContextOrNull())
+        return QqRefreshRetry.request(
+            once = {
+                QqClient.musicu(QqRequests.loginUserInfo(), appIdentity = true)
+                    ?.let(QqPlaylistParser::parseUserInfo) ?: QqPlaylistResult.Network
+            },
+            rejected = { it == QqPlaylistResult.NeedLogin },
+            refresh = {
+                QqTokenRefresher.refreshAfterRejection(QqClient.appContextOrNull()) == QqTokenRefresher.RefreshResult.REFRESHED
+            },
+            revision = QqAuthStore::currentAuthRevision,
+            loggedIn = QqClient::isLoggedIn,
+        )
     }
 
-    /** 只判登录态，不关心资料。 */
-    suspend fun checkLoginValid(): Boolean =
-        fetchUserInfo() is QqPlaylistResult.Ok
+    suspend fun checkLoginValid(): QqPlaylistResult<QqUserBrief> = fetchUserInfo()
 
     // -------------------------------------------------------------- 歌单列表 ----
 

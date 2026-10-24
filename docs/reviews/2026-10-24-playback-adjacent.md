@@ -27,3 +27,10 @@
 建议：持久化与具体缓存文件绑定的Full/Trial/Unknown元数据并设计旧缓存迁移，不能把缺失字段直接当Full；让播放、跳过偏好、徽标、上报使用同一份内容属性。首次缓存试听、冷重建、旧条目缺失字段、联网后换成完整文件都要回归。
 
 以上三项为审查发现，尚未修改业务实现。本次v3.7.2功能修改是庆祝结束按钮的布局；单测和发布验证另存verification目录。
+
+## 修复状态（v3.7.3-gpl / versionCode 89）
+
+- **旧预载插队**：`player/PreloadGeneration` 给“下一首计划”一个单调代次；MainActivity 的 12 处队列变更都在改队列前调用 `invalidatePreload()`，`PlayerViewModel` 取消在飞任务、清空槽位，`PlaybackService.discardPreload()` 清掉已入队的待播项与封面预取。Service 在处理 `preload_next` 时核对 Intent 携带的代次，过期直接丢弃。队列/播放模式变化后会按最新计划重新预载一次（`preloadNextSong` 自带去重与 gapless 开关门控）。
+- **离线档位回退**：`OfflineUrlIndex.recallRecord` 按“请求档位优先 → 同曲其它档位”排序，并对每个候选做可用性判定（本会话失败过的不再喂、`coversStart` 覆盖 position 0），不再因首选档位失效就放弃整首歌。
+- **冷启动试听属性**：`cache/OfflineContent` 把 full / trial（含起止秒）随文件记录持久化；`SongUrlResult.cachedContent` 一路带到预载缓存与播放判定，冷启动命中离线文件时能还原 `Trial`。
+  - 兼容性取舍：**FULL 沿用历史 key** `song:<id>:<level>`，只有 trial 才加 `~trial_<start>_<end>` 后缀——否则升级后既有的全部下载都会 miss。旧清单（纯字符串）迁移为 `UNKNOWN`：仍可播放，但不会被当成“完整收听的证据”（`currentContentKnown = false`），避免把 30 秒片段计入播放上报。

@@ -89,6 +89,7 @@ data class SongUrlResult(
      * 否则设备原因会被误算成账号权限不足。
      */
     val requestedLevel: String? = null,
+    val cachedContent: com.takahashirinta.ncrust.cache.OfflineContent? = null,
 )
 
 object SongUrlFetcher {
@@ -168,6 +169,7 @@ object SongUrlFetcher {
     // Returns null when no level yields a playable URL (e.g. VIP-only song without a
     // subscription, or no valid session). Callers must skip the song instead of playing.
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? = withContext(Dispatchers.IO) {
+        com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.refreshIfNeeded()
         // Try the requested level first, then fall back down the quality ladder.
         val fallbackLevels = when (level) {
             "dolby"    -> listOf("dolby", "hires", "lossless", "exhigh", "higher", "standard")
@@ -232,7 +234,7 @@ object SongUrlFetcher {
                     // CDN 只认路径里的签名，实测删改 query 仍 206）。挂上之后 CacheDataSource
                     // 才能把「同一首歌 + 同一档位」的所有轮换 URL 认成同一份缓存。
                     return@withContext SongUrlResult(
-                        OfflineKeys.withKey(url, songId, actualLevel), actualLevel, br, type, songMaxLevel,
+                        OfflineKeys.withContentKey(url, songId, actualLevel, com.takahashirinta.ncrust.cache.OfflineContent.from(item)), actualLevel, br, type, songMaxLevel,
                         playbackItem = item,
                         requestedLevel = requestedLevel,
                     )

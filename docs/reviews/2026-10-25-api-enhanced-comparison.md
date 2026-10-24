@@ -44,3 +44,32 @@
 先修网易云会话代次/迟到响应，以及 QQ 歌单的分类丢失，再接网易云按需续期；最后才评估 neapi/xeapi 取链实验。写操作遇到响应解密失败或超时，服务端可能已经执行：不能通用自动重放全部请求，优先查询目标状态。QQ 可共享策略接口，不能共享网易协议实现。
 
 前一轮队列预载、离线多档回退、试听缓存属性三项见 `2026-10-24-playback-adjacent.md`。本报告新增的两类问题也尚未修改业务代码；v3.7.2 仅修庆祝按钮布局，避免把源码建议描述成已经上线或经过真实账号验证。
+
+## 修复状态（v3.7.3-gpl / versionCode 89）
+
+本轮按建议顺序落地，**没有**把推荐项描述成已上线经验：所有验证都是 JVM 单测 + 静态检查，未连接真实账号、未做真机测试。
+
+### P1 会话代次与迟到响应
+
+- `auth/NeteaseSessionGuard`：会话快照 = 凭证 + 单调 revision + 登录代次。登录、登出、明确重登都推进登录代次；续期只推进 revision（`renewal = true`），因此“换票”不会让同账号的在飞读取作废。`toString()` 不含凭证。
+- `auth/CookieManager`：`snapshot / isCurrent / ifCurrent / advanceGeneration / commitRefresh` 与 Cookie 落盘在同一把锁内完成；`commitRefresh` 先校验请求身份再写盘，写失败回滚并返回 false。
+- `network/RetrofitClient`：请求带 `NeteaseSessionSnapshot` 标签（`cookieOverride` 路径不带，避免把“验证票”误认成当前会话）。
+- `account/SessionMonitor`：`reportApiCode(code, started)` 必须携带请求身份；`markExpired` 只在 `ifCurrent(started)` 内清 Cookie；复核期间换号会重新排队一次，不再把旧账号结果写进状态。`deriveSession` 与 VIP 读取都受同一身份闸门保护。
+- `auth/NeteaseVipStore`：先取快照再请求，提交前 `ifCurrent`，旧账号的会员结果不会覆盖新账号的排序判据。
+
+### 网易云按需续期
+
+- `auth/NeteaseTokenRefresher`：启动（`SessionMonitor.init`）、回前台（`onResume`）、实际使用（`SongUrlFetcher` / `SettingsAccountPage` / 每次 eapi 读取）按需触发；`Mutex` 共享在飞刷新；会话级冷却（失败 60 s、成功 10 min）；**续期后先用 `w/nuser/account/get` 验证票据再落盘**；`301` 才判 `AUTH_EXPIRED`，其余失败按可重试处理，绝不因网络故障清凭证。
+- `auth/NeteaseSessionRequests`：`renewRead` 是纯编排缝——首次读取 → 判定是否被拒 → 共享续期 → 最多重试一次；换号期间抛 `NeteaseSessionChangedException`（**不是** `CancellationException`，否则调用方会把它当取消吞掉、监视器停摆）。
+- 参考实现里 `777/999` 是 neapi 配置轮换判据，没有搬进登录失效判定。
+
+### P2 QQ 歌单错误分类
+
+- `qq/QqPlaylistAuth`：`playlistAuthFailure` 保留完整分类，`Network`/未知业务码 → `OFFLINE`，只有 `NeedLogin` → `NEED_LOGIN`。列表与详情两条路径都改用它。
+- `QqPlaylistApi.checkLoginValid()` 返回完整结果而不是 Boolean；`fetchUserInfo` 走 `QqRefreshRetry`（共享在飞、冷却、成功静默期、迟到响应保护），只对明确的 `NeedLogin` 续期并重试一次。
+- 写缓存前在 `QqAuthStore.withAuthLock` 内复核 owner，换号后不再把旧账号歌单写进新账号。
+
+## 未做
+
+- 逐字歌词接口切换、xeapi 取链通道对照：仍按“先做同账号同曲目夹具对照再决定”的顺序，本轮未动。
+- 真机 / 真实账号验证：本轮明确不做。

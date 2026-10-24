@@ -307,6 +307,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 当前歌是"45 秒试听片段"：迷你条与全屏播放器的音质徽标改显示「试听」，
     // 且**不上报完整播放**（否则试听也算收听，污染推荐）。
     val currentIsTrial = MutableStateFlow(false)
+    private var currentContentKnown = false
 
     private val _notice = MutableStateFlow<PlaybackNotice?>(null)
 
@@ -670,7 +671,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val sid = currentSongId.value ?: -1L
             val listenedMs = listeningClock.playedMs(sid)
             // 试听片段（45 秒）不算听完——否则"只听了半首"也会喂给推荐体系。
-            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value &&
+            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && currentContentKnown &&
                 PlayReporter.reachedCompletion(listenedMs, dur)
             ) {
                 lastReportedSongId = sid
@@ -697,7 +698,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // B4：正常播完 = 这首歌已「听完」，清除进度记录，重播时从 0 分 0 秒对齐。
             if (sid > 0) PlaybackStateManager.clearSongPosition(getApplication(), sid)
             val listenedMs = listeningClock.playedMs(sid)
-            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && PlayReporter.reachedCompletion(listenedMs, duration.value)) {
+            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && currentContentKnown && PlayReporter.reachedCompletion(listenedMs, duration.value)) {
                 lastReportedSongId = sid
                 PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
@@ -1147,6 +1148,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 提示刻意放在这里而不是预载阶段——预载可以比实际起播早一分钟。
      */
     private fun restoreTrialState(songId: Long) {
+        val content = PlaybackService.instance?.currentOfflineContent()
+        // No record at all = an online stream, whose entitlement was classified when it was fetched.
+        // A record with UNKNOWN content = a file cached before full/trial was persisted: playable,
+        // but unproven, so it must not be reported as a full listen.
+        currentContentKnown = content == null || content.known
+        if (content?.kind == com.takahashirinta.ncrust.cache.OfflineContent.TRIAL) {
+            noticeTracker.recordTrial(songId, (((content.trialEnd ?: 0) - (content.trialStart ?: 0))).coerceAtLeast(0), EntitlementReason.UNKNOWN)
+        } else if (content?.kind == com.takahashirinta.ncrust.cache.OfflineContent.FULL) noticeTracker.clearTrial(songId)
         currentIsTrial.value = noticeTracker.isTrial(songId)
         noticeTracker.trialNoticeOnStart(songId)?.let { _notice.value = it }
     }
@@ -1160,6 +1169,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         entitlement: PlaybackEntitlement,
         actualLevel: String,
     ) {
+        currentContentKnown = true
         when (entitlement) {
             is PlaybackEntitlement.Trial -> {
                 recordTrialInfo(songId, entitlement)
@@ -1377,7 +1387,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun reportStartplay(songId: Long) {
         // 试听片段不是一次完整播放：与 80% / 自然结束同一条门控，绝不进「最近播放」。
         // 车机路径的试听标记由 PlaybackService.onTrialResolved 在解析媒体项时回填。
-        if (currentIsTrial.value) return
+        if (currentIsTrial.value || !currentContentKnown) return
         if (songId <= 0 || songId == lastStartReportedSongId) return
         lastStartReportedSongId = songId
         // startplay 的字段里没有 wifi（参考实现如此），所以这里不传网络状态。
@@ -1419,6 +1429,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         lastPlayOrigin = origin
         // 切歌即复位试听标记；真正的判定在拿到 URL 之后。
         currentIsTrial.value = false
+        currentContentKnown = false
         // 队列里的 SongItem 带 privilege，但降档重试 / 预载接管只带 id —— 用小表桥接。
         val effectivePrivilege = privilege ?: privilegeBySongId[songId]
         lastSongPrivilege = effectivePrivilege
@@ -1533,6 +1544,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 cachedEntry.url, cachedEntry.actualLevel,
                 cachedEntry.br, cachedEntry.type, cachedEntry.songMaxLevel,
                 playbackItem = preloadPlaybackItems[songId],
+                cachedContent = cachedEntry.cachedContent,
                 requestedLevel = preloadRequestedLevels[songId],
             )
             val entitlement = classifyEntitlement(track.source, cachedResult, selectedQuality, effectivePrivilege)
@@ -1719,41 +1731,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
-        val hit = OfflineUrlStore.recall(app, songId, listOf(level)) ?: return null
-        // v3.3.0 · P1：判据从 `contains`（有任何片段）换成 `coversStart`（**能从头播**）。
-        //
-        // 旧判据只问「缓存里有没有这个 key 的片段」，而播放器是从 position 0 读的。
-        // 缓存只有中段时（seek 过去听过、或上次缓冲到一半就切歌）它会放行 ⇒
-        // 起播正常、播到洞的位置**突然卡死**再弹降级 —— 用户读到的就是「播一半就断」。
-        // 更糟的是它先给了「能放」的承诺，比直接说放不了更难理解。
-        if (!OfflineAudioCache.coversStart(app, hit.first)) {
-            Log.i(
-                "PlayerViewModel",
-                "offline cache hit but does not cover position 0: songId=$songId key=${hit.first}",
-            )
-            return null
-        }
-        // v2.2.1 · P0：本会话里已经证明播不出来的那条链，不再喂第二次。
-        //
-        // 这一条是那个**固定点**的最后一道闸：离线清单会「退化成这首歌的任意档位」，
-        // 于是「请求 exhigh → 兜底给 lossless 的旧链 → 失败 → 又请求 exhigh → 又是同一条」
-        // 可以永远转下去（实测 logcat 里连续十几轮）。去掉重放之后，环必然会被打破。
-        if (hit.first in failedUrlKeys) {
-            Log.w("PlayerViewModel", "offline cache hit but already failed this session: ${hit.first}")
-            return null
-        }
+        val hit = OfflineUrlStore.recallRecord(app, songId, listOf(level)) { key ->
+            key !in failedUrlKeys && OfflineKeys.key(songId, OfflineKeys.levelOf(key) ?: level) !in failedUrlKeys &&
+                OfflineAudioCache.coversStart(app, key)
+        } ?: return null
         Log.i("PlayerViewModel", "offline cache hit songId=$songId key=" + hit.first)
         // v2.2.1 · P0：离线兜底拿到的档位**不一定等于请求档位**（recall 会退化成任意档位）。
         // 把这个事实如实带出去：levelFromFile=true 表示这个档位是从离线 key 反推的、
         // 不是服务端标签，QualityAssessment 据此可以给出诚实的「已降级」而不是沉默。
         return SongUrlResult(
-            url = hit.second,
+            url = hit.second.url,
             actualLevel = OfflineKeys.levelOf(hit.first) ?: level,
             br = 0L,
             type = "",
             songMaxLevel = null,
             levelFromFile = true,
             fallbackFromLevel = level.takeIf { OfflineKeys.levelOf(hit.first) != level },
+            cachedContent = hit.second.content,
+            playbackItem = hit.second.content.playbackItem(hit.second.url, OfflineKeys.levelOf(hit.first) ?: level),
         )
     }
 
@@ -1784,7 +1779,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 离线兜底命中时是 Ok；在线取链失败**且离线也没命中**时才把分类交出去 ——
         // 也就是说「离线缓存救回来了」这件事优先于失败分类（能播就是不失败）。
         val outcome = SourceRouter.resolveUrlOutcome(ref, level)
-        outcome.result?.let { return outcome }
+        outcome.result?.let { OfflineUrlStore.rememberResult(app, it); return outcome }
         recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
         return outcome
     }
@@ -2113,6 +2108,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** Main-thread queue edits revoke both pending requests and the Service slot immediately. */
+    fun invalidatePreload() {
+        com.takahashirinta.ncrust.player.preloadGeneration.invalidate()
+        preloadJob?.cancel()
+        preloadJob = null
+        currentlyPreloadingSongId = -1L
+        clearPreloadedState()
+        PlaybackService.instance?.discardPreload()
+    }
+
     private fun clearPreloadedState() {
         preloadedSongId = -1L
         preloadedTitle = ""
@@ -2168,6 +2173,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val capturedVersion = playGate.current
         preloadJob?.cancel()
         currentlyPreloadingSongId = songId
+        val queueRevision = com.takahashirinta.ncrust.player.preloadGeneration.current()
         preloadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val prefs = getApplication<Application>().getSharedPreferences("ncrust_settings", 0)
@@ -2217,12 +2223,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     SongUrlResult(
                         it.url, it.actualLevel, it.br, it.type, it.songMaxLevel,
                         playbackItem = preloadPlaybackItems[songId],
+                        cachedContent = it.cachedContent,
                         requestedLevel = preloadRequestedLevels[songId],
                     )
                 } ?: fetchUrlOfflineFirst(
                     songRefOf(nextTrack.source, songId, sourceId, mediaId),
                     quality,
                 ).result
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (!com.takahashirinta.ncrust.player.preloadGeneration.accepts(queueRevision)) return@launch
                 if (result == null) {
                     // 预加载失败：可能无版权/无订阅，忽略即可，等当前歌结束时由 songEnded 跳歌。
                     // ⚠️ 这里是**预加载**，不是用户点了播放 —— 不提示、不跳歌、不改任何状态。
@@ -2250,12 +2259,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     preloadRequestedLevels[songId] = it
                 }
                 withContext(Dispatchers.Main) {
+                    if (!com.takahashirinta.ncrust.player.preloadGeneration.accepts(queueRevision)) return@withContext
                     currentlyPreloadingSongId = -1L
                     // Store in cache regardless of staleness — URL is valid even if a new song started.
                     preloadCache[songId] = PreloadCacheEntry(
                         result.url, result.actualLevel, quality, result.br, result.type, result.songMaxLevel,
                         // v3.1.0：把 Provider 给的绝对过期时刻带上（B 站必需；ncm/QQ 为 null）。
                         expiresAtMs = result.expiresAtMs,
+                        cachedContent = result.cachedContent,
                     )
                     if (!playGate.isCurrent(capturedVersion)) {
                         // playSong was called while this fetch was in flight.
@@ -2357,6 +2368,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     preloadedTrack = nextTrack
                     val intent = Intent(getApplication(), PlaybackService::class.java).apply {
                         putExtra("action", "preload_next")
+                        putExtra("preloadRevision", queueRevision)
                         putExtra("url", result.url)
                         putExtra("title", title)
                         putExtra("artist", artist)

@@ -41,6 +41,11 @@ object OfflineKeys {
         return url + sep + QUERY_KEY + "=" + key(songId, level)
     }
 
+    /** Separate full/trial bytes from legacy unknown files, retaining the song/quality grammar. */
+    fun withContentKey(url: String, songId: Long, level: String, content: OfflineContent): String =
+        if (content.variant.isEmpty()) withKey(url, songId, level)
+        else withKey(url, songId, level + "~" + content.variant)
+
     /**
      * 从 URL 里取回 key；没有就返回 null（调用方回落到「用 URL 当 key」的默认行为）。
      * 只做字符串处理，不引 java.net.URI —— 播放 URL 里的签名含 \`+\` \`/\` \`=\`，URL 解析器可能报错。
@@ -65,7 +70,7 @@ object OfflineKeys {
     /** 从 key 里解出档位；解不出返回 null。 */
     fun levelOf(key: String): String? {
         val parts = key.split(':')
-        return if (parts.size == 3 && parts[0] == "song") parts[2].ifEmpty { null } else null
+        return if (parts.size == 3 && parts[0] == "song") parts[2].substringBefore("~").ifEmpty { null } else null
     }
 
     /** 从 key 里解出歌曲 id；解不出返回 null。 */

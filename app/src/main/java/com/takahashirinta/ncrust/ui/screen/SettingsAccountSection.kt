@@ -129,17 +129,18 @@ internal fun SettingsAccountPage(
         }
         coroutineScope.launch {
             isLoadingProfile = true
+            com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.refreshIfNeeded()
+            val started = CookieManager.snapshot()
             try {
                 val profile = PlaylistApi.getUserProfile()
                 // 服务端对失效 cookie 会返回空 account/profile → userId=0。
                 // 此时判定为已过期，主动清除本地 cookie，避免 UI 卡在 "UID: 0"。
+                if (!CookieManager.isCurrent(started)) {
+                    if (CookieManager.hasCookie(context)) loadProfile()
+                    return@launch
+                }
                 if (profile.userId == 0L) {
-                    CookieManager.clearCookie(context)
-                    RetrofitClient.updateCookie(null)
-                    // cookie 判定过期 = 301 语义：让 SessionMonitor 一并转 Expired。
-                    SessionMonitor.reportApiCode(301)
-                    // v2.1.4：cookie 判定过期时会员缓存同样失效（理由见下方登出处）。
-                    com.takahashirinta.ncrust.auth.NeteaseVipStore.clear(context)
+                    SessionMonitor.reportApiCode(301, started)
                     hasCookie = false
                     userProfile = null
                 } else {

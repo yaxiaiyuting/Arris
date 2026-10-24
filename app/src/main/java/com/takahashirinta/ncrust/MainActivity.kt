@@ -1231,6 +1231,7 @@ fun MainScreen(
 
     /** 切换播放模式：写盘 + 维护乱序序列（唯一入口，避免漏掉落盘）。 */
     fun applyPlayMode(mode: Int) {
+        playerViewModel.invalidatePreload()
         playMode = mode
         PlaybackStateManager.savePlayMode(context, mode)
         if (mode == QueueModes.SHUFFLE) {
@@ -1246,6 +1247,7 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         val savedQueue = PlaybackStateManager.getQueue(context)
         if (savedQueue != null && savedQueue.first.isNotEmpty()) {
+            playerViewModel.invalidatePreload()
             playbackQueue = savedQueue.first.toMutableList()
             currentQueueIndex = savedQueue.second.coerceIn(0, playbackQueue.size - 1)
             if (playMode == QueueModes.SHUFFLE) {
@@ -1357,6 +1359,7 @@ fun MainScreen(
         // 一格一格指向「当前歌的后一首」，不变量 `queue[current] == 正在播的歌` 当场破坏。
         // 身份是 TrackKey（音源 + id），跨源同号不会被认成同一首。
         val next = PlaybackQueueLogic.removeAt(playbackQueue, currentQueueIndex, index)
+        playerViewModel.invalidatePreload()
         playbackQueue = next.queue
         currentQueueIndex = next.currentIndex
         Log.d(
@@ -1379,6 +1382,7 @@ fun MainScreen(
             from > currentQueueIndex && to <= currentQueueIndex -> currentQueueIndex + 1
             else -> currentQueueIndex
         }
+        playerViewModel.invalidatePreload()
         playbackQueue = newQueue
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
@@ -1497,6 +1501,7 @@ fun MainScreen(
                 return@launch
             }
             withContext(Dispatchers.Main) {
+                playerViewModel.invalidatePreload()
                 playbackQueue = playbackQueue + continuation
                 val startIdx = playbackQueue.size - continuation.size
                 // 乱序不要在这里重洗：追加项的下标一定不在旧轮次里，playFromQueue 会自己
@@ -1636,6 +1641,19 @@ fun MainScreen(
         // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
         // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
         playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
+    }
+
+    // Editing a queue does not re-emit needsPreload=true, and consuming the flag once per song
+    // would leave the new "next" track unpreloaded until the following song. Re-plan on every
+    // queue/mode change: preloadNextSong already dedupes and honours the gapless setting.
+    LaunchedEffect(playbackQueue, playMode) {
+        playbackQueue.getOrNull(preloadIndex())?.let { next ->
+            val (title, artist, artwork) = songParams(next)
+            playerViewModel.preloadNextSong(next.id, title, artist, artwork,
+                allowCurrent = playMode == QueueModes.SINGLE,
+                sourceKey = next.source, sourceId = next.sourceId, mediaId = next.mediaId,
+                privilege = next.privilege)
+        }
     }
 
     // 无缝播放：当进入当前歌曲的最后 60 秒时，预取下一首的 URL 并加入 ExoPlayer 队列。
@@ -1849,6 +1867,7 @@ fun MainScreen(
     fun playSongItem(song: SongItem) {
         val plan = QueueKeys.planPlayItem(playbackQueue, currentQueueIndex, song)
         if (plan.queueChanged) {
+            playerViewModel.invalidatePreload()
             playbackQueue = plan.queue
             currentQueueIndex = plan.currentIndex
             // v2.0.0 · T1-C：乱序模式必须跟着重排，否则「下一首」仍按旧编排推进。
@@ -1921,6 +1940,8 @@ fun MainScreen(
         // 比让队列静默缺一首安全（队列缺项 = 某首歌再也播不到）。
         // 装配逻辑收敛在 `QueueKeys.rebuild`（纯函数、有单测），不再内联在这里。
         val rebuilt = QueueKeys.rebuild(playbackQueue, plan.keys, extra = listOf(song)) ?: return
+
+        playerViewModel.invalidatePreload()
 
         playbackQueue = rebuilt
         currentQueueIndex = plan.currentIndex
@@ -2002,6 +2023,7 @@ fun MainScreen(
         // 不会留下「去重成功但追加失败」的半成品状态。
         val target = QueueKeys.dedupe(QueueKeys.keysOf(playbackQueue), songKey) + songKey
         val rebuilt = QueueKeys.rebuild(playbackQueue, target, extra = listOf(song)) ?: return
+        playerViewModel.invalidatePreload()
         playbackQueue = rebuilt
         currentQueueIndex = QueueKeys.indexOfCurrent(QueueKeys.keysOf(rebuilt), currentKey)
             .coerceAtLeast(0)
@@ -2012,6 +2034,7 @@ fun MainScreen(
     fun replaceQueueAndPlay(songs: List<SongItem>) {
         if (songs.isEmpty()) return
         fmMode = false
+        playerViewModel.invalidatePreload()
         playbackQueue = songs
         currentQueueIndex = 0
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
@@ -2058,6 +2081,7 @@ fun MainScreen(
         val newCurrentIndex = QueueKeys.indexOfCurrent(filtered, currentKey).coerceAtLeast(0)
         val insertPos = (newCurrentIndex + 1).coerceIn(0, filtered.size)
         filtered.addAll(insertPos, toInsert)
+        playerViewModel.invalidatePreload()
         playbackQueue = QueueKeys.rebuild(playbackQueue, filtered, extra = songs) ?: return
         currentQueueIndex = newCurrentIndex
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
@@ -2076,6 +2100,7 @@ fun MainScreen(
         val newSongs = QueueKeys.selectSongs(songs, newKeys)
         if (newSongs.isEmpty()) return
         // 尾追加不动 currentQueueIndex 前面的项，无需修正索引。
+        playerViewModel.invalidatePreload()
         playbackQueue = playbackQueue + newSongs
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
@@ -2423,6 +2448,7 @@ fun MainScreen(
                             ?: return@launch
                         withContext(Dispatchers.Main) {
                             currentSong = detail
+                            playerViewModel.invalidatePreload()
                             playbackQueue = listOf(detail)
                             currentQueueIndex = 0
                             shuffledIndices = emptyList()
@@ -2841,6 +2867,7 @@ fun MainScreen(
             onClearQueue = {
                 // 显式清空: 停播 + 回到暂无播放态。进程重建保留队列是特性(接着听),
                 // 想清空时用户有明确入口, 不做隐式自动清空(打断连续收听习惯)。
+                playerViewModel.invalidatePreload()
                 playbackQueue = emptyList()
                 currentQueueIndex = -1
                 currentSong = null

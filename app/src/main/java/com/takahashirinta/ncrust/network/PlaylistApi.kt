@@ -33,6 +33,9 @@ object PlaylistApi {
     private const val USER_PLAYLIST_PATH = "/eapi/user/playlist"
     private const val PLAYLIST_DETAIL_PATH = "/eapi/v6/playlist/detail"
     private const val ACCOUNT_GET_PATH = "/eapi/w/nuser/account/get"
+    private suspend fun readEapi(path: String, payload: Map<String, String>): okhttp3.Response =
+        com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read { RetrofitClient.eapiPost(path, payload) }
+
     /** 会员状态（weapi）。字段见 `account.VipInfoResponse`。 */
     private const val VIP_INFO_PATH = "/api/music-vip-membership/client/vip/info"
 
@@ -45,8 +48,8 @@ object PlaylistApi {
      * 界面据此显示失效横幅。登录失效时 `account/get` 仍返回 200，只有这类需登录接口会 301，
      * 所以判定必须在读到业务码的地方做。
      */
-    private fun reportBusinessCode(code: Int) {
-        SessionMonitor.reportApiCode(code)
+    private fun reportBusinessCode(code: Int, response: okhttp3.Response) {
+        response.request.tag(com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot::class.java)?.let { SessionMonitor.reportApiCode(code, it) }
     }
 
     /**
@@ -55,11 +58,11 @@ object PlaylistApi {
      * `deriveSession`，不能只看 HTTP 状态码。
      */
     suspend fun getAccount(): AccountGetResponse = withContext(Dispatchers.IO) {
-        val response = RetrofitClient.eapiPost(ACCOUNT_GET_PATH, emptyMap())
+        val response = readEapi(ACCOUNT_GET_PATH, emptyMap())
         val body = response.body?.string() ?: throw Exception("empty response")
         val parsed = gson.fromJson(body, AccountGetResponse::class.java)
             ?: throw Exception("account/get 解析失败")
-        reportBusinessCode(parsed.code ?: -1)
+        reportBusinessCode(parsed.code ?: -1, response)
         parsed
     }
 
@@ -69,11 +72,11 @@ object PlaylistApi {
      */
     suspend fun getVipInfo(userId: Long): VipInfoResponse = withContext(Dispatchers.IO) {
         val payload = JSONObject().put("userId", userId).toString()
-        val response = RetrofitClient.weapiPost(VIP_INFO_PATH, payload)
+        val response = com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read { RetrofitClient.weapiPost(VIP_INFO_PATH, payload) }
         val body = response.body?.string() ?: throw Exception("empty response")
         val parsed = gson.fromJson(body, VipInfoResponse::class.java)
             ?: throw Exception("vip/info 解析失败")
-        reportBusinessCode(parsed.code ?: -1)
+        reportBusinessCode(parsed.code ?: -1, response)
         parsed
     }
 
@@ -89,10 +92,10 @@ object PlaylistApi {
      */
     suspend fun getCurrentUserId(): Long = withContext(Dispatchers.IO) {
         val payload = emptyMap<String, String>()
-        val response = RetrofitClient.eapiPost(ACCOUNT_GET_PATH, payload)
+        val response = readEapi(ACCOUNT_GET_PATH, payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
         val account = json.optJSONObject("account")
             ?: json.optJSONObject("profile")
             ?: throw Exception("no account data, body=$body")
@@ -110,10 +113,10 @@ object PlaylistApi {
 
     suspend fun getUserProfile(): UserProfile = withContext(Dispatchers.IO) {
         val payload = emptyMap<String, String>()
-        val response = RetrofitClient.eapiPost(ACCOUNT_GET_PATH, payload)
+        val response = readEapi(ACCOUNT_GET_PATH, payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
 
         val account = json.optJSONObject("account")
         val profile = json.optJSONObject("profile")
@@ -135,12 +138,12 @@ object PlaylistApi {
             "offset" to offset.toString(),
             "includeVideo" to "false"
         )
-        val response = RetrofitClient.eapiPost(USER_PLAYLIST_PATH, payload)
+        val response = readEapi(USER_PLAYLIST_PATH, payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         val code = json.optInt("code", -1)
         if (code != 200) {
-            reportBusinessCode(code)
+            reportBusinessCode(code, response)
             throw Exception("API error: code=$code")
         }
 
@@ -178,10 +181,10 @@ object PlaylistApi {
      */
     suspend fun fetchPlaylistInfo(playlistId: Long): PlaylistInfo? = withContext(Dispatchers.IO) {
         val payload = mapOf("id" to playlistId.toString(), "n" to "0", "s" to "0")
-        val response = RetrofitClient.eapiPost(PLAYLIST_DETAIL_PATH, payload)
+        val response = readEapi(PLAYLIST_DETAIL_PATH, payload)
         val body = response.body?.string() ?: return@withContext null
         val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
         val playlist = json.optJSONObject("playlist") ?: return@withContext null
         PlaylistInfo(
             id = playlist.optLong("id", playlistId),
@@ -198,7 +201,7 @@ object PlaylistApi {
 
     suspend fun getArtistDetail(artistId: Long): String = withContext(Dispatchers.IO) {
         val payload = mapOf("id" to artistId.toString())
-        val response = RetrofitClient.eapiPost("/eapi/v1/artist/detail", payload)
+        val response = readEapi("/eapi/v1/artist/detail", payload)
         response.body?.string() ?: throw Exception("empty response")
     }
 
@@ -214,7 +217,7 @@ object PlaylistApi {
             "offset" to "0",
             "order" to "hot"
         )
-        val response = RetrofitClient.eapiPost("/eapi/v1/artist/songs", payload)
+        val response = readEapi("/eapi/v1/artist/songs", payload)
         val root = JSONObject(response.body?.string() ?: return@withContext emptyList())
         val arr = root.optJSONArray("songs") ?: return@withContext emptyList()
         (0 until arr.length()).mapNotNull { i ->
@@ -228,7 +231,7 @@ object PlaylistApi {
             "limit" to "50",
             "offset" to "0"
         )
-        val response = RetrofitClient.eapiPost("/eapi/artist/albums", payload)
+        val response = readEapi("/eapi/artist/albums", payload)
         response.body?.string() ?: throw Exception("empty response")
     }
 
@@ -240,12 +243,12 @@ object PlaylistApi {
             "n" to "1000",
             "s" to "0"
         )
-        val response = RetrofitClient.eapiPost(PLAYLIST_DETAIL_PATH, payload)
+        val response = readEapi(PLAYLIST_DETAIL_PATH, payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         val code = json.optInt("code", -1)
         if (code != 200) {
-            reportBusinessCode(code)
+            reportBusinessCode(code, response)
             throw Exception("API error: code=$code")
         }
 
@@ -341,10 +344,10 @@ object PlaylistApi {
         var lastError: Exception? = null
         repeat(2) { attempt ->
             try {
-                val response = RetrofitClient.eapiPost("/eapi/v3/song/detail", payload)
+                val response = readEapi("/eapi/v3/song/detail", payload)
                 val body = response.body?.string() ?: return@repeat
                 val json = JSONObject(body)
-                reportBusinessCode(json.optInt("code", -1))
+                reportBusinessCode(json.optInt("code", -1), response)
                 val songArray = json.optJSONArray("songs") ?: return@repeat
                 val privileges = parsePrivileges(json.optJSONArray("privileges"))
                 return@withContext (0 until songArray.length()).map { i ->
@@ -401,12 +404,12 @@ object PlaylistApi {
     // ==================== Discovery ====================
 
     suspend fun getDailyRecommendSongs(): List<SongItem> = withContext(Dispatchers.IO) {
-        val response = RetrofitClient.eapiPost("/eapi/v2/discovery/recommend/songs", emptyMap())
+        val response = readEapi("/eapi/v2/discovery/recommend/songs", emptyMap())
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         // 登录失效时这个接口**仍然 200**，只是返回非个性化的通用列表；
         // 真正会 301 的是收藏等私有接口，但代码里统一上报：301 即转 Expired。
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
         val arr = json.optJSONArray("recommend") ?: json.optJSONArray("data")
             ?: return@withContext emptyList()
         (0 until arr.length()).map { i ->
@@ -428,7 +431,7 @@ object PlaylistApi {
     }
 
     suspend fun getRecommendPlaylists(): List<PlaylistCard> = withContext(Dispatchers.IO) {
-        val response = RetrofitClient.eapiPost("/eapi/v1/discovery/recommend/resource", emptyMap())
+        val response = readEapi("/eapi/v1/discovery/recommend/resource", emptyMap())
         val body = response.body?.string() ?: throw Exception("empty response")
         val arr = JSONObject(body).optJSONArray("recommend") ?: return@withContext emptyList()
         (0 until minOf(arr.length(), 10)).map { i ->
@@ -449,7 +452,7 @@ object PlaylistApi {
      * 不需要任何新解析代码。默认只取前 [limit] 个（首页/搜索页只展示精选入口）。
      */
     suspend fun getToplists(limit: Int = 12): List<PlaylistCard> = withContext(Dispatchers.IO) {
-        val response = RetrofitClient.eapiPost("/eapi/toplist", emptyMap())
+        val response = readEapi("/eapi/toplist", emptyMap())
         val body = response.body?.string() ?: throw Exception("empty response")
         val arr = JSONObject(body).optJSONArray("list") ?: return@withContext emptyList()
         (0 until minOf(arr.length(), limit)).map { i ->
@@ -495,7 +498,7 @@ object PlaylistApi {
      * "每日推荐"——Infinity 无限播放应该用这个作为主数据源。
      */
     suspend fun getPersonalFm(): List<SongItem> = withContext(Dispatchers.IO) {
-        val response = RetrofitClient.eapiPost("/eapi/v1/radio/get", emptyMap())
+        val response = readEapi("/eapi/v1/radio/get", emptyMap())
         val body = response.body?.string() ?: throw Exception("empty response")
         val arr = JSONObject(body).optJSONArray("data") ?: return@withContext emptyList()
         (0 until arr.length()).map { i ->
@@ -563,7 +566,7 @@ object PlaylistApi {
         ).toString()
 
         val eapi = runCatching {
-            val response = RetrofitClient.eapiPost(
+            val response = readEapi(
                 "/eapi/v1/discovery/similarSong",
                 mapOf("songid" to songId.toString(), "limit" to limit.toString(), "offset" to "0")
             )
@@ -710,10 +713,10 @@ object PlaylistApi {
             "offset" to "0",
             "includeVideo" to "false"
         )
-        val response = RetrofitClient.eapiPost(USER_PLAYLIST_PATH, payload)
+        val response = readEapi(USER_PLAYLIST_PATH, payload)
         val body = response.body?.string() ?: return@withContext null
         val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
         pickLikedPlaylistIdFrom(json.optJSONArray("playlist"))
     }
 
@@ -776,7 +779,7 @@ object PlaylistApi {
         val head: List<Long>
         val declaredCount: Int
         try {
-            val response = RetrofitClient.eapiPost(PLAYLIST_DETAIL_PATH, payload)
+            val response = readEapi(PLAYLIST_DETAIL_PATH, payload)
             val body = response.body?.string()
                 ?: return@withContext LikedIdsResult.Failure("empty body")
             val json = JSONObject(body)
@@ -785,7 +788,7 @@ object PlaylistApi {
             val code = json.optInt("code", -1)
             if (code != 200) {
                 // 登录失效时这里返回 301：立即把会话转 Expired，界面显示失效横幅。
-                reportBusinessCode(code)
+                reportBusinessCode(code, response)
                 return@withContext LikedIdsResult.Failure("business code=$code")
             }
             val playlistObj = json.optJSONObject("playlist")
@@ -825,7 +828,7 @@ object PlaylistApi {
 
     /** 分页读取红心歌单第 offset 起的 limit 个单曲 id（Bug2-③ 补齐用）。 */
     private suspend fun fetchTrackIdsPage(playlistId: Long, offset: Int, limit: Int): List<Long> {
-        val response = RetrofitClient.eapiPost(
+        val response = readEapi(
             PLAYLIST_TRACK_ALL_PATH,
             mapOf(
                 "id" to playlistId.toString(),
@@ -983,10 +986,10 @@ object PlaylistApi {
         )
         // 客户端(接口域)用的是 eapi 端点 /eapi/album/sublist；weapi 那条网页端读取为空，
         // 故改用 eapi 读「我收藏的专辑」。eapi 返回 data 直接是专辑数组(非 weapi 的 data.albums)。
-        val response = RetrofitClient.eapiPost("/eapi/album/sublist", payload)
+        val response = readEapi("/eapi/album/sublist", payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1))
+        reportBusinessCode(json.optInt("code", -1), response)
         val arr: JSONArray = when {
             json.optJSONArray("data") != null -> json.optJSONArray("data")
             json.optJSONObject("data") != null -> json.optJSONObject("data").optJSONArray("albums")
@@ -1014,7 +1017,7 @@ object PlaylistApi {
         val response = RetrofitClient.eapiPost("/eapi/album/$action", payload)
         val body = response.body?.string() ?: return@withContext false
         val code = JSONObject(body).optInt("code", -1)
-        reportBusinessCode(code)
+        reportBusinessCode(code, response)
         code == 200
     }
 }
