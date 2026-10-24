@@ -42,3 +42,18 @@
 
 详见 `docs/reviews/2026-10-25-api-enhanced-comparison.md`（会话隔离 / QQ 分类）与
 `docs/reviews/2026-10-24-playback-adjacent.md`（预载 / 离线档位 / 试听属性）末尾的“修复状态”一节。
+
+## 5. 远端草稿 Release
+
+- 发布：draft **true**，tag `v3.7.3-gpl`，id `422929677`，源码提交 `786f89c`。
+- 五个附件远端 `size` 与 `digest` 全部与本地一致：**True**；另行下载 release APK 复核 SHA-256：**True**。
+
+| 附件 | 字节 | 远端 digest |
+|---|---|---|
+| `mapping-v3.7.3-gpl.txt.gz` | 5776242 | `sha256:67945654ca5000ab56ffb94b3e9eb9e7a9c164d33089a16945f0ebade42d3fc3` |
+| `Ncrust-v3.7.3-gpl-debug.apk` | 34197075 | `sha256:89740161284eaa60fc301de65816cfaba6194ee4eb7ff95a510ded3d23b2e7b1` |
+| `Ncrust-v3.7.3-gpl-release.apk` | 12039884 | `sha256:935d16d71344f5ed458174b3ec118aa1f2bc9ef2923b61dd15aeb785921e2a64` |
+| `RELEASE_NOTES.md` | 2161 | `sha256:082d4de653ad824134c2ff0fe0b4992d5eac8b31bbecbf97e5597bdb8c6877d7` |
+| `SHA256SUMS` | 365 | `sha256:e652e380c1d89712bb12ec253a908697a68e067be6bd9db9ff803f09bcca0b1e` |
+
+链接：https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-683e0fd363644862f0bc
