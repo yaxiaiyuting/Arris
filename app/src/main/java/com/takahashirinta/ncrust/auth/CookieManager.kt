@@ -54,6 +54,10 @@ object CookieManager {
     fun saveCookie(context: Context, cookie: String) {
         synchronized(guard) {
             init(context)
+            // 半截会话不得覆盖完整会话（与 saveCookieMerged 同一条判据，这里补上）。
+            // 缺了这道闸：一次失败/半途的登录页把只剩 JSESSIONID 的串写进来，就能把
+            // 已经可用的 MUSIC_U 会话整个顶掉 —— 用户看到的就是「登录态全没了」。
+            if (!NeteaseCookie.shouldReplace(guard.snapshot().cookie, cookie)) return
             getPrefs(context).edit().putString(KEY_COOKIE, cookie).remove(KEY_REFRESHED_AT).apply()
             guard.replace(cookie)
             NeteaseVipStore.clear(context)

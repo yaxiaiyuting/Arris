@@ -504,8 +504,15 @@ android {
         //   修法：① 强制 HTTP/1.1；② 取链单次调用上限 8 s；③ 每主机并发 5→12（排队 30 s 的根因）；
         //   ④ 取链请求改成可取消 + 取消异常原样抛出；⑤ 连接层失败不再逐档重试，弃连接后原档重试一次；
         //   ⑥ 传输失败归类为 NETWORK（有界重试，不再当成结构性不可播去跳歌）+ 3 s 全局冷却。
-        versionCode = 91
-        versionName = "3.7.5-gpl"
+        // v3.7.6：① **撤销 v3.7.5 的 HTTP/1.1 回退** —— 探针证明 h2 本身可用（同一 client 配置
+        //   强制 h2 时取链 200/300ms，与 h1 逐字节一致）；此前的 `REFUSED_STREAM` 是请求风暴
+        //   限流（一次点击 6 档阶梯、取消不掉、失败又自动跳歌 ⇒ 53 秒 2064 次请求）。
+        //   真正的修法是可取消取链 + 传输失败即停 + 全局冷却 + NETWORK 分类不跳歌。
+        //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
+        //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
+        //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
+        versionCode = 92
+        versionName = "3.7.6-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

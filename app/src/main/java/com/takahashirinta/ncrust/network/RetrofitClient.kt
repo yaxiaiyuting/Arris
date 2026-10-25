@@ -66,6 +66,10 @@ object RetrofitClient {
      * 直到某次恰好换了新连接。POST 不是幂等请求，OkHttp 不会自动重试，所以由调用方在
      * 识别到传输层失败后主动弃连接、在新连接上重试一次。
      */
+    /** Debug 探针专用：拿一份与 [plainClient] 同配置、但协议可指定的客户端。 */
+    internal fun probeClientWithProtocols(protocols: List<okhttp3.Protocol>): OkHttpClient =
+        plainClient.newBuilder().protocols(protocols).build()
+
     fun evictConnections() {
         sharedConnectionPool.evictAll()
     }
@@ -123,16 +127,11 @@ object RetrofitClient {
      */
     private val baseClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            // **强制 HTTP/1.1**。实测（2026-10-25，PLC110 / Android 16）：
-            // 同一台设备、同一个 `/eapi/song/enhance/player/url/v1`，
-            // curl over HTTP/1.1 → 200 / 0.40 s；App 的 HTTP/2 请求 → TTFB 永远 -1、
-            // 8 s 后 InterruptedIOException，日志里是 `stream was reset: REFUSED_STREAM`。
-            // 对照实验：保留 h2 但在每次取链前 `evictAll()` 强制全新连接，仍然 600 ms 就被
-            // `StreamResetException` 拒流 —— 不是连接复用问题，是服务端/CDN 对这条链路的
-            // h2 流直接拒收，客户端无法修复。
-            // 安全性：h1 与 h2 都在同一层 TLS 之上（ALPN 协商、同一套证书），回退不降低安全等级；
-            // 丢掉的只是多路复用与头部压缩，对本应用这种低并发 API 调用可忽略。
-            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            // 保持协议默认协商（HTTP/2 优先）。2026-10-25 的对照实验证明 h2 本身可用：
+            // 同样的 client 配置强制 h2 时，取链接口 200 / 300 ms，与 h1 逐字节一致。
+            // 之前观察到的 `REFUSED_STREAM` 是**请求风暴限流**（一次点击 6 档阶梯、取消不掉、
+            // 失败又触发自动跳歌 → 53 秒 2064 个请求），不是协议问题。真正的修法在
+            // SongUrlFetcher（可取消、传输失败即停、全局冷却）与失败分类（NETWORK 不跳歌）。
             .connectionPool(sharedConnectionPool)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

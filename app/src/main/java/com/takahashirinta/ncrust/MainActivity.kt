@@ -2740,7 +2740,30 @@ fun MainScreen(
                             .setAcceptThirdPartyCookies(this, true)
                         // 轮询是**主路径**；这个回调只作为「多一次机会」的补充，不再承担正确性。
                         // 判据与写入方式都与轮询保持一致（否则两条路会把 cookie 写成两种形状）。
+                        // 登录页兜底：`music.163.com/` 这个桌面 SPA 根路径在**部分运营商出口**上
+                        // 会直接返回 404（同设备实测：`/` = 404，而 `/login` → 302 到
+                        // `y.music.163.com/m/login` = 200）。命中一次就换到会跳转的入口，
+                        // 只换一次（避免 404 → 404 的循环）。
+                        var loginFallbackUsed = false
                         webViewClient = object : android.webkit.WebViewClient() {
+                            override fun onReceivedHttpError(
+                                view: android.webkit.WebView,
+                                request: android.webkit.WebResourceRequest,
+                                errorResponse: android.webkit.WebResourceResponse,
+                            ) {
+                                val code = errorResponse.statusCode
+                                val url = request.url.toString()
+                                if (!loginFallbackUsed && request.isForMainFrame &&
+                                    (code == 404 || code == 403) &&
+                                    url.startsWith("https://music.163.com")
+                                ) {
+                                    loginFallbackUsed = true
+                                    Log.w("NcrustLogin", "login page HTTP $code at $url → fallback /login")
+                                    view.loadUrl("https://music.163.com/login")
+                                }
+                                super.onReceivedHttpError(view, request, errorResponse)
+                            }
+
                             override fun onPageFinished(
                                 view: android.webkit.WebView, url: String
                             ) {

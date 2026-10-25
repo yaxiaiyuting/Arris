@@ -6,5 +6,6 @@
     <application tools:ignore="MissingIntentFilterForMediaSearch">
         <activity android:name=".celebration.CelebrationProbeActivity" android:exported="true" />
         <activity android:name=".player.PlaybackRegressionProbeActivity" android:exported="true" />
+        <activity android:name=".network.ProtocolProbeActivity" android:exported="true" />
     </application>
 </manifest>

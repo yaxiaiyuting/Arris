@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.7.5--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.7.6--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-12.04%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -375,6 +375,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.7.1-gpl | 2026-10-24 | 歌词不再把断网等待计入播放进度；账号页显示 ncm/qm/B站权益到期；码率补齐到实际音频轨道与文件元数据；缓存默认 1 GiB；随机播放按队列身份保存整轮顺序与游标 |
 | v3.7.2-gpl | 2026-10-24 | Tux 彩蛋与生日结束页的「继续听歌」上移 48dp（短屏按可用空间收间距），网页生日结束区同步；8 种尺寸的继续/重播/吹气门控复核 |
 | v3.7.3-gpl | 2026-10-25 | 会话代次隔离（迟到 301 不再清掉新登录）+ ncm 按需续期（共享在飞、限次重试、续期后先验票）+ qm 歌单鉴权保留完整失败分类；编辑队列即时撤销旧预载；离线逐档回退、试听归属随文件持久化 |
+| v3.7.6-gpl | 2026-10-25 | 撤销 v3.7.5 的 h1 回退（h2 实测正常，此前是请求风暴限流导致的误判）；登录页 404 自动换入口；`saveCookie` 禁止半截会话覆盖完整会话 |
 | v3.7.5-gpl | 2026-10-25 | 修 ncm 取链卡死：HTTP/2 被服务端拒流（`REFUSED_STREAM`），ncm 客户端改走 h1；取链可取消、连接层失败不再逐档重试、传输失败不再误判为「不可播」而自动跳歌 |
 | v3.7.4-gpl | 2026-10-25 | QQ→网易云完整替换播放身份；手动切歌与自然曲终分离；Media3 执行层接管系统导航；播放/预载双重代次与 owner 校验；主动续期后台化；旧缓存文件验证迁移 |
 
