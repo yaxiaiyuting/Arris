@@ -18,7 +18,7 @@ class NeteaseSessionChangedException(message: String) : IOException(message)
 /** Explicit read-only entry point. Responses remain owned by the caller, except the replaced one. */
 object NeteaseSessionRequests {
     suspend fun read(once: () -> Response): Response {
-        NeteaseTokenRefresher.refreshIfNeeded()
+        NeteaseTokenRefresher.scheduleIfNeeded()
         return renewRead(
             once = once,
             snapshot = { it.request.tag(NeteaseSessionSnapshot::class.java) },

@@ -5,6 +5,10 @@ import android.os.SystemClock
 import com.takahashirinta.ncrust.network.RetrofitClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,6 +23,16 @@ object NeteaseTokenRefresher {
     @Volatile private var app: Context? = null
     private val mutex = Mutex()
     private val throttle = NeteaseRefreshThrottle()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var proactiveJob: Job? = null
+    /** Proactive upkeep never holds a playable request behind a slow refresh server. */
+    @Synchronized fun scheduleIfNeeded() {
+        val context = app ?: return
+        if (proactiveJob?.isActive == true || !NeteaseCookie.isUsable(CookieManager.snapshot().cookie)) return
+        val at = CookieManager.lastRefreshedAt(context)
+        if (at > 0 && System.currentTimeMillis() - at in 0 until REFRESH_INTERVAL_MS) return
+        proactiveJob = scope.launch { refreshIfNeeded() }
+    }
     fun init(context: Context) { app = context.applicationContext }
 
     /**

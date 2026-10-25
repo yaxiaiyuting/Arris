@@ -169,7 +169,7 @@ object SongUrlFetcher {
     // Returns null when no level yields a playable URL (e.g. VIP-only song without a
     // subscription, or no valid session). Callers must skip the song instead of playing.
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? = withContext(Dispatchers.IO) {
-        com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.refreshIfNeeded()
+        com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
         // Try the requested level first, then fall back down the quality ladder.
         val fallbackLevels = when (level) {
             "dolby"    -> listOf("dolby", "hires", "lossless", "exhigh", "higher", "standard")
@@ -194,12 +194,12 @@ object SongUrlFetcher {
                 // A1：服务端按 **Cookie 里的客户端身份** 判定音质上限。只带 MUSIC_U/__csrf 时，
                 // 请求 hires 会被静默封顶成 lossless（code 仍是 200）；追加 os/appver 后同一请求
                 // 才真正返回 hires。实测见仓库外 tools/probe-quality.py。
-                val response = RetrofitClient.eapiPost(
-                    SONG_URL_PATH,
-                    payload,
-                    useInterface = true,
-                    extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie())
-                )
+                val response = com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read {
+                    RetrofitClient.eapiPost(
+                        SONG_URL_PATH, payload, useInterface = true,
+                        extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie()),
+                    )
+                }
                 val body = response.body?.string() ?: continue
                 // 不再打印响应体：里面带签名的 URL 不该进 logcat（移植 981e9b3）。
                 Log.d(TAG, "eapi response level=$tryLevel len=${body.length}")
