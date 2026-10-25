@@ -1,0 +1,40 @@
+{
+  "source_commit": "cc7ba51c25efbe1441c8339af8970fed06da0551",
+  "versionName": "3.7.4-gpl",
+  "versionCode": 90,
+  "package": "package: name='com.takahashirinta.ncrust' versionCode='90' versionName='3.7.4-gpl' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+  "tests": {
+    "tests": 3074,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes": 250
+  },
+  "lint": {
+    "Error": 0,
+    "Fatal": 0,
+    "Warning": 60
+  },
+  "signature_verified": true,
+  "zipalign_16k_verified": true,
+  "debug_probe_excluded_from_release": true,
+  "raw_mapping_sha256": "03958632c873f4907ed7ca3f57de207660f4ed65b99ce5f2254df04ca5cf7bb3",
+  "files": {
+    "Ncrust-v3.7.4-gpl-release.apk": {
+      "bytes": 12072652,
+      "sha256": "861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544"
+    },
+    "Ncrust-v3.7.4-gpl-debug.apk": {
+      "bytes": 34315819,
+      "sha256": "5c0f1d79df4547e850e9a4bb83f94665500e417ddbfacbe15cc929da1943ca3d"
+    },
+    "mapping-v3.7.4-gpl.txt.gz": {
+      "bytes": 5721775,
+      "sha256": "df60f195c59e0f766682d505553779a6085dcc4d778e56317ed7fa6a7ebd9b42"
+    },
+    "RELEASE_NOTES.md": {
+      "bytes": 1796,
+      "sha256": "7c22be68678e9811caca2e51d76d34fb05e2f2a33979771874557d3963944806"
+    }
+  }
+}

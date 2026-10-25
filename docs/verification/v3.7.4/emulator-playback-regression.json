@@ -1,0 +1,22 @@
+{
+  "success": true,
+  "checks": [
+    "QQ source and identifiers installed",
+    "QQ to Netease with null source clears old source and identifiers",
+    "already queued superseded play request cannot replace current item",
+    "stale QQ-owned preload rejected behind Netease item",
+    "manual next replaces actual media item without natural-end callback",
+    "MediaController next on one-item internal playlist dispatches exactly once",
+    "MediaController next-media-item dispatches exactly once",
+    "MediaController previous replaces item without natural completion"
+  ],
+  "naturalEndCount": 0,
+  "environment": {
+    "api": 33,
+    "serial": "emulator-5556",
+    "avd": "arris-regression374",
+    "source_commit": "cc7ba51",
+    "physical_device_test": false,
+    "network_audio": false
+  }
+}

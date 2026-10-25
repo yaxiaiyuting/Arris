@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.7.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.7.4--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-12.04%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -191,7 +191,7 @@ UI 上是一套 8 级档位，各音源映射到自己平台的文件档位：
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v3.7.3 release APK **实测 12,039,884 字节 ≈ 12.04 MB**，debug 34,197,075 字节。
+> 体积说明（最新）：v3.7.4 release APK **实测 12,072,652 字节 ≈ 12.07 MB**，debug 34,315,819 字节。
 > 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
 
 ### 🔐 登录
@@ -204,10 +204,10 @@ App 不提供手动粘贴 Cookie，登录方式：
 
 登录成功后自动同步云端收藏。
 
-#### 登录态怎么维持（v3.7.3）
+#### 登录态怎么维持（v3.7.3 起，v3.7.4 调整等待路径）
 
-- **ncm 会话按需续期**：启动、回到前台、以及真正要用到登录态的请求（取链、读资料、写收藏）会先检查一次；
-  票还新就直接放行，不额外打网络。需要续期时**同一时刻只有一个刷新在飞**，其余请求等它的结果。
+- **ncm 会话按需续期**：启动、回到前台与实际使用时按需检查，主动续期在后台单飞；可播放请求不等待刷新服务器。
+  明确收到鉴权拒绝的读取请求才等待续期并最多重试一次。近期已成功续期时直接放行，不额外打网络。
 - **断网不等于掉登录**：只有服务端明确回「未登录」才会判定失效并让界面提示重登；超时、DNS 失败、
   5xx 一律按可重试处理，凭证原样保留。判定失效后 60 秒内不会重复请求，续期成功则 10 分钟内不再刷。
 - **换号不串状态**：每个请求都带着它发出时的会话身份，迟到的响应只能更新它自己那份会话。
@@ -259,9 +259,9 @@ benchmark/run_benchmark.sh all     # Macrobenchmark：冷启动 / 滚动 / 播�
 | **网络直连** | 自有 `EapiCrypto`（AES-128-ECB + MD5 签名）与 `WeapiCrypto`（双 AES-CBC + 原始 RSA），直连 ncm，无中间服务器 |
 | **ContentCache** | 内存网络快照 + Crossfade，消除「空屏 → spinner → 跳变」；LRU-32 详情缓存 |
 | **离线缓存** | `cache/OfflineAudioCache`（media3 `SimpleCache` + `CacheDataSource`，`filesDir/offline/audio`，默认 1 GiB、上限 16 GiB；自定义 key `ncrustkey=song:<id>:<level>`，否则 URL 每次轮换永远不命中）+ `OfflineUrlStore`（离线回放 URL 清单，300 条 LRU） |
-| **会话与鉴权（v3.7.3）** | `auth/NeteaseSessionGuard`（凭证 + 单调 revision + 登录代次）、`NeteaseTokenRefresher`（共享在飞续期 / 会话级冷却 / 续期后先验票）、`NeteaseSessionRequests`（读取最多重试一次，换号即弃响应）、`qq/QqPlaylistAuth`（保留网络/业务/鉴权三类失败）；所有写操作都受同一代次闸门保护 |
+| **会话与鉴权（v3.7.3）** | `auth/NeteaseSessionGuard`（凭证 + 单调 revision + 登录代次）、`NeteaseTokenRefresher`（共享在飞续期 / 会话级冷却 / 续期后先验票）、`NeteaseSessionRequests`（读取最多重试一次，换号即弃响应）、`qq/QqPlaylistAuth`（保留网络/业务/鉴权三类失败）；会话状态与会员缓存的写回受同一代次闸门保护 |
 | **持久化** | 全部 SharedPreferences + Gson，无 Room |
-| **性能** | R8 全量混淆 + 资源 shrink（release 12.04 MB，v3.7.3 实测）、`AppWarmup` 冷启动预热、状态订阅下推至叶子组件、播放器折叠态子树 gating、大屏可视化 60fps 增量重绘 |
+| **性能** | R8 全量混淆 + 资源 shrink（release 12.07 MB，v3.7.4 实测）、`AppWarmup` 冷启动预热、状态订阅下推至叶子组件、播放器折叠态子树 gating、大屏可视化 60fps 增量重绘 |
 | **动效强度（v3.0.0）** | `ui/player/motion/`：`MotionEffects`（统一档位 / 能力位矩阵 / 五个独立开关，**纯逻辑且不含任何降级水位**——自动降级已删除，有反射断言守着）、`MotionPrefs`（10 个键 + 迁移水位 4）、`MotionBindings`（**特征 → 动效参数**的唯一映射层）、`MotionEnvelope` + `MotionBackdropState`（响度包络 / 瞬态脉冲 / 冲击波 / 光晕 / 粒子的定长 SoA 池）、`CoverBlur`（32px 降采样 + 三遍盒式模糊 + 按封面 URL 缓存的纯 Kotlin 实现）、`MotionClock`（全仓库唯一的帧时钟）、`MotionBackdrop`（全屏背景层：模糊 / 呼吸 / 视差 / 冲击波 / 光晕 / 粒子） |
 | **音频特征（v3.0.0）** | `player/AudioFeatureExtractor.kt`：两个一阶低通（150 Hz / 2 kHz）在**同一次逐样本遍历**里算出全带 RMS + 低 / 中 / 高频带 + 质心近似 + 瞬态（**每声道一份滤波状态** + **10 ms 子帧结算**）；`player/TransparentWaveformSink.kt` 负责两个开关（画不画波形 / 界面动效要不要特征）与「失败回落 RMS-only」；`ui/player/WaveformStore` 用 volatile 标量 + **单调瞬态计数**发布到 UI 线程。**全程无 FFT**，音频线程零分配 |
 
@@ -375,6 +375,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.7.1-gpl | 2026-10-24 | 歌词不再把断网等待计入播放进度；账号页显示 ncm/qm/B站权益到期；码率补齐到实际音频轨道与文件元数据；缓存默认 1 GiB；随机播放按队列身份保存整轮顺序与游标 |
 | v3.7.2-gpl | 2026-10-24 | Tux 彩蛋与生日结束页的「继续听歌」上移 48dp（短屏按可用空间收间距），网页生日结束区同步；8 种尺寸的继续/重播/吹气门控复核 |
 | v3.7.3-gpl | 2026-10-25 | 会话代次隔离（迟到 301 不再清掉新登录）+ ncm 按需续期（共享在飞、限次重试、续期后先验票）+ qm 歌单鉴权保留完整失败分类；编辑队列即时撤销旧预载；离线逐档回退、试听归属随文件持久化 |
+| v3.7.4-gpl | 2026-10-25 | QQ→网易云完整替换播放身份；手动切歌与自然曲终分离；Media3 执行层接管系统导航；播放/预载双重代次与 owner 校验；主动续期后台化；旧缓存文件验证迁移 |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 

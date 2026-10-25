@@ -1,0 +1,75 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-playback-fixes/app/build/outputs/apk/release/app-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 247,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+47 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1650,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqAuthStore.currentAuthRevision (+33 inline/overload)",
+      "obfuscated": "E4.f.invoke",
+      "class": "E4.f",
+      "codeUnits": 1392,
+      "registers": 37,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+58 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+47 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1650,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqAuthStore.currentAuthRevision (+33 inline/overload)",
+      "obfuscated": "E4.f.invoke",
+      "class": "E4.f",
+      "codeUnits": 1392,
+      "registers": 37,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+58 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.common.SimpleBasePlayer.updateStateAndInformListeners (+12 inline/overload)",
+      "obfuscated": "J4.q0.O1",
+      "class": "J4.q0",
+      "codeUnits": 1083,
+      "registers": 28,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.stats.StatsRecorder.onSample (+44 inline/overload)",
+      "obfuscated": "J4.F.h",
+      "class": "J4.F",
+      "codeUnits": 848,
+      "registers": 24,
+      "dex": "classes.dex"
+    }
+  ]
+}
