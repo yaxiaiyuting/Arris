@@ -143,8 +143,7 @@ object LibraryManager {
         return synchronized(songsLock) {
             cachedEntries ?: run {
                 val parsed = SavedSongCodec.decode(prefs(context).getString(KEY_SONGS, null))
-                cachedEntries = parsed.toMutableList()
-                parsed.toMutableList()
+                parsed.toMutableList().also { cachedEntries = it }
             }
         }
     }
@@ -158,8 +157,7 @@ object LibraryManager {
                 // 且**逐条**容错 —— 旧写法 `runCatching { gson.fromJson(...) }` 是
                 // 「一个字节坏了，用户收藏的整张专辑表消失」。
                 val parsed = SavedAlbumCodec.decode(prefs(context).getString(KEY_ALBUMS, null))
-                cachedAlbums = parsed.toMutableList()
-                parsed.toMutableList()
+                parsed.toMutableList().also { cachedAlbums = it }
             }
         }
     }
@@ -223,27 +221,20 @@ object LibraryManager {
      * （`edit()` 里不 put 就是不动），只有非 null 才写。
      */
     private fun flushToDisk() {
-        val ctx: Context
-        val songsSnapshot: List<SavedSongEntry>?
-        val albumsSnapshot: List<AlbumInfo>?
-        val likedIdsSnapshot: List<Long>?
+        // A canceled IO job may already be saving: serialize snapshot + write, not just ctx handoff.
         synchronized(flushLock) {
-            ctx = pendingAppContext ?: return
+            val ctx = pendingAppContext ?: return
             pendingAppContext = null
-        }
-
-        synchronized(songsLock) { songsSnapshot = cachedEntries?.toList() }
-        synchronized(albumsLock) { albumsSnapshot = cachedAlbums?.toList() }
-        synchronized(idsLock) { likedIdsSnapshot = cachedLikedIds?.toList() }
-        runCatching {
-            val editor = prefs(ctx).edit()
-            // v2.6.0 · P0：写路径走 codec（显式字段名 + origin/tombstone），
-            // 不再依赖 R8 后的类结构，也不再落一份没有来源信息的裸 SongItem 数组。
-            songsSnapshot?.let { editor.putString(KEY_SONGS, SavedSongCodec.encode(it)) }
-            // v2.5.5 · A：写路径走 codec（显式字段名），不再依赖 R8 后的类结构。
-            albumsSnapshot?.let { editor.putString(KEY_ALBUMS, SavedAlbumCodec.encode(it)) }
-            likedIdsSnapshot?.let { editor.putString(KEY_LIKED_IDS, gson.toJson(it)) }
-            editor.apply()
+            val songsSnapshot = synchronized(songsLock) { cachedEntries?.toList() }
+            val albumsSnapshot = synchronized(albumsLock) { cachedAlbums?.toList() }
+            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds?.toList() }
+            runCatching {
+                val editor = prefs(ctx).edit()
+                songsSnapshot?.let { editor.putString(KEY_SONGS, SavedSongCodec.encode(it)) }
+                albumsSnapshot?.let { editor.putString(KEY_ALBUMS, SavedAlbumCodec.encode(it)) }
+                likedIdsSnapshot?.let { editor.putString(KEY_LIKED_IDS, gson.toJson(it)) }
+                editor.apply()
+            }
         }
     }
 
@@ -316,7 +307,7 @@ object LibraryManager {
         val key = TrackKey.ofSong(song)
         val changed: Boolean
         synchronized(songsLock) {
-            val before = cachedEntries ?: mutableListOf()
+            val before = ensureSongsLoaded(context)
             val after = SavedSongSync.addManual(before, song, System.currentTimeMillis())
             changed = after !== before
             if (changed) cachedEntries = after.toMutableList()
@@ -335,7 +326,7 @@ object LibraryManager {
         if (newSongs.isEmpty()) return
         val added = mutableListOf<SongItem>()
         synchronized(songsLock) {
-            val before = cachedEntries ?: mutableListOf()
+            val before = ensureSongsLoaded(context)
             // 判断「这次到底哪些真的进了可见表」的判据：**可见**条目的 trackKey 集合。
             // 用「可见」而不是「全部」是为了让「重新添加一首被 tombstone 过的歌」
             // 也算一次新增（它需要推一次 like(true) 给云端）。
@@ -369,7 +360,7 @@ object LibraryManager {
         val key = TrackKey.of(null, songId)
         val changed: Boolean
         synchronized(songsLock) {
-            val before = cachedEntries ?: mutableListOf()
+            val before = ensureSongsLoaded(context)
             val after = SavedSongSync.remove(before, key)
             changed = after !== before
             if (changed) cachedEntries = after.toMutableList()
@@ -383,25 +374,21 @@ object LibraryManager {
 
     /** 可见（未被 tombstone）的收藏单曲，按表内顺序。 */
     fun getSavedSongs(context: Context): List<SongItem> {
-        val entries = ensureSongsLoaded(context)
-        return synchronized(songsLock) { entries.filter { it.isVisible }.map { it.song } }
+        return synchronized(songsLock) { ensureSongsLoaded(context).filter { it.isVisible }.map { it.song } }
     }
 
     /** 带来源的只读视图（诊断 / 单测 / 将来的 UI 角标用）。 */
     fun getSavedSongEntries(context: Context): List<SavedSongEntry> {
-        val entries = ensureSongsLoaded(context)
-        return synchronized(songsLock) { entries.toList() }
+        return synchronized(songsLock) { ensureSongsLoaded(context).toList() }
     }
 
     fun isSongSaved(context: Context, songId: Long): Boolean {
-        val entries = ensureSongsLoaded(context)
-        return synchronized(songsLock) { entries.any { it.isVisible && it.trackKey.id == songId } }
+        return synchronized(songsLock) { ensureSongsLoaded(context).any { it.isVisible && it.trackKey.id == songId } }
     }
 
     fun getSongsByAlbumId(context: Context, albumId: Long): List<SongItem> {
-        val entries = ensureSongsLoaded(context)
         return synchronized(songsLock) {
-            entries.filter { it.isVisible && it.song.album?.id == albumId }.map { it.song }
+            ensureSongsLoaded(context).filter { it.isVisible && it.song.album?.id == albumId }.map { it.song }
         }
     }
 
@@ -409,14 +396,13 @@ object LibraryManager {
 
     /** 收藏页「专辑」栏：返回云端「收藏的专辑」（album_sublist 缓存）。纯云端，不派生。 */
     fun getSavedAlbums(context: Context): List<AlbumInfo> {
-        val albums = ensureAlbumsLoaded(context)
-        return synchronized(albumsLock) { albums.toList() }
+        return synchronized(albumsLock) { ensureAlbumsLoaded(context).toList() }
     }
 
     /** 收藏专辑（订阅云端）：先落本地缓存，再异步同步云端。 */
     fun subscribeAlbum(context: Context, album: AlbumInfo) {
-        val albums = ensureAlbumsLoaded(context)
         synchronized(albumsLock) {
+            val albums = ensureAlbumsLoaded(context)
             albums.removeAll { it.albumId == album.albumId }
             albums.add(0, album)
         }
@@ -426,10 +412,9 @@ object LibraryManager {
 
     /** 取消收藏专辑：仅移除专辑订阅（不影响收藏单曲，二者解耦）。 */
     fun removeAlbum(context: Context, albumId: Long) {
-        val albums = ensureAlbumsLoaded(context)
         val removed: Boolean
         synchronized(albumsLock) {
-            removed = albums.removeAll { it.albumId == albumId }
+            removed = ensureAlbumsLoaded(context).removeAll { it.albumId == albumId }
         }
         if (removed) {
             scheduleFlush(context)
@@ -460,6 +445,7 @@ object LibraryManager {
         }
         val uid: Long = try {
             PlaylistApi.getCurrentUserId()
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: getCurrentUserId failed: ${e.message}")
             return@withContext false
@@ -495,7 +481,7 @@ object LibraryManager {
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
                     synchronized(songsLock) {
-                        val before = cachedEntries ?: mutableListOf()
+                        val before = ensureSongsLoaded(context)
                         val after = SavedSongSync.merge(before, likedIds, freshById, System.currentTimeMillis())
                         cachedEntries = after.toMutableList()
                         // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
@@ -510,6 +496,7 @@ object LibraryManager {
                     anySuccess = true
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: liked songs failed: ${e.message}")
         }
@@ -529,12 +516,13 @@ object LibraryManager {
                 }.toMutableList()
             }
             anySuccess = true
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: albums failed: ${e.message}")
         }
 
         if (anySuccess) scheduleFlush(context)
-        true
+        anySuccess
     }
 
     /** 红心歌单全部单曲 id（有序），供收藏页做分页懒加载的底表。 */
@@ -563,7 +551,7 @@ object LibraryManager {
             return@withContext emptyList()
         }
         synchronized(songsLock) {
-            val before = cachedEntries ?: mutableListOf()
+            val before = ensureSongsLoaded(context)
             // 纯追加（不是 merge）：分页只拿到一段 slice，用 merge 会把不在这一批里的
             // 条目重排到后面 —— 每翻一页列表顺序就抖一次。
             val after = SavedSongSync.appendRemote(before, fetched, System.currentTimeMillis())
@@ -601,7 +589,7 @@ object LibraryManager {
             var tombstoned: Set<Long>
             val byId = LinkedHashMap<Long, SongItem>()
             synchronized(songsLock) {
-                val entries = cachedEntries ?: mutableListOf()
+                val entries = ensureSongsLoaded(context)
                 localVisible = entries.filter { it.isVisible }
                 tombstoned = entries.asSequence()
                     .filter { it.tombstoned && it.trackKey.source == MusicSource.NETEASE }
@@ -624,7 +612,7 @@ object LibraryManager {
                 for (s in fetched) byId[s.id] = s
                 if (fetched.isNotEmpty()) {
                     synchronized(songsLock) {
-                        val before = cachedEntries ?: mutableListOf()
+                        val before = ensureSongsLoaded(context)
                         cachedEntries = SavedSongSync
                             .appendRemote(before, fetched, System.currentTimeMillis())
                             .toMutableList()

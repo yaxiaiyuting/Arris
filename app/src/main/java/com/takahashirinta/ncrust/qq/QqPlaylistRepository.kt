@@ -110,15 +110,16 @@ object QqPlaylistRepository {
         return when (val r = QqPlaylistApi.fetchOwnedPlaylists(ownerId)) {
             is QqPlaylistResult.Ok -> {
                 val fav = fetchFavoritesSafely(ownerId, r.value)
-                val merged = r.value + fav
+                val retained = if (fav.degradation != null) cachedList?.playlists.orEmpty().filterNot { it.isOwned } else emptyList()
+                val merged = (r.value + fav.playlists + retained).distinctBy { it.key }
                 val stored = QqAuthStore.withAuthLock {
                     if (currentOwnerId(ctx) != ownerId) false else {
-                        QqPlaylistStore.writeList(ctx, ownerId, merged, now()); true
+                        QqPlaylistStore.writeList(ctx, ownerId, merged, if (fav.degradation == null) now() else 0L); true
                     }
                 }
                 if (!stored) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
                 PlaylistResult.Data(
-                    PlaylistLoadOutcome(merged, fromCache = false, fresh = true, degradation = null)
+                    PlaylistLoadOutcome(merged, fromCache = false, fresh = fav.degradation == null, degradation = fav.degradation)
                 )
             }
             QqPlaylistResult.NeedLogin -> degradedOrFail(
@@ -160,35 +161,35 @@ object QqPlaylistRepository {
             PlaylistResult.Failed(failure)
         }
 
-    /**
-     * 尽力而为地取收藏歌单。任何失败都吞掉并返回空 —— 它不该让「我自己的歌单」也失败。
-     * **失败要留日志**（否则「收藏歌单为什么一直空」无法排查），但只打错误码不打内容。
-     */
-    private suspend fun fetchFavoritesSafely(
-        ownerId: String,
-        owned: List<Playlist>,
-    ): List<Playlist> {
-        val fav = owned.firstOrNull { it.isFavorite } ?: return emptyList()
-        val euin = when (
-            val d = QqPlaylistApi.fetchDetailPage(
-                key = fav.key, disstid = 0L, dirId = QqPlaylistParser.FAVORITE_DIR_ID,
-                songBegin = 0, songNum = 1,
-            )
-        ) {
-            is QqPlaylistResult.Ok -> d.value.encryptUin
-            else -> null
-        }
-        if (euin.isNullOrBlank()) {
-            Log.i(TAG, "favorite playlists skipped: no encrypt_uin (detail lookup failed)")
-            return emptyList()
-        }
-        return when (val r = QqPlaylistApi.fetchFavPlaylists(ownerId, euin)) {
-            is QqPlaylistResult.Ok -> r.value
-            else -> {
-                Log.i(TAG, "favorite playlists fetch failed: $r")
-                emptyList()
+    private data class FavoritesLoad(val playlists: List<Playlist>, val degradation: PlaylistDegradation? = null)
+
+    /** A failed optional read is partial data, never a confirmed empty collection. */
+    private suspend fun fetchFavoritesSafely(ownerId: String, owned: List<Playlist>): FavoritesLoad {
+        val favorite = owned.firstOrNull { it.isFavorite }
+            ?: return FavoritesLoad(emptyList(), PlaylistDegradation.TRUNCATED)
+        val detail = QqPlaylistApi.fetchDetailPage(favorite.key, 0L, QqPlaylistParser.FAVORITE_DIR_ID, 0, 1)
+        val euin = (detail as? QqPlaylistResult.Ok)?.value?.encryptUin
+        if (euin.isNullOrBlank()) return FavoritesLoad(emptyList(),
+            playlistAuthFailure(detail)?.first ?: PlaylistDegradation.OFFLINE)
+        val all = LinkedHashMap<PlaylistKey, Playlist>()
+        val pageSize = 50
+        var offset = 0
+        repeat(40) {
+            when (val page = QqPlaylistApi.fetchFavPlaylists(ownerId, euin, offset, pageSize)) {
+                is QqPlaylistResult.Ok -> {
+                    val oldSize = all.size
+                    page.value.forEach { all[it.key] = it }
+                    if (page.value.size < pageSize) return FavoritesLoad(all.values.toList())
+                    if (all.size == oldSize) return FavoritesLoad(all.values.toList(), PlaylistDegradation.TRUNCATED)
+                    offset += page.value.size
+                }
+                else -> {
+                    Log.i(TAG, "favorite playlists incomplete: $page")
+                    return FavoritesLoad(all.values.toList(), playlistAuthFailure(page)?.first ?: PlaylistDegradation.OFFLINE)
+                }
             }
         }
+        return FavoritesLoad(all.values.toList(), PlaylistDegradation.TRUNCATED)
     }
 
     // ---------------------------------------------------------------- 详情 ----

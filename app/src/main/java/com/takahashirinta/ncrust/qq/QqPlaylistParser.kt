@@ -145,7 +145,7 @@ object QqPlaylistParser {
         val code = codeOf(response)
         classify(code).let { if (it !is QqPlaylistResult.Ok) return it.cast() }
         val arr = dataOf(response)?.optJSONArray("v_playlist")
-            ?: return QqPlaylistResult.Ok(emptyList())
+            ?: return QqPlaylistResult.Failure(-1)
         val out = ArrayList<Playlist>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
@@ -168,7 +168,7 @@ object QqPlaylistParser {
         }
         classify(code).let { if (it !is QqPlaylistResult.Ok) return it.cast() }
         val arr = dataOf(response)?.optJSONArray("v_list")
-            ?: return QqPlaylistResult.Ok(emptyList())
+            ?: return QqPlaylistResult.Failure(-1)
         val out = ArrayList<Playlist>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue

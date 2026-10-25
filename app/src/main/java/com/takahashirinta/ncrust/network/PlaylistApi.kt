@@ -978,35 +978,54 @@ object PlaylistApi {
         val songCount: Int
     )
 
-    suspend fun getSubscribedAlbums(limit: Int = 100, offset: Int = 0): List<CloudAlbum> = withContext(Dispatchers.IO) {
-        val payload = mapOf(
-            "limit" to limit.toString(),
-            "offset" to offset.toString(),
-            "total" to "true"
-        )
-        // 客户端(接口域)用的是 eapi 端点 /eapi/album/sublist；weapi 那条网页端读取为空，
-        // 故改用 eapi 读「我收藏的专辑」。eapi 返回 data 直接是专辑数组(非 weapi 的 data.albums)。
-        val response = readEapi("/eapi/album/sublist", payload)
-        val body = response.body?.string() ?: throw Exception("empty response")
-        val json = JSONObject(body)
-        reportBusinessCode(json.optInt("code", -1), response)
-        val arr: JSONArray = when {
-            json.optJSONArray("data") != null -> json.optJSONArray("data")
-            json.optJSONObject("data") != null -> json.optJSONObject("data").optJSONArray("albums")
-            else -> return@withContext emptyList()
+    private data class AlbumPage(val albums: List<CloudAlbum>, val more: Boolean)
+
+    /** Complete bounded read: any failed/truncated page leaves the caller's old cache intact. */
+    suspend fun getSubscribedAlbums(limit: Int = 100, offset: Int = 0): List<CloudAlbum> {
+        val pageSize = limit.coerceIn(1, 100)
+        var cursor = offset.coerceAtLeast(0)
+        val generation = com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration
+        val all = LinkedHashMap<Long, CloudAlbum>()
+        repeat(100) {
+            val page = getSubscribedAlbumPage(pageSize, cursor)
+            if (com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration != generation)
+                throw com.takahashirinta.ncrust.auth.NeteaseSessionChangedException("Login changed during album read")
+            val oldSize = all.size
+            page.albums.forEach { all[it.albumId] = it }
+            if (!page.more) return all.values.toList()
+            if (page.albums.isEmpty() || oldSize == all.size) throw java.io.IOException("Album page made no progress")
+            cursor += page.albums.size
         }
-        (0 until arr.length()).map { i ->
-            val a = arr.getJSONObject(i)
-            CloudAlbum(
-                albumId = a.optLong("id"),
-                name = a.optString("name"),
-                artist = a.optJSONArray("artists")
-                    ?.takeIf { it.length() > 0 }
-                    ?.getJSONObject(0)?.optString("name")
-                    ?: a.optJSONObject("artist")?.optString("name") ?: "",
-                picUrl = a.optString("picUrl"),
-                songCount = a.optInt("size")
-            )
+        throw java.io.IOException("Album page limit exceeded")
+    }
+
+    private suspend fun getSubscribedAlbumPage(limit: Int, offset: Int): AlbumPage = withContext(Dispatchers.IO) {
+        val response = readEapi("/eapi/album/sublist", mapOf(
+            "limit" to limit.toString(), "offset" to offset.toString(), "total" to "true",
+        ))
+        response.use {
+            val json = JSONObject(it.body?.string() ?: throw java.io.IOException("Empty album response"))
+            val code = json.optInt("code", -1)
+            reportBusinessCode(code, it)
+            if (!it.isSuccessful || code != 200) throw java.io.IOException("Album read failed: code=$code")
+            val arr = json.optJSONArray("data") ?: json.optJSONObject("data")?.optJSONArray("albums")
+                ?: throw java.io.IOException("Missing album array")
+            val albums = (0 until arr.length()).map { i ->
+                val album = arr.getJSONObject(i)
+                val id = album.optLong("id")
+                if (id <= 0) throw java.io.IOException("Missing album identity")
+                CloudAlbum(id, album.optString("name"),
+                    album.optJSONArray("artists")?.optJSONObject(0)?.optString("name")
+                        ?: album.optJSONObject("artist")?.optString("name").orEmpty(),
+                    album.optString("picUrl"), album.optInt("size"))
+            }
+            // Older response shapes omit hasMore: request one extra page when exactly full.
+            val more = when {
+                json.has("hasMore") -> json.getBoolean("hasMore")
+                json.has("more") -> json.getBoolean("more")
+                else -> albums.size >= limit
+            }
+            AlbumPage(albums, more)
         }
     }
 
