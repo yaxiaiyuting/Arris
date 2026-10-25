@@ -62,11 +62,8 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- **Current: `versionName = "3.7.3-gpl"`, `versionCode = 89`.** Latest release: `v3.7.3-gpl`（draft）。
-  定号依据：`tools/next-version.sh --no-fetch` 三源交叉 —— ① 最近 5 个 tag 的 `versionCode`
-  （v3.7.3=89 / 87.2=88 / 87.1=87 / 87.0=86）② `dist/*.apk` 的 `aapt2 dump badging`
-  ③ 工作区 `build.gradle.kts`；最大值 89 ⇒ 下一个可用 **90**。
-  打 tag 前已用 `git show v3.7.3-gpl:app/build.gradle.kts | grep version` 自证：89 / 3.7.3-gpl。
+- **Current: `versionName = "3.7.7-gpl"`, `versionCode = 93`.** 本轮草稿标签 `v3.7.7-gpl`。
+  定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 92，取 93；另核对 dist/v3.7.6-gpl 的实际 APK 为 92。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）
   （v2.1.4 定号：`tools/next-version.sh` 三源交叉验证最大值 = 33 ⇒ **34**；
@@ -5113,3 +5110,9 @@ QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串�
 手动上一首/下一首与自然结束分离，SINGLE 只在 AUTO_NEXT 时重播当前项。MediaSession 的 onPlayerCommandRequest 返回 RESULT_SUCCESS 仅代表许可，不会吞默认动作；导航执行由 QueueSessionPlayer（ForwardingSimpleBasePlayer）接管，不能再在授权回调里派发一次。当前项只有一首时同样声明四个 next/previous 命令。
 
 播放代次在 IO→Main 提交后重新校验，并随 Intent 交给 Service 再校验，缓存快路径也取消旧任务。预载同时携带队列代次与 owner TrackKey，只能排到该 owner 后面；新当前歌仍在取链时可缓存下一首 URL，但不能挂到仍在播放的上一首后面。
+
+## v3.7.7 延迟重试与收藏持久化
+
+网络重试和播放降档共用 PlaybackRetryScheduler；等待前保存完整请求与播放代次，醒来先核对原 owner，切歌/同歌重播/换档/暂停/停止撤销。不得拿旧 songId 与醒来时的全局 source/title 拼装新请求。系统媒体暂停也撤销旧意图。
+
+收藏库的读改写必须持有对应锁并先 ensureLoaded，初始化只返回同一份可变真源；flush 的快照与写盘整体串行。网易专辑只接受 code 200 且具有数组的结果，完整分页成功后才替换缓存；QQ 附加歌单失败时保留旧收藏、标记降级且不刷新整表 TTL。未知结构不能当成功空表。
