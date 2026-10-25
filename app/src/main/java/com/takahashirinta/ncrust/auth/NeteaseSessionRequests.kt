@@ -17,7 +17,7 @@ class NeteaseSessionChangedException(message: String) : IOException(message)
 
 /** Explicit read-only entry point. Responses remain owned by the caller, except the replaced one. */
 object NeteaseSessionRequests {
-    suspend fun read(once: () -> Response): Response {
+    suspend fun read(once: suspend () -> Response): Response {
         NeteaseTokenRefresher.scheduleIfNeeded()
         return renewRead(
             once = once,
@@ -39,7 +39,7 @@ object NeteaseSessionRequests {
 
 /** Pure orchestration seam for concurrent renewal, account switches, and response ownership tests. */
 internal suspend fun <T> renewRead(
-    once: () -> T,
+    once: suspend () -> T,
     snapshot: (T) -> NeteaseSessionSnapshot?,
     current: () -> NeteaseSessionSnapshot,
     rejected: (T) -> Boolean,

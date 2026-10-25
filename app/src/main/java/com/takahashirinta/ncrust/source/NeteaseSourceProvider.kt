@@ -98,6 +98,9 @@ object NeteaseSourceProvider : MusicSourceProvider {
         val result = resolveUrl(song, level)
         if (result != null) return ResolveOutcome.ok(result)
         val kind = when {
+            // ⓪ 这次是死在传输层（拒流/超时/断网）—— 与这首歌、这个账号都无关，
+            //    必须走「有界重试」而不是「结构性不可播 ⇒ 跳歌」。
+            SongUrlFetcher.lastAttemptFailedOnTransport(song.id) -> ResolveFailureKind.NETWORK
             // ① 服务端显式声明无版权 —— 唯一的合法来源。
             song.noCopyright != null -> ResolveFailureKind.COPYRIGHT_GONE
             // ② 会员专享 / 数字专辑。

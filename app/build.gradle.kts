@@ -497,8 +497,15 @@ android {
         //   ④ 编辑队列即时撤销旧预载（generation + 服务待播项），旧无缝预载不会再插队；
         //   ⑤ 离线首选档位失效时逐档回退，并把 full/trial 归属随文件一起持久化，
         //   冷启动回放不再丢失试听属性。
-        versionCode = 90
-        versionName = "3.7.4-gpl"
+        // v3.7.5：播放取链全面失败 —— 根因是到 eapi 主机的 **HTTP/2** 被服务端持续拒流
+        //   （`REFUSED_STREAM`，TTFB 永远 -1），而同一台设备的 HTTP/1.1 请求 0.4 s 就返回 200。
+        //   客户端表现：点「下一首」卡 30 s 以上、收藏点开要等 5 s、加载中按钮点了没反应、
+        //   下一首只有歌词变而播放界面和音源不动、偶尔还弹「已降级」。
+        //   修法：① 强制 HTTP/1.1；② 取链单次调用上限 8 s；③ 每主机并发 5→12（排队 30 s 的根因）；
+        //   ④ 取链请求改成可取消 + 取消异常原样抛出；⑤ 连接层失败不再逐档重试，弃连接后原档重试一次；
+        //   ⑥ 传输失败归类为 NETWORK（有界重试，不再当成结构性不可播去跳歌）+ 3 s 全局冷却。
+        versionCode = 91
+        versionName = "3.7.5-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

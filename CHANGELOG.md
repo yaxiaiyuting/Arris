@@ -526,3 +526,28 @@ advanceGeneration / commitRefresh` 与 Cookie 落盘在同一把锁内完成，�
 验证：**3058 JVM tests / 249 类 / 0 失败**（新增 4 个测试类 20 例）；Lint **0 error**（60 warning，17 条按 baseline 过滤）；
 release/debug 构建成功，`versionCode` 89，签名证书 SHA-256 与 v3.7.2 相同（`e62eca39…bbec82`），`zipalign` 通过。
 **未做真机测试**，也没有向真实账号发送续期、收藏或播放上报请求；以上结论来自源码构造状态的单元测试与静态检查。
+
+## v3.7.5-gpl — 2026-10-25
+
+versionCode **91**。修「网易云的歌点不动 / 卡很久」——**不是网络问题**。
+
+**现象**：点「下一首」卡 30 s+；收藏点开 ncm 歌等 ~5 s；竖屏播放页加载中按钮点了没反应；
+下一首只有歌词变、播放界面与音源不动；偶发「已降级」。
+
+**根因**：`/eapi/song/enhance/player/url/v1`（`interface3.music.163.com`）的 **HTTP/2** 请求被
+服务端以 `REFUSED_STREAM` 拒收（TTFB 永远 `-1`，只能等超时）。真机对照：同一设备同一路径
+`curl`(HTTP/1.1) **200 / 0.40 s**，而 App(h2) 一直失败；保留 h2 但每次请求前 `evictAll()`
+强制全新连接仍被拒 —— 排除连接复用，是服务端/CDN 对这条链路 h2 流直接拒收。
+qm 用自己的 `QqClient`（h2）取链正常，说明不是设备/运营商整体禁用 h2。
+
+**修复**：
+- ncm 客户端强制 `Protocol.HTTP_1_1`（qm 不受影响）；h1 与 h2 同层 TLS，不降低安全等级。
+- 每主机并发 5 → 12（`ttfb=96ms / total=30162ms` 的排队来源）。
+- 取链 `callTimeout` 8 s；新增 `eapiPostCancellable`（`Call.cancel()`），切歌真正取消在飞请求。
+- 阶梯 `catch` 分离 `CancellationException` / `IOException`：取消原样抛出；连接层失败弃连接后
+  原档重试一次即放弃，1 次故障不再放大成 6 次。
+- 传输失败归类 `NETWORK`（有界重试，不再当成结构性不可播去跳歌）+ 3 s 全局冷却。
+  修复前同类误判在 53 s 内自动跳了 240 首。
+
+**实测**：点击到拿到 URL 130 ms，首档命中母带 FLAC、无降级提示；用户确认真机恢复正常。
+验证：3074 JVM tests / 250 类 / 0 失败；Lint 0 error；签名与对齐通过。未做其它运营商/地区复测。

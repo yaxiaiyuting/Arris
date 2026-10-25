@@ -58,6 +58,18 @@ object RetrofitClient {
         XeapiState.init(context)
     }
 
+    /**
+     * 丢掉连接池里的所有连接。
+     *
+     * 服务端在 HTTP/2 上回 `REFUSED_STREAM`（或半关闭）时，连接本身看起来仍是"可用"的，
+     * OkHttp 会继续把新请求复用到这条已经不可用的连接上 —— 表现是**每一次**请求都立刻失败，
+     * 直到某次恰好换了新连接。POST 不是幂等请求，OkHttp 不会自动重试，所以由调用方在
+     * 识别到传输层失败后主动弃连接、在新连接上重试一次。
+     */
+    fun evictConnections() {
+        sharedConnectionPool.evictAll()
+    }
+
     fun updateCookie(cookie: String?) {
         // 换登录态后旧的内存会话不再属于当前 cookie，清掉重取。
         XeapiState.clearSession()
@@ -111,6 +123,16 @@ object RetrofitClient {
      */
     private val baseClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // **强制 HTTP/1.1**。实测（2026-10-25，PLC110 / Android 16）：
+            // 同一台设备、同一个 `/eapi/song/enhance/player/url/v1`，
+            // curl over HTTP/1.1 → 200 / 0.40 s；App 的 HTTP/2 请求 → TTFB 永远 -1、
+            // 8 s 后 InterruptedIOException，日志里是 `stream was reset: REFUSED_STREAM`。
+            // 对照实验：保留 h2 但在每次取链前 `evictAll()` 强制全新连接，仍然 600 ms 就被
+            // `StreamResetException` 拒流 —— 不是连接复用问题，是服务端/CDN 对这条链路的
+            // h2 流直接拒收，客户端无法修复。
+            // 安全性：h1 与 h2 都在同一层 TLS 之上（ALPN 协商、同一套证书），回退不降低安全等级；
+            // 丢掉的只是多路复用与头部压缩，对本应用这种低并发 API 调用可忽略。
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .connectionPool(sharedConnectionPool)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -136,6 +158,13 @@ object RetrofitClient {
 
     private val plainClient: OkHttpClient by lazy {
         baseClient.newBuilder()
+            // 每主机并发从默认 5 提到 12：播放取链、歌词、资料、封面会同时打同一台主机，
+            // 5 条槽位一旦被几条慢请求占住，后续请求就只能在队列里干等（实测单请求 total
+            // 30 s、而 ttfb 只有 96 ms —— 时间全花在排队）。上限仍在，不会无限并发。
+            .dispatcher(okhttp3.Dispatcher().apply {
+                maxRequests = 64
+                maxRequestsPerHost = 12
+            })
             // v2.5.6 · P1：被动计时（真 TTFB / 响应体读完）。见 HttpTimingListener 的 KDoc ——
             // 它是纯观测，不改变请求行为；不加这一行，「TTFB 花在哪」在 release 包里无从取证。
             .eventListenerFactory(HttpTimingListener.factory)
@@ -253,6 +282,53 @@ object RetrofitClient {
             .build()
 
         return plainClient.newCall(request).execute()
+    }
+
+    /**
+     * [eapiPost] 的**可取消**版本：协程被取消时真正 `Call.cancel()`，而不是等阻塞的
+     * `execute()` 自己跑完。
+     *
+     * 为什么必须有它：切歌时 `playJob.cancel()` 只结束协程，已发出的 HTTP 调用仍会跑完，
+     * 于是「连点下一首」会累积成一串并发请求；服务端对播放取链接口有并发/频率阈值，
+     * 超了就用 `REFUSED_STREAM` 拒流（实测 6 次点击 = 36 个请求，直接换来 53 秒的全面拒流）。
+     */
+    suspend fun eapiPostCancellable(
+        path: String,
+        payload: Map<String, String>,
+        useInterface: Boolean = false,
+        extraCookie: String? = null,
+    ): Response {
+        val session = CookieManager.snapshot()
+        val host = if (useInterface) INTERFACE_URL else API_URL
+        val fullUrl = host + path
+        val params = EapiCrypto.encryptParams(fullUrl, payload.mapValues { it.value as Any })
+        val request = Request.Builder()
+            .tag(NeteaseSessionSnapshot::class.java, session)
+            .url(fullUrl)
+            .post(FormBody.Builder().add("params", params).build())
+            .header("User-Agent", UA)
+            .header("Referer", "https://music.163.com/")
+            .header("Cookie", listOfNotNull(
+                session.cookie?.takeIf { it.isNotBlank() },
+                extraCookie?.takeIf { it.isNotBlank() },
+            ).joinToString("; "))
+            .build()
+        // 播放取链是用户正在等的请求：单次最多等 8 秒就判失败，让上层走「有界重试」，
+        // 而不是把 30 秒的读超时耗完（那 30 秒里所有同主机请求都在排队）。
+        val call = plainClient.newCall(request).apply {
+            timeout().timeout(8, TimeUnit.SECONDS)
+        }
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : okhttp3.Callback {
+                override fun onFailure(c: okhttp3.Call, e: java.io.IOException) {
+                    if (cont.isActive) cont.resumeWith(Result.failure(e))
+                }
+                override fun onResponse(c: okhttp3.Call, response: Response) {
+                    if (cont.isActive) cont.resumeWith(Result.success(response)) else response.close()
+                }
+            })
+        }
     }
 
     /**

@@ -25,6 +25,8 @@ import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.network.ClientIdentity
 import com.takahashirinta.ncrust.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -166,10 +168,41 @@ object SongUrlFetcher {
     /** [level] 是否属于必须依赖 FLAC 解码器的档位。 */
     fun isFlacTier(level: String): Boolean = level in FLAC_TIERS
 
+    /**
+     * 这首歌最近一次取链是否**死在传输层**（连接被拒流 / 超时 / 断网），而不是"档位不可用"。
+     *
+     * 两者都会让 [fetch] 返回 null，但上层必须分开处理：传输失败要按网络问题**有界重试**，
+     * 绝不能当成「这首结构性不可播」去跳歌 —— 实测把两者混为一谈时，一次断流会让客户端
+     * 在一分钟内自动跳掉两百多首。
+     */
+    private val transportFailures = java.util.Collections.newSetFromMap(
+        java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+    )
+    fun lastAttemptFailedOnTransport(songId: Long): Boolean = transportFailures.contains(songId)
+
+    /**
+     * 传输层失败后的**全局限速**：断流类故障通常持续几秒到几十秒，这段时间里继续按次重试
+     * 只会把服务端的拒流窗口拖长。冷却期内直接返回"网络失败"，不再发请求。
+     */
+    private val transportCooldownUntil = java.util.concurrent.atomic.AtomicLong(0L)
+    private const val TRANSPORT_COOLDOWN_MS = 3_000L
+    private fun coolingDown(): Boolean =
+        System.currentTimeMillis() < transportCooldownUntil.get()
+    private fun startCooldown() {
+        transportCooldownUntil.set(System.currentTimeMillis() + TRANSPORT_COOLDOWN_MS)
+    }
+
     // Returns null when no level yields a playable URL (e.g. VIP-only song without a
     // subscription, or no valid session). Callers must skip the song instead of playing.
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? = withContext(Dispatchers.IO) {
         com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
+        transportFailures.remove(songId)
+        if (coolingDown()) {
+            // 刚被服务端拒过流：直接按网络失败处理，别再去敲同一扇门。
+            Log.w(TAG, "transport cooldown active songId=$songId — failing fast")
+            transportFailures.add(songId)
+            return@withContext null
+        }
         // Try the requested level first, then fall back down the quality ladder.
         val fallbackLevels = when (level) {
             "dolby"    -> listOf("dolby", "hires", "lossless", "exhigh", "higher", "standard")
@@ -186,67 +219,97 @@ object SongUrlFetcher {
         val requestedLevel = fallbackLevels.firstOrNull { it !in FLAC_TIERS || deviceCanDecodeFlac }
             ?: level
 
+        // 一次"档位尝试"：成功返回结果，档位不可用返回 null，连接层失败抛 IOException。
+        // 拆成函数是为了让"传输失败"和"档位不可用"走两条不同的路 —— 以前它们被同一个
+        // catch 吞掉，于是连接一断就会把整条阶梯跑完，把 1 次故障放大成 6 次请求。
+        suspend fun attempt(tryLevel: String): SongUrlResult? {
+            val payload = buildPayload(songId, tryLevel)
+            // A1：服务端按 **Cookie 里的客户端身份** 判定音质上限。只带 MUSIC_U/__csrf 时，
+            // 请求 hires 会被静默封顶成 lossless（code 仍是 200）；追加 os/appver 后同一请求
+            // 才真正返回 hires。实测见仓库外 tools/probe-quality.py。
+            val response = com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read {
+                RetrofitClient.eapiPostCancellable(
+                    SONG_URL_PATH, payload, useInterface = true,
+                    extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie()),
+                )
+            }
+            val body = response.body?.string() ?: return null
+            // 不再打印响应体：里面带签名的 URL 不该进 logcat（移植 981e9b3）。
+            Log.d(TAG, "eapi response level=$tryLevel len=${body.length}")
+            val json = JSONObject(body)
+            val data = json.optJSONArray("data") ?: return null
+            if (data.length() <= 0) return null
+            val obj = data.getJSONObject(0)
+            val item = parseItem(obj)
+            // 最后一次响应项：全档位失败时上层靠它区分版权/会员/登录。
+            if (lastItems.size > 128) lastItems.clear()
+            lastItems[songId] = item
+            val code = item.code ?: 200
+            val url = item.url
+            val actualLevel = item.level ?: tryLevel
+            // type/br 用于诊断:type 是实际容器(mp3/flac/mp4),br 是码率,
+            // 出现"有进度没声音"时靠这两项判断拿到的到底是不是预期的文件。
+            val type = obj.optString("type", "")
+            val br = obj.optLong("br", 0L)
+            // code != 200 means the level is unavailable (404 = no resource / not entitled).
+            // There is no point accepting such an entry, so advance down the ladder.
+            if (code != 200 || url.isNullOrEmpty()) {
+                logAttempt(tryLevel, actualLevel, br, type, code, accepted = false)
+                return null
+            }
+            logAttempt(tryLevel, actualLevel, br, type, code, accepted = true)
+            // A3：只有"实际文件可能低于请求档位"时才多问一次该曲的档位上限 ——
+            // 用来把「账号无权限」和「该曲根本没这个档位」分开。平时不加这次往返。
+            val songMaxLevel =
+                if (QualityAssessment.needsSongCapability(level, br, type)) fetchSongMaxLevel(songId)
+                else null
+            // v1.6.0 · D1：给播放 URL 挂上离线缓存的 key（query 参数是装饰，
+            // CDN 只认路径里的签名，实测删改 query 仍 206）。挂上之后 CacheDataSource
+            // 才能把「同一首歌 + 同一档位」的所有轮换 URL 认成同一份缓存。
+            return SongUrlResult(
+                OfflineKeys.withContentKey(url, songId, actualLevel, com.takahashirinta.ncrust.cache.OfflineContent.from(item)),
+                actualLevel, br, type, songMaxLevel,
+                playbackItem = item,
+                requestedLevel = requestedLevel,
+            )
+        }
+
+        var retriedTransport = false
         for (tryLevel in fallbackLevels) {
             // 设备解不了 FLAC 时,flac 档位取来也是无声,直接跳到 mp3 档。
             if (tryLevel in FLAC_TIERS && !deviceCanDecodeFlac) continue
+            // 用户已经切到别的歌：上一首的降级阶梯必须立刻停下，否则每次点"下一首"
+            // 都会把这一整条阶梯跑完（实测 6 次点击 = 36 个并发请求，直接把服务端打成拒流）。
+            coroutineContext.ensureActive()
             try {
-                val payload = buildPayload(songId, tryLevel)
-                // A1：服务端按 **Cookie 里的客户端身份** 判定音质上限。只带 MUSIC_U/__csrf 时，
-                // 请求 hires 会被静默封顶成 lossless（code 仍是 200）；追加 os/appver 后同一请求
-                // 才真正返回 hires。实测见仓库外 tools/probe-quality.py。
-                val response = com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read {
-                    RetrofitClient.eapiPost(
-                        SONG_URL_PATH, payload, useInterface = true,
-                        extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie()),
-                    )
+                attempt(tryLevel)?.let { return@withContext it }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 取消必须原样抛出。以前这里被 `catch (Exception)` 吞掉，于是"点下一首"只取消了
+                // 外层协程，正在跑的阶梯会继续把剩下几档发完 —— 那是请求雪崩的起点。
+                throw e
+            } catch (e: java.io.IOException) {
+                // 连接层失败与档位无关：换档位只会把 1 次故障放大成 6 次。
+                // 先在干净连接上原档重试一次（服务端 REFUSED_STREAM 时旧连接已不可用），
+                // 还失败就放弃这一首，让上层按"网络失败"处理，而不是逐档试到底。
+                if (retriedTransport) {
+                    Log.e(TAG, "transport failure persisted songId=$songId level=$tryLevel — abort ladder", e)
+                    transportFailures.add(songId)
+                    startCooldown()
+                    return@withContext null
                 }
-                val body = response.body?.string() ?: continue
-                // 不再打印响应体：里面带签名的 URL 不该进 logcat（移植 981e9b3）。
-                Log.d(TAG, "eapi response level=$tryLevel len=${body.length}")
-                val json = JSONObject(body)
-                val data = json.optJSONArray("data") ?: continue
-                if (data.length() > 0) {
-                    val obj = data.getJSONObject(0)
-                    val item = parseItem(obj)
-                    // 最后一次响应项：全档位失败时上层靠它区分版权/会员/登录。
-                    if (lastItems.size > 128) lastItems.clear()
-                    lastItems[songId] = item
-                    val code = item.code ?: 200
-                    val url = item.url
-                    val actualLevel = item.level ?: tryLevel
-                    // type/br 用于诊断:type 是实际容器(mp3/flac/mp4),br 是码率,
-                    // 出现"有进度没声音"时靠这两项判断拿到的到底是不是预期的文件。
-                    val type = obj.optString("type", "")
-                    val br = obj.optLong("br", 0L)
-                    // code != 200 means the level is unavailable (404 = no resource / not entitled).
-                    // There is no point accepting such an entry, so advance down the ladder.
-                    if (code != 200 || url.isNullOrEmpty()) {
-                        logAttempt(tryLevel, actualLevel, br, type, code, accepted = false)
-                        continue
-                    }
-                    logAttempt(tryLevel, actualLevel, br, type, code, accepted = true)
-                    // A3：只有"实际文件可能低于请求档位"时才多问一次该曲的档位上限 ——
-                    // 用来把「账号无权限」和「该曲根本没这个档位」分开。平时不加这次往返。
-                    val songMaxLevel =
-                        if (QualityAssessment.needsSongCapability(level, br, type)) fetchSongMaxLevel(songId)
-                        else null
-                    // v1.6.0 · D1：给播放 URL 挂上离线缓存的 key（query 参数是装饰，
-                    // CDN 只认路径里的签名，实测删改 query 仍 206）。挂上之后 CacheDataSource
-                    // 才能把「同一首歌 + 同一档位」的所有轮换 URL 认成同一份缓存。
-                    return@withContext SongUrlResult(
-                        OfflineKeys.withContentKey(url, songId, actualLevel, com.takahashirinta.ncrust.cache.OfflineContent.from(item)), actualLevel, br, type, songMaxLevel,
-                        playbackItem = item,
-                        requestedLevel = requestedLevel,
-                    )
-                }
+                retriedTransport = true
+                Log.w(TAG, "transport failure level=$tryLevel, retrying once on a fresh connection", e)
+                RetrofitClient.evictConnections()
+                coroutineContext.ensureActive()
+                attempt(tryLevel)?.let { return@withContext it }
+                transportFailures.add(songId)
+                startCooldown()
+                return@withContext null
             } catch (e: Exception) {
                 Log.w(TAG, "fetch failed for level=$tryLevel", e)
             }
         }
 
-        // 所有档位都取不到可播放的 URL。绝不要用 https://music.163.com/song/media/outer/url?id=X.mp3
-        // 兜底 —— 那个旧端点对无版权/需会员的歌曲返回 302→404 的 HTML 页面，ExoPlayer 拿到非音频流
-        // 会无限缓冲（"卡住"）。这里直接返回 null，让上层跳歌而不是播放坏链接。
         Log.e(TAG, "no playable url for songId=$songId at any level")
         null
     }

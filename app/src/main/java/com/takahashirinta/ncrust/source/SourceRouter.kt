@@ -100,11 +100,15 @@ object SourceRouter {
         }
         // Provider 的契约是「绝不抛」，但这里再兜一层：取链在播放的关键路径上，
         // 一个未捕获的异常会把「取链失败」升级成「播放崩溃」（铁律 4）。
-        return runCatching { provider.resolveUrlOutcome(song, level) }
-            .onFailure { Log.w(TAG, "resolveUrlOutcome failed on ${song.musicSource.key}", it) }
-            .getOrElse {
-                ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, song.musicSource)
-            }
+        return try {
+            provider.resolveUrlOutcome(song, level)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 取消不是"取链失败"：吞掉它会让已作废的请求继续往下走（并继续发请求）。
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveUrlOutcome failed on ${song.musicSource.key}", e)
+            ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, song.musicSource)
+        }
     }
 
     /**
