@@ -35,7 +35,7 @@
 
 正式APK 12072652 B，SHA-256 `861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544`。其他文件见artifacts.json和SHA256SUMS。应用源码与构建提交cc7ba51一致；标签指向该构建源码，后续仅文档提交可推进master。
 
-远端资产核验（release id `423136080`，草稿状态 `true`）：
+远端资产核验（release id `423136080`，已发布于 `https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.4-gpl`（发布前为 draft，附件核验通过后转公开））：
 
 | 附件 | 字节 | 远端 digest | 与本地一致 |
 |---|---|---|---|
@@ -47,6 +47,6 @@
 
 五个附件远端 `size` 与 `sha256` 全部与本地一致（`True`）；
 另按 asset id 下载正式包含量校验：`sha256 = 861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544`，与本地一致（`True`）。
-链接：https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-a3b372dc650146e42fc8
+链接：https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.4-gpl
 
 模拟器组件验证不等同于真实账号、真实音乐网络或真机复测。本轮没有向真实账号发送续期或播放上报请求。模拟器组件验证不等同于真实账号、真实音乐网络或真机复测。本轮没有向真实账号发送续期或播放上报请求。

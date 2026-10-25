@@ -2,7 +2,7 @@
   "verification_date": "2026-10-25",
   "release_id": 423136080,
   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-a3b372dc650146e42fc8",
-  "draft": true,
+  "draft": false,
   "tag_name": "v3.7.4-gpl",
   "source_commit": "cc7ba51c25efbe1441c8339af8970fed06da0551",
   "all_remote_sizes_and_sha256_match": true,
@@ -49,5 +49,6 @@
       "digest": "sha256:28aca46493274f5cbe83f3b1ba8dbc6aedf4b8e01f7668306ea670ac3f9d3370",
       "matches_local": true
     }
-  ]
+  ],
+  "published_html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.4-gpl"
 }
