@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-25T18:45:40.832Z" hostname="cachyos-x8664" time="0.347">
+  <properties/>
+  <testcase name="albumBusinessFailureClearsCacheAndReportsSuccess" classname="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" time="0.28"/>
+  <testcase name="firstAlbumMutationChangesDetachedCopy" classname="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" time="0.002"/>
+  <testcase name="qqFavoriteFailureOverwritesCompleteCacheAsFreshSuccess" classname="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" time="0.029"/>
+  <testcase name="coldSongWriteReplacesUnreadDiskCollection" classname="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" time="0.013"/>
+  <testcase name="secondTransportFailureEscapesNetworkClassification" classname="com.takahashirinta.ncrust.library.SourceReviewBoundaryProbe" time="0.02"/>
+  <system-out><![CDATA[AUDIT album code 500: persisted [101] -> [], refresh returned true
+AUDIT cold album: subscribe 202 discarded from memory and persistence
+AUDIT QQ partial failure: complete [111,222] -> fresh [111], no degradation
+AUDIT cold write: persisted [101] -> [202], old local song lost
+AUDIT double IOException: UNKNOWN, transport flag false, cooldown unset
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

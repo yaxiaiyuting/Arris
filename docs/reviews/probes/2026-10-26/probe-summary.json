@@ -1,0 +1,32 @@
+{
+  "review_date": "2026-10-26",
+  "baseline": "763987a90d8e80617bc84ff491a8fc91b30af2bb",
+  "version": "3.7.6-gpl",
+  "version_code": 92,
+  "mode": "characterization of existing defects; pass means defect reproduced, not fixed",
+  "network": "All requests intercepted by local OkHttp application interceptors; no external sockets or accounts",
+  "physical_device_test": false,
+  "production_code_changed": false,
+  "tests": 5,
+  "failures": 0,
+  "errors": 0,
+  "cases": [
+    "albumBusinessFailureClearsCacheAndReportsSuccess",
+    "firstAlbumMutationChangesDetachedCopy",
+    "qqFavoriteFailureOverwritesCompleteCacheAsFreshSuccess",
+    "coldSongWriteReplacesUnreadDiskCollection",
+    "secondTransportFailureEscapesNetworkClassification"
+  ],
+  "observations": [
+    "AUDIT album code 500: persisted [101] -> [], refresh returned true",
+    "AUDIT cold album: subscribe 202 discarded from memory and persistence",
+    "AUDIT QQ partial failure: complete [111,222] -> fresh [111], no degradation",
+    "AUDIT cold write: persisted [101] -> [202], old local song lost",
+    "AUDIT double IOException: UNKNOWN, transport flag false, cooldown unset"
+  ],
+  "additional_static_finding": {
+    "id": "R1",
+    "description": "Unowned delayed network and quality retries can revive an old song after manual navigation",
+    "runtime_reproduced": false
+  }
+}
