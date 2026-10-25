@@ -94,7 +94,8 @@ object RetrofitClient {
      *
      * 池子参数用 OkHttp 默认（5 个空闲连接 / 5 分钟保活）：本应用同时活跃的 host 不超过 4 个。
      */
-    internal val sharedConnectionPool: ConnectionPool = ConnectionPool()
+    // 保活从默认 5 分钟收紧到 30 秒：运营商/NAT 会静默丢弃长期存活的连接。
+    internal val sharedConnectionPool: ConnectionPool = ConnectionPool(5, 30, TimeUnit.SECONDS)
 
     /**
      * **所有 OkHttpClient 的唯一基座**（v3.3.2）。
@@ -132,6 +133,10 @@ object RetrofitClient {
             // 之前观察到的 `REFUSED_STREAM` 是**请求风暴限流**（一次点击 6 档阶梯、取消不掉、
             // 失败又触发自动跳歌 → 53 秒 2064 个请求），不是协议问题。真正的修法在
             // SongUrlFetcher（可取消、传输失败即停、全局冷却）与失败分类（NETWORK 不跳歌）。
+            // h2 **连接级保活**：多路复用连接被中间设备黑洞时，没有"每次请求新建连接"的兜底，
+            // 只能等读超时才知情（实测：真实取链 8 s 超时，同一时刻新建连接 190 ms 成功）。
+            // PING 让 OkHttp 在连接失效时及时换新连接。
+            .pingInterval(15, TimeUnit.SECONDS)
             .connectionPool(sharedConnectionPool)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

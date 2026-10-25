@@ -37,6 +37,28 @@ S total  1895 ms（≈190 ms/首）
 transportFail=false，无 StreamReset
 ```
 
+## 2.1 真正的失效模式：长连接被黑洞（关键）
+
+探针里 h2 全部 200，但**真实 App 路径**在同一台设备上 `ttfb=-1`、卡满 8 s 超时
+（`InterruptedIOException: timeout`，`Caused by: IOException: Canceled` 是超时取消）。
+两者唯一的差别是**连接的存活时间**：探针每次新建连接，App 复用的是已经活了很久的 h2 连接。
+
+结论：运营商/NAT 会把长期存活的多路复用连接**静默丢弃**；h2 没有「每请求新建连接」的兜底，
+OkHttp 只能等读超时（30 s）才发现，而我们设了 8 s 取链超时 → 每次点击都白等 8 秒。
+
+修法（已实现）：
+
+- `baseClient.pingInterval(15 s)`：h2 PING 保活，连接失效时 OkHttp 立即换新连接；
+- 连接池保活 5 min → **30 s**（`sharedConnectionPool`）。
+
+实测（同一台真机、同一首歌）：
+
+| 场景 | 结果 |
+|---|---|
+| 冷启动第一次播放 | 97 ms，jymaster FLAC 6.31 Mbps |
+| **闲置 50 s（跨过 30 s 池窗口）后再播** | **92 ms / 96 ms**，jymaster FLAC 5.02 / 4.55 Mbps |
+| 修复前同类场景 | 8 s 超时，最终 `no playable url` |
+
 ## 3. 登录页 404
 
 同设备实测（运营商出口）：`https://music.163.com/` = **404**；`https://music.163.com/login`
