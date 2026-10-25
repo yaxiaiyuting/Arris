@@ -5105,3 +5105,11 @@ QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串�
 ## v3.7.2 庆祝结束动作的底部间距
 
 原生结束页 footerLift 最多48dp，只能使用插画高于ART_MIN_HEIGHT的富余空间，Layout总高度保持原视口；小屏不额外制造滚动。保留320ms阶段过渡。网页祝福组竖屏锚点60%（短屏54%），结束动作间距16px，测量时至少留48..72px底部空隙；继续与重播仍在同一文案流内，不恢复独立固定footer。
+
+## v3.7.4 播放身份与手动导航
+
+新 URL 必须整体替换音源、songmid 和 media_mid，null 是新曲目字段的实际值，不是“保留上一首”；网易云默认 source=null 时按 TrackKey.of 解析，并清掉 QQ 载荷。无 URL 的播放/暂停控制才保留身份。
+
+手动上一首/下一首与自然结束分离，SINGLE 只在 AUTO_NEXT 时重播当前项。MediaSession 的 onPlayerCommandRequest 返回 RESULT_SUCCESS 仅代表许可，不会吞默认动作；导航执行由 QueueSessionPlayer（ForwardingSimpleBasePlayer）接管，不能再在授权回调里派发一次。当前项只有一首时同样声明四个 next/previous 命令。
+
+播放代次在 IO→Main 提交后重新校验，并随 Intent 交给 Service 再校验，缓存快路径也取消旧任务。预载同时携带队列代次与 owner TrackKey，只能排到该 owner 后面；新当前歌仍在取链时可缓存下一首 URL，但不能挂到仍在播放的上一首后面。

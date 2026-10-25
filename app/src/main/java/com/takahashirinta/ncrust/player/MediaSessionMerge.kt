@@ -18,7 +18,7 @@ internal object MediaSessionMerge {
 
     /** 一条 media button 命令最终由谁执行。 */
     enum class Route {
-        /** 交给应用的播放队列（[PlaybackService.onPlaybackEnded]）。 */
+        /** 交给应用的播放队列（[PlaybackService.onPlaybackNext]）。 */
         APP_NEXT,
 
         /** 交给应用的播放队列（[PlaybackService.onPlaybackPrevious]）。 */

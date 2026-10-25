@@ -233,6 +233,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private var onSongEndedCallback: (() -> Unit)? = null
     private var onSongPreviousCallback: (() -> Unit)? = null
+    private var onSongNextCallback: (() -> Unit)? = null
     // 参数 = 本次过渡是否为 ExoPlayer 自然衔接（AUTO）。UI 层据此决定「队列索引能不能
     // 拿模式推断兜底」：非 AUTO（手动/系统控件/车机 seek）时应用队列并没有推进。
     private var onSongTransitionedCallback: ((Boolean) -> Unit)? = null
@@ -259,7 +260,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 代际已前进就直接 `return`，既不报错也不重发，日志里一个字都没有。于是
      * 「点其他歌不切换」这类报告无法与「点击根本没到达播放链」区分开 —— 见 [PlayRequestGate]。
      */
-    private val playGate = PlayRequestGate()
+    private val playGate = com.takahashirinta.ncrust.player.playRequestGeneration
 
     companion object {
         /**
@@ -705,6 +706,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             onSongEndedCallback?.invoke()
         }
         PlaybackService.onPlaybackPrevious = { onSongPreviousCallback?.invoke() }
+        PlaybackService.onPlaybackNext = { onSongNextCallback?.invoke() }
         PlaybackService.onIsPlayingChanged = { playing ->
             listeningClock.setPlaying(playing)
             isPlaying.value = playing
@@ -920,6 +922,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setOnSongEndedCallback(callback: () -> Unit) { onSongEndedCallback = callback }
     fun setOnSongPreviousCallback(callback: () -> Unit) { onSongPreviousCallback = callback }
+    fun setOnSongNextCallback(callback: () -> Unit) { onSongNextCallback = callback }
     fun setOnSongTransitionedCallback(callback: (Boolean) -> Unit) { onSongTransitionedCallback = callback }
     fun setOnUnplayableCallback(callback: () -> Unit) { onUnplayableCallback = callback }
 
@@ -1425,6 +1428,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             listeningClock.restartOnNextBegin(songId)
         }
         val fetchVersion = playGate.next()
+        playJob?.cancel()
+        invalidatePreload()
         latestPlaySongId = songId
         lastPlayOrigin = origin
         // 切歌即复位试听标记；真正的判定在拿到 URL 之后。
@@ -1576,6 +1581,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentSongArtist.value = artist
             currentSongArtwork.value = artworkUrl
             val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                putExtra("playRevision", playGate.current)
                 putExtra("url", cachedEntry.url)
                 putExtra("title", title)
                 putExtra("artist", artist)
@@ -1642,6 +1648,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             "entitlement=$entitlement failure=${outcome.failure?.kind}",
                     )
                     withContext(Dispatchers.Main) {
+                        if (!playGate.isCurrent(fetchVersion)) return@withContext
                         onUrlUnavailable(songId, selectedQuality, origin, outcome.failure)
                     }
                     return@launch
@@ -1667,6 +1674,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (entitlement != null && actionFor(entitlement) == EntitlementAction.SKIP_TRIAL) {
                     val reason = (entitlement as PlaybackEntitlement.Trial).reason
                     withContext(Dispatchers.Main) {
+                        if (!playGate.isCurrent(fetchVersion)) return@withContext
                         emitTrialSkip(songId, title, reason)
                         if (autoSkipGuard.requestAutoSkip()) {
                             onUnplayableCallback?.invoke()
@@ -1682,6 +1690,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // 这里**只**替换播放列表。原先那两行（reset + launch）留在这里的含义是
                 // 「等取链回来再开始取词」—— 那正是本版要拆掉的串行。
                 withContext(Dispatchers.Main) {
+                    if (!playGate.isCurrent(fetchVersion)) return@withContext
                     applyQualityVerdict(selectedQuality, result)
                     entitlement?.let { applyPlayableEntitlement(songId, it, result.actualLevel) }
                     currentSongId.value = songId
@@ -1690,6 +1699,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     currentSongArtwork.value = artworkUrl
 
                     val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                        putExtra("playRevision", playGate.current)
                         putExtra("url", result.url)
                         putExtra("title", title)
                         putExtra("artist", artist)
@@ -2171,6 +2181,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (songId > 0 && nextTrack == preloadedTrack) return
 
         val capturedVersion = playGate.current
+        val preloadOwner = currentTrack
         preloadJob?.cancel()
         currentlyPreloadingSongId = songId
         val queueRevision = com.takahashirinta.ncrust.player.preloadGeneration.current()
@@ -2310,6 +2321,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             currentSongArtist.value = artist
                             currentSongArtwork.value = artworkUrl
                             val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                                putExtra("playRevision", playGate.current)
                                 putExtra("url", result.url)
                                 putExtra("title", title)
                                 putExtra("artist", artist)
@@ -2355,6 +2367,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         return@withContext
                     }
                     // Normal path: add to ExoPlayer queue for gapless auto-transition.
+                    if (!com.takahashirinta.ncrust.player.admitPreload(
+                            com.takahashirinta.ncrust.player.preloadGeneration.accepts(queueRevision),
+                            preloadOwner, PlaybackService.instance?.playingTrackKey())) return@withContext
                     preloadedSongId = songId
                     preloadedTitle = title
                     preloadedArtist = artist
@@ -2369,6 +2384,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     val intent = Intent(getApplication(), PlaybackService::class.java).apply {
                         putExtra("action", "preload_next")
                         putExtra("preloadRevision", queueRevision)
+                        putExtra("preloadOwner", preloadOwner?.let { com.takahashirinta.ncrust.source.SourceIds.mediaId(it.source, it.id) })
+                        putExtra("playRevision", playGate.current)
                         putExtra("url", result.url)
                         putExtra("title", title)
                         putExtra("artist", artist)
@@ -3067,6 +3084,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onProgressUpdate = null
         PlaybackService.onPlaybackEnded = null
         PlaybackService.onPlaybackPrevious = null
+        PlaybackService.onPlaybackNext = null
         PlaybackService.onIsPlayingChanged = null
         PlaybackService.onSongTransitioned = null
         PlaybackService.onTrackStarted = null
@@ -3111,17 +3129,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
  */
 class PlayRequestGate {
 
-    private var generation: Int = 0
+    private val generation = java.util.concurrent.atomic.AtomicInteger()
 
     /** 当前代际。用于预载路径记下「我开始取链时的代际」。 */
-    val current: Int get() = generation
+    val current: Int get() = generation.get()
 
     /** 一次新的开播动作：推进代际并返回它。 */
     fun next(): Int {
-        generation++
-        return generation
+        return generation.incrementAndGet()
     }
 
     /** 这次取链/预载的结果是否仍然有效。`false` = 期间已有更新的开播动作，结果必须丢弃。 */
-    fun isCurrent(gen: Int): Boolean = gen == generation
+    fun isCurrent(gen: Int): Boolean = gen == generation.get()
 }

@@ -193,6 +193,7 @@ class PlaybackService : MediaLibraryService() {
             }
         var onPlaybackEnded: (() -> Unit)? = null
         var onPlaybackPrevious: (() -> Unit)? = null
+        var onPlaybackNext: (() -> Unit)? = null
         var onIsPlayingChanged: ((Boolean) -> Unit)? = null
         // Fired on the main thread when ExoPlayer reports a playback error (decode/source
         // failure). Carries the song id ExoPlayer was on; the ViewModel downgrades quality
@@ -578,11 +579,13 @@ class PlaybackService : MediaLibraryService() {
         // | 角色 | 谁负责 |
         // |---|---|
         // | 播放/暂停/seek/上一首/下一首的命令入口 | media3 `MediaSession` 自己（平台 media button → 本会话） |
-        // | 上一首/下一首的**语义** | 应用（队列归 MainScreen），走 [onPlaybackPrevious]/[onPlaybackEnded] 回调 —— 见 `onPlayerCommandRequest` |
+        // | 上一首/下一首的**语义** | 应用（队列归 MainScreen），走 [onPlaybackPrevious]/[onPlaybackNext] 回调 —— 见 `onPlayerCommandRequest` |
         // | 会话 metadata（标题/艺人/时长/封面） | 当前 `MediaItem` 的 `MediaMetadata`，由 [publishSessionMetadata] 写 |
         // | 通知正文两行 | [buildNotification] 自己设（**不**从会话读，所以歌词行为与 v2.1.5 逐字节一致） |
         // | 声明「本应用是媒体应用」 | 清单里的 `androidx.media3.session.MediaButtonReceiver` |
-        mediaSession = MediaLibrarySession.Builder(this, player, libraryCallback()).build()
+        mediaSession = MediaLibrarySession.Builder(this,
+            QueueSessionPlayer(player, { onPlaybackNext?.invoke() }, { onPlaybackPrevious?.invoke() }),
+            libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -868,7 +871,8 @@ class PlaybackService : MediaLibraryService() {
 
         when (intent?.getStringExtra("action")) {
             "preload_next" -> {
-                if (!preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L))) return START_NOT_STICKY
+                val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
+                if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return START_NOT_STICKY
                 val nextUrl = intent.getStringExtra("url") ?: return START_NOT_STICKY
                 val nextSongId = intent.getLongExtra("songId", -1L)
                 // v1.5.2 串台修复：同一首下一曲会被预载两次（切歌瞬间 + 进入最后 60s 窗口），
@@ -936,10 +940,12 @@ class PlaybackService : MediaLibraryService() {
                 publishProgressNow()
             }
             "previous" -> onPlaybackPrevious?.invoke()
-            "next" -> onPlaybackEnded?.invoke()
+            "next" -> onPlaybackNext?.invoke()
         }
 
         val url = intent?.getStringExtra("url")
+        if (url != null && intent.hasExtra("playRevision") &&
+            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
         val title = intent?.getStringExtra("title")
         val artist = intent?.getStringExtra("artist")
         val artwork = intent?.getStringExtra("artwork")
@@ -952,12 +958,16 @@ class PlaybackService : MediaLibraryService() {
         // B4：起播位置。0 = 从 0 分 0 秒开始；> 0 = 从上次退出的时间点续播。
         val startPositionMs = intent?.getLongExtra("startPositionMs", 0L) ?: 0L
 
+        val identity = if (url != null) playbackRequestIdentity(null, true, songId, sourceKey, sourceId, mediaId)
+            ?: return START_NOT_STICKY else null
         if (title != null) mediaTitle = title
         if (artist != null) mediaArtist = artist
-        if (songId > 0) mediaSongId = songId
-        if (sourceKey != null) mediaSourceKey = sourceKey
-        if (sourceId != null) mediaSourceId = sourceId
-        if (mediaId != null) mediaMediaId = mediaId
+        if (identity != null) {
+            mediaSongId = identity.id
+            mediaSourceKey = identity.source.key
+            mediaSourceId = identity.sourceId
+            mediaMediaId = identity.mediaId
+        }
 
         if (artwork != null && artwork != currentArtworkUrl) {
             currentArtworkUrl = artwork
@@ -1008,21 +1018,8 @@ class PlaybackService : MediaLibraryService() {
          *
          * ## 为什么不能交给 media3 的默认实现
          *
-         * 合并前，legacy `MediaSessionCompat.Callback` 把 `onSkipToNext` 接到
-         * [onPlaybackEnded]、`onSkipToPrevious` 接到 [onPlaybackPrevious] —— 这两个回调
-         * 由 `PlayerViewModel` 提供，最终走的是 `MainScreen` 的**队列**操作。
-         *
-         * 合并后再没人接这两个键，media3 的默认实现会把
-         * `COMMAND_SEEK_TO_NEXT_MEDIA_ITEM` 当成 `player.seekToNextMediaItem()`。
-         * 但 ExoPlayer 的播放列表**不是**用户的播放队列 —— 按 v1.5.2 的待播槽位不变量，
-         * 它里面只有「当前项 + 至多一首预载项」。于是「下一首」会退化成
-         * 「跳到那首预载的歌」，而 `currentQueueIndex` / `PlaybackStateManager` / 歌词
-         * 全都停在上一首 —— 正是用户报过的串台。
-         *
-         * ## 返回值的含义
-         *
-         * 返回 [SessionResult.RESULT_SUCCESS] = 「这条命令我处理了」，media3 不再执行默认动作；
-         * 其余命令一律 `super`，保持 media3 自己的行为（播放/暂停/seek 都在那边）。
+         * 上一首/下一首由 QueueSessionPlayer 在执行层转交应用队列。
+         * 此处只做授权；RESULT_SUCCESS 不会吞掉 Media3 后续的默认动作。
          */
         override fun onPlayerCommandRequest(
             session: M3MediaSession,
@@ -1042,22 +1039,9 @@ class PlaybackService : MediaLibraryService() {
                 resumePlayback()
                 return SessionResult.RESULT_SUCCESS
             }
-            return when (MediaSessionMerge.route(playerCommand)) {
-                MediaSessionMerge.Route.APP_NEXT -> {
-                    Log.i(TAG_MEDIA_PANEL, "media button NEXT -> app queue (onPlaybackEnded)")
-                    onPlaybackEnded?.invoke()
-                    SessionResult.RESULT_SUCCESS
-                }
-
-                MediaSessionMerge.Route.APP_PREVIOUS -> {
-                    Log.i(TAG_MEDIA_PANEL, "media button PREVIOUS -> app queue (onPlaybackPrevious)")
-                    onPlaybackPrevious?.invoke()
-                    SessionResult.RESULT_SUCCESS
-                }
-
-                MediaSessionMerge.Route.MEDIA3_DEFAULT ->
-                    super.onPlayerCommandRequest(session, controller, playerCommand)
-            }
+            // RESULT_SUCCESS only authorises a command. QueueSessionPlayer consumes navigation,
+            // preventing Media3 from also seeking the small internal preload playlist.
+            return super.onPlayerCommandRequest(session, controller, playerCommand)
         }
 
         override fun onGetLibraryRoot(
@@ -1202,6 +1186,9 @@ class PlaybackService : MediaLibraryService() {
             causeMessage = root.message,
         )
     }
+
+    fun playingTrackKey(): com.takahashirinta.ncrust.source.TrackKey? =
+        com.takahashirinta.ncrust.source.TrackKey.fromMediaId(player.currentMediaItem?.mediaId)
 
     fun currentOfflineContent(): com.takahashirinta.ncrust.cache.OfflineContent? =
         player.currentMediaItem?.localConfiguration?.uri?.toString()?.let { OfflineUrlStore.contentForUrl(this, it) }

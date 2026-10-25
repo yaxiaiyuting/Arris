@@ -1551,7 +1551,8 @@ fun MainScreen(
     fun playNext(origin: PlayOrigin = PlayOrigin.USER) {
         if (playbackQueue.isEmpty()) return
         when (playMode) {
-            QueueModes.SINGLE -> playerViewModel.seekTo(0)
+            QueueModes.SINGLE -> if (origin == PlayOrigin.AUTO_NEXT) playerViewModel.seekTo(0)
+                else com.takahashirinta.ncrust.player.manualQueueIndex(playbackQueue.size, currentQueueIndex, 1)?.let { playFromQueue(it, origin) }
             QueueModes.SHUFFLE -> {
                 if (shuffledIndices.isEmpty() || shuffledPosition >= shuffledIndices.size - 1) {
                     // v2.0.0 · T1-C：一轮播完 ⇒ 开新一轮，**跳过下标 0**（那是刚播完的这首）。
@@ -1605,7 +1606,7 @@ fun MainScreen(
         // FM 电台(INFINITY)不可回退：上一首禁用
         if (playMode == QueueModes.INFINITY) return
         when (playMode) {
-            QueueModes.SINGLE -> playerViewModel.seekTo(0)
+            QueueModes.SINGLE -> com.takahashirinta.ncrust.player.manualQueueIndex(playbackQueue.size, currentQueueIndex, -1)?.let { playFromQueue(it) }
             QueueModes.SHUFFLE -> {
                 // ★ v2.5.5 · C：**轮首要回绕到轮末**。
                 //
@@ -1632,6 +1633,7 @@ fun MainScreen(
 
     // 设置播放器回调。
     LaunchedEffect(Unit) {
+        playerViewModel.setOnSongNextCallback { playNext(PlayOrigin.USER) }
         playerViewModel.setOnSongPreviousCallback { playPrevious() }
         playerViewModel.setOnSongEndedCallback { songEnded = true }
         playerViewModel.setOnSongTransitionedCallback { auto ->

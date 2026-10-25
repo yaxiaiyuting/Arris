@@ -5,5 +5,6 @@
          lint-baseline.xml. This overlay only adds a rendering probe, not a car entry. -->
     <application tools:ignore="MissingIntentFilterForMediaSearch">
         <activity android:name=".celebration.CelebrationProbeActivity" android:exported="true" />
+        <activity android:name=".player.PlaybackRegressionProbeActivity" android:exported="true" />
     </application>
 </manifest>
