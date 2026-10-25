@@ -187,9 +187,9 @@ object SongUrlFetcher {
     private val transportCooldownUntil = java.util.concurrent.atomic.AtomicLong(0L)
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
     private fun coolingDown(): Boolean =
-        System.currentTimeMillis() < transportCooldownUntil.get()
+        System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
     private fun startCooldown() {
-        transportCooldownUntil.set(System.currentTimeMillis() + TRANSPORT_COOLDOWN_MS)
+        transportCooldownUntil.set(System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS)
     }
 
     // Returns null when no level yields a playable URL (e.g. VIP-only song without a
@@ -281,32 +281,29 @@ object SongUrlFetcher {
             // 用户已经切到别的歌：上一首的降级阶梯必须立刻停下，否则每次点"下一首"
             // 都会把这一整条阶梯跑完（实测 6 次点击 = 36 个并发请求，直接把服务端打成拒流）。
             coroutineContext.ensureActive()
-            try {
-                attempt(tryLevel)?.let { return@withContext it }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // 取消必须原样抛出。以前这里被 `catch (Exception)` 吞掉，于是"点下一首"只取消了
-                // 外层协程，正在跑的阶梯会继续把剩下几档发完 —— 那是请求雪崩的起点。
-                throw e
-            } catch (e: java.io.IOException) {
-                // 连接层失败与档位无关：换档位只会把 1 次故障放大成 6 次。
-                // 先在干净连接上原档重试一次（服务端 REFUSED_STREAM 时旧连接已不可用），
-                // 还失败就放弃这一首，让上层按"网络失败"处理，而不是逐档试到底。
-                if (retriedTransport) {
-                    Log.e(TAG, "transport failure persisted songId=$songId level=$tryLevel — abort ladder", e)
-                    transportFailures.add(songId)
-                    startCooldown()
-                    return@withContext null
+            while (true) {
+                try {
+                    attempt(tryLevel)?.let { return@withContext it }
+                    break // A business rejection may still permit a lower tier.
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: com.takahashirinta.ncrust.auth.NeteaseSessionChangedException) {
+                    throw e // A different account must not be retried as a broken connection.
+                } catch (e: java.io.IOException) {
+                    if (retriedTransport) {
+                        Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
+                        transportFailures.add(songId)
+                        startCooldown()
+                        return@withContext null
+                    }
+                    retriedTransport = true
+                    Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
+                    RetrofitClient.evictConnections()
+                    coroutineContext.ensureActive()
+                } catch (e: Exception) {
+                    Log.w(TAG, "fetch failed for level=$tryLevel", e)
+                    break
                 }
-                retriedTransport = true
-                Log.w(TAG, "transport failure level=$tryLevel, retrying once on a fresh connection", e)
-                RetrofitClient.evictConnections()
-                coroutineContext.ensureActive()
-                attempt(tryLevel)?.let { return@withContext it }
-                transportFailures.add(songId)
-                startCooldown()
-                return@withContext null
-            } catch (e: Exception) {
-                Log.w(TAG, "fetch failed for level=$tryLevel", e)
             }
         }
 
