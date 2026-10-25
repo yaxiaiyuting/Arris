@@ -497,8 +497,8 @@ android {
         //   ④ 编辑队列即时撤销旧预载（generation + 服务待播项），旧无缝预载不会再插队；
         //   ⑤ 离线首选档位失效时逐档回退，并把 full/trial 归属随文件一起持久化，
         //   冷启动回放不再丢失试听属性。
-        versionCode = 89
-        versionName = "3.7.3-gpl"
+        versionCode = 90
+        versionName = "3.7.4-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
