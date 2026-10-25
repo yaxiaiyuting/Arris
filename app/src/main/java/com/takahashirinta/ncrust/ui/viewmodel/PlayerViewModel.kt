@@ -262,6 +262,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     private val playGate = com.takahashirinta.ncrust.player.playRequestGeneration
 
+    private data class RetryRequest(
+        val track: TrackKey, val revision: Int, val title: String, val artist: String,
+        val artwork: String, val positionMs: Long, val privilege: SongPrivilege?,
+    )
+    private var latestRetryRequest: RetryRequest? = null
+    private val playbackRetries = com.takahashirinta.ncrust.player.PlaybackRetryScheduler<RetryRequest>(
+        viewModelScope, { it.track == currentTrack && playGate.isCurrent(it.revision) },
+    )
+
+    private fun schedulePlaybackRetry(songId: Long, level: String, delayMs: Long, qualityRetry: Boolean = false) {
+        val owner = currentTrack?.takeIf { it.id == songId } ?: return
+        val request = latestRetryRequest?.takeIf { it.track == owner && playGate.isCurrent(it.revision) }
+            ?.let { if (qualityRetry) it.copy(positionMs = currentPosition.value) else it }
+            ?: if (currentSongId.value == songId) RetryRequest(owner, playGate.current, currentSongName.value.orEmpty(),
+                currentSongArtist.value.orEmpty(), currentSongArtwork.value.orEmpty(), currentPosition.value, lastSongPrivilege)
+            else return
+        playbackRetries.schedule(request, delayMs) { saved ->
+            if (qualityRetry) qualityRetryGuard.onRetryStarted(System.currentTimeMillis())
+            playSong(saved.track.id, saved.title, saved.artist, saved.artwork, level,
+                saved.track.source.key, saved.track.sourceId, saved.track.mediaId,
+                saved.positionMs, PlayOrigin.QUALITY_RETRY, saved.privilege)
+        }
+    }
+
+    private fun invalidatePlaybackIntent() {
+        playbackRetries.cancel()
+        playGate.next()
+        playJob?.cancel()
+    }
+
     companion object {
         /**
          * 音质档位（低 → 高）。索引与 i18n qualityOptions 顺序、以及 eapi level 取值一一对应；
@@ -707,6 +737,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         PlaybackService.onPlaybackPrevious = { onSongPreviousCallback?.invoke() }
         PlaybackService.onPlaybackNext = { onSongNextCallback?.invoke() }
+        PlaybackService.onPlaybackInterrupted = { invalidatePlaybackIntent() }
         PlaybackService.onIsPlayingChanged = { playing ->
             listeningClock.setPlaying(playing)
             isPlaying.value = playing
@@ -741,11 +772,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // ExoPlayer 主线程回调。播放失败 → 降档重试,而不是无声地停在 IDLE。
         // v2.2.1 · P0：回调现在带失败描述（errorCode + cause），重试策略由
         // [QualityRetryGuard] 决定 —— 单调、去重、有上限、带音频焦点节流。
-        // 回调在 ExoPlayer 主线程；重试里要做「音频焦点节流」的 delay()，所以丢进 viewModelScope。
+        // 回调在主线程；仅把带归属的延迟任务交给统一重试调度器。
         PlaybackService.onPlaybackError = { sid, failure ->
             // v2.5.4 · C：兜底曲目的失败计数（同样只对兜底 id 生效，内部短路去重）。
             QqProbeCounters.onPlaybackFailure(sid, currentTrack?.sourceId)
-            viewModelScope.launch { handlePlaybackError(sid, failure) }
+            handlePlaybackError(sid, failure)
         }
 
         // Called on the main thread by ExoPlayer's onMediaItemTransition. 现在**所有**过渡
@@ -779,6 +810,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (nextTrack != null && nextTrack.id > 0L) {
                 val changed = nextTrack != currentTrack
                 if (changed) {
+                    playbackRetries.cancel()
                     // B4：无缝切换说明上一首已自然播完，清除其进度记录（重播从 0:00 对齐）。
                     // 只有「真的换了一首」才清 —— 手动重播当前歌时 previousId 已经是新 id，
                     // 无条件清会把这首歌自己的续播位置也抹掉。
@@ -1355,6 +1387,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setQualityPreference(index: Int) {
         if (index !in qualityApiLevels.indices) return
+        playbackRetries.cancel()
         // v2.2.1 · P0：用户手动选档位 = 重新试探 ⇒ 清掉本曲的降级上限与重试计数。
         qualityCeiling.clear(currentTrack?.toString() ?: "")
         qualityRetryGuard.resetAll()
@@ -1427,6 +1460,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (origin == PlayOrigin.USER || origin == PlayOrigin.AUTO_NEXT) {
             listeningClock.restartOnNextBegin(songId)
         }
+        playbackRetries.cancel()
         val fetchVersion = playGate.next()
         playJob?.cancel()
         invalidatePreload()
@@ -1520,6 +1554,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 「每首歌自动从 0 分 0 秒播放对齐」；有记录则从上次退出点续播。
         val resumeMs = if (startPositionMs >= 0) startPositionMs
         else PlaybackStateManager.getSongPosition(getApplication(), songId)
+        latestRetryRequest = RetryRequest(track, fetchVersion, title, artist, artworkUrl, resumeMs, effectivePrivilege)
         lastSavedPositionMs = resumeMs
         resumedFromMs.value = resumeMs
         if (resumeMs > 0) {
@@ -1884,22 +1919,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             "network failure, retry #${UrlRetryGate.MAX_ATTEMPTS_PER_SONG -
                                 urlRetryGate.remaining()} songId=$songId level=$requested",
                         )
-                        viewModelScope.launch {
-                            delay(UrlRetryGate.MIN_INTERVAL_MS)
-                            playSong(
-                                songId,
-                                title = currentSongName.value ?: "",
-                                artist = currentSongArtist.value ?: "",
-                                artworkUrl = currentSongArtwork.value ?: "",
-                                quality = requested,
-                                startPositionMs = currentPosition.value,
-                                sourceKey = currentSongSourceKey,
-                                sourceId = currentSongSourceId,
-                                mediaId = currentSongMediaId,
-                                origin = PlayOrigin.QUALITY_RETRY,
-                                privilege = lastSongPrivilege,
-                            )
-                        }
+                        schedulePlaybackRetry(songId, requested, UrlRetryGate.MIN_INTERVAL_MS)
                     } else {
                         showResolveFailureHint(effective)
                         stopForQualityFailure(songId, "取链网络失败且重试额度已用尽")
@@ -1929,8 +1949,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * | 无节流 | 每次重试立刻 `play()` ⇒ 视频被反复打断 | 两次自动重取之间至少 [QualityRetryGuard.MIN_RESTART_INTERVAL_MS] |
      * | 最低档失败 ⇒ `onUnplayable` ⇒ 跳歌 | **音质问题被当成播放问题**，整条队列无限跳 | 自动重试路径**永不跳歌**：熔断后进「暂停 + 错误态」等用户手动操作 |
      */
-    private suspend fun handlePlaybackError(songId: Long, failure: PlaybackFailure) {
-        if (songId <= 0 || songId != currentSongId.value) return
+    private fun handlePlaybackError(songId: Long, failure: PlaybackFailure) {
+        if (songId <= 0 || songId != currentSongId.value || currentTrack?.id != songId) return
+        if (playbackRetries.hasPending) return
         val kind = classifyFailure(failure)
         val now = System.currentTimeMillis()
 
@@ -1975,23 +1996,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         when (decision.action) {
             GuardAction.RETRY -> {
                 // 音频焦点节流：不足 10s 就先等，绝不立刻再 play() 一次。
-                if (decision.delayMs > 0) delay(decision.delayMs)
-                qualityRetryGuard.onRetryStarted(System.currentTimeMillis())
-                playSong(
-                    songId,
-                    title = currentSongName.value ?: "",
-                    artist = currentSongArtist.value ?: "",
-                    artworkUrl = currentSongArtwork.value ?: "",
-                    quality = decision.nextLevel ?: return,
-                    // 降档重试必须从**当前**进度接着播，不能读进度记录（那是上一次退出的位置）。
-                    startPositionMs = currentPosition.value,
-                    // v2.1.0 · C：降档重试同属「重播当前歌」，音源必须原样带着。
-                    sourceKey = currentSongSourceKey,
-                    sourceId = currentSongSourceId,
-                    mediaId = currentSongMediaId,
-                    origin = PlayOrigin.QUALITY_RETRY,
-                    privilege = lastSongPrivilege,
-                )
+                schedulePlaybackRetry(songId, decision.nextLevel ?: return, decision.delayMs, qualityRetry = true)
             }
 
             GuardAction.STOP_AND_WAIT, GuardAction.SKIP_ALLOWED -> {
@@ -2028,6 +2033,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 用户正在看的视频不再被打断。
      */
     private fun stopForQualityFailure(songId: Long, reason: String) {
+        playbackRetries.cancel()
         Log.w(
             "PlayerViewModel",
             "quality pipeline gave up for songId=$songId: $reason — pausing for user action",
@@ -2992,6 +2998,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 自动走全量 playSong 路径开播。
      */
     fun prepareSongWithoutPlay(songId: Long, title: String, artist: String, artworkUrl: String) {
+        invalidatePlaybackIntent()
         latestPlaySongId = songId
         resetLyricsForNewSong()
         // v2.1.5：身份必须与 currentSongId 同步落下（旧代码只写 id，音源留在上一首上）。
@@ -3030,6 +3037,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         isPlaying.value = !isPlaying.value
+        if (!isPlaying.value) invalidatePlaybackIntent()
         val intent = Intent(getApplication(), PlaybackService::class.java).apply {
             putExtra("action", if (isPlaying.value) "resume" else "pause")
         }
@@ -3038,6 +3046,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     /** 仅暂停播放,保留当前歌曲与队列(LINE 模式队尾停用)。 */
     fun pausePlayback() {
+        invalidatePlaybackIntent()
         isPlaying.value = false
         val intent = Intent(getApplication(), PlaybackService::class.java).apply {
             putExtra("action", "pause")
@@ -3061,6 +3070,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun stopService() {
+        invalidatePlaybackIntent()
         val app = getApplication<Application>()
         PlaybackStateManager.clearState(app)
         PlaybackStateManager.clearQueue(app)
@@ -3081,10 +3091,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        invalidatePlaybackIntent()
         PlaybackService.onProgressUpdate = null
         PlaybackService.onPlaybackEnded = null
         PlaybackService.onPlaybackPrevious = null
         PlaybackService.onPlaybackNext = null
+        PlaybackService.onPlaybackInterrupted = null
         PlaybackService.onIsPlayingChanged = null
         PlaybackService.onSongTransitioned = null
         PlaybackService.onTrackStarted = null

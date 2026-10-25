@@ -194,6 +194,7 @@ class PlaybackService : MediaLibraryService() {
         var onPlaybackEnded: (() -> Unit)? = null
         var onPlaybackPrevious: (() -> Unit)? = null
         var onPlaybackNext: (() -> Unit)? = null
+        var onPlaybackInterrupted: (() -> Unit)? = null
         var onIsPlayingChanged: ((Boolean) -> Unit)? = null
         // Fired on the main thread when ExoPlayer reports a playback error (decode/source
         // failure). Carries the song id ExoPlayer was on; the ViewModel downgrades quality
@@ -584,7 +585,7 @@ class PlaybackService : MediaLibraryService() {
         // | 通知正文两行 | [buildNotification] 自己设（**不**从会话读，所以歌词行为与 v2.1.5 逐字节一致） |
         // | 声明「本应用是媒体应用」 | 清单里的 `androidx.media3.session.MediaButtonReceiver` |
         mediaSession = MediaLibrarySession.Builder(this,
-            QueueSessionPlayer(player, { onPlaybackNext?.invoke() }, { onPlaybackPrevious?.invoke() }),
+            QueueSessionPlayer(player, { onPlaybackNext?.invoke() }, { onPlaybackPrevious?.invoke() }, { onPlaybackInterrupted?.invoke() }),
             libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
@@ -918,9 +919,10 @@ class PlaybackService : MediaLibraryService() {
                 )
                 return START_NOT_STICKY
             }
-            "pause" -> { player.pause() }
+            "pause" -> { onPlaybackInterrupted?.invoke(); player.pause() }
             "resume" -> { resumePlayback() }
             "stop" -> {
+                onPlaybackInterrupted?.invoke()
                 PlaybackStateManager.clearState(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 // v1.6.0 · D3：撤掉实时更新通知，别在状态栏留一条不动的进度条。
