@@ -1,0 +1,28 @@
+{
+  "source_commit": "4e9d763",
+  "version": "3.7.7-gpl",
+  "versionCode": 93,
+  "raw_mapping_sha256": "6f6a34c00ca85ea28db13729f3fba331b18c0dc5b0f2895ca486cf16bec4fc78",
+  "assets": [
+    {
+      "name": "Ncrust-v3.7.7-gpl-release.apk",
+      "size": 12072652,
+      "sha256": "2ef8496e61c6a83eb99d38d7a34aeba8fcfade3c50f00be0f5f43a0685c627f8"
+    },
+    {
+      "name": "Ncrust-v3.7.7-gpl-debug.apk",
+      "size": 33920477,
+      "sha256": "fde32b1ff0bb90bd2dfe6116b1f93f47492006568a9e8e094c10abe51b51a65e"
+    },
+    {
+      "name": "mapping-v3.7.7-gpl.txt.gz",
+      "size": 5730671,
+      "sha256": "bd8119fdabcaaa8e7bacda5f93ebfac7b336180ea794523a5ca95b1a9189a9c2"
+    },
+    {
+      "name": "RELEASE_NOTES.md",
+      "size": 1452,
+      "sha256": "91860559cda9b51c2b0c047af229cbb002b51967e65d3dfc56b08df95bc93858"
+    }
+  ]
+}

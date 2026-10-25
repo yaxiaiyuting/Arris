@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.7.6--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-12.04%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.7.7--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-12.07%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -378,6 +378,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.7.6-gpl | 2026-10-25 | 撤销 v3.7.5 的 h1 回退（h2 实测正常，此前是请求风暴限流导致的误判）；登录页 404 自动换入口；`saveCookie` 禁止半截会话覆盖完整会话 |
 | v3.7.5-gpl | 2026-10-25 | 修 ncm 取链卡死：HTTP/2 被服务端拒流（`REFUSED_STREAM`），ncm 客户端改走 h1；取链可取消、连接层失败不再逐档重试、传输失败不再误判为「不可播」而自动跳歌 |
 | v3.7.4-gpl | 2026-10-25 | QQ→网易云完整替换播放身份；手动切歌与自然曲终分离；Media3 执行层接管系统导航；播放/预载双重代次与 owner 校验；主动续期后台化；旧缓存文件验证迁移 |
+| v3.7.7-gpl | 2026-10-26 | 延迟重试绑定原播放代次并支持暂停撤销；收藏冷写保留旧库；网络末次失败分类与冷却；网易专辑完整分页；QQ 收藏歌单部分失败保留缓存 |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 

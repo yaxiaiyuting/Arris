@@ -82,3 +82,7 @@
 探针运行：将该 Kotlin 文件临时复制到 `app/src/test/java/com/takahashirinta/ncrust/library/`，运行 `JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew :app:testDebugUnitTest --tests '*SourceReviewBoundaryProbe' --offline --console=plain --max-workers=4`，结束后移除临时副本。探针通过后已从自动测试目录移走，仅保留在审查材料中，因为它们断言的是旧的错误结果；正式修复时应改为正确期望并纳入常规测试。
 
 本轮只执行了这 5 个定向探针（0 失败、0 错误），没有重跑完整 3074 项测试、构建 APK、发布 Release 或真机测试。下一轮优先修 R1/R3 的重试归属与错误分类、R2 的收藏初始化，随后收敛 R4/R5 的完整/部分读取与持久化策略。后续审查可转入 `local/LocalPlaylistStore`、`LocalPlaylistSync`、播放统计和更新器，不重复把本报告当作整库审查已完成。
+
+## 修复状态（v3.7.7-gpl / versionCode 93）
+
+R1–R5 已在构建源码 `4e9d763` 修复。新增 26 项常规回归（PlaybackRetrySchedulerTest 8、SongUrlTransportRetryTest 4、LibraryBoundaryRegressionTest 14），包括把原先 5 条探针的错误结果改为正确期望。全量 3100 项 JVM 测试通过，Lint 0 错误，独立无窗口模拟器 8 项播放检查通过；未做真机或真实账号联网测试。具体产物、方法预算与剩余边界见 `../verification/v3.7.7/RELEASE_VERIFICATION.md`。原探针继续作为历史缺陷证据，不进入常规测试。

@@ -1,0 +1,196 @@
+{
+  "source": "/home/duanjb666/deepseek/dist/v3.7.6-gpl/Ncrust-v3.7.6-gpl-release.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 1165,
+  "violations": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.Y.l",
+      "class": "b5.Y",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    }
+  ],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+47 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1650,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+58 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsNoContentSongId (+13 inline/overload)",
+      "obfuscated": "b5.Y.l",
+      "class": "b5.Y",
+      "codeUnits": 2050,
+      "registers": 38,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand (+47 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onStartCommand",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1650,
+      "registers": 48,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.buildNotification (+58 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.i",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 1268,
+      "registers": 20,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.<init> (+38 inline/overload)",
+      "obfuscated": "b5.Y.<init>",
+      "class": "b5.Y",
+      "codeUnits": 1143,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.currentSongName (+2 inline/overload)",
+      "obfuscated": "b5.Y.B",
+      "class": "b5.Y",
+      "codeUnits": 1122,
+      "registers": 41,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.SongUrlFetcher.buildPayload (+20 inline/overload)",
+      "obfuscated": "J4.F0.a",
+      "class": "J4.F0",
+      "codeUnits": 1107,
+      "registers": 42,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.onSongEndedCallback (+16 inline/overload)",
+      "obfuscated": "b5.Y.G",
+      "class": "b5.Y",
+      "codeUnits": 1105,
+      "registers": 61,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "androidx.media3.common.SimpleBasePlayer.updateStateAndInformListeners (+12 inline/overload)",
+      "obfuscated": "J4.q0.O1",
+      "class": "J4.q0",
+      "codeUnits": 1083,
+      "registers": 28,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel.lyricsSongId (+16 inline/overload)",
+      "obfuscated": "b5.Y.h",
+      "class": "b5.Y",
+      "codeUnits": 1010,
+      "registers": 35,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.qq.QqPlaylistRepository.loadDetail (+20 inline/overload)",
+      "obfuscated": "K4.H0.e",
+      "class": "K4.H0",
+      "codeUnits": 927,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.library.LibraryManager$loadAllLikedSongsResult$2.invokeSuspend (+14 inline/overload)",
+      "obfuscated": "I4.d.invokeSuspend",
+      "class": "I4.d",
+      "codeUnits": 897,
+      "registers": 21,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.stats.StatsRecorder.onSample (+44 inline/overload)",
+      "obfuscated": "J4.F.k",
+      "class": "J4.F",
+      "codeUnits": 848,
+      "registers": 24,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1$3.invokeSuspend (+41 inline/overload)",
+      "obfuscated": "b5.P.invokeSuspend",
+      "class": "b5.P",
+      "codeUnits": 826,
+      "registers": 46,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PreloadSlot.identityFromMediaId (+49 inline/overload)",
+      "obfuscated": "J4.J.v",
+      "class": "J4.J",
+      "codeUnits": 751,
+      "registers": 32,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.SongUrlFetcher$fetch$2.invokeSuspend (+9 inline/overload)",
+      "obfuscated": "J4.F0.invokeSuspend",
+      "class": "J4.F0",
+      "codeUnits": 750,
+      "registers": 26,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.network.PlaylistApi$getLikedTrackIds$2.invokeSuspend (+10 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.network.PlaylistApi$getLikedTrackIds$2.invokeSuspend",
+      "class": "com.takahashirinta.ncrust.network.PlaylistApi$getLikedTrackIds$2",
+      "codeUnits": 745,
+      "registers": 24,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.PlaybackService.onCreate (+51 inline/overload)",
+      "obfuscated": "com.takahashirinta.ncrust.player.PlaybackService.onCreate",
+      "class": "com.takahashirinta.ncrust.player.PlaybackService",
+      "codeUnits": 704,
+      "registers": 15,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.player.AudioFeatureExtractor.low (+2 inline/overload)",
+      "obfuscated": "J4.a.b",
+      "class": "J4.a",
+      "codeUnits": 699,
+      "registers": 39,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.library.LibraryManager$refreshFromCloud$2.invokeSuspend (+18 inline/overload)",
+      "obfuscated": "I4.i.invokeSuspend",
+      "class": "I4.i",
+      "codeUnits": 686,
+      "registers": 21,
+      "dex": "classes.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel$preloadNextSong$1.invokeSuspend (+22 inline/overload)",
+      "obfuscated": "b5.Q.invokeSuspend",
+      "class": "b5.Q",
+      "codeUnits": 657,
+      "registers": 45,
+      "dex": "classes.dex"
+    }
+  ]
+}
