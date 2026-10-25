@@ -35,4 +35,18 @@
 
 正式APK 12072652 B，SHA-256 `861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544`。其他文件见artifacts.json和SHA256SUMS。应用源码与构建提交cc7ba51一致；标签指向该构建源码，后续仅文档提交可推进master。
 
-GitHub只创建草稿；远端附件大小、状态及SHA-256核验结果保存于remote-release-verification.json。模拟器组件验证不等同于真实账号、真实音乐网络或真机复测。本轮没有向真实账号发送续期或播放上报请求。
+远端资产核验（release id `423136080`，草稿状态 `true`）：
+
+| 附件 | 字节 | 远端 digest | 与本地一致 |
+|---|---|---|---|
+| `mapping-v3.7.4-gpl.txt.gz` | 5721775 | `sha256:df60f195c59e0f766682d505553779a6085dcc4d778e56317ed7fa6a7ebd9b42` | 是 |
+| `Ncrust-v3.7.4-gpl-debug.apk` | 34315819 | `sha256:5c0f1d79df4547e850e9a4bb83f94665500e417ddbfacbe15cc929da1943ca3d` | 是 |
+| `Ncrust-v3.7.4-gpl-release.apk` | 12072652 | `sha256:861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544` | 是 |
+| `RELEASE_NOTES.md` | 1796 | `sha256:7c22be68678e9811caca2e51d76d34fb05e2f2a33979771874557d3963944806` | 是 |
+| `SHA256SUMS` | 365 | `sha256:28aca46493274f5cbe83f3b1ba8dbc6aedf4b8e01f7668306ea670ac3f9d3370` | 是 |
+
+五个附件远端 `size` 与 `sha256` 全部与本地一致（`True`）；
+另按 asset id 下载正式包含量校验：`sha256 = 861800757ffe4c146bf5ef1af8134373e7dac581933c73b7f44a669799675544`，与本地一致（`True`）。
+链接：https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-a3b372dc650146e42fc8
+
+模拟器组件验证不等同于真实账号、真实音乐网络或真机复测。本轮没有向真实账号发送续期或播放上报请求。模拟器组件验证不等同于真实账号、真实音乐网络或真机复测。本轮没有向真实账号发送续期或播放上报请求。
