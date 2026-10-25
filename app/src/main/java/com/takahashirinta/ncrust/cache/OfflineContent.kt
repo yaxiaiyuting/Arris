@@ -10,7 +10,7 @@ data class OfflineContent(
     @SerializedName("trial_start") val trialStart: Int? = null,
     @SerializedName("trial_end") val trialEnd: Int? = null,
     @SerializedName("fee") val fee: Int? = null,
-    // Gson defaults a missing primitive to 0. Pre-v3.7.4 FULL records cannot prove which bytes occupied a legacy key.
+    // fromJson explicitly maps an absent epoch to 0; old FULL labels do not identify the bytes.
     @SerializedName("file_epoch") val fileEpoch: Int = 1,
 ) {
     val known: Boolean get() = (kind == FULL && fileEpoch >= 1) || kind == TRIAL

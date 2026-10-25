@@ -99,7 +99,9 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
                         if (v.isJsonPrimitive && v.asJsonPrimitive.isString) idx.put(k, v.asString)
                         else {
                             val record = Gson().fromJson(v, OfflineUrlRecord::class.java)
-                            idx.put(k, record.url, record.content ?: OfflineContent())
+                            val content = record.content ?: OfflineContent()
+                            val epochPresent = v.asJsonObject.getAsJsonObject("content")?.has("file_epoch") == true
+                            idx.put(k, record.url, if (epochPresent) content else content.copy(fileEpoch = 0))
                         }
                     }
                 }
