@@ -10,10 +10,12 @@ data class OfflineContent(
     @SerializedName("trial_start") val trialStart: Int? = null,
     @SerializedName("trial_end") val trialEnd: Int? = null,
     @SerializedName("fee") val fee: Int? = null,
+    // Gson defaults a missing primitive to 0. Pre-v3.7.4 FULL records cannot prove which bytes occupied a legacy key.
+    @SerializedName("file_epoch") val fileEpoch: Int = 1,
 ) {
-    val known: Boolean get() = kind == FULL || kind == TRIAL
+    val known: Boolean get() = (kind == FULL && fileEpoch >= 1) || kind == TRIAL
     fun playbackItem(url: String, level: String): PlaybackItem? = when(kind) {
-        FULL -> PlaybackItem(url = url, code = 200, level = level, fee = fee)
+        FULL -> if (known) PlaybackItem(url = url, code = 200, level = level, fee = fee) else null
         TRIAL -> PlaybackItem(url = url, code = 200, level = level, fee = fee, freeTrialInfo = FreeTrialInfo(trialStart, trialEnd))
         else -> null
     }
@@ -40,3 +42,8 @@ data class OfflineUrlRecord(
     @SerializedName("url") val url: String,
     @SerializedName("content") val content: OfflineContent = OfflineContent(),
 )
+
+/** Reuse verified full files; isolate only legacy bytes whose content has never been proven. */
+internal fun verifiedCacheKey(key: String, next: OfflineContent, previous: OfflineContent?, hasBytes: Boolean): String =
+    if (next.kind == OfflineContent.FULL && next.known && hasBytes &&
+        !(previous?.kind == OfflineContent.FULL && previous.known)) key + "~full-v1" else key

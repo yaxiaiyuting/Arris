@@ -60,4 +60,17 @@ class OfflineContentRecoveryTest {
         val i=OfflineUrlIndex.fromJson("""{"song:42:lossless":[],"song:42:standard":"good"}""")
         assertEquals("good",i.get(key("standard")))
     }
+    @Test fun preV374FullRecordRemainsUnverifiedUntilNewBytesAreBound() {
+        val i=OfflineUrlIndex.fromJson("""{"song:42:standard":{"url":"old","content":{"kind":"full"}}}""")
+        val c=i.record(key("standard"))!!.content
+        assertFalse(c.known);assertNull(c.playbackItem("old","standard"))
+    }
+    @Test fun freshFullCannotReadLegacyUnverifiedTrialBytes() {
+        val full=OfflineContent(OfflineContent.FULL)
+        val isolated=verifiedCacheKey(key("standard"),full,OfflineContent(),true)
+        assertNotEquals(key("standard"),isolated)
+        assertEquals("standard",OfflineKeys.levelOf(isolated));assertEquals(42L,OfflineKeys.songIdOf(isolated))
+        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,full,true))
+        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,null,false))
+    }
 }

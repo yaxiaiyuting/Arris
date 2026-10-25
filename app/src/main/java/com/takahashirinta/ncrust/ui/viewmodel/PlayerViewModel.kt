@@ -1789,7 +1789,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 离线兜底命中时是 Ok；在线取链失败**且离线也没命中**时才把分类交出去 ——
         // 也就是说「离线缓存救回来了」这件事优先于失败分类（能播就是不失败）。
         val outcome = SourceRouter.resolveUrlOutcome(ref, level)
-        outcome.result?.let { OfflineUrlStore.rememberResult(app, it); return outcome }
+        outcome.result?.let { return ResolveOutcome.ok(OfflineUrlStore.rememberResult(app, it)) }
         recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
         return outcome
     }

@@ -77,7 +77,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         val candidates = map.entries.filter { OfflineKeys.songIdOf(it.key) == songId }
             .sortedWith(compareBy<Map.Entry<String, OfflineUrlRecord>> { e ->
                 levels.indexOf(OfflineKeys.levelOf(e.key)).let { if (it < 0) levels.size else it }
-            }.thenBy { when(it.value.content.kind) { OfflineContent.FULL -> 0; OfflineContent.TRIAL -> 1; else -> 2 } })
+            }.thenBy { if (!it.value.content.known) 2 else when(it.value.content.kind) { OfflineContent.FULL -> 0; OfflineContent.TRIAL -> 1; else -> 2 } })
         for ((k, v) in candidates) if (usable(k)) return k to v
         return null
     }
@@ -176,9 +176,15 @@ object OfflineUrlStore {
             index(context).recall(preferredLevels.map { OfflineKeys.key(songId, it) }, songId)
         }
 
-    fun rememberResult(context: Context, result: com.takahashirinta.ncrust.player.SongUrlResult) {
-        OfflineKeys.keyOf(result.url)?.let { key ->
-            mutate(context) { it.put(key, result.url, result.cachedContent ?: OfflineContent.from(result.playbackItem)) }
+    fun rememberResult(context: Context, result: com.takahashirinta.ncrust.player.SongUrlResult): com.takahashirinta.ncrust.player.SongUrlResult {
+        val key = OfflineKeys.keyOf(result.url) ?: return result
+        return mutate(context) { idx ->
+            val content = result.cachedContent ?: OfflineContent.from(result.playbackItem)
+            val chosen = verifiedCacheKey(key, content, idx.record(key)?.content, OfflineAudioCache.contains(context, key))
+            val url = if (chosen == key) result.url else
+                result.url.replaceFirst(OfflineKeys.QUERY_KEY + "=" + key, OfflineKeys.QUERY_KEY + "=" + chosen)
+            idx.put(chosen, url, content)
+            if (url == result.url) result else result.copy(url = url)
         }
     }
     /** `null` = this file has no offline record (an online stream), which is NOT the same as

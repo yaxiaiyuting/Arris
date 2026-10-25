@@ -1132,9 +1132,9 @@ class PlaybackService : MediaLibraryService() {
         val parsed = com.takahashirinta.ncrust.source.SourceIds.parseMediaId(item.mediaId) ?: return item
         val (source, songId) = parsed
         val ref = com.takahashirinta.ncrust.source.songRefOf(source, songId)
-        val result = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
+        val resolved = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
             ?: return item
-        OfflineUrlStore.rememberResult(this, result)
+        val result = OfflineUrlStore.rememberResult(this, resolved)
         // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
         // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
         result.playbackItem?.freeTrialInfo?.let { trial ->
