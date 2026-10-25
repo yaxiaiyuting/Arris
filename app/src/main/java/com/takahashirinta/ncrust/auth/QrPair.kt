@@ -61,7 +61,14 @@ object QrPair {
         if (data.size <= 16) return null
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, key(unikey), IvParameterSpec(data.copyOfRange(0, 16)))
-        String(cipher.doFinal(data.copyOfRange(16, data.size)), Charsets.UTF_8)
+        // CBC padding is not an integrity check: a wrong key can occasionally have valid padding.
+        // Keep the wire protocol, but refuse malformed UTF-8 and non-session plaintext.
+        val bytes = cipher.doFinal(data.copyOfRange(16, data.size))
+        val plain = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+        plain.takeIf { NeteaseCookie.hasSession(it) }
     }.getOrNull()
 
     /** 从二维码内容解析 unikey：支持标准登录链接，也兼容裸 unikey。 */

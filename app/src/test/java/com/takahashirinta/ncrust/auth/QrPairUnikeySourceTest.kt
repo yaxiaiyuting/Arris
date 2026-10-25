@@ -38,4 +38,15 @@ class QrPairUnikeySourceTest {
         // 换一把 unikey（= 换密钥）就解不开，这正是交接能只靠屏幕上的 unikey 加密的原因。
         assertNull(QrPair.decrypt("OTHERKEY", QrPair.encrypt(unikey, cookie)))
     }
+    @Test fun `well padded non cookie plaintext is rejected`() {
+        assertNull(QrPair.decrypt("UNIKEY123", QrPair.encrypt("UNIKEY123", "not a session cookie")))
+    }
+    @Test fun `valid padding cannot hide malformed utf8`() {
+        val key=javax.crypto.spec.SecretKeySpec(java.security.MessageDigest.getInstance("SHA-256").digest("UNIKEY123".toByteArray()).copyOf(16),"AES")
+        val iv=ByteArray(16)
+        val cipher=javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,key,javax.crypto.spec.IvParameterSpec(iv))
+        val malformed="MUSIC_U=".toByteArray()+byteArrayOf(0xc3.toByte(),0x28)
+        assertNull(QrPair.decrypt("UNIKEY123",iv+cipher.doFinal(malformed)))
+    }
 }
