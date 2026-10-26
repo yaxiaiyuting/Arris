@@ -1,0 +1,18 @@
+{
+  "baseline": "4e9d763",
+  "version": "3.7.7-gpl",
+  "type": "known-defect characterization, not regression success",
+  "tests": 7,
+  "failures": 0,
+  "observations": [
+    "AUDIT local sync: known incomplete 1/100 QQ cache -> Success and 10-minute fresh timestamp",
+    "AUDIT manual local add returns 1 track after Store failed and rolled back to 0",
+    "AUDIT newer B credential paired with delayed A profile and membership",
+    "AUDIT delayed Bili A nav rejection clears newer B login",
+    "AUDIT stats clear: memory totalPlays=0 but persisted old totalPlays=1 after generation check",
+    "AUDIT deleted local playlist resurrected by already-running remote sync",
+    "AUDIT clearOwner(10001): own detail retained; other owner 20002 playlist 10001 removed"
+  ],
+  "external_network": false,
+  "physical_device": false
+}

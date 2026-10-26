@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-26T00:49:23.121Z" hostname="cachyos-x8664" time="0.237">
+  <properties/>
+  <testcase name="degradedQqDetailIsReportedAsSuccessfulFreshLocalSync" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.08"/>
+  <testcase name="manualLocalAddReturnsUncommittedTracksAfterDiskFailure" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.005"/>
+  <testcase name="oldBiliLoginProfileOverwritesNewAccountMembership" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.018"/>
+  <testcase name="oldBiliLoginRejectionClearsNewAccountCredential" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.001"/>
+  <testcase name="clearCanBeUndoneAfterOldFlushPassedGenerationCheck" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.014"/>
+  <testcase name="lateRemoteSyncResurrectsDeletedLocalPlaylist" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.115"/>
+  <testcase name="clearOwnerMissesOwnDetailAndDeletesAnotherOwnersSameNumberedPlaylist" classname="com.takahashirinta.ncrust.stats.FollowupBoundaryProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT local sync: known incomplete 1/100 QQ cache -> Success and 10-minute fresh timestamp
+AUDIT manual local add returns 1 track after Store failed and rolled back to 0
+AUDIT newer B credential paired with delayed A profile and membership
+AUDIT delayed Bili A nav rejection clears newer B login
+AUDIT stats clear: memory totalPlays=0 but persisted old totalPlays=1 after generation check
+AUDIT deleted local playlist resurrected by already-running remote sync
+AUDIT clearOwner(10001): own detail retained; other owner 20002 playlist 10001 removed
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
