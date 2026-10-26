@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledLyricGeometryAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:40:10.837Z" hostname="cachyos-x8664" time="0.003">
+  <properties/>
+  <testcase name="oneLyricWordWrappingAcrossThreeVisualLinesSkipsTheMiddleLine" classname="com.takahashirinta.ncrust.audit.ScheduledLyricGeometryAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT lyric geometry: a valid timed span covering three wrapped lines produces sweep samples on lines 0 and 2 only; line 1 can only become lit at the jump
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

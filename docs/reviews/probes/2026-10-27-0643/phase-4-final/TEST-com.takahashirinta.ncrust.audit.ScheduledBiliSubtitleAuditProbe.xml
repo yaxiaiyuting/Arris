@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledBiliSubtitleAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:40:10.747Z" hostname="cachyos-x8664" time="0.006">
+  <properties/>
+  <testcase name="subtitlesAfterOneHundredMinutesAreDroppedByTheLrcParser" classname="com.takahashirinta.ncrust.audit.ScheduledBiliSubtitleAuditProbe" time="0.003"/>
+  <testcase name="subtitleCdnRequestReceivesTheFullLoginCookie" classname="com.takahashirinta.ncrust.audit.ScheduledBiliSubtitleAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT long Bili lyric: three valid music cues survive lyric filtering, but the generated 100-minute timestamps are discarded by LrcParser
+AUDIT subtitle credential scope: the real subtitleBody entry attaches the full login Cookie to hdslb.com; no DNS or socket was opened
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

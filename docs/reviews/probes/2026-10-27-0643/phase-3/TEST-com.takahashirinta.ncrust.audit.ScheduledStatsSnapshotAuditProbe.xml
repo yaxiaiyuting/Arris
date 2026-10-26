@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledStatsSnapshotAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:35:04.606Z" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="readingStatsDuringAListeningTickCanThrowConcurrentModification" classname="com.takahashirinta.ncrust.audit.ScheduledStatsSnapshotAuditProbe" time="0.004"/>
+  <system-out><![CDATA[AUDIT stats snapshot: the real unlocked snapshot iterates byDay while a real addListen tick mutates it under another lock, raising ConcurrentModificationException
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

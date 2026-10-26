@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:35:01.543Z" hostname="cachyos-x8664" time="2.861">
+  <properties/>
+  <testcase name="neteasePlaylistWithAFailedDetailBatchIsStillMarkedFullySynced" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="0.22"/>
+  <testcase name="albumUnlikeCanBeOvertakenByTheOlderSubscribe" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="0.307"/>
+  <testcase name="likedSongPaginationConsumesAFailedBatchAndDoesNotRetryIt" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="0.306"/>
+  <testcase name="truncatedNeteaseTrackIdHeadIsAlsoMarkedFullySynced" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="0.004"/>
+  <testcase name="queuedRenameUsesTheNewAccountsCredential" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="2.01"/>
+  <testcase name="delayedScrobbleUsesTheNextLoggedInAccount" classname="com.takahashirinta.ncrust.audit.ScheduledAuditProbe" time="0.011"/>
+  <system-out><![CDATA[AUDIT Netease sync: playlist declares 2 tracks, second detail returns code500, yet Success(total=1) advances full-sync TTL
+AUDIT album intent: local removed, simulated cloud ends subscribed because old sub commits last
+AUDIT liked pagination: failed detail batch advances cursor to the end; next scroll never retries even with a healthy response
+AUDIT Netease completeness: declared trackCount=2 with a one-id head is accepted without filling the missing id and advances TTL
+AUDIT playlist owner: A's queued rename is sent using B credential
+AUDIT scrobble owner: a report created under A is emitted under B after the worker delay
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

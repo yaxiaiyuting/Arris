@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledQqPagingAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:40:10.940Z" hostname="cachyos-x8664" time="0.014">
+  <properties/>
+  <testcase name="missingSongArrayIsCachedAsAFreshCompleteEmptyPlaylist" classname="com.takahashirinta.ncrust.audit.ScheduledQqPagingAuditProbe" time="0.012"/>
+  <testcase name="skippedRawSongRowsMakeTheNextOffsetOverlapThePreviousPage" classname="com.takahashirinta.ncrust.audit.ScheduledQqPagingAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT QQ completeness: no songlist with declared total100 is accepted and cached as complete=true, fresh=true, zero songs, without degradation
+AUDIT QQ playlist offset: one unmappable raw row advances offset by 1 instead of 2, fetching the prior song again and returning a duplicate
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

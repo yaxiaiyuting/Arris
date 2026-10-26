@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledDownloadAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:35:04.489Z" hostname="cachyos-x8664" time="0.009">
+  <properties/>
+  <testcase name="separateDownloaderInstancesStillSharePartOneAndLoseTheNewPackage" classname="com.takahashirinta.ncrust.audit.ScheduledDownloadAuditProbe" time="0.009"/>
+  <system-out><![CDATA[AUDIT updater: two real service-style instances both use .part-1; old cancellation consumes new part and final APK disappears
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

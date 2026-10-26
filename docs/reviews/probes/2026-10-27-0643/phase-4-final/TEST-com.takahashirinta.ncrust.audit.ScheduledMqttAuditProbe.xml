@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:40:10.842Z" hostname="cachyos-x8664" time="0.075">
+  <properties/>
+  <testcase name="serverClosingFrameIsNeitherAcknowledgedNorReportedToTheWaitingSession" classname="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" time="0.039"/>
+  <testcase name="failureFromTheResetSocketKillsTheNewQrSession" classname="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" time="0.004"/>
+  <testcase name="credentialsBeforeSubAckAreDiscardedWhenScannedArrivedFirst" classname="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" time="0.032"/>
+  <system-out><![CDATA[AUDIT QQ MQTT close: receiving onClosing produces neither WebSocket close acknowledgement nor a terminal event; the QR waiter only times out
+AUDIT QQ MQTT generation: late onFailure from the canceled old socket inserts DISCONNECT into the new session, before its valid scanned event
+AUDIT QQ MQTT early events: scanned then valid cookie payload before SUBACK keeps only Scanned and permanently drops Credentials
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

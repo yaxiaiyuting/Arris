@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledPairIntegrityAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:35:04.558Z" hostname="cachyos-x8664" time="0.006">
+  <properties/>
+  <testcase name="changingAnIvByteChangesTheCookieWithoutAnyIntegrityRejection" classname="com.takahashirinta.ncrust.audit.ScheduledPairIntegrityAuditProbe" time="0.006"/>
+  <system-out><![CDATA[AUDIT pair payload integrity: one IV bit flips a session-token character; decrypt still accepts a usable-shaped cookie. This is not a forged valid cloud credential or a real LAN attack
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

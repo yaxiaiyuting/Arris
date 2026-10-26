@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:35:04.508Z" hostname="cachyos-x8664" time="0.044">
+  <properties/>
+  <testcase name="serverClosingFrameIsNeitherAcknowledgedNorReportedToTheWaitingSession" classname="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" time="0.039"/>
+  <testcase name="failureFromTheResetSocketKillsTheNewQrSession" classname="com.takahashirinta.ncrust.audit.ScheduledMqttAuditProbe" time="0.004"/>
+  <system-out><![CDATA[AUDIT QQ MQTT close: receiving onClosing produces neither WebSocket close acknowledgement nor a terminal event; the QR waiter only times out
+AUDIT QQ MQTT generation: late onFailure from the canceled old socket inserts DISCONNECT into the new session, before its valid scanned event
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

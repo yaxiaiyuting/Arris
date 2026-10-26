@@ -2,7 +2,7 @@
 
 日期：2026-10-27（Asia/Shanghai）。启动 HEAD `b82545c`，应用基线 `15237f8`，v3.7.8-gpl / versionCode 94。用户只授权审查、隔离复现与留档，修复由用户统一安排。
 
-**进度快照：本轮仍在继续。** 第二阶段累计确认下列 19 类问题，共 22 个通过缺陷断言的探针；另有 4 项源码调用链确认的问题。部分是旧 S17/S18/S10/S5/S20/S14 修复未覆盖的分支，不应把它们全部称为新引入的回归。前一轮 R1–R4 未重复计数。
+**进度快照：进入归档收尾。** 本轮累计确认下列 24 类问题，共 30 个通过缺陷断言的探针；另有 5 项源码调用链确认的问题。部分是旧 S17/S18/S10/S5/S20/S14/S19/S1 修复未覆盖的分支，不应把它们全部称为新引入的回归。前一轮 R1–R4 未重复计数。
 
 ## 有动态证据的问题
 
@@ -27,6 +27,11 @@
 | H17 | P2 | B站字幕 CDN 请求附带完整登录 Cookie | subtitleCdnRequestReceivesTheFullLoginCookie |
 | H18 | P2 | B站字幕生成的 100 分钟以上时间戳被歌词解析器丢弃 | subtitlesAfterOneHundredMinutesAreDroppedByTheLrcParser |
 | H19 | P2 | 统计页无锁复制正在写入的 Map，可抛 ConcurrentModificationException | readingStatsDuringAListeningTickCanThrowConcurrentModification |
+| H20 | P2 | QQ 扫码旧失败污染新会话、关闭帧未收尾、早到凭据被丢弃 | 3 个连接生命周期用例 |
+| H21 | P2 | QQ 歌单按解析后条数翻页、缺数组响应被缓存成完整空表 | 2 个真实取数/仓库入口用例 |
+| H22 | P2 | 单个逐词段折成三行时，扫光跳过中间行 | oneLyricWordWrappingAcrossThreeVisualLinesSkipsTheMiddleLine |
+| H23 | P2 | 局域网回传缺少密文完整性校验，改 IV 后仍接受凭据形状 | changingAnIvByteChangesTheCookieWithoutAnyIntegrityRejection |
+| H24 | P1 | 普通歌单名称含“喜欢的音乐”时可抢在真正红心歌单前命中 | ordinaryPlaylistNameContainingLikedMusicShadowsTheRealHeartPlaylist |
 
 ### H01：专辑写入仍缺少最新意图串行化
 
@@ -164,12 +169,51 @@
 
 建议所有快照都在同一个 aggregate 锁内取不可变副本，序列化继续放锁外；补读取与新增曲目/跨日/裁剪同时发生的用例。此问题不同于旧 S4 的清空后旧磁盘快照反写。
 
-## 源码确认，未运行 Compose/设备的 4 项
+### H20：QQ 扫码连接没有隔离旧连接回调
+
+`qq/MqttWebSocketTransport.kt:163–168` reset 取消旧 socket 并清队列，但 `Connection.onMessage/onClosed/onFailure(:197–224)` 没检查自己是否仍是 active，全部写同一个 incoming。`QqQrMqttSession.open(:164–172)` 的正常重定向会经过 reset；只有 awaitConnAckFrame 忽略旧断连哨兵，`:293–295/336–338` 的订阅及事件阶段仍直接失败。
+
+状态夹具建立旧、新 Connection，调用真实 reset 和旧 onFailure，再给新连接发送正常 scanned MQTT 帧：真实 awaitEvent 首先返回 Failed，下一次才读到正常 Scanned，新连接的 send 仍成功。没有建立真实 WebSocket，证明的是回调/队列的会话归属。
+
+另一用例经真实当前 Connection.onClosing 确认：没有调用 socket.close/cancel，也没有终止事件，awaitEvent 只超时；`:209–211` 只有日志。扫码 UI 将 null 当作继续等待，可能一直到二维码超时。建议给连接加代次，所有回调先核对 active；当前连接收到关闭帧应确认关闭并且只投递一次终止事件，旧连接不能终止新会话。
+
+第三个状态机探针给合法的早到 Scanned、Credentials，随后给 SUBACK：真实 awaitSubAck(:288–291) 只保留第一个事件，凭据事件被永久丢掉，后续只得到 Scanned 和超时。没有声称 QQ 生产服务已经观察到此包序；已确认的是应用承诺处理的“PUBLISH 早于 SUBACK”分支不能保存多条状态。建议按序暂存早到事件，至少不得丢失 Credentials/终态，并覆盖同一网络帧含多条 MQTT 报文。
+
+### H21：QQ 歌单丢掉了原始分页消费量与响应完整性
+
+`QqPlaylistParser.kt:253–261` 跳过无法映射的原始条目；`QqPlaylistApi.kt:183` 却按 page.tracks.size 推进服务端 song_begin。真实 fetchAllPages 探针给第一页两个原始条目，其中一个缺 mid：下一请求 offset=1 而非 2，最后输出 A、A、B，重复了一首。建议页结果同时保存原始消费数/下一偏移，映射过滤不改变传输游标，并检测无进展分页。
+
+`:249/264–272` 对缺失 songlist、缺失 hasmore 都给默认空/false；仓库 `QqPlaylistRepository.kt:241–250` 据此标 complete=true。第二个真实 loadDetail 探针给 code=0、声明 total=100、但没有 songlist 的响应：返回零曲目、无降级，并缓存为 fresh=true/complete=true/total=100。建议缺数组判结构错误，显式空数组且总数一致才是权威空表；部分结果不能覆盖完整缓存或推进完整 TTL。这是旧 S1 修复的上游证据缺失分支：本地同步虽然开始看 degradation，仓库仍有把不完整结果标成完整的路径。
+
+### H22：跨三行的计时段只建立首尾两行轨道
+
+`lyric/SweepTrack.kt:307–312` 在 l0 != l1 时只按中点建立 l0 与 l1，没有中间视觉行。`ui/player/NcrustLyricsPanel.kt:725` 使用真实排版几何，`:817–824` 会把光标所在行之前的内容一次全点亮。
+
+纯几何探针构造 12 个字符、每行 4 个字符的合法计时段：0–1200ms 所有采样只出现视觉行号 {0,2}，从未出现 1。影响窄栏/大字/长计时短语折成三行以上的扫光；不是全部逐字歌词都失败，也没有做像素渲染验证。建议按每个实际折行边界拆段，按字符或几何长度分配时长，覆盖三行、四行与 RTL。
+
+### H23：配对发现已认证，但回传内容尚未认证
+
+旧 S19 已把秘密移出 UDP、为发现响应补 HMAC；本轮没有重复报告“秘密仍在广播”。残余是 `auth/QrPair.kt:110–128` 仍用 AES-CBC，IV 与密文没有 MAC/AEAD；decrypt 只做 UTF-8 与 MUSIC_U 形状检查。`QrPairServer.kt:82–85` 据此交给登录回调。
+
+纯协议探针先正常加密虚构 cookie，再只翻转线上 IV 的一位：无需在修改步骤使用秘密，就把 token 首字符 f 改为 g；真实 decrypt 仍返回非空，NeteaseCookie.isUsable 仍为 true。**没有证明伪造了有效云端票据、攻破账号或完成真实局域网中间人攻击。** 已确认的是接收端无法识别传输篡改，可能接纳坏凭据并提前结束等待。
+
+建议回传也用 AEAD 或 encrypt-then-MAC，把协议版本、unikey、挑战与密文一起绑定并防重放；认证失败必须不触发 onCookie。不能把“发现响应的 HMAC”当成“回传密文也已经完整性校验”。
+
+### H24：歌单名包含关键词不是红心身份
+
+`network/LikedPlaylistPick.kt:50–54` 在 specialType 判定前就按名称子串返回第一个命中。固定的官方红心名称不可改，并不意味着普通歌单不能叫“以前喜欢的音乐精选”。`PlaylistApi.kt:710–721/770` 将此结果直接用于收藏底表读取。
+
+真实 getLikedPlaylistId/getLikedTrackIds 入口探针给同一 owner 的两项列表：普通 id111、specialType=0、名称“以前喜欢的音乐精选”在前，真实红心 id999、specialType=5 在后。实际选中 111 并以其详情返回收藏 ID。全部接口本地拦截；未声称线上该账号当前就是这个排序。触发前提是类似名称的普通歌单位于真红心之前，一旦发生会污染 liked_ids/总数/后续导入，而 like 写入仍落在真正红心歌单。
+
+建议先按 owner 与明确专用标记建立唯一身份；名称降级只接受经过约束的精确候选，遇到多义返回 Failure、保留旧底表。停止“任意特殊歌单”兜底污染数据。回归要加入普通同名/含关键词歌单，以及语言差异和特殊类型缺失的反例；不能只测两个 specialType=5 的名称优先级。
+
+## 源码确认，未运行 Compose/设备的 5 项
 
 - **F01 / P2：单曲详情“添加到下一首”回调未接线。** `NavGraph.kt:433/450` 两个 SongDetailScreen 调用都省略 onAddToNext，页面默认 `{}`，行内按钮点到空实现。主层已有 onSongInsertNext 可接。
 - **F02 / P2：QQ 歌单“重新登录”回调未接线。** `NavGraph.kt:378` 省略 onRelogin，`QqPlaylistDetailScreen.kt:231` 的重登按钮触发默认空实现。需要把 QQ 登录入口送到该路由。
-- **F03 / P2：网易歌单列表只展示首 100 项。** `LibraryScreen.kt:191–193` 仅一次调用默认 limit=100/offset=0 的 getUserPlaylists，忽略 result.more；列表没有后续页入口。已检查的是这一 UI 调用链，未用真实 100+ 歌单账号验证。
+- **F03 / P2：网易歌单列表只展示首 100 项。** `LibraryScreen.kt:191–193` 仅一次调用默认 limit=100/offset=0 的 getUserPlaylists，忽略 result.more；列表没有后续页入口。建议保留分页游标与 more，支持重试和去重。已检查的是这一 UI 调用链，未用真实 100+ 歌单账号验证。
 - **F04 / P2：服务退出后的桌面卡片播放没有恢复入口。** `NcrustWidgetProvider.kt:236–249` 从持久化状态画有内容、暂停态的卡片；`WidgetRenderer.kt:151–153` 的播放按钮只发 resume。冷服务 onCreate 创建空播放器，`PlaybackService.kt:923/1833–1842` 的 resumePlayback 只 seek/prepare/play，不读取已存队列、载荷或取链。因而保留旧卡片而服务已不存在时，按钮没有可播放 MediaItem。建议经完整身份恢复或先引导打开应用。此项为调用链静态确认，未执行 Android 生命周期；没有把“划掉任务仍继续播放”算作问题，当前 onTaskRemoved 明确 stopSelf。
+- **F05 / P2：导出媒体服务也暴露了内部 start Intent 命令。** `AndroidManifest.xml:66–69` 的 PlaybackService exported=true、无调用权限；`PlaybackService.kt:873–945` 直接处理 pause/stop/seek，`:949` 只在 URL Intent **自带** playRevision 时检查代次，不带就绕过。第三方前台应用显式启动此导出组件时可进入内部命令/URL路径，绕过 UI 路由和播放意图门控。证据为清单和服务静态分支，未执行外部应用/ADB 命令或播放任意 URL，也未声称云端写入或凭据泄露。建议区分公开 MediaLibrarySession 与仅本应用可用的命令通道，通过私有组件或受控能力调用；不要为修此问题直接关闭车机所需的服务导出。
 
 ## 验证与边界
 
@@ -177,6 +221,10 @@
 
 第二阶段累计证据见 [probes/2026-10-27-0643/phase-2/](probes/2026-10-27-0643/phase-2/)。22 个探针通过，0 failure / 0 error，包含第一阶段 16 个再运行及新增 6 个；不是 16+22 个独立用例。
 
-探针开发中修正过：QQ 主源的错误推测（实际是漏掉对端，没有误发该 id）、一次 shouldAutoSync 参数类型错误、一次 SongItem 夹具漏填构造参数。最终归档的是修正后的成功运行；这些探针问题不是应用构建故障。
+第三阶段累计证据归档至 `phase-3/`，最终选定运行共 28 个缺陷断言，0 failure / 0 error；其中连接生命周期与几何、协议用例均为本地状态/纯逻辑复现，未启动浏览器、相机、网络配对或播放服务。前两阶段证据保持不变。
+
+最终累计证据归档至 `phase-4-final/`，共 **30 tests / 0 failure / 0 error / 0 skipped**。新增的两项是 H20 早到凭据及 H24 红心身份；四个目录是阶段快照，独立用例总数仍为 30。
+
+探针开发中修正过：QQ 主源的错误推测（实际是漏掉对端，没有误发该 id）、一次 shouldAutoSync 参数类型错误、一次 SongItem 夹具漏填构造参数、QQ 分页夹具漏导入 playlist 包。最终归档的是修正后的成功运行；这些探针问题不是应用构建故障。
 
 本轮后续还会继续审阅未覆盖区域，收尾时补最终额度、覆盖范围与下一次断点。修复不在本任务内。
