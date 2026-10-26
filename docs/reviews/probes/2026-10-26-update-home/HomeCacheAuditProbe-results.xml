@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.cache.HomeCacheAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T12:48:14.076Z" hostname="cachyos-x8664" time="0.084">
+  <properties/>
+  <testcase name="clearingHomeLeavesFreshMarkerEvenWhenAllSectionsAreMissing" classname="com.takahashirinta.ncrust.cache.HomeCacheAuditProbe" time="0.008"/>
+  <testcase name="accountReplacementRetainsPreviousAccountsHomeAndProfileSnapshots" classname="com.takahashirinta.ncrust.cache.HomeCacheAuditProbe" time="0.06"/>
+  <testcase name="successfulEmptySnapshotSaveRestoresTheOldNonemptyList" classname="com.takahashirinta.ncrust.cache.HomeCacheAuditProbe" time="0.012"/>
+  <system-out><![CDATA[AUDIT home: clearAll leaves empty cache marked fresh; new HomeScreen initial load returns before fetching or clearing loader
+AUDIT home owner: A -> logout -> B retains A profile and daily in memory; disk snapshot restores A daily without owner check
+AUDIT home snapshot: confirmed empty daily refresh retains old row 101 while saved_at advances; cold restore reintroduces row
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

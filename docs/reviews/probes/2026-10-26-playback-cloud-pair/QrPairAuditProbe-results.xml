@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.auth.QrPairAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T13:05:24.541Z" hostname="cachyos-x8664" time="0.053">
+  <properties/>
+  <testcase name="publicDiscoveryTokenIsAlsoTheCookieEncryptionKeyMaterial" classname="com.takahashirinta.ncrust.auth.QrPairAuditProbe" time="0.05"/>
+  <system-out><![CDATA[AUDIT QR pairing: clear discovery exposes all key material; a forged same-token discovery response passes client token check and can decrypt cookie payload
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

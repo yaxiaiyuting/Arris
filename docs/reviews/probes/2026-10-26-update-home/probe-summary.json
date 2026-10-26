@@ -1,0 +1,30 @@
+{
+  "baseline": "4e9d763",
+  "tests": 5,
+  "type": "known-defect characterization",
+  "http": "loopback 127.0.0.1 only",
+  "physical_device": false,
+  "classes": [
+    {
+      "class": "UpdateAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "observations": [
+        "AUDIT updater: cancelled A resumes after B completed, truncates B file 1000 -> 0 bytes",
+        "AUDIT updater: response ETag v1 not saved, next Range has no If-Range; same-URL/no-id fallback mixes old prefix and new suffix"
+      ]
+    },
+    {
+      "class": "HomeCacheAuditProbe",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "observations": [
+        "AUDIT home: clearAll leaves empty cache marked fresh; new HomeScreen initial load returns before fetching or clearing loader",
+        "AUDIT home owner: A -> logout -> B retains A profile and daily in memory; disk snapshot restores A daily without owner check",
+        "AUDIT home snapshot: confirmed empty daily refresh retains old row 101 while saved_at advances; cold restore reintroduces row"
+      ]
+    }
+  ]
+}

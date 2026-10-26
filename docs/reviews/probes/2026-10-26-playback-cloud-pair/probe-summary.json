@@ -1,0 +1,39 @@
+{
+  "baseline": "4e9d763",
+  "tests": 6,
+  "type": "known-defect characterization",
+  "external_network": false,
+  "physical_device": false,
+  "classes": [
+    {
+      "class": "PlaybackStateAuditProbe",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "observations": [
+        "AUDIT playback: cancellation between queue JSON read and Default parsing clears healthy persisted queue",
+        "AUDIT playback: stop clearState clears the whole prefs file; persisted play mode 3 -> 0",
+        "AUDIT playback: superseded A flush catches cancellation, clearQueue cancels B and discards its pending snapshot"
+      ]
+    },
+    {
+      "class": "CloudWriteAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "observations": [
+        "AUDIT cloud write: like started under A emits its fallback mutation with B credential after account switch",
+        "AUDIT cloud write: real Library save -> remove leaves local tombstone, but reordered mocked server writes finish at like=true"
+      ]
+    },
+    {
+      "class": "QrPairAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "observations": [
+        "AUDIT QR pairing: clear discovery exposes all key material; a forged same-token discovery response passes client token check and can decrypt cookie payload"
+      ]
+    }
+  ]
+}

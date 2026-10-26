@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.player.PlaybackStateAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T13:05:25.087Z" hostname="cachyos-x8664" time="0.569">
+  <properties/>
+  <testcase name="cancellingQueueReadDeletesAnOtherwiseHealthySavedQueue" classname="com.takahashirinta.ncrust.player.PlaybackStateAuditProbe" time="0.003"/>
+  <testcase name="clearingPlayerStateAlsoErasesTheUsersPersistedPlayMode" classname="com.takahashirinta.ncrust.player.PlaybackStateAuditProbe" time="0.0"/>
+  <testcase name="replacingAnInFlightQueueFlushLetsOldCancellationDeleteNewPendingQueue" classname="com.takahashirinta.ncrust.player.PlaybackStateAuditProbe" time="0.566"/>
+  <system-out><![CDATA[AUDIT playback: cancellation between queue JSON read and Default parsing clears healthy persisted queue
+AUDIT playback: stop clearState clears the whole prefs file; persisted play mode 3 -> 0
+AUDIT playback: superseded A flush catches cancellation, clearQueue cancels B and discards its pending snapshot
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

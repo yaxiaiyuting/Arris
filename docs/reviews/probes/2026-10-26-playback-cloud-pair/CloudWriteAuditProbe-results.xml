@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.library.CloudWriteAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T13:05:24.722Z" hostname="cachyos-x8664" time="0.206">
+  <properties/>
+  <testcase name="oldAccountsLikeFallbackUsesTheNewAccountsCookie" classname="com.takahashirinta.ncrust.library.CloudWriteAuditProbe" time="0.185"/>
+  <testcase name="oldLikeCanFinishAfterNewUnlikeAndReverseTheLastUserAction" classname="com.takahashirinta.ncrust.library.CloudWriteAuditProbe" time="0.021"/>
+  <system-out><![CDATA[AUDIT cloud write: like started under A emits its fallback mutation with B credential after account switch
+AUDIT cloud write: real Library save -> remove leaves local tombstone, but reordered mocked server writes finish at like=true
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

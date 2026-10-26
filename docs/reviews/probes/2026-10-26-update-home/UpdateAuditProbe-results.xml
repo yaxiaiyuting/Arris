@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.update.UpdateAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T12:48:14.606Z" hostname="cachyos-x8664" time="0.154">
+  <properties/>
+  <testcase name="cancelledOldWriterCanTruncateCompletedReplacement" classname="com.takahashirinta.ncrust.update.UpdateAuditProbe" time="0.141"/>
+  <testcase name="truncatedDownloadDoesNotCaptureEtagAndCanMixFallbackIdentityBytes" classname="com.takahashirinta.ncrust.update.UpdateAuditProbe" time="0.013"/>
+  <system-out><![CDATA[AUDIT updater: cancelled A resumes after B completed, truncates B file 1000 -> 0 bytes
+AUDIT updater: response ETag v1 not saved, next Range has no If-Range; same-URL/no-id fallback mixes old prefix and new suffix
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

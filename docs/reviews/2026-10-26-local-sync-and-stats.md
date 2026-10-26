@@ -1,6 +1,6 @@
 # 歌单同步、账号会话、统计、离线索引与搜索分页审查
 
-基线：v3.7.7-gpl / versionCode 93，应用源码 `4e9d763`。本报告承接已修复的五类问题，继续检查 local、QQ 缓存维护、stats 和 B 站登录收尾。以下九类通过真实业务入口/状态快照和本地夹具复现，共 10 个用例；不使用真实账号，不做真机测试。它们是新发现，尚未修复，不能把 v3.7.7 描述成已解决这些问题。
+基线：v3.7.7-gpl / versionCode 93，应用源码 `4e9d763`。本报告承接已修复的五类问题，继续检查 local、QQ 缓存维护、stats、B 站登录收尾、更新下载和首页缓存。以下十九类通过真实业务入口/状态快照和本地夹具复现，共 21 个用例；不使用真实账号，不做真机测试。它们是新发现，尚未修复，不能把 v3.7.7 描述成已解决这些问题。
 
 ## S1 · P2：不完整/降级的 QQ 歌单被当成本地同步成功
 
@@ -88,6 +88,80 @@ finishLogin 保存 A 的凭据后等待 nav，再无条件保存 A 的资料或�
 
 建议：各来源独立维护已确认游标与待重试页，合并结果发布采用该页替换或按 TrackKey 幂等提交；来源数由已合并的唯一结果计算，不能以多次发布的长度累加。
 
+## S10 · P2：取消后的旧下载仍能截断已完成的新包
+
+位置：`update/UpdateDownloader.kt:209` 的初始进度回调与 `:211` 的 FileOutputStream；`UpdateService.cancelDownload` 只 cancel 不等待旧阻塞下载退出，文件名仍按资产名共用。
+
+探针在 A 下载初始进度回调暂停（真实回调边界的线程调度夹具），取消 A，再让同名新资产 B 完整下载；B 内容 1000 字节且比对一致。恢复 A 后，旧任务先打开覆盖输出流，随后才在循环里检查 cancelled；B 文件变成 0 字节。状态代次保护挡住旧进度，但没有保护文件副作用。
+
+没有启动安装器，也没有证明系统会接受坏包；影响是已校验/显示就绪的文件可能被旧任务破坏，导致安装失败或重复下载。建议按目标身份隔离 part 文件并串行化同目标写入和最终交付；取消后的终止必须得到确认。仅在 FileOutputStream 前多读一次取消标记仍存在检查与打开之间的竞争。
+
+## S11 · P2：响应 ETag 从未写入续传标记，URL 回退身份可拼接换包内容
+
+位置：`update/UpdateDownloader.kt:160` 只写传入/已有 ETag，响应分支从不保存 response ETag；`:245` 附近 If-Range 只使用已有值。
+
+本地 HTTP 先返回 ETag=v1 并中断一半传输；标记里的 etag 仍为 null。相同 URL、相同长度、没有资产 id 的回退身份换成 v2 后，下次请求只带 Range，未带 If-Range，下载器把 v1 前 500 字节和 v2 后 500 字节拼在一起并返回成功。
+
+正常 GitHub 资产存在稳定 asset id，换资产 id 会触发重下；本条动态确认的是代码明示支持的无 id / URL 身份回退。APK 后续校验可能拒绝坏包，不能描述成绕过系统签名。建议收到响应头后、写入任何字节前原子记录实体校验信息；回退身份缺少可靠验证器时放弃拼接，安全整包下载。
+
+## S12 · P2：首页清缓存后仍被标成刚预热，可能跳过初始加载
+
+位置：`cache/ContentCache.kt:77` 的 clearAll 未清 homeWarmedUpAt；`ui/screen/HomeScreen.kt` 初始 LaunchedEffect 首行以 isHomeFresh 直接 return。
+
+真实缓存入口探针先 markHomeWarmed，再 clearAll：三个首页字段均为 null，isHomeFresh 仍为 true。首页新实例在 15 秒窗口内进入时，会保留初始 isLoading=true 并跳过取数。这一 UI 后果来自调用方源码，未做 Compose/真机页面复现。清理入口既有设置页，也有 Application.onTrimMemory/onLowMemory。
+
+建议清内容与失效新鲜度原子配套，页面只有具备可用内容才跳过加载；测试要同时覆盖清理后的 freshness 与首页初始加载决策。
+
+## S13 · P2：首页空列表快照写入没有替换旧值
+
+位置：`cache/HomeSnapshot.kt:78` 至 `:85` 对全部非 null 列表再过滤 isNotEmpty，`:86` 却仍推进 saved_at。
+
+探针预存 daily=[101]，调用 save(daily=emptyList()) 并等真实异步 apply 完成；保存时间已更新，重建内存再 restore 后仍读到 101。确认的是空参数保存语义，未把服务端异常缺数组冒称为权威空表。
+
+建议先由 API 区分有效空表与读取失败；持久化层明确 null=未提供、空列表=成功清空，失败不提交。与账号归属隔离一起处理，避免旧推荐在冷启动时再次出现。
+
+## S14 · P2：首页个性化缓存没有账号归属，换账号后可读到旧资料
+
+位置：`cache/ContentCache.kt` 的 homeDailySongs/userProfile；`cache/HomeSnapshot.kt` 的无 owner 全局键；CookieManager 登录/清凭据和 SettingsAccountSection 登出没有使这些缓存失效。
+
+探针经真实 CookieManager 写入虚构 A，填入 A 的首页与头像资料，再 clearCookie 并登录虚构 B：B 凭据已经生效，内存资料仍为 A。清内存模拟重新加载，HomeSnapshot 又能不检查 owner 地恢复 A 的推荐。HomeScreen 首帧直接消费这些缓存，私人 FM 资料有缓存时还会跳过新取资料。
+
+没有证明跨账号凭据混用或云端数据写错账号；影响是首页推荐/昵称/头像的展示归属。建议对个性化块绑定账号 owner 与登录代次，切换时清理内存并过滤磁盘恢复；公共榜单与新歌可以独立复用。异步旧响应与快照写盘也必须携带原会话，避免刚清掉又被旧请求写回。
+
+## S15 · P1：队列读写把协程取消当故障，删除正常队列并撤销新写入
+
+位置：PlaybackStateManager.flushPendingQueue/getQueue 的 catch(Exception) 均调用 clearQueue，包含 CancellationException。
+
+两条真实入口复现：正常 JSON 读出后取消调用方，解析挂起点抛取消，正常落盘队列被删除；A 队列正在 Default 序列化时保存 B，A 被取消后调用 clearQueue，连 B 的 pendingQueue 和新 flushJob 也撤销。后一条用 AbstractList 在序列化读取处控制线程，不改业务实现。
+
+建议取消原样传播；读失败不做破坏性清理；写盘快照按代次串行提交，旧任务失败也无权清新任务。显式清队列进入同一提交序列。
+
+## S16 · P2：退出播放器清掉用户保存的播放模式
+
+PlaybackStateManager.clearState 清整个 ncrust_playback_state，PlayerViewModel.stopService 调用它。探针保存 mode=3 和曲目后清状态，模式读出变为默认 0。MainScreen 重建会读此值，与 clearQueue 注释“不改变模式”冲突。整文件清空也触及续播表，内存 positionCache 却没清，冷热口径不同（附加静态观察）。建议拆开当前状态、队列、偏好与续播记录的删除边界。
+
+## S17 · P1：收藏/取消独立异步写入，旧意图可能最后提交
+
+LibraryManager.pushLike 每次独立 launch。探针经真实 saveSong -> removeSong，解析真实 EAPI 加密载荷，在模拟服务端先提交后发的 false，再提交迟到的 true：本地 tombstone 有效，模拟云端却变回 true。没有真实网络或云端写入，证明的是本应用允许反序提交，未宣称验证网易生产服务内部排序。
+
+建议按账号和曲目串行写入，保存最新期望方向；前次完成后按最新意图补一次，不盲目重放最初动作。专辑 sub/unsub 具有相同发射形状，应一并检查。
+
+## S18 · P1：收藏回退重新取当前凭据，A 的操作可发给 B
+
+PlaylistApi.likeSong 的 xeapi/weapi/eapi 回退没有统一登录快照，各 RetrofitClient 入口重新读 CookieManager；LibraryManager 排任务前也未绑定归属。
+
+探针在 A 会话的 XEAPI 前置 token 请求挂起，登出 A、登录 B，再放行且令公钥不可用；后续 EAPI 请求携带 B 的凭据发出原操作，API 返回成功。HTTP 全部拦截。JVM Android Base64 是空桩，不能执行正常 WEAPI 加密；最初等待 WEAPI 的探针初始化方案因此失败，修正后从真实 XEAPI preflight 控制时序，不把 WEAPI 当动态覆盖。
+
+建议动作创建时捕获登录代次与凭据，全通道固定归属，切账号后停止未发出的副作用，禁止拿新账号兜底。PlayReporter 在新线程重新取 Cookie 属于同类静态观察，尚未单独做线程复现。
+
+## S19 · P1：局域网扫码广播公开了回传会话的全部密钥材料
+
+QrPair.requestPayload 明文广播 unikey，key() 只由此派生 AES；QrPairClient.discover 接受第一个同 unikey 响应，向其来源地址和端口发送凭据。
+
+纯协议探针从合法发现报文解析 unikey，构造可通过客户端 token/port 判断的应答，并用该公开材料解密虚构 Cookie。未发 UDP 广播、未建立攻击连接、未读取真实会话。结合客户端接收条件，在可伪造局域网发现响应的环境中，错误接收方可抢先应答并解密回传；不需要破解 AES。这不是已发现用户凭据实际泄露的证据。
+
+建议接收设备以二维码绑定的公钥/秘密认证，发现报文不得包含全部秘密，回传使用完整性校验加密。只改成 GCM、仍用公开广播派生密钥不能解决冒充。修复保留官方扫码兼容性，旧的无认证回传不能静默回退。
+
 ## 证据与断点
 
 `probes/2026-10-26-followup/` 保存 `FollowupBoundaryProbe.kt`、XML、构建日志和摘要。7 个探针全部复现；通过表示已确认缺陷，尚不表示修复。临时测试源已移出常规测试目录，未进入 v3.7.7 的 APK，正式版本仍对应已验收的 3100 项测试。
@@ -95,3 +169,7 @@ finishLogin 保存 A 的凭据后等待 nav，再无条件保存 A 的资料或�
 `probes/2026-10-26-accounting/` 的 2 个用例和 `probes/2026-10-26-search/` 的 1 个用例也全部通过缺陷复现断言。搜索探针需要归档的 MainDispatcherFactory service，并设置 JAVA_TOOL_OPTIONS=-Dkotlinx.coroutines.fast.service.loader=false；首次未关闭 Android fast loader 的运行仅为探针环境初始化失败，修正环境后的成功 XML 与日志保存在 search 目录。全部 10 个用例断言的是已知错误行为，不应计为修复回归通过。
 
 本轮在五小时额度剩余约 11% 时收尾；后续断点为更新下载/安装链路、页面生命周期和异步读取的完整性，以及以上九类问题的修复。正式应用源码、v3.7.7 tag 和 APK 不因本轮审查发生变化。源码 review 不执行真实账号写操作。
+
+2026-10-26 晚续审：`probes/2026-10-26-update-home/` 另存 5 条缺陷复现、两份 XML、摘要与成功构建日志。用户明确要求继续审查、重置前不修复。已建立本聊天单次自动续跑：2026-10-27 01:43（Asia/Shanghai），先核对 01:41:34 的五小时窗口已重置，再统一修复所有未解决条目；不做真机测试，发布仍只创建草稿。
+
+继续审查补充：`probes/2026-10-26-playback-cloud-pair/` 归档 6 条复现（队列/模式 3、云端写入 2、配对协议 1）。均通过已知缺陷断言；不代表问题已修复。
