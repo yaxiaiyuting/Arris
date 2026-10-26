@@ -1,0 +1,44 @@
+{
+  "verification_date": "2026-10-27",
+  "release_id": 424630028,
+  "tag_name": "v3.7.8-gpl",
+  "source_commit": "15237f8",
+  "all_remote_sizes_and_sha256_match": true,
+  "assets": [
+    {
+      "name": "mapping-v3.7.8-gpl.txt.gz",
+      "size": 5837762,
+      "state": "uploaded",
+      "digest": "sha256:d72bc69769ae8aadbd71de34abce5096370c6079a7a875b16ac7b75b4c3a8911",
+      "matches_local": true
+    },
+    {
+      "name": "Ncrust-v3.7.8-gpl-debug.apk",
+      "size": 33936861,
+      "state": "uploaded",
+      "digest": "sha256:4145affe406c0c1cb4e0c1c3add519daa9c53f565ad0b83d3cc1db09debc98ce",
+      "matches_local": true
+    },
+    {
+      "name": "Ncrust-v3.7.8-gpl-release.apk",
+      "size": 12089036,
+      "state": "uploaded",
+      "digest": "sha256:86c2048e2fdaf16253fe94eae81a2646a9e99a6a2db8e65754c26df7ae715304",
+      "matches_local": true
+    },
+    {
+      "name": "RELEASE_NOTES.md",
+      "size": 3770,
+      "state": "uploaded",
+      "digest": "sha256:c396fa3c4d7661b0bb28ceb732340a4ffc2211d65a016a0024c85e1407e283a6",
+      "matches_local": true
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 282,
+      "state": "uploaded",
+      "digest": "sha256:35478ec0c915de1fb77cea0e02f005a53b3477478fb391a2658c6221f29ae052",
+      "matches_local": true
+    }
+  ]
+}
