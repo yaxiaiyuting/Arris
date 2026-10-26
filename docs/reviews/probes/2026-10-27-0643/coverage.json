@@ -2600,6 +2600,14 @@
         [
           260,
           305
+        ],
+        [
+          60,
+          260
+        ],
+        [
+          318,
+          485
         ]
       ],
       "lines_total": 485,
@@ -2759,5 +2767,6 @@
     "partial_call_chain": 58,
     "non_kotlin_files": 9
   },
-  "probe_evidence": "phase-4-final/summary.json"
+  "probe_evidence": "phase-4-final/summary.json",
+  "coverage_recorded_at": "2026-10-27T07:45:05+08:00"
 }

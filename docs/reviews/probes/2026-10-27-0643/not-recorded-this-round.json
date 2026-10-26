@@ -1,0 +1,901 @@
+{
+  "meaning": "本轮无逐文件阅读记录，不表示历史上从未审查。局部阅读的剩余区段另见 coverage.json。",
+  "count": 179,
+  "files": [
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/BigScreenOrientation.kt",
+      "lines": 158,
+      "sha256": "165531b1b607adfec389a16f164d3248f6d13cc8be27203dff0a84d5ce507ed9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/KeepScreenOnSetting.kt",
+      "lines": 65,
+      "sha256": "d98b1e9a9b65fb39407e58c14828b09a3a0be76e8c7d12f6b56b804107a41ab3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/NcrustApplication.kt",
+      "lines": 95,
+      "sha256": "bdb168aefb02e941ba44c976030486d0af2c5a3d578ea83e88e96b0ed0560a9d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/RotationSetting.kt",
+      "lines": 77,
+      "sha256": "414a1d50762435107358dc4a2a5e67d49d4ace2c4770585d662e85a739115c48"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/Entitlement.kt",
+      "lines": 169,
+      "sha256": "ee5b7808b9713d960a937e257d9f286658bfc7b475a847e2349926a5ede387f7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/PlaybackNotice.kt",
+      "lines": 35,
+      "sha256": "d287df1cb41290d318cc872dc167e0e22cfadebfed74540ecdcc9f0b17f8e30d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/PlaybackNoticeTracker.kt",
+      "lines": 86,
+      "sha256": "310d92f81363d3414cbf0c1057f0ae4f4f4cda1ab8ff103ce83f448cb863e2eb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrLoginProtocol.kt",
+      "lines": 129,
+      "sha256": "99f3f63a304250c883b01b674aaf62e2a0aa81248b0e085c055cb4b443c6b460"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliAuthApi.kt",
+      "lines": 435,
+      "sha256": "a577abbd259843d93113822af59b4825a9c96daf0e53e86092d18665dc225d92"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliPrefs.kt",
+      "lines": 515,
+      "sha256": "7a023c2fc1a34ae9eb5e349bb9e98d56e2cd11c2b94b66bb362d675e0399f0f0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt",
+      "lines": 155,
+      "sha256": "60202f0f9c45d89a4ee879eb782cff85077172441785efb72cb5c2a366187e67"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/FireworkPainter.kt",
+      "lines": 48,
+      "sha256": "7ecba90d459ffd14be8c4e5307ad04624d831a1431005fbe607b2349d751b81b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/CrossSourceModels.kt",
+      "lines": 243,
+      "sha256": "4c0b8de209c11c76a3813907063d57897c52e67b645c6fc4efebb8b340666187"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/MatchCacheCodec.kt",
+      "lines": 282,
+      "sha256": "b92a53056f29ba24ca48ccf20e713a476caa9ee2b98c35a8464c2952f748d2c7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/PlayAllDedup.kt",
+      "lines": 213,
+      "sha256": "9a22e7437bccb5420308d76e8a5cc461086b93d758a254274a2c49b93b42bbf5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/LikedPlayAll.kt",
+      "lines": 89,
+      "sha256": "a8c31ed096a7fd8cc9ce787c0f9fb7a2512a92d996e020daf1c1f6b2feb3e76b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedAlbumCodec.kt",
+      "lines": 257,
+      "sha256": "804365be345dad2642e52330973baaf945c7eb3cf9a6225e46942da9416d055f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedSongCodec.kt",
+      "lines": 357,
+      "sha256": "db6f1a47281e2e7158d1bed618555c314500ca52b5318d4fa09dd4b97698fbb9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedSongModels.kt",
+      "lines": 354,
+      "sha256": "2260f945205203a19822a02cc91d12a84aaa65ad397091ba3b1c301d4a6539c8"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/DynamicLyricFont.kt",
+      "lines": 155,
+      "sha256": "5067caad26cdb5961799c9bcc6cacf5f4403d1c991fc802e4ecfcadad527d9f2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricsDisplayPrefs.kt",
+      "lines": 281,
+      "sha256": "8c15972a25d73279234cf9586c834de6b44d10f88448c54fd824f2b12c7cfaa9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/HttpTimingListener.kt",
+      "lines": 147,
+      "sha256": "c3b0b8c35d8d2a05582103f32206eb338bdb907c9b22a4cbc6ab856bcc48a8b8"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/NetworkAvailability.kt",
+      "lines": 43,
+      "sha256": "3a11b1a79ed902bcf1e1736d2026a40bd71271e6544b02b929d05abb3d0cf4b1"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/SearchResponse.kt",
+      "lines": 208,
+      "sha256": "97b1968d27c08432c406cd3e7e47e2982196d96811c44bf48a29b934a608848c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/EapiCrypto.kt",
+      "lines": 59,
+      "sha256": "3356494476e2a4e257e267259ac7d6f56920d84482cadf1d4e5737f40116e279"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/WeapiCrypto.kt",
+      "lines": 78,
+      "sha256": "1fc80d33b3b971fe8ba1df3c6c26be618635fe14159d4986adb5f3215d110610"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/XeapiCrypto.kt",
+      "lines": 384,
+      "sha256": "6c17d55258961fb503ec58d84865d374c0c936c12b8635904e52152ef04054cb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/AlbumDetail.kt",
+      "lines": 56,
+      "sha256": "5d32f668881c36a0f4addfa98859c193db27e091216867f312113253236b43ec"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/ArtistDetail.kt",
+      "lines": 39,
+      "sha256": "da439d646e14615f9e12405e74adb3cddf94d616263886dcf933169179ed255c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/DiscoveryModels.kt",
+      "lines": 53,
+      "sha256": "17ce9c72e75f1f026bc90dc26bb826c3aca64ca52af63e933ed4d7c479b39419"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/SongDetail.kt",
+      "lines": 131,
+      "sha256": "5a670b5eab379c876fe21e594dca6fa102e6a62f0c5b15dd77519ded8f22e3e4"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/SongUrlResponse.kt",
+      "lines": 16,
+      "sha256": "69d109554b10daa54ddb49b43e96bc9c030f920cc659203e19ebc11ff677d887"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/AudioFeatureExtractor.kt",
+      "lines": 767,
+      "sha256": "a87bd2ba1e97180644d7c8cbb689220fd78bba4c19af2202d420643b9a8bbd04"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/LiveUpdateNotifier.kt",
+      "lines": 141,
+      "sha256": "0d9d7addb9b76f7a850b6eaa5aee3b3b57db0a65480ed4aa093d25b9b2da4ab3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/LyricNotifyGate.kt",
+      "lines": 100,
+      "sha256": "5f85270fd3c6e3f79032ca3170926efb4f554ac20a83b147367be87f1714ea03"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/MediaDisplayLines.kt",
+      "lines": 51,
+      "sha256": "b4dbe4bd520e49c03476dafaeaa1cc30c4e8f5ed73e6962bc1ea1a1bc73730b6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/MediaSessionMerge.kt",
+      "lines": 73,
+      "sha256": "1b31b5d4613eb2288ac634e117dc31248679cdd9755186271e6c0b21e07e0849"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackRequestPolicy.kt",
+      "lines": 26,
+      "sha256": "5976c04b0b72cda6416f7fa5ff3bca89fc4b11db9306b6eaa9560377d0f9c875"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadCachePolicy.kt",
+      "lines": 106,
+      "sha256": "e4bf5ecdbad909c368921ed268bf53718be54b455a3d2708e6cec806bd62638a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadRevision.kt",
+      "lines": 12,
+      "sha256": "53054b1a666dae04e33fe9fe29c721f2b90f881400a9ed1874b84652c6828195"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadSlot.kt",
+      "lines": 134,
+      "sha256": "30f65fca40818f6bda412d2e8797a1282bbca284e9661646d38cd52fde12437e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ResolveFailureText.kt",
+      "lines": 82,
+      "sha256": "4fe2b1534a3726b372c3a7c303de4b28365b5486854854046e57cff681d53fde"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/StreamBitrate.kt",
+      "lines": 18,
+      "sha256": "72b6ba60f50cb2627fd6af3da5626791f5a05f44833e33783e860f0b8f2f226d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/TransparentWaveformSink.kt",
+      "lines": 469,
+      "sha256": "15ff46726d0125a552021f6bfcd41fbe22323a03d2750937f4e940d9e19dbd59"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/VisualizerRenderersFactory.kt",
+      "lines": 78,
+      "sha256": "39709e01acf0d29065d5d1f91bf463551d5ce8eacf9d8ca280e7ed2e4901bd91"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PlaylistLoadCoordinator.kt",
+      "lines": 201,
+      "sha256": "08d97231ff37f82cd89e1ad3b7c65337c06c4334ff307d7cd0d3bcc8c9087735"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PullToRefresh.kt",
+      "lines": 60,
+      "sha256": "e1ef86d3db718d42c63a68e6be65eb8338a140aec9e94b3a0482ed713026c760"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqDes.kt",
+      "lines": 489,
+      "sha256": "a44585c9e34dc105fc3d08ceddb0e3de724ccbe4f99f0b880b535f05c2a7a823"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqFallbackStats.kt",
+      "lines": 362,
+      "sha256": "15c67e90e478575483ec99b73995b1e73d42536f5809c047cb524ca0b5732d60"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqProbeStore.kt",
+      "lines": 89,
+      "sha256": "a90224beef1c4175d2e8a12e59e214cc913057f3b45c82ab8a054aa2042cd775"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqQrLogin.kt",
+      "lines": 238,
+      "sha256": "7c39356c69453236b87e2971e5266bedc1b121b17d458f69175a1d8071ac78ed"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshCommitGuard.kt",
+      "lines": 84,
+      "sha256": "06aaf8534984b65f2483f8480ecf2207d750c1146c723cff950c2d2d0c194739"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshCredential.kt",
+      "lines": 467,
+      "sha256": "462564b0be4ce93baced8399469999ec84f6337e87b36d4f179b826a519a275d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshFlight.kt",
+      "lines": 29,
+      "sha256": "a81781e4fb414e2ec681b18e7d11e44c9d214da3f1c6ee7803c041d865d65207"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshStore.kt",
+      "lines": 101,
+      "sha256": "8f037c372abc004554e913269c70a37e3c140d1b9f86c9f8120b5cfdfd32ac49"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqSongMapper.kt",
+      "lines": 236,
+      "sha256": "779b1a21cb67b626f73d99b4e18933e00734b402717d17133f43f18dce898381"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QrcDecryptor.kt",
+      "lines": 99,
+      "sha256": "8a1fe14a7e4efda718966b4ed7ccc5fdfa0fa3082123a5c7ad19ce18251e55c9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchLatencyTrace.kt",
+      "lines": 128,
+      "sha256": "76449f42a95dc2bef5a4b7ea309d202036df3e91632d95fc9cd09396e29fbb0a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchPaging.kt",
+      "lines": 104,
+      "sha256": "0b7c5288f0840a270ca9a0d0b59662ff6644a10382a2b28d0f347057df35ced2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchRanking.kt",
+      "lines": 245,
+      "sha256": "2968c47957b62c60f3d3508d33fafac03a4e90314f721b3fc206e872fdf69b6e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterLayout.kt",
+      "lines": 222,
+      "sha256": "b76cf5b2bba83f9a7908bccd3271ad9c5008fb6253c0c3df2c8f960aca641b7c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterRenderer.kt",
+      "lines": 414,
+      "sha256": "85154b9ef97759254397d1c8a0e570bf1250f4a4861146e62f0792a2ccb2fe33"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareModel.kt",
+      "lines": 108,
+      "sha256": "402c412c1511ab3081b3e32861e12e611a2d60b70c223fcb6244869c5302f030"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/AlbumNavigator.kt",
+      "lines": 283,
+      "sha256": "d04d34343a2620e8d70e512ad8d5664623c88138ec1f0e7259961964f36bc561"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/ArtistNavigator.kt",
+      "lines": 215,
+      "sha256": "98bdf02b175061ab0d499def5083011921083bd6c180ad5546e46a29b5757ef9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/MusicSourceProvider.kt",
+      "lines": 136,
+      "sha256": "a3e39cbbdf6751c3af959b65f30c33c098f3cb8b249aaa3aa8fbe2680349c5fd"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/NeteaseSourceProvider.kt",
+      "lines": 127,
+      "sha256": "5e4dc00dab4a0514d22080bc2a5563b0bb98e5184e1a7d700779c36f9e98c4a4"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SourceRouter.kt",
+      "lines": 156,
+      "sha256": "2788d7ce46694b312f636d72898000cc0870bb2a95dfbbd1001cfd66ebc56988"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsCodec.kt",
+      "lines": 207,
+      "sha256": "36d1ba8fdd5a306f8c32443fdfe084871cd76190977b44f7940a46bd6e663b59"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/BottomOverlayInset.kt",
+      "lines": 30,
+      "sha256": "5b40eff1e506df0488dd4b14001c9a2857c16346a3c711441ae1d00d1bd46636"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/CustomBackgroundLayer.kt",
+      "lines": 95,
+      "sha256": "f41fd6db459a88986393dab952b44ce1136a4e1efb01f3bf0efd8ec5b054f089"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/HeightClass.kt",
+      "lines": 35,
+      "sha256": "4325df26d668c04d822ebebaf5eb50afff7dd72c5a6b95ad342b7413e4f24056"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/ResponsiveContent.kt",
+      "lines": 66,
+      "sha256": "c29125732748b55b4496024442b26a6c6ba4bed1384a29691a507c6263eb41d1"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AddToPlaylistSheet.kt",
+      "lines": 331,
+      "sha256": "16bba7ba8e1d030a8bb125b7c76018b8739848f0fa6bb8a7260a4b15ad8b73a6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AlbumSourceFilterRow.kt",
+      "lines": 110,
+      "sha256": "2798b0497bf490149d641fa3f5e96b4ddd20a1dd0f033d2a2546173a10efc6b2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AlbumSourceTag.kt",
+      "lines": 179,
+      "sha256": "0b06ae03d71759f02864a79b095495e0f8ee1382ef8720f9818d0bf3ba83b136"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AppSnackbar.kt",
+      "lines": 193,
+      "sha256": "e905ff5abf37610235fc6220aac22ed7baccb122d72c870960c08a5895f2dc91"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AppVisualModifiers.kt",
+      "lines": 135,
+      "sha256": "a0920b1e672f4cd976b3f9f113b818e511698d46e39508068f94107877733b2b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ArtistRecoCard.kt",
+      "lines": 102,
+      "sha256": "39adb17de6e690452449b545adfe5e79d06888fdd869615ddf66fa5fcfa09b2a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ArtistSearchItem.kt",
+      "lines": 113,
+      "sha256": "0c0fc926fac7ba9fbe4300a220f70a68f9f5af1ccd8367686974317f7fe36aaa"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BackgroundActivityDialog.kt",
+      "lines": 83,
+      "sha256": "84daeadc6410a2cd17b9008aaea6bf214bb32f7e65fdd2f73192493308340add"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ListItemAppear.kt",
+      "lines": 103,
+      "sha256": "a917395ce6251a996f83a4b574e4fa509b8a6f008aef78028a0ef65742a56803"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt",
+      "lines": 399,
+      "sha256": "be03649e2f9f4a81f1dc5e54ae302abcc0aa8e342d0c89c82c8a1980cef301a8"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/PlayAllDialog.kt",
+      "lines": 147,
+      "sha256": "ab72123e93a3bb5ad7350f7b8ff0a5e4b3f55e8de7a0518bdc9ce1c882664555"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/PullToRefreshBox.kt",
+      "lines": 129,
+      "sha256": "963053a8ab37a5250276cbda0520c21172e6b600094d2e0122d02091f2b6c5f3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqCaptchaOverlay.kt",
+      "lines": 210,
+      "sha256": "1e0935eea3a3d420ae4f9026c862e5bf87fc307551c81c17d43e3ab68c0201e0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqLoginOverlay.kt",
+      "lines": 271,
+      "sha256": "9ba3dd3efa3a58066103d7deb51098d00d42cdadea5cc759565fdcaf1bb66feb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqQrLoginDialog.kt",
+      "lines": 251,
+      "sha256": "e9d3488f1b282c51dca80e448131b864e2b193541efdf96175513ae0651dd0b5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SessionBanner.kt",
+      "lines": 65,
+      "sha256": "fce1b66d68238a236650bf90564138dd073944941a30a51bd026eddeb154e96f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SettingsGroupCard.kt",
+      "lines": 176,
+      "sha256": "c094b767ced402228d3ff7c1217139d0694a3157ec75bb0963fe76f97be3dbfc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SettingsRows.kt",
+      "lines": 290,
+      "sha256": "92051b3d11508d8f31d13056f8053aeef80a1495c8f85acfc3bb13ccecd520cf"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongCard.kt",
+      "lines": 324,
+      "sha256": "be73aaa2e7fbff45d8b62552f98e9142245a4f30061ed4eecea1d5ee136980c7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongMenuSheet.kt",
+      "lines": 163,
+      "sha256": "63c2beaf7c4c5611d4c07e4bf800ef82bd9a4adf1b214aecec9e6c305e6c5517"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongMenuSheetLayout.kt",
+      "lines": 88,
+      "sha256": "4c9c5ab761ccf0d0b861e0fbbdfccdeb7d1cfc549bbf435fd4e28ec4a15abee5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongTags.kt",
+      "lines": 176,
+      "sha256": "4cde9e0dacdd273d1f11d652dd578ab000d81900754f45d60a812d9c4f5dfc61"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SourceCounts.kt",
+      "lines": 205,
+      "sha256": "29aa67cb2f779713b8037f6296478dac993f0c4127bc4548f6c8fdd979926b20"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SourceFilter.kt",
+      "lines": 155,
+      "sha256": "654cea99cf4c9a1a136359b9f68d2718b8e3488955e9f4eae6dae6e7fcada68b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/UpdateBanner.kt",
+      "lines": 123,
+      "sha256": "120f01f76878a5cb2473abb6757a9f8debf71fcfbd82757da35b77ee38b6ddb5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/UpdateManualCheck.kt",
+      "lines": 55,
+      "sha256": "50934c6159c1e490b4b0e9ebb9078215b64ee5a405673ce4d3de2e1c012ea207"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/VipStatus.kt",
+      "lines": 44,
+      "sha256": "bca64e59eb7287967b5a844a8af93c584493b0d40327147c9ed90fbce567efa6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/CelebrationStrings.kt",
+      "lines": 87,
+      "sha256": "7856b9934c17e71e1c19764d3f67a597df4e5e086ae965ef8a39c18c55cfc00b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/Strings.kt",
+      "lines": 2334,
+      "sha256": "1520ab1fd831c5bb08df6e0f45b7fe0e3059f151655124c9dfa8a53ed2c4c713"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt",
+      "lines": 725,
+      "sha256": "86e6e7a5bcfd2d4dbbf9ca34a306467166fb68f8819699ce3f6338673aa0f577"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt",
+      "lines": 726,
+      "sha256": "47bd314f82524c26228d17039fcebe347cb5ffb3798bf6f8b493260e5b88e35c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt",
+      "lines": 723,
+      "sha256": "e9fd76533c1f8a1845cc5167aa552ca7671afea64998592ca6fc25199c346c0b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt",
+      "lines": 722,
+      "sha256": "c27d07f580e6b3ab4d4866e73d4f6387e142abaee5ec1bd0d38349e820211069"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt",
+      "lines": 722,
+      "sha256": "7ccb5446dfc17c66b2aaf07d9d2555db59793dc1c61c7ca97f65cd1bc82c2e47"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt",
+      "lines": 725,
+      "sha256": "81fe32ac583cc7b005819dd92a03635403f9859867f9a2fabd7ecec5239a93c3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt",
+      "lines": 723,
+      "sha256": "3233fb41fbda391e21d8e6fd89b7973d9d7f5b3c5a7ce69512c67bd05dff4b77"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt",
+      "lines": 723,
+      "sha256": "e818846eed63f679ba7ea690155c28d6b469a267f75dacd83b9b7925ff28f2cb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/AudioVisualizer.kt",
+      "lines": 1575,
+      "sha256": "f1045c7c4fcdaa925b0e3b2d02815ebed01421f395d710937bc98f60aed81902"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/CoverGeometry.kt",
+      "lines": 52,
+      "sha256": "1dc2e7940996ade7dfc0414870f846715c5077c5d73b32e21d9db950da1315f3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/FullPlayerControls.kt",
+      "lines": 893,
+      "sha256": "cfa7d7867ef17f2354fed9ed0851f93457ff58a432ab0fd299ce42b900738aca"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsAutoCenter.kt",
+      "lines": 107,
+      "sha256": "cd8959982ed8b690bd849dda3a1fcc288781c4f2881a8008337b0db02504941c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsPanelScroll.kt",
+      "lines": 256,
+      "sha256": "102052a1967be552e5c89a36f90f840e420c130094a66ab7c4b801802a4363bf"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsView.kt",
+      "lines": 781,
+      "sha256": "d0d235350afdb74467643c341201a9f2681fe33b61d9c07225f74042fd762e23"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt",
+      "lines": 1011,
+      "sha256": "0daa1009f2ce11783ff1168ea25054a7cbc2181a9c92b88aafd6b61592988f18"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardBackdrop.kt",
+      "lines": 188,
+      "sha256": "8acf34522506cb8051fc6a0aabe56e8f934182e495a9824d4b6349e77f8b244c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardEffects.kt",
+      "lines": 161,
+      "sha256": "d84f4782bc384d5812152c9f5645bb2edc365353da6b092d301783d147297697"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt",
+      "lines": 514,
+      "sha256": "201a3be3cc3af8b584f641ae4c925adca8f6a7bc492fb0ffbf27320d6b04531d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardLayouts.kt",
+      "lines": 637,
+      "sha256": "6335c182c8b9a1625db3ef65a394e04e5a016494da6d1a22a7e1bec68878dcc9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardOverlay.kt",
+      "lines": 95,
+      "sha256": "6919ac4d19634dbd6c9cb517185e2185f17a2216c14dc5d0d5dca6abff82883e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardOverlays.kt",
+      "lines": 343,
+      "sha256": "604f4b097e0b58bdd904a6166ecef55f48514354bf60961296883e1cb56eee36"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardState.kt",
+      "lines": 394,
+      "sha256": "75c39df0f6f7ab0ad8b56c2d12ed7bd0567cca814ddbe5f7ebddac3d963e27e7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardTray.kt",
+      "lines": 464,
+      "sha256": "795f919de0175590b70a6fe03f407ef2d2551915a1837d56f67343976f9a109f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerDragSnap.kt",
+      "lines": 116,
+      "sha256": "41de9ff8156557b5b82a4f01974e8d7a26f50e62db107c7242ff5fbd0cafe8c7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerLayout.kt",
+      "lines": 303,
+      "sha256": "e5f16741296c7a0c80dcbf16bc81dd2c5c18d1bb8be31db2e5df0faf0a414b46"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/QueueView.kt",
+      "lines": 586,
+      "sha256": "495531188e79e02a0c4d210036b85c4ac15ec11fecf155dde36aecacdcfc4155"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/SlimProgressBar.kt",
+      "lines": 241,
+      "sha256": "43661fe50e45a620db98b38d8e2f25121ba8ba97a4c823b7efb9c0d67c43a029"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/ThresholdScope.kt",
+      "lines": 26,
+      "sha256": "df5d8be1273aecf30c1bf22a226ee0bb100da4289a6f27fed749138d17dccade"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/TrayLayout.kt",
+      "lines": 236,
+      "sha256": "88d1abc54897b361aa3f005e9fa68c14ed6d8ce8e2e0a0c4d1229b0c4fdaec98"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/TrayLyric.kt",
+      "lines": 75,
+      "sha256": "9960fd95fbd930cb93edf746d9f5de0f4162d2d658f6f08139fa38fe6334499f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/CoverBlur.kt",
+      "lines": 443,
+      "sha256": "a0f3481ecc4d2da13c9a6835ed85a981a555a52e2d9c3addabca5d77594893df"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/DisplayRefresh.kt",
+      "lines": 184,
+      "sha256": "dfadfeb23d89d87154625825c9e6b23f01d2f09bf04d7b41939f5fd45f63cde7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBackdrop.kt",
+      "lines": 335,
+      "sha256": "b131ca22a0b989c2a5e3d842a1f4032260df8cd771bffcb7de2c5b47c9aecb70"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBindings.kt",
+      "lines": 267,
+      "sha256": "ec7bc2f11e54ed4a21670fc60f36542cb8a07ba2e00e88f1bd564510cc854793"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionEffects.kt",
+      "lines": 471,
+      "sha256": "00792d52b818784ed9e440ed67af314dbcd511fd5384251f463237194db50fec"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionPrefs.kt",
+      "lines": 490,
+      "sha256": "592fa75ad9d1417fee4fbd44f5387190554acd0f5eb19f03207090e849493ba6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandBallistics.kt",
+      "lines": 542,
+      "sha256": "6172155fd338d129e8ada7c5c6ce7bdc1ecda351bf82857c194950f62609f45e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandColorRoles.kt",
+      "lines": 148,
+      "sha256": "a0402d3e9ee21020fce253acecbe5cdca8a08252423305e48586f045561dde6d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominance.kt",
+      "lines": 303,
+      "sha256": "5790226ef072dd4126b3b4d6cf1f630d219476c64b1a4450ec1935225375c631"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandLanes.kt",
+      "lines": 143,
+      "sha256": "27f4d3a38cb92b2cf9c254a550607a3dfec834be120595801ed9bfbb7b90d1e3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandMarkerGeometry.kt",
+      "lines": 187,
+      "sha256": "8bfc3deb2c8f4902a310601843f4e9b2bfd33511d09099e209476d348aa64487"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerFrameMonitor.kt",
+      "lines": 91,
+      "sha256": "252c439fb346bdb6e588ef9ba329e0ea8de98b6f7fe5b761bc8210b799b76034"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerPrefs.kt",
+      "lines": 337,
+      "sha256": "f1223af3726a8b678c134ffd6d3bbab67383516f681cf6591375893505182a88"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerStrings.kt",
+      "lines": 151,
+      "sha256": "15b1f326fc76b70aac4060e9b0e17dc6042af27325738cdae7f694cba339b611"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerTier.kt",
+      "lines": 261,
+      "sha256": "d7f18ae2202bd6f8a96978dbaf8f2c1745802ff1b941c0edb1967e2340af70a2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformCurve.kt",
+      "lines": 172,
+      "sha256": "cfbfabb0f6b65d94ad73789e5b7ef1cf1dc08fcbf15d29bbc778f964bbaea379"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AboutScreen.kt",
+      "lines": 259,
+      "sha256": "f146dce716469c0f3ee30fa7e9b57f11b214e908bd5c61d5ae6ef795dc09e86e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumSearchItem.kt",
+      "lines": 99,
+      "sha256": "0016cb46fde2f29ffe3aceb7a6a3e6b82230777254acee121d62db757b90d424"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibrarySectionFoldSetting.kt",
+      "lines": 142,
+      "sha256": "0e750c0df703b08eac39323e1f9eea93dfc81224b8efb782cda59b206795b6d3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/OfflineCacheOverlay.kt",
+      "lines": 609,
+      "sha256": "77f58fa186728ad3412e433784fe29524db5898ff824614fc5934a89e0ffea8b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistLayoutSetting.kt",
+      "lines": 132,
+      "sha256": "9f4892e6c1ba33cd5e2dcdc0cc5b19d047de7758f82ee568e2d54ab684a822a6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsGroupScreen.kt",
+      "lines": 1298,
+      "sha256": "d5724b84b0471027218009247780e2301aaee494e03bc29659c6d2d820485754"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SplashScreen.kt",
+      "lines": 73,
+      "sha256": "ff942fdab75aefcfa3ab7987dc2faab04ec17af3cd60a0ba535b32eeb5fbd186"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsRegistry.kt",
+      "lines": 1286,
+      "sha256": "39c7ee61b2adc6111bbde031e5fef6a99449e7126f14d4d4f13362a6704424ec"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AccentSourceSelector.kt",
+      "lines": 82,
+      "sha256": "2c95f705454c15814ce99f9a5009687b1107f1d127fd93339a7d7689ea25b722"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AppMotion.kt",
+      "lines": 379,
+      "sha256": "9a67d25b25955d2244c251400cb515f30f498c26590331998c086e76b8ff7b62"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AppShapes.kt",
+      "lines": 116,
+      "sha256": "5bbcd834330d7cadabae2f947ac829240339f62be8e62722f31b5399dc143116"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/CoverTheme.kt",
+      "lines": 136,
+      "sha256": "1e5ece4caece6d70f0ced2c0edff479b1c05a6952b5ebb4e00a1439f61d570f5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/MarkdownText.kt",
+      "lines": 184,
+      "sha256": "6516b6c4e281eecc444fbaf08018ad25ddc867301a284c15c017cea3875e1555"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/NcrustColors.kt",
+      "lines": 128,
+      "sha256": "909c8d649a3251b65cc4ed0a5a41ab1dd90410dfb04162aca76af7950b67d368"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/NcrustTypography.kt",
+      "lines": 58,
+      "sha256": "3083db34c1861071b5eee3109633f1eb0311faf794df2bfb84e52a852b4be6d0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/PageTransitionSetting.kt",
+      "lines": 125,
+      "sha256": "14f22427e960150ff49ef0ec7d03a63d5675e754c3e9fd9ca015ccd08d4bb516"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/ThemeColorSelector.kt",
+      "lines": 87,
+      "sha256": "a328d3e9694fd307f382c14e2099e736c27c9ca5129849cf561ff7016cac4c9c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Cam16.kt",
+      "lines": 422,
+      "sha256": "b39e810dca9633b0a096daaec60e6c598bb4721800adf56e8a9cb88b43b84a18"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/ColorUtils.kt",
+      "lines": 305,
+      "sha256": "7bdab03b1bb3adf09c968b9459bebda0aae57968fce76bda45d14c186814050d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/CoverPalette.kt",
+      "lines": 174,
+      "sha256": "a7c02169f452a0835cec3d68439e40d8de096eada0bd7cc4f39d61419636c6e5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/CoverPaletteExtractor.kt",
+      "lines": 161,
+      "sha256": "501928e5b2cafef901175ba10911afccd709d90ece1b06da020833bfc0c3fdb1"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Hct.kt",
+      "lines": 542,
+      "sha256": "49be2566bccf1f499f875fb8d876eb66712fb2870a6acfacfb1852d85cc703a0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Quantizer.kt",
+      "lines": 663,
+      "sha256": "8a55bc3cff37cf3ceef90b342d0d8b15b940f04920c9809b3e8d7b5888210e2d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Score.kt",
+      "lines": 158,
+      "sha256": "91b03bede3b6695b40872ece688e62ca3e33a7416390a6ba4b93dcd14afc01c2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/TonalPalette.kt",
+      "lines": 173,
+      "sha256": "21a58a27a68d6fd92ca063696b1eea8e8530ba0a555f2b76665001201203872b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/SearchViewModel.kt",
+      "lines": 998,
+      "sha256": "e16548f5581bcaada57b1ec2d2409e9b52354026ef20df952ff9a9da31e878da"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetSize.kt",
+      "lines": 154,
+      "sha256": "5a6e6905e17d6f16d4573753e497b903d3f68c6c6e7f6d4fdfa26027643a9fdb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetTextFormat.kt",
+      "lines": 83,
+      "sha256": "e41b5e6c22279ef1fc26a055b90bf76cd967817de2e10a3bd8d2866b2f974531"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ApkArchive.kt",
+      "lines": 83,
+      "sha256": "e5767b049d8fc812f93786d8f6abc4ec451a179272661bf1672c04644572ff49"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/AppVersion.kt",
+      "lines": 73,
+      "sha256": "49ec6d138d11274176c2cc114d454214de56df58585ae9c5fc69f77db0863feb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ForkRelease.kt",
+      "lines": 95,
+      "sha256": "71c2dbd9ad106ab56586d22ac2e63bb267f41128cc664b584ee3cfeaf0291b61"
+    }
+  ]
+}

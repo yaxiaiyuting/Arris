@@ -1,0 +1,12 @@
+{
+  "started": {
+    "primary_remaining_percent": 100,
+    "weekly_remaining_percent": 69
+  },
+  "conclusion_read": {
+    "observed_at": "2026-10-27T07:46:14+08:00",
+    "primary_remaining_percent": 12,
+    "weekly_remaining_percent": 55
+  },
+  "decision": "停止扩展，留出收尾空间；未消耗重置。额度为整个账号的窗口，不是本任务的独占预算。"
+}
