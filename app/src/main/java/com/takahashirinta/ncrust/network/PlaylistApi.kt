@@ -19,6 +19,7 @@ import com.takahashirinta.ncrust.account.AccountGetResponse
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SongPrivilege
 import com.takahashirinta.ncrust.account.VipInfoResponse
+import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
 import com.takahashirinta.ncrust.network.model.AlbumItem
@@ -870,17 +871,35 @@ object PlaylistApi {
      * 并在成功后再做一次读回校验。这里额外记录脱敏的 HTTP 状态、业务码与耗时，便于诊断；
      * **不记录** Cookie、易盾 token、CSRF token 或完整加密请求体。
      */
-    suspend fun likeSong(songId: Long, like: Boolean): Boolean = withContext(Dispatchers.IO) {
-        if (tryXeapiLike(songId, like) == 200) return@withContext true
-        if (tryWeapiLike(songId, like) == 200) return@withContext true
-        tryEapiLike(songId, like) == 200
+    suspend fun likeSong(
+        songId: Long,
+        like: Boolean,
+        /** 排任务时钉住的会话（S18）：切账号后不再用新凭据重发这个旧操作。 */
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        // 每个通道发之前都复核：A 会话的动作绝不能落到 B 的凭据上。
+        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+            Log.w("PlaylistApi", "likeSong aborted: session changed id=$songId like=$like")
+            return@withContext false
+        }
+        if (tryXeapiLike(songId, like, pinned?.loginGeneration) == 200) return@withContext true
+        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+            Log.w("PlaylistApi", "likeSong aborted before weapi: session changed id=$songId")
+            return@withContext false
+        }
+        if (tryWeapiLike(songId, like, pinned?.cookie) == 200) return@withContext true
+        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+            Log.w("PlaylistApi", "likeSong aborted before eapi: session changed id=$songId")
+            return@withContext false
+        }
+        tryEapiLike(songId, like, pinned?.cookie, pinned?.loginGeneration) == 200
     }
 
     /**
      * xeapi `/api/v1/radio/like`——与官方 Android 9.x 同形（xeapi 加密 + 持久 deviceId + 易盾 token）。
      * 字段顺序固定，别改：顺序进加密体，换了顺序就是另一种指纹。
      */
-    private fun tryXeapiLike(songId: Long, like: Boolean): Int {
+    private fun tryXeapiLike(songId: Long, like: Boolean, pinnedGeneration: Long? = null): Int {
         val startedAt = System.currentTimeMillis()
         return try {
             val text = RetrofitClient.xeapiPost(
@@ -891,7 +910,8 @@ object PlaylistApi {
                     "like" to like.toString(),
                     "time" to "3"
                 ),
-                antiCheat = true
+                antiCheat = true,
+                pinnedGeneration = pinnedGeneration,
             )
             val code = JSONObject(text).optInt("code", -1)
             Log.i(
@@ -910,7 +930,7 @@ object PlaylistApi {
     }
 
     /** 回退通道 1：经典 weapi `/api/radio/like`。**老通道，收藏可能被服务端事后回滚**。 */
-    private fun tryWeapiLike(songId: Long, like: Boolean): Int {
+    private fun tryWeapiLike(songId: Long, like: Boolean, pinnedCookie: String? = null): Int {
         return try {
             val payload = JSONObject()
                 .put("alg", "itembased")
@@ -918,7 +938,9 @@ object PlaylistApi {
                 .put("like", like)
                 .put("time", "3")
                 .toString()
-            val response = RetrofitClient.weapiPost("/api/radio/like", payload)
+            val response = RetrofitClient.weapiPost(
+                "/api/radio/like", payload, cookieOverride = pinnedCookie,
+            )
             val body = response.body?.string() ?: return -1
             JSONObject(body).optInt("code", -1).also {
                 Log.i("PlaylistApi", "likeSong(weapi) id=$songId like=$like code=$it")
@@ -930,7 +952,12 @@ object PlaylistApi {
     }
 
     /** 回退通道 2：eapi「官方 iPhone 指纹」`/eapi/radio/like`。**同样是老通道，可能被事后回滚**。 */
-    private fun tryEapiLike(songId: Long, like: Boolean): Int {
+    private fun tryEapiLike(
+        songId: Long,
+        like: Boolean,
+        pinnedCookie: String? = null,
+        pinnedGeneration: Long? = null,
+    ): Int {
         val payload = mapOf(
             "alg" to "itembased",
             "trackId" to songId.toString(),
@@ -941,7 +968,9 @@ object PlaylistApi {
         )
         val startedAt = System.currentTimeMillis()
         val http = try {
-            RetrofitClient.eapiPostOfficial("/eapi/radio/like", payload)
+            RetrofitClient.eapiPostOfficial(
+                "/eapi/radio/like", payload, pinnedCookie, pinnedGeneration,
+            )
         } catch (e: Throwable) {
             Log.w("PlaylistApi", "likeSong(eapi) req failed id=$songId like=$like", e)
             return -1

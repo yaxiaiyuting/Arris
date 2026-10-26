@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.takahashirinta.ncrust.auth.QrPair
 import com.takahashirinta.ncrust.auth.QrPairServer
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -84,10 +85,13 @@ fun QrLoginDialog(
                 return@launch
             }
             // 官方 App 扫码走轮询; Arris 手机扫码走局域网回传, 两条路谁先到用谁。
-            pairServer = QrPairServer(key.unikey) { cookie -> onLoginSuccess(cookie) }.also { it.start() }
+            // S19：配对密钥只在二维码里传递（官方 App 忽略未知参数），不进 UDP 广播。
+            val pairSecret = QrPair.newSecret()
+            pairServer = QrPairServer(key.unikey, pairSecret) { cookie -> onLoginSuccess(cookie) }
+                .also { it.start() }
             // 二维码内容是 PC 形态的官方登录链接（`?codekey=<unikey>`，不带 chainId）：
             // 服务端一般不给图, 用 zxing 本地生成(官方客户端同款做法)。
-            val qrContent = key.qrurl
+            val qrContent = QrPair.withSecret(key.qrurl, pairSecret)
             qrBitmap = key.qrimg?.let { decodeQrImage(it) } ?: generateQrBitmap(qrContent)
             if (qrBitmap == null) {
                 state = QrState.Failed

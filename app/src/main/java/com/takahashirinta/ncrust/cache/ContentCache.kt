@@ -75,6 +75,9 @@ object ContentCache {
 
     // 清空所有缓存（切换账号 / 内存压力 / 进程重启场景）。
     fun clearAll() {
+        // S12：清内容必须**同时**失效新鲜度。旧实现只清数据不清 homeWarmedUpAt，
+        // 于是首页在 15 秒窗口内进入时 isHomeFresh 仍为 true，跳过取数、停在空页面。
+        homeWarmedUpAt = 0L
         homeDailySongs = null
         homeRecommendPlaylists = null
         homeNewSongs = null

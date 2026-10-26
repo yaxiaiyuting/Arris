@@ -203,7 +203,22 @@ object BiliAuthStore {
      * **顺序是「先落盘、再改镜像」**（与 `BiliPrefs.setEnabled` 同一条纪律）：反过来的话
      * 写盘失败会让镜像说「已登录」、下次冷启动又说「没登录」—— 用户看到的是「登录自己掉了」。
      */
+    /**
+     * 登录代次：`save`（新凭据覆盖）与 `clear`（登出）各自 +1。
+     *
+     * 扫码登录的收尾是**两段式**（先落凭据、再等 nav 回来），中间可能已经换了账号。
+     * [BiliLoginSession] 用它判断"我这次 nav 的响应还是不是当前会话的"，
+     * 迟到的响应既不能清掉新登录，也不能把资料写成上一个账号的。
+     */
+    @Volatile
+    private var loginGeneration = 0L
+
+    fun currentGeneration(): Long = loginGeneration
+
+    fun isCurrent(generation: Long): Boolean = generation == loginGeneration
+
     fun save(context: Context, credential: BiliCredential) {
+        loginGeneration++
         prefs(context).edit()
             .putString(KEY_SESSDATA, credential.sessdata)
             .putString(KEY_BILI_JCT, credential.biliJct)
@@ -232,6 +247,7 @@ object BiliAuthStore {
      * 资料字段一起清：留着上一个账号的昵称会让界面显示「已登录：某某」而实际没有凭据。
      */
     fun clear(context: Context) {
+        loginGeneration++
         prefs(context).edit()
             .remove(KEY_SESSDATA)
             .remove(KEY_BILI_JCT)
@@ -280,6 +296,20 @@ object BiliAuthStore {
     }
 
     // ---------------------------------------------------------------- 资料 / 大会员 ----
+
+    /** 只在登录代次仍匹配时写资料 —— 否则写回的是上一个账号的资料（S6）。 */
+    fun saveProfileIfCurrent(context: Context, profile: BiliProfile, generation: Long): Boolean {
+        if (!isCurrent(generation)) return false
+        saveProfile(context, profile)
+        return true
+    }
+
+    /** 只在登录代次仍匹配时清凭据 —— 否则会把刚登录成功的新账号清掉（S6）。 */
+    fun clearIfCurrent(context: Context, generation: Long): Boolean {
+        if (!isCurrent(generation)) return false
+        clear(context)
+        return true
+    }
 
     fun saveProfile(context: Context, profile: BiliProfile) {
         prefs(context).edit()

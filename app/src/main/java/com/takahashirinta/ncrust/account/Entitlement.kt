@@ -93,6 +93,15 @@ data class FreeTrialInfo(
 )
 
 /**
+ * 试听时长的**唯一换算出口**（秒）。
+ *
+ * 服务端这一对字段就是秒（典型 0..45）。车机路径曾经又除以 1000，把它算成 0 秒 ——
+ * 两条路径各写一份单位必然漂移，所以收敛到这里，任何新调用点都只调这个函数。
+ */
+fun trialSeconds(start: Int?, end: Int?): Int =
+    ((end ?: 0) - (start ?: 0)).coerceAtLeast(0)
+
+/**
  * 试听限制的细节。判定规则本身不用它（规则只看 `url` / `level` / `fee` / `freeTrialInfo`
  * 与歌曲详情的 `privilege.st`），带出来是为了日志与将来细文案（如 `cannotListenReason`）。
  */

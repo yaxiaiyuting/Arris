@@ -3230,10 +3230,20 @@ fun MainScreen(
         }
 
         // B3：把歌曲加入某个歌单。toastText 在组合期取好（suspend 上下文不能调 @Composable）。
-        suspend fun addSongsToPlaylist(playlistId: Long, songIds: List<Long>, toastText: () -> String): AddToPlaylistResult {
-            val count = PlaylistEditApi.addSongs(playlistId, songIds)
+        suspend fun addSongsToPlaylist(
+            playlistId: Long,
+            songIds: List<Long>,
+            toastText: () -> String,
+            failureText: () -> String,
+        ): AddToPlaylistResult {
+            // 钉住当前会话：选择框可能开着，期间切了账号也不该用新账号重发（S18）。
+            val pinnedSession = CookieManager.snapshot()
+            val count = PlaylistEditApi.addSongs(playlistId, songIds, pinnedSession)
             val result = if (count != null) AddToPlaylistResult.SUCCESS else AddToPlaylistResult.FAILED
-            Toast.makeText(context, toastText(), Toast.LENGTH_SHORT).show()
+            // F3：成功文案只在真的成功时弹。旧实现无条件弹 `toastText()`，
+            // 于是请求失败（返回 FAILED）时用户仍然看到"已加入歌单"。
+            val text = if (result == AddToPlaylistResult.SUCCESS) toastText() else failureText()
+            Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
             return result
         }
 
@@ -3331,7 +3341,9 @@ fun MainScreen(
                     if (CookieManager.getCookie(context).isNullOrBlank()) {
                         PlaylistCreateOutcome.FAILED
                     } else {
-                        val playlistId = PlaylistEditApi.createPlaylist(name, privacy)
+                        // 钉住当前会话：对话框可能挂着，期间切了账号，旧操作不能落到新账号。
+                        val pinnedSession = CookieManager.snapshot()
+                        val playlistId = PlaylistEditApi.createPlaylist(name, privacy, pinnedSession)
                         when {
                             playlistId == null -> {
                                 val err = PlaylistEditApi.lastError
@@ -3343,9 +3355,11 @@ fun MainScreen(
                             }
                             pendingSongs().isNotEmpty() -> {
                                 val ids = pendingSongs().map { it.id }
-                                val outcome = addSongsToPlaylist(playlistId, ids) {
-                                    createStrings.playlistSongsAdded(ids.distinct().size)
-                                }
+                                val outcome = addSongsToPlaylist(
+                                    playlistId, ids,
+                                    toastText = { createStrings.playlistSongsAdded(ids.distinct().size) },
+                                    failureText = { createStrings.addToPlaylistFailed },
+                                )
                                 if (outcome == AddToPlaylistResult.SUCCESS) {
                                     PlaylistCreateOutcome.SUCCESS
                                 } else {
@@ -3376,17 +3390,26 @@ fun MainScreen(
                 playlists = localPickerList,
                 onDismiss = { showAddToLocalPlaylist = false },
                 onPick = { pl ->
-                    pickSong?.let { LocalPlaylistRepository.addTrack(context, pl.key, it) }
+                    // 写盘失败（Store 回滚）时不能提示「已加入」：保留对话框与可重试入口。
+                    val ok = pickSong?.let { LocalPlaylistRepository.addTrack(context, pl.key, it) } != null
                     localPlaylistsTick++
-                    showAddToLocalPlaylist = false
-                    Toast.makeText(context, pickStrings.localPlaylistAdded, Toast.LENGTH_SHORT).show()
+                    if (ok) {
+                        showAddToLocalPlaylist = false
+                        Toast.makeText(context, pickStrings.localPlaylistAdded, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, pickStrings.localPlaylist.syncFailed, Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onCreateNew = { name ->
                     val created = LocalPlaylistRepository.createLocalOnly(context, name)
-                    pickSong?.let { LocalPlaylistRepository.addTrack(context, created.key, it) }
+                    val ok = pickSong?.let { LocalPlaylistRepository.addTrack(context, created.key, it) } != null
                     localPlaylistsTick++
-                    showAddToLocalPlaylist = false
-                    Toast.makeText(context, pickStrings.localPlaylistAdded, Toast.LENGTH_SHORT).show()
+                    if (ok) {
+                        showAddToLocalPlaylist = false
+                        Toast.makeText(context, pickStrings.localPlaylistAdded, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, pickStrings.localPlaylist.syncFailed, Toast.LENGTH_SHORT).show()
+                    }
                 },
             )
         }
@@ -3398,9 +3421,11 @@ fun MainScreen(
                 songCount = pendingAddSongs.size,
                 onDismiss = { showAddToPlaylist = false },
                 onPick = { playlistId ->
-                    addSongsToPlaylist(playlistId, pendingAddSongs) {
-                        sheetStrings.addToPlaylistSuccess
-                    }
+                    addSongsToPlaylist(
+                        playlistId, pendingAddSongs,
+                        toastText = { sheetStrings.addToPlaylistSuccess },
+                        failureText = { sheetStrings.addToPlaylistFailed },
+                    )
                 },
                 onCreateNew = {
                     showAddToPlaylist = false

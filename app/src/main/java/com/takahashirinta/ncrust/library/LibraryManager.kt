@@ -37,6 +37,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
@@ -267,14 +269,51 @@ object LibraryManager {
      * （底层 = `SourceIds.isQqId`，与 `ReportGate` 共用同一个谓词）。
      * 被拦下时**只记本地计数**，不发请求。
      */
+    /**
+     * 把「收藏/取消」推到云端。
+     *
+     * 两条不变量（S17 / S18）：
+     * 1. **同一首歌串行**：连点收藏→取消时，云端最终状态必须等于用户最后一次意图。
+     *    旧实现每次独立 launch，两个请求并发，迟到的那条（可能是最初的 true）最后落地。
+     *    这里按曲目串行，并在轮到时读"最新意图"，被后续点击覆盖的旧意图直接跳过。
+     * 2. **绑定原会话**：排任务时钉住 cookie + 登录代次；切账号后旧操作作废，
+     *    绝不用新账号的凭据把它重发一遍。
+     */
     private fun pushLike(songId: Long, like: Boolean) {
         if (!SavedSongSync.isRemoteLikeEligible(songId)) {
             blockedLikeWrites.incrementAndGet()
             Log.w(TAG, "pushLike blocked: cross-source id=$songId like=$like")
             return
         }
-        ioScope.launch { runCatching { PlaylistApi.likeSong(songId, like) } }
+        val pinned = CookieManager.snapshot()
+        latestLikeIntent[songId] = like
+        ioScope.launch {
+            val mutex = likeMutexes.getOrPut(songId) { Mutex() }
+            mutex.withLock {
+                while (true) {
+                    val desired = latestLikeIntent[songId] ?: return@withLock
+                    if (!CookieManager.isCurrent(pinned)) {
+                        Log.w(TAG, "pushLike aborted: session changed id=$songId")
+                        latestLikeIntent.remove(songId)
+                        return@withLock
+                    }
+                    val sent = runCatching { PlaylistApi.likeSong(songId, desired, pinned) }
+                        .getOrDefault(false)
+                    // 期间用户又点了一次 ⇒ 继续按最新意图补发；否则收工。
+                    if (latestLikeIntent[songId] == desired) {
+                        latestLikeIntent.remove(songId)
+                        if (!sent) Log.w(TAG, "pushLike failed id=$songId like=$desired")
+                        return@withLock
+                    }
+                }
+            }
+        }
     }
+
+    /** 每首歌的写入门闩（串行化同一曲目的收藏/取消）。 */
+    private val likeMutexes = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
+    /** 最新的用户意图；被覆盖的旧意图不再发往云端。 */
+    private val latestLikeIntent = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
 
     private fun pushSubAlbum(albumId: Long, sub: Boolean) {
         ioScope.launch { runCatching { PlaylistApi.subAlbum(albumId, sub) } }

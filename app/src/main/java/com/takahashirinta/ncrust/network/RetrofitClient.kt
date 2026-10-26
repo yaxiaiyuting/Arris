@@ -480,11 +480,21 @@ object RetrofitClient {
      *  - iOS UA；data.header 同时写入加密 body
      * 用于写接口(如 /eapi/radio/like)以彻底对齐客户端指纹,排除 -460 风控的字段形态差异。
      */
-    fun eapiPostOfficial(path: String, payload: Map<String, String>): Response {
+    fun eapiPostOfficial(
+        path: String,
+        payload: Map<String, String>,
+        /** 非 null = 用调用方钉住的凭据（异步任务绑定原会话，禁止拿新账号兜底）。 */
+        pinnedCookie: String? = null,
+        pinnedGeneration: Long? = null,
+    ): Response {
         val session = CookieManager.snapshot()
+        if (pinnedGeneration != null && session.loginGeneration != pinnedGeneration) {
+            throw IOException("session changed before eapi official $path")
+        }
         val fullUrl = API_URL + path
-        val csrf = getCsrfToken(session.cookie).orEmpty()
-        val mus: Map<String, String> = (session.cookie ?: "")
+        val effectiveCookie = pinnedCookie ?: session.cookie
+        val csrf = getCsrfToken(effectiveCookie).orEmpty()
+        val mus: Map<String, String> = (effectiveCookie ?: "")
             .split(';')
             .asSequence()
             .map { it.trim() }
@@ -559,8 +569,17 @@ object RetrofitClient {
      * @param pairs 业务字段，**顺序即协议**：明文信封的 `content` 按这个顺序做表单编码。
      * @param antiCheat 是否现取易盾 token 放 `X-antiCheatToken`（写入类接口需要；取不到发空串）。
      */
-    fun xeapiPost(uri: String, pairs: List<Pair<String, String>>, antiCheat: Boolean): String {
+    fun xeapiPost(
+        uri: String,
+        pairs: List<Pair<String, String>>,
+        antiCheat: Boolean,
+        /** 非 null = 钉住的登录代次；与当前会话不一致时拒绝发送（见 S18）。 */
+        pinnedGeneration: Long? = null,
+    ): String {
         val session = CookieManager.snapshot()
+        if (pinnedGeneration != null && session.loginGeneration != pinnedGeneration) {
+            throw IOException("session changed before xeapi $uri")
+        }
         val url = XEAPI_URL + "/xeapi/" + uri.removePrefix("/api/")
         // 易盾 token 每次写入现取、不缓存（xeapi.md §5）。
         val antiCheatToken = if (antiCheat) fetchAntiCheatToken() else null

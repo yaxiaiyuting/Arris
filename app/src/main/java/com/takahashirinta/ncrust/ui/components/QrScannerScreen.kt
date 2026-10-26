@@ -100,6 +100,7 @@ fun QrAuthorizeScreen(
 
     fun handleContent(content: String) {
         val unikey = QrPair.unikeyFromQrContent(content)
+        val pairSecret = QrPair.secretFromQrContent(content)
         val cookie = CookieManager.getCookie(context)
         when {
             unikey == null -> status = ScanStatus.Failed(strings.scanFailed)
@@ -107,7 +108,7 @@ fun QrAuthorizeScreen(
             else -> {
                 status = ScanStatus.Connecting
                 scope.launch {
-                    val ok = QrPairClient.sendCookie(unikey, cookie)
+                    val ok = QrPairClient.sendCookie(unikey, cookie, pairSecret)
                     if (ok) {
                         status = ScanStatus.Success
                         delay(900)

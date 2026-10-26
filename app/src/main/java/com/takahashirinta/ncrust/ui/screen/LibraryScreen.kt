@@ -267,7 +267,7 @@ fun LibraryScreen(
                 if (!CookieManager.hasCookie(context)) {
                     PlaylistCreateOutcome.FAILED
                 } else {
-                    val id = PlaylistEditApi.createPlaylist(name, privacy)
+                    val id = PlaylistEditApi.createPlaylist(name, privacy, CookieManager.snapshot())
                     when {
                         id != null -> {
                             Toast.makeText(context, createStrings.playlistCreated(name), Toast.LENGTH_SHORT).show()

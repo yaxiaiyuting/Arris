@@ -74,15 +74,26 @@ object HomeSnapshot {
         val app = context.applicationContext
         ioScope.launch {
             runCatching {
+                // S13：语义定死 —— `null` = 本次没提供（保持旧值）；
+                // 空列表 = 服务端明确给了空表 ⇒ **必须覆盖**，否则时间戳更新了、
+                // 旧推荐却在下次冷启动又冒出来。
                 val editor = prefs(app).edit()
-                daily?.takeIf { it.isNotEmpty() }
-                    ?.let { editor.putString(KEY_DAILY, gson.toJson(it.take(MAX_ITEMS), songListType)) }
-                playlists?.takeIf { it.isNotEmpty() }
-                    ?.let { editor.putString(KEY_PLAYLISTS, gson.toJson(it.take(MAX_ITEMS), cardListType)) }
-                newSongs?.takeIf { it.isNotEmpty() }
-                    ?.let { editor.putString(KEY_NEW_SONGS, gson.toJson(it.take(MAX_ITEMS), songListType)) }
-                toplists?.takeIf { it.isNotEmpty() }
-                    ?.let { editor.putString(KEY_TOPLISTS, gson.toJson(it.take(MAX_ITEMS), cardListType)) }
+                daily?.let {
+                    if (it.isEmpty()) editor.remove(KEY_DAILY)
+                    else editor.putString(KEY_DAILY, gson.toJson(it.take(MAX_ITEMS), songListType))
+                }
+                playlists?.let {
+                    if (it.isEmpty()) editor.remove(KEY_PLAYLISTS)
+                    else editor.putString(KEY_PLAYLISTS, gson.toJson(it.take(MAX_ITEMS), cardListType))
+                }
+                newSongs?.let {
+                    if (it.isEmpty()) editor.remove(KEY_NEW_SONGS)
+                    else editor.putString(KEY_NEW_SONGS, gson.toJson(it.take(MAX_ITEMS), songListType))
+                }
+                toplists?.let {
+                    if (it.isEmpty()) editor.remove(KEY_TOPLISTS)
+                    else editor.putString(KEY_TOPLISTS, gson.toJson(it.take(MAX_ITEMS), cardListType))
+                }
                 editor.putLong(KEY_SAVED_AT, System.currentTimeMillis())
                 editor.apply()
             }

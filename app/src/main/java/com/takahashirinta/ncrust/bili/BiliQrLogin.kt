@@ -299,10 +299,16 @@ class BiliQrLogin(
     suspend fun finishLogin(context: android.content.Context): BiliNavResult? {
         val cred = credential ?: return null
         BiliAuthStore.save(context, cred)
+        // 落盘后立刻取一次代次：这次收尾只允许影响"这一份登录"。
+        val generation = BiliAuthStore.currentGeneration()
         val result = api.navWithCookie(cred.cookieHeader())
         when (result) {
-            is BiliNavResult.LoggedIn -> BiliAuthStore.saveProfile(context, result.nav.profile())
-            BiliNavResult.NotLoggedIn -> BiliAuthStore.clear(context)
+            is BiliNavResult.LoggedIn ->
+                // 期间若切到另一个账号，旧响应不能把资料改成上一个账号的。
+                BiliAuthStore.saveProfileIfCurrent(context, result.nav.profile(), generation)
+            BiliNavResult.NotLoggedIn ->
+                // 迟到的 -101 不能清掉用户刚建立的新登录。
+                BiliAuthStore.clearIfCurrent(context, generation)
             is BiliNavResult.Failed, is BiliNavResult.Unknown -> Unit
         }
         Log.i(TAG, "finishLogin: ${result::class.java.simpleName}")

@@ -34,6 +34,14 @@ sealed interface LocalSyncOutcome {
     /** 这个本地歌单没有绑定远程来源（纯手动歌单）——**不发任何请求**。 */
     data object NoRemoteSource : LocalSyncOutcome
 
+    /**
+     * 部分成功：拿到了数据但不完整（缓存回退 / 截断 / 降级）。
+     *
+     * 与 [Success] 的区别是**不更新 lastSyncedAt**：TTL 之后仍会再补取一次。
+     * 界面应显示"已同步 N 首（数据不完整，稍后会自动补齐）"而不是完整成功。
+     */
+    data class Partial(val added: Int, val skipped: Int, val total: Int) : LocalSyncOutcome
+
     /** 远程拉取失败（网络 / 登录态 / 歌单不存在）。**本地数据一个字节都不动。** */
     data object Failed : LocalSyncOutcome
 }
@@ -67,33 +75,55 @@ object LocalPlaylistRepository {
      * @param key 远程歌单身份。
      * @param dirId qm 的目录号（载荷）。0 = 让服务端按 disstid 解析。
      */
-    suspend fun loadRemoteSongs(
+    /**
+     * 远程读取结果 + **完整性**。
+     *
+     * 旧实现只把 `data` 解包成 songs，把 `fresh / fromCache / degradation` 全丢了：
+     * 截断的缓存（TRUNCATED 1/100 条）、离线回退、甚至 NEED_LOGIN 回退都被当成
+     * "完整成功了"，于是 `sync` 更新 lastSyncedAt，10 分钟内不再补取。
+     */
+    private data class RemoteFetch(val songs: List<SongItem>?, val complete: Boolean)
+
+    private suspend fun loadRemoteOutcome(
         key: PlaylistKey,
         dirId: Long,
         forceRefresh: Boolean,
-    ): List<SongItem>? {
+    ): RemoteFetch {
         return when (key.source) {
             MusicSource.QQMUSIC -> {
                 val result = runCatching {
                     QqPlaylistRepository.loadDetail(key, dirId, forceRefresh)
-                }.getOrNull() ?: return null
+                }.getOrNull() ?: return RemoteFetch(null, false)
                 when (result) {
-                    is PlaylistResult.Data -> result.outcome.data.songs
-                    is PlaylistResult.Failed -> null
+                    is PlaylistResult.Data -> RemoteFetch(
+                        songs = result.outcome.data.songs,
+                        // 只有"联网取到的新鲜完整数据"才算完整；缓存/降级一律不算。
+                        complete = result.outcome.fresh && result.outcome.degradation == null,
+                    )
+                    is PlaylistResult.Failed -> RemoteFetch(null, false)
                 }
             }
-            // ncm 的 playlistId 是数字；本地歌单的 key.id 是 String（v2.2.0 的统一形状）。
-            // 解析不出来 ⇒ 这个 key 不是 ncm 的歌单 id（例如 local: 前缀）⇒ 没有远程来源。
             MusicSource.NETEASE -> {
-                val pid = key.id.toLongOrNull() ?: return null
-                runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull()
+                val pid = key.id.toLongOrNull() ?: return RemoteFetch(null, false)
+                RemoteFetch(runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull(), true)
             }
-            // v3.1.0：B 站的「歌单」（音频区收藏夹 amid）本轮**不做同步** ——
-            // 它既没有登录态可依附（匿名拿到的收藏夹不是用户的），
-            // 也与「本地歌单 / 云歌单」这套两源模型不同构。
-            // 返回 null 的语义是「这个 key 没有远程来源」，调用方会保留本地内容。
-            MusicSource.BILIBILI -> null
+            MusicSource.BILIBILI -> RemoteFetch(null, false)
         }
+    }
+
+    suspend fun loadRemoteSongs(
+        key: PlaylistKey,
+        dirId: Long,
+        forceRefresh: Boolean,
+    ): List<SongItem>? = loadRemoteOutcome(key, dirId, forceRefresh).songs
+
+    private suspend fun loadRemoteSongsForSync(
+        key: PlaylistKey,
+        dirId: Long,
+        forceRefresh: Boolean,
+    ): List<SongItem>? {
+        // 兼容旧入口：sync 只走这个包装，保持原有的 `loadRemoteSongs` 契约。
+        return loadRemoteOutcome(key, dirId, forceRefresh).songs
     }
 
     /**
@@ -114,17 +144,36 @@ object LocalPlaylistRepository {
         now: Long = System.currentTimeMillis(),
     ): LocalSyncOutcome {
         if (!playlist.hasRemoteSource) return LocalSyncOutcome.NoRemoteSource
-        val remote = loadRemoteSongs(playlist.key, playlist.dirId, forceRefresh = force)
-            ?: return LocalSyncOutcome.Failed
+        // 记住发请求前的修订号：网络期间用户可能删歌单、移除曲目或重新加回。
+        // 没有这道闸门，旧同步返回后会把删除意图覆盖掉（歌单复活 / tombstone 被抹）。
+        val revisionBefore = LocalPlaylistStore.currentRevision()
+        val fetched = loadRemoteOutcome(playlist.key, playlist.dirId, forceRefresh = force)
+        val remote = fetched.songs ?: return LocalSyncOutcome.Failed
 
         val existing = LocalPlaylistStore.readTracks(context, playlist.key)
         val merged = LocalPlaylistSync.merge(existing, remote, now)
-        LocalPlaylistStore.writePlaylistWithTracks(
+        if (!fetched.complete) {
+            // 降级/截断/缓存：能合的就合（只加不减，不丢用户数据），但**不算完整成功**：
+            // 不更新 lastSyncedAt，让 TTL 之后还能再补取，也不向界面报 Success。
+            LocalPlaylistStore.writePlaylistWithTracksIfUnchanged(
+                context = context,
+                playlist = playlist,           // lastSyncedAt 保持原值
+                tracks = merged.tracks,
+                now = now,
+                expectedRevision = revisionBefore,
+            )
+            return LocalSyncOutcome.Partial(
+                added = merged.added, skipped = merged.skipped,
+                total = merged.tracks.count { it.isVisible },
+            )
+        }
+        LocalPlaylistStore.writePlaylistWithTracksIfUnchanged(
             context = context,
             // lastSyncedAt 只在这里更新 —— 它是「成功同步过」的事实，失败时不写。
             playlist = playlist.copy(lastSyncedAt = now),
             tracks = merged.tracks,
             now = now,
+            expectedRevision = revisionBefore,
         ) ?: return LocalSyncOutcome.Failed
         return LocalSyncOutcome.Success(
             added = merged.added,
@@ -161,11 +210,11 @@ object LocalPlaylistRepository {
         key: PlaylistKey,
         trackKey: TrackKey,
         now: Long = System.currentTimeMillis(),
-    ): List<LocalPlaylistTrack> {
+    ): List<LocalPlaylistTrack>? {
         val tracks = LocalPlaylistStore.readTracks(context, key)
         val next = LocalPlaylistSync.remove(tracks, trackKey)
-        persist(context, key, next, now)
-        return next
+        // 返回 null = 持久化没成功：调用方不得提示「已移除」，应保留可重试入口。
+        return next.takeIf { persist(context, key, next, now) }
     }
 
     /** 规则 5 / 7：手动加一首歌（已存在则清除 tombstone）。 */
@@ -174,11 +223,10 @@ object LocalPlaylistRepository {
         key: PlaylistKey,
         song: SongItem,
         now: Long = System.currentTimeMillis(),
-    ): List<LocalPlaylistTrack> {
+    ): List<LocalPlaylistTrack>? {
         val tracks = LocalPlaylistStore.readTracks(context, key)
         val next = LocalPlaylistSync.addManual(tracks, song, now)
-        persist(context, key, next, now)
-        return next
+        return next.takeIf { persist(context, key, next, now) }
     }
 
     /** 清空歌单：**连 tombstone 一起清**（规则里的「tombstone 清除条件」之一）。 */
@@ -186,11 +234,10 @@ object LocalPlaylistRepository {
         context: Context,
         key: PlaylistKey,
         now: Long = System.currentTimeMillis(),
-    ): List<LocalPlaylistTrack> {
+    ): List<LocalPlaylistTrack>? {
         val tracks = LocalPlaylistStore.readTracks(context, key)
         val next = LocalPlaylistSync.clearAll(tracks)
-        persist(context, key, next, now)
-        return next
+        return next.takeIf { persist(context, key, next, now) }
     }
 
     /** 新建一个纯手动（无远程来源）的本地歌单。 */
@@ -252,7 +299,7 @@ object LocalPlaylistRepository {
         key: PlaylistKey,
         tracks: List<LocalPlaylistTrack>,
         now: Long,
-    ) {
+    ): Boolean {
         val meta = LocalPlaylistStore.readPlaylists(context).firstOrNull { it.key == key }
             ?: LocalPlaylist(
                 key = key,
@@ -260,6 +307,8 @@ object LocalPlaylistRepository {
                 createdAt = now,
                 updatedAt = now,
             )
-        LocalPlaylistStore.writePlaylistWithTracks(context, meta, tracks, now)
+        // Store 在 commit 失败时会回滚内存快照并返回 null；旧实现丢掉这个结果，
+        // 于是「磁盘没写成功」在 UI 上仍然显示成「已加入」。
+        return LocalPlaylistStore.writePlaylistWithTracks(context, meta, tracks, now) != null
     }
 }

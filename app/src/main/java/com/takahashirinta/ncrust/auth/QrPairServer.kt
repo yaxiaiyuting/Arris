@@ -22,6 +22,8 @@ import java.net.Socket
  */
 class QrPairServer(
     private val unikey: String,
+    /** 二维码里携带的配对密钥（`arris=`）：应答要带 HMAC 证明，回传用它派生密钥。 */
+    private val pairSecret: String,
     private val onCookie: (String) -> Unit
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -60,8 +62,11 @@ class QrPairServer(
         while (scope.isActive) {
             val packet = DatagramPacket(buf, buf.size)
             if (runCatching { socket.receive(packet) }.isFailure) break
-            if (QrPair.parseRequest(String(packet.data, 0, packet.length)) == unikey) {
-                val resp = QrPair.responsePayload(unikey, tcpPort).toByteArray(Charsets.UTF_8)
+            val request = QrPair.parseRequest(String(packet.data, 0, packet.length))
+            if (request != null && request.unikey == unikey) {
+                // 应答里带 HMAC(secret, unikey|challenge|port)：没有 secret 的伪造者算不出来。
+                val resp = QrPair.responsePayload(unikey, tcpPort, pairSecret, request.challenge)
+                    .toByteArray(Charsets.UTF_8)
                 runCatching { socket.send(DatagramPacket(resp, resp.size, packet.address, packet.port)) }
             }
         }
@@ -74,7 +79,7 @@ class QrPairServer(
         if (length !in 1..65_535) return false
         val data = ByteArray(length)
         input.readFully(data)
-        val cookie = QrPair.decrypt(unikey, data) ?: return false
+        val cookie = QrPair.decrypt(pairSecret, unikey, data) ?: return false
         if (!cookie.contains("MUSIC_U=")) return false
         scope.launch(Dispatchers.Main) { onCookie(cookie) }
         return true

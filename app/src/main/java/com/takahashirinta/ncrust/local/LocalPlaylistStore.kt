@@ -130,16 +130,62 @@ object LocalPlaylistStore {
         now: Long,
     ): LocalPlaylist? = writePlaylistWithTracks(prefs(context), playlist, tracks, now)
 
+    /**
+     * 本地歌单的**修订号**：每一次成功落盘（同步、加曲、删曲、清空、删除、新建）都 +1。
+     *
+     * 用途：`sync` 在发请求前记下它，提交时要求它没变 —— 否则「同步期间用户删了歌单/移除了
+     * 曲目」会被在途同步用旧快照覆盖回去（删除意图丢失、曲目复活）。
+     */
+    @Volatile
+    private var revision = 0L
+    fun currentRevision(): Long = revision
+
     @Synchronized
     internal fun writePlaylistWithTracks(
         storage: SharedPreferences,
         playlist: LocalPlaylist,
         tracks: List<LocalPlaylistTrack>,
         now: Long,
+    ): LocalPlaylist? = writePlaylistWithTracksLocked(storage, playlist, tracks, now, null, false)
+
+    /**
+     * 带**期望修订号**的写入：`expectedRevision != null` 时要求
+     * ① 修订号未变（同步期间没有别的编辑）② 该 key 仍然存在（没被删除）。
+     * 任一不满足返回 null，调用方据此把这次同步判为失败而不是"成功"。
+     */
+    @Synchronized
+    fun writePlaylistWithTracksIfUnchanged(
+        context: Context,
+        playlist: LocalPlaylist,
+        tracks: List<LocalPlaylistTrack>,
+        now: Long,
+        expectedRevision: Long,
+    ): LocalPlaylist? =
+        writePlaylistWithTracksLocked(prefs(context), playlist, tracks, now, expectedRevision, true)
+
+    @Synchronized
+    internal fun writePlaylistWithTracksIfUnchanged(
+        storage: SharedPreferences,
+        playlist: LocalPlaylist,
+        tracks: List<LocalPlaylistTrack>,
+        now: Long,
+        expectedRevision: Long,
+    ): LocalPlaylist? = writePlaylistWithTracksLocked(storage, playlist, tracks, now, expectedRevision, true)
+
+    private fun writePlaylistWithTracksLocked(
+        storage: SharedPreferences,
+        playlist: LocalPlaylist,
+        tracks: List<LocalPlaylistTrack>,
+        now: Long,
+        expectedRevision: Long?,
+        requireExisting: Boolean,
     ): LocalPlaylist? {
+        if (expectedRevision != null && expectedRevision != revision) return null
         val updated = playlist.copy(updatedAt = now)
         val list = LocalPlaylistCodec.decodePlaylists(storage.getString(KEY_PLAYLISTS, null))
         val idx = list.indexOfFirst { it.key == updated.key }
+        // 同步路径禁止"借更新接口隐式重建"：期间被删掉的歌单不允许复活。
+        if (requireExisting && idx < 0) return null
         val next = if (idx < 0) list + updated else list.toMutableList().also { it[idx] = updated }
         val kept = if (next.size <= LocalPlaylistSync.MAX_PLAYLISTS) next
             else next.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
@@ -162,6 +208,7 @@ object LocalPlaylistStore {
             commit(before)
             return null
         }
+        revision++
         return updated
     }
 
@@ -173,6 +220,7 @@ object LocalPlaylistStore {
      */
     @Synchronized
     fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
+        revision++
         val list = readPlaylists(context)
         writePlaylists(context, list.filterNot { it.key == key })
         removeTracks(context, key)

@@ -82,6 +82,12 @@ object StatsStore {
      * 代数不同 ⇒ 这一份快照作废（丢一次落盘，下一次变更会重新排）。
      */
     private var generation = 0
+    /**
+     * 落盘串行锁：`flushNow` 的「校验代次 + 写入」与 `clear` 的「删除」必须在同一把锁里，
+     * 否则用户点清空之后，一个已通过代次校验的旧快照仍能把历史写回来。
+     * 只保护磁盘提交，不保护（可能很慢的）JSON 序列化。
+     */
+    private val commitLock = Any()
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -157,11 +163,13 @@ object StatsStore {
     /** 清空全部统计（用户在页面上点「清除统计」）。**立即落盘**，不给「清了又复活」留窗口。 */
     fun clear(context: Context) {
         val app = context.applicationContext
+        val clearGeneration: Int
         synchronized(lock) {
             flushJob?.cancel()
             flushJob = null
             // 先让代数前进：任何**已经拿着旧快照**的 flushNow 会在写盘前放弃。
             generation += 1
+            clearGeneration = generation
             aggregate = StatsAggregate()
         }
         ioScope.launch {
@@ -169,7 +177,13 @@ object StatsStore {
                 // 用 commit() 而不是 apply()：用户点的是「删除」，这一次必须真的落盘
                 // 才算数（apply 是异步的，进程随后被杀就会「清了又回来」）。
                 // 它在 IO 线程上，不阻塞 UI。
-                withContext(Dispatchers.IO) { prefs(app).edit().remove(KEY_SNAPSHOT).commit() }
+                withContext(Dispatchers.IO) {
+                    synchronized(commitLock) {
+                        // 删除也要带代次：清空之后若已经有新统计累加，就不该把新快照删掉。
+                        if (synchronized(lock) { generation } != clearGeneration) return@withContext
+                        prefs(app).edit().remove(KEY_SNAPSHOT).commit()
+                    }
+                }
             }
         }
     }
@@ -217,9 +231,12 @@ object StatsStore {
         try {
             val json = withContext(Dispatchers.Default) { StatsCodec.encode(snapshot) }
             withContext(Dispatchers.IO) {
-                val stillCurrent = synchronized(lock) { generation == snapshotGeneration }
-                if (!stillCurrent) return@withContext
-                prefs(context).edit().putString(KEY_SNAPSHOT, json).apply()
+                synchronized(commitLock) {
+                    // 代次校验与提交在同一把锁内完成：中间不会插进 clear 的删除，
+                    // 也不会出现「校验通过 → 被清空 → 旧快照写回」的窗口。
+                    if (synchronized(lock) { generation } != snapshotGeneration) return@withContext
+                    prefs(context).edit().putString(KEY_SNAPSHOT, json).commit()
+                }
             }
         } catch (e: Exception) {
             // 写失败不影响统计继续累加：内存里还是完整的，下一次变更会再排一次落盘。

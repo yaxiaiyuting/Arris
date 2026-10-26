@@ -77,14 +77,18 @@ object PlaylistEditApi {
     // ==================== 端点 ====================
 
     /** 创建歌单。返回新 pid；失败返回 null（具体原因看 [lastError]）。 */
-    suspend fun createPlaylist(name: String, privacy: Int = PRIVACY_PUBLIC): Long? {
+    suspend fun createPlaylist(
+        name: String,
+        privacy: Int = PRIVACY_PUBLIC,
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+    ): Long? {
         val payload = mutableMapOf(
             "name" to name,
             "privacy" to privacy.toString(),
             "type" to "NORMAL",
             "subType" to "NORMAL",
         )
-        return when (val result = write(CREATE_PATH, payload)) {
+        return when (val result = write(CREATE_PATH, payload, pinned)) {
             is PlaylistWriteResult.Success -> {
                 // 顶层 id 与 playlist.id 同时存在且相等；只认其中一个都行。
                 val id = result.raw.optLong("id").takeIf { it > 0 }
@@ -108,11 +112,22 @@ object PlaylistEditApi {
      *
      * @return 成功时返回操作后的曲目总数（服务端 count 字段），失败 null
      */
-    suspend fun addSongs(playlistId: Long, songIds: List<Long>): Int? {
+    suspend fun addSongs(
+        playlistId: Long,
+        songIds: List<Long>,
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+    ): Int? {
         if (songIds.isEmpty()) return null
+        // S22：网易歌单写接口只认网易曲目 id。QQ/B 站的合成 id（bit62 标记）传过去
+        // 会被服务端当成"另一首网易歌"，所以在这里（唯一写出口）直接拒绝跨源 id。
+        val foreign = songIds.filterNot { com.takahashirinta.ncrust.source.SourceIds.isNeteaseId(it) }
+        if (foreign.isNotEmpty()) {
+            Log.w(TAG, "addSongs rejected: ${foreign.size} cross-source ids (e.g. ${foreign.first()})")
+            return null
+        }
         var count: Int? = null
         for (batch in songIds.distinct().chunked(TRACK_BATCH)) {
-            when (val result = write(TRACKS_PATH, addSongsPayload(playlistId, batch))) {
+            when (val result = write(TRACKS_PATH, addSongsPayload(playlistId, batch), pinned)) {
                 is PlaylistWriteResult.Success -> count = result.raw.optInt("count", count ?: 0)
                 PlaylistWriteResult.Duplicate -> count = count ?: 0
                 else -> {
@@ -206,9 +221,20 @@ object PlaylistEditApi {
     var lastError: PlaylistWriteResult? = null
         private set
 
-    private suspend fun write(path: String, payload: Map<String, String>): PlaylistWriteResult =
+    private suspend fun write(
+        path: String,
+        payload: Map<String, String>,
+        /** 排任务时钉住的会话；切账号后旧写操作作废（S18）。 */
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+    ): PlaylistWriteResult =
         PlaylistWriteGate.run {
             withContext(Dispatchers.IO) {
+                if (pinned != null && !com.takahashirinta.ncrust.auth.CookieManager.isCurrent(pinned)) {
+                    Log.w(TAG, "write " + path + " aborted: session changed")
+                    return@withContext PlaylistWriteResult.NetworkError(
+                        IOException("session changed before $path"),
+                    )
+                }
                 // csrf_token 服务端不校验值，但带上最稳；身份 cookie 与它至少有其一，
                 // 否则 403 illegal request!（实测：只带原 cookie 必 403）。
                 val body = payload.toMutableMap()

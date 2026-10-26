@@ -17,6 +17,8 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.TrackKey
 
 /**
@@ -193,6 +195,26 @@ internal object SavedSongCodec {
         return decodeEnvelopeByDeclarationOrder(obj)
     }
 
+
+/**
+ * 让"载荷的音源"与"权威身份"一致（S21）。
+ *
+ * 旧收藏条目里 `trackKey` 可能是 QQ 合成 ID（身份 = QQ），但内嵌的 `SongItem.source`
+ * 是空的 —— `musicSource` 于是回落成网易，Router 就把一首 QQ 曲目发给网易 Provider
+ * （判重按 QQ、取链按网易，两个口径打架）。这里以 `trackKey` 为准回填：
+ * 载荷缺失来源时补上；载荷与身份**矛盾**时也以身份为准（宁可少一个 mid 走不可解析，
+ * 也不要把用户的歌悄悄换成另一首）。
+ */
+private fun SavedSongEntry.withPayloadSourceAligned(): SavedSongEntry {
+    val song = song ?: return this
+    val expected = trackKey.source
+    if (song.musicSource == expected) return this
+    val aligned = song.copy(
+        source = expected.key.takeIf { expected != MusicSource.NETEASE },
+    )
+    return copy(song = aligned)
+}
+
     /** 形状 2：v2 信封，稳定名字。 */
     private fun decodeEnvelopeByNames(obj: JsonObject): SavedSongEntry? {
         val song = obj.get("song")?.takeIf { it.isJsonObject }?.let {
@@ -205,7 +227,7 @@ internal object SavedSongCodec {
             addedAt = obj.longOf("addedAt") ?: 0L,
             tombstoned = obj.booleanOf("tombstoned") ?: false,
             song = song,
-        )
+        ).withPayloadSourceAligned()
     }
 
     /** 形状 3a：v2 信封，被混淆过的单字母 key（当前 [LEGACY_KEYS] 为空 ⇒ 走不到）。 */
@@ -220,7 +242,7 @@ internal object SavedSongCodec {
             addedAt = obj.longOf(LEGACY_KEYS[2]) ?: 0L,
             tombstoned = obj.booleanOf(LEGACY_KEYS[3]) ?: false,
             song = song,
-        )
+        ).withPayloadSourceAligned()
     }
 
     /**

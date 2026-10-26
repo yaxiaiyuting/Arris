@@ -170,16 +170,23 @@ object QqPlaylistStore {
      */
     fun clearOwner(context: Context, ownerId: String) {
         val p = prefs(context)
-        val suffix = SEP + ownerId
-        val victims = p.all.keys.filter {
-            (it.startsWith(PREFIX_LIST) || it.startsWith(PREFIX_DETAIL) ||
-                it.startsWith("list_at$SEP") || it.startsWith("detail_at$SEP")) && it.endsWith(suffix)
+        // key 的第二种形状是 `detail:<source>:<owner>:<playlistId>`：
+        // 旧实现用 `endsWith(":" + owner)` 匹配，于是
+        //   ① 本账号的详情清不掉（结尾是歌单 id）；
+        //   ② 别的账号里**歌单 id 恰好等于这个 owner** 的详情会被误删。
+        // 这里改成"按 SEP 切段、第 3 段等于 owner"，四种形状（list/list_at/detail/detail_at）统一。
+        val victims = p.all.keys.filter { key ->
+            val parts = key.split(SEP)
+            parts.size >= 3 && parts[0] in OWNER_SCOPED_PREFIXES && parts[2] == ownerId
         }
         if (victims.isEmpty()) return
         val e = p.edit()
         victims.forEach { e.remove(it) }
         e.commit()
     }
+
+    /** 第一段（SEP 之前）的四种形状；PREFIX_LIST/PREFIX_DETAIL 自带冒号，这里用裸名比较。 */
+    private val OWNER_SCOPED_PREFIXES = setOf("list", "detail", "list_at", "detail_at")
 
     /** 缓存里的条目数（诊断/测试用）。 */
     fun entryCount(context: Context): Int = prefs(context).all.size

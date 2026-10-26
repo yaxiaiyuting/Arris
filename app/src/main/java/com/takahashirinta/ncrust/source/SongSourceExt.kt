@@ -99,3 +99,35 @@ fun songRefOf(
     sourceId = sourceId,
     mediaId = mediaId,
 )
+
+/**
+ * 从本地记录里补回一首曲目的**完整取链载荷**（S20）。
+ *
+ * 车机浏览项只带 `song:<source>:<id>`，QQ 需要的 `songmid` / 文件 media_mid 会丢，
+ * 于是本来能放的歌被 Router 判成 `UNRESOLVABLE`。这里按 TrackKey 去本地歌单与收藏里
+ * 找同一条记录，用它的载荷把身份补全 —— 找不到就保持原样（不猜音源、不换源）。
+ */
+fun recoverPayload(
+    context: android.content.Context,
+    source: MusicSource,
+    id: Long,
+): SongItem? {
+    val wanted = TrackKey(source, id)
+    // 本地歌单优先（车机浏览大多来自这里）。
+    runCatching {
+        com.takahashirinta.ncrust.local.LocalPlaylistStore.readPlaylists(context).forEach { pl ->
+            val hit = com.takahashirinta.ncrust.local.LocalPlaylistStore
+                .readTracks(context, pl.key)
+                .firstOrNull { it.trackKey == wanted && !it.tombstoned }
+                ?.song
+            if (hit != null) return hit
+        }
+    }
+    // 再看收藏库。
+    runCatching {
+        com.takahashirinta.ncrust.library.LibraryManager.getSavedSongs(context)
+            .firstOrNull { com.takahashirinta.ncrust.source.TrackKey.ofSong(it) == wanted }
+            ?.let { return it }
+    }
+    return null
+}

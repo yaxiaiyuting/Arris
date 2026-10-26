@@ -1133,14 +1133,20 @@ class PlaybackService : MediaLibraryService() {
         // （返回原 item 让上层跳歌），**不要**猜成 ncm —— 猜错就是放到别人的歌。
         val parsed = com.takahashirinta.ncrust.source.SourceIds.parseMediaId(item.mediaId) ?: return item
         val (source, songId) = parsed
-        val ref = com.takahashirinta.ncrust.source.songRefOf(source, songId)
+        // S20：浏览项只带 id，QQ 的 songmid/media_mid 会丢。先按 TrackKey 回查本地记录补全载荷；
+        // 补不到就保持原样（Router 会判 UNRESOLVABLE 让上层跳歌，绝不换源猜成 ncm）。
+        val ref = com.takahashirinta.ncrust.source.recoverPayload(applicationContext, source, songId)
+            ?: com.takahashirinta.ncrust.source.songRefOf(source, songId)
         val resolved = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
             ?: return item
         val result = OfflineUrlStore.rememberResult(this, resolved)
         // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
         // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
         result.playbackItem?.freeTrialInfo?.let { trial ->
-            val seconds = (((trial.end ?: 0) - (trial.start ?: 0)) / 1000).coerceAtLeast(0)
+            // F1：同一份响应模型在 `Entitlement.classifyPlayback` 里是按**秒**直接用的，
+            // 这里旧代码又除以 1000，典型 start=0/end=45 会算成 0 秒。
+            // 统一走同一个换算出口，别让两条路径各写一份单位。
+            val seconds = com.takahashirinta.ncrust.account.trialSeconds(trial.start, trial.end)
             onTrialResolved?.invoke(songId, seconds)
         }
         return item.buildUpon().setUri(result.url).build()
@@ -1149,7 +1155,19 @@ class PlaybackService : MediaLibraryService() {
     private fun currentQualityLevel(): String {
         val prefs = getSharedPreferences("ncrust_settings", 0)
         // A2：档位表收敛到 QualityLadder —— 之前车机路径和手机路径各写一份，加档位时容易漂移。
-        return QualityLadder.levelAt(prefs.getInt("wifi_quality", 3), "lossless")
+        // F2：**网络类型也要和手机主路径一致**。旧实现固定读 wifi_quality，车机走移动网络点播时
+        // 会用比用户移动数据配置更高的档位（多耗流量）。
+        val onWifi = runCatching {
+            val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
+            cm.getNetworkCapabilities(cm.activeNetwork)
+                ?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+        }.getOrDefault(true)
+        return if (onWifi) {
+            QualityLadder.levelAt(prefs.getInt(QualityLadder.KEY_WIFI, 3), "lossless")
+        } else {
+            QualityLadder.levelAt(prefs.getInt(QualityLadder.KEY_MOBILE, 1), "lossless")
+        }
     }
 
     /**

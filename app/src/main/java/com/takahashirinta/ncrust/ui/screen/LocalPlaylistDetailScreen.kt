@@ -140,6 +140,14 @@ fun LocalPlaylistDetailScreen(
                         Toast.LENGTH_SHORT,
                     ).show()
                 }
+                is LocalSyncOutcome.Partial -> {
+                    // 数据不完整（缓存回退/截断）：显示拿到了多少，但不宣称"完整同步成功"。
+                    Toast.makeText(
+                        context,
+                        strings.localPlaylistSynced(outcome.added, outcome.skipped),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
                 LocalSyncOutcome.NoRemoteSource ->
                     Toast.makeText(context, strings.localPlaylistSyncNoSource, Toast.LENGTH_SHORT).show()
                 LocalSyncOutcome.Failed ->
@@ -170,10 +178,15 @@ fun LocalPlaylistDetailScreen(
             confirmLabel = strings.localPlaylistClear,
             onDismiss = { showClearConfirm = false },
             onConfirm = {
-                LocalPlaylistRepository.clear(context, playlistKey)
+                // 持久化失败时不能提示「已清空」：保留对话框，用户可以重试。
+                val ok = LocalPlaylistRepository.clear(context, playlistKey) != null
                 reload()
-                showClearConfirm = false
-                Toast.makeText(context, strings.localPlaylistCleared, Toast.LENGTH_SHORT).show()
+                showClearConfirm = !ok
+                Toast.makeText(
+                    context,
+                    if (ok) strings.localPlaylistCleared else strings.localPlaylist.syncFailed,
+                    Toast.LENGTH_SHORT,
+                ).show()
             },
         )
     }
@@ -305,9 +318,13 @@ fun LocalPlaylistDetailScreen(
                                 },
                                 // 规则 6：移除 = 打 tombstone，不是删除记录。
                                 SongMenuAction(Icons.Default.Delete, strings.localPlaylistRemoveTrack) {
-                                    LocalPlaylistRepository.removeTrack(context, playlistKey, row.trackKey)
+                                    val ok = LocalPlaylistRepository.removeTrack(context, playlistKey, row.trackKey) != null
                                     reload()
-                                    Toast.makeText(context, strings.localPlaylistRemoved, Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        if (ok) strings.localPlaylistRemoved else strings.localPlaylist.syncFailed,
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
                                 },
                             ),
                         )

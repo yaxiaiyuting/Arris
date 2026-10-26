@@ -228,6 +228,16 @@ object OfflineAudioCache {
     fun keys(context: Context): Set<String> =
         runCatching { get(context).keys.toSet() }.getOrDefault(emptySet())
 
+    /**
+     * 枚举缓存 key，**失败返回 null**（区分「确实空」与「读不出来」）。
+     *
+     * S8：`keys()` 把异常降级成 `emptySet()`，而 `reconcileLibrary` 又把它当成
+     * 「已确认的空缓存」去裁剪持久化离线索引 ⇒ 目录读取一抖，管理页的离线条目就被抹掉
+     * （音频字节还在，元数据却没了）。凡是会影响**持久化删除**的调用，都必须用这个版本。
+     */
+    fun keysOrNull(context: Context): Set<String>? =
+        runCatching { get(context).keys.toSet() }.getOrNull()
+
     /** 这首歌在缓存里的所有档位 key（按 SimpleCache 的枚举顺序）。 */
     fun songKeys(context: Context, songId: Long): List<String> =
         runCatching { get(context).keys.filter { OfflineKeys.songIdOf(it) == songId } }
@@ -295,7 +305,9 @@ object OfflineAudioCache {
      */
     fun reconcileLibrary(context: Context): Int {
         val app = context.applicationContext
-        val liveSongIds = keys(app).mapNotNull { OfflineKeys.songIdOf(it) }.toSet()
+        // 拿不到缓存真相就不裁剪：宁可留下几条过期索引，也不能把用户的离线库清空。
+        val live = keysOrNull(app) ?: return 0
+        val liveSongIds = live.mapNotNull { OfflineKeys.songIdOf(it) }.toSet()
         return OfflineLibrary.retain(app, liveSongIds)
     }
 

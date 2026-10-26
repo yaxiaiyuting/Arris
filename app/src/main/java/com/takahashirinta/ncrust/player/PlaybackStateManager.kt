@@ -68,6 +68,8 @@ object PlaybackStateManager {
     private var pendingAppContext: Context? = null
     private var flushJob: Job? = null
     private val flushLock = Any()
+    /** 队列写盘代次：每次 saveQueue / clearQueue 推进，用于让过期快照的提交作废。 */
+    private var pendingGeneration = 0L
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -107,8 +109,25 @@ object PlaybackStateManager {
         getPrefs(context).edit().putBoolean(KEY_IS_PLAYING, isPlaying).apply()
     }
 
+    /**
+     * 只清「当前播放状态」（上次播到哪首、是否在播），**不清**用户的播放模式、队列与续播记录。
+     *
+     * 旧实现是 `edit().clear()`：`PlayerViewModel.stopService` 调用它之后，用户存的随机/单曲
+     * 循环模式被一起抹掉，下次启动读回 CYCLE（`getPlayMode` 的默认值）。队列与续播表也被清空，
+     * 但内存里的 positionCache 没清 —— 冷热两套口径。
+     */
     fun clearState(context: Context) {
-        getPrefs(context).edit().clear().apply()
+        getPrefs(context).edit()
+            .remove(KEY_SONG_ID)
+            .remove(KEY_SONG_NAME)
+            .remove(KEY_SONG_ARTIST)
+            .remove(KEY_SONG_ARTWORK)
+            .remove(KEY_SONG_SOURCE)
+            .remove(KEY_SONG_SOURCE_ID)
+            .remove(KEY_SONG_MEDIA_ID)
+            .remove(KEY_IS_PLAYING)
+            .remove(KEY_HAS_STATE)
+            .apply()
     }
 
     fun hasState(context: Context): Boolean {
@@ -252,6 +271,7 @@ object PlaybackStateManager {
             pendingQueue = queue
             pendingIndex = currentIndex
             pendingAppContext = context.applicationContext
+            pendingGeneration++
             flushJob?.cancel()
             flushJob = ioScope.launch {
                 delay(200L)
@@ -264,10 +284,12 @@ object PlaybackStateManager {
         val queue: List<SongItem>
         val index: Int
         val ctx: Context
+        val generation: Long
         synchronized(flushLock) {
             queue = pendingQueue ?: return
             index = pendingIndex
             ctx = pendingAppContext ?: return
+            generation = pendingGeneration
             pendingQueue = null
             pendingAppContext = null
         }
@@ -275,13 +297,21 @@ object PlaybackStateManager {
             // Gson 反射序列化是 CPU 密集，切 Default 避免 IO 线程池被占。
             val json = withContext(Dispatchers.Default) { gson.toJson(queue) }
             withContext(Dispatchers.IO) {
+                // 提交前复核代次：期间若有更新的 saveQueue / clearQueue，本次写盘作废。
+                // 否则「A 的旧快照」会覆盖「B 的新队列」，或把刚清掉的队列写回来。
+                val current = synchronized(flushLock) { pendingGeneration == generation }
+                if (!current) return@withContext
                 ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
                     .putString(KEY_QUEUE, json)
                     .putInt(KEY_QUEUE_INDEX, index)
                     .apply()
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 取消是正常路径（下一次 saveQueue / clearQueue 会取消上一次去抖）。
+            // 旧实现把它当异常并 clearQueue ⇒ 正常队列被删除，还会顺手撤销新写入。
+            throw e
         } catch (_: Exception) {
-            clearQueue(ctx)
+            // 序列化/写盘失败：保留已落盘的旧队列，不清空。等下一次变更再写。
         }
     }
 
@@ -296,8 +326,12 @@ object PlaybackStateManager {
             }
             val index = prefs.getInt(KEY_QUEUE_INDEX, 0)
             Pair(queue, index)
-        } catch (e: Exception) {
-            clearQueue(context)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // 取消不是「队列损坏」：原样抛出，绝不顺手删除已落盘的队列。
+            throw e
+        } catch (_: Exception) {
+            // 解析失败只影响本次读取：保留磁盘数据（可能是新版写的、旧版读不懂），
+            // 交回 null 让上层走空队列，而不是把用户队列删掉。
             null
         }
     }
@@ -336,6 +370,7 @@ object PlaybackStateManager {
             flushJob?.cancel()
             pendingQueue = null
             pendingAppContext = null
+            pendingGeneration++
         }
         getPrefs(context).edit()
             .remove(KEY_QUEUE)
