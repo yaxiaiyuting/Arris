@@ -1,0 +1,22 @@
+{
+  "baselineHead": "a12bdd7",
+  "applicationCommit": "15237f8c06ba160632c9096101386f821b85a723",
+  "version": "3.7.8-gpl",
+  "tests": 4,
+  "failures": 0,
+  "errors": 0,
+  "interpretation": "passing tests reproduce incorrect behavior; no fix applied",
+  "cases": [
+    "oldAccountWorkerDropsNewAccountsLatestLikeIntent",
+    "failedPartialSyncStillReportsAddedTracks",
+    "lateAlbumRefreshErasesAnAlbumSubscribedWhileReading",
+    "pausedSeekIsSuppressedByDesktopWidgetGate"
+  ],
+  "realNetwork": false,
+  "physicalDevice": false,
+  "sha256": {
+    "ContinuationAuditProbe.kt": "b2fa206de648a78d85a9d0d9cb7a09fb0b64c6b4a9416eb8fa2bc4b43e2c8d6b",
+    "probe-build.txt": "984daa3e97d1608707edd41ba96a505ac2acce0275edd8ada2a1351494c61512",
+    "probe-results.xml": "06c5be9abf65a545d05fbdbc4419e7c597bb0299aaa29a17f1940eb0671430ca"
+  }
+}

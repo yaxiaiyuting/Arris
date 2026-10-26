@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.library.ContinuationAuditProbe" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-26T19:22:41.637Z" hostname="cachyos-x8664" time="0.587">
+  <properties/>
+  <testcase name="oldAccountWorkerDropsNewAccountsLatestLikeIntent" classname="com.takahashirinta.ncrust.library.ContinuationAuditProbe" time="0.221"/>
+  <testcase name="failedPartialSyncStillReportsAddedTracks" classname="com.takahashirinta.ncrust.library.ContinuationAuditProbe" time="0.027"/>
+  <testcase name="lateAlbumRefreshErasesAnAlbumSubscribedWhileReading" classname="com.takahashirinta.ncrust.library.ContinuationAuditProbe" time="0.332"/>
+  <testcase name="pausedSeekIsSuppressedByDesktopWidgetGate" classname="com.takahashirinta.ncrust.library.ContinuationAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT: B's latest unlike disappears without any B-account mutation; local tombstone remains
+AUDIT: disk failure rolled data back but sync reports Partial(added=1,total=1)
+AUDIT: older empty album snapshot overwrites a newer local/cloud-success subscription
+AUDIT: paused widget position changes from 10s to 90s, but render gate returns false
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
