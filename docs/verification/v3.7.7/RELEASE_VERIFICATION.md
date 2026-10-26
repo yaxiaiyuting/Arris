@@ -29,3 +29,5 @@
 - 修复历史归档：仓库原 v3.7.6 mapping 是 0 字节，已从发布目录中与远端附件哈希一致的 5,820,885 B gzip 恢复；解压原文 79,105,253 B。未移动历史标签或替换历史 Release 附件。
 
 标签指向构建源码，master 可以在后续仅文档提交上前进。GitHub 上传后应以 numeric release id 核对草稿状态及全部 5 个附件的大小、state、SHA-256，记录于 remote-release-verification.json。
+
+远端已核验：Release ID 423757498，保持 draft=true，5 个附件均为 uploaded，大小和 SHA-256 全部与本地一致。草稿链接：https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-e49fb25864c4771b4b38。首次 CLI 上传的正式 APK 连接超时，最终使用 curl HTTP/2 成功上传；其余 4 个附件未被替换。

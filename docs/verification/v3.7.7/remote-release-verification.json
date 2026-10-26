@@ -1,0 +1,51 @@
+{
+  "verification_date": "2026-10-26",
+  "release_id": 423757498,
+  "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-e49fb25864c4771b4b38",
+  "draft": true,
+  "tag_name": "v3.7.7-gpl",
+  "source_commit": "4e9d763",
+  "all_remote_sizes_and_sha256_match": true,
+  "assets": [
+    {
+      "id": 676570176,
+      "name": "Ncrust-v3.7.7-gpl-release.apk",
+      "size": 12072652,
+      "state": "uploaded",
+      "digest": "sha256:2ef8496e61c6a83eb99d38d7a34aeba8fcfade3c50f00be0f5f43a0685c627f8",
+      "matches_local": true
+    },
+    {
+      "id": 676554887,
+      "name": "Ncrust-v3.7.7-gpl-debug.apk",
+      "size": 33920477,
+      "state": "uploaded",
+      "digest": "sha256:fde32b1ff0bb90bd2dfe6116b1f93f47492006568a9e8e094c10abe51b51a65e",
+      "matches_local": true
+    },
+    {
+      "id": 676554892,
+      "name": "mapping-v3.7.7-gpl.txt.gz",
+      "size": 5730671,
+      "state": "uploaded",
+      "digest": "sha256:bd8119fdabcaaa8e7bacda5f93ebfac7b336180ea794523a5ca95b1a9189a9c2",
+      "matches_local": true
+    },
+    {
+      "id": 676554886,
+      "name": "SHA256SUMS",
+      "size": 365,
+      "state": "uploaded",
+      "digest": "sha256:96c6e2a981dc496e895a30b6c828857aba031943e3b559e59e76f1eed9de5f4d",
+      "matches_local": true
+    },
+    {
+      "id": 676554888,
+      "name": "RELEASE_NOTES.md",
+      "size": 1452,
+      "state": "uploaded",
+      "digest": "sha256:91860559cda9b51c2b0c047af229cbb002b51967e65d3dfc56b08df95bc93858",
+      "matches_local": true
+    }
+  ]
+}
