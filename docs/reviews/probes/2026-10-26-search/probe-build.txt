@@ -1,0 +1,227 @@
+Picked up JAVA_TOOL_OPTIONS: -Dkotlinx.coroutines.fast.service.loader=false
+> Task :Kanesumi-sec-a:kanesumi-controls:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preDebugBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:generateDebugResValues
+> Task :app:generateDebugResources
+> Task :Kanesumi-sec-a:kanesumi-core:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeDebugAarMetadata
+> Task :Kanesumi-sec-a:kanesumi-core:writeDebugAarMetadata
+> Task :Kanesumi-sec-a:kanesumi-controls:writeDebugAarMetadata
+> Task :Kanesumi-sec-a:kanesumi-structure:writeDebugAarMetadata
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResValues
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResources
+> Task :Kanesumi-sec-a:kanesumi-core:packageDebugResources
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResValues
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResources
+> Task :Kanesumi-sec-a:kanesumi-structure:packageDebugResources
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResValues
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResources
+> Task :Kanesumi-sec-a:kanesumi-anim:packageDebugResources
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResValues
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResources
+> Task :Kanesumi-sec-a:kanesumi-controls:packageDebugResources
+> Task :app:packageDebugResources
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksDebug
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksDebug
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugManifest
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugManifest
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugManifest
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugManifest
+> Task :app:checkDebugAarMetadata
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksDebug
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksDebug
+> Task :app:mapDebugSourceSetPaths
+> Task :Kanesumi-sec-a:kanesumi-core:parseDebugLocalResources
+> Task :Kanesumi-sec-a:kanesumi-anim:parseDebugLocalResources
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugLibraryResources
+> Task :Kanesumi-sec-a:kanesumi-structure:parseDebugLocalResources
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugRFile
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugRFile
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugRFile
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugLibraryResources
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugLibraryResources
+> Task :Kanesumi-sec-a:kanesumi-controls:parseDebugLocalResources
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugLibraryResources
+> Task :Kanesumi-sec-a:kanesumi-anim:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugRFile
+> Task :Kanesumi-sec-a:kanesumi-controls:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-core:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-anim:javaPreCompileDebug
+> Task :Kanesumi-sec-a:kanesumi-core:javaPreCompileDebug
+> Task :Kanesumi-sec-a:kanesumi-controls:javaPreCompileDebug
+> Task :Kanesumi-sec-a:kanesumi-structure:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-structure:javaPreCompileDebug
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:processDebugManifestForPackage
+> Task :app:javaPreCompileDebugUnitTest
+> Task :app:javaPreCompileDebug
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugKotlin
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugJavaRes
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibRuntimeToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibCompileToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugKotlin
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibCompileToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibRuntimeToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugJavaRes
+> Task :app:processDebugResources
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugKotlin
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugJavaRes
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibCompileToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibRuntimeToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugKotlin
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugJavaRes
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibCompileToJarDebug
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibRuntimeToJarDebug
+> Task :app:compileDebugKotlin
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:872:26 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:991:9 Variable 'sidebarWidthPx' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:2398:55 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:3269:43 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:3279:43 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/NcrustApplication.kt:75:42 'TRIM_MEMORY_RUNNING_LOW: Int' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/NcrustApplication.kt:82:42 'TRIM_MEMORY_RUNNING_MODERATE: Int' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/auth/QrPairClient.kt:54:24 Type mismatch: inferred type is Pair<String?, Int> but Pair<String, Int>? was expected
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/cache/OfflineUrlStore.kt:102:58 Elvis operator (?:) always returns the left operand of non-nullable type OfflineContent
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt:23:96 Unnecessary non-null assertion (!!) on a non-null receiver of type Path
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt:24:92 Unnecessary non-null assertion (!!) on a non-null receiver of type Path
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt:25:131 Unnecessary non-null assertion (!!) on a non-null receiver of type Path
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt:26:92 Unnecessary non-null assertion (!!) on a non-null receiver of type Path
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt:489:28 Elvis operator (?:) always returns the left operand of non-nullable type Long
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt:490:30 Elvis operator (?:) always returns the left operand of non-nullable type Long
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt:571:45 Elvis operator (?:) always returns the left operand of non-nullable type Long
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt:655:32 Elvis operator (?:) always returns the left operand of non-nullable type Long
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt:656:34 Elvis operator (?:) always returns the left operand of non-nullable type Long
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:77:22 Parameter 'cookie' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:268:55 No cast needed
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:308:85 No cast needed
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:328:40 The corresponding parameter in the supertype 'Callback' is named 'call'. This may cause problems when calling this function with named arguments.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:331:41 The corresponding parameter in the supertype 'Callback' is named 'call'. This may cause problems when calling this function with named arguments.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/LiveUpdateNotifier.kt:85:9 Parameter 'isPlaying' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:687:77 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:690:40 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:691:45 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:719:90 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:726:68 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:1026:22 This declaration overrides deprecated member but not marked as deprecated itself. Please add @Deprecated annotation or suppress. See https://youtrack.jetbrains.com/issue/KT-47902 for details
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:1046:26 'onPlayerCommandRequest(MediaSession, MediaSession.ControllerInfo, Int): Int' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:2072:52 'getter for sessionCompatToken: MediaSessionCompat.Token' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/qq/QqApi.kt:494:55 Destructured parameter 't' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/qq/QqRejection.kt:141:22 Variable 'code' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterRenderer.kt:316:9 Parameter 'scale' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/share/LyricShareActions.kt:206:30 Elvis operator (?:) always returns the left operand of non-nullable type Uri?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/source/ArtistNavigator.kt:208:32 Unnecessary safe call on a non-null receiver of type ArtistItem?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/CustomBackgroundLayer.kt:62:26 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt:58:5 Parameter 'title' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/EditPlaylistDialog.kt:161:35 Variable 'outcome' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt:231:38 'Send: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.Send
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/PlayAllDialog.kt:117:49 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/PullToRefreshBox.kt:88:46 'Drag: NestedScrollSource' is deprecated. This has been replaced by UserInput.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/components/QrScannerScreen.kt:79:26 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/AudioVisualizer.kt:932:25 Condition 'sheen != null' is always 'true'
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/AudioVisualizer.kt:1293:5 Parameter 'effects' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:174:17 Variable 's' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:174:25 Unnecessary non-null assertion (!!) on a non-null receiver of type SongItem
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:191:21 Condition 'cur != null' is always 'true'
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:335:47 Unnecessary safe call on a non-null receiver of type SongItem
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:373:48 Unnecessary safe call on a non-null receiver of type SongItem
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt:411:74 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardLayouts.kt:388:5 Parameter 'geo' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardTray.kt:182:5 Parameter 'strings' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/player/QueueView.kt:353:59 Parameter 'visualRow' is never used, could be renamed to _
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumDetailScreen.kt:404:66 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumDetailScreen.kt:407:66 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/ArtistDetailScreen.kt:387:74 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/ArtistDetailScreen.kt:390:74 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/HomeScreen.kt:313:38 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/HomeScreen.kt:314:38 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryPlaylistsTab.kt:664:49 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryScreen.kt:446:74 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryScreen.kt:449:74 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistDetailScreen.kt:282:62 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistDetailScreen.kt:285:62 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt:77:5 Parameter 'onSongInsertNext' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt:78:5 Parameter 'onSongAppendToQueue' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SearchScreen.kt:686:82 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SearchScreen.kt:690:82 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SearchScreen.kt:715:55 Unnecessary non-null assertion (!!) on a non-null receiver of type SearchEmptyKind
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsGroupScreen.kt:974:81 This declaration needs opt-in. Its usage should be marked with '@coil.annotation.ExperimentalCoilApi' or '@OptIn(coil.annotation.ExperimentalCoilApi::class)'
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SongDetailScreen.kt:90:9 Variable 'translatedLyric' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:2953:9 Parameter 'load' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/SearchViewModel.kt:792:25 Name shadowed: page
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/SearchViewModel.kt:829:25 Name shadowed: page
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/update/ApkArchive.kt:28:53 'GET_SIGNATURES: Int' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/main/java/com/takahashirinta/ncrust/update/ApkArchive.kt:44:29 Parameter 'context' is never used
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:bundleDebugClassesToRuntimeJar
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/bili/BiliApiDispatchTest.kt:133:28 Variable 'callerThread' initializer is redundant
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/bili/BiliApiDispatchTest.kt:188:30 Variable 'lyric' initializer is redundant
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/cache/OfflineKeysTest.kt:29:9 Name contains characters which can cause problems on Windows: ?
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/library/SearchHistoryCodecTest.kt:197:9 Name contains characters which can cause problems on Windows: "
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/library/SearchHistoryMigrationTest.kt:123:9 Name contains characters which can cause problems on Windows: "
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/probe/ProbeAudioCorpus.kt:162:5 Annotation 'androidx.media3.common.util.UnstableApi' is not an opt-in requirement marker, therefore its usage in @OptIn is ignored
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/probe/V322CurveProbe.kt:246:5 Annotation 'androidx.media3.common.util.UnstableApi' is not an opt-in requirement marker, therefore its usage in @OptIn is ignored
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/search/SearchPartialPageProbe.kt:84:36 Unchecked cast: Any! to MutableMap<MusicSource, MusicSourceProvider>
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/search/TrackAvailabilityTest.kt:101:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:149:18 Unchecked cast: Any to Function1<Any?, Any?>
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:149:21 This class shouldn't be used in Kotlin. Use kotlin.Function1 instead.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:150:18 Unchecked cast: Any to Function2<Any?, Any?, Any?>
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:150:21 This class shouldn't be used in Kotlin. Use kotlin.Function2 instead.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:151:18 Unchecked cast: Any to Function3<Any?, Any?, Any?, Any?>
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:151:21 This class shouldn't be used in Kotlin. Use kotlin.Function3 instead.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:153:18 Unchecked cast: Any to Function4<Any?, Any?, Any?, Any?, Any?>
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/i18n/StringsSnapshot.kt:153:21 This class shouldn't be used in Kotlin. Use kotlin.Function4 instead.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/PlayerCardGeometryTest.kt:215:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/PlayerCardGeometryTest.kt:221:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/PlayerCardGeometryTest.kt:227:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/WaveformBandBallisticsTest.kt:55:36 Parameter 'ring' is never used
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/BandBallisticsTest.kt:534:18 Variable 'gv' initializer is redundant
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominanceTest.kt:74:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominanceTest.kt:85:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominanceTest.kt:107:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominanceTest.kt:133:9 Name contains characters which can cause problems on Windows: %
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformIsolationTest.kt:42:22 Returning type parameter has been inferred to Nothing implicitly. Please specify type arguments explicitly to hide this warning. Nothing can produce an exception at runtime.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformIsolationTest.kt:52:22 Returning type parameter has been inferred to Nothing implicitly. Please specify type arguments explicitly to hide this warning. Nothing can produce an exception at runtime.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformIsolationTest.kt:63:13 Returning type parameter has been inferred to Nothing implicitly. Please specify type arguments explicitly to hide this warning. Nothing can produce an exception at runtime.
+w: file:///home/duanjb666/deepseek/Arris-playback-fixes/app/src/test/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformIsolationTest.kt:77:13 Returning type parameter has been inferred to Nothing implicitly. Please specify type arguments explicitly to hide this warning. Nothing can produce an exception at runtime.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Dkotlinx.coroutines.fast.service.loader=false
+
+[Incubating] Problems report is available at: file:///home/duanjb666/deepseek/Arris-playback-fixes/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 22s
+85 actionable tasks: 85 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.3.1/userguide/configuration_cache_enabling.html

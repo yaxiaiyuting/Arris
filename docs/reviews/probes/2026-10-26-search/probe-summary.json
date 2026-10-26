@@ -1,0 +1,13 @@
+{
+  "baseline": "4e9d763",
+  "tests": 1,
+  "failures": 0,
+  "errors": 0,
+  "type": "known-defect characterization",
+  "observations": [
+    "AUDIT search partial failure: Netease page 2 requested once then skipped; source count=90 for 60 unique Netease rows"
+  ],
+  "external_network": false,
+  "physical_device": false,
+  "run_environment": "JAVA_TOOL_OPTIONS=-Dkotlinx.coroutines.fast.service.loader=false (loads archived MainDispatcherFactory service in JVM test)"
+}

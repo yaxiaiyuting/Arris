@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.search.SearchPartialPageProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T01:00:15.583Z" hostname="cachyos-x8664" time="1.162">
+  <properties/>
+  <testcase name="partialFailureAdvancesSharedCursorAndDoubleCountsSuccessfulSource" classname="com.takahashirinta.ncrust.search.SearchPartialPageProbe" time="1.16"/>
+  <system-out><![CDATA[AUDIT search partial failure: Netease page 2 requested once then skipped; source count=90 for 60 unique Netease rows
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

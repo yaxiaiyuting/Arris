@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.stats.PlaybackAccountingProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T00:56:15.946Z" hostname="cachyos-x8664" time="0.09">
+  <properties/>
+  <testcase name="cacheEnumerationFailurePrunesPersistedOfflineMetadata" classname="com.takahashirinta.ncrust.stats.PlaybackAccountingProbe" time="0.048"/>
+  <testcase name="pendingTrackIdentityReceivesOldAudiosListeningTime" classname="com.takahashirinta.ncrust.stats.PlaybackAccountingProbe" time="0.038"/>
+  <system-out><![CDATA[AUDIT unavailable audio directory becomes empty cache truth, persisted offline list 1 -> 0
+AUDIT actual A id=101 still playing, pending B receives 500 ms and A metadata
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
