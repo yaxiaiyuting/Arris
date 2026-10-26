@@ -89,7 +89,8 @@ class UpdateDownloaderTest {
     @Test
     fun `resumes from the bytes already on disk when the identity matches`() {
         target().writeBytes(body.copyOfRange(0, 400))
-        writeMarker()
+        writeMarker(etag = "v1")
+        server.etag = "v1"
 
         val file = UpdateDownloader(directory).download(url("/asset.apk"), fileName) { _, _ -> }
 
@@ -101,7 +102,7 @@ class UpdateDownloaderTest {
     fun `restarts when the server ignores the range request`() {
         server.honorRange = false
         target().writeBytes(ByteArray(400) { 0x7F })
-        writeMarker()
+        writeMarker(etag = "v1")
 
         val file = UpdateDownloader(directory).download(url("/asset.apk"), fileName) { _, _ -> }
 
@@ -113,7 +114,7 @@ class UpdateDownloaderTest {
     fun `clears a stale partial file when the server answers 416`() {
         // 本地残留比服务端那份还大（班次里的资产被换过）：416 → 删掉重下。
         target().writeBytes(ByteArray(2000) { 0x11 })
-        writeMarker(size = 2000L)
+        writeMarker(size = 2000L, etag = "v1")
 
         val file = UpdateDownloader(directory).download(url("/asset.apk"), fileName) { _, _ -> }
 
@@ -155,7 +156,7 @@ class UpdateDownloaderTest {
     @Test
     fun `restarts when the 206 Content-Range start does not match the request`() {
         target().writeBytes(body.copyOfRange(0, 400))
-        writeMarker()
+        writeMarker(etag = "v1")
         server.mangleRangeStart = true
 
         val file = UpdateDownloader(directory).download(url("/asset.apk"), fileName) { _, _ -> }
@@ -360,5 +361,22 @@ class UpdateDownloaderTest {
                 out.flush()
             }
         }
+    }
+
+    /**
+     * S11 回归：URL 回退身份（没有稳定资产 id）且**没有验证器**时，不允许拼接。
+     *
+     * 旧行为会在同一 URL 换了内容后，把 v1 的前缀和 v2 的后缀拼成一个混合包并返回成功。
+     * 新行为：放弃续传、整包重下（Range 头根本不发）。
+     */
+    @Test
+    fun `does not splice when the URL identity has no validator`() {
+        target().writeBytes(ByteArray(400) { 0x7F })
+        writeMarker() // 没有 etag：这是"缺验证器"的回退身份
+
+        val file = UpdateDownloader(directory).download(url("/asset.apk"), fileName) { _, _ -> }
+
+        assertNull("没有验证器就不能发 Range", server.rangeHeaders.single())
+        assertArrayEquals("必须整包重下", body, file.readBytes())
     }
 }

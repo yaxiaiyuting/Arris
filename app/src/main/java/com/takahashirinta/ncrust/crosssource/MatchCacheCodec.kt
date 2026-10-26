@@ -56,7 +56,9 @@ object MatchCacheCodec {
      * 历史：
      * - v1：首版（艺人 = 名称包含召回 + 专辑重合 3 张；专辑 = 名 + 艺人 + 曲目名 90%；单曲 = 名 + 艺人 + 时长 2s + 版本标记）
      */
-    const val ALGORITHM_VERSION = 1
+    // v2（C1）：版本判定从"有没有标记"改成"版本种类是否相同"。
+    // 旧缓存里的 EXACT 是按旧规则算的，必须整体失效。
+    const val ALGORITHM_VERSION = 2
 
     /** 匹配结果的有效期。目录数据变化很慢，7 天足够；而账号态的东西**不进这个缓存**。 */
     const val TTL_MS = 7L * 24 * 60 * 60 * 1000

@@ -15,26 +15,33 @@ class EditionMatchAuditProbe {
         duration = 240000, source = source.key,
         sourceId = if (source == MusicSource.QQMUSIC) "fixture-$n" else null,
     )
-    @Test fun instrumentalCanReplaceTheVocalTrackWhenDurationMatches() {
+    /**
+     * 回归（原 S/C1 探针）：伴奏**不能**在时长相同的条件下顶替原唱。
+     *
+     * 修复前：判 HIGH（可合并）⇒ 用户在"播放全部"里可能听到伴奏。
+     * 修复后：版本种类不同一律 LOW（不合并）。
+     */
+    @Test fun instrumentalMustNotReplaceTheVocalTrackWhenDurationMatches() {
         val vocal = song(MusicSource.NETEASE, "fixture-song", 101)
         val instrumental = song(MusicSource.QQMUSIC, "fixture-song(伴奏)", 202)
         val verdict = CrossSourceMatcher.gradeTrack(CatalogAggregator.trackCandidateOf(vocal), CatalogAggregator.trackCandidateOf(instrumental))
-        assertEquals(MatchConfidence.HIGH, verdict.confidence)
-        assertTrue(verdict.mergeable)
+        assertEquals(MatchConfidence.LOW, verdict.confidence)
+        assertFalse(verdict.mergeable)
         val (rows, _, _) = CatalogAggregator.assembleSongsWithProbe(listOf(vocal), listOf(instrumental),
             mapOf(TrackKey.fromSong(vocal) to TrackAvailability.NO_COPYRIGHT,
                 TrackKey.fromSong(instrumental) to TrackAvailability.PLAYABLE))
-        assertEquals(1, rows.size)
-        assertEquals(instrumental.id, rows.single().song.id)
-        println("AUDIT edition match: same-duration vocal vs instrumental graded HIGH, original row replaced by playable instrumental and collapsed")
+        // 两行都在：原唱那一行即使不可播，也不能被伴奏顶替（用户看得见"这是伴奏"）。
+        assertEquals(2, rows.size)
+        assertTrue(rows.any { it.song.id == vocal.id })
+        assertTrue(rows.any { it.song.id == instrumental.id })
     }
-    @Test fun distinctLiveAndRemixEditionsAreGradedExactAndCollapsed() {
+    /** 回归：Live 与 Remix 是两种版本，不能因为"都带标记"就判 EXACT。 */
+    @Test fun liveAndRemixEditionsMustNotBeGradedExact() {
         val live = song(MusicSource.NETEASE, "fixture-song (Live)", 101)
         val remix = song(MusicSource.QQMUSIC, "fixture-song (Remix)", 202)
         val verdict = CrossSourceMatcher.gradeTrack(CatalogAggregator.trackCandidateOf(live), CatalogAggregator.trackCandidateOf(remix))
-        assertEquals(MatchConfidence.EXACT, verdict.confidence)
+        assertEquals(MatchConfidence.LOW, verdict.confidence)
         val plan = PlayAllDedup.plan(listOf(AggregatedSong(song=live), AggregatedSong(song=remix)))
-        assertEquals(1, plan.songs.size)
-        println("AUDIT edition match: Live vs Remix both have a marker, graded EXACT and play-all drops one distinct edition")
+        assertEquals("两个版本都要保留", 2, plan.songs.size)
     }
 }

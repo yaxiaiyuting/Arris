@@ -199,7 +199,8 @@ object StatsRecorder {
     private fun onSample(context: Context, pos: Long) {
         val vm = model ?: return
         val now = System.currentTimeMillis()
-        val track = vm.currentTrackKey
+        // S7：用「在播身份」记账。`currentTrackKey` 是请求身份，取链没回来时音频仍是上一首。
+        val track = vm.playingTrackKey ?: vm.currentTrackKey
         val key = track?.tag
         val durationMs = vm.duration.value
 

@@ -207,10 +207,20 @@ class CrossSourceMatcherTest {
     }
 
     @Test
-    fun `单曲 HIGH —— 时长一致但版本标记不同（原曲 vs 伴奏）`() {
+    fun `单曲 LOW —— 时长一致但版本不同（原曲 vs 伴奏）不得合并`() {
+        // C1：版本种类不同 = 不同的录音。旧实现给 HIGH 并合并，用户点开播放的会是伴奏。
         val a = track(ne, 1, "你过得好吗", listOf("薛之谦"), 240_000)
         val b = track(qq, 2, "你过得好吗(伴奏)", listOf("薛之谦"), 240_000)
-        assertEquals(MatchConfidence.HIGH, CrossSourceMatcher.gradeTrack(a, b).confidence)
+        val verdict = CrossSourceMatcher.gradeTrack(a, b)
+        assertEquals(MatchConfidence.LOW, verdict.confidence)
+        assertFalse(verdict.mergeable)
+    }
+
+    @Test
+    fun `单曲 LOW —— Live 与 Remix 是两种版本，不得判成同版`() {
+        val a = track(ne, 1, "晴天(Live)", listOf("周杰伦"), 269_000)
+        val b = track(qq, 2, "晴天(Remix)", listOf("周杰伦"), 269_000)
+        assertEquals(MatchConfidence.LOW, CrossSourceMatcher.gradeTrack(a, b).confidence)
     }
 
     @Test

@@ -623,6 +623,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     val currentTrackKey: TrackKey? get() = currentTrack
 
+    /**
+     * **实际在播**的曲目身份（S7）。
+     *
+     * [currentTrack] 是"正在请求的那首"——`playSong` 一进来就写它，此时 URL 还没回来，
+     * 音频仍是上一首。统计必须按**在播**身份记账，否则慢网下"请求 B、实际还在放 A"
+     * 的 500ms 会被记到 B 头上，还带着 A 的标题。
+     *
+     * 写入点只有一个：ExoPlayer 的媒体项过渡回调（[onSongTransitioned] 里身份落定的那一刻）。
+     */
+    @Volatile
+    private var playingTrack: TrackKey? = null
+    val playingTrackKey: TrackKey? get() = playingTrack
+
     /** 闸门判定「这次请求已经被新歌取代」时的返回：调用方拿到它只会原样丢弃，不会写任何状态。 */
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
 
@@ -820,6 +833,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     resetLyricsForNewSong()
                     // ① 身份必须在任何取词动作**之前**落到 currentTrack。
                     currentTrack = nextTrack
+                    // ② 音频确实切到这一项了：这才是统计该用的身份。
+                    playingTrack = nextTrack
                     currentSongId.value = nextTrack.id
                     currentSongName.value = nextTitle.ifBlank { currentSongName.value.orEmpty() }
                     currentSongArtist.value = nextArtist.ifBlank { currentSongArtist.value.orEmpty() }

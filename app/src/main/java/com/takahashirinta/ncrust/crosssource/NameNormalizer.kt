@@ -114,6 +114,35 @@ object NameNormalizer {
     fun hasEditionMarker(text: String): Boolean = EDITION_MARKERS.containsMatchIn(toHalfWidth(text))
 
     /**
+     * **版本种类**集合（C1）。
+     *
+     * 只判"有没有标记"是不够的：`晴天(Live)` 与 `晴天(Remix)` 都带标记，
+     * 旧实现据此判成"版本一致"，于是原唱/伴奏/Live/Remix 可能被合并成一条 ——
+     * 用户点开播放的可能是伴奏。这里把标记归一成有限的种类，只有**种类集合相等**
+     * 才算同一版本；空集合 = 原版。
+     */
+    fun editionKinds(text: String): Set<String> {
+        val lowered = toHalfWidth(text).lowercase()
+        val kinds = mutableSetOf<String>()
+        EDITION_KIND_PATTERNS.forEach { (kind, regex) -> if (regex.containsMatchIn(lowered)) kinds += kind }
+        return kinds
+    }
+
+    /** 版本种类 → 识别用的正则。新增版本词时**必须**同时加到这里是硬要求。 */
+    private val EDITION_KIND_PATTERNS: List<Pair<String, Regex>> = listOf(
+        "instrumental" to Regex("instrumental|off\\s?vocal|karaoke|伴奏|纯音乐|純音樂|器乐|器樂|演奏版|钢琴版|鋼琴版|吉他版"),
+        "live" to Regex("\\blive\\b|现场|現場|演唱会|演唱會"),
+        "remix" to Regex("remix|混音|重混"),
+        "acoustic" to Regex("acoustic|不插电|不插電"),
+        "cover" to Regex("翻唱|cover"),
+        "demo" to Regex("\\bdemo\\b"),
+        "vocal" to Regex("女声版|女聲版|男声版|男聲版|清唱|和声|和聲"),
+        "edit" to Regex("加长|加長|慢板|快板|片段|试听|試聽|副歌|深情版|mono|stereo|\\bep\\b"),
+        "deluxe" to Regex("deluxe|豪华版|豪華版|典藏版|纪念版|紀念版|特别版|特別版|限量版|珍藏版|加强版"),
+        "remaster" to Regex("remaster|重制|重置"),
+    )
+
+    /**
      * 两个名字是否**同一归一化结果**。空串一律不相等 ——
      * 空名字能互相匹配是匹配算法里最容易造成错配的一条捷径。
      */

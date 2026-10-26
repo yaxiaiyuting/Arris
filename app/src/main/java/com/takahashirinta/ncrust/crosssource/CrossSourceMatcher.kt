@@ -251,8 +251,12 @@ object CrossSourceMatcher {
             return MatchVerdict(MatchConfidence.NONE, "曲名归一化后不相等")
         }
         val artistOk = NameNormalizer.artistsOverlap(anchor.artists, candidate.artists)
-        val sameEdition = NameNormalizer.hasEditionMarker(anchor.name) ==
-            NameNormalizer.hasEditionMarker(candidate.name)
+        // C1：比较**版本种类集合**，不是"有没有标记"。
+        // 旧判据把「原版 vs 伴奏」「Live vs Remix」都当成"版本一致"，
+        // 于是时长相近时会被合并（甚至给 EXACT），用户点到的是伴奏/现场版。
+        val anchorEdition = NameNormalizer.editionKinds(anchor.name)
+        val candidateEdition = NameNormalizer.editionKinds(candidate.name)
+        val sameEdition = anchorEdition == candidateEdition
         val delta = durationDelta(anchor, candidate)
         val durationOk = delta != null && delta <= DURATION_TOLERANCE_MS
 
@@ -269,7 +273,12 @@ object CrossSourceMatcher {
             return MatchVerdict(MatchConfidence.EXACT, "曲名 + 艺人 + 时长差 ${delta}ms + 版本标记一致")
         }
         if (durationOk) {
-            return MatchVerdict(MatchConfidence.HIGH, "曲名 + 艺人 + 时长一致，版本标记不同")
+            // 版本不同 = 不同的录音（伴奏/现场/混音/重制…）。合并会让用户点到另一版，
+            // 按铁律 17「给错单曲比不合并严重得多」只给 LOW。
+            return MatchVerdict(
+                MatchConfidence.LOW,
+                "曲名 + 艺人 + 时长一致，但版本不同（${anchorEdition.ifEmpty { setOf("原版") }} vs ${candidateEdition.ifEmpty { setOf("原版") }}）",
+            )
         }
         if (delta == null) {
             return MatchVerdict(MatchConfidence.MEDIUM, "曲名 + 艺人一致（一侧没有时长，无法校验）")

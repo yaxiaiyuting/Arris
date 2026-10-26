@@ -29,6 +29,28 @@ object ContentCache {
     // 避免冷启动时 warmup 与 Home 各拉一遍同样的三个接口(重复网络/耗电)。
     @Volatile private var homeWarmedUpAt: Long = 0L
 
+    /**
+     * 首页个性化缓存归属的账号指纹（S14）。
+     *
+     * 换账号后旧推荐/昵称/头像不能再被读到：`ownerKey` 与当前账号不一致时，
+     * [isHomeFresh] 直接为 false，`homeDailySongs`/`userProfile` 也必须先 [clearPersonalized]。
+     */
+    @Volatile private var homeOwner: String? = null
+
+    fun bindOwner(owner: String?) {
+        if (homeOwner != owner) {
+            // 归属变了：个性化数据立即作废，公共榜单可以保留。
+            homeDailySongs = null
+            homeRecommendPlaylists = null
+            homeNewSongs = null
+            userProfile = null
+            homeWarmedUpAt = 0L
+        }
+        homeOwner = owner
+    }
+
+    fun ownerMatches(owner: String?): Boolean = homeOwner == owner
+
     fun markHomeWarmed() {
         homeWarmedUpAt = System.currentTimeMillis()
     }
@@ -36,6 +58,10 @@ object ContentCache {
     /** 首页数据是否是 [ttlMs] 内被 warmup 预取过的（有则 Home 不必再拉一遍）。 */
     fun isHomeFresh(ttlMs: Long = 15_000L): Boolean =
         homeWarmedUpAt > 0L && System.currentTimeMillis() - homeWarmedUpAt < ttlMs
+
+    /** 首页新鲜度还必须**账号匹配**（S14）：换账号后旧个性化内容不算新鲜。 */
+    fun isHomeFreshFor(owner: String?, ttlMs: Long = 15_000L): Boolean =
+        ownerMatches(owner) && isHomeFresh(ttlMs)
 
     // ── 榜单（E：首页卡片与搜索页共用同一份快照，避免两处各拉一遍） ──
     @Volatile var toplistItems: List<PlaylistApi.PlaylistCard>? = null
@@ -78,6 +104,7 @@ object ContentCache {
         // S12：清内容必须**同时**失效新鲜度。旧实现只清数据不清 homeWarmedUpAt，
         // 于是首页在 15 秒窗口内进入时 isHomeFresh 仍为 true，跳过取数、停在空页面。
         homeWarmedUpAt = 0L
+        homeOwner = null
         homeDailySongs = null
         homeRecommendPlaylists = null
         homeNewSongs = null

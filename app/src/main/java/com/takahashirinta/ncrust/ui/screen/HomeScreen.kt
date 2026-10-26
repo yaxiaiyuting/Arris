@@ -37,6 +37,7 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
+import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.network.NetworkAvailability
@@ -248,7 +249,9 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         // AppWarmup 刚预取过同样三个接口时直接复用缓存，避免冷启动重复网络/耗电。
-        if (ContentCache.isHomeFresh()) return@LaunchedEffect
+        // S14：新鲜度必须属于当前账号，否则换账号后会拿旧推荐跳过加载。
+        val owner = CookieManager.accountOwner()
+        if (ContentCache.isHomeFreshFor(owner)) return@LaunchedEffect
         // v1.5.1 · C 冷启动竞态：AppWarmup 把磁盘快照灌回 ContentCache 是异步的
         // （IO 线程 + JSON 解析），这里最多等 800ms 再接后面的判断，免得首帧先闪一个
         // 空态、再被随后到达的快照顶掉。有内容时这个等待一次都不会发生。
@@ -269,12 +272,12 @@ fun HomeScreen(
         // v1.5.2：AppWarmup 的网络阶段不再阻塞 splash，它此刻很可能**正在**取同一批数据。
         // 冷启动时在这里等它收尾（它有硬预算，见 AppWarmup.NETWORK_BUDGET_MS），
         // 免得同一批接口在启动瞬间打两遍。等不到就自己发 —— 下面那段逻辑原样保留。
-        if (!ContentCache.isHomeFresh() && !AppWarmup.homeFetchDone.value) {
+        if (!ContentCache.isHomeFreshFor(owner) && !AppWarmup.homeFetchDone.value) {
             withTimeoutOrNull(HOME_WARMUP_JOIN_MS) { AppWarmup.homeFetchDone.first { it } }
             ContentCache.homeDailySongs?.let { dailySongs = it }
             ContentCache.homeRecommendPlaylists?.let { playlists = it }
             ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
-            if (ContentCache.isHomeFresh()) {
+            if (ContentCache.isHomeFreshFor(owner)) {
                 isLoading = false
                 return@LaunchedEffect
             }

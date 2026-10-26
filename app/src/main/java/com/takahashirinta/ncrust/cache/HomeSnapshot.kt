@@ -42,6 +42,8 @@ object HomeSnapshot {
     private const val KEY_NEW_SONGS = "new_songs"
     private const val KEY_TOPLISTS = "toplists"
     private const val KEY_SAVED_AT = "saved_at"
+    /** 快照归属的账号指纹（S14）；老版本没有这个 key ⇒ 读成 null ⇒ 视为"无归属"。 */
+    private const val KEY_OWNER = "owner"
 
     /** 每块最多存多少条：首屏够用即可，避免 prefs 无限膨胀。 */
     private const val MAX_ITEMS = 60
@@ -95,6 +97,9 @@ object HomeSnapshot {
                     else editor.putString(KEY_TOPLISTS, gson.toJson(it.take(MAX_ITEMS), cardListType))
                 }
                 editor.putLong(KEY_SAVED_AT, System.currentTimeMillis())
+                // 归属随快照一起落盘：换账号后 restore 会被 owner 过滤掉，不会读到别人的推荐。
+                val owner = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
+                if (owner == null) editor.remove(KEY_OWNER) else editor.putString(KEY_OWNER, owner)
                 editor.apply()
             }
         }
@@ -108,6 +113,11 @@ object HomeSnapshot {
      */
     fun restoreIntoCache(context: Context): Boolean {
         val p = runCatching { prefs(context) }.getOrNull() ?: return false
+        // S14：账号不匹配就整份不恢复（个性化块）。公共榜单在 owner 缺失时仍可复用，
+        // 但它和个性化内容存在同一个快照里，这里统一按"整份不可信"处理更安全。
+        val current = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
+        val stored = p.getString(KEY_OWNER, null)
+        if (stored != current) return false
         var restored = false
         if (ContentCache.homeDailySongs == null) {
             readList<SongItem>(p, KEY_DAILY, songListType)?.let { ContentCache.homeDailySongs = it; restored = true }
@@ -122,6 +132,11 @@ object HomeSnapshot {
             readList<PlaylistApi.PlaylistCard>(p, KEY_TOPLISTS, cardListType)?.let { ContentCache.putToplist(it); restored = true }
         }
         return restored
+    }
+
+    /** 清除整份首页快照（登出/换账号时调用）。 */
+    fun clear(context: Context) {
+        runCatching { prefs(context).edit().clear().apply() }
     }
 
     private fun <T> readList(p: SharedPreferences, key: String, type: java.lang.reflect.Type): List<T>? {

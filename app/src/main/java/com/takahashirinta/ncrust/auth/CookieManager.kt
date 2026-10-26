@@ -17,6 +17,27 @@ object CookieManager {
         }
     }
     fun snapshot(): NeteaseSessionSnapshot = synchronized(guard) { guard.snapshot() }
+
+    /**
+     * 当前登录账号的**稳定指纹**（S14）。
+     *
+     * 用 `MUSIC_U` 的 SHA-256 前 8 字节做 key：同一账号在任何设备/任何时刻都相同，
+     * 不含明文凭据，可用于给首页个性化缓存做归属标记。未登录返回 `null`。
+     */
+    fun accountOwner(): String? = synchronized(guard) { accountOwnerLocked() }
+
+    private fun accountOwnerLocked(): String? = run {
+        val cookie = guard.snapshot().cookie ?: return@run null
+        val musicU = cookie.split(';')
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("MUSIC_U=") }
+            ?.substringAfter('=')
+            ?.takeIf { it.isNotBlank() }
+            ?: return@run null
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(musicU.toByteArray(Charsets.UTF_8))
+        digest.take(8).joinToString("") { "%02x".format(it) }
+    }
     fun isCurrent(s: NeteaseSessionSnapshot): Boolean = synchronized(guard) { guard.isCurrent(s) }
     fun <T> ifCurrent(s: NeteaseSessionSnapshot, block: () -> T): T? = synchronized(guard) {
         guard.ifCurrent(s, block)
@@ -61,6 +82,12 @@ object CookieManager {
             getPrefs(context).edit().putString(KEY_COOKIE, cookie).remove(KEY_REFRESHED_AT).apply()
             guard.replace(cookie)
             NeteaseVipStore.clear(context)
+            // S14：账号归属变了 ⇒ 首页个性化缓存与磁盘快照立即作废。
+            val owner = accountOwnerLocked()
+            if (!com.takahashirinta.ncrust.cache.ContentCache.ownerMatches(owner)) {
+                com.takahashirinta.ncrust.cache.ContentCache.bindOwner(owner)
+                com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
+            }
         }
     }
 
@@ -107,6 +134,9 @@ object CookieManager {
             getPrefs(context).edit().remove(KEY_COOKIE).remove(KEY_REFRESHED_AT).apply()
             guard.replace(null)
             NeteaseVipStore.clear(context)
+            // S14：登出后首页个性化内容一个字节都不该留（换账号/未登录都不读旧资料）。
+            com.takahashirinta.ncrust.cache.ContentCache.bindOwner(null)
+            com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
         }
     }
 }

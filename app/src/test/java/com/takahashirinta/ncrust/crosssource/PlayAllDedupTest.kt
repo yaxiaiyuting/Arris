@@ -169,10 +169,9 @@ class PlayAllDedupTest {
                 row(qqSong(2L, "晴天 (Remix)")),
             ),
         )
-        // 注意：这两条时长同为 269s ⇒ 按 v2.4.0 的 gradeTrack 是 HIGH（版本标记不同）⇒ 合并。
-        // 这条用例钉的是**当前真实行为**，不是理想行为；界面上它们本来也只显示一行。
-        // 真正需要警惕的是下面那条「版本标记 + 时长都不同」的组合。
-        assertEquals(1, plan.songs.size)
+        // C1 起：版本种类不同（原版 vs Remix）即使时长相同也是**两份**。
+        // 旧行为把它们合并成一行，点开播放的是 Remix。
+        assertEquals(2, plan.songs.size)
     }
 
     @Test

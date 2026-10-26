@@ -324,23 +324,61 @@ class SearchViewModel : ViewModel() {
      *   注意「拼接后整体重排」而不是「把新结果接在旧列表后面」——
      *   后者会让第二页的会员专享曲排在第一页的非会员曲之后，而按会员排序是本应用的既有契约。
      */
+    // ── S9：每源各自维护"已确认页"与"待重试页" ─────────────────────────────────
+    //
+    // 旧实现只有一个共享页码：任一来源成功就推进它，于是「netease 第 2 页失败、QQ 成功」
+    // 会让下一次加载直接请求双方的**第 3 页**，netease 的第 2 页永远补不回来。
+    //
+    // 现在：每源记 `confirmedPages`（已拿到的页）与 `pendingPage`（失败待补的页）。
+    // 下一次 append 时，有 pending 的源重取那一页，其它源取下一页。
+    private val confirmedPages = mutableMapOf<String, MutableSet<Int>>()
+    private val pendingPage = mutableMapOf<String, Int>()
+    private val pageItems = mutableMapOf<String, MutableMap<Int, List<SongItem>>>()
+
+    /** 这一轮该向 [source] 请求哪一页。 */
+    private fun pageFor(source: String, sharedPage: Int): Int =
+        pendingPage[source] ?: confirmedPages[source]?.maxOrNull()?.plus(1) ?: sharedPage
+
+    private fun resetPagingState() {
+        confirmedPages.clear()
+        pendingPage.clear()
+        pageItems.clear()
+    }
+
+    private fun flatten(source: String): List<SongItem> =
+        pageItems[source]?.toSortedMap()?.values?.flatten().orEmpty()
+
     private fun accumulateAndPublish(
         netease: List<SongItem>,
         qq: List<SongItem>,
         bili: List<SongItem>,
         append: Boolean,
+        /** 本轮各源实际请求的页号；同一页重复发布是**替换**而不是叠加。 */
+        neteasePage: Int = 1,
+        qqPage: Int = 1,
+        biliPage: Int = 1,
     ): List<SongItem> {
         if (!append) {
-            lastSongs = netease
-            lastQqSongs = qq
-            lastBiliSongs = bili
-        } else {
-            lastSongs = lastSongs + netease
-            lastQqSongs = lastQqSongs + qq
-            lastBiliSongs = lastBiliSongs + bili
+            pageItems.clear()
+            confirmedPages.clear()
+            pendingPage.clear()
         }
+        fun put(source: String, page: Int, items: List<SongItem>) {
+            pageItems.getOrPut(source) { mutableMapOf() }[page] = items
+            confirmedPages.getOrPut(source) { mutableSetOf() }.add(page)
+            pendingPage.remove(source)
+        }
+        put("netease", neteasePage, netease)
+        if (qq.isNotEmpty()) put("qqmusic", qqPage, qq)
+        if (bili.isNotEmpty() && !append) put("bilibili", 1, bili)
+
+        // 逐源按页展平 → 跨页去重 → 再整体重排。
+        // 来源计数从"展平后的唯一列表"算：分批发布不会把同一页数两遍（S9 的第二个表现）。
+        lastSongs = dedupeSongs(flatten("netease"))
+        lastQqSongs = dedupeSongs(flatten("qqmusic"))
+        lastBiliSongs = dedupeSongs(flatten("bilibili"))
         val fresh = publish(lastSongs, lastQqSongs, lastBiliSongs)
-        accumulatedSongs = if (append) dedupeSongs(accumulatedSongs + fresh) else fresh
+        accumulatedSongs = fresh
         _songs.value = accumulatedSongs
         return accumulatedSongs
     }
@@ -385,6 +423,7 @@ class SearchViewModel : ViewModel() {
             // 新一轮（关键词变了 / 换 tab / 下拉刷新）：页码归 1、累计清空。
             // ⚠️ 这两行必须在**取数之前** —— 否则第一页会带着上一轮的 offset 发出去。
             pages.reset()
+            resetPagingState()
             resetSongs()
         }
         _error.value = null
@@ -392,6 +431,9 @@ class SearchViewModel : ViewModel() {
         try {
             when (type) {
                 1 -> {
+                    // S9：本轮各源请求哪一页由**各自的游标**决定（失败页优先补取）。
+                    val neteasePage = pageFor("netease", page)
+                    val qqPage = pageFor("qqmusic", page)
                     // v2.1.0 · E：**聚合搜索** —— ncm 与 qm。
                     //
                     // ## hotfix 3 留下的顺序契约（**本版没有改它**）
@@ -445,7 +487,7 @@ class SearchViewModel : ViewModel() {
                                     limit = PAGE_SIZE,
                                     // v3.4.11：翻页靠的就是这个 offset（接口本来就是分页的）。
                                     offset = com.takahashirinta.ncrust.search.SearchPaging
-                                        .offsetOf(page, PAGE_SIZE),
+                                        .offsetOf(neteasePage, PAGE_SIZE),
                                 ).result?.also { r ->
                                     // v3.4.11：总数（实测 `s=周杰伦` → songCount=273）。
                                     r.songCount?.let { lastTotals["netease"] = it }
@@ -454,6 +496,8 @@ class SearchViewModel : ViewModel() {
                             val failure = outcome.exceptionOrNull()
                             if (failure != null) {
                                 android.util.Log.w("SearchViewModel", "netease search failed", failure)
+                                // S9：记住这一页，下一次加载先把它补回来。
+                                if (append) pendingPage["netease"] = neteasePage
                             }
                             outcome.getOrNull().orEmpty() to failure
                         }
@@ -469,7 +513,7 @@ class SearchViewModel : ViewModel() {
                                         MusicSource.QQMUSIC,
                                         keyword,
                                         PAGE_SIZE,
-                                        page = page,
+                                        page = qqPage,
                                         totalOut = lastTotals,
                                     )
                                 }
@@ -575,11 +619,14 @@ class SearchViewModel : ViewModel() {
                                 qqOutcome?.songs.orEmpty(),
                                 biliOutcome?.songs.orEmpty(),
                                 append = append,
+                                neteasePage = neteasePage,
+                                qqPage = qqPage,
                             )
                             _albums.value = emptyList()
                             _artists.value = emptyList()
                             _sourceCounts.value = SourceCounts(
-                                neteaseCount = netease?.size ?: 0,
+                                // S9：用累计唯一列表，而不是"本页条数"或"多次发布长度相加"。
+                                neteaseCount = lastSongs.size,
                                 // 还没回来的那一侧写 PENDING，**不是** DONE + 0 ——
                                 // 「搜索中…」与「0 首」在界面上必须是两句话（v2.5.5 · G 的既有契约）。
                                 neteaseStatus = if (netease != null) {
@@ -631,7 +678,10 @@ class SearchViewModel : ViewModel() {
                             qq.isNotEmpty() || bili.isNotEmpty()
                         }
                         if (shouldRepublish && _query.value == keyword) {
-                            accumulateAndPublish(neteaseList, qq, bili, append = append)
+                            accumulateAndPublish(
+                                neteaseList, qq, bili, append = append,
+                                neteasePage = neteasePage, qqPage = qqPage,
+                            )
                             trace.mark(SearchLatencyTrace.MARK_MERGED_PUBLISH)
                         }
                         // v3.4.11：单曲 tab 的「还有没有下一页」。
@@ -656,7 +706,7 @@ class SearchViewModel : ViewModel() {
                                 // （用户报的正是这句话）。
                                 neteaseCount = lastSongs.size,
                                 neteaseStatus = SourceSearchStatus.DONE,
-                                qqCount = qq.size,
+                                qqCount = lastQqSongs.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
                                 biliCount = bili.size,
                                 biliStatus = biliStatusOf(biliOutcome, biliAllowed),
