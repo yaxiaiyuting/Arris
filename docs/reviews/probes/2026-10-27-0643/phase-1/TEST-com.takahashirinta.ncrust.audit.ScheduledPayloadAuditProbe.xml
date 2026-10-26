@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledPayloadAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:10:04.375Z" hostname="cachyos-x8664" time="0.019">
+  <properties/>
+  <testcase name="incompleteLocalPayloadShadowsAResolvableSavedSongDuringCarRecovery" classname="com.takahashirinta.ncrust.audit.ScheduledPayloadAuditProbe" time="0.008"/>
+  <testcase name="qqSongDetailRouteBuildsAnUnplayableCurrentVersionFromAPlayableSong" classname="com.takahashirinta.ncrust.audit.ScheduledPayloadAuditProbe" time="0.011"/>
+  <system-out><![CDATA[AUDIT payload recovery: incomplete local QQ record shadows the complete saved-song mid, so car routing still refuses the song
+AUDIT QQ detail route: a playable song becomes a blank unresolvable current-version row because route construction discards its mid and metadata
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

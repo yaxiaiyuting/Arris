@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledCatalogAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:10:04.292Z" hostname="cachyos-x8664" time="0.067">
+  <properties/>
+  <testcase name="concurrentFirstDeviceRequestsReturnDifferentPersistentIdentities" classname="com.takahashirinta.ncrust.audit.ScheduledCatalogAuditProbe" time="0.002"/>
+  <testcase name="qqAnchorFindsButOmitsItsNeteaseCounterpartTracks" classname="com.takahashirinta.ncrust.audit.ScheduledCatalogAuditProbe" time="0.055"/>
+  <testcase name="albumCandidateBorrowsTheAnchorArtistAndConfirmsADifferentArtist" classname="com.takahashirinta.ncrust.audit.ScheduledCatalogAuditProbe" time="0.01"/>
+  <system-out><![CDATA[AUDIT QQ identity: two concurrent first reads each commit successfully and return different device ids; commit is not compare-and-set
+AUDIT catalog source: QQ-origin page recognizes Netease album 20 but never includes its tracks; output is QQ-only
+AUDIT catalog artist: Beta's same-title album becomes a HIGH alias of Alpha because the candidate is given Alpha's artist name
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

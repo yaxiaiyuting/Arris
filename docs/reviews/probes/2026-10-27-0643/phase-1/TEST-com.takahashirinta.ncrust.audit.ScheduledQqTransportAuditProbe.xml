@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledQqTransportAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:10:04.399Z" hostname="cachyos-x8664" time="0.012">
+  <properties/>
+  <testcase name="unrelatedSuccessfulMusicuCallTurnsAVkey403IntoANetworkFailure" classname="com.takahashirinta.ncrust.audit.ScheduledQqTransportAuditProbe" time="0.012"/>
+  <system-out><![CDATA[AUDIT QQ transport: same vkey HTTP403 is AUTH_EXPIRED in isolation, NETWORK when a healthy profile-style request overwrites shared HTTP state before classification
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
