@@ -1,0 +1,32 @@
+{
+  "application_baseline": "15237f8c06ba160632c9096101386f821b85a723",
+  "scope": "cumulative defect probes; passing asserts defects exist, not fixed",
+  "tests": 22,
+  "failures": 0,
+  "errors": 0,
+  "files": {
+    "ScheduledAuditProbe.kt": "77131ee9e1fba58febd7c6edaecf7ad2e5f2b629bc6fdd428e9409e2e070a2f7",
+    "ScheduledDownloadAuditProbe.kt": "05ad163bf0b04e1464b65530350dd08ceb7435aa0b227f8483fb33eb69ff2edf",
+    "ScheduledCatalogAuditProbe.kt": "2aa381529cfdf2f094d970467a232bffa5c37b04b78e61fe1a10305c87837e87",
+    "ScheduledNavigationAuditProbe.kt": "16c9be2723f2475980d5bf0eef288cabf296976e9b735df0db47faa1de7997f8",
+    "ScheduledPersistenceAuditProbe.kt": "67881e4ea9acf9cbb2fd4c707a043c5f61145cfedf9652ab8f39375bf61502cd",
+    "ScheduledPayloadAuditProbe.kt": "bdbfaad7040db81b3c831dd6028d81e9ae9d65cb976d61cc5aa508f3aef9d794",
+    "ScheduledQqTransportAuditProbe.kt": "746743b49d42064d197f0a2475a373eed345bf3fdc85d2688ba5f7d88d3741f7",
+    "ScheduledBiliIdentityAuditProbe.kt": "49d38f075ba04083a5f0894b91cfb94fb7b7589e92dc92529b5654584f5d11fa",
+    "ScheduledLifecycleAuditProbe.kt": "0b82a3f73449e68a6e5344f4fdea535e344cef4bae8ebee95a5f680b47084344",
+    "ScheduledBiliSubtitleAuditProbe.kt": "1207b98efdbecec3abaae9ba73d6a9e4b667ea92022f8ba8e2899bd369bec75b",
+    "ScheduledStatsSnapshotAuditProbe.kt": "c38f0b4fed3ea13274e83a372ecd30b507c36c799a6c988bda035f70dae06d29",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledAuditProbe.xml": "de8c708de6420b5e6bd292dbe76e668d0bf27ec13d5cf59c4f0266bf1a3a3e15",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledBiliIdentityAuditProbe.xml": "a0d1caa9f5d2b5f25820d52eb4d4337798f129ddf9f116c0c690b818154090b8",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledBiliSubtitleAuditProbe.xml": "42c053e15f7ab91dffa5ee632a745f076fceefe7b2ef31b5e7a8b880de3de295",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledCatalogAuditProbe.xml": "7b81ce397b716ef1ef54110d99f309461f4ffef52f8019f71068169651087d51",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledDownloadAuditProbe.xml": "f091bb68d6da989b1ac8d1049dcb6bbe59fac4b76bd0069640fe2b6ee26f4234",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledLifecycleAuditProbe.xml": "13747acd548a526fb595dbeb6ff7ee5989d3ef783880a8d9adb711e7947a008d",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledNavigationAuditProbe.xml": "405cced06a38e7757c432e496bacecada5729c64b05c1ec1ceae813f57d373f3",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledPayloadAuditProbe.xml": "757a5770ab4d156047e5c4601c0eeefe07c00e06c47339d53851c98b7edde5c6",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledPersistenceAuditProbe.xml": "81fb77c18447f648c497183da589e1d683f459e252652bebc1ea3b855e0dc408",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledStatsSnapshotAuditProbe.xml": "e4d3100d37bcaa6f3bdce0add1a20d013feaacb176a7d3cac4353522322e78e0",
+    "TEST-com.takahashirinta.ncrust.audit.ScheduledQqTransportAuditProbe.xml": "a5f0852ea8ae306d7884c82ac96e33b0f6ff436d956fab069676ad7e796ba036",
+    "scheduled-audit-0643-20261027-build.txt": "f905be2012d0e3a3c2a44d232886ef55fd3c063e28a5f46e18b5d08c05a72501"
+  }
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledLifecycleAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:23:39.837Z" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="seekingBackBeforeTheResumeThresholdLeavesTheOldResumePoint" classname="com.takahashirinta.ncrust.audit.ScheduledLifecycleAuditProbe" time="0.002"/>
+  <testcase name="queuedHomeSnapshotRetagsThePreviousAccountsDataAsTheNewOwner" classname="com.takahashirinta.ncrust.audit.ScheduledLifecycleAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT resume rewind: persisting position 1s after a 60s record keeps 60s; restarting the song resumes at the obsolete position
+AUDIT home snapshot ownership: A's delayed save survives account clear, is labelled owner B, and restores A's data under B
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

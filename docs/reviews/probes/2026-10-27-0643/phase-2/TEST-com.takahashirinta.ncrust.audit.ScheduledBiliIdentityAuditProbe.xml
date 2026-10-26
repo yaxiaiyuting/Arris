@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledBiliIdentityAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:23:39.748Z" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="audioZoneAndVideoWithTheSameNumericIdCollapseInQueueAndCollection" classname="com.takahashirinta.ncrust.audit.ScheduledBiliIdentityAuditProbe" time="0.004"/>
+  <system-out><![CDATA[AUDIT Bili identity: AU and AV share an id; selecting the video preserves the queued audio, collection drops the second item, offline keys collide
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

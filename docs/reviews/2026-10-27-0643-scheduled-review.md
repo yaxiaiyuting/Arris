@@ -2,7 +2,7 @@
 
 日期：2026-10-27（Asia/Shanghai）。启动 HEAD `b82545c`，应用基线 `15237f8`，v3.7.8-gpl / versionCode 94。用户只授权审查、隔离复现与留档，修复由用户统一安排。
 
-**进度快照：本轮仍在继续。** 第一阶段已确认下列 13 类问题，共 16 个通过缺陷断言的探针；另有 3 项源码调用链确认的问题。部分是旧 S17/S18/S10/S5/S20 修复未覆盖的分支，不应把它们全部称为新引入的回归。前一轮 R1–R4 未重复计数。
+**进度快照：本轮仍在继续。** 第二阶段累计确认下列 19 类问题，共 22 个通过缺陷断言的探针；另有 4 项源码调用链确认的问题。部分是旧 S17/S18/S10/S5/S20/S14 修复未覆盖的分支，不应把它们全部称为新引入的回归。前一轮 R1–R4 未重复计数。
 
 ## 有动态证据的问题
 
@@ -21,6 +21,12 @@
 | H11 | P2 | 车机载荷回查优先返回不可用的本地旧记录，遮蔽可用收藏 | incompleteLocalPayloadShadowsAResolvableSavedSongDuringCarRecovery |
 | H12 | P2 | QQ 共享 HTTP 状态让并发请求污染取链失败分类 | unrelatedSuccessfulMusicuCallTurnsAVkey403IntoANetworkFailure |
 | H13 | P2 | QQ 单曲详情路由丢掉 mid 和元数据，当前版本播放项不可解析 | qqSongDetailRouteBuildsAnUnplayableCurrentVersionFromAPlayableSong |
+| H14 | P1 | B站音频区与视频区同号时身份冲突，选曲与收藏丢掉第二项 | audioZoneAndVideoWithTheSameNumericIdCollapseInQueueAndCollection |
+| H15 | P2 | 首页旧快照排队写入时重新取账号，A 数据被标成 B 并恢复 | queuedHomeSnapshotRetagsThePreviousAccountsDataAsTheNewOwner |
+| H16 | P2 | 回退至前三秒后保存，旧续播点没有清除 | seekingBackBeforeTheResumeThresholdLeavesTheOldResumePoint |
+| H17 | P2 | B站字幕 CDN 请求附带完整登录 Cookie | subtitleCdnRequestReceivesTheFullLoginCookie |
+| H18 | P2 | B站字幕生成的 100 分钟以上时间戳被歌词解析器丢弃 | subtitlesAfterOneHundredMinutesAreDroppedByTheLrcParser |
+| H19 | P2 | 统计页无锁复制正在写入的 Map，可抛 ConcurrentModificationException | readingStatsDuringAListeningTickCanThrowConcurrentModification |
 
 ### H01：专辑写入仍缺少最新意图串行化
 
@@ -114,16 +120,63 @@
 
 探针调用真实私有 routeAnchorSong，再走真实 CatalogAggregator.loadTrack 与 Router：原曲可解析，同身份的详情行不可解析，且没有曲名可召回另一源。这里未要求新增 QQ 歌词能力；问题是已有播放按钮交出不可播放条目。建议保留选中曲目的完整载荷或按身份回查，未补齐时禁用播放与插播。
 
-## 源码确认，未运行 Compose 的 3 项
+### H14：B站 AU 与 AV 的数字身份没有分区
+
+`bili/BiliModels.kt:74` 将 `auid ?: aid` 都交给同一个 `SourceIds.biliId`。虽然 sourceId 分别保留 `au:101` 和 `bv:…:202`，`TrackKey.equals` 只比较 source/id，队列、收藏与缓存键仍会冲突。`:67–72` 的“不会串台”注释只考虑了取流分支，没有覆盖身份消费者。
+
+探针经真实 BiliTrack→SongItem→TrackKey、QueueKeys.planPlayItem 和 SavedSongSync：AU101 已在播时选择不同的 AV101，计划不改队列，播放项仍为 AU；先收藏 AU 再收藏 AV，只保留 AU。两个 OfflineKeys 也相同，但没有运行真实音频缓存，不能宣称实际缓存已经串流。
+
+建议给 AU/AV 建立互不相交的稳定身份域，或让所有身份消费者纳入媒体种类；同步迁移旧收藏、歌单、队列、歌词和音频索引。只修 provider 的 sourceId 分支不足以解决。
+
+### H15：首页旧快照可以被重新标成新账号
+
+`cache/HomeSnapshot.kt:77–103` 捕获待保存列表后异步执行，却在序列化末尾重新读当前 accountOwner。`CookieManager` 换号清理只能清已经存在的值，不能阻挡这个尚未提交的旧任务。`warmup/AppWarmup.kt:162–167` 和 `HomeScreen.kt:174–198` 的旧响应写内存也没有会话提交闸门，后两条只作静态观察，未单独运行完整启动器。
+
+真实 HomeSnapshot.save 探针在 A 列表序列化时暂停，清 A、登录 B，再放行：磁盘 owner 为 B，daily_songs 却含 A；清内存后在 B 会话调用真实 restoreIntoCache，也恢复了 A。此为旧 S14 的异步残余，不是此前已修的直接切号缓存未清。
+
+建议在请求/快照创建时捕获归属和代次，内存发布与磁盘提交都核对同一个快照；显式清理也推进写入代次。不要在工作线程末尾给旧数据贴上“当前账号”标签。
+
+### H16：回退至不可续播区间没有撤销旧位置
+
+`player/PlaybackStateManager.kt:216–217` 对小于 MIN_RESUMABLE_MS=3000 的位置直接返回。`PlayerViewModel.kt:726–728` 会在进度大幅变化时调用该入口；`:3072–3084` 的 seek 没有另外清记录。因此保存过 60 秒、用户拖回 1 秒并离开后，旧 60 秒仍然是下次的续播点。
+
+探针直接经真实 saveSongPosition/getSongPosition 确认 60000→1000 后读回 60000；这是持久化入口逻辑复现，没有模拟整段播放。建议有效位置落回起点区间时删除该歌旧记录，而非忽略本次更新，并覆盖暂停拖动和拖回起点后立即切歌。
+
+### H17：通用 B站 GET 把凭据发给字幕 CDN
+
+`bili/BiliApi.kt:283–301` 不看目标 host 就拼入完整 BiliAuthStore Cookie；`subtitleBody(:539–544)` 也复用它。`BiliSubtitle.normalizeSubtitleUrl(:331–340)` 接受 hdslb CDN 或其它 http(s) 地址，未限定鉴权域。
+
+探针给虚构登录镜像后，经真实 subtitleBody 请求 `aisubtitle.hdslb.com`，本地拦截器捕获到 SESSDATA 与 bili_jct。没有 DNS/socket，也没有把真实凭据传出去。证明的是登录凭据超出 bilibili.com 账号 API 域的发送范围；**未证明 CDN 泄露、账号被接管或重定向攻击**。
+
+建议按目标域和请求用途带凭据：账号 API 才携带会话，字幕/媒体 CDN 使用无账号 Cookie 的客户端；对服务端给出的 URL 与跨域重定向建立明确边界。不要只检查日志脱敏。
+
+### H18：100 分钟后的字幕时间戳与解析器不兼容
+
+`bili/BiliSubtitle.kt:532–539` 的 `%02d` 对分钟只规定最小宽度，100 分钟生成 `[100:00.00]`；`lyric/LrcParser.kt:48/61–62` 却只接受恰好两位分钟。真实链路 `BiliSourceProvider.fetchLyric` 生成 LRC，`PlayerViewModel.loadBiliLyrics(:2602)` 再用该解析器。
+
+纯转换链探针输入 99:59、100:00、100:02 三条有效音乐字幕：音乐筛选保留全部三条，LRC 解析只剩第一条。影响长视频/长音频在该边界之后的歌词；未验证某个线上视频。建议内部直接传时间化行表，或统一允许多位分钟，补边界与长时长回归。
+
+### H19：统计页快照没有持有写入使用的锁
+
+`stats/StatsStore.kt:128` 直接调用 aggregate.snapshot，而 addListen/addPlay/prune 使用 Store.lock；`StatsModel.kt:201–208` 的 snapshot 逐个复制普通 LinkedHashMap。`StatsScreen.kt:124–126` 在 IO 读取，采样器可在 Main 同时增加曲目、来源或跨日桶。
+
+真实 StatsStore.snapshot 与 addListen 探针在复制 byDay 时暂停普通迭代器，然后新增一个日期桶：读取抛 ConcurrentModificationException。夹具只给标准 LinkedHashMap 的迭代器加时序闸门，没有改变其 fail-fast 行为。统计页 LaunchedEffect 未捕获此异常，存在页面崩溃路径；没有运行 Compose/真机。
+
+建议所有快照都在同一个 aggregate 锁内取不可变副本，序列化继续放锁外；补读取与新增曲目/跨日/裁剪同时发生的用例。此问题不同于旧 S4 的清空后旧磁盘快照反写。
+
+## 源码确认，未运行 Compose/设备的 4 项
 
 - **F01 / P2：单曲详情“添加到下一首”回调未接线。** `NavGraph.kt:433/450` 两个 SongDetailScreen 调用都省略 onAddToNext，页面默认 `{}`，行内按钮点到空实现。主层已有 onSongInsertNext 可接。
 - **F02 / P2：QQ 歌单“重新登录”回调未接线。** `NavGraph.kt:378` 省略 onRelogin，`QqPlaylistDetailScreen.kt:231` 的重登按钮触发默认空实现。需要把 QQ 登录入口送到该路由。
 - **F03 / P2：网易歌单列表只展示首 100 项。** `LibraryScreen.kt:191–193` 仅一次调用默认 limit=100/offset=0 的 getUserPlaylists，忽略 result.more；列表没有后续页入口。已检查的是这一 UI 调用链，未用真实 100+ 歌单账号验证。
+- **F04 / P2：服务退出后的桌面卡片播放没有恢复入口。** `NcrustWidgetProvider.kt:236–249` 从持久化状态画有内容、暂停态的卡片；`WidgetRenderer.kt:151–153` 的播放按钮只发 resume。冷服务 onCreate 创建空播放器，`PlaybackService.kt:923/1833–1842` 的 resumePlayback 只 seek/prepare/play，不读取已存队列、载荷或取链。因而保留旧卡片而服务已不存在时，按钮没有可播放 MediaItem。建议经完整身份恢复或先引导打开应用。此项为调用链静态确认，未执行 Android 生命周期；没有把“划掉任务仍继续播放”算作问题，当前 onTaskRemoved 明确 stopSelf。
 
 ## 验证与边界
 
 第一阶段证据见 [probes/2026-10-27-0643/phase-1/](probes/2026-10-27-0643/phase-1/)。16 个探针通过，0 failure / 0 error；**通过表示错误存在，未修复**。未运行全量 3109 项测试，未改业务实现、版本、APK 或 Release，未做真实网络和设备操作。
 
-探针开发中修正过：QQ 主源的错误推测（实际是漏掉对端，没有误发该 id）、一次 shouldAutoSync 参数类型错误。最终归档的是修正后的成功运行；这些探针问题不是应用构建故障。
+第二阶段累计证据见 [probes/2026-10-27-0643/phase-2/](probes/2026-10-27-0643/phase-2/)。22 个探针通过，0 failure / 0 error，包含第一阶段 16 个再运行及新增 6 个；不是 16+22 个独立用例。
+
+探针开发中修正过：QQ 主源的错误推测（实际是漏掉对端，没有误发该 id）、一次 shouldAutoSync 参数类型错误、一次 SongItem 夹具漏填构造参数。最终归档的是修正后的成功运行；这些探针问题不是应用构建故障。
 
 本轮后续还会继续审阅未覆盖区域，收尾时补最终额度、覆盖范围与下一次断点。修复不在本任务内。

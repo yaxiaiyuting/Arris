@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.ScheduledNavigationAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-26T23:23:39.842Z" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="literalPercentNameFailsAfterNavigationsPathDecoding" classname="com.takahashirinta.ncrust.audit.ScheduledNavigationAuditProbe" time="0.003"/>
+  <testcase name="literalPlusInAnArtistNameBecomesASpace" classname="com.takahashirinta.ncrust.audit.ScheduledNavigationAuditProbe" time="0.001"/>
+  <system-out><![CDATA[AUDIT navigation codec: 100% Love becomes 100%+Love in the argument; the page's second URLDecoder throws
+AUDIT navigation codec: A+B is silently rewritten to A B by the second decoder
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
