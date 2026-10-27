@@ -10,6 +10,8 @@
 
 阶段三累计 **15 tests / 0 failures / 0 errors**，追加 QQ 旧接口形状映射、失败提示占位符、两条手势方向组合用例。另补三项 UI 源码问题及实际依赖字节码证据；尚未执行设备视觉或触摸验证。
 
+阶段四累计 **18 个 JVM 用例 / 0 failure / 0 error**，确认三泳道曲线点数截断、旧设置覆盖，并补上 J08 的 HTTP200/业务失败分支。另审独立 Go 服务的 5 个源文件，确认 3 项有隔离路由证据的问题，**当前 APK 不调用该服务，放在附录，不计入安卓问题数**。
+
 ## 阶段一确认
 
 | 编号 | 优先级 | 问题 | 证据范围 |
@@ -26,11 +28,16 @@
 | J10 | P2 | QQ 旧字段 songmid/songid/songname 只兼容 mid，数字身份散列化且标题丢失；与新接口同曲重复收藏 | 真实旧响应解析和收藏合并；远端当前返回形状频率未测 |
 | J11 | P3 | 换源失败提示在全部八种语言都暴露字面 `%s` | 真实提示函数，八语言对照 |
 | J12 | P2 | 播放器与控制栏把进度速度当屏幕 Y 速度，快甩方向判反 | 两条真实吸附决策与入口公式组合，未注入触摸事件 |
+| J13 | P2 | 三泳道实际 85 个点，PCHIP 只计算前 64 个，截断边界切线可使曲线越界 | 真实生产点数与曲线数学探针 |
+| J14 | P2 | 已迁移的新版动效档位，在后续升级时被保留的旧 visualizer 档位覆盖 | 真实 prefs 迁移入口 |
 | K01 | P1 | MainScreen 的异步私人 FM、立即播放和续播返回时缺少播放意图提交闸门，旧结果可夺回播放权 | 静态调用链；未执行 Compose/音频复现 |
 | K02 | P2 | 启动时异步恢复旧队列，无条件覆盖等待期间用户新建的队列 | 静态调用链；尚无页面竞态复现 |
 | K03 | P2 | 海报在最小字号仍放不下且当前行靠后时，不裁掉前文也不剪裁，歌词可越过页脚 | 静态渲染边界，未运行 Android Canvas |
 | K04 | P2 | 播放器触摸协程捕获旧 geo，面板变化后命中边界不更新 | 静态代码 + 实际 Compose 1.7.6 字节码，未执行设备手势 |
 | K05 | P3 | 库页或搜索页修改当前歌曲收藏后，播放器红心可保留旧值 | 静态状态依赖链，未运行 Compose |
+| K06 | P2 | 关闭多频段或特征不可用时，单泳道路径未使用滚动相位，仍是逐格变形 | 静态绘制分支，未执行视觉复测 |
+| K07 | P2 | 背景图受前台内存压力隐藏后，恢复监听也被移除；在途导入也缺少清除代次 | 静态生命周期/提交链，两条相关观察，无 Canvas/设备复现 |
+| K08 | P3 | 从系统后台权限设置返回后，白名单状态可能保持跳转前值 | 静态 remember/生命周期链 |
 
 ### J01：同一 clear 代次内的持久化反序
 
@@ -108,6 +115,8 @@
 
 建议发布以每个来源明确的 Pending/Success/Failure 为输入；只有已成功到达的页可确认和替换，失败和未到达不能占用页号或清除待补页。回归必须覆盖同一页的先到发布与最终发布，而不能只测独立分页游标类。
 
+阶段四补充 `anHttpSuccessWithABusinessErrorBecomesASuccessfulEmptySearch`：真实 Retrofit 返回 HTTP200、JSON code500 且没有 result，QQ 本地替身合法空表。搜索返回 true、空结果、error=null、网易徽标 DONE、hasMore=false。`network/SearchResponse.kt:8–10` 丢弃业务 code，`:494/502` 将 result 缺失变成无错误空页。该分支甚至不会登记 pending，应连同“业务失败与真实空表”区别一起修；不另加一个问题编号。
+
 ### J09：清空输入未撤销结果提交权
 
 `SearchViewModel.kt:924–926` clearQuery 只清输入和列表，不 cancel searchJob、不推进请求修订。`:836–847` 的专辑分支返回后直接发布；艺人分支 `:873–883` 与歌词分支 `:788–809` 也缺少关键字/类型/修订提交检查（后两条仅静态观察）。
@@ -160,15 +169,67 @@
 
 源码状态链确认，未执行 Compose 画面。建议收藏仓库提供按身份的可观察修订/状态，播放器订阅它；不要依赖页面私有 tick 或靠切歌触发刷新。本项为展示状态问题，不能称为收藏数据已经丢失。
 
+## 阶段四确认
+
+### J13：生产曲线点数已经超过旧上限
+
+`ui/player/AudioVisualizer.kt:690/706/829/899–905` 按 28 格×3 泳道加 1 个延长点建立并绘制 85 点；`ui/player/waveform/WaveformCurve.kt:60/71` 仍把切线数截成 MAX_POINTS=64。之后绘图 `AudioVisualizer.kt:1192–1204` 却使用完整点数，不仅最后 21 个斜率未计算，第 63 个还被错误视作整条曲线终点，缺少相对于第 64 点的单调保护。
+
+`productionThreeLanePointCountExceedsTheTangentLimitAndOvershootsTheSeam` 使用真实生产常量和真实计算器，给第 61–64 点合法归一化高度 0.1/0.4/1.0/0.1，边界切线为正而下一段下降；采样得到峰值 **1.0243**，真实 staysWithinEndpoints 返回 false。没有执行 Canvas，不能据此声称已复现用户的闪屏或停顿。
+
+建议以实际绘制点数计算、初始化全部切线，或统一容量上限至少覆盖 85；回归包含第 63/64 点转折及最后一泳道，而非只测 28 点样本。
+
+### J14：再次迁移时把旧选择搬回来
+
+`ui/player/motion/MotionPrefs.kt:283–299/326–334` 在任何旧水位（包括 4）升级到 5 时，优先读取仍保留的 visualizer_tier，再写入已经存在的 motion_tier。旧键按设计不会删除，因此在 v2.9/v3.0 迁移后又手动改过新档位的用户可被覆盖。
+
+`upgradingAnAlreadyMigratedPreferenceReappliesAnObsoleteShowcaseChoice` 给出合法 version4 盘：旧 visualizer=SHOWCASE，新 motion=SIMPLE（后来显式选择）；真实 migrate 后新档位变回 SHOWCASE，水位推进到 5。纯 prefs 入口，无设备动效或播放。
+
+建议已存在且有效的 motion_tier 优先；只在确需从旧命名空间首次迁移且新键缺失时搬运。补“旧版设置→首次迁移→用户改新键→后续水位升级”的连续路径，不只测缺新键或缺旧键的独立盘。这是历史升级缺陷，不声称由 v3.7.8 新引入。
+
+### K06：单泳道没有接入连续滚动
+
+`AudioVisualizer.kt:788` 只有 waveBandOn && featuresAvailable && paletteReady 才进三泳道；这一支 `:827/851` 使用 scrollPhase01/BandScroll。回退单泳道 `:943–990` 只复制各格显示高度，xShift 固定为 0（flow 分支的平移又被内层相反抵消，只移动刷色）；没有使用滚动相位。`WaveformRing.kt:914–937` 也只平移 aggregate targets，没有将 aggregate bars/速度/峰值随历史平移，形成逐格形状逼近。
+
+`MotionEffects.kt:424–431` 的用户多频段开关可明确走此分支；特征暂不可用也会降级进入。结论是源码分支仍缺少所要求的均匀横向滚动，未运行视觉复测，不把它认作某段用户录屏的已确认唯一原因。建议单/三泳道共享时间轴、历史平移与几何插值，不以颜色流动替代波形移动。
+
+### K07：恢复监听被自己的降级分支移除
+
+`ui/CustomBackgroundLayer.kt:49–55` 在 suppressed=true 时先 return；恢复监听却在 `:63–69` 才注册。`ui/theme/BackgroundImageManager.kt:142–148` 的内存压力只把 suppressed 设 true，唯一生产 onForeground 调用就在该监听。若内存压力发生于前台并触发重组，监听随 return 被移除，下次回前台无入口解除 suppressed，背景图可一直隐藏到清除/进程重建。`NcrustApplication.kt:75–80/88–92` 确有内存回调入口。后台期间是否先重组受生命周期调度影响，所以没有声称每次切后台都必现。
+
+同一管理器 `:72–128` 的异步导入和 `:132–138` clear 没有共享修订/取消闸门。若用户清除发生在旧导入创建目录/提交之前，旧导入仍可晚到写文件并 setEnabled(true)，恢复刚清除的旧图；此为第二条静态提交观察，不额外加一个编号。
+
+建议前台恢复监听放在可视资源条件之外或 Application 生命周期中；在途导入捕获修订，清除/新导入推进修订，只有最新任务可提交。未执行 Android 图片导入或 Compose 生命周期复现。
+
+### K08：后台权限结果没有恢复时刷新
+
+`SettingsGroupScreen.kt:309/869–901` 的 allowed 只 remember(backgroundBatteryRefresh)；计数在启动系统页面后立即增加，通常仍读取跳转前的权限值。该页面没有 ON_RESUME 观察者/结果回调，用户在系统设置改好权限再返回，同一页面可继续显示旧“未允许”，直到销毁重进或再次点行。
+
+建议在恢复前台或设置结果返回时重新读取系统状态，必要时刷新跳转目标。仅源码确认；不测试系统权限或设备界面。
+
+## 独立 Go 服务附录（不属于当前 APK 请求链）
+
+`RetrofitClient.kt:25/205` 当前直连 music.163.com；历史设计也明确不使用自建 API。因此下面 3 项仅针对单独部署 ncrust-api 的情形，不计作安卓运行中的账号泄露或播放故障。5 个 Go 文件均已通读，覆盖单独记在 non_kotlin_boundaries。
+
+| 编号 | 优先级（若部署） | 问题与证据 | 建议 |
+|---|---|---|---|
+| W01 | P1 | `ncrust-api/handlers.go:280–296/418–423` 只截 Cookie 前 40 字节分账号缓存。真实 routes 先 A 后 B，两份 Cookie 的公共设备字段前缀相同、MUSIC_U 后缀不同，B 读到 A 的 account JSON，上游仅调用一次 | 账号资料不共享缓存，或按完整认证快照不可逆指纹隔离；不可用公共 Cookie 前缀当账号身份 |
+| W02 | P2 | `handlers.go:76–84` 除特判 301 外不转发上游状态；本地 RoundTripper 的 HTTP503 经真实 search 路由变成 HTTP200 | 显式区分 HTTP 状态与 JSON 业务 code，保留失败状态/安全响应形状 |
+| W03 | P2 | `handlers.go:176–177` 只看 HTTP200 就缓存歌词 24h；本地 HTTP200/code500 先到后，健康夹具再不被请求，失败体一直作为缓存命中 | 只缓存结构与业务码均成功的内容；失败不占完整内容 TTL；其它同形缓存出口一起核对 |
+
+证据为 phase-4/noon_audit_test.go 和 optional-backend-go-test.jsonl：3 tests pass，断言错误存在。`httptest.NewRecorder` 直接调用 routes，所有外发由内存 RoundTripper 返回，**没有启动 TCP 服务、没有真实网络或账号、没有执行 fmTrash 等云端写入**。运行使用 GOTOOLCHAIN=local/GOPROXY=off，无依赖下载。
+
 ## 证据与执行说明
 
 - 阶段一源码探针、XML 和 Gradle 日志：[phase-1/](probes/2026-10-27-1150/phase-1/)。5 tests / 0 failures / 0 errors，均断言错误存在。
 - 阶段二完整累计证据：[phase-2/](probes/2026-10-27-1150/phase-2/)。11 tests / 0 failures / 0 errors。搜索夹具的网易 HTTP 由应用拦截器直接返回，QQ/B站 Provider 均被本地替身覆盖并恢复；未产生真实账号/云端请求。
 - 阶段三完整累计证据：[phase-3/](probes/2026-10-27-1150/phase-3/)。15 tests / 0 failures / 0 errors；含真实依赖版本和触摸节点字节码，属于静态证据而非额外设备复现。
+- 阶段四累计证据：[phase-4/](probes/2026-10-27-1150/phase-4/)。18 JVM tests pass，另有独立未接入 Go 服务的 3 条缺陷用例，不混算安卓用例数。
 - 统计探针通过修改测试中对象实例的 CoroutineContext/Gson factories 控制时序，恢复全部原值，不改磁盘业务源码。初次尝试静态 final 字段赋值被 JDK21 拒绝、字段名猜测失败，均属探针环境错误，修正后才采纳上述证据，不算应用问题。
 - 本轮逐文件/行段与源码 SHA-256：[coverage.json](probes/2026-10-27-1150/coverage.json)。阶段未结束，不提供全项目完成比例。
 - 开始实测额度：五小时剩余 99%、周剩余 55%；阶段一读取：88% / 53%。未使用重置。
 - 阶段二读取额度：78% / 52%。探针编译时直接引用 sun.misc.Unsafe 不在 Android 编译类路径，改用 JDK 反射后通过；属于夹具环境修正，不计应用缺陷。
+- 后续阶段读取额度：57% / 48% → 46% / 47% → **35% / 45%**，均为五小时/周窗口实际剩余比例，继续审查，未消耗重置。
 
 ## 当前断点
 

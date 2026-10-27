@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonGestureAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:27:28.293Z" hostname="cachyos-x8664" time="0.001">
+  <properties/>
+  <testcase name="theCardsProgressVelocityHasTheOppositeSignToTheSnapContract" classname="com.takahashirinta.ncrust.audit.NoonGestureAuditProbe" time="0.0"/>
+  <testcase name="aFastControlsUpwardDragSnapsBackEvenAfterCrossingTheDistanceThreshold" classname="com.takahashirinta.ncrust.audit.NoonGestureAuditProbe" time="0.001"/>
+  <system-out><![CDATA[AUDIT card gesture composition: upward 40px / 10ms increases progress; the caller passes +4000px/s to a contract requiring negative upward velocity, so a short fast upward fling returns collapsed. Pure decision/entry-formula evidence, no pointer event injected
+AUDIT controls gesture composition: upward 120px / 50ms supplies positive velocity; velocity branch overrides the already-crossed 12% collapse distance and restores the controls. Correct screen-Y sign yields collapse
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
