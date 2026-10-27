@@ -1,0 +1,70 @@
+{
+  "automation_id": "arris-17-00",
+  "trigger_utc": "2026-10-27T09:00:14.694Z",
+  "start_head": "e7582ca0cc0ba55075f80a8d46c8b1747fe7ab1b",
+  "branch": "fix/player-regression-v374",
+  "application_baseline": "15237f8c06ba160632c9096101386f821b85a723",
+  "versionName": "3.7.8-gpl",
+  "versionCode": 94,
+  "initial_worktree_clean": true,
+  "committed_app_backend_agents_diff_since_baseline": "",
+  "remote_fetched": false,
+  "previous_coverage_sha256": "4e0d13431569df4d0ecfbec588dae1092c46f74c46b8d2979429559b0fecd31c",
+  "previous_source_fingerprints_checked": 376,
+  "changed_fingerprints": [],
+  "new_business_source_reads": 0,
+  "new_probes": 0,
+  "tests_run": 0,
+  "coverage_counts_unchanged": {
+    "recorded": 376,
+    "full_executable_code": 300,
+    "partial_call_chain": 76,
+    "without_record": 6
+  },
+  "document_reads": [
+    {
+      "path": "AGENTS.md",
+      "regions": [
+        [
+          1,
+          155
+        ],
+        [
+          5084,
+          5118
+        ]
+      ],
+      "mode": "unchanged instructions relevant sections, not full historical document",
+      "sha256": "21ca5b5f14669824323ba29084fb426e245254133c120301b13032efed8838c4"
+    },
+    {
+      "path": "docs/reviews/REVIEW_COVERAGE.md",
+      "regions": [
+        [
+          1,
+          74
+        ]
+      ],
+      "mode": "whole coverage ledger before this round edit"
+    },
+    {
+      "path": "docs/reviews/2026-10-27-1150-scheduled-review.md",
+      "regions": [
+        [
+          230,
+          279
+        ]
+      ],
+      "mode": "latest report execution/results/breakpoint tail only"
+    }
+  ],
+  "commands": [
+    "git status --short / --porcelain=v1",
+    "git log -8 --oneline",
+    "git log -1 --format=%H -- app",
+    "git diff --name-status 15237f8 HEAD -- app ncrust-api AGENTS.md",
+    "version fields read at app/build.gradle.kts:514-515",
+    "SHA-256 comparison of 376 previously recorded Kotlin files"
+  ],
+  "interpretation": "No new source audit or defect reproduction. Fingerprint checks do not increase source coverage."
+}

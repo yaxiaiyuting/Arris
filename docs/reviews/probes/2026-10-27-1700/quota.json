@@ -1,0 +1,20 @@
+{
+  "automation": "arris-17-00",
+  "start": {
+    "checkedAtUtc": "2026-10-27 09:00:28 UTC",
+    "primaryRemainingPercent": 9,
+    "weeklyRemainingPercent": 41,
+    "primaryResetsAt": 1793095772,
+    "weeklyResetsAt": 1793623294
+  },
+  "final": {
+    "checkedAtUtc": "2026-10-27 09:02:13 UTC",
+    "primaryRemainingPercent": 8,
+    "weeklyRemainingPercent": 41,
+    "primaryResetsAt": 1793095771,
+    "weeklyResetsAt": 1793623294
+  },
+  "decision": "start below ~10% threshold; status verification and documentation only; no review expansion",
+  "resetConsumed": false,
+  "note": "Reported reset time is earlier than observation; no recovery was assumed from the timestamp. Decision uses the returned remaining percentage."
+}
