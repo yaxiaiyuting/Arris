@@ -21,9 +21,9 @@
 
 | 文件 | 大小 | SHA-256 |
 |---|---:|---|
-| `Ncrust-v3.7.9-gpl-release.apk` | 12,090,660 | `938ced037d8349515fa088c5fc4a1e0a853aaf0512062e285b91760aad2c5a12` |
-| `Ncrust-v3.7.9-gpl-debug.apk` | 33,9xx,xxx | 见 `SHA256SUMS` |
-| `mapping-v3.7.9-gpl.txt.gz` | 5,8xx,xxx | 见 `SHA256SUMS` |
+| `Ncrust-v3.7.9-gpl-release.apk` | 12,089,036 | `938ced037d8349515fa088c5fc4a1e0a853aaf0512062e285b91760aad2c5a12` |
+| `Ncrust-v3.7.9-gpl-debug.apk` | 33,969,629 | `774d4b99487aa288067090dbbc2ef7a4e51115cb8f410a6735019f7ea1e36e8e` |
+| `mapping-v3.7.9-gpl.txt.gz` | 5,851,154 | `690281fc8f426074b300055cb50ddc635195004f4da357208046db21aafac494` |
 
 ## 本轮执行方式
 

@@ -1,0 +1,44 @@
+{
+  "verification_date": "2026-10-27",
+  "release_id": 425542747,
+  "tag_name": "v3.7.9-gpl",
+  "source_commit": "c0bcb97",
+  "all_remote_sizes_and_sha256_match": true,
+  "assets": [
+    {
+      "name": "mapping-v3.7.9-gpl.txt.gz",
+      "size": 5851154,
+      "state": "uploaded",
+      "matches_local": true,
+      "id": 681781527
+    },
+    {
+      "name": "Ncrust-v3.7.9-gpl-debug.apk",
+      "size": 33969629,
+      "state": "uploaded",
+      "matches_local": true,
+      "id": 681781329
+    },
+    {
+      "name": "Ncrust-v3.7.9-gpl-release.apk",
+      "size": 12089036,
+      "state": "uploaded",
+      "matches_local": true,
+      "id": 681781223
+    },
+    {
+      "name": "RELEASE_NOTES.md",
+      "size": 6331,
+      "state": "uploaded",
+      "matches_local": true,
+      "id": 681781678
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 282,
+      "state": "uploaded",
+      "matches_local": true,
+      "id": 681781590
+    }
+  ]
+}
