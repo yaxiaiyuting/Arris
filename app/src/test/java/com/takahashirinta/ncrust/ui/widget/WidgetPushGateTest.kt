@@ -93,11 +93,25 @@ class WidgetPushGateTest {
     }
 
     @Test
-    fun `暂停时秒数变化——不推（暂停后进度不会自己走）`() {
+    fun `暂停态的位置判据——空闲重复不推，显式 seek 推一次`() {
+        // v3.7.9 · R4：旧实现「暂停 ⇒ 一律不推」，于是暂停中拖动进度条（positionSec
+        // 10 → 90）也被吃掉，卡片一直显示旧进度。修法是把「位置有没有变」当成唯一判据：
+        //   · 暂停时位置**不会自己走** ⇒ 位置没变只可能是同一份数据被重复采样 ⇒ 压掉；
+        //   · 位置变了 ⇒ 只可能是用户显式 seek（拖进度条 / 系统媒体控件）⇒ 必须推。
+        val pausedAt10 = key(isPlaying = false, positionSec = 10)
+        assertFalse(
+            "暂停态的空闲重复快照必须压掉（节流目标：零重复推送）",
+            WidgetPushGate.shouldPush(pausedAt10, key(isPlaying = false, positionSec = 10)),
+        )
+        assertTrue(
+            "暂停态的显式 seek（10s → 90s）必须推一次，否则卡片停在旧进度",
+            WidgetPushGate.shouldPush(pausedAt10, key(isPlaying = false, positionSec = 90)),
+        )
+        // 「推一次」而不是「每秒一次」：新指纹成为基准后，同一位置不再推。
         assertFalse(
             WidgetPushGate.shouldPush(
-                key(isPlaying = false, positionSec = 7),
-                key(isPlaying = false, positionSec = 8),
+                key(isPlaying = false, positionSec = 90),
+                key(isPlaying = false, positionSec = 90),
             ),
         )
     }
@@ -170,18 +184,39 @@ class WidgetPushGateTest {
     }
 
     @Test
-    fun `暂停后的 120 次 tick 一次都不推`() {
+    fun `暂停态的重复快照——120 次一次都不推（节流目标不变）`() {
+        // v3.7.9 · R4 修的是「暂停态的显式 seek 被吃掉」，**不是**恢复暂停 ticker：
+        // `startProgressUpdates` 仍然只在 `isPlaying` 时启动，暂停时根本没有人按秒采位置。
+        // 这里模拟的是「同一份暂停数据被反复送到闸门」（updateNotify / 重复渲染）：
+        // 位置不变 ⇒ 一次都不推，空闲零重复推送的节流目标原样成立。
         val paused = key(isPlaying = false, positionSec = 42)
         var previous: WidgetPushKey? = paused
         var pushes = 0
-        for (tick in 0 until 120) {
-            val next = key(isPlaying = false, positionSec = 42 + tick / 2)
+        repeat(120) {
+            val next = key(isPlaying = false, positionSec = 42)
             if (WidgetPushGate.shouldPush(previous, next)) {
                 pushes++
                 previous = next
             }
         }
-        assertEquals("暂停期间必须完全停止推送", 0, pushes)
+        assertEquals("暂停态的空闲重复快照必须零推送", 0, pushes)
+    }
+
+    @Test
+    fun `暂停中拖动进度条的 120 次采样——每个整数秒各推一次`() {
+        // 拖动由用户驱动、不是 ticker：位置真的变了就必须推，而且每个整数秒只推一次。
+        // 起点 9s，2Hz 采样从 10s 走到 69s ⇒ 跨过 60 个整秒 = 60 次推送（不是 120 次）。
+        var previous: WidgetPushKey? = key(isPlaying = false, positionSec = 9)
+        var pushes = 0
+        for (tick in 0 until 120) {
+            val positionSec = 10 + tick / 2
+            val next = key(isPlaying = false, positionSec = positionSec)
+            if (WidgetPushGate.shouldPush(previous, next)) {
+                pushes++
+                previous = next
+            }
+        }
+        assertEquals("暂停拖动必须跟手，但同一秒只推一次", 60, pushes)
     }
 
     // ---------------------------------------------------------------- 封面发送策略

@@ -195,6 +195,28 @@ object QqPlaylistRepository {
     // ---------------------------------------------------------------- 详情 ----
 
     /**
+     * 一份详情结果**是不是取全了**（H21）。
+     *
+     * 旧判定只看 `hasMore`。于是「服务端声明 `total_song_num=100`、却根本没给 `songlist`
+     * 数组」这种结构异常被当成**权威空表**：0 首 + `hasMore=0` ⇒ `complete=true`、
+     * 写进缓存，上层（本地同步）也就无从判断"其实一首都没拿到"。
+     *
+     * 现在同时校验**声明总数**与**实际拿到的条数**：只有"不再有下一页"且"条数对得上"
+     * （或服务端没声明总数）才算完整。
+     *
+     * 代价写在明处：[collected] 是**映射后**的条数 —— 缺 `songmid` 的原始条目会在
+     * `QqSongMapper` 那一步被丢掉（H21 探针的夹具正是这种形状）。这样的歌单会一直留在
+     * "不完整"，每次 TTL 到期都会再补取一次。这是有意的取舍：宁可多拉一次，
+     * 也不能把"少了几首"报成"已经取全"。
+     *
+     * @param declaredTotal 服务端声明的曲目总数（`total_song_num`，缺失时为 0）。
+     * @param collected 本次实际拿到的（映射成功的）条数。
+     * @param hasMore 服务端是否还有下一页。
+     */
+    internal fun detailIsComplete(declaredTotal: Int, collected: Int, hasMore: Boolean): Boolean =
+        !hasMore && (declaredTotal <= 0 || collected >= declaredTotal)
+
+    /**
      * 加载某个歌单的全部曲目（分页累积）。
      *
      * @param dirId 目录号。qm 用它寻址（「我喜欢」= 201）；收藏来的歌单没有自己的
@@ -238,16 +260,23 @@ object QqPlaylistRepository {
         ) {
             is QqPlaylistResult.Ok -> {
                 val page = r.value
-                QqPlaylistStore.writeDetail(
-                    ctx, key, page.songs, now(),
-                    complete = !page.hasMore, total = page.total,
-                )
+                // 完整性由 detailIsComplete 统一判定：分页截断、缺 songlist、条数对不上
+                // 都算"没取全"（H21）。旧实现在这里只看 hasMore。
+                val complete = detailIsComplete(page.total, page.tracks.size, page.hasMore)
+                // 部分结果**不覆盖**已知完整的那份缓存：一次网络抖动/结构异常不该把之前
+                // 取全的数据降级成不完整（用户下次打开看到的是更少的曲目）。
+                if (complete || cachedDetail?.complete != true) {
+                    QqPlaylistStore.writeDetail(
+                        ctx, key, page.songs, now(),
+                        complete = complete, total = page.total,
+                    )
+                }
                 PlaylistResult.Data(
                     PlaylistLoadOutcome(
                         PlaylistDetailData(page.songs, page.tracks),
                         fromCache = false, fresh = true,
-                        // 「拉完了但一首都没有」是**空歌单**，不是降级；只有被截断才算降级。
-                        degradation = if (page.hasMore) PlaylistDegradation.TRUNCATED else null,
+                        // 权威空表（total 与条数一致）仍然是 null；只有"没取全"才降级。
+                        degradation = if (complete) null else PlaylistDegradation.TRUNCATED,
                     )
                 )
             }

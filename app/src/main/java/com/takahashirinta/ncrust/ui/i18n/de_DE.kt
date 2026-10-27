@@ -647,7 +647,7 @@ val deDE = Strings(
             regionLocked = "Vom Rechteinhaber für diese Region gesperrt",
             network = "Netzwerkfehler — bitte später erneut versuchen",
             unknown = "Dieser Titel kann gerade nicht abgespielt werden — bitte später erneut versuchen",
-            switchSource = { other -> "%s hat diesen Titel nicht — wechseln zu " + other },
+            switchSource = { other -> "hat diesen Titel nicht — wechseln zu " + other },
         ),
 
         share = ShareStrings(

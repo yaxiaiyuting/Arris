@@ -205,6 +205,8 @@ internal fun PlayerCardBigScreenLayout(
                     onSelect = { playerViewModel.setQualityPreference(it) },
                     maxHeightDp = qualityPickerMaxHeightDp,
                     horizontalAlignment = Alignment.End,
+                    // K09：大屏左栏与展开态必须同源，否则同一首试听曲在两处显示不一致。
+                    trialFlow = playerViewModel.currentIsTrial,
                 )
                 // v1.8.0 · T4：大屏里的自动旋转开关。放在左栏信息行（音质 chip 右侧）
                 // 而不是控制条：横向控制条是"左组贴左 + 传输组居中 + 右组贴右"的三段式，

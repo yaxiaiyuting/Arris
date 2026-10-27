@@ -273,6 +273,9 @@ object MotionPrefs {
     /**
      * 幂等迁移：**不删不改任何既有键**（`visualizer_*` 一律原样）。
      *
+     * v3.8.0 · J14：`motion_tier` **已经存在且合法**时，一律以它为准 —— 旧键不删，
+     * 所以「有旧键」不等于「没迁移过」（详见下面 `existingTier` 处的注释）。
+     *
      * - v3.0.0（水位 3 → 4）：不搬运任何键的值，只补一条「自动降级已移除」的说明
      *   —— 且**只对真的被降级过的盘补**（那些用户会看到画面多出动效，需要一个解释）。
      * - v3.2.0（水位 4 → 5）：同样不搬运任何键的值，只补一条「简洁档已收窄为静态档」的说明
@@ -287,7 +290,23 @@ object MotionPrefs {
         val legacyShowcase = bool(prefs, LegacyKeys.KEY_SHOWCASE, false)
         val legacyAutoDowngraded = bool(prefs, LegacyKeys.KEY_AUTO_DOWNGRADED, false)
 
-        val tier = migratedTier(legacyTier, legacyShowcase, deviceDefault)
+        // v3.8.0 · J14：**新键优先**。
+        //
+        // 旧键（`visualizer_*`）按设计**永不删除**（回滚安装 v2.8.0 时用户的选择还在），
+        // 所以「盘上有旧键」不能当成「还没迁移过」。旧实现无条件 `putInt(motion_tier, tier)`，
+        // 而水位升级（v3.0.0 3→4、v3.2.0 4→5）会对**已经迁移过的盘**再走一遍本函数 ——
+        // 于是「v2.8 迁移 → 用户手动改成简洁档 → 后续版本升级」会被旧设置搬回炫技档
+        // （探针：version4 盘、旧 visualizer=SHOWCASE、新 motion=SIMPLE，迁移后变回 SHOWCASE）。
+        //
+        // 判据是「**新键存在且取值合法**」：越界/脏值仍按缺失处理（那种盘只能靠旧键救），
+        // 与 `MotionIntensity.sanitize` 的语义一致 —— 合法范围只有 `MotionIntensity.RANGE`。
+        val existingTier = intOrNull(prefs, KEY_TIER)?.takeIf { it in MotionIntensity.RANGE }
+        val tier = if (existingTier != null) {
+            // 已经是新版盘（用户后来还改过）⇒ 不搬运旧值，只推进水位。
+            null
+        } else {
+            migratedTier(legacyTier, legacyShowcase, deviceDefault)
+        }
         val legacyLevel = readDegradeLevel(prefs)
         // 只有「盘上真的带着一次降级」才写说明：v2.8.0 的标记或 v2.9.0 的水位都算。
         val wasDegraded = legacyAutoDowngraded || legacyLevel > MotionDegrade.NONE

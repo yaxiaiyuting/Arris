@@ -253,15 +253,31 @@ object LyricPosterRenderer {
         var blocks = chosen.first
         var total = chosen.second
 
-        // 最小档仍然放不下 ⇒ 从**尾部**丢行，永远保住当前行（[currentIndex]）。
-        // 循环受 blocks.size 约束，最多丢 N 行，不存在"丢不完"的死循环。
+        // 最小档仍然放不下 ⇒ **前后同时裁**，永远保住当前行（[currentIndex]）。
+        //
+        // K03：旧实现只从尾部丢行，一旦当前行靠后（end-1 > keepCurrent 立刻不成立），
+        // 循环直接停 —— 歌词照旧画到页脚上。这里先丢当前行之前的上下文，
+        // 再丢之后的；两侧都无可丢时退出（不会死循环）。
+        var baseIndex = 0
         if (total > available) {
-            val keepCurrent = spec.currentIndex.coerceAtLeast(0)
+            var start = 0
             var end = blocks.size
-            while (total > available && end > 1 && end - 1 > keepCurrent) {
-                end -= 1
-                blocks = blocks.subList(0, end)
-                total = blocks.sumOf { it.height }
+            val keepCurrent = spec.currentIndex.coerceIn(0, (blocks.size - 1).coerceAtLeast(0))
+            var before = keepCurrent
+            var after = blocks.size - 1 - keepCurrent
+            while (total > available && (before > 0 || after > 0)) {
+                if (before > 0) {
+                    start += 1
+                    before -= 1
+                } else if (after > 0) {
+                    end -= 1
+                    after -= 1
+                }
+                total = blocks.subList(start, end).sumOf { it.height }
+            }
+            if (start > 0 || end < blocks.size) {
+                blocks = blocks.subList(start, end)
+                baseIndex = start
             }
         }
 
@@ -272,13 +288,16 @@ object LyricPosterRenderer {
 
         canvas.save()
         canvas.translate(plan.lyricsLeftPx.toFloat(), plan.lyricsTopPx.toFloat())
+        // K03：无论怎么裁，渲染都不得越过歌词区（旧实现没有裁剪，最小档时压到页脚上）。
+        canvas.clipRect(0f, 0f, plan.lyricsWidthPx.toFloat(), available.toFloat())
         var y = 0f
         blocks.forEachIndexed { index, block ->
-            // 与原表比对：截尾之后下标仍然是原表的前缀，所以可以直接用 spec.currentIndex。
+            // 与原表比对：裁剪后下标要加上窗口起点（前裁时不再是 0 起）。
+            val original = baseIndex + index
             val color = when {
                 spec.currentIndex < 0 -> onBackground
-                index < spec.currentIndex -> past
-                index == spec.currentIndex -> primary
+                original < spec.currentIndex -> past
+                original == spec.currentIndex -> primary
                 else -> future
             }
             block.main.paint.color = color

@@ -159,9 +159,15 @@ object AppWarmup {
                         // 不留"缓存 10 条 → 刷新变 20 条"的可见 diff
                         runCatchingCancellable { PlaylistApi.getTopSongs(limit = 20, offset = 0) }
                     }
-                    dailyDeferred.await()?.let { ContentCache.homeDailySongs = it }
-                    plsDeferred.await()?.let { ContentCache.homeRecommendPlaylists = it }
-                    topDeferred.await()?.let { ContentCache.homeNewSongs = it }
+                    // H15：这批请求发出时属于某个账号；等它们回来时用户可能已经换号。
+                    // 归属变了就整批丢弃 —— 否则新账号的首页会先闪一下上一个人的每日推荐。
+                    val ownerAtStart = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
+                    fun ownerStillSame() =
+                        com.takahashirinta.ncrust.auth.CookieManager.accountOwner() == ownerAtStart
+                    dailyDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeDailySongs = it }
+                    plsDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeRecommendPlaylists = it }
+                    topDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeNewSongs = it }
+                    ContentCache.bindOwner(ownerAtStart)
                 }
                 // 标记首页数据已预热：HomeScreen 进屏时据此跳过重复请求。
                 ContentCache.markHomeWarmed()
@@ -208,6 +214,7 @@ object AppWarmup {
             runCatchingCancellable {
                 HomeSnapshot.save(
                     app,
+                    owner = com.takahashirinta.ncrust.auth.CookieManager.accountOwner(),
                     daily = ContentCache.homeDailySongs,
                     playlists = ContentCache.homeRecommendPlaylists,
                     newSongs = ContentCache.homeNewSongs,

@@ -20,6 +20,7 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,11 +45,13 @@ import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseCookie
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.qq.QqAuthStore
 import com.takahashirinta.ncrust.qq.QqProfile
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
+import com.takahashirinta.ncrust.ui.components.LoginCredentialAcceptance
 import com.takahashirinta.ncrust.ui.components.QrAuthorizeScreen
 import com.takahashirinta.ncrust.ui.components.QrLoginDialog
 import com.takahashirinta.ncrust.ui.components.SectionTitle
@@ -314,12 +317,26 @@ internal fun SettingsAccountPage(
 
         if (showQrLogin) QrLoginDialog(
             onLoginSuccess = { cookie ->
+                // J02：这里原本无条件 `hasCookie = true` + 关弹窗。`saveCookie` 内部有
+                // 「半截会话不得覆盖完整会话」的闸（NeteaseCookie.shouldReplace），被拒时
+                // 磁盘上还是旧账号的凭据 —— 必须读回确认，再决定是不是真的登录成功。
                 CookieManager.saveCookie(context, cookie)
-                RetrofitClient.updateCookie(cookie)
-                SessionMonitor.onLoginSucceeded(context)
-                hasCookie = true
-                showQrLogin = false
-                loadProfile()
+                val stored = CookieManager.getCookie(context)
+                if (LoginCredentialAcceptance.isApplied(null, stored, cookie)) {
+                    RetrofitClient.updateCookie(stored)
+                    SessionMonitor.onLoginSucceeded(context)
+                    hasCookie = true
+                    showQrLogin = false
+                    loadProfile()
+                    true
+                } else {
+                    Log.w(
+                        "SettingsAccount",
+                        "qr login rejected locally: stored=[${NeteaseCookie.describe(stored)}] " +
+                            "candidate=[${NeteaseCookie.describe(cookie)}]",
+                    )
+                    false
+                }
             },
             onGenericLogin = {
                 showQrLogin = false

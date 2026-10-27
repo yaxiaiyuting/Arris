@@ -117,6 +117,25 @@ class BiliQrLogin(
     @Volatile
     private var cancelled: Boolean = false
 
+    /**
+     * **会话代次**（E08）：每一次「申请新二维码 / 重置 / 取消」都推进它。
+     *
+     * 取消标志只挡得住「还没有发出请求」的那一段；而取消**正好发生在请求在飞的那几毫秒**
+     * 时，晚到的响应会把状态从 CANCELLED 推回 WAITING，甚至把凭据写进 [credential]
+     * 并落成 CONFIRMED —— 用户已经关掉登录框了，控制器却仍然"登录成功"。
+     * 所以每个 `await` 回来之后都要核对「我还是发起时那一轮吗」。
+     *
+     * 用 [AtomicLong] 而不是 `@Volatile Long` + `++`：取消来自 UI 线程、
+     * 推进来自协程，`++` 在读-改-写之间丢一次自增就会让「代次没变」的旧响应蒙混过关。
+     */
+    private val generation = java.util.concurrent.atomic.AtomicLong(0L)
+
+    /** 开一轮新会话，返回它的代次（[prepare] / [reset] 调用）。 */
+    private fun startSession(): Long = generation.incrementAndGet()
+
+    /** 发起时的那一轮**已经作废**了吗（被取消，或已被更新的会话取代）。 */
+    private fun sessionStale(started: Long): Boolean = cancelled || started != generation.get()
+
     // ---------------------------------------------------------------- 状态机 ----
 
     /**
@@ -134,6 +153,8 @@ class BiliQrLogin(
         credential = null
         lastFailure = null
         pollCount = 0
+        // 新一轮申请 = 新一代会话：上一轮还在飞的申请响应从此不属于本会话（E08）。
+        val started = startSession()
         emit(State.LOADING, onState)
 
         val code = try {
@@ -143,6 +164,11 @@ class BiliQrLogin(
         } catch (e: Exception) {
             Log.w(TAG, "申请二维码失败", e)
             null
+        }
+        // E08：取消（或已经开了新一轮）之后才回来的申请响应，**不许**把状态推回 WAITING。
+        if (sessionStale(started)) {
+            Log.i(TAG, "prepare: 申请响应迟到（已取消 / 已换一轮）⇒ 丢弃")
+            return emitTerminal(State.CANCELLED, onState)
         }
         if (code == null) {
             // v3.2.1 · P0：失败**必须**留下痕迹，且与「已失效」分开 ——
@@ -213,6 +239,9 @@ class BiliQrLogin(
         val deadline = clock() + QR_TTL_MS
         var unavailableStreak = 0
         var networkStreak = 0
+        // E08：本轮会话的代次。每个 await 之后复核它 —— `cancelled` 的两个检查点
+        // （循环头、`sleep` 之后）**跨不过**「就在 poll API 里等待时被取消」这个窗口。
+        val started = generation.get()
 
         while (true) {
             if (cancelled) return emitTerminal(State.CANCELLED, onState)
@@ -227,6 +256,11 @@ class BiliQrLogin(
             pollCount++
 
             val result = poll(code.qrcodeKey)
+            // E08：等待期间被取消 ⇒ 这条响应属于已作废的会话，绝不 apply（它会写 credential）。
+            if (sessionStale(started)) {
+                Log.i(TAG, "poll: 响应迟到（已取消）⇒ 丢弃")
+                return emitTerminal(State.CANCELLED, onState)
+            }
             if (result is BiliQrPoll.Failed) {
                 when (result.reason) {
                     BiliQrPoll.Failed.Reason.NETWORK -> networkStreak++
@@ -256,8 +290,15 @@ class BiliQrLogin(
         if (isTerminal(state)) return state
         val key = qrCode?.qrcodeKey
         if (key.isNullOrBlank()) return state
+        val started = generation.get()
         pollCount++
-        val next = apply(poll(key), tolerateNetwork = false, networkStreak = 0, unavailableStreak = 0)
+        val result = poll(key)
+        // E08：单步轮询也有同一个等待窗口 —— 取消后到达的成功响应同样不许写凭据。
+        if (sessionStale(started)) {
+            Log.i(TAG, "pollOnce: 响应迟到（已取消）⇒ 丢弃")
+            return emitTerminal(State.CANCELLED, null)
+        }
+        val next = apply(result, tolerateNetwork = false, networkStreak = 0, unavailableStreak = 0)
         emitIfChanged(next, null)
         return next
     }
@@ -271,12 +312,16 @@ class BiliQrLogin(
      */
     fun cancel() {
         cancelled = true
+        // 推进代次：正在飞的那几个请求（申请 / 轮询）从此都是"上一轮"的，回来也不 apply。
+        generation.incrementAndGet()
         if (!isTerminal(state)) state = State.CANCELLED
     }
 
     /** 回到起点，可以重新开始（UI 的「刷新二维码」按钮）。 */
     fun reset() {
         cancelled = false
+        // 重开也要推进代次：上一轮的迟到响应不得写进这一轮的状态/凭据（E08）。
+        generation.incrementAndGet()
         credential = null
         qrCode = null
         lastFailure = null

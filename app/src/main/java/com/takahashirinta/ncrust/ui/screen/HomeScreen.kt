@@ -123,14 +123,27 @@ fun HomeScreen(
     // E（方案 2 瘦身版）：榜单入口。走 ContentCache 的 15s freshness 窗口 —— warmup/上次
     // 访问刚拉过就不再请求；卡片放在首屏，但请求不阻塞其它分节渲染（拿不到就整块不显示）。
     var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
+    /**
+     * H15：一次首页请求**发出时**的会话归属，用来挡住"换号之后才到达"的旧响应。
+     *
+     * `ContentCache.bindOwner` 只在**换号那一刻**清理已经存在的值，挡不住之后到达的写：
+     * A 的三块个性化数据如果在切到 B 之后才回来，就会被写进同一个 ContentCache、
+     * 再被 [persistHomeSnapshot] 落盘 —— 用户看到的是 B 的首页上摆着 A 的每日推荐。
+     * 判据与 `HomeSnapshot.save` 的提交闸门**同一条**（都走 `CookieManager.accountOwner()`）。
+     */
+    fun sessionStillAt(startedOwner: String?): Boolean = CookieManager.accountOwner() == startedOwner
+
     LaunchedEffect(Unit) {
         if (ContentCache.toplistItems != null && ContentCache.isToplistFresh()) return@LaunchedEffect
+        // H15：榜单同样不能把「换号前发出的请求」的结果落进新会话的快照。
+        val ownerAtStart = CookieManager.accountOwner()
         // v1.5.1 · C：没网就不发（榜单只是首屏一块内容，不值得为它等超时）。
         if (!NetworkAvailability.isOnline(context)) {
             offline = true
             return@LaunchedEffect
         }
         runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
+            if (!sessionStillAt(ownerAtStart)) return@LaunchedEffect
             ContentCache.putToplist(it)
             toplists = it
             HomeSnapshot.save(context, toplists = it)
@@ -172,15 +185,21 @@ fun HomeScreen(
     }
 
     fun loadDailySongs() {
+        // H15：归属在**请求发出时**捕获（本函数跑在 Main 上），响应回来时再复核。
+        val ownerAtStart = CookieManager.accountOwner()
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val list = PlaylistApi.getDailyRecommendSongs()
                 withContext(Dispatchers.Main) {
+                    // 换过账号 ⇒ 这是上一个会话的推荐，不写内存、不落盘。
+                    if (!sessionStillAt(ownerAtStart)) return@withContext
                     dailySongs = list
                     ContentCache.homeDailySongs = list
                     offline = false
                     persistHomeSnapshot()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("DailySongs", "Error", e)
             }
@@ -188,26 +207,32 @@ fun HomeScreen(
     }
 
     fun loadPlaylists() {
+        val ownerAtStart = CookieManager.accountOwner()
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val list = PlaylistApi.getRecommendPlaylists()
                 withContext(Dispatchers.Main) {
+                    if (!sessionStillAt(ownerAtStart)) return@withContext
                     playlists = list
                     ContentCache.homeRecommendPlaylists = list
                     offline = false
                     persistHomeSnapshot()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (_: Exception) { }
         }
     }
 
     fun loadNewSongs() {
+        val ownerAtStart = CookieManager.accountOwner()
         coroutineScope.launch(Dispatchers.IO) {
             if (newSongs.isEmpty()) isLoading = true
             error = null
             try {
                 val list = PlaylistApi.getTopSongs(limit = NEW_SONGS_LIMIT, offset = 0)
                 withContext(Dispatchers.Main) {
+                    if (!sessionStillAt(ownerAtStart)) return@withContext
                     newSongs.clear()
                     newSongs.addAll(list)
                     ContentCache.homeNewSongs = list.toList()
@@ -215,6 +240,8 @@ fun HomeScreen(
                     offline = false
                     persistHomeSnapshot()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     error = strings.loadFailed(e.message)
@@ -238,8 +265,10 @@ fun HomeScreen(
         loadDailySongs()
         loadPlaylists()
         loadNewSongs()
+        val ownerAtStart = CookieManager.accountOwner()
         coroutineScope.launch(Dispatchers.IO) {
             runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
+                if (!sessionStillAt(ownerAtStart)) return@launch
                 ContentCache.putToplist(it)
                 withContext(Dispatchers.Main) { toplists = it }
                 HomeSnapshot.save(context, toplists = it)

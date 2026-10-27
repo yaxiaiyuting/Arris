@@ -121,7 +121,7 @@ object CatalogAggregator {
      * @param anchor 用户点进来的那个艺人身份。**它永远是主身份**（标题、头像、默认口径都用它）。
      */
     suspend fun loadArtist(context: Context, anchor: ArtistKey): ArtistPage {
-        val anchorAlbums = neOrQqAlbums(anchor)
+        val anchorAlbums = albumsOfSide(anchor)
         val candidate = findCounterpartArtist(context, anchor, anchorAlbums)
 
         val merged = MergedArtist(
@@ -136,20 +136,30 @@ object CatalogAggregator {
             runCatching { MatchCacheStore.putArtist(context, merged) }
         }
 
-        // ---- 两源的专辑列表 ----
-        val neAlbums = if (anchor.source == MusicSource.NETEASE) anchorAlbums else emptyList()
-        val qqAlbums = if (anchor.source == MusicSource.QQMUSIC) anchorAlbums else
-            candidate?.first?.let { qqAlbumsOf(it.key.id) }.orEmpty()
+        // ---- 两源的专辑列表（H06）----
+        // 旧写法按**锚点**分支：锚点是 ncm 才去取对端 QQ 的专辑，锚点是 QQ 时对端的
+        // ncm 那份根本没人取 —— 于是「以 QQ 为主源」的艺人页只有 QQ 的专辑，
+        // 而 alias 明明已经记下了那个 ncm 艺人。现在两侧先列成 [artistSides]，
+        // 再**按各自 source 分派取数**：谁都不会漏，也不会拿 ncm 的数字 id
+        // 去当 QQ 的 singerMID（那是「查到别人的专辑」的形状）。
+        val sides = artistSides(anchor, candidate?.first?.key)
+        // 锚点那一侧的专辑已经在上面取过一次（候选校验要用），不再重复请求。
+        val albumsBySide = sides.associateWith { key ->
+            if (key == anchor) anchorAlbums else albumsOfSide(key)
+        }
+        val neAlbums = sides.filter { it.source == MusicSource.NETEASE }.flatMap { albumsBySide[it].orEmpty() }
+        val qqAlbums = sides.filter { it.source == MusicSource.QQMUSIC }.flatMap { albumsBySide[it].orEmpty() }
         val albums = if (anchor.source == MusicSource.NETEASE) {
             assembleAlbums(neAlbums, MusicSource.NETEASE, qqAlbums, MusicSource.QQMUSIC)
         } else {
             assembleAlbums(qqAlbums, MusicSource.QQMUSIC, neAlbums, MusicSource.NETEASE)
         }
 
-        // ---- 两源的曲目列表 + 可用性 ----
-        val neSongs = if (anchor.source == MusicSource.NETEASE) neteaseArtistSongs(anchor) else emptyList()
-        val qqSongs = if (anchor.source == MusicSource.QQMUSIC) qqArtistSongs(anchor) else
-            candidate?.first?.let { qqArtistSongs(it.key) }.orEmpty()
+        // ---- 两源的曲目列表 + 可用性（同 H06）----
+        val songsBySide = sides.associateWith { songsOfSide(it) }
+        val allSongs = sides.flatMap { songsBySide[it].orEmpty() }
+        val neSongs = allSongs.filter { it.musicSource == MusicSource.NETEASE }
+        val qqSongs = allSongs.filter { it.musicSource == MusicSource.QQMUSIC }
         val (songs, playable, totals) = assembleSongs(neSongs, qqSongs)
 
         val preferred = preferredSource(playable, totals, anchor.source)
@@ -172,8 +182,11 @@ object CatalogAggregator {
      * @param anchor 用户点进来的那张专辑。
      */
     suspend fun loadAlbum(context: Context, anchor: AlbumKey): AlbumPage {
-        val anchorTracks = albumTrackCandidates(anchor)
-        val counterpart = findCounterpartAlbum(context, anchor, anchorTracks)
+        // 锚点曲目只取一次：它既是匹配判据（曲目名集合），也是最终列表里主源那一侧。
+        // 旧实现为此各取一次（匹配判据一次、装配再一次），弱网下两次响应
+        // 还可能不一致 —— 那会让「匹配说重合 95%、列表却少两首」这种形态出现。
+        val anchorSongs = albumSongsOf(anchor.source, anchor.id)
+        val counterpart = findCounterpartAlbum(context, anchor, anchorSongs.map { trackCandidateOf(it) })
 
         val merged = MergedAlbum(
             primary = anchor,
@@ -187,9 +200,17 @@ object CatalogAggregator {
             runCatching { MatchCacheStore.putAlbum(context, merged) }
         }
 
-        val neSongs = if (anchor.source == MusicSource.NETEASE) neAlbumSongs(anchor.id) else emptyList()
-        val qqSongs = if (anchor.source == MusicSource.QQMUSIC) qqAlbumSongs(anchor.id) else
-            counterpart?.first?.let { qqAlbumSongs(it.key.id) }.orEmpty()
+        // H06：两侧都取，且**按每一侧自己的 source 分派**。
+        // 旧写法是 `neSongs = if (锚点是 ncm) … else emptyList()` —— 以 QQ 为主源进专辑页时，
+        // 网易侧的曲目整块缺失（有对面 alias，列表里却只有 QQ），
+        // 而「对面那几个版本」正是用户进双源专辑页要看的东西。
+        val sides = albumSides(anchor, counterpart?.first?.key)
+        val songsBySide = sides.associateWith { key ->
+            if (key == anchor) anchorSongs else albumSongsOf(key.source, key.id)
+        }
+        val allSongs = sides.flatMap { songsBySide[it].orEmpty() }
+        val neSongs = allSongs.filter { it.musicSource == MusicSource.NETEASE }
+        val qqSongs = allSongs.filter { it.musicSource == MusicSource.QQMUSIC }
 
         val (songs, playable, totals) = assembleSongs(neSongs, qqSongs)
         val preferred = preferredSource(playable, totals, anchor.source)
@@ -308,7 +329,7 @@ object CatalogAggregator {
                 key = AlbumKey(primarySource, a.mid, a.name),
                 aliases = listOfNotNull(alias),
                 name = a.name,
-                picUrl = coverOf(a.mid),
+                picUrl = coverOf(a, primarySource),
                 trackCount = a.trackCount,
                 publishDate = a.publishDate,
                 company = a.company,
@@ -321,7 +342,7 @@ object CatalogAggregator {
             out += AggregatedAlbum(
                 key = AlbumKey(secondarySource, b.mid, b.name),
                 name = b.name,
-                picUrl = coverOf(b.mid),
+                picUrl = coverOf(b, secondarySource),
                 trackCount = b.trackCount,
                 publishDate = b.publishDate,
                 company = b.company,
@@ -478,8 +499,45 @@ object CatalogAggregator {
         return ne + qq
     }
 
-    private suspend fun neOrQqAlbums(anchor: ArtistKey): List<QqAlbum> =
-        if (anchor.source == MusicSource.NETEASE) neArtistAlbums(anchor.id) else qqAlbumsOf(anchor.id)
+    /**
+     * 艺人页要从**哪几侧**取专辑/曲目（H06 的纯逻辑落点，单测直接钉）。
+     *
+     * 主源永远在内；对端只在「确实找到另一源的同一艺人」且源不同时才加入。
+     * 旧实现没有这一层 —— 取哪几侧是由 `if (锚点 == ncm)` 这样的分支在三个地方
+     * 各写一遍拼出来的，漏写一处就是「列表少一半」（H06 正是漏了 QQ 主源那一侧）。
+     */
+    fun artistSides(anchor: ArtistKey, counterpart: ArtistKey?): List<ArtistKey> =
+        listOf(anchor) + listOfNotNull(counterpart?.takeIf { it.source != anchor.source })
+
+    /** 专辑页的同一件事（见 [artistSides]）。 */
+    fun albumSides(anchor: AlbumKey, counterpart: AlbumKey?): List<AlbumKey> =
+        listOf(anchor) + listOfNotNull(counterpart?.takeIf { it.source != anchor.source })
+
+    /**
+     * 某一侧的**专辑列表**。分派只看传入身份的 source —— 调用方不再自己写 if。
+     */
+    private suspend fun albumsOfSide(key: ArtistKey): List<QqAlbum> = when (key.source) {
+        MusicSource.NETEASE -> neArtistAlbums(key.id)
+        MusicSource.QQMUSIC -> qqAlbumsOf(key.id)
+        // B 站没有「艺人页专辑列表」这个概念（v3.1.0 起它只有曲目与歌单）。
+        // 不是 `else`：将来再加音源时编译器会把这一处重新指出来（同 [albumsOfSide] 里 `BILIBILI -> emptyList()` 的纪律）。
+        MusicSource.BILIBILI -> emptyList()
+    }
+
+    /** 某一侧的**曲目列表**（同上）。 */
+    private suspend fun songsOfSide(key: ArtistKey): List<SongItem> = when (key.source) {
+        MusicSource.NETEASE -> neteaseArtistSongs(key)
+        MusicSource.QQMUSIC -> qqArtistSongs(key)
+        MusicSource.BILIBILI -> emptyList()
+    }
+
+    /** 某一侧的**专辑曲目**（同上）。 */
+    private suspend fun albumSongsOf(source: MusicSource, albumId: String): List<SongItem> =
+        when (source) {
+            MusicSource.NETEASE -> neAlbumSongs(albumId)
+            MusicSource.QQMUSIC -> qqAlbumSongs(albumId)
+            MusicSource.BILIBILI -> emptyList()
+        }
 
     private suspend fun neArtistAlbums(artistId: String): List<QqAlbum> = runCatching {
         val id = artistId.toLongOrNull() ?: return@runCatching emptyList()
@@ -497,6 +555,9 @@ object CatalogAggregator {
                 // 口径不同（8/34 一致），它本来就不该参与判定。
                 company = null,
                 singerName = it.artist?.name,
+                // E03：ncm 的封面是**这个字段**给的。聚合层不能拿它的十进制 id 去拼
+                // 腾讯的 `M000<albumMID>.jpg` 模板 —— 那是「封面归属错源」。
+                coverUrl = it.picUrl,
             )
         }
     }.onFailure { Log.w(TAG, "ne artist albums failed", it) }.getOrDefault(emptyList())
@@ -531,15 +592,6 @@ object CatalogAggregator {
     private suspend fun qqAlbumSongs(albumMid: String): List<SongItem> =
         runCatching { QqCatalogApi.albumDetail(albumMid)?.songs.orEmpty() }
             .onFailure { Log.w(TAG, "qq album songs failed", it) }.getOrDefault(emptyList())
-
-    private suspend fun albumTrackCandidates(anchor: AlbumKey): List<CrossSourceMatcher.TrackCandidate> =
-        when (anchor.source) {
-            MusicSource.NETEASE -> neAlbumSongs(anchor.id).map { trackCandidateOf(it) }
-            MusicSource.QQMUSIC -> qqAlbumSongs(anchor.id).map { trackCandidateOf(it) }
-            // v3.1.0：B 站没有「专辑」这个概念（音频区只有单曲与歌单），跨源匹配对它无意义。
-            // 这里**不是** `else`：将来再加音源时编译器会再把这一处指出来（v2.6.2 的纪律）。
-            MusicSource.BILIBILI -> emptyList()
-        }
 
     // ---------------------------------------------------------- 对端查找 ----
 
@@ -586,7 +638,7 @@ object CatalogAggregator {
                 MusicSource.QQMUSIC -> qqAlbumsOf(candidate.key.id)
                 MusicSource.NETEASE -> neArtistAlbums(candidate.key.id)
                 // 结构上不可达：`other` 来自 MusicSource.otherThan（只遍历 loginSources）。
-                // 仍然显式写出来，理由同 albumTrackCandidates。
+                // 仍然显式写出来，理由同 [albumsOfSide]。
                 MusicSource.BILIBILI -> emptyList()
             }
             val withAlbums = candidate.copy(albumNames = albums.map { it.name })
@@ -635,7 +687,7 @@ object CatalogAggregator {
         val anchorNames = anchorTracks.map { it.name }
         val anchorArtist = anchor.artistKey?.name.orEmpty()
         val candidates: List<QqAlbum> = when (other) {
-            // 结构上不可达（同 findCounterpartAlbum）；显式分支见 albumTrackCandidates 的说明。
+            // 结构上不可达（同 findCounterpartAlbum）；显式分支见 [albumsOfSide] 的说明。
             MusicSource.BILIBILI -> emptyList()
             // v3.4.11：搜索关键词是**专辑名 + 歌手**（此前只有专辑名）。
             //
@@ -668,42 +720,26 @@ object CatalogAggregator {
                 MusicSource.NETEASE -> neAlbumSongs(c.mid)
                 MusicSource.BILIBILI -> emptyList()
             }
-            val candidate = CrossSourceMatcher.AlbumCandidate(
-                key = AlbumKey(other, c.mid, c.name),
-                trackNames = tracks.map { it.name },
-                trackCount = c.trackCount,
-                rawName = c.name,
-                artistNames = listOfNotNull(c.singerName, anchorArtist.takeIf { it.isNotEmpty() }),
-            )
+            // H05：候选的证据**只能来自候选自己**（见 [albumCandidateOf]）。
+            // 信息缺失（QQ 搜索偶尔不给 singerName）会如实落到 LOW（不合并），
+            // 那正是铁律 17 要的「拿不准就分开展示」。
+            val candidate = albumCandidateOf(c, other, tracks.map { it.name })
             val ratio = CrossSourceMatcher.trackOverlapRatio(anchorNames, candidate.trackNames)
             val verdict = CrossSourceMatcher.gradeAlbum(
+                // 锚点的证据仍然来自锚点自己（这里没有反向注入）。
                 CrossSourceMatcher.AlbumCandidate(anchor, anchorNames, null, anchor.name, listOfNotNull(anchorArtist)),
                 candidate,
                 ratio,
             )
-            // v3.4.11：**歌手必须先对上**才允许进入「同名匹配」。
+            // v3.4.11 的「歌手必须先对上才允许进入同名匹配」，H05 起真正生效：
             //
-            // 这一步是用户要求的「优先原唱 / 用搜索的歌手名字匹配专辑作者」，而它此前
-            // 在结构上做不到：`candidate.artistNames` 里塞的是
-            // `listOfNotNull(c.singerName, anchorArtist)` —— **候选自己的歌手与锚点的歌手
-            // 被合成了一个列表**，判据分不清「这个候选是同一个人唱的」还是「我们只是想
-            // 找一个同歌手的」。现在用 `AlbumLookup` 单独判一次歌手，把它作为
-            // 「同名但不同歌手」的排除条件。
-            val artistMatches = AlbumLookup.score(
-                queryName = anchor.name,
-                queryArtist = anchorArtist.takeIf { it.isNotEmpty() },
-                candidate = AlbumLookup.Candidate(
-                    id = 0L,
-                    name = c.name,
-                    artistName = c.singerName,
-                    trackCount = c.trackCount,
-                ),
-            )
-            // 锚点有歌手、候选也有歌手、但两者对不上 ⇒ **跳过这个候选**（同名不同人）。
-            // 只在两边都已知时才排除：信息不足时保持旧行为（宁可少排除，也不要凭猜测丢候选）。
-            val artistConflict = anchorArtist.isNotEmpty() &&
-                !c.singerName.isNullOrEmpty() &&
-                artistMatches == null
+            // 旧闸门写的是 `AlbumLookup.score(...) == null`，而 `score` 在**专辑名相同**时
+            // 永远返回非 null（歌手不一致只不过加 0 分）⇒ 这道闸门从未拦下过任何候选。
+            // 现在用三值的 [AlbumLookup.ArtistVerdict]：只有「两侧都给了歌手且对不上」
+            // 才算冲突；信息缺失是 UNKNOWN，**保持旧行为**（宁可少排除，也不凭猜测丢候选）。
+            val artistConflict =
+                AlbumLookup.artistVerdict(anchorArtist.takeIf { it.isNotEmpty() }, c.singerName) ==
+                    AlbumLookup.ArtistVerdict.CONFLICT
             if (artistConflict) continue
             val overlap = candidate.trackNames.mapNotNull { NameNormalizer.normalizeName(it).takeIf { n -> n.isNotEmpty() } }
                 .toSet().let { set -> anchorNames.count { NameNormalizer.normalizeName(it) in set } }
@@ -767,14 +803,29 @@ object CatalogAggregator {
         )
     }
 
-    private fun albumCandidateOf(album: QqAlbum, source: MusicSource) =
-        CrossSourceMatcher.AlbumCandidate(
-            key = AlbumKey(source, album.mid, album.name),
-            trackNames = emptyList(),
-            trackCount = album.trackCount,
-            rawName = album.name,
-            artistNames = listOfNotNull(album.singerName),
-        )
+    /**
+     * 专辑候选的**唯一构造点**（H05）。
+     *
+     * @param trackNames 候选的曲目名。艺人页拿不到曲目名（见 [trackRatioOf]）时传空列表；
+     *   专辑页会真的去取一遍对端曲目，所以那里传实际曲目名。
+     *
+     * ⚠️ **歌手证据只能来自候选自己**：这里的 `artistNames` 只放 `album.singerName`。
+     * 曾经这里被写成 `listOfNotNull(album.singerName, anchorArtist)` —— 把锚点的歌手塞进
+     * 候选的艺名列表，而 `CrossSourceMatcher.gradeAlbum` 判的正是两边列表的交集，
+     * 于是「艺人一致」这一条**必然成立**，同名不同歌手的专辑也能拿到 HIGH 并合并。
+     * 锚点的证据由调用方（`findCounterpartAlbum`）放在锚点自己的候选里。
+     */
+    internal fun albumCandidateOf(
+        album: QqAlbum,
+        source: MusicSource,
+        trackNames: List<String> = emptyList(),
+    ) = CrossSourceMatcher.AlbumCandidate(
+        key = AlbumKey(source, album.mid, album.name),
+        trackNames = trackNames,
+        trackCount = album.trackCount,
+        rawName = album.name,
+        artistNames = listOfNotNull(album.singerName),
+    )
 
     /**
      * 专辑曲目名集合的重合率。
@@ -801,8 +852,27 @@ object CatalogAggregator {
             .get(java.util.Calendar.YEAR).toString()
     }
 
-    private fun coverOf(mid: String): String? =
-        mid.takeIf { it.isNotEmpty() }?.let { "https://y.qq.com/music/photo_new/T002R500x500M000$it.jpg" }
+    /**
+     * 专辑行的封面（E03）。
+     *
+     * 两个平台的封面**不是同一个规则**：QQ 的封面是由 `albumMID` 拼一个图片模板，
+     * ncm 的是接口直接给的 `picUrl`（`/api/artist/albums/{id}` 的字段）。
+     *
+     * 旧实现无条件调用 `coverOf(mid)`，于是网易专辑的**十进制专辑 id** 被填进腾讯的
+     * `T002R500x500M000<mid>.jpg` —— 请求到的地址与这张专辑没有任何关系（不是 404，
+     * 就是别人的图），封面归属与专辑源不一致。
+     *
+     * 现在：接口给了封面就用它（[QqAlbum.coverUrl]，ncm 解析器会填），否则**只有 QQ**
+     * 才拼模板。ncm 没给封面时返回 null —— UI 显示占位图，而不是一张错源的图。
+     */
+    private fun coverOf(album: QqAlbum, source: MusicSource): String? {
+        album.coverUrl?.takeIf { it.isNotBlank() }?.let { return it }
+        if (source != MusicSource.QQMUSIC) return null
+        return album.mid.takeIf { it.isNotEmpty() }?.let { QQ_ALBUM_COVER_TEMPLATE.format(it) }
+    }
+
+    /** QQ 的专辑封面模板（`albumMID` → 500×500）。ncm 的封面**不能**走它。 */
+    private const val QQ_ALBUM_COVER_TEMPLATE = "https://y.qq.com/music/photo_new/T002R500x500M000%s.jpg"
 
     private fun rank(confidence: MatchConfidence): Int = when (confidence) {
         MatchConfidence.EXACT -> 4

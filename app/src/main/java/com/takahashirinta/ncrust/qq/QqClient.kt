@@ -72,20 +72,19 @@ object QqClient {
     private var appContext: Context? = null
 
     /**
-     * v3.2.0 · P0：最近一次 [musicu] 的传输层结果。
+     * **诊断用**：进程内最近一次 [execute] 的传输层结果（v3.2.0 引入，v3.8.0 · H12 降级）。
      *
-     * 为什么必须有它：`104003`（需要登录/会员）与「HTTP 401/403（凭证过期）」在
-     * 业务码层面**都是失败**，但处置不同 —— 前者要开通会员/登录，后者只要重新登录。
-     * v3.1.0 的 `musicu` 把两者都变成 `null`，调用方无从区分。
+     * ⚠️ **它是「最近一次」，不是「我这次」** —— 并发请求会互相覆盖。所以
+     * **业务控制流绝不许读它**：失败分类改读 [QqMusicuOutcome]（由 `execute` 随响应一起
+     * 返回，与请求一一对应）。这里只留给 `Log` / 诊断按需引用。
      *
-     * 只写不读的地方没有：唯一消费者是 [QqApi] 的失败分类（[QqRejectionInput.httpStatus]）。
-     * `@Volatile` 是因为它在 IO 线程写、在调用方线程读。
+     * `@Volatile` 是因为它在 IO 线程写、在任意线程读。
      */
     @Volatile
     var lastHttpStatus: Int? = null
         private set
 
-    /** 最近一次 [musicu] 的失败原因（异常类名 + 消息，**只进日志**）。 */
+    /** 诊断用：最近一次 [execute] 的失败原因（异常类名 + 消息，**只进日志**）。 */
     @Volatile
     var lastTransportError: String? = null
         private set
@@ -167,8 +166,20 @@ object QqClient {
     suspend fun musicu(
         request: JSONObject,
         appIdentity: Boolean,
-    ): JSONObject? = withContext(Dispatchers.IO) {
-        val ctx = appContext ?: return@withContext null
+    ): JSONObject? = musicuOutcome(request, appIdentity).payload
+
+    /**
+     * 与 [musicu] 同一条通道，但把**传输层事实**（HTTP 状态码 / 失败原因）一起带回来
+     * （v3.8.0 · H12）。
+     *
+     * 只有需要「按失败原因分类」的调用方该用它（当前是取链的失败分类）。
+     * 其余调用方继续用 [musicu]：它们的契约是「拿不到就 null」，多一个字段没有意义。
+     */
+    suspend fun musicuOutcome(
+        request: JSONObject,
+        appIdentity: Boolean,
+    ): QqMusicuOutcome = withContext(Dispatchers.IO) {
+        val ctx = appContext ?: return@withContext QqMusicuOutcome.notInitialized()
         val body = JSONObject()
             .put("comm", if (appIdentity) appComm(ctx) else webComm(ctx))
             .put("req", request)
@@ -190,7 +201,7 @@ object QqClient {
                 .filter { it != "comm" }
                 .mapNotNull { envelope.optJSONObject(it)?.optString("module") }
                 .firstOrNull().orEmpty()
-            execute(ctx, envelope, module, appIdentity = true)
+            execute(ctx, envelope, module, appIdentity = true).payload
         }
 
     /**
@@ -228,7 +239,7 @@ object QqClient {
                 // 有验证 cookie 就带上；没有就发裸请求（实测过的形状）。
                 sendCookie = !extraCookie.isNullOrEmpty(),
                 overrideCookie = extraCookie,
-            )
+            ).payload
         }
 
     /**
@@ -265,8 +276,17 @@ object QqClient {
      *   0 在参考实现里因为 `or None` 被省略，与本函数 `if (loginType > 0)` 一致）。
      */
     suspend fun musicuRefresh(request: JSONObject, loginType: Int): JSONObject? =
+        musicuRefreshOutcome(request, loginType).payload
+
+    /**
+     * 与 [musicuRefresh] 同一条通道，附带**这次**的传输层结果（v3.8.0 · H12）。
+     *
+     * 续期失败时要把「传输层」与「业务码」分开归类，而那个归类不能读单例 last 字段
+     * —— 续期与取链会同时在飞。见 [QqMusicuOutcome]。
+     */
+    suspend fun musicuRefreshOutcome(request: JSONObject, loginType: Int): QqMusicuOutcome =
         withContext(Dispatchers.IO) {
-            val ctx = appContext ?: return@withContext null
+            val ctx = appContext ?: return@withContext QqMusicuOutcome.notInitialized()
             val body = JSONObject()
                 .put(
                     "comm",
@@ -319,9 +339,15 @@ object QqClient {
                 request.optString("module"),
                 appIdentity = true,
                 sendCookie = false,
-            )
+            ).payload
         }
 
+    /**
+     * 发一次 `musicu.fcg`，返回**请求级**的传输结果（v3.8.0 · H12）。
+     *
+     * 返回值从 `JSONObject?` 换成 [QqMusicuOutcome]：HTTP 状态码与失败原因必须与
+     * 「这一次」绑定，不能再经单例字段中转（并发请求会互相覆盖，见 [QqMusicuOutcome] 的 KDoc）。
+     */
     private fun execute(
         ctx: Context,
         body: JSONObject,
@@ -330,7 +356,7 @@ object QqClient {
         sendCookie: Boolean = true,
         /** 非空时**只用它**作 Cookie（图形验证后回传的会话 cookie）。 */
         overrideCookie: String? = null,
-    ): JSONObject? {
+    ): QqMusicuOutcome {
         return try {
             val httpRequest = Request.Builder()
                 .url(MUSICU_URL)
@@ -365,27 +391,35 @@ object QqClient {
 
             http.newCall(httpRequest).execute().use { response ->
                 val text = response.body?.string()
-                // v3.2.0 · P0：把传输层事实记下来，供失败分类使用（401/403 = 凭证问题）。
+                // v3.2.0 · P0：传输层事实既随返回值带走（H12：给失败分类用），
+                // 也照旧记在单例字段上（**只供诊断日志**，业务控制流不读它）。
                 lastHttpStatus = response.code
                 lastTransportError = null
                 if (BuildConfig.DEBUG) {
                     Log.d(TAG, "musicu $module http=${response.code} len=${text?.length ?: 0}")
                 }
                 if (response.code == 401 || response.code == 403) {
-                    // 凭证被服务端拒绝：状态码记下来，正文不解析（多数是 HTML/空壳）。
-                    lastTransportError = "http=${response.code}"
-                    return@use null
+                    // 凭证被服务端拒绝：状态码带回去，正文不解析（多数是 HTML/空壳）。
+                    val err = "http=${response.code}"
+                    lastTransportError = err
+                    return@use QqMusicuOutcome(null, response.code, err)
                 }
                 if (!response.isSuccessful || text.isNullOrEmpty()) {
-                    lastTransportError = "http=${response.code} bodyLen=${text?.length ?: 0}"
-                    return@use null
+                    val err = "http=${response.code} bodyLen=${text?.length ?: 0}"
+                    lastTransportError = err
+                    return@use QqMusicuOutcome(null, response.code, err)
                 }
                 val json = runCatching { JSONObject(text) }.getOrElse {
-                    lastTransportError = "malformed json (len=${text.length})"
-                    return@use null
+                    val err = "malformed json (len=${text.length})"
+                    lastTransportError = err
+                    return@use QqMusicuOutcome(null, response.code, err)
                 }
                 // 信封 key 可能是 "req"，也可能是 module 名本身；两者都认。
-                json.optJSONObject("req") ?: json.optJSONObject(module)
+                QqMusicuOutcome(
+                    payload = json.optJSONObject("req") ?: json.optJSONObject(module),
+                    httpStatus = response.code,
+                    transportError = null,
+                )
             }
         } catch (e: CancellationException) {
             // 协程取消必须传播：吞成 null 会让上层把「用户离开了」当成网络失败，
@@ -396,10 +430,11 @@ object QqClient {
             throw CancellationException("musicu cancelled").apply { initCause(e) }
         } catch (e: Exception) {
             // v3.2.0：异常也记账 —— 否则「连不上」在分类里会退化成「读不懂的拒绝」。
+            val err = e::class.java.simpleName + ": " + (e.message ?: "")
             lastHttpStatus = null
-            lastTransportError = e::class.java.simpleName + ": " + (e.message ?: "")
+            lastTransportError = err
             Log.w(TAG, "musicu failed: $module", e)
-            null
+            QqMusicuOutcome(null, null, err)
         }
     }
 

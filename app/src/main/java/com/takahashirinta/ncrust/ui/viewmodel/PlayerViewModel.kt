@@ -630,11 +630,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 音频仍是上一首。统计必须按**在播**身份记账，否则慢网下"请求 B、实际还在放 A"
      * 的 500ms 会被记到 B 头上，还带着 A 的标题。
      *
-     * 写入点只有一个：ExoPlayer 的媒体项过渡回调（[onSongTransitioned] 里身份落定的那一刻）。
+     * 写入点只有一个：ExoPlayer 的媒体项过渡回调（`onSongTransitioned` 里身份落定的那一刻）。
+     * 持有点与落定规则抽在 [PlayingIdentity]（纯状态，JVM 单测覆盖）——
+     * 「是否换歌」只由返回值回答，与写入本身解耦（v3.7.9 · J07）。
      */
-    @Volatile
-    private var playingTrack: TrackKey? = null
-    val playingTrackKey: TrackKey? get() = playingTrack
+    private val playingIdentity = PlayingIdentity()
+    val playingTrackKey: TrackKey? get() = playingIdentity.value
+
+    /**
+     * 一次**真实媒体过渡**的身份落定（v3.7.9 · J07）。
+     *
+     * @return 这次过渡是否换了一首歌（`next != currentTrack`）——只用于决定
+     *   「要不要清上一首的续播记录 / 重取歌词」，**不**决定要不要写身份。
+     *
+     * 为什么必须解耦：手动切歌时 `playSong` 已经提前把 [currentTrack] 写成了 B，
+     * 所以真正起播 B 的那一刻 `next == currentTrack`。旧实现把 `playingTrack = next`
+     * 放在 `changed` 分支里，于是 `playingTrack` 停在上一首 A —— 之后
+     * `StatsRecorder` 一直拿「非空的 A」记账，B 的收听时长全都记到 A 头上。
+     * 慢网重复点同一首是同一个形状。只要音频真的过渡到了这一项，身份就必须落定。
+     */
+    internal fun settlePlayingIdentity(next: TrackKey): Boolean =
+        playingIdentity.settle(next, currentTrack)
 
     /** 闸门判定「这次请求已经被新歌取代」时的返回：调用方拿到它只会原样丢弃，不会写任何状态。 */
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
@@ -723,9 +739,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             // B4：每 5s 落盘一次本歌进度，供断点续播；播完会由 onPlaybackEnded 清除。
+            // v3.7.9 · H16：连**本曲真实时长**一起交下去 —— 越界记录（旧源更长）由
+            // PlaybackStateManager 撤销；位置落回起点区间时同样是撤销而不是忽略。
             if (sid > 0 && kotlin.math.abs(pos - lastSavedPositionMs) >= POSITION_SAVE_INTERVAL_MS) {
                 lastSavedPositionMs = pos
-                PlaybackStateManager.saveSongPosition(getApplication(), sid, pos)
+                PlaybackStateManager.saveSongPosition(getApplication(), sid, pos, dur)
             }
 
             // Signal the preload window once per song (guarded by !needsPreload.value).
@@ -821,7 +839,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val previousId = currentSongId.value ?: -1L
 
             if (nextTrack != null && nextTrack.id > 0L) {
-                val changed = nextTrack != currentTrack
+                // v3.7.9 · J07：身份落定与「是否换歌」**解耦**。
+                // 旧实现把 `playingTrack = nextTrack` 写在 `if (changed)` 里，于是
+                // 「manual 切歌先写 currentTrack → 真过渡时 nextTrack == currentTrack」
+                // 这条常规路径（以及慢网重复点同一首）根本不会刷新实际在播身份，
+                // 统计继续记在上一首头上。现在任何一次真实过渡都落定身份。
+                val changed = settlePlayingIdentity(nextTrack)
                 if (changed) {
                     playbackRetries.cancel()
                     // B4：无缝切换说明上一首已自然播完，清除其进度记录（重播从 0:00 对齐）。
@@ -834,7 +857,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // ① 身份必须在任何取词动作**之前**落到 currentTrack。
                     currentTrack = nextTrack
                     // ② 音频确实切到这一项了：这才是统计该用的身份。
-                    playingTrack = nextTrack
+                    //    这一行现在由 settlePlayingIdentity 无条件写入（J07）。
                     currentSongId.value = nextTrack.id
                     currentSongName.value = nextTitle.ifBlank { currentSongName.value.orEmpty() }
                     currentSongArtist.value = nextArtist.ifBlank { currentSongArtist.value.orEmpty() }
@@ -959,7 +982,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             sourceId ?: currentTrack?.sourceId,
             mediaId ?: currentTrack?.mediaId,
         )
-        if (merged == currentTrack) return
+        // J06：`TrackKey` 的相等只看 (source, id)，载荷可能补全了却仍判"相同"。
+        // 身份相等 + 载荷也相等才是真的没变化，否则这次回填会被静默丢掉。
+        val before = currentTrack
+        if (merged == before && merged.sourceId == before?.sourceId && merged.mediaId == before?.mediaId) return
         Log.i(TAG_TRACK, "identity backfilled from queue -> $merged")
         currentTrack = merged
         lyricCoordinator.onTrackChanged(merged)
@@ -3077,6 +3103,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentPosition.value = position
         if (dur > 0) progress.value = (position.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
 
+        // v3.7.9 · H16：用户把进度条拖回起点区间 ⇒ **立刻**撤销这首的续播记录。
+        // 不能只靠进度回调里那条「5s 才落盘一次」的写入：暂停态拖回 1 秒后直接切歌/
+        // 退出时，回调可能还没来得及跑，旧记录（例如上次的 60 秒）就留到了下次续播。
+        if (position < PlaybackStateManager.MIN_RESUMABLE_MS) {
+            currentSongId.value?.takeIf { it > 0L }?.let {
+                PlaybackStateManager.clearSongPosition(getApplication(), it)
+                lastSavedPositionMs = position
+            }
+        }
+
         val intent = Intent(getApplication(), PlaybackService::class.java).apply {
             putExtra("action", "seek")
             putExtra("position", position)
@@ -3099,6 +3135,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         isPlaying.value = false
         clearPreloadedState()
         resetLyricsForNewSong()
+        // v3.7.9 · J07：停止后必须清掉「实际在播身份」。否则 StatsRecorder 的
+        // `playingTrackKey ?: currentTrackKey` 会一直拿到这条旧身份，把后续（重新开播的
+        // 那一刻之前 / 车机重新接管）的采样继续记到已经停止的那首歌上。
+        playingIdentity.clear()
         currentSongId.value = null
         currentSongName.value = null
         currentSongArtist.value = null
@@ -3168,4 +3208,43 @@ class PlayRequestGate {
 
     /** 这次取链/预载的结果是否仍然有效。`false` = 期间已有更新的开播动作，结果必须丢弃。 */
     fun isCurrent(gen: Int): Boolean = gen == generation.get()
+}
+
+/**
+ * 「实际在播身份」的持有者（v3.7.9 · J07）。
+ *
+ * 为什么单独抽出来：这条身份**不是** `currentTrack`（"正在请求的那首"），它的写入时机
+ * 只有「ExoPlayer 真的过渡到了这一项」。旧实现把写入藏在 `if (changed)` 分支里，
+ * 于是「手动切歌时 currentTrack 已提前变成 B」这条常规路径根本不会刷新它 ——
+ * `StatsRecorder` 会一直用非空的旧身份记账。
+ *
+ * 落定规则只有一条、且与「是否换歌」解耦：**只要过渡发生，就写**；
+ * 返回值只回答「换没换歌」，供调用方决定要不要清上一首的续播记录、要不要重取歌词。
+ * 抽成纯状态之后这条不变量可以被 JVM 单测直接钉住（`PlayingIdentityTest`）。
+ */
+internal class PlayingIdentity {
+
+    /** 当前实际在播的曲目身份；null = 还没有过真实过渡（或服务已停止）。 */
+    @Volatile
+    var value: TrackKey? = null
+        private set
+
+    /**
+     * 落定一次真实过渡。
+     *
+     * @param next 这次过渡真正起播的那一项。
+     * @param current 请求身份（[PlayerViewModel.currentTrack]）——只用来算「换没换歌」。
+     * @return `true` = 换了歌；`false` = 同一首（重播 / seek / 慢网重复点同一首）。
+     *   两种情况下 [value] 都已经是 [next]。
+     */
+    fun settle(next: TrackKey, current: TrackKey?): Boolean {
+        val changed = next != current
+        value = next
+        return changed
+    }
+
+    /** 服务停止：没有「实际在播」这回事了，别让旧身份继续遮蔽新项。 */
+    fun clear() {
+        value = null
+    }
 }

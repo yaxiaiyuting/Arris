@@ -202,19 +202,47 @@ object PlaybackStateManager {
      * 读取某首歌的续播位置（毫秒）。
      *
      * 返回 0 表示「没有可用记录」——包括从未播过、已播完被清除、
-     * 以及记录位置过于接近开头（< 3s，续播没有意义）或结尾（> 95%，等于已听完）。
+     * 以及记录位置过于接近开头（< [MIN_RESUMABLE_MS]，续播没有意义）或结尾（> 95%，等于已听完）。
+     *
+     * @param durationMs 本曲**当前解析出来的真实时长**；0 / 负数 = 未知。
+     *   已知时长时必须核对：记录可能来自「上一次解析出的更长的源」（完整曲 vs 试听片段，
+     *   v3.7.9 · H16）。3 分钟的记录配 20 秒的曲目，续播点已经越界，撤销这条记录并返回 0，
+     *   而不是拿它去 seek 到曲尾。
      */
-    fun getSongPosition(context: Context, songId: Long): Long {
+    fun getSongPosition(context: Context, songId: Long, durationMs: Long = 0L): Long {
         if (songId <= 0) return 0
         val map = ensurePositionsLoaded(context)
         val entry = synchronized(positionLock) { map[songId] } ?: return 0L
+        if (durationMs > 0L && entry.posMs >= durationMs) {
+            // 越界记录即作废：留着只会在下次续播时再被读一次（H16）。
+            clearSongPosition(context, songId)
+            return 0L
+        }
         if (entry.posMs < MIN_RESUMABLE_MS) return 0L
         return entry.posMs
     }
 
-    /** 记录某首歌的播放位置（1s debounce 写盘）。 */
-    fun saveSongPosition(context: Context, songId: Long, positionMs: Long) {
-        if (songId <= 0 || positionMs < MIN_RESUMABLE_MS) return
+    /**
+     * 记录某首歌的播放位置（1s debounce 写盘）。
+     *
+     * 两条**撤销**路径（v3.7.9 · H16）：位置落回起点区间（用户把进度拖回开头），
+     * 或超出本曲真实时长（旧记录来自更长的源）。旧实现只是 `return`，于是「上次记的 60 秒」
+     * 一直留着，下次又从 60 秒续播 —— 听感上就是「这歌一播就跳到中段/直接结束」。
+     *
+     * @param durationMs 本曲真实时长；0 / 负数 = 未知，此时不做时长校验。
+     */
+    fun saveSongPosition(
+        context: Context,
+        songId: Long,
+        positionMs: Long,
+        durationMs: Long = 0L,
+    ) {
+        if (songId <= 0) return
+        if (positionMs < MIN_RESUMABLE_MS || (durationMs > 0L && positionMs >= durationMs)) {
+            // 显式回到不可续播区间 = 旧记录已经不代表「上次听到哪」⇒ 撤销，而不是忽略本次更新。
+            clearSongPosition(context, songId)
+            return
+        }
         val map = ensurePositionsLoaded(context)
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
@@ -262,8 +290,13 @@ object PlaybackStateManager {
         }
     }
 
-    /** 小于此值的位置不值得续播（直接从头播），也避免把开头几秒当成有效记录。 */
-    private const val MIN_RESUMABLE_MS = 3_000L
+    /**
+     * 小于此值的位置不值得续播（直接从头播），也避免把开头几秒当成有效记录。
+     *
+     * v3.7.9 · H16：`internal` 而非 private —— `PlayerViewModel.seekTo` 要用同一个阈值
+     * 判断「这次 seek 是不是落回了起点区间」，避免把数字各写一份。
+     */
+    internal const val MIN_RESUMABLE_MS = 3_000L
 
     // ---------- 队列持久化 ----------
     fun saveQueue(context: Context, queue: List<SongItem>, currentIndex: Int) {

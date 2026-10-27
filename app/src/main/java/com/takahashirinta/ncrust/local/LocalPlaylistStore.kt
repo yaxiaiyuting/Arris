@@ -79,17 +79,20 @@ object LocalPlaylistStore {
      * 只删列表项会把曲目表变成永远读不到的垃圾（`SharedPreferences` 不会自己回收）。
      */
     @Synchronized
-    fun writePlaylists(context: Context, playlists: List<LocalPlaylist>) {
+    fun writePlaylists(context: Context, playlists: List<LocalPlaylist>): Boolean {
         val kept = if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) {
             playlists
         } else {
             playlists.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
         }
         val dropped = playlists.filterNot { p -> kept.any { it.key == p.key } }
-        val editor = prefs(context).edit()
-            .putString(KEY_PLAYLISTS, LocalPlaylistCodec.encodePlaylists(kept))
-        dropped.forEach { editor.remove(tracksKey(it.key)) }
-        editor.commit()
+        val changes = linkedMapOf<String, String?>(
+            KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept),
+        )
+        dropped.forEach { changes[tracksKey(it.key)] = null }
+        // 返回值是「**真的落盘了**」的唯一凭据。旧实现丢掉 commit 结果，于是新建歌单在
+        // 磁盘写失败时照样被当成创建成功（H09）：本进程能读到、冷启动就没了。
+        return commitValues(prefs(context), changes)
     }
 
     // ---------------------------------------------------------------- 曲目 ----
@@ -196,20 +199,30 @@ object LocalPlaylistStore {
         if (kept.any { it.key == updated.key }) {
             changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
         }
-        val before = changes.keys.associateWith { storage.getString(it, null) }
-        fun commit(values: Map<String, String?>): Boolean {
-            val editor = storage.edit()
-            values.forEach { (key, value) -> if (value == null) editor.remove(key) else editor.putString(key, value) }
-            return editor.commit()
-        }
-        if (!commit(changes)) {
-            // SharedPreferences changes memory even when disk commit fails. Restore the previous
-            // snapshot too, so reload/TTL cannot treat the failed sync as fresh in this process.
-            commit(before)
-            return null
-        }
+        if (!commitValues(storage, changes)) return null
         revision++
         return updated
+    }
+
+    /**
+     * 一次提交多个 key；**失败时把内存也回滚**。
+     *
+     * `SharedPreferences` 在 `commit()` 返回 false 时，进程内的内存表**已经被改过**
+     * （只有磁盘没落）。不回滚的话，同进程的读取会看到一个磁盘上并不存在的状态：
+     * 「新建的歌单创建成功」、重启后消失 —— 正是 H09 那种「看起来成功、其实没落盘」。
+     *
+     * @return true = 磁盘已提交。false = 未提交，且内存已还原成提交前的样子。
+     */
+    private fun commitValues(storage: SharedPreferences, values: Map<String, String?>): Boolean {
+        val before = values.keys.associateWith { storage.getString(it, null) }
+        val editor = storage.edit()
+        values.forEach { (key, value) -> if (value == null) editor.remove(key) else editor.putString(key, value) }
+        if (editor.commit()) return true
+        // 回滚本身也可能失败（同一次磁盘故障），但那已经不改变结论：调用方拿到的是 false。
+        val rollback = storage.edit()
+        before.forEach { (key, value) -> if (value == null) rollback.remove(key) else rollback.putString(key, value) }
+        rollback.commit()
+        return false
     }
 
     /**
@@ -217,13 +230,17 @@ object LocalPlaylistStore {
      *
      * 与「清空歌单」不同：删除会连 tombstone 一起丢掉（[LocalPlaylistSync.clearAll] 之后再删），
      * 也就是**放弃这个歌单的同步来源关联**。
+     *
+     * @return true = 歌单列表的提交成功。曲目表的删除是独立的一条 key，它的 commit 结果
+     *   不单独上报（删歌单失败时列表仍在，用户可以重试；`tracks:` 残留是惰性的，读不到）。
      */
     @Synchronized
-    fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
+    fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): Boolean {
         revision++
         val list = readPlaylists(context)
-        writePlaylists(context, list.filterNot { it.key == key })
+        val removed = writePlaylists(context, list.filterNot { it.key == key })
         removeTracks(context, key)
+        return removed
     }
 
     /**
@@ -232,6 +249,7 @@ object LocalPlaylistStore {
      * @param key 身份。绑远程来源时用远程的 [com.takahashirinta.ncrust.source.PlaylistKey]；
      *   纯手动的用 [LocalPlaylistSync.localOnlyKey]。
      * @return 新建的歌单；同名同 key 已存在时返回**已存在的那一个**（幂等，不覆盖用户的歌）。
+     *   **null = 落盘失败**（内存已回滚）—— 调用方不得据此提示「已创建」，应保留重试入口。
      */
     @Synchronized
     fun createPlaylist(
@@ -239,11 +257,11 @@ object LocalPlaylistStore {
         key: com.takahashirinta.ncrust.source.PlaylistKey,
         name: String,
         now: Long,
-    ): LocalPlaylist {
+    ): LocalPlaylist? {
         val list = readPlaylists(context)
         list.firstOrNull { it.key == key }?.let { return it }
         val created = LocalPlaylist(key = key, name = name, createdAt = now, updatedAt = now)
-        writePlaylists(context, list + created)
-        return created
+        // H09：只有 commit 真的成功，才把这条当成"已创建"。否则返回 null，让上层提示失败。
+        return created.takeIf { writePlaylists(context, list + created) }
     }
 }

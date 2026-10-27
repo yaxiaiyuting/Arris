@@ -878,22 +878,33 @@ object PlaylistApi {
         pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         // 每个通道发之前都复核：A 会话的动作绝不能落到 B 的凭据上。
-        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+        if (pinned != null && !sameAccount(pinned)) {
             Log.w("PlaylistApi", "likeSong aborted: session changed id=$songId like=$like")
             return@withContext false
         }
         if (tryXeapiLike(songId, like, pinned?.loginGeneration) == 200) return@withContext true
-        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+        if (pinned != null && !sameAccount(pinned)) {
             Log.w("PlaylistApi", "likeSong aborted before weapi: session changed id=$songId")
             return@withContext false
         }
         if (tryWeapiLike(songId, like, pinned?.cookie) == 200) return@withContext true
-        if (pinned != null && !CookieManager.isCurrent(pinned)) {
+        if (pinned != null && !sameAccount(pinned)) {
             Log.w("PlaylistApi", "likeSong aborted before eapi: session changed id=$songId")
             return@withContext false
         }
         tryEapiLike(songId, like, pinned?.cookie, pinned?.loginGeneration) == 200
     }
+
+    /**
+     * 会话归属复核（S18 / R1）：**只认登录代次**。
+     *
+     * 旧判据是 `CookieManager.isCurrent(pinned)`，它同时比较 `revision` —— 而同账号
+     * **续期换票只推进 revision、不换登录代次**。于是后台换票会让一个仍在排队/正在重试的
+     * 收藏写入被当成"换号"丢弃：用户点过的那次收藏静默消失。换号与登出都会推进代次，
+     * 所以代次相同 = 同一个账号，用旧票发也只会落到同一个账号上。
+     */
+    private fun sameAccount(pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot): Boolean =
+        CookieManager.snapshot().loginGeneration == pinned.loginGeneration
 
     /**
      * xeapi `/api/v1/radio/like`——与官方 Android 9.x 同形（xeapi 加密 + 持久 deviceId + 易盾 token）。
@@ -1058,10 +1069,26 @@ object PlaylistApi {
         }
     }
 
-    /** 收藏(sub=true) / 取消收藏(false) 专辑（eapi，与客户端一致）。 */
-    suspend fun subAlbum(albumId: Long, sub: Boolean): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * 收藏(sub=true) / 取消收藏(false) 专辑（eapi，与客户端一致）。
+     *
+     * @param pinned 排任务时钉住的会话（H01）。切账号/登出后这个旧操作直接作废，
+     *   **不会**被新账号的凭据重发一遍。判据用**登录代次**而不是 cookie 字节：
+     *   同账号续期只换票（revision 变、代次不变），那条订阅动作仍然属于同一个账号。
+     */
+    suspend fun subAlbum(
+        albumId: Long,
+        sub: Boolean,
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (pinned != null && !sameAccount(pinned)) {
+            Log.w("PlaylistApi", "subAlbum aborted: session changed id=$albumId sub=$sub")
+            return@withContext false
+        }
         val action = if (sub) "sub" else "unsub"
         val payload = mapOf("id" to albumId.toString())
+        // 复核与发包之间没有挂起点：不传 cookieOverride 是为了让请求保留会话 tag，
+        // 迟到的 301 仍能走 SessionMonitor 把会话转 Expired。
         val response = RetrofitClient.eapiPost("/eapi/album/$action", payload)
         val body = response.body?.string() ?: return@withContext false
         val code = JSONObject(body).optInt("code", -1)

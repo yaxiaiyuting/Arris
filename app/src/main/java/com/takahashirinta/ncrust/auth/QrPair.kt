@@ -107,6 +107,33 @@ object QrPair {
     }
 
     /** AES-128-CBC，随机 IV 前置。 */
+    /**
+     * 回传载荷 = 密文 ‖ HMAC-SHA256(secret, unikey|密文)。
+     *
+     * 发现应答已经有 HMAC 证明（谁在应答），但**回传内容本身**之前没有完整性校验（H23）：
+     * 中间人能改 ciphertext 的字节（CBC 无认证），平板侧的 `decrypt` 只靠 padding 与
+     * UTF-8 校验兜着，理论上存在可被利用的伪造面。这里把「内容」也绑到 secret 上。
+     */
+    fun sealPayload(secret: String, unikey: String, cipherText: ByteArray): ByteArray {
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        mac.update(unikey.toByteArray(Charsets.UTF_8))
+        mac.update(cipherText)
+        return cipherText + mac.doFinal()
+    }
+
+    /** 校验并剥离 MAC；失败返回 null（调用方按"这不是本会话的合法回传"处理）。 */
+    fun openPayload(secret: String, unikey: String, payload: ByteArray): ByteArray? {
+        if (payload.size <= 32) return null
+        val cipherText = payload.copyOfRange(0, payload.size - 32)
+        val tag = payload.copyOfRange(payload.size - 32, payload.size)
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        mac.update(unikey.toByteArray(Charsets.UTF_8))
+        mac.update(cipherText)
+        return if (java.security.MessageDigest.isEqual(tag, mac.doFinal())) cipherText else null
+    }
+
     fun encrypt(secret: String, unikey: String, plain: String): ByteArray {
         val iv = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")

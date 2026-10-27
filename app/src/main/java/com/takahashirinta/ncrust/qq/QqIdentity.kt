@@ -44,16 +44,21 @@ object QqIdentity {
      * 说明别人先写成功了 —— 此时**读回已存在的值**而不是用自己这份，
      * 否则同一次启动里的两个请求会带上不同指纹（服务端会当成两台设备）。
      */
-    fun deviceId(context: Context): String {
+    fun deviceId(context: Context): String = synchronized(deviceLock) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.getString(KEY_DEVICE, null)?.takeIf { it.length == DEVICE_LEN }?.let { return it }
         val candidate = randomHex(DEVICE_LEN)
-        return if (prefs.edit().putString(KEY_DEVICE, candidate).commit()) {
-            candidate
-        } else {
-            prefs.getString(KEY_DEVICE, null)?.takeIf { it.length == DEVICE_LEN } ?: candidate
-        }
+        // H07：`commit()` 的返回值只代表"这次写盘成功了"，**不是 CAS** ——
+        // 两个协程同时首次请求时都能返回 true，各自用上自己的指纹，
+        // 服务端就把同一台设备当成两台。这里用进程内锁把
+        // 「读 → 判空 → 生成 → 提交 → 读回」串起来，最终一律以盘上的值为准。
+        // （多进程同时初始化仍无跨进程 CAS，本项目只在主进程用 QQ 身份。）
+        prefs.edit().putString(KEY_DEVICE, candidate).apply()
+        prefs.getString(KEY_DEVICE, null)?.takeIf { it.length == DEVICE_LEN } ?: candidate
     }
+
+    /** 进程内的设备标识初始化锁（见 [deviceId] 的说明）。 */
+    private val deviceLock = Any()
 
     /** `comm.guid`：参考实现用 10 位数字。 */
     fun guid(context: Context): String {

@@ -13,6 +13,8 @@
 package com.takahashirinta.ncrust.network
 
 import android.util.Log
+import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -76,19 +78,31 @@ object PlaylistEditApi {
 
     // ==================== 端点 ====================
 
+    /**
+     * 钉住用户动作产生时的会话（H02）。
+     *
+     * 所有写出口都必须**在进入 [PlaylistWriteGate] 之前**拿到快照：门控会等待 ≥2s，
+     * 若等到真正发请求时才读 `CookieManager`，排队期间只要换过号，A 的编辑就会带着
+     * B 的凭据发出去（旧代码里删除/改名/描述/隐私/移除曲目都没有 `pinned` 参数，
+     * 正是这条路径）。调用方显式传快照时以调用方的为准 —— 一次多字段编辑应当共享同一份。
+     */
+    private fun pinnedOrCurrent(pinned: NeteaseSessionSnapshot?): NeteaseSessionSnapshot =
+        pinned ?: CookieManager.snapshot()
+
     /** 创建歌单。返回新 pid；失败返回 null（具体原因看 [lastError]）。 */
     suspend fun createPlaylist(
         name: String,
         privacy: Int = PRIVACY_PUBLIC,
-        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+        pinned: NeteaseSessionSnapshot? = null,
     ): Long? {
+        val session = pinnedOrCurrent(pinned)
         val payload = mutableMapOf(
             "name" to name,
             "privacy" to privacy.toString(),
             "type" to "NORMAL",
             "subType" to "NORMAL",
         )
-        return when (val result = write(CREATE_PATH, payload, pinned)) {
+        return when (val result = write(CREATE_PATH, payload, session)) {
             is PlaylistWriteResult.Success -> {
                 // 顶层 id 与 playlist.id 同时存在且相等；只认其中一个都行。
                 val id = result.raw.optLong("id").takeIf { it > 0 }
@@ -115,9 +129,11 @@ object PlaylistEditApi {
     suspend fun addSongs(
         playlistId: Long,
         songIds: List<Long>,
-        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+        pinned: NeteaseSessionSnapshot? = null,
     ): Int? {
         if (songIds.isEmpty()) return null
+        // 一次调用里的所有批次共享同一份快照：第 2 批不能在第 1 批等门控时改读新账号。
+        val session = pinnedOrCurrent(pinned)
         // S22：网易歌单写接口只认网易曲目 id。QQ/B 站的合成 id（bit62 标记）传过去
         // 会被服务端当成"另一首网易歌"，所以在这里（唯一写出口）直接拒绝跨源 id。
         val foreign = songIds.filterNot { com.takahashirinta.ncrust.source.SourceIds.isNeteaseId(it) }
@@ -127,7 +143,7 @@ object PlaylistEditApi {
         }
         var count: Int? = null
         for (batch in songIds.distinct().chunked(TRACK_BATCH)) {
-            when (val result = write(TRACKS_PATH, addSongsPayload(playlistId, batch), pinned)) {
+            when (val result = write(TRACKS_PATH, addSongsPayload(playlistId, batch), session)) {
                 is PlaylistWriteResult.Success -> count = result.raw.optInt("count", count ?: 0)
                 PlaylistWriteResult.Duplicate -> count = count ?: 0
                 else -> {
@@ -140,11 +156,16 @@ object PlaylistEditApi {
     }
 
     /** 从歌单移除歌曲（op=del）。返回操作后的曲目总数，失败 null。 */
-    suspend fun removeSongs(playlistId: Long, songIds: List<Long>): Int? {
+    suspend fun removeSongs(
+        playlistId: Long,
+        songIds: List<Long>,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Int? {
         if (songIds.isEmpty()) return null
+        val session = pinnedOrCurrent(pinned)
         var count: Int? = null
         for (batch in songIds.distinct().chunked(TRACK_BATCH)) {
-            when (val result = write(TRACKS_PATH, removeSongsPayload(playlistId, batch))) {
+            when (val result = write(TRACKS_PATH, removeSongsPayload(playlistId, batch), session)) {
                 is PlaylistWriteResult.Success -> count = result.raw.optInt("count", count ?: 0)
                 else -> {
                     recordError("removeSongs", result)
@@ -159,32 +180,60 @@ object PlaylistEditApi {
      * 删除歌单（单个）。参数名是 pid；传 ids 会 400「请求参数错误」。
      * 非本人 pid 返回 401「无权限操作歌单」，可用来判定归属。
      */
-    suspend fun deletePlaylist(playlistId: Long): Boolean =
-        write(DELETE_PATH, mutableMapOf("pid" to playlistId.toString())).isSuccess()
+    suspend fun deletePlaylist(
+        playlistId: Long,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Boolean = write(
+        DELETE_PATH,
+        mutableMapOf("pid" to playlistId.toString()),
+        pinnedOrCurrent(pinned),
+    ).isSuccess()
 
     /**
      * 批量删除歌单（/eapi/playlist/remove，参数名是 ids 且为 JSON 串）。
      * 注意它**对非本人歌单返回 200 却什么都不做**，所以不能拿它判权限 —— 判权限用 [deletePlaylist]。
      */
-    suspend fun removePlaylists(playlistIds: List<Long>): Boolean =
-        write(REMOVE_PATH, mutableMapOf("ids" to JSONArray(playlistIds).toString())).isSuccess()
+    suspend fun removePlaylists(
+        playlistIds: List<Long>,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Boolean = write(
+        REMOVE_PATH,
+        mutableMapOf("ids" to JSONArray(playlistIds).toString()),
+        pinnedOrCurrent(pinned),
+    ).isSuccess()
 
-    suspend fun renamePlaylist(playlistId: Long, name: String): Boolean =
-        write(
-            UPDATE_NAME_PATH,
-            mutableMapOf("id" to playlistId.toString(), "name" to name),
-        ).isSuccess()
+    suspend fun renamePlaylist(
+        playlistId: Long,
+        name: String,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Boolean = write(
+        UPDATE_NAME_PATH,
+        mutableMapOf("id" to playlistId.toString(), "name" to name),
+        pinnedOrCurrent(pinned),
+    ).isSuccess()
 
-    suspend fun updatePlaylistDesc(playlistId: Long, desc: String): Boolean =
-        write(
-            UPDATE_DESC_PATH,
-            mutableMapOf("id" to playlistId.toString(), "desc" to desc),
-        ).isSuccess()
+    suspend fun updatePlaylistDesc(
+        playlistId: Long,
+        desc: String,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Boolean = write(
+        UPDATE_DESC_PATH,
+        mutableMapOf("id" to playlistId.toString(), "desc" to desc),
+        pinnedOrCurrent(pinned),
+    ).isSuccess()
 
     /** 改隐私，只接受 [PRIVACY_PUBLIC] / [PRIVACY_PRIVATE]。 */
-    suspend fun updatePlaylistPrivacy(playlistId: Long, privacy: Int): Boolean {
+    suspend fun updatePlaylistPrivacy(
+        playlistId: Long,
+        privacy: Int,
+        pinned: NeteaseSessionSnapshot? = null,
+    ): Boolean {
         if (privacy != PRIVACY_PUBLIC && privacy != PRIVACY_PRIVATE) return false
-        return write(UPDATE_PRIVACY_PATH, privacyPayload(playlistId, privacy)).isSuccess()
+        return write(
+            UPDATE_PRIVACY_PATH,
+            privacyPayload(playlistId, privacy),
+            pinnedOrCurrent(pinned),
+        ).isSuccess()
     }
 
     // ==================== 请求体构造（纯函数，单测直接断言） ====================
@@ -224,12 +273,17 @@ object PlaylistEditApi {
     private suspend fun write(
         path: String,
         payload: Map<String, String>,
-        /** 排任务时钉住的会话；切账号后旧写操作作废（S18）。 */
-        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
+        /**
+         * 用户动作产生时钉住的会话（S18 / H02）。**必须由公共入口在等门控之前取好**：
+         * 门控会挂起 ≥2s，在这里才读 `CookieManager` 就已经晚了。
+         */
+        session: NeteaseSessionSnapshot,
     ): PlaylistWriteResult =
         PlaylistWriteGate.run {
             withContext(Dispatchers.IO) {
-                if (pinned != null && !com.takahashirinta.ncrust.auth.CookieManager.isCurrent(pinned)) {
+                // 判据是登录代次：同账号续期只换票（revision 变），不该把这次写操作丢掉；
+                // 换号/登出才作废。复核与发包之间没有挂起点。
+                if (CookieManager.snapshot().loginGeneration != session.loginGeneration) {
                     Log.w(TAG, "write " + path + " aborted: session changed")
                     return@withContext PlaylistWriteResult.NetworkError(
                         IOException("session changed before $path"),

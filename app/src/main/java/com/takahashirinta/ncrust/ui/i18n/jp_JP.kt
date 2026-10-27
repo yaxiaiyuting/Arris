@@ -645,7 +645,7 @@ val jpJP = Strings(
             regionLocked = "権利者により、この地域では再生できません",
             network = "ネットワークエラーです。しばらくして再試行してください",
             unknown = "現在この曲を再生できません。しばらくして再試行してください",
-            switchSource = { other -> "%s にはこの曲がありません。切り替え先: " + other },
+            switchSource = { other -> "にはこの曲がありません。切り替え先: " + other },
         ),
 
         share = ShareStrings(

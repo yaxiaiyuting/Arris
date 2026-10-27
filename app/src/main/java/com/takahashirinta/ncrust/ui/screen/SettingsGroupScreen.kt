@@ -35,6 +35,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.takahashirinta.ncrust.KeepScreenOnSetting
 import com.takahashirinta.ncrust.RotationSetting
 import com.takahashirinta.ncrust.cache.ContentCache
@@ -866,6 +869,21 @@ private fun SettingsPreferenceGroupPage(
                         //
                         // 修法三步：① 读 `isUnrestricted()` 做两态回显；② 已在白名单时改跳
                         // 电池优化**列表页**（必有界面，不再是一次空跳）；③ 两条路都失败时给可见提示。
+                        // K08：这一行必须能「从系统页回来就重读白名单状态」。
+                        //
+                        // 旧实现只在点击那一刻 `backgroundBatteryRefresh++` —— 而那一刻权限
+                        // 还是跳转前的值；本页又没有 ON_RESUME 观察者，于是用户去系统页点了
+                        // 「允许」回到应用，这一行仍写着「未允许」，直到页面销毁重进。
+                        // 监听放在行内（而不是整页）：它只在行真的可见时挂载/卸载，
+                        // 滚出视口的行本来就会重新 `remember` 一次，语义一致。
+                        val lifecycleOwner = LocalLifecycleOwner.current
+                        DisposableEffect(lifecycleOwner) {
+                            val observer = LifecycleEventObserver { _, event ->
+                                if (event == Lifecycle.Event.ON_RESUME) backgroundBatteryRefresh++
+                            }
+                            lifecycleOwner.lifecycle.addObserver(observer)
+                            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                        }
                         val allowed = remember(backgroundBatteryRefresh) {
                             BackgroundActivity.isUnrestricted(context)
                         }

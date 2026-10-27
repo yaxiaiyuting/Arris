@@ -64,6 +64,9 @@ object HomeSnapshot {
     /**
      * 异步落盘。传 null 的块保持原值不变（例如只刷新了新歌，就别把榜单冲掉）。
      * 任何异常都被吞掉 —— 快照写失败不该影响任何用户可见行为。
+     *
+     * @param owner 这份快照**属于哪个账号**。默认值在**调用线程**求值 —— 也就是
+     *   在「请求发出 / 列表产生」的那一刻，而不是在工作线程收尾时（H15，见下）。
      */
     fun save(
         context: Context,
@@ -71,11 +74,25 @@ object HomeSnapshot {
         playlists: List<PlaylistApi.PlaylistCard>? = null,
         newSongs: List<SongItem>? = null,
         toplists: List<PlaylistApi.PlaylistCard>? = null,
+        owner: String? = com.takahashirinta.ncrust.auth.CookieManager.accountOwner(),
     ) {
         if (daily == null && playlists == null && newSongs == null && toplists == null) return
         val app = context.applicationContext
         ioScope.launch {
             runCatching {
+                // H15：**归属在发起调用时就已经定了**（默认参数在调用线程求值）。
+                //
+                // 旧实现在序列化**末尾**读一次 `accountOwner()` 写进 KEY_OWNER：
+                // 换账号发生在这次异步写盘的中途时，A 的列表会被贴上 B 的标签落盘，
+                // 于是 B 的冷启动 `restoreIntoCache`（它按 owner 过滤）看到的是一份
+                // "属于 B" 的 A 的数据。`CookieManager` 换号时清理只能清已经存在的值，
+                // 挡不住这个**还没提交**的旧任务。
+                //
+                // 现在：归属变了就整份丢弃（旧快照留着，它自带旧 owner，恢复时会被过滤掉），
+                // 绝不给旧数据盖上新的账号标签。
+                if (!sameOwner(owner, com.takahashirinta.ncrust.auth.CookieManager.accountOwner())) {
+                    return@runCatching
+                }
                 // S13：语义定死 —— `null` = 本次没提供（保持旧值）；
                 // 空列表 = 服务端明确给了空表 ⇒ **必须覆盖**，否则时间戳更新了、
                 // 旧推荐却在下次冷启动又冒出来。
@@ -98,7 +115,7 @@ object HomeSnapshot {
                 }
                 editor.putLong(KEY_SAVED_AT, System.currentTimeMillis())
                 // 归属随快照一起落盘：换账号后 restore 会被 owner 过滤掉，不会读到别人的推荐。
-                val owner = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
+                // 这里写的是**调用时捕获的** owner（H15），不是在收尾时重新读的"当前账号"。
                 if (owner == null) editor.remove(KEY_OWNER) else editor.putString(KEY_OWNER, owner)
                 editor.apply()
             }
@@ -117,7 +134,7 @@ object HomeSnapshot {
         // 但它和个性化内容存在同一个快照里，这里统一按"整份不可信"处理更安全。
         val current = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
         val stored = p.getString(KEY_OWNER, null)
-        if (stored != current) return false
+        if (!sameOwner(stored, current)) return false
         var restored = false
         if (ContentCache.homeDailySongs == null) {
             readList<SongItem>(p, KEY_DAILY, songListType)?.let { ContentCache.homeDailySongs = it; restored = true }
@@ -138,6 +155,16 @@ object HomeSnapshot {
     fun clear(context: Context) {
         runCatching { prefs(context).edit().clear().apply() }
     }
+
+    /**
+     * 两份归属是不是**同一个账号**（H15 的唯一判据，纯函数、JVM 可单测）。
+     *
+     * 单拎出来而不是直接写 `a == b`，是为了把「null 该不该等于 null」这件事钉成一条
+     * 有注释的约定：**未登录（null）与未登录是同一个归属**（游客也有"自己的"首页），
+     * 而「未登录 → 已登录」永远是换号。写成可测的函数之后，
+     * `save` 的提交闸门与 `restoreIntoCache` 的读取闸门也共用同一条规则。
+     */
+    internal fun sameOwner(captured: String?, current: String?): Boolean = captured == current
 
     private fun <T> readList(p: SharedPreferences, key: String, type: java.lang.reflect.Type): List<T>? {
         val raw = p.getString(key, null) ?: return null

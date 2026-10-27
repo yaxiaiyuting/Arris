@@ -54,6 +54,61 @@ object AlbumLookup {
     data class Scored(val candidate: Candidate, val score: Int, val reason: String)
 
     /**
+     * 「歌手这一条判据」的三种结局（H05）。
+     *
+     * ## 为什么必须与 [score] 分开、且是**三值**
+     *
+     * 旧代码把「同名不同歌手」的排除条件写成 `score(...) == null` —— 而 [score] 在
+     * **名称相同**时永远返回非 null（歌手不一致只不过加 0 分），于是那道闸门从未生效：
+     * 同名的另一张专辑照样能拿到 `HIGH` 并作为 alias 写进缓存。
+     *
+     * `null` 是个二值的语言，而这里的事实是三值的：
+     * - [SAME] / [CONTAINS]：两侧都给了歌手且对得上 ⇒ 歌手这条判据**成立**；
+     * - [CONFLICT]：两侧都给了歌手但**对不上** ⇒ 同名不同人，这是「另一张专辑」；
+     * - [UNKNOWN]：至少一侧没给歌手 ⇒ **无法判断**（不是「冲突」，也不是「一致」）。
+     *
+     * 把 [UNKNOWN] 与 [CONFLICT] 混在一起，要么误杀正确候选（信息缺失当成冲突），
+     * 要么放行错配（信息缺失当成一致）。两者都会在界面上表现为「匹配不可信」。
+     *
+     * ⚠️ 已知边界：本仓库不做繁简转换（见 [NameNormalizer.artistsOverlap]），
+     * `周杰伦` 与 `周杰倫` 会被判成 [CONFLICT]。这是既有口径，不在本次改动里推翻 ——
+     * 但调用方（`CatalogAggregator.findCounterpartAlbum`）只在**两边都已知**时才据此跳过候选，
+     * 信息不足时仍然保留候选（宁可少排除，也不凭猜测丢候选）。
+     */
+    enum class ArtistVerdict {
+        /** 两侧都已知且归一化后完全相同。 */
+        SAME,
+
+        /** 两侧都已知且存在包含关系（合作艺人 `A / B` vs `A`）。 */
+        CONTAINS,
+
+        /** 两侧都已知但对不上 ⇒ 同名不同歌手。 */
+        CONFLICT,
+
+        /** 至少一侧没给歌手 ⇒ 判不出来。 */
+        UNKNOWN,
+        ;
+
+        /** 歌手判据**正向成立**（[SAME] 或 [CONTAINS]）。 */
+        val matched: Boolean get() = this == SAME || this == CONTAINS
+    }
+
+    /**
+     * 只判「歌手」这一条（H05 的唯一落点；[score] 也复用它，避免两处规则漂移）。
+     */
+    fun artistVerdict(queryArtist: String?, candidateArtist: String?): ArtistVerdict {
+        val qArtist = queryArtist?.let { NameNormalizer.normalizeName(it) }?.takeIf { it.isNotEmpty() }
+            ?: return ArtistVerdict.UNKNOWN
+        val cArtist = candidateArtist?.let { NameNormalizer.normalizeName(it) }?.takeIf { it.isNotEmpty() }
+            ?: return ArtistVerdict.UNKNOWN
+        return when {
+            qArtist == cArtist -> ArtistVerdict.SAME
+            qArtist.contains(cArtist) || cArtist.contains(qArtist) -> ArtistVerdict.CONTAINS
+            else -> ArtistVerdict.CONFLICT
+        }
+    }
+
+    /**
      * 给候选打分。**名称不命中直接返回 null**（那是另一张专辑，不该参与排序）。
      *
      * 分值（累加）：
@@ -83,20 +138,21 @@ object AlbumLookup {
         var score = 0
         val parts = ArrayList<String>(3)
         parts += "同名"
-        val qArtist = queryArtist?.let { NameNormalizer.normalizeName(it) }?.takeIf { it.isNotEmpty() }
-        val cArtist = candidate.artistName?.let { NameNormalizer.normalizeName(it) }?.takeIf { it.isNotEmpty() }
-        if (qArtist != null && cArtist != null) {
-            when {
-                qArtist == cArtist -> {
-                    score += 4
-                    parts += "同歌手"
-                }
-                qArtist.contains(cArtist) || cArtist.contains(qArtist) -> {
-                    // 合作艺人：`A / B` vs `A`。包含关系是可用的信号，但比完全相同弱。
-                    score += 2
-                    parts += "歌手包含"
-                }
+        // 歌手判据与「同名不同歌手」的排除条件（`CatalogAggregator.findCounterpartAlbum`）
+        // 共用 [artistVerdict] 这一个实现：两处各写一遍必然漂移，而漂移的那一天
+        // 打分说「同歌手」、闸门说「冲突」—— 表现是候选被随机丢掉。
+        when (artistVerdict(queryArtist, candidate.artistName)) {
+            ArtistVerdict.SAME -> {
+                score += 4
+                parts += "同歌手"
             }
+            // 合作艺人：`A / B` vs `A`。包含关系是可用的信号，但比完全相同弱。
+            ArtistVerdict.CONTAINS -> {
+                score += 2
+                parts += "歌手包含"
+            }
+            // 信息缺失与冲突都**不加分**：前者是「不知道」，后者是「不是同一个人」。
+            ArtistVerdict.UNKNOWN, ArtistVerdict.CONFLICT -> Unit
         }
         // 曲目数：**两边都已知**且相同才 +1。
         // ⚠️ 未知（null）绝不能当成 0 去比 —— 那会让「不知道」凭空输给「知道」，

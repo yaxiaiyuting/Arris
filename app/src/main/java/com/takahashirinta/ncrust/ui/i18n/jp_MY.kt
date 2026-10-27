@@ -644,7 +644,7 @@ val jpMY = Strings(
             regionLocked = "権利者により此の地にては奏でられず",
             network = "網に障りあり。暫し待ちて再び試されたし",
             unknown = "今しばらく此曲を奏でられず。暫し待ちて再び試されたし",
-            switchSource = { other -> "%s に此曲なし。切替先: " + other },
+            switchSource = { other -> "に此曲なし。切替先: " + other },
         ),
 
         share = ShareStrings(

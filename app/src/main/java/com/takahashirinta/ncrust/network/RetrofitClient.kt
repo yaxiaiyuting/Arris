@@ -374,11 +374,26 @@ object RetrofitClient {
      * @param path `/api/…` 形态，内部改写成 `/eapi/…`。
      * @param fields 业务字段（播放上报只有一个 `logs`，值是 JSON 文本）。
      */
-    fun eapiPostOsx(path: String, fields: Map<String, Any>): Response {
-        val cookie = cookieValues(currentCookie)
+    fun eapiPostOsx(
+        path: String,
+        fields: Map<String, Any>,
+        /**
+         * H03：调用方钉住的凭据（连同登录代次）。异步上报线程绝不能在排队之后
+         * 重新读一次 CookieManager —— 那会把 A 账号的收听记录发给 B。
+         */
+        pinnedCookie: String? = null,
+        pinnedGeneration: Long? = null,
+    ): Response {
+        if (pinnedGeneration != null) {
+            val now = CookieManager.snapshot()
+            if (now.loginGeneration != pinnedGeneration) {
+                throw IOException("session changed before scrobble $path")
+            }
+        }
+        val cookie = cookieValues(pinnedCookie ?: currentCookie)
         val header = osxHeader(
             deviceId = pcDeviceId(),
-            csrf = getCsrfToken().orEmpty(),
+            csrf = getCsrfToken(pinnedCookie ?: currentCookie).orEmpty(),
             musicU = cookie["MUSIC_U"],
             musicA = cookie["MUSIC_A"],
             nowMs = System.currentTimeMillis(),

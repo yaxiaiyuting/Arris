@@ -41,7 +41,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.takahashirinta.ncrust.qq.QqCookie
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.controls.MetroButton
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
@@ -75,12 +74,14 @@ import java.net.URL
  * ## 完成检测：cookie 变化（主）+ 手动按钮（兜底）
  *
  * 不去猜验证页的 DOM 结构：它会变，而且我们在开发环境复现不出这个页面。
- * 「cookie store 里出现了新的 cookie」是「这个会话被写过东西」的可靠信号。
+ * 「cookie store 被写过东西」是「验证在这个会话上生效了」的可靠信号 ——
+ * 判据是**键或值任一变化**（E04：真实响应多为给已有键换值，只比键名会永远等不到完成），
+ * 判定本身抽在 [QqCaptchaCookieGate]，JVM 可直接单测。
  *
  * ⚠️ **基线必须在页面首次加载完成之后才取**：验证页自己一进来就会写会话 cookie，
  * 若把进入时的空快照当基线，第一次 `onPageFinished` 就会被误判成「验证完成」，
  * 于是拿一份没验证过的 cookie 去重试 —— 结果是被再次要求验证，用户看到死循环。
- * 所以 [baseline] 在首次 `onPageFinished` 才落定，之后再出现的**新** cookie 才算数。
+ * 所以 [baseline] 在首次 `onPageFinished` 才落定，之后键或值**再变化**才算数。
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -94,8 +95,8 @@ fun QqCaptchaOverlay(
     val strings = LocalStrings.current
     val colors = LocalMetroColors.current
     var webView by remember { mutableStateOf<WebView?>(null) }
-    // null = 还没取基线（页面尚未首次加载完）。
-    var baseline by remember { mutableStateOf<Set<String>?>(null) }
+    // null = 还没取基线（页面尚未首次加载完）。值是「键 → 值」，不是键名集合（E04）。
+    var baseline by remember { mutableStateOf<Map<String, String>?>(null) }
     var verified by remember { mutableStateOf(false) }
 
     fun snapshot(): String? {
@@ -112,8 +113,10 @@ fun QqCaptchaOverlay(
     fun maybeFinish(): Boolean {
         val base = baseline ?: return false
         if (verified) return false
-        val now = QqCookie.parse(snapshot())
-        if (now.keys.any { it !in base }) {
+        val now = QqCaptchaCookieGate.snapshot(snapshot())
+        // E04：新键**或**旧键换了值都算「验证写过 cookie」。只比键名会漏掉
+        // 「验证结果只是刷新已有 cookie 值」这一形状，自动流程永远不结束。
+        if (QqCaptchaCookieGate.changedSince(base, now)) {
             verified = true
             onVerified(snapshot())
             return true
@@ -166,7 +169,7 @@ fun QqCaptchaOverlay(
 
                         override fun onPageFinished(view: WebView, url: String?) {
                             // 首次加载完成 = 验证页自己的会话 cookie 已经写完 ⇒ 此刻才取基线。
-                            baseline = baseline ?: QqCookie.parse(snapshot()).keys
+                            baseline = baseline ?: QqCaptchaCookieGate.snapshot(snapshot())
                             maybeFinish()
                         }
                     }

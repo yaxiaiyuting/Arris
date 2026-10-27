@@ -66,14 +66,20 @@ class LikedPlaylistPickTest {
         assertEquals("两条都是 specialType=5 时，名称是最强判据", 999L, pickLikedPlaylistIdFrom(arr))
     }
 
-    /** 繁体/多语言账号下名字可能只有「喜欢的音乐」——两种子串都要收。 */
+    /**
+     * H24 回归：**名字不能单独构成身份**。
+     *
+     * 用户自建歌单可以叫「以前喜欢的音乐精选」，旧实现按名字子串先命中它，
+     * 收藏底表就按这个普通歌单读。修复后：名字只在特殊歌单里做兜底，
+     * 所以这里必须落到 111（specialType=1 的特殊歌单），而不是 999（普通歌单）。
+     */
     @Test
-    fun `名称只含「喜欢的音乐」也能命中`() {
+    fun `普通歌单名字里带关键词也不会被当成红心歌单`() {
         val arr = list(
             playlist(111L, "其他", specialType = 1),
             playlist(999L, "喜欢的音乐", specialType = 0),
         )
-        assertEquals(999L, pickLikedPlaylistIdFrom(arr))
+        assertEquals("普通歌单不是红心歌单", 111L, pickLikedPlaylistIdFrom(arr))
     }
 
     // ------------------------------------------------- ② specialType == 5

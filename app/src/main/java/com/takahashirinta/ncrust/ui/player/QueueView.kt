@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.takahashirinta.ncrust.QueueModes
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.source.TrackKey
+import com.takahashirinta.ncrust.source.trackKeyOf
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -94,13 +96,22 @@ fun QueueView(
     // (列表项本体现身、让位归零), 悬浮层多留一帧盖住交接处, 下一帧再撤——
     // 保证"悬浮层 → 列表项"的交接跨帧重叠、像素一致, 不出现空帧/跳变
     var overlayVisible by remember { mutableStateOf(false) }
-    // 被拖歌曲 id: 悬浮层渲染用(拖拽结束 draggingQueueIndex 清空后仍能渲染)
-    var draggedSongId by remember { mutableStateOf<Long?>(null) }
+    // 被拖曲目的**身份**（v3.8.0 · E11：原来是裸 `Long` id）。
+    //
+    // 悬浮层渲染用它（拖拽结束 draggingQueueIndex 清空后仍要能画出那一行），
+    // 提交重排时也用它重新定位（见下面的提交段）——都是「哪一首歌」的问题，
+    // 而 ncm 与 qm 的曲目 id 各自独立编号，裸数字会撞号：同号的两行会一起消失、
+    // 悬浮卡会取到另一源的那一首。
+    var draggedIdentity by remember { mutableStateOf<TrackKey?>(null) }
+    // 落点行的身份（与 draggedIdentity 成对使用，见提交段的「按身份重定位」）
+    var dragTargetIdentity by remember { mutableStateOf<TrackKey?>(null) }
     // 被拖行本体(列表项)的隐藏状态, 独立于 draggingQueueIndex:
     // 落位时 draggingQueueIndex 与 dragTargetQueueIndex 必须与重排同帧清空
     // (让位归零用 tween(0) 与槽位跳变精确相消, B 才不会跳); 本体是否隐藏
-    // 由 hiddenSongId 单独控制 —— 先随布局移到新槽位再现形, 残影不可能出现
-    var hiddenSongId by remember { mutableStateOf<Long?>(null) }
+    // 由 hiddenRowKey 单独控制 —— 先随布局移到新槽位再现形, 残影不可能出现。
+    // v3.8.0 · E11：存的是**行 key**（含音源），不是 `song.id` —— 否则同号的两行
+    // 会同时变透明，而视觉上只会少一行（另一行"凭空消失"）。
+    var hiddenRowKey by remember { mutableStateOf<String?>(null) }
     // 悬浮行的视口顶位置(由手指驱动, 与列表项生命周期完全解耦)
     var overlayTop by remember { mutableFloatStateOf(0f) }
     // 拖拽开始时: 被拖行的视口偏移 + 按下位置(root 坐标) + 累计滚动量
@@ -190,155 +201,202 @@ fun QueueView(
     val infinityActiveRef by rememberUpdatedState(infinityActive)
     val queueRef by rememberUpdatedState(queue)
     val dragGesturesModifier = Modifier.pointerInput(interactive) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val rowsNow = rowsRef
-            val idxNow = currentIndexRef
-            val targetVisual = itemIndexAt(listState, down.position.y)
-                ?: return@awaitEachGesture
-            val row = rowsNow.getOrNull(targetVisual) ?: return@awaitEachGesture
-            val qi = row.queueIndex
-            if (qi <= idxNow || infinityActiveRef) return@awaitEachGesture
-            // 把手命中区: 行右端 16dp 内边距 + 16dp 尾距 + 48dp 移除钮左侧的 32dp 把手
-            val pad = with(density) { 16.dp.toPx() }
-            val spacer = with(density) { 16.dp.toPx() }
-            val removeW = with(density) { 48.dp.toPx() }
-            val handleW = with(density) { 32.dp.toPx() }
-            val handleLeft = size.width - pad - spacer - removeW - handleW
-            val handleRight = size.width - pad - spacer - removeW
-            if (down.position.x !in handleLeft..handleRight) return@awaitEachGesture
+        try {
+            awaitEachGesture {
+                // v3.8.0 · E10：`interactive` 是 pointerInput 的 key，但**入口也要判一次**——
+                // 面板不可交互时（折叠态、播放器收起）根本不该开始一次拖拽。
+                if (!interactive) return@awaitEachGesture
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val rowsNow = rowsRef
+                val idxNow = currentIndexRef
+                val targetVisual = itemIndexAt(listState, down.position.y)
+                    ?: return@awaitEachGesture
+                val row = rowsNow.getOrNull(targetVisual) ?: return@awaitEachGesture
+                val qi = row.queueIndex
+                if (qi <= idxNow || infinityActiveRef) return@awaitEachGesture
+                // 身份在**按下那一刻**钉住：之后队列怎么变，提交时都按它重新定位。
+                val pressedIdentity = queueRef.getOrNull(qi)?.trackKeyOf()
+                // 把手命中区: 行右端 16dp 内边距 + 16dp 尾距 + 48dp 移除钮左侧的 32dp 把手
+                val pad = with(density) { 16.dp.toPx() }
+                val spacer = with(density) { 16.dp.toPx() }
+                val removeW = with(density) { 48.dp.toPx() }
+                val handleW = with(density) { 32.dp.toPx() }
+                val handleLeft = size.width - pad - spacer - removeW - handleW
+                val handleRight = size.width - pad - spacer - removeW
+                if (down.position.x !in handleLeft..handleRight) return@awaitEachGesture
 
-            // ---- 接管拖拽 ----
-            draggingQueueIndex = qi
-            dragTargetQueueIndex = qi
-            overlayVisible = true
-            val songId = queueRef.getOrNull(qi)?.id
-            draggedSongId = songId
-            hiddenSongId = songId
-            slotOffset0 = listState.layoutInfo.visibleItemsInfo
-                .firstOrNull { it.index == targetVisual }
-                ?.offset?.toFloat() ?: down.position.y
-            downY = down.position.y
-            scrollDelta = 0f
-            overlayTop = slotOffset0
-            autoScrollDir = 0f
-            // 边缘自动滚动: 手指贴近上/下边缘(或已在边缘外)时每帧滚一段,
-            // 滚动期间按悬浮行中心实时刷新插入目标
-            dragScrollJob?.cancel()
-            dragScrollJob = dragScrollScope.launch {
-                while (isActive) {
-                    val dir = autoScrollDir
-                    if (dir != 0f) {
-                        // 16px/帧 ≈ 960px/s, 比 24px/帧 缓和, 边缘滚动不显得失控
-                        val consumed = listState.scrollBy(dir * 16f)
-                        if (consumed != 0f) {
-                            scrollDelta += consumed
-                            val center = overlayTop + draggedRowHeight / 2f
-                            val tv = itemIndexAt(listState, center)
-                            if (tv != null) {
-                                val next = rowsRef.getOrNull(tv)
-                                if (next != null && next.queueIndex > idxNow) {
-                                    dragTargetQueueIndex = next.queueIndex
+                // ---- 接管拖拽 ----
+                draggingQueueIndex = qi
+                dragTargetQueueIndex = qi
+                overlayVisible = true
+                draggedIdentity = pressedIdentity
+                dragTargetIdentity = pressedIdentity
+                hiddenRowKey = row.key
+                slotOffset0 = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == targetVisual }
+                    ?.offset?.toFloat() ?: down.position.y
+                downY = down.position.y
+                scrollDelta = 0f
+                overlayTop = slotOffset0
+                autoScrollDir = 0f
+                // 边缘自动滚动: 手指贴近上/下边缘(或已在边缘外)时每帧滚一段,
+                // 滚动期间按悬浮行中心实时刷新插入目标
+                dragScrollJob?.cancel()
+                dragScrollJob = dragScrollScope.launch {
+                    while (isActive) {
+                        val dir = autoScrollDir
+                        if (dir != 0f) {
+                            // 16px/帧 ≈ 960px/s, 比 24px/帧 缓和, 边缘滚动不显得失控
+                            val consumed = listState.scrollBy(dir * 16f)
+                            if (consumed != 0f) {
+                                scrollDelta += consumed
+                                val center = overlayTop + draggedRowHeight / 2f
+                                val tv = itemIndexAt(listState, center)
+                                if (tv != null) {
+                                    val next = rowsRef.getOrNull(tv)
+                                    if (next != null && next.queueIndex > idxNow) {
+                                        dragTargetQueueIndex = next.queueIndex
+                                        dragTargetIdentity =
+                                            queueRef.getOrNull(next.queueIndex)?.trackKeyOf()
+                                    }
                                 }
                             }
                         }
+                        withFrameNanos { }
                     }
-                    withFrameNanos { }
                 }
-            }
-            // 拖拽主循环: 悬浮行 1:1 跟随手指(根坐标, 无滚动/位移反馈),
-            // 钉在可见区上下边缘, 并实时判定插入目标
-            drag(down.id) { change ->
-                change.consume()
+                // 拖拽主循环: 悬浮行 1:1 跟随手指(根坐标, 无滚动/位移反馈),
+                // 钉在可见区上下边缘, 并实时判定插入目标
+                drag(down.id) { change ->
+                    change.consume()
+                    val vh = listState.layoutInfo.viewportEndOffset.toFloat()
+                    val rowH = draggedRowHeight
+                    overlayTop = (slotOffset0 + (change.position.y - downY))
+                        .coerceIn(0f, (vh - rowH).coerceAtLeast(0f))
+                    val center = overlayTop + rowH / 2f
+                    val edge = with(density) { 72.dp.toPx() }
+                    autoScrollDir = when {
+                        center < edge -> -1f
+                        center > vh - edge -> 1f
+                        else -> 0f
+                    }
+                    val tv = itemIndexAt(listState, center) ?: targetVisual
+                    val next = rowsRef.getOrNull(tv)
+                    val targetIndex = next?.queueIndex?.takeIf { it > idxNow } ?: qi
+                    dragTargetQueueIndex = targetIndex
+                    dragTargetIdentity = queueRef.getOrNull(targetIndex)?.trackKeyOf()
+                }
+                // 拖拽结束(手指抬起): 状态稳定后才更新队列。落位动画放到
+                // dragSettleScope(手势作用域是受限的, 不能 delay/animateTo);
+                // pointerInput 不以 rows 为 key, 落位重排不会重启手势,
+                // 归零一定完整执行 → 下一次拖拽正常。
+                dragScrollJob?.cancel()
+                dragScrollJob = null
+                autoScrollDir = 0f
+                val from = draggingQueueIndex
+                val to = dragTargetQueueIndex
                 val vh = listState.layoutInfo.viewportEndOffset.toFloat()
-                val rowH = draggedRowHeight
-                overlayTop = (slotOffset0 + (change.position.y - downY))
-                    .coerceIn(0f, (vh - rowH).coerceAtLeast(0f))
-                val center = overlayTop + rowH / 2f
-                val edge = with(density) { 72.dp.toPx() }
-                autoScrollDir = when {
-                    center < edge -> -1f
-                    center > vh - edge -> 1f
-                    else -> 0f
+                if (from >= 0 && to >= 0 && from == to) {
+                    // 原位松手: 悬浮行从当前位置阻尼回正到槽位, 其余行让位弹簧归位
+                    dragTargetQueueIndex = -1
+                    val startTop = overlayTop
+                    val slotTop = (slotOffset0 - scrollDelta)
+                        .coerceIn(0f, (vh - draggedRowHeight).coerceAtLeast(0f))
+                    dragSettleScope.launch {
+                        val anim = Animatable(startTop)
+                        anim.animateTo(slotTop, sokuouSpring(response = 0.18f, dampingRatio = 1f)) {
+                            overlayTop = value
+                        }
+                        // 等让位弹簧彻底落稳
+                        delay(150)
+                        // dragging 与 target 同帧清空: 让位归零(tween(0))不再受
+                        // spring 影响, 与槽位变化精确相消
+                        draggingQueueIndex = -1
+                        dragTargetQueueIndex = -1
+                        // 本体在槽位现形(悬浮层同一位置盖住), 下一帧撤悬浮层
+                        hiddenRowKey = null
+                        withFrameNanos { }
+                        overlayVisible = false
+                        draggedIdentity = null
+                        overlayTop = 0f
+                    }
+                } else if (from >= 0 && to >= 0) {
+                    // 落位: 悬浮行从手指位置**快速滑进目标槽位**(≤半行), 滑动与
+                    // 让位弹簧同窗口落稳后提交重排。关键: dragging/target 与重排
+                    // **同帧**清空(让位归零 tween(0) 与槽位跳变精确相消, B 不跳);
+                    // 本体保持隐藏先随布局移到新槽位(悬浮层盖住目标), 布局落地后
+                    // 才现形 —— 列表项可见的每一帧都被悬浮层遮挡, 残影不可能发生
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val startTop = overlayTop
+                    val targetTop = (slotOffset0 + (to - from) * draggedRowHeight - scrollDelta)
+                        .coerceIn(0f, (vh - draggedRowHeight).coerceAtLeast(0f))
+                    // v3.8.0 · E10：把「拖谁 / 拖到哪」钉成**身份**，不再只带下标。
+                    // 用**按下那一刻**记下的身份（`pressedIdentity`），而不是当前状态字段：
+                    // 上一次手势的收尾协程可能刚好在清 `draggedIdentity`。
+                    val dragged = pressedIdentity
+                    val dropTarget = dragTargetIdentity
+                    dragSettleScope.launch {
+                        val anim = Animatable(startTop)
+                        anim.animateTo(targetTop, sokuouSpring(response = 0.16f, dampingRatio = 1f)) {
+                            overlayTop = value
+                        }
+                        // 让位弹簧落稳缓冲(残差降到亚像素再提交)
+                        delay(150)
+                        // ⚠️ 这段缓冲里队列**可能已经被改过**（行内有删除按钮，上层还有任意
+                        // 队列操作）。`from`/`to` 是拖动开始时的下标，此时可能指向别的曲目：
+                        // 原队列 [A,B,C,D,E] 的 from=2/to=3 在「删掉 B」之后仍合法，
+                        // 但 `queue[2]` 已经是 D ⇒「拖 C」变成了移动 D。
+                        //
+                        // 所以提交前按**身份**重新定位两端；任何一端已经不在队列里、
+                        // 或者落点已经不在「将要播放」区，就作废这次提交（只收尾）。
+                        val queueNow = queueRef
+                        val fromNow = if (dragged == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dragged }
+                        val toNow = if (dropTarget == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dropTarget }
+                        if (fromNow >= 0 && toNow >= 0 && fromNow != toNow && toNow > currentIndexRef) {
+                            onMove(fromNow, toNow)
+                        }
+                        draggingQueueIndex = -1
+                        dragTargetQueueIndex = -1
+                        dragTargetIdentity = null
+                        // 重排布局落地: 列表项移到新槽位(仍隐藏), 悬浮层盖住目标
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        // 列表项在新槽位现形(悬浮层同一位置盖住, 无残影)
+                        hiddenRowKey = null
+                        withFrameNanos { }
+                        // 撤悬浮层, 交接完成
+                        overlayVisible = false
+                        draggedIdentity = null
+                        overlayTop = 0f
+                    }
+                } else {
+                    draggingQueueIndex = -1
+                    dragTargetQueueIndex = -1
+                    dragTargetIdentity = null
+                    overlayVisible = false
+                    draggedIdentity = null
+                    hiddenRowKey = null
+                    overlayTop = 0f
                 }
-                val tv = itemIndexAt(listState, center) ?: targetVisual
-                val next = rowsRef.getOrNull(tv)
-                dragTargetQueueIndex = next?.queueIndex?.takeIf { it > idxNow } ?: qi
             }
-            // 拖拽结束(手指抬起): 状态稳定后才更新队列。落位动画放到
-            // dragSettleScope(手势作用域是受限的, 不能 delay/animateTo);
-            // pointerInput 不以 rows 为 key, 落位重排不会重启手势,
-            // 归零一定完整执行 → 下一次拖拽正常。
+        } finally {
+            // v3.8.0 · E10：协程被取消时也要收尾。
+            //
+            // `awaitEachGesture` 只在取消/异常时退出；而 `interactive` 翻转（播放器收起、
+            // 面板切走）会取消这个 pointerInput 的协程。旧实现没有任何收尾路径：
+            // 自动滚动任务继续跑（它自己 while(isActive) 退出，但 `dragScrollJob` 的引用
+            // 还留着）、悬浮层与被隐藏的行停在半拖状态。这里统一归零。
+            // 注意：**不能**在这里提交落位 —— 手势被取消不等于用户松手。
             dragScrollJob?.cancel()
             dragScrollJob = null
             autoScrollDir = 0f
-            val from = draggingQueueIndex
-            val to = dragTargetQueueIndex
-            val vh = listState.layoutInfo.viewportEndOffset.toFloat()
-            if (from >= 0 && to >= 0 && from == to) {
-                // 原位松手: 悬浮行从当前位置阻尼回正到槽位, 其余行让位弹簧归位
-                dragTargetQueueIndex = -1
-                val startTop = overlayTop
-                val slotTop = (slotOffset0 - scrollDelta)
-                    .coerceIn(0f, (vh - draggedRowHeight).coerceAtLeast(0f))
-                dragSettleScope.launch {
-                    val anim = Animatable(startTop)
-                    anim.animateTo(slotTop, sokuouSpring(response = 0.18f, dampingRatio = 1f)) {
-                        overlayTop = value
-                    }
-                    // 等让位弹簧彻底落稳
-                    delay(150)
-                    // dragging 与 target 同帧清空: 让位归零(tween(0))不再受
-                    // spring 影响, 与槽位变化精确相消
-                    draggingQueueIndex = -1
-                    dragTargetQueueIndex = -1
-                    // 本体在槽位现形(悬浮层同一位置盖住), 下一帧撤悬浮层
-                    hiddenSongId = null
-                    withFrameNanos { }
-                    overlayVisible = false
-                    draggedSongId = null
-                    overlayTop = 0f
-                }
-            } else if (from >= 0 && to >= 0) {
-                // 落位: 悬浮行从手指位置**快速滑进目标槽位**(≤半行), 滑动与
-                // 让位弹簧同窗口落稳后提交重排。关键: dragging/target 与重排
-                // **同帧**清空(让位归零 tween(0) 与槽位跳变精确相消, B 不跳);
-                // 本体保持隐藏先随布局移到新槽位(悬浮层盖住目标), 布局落地后
-                // 才现形 —— 列表项可见的每一帧都被悬浮层遮挡, 残影不可能发生
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                val startTop = overlayTop
-                val targetTop = (slotOffset0 + (to - from) * draggedRowHeight - scrollDelta)
-                    .coerceIn(0f, (vh - draggedRowHeight).coerceAtLeast(0f))
-                val dropTo = to
-                dragSettleScope.launch {
-                    val anim = Animatable(startTop)
-                    anim.animateTo(targetTop, sokuouSpring(response = 0.16f, dampingRatio = 1f)) {
-                        overlayTop = value
-                    }
-                    // 让位弹簧落稳缓冲(残差降到亚像素再提交)
-                    delay(150)
-                    onMove(from, dropTo)
-                    draggingQueueIndex = -1
-                    dragTargetQueueIndex = -1
-                    // 重排布局落地: 列表项移到新槽位(仍隐藏), 悬浮层盖住目标
-                    withFrameNanos { }
-                    withFrameNanos { }
-                    // 列表项在新槽位现形(悬浮层同一位置盖住, 无残影)
-                    hiddenSongId = null
-                    withFrameNanos { }
-                    // 撤悬浮层, 交接完成
-                    overlayVisible = false
-                    draggedSongId = null
-                    overlayTop = 0f
-                }
-            } else {
-                draggingQueueIndex = -1
-                dragTargetQueueIndex = -1
-                overlayVisible = false
-                draggedSongId = null
-                hiddenSongId = null
-                overlayTop = 0f
-            }
+            draggingQueueIndex = -1
+            dragTargetQueueIndex = -1
+            dragTargetIdentity = null
+            overlayVisible = false
+            draggedIdentity = null
+            hiddenRowKey = null
+            overlayTop = 0f
         }
     }
 
@@ -409,7 +467,7 @@ fun QueueView(
                                 .graphicsLayer {
                                     // 被拖行的本体隐藏(alpha=0), 视觉由列表外的悬浮层渲染——
                                     // 悬浮层不随 LazyColumn 滚动回收, 行槽位滚出视口也不会"消失"
-                                    alpha = if (hiddenSongId == song.id) 0f else 1f
+                                    alpha = if (hiddenRowKey == row.key) 0f else 1f
                                     // 其余行用弹簧让位, 形成"挖出空位"的联动感
                                     translationY = animatedShift
                                 }
@@ -495,7 +553,8 @@ fun QueueView(
         // 自动滚动把槽位滚出视口也不受影响。alpha=1: 与落定后列表项本体
         // 的透明度完全一致, 交接瞬间没有亮度跳变。
         if (overlayVisible) {
-            val draggedSong = draggedSongId?.let { id -> queue.firstOrNull { it.id == id } }
+            // v3.8.0 · E11：按**身份**找（`queue.firstOrNull { it.id == id }` 会取到另一源同号的那首）
+            val draggedSong = draggedIdentity?.let { key -> queue.firstOrNull { it.trackKeyOf() == key } }
             if (draggedSong != null) {
                 SongCard(
                     song = draggedSong,
@@ -514,11 +573,33 @@ fun QueueView(
     }
 }
 
-private enum class RowKind { PAST_HEAD, NOW_HEAD, UPCOMING_HEAD, SONG, INFINITY }
+/**
+ * 视觉行的种类。
+ *
+ * v3.8.0 · E11：`private` → `internal`，只为了让 [buildQueueRows] 的**行 key 契约**
+ * 能被 JVM 单测直接钉住（重复 key / 跨源同号是纯行模型的性质，不需要跑 Compose）。
+ */
+internal enum class RowKind { PAST_HEAD, NOW_HEAD, UPCOMING_HEAD, SONG, INFINITY }
 
-private data class RowInfo(val kind: RowKind, val queueIndex: Int, val key: String)
+internal data class RowInfo(val kind: RowKind, val queueIndex: Int, val key: String)
 
-private fun buildQueueRows(
+/**
+ * 视觉行模型。
+ *
+ * v3.8.0 · E11：歌曲行的 [RowInfo.key] **必须含音源**。
+ *
+ * 旧写法是 `"s-${song.id}"` —— 默认「id 全局唯一」。可是队列是按 `TrackKey`
+ * （`source + id`）去重的（`MainActivity` 的 `replaceQueueAndPlay` / 追加路径都如此），
+ * 网易云与 QQ 的同数字 id **允许同时在场**：
+ *  - 两个同为 `12345` 的曲目会得到同一个 LazyColumn key ⇒ 重复 key；
+ *  - 拖其中一首会让**同 id 的多行一起透明**（隐藏态按 `song.id` 比较）；
+ *  - 悬浮卡用 `queue.firstOrNull { it.id == id }` 取图文，可能取到**另一源**的那首。
+ *
+ * 现在 key 的形状是 `s-<source>:<id>#<同曲序号>`：音源让跨源同号分开，
+ * 序号让「队列里真的有两首一模一样的歌」也不会撞（去重逻辑在，但不该由 UI 兜底）。
+ * [TrackKey.tag] 就是 `"netease:12345"` / `"qqmusic:12345"`，是身份的唯一格式。
+ */
+internal fun buildQueueRows(
     queue: List<SongItem>,
     currentIndex: Int,
     infinityActive: Boolean
@@ -526,16 +607,25 @@ private fun buildQueueRows(
     if (queue.isEmpty()) return emptyList()
     val rows = mutableListOf<RowInfo>()
     val cur = currentIndex.coerceIn(0, queue.size - 1)
+    // 同一个身份的曲目在队列里出现第几次（0 起）。按队列顺序递增分配 ——
+    // 下面三段循环的下标是严格递增的（0..cur-1 → cur → cur+1..last），所以序号稳定。
+    val seen = HashMap<String, Int>()
+    fun keyOf(i: Int): String {
+        val tag = queue[i].trackKeyOf().tag
+        val n = seen[tag] ?: 0
+        seen[tag] = n + 1
+        return "s-$tag#$n"
+    }
 
     if (cur > 0) {
         rows += RowInfo(RowKind.PAST_HEAD, -1, "h-past")
-        for (i in 0 until cur) rows += RowInfo(RowKind.SONG, i, "s-${queue[i].id}")
+        for (i in 0 until cur) rows += RowInfo(RowKind.SONG, i, keyOf(i))
     }
     rows += RowInfo(RowKind.NOW_HEAD, cur, "h-now")
-    rows += RowInfo(RowKind.SONG, cur, "s-${queue[cur].id}")
+    rows += RowInfo(RowKind.SONG, cur, keyOf(cur))
     if (cur < queue.size - 1 || infinityActive) {
         rows += RowInfo(RowKind.UPCOMING_HEAD, -1, "h-upcoming")
-        for (i in (cur + 1) until queue.size) rows += RowInfo(RowKind.SONG, i, "s-${queue[i].id}")
+        for (i in (cur + 1) until queue.size) rows += RowInfo(RowKind.SONG, i, keyOf(i))
         if (infinityActive) rows += RowInfo(RowKind.INFINITY, -1, "infinity")
     }
     return rows

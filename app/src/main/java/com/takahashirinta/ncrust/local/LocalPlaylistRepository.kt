@@ -13,6 +13,8 @@ package com.takahashirinta.ncrust.local
 import android.content.Context
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.playlist.PlaylistDegradation
+import com.takahashirinta.ncrust.playlist.PlaylistLoadOutcome
 import com.takahashirinta.ncrust.playlist.PlaylistResult
 import com.takahashirinta.ncrust.qq.QqPlaylistRepository
 import com.takahashirinta.ncrust.source.MusicSource
@@ -39,11 +41,42 @@ sealed interface LocalSyncOutcome {
      *
      * 与 [Success] 的区别是**不更新 lastSyncedAt**：TTL 之后仍会再补取一次。
      * 界面应显示"已同步 N 首（数据不完整，稍后会自动补齐）"而不是完整成功。
+     *
+     * ⚠️ **只有真的落盘成功才允许返回本结果**（R3）：写盘失败 / 期间的删除或编辑让提交
+     * 被拒时，返回的是 [Failed] —— 否则界面会显示一个从未提交的新增数量。
+     *
+     * @property cause 为什么算不完整。界面可以据此说清"是没网"还是"没取全"。
      */
-    data class Partial(val added: Int, val skipped: Int, val total: Int) : LocalSyncOutcome
+    data class Partial(
+        val added: Int,
+        val skipped: Int,
+        val total: Int,
+        val cause: LocalPartialCause = LocalPartialCause.UNKNOWN,
+    ) : LocalSyncOutcome
 
     /** 远程拉取失败（网络 / 登录态 / 歌单不存在）。**本地数据一个字节都不动。** */
     data object Failed : LocalSyncOutcome
+}
+
+/**
+ * [LocalSyncOutcome.Partial] 的成因（H10 / H21）。
+ *
+ * 做成一枚举而不是一个错误字符串：界面文案要能一一对应，而且"没网"与"没取全"
+ * 是两种完全不同的用户动作（重试 vs 等它自己补齐）。
+ */
+enum class LocalPartialCause {
+
+    /** 联网失败或不允许联网，展示的是本地/远程缓存。 */
+    CACHE_FALLBACK,
+
+    /** 登录态失效，展示的是缓存。 */
+    NEED_LOGIN,
+
+    /** 服务端声明的曲目数没取全（分页被截断 / 响应缺数组 / 条目解析不出来）。 */
+    TRUNCATED,
+
+    /** 拿到了但不新鲜，具体原因上游没给。 */
+    UNKNOWN,
 }
 
 /**
@@ -69,61 +102,98 @@ sealed interface LocalSyncOutcome {
 object LocalPlaylistRepository {
 
     /**
-     * 拉取远程歌单的曲目。**任何异常都返回 null，绝不抛给调用方**
-     * （与 `MusicSourceProvider` 的契约一致）。
+     * 远程读取的**三种结局**（H10）：完整 / 不完整 / 失败。
      *
-     * @param key 远程歌单身份。
-     * @param dirId qm 的目录号（载荷）。0 = 让服务端按 disstid 解析。
-     */
-    /**
-     * 远程读取结果 + **完整性**。
+     * 旧实现是「`List<SongItem>?` + 一个 Boolean」，只有两格：拿到列表就一律算完整。
+     * 于是「取到一半」「失败后回落到空表」「缓存回退」全被压成同一格 —— 网易那一路干脆
+     * 把 `complete` 写死成 true，截断和失败都能冒充"完整成功"，然后推进 lastSyncedAt。
      *
-     * 旧实现只把 `data` 解包成 songs，把 `fresh / fromCache / degradation` 全丢了：
-     * 截断的缓存（TRUNCATED 1/100 条）、离线回退、甚至 NEED_LOGIN 回退都被当成
-     * "完整成功了"，于是 `sync` 更新 lastSyncedAt，10 分钟内不再补取。
+     * 现在失败与不完整各有自己的类型：[songs] 只表示"能用的那一部分"，
+     * 它是否权威由 [partialCause] 回答（null = 完整）。
      */
-    private data class RemoteFetch(val songs: List<SongItem>?, val complete: Boolean)
+    internal sealed interface RemoteRead {
 
-    private suspend fun loadRemoteOutcome(
+        /** 能用的曲目（[Failed] 时为空）。 */
+        val songs: List<SongItem>
+
+        /** null = 完整读取；非 null = 只拿到一部分，值就是原因。 */
+        val partialCause: LocalPartialCause?
+
+        data class Complete(override val songs: List<SongItem>) : RemoteRead {
+            override val partialCause: LocalPartialCause? get() = null
+        }
+
+        data class Incomplete(
+            override val songs: List<SongItem>,
+            override val partialCause: LocalPartialCause,
+        ) : RemoteRead
+
+        data object Failed : RemoteRead {
+            override val songs: List<SongItem> get() = emptyList()
+            override val partialCause: LocalPartialCause? get() = null
+        }
+    }
+
+    private suspend fun loadRemote(
         key: PlaylistKey,
         dirId: Long,
         forceRefresh: Boolean,
-    ): RemoteFetch {
+    ): RemoteRead {
         return when (key.source) {
             MusicSource.QQMUSIC -> {
                 val result = runCatching {
                     QqPlaylistRepository.loadDetail(key, dirId, forceRefresh)
-                }.getOrNull() ?: return RemoteFetch(null, false)
+                }.getOrNull() ?: return RemoteRead.Failed
                 when (result) {
-                    is PlaylistResult.Data -> RemoteFetch(
-                        songs = result.outcome.data.songs,
-                        // 只有"联网取到的新鲜完整数据"才算完整；缓存/降级一律不算。
-                        complete = result.outcome.fresh && result.outcome.degradation == null,
-                    )
-                    is PlaylistResult.Failed -> RemoteFetch(null, false)
+                    is PlaylistResult.Data -> {
+                        val outcome = result.outcome
+                        // 只有"联网取到的新鲜完整数据"才算完整；缓存/降级/截断一律不算。
+                        if (outcome.fresh && outcome.degradation == null) {
+                            RemoteRead.Complete(outcome.data.songs)
+                        } else {
+                            RemoteRead.Incomplete(outcome.data.songs, partialCauseOf(outcome))
+                        }
+                    }
+                    is PlaylistResult.Failed -> RemoteRead.Failed
                 }
             }
             MusicSource.NETEASE -> {
-                val pid = key.id.toLongOrNull() ?: return RemoteFetch(null, false)
-                RemoteFetch(runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull(), true)
+                val pid = key.id.toLongOrNull() ?: return RemoteRead.Failed
+                // ⚠️ 网易这一路目前**判不出"不完整"**（H10 仍缺的上游信号）：
+                // `PlaylistApi.getPlaylistDetail` 把「声明 N 首、批量详情失败」折成了一个
+                // 更短的 List，`trackCount` / `trackIds` 完整性 / 失败批次数全部没带出来。
+                // 所以这里只能保证「失败不再冒充成功」；要判截断，得让 PlaylistApi 返回
+                // (songs, declaredCount, failedBatches)，不在这几个文件的范围里。
+                val songs = runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull()
+                    ?: return RemoteRead.Failed
+                RemoteRead.Complete(songs)
             }
-            MusicSource.BILIBILI -> RemoteFetch(null, false)
+            MusicSource.BILIBILI -> RemoteRead.Failed
         }
     }
 
+    /**
+     * 把 QQ 侧已有的降级标记映射成本层的成因（H10 / H21 的"完整性带回上层"）。
+     *
+     * `fresh=false` 但没有任何 degradation 是旧缓存/老代码写下的形状：那也**不是**完整同步，
+     * 按"缓存回退"处理，绝不放行成 Success。
+     */
+    internal fun partialCauseOf(outcome: PlaylistLoadOutcome<*>): LocalPartialCause =
+        when (outcome.degradation) {
+            PlaylistDegradation.OFFLINE -> LocalPartialCause.CACHE_FALLBACK
+            PlaylistDegradation.NEED_LOGIN -> LocalPartialCause.NEED_LOGIN
+            PlaylistDegradation.TRUNCATED -> LocalPartialCause.TRUNCATED
+            null -> if (outcome.fresh) LocalPartialCause.UNKNOWN else LocalPartialCause.CACHE_FALLBACK
+        }
+
+    /** 供既有调用方用的"尽力读"：失败返回 null；不完整照旧返回拿到的那一部分。 */
     suspend fun loadRemoteSongs(
         key: PlaylistKey,
         dirId: Long,
         forceRefresh: Boolean,
-    ): List<SongItem>? = loadRemoteOutcome(key, dirId, forceRefresh).songs
-
-    private suspend fun loadRemoteSongsForSync(
-        key: PlaylistKey,
-        dirId: Long,
-        forceRefresh: Boolean,
-    ): List<SongItem>? {
-        // 兼容旧入口：sync 只走这个包装，保持原有的 `loadRemoteSongs` 契约。
-        return loadRemoteOutcome(key, dirId, forceRefresh).songs
+    ): List<SongItem>? = when (val read = loadRemote(key, dirId, forceRefresh)) {
+        is RemoteRead.Failed -> null
+        else -> read.songs
     }
 
     /**
@@ -136,6 +206,8 @@ object LocalPlaylistRepository {
      * 2. 拉取失败 ⇒ [LocalSyncOutcome.Failed]，**本地数据不动**（只加不减的另一半：
      *    失败时更不能删东西）；
      * 3. 成功 ⇒ [LocalPlaylistSync.merge] 合并 → 落盘（元数据 + 曲目一起写）。
+     * 4. 落盘被拒（写盘失败 / 期间删除 / 期间编辑）⇒ [LocalSyncOutcome.Failed]，
+     *    **连 Partial 都不许回**（R3）。
      */
     suspend fun sync(
         context: Context,
@@ -147,39 +219,42 @@ object LocalPlaylistRepository {
         // 记住发请求前的修订号：网络期间用户可能删歌单、移除曲目或重新加回。
         // 没有这道闸门，旧同步返回后会把删除意图覆盖掉（歌单复活 / tombstone 被抹）。
         val revisionBefore = LocalPlaylistStore.currentRevision()
-        val fetched = loadRemoteOutcome(playlist.key, playlist.dirId, forceRefresh = force)
-        val remote = fetched.songs ?: return LocalSyncOutcome.Failed
+        val read = loadRemote(playlist.key, playlist.dirId, forceRefresh = force)
+        if (read is RemoteRead.Failed) return LocalSyncOutcome.Failed
+        // 降级/截断/缓存：能合的就合（只加不减，不丢用户数据），但**不算完整成功**：
+        // 不更新 lastSyncedAt，让 TTL 之后还能再补取，也不向界面报 Success。
+        val incompleteCause = read.partialCause
 
         val existing = LocalPlaylistStore.readTracks(context, playlist.key)
-        val merged = LocalPlaylistSync.merge(existing, remote, now)
-        if (!fetched.complete) {
-            // 降级/截断/缓存：能合的就合（只加不减，不丢用户数据），但**不算完整成功**：
-            // 不更新 lastSyncedAt，让 TTL 之后还能再补取，也不向界面报 Success。
-            LocalPlaylistStore.writePlaylistWithTracksIfUnchanged(
-                context = context,
-                playlist = playlist,           // lastSyncedAt 保持原值
-                tracks = merged.tracks,
-                now = now,
-                expectedRevision = revisionBefore,
-            )
-            return LocalSyncOutcome.Partial(
-                added = merged.added, skipped = merged.skipped,
-                total = merged.tracks.count { it.isVisible },
-            )
-        }
+        val merged = LocalPlaylistSync.merge(existing, read.songs, now)
+        // lastSyncedAt 只在完整读取时推进 —— 它是「完整同步过」的事实，别的时候不写。
+        val toWrite = if (incompleteCause == null) playlist.copy(lastSyncedAt = now) else playlist
+        // ★ 提交结果是**唯一**的成功判据：写盘失败、期间被删、期间被编辑都会返回 null。
+        //   R3 的根因就是这一段在"不完整"分支里被整段跳过、返回值被忽略：
+        //   于是写盘失败时界面仍显示「新增 N 首」，而磁盘上一条都没提交。
         LocalPlaylistStore.writePlaylistWithTracksIfUnchanged(
             context = context,
-            // lastSyncedAt 只在这里更新 —— 它是「成功同步过」的事实，失败时不写。
-            playlist = playlist.copy(lastSyncedAt = now),
+            playlist = toWrite,
             tracks = merged.tracks,
             now = now,
             expectedRevision = revisionBefore,
         ) ?: return LocalSyncOutcome.Failed
-        return LocalSyncOutcome.Success(
-            added = merged.added,
-            skipped = merged.skipped,
-            total = merged.tracks.count { it.isVisible },
-        )
+
+        val total = merged.tracks.count { it.isVisible }
+        return if (incompleteCause == null) {
+            LocalSyncOutcome.Success(
+                added = merged.added,
+                skipped = merged.skipped,
+                total = total,
+            )
+        } else {
+            LocalSyncOutcome.Partial(
+                added = merged.added,
+                skipped = merged.skipped,
+                total = total,
+                cause = incompleteCause,
+            )
+        }
     }
 
     /**
@@ -240,12 +315,20 @@ object LocalPlaylistRepository {
         return next.takeIf { persist(context, key, next, now) }
     }
 
-    /** 新建一个纯手动（无远程来源）的本地歌单。 */
+    /**
+     * 新建一个纯手动（无远程来源）的本地歌单。
+     *
+     * @return 新建的歌单；**null = 落盘失败**（H09）。
+     *
+     * 旧实现无论磁盘有没有写成功都返回一个对象，于是 UI 无条件关掉对话框、弹出
+     * 「已创建」；进程重启后歌单并不存在。现在提交失败必须是**可判**的失败：
+     * 调用方拿到 null 就保留对话框/重试入口，并提示失败。
+     */
     fun createLocalOnly(
         context: Context,
         name: String,
         now: Long = System.currentTimeMillis(),
-    ): LocalPlaylist {
+    ): LocalPlaylist? {
         // 用时间戳造 id：同一毫秒内连点两次会撞，所以再串一个自增序号。
         val id = now.toString() + "-" + (localOnlyCounter++).toString()
         return LocalPlaylistStore.createPlaylist(
@@ -260,6 +343,12 @@ object LocalPlaylistRepository {
      * 把一个**远程歌单**变成可编辑的本地歌单（首次进入时调用）。
      *
      * 幂等：已经建过就返回那一个，**不覆盖**用户已经攒下的曲目。
+     *
+     * ⚠️ 与 [createLocalOnly] 同属 H09 那一类，但**签名本轮不改**（调用方在
+     * `QqPlaylistDetailScreen`，不在本次改动范围）：写盘失败时这里仍会返回一个
+     * 「只在内存里存在」的对象。所幸它的下一个动作就是 `sync(force = true)`，
+     * 而那条路径会因为「key 不存在」返回 Failed，不会把失败伪装成成功。
+     * 后续把本函数也改成可空返回时，调用方需要按 null 分支提示失败。
      */
     fun adoptRemote(
         context: Context,
@@ -283,10 +372,13 @@ object LocalPlaylistRepository {
         return created
     }
 
-    /** 删除一个本地歌单（元数据 + 曲目，含 tombstone）。 */
-    fun deletePlaylist(context: Context, key: PlaylistKey) {
+    /**
+     * 删除一个本地歌单（元数据 + 曲目，含 tombstone）。
+     *
+     * @return true = 歌单列表这次提交成功（曲目表删除不单独报告，见报告）。
+     */
+    fun deletePlaylist(context: Context, key: PlaylistKey): Boolean =
         LocalPlaylistStore.deletePlaylist(context, key)
-    }
 
     // -------------------------------------------------------------- 内部 ----
 

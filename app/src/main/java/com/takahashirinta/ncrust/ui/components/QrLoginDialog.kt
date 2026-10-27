@@ -50,7 +50,14 @@ private enum class QrState { Loading, Waiting, Scanned, Expired, Failed, Invalid
  */
 @Composable
 fun QrLoginDialog(
-    onLoginSuccess: (cookie: String) -> Unit,
+    /**
+     * 交出一份候选凭据，返回「调用方是否真的把它落进了本地登录态」（J02）。
+     *
+     * 返回 false = **本地拒绝**（例如扫码 803 的 `Set-Cookie` 只有 `MUSIC_U`，
+     * 不足以覆盖本地完整会话）。这时不能当登录成功收尾：弹窗保持打开并进
+     * [QrState.InvalidSession]，用户可以点二维码重试或改走通用登录。
+     */
+    onLoginSuccess: (cookie: String) -> Boolean,
     onGenericLogin: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -87,8 +94,11 @@ fun QrLoginDialog(
             // 官方 App 扫码走轮询; Arris 手机扫码走局域网回传, 两条路谁先到用谁。
             // S19：配对密钥只在二维码里传递（官方 App 忽略未知参数），不进 UDP 广播。
             val pairSecret = QrPair.newSecret()
-            pairServer = QrPairServer(key.unikey, pairSecret) { cookie -> onLoginSuccess(cookie) }
-                .also { it.start() }
+            pairServer = QrPairServer(key.unikey, pairSecret) { cookie ->
+                // 局域网回传同样要问「本地接受了吗」（J02）：拒绝时至少留一条可查的证据，
+                // 而不是把「服务端验过」当成「已经登录成功」。
+                if (!onLoginSuccess(cookie)) Log.w(TAG, "LAN handoff rejected locally")
+            }.also { it.start() }
             // 二维码内容是 PC 形态的官方登录链接（`?codekey=<unikey>`，不带 chainId）：
             // 服务端一般不给图, 用 zxing 本地生成(官方客户端同款做法)。
             val qrContent = QrPair.withSecret(key.qrurl, pairSecret)
@@ -125,8 +135,15 @@ fun QrLoginDialog(
                         // 不校验就会出现「提示登录成功、回首页仍显示未登录」。
                         when (PlaylistApi.validateSession(cookie)) {
                             PlaylistApi.SessionCheck.Valid -> {
-                                Log.d(TAG, "session validated, handing off login")
-                                onLoginSuccess(cookie)
+                                // J02：服务端认了 ≠ 本地接受了。`saveCookieMerged` 会拒绝
+                                // 「只有 MUSIC_U 的增量」覆盖完整会话；此时界面不能报成功，
+                                // 否则用户以为换了账号，实际留下的还是上一份凭据。
+                                if (onLoginSuccess(cookie)) {
+                                    Log.d(TAG, "session validated and accepted locally")
+                                } else {
+                                    Log.w(TAG, "session validated by server but rejected locally")
+                                    state = QrState.InvalidSession
+                                }
                             }
                             PlaylistApi.SessionCheck.Invalid -> {
                                 Log.w(TAG, "session rejected by account/get")

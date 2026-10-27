@@ -61,9 +61,34 @@ internal object PlayerCardDragSnap {
     const val FLING_VELOCITY_PX_PER_S = 600f
 
     /**
+     * **progress 域**的增量 → **屏幕坐标**的竖直速度（px/s，向上为负）。
+     *
+     * ## 这个函数存在的唯一理由：符号（v3.8.0 · J12）
+     *
+     * 「进度」与「屏幕 Y」是**两条方向相反**的轴：
+     *  - 手指向上划 ⇒ 屏幕 y 减小（`dragAmount < 0`）⇒ 展开进度**增加**；
+     *  - 收起进度（控制栏）同理：向上推 ⇒ `current` 增加。
+     *
+     * 而 [target] / [ControlsDragSnap.target] 的 `velocityY` 参数约定的是**屏幕 Y**
+     * （向上为负，见 [FLING_VELOCITY_PX_PER_S]）。旧实现把 progress 域的增量直接当屏幕
+     * 速度传进去，快甩方向因此判反：收起态上甩被判成「下滑」⇒ 弹回收起；控制栏上拖
+     * 被判成「下拉」⇒ 把已经越过的行程阈值再翻回去。
+     *
+     * 抽成一个函数（而不是在两处各写一个 `-`）是因为「两处各写一个符号」正是这条
+     * 缺陷的成因 —— 一处改了、另一处忘了，就又回去一个。
+     *
+     * @param progressDelta 进度增量（**向上/收起方向为正**）
+     * @param travelPx      该进度从 0 到 1 对应的像素行程
+     * @param elapsedMs     手势耗时；`<= 0` 时返回 0（没有时间就没有速度）
+     */
+    fun screenVelocityY(progressDelta: Float, travelPx: Float, elapsedMs: Long): Float =
+        if (elapsedMs <= 0L) 0f else -progressDelta * travelPx / (elapsedMs / 1000f)
+
+    /**
      * @param startProgress 手势按下时的 progress（0 = 收起成 mini bar，1 = 全屏）
      * @param endProgress   抬手时的 progress
-     * @param velocityY     抬手时的竖直速度（px/s，向上为负）
+     * @param velocityY     抬手时的竖直速度（px/s，**屏幕坐标，向上为负** ——
+     *   请用 [screenVelocityY] 从 progress 域换算，别自己写符号）
      * @return 1f = 展开，0f = 收起
      */
     fun target(startProgress: Float, endProgress: Float, velocityY: Float): Float {
@@ -100,7 +125,9 @@ internal object ControlsDragSnap {
     /**
      * @param from      手势按下时的收起进度（0 = 展开，1 = 完全收起）
      * @param current   抬手时的收起进度
-     * @param velocityY 抬手时的竖直速度（px/s，向上为负）
+     * @param velocityY 抬手时的竖直速度（px/s，**屏幕坐标，向上为负**）。
+     *   换算请走 [PlayerCardDragSnap.screenVelocityY] —— 手动收起的进度同样是「向上增加」，
+     *   符号方向与整卡一致（v3.8.0 · J12）。
      * @return 1f = 收起控制栏，0f = 展开控制栏
      */
     fun target(from: Float, current: Float, velocityY: Float): Float {

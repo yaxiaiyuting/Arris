@@ -9,6 +9,7 @@
 package com.takahashirinta.ncrust.cache
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 
 import com.takahashirinta.ncrust.bili.BiliCdn
@@ -53,6 +54,7 @@ import java.io.File
 // 这些 API 在 media3 1.5 上是稳定的，标 `UnstableApi` 是库方的兼容承诺方式，不是风险信号。
 @OptIn(UnstableApi::class)
 object OfflineAudioCache {
+    private const val TAG = "OfflineAudioCache"
 
     /** 缓存目录名（相对 filesDir）。 */
     private const val DIR = "offline/audio"
@@ -279,7 +281,10 @@ object OfflineAudioCache {
     fun removeSong(context: Context, songId: Long): Boolean {
         if (songId <= 0L) return false
         val app = context.applicationContext
-        val removedSpans = runCatching {
+        // E01：缓存操作**失败**与「缓存里确实没有片段」不是一回事。
+        // 旧写法把异常折成 false 之后仍然继续，紧接着就把离线索引删了 ——
+        // 磁盘上字节还在、管理页里的条目却先消失（用户以为删干净了）。
+        val removedSpans = try {
             val c = get(app)
             var removed = false
             songKeys(app, songId).forEach { key ->
@@ -287,7 +292,10 @@ object OfflineAudioCache {
                 removed = true
             }
             removed
-        }.getOrDefault(false)
+        } catch (e: Exception) {
+            Log.w(TAG, "removeSong failed, keep offline index: songId=$songId", e)
+            return false
+        }
         // 缓存里没有片段也要清两条清单：用户点了「删除」，列表里就不能再留着它。
         OfflineLibrary.remove(app, songId)
         return removedSpans
@@ -316,10 +324,21 @@ object OfflineAudioCache {
      * 同时清掉离线 URL 清单与离线曲目索引，否则会留下指向已删缓存的死条目、
      * 并且「缓存占用」与「可清理范围」的口径就对不上了（v1.6.0 起的不变量）。
      */
-    fun clear(context: Context) {
+    fun clear(context: Context): Boolean {
         val app = context.applicationContext
-        runCatching { get(app).keys.toList().forEach { get(app).removeResource(it) } }
+        // E01：清空同样要求「真的删掉了」才动索引。缓存目录打不开时先返回，
+        // 否则两份索引先被清掉、字节却还在，管理页再也列不出这些文件（只能靠重装清）。
+        val cleared = runCatching {
+            val c = get(app)
+            c.keys.toList().forEach { c.removeResource(it) }
+            true
+        }.getOrElse {
+            Log.w(TAG, "clear failed, keep offline indexes", it)
+            false
+        }
+        if (!cleared) return false
         OfflineUrlStore.clear(app)
         OfflineLibrary.clear(app)
+        return true
     }
 }

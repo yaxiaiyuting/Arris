@@ -49,16 +49,9 @@ fun CustomBackgroundLayer(modifier: Modifier = Modifier) {
     val revision by BackgroundImageManager.revision.collectAsState()
     val suppressed by BackgroundImageManager.suppressed.collectAsState()
 
-    val active = remember(revision, suppressed) {
-        !suppressed && BackgroundImageManager.isActive(context)
-    }
-    if (!active) return
-
-    val file = remember(revision) { BackgroundImageManager.backgroundFile(context) }
-    val isLightTheme = LocalMetroColors.current.background.luminance() > 0.5f
-
-    // 内存压力下背景被隐藏（释放位图），回到前台时恢复显示 —— 自包含在图层里，
-    // 不需要 MainActivity 再挂生命周期回调。
+    // K07：恢复监听必须**无条件**注册，且要在早退之前。
+    // 旧实现把它放在 `if (!active) return` 之后：一旦因内存压力被隐藏，图层早退、
+    // effect 被 dispose，ON_RESUME 再也没人听 —— 背景永久消失，只有重启才回来。
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -67,6 +60,15 @@ fun CustomBackgroundLayer(modifier: Modifier = Modifier) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    val active = remember(revision, suppressed) {
+        !suppressed && BackgroundImageManager.isActive(context)
+    }
+    if (!active) return
+
+    val file = remember(revision) { BackgroundImageManager.backgroundFile(context) }
+    val isLightTheme = LocalMetroColors.current.background.luminance() > 0.5f
+
 
     Box(modifier = modifier.fillMaxSize()) {
         AsyncImage(

@@ -272,12 +272,16 @@ object LibraryManager {
     /**
      * 把「收藏/取消」推到云端。
      *
-     * 两条不变量（S17 / S18）：
+     * 三条不变量（S17 / S18 / R1）：
      * 1. **同一首歌串行**：连点收藏→取消时，云端最终状态必须等于用户最后一次意图。
      *    旧实现每次独立 launch，两个请求并发，迟到的那条（可能是最初的 true）最后落地。
      *    这里按曲目串行，并在轮到时读"最新意图"，被后续点击覆盖的旧意图直接跳过。
-     * 2. **绑定原会话**：排任务时钉住 cookie + 登录代次；切账号后旧操作作废，
+     * 2. **绑定原会话**：排任务时钉住登录代次；切账号后旧操作作废，
      *    绝不用新账号的凭据把它重发一遍。
+     * 3. **旧 worker 只能删自己领取的那一条**（R1）：意图带 [LikeIntent.ownerGeneration]
+     *    与唯一 [LikeIntent.seq]，删除用 `remove(key, value)` 的条件形式。
+     *    旧实现只按 songId 存 Boolean，A 的 worker 一发现会话过期就 `remove(songId)`，
+     *    把 B 刚写下的意图一起删掉 —— B 的写请求再也不会发出。
      */
     private fun pushLike(songId: Long, like: Boolean) {
         if (!SavedSongSync.isRemoteLikeEligible(songId)) {
@@ -285,24 +289,32 @@ object LibraryManager {
             Log.w(TAG, "pushLike blocked: cross-source id=$songId like=$like")
             return
         }
-        val pinned = CookieManager.snapshot()
-        latestLikeIntent[songId] = like
+        // 归属判据是**登录代次**，不是 cookie 字节：同账号续期只换票（revision 变、
+        // 代次不变），那条意图仍然属于同一个账号，不能被当成"换号"丢掉。
+        latestLikeIntent[songId] = LikeIntent(
+            like = like,
+            seq = likeIntentSeq.incrementAndGet(),
+            ownerGeneration = CookieManager.snapshot().loginGeneration,
+        )
         ioScope.launch {
             val mutex = likeMutexes.getOrPut(songId) { Mutex() }
             mutex.withLock {
                 while (true) {
-                    val desired = latestLikeIntent[songId] ?: return@withLock
-                    if (!CookieManager.isCurrent(pinned)) {
-                        Log.w(TAG, "pushLike aborted: session changed id=$songId")
-                        latestLikeIntent.remove(songId)
+                    val intent = latestLikeIntent[songId] ?: return@withLock
+                    // 每轮都取当前快照：同账号续期后要拿新票发，旧票会被服务端 301。
+                    val live = CookieManager.snapshot()
+                    if (live.loginGeneration != intent.ownerGeneration) {
+                        // 换号/登出：只条件删除"自己领取的那一条"。期间别人写过新意图 ⇒
+                        // remove 失败（值不同），那条留给它自己的 worker，不在这里陪葬。
+                        latestLikeIntent.remove(songId, intent)
+                        Log.w(TAG, "pushLike aborted: session changed id=$songId like=${intent.like}")
                         return@withLock
                     }
-                    val sent = runCatching { PlaylistApi.likeSong(songId, desired, pinned) }
+                    val sent = runCatching { PlaylistApi.likeSong(songId, intent.like, live) }
                         .getOrDefault(false)
-                    // 期间用户又点了一次 ⇒ 继续按最新意图补发；否则收工。
-                    if (latestLikeIntent[songId] == desired) {
-                        latestLikeIntent.remove(songId)
-                        if (!sent) Log.w(TAG, "pushLike failed id=$songId like=$desired")
+                    // 自己仍是最新一条 ⇒ 收工；否则说明期间又点了（或换了账号又点），继续补发。
+                    if (latestLikeIntent.remove(songId, intent)) {
+                        if (!sent) Log.w(TAG, "pushLike failed id=$songId like=${intent.like}")
                         return@withLock
                     }
                 }
@@ -310,14 +322,60 @@ object LibraryManager {
         }
     }
 
+    /**
+     * 一条待写的收藏意图。`seq` 全局递增 ⇒ 两条意图永不相等，
+     * `ConcurrentHashMap.remove(key, value)` 才能精确表达"删掉我领取的那一条"。
+     */
+    private data class LikeIntent(val like: Boolean, val seq: Long, val ownerGeneration: Long)
+
     /** 每首歌的写入门闩（串行化同一曲目的收藏/取消）。 */
     private val likeMutexes = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
-    /** 最新的用户意图；被覆盖的旧意图不再发往云端。 */
-    private val latestLikeIntent = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+    /** 每首歌的最新意图（带归属）；被覆盖的旧意图不再发往云端。 */
+    private val latestLikeIntent = java.util.concurrent.ConcurrentHashMap<Long, LikeIntent>()
+    /** 意图发布序号（R1）：让条件删除成为"按值判定"，而不是"按 key 清空"。 */
+    private val likeIntentSeq = AtomicLong()
 
+    /**
+     * 把「收藏/取消专辑」推到云端 —— **与 [pushLike] 同构**（H01）。
+     *
+     * 旧实现每次独立 `ioScope.launch`：先 sub 后 unsub 时两条请求并发，迟到的那条
+     * （可能是旧的 sub）最后落地，云端最终状态与用户最后一次点击相反。这里按专辑串行 +
+     * 最新意图覆盖 + 钉住登录代次，三条不变量与单曲收藏完全一致。
+     */
     private fun pushSubAlbum(albumId: Long, sub: Boolean) {
-        ioScope.launch { runCatching { PlaylistApi.subAlbum(albumId, sub) } }
+        latestAlbumIntent[albumId] = AlbumSubIntent(
+            sub = sub,
+            seq = albumIntentSeq.incrementAndGet(),
+            ownerGeneration = CookieManager.snapshot().loginGeneration,
+        )
+        ioScope.launch {
+            val mutex = albumMutexes.getOrPut(albumId) { Mutex() }
+            mutex.withLock {
+                while (true) {
+                    val intent = latestAlbumIntent[albumId] ?: return@withLock
+                    val live = CookieManager.snapshot()
+                    if (live.loginGeneration != intent.ownerGeneration) {
+                        latestAlbumIntent.remove(albumId, intent)
+                        Log.w(TAG, "pushSubAlbum aborted: session changed albumId=$albumId sub=${intent.sub}")
+                        return@withLock
+                    }
+                    val sent = runCatching { PlaylistApi.subAlbum(albumId, intent.sub, live) }
+                        .getOrDefault(false)
+                    if (latestAlbumIntent.remove(albumId, intent)) {
+                        if (!sent) Log.w(TAG, "pushSubAlbum failed albumId=$albumId sub=${intent.sub}")
+                        return@withLock
+                    }
+                }
+            }
+        }
     }
+
+    /** 一条待写的专辑订阅意图（H01），字段语义同 [LikeIntent]。 */
+    private data class AlbumSubIntent(val sub: Boolean, val seq: Long, val ownerGeneration: Long)
+
+    private val albumMutexes = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
+    private val latestAlbumIntent = java.util.concurrent.ConcurrentHashMap<Long, AlbumSubIntent>()
+    private val albumIntentSeq = AtomicLong()
 
     // ==================== 单曲（收藏） ====================
 
@@ -438,9 +496,24 @@ object LibraryManager {
         return synchronized(albumsLock) { ensureAlbumsLoaded(context).toList() }
     }
 
+    /**
+     * 专辑表的**本地编辑修订号**（R2）。
+     *
+     * `refreshFromCloud` 的专辑段在锁外用 `PlaylistApi.getSubscribedAlbums()` 取快照，
+     * 那份快照**可能老于**读取期间发生的 subscribe / remove。旧实现拿它整体替换
+     * `cachedAlbums`，于是「刚收藏成功的专辑」被一份旧的空列表撤销，内存与 `saved_albums`
+     * 一起丢 —— 锁只保护赋值，不保证快照比用户操作新。
+     *
+     * 修订号与改表在同一把 [albumsLock] 内完成，落库前复核「读出时的修订号 == 当前修订号」：
+     * 不等就保留本地真相并记日志，旧快照永远无权撤销新编辑。取消收藏走同一条判据（对称）。
+     */
+    private val albumEditRevision = AtomicLong()
+
     /** 收藏专辑（订阅云端）：先落本地缓存，再异步同步云端。 */
     fun subscribeAlbum(context: Context, album: AlbumInfo) {
         synchronized(albumsLock) {
+            // 先推进修订号再改表：refreshFromCloud 的复核读的是同一个计数。
+            albumEditRevision.incrementAndGet()
             val albums = ensureAlbumsLoaded(context)
             albums.removeAll { it.albumId == album.albumId }
             albums.add(0, album)
@@ -454,6 +527,7 @@ object LibraryManager {
         val removed: Boolean
         synchronized(albumsLock) {
             removed = ensureAlbumsLoaded(context).removeAll { it.albumId == albumId }
+            if (removed) albumEditRevision.incrementAndGet()
         }
         if (removed) {
             scheduleFlush(context)
@@ -541,20 +615,34 @@ object LibraryManager {
         }
 
         try {
+            // R2：这份快照只对「它出发时的那份本地专辑表」有效。读取（网络）期间用户可能
+            // 刚收藏/取消过专辑，而修订号只在真正改表时推进 —— 所以落库前必须复核。
+            val revisionAtRead = albumEditRevision.get()
             val cloudAlbums = PlaylistApi.getSubscribedAlbums()
             Log.i(TAG, "refreshFromCloud: albums=${cloudAlbums.size}")
             synchronized(albumsLock) {
-                cachedAlbums = cloudAlbums.map {
-                    AlbumInfo(
-                        albumId = it.albumId,
-                        name = it.name,
-                        picUrl = it.picUrl,
-                        artist = it.artist,
-                        songCount = it.songCount
+                val edited = albumEditRevision.get()
+                if (edited != revisionAtRead) {
+                    // 读取期间有本地编辑：旧快照无权撤销新编辑（也不能把它"复活"）。
+                    // 保留本地真相，等下一次刷新（那时修订号重新对齐）。
+                    Log.w(
+                        TAG,
+                        "refreshFromCloud: albums snapshot discarded, local edits=${edited - revisionAtRead} " +
+                            "local=${cachedAlbums?.size ?: 0} cloud=${cloudAlbums.size}"
                     )
-                }.toMutableList()
+                } else {
+                    cachedAlbums = cloudAlbums.map {
+                        AlbumInfo(
+                            albumId = it.albumId,
+                            name = it.name,
+                            picUrl = it.picUrl,
+                            artist = it.artist,
+                            songCount = it.songCount
+                        )
+                    }.toMutableList()
+                    anySuccess = true
+                }
             }
-            anySuccess = true
         } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: albums failed: ${e.message}")

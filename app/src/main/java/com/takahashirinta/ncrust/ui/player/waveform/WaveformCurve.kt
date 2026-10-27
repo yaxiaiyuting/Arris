@@ -52,12 +52,30 @@ import kotlin.math.sqrt
 object WaveformCurve {
 
     /**
-     * 一次能处理的最大点数（柱数）。
+     * 一次能处理的最大点数。
      *
-     * 64 的依据：当前窗口是 28 柱（`WaveformStore.BAR_COUNT`），64 给了 2 倍余量，
-     * 同时把渲染层复用数组的长度钉死在 64 —— 曲线化不引入"点数随设备变化"的新自由度。
+     * ## v3.8.0 · J13：从 64 提到 96（**64 比生产的 85 还小**）
+     *
+     * 旧注释说「当前窗口 28 柱，64 给了 2 倍余量」—— 这个推理漏了一件事：
+     * 生产的三泳道把 **3 条泳道拼成一条曲线**，再加 1 个右边缘延伸点：
+     *
+     * ```
+     * 28 × 3 + 1 = 85
+     * ```
+     *
+     * 于是 `computeTangents` 里的 `minOf(..., MAX_POINTS)` 把 85 点**静默夹到 64**：
+     *  - 第 64..84 点的切线根本没算（数组里留着**上一帧的旧值**，因为清零循环也只跑到 63）；
+     *  - 第 63 点被当成「整条曲线的最后一个点」用端点公式，缺了对第 64 点的单调保护；
+     *  - 绘制层用的是**完整点数**（`drawWaveformCurve` 只按 `count`/数组长度夹），
+     *    于是最后 21 段用的是错误/陈旧的切线 —— 探针在 61–64 点给 0.1/0.4/1.0/0.1 的
+     *    合法归一化高度，采样峰值 **1.0243**（超过数据上包络 1.0），
+     *    `staysWithinEndpoints` 返回 false。
+     *
+     * 96 = 85 + 11 的余量：**容量必须覆盖生产点数**，而不是「覆盖点数 × 2」这种拍脑袋比例。
+     * 生产点数变化时（`WaveformStore.BAR_COUNT` 或 `BandLanes.LANE_COUNT` 改了），
+     * `WaveformCurvePointBudgetTest` 会先红。
      */
-    const val MAX_POINTS = 64
+    const val MAX_POINTS = 96
 
     /**
      * 计算 [count] 个点（等距，间距 [dx]）的保单调切线，写进 [out]。
@@ -70,7 +88,10 @@ object WaveformCurve {
     fun computeTangents(y: FloatArray, count: Int, dx: Float, out: FloatArray) {
         val n = minOf(count, y.size, out.size, MAX_POINTS)
         if (n <= 0) return
-        for (i in 0 until n) out[i] = 0f
+        // v3.8.0 · J13：清零范围必须覆盖**调用方这一帧会读到的全部格**，
+        // 只清 `0 until n` 会让 `n` 之后的位置留着上一帧的切线（那正是 85 > 64 时
+        // 最后 21 段画出来的东西）。夹断本身已经在上面做了，这里只保证不留脏值。
+        for (i in 0 until minOf(count, out.size)) out[i] = 0f
         if (n < 2 || !dx.isFinite() || dx <= 0f) return
 
         // Δ_i = (y_{i+1} − y_i) / dx。原地复用 out 的前 n-1 格存斜率会与后面的切线写入打架，

@@ -303,13 +303,26 @@ class SweepTrack private constructor(
                     push(startTime, x0, l0)
                     push(endTime, x1, l0)
                 } else {
-                    // 词被软换行劈成两截：前半截把渐变带送出上一行行尾，后半截从下一行行首外滑入。
-                    // 折返发生在同一个时刻，用 +1ms 让它在时间轴上仍然严格递增（视觉上是一帧内完成）。
-                    val mid = startTime + (endTime - startTime) / 2
-                    push(startTime, x0, l0)
-                    push(mid, geo.lineEnd(l0) + dir * half, l0)
-                    push(mid + 1, geo.lineStart(l1) - dir * half, l1)
-                    push(endTime, x1, l1)
+                    // 词被软换行劈成多截（H22）：**每一行都要建立轨道**。
+                    //
+                    // 旧实现只写 l0 与 l1 两行，跨三行时中间那行没有任何节点 ——
+                    // 光标会从第一行直接跳到第三行，中间行的字一次性全亮。
+                    // 现在按行数等分这段时长，逐行「行尾外滑 → 下一行行首外滑入」，
+                    // 折返仍用 +1ms 保证时间轴严格递增（视觉上是一帧内完成）。
+                    val span = (l1 - l0 + 1).coerceAtLeast(1)
+                    val total = (endTime - startTime).coerceAtLeast(0L)
+                    for (i in 0 until span) {
+                        val l = l0 + i
+                        val enterX = if (l == l0) x0 else geo.lineStart(l) - dir * half
+                        val exitX = if (l == l1) x1 else geo.lineEnd(l) + dir * half
+                        // 第 i 行占 [start + total*i/span, start + total*(i+1)/span]，
+                        // 末行的出口必须**正好落在 endTime**（否则采样会插值到词外）。
+                        val tIn = startTime + total * i / span
+                        val tOut = if (i == span - 1) endTime else startTime + total * (i + 1) / span
+                        // 折返发生在同一刻时推迟 1ms，让时间轴严格递增（视觉上仍是一帧内完成）。
+                        push(if (i == 0) tIn else tIn + 1, enterX, l)
+                        push(tOut, exitX, l)
+                    }
                 }
             }
 

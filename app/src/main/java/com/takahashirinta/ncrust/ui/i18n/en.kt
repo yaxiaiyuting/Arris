@@ -647,7 +647,7 @@ val en = Strings(
             regionLocked = "Blocked by the rights holder in your region",
             network = "Network error — please try again later",
             unknown = "Cannot play this track right now — please try again later",
-            switchSource = { other -> "%s does not have this track — you can switch to " + other },
+            switchSource = { other -> "does not have this track — you can switch to " + other },
         ),
 
         share = ShareStrings(

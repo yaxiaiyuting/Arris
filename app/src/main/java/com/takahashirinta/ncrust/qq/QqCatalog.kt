@@ -42,6 +42,13 @@ data class QqArtist(
  * @property trackCount 曲目数。**只有旧版 `fcg_v8_singer_album.fcg` 的
  *   `latest_song.song_count` 给得到它**；`musicu` 的 `GetAlbumList` 恒为 0
  *   （见 `probe-artist-api.md`）—— 所以艺人页必须走旧版通道，否则会退化成 N+1 次请求。
+ * @property coverUrl **接口直接给的**封面地址（E03）。
+ *
+ *   QQ 一侧的封面是**模板拼出来的**（`albumMID` → `y.qq.com/…/M000<mid>.jpg`），
+ *   所以 QQ 解析器可以不填这个字段；而 ncm 一侧的 `picUrl` 是 `/api/artist/albums/{id}`
+ *   返回的字段，腾讯的模板对它没有意义（把十进制专辑 id 填进 `M000<mid>.jpg` 会请求到
+ *   一个归属错误的地址）。跨源聚合因此需要一个**与来源无关**的封面载体：
+ *   有 [coverUrl] 就用它，没有才按目标源自己的规则生成。
  */
 data class QqAlbum(
     val id: Long,
@@ -52,6 +59,7 @@ data class QqAlbum(
     val company: String? = null,
     val albumType: String? = null,
     val singerName: String? = null,
+    val coverUrl: String? = null,
 )
 
 /**

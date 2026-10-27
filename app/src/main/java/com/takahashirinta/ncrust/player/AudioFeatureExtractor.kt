@@ -470,7 +470,11 @@ open class AudioFeatureExtractor {
         val n = subFrames.toDouble()
         val lowSub = sqrt(sumLowSub / n)
         val fullSub = sqrt(sumFullSub / n)
-        val dtMs = if (sampleRateHz > 0) n * channelCount * 1000.0 / sampleRateHz else 0.0
+        // J05：`subFrames` 统计的是**交错样本数**（每个声道各算一个），
+        // 换算成时长必须先除以声道数：立体声下旧写法把 dtMs 放大 4 倍
+        // （n×ch 而不是 n/ch），瞬态时间常数整条跟着错。
+        val channels = channelCount.coerceAtLeast(1)
+        val dtMs = if (sampleRateHz > 0) n / channels * 1000.0 / sampleRateHz else 0.0
         subFrames = 0
         updateTransient(
             low = if (lowSub.isFinite()) lowSub.toFloat().coerceIn(0f, 1f) else 0f,

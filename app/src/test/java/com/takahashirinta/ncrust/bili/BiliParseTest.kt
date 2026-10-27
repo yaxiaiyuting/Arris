@@ -15,6 +15,7 @@ import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.musicSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -351,7 +352,29 @@ class BiliTrackMappingTest {
         val song = t.toSongItem()!!
         assertEquals(MusicSource.BILIBILI, song.musicSource)
         assertEquals("bv:BV1bhau6REvc:0", song.sourceId)
-        assertEquals(117329648162166L, SourceIds.biliRawId(song.id))
+        // H14：AU 与 AV 的数字身份分区。视频腿现在落在位 60 的区间里，所以反解出来的
+        // **不是裸 aid**，而是 `AV_PARTITION_FLAG or aid`。
+        // 旧断言（`= 117329648162166L`）钉的正是缺陷本身：AU 与 AV 共用一个区间，
+        // 于是「音频区 101」与「视频 av101」成了同一首歌（队列/收藏/缓存键全撞）。
+        assertEquals(
+            117329648162166L or BiliTrack.AV_PARTITION_FLAG,
+            SourceIds.biliRawId(song.id),
+        )
+    }
+
+    @Test
+    fun `AU 与 AV 的数字身份互不相交（H14）`() {
+        val audio = BiliTrack(auid = 101L, title = "au101", author = "a", coverUrl = "", durationMs = 1000L)
+        val video = BiliTrack(bvid = "BV1au101", aid = 101L, title = "av101", author = "a", coverUrl = "", durationMs = 1000L)
+        val audioSong = audio.toSongItem()!!
+        val videoSong = video.toSongItem()!!
+        // 同一个数字 101 的两条腿必须是两首歌：TrackKey 只比较 (source, id)。
+        assertNotEquals(audioSong.id, videoSong.id)
+        assertEquals(101L, SourceIds.biliRawId(audioSong.id))
+        assertEquals(101L or BiliTrack.AV_PARTITION_FLAG, SourceIds.biliRawId(videoSong.id))
+        // 两者仍然是「B 站」，分区位不影响音源反推。
+        assertEquals(MusicSource.BILIBILI, SourceIds.sourceOfId(videoSong.id))
+        assertTrue(SourceIds.isBiliId(videoSong.id))
     }
 
     @Test

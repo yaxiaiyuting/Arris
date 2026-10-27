@@ -89,9 +89,15 @@ fun Modifier.listItemAppear(index: Int, enabled: Boolean = true): Modifier {
     val progress = remember { Animatable(if (animate) 0f else 1f) }
     val risePx = with(LocalDensity.current) { AppMotion.LIST_ITEM_RISE_DP.toPx() }
 
-    if (animate) {
-        LaunchedEffect(Unit) {
+    // J17：`animate` 由 (enabled, index) 决定，而 index 会因重排变化。
+    // 旧写法只在 animate=true 时挂 LaunchedEffect：条目在入场途中被重排移出范围后，
+    // 效果被取消、`progress` 永远停在中间值（实测 0.29），于是那一行**永久半透明**。
+    // 现在两种状态都有明确的收敛方向：该动画就动画，不该动画就直接跳到终态。
+    LaunchedEffect(animate) {
+        if (animate) {
             progress.animateTo(1f, AppMotion.listItemEnter)
+        } else if (progress.value != 1f) {
+            progress.snapTo(1f)
         }
     }
 

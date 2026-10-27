@@ -423,6 +423,9 @@ fun FullPlayerControls(
                     maxHeightDp = qualityPickerMaxHeightDp,
                     horizontalAlignment = Alignment.End,
                     minHitHeightDp = 32.dp,
+                    // K09：小高度竖屏的音质控件此前没传试听状态，标签按普通音质显示，
+                    // 用户看不出"现在只有 45 秒试听"。这里补上（与展开态同一条数据源）。
+                    trialFlow = trialFlow,
                 )
             }
         } else {

@@ -143,6 +143,16 @@ fun SearchScreen(
     // `PullToRefreshIndicator`，v2.3.0 · B），唯一的使用点此前是歌单详情页 ——
     // 本页从来没接过，所以「没有下拉刷新」不是被跳过，而是从来没有入口。
     val listState = rememberLazyListState()
+    // E05：专辑 / 艺人 tab 以前没有 state，滚到底**不会**触发 loadMore
+    // （分页逻辑本身是好的，只是没有人观察它们的滚动位置）。
+    val albumListState = rememberLazyListState()
+    val artistListState = rememberLazyListState()
+    // 与 tab 的映射同一套数字（10 = 专辑、100 = 艺人；见上面的 MetroTabRow）。
+    val activeListState = when (currentType) {
+        10 -> albumListState
+        100 -> artistListState
+        else -> listState
+    }
     val pullState = rememberPullToRefreshState()
 
     // v3.4.11：**滚到最底部自动加载下一页**（用户要求：「加载更多不要用点击，
@@ -176,7 +186,7 @@ fun SearchScreen(
     // `listState`，而协程体里读到的这几个值会被捕获在启动那一刻 ——
     // 不进 key 就会出现「翻页后 hasMore 已是 false 却仍然再触发一次」。
     LaunchedEffect(
-        listState,
+        activeListState,
         hasMore,
         isLoadingMore,
         songs.size,
@@ -185,7 +195,7 @@ fun SearchScreen(
         currentType,
     ) {
         snapshotFlow {
-            val info = listState.layoutInfo
+            val info = activeListState.layoutInfo
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
             // 只把**布尔结论**传下去：滚动位置本身每次都在变，
             // 用它当 key 会让下游在每一次滚动时都重启一遍。
@@ -734,6 +744,7 @@ fun SearchScreen(
                             }
                         } else {
                             LazyColumn(
+                                state = albumListState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
                                 flingBehavior = rememberMetroFlingBehavior()
@@ -799,6 +810,7 @@ fun SearchScreen(
                             }
                         } else {
                             LazyColumn(
+                                state = artistListState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
                                 flingBehavior = rememberMetroFlingBehavior()

@@ -290,10 +290,16 @@ fun LibraryScreen(
         LocalPlaylistCreateDialog(
             onDismiss = { showCreateLocal = false },
             onCreate = { name ->
-                LocalPlaylistRepository.createLocalOnly(context, name)
+                // H09：createLocalOnly 现在会在写盘失败时返回 null。丢掉返回值就会
+                // "没建出来却弹已创建"，用户回头找不到这个歌单。
+                val created = LocalPlaylistRepository.createLocalOnly(context, name)
                 localPlaylists = LocalPlaylistStore.readPlaylists(context)
-                showCreateLocal = false
-                Toast.makeText(context, strings.localPlaylistCreated(name), Toast.LENGTH_SHORT).show()
+                if (created != null) {
+                    showCreateLocal = false
+                    Toast.makeText(context, strings.localPlaylistCreated(name), Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, strings.localPlaylistSyncFailed, Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }

@@ -65,4 +65,25 @@ class QrPairUnikeySourceTest {
         val malformed="MUSIC_U=".toByteArray()+byteArrayOf(0xc3.toByte(),0x28)
         assertNull(QrPair.decrypt("s", "UNIKEY123", iv+cipher.doFinal(malformed)))
     }
+
+    /** H23 回归：回传载荷带 MAC，被改一个字节就必须拒绝。 */
+    @Test
+    fun `tampered handoff payload is rejected before decryption`() {
+        val secret = "pair-secret"
+        val unikey = "UNIKEY123"
+        val cookie = "MUSIC_U=abc; __csrf=xyz"
+        val sealed = QrPair.sealPayload(secret, unikey, QrPair.encrypt(secret, unikey, cookie))
+
+        // 合法载荷：先验 MAC 再解密，能得到原 cookie。
+        val opened = QrPair.openPayload(secret, unikey, sealed)!!
+        assertEquals(cookie, QrPair.decrypt(secret, unikey, opened))
+
+        // 篡改一个字节：MAC 校验失败，必须在解密之前就被拒。
+        val tampered = sealed.copyOf()
+        tampered[0] = (tampered[0].toInt() xor 0x01).toByte()
+        assertNull(QrPair.openPayload(secret, unikey, tampered))
+
+        // 换 secret 也验不过（中间人没有密钥就算不出标签）。
+        assertNull(QrPair.openPayload("other-secret", unikey, sealed))
+    }
 }

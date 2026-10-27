@@ -135,8 +135,7 @@ internal class MqttWebSocketTransport(private val clientId: String) {
             .build()
         // 每次连接一个**新的** Connection（含自己的 opened / socket / 缓冲区 / 监听器）——
         // 重定向时旧连接的回调只会影响属于它的那个 Connection。
-        val conn = Connection()
-        active = conn
+        val conn = attachConnection()
         val ws = http.newWebSocket(request, conn)
         conn.socket = ws
         val ok = try {
@@ -146,8 +145,26 @@ internal class MqttWebSocketTransport(private val clientId: String) {
             runCatching { ws.cancel() }
             false
         }
-        if (!ok) incoming.trySend(mqttDisconnectedFrame())
+        if (!ok) {
+            // 握手失败同样是「这条连接结束了」：只投一次哨兵，并让这条连接退休
+            // （之后它迟到的 onFailure 不再算数、`send` 也不会再写它）。
+            conn.deliverDisconnectOnce()
+            conn.retire()
+        }
         return ok
+    }
+
+    /**
+     * 造一条连接并让它成为**当前连接**（v3.8.0 · H20）。
+     *
+     * 抽出来不是为了好看：[connect] 与单测走**同一段**「造连接 + 设为当前」，
+     * 于是「回调属于哪条连接」这件事可以在不联网的情况下被断言
+     * （真实入口必须先握手成功才拿得到 `Connection`，测试不可能去连 `mu.y.qq.com`）。
+     * 返回 [Connection] 实例即可手工触发 `WebSocketListener` 的回调。
+     */
+    internal fun attachConnection(conn: Connection = Connection()): Connection {
+        active = conn
+        return conn
     }
 
     /** 发一条已经编码好的 MQTT 报文。返回是否真的发出去了。 */
@@ -161,7 +178,12 @@ internal class MqttWebSocketTransport(private val clientId: String) {
      * 其实是上一条连接的残渣」。**不动 [incoming]**（它属于会话，见 KDoc）。
      */
     fun reset() {
-        active?.let { runCatching { it.socket?.cancel() } }
+        active?.let {
+            // v3.8.0 · H20：先让它退休、再 cancel —— cancel 会**异步**回调 onFailure，
+            // 退休之后那条回调看到「我已经不是 active」就不再往会话通道里投东西。
+            it.retire()
+            runCatching { it.socket?.cancel() }
+        }
         active = null
         while (incoming.tryReceive().isSuccess) {
             // 故意空转：把上一条连接的未消费报文丢掉
@@ -169,7 +191,10 @@ internal class MqttWebSocketTransport(private val clientId: String) {
     }
 
     fun close() {
-        active?.let { runCatching { it.socket?.close(1000, null) } }
+        active?.let {
+            it.retire()
+            runCatching { it.socket?.close(1000, null) }
+        }
         active = null
         incoming.close()
     }
@@ -180,7 +205,7 @@ internal class MqttWebSocketTransport(private val clientId: String) {
      * 它同时负责「把字节流切成 MQTT 报文」—— 放在这里而不是外层，是因为缓冲区
      * 必须**跟着连接走**（见 [reset] 的注释）。
      */
-    private inner class Connection : WebSocketListener() {
+    internal inner class Connection : WebSocketListener() {
 
         val opened = CompletableDeferred<Boolean>()
 
@@ -189,12 +214,43 @@ internal class MqttWebSocketTransport(private val clientId: String) {
 
         private val slicer = FrameSlicer()
 
+        /** 「终态哨兵已投递」的一次性闸门（见 [deliverDisconnectOnce]）。 */
+        private val terminated = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /**
+         * 这条连接是否**仍然是当前连接**（v3.8.0 · H20）。
+         *
+         * 为什么必须判：`reset()`（重定向）取消旧 socket 之后，OkHttp 仍会**异步**
+         * 回调旧连接的 `onFailure`/`onClosed`；旧实现在这些回调里无条件往会话级的
+         * `incoming` 投「连接没了」哨兵 —— 于是**新连接**的 `awaitEvent` 第一条就拿到
+         * 旧连接的哨兵，判成 `Failed`（探针：先 Failed、下一次才读到正常的 Scanned）。
+         * 会话级的通道必须只接受「当前连接」的消息。
+         */
+        private fun isActive(): Boolean = active === this
+
+        /** 把这条连接从「当前连接」的位置上摘下来（之后它的回调一律不算数）。 */
+        internal fun retire() {
+            if (active === this) active = null
+        }
+
+        /**
+         * 投一次「连接没了」哨兵，**每条连接至多一次**。
+         *
+         * 关闭帧、onClosed、onFailure、握手失败都会走到这里；去重是为了让
+         * 「关闭帧先到、onClosed 随后到」不会给等待方投两条终态事件。
+         */
+        internal fun deliverDisconnectOnce() {
+            if (terminated.compareAndSet(false, true)) incoming.trySend(mqttDisconnectedFrame())
+        }
+
         override fun onOpen(webSocket: WebSocket, response: Response) {
+            if (!isActive()) return
             if (BuildConfig.DEBUG) Log.d(TAG, "WS 已连接")
             opened.complete(true)
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            if (!isActive()) return
             for (frame in slicer.feed(bytes.toByteArray())) {
                 if (!incoming.trySend(frame).isSuccess) return
             }
@@ -206,22 +262,40 @@ internal class MqttWebSocketTransport(private val clientId: String) {
             Log.w(TAG, "收到文本帧（非预期），忽略 len=${text.length}")
         }
 
+        /**
+         * 收到**关闭帧**：这条连接要结束了。
+         *
+         * v3.8.0 · H20 补上收尾 —— 旧实现只打一行日志，既不关 socket 也不给等待方
+         * 任何信号，于是 `awaitEvent` 一直等到超时（扫码界面把 null 当成「继续等待」，
+         * 用户要等到二维码自己过期）。现在：确认关闭 → 投一次终态事件 → 让位给下一条连接。
+         */
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isActive()) return
             if (BuildConfig.DEBUG) Log.d(TAG, "WS closing code=$code reason=$reason")
+            // 服务端已发关闭帧 ⇒ 按协议回一个正常关闭（不再 cancel：那会让对端看到
+            // 1006 异常关闭，也让本地收不到 onClosed）。
+            runCatching { webSocket.close(1000, null) }
+            deliverDisconnectOnce()
+            retire()
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isActive()) return
             if (BuildConfig.DEBUG) Log.d(TAG, "WS closed code=$code reason=$reason")
             opened.complete(false)
+            retire()
             // ⚠️ **不关 incoming**：通道属于会话，后面可能还有一条重定向连接要用它。
             // 只告诉等待方「这条连接没了」。
-            incoming.trySend(mqttDisconnectedFrame())
+            deliverDisconnectOnce()
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            // 旧连接（已被 reset/close 摘掉）的迟到失败不属于当前会话，不投任何事件。
+            if (!isActive()) return
             Log.w(TAG, "WS failure: ${t::class.java.simpleName} ${t.message} http=${response?.code}")
             opened.complete(false)
-            incoming.trySend(mqttDisconnectedFrame())
+            retire()
+            deliverDisconnectOnce()
         }
     }
 

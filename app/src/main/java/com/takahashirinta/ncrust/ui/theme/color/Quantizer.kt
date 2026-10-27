@@ -255,7 +255,9 @@ class QuantizerWu : Quantizer {
             moments[getIndex(cube.r0, cube.g0, cube.b1)] -
             moments[getIndex(cube.r0, cube.g0, cube.b0)]
 
-        val hypotenuse = dr * dr + dg * dg + db * db
+        // J15：`dr/dg/db` 是 Int，`dr * dr` 先在 Int 里算完才参与 Double 运算 ——
+        // 通道差上万时三项之和会溢出成负数（Wu 距离被截断 ⇒ 两种颜色被误判为同色）。
+        val hypotenuse = dr.toDouble() * dr + dg.toDouble() * dg + db.toDouble() * db
         val cubeVolume = volume(cube, weights)
         return xx - hypotenuse / cubeVolume.toDouble()
     }
@@ -572,6 +574,9 @@ object QuantizerWsmeans {
                 var newClusterIndex = -1
                 for (j in 0 until clusterCount) {
                     // 三角不等式剪枝：距离已经 >= 4 倍当前距离的中心不可能更近。
+                    // J15（后半）：官方 MCU 端口同样在 `Arrays.sort` 之后按位置 j 剪枝。
+                    // 这里**保持与官方端口逐字节一致**（QuantizerTest/ScoreTest 是 parity 守卫）；
+                    // 偏离它属于产品决策，不是单方面"修 bug"。
                     if (distanceToIndexMatrix[previousClusterIndex][j].distance >= 4 * previousDistance) {
                         continue
                     }

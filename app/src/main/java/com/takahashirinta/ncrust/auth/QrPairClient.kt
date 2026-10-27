@@ -32,7 +32,8 @@ object QrPairClient {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(target.first, target.second), 4_000)
                 socket.soTimeout = 4_000
-                val payload = QrPair.encrypt(pairSecret, unikey, cookie)
+                // H23：密文 + MAC，平板侧先验完整性再解密。
+                val payload = QrPair.sealPayload(pairSecret, unikey, QrPair.encrypt(pairSecret, unikey, cookie))
                 DataOutputStream(socket.getOutputStream()).use { out ->
                     out.writeInt(payload.size)
                     out.write(payload)

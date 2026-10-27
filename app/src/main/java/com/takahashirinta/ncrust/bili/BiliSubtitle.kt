@@ -522,12 +522,20 @@ object BiliSubtitle {
         raw.replace(NOTE_MARK, "").replace("♫", "").trim()
 
     /**
-     * 毫秒 → `[mm:ss.xx]`。
+     * 毫秒 → `[mmmm:ss.xx]`（分钟宽度至少 2 位，超过 99 分钟时**如实给 3 位**）。
      *
-     * 用**两位**厘秒与既有 LRC 源（ncm/QQ）一致 —— `LrcParser` 对 2 位与 3 位都认，
+     * 用**两位**厘秒与既有 LRC 源（ncm/QQ）一致 —— `LrcParser` 对 2 位与 3 位厘秒都认，
      * 但保持同一形状能让「同一首歌两个来源的 LRC 做 diff」这类排查少一个变量。
-     * 分钟数**不截断到 2 位**：现场曲目会超过 99 分钟（`[78:30.00]` 是合法输入，
-     * `LrcParser` 也按两位读，见它的单测）。
+     *
+     * ## ⚠️ H18：这里**故意不截断**分钟，而消费端目前做不到
+     *
+     * `[100:00.00]` 是合法的 LRC（`[mm:ss.xx]` 的 mm 没有上限），但 `LrcParser` 的两个
+     * 正则（`TIME_STAMP` / `LEADING_TIME_STAMPS`）写死了 `\d{2}`，于是 100 分钟以后的
+     * 字幕行会被**整行丢弃** —— 长视频/长音频在这一刻之后没有歌词，且不报错。
+     *
+     * 修法只有一处，在 `lyric/LrcParser.kt`（把 `(\d{2})` 改成 `(\d{2,})`，两处），
+     * 不在本文件职责内；这里**保持正确输出**而不是把 100 分钟折成 `40:00`（那会把时间轴
+     * 悄悄改错，比丢行更难查）。边界值由 `BiliSubtitleStampTest` 钉住。
      */
     internal fun formatStamp(ms: Long): String {
         val safe = if (ms < 0L) 0L else ms

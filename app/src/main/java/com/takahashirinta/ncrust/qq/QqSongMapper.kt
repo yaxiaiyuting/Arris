@@ -126,13 +126,38 @@ object QqSongMapper {
         return out
     }
 
-    /** 单首歌的对象 → [SongItem]；缺 id 或 mid 时返回 null（这种条目没法取链）。 */
+    /**
+     * 单首歌的对象 → [SongItem]；缺 id 或 mid 时返回 null（这种条目没法取链）。
+     *
+     * ## J10：新旧字段**成组**兼容，不许逐字段零散兜底
+     *
+     * 同一个 QQ 曲目有两种形状：
+     *
+     * | 字段 | 新版（`new_json=1` / `musicu`） | 旧版（`client_search_cp` 原样） |
+     * |---|---|---|
+     * | 数字 id | `id` | `songid` |
+     * | mid | `mid` | `songmid` |
+     * | 标题 | `name` / `title` | `songname` |
+     * | 专辑 | `album{ id, mid, name, pmid }` | `albumid` / `albummid` / `albumname` / `pmid`（**摊在 song 层**） |
+     *
+     * 旧实现只给 **mid** 做了兼容（`mid ?: songmid`），其余字段仍只读新名字 —— 于是
+     * 同一条旧响应的解析结果是「身份对（mid）、标题空、专辑丢、数字 id 落散列兜底」，
+     * 而它的新版形状解析出的是**另一条 `TrackKey`**（`SourceIds.qqId` 在没有 songid 时
+     * 走 FNV 散列兜底，两个 id 必然不同）。身份判等只看 `(source, id)`，所以收藏 /
+     * 队列 / 缓存里同一首歌变成两份。
+     *
+     * 修法是**成组**读：三组字段各自「新名优先、旧名兜底」，绝不出现「mid 认旧的、
+     * id 只认新的」这种半截状态。字段缺失仍然如实为空（不猜）。
+     */
     fun fromSongObject(item: JSONObject?): SongItem? {
         if (item == null) return null
         val mid = item.optString("mid").takeIf { it.isNotEmpty() }
             ?: item.optString("songmid").takeIf { it.isNotEmpty() }
             ?: return null
-        val rawId = item.optLong("id", 0L)
+        // 旧版把数字 id 叫 `songid`；缺了就保持 0（散列兜底），与既有的埋点口径一致。
+        val rawId = item.optLong("id", 0L).takeIf { it > 0L }
+            ?: item.optLong("songid", 0L).takeIf { it > 0L }
+            ?: 0L
         val syntheticId = SourceIds.qqId(rawId, mid)
         // v2.5.4 · C：解析期埋点（唯一落点）。
         // 「服务端没给 songid」在这里是**唯一可判**的地方：`optLong("id", 0L)` 把
@@ -163,36 +188,17 @@ object QqSongMapper {
             }
         }
 
-        val albumObj = item.optJSONObject("album")
-        // v2.6.2 · P0：`album` 对象上的**三个候选分两个职责**，绝不能互相顶替：
-        //
-        //   · 封面 = `pmid`（**封面照片 id**，形如 `000MkMni19ClKG_5`）优先，回落 `mid`；
-        //   · **身份** = `mid`（albumMID，base62，形如 `000MkMni19ClKG`）—— 这是
-        //     `music.musichallAlbum.AlbumSongList` 的 `albumMid` 参数唯一认的东西，
-        //     也是「转到专辑」要跳过去的那张专辑的键。
-        //
-        // 旧代码把 `pmid ?: mid` 读进一个局部 val 只喂给封面，`AlbumItem` 没有字段装身份，
-        // 于是跳转只能拿数字 `album.id` 去 ncm 查 —— 陈奕迅 `22276` → 陈小云（真机复现）。
-        // 实测 QQ 服务端**碰巧**能容忍把 `pmid` 当 `albumMid` 传（内部会剥掉 `_N`），
-        // 但那是服务端的宽容而不是契约，所以身份这一路只认 `mid`，
-        // 且由 `AlbumNavigator` 的值域闸门（base62，`_` 不合法）把 `pmid` 挡在门外。
-        val albumPhotoId = albumObj?.optString("pmid")?.takeIf { it.isNotEmpty() }
-            ?: albumObj?.optString("mid")?.takeIf { it.isNotEmpty() }
-        val albumMid = albumObj?.optString("mid")?.takeIf { it.isNotEmpty() }
-        val album = albumObj?.let {
-            AlbumItem(
-                id = it.optLong("id", 0L).takeIf { v -> v > 0L },
-                name = it.optString("name").takeIf { v -> v.isNotEmpty() },
-                picUrl = albumPhotoId?.let { m -> COVER_TEMPLATE.format(m) },
-                mid = albumMid,
-            )
-        }
+        val album = albumOf(item)
+        val trackName = item.optString("name").takeIf { it.isNotEmpty() }
+            ?: item.optString("title").takeIf { it.isNotEmpty() }
+            // J10：旧形状的标题叫 `songname`。少这一条 ⇒ 旧条目标是空标题，
+            // 而空标题在下游是「不可解析」（`candidateToSong` 直接丢）。
+            ?: item.optString("songname").takeIf { it.isNotEmpty() }
+            ?: ""
 
         return SongItem(
             id = syntheticId,
-            name = item.optString("name").takeIf { it.isNotEmpty() }
-                ?: item.optString("title").takeIf { it.isNotEmpty() }
-                ?: "",
+            name = trackName,
             artists = artists,
             album = album,
             // `interval` 是**秒**（ncm 那边 `dt` 是毫秒）—— 不乘 1000 会让进度条与歌词全错。
@@ -204,6 +210,50 @@ object QqSongMapper {
             // 官方搜索响应里 VIP 专享曲就是它。与 [isPaywalled] 共用同一个出口，
             // 避免同一个字段在两处各写一遍（那正是会漂移的地方）。
             memberOnly = isPaywalled(item),
+        )
+    }
+
+    /**
+     * 专辑字段的**成组**读取（J10）：新版嵌套 `album{…}` 与旧版 song 层扁平字段。
+     *
+     * ### v2.6.2 · P0：`album` 对象上的**三个候选分两个职责**，绝不能互相顶替
+     *
+     * · 封面 = `pmid`（**封面照片 id**，形如 `000MkMni19ClKG_5`）优先，回落 `mid`；
+     * · **身份** = `mid`（albumMID，base62，形如 `000MkMni19ClKG`）—— 这是
+     *   `music.musichallAlbum.AlbumSongList` 的 `albumMid` 参数唯一认的东西，
+     *   也是「转到专辑」要跳过去的那张专辑的键。
+     *
+     * 旧代码把 `pmid ?: mid` 读进一个局部 val 只喂给封面，`AlbumItem` 没有字段装身份，
+     * 于是跳转只能拿数字 `album.id` 去 ncm 查 —— 陈奕迅 `22276` → 陈小云（真机复现）。
+     * 实测 QQ 服务端**碰巧**能容忍把 `pmid` 当 `albumMid` 传（内部会剥掉 `_N`），
+     * 但那是服务端的宽容而不是契约，所以身份这一路只认 `mid`，
+     * 且由 `AlbumNavigator` 的值域闸门（base62，`_` 不合法）把 `pmid` 挡在门外。
+     *
+     * ### J10：旧形状的专辑是**摊在 song 层**的
+     *
+     * `albumid` / `albummid` / `albumname`（以及可选的 `pmid`）。只兼容 `mid` 而不兼容
+     * 它们，会让旧条目「专辑身份与封面一起丢」—— 而那正是「同一首歌两份收藏」的另一半。
+     * 两者都没有时返回 null（如实留空，不造一个空专辑）。
+     */
+    private fun albumOf(item: JSONObject): AlbumItem? {
+        val albumObj = item.optJSONObject("album")
+        val rawId = albumObj?.optLong("id", 0L)?.takeIf { v -> v > 0L }
+            ?: item.optLong("albumid", 0L).takeIf { v -> v > 0L }
+        val albumMid = albumObj?.optString("mid")?.takeIf { it.isNotEmpty() }
+            ?: item.optString("albummid").takeIf { it.isNotEmpty() }
+        val name = albumObj?.optString("name")?.takeIf { it.isNotEmpty() }
+            ?: item.optString("albumname").takeIf { it.isNotEmpty() }
+        // 封面照片 id：`pmid` **只喂封面**，绝不落到 [AlbumItem.mid]（那是身份）。
+        val photoId = albumObj?.optString("pmid")?.takeIf { it.isNotEmpty() }
+            ?: albumObj?.optString("mid")?.takeIf { it.isNotEmpty() }
+            ?: item.optString("pmid").takeIf { it.isNotEmpty() }
+            ?: albumMid
+        if (rawId == null && albumMid == null && name == null) return null
+        return AlbumItem(
+            id = rawId,
+            name = name,
+            picUrl = photoId?.let { m -> COVER_TEMPLATE.format(m) },
+            mid = albumMid,
         )
     }
 

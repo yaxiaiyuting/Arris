@@ -104,6 +104,31 @@ object BiliApi {
 
     private const val TAG = "BiliApi"
 
+    /**
+     * 允许携带**会话凭据**（Cookie / Referer / Origin）的目标域后缀（H17）。
+     *
+     * 只列 B 站的**账号与接口域**：凭据是按域登录的产物，离开这个域没有任何正当用途。
+     *
+     * `*.hdslb.com`（字幕 / 图片 CDN）与 `*.bilivideo.com`（媒体 CDN）**刻意不在表里**：
+     * 它们的直链自带签名（`deadline` / `auth_key` / `upsig`），本来就不需要账号 Cookie；
+     * 而 [BiliApi.subtitleBody] 的地址是**服务端给的**，把它也当成可发凭据的目标，
+     * 等于把「登录会话」的发送范围交给响应内容决定。
+     */
+    private val CREDENTIAL_DOMAIN_SUFFIXES = listOf("bilibili.com")
+
+    /**
+     * 这个 url 是否属于**账号域**（决定要不要带会话凭据）。纯函数，单测直接钉。
+     *
+     * 解析失败（相对地址 / 畸形串）一律返回 false：宁可匿名请求，也不把凭据发给
+     * 一个我们没看懂的目标。
+     */
+    internal fun isAccountDomain(url: String?): Boolean {
+        val host = runCatching { java.net.URI(url.orEmpty()).host }.getOrNull()
+            ?.lowercase()
+            ?: return false
+        return CREDENTIAL_DOMAIN_SUFFIXES.any { host == it || host.endsWith("." + it) }
+    }
+
     private const val NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
     private const val SEARCH_URL = "https://api.bilibili.com/x/web-interface/wbi/search/type"
     private const val VIEW_URL = "https://api.bilibili.com/x/web-interface/view"
@@ -281,21 +306,38 @@ object BiliApi {
      * 它是 `private` 的，就是为了让「谁在什么线程上调它」在本文件里一眼看完。
      */
     private fun get(url: String, cookie: String? = null): String {
-        // v3.2.0 · P1：**登录之后每一个 B 站请求都带上 SESSDATA**。
-        // 这是登录唯一有意义的落点 —— 音频区取流按身份给档位（大会员才有 FLAC），
-        // 收藏夹/投币那类端点按身份返回。凭据来自 `BiliAuthStore` 的进程内镜像，
-        // 而镜像为空（未登录 / 未 init）时 `requestCookieHeader()` 返回 null ⇒
-        // 这条链路的**匿名行为与 v3.1.0 逐字一致**（一个 Cookie 都不带）。
-        val cookieHeader = BiliAuthStore.mergeCookieHeaders(
-            BiliAuthStore.requestCookieHeader(),
-            cookie?.takeIf { it.isNotBlank() }?.let { "buvid3=$it" },
-        )
+        // H17：**凭据按目标 host 白名单发放**。
+        //
+        // 旧实现不看 url，把 `BiliAuthStore.requestCookieHeader()`（SESSDATA / bili_jct /
+        // DedeUserID）连同 `Referer`/`Origin` 一概拼进去 —— 而 [subtitleBody] 的 url 是
+        // **服务端给的**（实测 `//aisubtitle.hdslb.com/…`，且 [BiliSubtitle.normalizeSubtitleUrl]
+        // 接受任意 http(s) 地址）。于是「登录凭据被发给一个字幕 CDN 域」从结构上就成了可能：
+        // 那是账号会话，不是媒体签名，跨域没有任何正当用途。
+        //
+        // 现在：只有 B 站**账号/接口域**（`*.bilibili.com`）才带会话 Cookie 与 Referer；
+        // CDN / 第三方地址一律匿名取（B 站的直链自带签名，不依赖 Cookie）。
+        // 匿名分支因此与 v3.1.0 的行为逐字一致 —— 一个 Cookie 都不带。
+        val sameAccountDomain = isAccountDomain(url)
+        val cookieHeader = if (sameAccountDomain) {
+            // v3.2.0 · P1：登录之后每一个**账号域**请求都带上 SESSDATA。
+            // 这是登录唯一有意义的落点 —— 音频区取流按身份给档位（大会员才有 FLAC），
+            // 收藏夹/投币那类端点按身份返回。凭据来自 `BiliAuthStore` 的进程内镜像，
+            // 而镜像为空（未登录 / 未 init）时 `requestCookieHeader()` 返回 null ⇒
+            // **匿名行为与 v3.1.0 逐字一致**（一个 Cookie 都不带）。
+            BiliAuthStore.mergeCookieHeaders(
+                BiliAuthStore.requestCookieHeader(),
+                cookie?.takeIf { it.isNotBlank() }?.let { "buvid3=$it" },
+            )
+        } else {
+            null
+        }
         val builder = Request.Builder()
             .url(url)
             .get()
             .header("User-Agent", UA)
-            .header("Referer", REFERER)
-            .header("Origin", "https://www.bilibili.com")
+        if (sameAccountDomain) {
+            builder.header("Referer", REFERER).header("Origin", "https://www.bilibili.com")
+        }
         // 只有旧版 playurl 需要指纹 Cookie（见 [buvid3]）；匿名时其余请求一个 Cookie 都不带 ——
         // 带上一个孤立的指纹只会让指纹在不同接口间不一致。
         if (cookieHeader != null) builder.header("Cookie", cookieHeader)

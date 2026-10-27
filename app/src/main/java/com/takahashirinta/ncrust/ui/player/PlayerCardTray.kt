@@ -142,6 +142,9 @@ internal fun PlayerCardTray(
                 TrayInfoColumn(
                     song = s,
                     strings = strings,
+                    // E09：托盘隐去时（透明迷你条）这些子交互必须一起失效，
+                    // 否则"看不见的地方还能点"——点歌词跳歌词页、点艺人进艺人页。
+                    miniBarEnabled = miniBarEnabled,
                     lyricsFlow = lyricsFlow,
                     positionFlow = positionFlow,
                     trialFlow = trialFlow,
@@ -180,6 +183,7 @@ internal fun PlayerCardTray(
 private fun RowScope.TrayInfoColumn(
     song: SongItem,
     strings: Strings,
+    miniBarEnabled: Boolean,
     lyricsFlow: StateFlow<List<LrcLine>>,
     positionFlow: StateFlow<Long>,
     trialFlow: StateFlow<Boolean>,
@@ -212,6 +216,7 @@ private fun RowScope.TrayInfoColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(
+                    enabled = miniBarEnabled,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) { onExpandToLyrics() }
@@ -264,6 +269,7 @@ private fun RowScope.TrayInfoColumn(
                     modifier = Modifier
                         .weight(1f)
                         .clickable(
+                            enabled = miniBarEnabled,
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) {

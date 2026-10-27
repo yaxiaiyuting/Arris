@@ -118,14 +118,15 @@ class UpdateDownloader(private val directory: File) {
     @Volatile
     private var cancelled = false
 
-    /**
-     * S10：每个目标文件只允许"最新一次尝试"交付。
-     *
-     * 旧实现所有尝试共用同一个输出文件：A 被取消后仍打开覆盖流，会把 B 刚下完的包截成 0 字节。
-     * 现在每次尝试写自己的 `*.part-<attempt>`，交付前再核对"我还是不是最新尝试"。
-     */
-    private val attemptSeq = java.util.concurrent.atomic.AtomicLong(0L)
-    private val latestAttempt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    // S10 / H04：「最新一次尝试」与 part 序号**必须是进程级**的，不能挂在实例上。
+    //
+    // 为什么（H04）：`UpdateService.startDownload` 每次下载都 `UpdateDownloader(directory)` 新建
+    // 一个实例，于是实例字段的 attemptSeq 从 0 重新数、latestAttempt 各自为政 ——
+    // 两个实例都叫 `*.part-1`，也互相看不出"我已经被取代了"。旧任务的收尾就会把新任务的
+    // part 改名成交付目标（或反过来），最后 APK 不存在。
+    //
+    // 键取**目标文件的绝对路径**而不是裸文件名：同一个缓存目录下的同名文件才是同一个竞态域，
+    // 不同目录（单测的临时目录、将来别的下载目录）互不干扰。见 [ATTEMPT_SEQ] / [LATEST_ATTEMPT]。
 
     fun cancel() {
         cancelled = true
@@ -148,11 +149,14 @@ class UpdateDownloader(private val directory: File) {
         directory.mkdirs()
         val target = File(directory, fileName)
         // 每次尝试独占一个 part 文件：旧任务即使还在跑，也只动自己那份。
-        val attempt = attemptSeq.incrementAndGet()
-        latestAttempt[fileName] = attempt
+        // H04：序号与「谁是最新尝试」都在**进程级**表里（见 [ATTEMPT_SEQ] / [LATEST_ATTEMPT]），
+        // 否则 `UpdateService` 每次新建实例时两个任务的 part 会撞成同一个名字。
+        val targetKey = target.absolutePath
+        val attempt = ATTEMPT_SEQ.incrementAndGet()
+        LATEST_ATTEMPT[targetKey] = attempt
         val part = File(directory, "$fileName.part-$attempt")
         val markerFile = File(directory, markerNameFor(fileName))
-        fun superseded() = latestAttempt[fileName] != attempt
+        fun superseded() = LATEST_ATTEMPT[targetKey] != attempt
         // 清掉同一目标的其它 part（上一轮被杀的残留），只保留本次尝试的那份。
         runCatching {
             directory.listFiles()
@@ -184,7 +188,10 @@ class UpdateDownloader(private val directory: File) {
         // 上游只在成功返回前写 marker，导致取消 / 进程被杀后残包没有身份，下次只能整包重下。
         // 这里写入的是本次请求的身份与期望总长；ETag 在没续传时为空，服务端会以 200 整体覆盖，
         // 不会拿旧前缀去拼新后缀。
-        writeMarker(markerFile, ResumeMarker(url, identity, expectedSize, ifRange))
+        // H04：只有最新尝试才写（被取代的旧任务不许改这份共享标记）。
+        if (!superseded()) {
+            writeMarker(markerFile, ResumeMarker(url, identity, expectedSize, ifRange))
+        }
 
         try {
         while (true) {
@@ -226,7 +233,10 @@ class UpdateDownloader(private val directory: File) {
                 // 于是下次续传没有 If-Range，v1 前缀 + v2 后缀能拼成一个混合包。
                 val responseEtag = response.header("ETag")
                 val effectiveEtag = responseEtag ?: ifRange
-                if (effectiveEtag != null) {
+                // H04：续传标记是**按目标文件**共享的一份，只有仍然是"最新尝试"的任务才许写它。
+                // 否则被取代的旧任务会用自己的身份 / 定长把新任务的标记冲掉，下一次续传就会
+                // 拿旧身份去拼新后缀。
+                if (effectiveEtag != null && !superseded()) {
                     writeMarker(markerFile, ResumeMarker(url, identity, expectedSize, effectiveEtag))
                 }
                 if (!append && ifRange == null && effectiveEtag != null) {
@@ -342,5 +352,21 @@ class UpdateDownloader(private val directory: File) {
     private companion object {
         /** 续传被服务端 / 内容变动打断后，允许的最多重下次数。 */
         const val MAX_RESTARTS = 2
+
+        /**
+         * H04：**进程级**的尝试序号。part 文件名取 `*.part-<序号>`，跨实例必须唯一，
+         * 否则两个实例都写 `*.part-1`（旧实现就是这样互相踩的）。
+         */
+        val ATTEMPT_SEQ = java.util.concurrent.atomic.AtomicLong(0L)
+
+        /**
+         * H04：**进程级**的「每个目标文件的最新尝试」。交付 / 归还前都用它判断自己是否已被取代，
+         * 不能挂在实例上 —— `UpdateService.startDownload` 每次都会新建一个 `UpdateDownloader`，
+         * 实例级判定等于「两个任务互相看不见对方」。
+         *
+         * 键 = 目标文件绝对路径（同一目录同名文件才是同一个竞态域）。条目数等于同时/先后
+         * 下载过的目标文件数（实际只有个位数），不需要淘汰。
+         */
+        val LATEST_ATTEMPT = java.util.concurrent.ConcurrentHashMap<String, Long>()
     }
 }

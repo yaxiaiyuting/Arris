@@ -21,6 +21,8 @@ package com.takahashirinta.ncrust.player
 
 import android.util.Log
 import com.google.gson.GsonBuilder
+import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.network.RetrofitClient
 import kotlin.concurrent.thread
 
@@ -124,6 +126,13 @@ object PlayReporter {
      * 调用点会变多（开始播放 / 80% / 自然结束），而「出口」只有一个 —— 判据挂在不会漏的那一层。
      * 被拦下的次数只做一次内存自增（不碰 IO、不碰网络），落盘在 `MainActivity.onStop`
      * 与诊断入口（铁律 4：非核心组件不得破坏核心播放链路）。
+     *
+     * ## v3.7.9 · H03：会话快照在**产生上报时**捕获
+     *
+     * 旧实现在这里只用 cookie 判断「有没有登录」，真正的凭据是后台线程里
+     * `RetrofitClient.eapiPostOsx` 重新读的当前账号 —— 排队期间只要换过号，
+     * A 的收听记录就会发给 B。现在把快照（cookie + 登录代次）钉在这里，
+     * 线程里只认这份快照：代次变了就丢弃，绝不改投新账号。
      */
     private fun send(songId: Long, logs: String) {
         val gateReason = ReportGate.blockReason(ReportGate.Target.NETEASE_WEBLOG, songId)
@@ -134,21 +143,46 @@ object PlayReporter {
         }
 
         // 没登录（Cookie 里没有 MUSIC_U）直接不发：这条通道的身份就是登录态，匿名请求没有意义。
-        val cookie = RetrofitClient.getCookie() ?: return
-        if (!cookie.contains("MUSIC_U")) return
+        val pinned = CookieManager.snapshot()
+        if (pinned.cookie?.contains("MUSIC_U") != true) return
 
         thread(name = "ncrust-scrobble") {
-            try {
-                ReportGateStats.counter.onReported()
-                val resp = RetrofitClient.eapiPostOsx(
-                    WEBLOG_PATH,
-                    linkedMapOf<String, Any>("logs" to logs)
-                )
-                Log.d(TAG, "scrobble resp: ${resp.code} bytes=${logs.length}")
-                resp.close()
-            } catch (e: Exception) {
-                Log.w(TAG, "scrobble report failed", e)
-            }
+            dispatchReport(pinned, logs)
+        }
+    }
+
+    /**
+     * 上报线程的发送入口（H03）：**只发属于 [pinned] 这个登录代次的那一条**。
+     *
+     * 抽成 internal 是为了让 JVM 单测能直接驱动「换号 / 续期」两条分支 ——
+     * 线程本身没有可注入的调度点，把它留在单测里靠 sleep 猜时序没有意义。
+     *
+     * @param pinned 产生这条上报时的会话快照（`send` 在调用线程上取的）。
+     * @return 是否真的发出去了；换号丢弃与网络异常都是 false。
+     */
+    internal fun dispatchReport(pinned: NeteaseSessionSnapshot, logs: String): Boolean {
+        // 排队期间换号/登出：这条记录属于上一个账号，一个字节都不该发。
+        // 判据用登录代次而不是 cookie 字节 —— 同账号续期只换票，仍然算同一个账号。
+        val live = CookieManager.snapshot()
+        if (live.loginGeneration != pinned.loginGeneration) {
+            Log.i(TAG, "scrobble dropped: session changed before send bytes=${logs.length}")
+            return false
+        }
+        return try {
+            ReportGateStats.counter.onReported()
+            val resp = RetrofitClient.eapiPostOsx(
+                WEBLOG_PATH,
+                linkedMapOf<String, Any>("logs" to logs),
+                // 凭据用这里的快照，不让传输层再读一次当前账号；续期后取到的是同一账号的新票。
+                pinnedCookie = live.cookie ?: pinned.cookie,
+                pinnedGeneration = pinned.loginGeneration,
+            )
+            Log.d(TAG, "scrobble resp: ${resp.code} bytes=${logs.length}")
+            resp.close()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "scrobble report failed", e)
+            false
         }
     }
 }

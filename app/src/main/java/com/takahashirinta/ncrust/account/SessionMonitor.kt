@@ -24,6 +24,13 @@ object SessionMonitor {
     @Volatile private var appContext: Context? = null
     private var lastCheckAt = 0L
     private var lastRevision = -1L
+    /**
+     * J03：失败后的退避截止。
+     *
+     * 旧实现无论成败都把 `lastCheckAt` 推进到"现在"，于是**一次网络抖动**就让整段
+     * 30 分钟窗口内不再复核（用户明明在线却被当成"暂时不可用"）。失败只退避 60 秒。
+     */
+    private var retryAfterAt = 0L
     private fun prefs(c: Context) = c.getSharedPreferences("ncrust_settings", Context.MODE_PRIVATE)
 
     fun init(context: Context) {
@@ -79,6 +86,7 @@ object SessionMonitor {
             checks.withLock {
                 var started = CookieManager.snapshot()
                 val now = android.os.SystemClock.elapsedRealtime()
+                if (!force && lastRevision == started.revision && now < retryAfterAt) return@withLock
                 if (!force && lastRevision == started.revision && now - lastCheckAt in 0 until 30 * 60_000L) return@withLock
                 lastCheckAt = now
                 lastRevision = started.revision
@@ -112,7 +120,12 @@ object SessionMonitor {
                     lastRevision = CookieManager.snapshot().revision
                     refresh(app, true)
                 }
-                catch (_: Exception) { Log.w(TAG, "会话复核暂不可用，保留已知状态") }
+                catch (_: Exception) {
+                    // 失败：60 秒后可重试，但**不**把 30 分钟窗口当成"刚检查过"。
+                    retryAfterAt = android.os.SystemClock.elapsedRealtime() + 60_000L
+                    lastCheckAt = 0L
+                    Log.w(TAG, "会话复核暂不可用，保留已知状态（60s 后重试）")
+                }
             }
         }
     }

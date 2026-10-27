@@ -118,7 +118,9 @@ fun recoverPayload(
         com.takahashirinta.ncrust.local.LocalPlaylistStore.readPlaylists(context).forEach { pl ->
             val hit = com.takahashirinta.ncrust.local.LocalPlaylistStore
                 .readTracks(context, pl.key)
-                .firstOrNull { it.trackKey == wanted && !it.tombstoned }
+                // H11：只接受**能解析**的记录。取回一条缺 songmid 的 QQ 条目等于没取，
+                // 反而会把"本来能回查到的完整载荷"挡住。
+                .firstOrNull { it.trackKey == wanted && !it.tombstoned && it.song?.isResolvable == true }
                 ?.song
             if (hit != null) return hit
         }
@@ -126,7 +128,7 @@ fun recoverPayload(
     // 再看收藏库。
     runCatching {
         com.takahashirinta.ncrust.library.LibraryManager.getSavedSongs(context)
-            .firstOrNull { com.takahashirinta.ncrust.source.TrackKey.ofSong(it) == wanted }
+            .firstOrNull { TrackKey.ofSong(it) == wanted && it.isResolvable }
             ?.let { return it }
     }
     return null

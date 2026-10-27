@@ -25,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.playlist.PullToRefresh
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
@@ -72,34 +73,66 @@ fun Modifier.pullToRefresh(
     state: PullToRefreshState,
     atTop: () -> Boolean,
     onRefresh: () -> Unit,
-): Modifier = this.nestedScroll(
-    object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            // 手指往上滑（available.y < 0）⇒ 立刻放弃这次下拉。
-            if (available.y < 0f) state.reset()
-            return Offset.Zero
-        }
+): Modifier = this.nestedScroll(PullToRefreshConnection(state, atTop, onRefresh))
 
-        override fun onPostScroll(
-            consumed: Offset,
-            available: Offset,
-            source: NestedScrollSource,
-        ): Offset {
-            if (source != NestedScrollSource.Drag) return Offset.Zero
-            if (available.y > 0f && atTop()) {
-                state.dragPx += available.y
-                if (PullToRefresh.shouldTrigger(state.dragPx, true, state.refreshing)) {
-                    state.reset()
-                    state.refreshing = true
-                    onRefresh()
-                }
-            } else {
+/**
+ * 下拉刷新的手势接线（J16 抽出来是为了能被单测直接驱动）。
+ *
+ * ## 为什么必须处理 `onPreFling`（松手/取消）
+ *
+ * 旧实现只在两条路上把 [PullToRefreshState.dragPx] 归零：上滑（`onPreScroll` 里
+ * `available.y < 0`）和「不在顶部 / 位移非正」（`onPostScroll` 的 else 分支）。
+ * **松手不在这两条路上** —— 手指抬起后没有任何滚动事件，`dragPx` 就停在原值，
+ * 于是：
+ *
+ * - 指示器继续挂着（`dragPx > 0` 是它的挂载条件，看着像"卡住的下拉"）；
+ * - 更糟的是**两次独立的下拉会互相借用距离**：第一次 80px 没到 160px 阈值，
+ *   松手不清零，第二次再拉 80px 就凑够 160px 触发刷新 —— 用户只拉了两次"半个动作"。
+ *
+ * `onPreFling` 是平台在**每一次拖动结束时**（含零速度松手）都会派发的一站，
+ * 放在这里归零即"一次手势一次累计"。不消费任何速度，滚动/惯性行为不变。
+ */
+internal class PullToRefreshConnection(
+    private val state: PullToRefreshState,
+    private val atTop: () -> Boolean,
+    private val onRefresh: () -> Unit,
+) : NestedScrollConnection {
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // 手指往上滑（available.y < 0）⇒ 立刻放弃这次下拉。
+        if (available.y < 0f) state.reset()
+        return Offset.Zero
+    }
+
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource,
+    ): Offset {
+        if (source != NestedScrollSource.Drag) return Offset.Zero
+        if (available.y > 0f && atTop()) {
+            state.dragPx += available.y
+            if (PullToRefresh.shouldTrigger(state.dragPx, true, state.refreshing)) {
                 state.reset()
+                state.refreshing = true
+                onRefresh()
             }
-            return Offset.Zero
+        } else {
+            state.reset()
         }
-    },
-)
+        return Offset.Zero
+    }
+
+    /**
+     * 松手 / 手势被取消 ⇒ 本次下拉结束，累计位移归零。
+     *
+     * 只归零位移，不动 [PullToRefreshState.refreshing]：刚触发的那次刷新要照常继续。
+     */
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        state.reset()
+        return Velocity.Zero
+    }
+}
 
 /**
  * 下拉时出现在列表顶部的进度指示器。

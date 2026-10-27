@@ -113,12 +113,17 @@ internal class QqQrMqttSession(
     private var keepAliveSeconds: Int = REQUESTED_KEEP_ALIVE
 
     /**
-     * 「SUBACK 之前先到的推送」。`null` = 没有。
+     * 「SUBACK 之前先到的推送」的**按序暂存**（空 = 没有）。
      *
-     * 必须留住它：那可能是 `cookies`（用户手速极快时）或 `scanned`，
-     * 丢掉它就意味着「扫了码但界面不动，直到下一次推送或超时」。
+     * 必须留住它们：那可能是 `cookies`（用户手速极快时）或 `scanned`，
+     * 丢掉一条就意味着「扫了码但界面不动，直到下一次推送或超时」。
+     *
+     * ⚠️ v3.8.0 · H20：**用列表而不是单槽**。单槽 `if (pendingEarlyEvent == null) … else 日志`
+     * 会把「同一帧里先来 Scanned、再来 Credentials」的第二条直接丢掉 ——
+     * 而 `Credentials` 正是换凭证唯一需要的那条（探针：随后只得到 Scanned 和超时，
+     * 凭据事件被永久丢弃）。MQTT 允许一个 WebSocket 帧里塞多条报文，这不是理论情况。
      */
-    private var pendingEarlyEvent: Event? = null
+    private val pendingEarlyEvents = ArrayDeque<Event>()
 
     /** 订阅用的包标识。恒为 1：这条连接上只有一次订阅。 */
     private val subscribePacketId = 1
@@ -286,9 +291,9 @@ internal class QqQrMqttSession(
             when (frame.type) {
                 MqttCodec.SUBACK -> return subAckAccepted(frame)
                 MqttCodec.PUBLISH -> {
-                    // 先到的推送不能丢：塞回给 awaitEvent 用（会话级的通道还是同一条）。
-                    if (pendingEarlyEvent == null) pendingEarlyEvent = eventOf(frame)
-                    else Log.w(TAG, "SUBACK 前收到多条推送，只保留第一条")
+                    // 先到的推送不能丢：按序暂存，交给 awaitEvent 消费（会话级的通道还是同一条）。
+                    // 至少要把 Credentials / 终态留下 —— 它可能就排在第二条。
+                    eventOf(frame)?.let { pendingEarlyEvents.addLast(it) }
                 }
                 MqttCodec.DISCONNECT -> {
                     Log.w(TAG, "SUBACK 之前连接就断了")
@@ -316,11 +321,8 @@ internal class QqQrMqttSession(
      * @param timeoutMs 本次等待窗口。返回 `null` = 超时（调用方按「二维码过期」处理）。
      */
     suspend fun awaitEvent(timeoutMs: Long): Event? {
-        // SUBACK 之前先到的那条推送（见 awaitSubAck 的注释）优先消费。
-        pendingEarlyEvent?.let { early ->
-            pendingEarlyEvent = null
-            return early
-        }
+        // SUBACK 之前先到的推送（见 [pendingEarlyEvents]）按到达顺序优先消费。
+        pendingEarlyEvents.removeFirstOrNull()?.let { return it }
         val deadline = System.currentTimeMillis() + timeoutMs
         while (true) {
             val left = deadline - System.currentTimeMillis()

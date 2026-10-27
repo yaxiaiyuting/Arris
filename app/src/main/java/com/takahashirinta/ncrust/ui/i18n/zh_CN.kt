@@ -645,7 +645,7 @@ val zhCN = Strings(
             regionLocked = "版权方限制，当前地区无法播放",
             network = "网络异常，请稍后重试",
             unknown = "暂时无法播放这首歌，请稍后重试",
-            switchSource = { other -> "%s 没有这首歌，可切到 " + other },
+            switchSource = { other -> "没有这首歌，可切到 " + other },
         ),
 
         share = ShareStrings(

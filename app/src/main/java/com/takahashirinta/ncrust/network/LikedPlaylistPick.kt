@@ -46,20 +46,31 @@ import org.json.JSONArray
 internal fun pickLikedPlaylistIdFrom(playlists: JSONArray?): Long? {
     if (playlists == null || playlists.length() == 0) return null
 
-    // ① 名称：「我喜欢的音乐」不可被用户改名。
-    for (i in 0 until playlists.length()) {
-        val item = playlists.optJSONObject(i) ?: continue
-        val name = item.optString("name")
-        if (name.contains("我喜欢的音乐") || name.contains("喜欢的音乐")) {
-            return item.optLong("id")
-        }
-    }
+    fun nameOf(item: org.json.JSONObject): String = item.optString("name")
+    fun looksLikeHeart(name: String): Boolean =
+        name.contains("我喜欢的音乐") || name.contains("喜欢的音乐")
 
-    // ② specialType == 5。
+    // ① specialType == 5 是**语义**判据（H24）。旧实现把名字放第一位，于是用户自建的
+    // 「以前喜欢的音乐精选」会被当成红心歌单，收藏底表就按它读 —— 名字永远不该单独成为身份。
+    // 但同为 specialType==5 时，名字仍是最强的消歧依据（官方那条就叫「我喜欢的音乐」）。
+    var specialFallback: Long? = null
+    var specialNamed: Long? = null
     for (i in 0 until playlists.length()) {
         val item = playlists.optJSONObject(i) ?: continue
-        if (item.optInt("specialType") == 5) return item.optLong("id")
+        if (item.optInt("specialType") != 5) continue
+        if (specialFallback == null) specialFallback = item.optLong("id")
+        if (specialNamed == null && looksLikeHeart(nameOf(item))) specialNamed = item.optLong("id")
     }
+    specialNamed?.let { return it }
+
+    // ② 名字只在**特殊歌单**里做兜底：官方「我喜欢的音乐」名字不可改，
+    // 但同名普通歌单可以随便建，所以必须叠加 specialType != 0。
+    for (i in 0 until playlists.length()) {
+        val item = playlists.optJSONObject(i) ?: continue
+        if (item.optInt("specialType") == 0) continue
+        if (looksLikeHeart(nameOf(item))) return item.optLong("id")
+    }
+    specialFallback?.let { return it }
 
     // ③ 最后兜底：任意特殊歌单（个别老账号 specialType 取值不同）。
     for (i in 0 until playlists.length()) {

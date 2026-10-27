@@ -644,7 +644,7 @@ scanConnecting = "평판에 연결중…",
             regionLocked = "권리자의 제한으로 현재 지역에서는 재생할 수 없습니다",
             network = "네트워크 오류입니다. 잠시 후 다시 시도하세요",
             unknown = "지금은 이 곡을 재생할 수 없습니다. 잠시 후 다시 시도하세요",
-            switchSource = { other -> "%s 에는 이 곡이 없습니다. 전환 대상: " + other },
+            switchSource = { other -> "에는 이 곡이 없습니다. 전환 대상: " + other },
         ),
 
         share = ShareStrings(

@@ -79,6 +79,7 @@ import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseCookie
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.PlaylistEditApi
 import com.takahashirinta.ncrust.network.PlaylistWriteResult
@@ -115,6 +116,7 @@ import com.takahashirinta.ncrust.local.LocalPlaylistRepository
 import com.takahashirinta.ncrust.local.LocalPlaylistStore
 import com.takahashirinta.ncrust.ui.components.AddToPlaylistSheet
 import com.takahashirinta.ncrust.ui.components.LocalPlaylistPickerDialog
+import com.takahashirinta.ncrust.ui.components.LoginCredentialAcceptance
 import com.takahashirinta.ncrust.ui.components.CreatePlaylistDialog
 import com.takahashirinta.ncrust.ui.components.PlaylistCreateOutcome
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
@@ -1245,8 +1247,13 @@ fun MainScreen(
 
     // 恢复播放队列。
     LaunchedEffect(Unit) {
+        // K02：读盘是挂起操作，期间用户可能已经点歌建了新队列。
+        // 记下开始时的队列身份，回来的旧快照只有在"没人动过"时才有资格覆盖。
+        val restoreStartedWith = playbackQueue
         val savedQueue = PlaybackStateManager.getQueue(context)
-        if (savedQueue != null && savedQueue.first.isNotEmpty()) {
+        val untouched = playbackQueue === restoreStartedWith &&
+            playbackQueue.isEmpty() && currentQueueIndex < 0
+        if (savedQueue != null && savedQueue.first.isNotEmpty() && untouched) {
             playerViewModel.invalidatePreload()
             playbackQueue = savedQueue.first.toMutableList()
             currentQueueIndex = savedQueue.second.coerceIn(0, playbackQueue.size - 1)
@@ -2049,13 +2056,26 @@ fun MainScreen(
      * 主数据源是网易私人 FM 流(getPersonalFm), 失败时兜底每日推荐,
      * 保证入口点下去一定有歌。之后靠 INFINITY 的队尾续播机制继续拉 FM 流无限延伸。
      */
+    // 主页异步开播（电台/歌单/专辑）的在途任务：新的点击取消旧的。
+    // 局部函数里不能声明字段，用 remember 的持有者跨重组保存。
+    val pendingPlayJob = remember {
+        java.util.concurrent.atomic.AtomicReference<kotlinx.coroutines.Job?>(null)
+    }
+
     fun startFm() {
         applyPlayMode(QueueModes.INFINITY)
-        coroutineScope.launch(Dispatchers.IO) {
+        // K01：记下"这一次点击"的意图代际。取数期间用户可能又点了别的歌/电台，
+        // 那种情况下这份迟到的结果**没有资格**再夺回播放权（旧实现会直接 replaceQueueAndPlay）。
+        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
+        pendingPlayJob.getAndSet(coroutineScope.launch(Dispatchers.IO) {
             val fm = runCatching { PlaylistApi.getPersonalFm() }.getOrDefault(emptyList())
             val songs = if (fm.isNotEmpty()) fm
                 else runCatching { PlaylistApi.getDailyRecommendSongs() }.getOrDefault(emptyList())
             if (songs.isNotEmpty()) {
+                if (!com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)) {
+                    android.util.Log.i("MainScreen", "startFm: superseded by a newer play, drop result")
+                    return@launch
+                }
                 withContext(Dispatchers.Main) {
                     replaceQueueAndPlay(songs)
                     // replaceQueueAndPlay 会清 fmMode, 电台标记须在其后置位。
@@ -2063,8 +2083,9 @@ fun MainScreen(
                     expandCard()
                 }
             }
-        }
+        })
     }
+
 
     fun insertAllNext(songs: List<SongItem>) {
         if (songs.isEmpty()) return
@@ -2122,10 +2143,16 @@ fun MainScreen(
             return
         }
         Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
-        coroutineScope.launch {
+        // K01：同样绑定点击时的意图代际，迟到的歌单不许顶掉用户后来点的歌。
+        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
+        pendingPlayJob.getAndSet(coroutineScope.launch {
             val songs = runCatching { PlaylistApi.getPlaylistDetail(playlistId) }.getOrDefault(emptyList())
-            if (songs.isNotEmpty()) replaceQueueAndPlay(songs)
-        }
+            if (songs.isNotEmpty() &&
+                com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)
+            ) {
+                replaceQueueAndPlay(songs)
+            }
+        })
     }
 
     /**
@@ -2139,7 +2166,8 @@ fun MainScreen(
             return
         }
         Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
-        coroutineScope.launch {
+        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
+        pendingPlayJob.getAndSet(coroutineScope.launch {
             val songs = runCatching {
                 RetrofitClient.api.getAlbumDetail(albumId).songs?.map {
                     SongItem(
@@ -2148,8 +2176,12 @@ fun MainScreen(
                     )
                 }.orEmpty()
             }.getOrDefault(emptyList())
-            if (songs.isNotEmpty()) replaceQueueAndPlay(songs)
-        }
+            if (songs.isNotEmpty() &&
+                com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)
+            ) {
+                replaceQueueAndPlay(songs)
+            }
+        })
     }
 
     /**
@@ -2552,12 +2584,28 @@ fun MainScreen(
     if (showQrRelogin) {
         QrLoginDialog(
             onLoginSuccess = { cookie ->
-                CookieManager.saveCookieMerged(context, cookie)
-                RetrofitClient.updateCookie(CookieManager.getCookie(context))
-                // 重新登录成功 → 会话回到 Valid，全局失效横幅消失。
-                SessionMonitor.onLoginSucceeded(context)
-                showQrRelogin = false
-                cookieRefreshTrigger++
+                // J02：「服务端 account/get 通过」是验证结果，「saveCookieMerged 写进去」才是
+                // 本地接受 —— 两者必须分开。扫码 803 的 Set-Cookie 常常只有 MUSIC_U，
+                // 会被 NeteaseCookie.shouldReplace 拒绝覆盖完整会话；旧代码忽略返回值，
+                // 于是界面宣布登录成功，本地留下的还是上一个账号的凭据。
+                val saved = CookieManager.saveCookieMerged(context, cookie)
+                val stored = CookieManager.getCookie(context)
+                if (LoginCredentialAcceptance.isApplied(saved, stored, cookie)) {
+                    RetrofitClient.updateCookie(stored)
+                    // 重新登录成功 → 会话回到 Valid，全局失效横幅消失。
+                    SessionMonitor.onLoginSucceeded(context)
+                    showQrRelogin = false
+                    cookieRefreshTrigger++
+                    true
+                } else {
+                    // 候选不完整 / 被本地拒绝：不关闭弹窗、不宣布成功（弹窗内会给出重试入口）。
+                    Log.w(
+                        "MainScreen",
+                        "qr login rejected locally: stored=[${NeteaseCookie.describe(stored)}] " +
+                            "candidate=[${NeteaseCookie.describe(cookie)}]",
+                    )
+                    false
+                }
             },
             onGenericLogin = {
                 showQrRelogin = false
@@ -3401,8 +3449,12 @@ fun MainScreen(
                     }
                 },
                 onCreateNew = { name ->
+                    // H09：新建走的是**可失败的原子提交**，失败返回 null（磁盘没写进去就不能
+                    // 声称建好了）。这里必须先判空再用，否则一次写盘失败就是空指针崩溃；
+                    // 失败时按「同步失败」提示，与下面 addTrack 失败同一条出口。
                     val created = LocalPlaylistRepository.createLocalOnly(context, name)
-                    val ok = pickSong?.let { LocalPlaylistRepository.addTrack(context, created.key, it) } != null
+                    val ok = created != null &&
+                        pickSong?.let { LocalPlaylistRepository.addTrack(context, created.key, it) } != null
                     localPlaylistsTick++
                     if (ok) {
                         showAddToLocalPlaylist = false

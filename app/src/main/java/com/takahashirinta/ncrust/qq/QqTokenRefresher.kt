@@ -297,7 +297,10 @@ object QqTokenRefresher {
         // ⚠️ 必须走 musicuRefresh 而**不是** musicuLogin：后者会给 comm 塞
         // `tmeLoginMethod = 3`（手机验证码登录专用），而续期带上它会被服务端拒
         // （实测 code=1000；去掉就是 code=0 + 新票）。详见 QqClient.musicuRefresh 的 KDoc。
-        val response = QqClient.musicuRefresh(request, stored.loginType) ?: run {
+        // v3.8.0 · H12：传输层事实来自**这次**调用的返回值（不再读单例 last 字段 ——
+        // 续期与取链会同时在飞，读到别人的状态会把「网络抖动」和「凭证过期」判反）。
+        val outcome = QqClient.musicuRefreshOutcome(request, stored.loginType)
+        val response = outcome.payload ?: run {
             // 传输层失败：**不是凭证过期**。是否进冷却必须绑定「这次请求属于的登录态」——
             // 旧请求迟到时不能把新会话也冷却掉。
             return applyFailureIfStillCurrent(
@@ -305,7 +308,7 @@ object QqTokenRefresher {
                 started = stored,
                 startedRevision = startedRevision,
                 result = RefreshResult.RETRYABLE,
-                reason = "transport: ${QqClient.lastTransportError}",
+                reason = "transport: ${outcome.transportError}",
             )
         }
         val reqCode = response.optInt("code", -1)

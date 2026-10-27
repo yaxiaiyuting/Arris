@@ -72,22 +72,22 @@ object StatsStore {
     private var aggregate: StatsAggregate? = null
 
     /**
-     * 「清空」代数。每次 [clear] +1，用于**挡住已经在飞行中的那次落盘**。
+     * 落盘的**提交序**（J01）：清空代次 + 单调票号 + 磁盘写入。
      *
-     * 不加它有一个真实（虽然窄）的竞态：`flushNow` 先在锁内拷一份快照、释放锁、
-     * 再去序列化（几毫秒）；这几毫秒里用户点了「清除统计」 —— 那份**旧快照**
-     * 随后落盘，用户刚清掉的数据又回来了。`flushJob.cancel()` 挡不住它：
-     * 取消只在挂起点生效，而写盘可能已经进了 `withContext(Dispatchers.IO)`。
+     * 为什么光有「清空代次」不够（v3.7.8 之前的形态）：
      *
-     * 代数不同 ⇒ 这一份快照作废（丢一次落盘，下一次变更会重新排）。
+     * 1. `flushNow` 在 `Dispatchers.Default` 上序列化（几毫秒）。这期间第二次 `flushNow`
+     *    可能已经拷到更新的快照并先写完盘，随后**旧的那份最后提交**，磁盘回退成旧值。
+     *    全程没有 `clear`，代次从未变化 ⇒ 只校验代次会放行。
+     * 2. `clear` 的删除是异步协程。用户清空后立刻又听了几秒，`flushSoon` 会先把**清空后的
+     *    新数据**写盘，那份迟到的删除再把它删掉 —— 内存里有、磁盘上没有，冷启动即丢。
+     *    （「清空后新增采样」并不推进代次，所以删除侧也挡不住。）
+     *
+     * 修法见 [StatsCommitGate]：票号在拷快照的同一把锁内领，全序即内容新旧；
+     * 提交与删除都要求票号仍是"最新且未过期"，判定与写盘在同一把锁内完成
+     * （也就是旧代码的 `commitLock`，因此「校验通过 → 被清空 → 旧快照写回」这个窗口仍然不存在）。
      */
-    private var generation = 0
-    /**
-     * 落盘串行锁：`flushNow` 的「校验代次 + 写入」与 `clear` 的「删除」必须在同一把锁里，
-     * 否则用户点清空之后，一个已通过代次校验的旧快照仍能把历史写回来。
-     * 只保护磁盘提交，不保护（可能很慢的）JSON 序列化。
-     */
-    private val commitLock = Any()
+    private val commitGate = StatsCommitGate()
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -124,8 +124,17 @@ object StatsStore {
         ioScope.launch { runCatching { ensureLoaded(app) } }
     }
 
-    /** 当前快照。**阻塞**：调用方自己决定线程（UI 侧放 IO）。 */
-    fun snapshot(context: Context): StatsSnapshot = ensureLoaded(context).snapshot()
+    /**
+     * 当前快照。**阻塞**：调用方自己决定线程（UI 侧放 IO）。
+     *
+     * H19：读取也必须持有写入用的那把锁 —— `StatsAggregate` 内部是普通 `LinkedHashMap`，
+     * 采样线程（2Hz）在改它，统计页在复制它，没有锁就是一次并发遍历（偶发
+     * `ConcurrentModificationException` / 看到半更新的计数）。
+     */
+    fun snapshot(context: Context): StatsSnapshot {
+        val agg = ensureLoaded(context)
+        return synchronized(lock) { agg.snapshot() }
+    }
 
     // ------------------------------------------------------------ 写路径 ----
 
@@ -163,14 +172,14 @@ object StatsStore {
     /** 清空全部统计（用户在页面上点「清除统计」）。**立即落盘**，不给「清了又复活」留窗口。 */
     fun clear(context: Context) {
         val app = context.applicationContext
-        val clearGeneration: Int
+        val clearTicket: ClearTicket
         synchronized(lock) {
             flushJob?.cancel()
             flushJob = null
-            // 先让代数前进：任何**已经拿着旧快照**的 flushNow 会在写盘前放弃。
-            generation += 1
-            clearGeneration = generation
             aggregate = StatsAggregate()
+            // J01：推进代次 + 领票都在 [lock] 内完成，与 flushNow 的「拷快照 + 领票」同序，
+            // 票号顺序才等于内容顺序。删除本身仍走异步（不与 UI 抢线程）。
+            clearTicket = commitGate.beginClear()
         }
         ioScope.launch {
             runCatching {
@@ -178,11 +187,8 @@ object StatsStore {
                 // 才算数（apply 是异步的，进程随后被杀就会「清了又回来」）。
                 // 它在 IO 线程上，不阻塞 UI。
                 withContext(Dispatchers.IO) {
-                    synchronized(commitLock) {
-                        // 删除也要带代次：清空之后若已经有新统计累加，就不该把新快照删掉。
-                        if (synchronized(lock) { generation } != clearGeneration) return@withContext
-                        prefs(app).edit().remove(KEY_SNAPSHOT).commit()
-                    }
+                    // 删除要带票：清空之后若已经有新统计落过盘，删掉的就是**新数据**。
+                    commitGate.deleteAfterClear(prefs(app), clearTicket)
                 }
             }
         }
@@ -217,30 +223,36 @@ object StatsStore {
     /**
      * 落盘一次。序列化前先在锁内**拷一份快照**：这样 Gson 序列化（几毫秒）与写盘期间，
      * 采样线程可以继续改内存聚合，不需要等 IO。
+     *
+     * J01：快照、代次、票号三者在**同一把锁**内取 —— 票号的全序因此与内容的新旧一致，
+     * [StatsCommitGate.commit] 才能凭票号拒绝「晚到的旧快照」。
      */
     private suspend fun flushNow(context: Context) {
-        // 快照与代数一起取：代数变了就说明「用户在这中间清了统计」，
-        // 这一份不能再写回去（见 [generation]）。
         val pending = synchronized(lock) {
             val agg = aggregate ?: return
             agg.prune()
-            agg.snapshot() to generation
+            PendingSnapshot(
+                snapshot = agg.snapshot(),
+                generation = commitGate.currentGeneration(),
+                ticket = commitGate.newTicket(),
+            )
         }
-        val snapshot = pending.first
-        val snapshotGeneration = pending.second
         try {
-            val json = withContext(Dispatchers.Default) { StatsCodec.encode(snapshot) }
+            val json = withContext(Dispatchers.Default) { StatsCodec.encode(pending.snapshot) }
             withContext(Dispatchers.IO) {
-                synchronized(commitLock) {
-                    // 代次校验与提交在同一把锁内完成：中间不会插进 clear 的删除，
-                    // 也不会出现「校验通过 → 被清空 → 旧快照写回」的窗口。
-                    if (synchronized(lock) { generation } != snapshotGeneration) return@withContext
-                    prefs(context).edit().putString(KEY_SNAPSHOT, json).commit()
-                }
+                // 代次校验、票号校验与写入在同一道闸内完成。
+                commitGate.commit(prefs(context), pending.generation, pending.ticket, json)
             }
         } catch (e: Exception) {
             // 写失败不影响统计继续累加：内存里还是完整的，下一次变更会再排一次落盘。
             Log.w(TAG, "flush stats failed", e)
         }
     }
+
+    /** 一份待落盘的快照 + 它在提交序里的位置。 */
+    private class PendingSnapshot(
+        val snapshot: StatsSnapshot,
+        val generation: Int,
+        val ticket: Long,
+    )
 }

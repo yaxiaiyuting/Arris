@@ -963,7 +963,28 @@ fun AudioVisualizerBars(
                 dash[i] = dashHalf
             }
             val step = size.width / (n - 1)
-            WaveformCurve.computeTangents(heights, n, step, tangents)
+            // ── v3.8.0 · K06：单泳道也要**连续滚动** ────────────────────────────────
+            //
+            // 旧实现这一支的 xShift 是常数 0（flow 分支则是「画布左移 phasePx、内层再补
+            // 回 phasePx」—— 两者精确相消，动的只有刷色）。于是历史窗口每 100ms 整条
+            // 跳一格，看不出「波形在横向流动」，只剩下逐格的形状变形。
+            //
+            // 现在与三泳道走**同一条时间轴**（同为 [WaveformStore.scrollPhase01]）与
+            // **同一套画法**（[BandScroll.POSITION_SHIFT]：取值保真、亚格相位交给几何平移）：
+            // 高度数组一个值都不插值，只把 x 整体左移 `phase × step`，并把 x 范围多延伸
+            // 一格补右侧缺口（[BandScroll.EXTRA_POINTS]，与三泳道同一契约）。
+            val phase = WaveformStore.scrollPhase01()
+            val scrollShift = -phase * step
+            // 容量守卫与三泳道一致：容不下就不延伸（少画最右一格，画面几乎无差别），
+            // 绝不让越界把播放崩掉。
+            val extend = n < heights.size && n < peaks.size && n < tangents.size
+            val drawCount = if (extend) n + BandScroll.EXTRA_POINTS else n
+            if (extend) {
+                heights[n] = heights[n - 1]
+                peaks[n] = peaks[n - 1]
+                if (n < dash.size) dash[n] = dash[n - 1]
+            }
+            WaveformCurve.computeTangents(heights, if (extend) n + 1 else n, step, tangents)
             val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
             val ageBrush = if (!flow && effects.timeOrderedTint) {
                 brushCache.age(size.width, ribbonColor.toArgb())
@@ -974,17 +995,19 @@ fun AudioVisualizerBars(
                 if (flowBrush != null) {
                     val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
                     translate(left = -phasePx) {
+                        // 画布左移 phasePx ⇒ 这里补回**滚动位移 + phasePx**：
+                        // 波形的净位移是 scrollShift（K06），刷色跟着画布走（与改前一致）。
                         drawWaveformCurve(
-                            heights, peaks, n, tangents, path, ribbonColor, flowBrush, effects,
-                            xShift = phasePx, step = step, firstX = 0f, heightPx = heightPx,
+                            heights, peaks, drawCount, tangents, path, ribbonColor, flowBrush, effects,
+                            xShift = scrollShift + phasePx, step = step, firstX = 0f, heightPx = heightPx,
                             minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                             breath = breath, dashHeights = dash,
                         )
                     }
                 } else {
                     drawWaveformCurve(
-                        heights, peaks, n, tangents, path, ribbonColor, ageBrush, effects,
-                        xShift = 0f, step = step, firstX = 0f, heightPx = heightPx,
+                        heights, peaks, drawCount, tangents, path, ribbonColor, ageBrush, effects,
+                        xShift = scrollShift, step = step, firstX = 0f, heightPx = heightPx,
                         minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                         breath = breath, dashHeights = dash,
                     )

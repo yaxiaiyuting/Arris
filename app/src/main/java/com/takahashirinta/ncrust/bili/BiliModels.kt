@@ -64,14 +64,30 @@ data class BiliTrack(
     val isAudioZone: Boolean get() = auid != null
 
     /**
-     * 本应用内部使用的数字 id。
+     * 本应用内部使用的数字 id（H14 起 **AU 与 AV 分区**）。
      *
-     * 两条腿共用一个标志位（[SourceIds.BILI_ID_FLAG]），所以「音频区 2478206」
-     * 与「视频 av2478206」会撞成同一个 id —— 这**不会**造成串台，因为
-     * 取链分派看的是 [sourceId] 而不是 id。但它意味着**不该**用 id 去区分这两条腿。
+     * ## 旧实现的问题
+     *
+     * 旧实现是 `SourceIds.biliId(auid ?: aid ?: 0L)` —— 两条腿共用**同一个**数字区间，
+     * 于是「音频区 au101」与「视频 av101」得到完全相同的数字 id。取链不会串（那看
+     * [sourceId]），但**所有只拿数字 id 当身份的地方**都会串：`TrackKey.equals` 只比较
+     * `(source, id)`，所以队列判重、收藏去重、`OfflineKeys` 的缓存键、歌词缓存键、
+     * 续播进度都会把这两条腿当成同一首歌。
+     *
+     * ## 做法：用位 60 给「视频腿」单独开一个区间
+     *
+     * `numericId = BILI_ID_FLAG or (AV_PARTITION_FLAG or aid)`，其中
+     * [AV_PARTITION_FLAG] = `1L shl 60`。音频区（auid）**保持原值不动** —— 那是历史
+     * 数据（收藏 / 队列 / 离线索引）里已经写下的 id，改它等于让老数据全部失联。
+     *
+     * 值域检查：[SourceIds.biliId] 要求入参 `< BILI_ID_FLAG`（2⁶¹），而
+     * `AV_PARTITION_FLAG + aid` 最大只有 2⁶⁰ + 2³² 量级，仍在区间内；
+     * 且 `biliRawId` 的掩码是「位 0..60」，所以它给出的是**分区后的**原值
+     * （AU/AV 两边因此都不会互相冒充）。
+     *
      * 返回 0 表示这个 id 造不出来（见 [SourceIds.biliId]），调用方应当整条丢掉。
      */
-    val numericId: Long get() = SourceIds.biliId(auid ?: aid ?: 0L)
+    val numericId: Long get() = numericIdOf(auid, aid)
 
     /**
      * 取链用的载荷（进 [SongItem.sourceId]）。
@@ -109,6 +125,30 @@ data class BiliTrack(
     }
 
     companion object {
+
+        /**
+         * 「视频腿」的数字身份分区位（H14）。
+         *
+         * 位 61 已被 [SourceIds.BILI_ID_FLAG] 占掉（B 站整体），位 62 是 QQ
+         * （[SourceIds.QQ_ID_FLAG]）。位 60 在 `biliRawId` 的掩码区间内，因此：
+         * - AU 与 AV 的 `numericId` **结构性不相交**（不再可能撞成同一首歌）；
+         * - 反解仍在一个区间内完成（见 [numericId] 的说明）。
+         */
+        const val AV_PARTITION_FLAG: Long = 1L shl 60
+
+        /**
+         * AU / AV 分区后的数字 id（H14 的唯一落点；[numericId] 就是它）。
+         *
+         * 音频区优先：同时给了 `auid` 与 `aid` 的曲目按音频区身份处理（取链也走音频区）。
+         */
+        fun numericIdOf(auid: Long?, aid: Long?): Long {
+            auid?.takeIf { it > 0L }?.let { return SourceIds.biliId(it) }
+            val rawAid = aid?.takeIf { it > 0L } ?: return 0L
+            // 分区后的值必须仍在 `SourceIds.biliId` 的值域里（`< BILI_ID_FLAG`）。
+            if (rawAid >= SourceIds.BILI_ID_FLAG - AV_PARTITION_FLAG) return 0L
+            return SourceIds.biliId(rawAid or AV_PARTITION_FLAG)
+        }
+
         /** 从 `au:<id>` / `bv:<bvid>:<cid>` 解析出载荷。解析不出返回 null（不猜）。 */
         fun parseSourceId(sourceId: String?): Payload? {
             val v = sourceId?.trim().orEmpty()

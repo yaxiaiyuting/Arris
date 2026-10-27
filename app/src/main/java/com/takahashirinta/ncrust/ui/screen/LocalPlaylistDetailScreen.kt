@@ -197,10 +197,15 @@ fun LocalPlaylistDetailScreen(
             confirmLabel = strings.localPlaylistDelete,
             onDismiss = { showDeleteConfirm = false },
             onConfirm = {
-                LocalPlaylistRepository.deletePlaylist(context, playlistKey)
-                showDeleteConfirm = false
-                Toast.makeText(context, strings.localPlaylistDeleted, Toast.LENGTH_SHORT).show()
-                onBack()
+                // 删除也可能写盘失败（Store 会回滚内存）：失败时不能退页、不能报"已删除"，
+                // 否则用户回到列表会看到它还在，或者以为丢了数据。
+                if (LocalPlaylistRepository.deletePlaylist(context, playlistKey)) {
+                    showDeleteConfirm = false
+                    Toast.makeText(context, strings.localPlaylistDeleted, Toast.LENGTH_SHORT).show()
+                    onBack()
+                } else {
+                    Toast.makeText(context, strings.localPlaylist.syncFailed, Toast.LENGTH_SHORT).show()
+                }
             },
         )
     }

@@ -207,9 +207,21 @@ internal fun PlayerCard(
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。
     val lyricsSweepQuality by playerViewModel.lyricsSweepQuality.collectAsStateWithLifecycle()
     // 收藏库状态: 当前歌是否已收藏(右下角 加号/对号 切换用)。切歌或操作后刷新。
-    // ⚠️ 这个 remember **有意留在 PlayerCard**：键是 `(song?.id, libraryTick)`，
+    // ⚠️ 这个 remember **有意留在 PlayerCard**：键里带着 `song?.id`，
     // 搬进持有者会让「切歌后重新查一次」的语义消失。
-    val isSongSaved = remember(song?.id, ui.libraryTick) {
+    //
+    // v3.8.0 · K05：键里再加 `ui.cardExpandedForInput`。
+    //
+    // 旧键只有 `(song?.id, libraryTick)`，而 `libraryTick` 只由**播放器自己的**收藏按钮递增
+    // （`PlayerCardExpanded`）。库页 / 搜索页长按收藏改的是同一份数据，却推不动这个 tick
+    // —— 而播放器缩成 mini bar 时**仍然挂载**，于是「在库页取消收藏当前歌 → 展开播放器」
+    // 会继续显示旧红心（数据没丢，只是这一格的心没刷新）。
+    //
+    // 折叠 → 展开必然是 `cardExpandedForInput` 的一次翻转，所以用它当键就能保证
+    // 「每次真正要看到这颗心的时候重新查一次」。真正的根治是让收藏仓库暴露一个
+    // 按身份的**可观察修订**（`LibraryManager` 现在没有），那属于跨文件改动，
+    // 记在交付说明里；这里先把「已经能看到错误状态」的路径堵掉。
+    val isSongSaved = remember(song?.id, ui.libraryTick, ui.cardExpandedForInput) {
         song?.let { LibraryManager.isSongSaved(context, it.id) } ?: false
     }
     // currentPosition / progress 是 4Hz 更新的 StateFlow，直接传引用给需要的子组件，
@@ -381,6 +393,28 @@ internal fun PlayerCard(
         return y >= cardTopPx
     }
 
+    // v3.8.0 · K04：命中几何必须**跟着最新一帧**走。
+    //
+    // 下面两个 `pointerInput` 的 key 只有 `hasSong` / `bigScreenActive` —— Compose 只在 key
+    // 变化时重启它们的协程，其余情况闭包**仍然捕获按下那一刻的 geo 与那三个判定函数**。
+    // 可是 geo 会随 `wideSplit`（宽屏开关歌词/队列，280ms 动画）与旋转变化：
+    // 宽屏打开歌词时 `panelBoundaryPx` 从「全宽」变成约 44%，旧闭包却仍按全宽判命中，
+    // 于是面板手势边界停在旧位置（Compose 1.7.6 的 `SuspendingPointerInputModifierNodeImpl.update`
+    // 只在 key 变化时 reset 运行协程，换 handler 引用不重启 —— 本机依赖字节码已核对）。
+    //
+    // 用 `rememberUpdatedState` 把「用哪一版判定」变成一次状态读：协程可以长命，
+    // 读到的几何永远是当前帧的。**不能**把 geo 放进 key —— 动画每帧都会变 key，
+    // 拖动会被反复取消（那正是 v1.7.0 修「只能拖动一次」时留下的教训）。
+    val isOverPanelNow = rememberUpdatedState<(Float, Float) -> Boolean> { y, x -> isOverPanel(y, x) }
+    val isOverCardVisibleNow = rememberUpdatedState<(Float, Float) -> Boolean> { y, x ->
+        isOverCardVisibleArea(y, x)
+    }
+    val isOverCollapsibleControlsNow = rememberUpdatedState<(Float) -> Boolean> { y ->
+        isOverCollapsibleControls(y)
+    }
+    /** 拖动总行程同样要读最新值（旋转/分栏变化会改 `contentHeightPx`）。 */
+    val totalDragDistanceNow = rememberUpdatedState(totalDragDistancePx)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -406,7 +440,9 @@ internal fun PlayerCard(
                         val event = awaitPointerEvent(PointerEventPass.Main)
                         if (progress.value > 0.99f) {
                             val pos = event.changes.firstOrNull()?.position
-                            if (pos == null || !isOverCardVisibleArea(pos.y, pos.x)) {
+                            val visible = pos != null &&
+                                isOverCardVisibleNow.value(pos.y, pos.x)
+                            if (!visible) {
                                 event.changes.forEach { it.consume() }
                             }
                         }
@@ -425,9 +461,10 @@ internal fun PlayerCard(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     // 面板内纵向手势完全交给内部 LazyColumn/进度条,根节点不消费任何事件。
-                    if (isOverPanel(down.position.y, down.position.x)) return@awaitEachGesture
+                    // 三个判定都经 rememberUpdatedState 读最新几何（见上面的 K04 注释）。
+                    if (isOverPanelNow.value(down.position.y, down.position.x)) return@awaitEachGesture
                     // 底部控制栏区域同理让路：向上拖 = 收起控制栏（v1.4.0 · A）。
-                    if (isOverCollapsibleControls(down.position.y)) return@awaitEachGesture
+                    if (isOverCollapsibleControlsNow.value(down.position.y)) return@awaitEachGesture
                     val startProgress = progress.value
                     val pointer = down.id
                     val slop = viewConfiguration.touchSlop
@@ -455,7 +492,8 @@ internal fun PlayerCard(
                             // 不补这一段就会出现「划了但卡片没动」，松手必然弹回。
                             val overshoot = acc - (if (acc > 0f) slop else -slop)
                             if (overshoot != 0f) {
-                                dragProgress = (dragProgress - overshoot / totalDragDistancePx).coerceIn(0f, 1f)
+                                val travel = totalDragDistanceNow.value
+                                dragProgress = (dragProgress - overshoot / travel).coerceIn(0f, 1f)
                                 val snapshot = dragProgress
                                 coroutineScope.launch { progress.snapTo(snapshot) }
                             }
@@ -481,7 +519,8 @@ internal fun PlayerCard(
                         lastMs = change.uptimeMillis
                         val dragAmount = change.position.y - change.previousPosition.y
                         if (dragAmount != 0f) {
-                            dragProgress = (dragProgress - dragAmount / totalDragDistancePx).coerceIn(0f, 1f)
+                            val travel = totalDragDistanceNow.value
+                            dragProgress = (dragProgress - dragAmount / travel).coerceIn(0f, 1f)
                             val snapshot = dragProgress
                             coroutineScope.launch { progress.snapTo(snapshot) }
                         }
@@ -491,8 +530,19 @@ internal fun PlayerCard(
                     // progress 与像素的换算是已知的（totalDragDistancePx），换算回来既准又稳。
                     val elapsedMs = lastMs - dragStartMs
                     val movedProgress = dragProgress - startProgress
-                    val velocityY = if (elapsedMs > 0L)
-                        movedProgress * totalDragDistancePx / (elapsedMs / 1000f) else 0f
+                    // v3.8.0 · J12：**必须反号**。
+                    //
+                    // `dragProgress` 是 progress 域的量：**向上拖时它增加**（手指上移 ⇒
+                    // `dragAmount < 0` ⇒ `dragProgress += …`）。而 `PlayerDragSnap` 的
+                    // `velocityY` 约定是**屏幕坐标**（y 向下为正，向上为负）。
+                    // 旧实现直接把 progress 域的增量当屏幕速度传进去，符号正好相反：
+                    // 向上快甩被当成「向下甩」⇒ 收起态弹回收起、控制栏甚至把已经越过的
+                    // 行程阈值再翻回去（探针：上甩 40px/10ms 传入 +4000，正确应为 -4000）。
+                    val velocityY = PlayerCardDragSnap.screenVelocityY(
+                        progressDelta = movedProgress,
+                        travelPx = totalDragDistanceNow.value,
+                        elapsedMs = elapsedMs,
+                    )
                     coroutineScope.launch {
                         // v1.7.0 · P0：行程阈值 + 甩动（原实现要 progress 过中点 = 340dp，用户拖不动）
                         val target = PlayerCardDragSnap.target(startProgress, dragProgress, velocityY)
@@ -973,6 +1023,11 @@ internal fun controlsCollapseDragModifier(
         onDragStart = {
             from = controlsCollapse.value
             current = from
+            // v3.8.0 · J12：**每次手势都从零计时**。旧实现只在第一次拖动时写 startMs
+            // （`if (startMs == 0L)`），之后的手势把「上一次与本次之间的空闲时间」
+            // 也算进耗时 ⇒ 速度被系统性摊薄，甩动判据时灵时不灵。
+            startMs = 0L
+            lastMs = 0L
         },
         onVerticalDrag = { change, dragAmount ->
             change.consume()
@@ -989,7 +1044,15 @@ internal fun controlsCollapseDragModifier(
             val elapsedMs = lastMs - startMs
             val h = if (controlsHeightProvider() > 1f) controlsHeightProvider()
                     else with(density) { 200.dp.toPx() }
-            val velocityY = if (elapsedMs > 0L) (current - from) * h / (elapsedMs / 1000f) else 0f
+            // v3.8.0 · J12：**必须反号**。`current` 是「收起进度」，**向上推时它增加**，
+            // 而 [ControlsDragSnap.target] 的 velocityY 约定是屏幕坐标（向上为负）。
+            // 旧实现没反号 ⇒ 向上快甩被判成「向下甩」= 恢复，把已经收起的控制栏翻回来
+            // （探针：上拖 120px/50ms 传入 +2400，正确应为 -2400）。
+            val velocityY = PlayerCardDragSnap.screenVelocityY(
+                progressDelta = current - from,
+                travelPx = h,
+                elapsedMs = elapsedMs,
+            )
             coroutineScope.launch {
                 // 方向敏感吸附：向上推（收起）要 12% 行程；向下拉（恢复）只要 5%。
                 // 恢复方向阈值刻意很小：收起会挡住内容、需要"故意"，而恢复只是把控制栏

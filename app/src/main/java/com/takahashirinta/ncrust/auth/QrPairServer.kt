@@ -79,7 +79,12 @@ class QrPairServer(
         if (length !in 1..65_535) return false
         val data = ByteArray(length)
         input.readFully(data)
-        val cookie = QrPair.decrypt(pairSecret, unikey, data) ?: return false
+        // H23：先验 MAC（内容完整性），再解密。校验不过直接丢弃，不做任何降级尝试。
+        val cipherText = QrPair.openPayload(pairSecret, unikey, data) ?: run {
+            android.util.Log.w("QrPairServer", "handoff rejected: payload MAC mismatch")
+            return false
+        }
+        val cookie = QrPair.decrypt(pairSecret, unikey, cipherText) ?: return false
         if (!cookie.contains("MUSIC_U=")) return false
         scope.launch(Dispatchers.Main) { onCookie(cookie) }
         return true

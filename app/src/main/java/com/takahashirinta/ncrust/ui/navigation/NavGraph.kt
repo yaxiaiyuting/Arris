@@ -21,9 +21,39 @@ import com.takahashirinta.ncrust.ui.settings.SettingsGroup
 import com.takahashirinta.ncrust.ui.settings.SettingsGroupRoute
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.PageTransitionSetting
-import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
+/**
+ * 路由参数的**编解码边界**（v3.8.0 · H08）。
+ *
+ * 导航库（navigation-common 2.8.5）在把路径参数放进 `arguments` **之前**就已经解码过了：
+ * `NavDeepLink.getMatchingArguments` 对每个路径参数执行 `android.net.Uri.decode(...)`，
+ * 然后才交给 `parseArgument`。本机 AAR 的 `classes.jar` 反汇编可以逐条看到那次调用。
+ *
+ * 所以：
+ *  - **写**路由时编码一次（[NavRoutes] 里的 `encodePathSegment`）；
+ *  - **读**参数时**不再解码**（`backStackEntry.arguments?.getString(...)` 直接就是原文）。
+ *
+ * 旧实现在读侧又调了一次 `URLDecoder.decode`，于是：
+ *  - 名字里带 `%`（如 `100% Love`）时，第一次解码得到 `100% Love`，
+ *    第二次把 `% L` 当成转义序列 ⇒ 抛 `IllegalArgumentException`（导航直接崩）；
+ *  - 名字里带 `+`（如 `A+B`）时，form 解码器把 `+` 当空格 ⇒ 变成 `A B`。
+ *
+ * 这也是写侧必须用**路径**编码而不是 form 编码的原因：`URLEncoder.encode` 把空格
+ * 编成 `+`，而 `Uri.decode` 不认 `+` ⇒ `A B` 会读回 `A+B`。见 [NavRouteCodec.encodePathSegment]。
+ */
+internal object NavRouteCodec {
+
+    /**
+     * 路径段编码：`URLEncoder` 的 `%XX` + UTF-8 语义是对的，只有空格被编成 `+`
+     * 这一条不适配 `Uri.decode`。所以只把 `+` 换成 `%20`。
+     *
+     * 纯 JVM（不碰 `android.net.Uri`），因此编解码契约可以在普通单测里钉住。
+     */
+    fun encodePathSegment(value: String): String =
+        URLEncoder.encode(value, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+}
 
 object NavRoutes {
     const val HOME = "home"
@@ -100,7 +130,7 @@ object NavRoutes {
     fun album(albumId: Long) = "album/$albumId"
     fun artist(artistId: Long) = "artist/$artistId"
     fun playlist(id: Long, name: String = "", coverUrl: String = "") =
-        "playlist/$id/${URLEncoder.encode(name, StandardCharsets.UTF_8.toString())}/${URLEncoder.encode(coverUrl, StandardCharsets.UTF_8.toString())}"
+        "playlist/$id/${NavRouteCodec.encodePathSegment(name)}/${NavRouteCodec.encodePathSegment(coverUrl)}"
     fun song(songId: Long) = "song/$songId"
 
     /**
@@ -123,7 +153,7 @@ object NavRoutes {
      * 页面就只能靠猜；而这里能拿到，所以带过来。
      */
     fun artist(source: MusicSource, id: String, name: String = "") =
-        "artist/${source.key}/$id/" + URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
+        "artist/${source.key}/$id/" + NavRouteCodec.encodePathSegment(name)
 
     /** v2.6.1：直接吃一个身份决策对象，避免调用方把三个字段拆开再拼错。 */
     fun artist(target: com.takahashirinta.ncrust.source.ArtistNav.Direct) =
@@ -136,13 +166,13 @@ object NavRoutes {
     fun song(source: MusicSource, id: String) = "song/${source.key}/$id"
 
     fun qqPlaylistDetail(id: String, ownerId: String, dirId: Long, name: String) =
-        "qqplaylist/$id/$ownerId/$dirId/" + URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
+        "qqplaylist/$id/$ownerId/$dirId/" + NavRouteCodec.encodePathSegment(name)
 
     /** v2.3.0 · B：本地歌单路由。三段都做 URL 编码 —— `PlaylistKey.id` 可能是 `local:...`。 */
     fun localPlaylist(sourceKey: String, ownerId: String, playlistId: String): String =
-        "localplaylist/" + URLEncoder.encode(sourceKey, StandardCharsets.UTF_8.toString()) +
-            "/" + URLEncoder.encode(ownerId, StandardCharsets.UTF_8.toString()) +
-            "/" + URLEncoder.encode(playlistId, StandardCharsets.UTF_8.toString())
+        "localplaylist/" + NavRouteCodec.encodePathSegment(sourceKey) +
+            "/" + NavRouteCodec.encodePathSegment(ownerId) +
+            "/" + NavRouteCodec.encodePathSegment(playlistId)
 }
 
 @Composable
@@ -307,10 +337,9 @@ fun MainNavGraph(
         ) { backStackEntry ->
             val sourceKey = backStackEntry.arguments?.getString("source") ?: return@composable
             val artistId = backStackEntry.arguments?.getString("artistId") ?: return@composable
-            val artistName = URLDecoder.decode(
-                backStackEntry.arguments?.getString("artistName") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
+            // 名字已被导航库解码过**一次**（见 [NavRouteCodec]），这里直接取用 —— 再解一次
+            // 会把 `+` 变成空格、把含 `%` 的名字解崩。
+            val artistName = backStackEntry.arguments?.getString("artistName") ?: ""
             ArtistDetailScreen(
                 sourceKey = sourceKey,
                 artistId = artistId,
@@ -336,15 +365,10 @@ fun MainNavGraph(
             )
         ) { backStackEntry ->
             val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: return@composable
-            // ← 解码
-            val name = URLDecoder.decode(
-                backStackEntry.arguments?.getString("playlistName") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
-            val cover = URLDecoder.decode(
-                backStackEntry.arguments?.getString("playlistCoverUrl") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
+            // 名字与封面 URL 都由导航库解码过一次（见 [NavRouteCodec]）：直接取用。
+            // 封面 URL 里必然带 `:` / `/` / `&`，二次解码会改坏它。
+            val name = backStackEntry.arguments?.getString("playlistName") ?: ""
+            val cover = backStackEntry.arguments?.getString("playlistCoverUrl") ?: ""
             PlaylistDetailScreen(
                 playlistId = playlistId,
                 playlistName = name,
@@ -371,10 +395,8 @@ fun MainNavGraph(
             val pid = backStackEntry.arguments?.getString("playlistId") ?: return@composable
             val owner = backStackEntry.arguments?.getString("ownerId") ?: return@composable
             val dirId = backStackEntry.arguments?.getLong("dirId") ?: 0L
-            val name = URLDecoder.decode(
-                backStackEntry.arguments?.getString("playlistName") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
+            // 已由导航库解码过一次（见 [NavRouteCodec]），不再解第二次。
+            val name = backStackEntry.arguments?.getString("playlistName") ?: ""
             QqPlaylistDetailScreen(
                 playlistId = pid,
                 ownerId = owner,
@@ -397,18 +419,11 @@ fun MainNavGraph(
                 navArgument("playlistId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val sourceKey = URLDecoder.decode(
-                backStackEntry.arguments?.getString("source") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
-            val owner = URLDecoder.decode(
-                backStackEntry.arguments?.getString("ownerId") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
-            val pid = URLDecoder.decode(
-                backStackEntry.arguments?.getString("playlistId") ?: "",
-                StandardCharsets.UTF_8.toString()
-            )
+            // 三段都是导航库解码过的值（见 [NavRouteCodec]）：`playlistId` 可能是
+            // `local:...` 这类带冒号的串，二次解码会把它改坏。直接取用。
+            val sourceKey = backStackEntry.arguments?.getString("source") ?: ""
+            val owner = backStackEntry.arguments?.getString("ownerId") ?: ""
+            val pid = backStackEntry.arguments?.getString("playlistId") ?: ""
             LocalPlaylistDetailScreen(
                 playlistKey = com.takahashirinta.ncrust.source.PlaylistKey(
                     source = com.takahashirinta.ncrust.source.MusicSource.fromKey(sourceKey),

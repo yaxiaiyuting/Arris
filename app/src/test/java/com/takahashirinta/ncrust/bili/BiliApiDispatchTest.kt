@@ -155,10 +155,13 @@ class BiliApiDispatchTest {
         assertEquals("真实响应必须解析出两条（映射层本身没问题）", 2, songs.size)
         assertTrue("音源必须是 bilibili", songs.all { it.musicSource == MusicSource.BILIBILI })
         assertTrue("id 必须带 B 站标志位（位 61）", songs.all { SourceIds.isBiliId(it.id) })
+        // H14：视频腿（BV/AV）的数字身份有**独立分区**（`BiliTrack.AV_PARTITION_FLAG`，位 60），
+        // 不再与音频区（auid）共用同一区间。旧断言写的是裸 `biliId(aid)`，钉的正是
+        // 「AU 101 与 AV 101 是同一首歌」那个缺陷。
         assertEquals(
             listOf(
-                "bilibili:${SourceIds.biliId(117336711367421L)}",
-                "bilibili:${SourceIds.biliId(114260223006676L)}",
+                "bilibili:${SourceIds.biliId(117336711367421L or BiliTrack.AV_PARTITION_FLAG)}",
+                "bilibili:${SourceIds.biliId(114260223006676L or BiliTrack.AV_PARTITION_FLAG)}",
             ),
             songs.map { it.trackKey },
         )

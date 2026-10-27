@@ -154,13 +154,32 @@ class WaveformCurveTest {
         for (v in out0) assertEquals(9f, v, 0f)
     }
 
+    /**
+     * v3.8.0 · J13：被夹掉的部分**必须清零**，而不是「保持调用方原值」。
+     *
+     * 旧断言是 `-1f 保持不动`，理由是「`out` 里超出 `count` 的槽位属于调用方」。
+     * 那条理由对**`count` 之外**成立（见下一条用例），但这里的槽位在 `count` **之内**
+     * ——调用方声明了 116 个点、绘制层就会画 116 个点，而 `MAX_POINTS` 只允许算 96 个。
+     * 「保持不动」在真实渲染里意味着**用上一帧的旧切线去画这一帧的后 20 段**
+     * （生产上就是 85 点被夹到 64 时的那 21 段，探针测到峰值 1.0243 越界）。
+     * 所以夹断之后只能是 0（退化成折线，几何上绝不会越界）。
+     */
     @Test
-    fun `点数上限 MAX_POINTS 之外一律忽略`() {
+    fun `超出 MAX_POINTS 但在 count 之内的槽位必须清零而不是留旧值`() {
         val y = FloatArray(WaveformCurve.MAX_POINTS + 20) { it.toFloat() }
         val out = FloatArray(y.size) { -1f }
         WaveformCurve.computeTangents(y, y.size, 1f, out)
         for (i in WaveformCurve.MAX_POINTS until out.size) {
-            assertEquals("超出 MAX_POINTS 的槽位必须保持不动", -1f, out[i], 0f)
+            assertEquals("被夹断的槽位必须是 0（折线），不能留上一帧的切线", 0f, out[i], 0f)
+        }
+    }
+
+    @Test
+    fun `count 之外的槽位不属于本次调用 —— 保持不动`() {
+        val out = FloatArray(8) { -1f }
+        WaveformCurve.computeTangents(FloatArray(4) { it.toFloat() }, 4, 1f, out)
+        for (i in 4 until out.size) {
+            assertEquals("调用方没声明的槽位不该被写", -1f, out[i], 0f)
         }
     }
 

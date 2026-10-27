@@ -41,7 +41,8 @@ class LocalSyncRevisionAuditProbe {
     @Test fun inFlightSyncMustNotOverwriteANewUserDeletionTombstone() = runBlocking {
         val context = MemoryContext()
         val key = PlaylistKey(MusicSource.QQMUSIC, "333", "10001")
-        val meta = LocalPlaylistStore.createPlaylist(context, key, "fixture", 1)
+        // H09 之后 createPlaylist 可空：夹具不注入写盘失败，因此这里必然拿到对象。
+        val meta = LocalPlaylistStore.createPlaylist(context, key, "fixture", 1)!!
         fun song(n: Long) = SongItem(SourceIds.qqId(n, "mid-$n"), "fixture-$n", null, null, 200000,
             source = "qqmusic", sourceId = "mid-$n", mediaId = "file-$n")
         val first = song(101)

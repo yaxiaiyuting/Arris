@@ -639,6 +639,10 @@ class PlaybackService : MediaLibraryService() {
                 ) {
                     publishProgressNow()
                     updatePlaybackState()
+                    // v3.7.9 · R4：桌面卡片也要跟着跳。暂停态没有 ticker，这里是
+                    // 「暂停中拖动进度条」唯一的推送时机；闸门只放行位置真的变了的那一次，
+                    // 所以不会把暂停态的节流目标破掉。
+                    pushWidgetUpdate()
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -940,6 +944,9 @@ class PlaybackService : MediaLibraryService() {
                 val pos = intent.getLongExtra("position", 0L)
                 player.seekTo(pos)
                 publishProgressNow()
+                // v3.7.9 · R4：与 onPositionDiscontinuity 那条并列的显式 seek 入口
+                //（UI 进度条 / 歌词点按）。两条都调不会重复推 —— 位置指纹相同。
+                pushWidgetUpdate()
             }
             "previous" -> onPlaybackPrevious?.invoke()
             "next" -> onPlaybackNext?.invoke()
@@ -2015,11 +2022,13 @@ class PlaybackService : MediaLibraryService() {
      *
      * ## 为什么调用点这么少
      *
-     * 本方法被 `updateNotify()`（播放/暂停切换、切歌、跨歌词行）与
-     * `startProgressUpdates()` 的 2Hz tick 调用 —— 也就是**调用频率远高于推送频率**。
+     * 本方法被 `updateNotify()`（播放/暂停切换、切歌、跨歌词行）、`startProgressUpdates()`
+     * 的 2Hz tick 调用，另有两条 seek 路径（`onPositionDiscontinuity` 的暂停态分支、
+     * `"seek"` action）—— 也就是**调用频率远高于推送频率**。
      * 「该不该真的推」全部收敛在 `WidgetPushGate`（纯逻辑 + JVM 单测）里：
-     * 只有播放/暂停切换、切歌、整数秒变化、尺寸变化、封面有无变化五种情况会漏到桌面上，
-     * 且**暂停时一律不推**。调用方不需要自己算时机，也不必怕多调。
+     * 只有播放/暂停切换、切歌、位置（整数秒）变化、尺寸变化、封面有无变化五种情况会漏到桌面上。
+     * 位置判据对暂停态同样生效（v3.7.9 · R4）：暂停时位置自己不会走，所以「空闲零推送」
+     * 依旧成立，而用户拖动进度条这种显式 seek 会推一次。调用方不需要自己算时机，也不必怕多调。
      *
      * 另一条硬约束：桌面上没有卡片时 `NcrustWidgetProvider.push` 会立刻返回，
      * 连一次 Binder 都不发（见 WidgetPresencePolicy）。

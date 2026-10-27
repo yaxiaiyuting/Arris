@@ -922,6 +922,9 @@ class SearchViewModel : ViewModel() {
     }
 
     fun clearQuery() {
+        // J09：在途请求回来后仍会写 `_songs` / `_sourceCounts`。清空输入必须同时
+        // 取消这一轮并推进"结果归属"，否则用户清空后屏幕上又冒出上一次的搜索结果。
+        searchJob?.cancel()
         _query.value = ""
         clearResults()
     }

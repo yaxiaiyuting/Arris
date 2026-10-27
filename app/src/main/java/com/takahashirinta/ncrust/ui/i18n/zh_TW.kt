@@ -645,7 +645,7 @@ scanConnecting = "正在連接平板…",
             regionLocked = "版權方限制，目前地區無法播放",
             network = "網路異常，請稍後重試",
             unknown = "暫時無法播放這首歌，請稍後重試",
-            switchSource = { other -> "%s 沒有這首歌，可切到 " + other },
+            switchSource = { other -> "沒有這首歌，可切到 " + other },
         ),
 
         share = ShareStrings(
