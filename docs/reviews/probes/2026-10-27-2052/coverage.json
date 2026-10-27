@@ -1,0 +1,1503 @@
+{
+  "review": "2026-10-27 20:52 Asia/Shanghai manual continuation",
+  "head": "f09b0ed",
+  "application_baseline": "15237f8c06ba160632c9096101386f821b85a723",
+  "definition": "full_executable_code: 实际执行代码通读，跳过注释/import/空行；partial_call_chain: 实际局部阅读。不能视作动态验证或项目完成率。",
+  "files": [
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt",
+      "regions": [
+        [
+          1,
+          155
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 155,
+      "sha256": "60202f0f9c45d89a4ee879eb782cff85077172441785efb72cb5c2a366187e67"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/FireworkPainter.kt",
+      "regions": [
+        [
+          1,
+          48
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 48,
+      "sha256": "7ecba90d459ffd14be8c4e5307ad04624d831a1431005fbe607b2349d751b81b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AboutScreen.kt",
+      "regions": [
+        [
+          1,
+          259
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 259,
+      "sha256": "f146dce716469c0f3ee30fa7e9b57f11b214e908bd5c61d5ae6ef795dc09e86e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqDes.kt",
+      "regions": [
+        [
+          1,
+          489
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 489,
+      "sha256": "a44585c9e34dc105fc3d08ceddb0e3de724ccbe4f99f0b880b535f05c2a7a823"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/CelebrationStrings.kt",
+      "regions": [
+        [
+          1,
+          87
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 87,
+      "sha256": "7856b9934c17e71e1c19764d3f67a597df4e5e086ae965ef8a39c18c55cfc00b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerStrings.kt",
+      "regions": [
+        [
+          1,
+          151
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 151,
+      "sha256": "15b1f326fc76b70aac4060e9b0e17dc6042af27325738cdae7f694cba339b611"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineAudioCache.kt",
+      "regions": [
+        [
+          1,
+          325
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 325,
+      "sha256": "4f549f8e42fe1ee012e004647bf221c7e7d5d46f0ab97337043713208b00c4e4"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineLibrary.kt",
+      "regions": [
+        [
+          1,
+          324
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 324,
+      "sha256": "5bbc1204194a6686f8affe5c8bf7f46b52e1630885688108d33fa2008d1c1141"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineUrlStore.kt",
+      "regions": [
+        [
+          1,
+          204
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 204,
+      "sha256": "e4122677621ca5a49a1e013b215887ed0d71b24f1b168e1bffe756fc02cf12e2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/OfflineCacheOverlay.kt",
+      "regions": [
+        [
+          285,
+          332
+        ],
+        [
+          574,
+          609
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 609,
+      "sha256": "77f58fa186728ad3412e433784fe29524db5898ff824614fc5934a89e0ffea8b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt",
+      "regions": [
+        [
+          1,
+          240
+        ],
+        [
+          531,
+          555
+        ],
+        [
+          593,
+          849
+        ],
+        [
+          1241,
+          1804
+        ],
+        [
+          1853,
+          1968
+        ],
+        [
+          2002,
+          2169
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 2217,
+      "sha256": "98cefee0115a9d847cfd0717db2c6fb93f5e63dcfdc0dc61e5e3029f09f113e8"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqApi.kt",
+      "regions": [
+        [
+          1,
+          144
+        ],
+        [
+          302,
+          353
+        ],
+        [
+          498,
+          522
+        ],
+        [
+          618,
+          1037
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1037,
+      "sha256": "7bc611f8037b7bd10be2ea324f8def4f846f37ac51e917c7a41e66b89b087b3d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqCaptchaOverlay.kt",
+      "regions": [
+        [
+          1,
+          210
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 210,
+      "sha256": "1e0935eea3a3d420ae4f9026c862e5bf87fc307551c81c17d43e3ab68c0201e0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqPhoneLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          54
+        ],
+        [
+          70,
+          365
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 365,
+      "sha256": "a78da1911049aabc5aa077ff48460333ec295d9fb54abafdda2f3e34e56275af"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt",
+      "regions": [
+        [
+          2500,
+          2545
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 3171,
+      "sha256": "b4a9fa4a5825ff733c14307134518f3aa584294640b80160119324a470b6684f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt",
+      "regions": [
+        [
+          1,
+          262
+        ],
+        [
+          456,
+          741
+        ],
+        [
+          754,
+          802
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 802,
+      "sha256": "01674676e5c62bd84253e23d0acb7d855d2ee03f5fcae91a89297e0fb89cf405"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliModels.kt",
+      "regions": [
+        [
+          1,
+          49
+        ],
+        [
+          111,
+          646
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 646,
+      "sha256": "4e95fd7e8bbb428a19bfd5aca38b51601f8bda9aada3a6491be91768a4f2a068"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SearchScreen.kt",
+      "regions": [
+        [
+          1,
+          207
+        ],
+        [
+          234,
+          425
+        ],
+        [
+          448,
+          654
+        ],
+        [
+          682,
+          1216
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1216,
+      "sha256": "d10dcfeab09290f4a6acf3324d92c3f7a456149489c9e2cf0baad061a87b8250"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/HomeScreen.kt",
+      "regions": [
+        [
+          1,
+          94
+        ],
+        [
+          312,
+          869
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 869,
+      "sha256": "367eecb56b25ea8666ec4f65f8fd3b03bfd75505f6872495a38687ebb114f611"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryPlaylistsTab.kt",
+      "regions": [
+        [
+          1,
+          123
+        ],
+        [
+          191,
+          329
+        ],
+        [
+          389,
+          838
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 838,
+      "sha256": "0d62f8f38e7d4ad0d018ef3672de067130f3e27390f3bc45c048775f3a99b35e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/NcrustLyricsPanel.kt",
+      "regions": [
+        [
+          1,
+          714
+        ],
+        [
+          740,
+          809
+        ],
+        [
+          838,
+          960
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 960,
+      "sha256": "6a208c53f3f3a20566aaa26621412af8e676acf09596c6d2b96ae066bf7d3b9b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqCatalog.kt",
+      "regions": [
+        [
+          1,
+          123
+        ],
+        [
+          141,
+          188
+        ],
+        [
+          316,
+          387
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 387,
+      "sha256": "1d529d07f1541fe27b0cfba67b423865d44b52067875bfe04d78bb381971ab60"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/PlaylistApi.kt",
+      "regions": [
+        [
+          1,
+          134
+        ],
+        [
+          307,
+          338
+        ],
+        [
+          369,
+          400
+        ],
+        [
+          493,
+          529
+        ],
+        [
+          704,
+          705
+        ],
+        [
+          815,
+          1071
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1071,
+      "sha256": "2cb40ae981baf8c17f2df8dd835656974efbdd1537eb4beec895585af39a0af4"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/ArtistDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          75
+        ],
+        [
+          456,
+          526
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 526,
+      "sha256": "c613fb3e999b9e240740b4d5917a85912303d707e1aeee56658294c0898511d6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsRegistry.kt",
+      "regions": [
+        [
+          1,
+          918
+        ],
+        [
+          946,
+          1286
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1286,
+      "sha256": "39c7ee61b2adc6111bbde031e5fef6a99449e7126f14d4d4f13362a6704424ec"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliQrLogin.kt",
+      "regions": [
+        [
+          1,
+          247
+        ],
+        [
+          325,
+          413
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 413,
+      "sha256": "8a5ac09c847b45ee59f26c0bb0741542029ef8923382ccda39a9b3346e57f2a9"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliAuthStore.kt",
+      "regions": [
+        [
+          1,
+          36
+        ],
+        [
+          120,
+          145
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 371,
+      "sha256": "42150edb5c19954a24c47119c259d822c3dcf7ef31f02d7cb90cc2be7e74282d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliQrLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          77
+        ],
+        [
+          111,
+          129
+        ],
+        [
+          201,
+          331
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 331,
+      "sha256": "ade34dc0dd3f76f9b90559b40df8ea5ff8b39a7c568a9ad46cc9b8f2510d2753"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliSourceProvider.kt",
+      "regions": [
+        [
+          1,
+          109
+        ],
+        [
+          150,
+          256
+        ],
+        [
+          359,
+          450
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 450,
+      "sha256": "d2d22aa5cc76e52e85c955c0f0d5ea11a0ccc29e0253c749a5b128920631a415"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqTokenRefresher.kt",
+      "regions": [
+        [
+          1,
+          219
+        ],
+        [
+          351,
+          369
+        ],
+        [
+          516,
+          540
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 540,
+      "sha256": "c17cf15ae0e84b510ea38f7e769028dfdb2ff0dd66910049f0276df9724128ce"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqAuthStore.kt",
+      "regions": [
+        [
+          1,
+          104
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 203,
+      "sha256": "8689a8591d8bdb19ee07d62022fb4206e17de5ca7e51dc556512c2a8299258ea"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqCookie.kt",
+      "regions": [
+        [
+          1,
+          129
+        ],
+        [
+          161,
+          176
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 176,
+      "sha256": "3461af75855ec6eefddac6d1c6d1b0c80e8d94d589fe4f61028d8ff17fa76503"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRequests.kt",
+      "regions": [
+        [
+          1,
+          47
+        ],
+        [
+          64,
+          451
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 451,
+      "sha256": "121f2f3765a7d30ac3c2f4255389bac65a1752e4494565cec35027bf5c844dd7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqClient.kt",
+      "regions": [
+        [
+          1,
+          55
+        ],
+        [
+          251,
+          324
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 509,
+      "sha256": "8bca951fee90e3244956a434defe7e4381a3f308ff2b06f07fe99acd708bbded"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/LibraryManager.kt",
+      "regions": [
+        [
+          1,
+          124
+        ],
+        [
+          326,
+          429
+        ],
+        [
+          626,
+          718
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 718,
+      "sha256": "22019d192013ef5826758e601eed16bebe6a78e1f374b59c38ea2776903105ba"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistRepository.kt",
+      "regions": [
+        [
+          1,
+          39
+        ],
+        [
+          206,
+          237
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 314,
+      "sha256": "1ea6ad93a509347383693b5ba33cc4cb07051f23b761616b4553fd98f4160584"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt",
+      "regions": [
+        [
+          1,
+          80
+        ],
+        [
+          97,
+          234
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 249,
+      "sha256": "93cf2ad5f602ee708091fcc3d27f2f0b76219076c24317b8f896cdb48e343f0e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryScreen.kt",
+      "regions": [
+        [
+          1,
+          89
+        ],
+        [
+          256,
+          292
+        ],
+        [
+          297,
+          311
+        ],
+        [
+          376,
+          445
+        ],
+        [
+          463,
+          778
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 778,
+      "sha256": "571bfba32e31dc58a32b7b79385765fc340c5a5b6d281b8784310143163e2881"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SourceRouter.kt",
+      "regions": [
+        [
+          1,
+          114
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 156,
+      "sha256": "2788d7ce46694b312f636d72898000cc0870bb2a95dfbbd1001cfd66ebc56988"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqMusicSourceProvider.kt",
+      "regions": [
+        [
+          1,
+          42
+        ],
+        [
+          84,
+          118
+        ],
+        [
+          170,
+          218
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 218,
+      "sha256": "c0407be1164a189ee23551de28ad60698ff0fced96a04297f84e8158abd684c1"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistModels.kt",
+      "regions": [
+        [
+          1,
+          139
+        ],
+        [
+          343,
+          348
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 348,
+      "sha256": "1e7b1a6c64a76bc79e091bad10100210475a10b1c023688ded970f5f6ae8d37a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SearchHistoryCodec.kt",
+      "regions": [
+        [
+          1,
+          124
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 284,
+      "sha256": "e009c16e84325fbfba7edf756040ac884267093ced0597f4d3beb55bf03f66eb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/MatchCacheStore.kt",
+      "regions": [
+        [
+          1,
+          84
+        ],
+        [
+          166,
+          239
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 239,
+      "sha256": "d5f1961d8b7f08c1ae3c118f01a17e5aef2d8e4f4fe6d8e8afe83ce398967c6b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateDownloader.kt",
+      "regions": [
+        [
+          1,
+          126
+        ],
+        [
+          311,
+          346
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 346,
+      "sha256": "1c566a44a73c85d86ddc021a678acc9d8a714c14c58b000f98af3f50cb9a4a10"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateService.kt",
+      "regions": [
+        [
+          1,
+          59
+        ],
+        [
+          306,
+          317
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 485,
+      "sha256": "2caffbaf9b92422f2680ae7a6cb027bb804ba0a0649dd84ef4d7a394619f2e60"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/UpdateScreen.kt",
+      "regions": [
+        [
+          1,
+          77
+        ],
+        [
+          219,
+          479
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 479,
+      "sha256": "3f5b4250e0ebc8cd2acc4e28e7e179e13a8646257043ec0a8fd77b88e3d65909"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/AmllTtmlClient.kt",
+      "regions": [
+        [
+          1,
+          74
+        ],
+        [
+          231,
+          243
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 243,
+      "sha256": "c142eb3710d659e257aa3c27bb4f4089e761da12412b8576437f1ba8f9915c57"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/ConnectionWarmup.kt",
+      "regions": [
+        [
+          1,
+          55
+        ],
+        [
+          171,
+          178
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 178,
+      "sha256": "6be9789a361380aa1fff25c15fd700f322ad8700961b865e13bb86448ee4a776"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsAccountSection.kt",
+      "regions": [
+        [
+          181,
+          195
+        ],
+        [
+          217,
+          754
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 754,
+      "sha256": "36ec71f8abb500d5757c1a2fc135f9e36225acf6f91432663b9c1dbaad3ea7d7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliAccountBlock.kt",
+      "regions": [
+        [
+          1,
+          58
+        ],
+        [
+          87,
+          117
+        ],
+        [
+          130,
+          152
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 152,
+      "sha256": "6e7d4737d6679df202e082fb34317f40fe375795fc3491aa4f4460d691182020"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/CreatePlaylistDialog.kt",
+      "regions": [
+        [
+          1,
+          181
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 181,
+      "sha256": "e697e6b3dd13e10f1c19f1d1c694430a7d581829d236284ad13ff512f593acb7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/EditPlaylistDialog.kt",
+      "regions": [
+        [
+          1,
+          179
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 179,
+      "sha256": "d8a3f28837f028798bc9310f4c261c732ddd0e7f76f9c7026a9b3d876b0fe0be"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt",
+      "regions": [
+        [
+          1,
+          68
+        ],
+        [
+          181,
+          350
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 350,
+      "sha256": "efc7f7b77a188ab018149c9fd00d833d3d1f0056bb4217b9af88381fab72209d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt",
+      "regions": [
+        [
+          1,
+          69
+        ],
+        [
+          311,
+          399
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 399,
+      "sha256": "be03649e2f9f4a81f1dc5e54ae302abcc0aa8e342d0c89c82c8a1980cef301a8"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/StatsScreen.kt",
+      "regions": [
+        [
+          1,
+          105
+        ],
+        [
+          286,
+          611
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 611,
+      "sha256": "2d367baca49bd9a7b68546047da2e397a6a4655022befb31fcdf22ef7e398f2f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LocalPlaylistDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          59
+        ],
+        [
+          186,
+          341
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 341,
+      "sha256": "f1c77782cc46f9ad55111e126b12bb53d1ee08ad6f483ef1674370ef950936d0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          59
+        ],
+        [
+          216,
+          326
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 326,
+      "sha256": "0193077a2338a5e738a8b2745ef83d4e5c0cea0872742d36e9f4af07aa94219a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/QueueView.kt",
+      "regions": [
+        [
+          1,
+          89
+        ],
+        [
+          231,
+          324
+        ],
+        [
+          476,
+          586
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 586,
+      "sha256": "495531188e79e02a0c4d210036b85c4ac15ec11fecf155dde36aecacdcfc4155"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqQrLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          64
+        ],
+        [
+          186,
+          251
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 251,
+      "sha256": "e9d3488f1b282c51dca80e448131b864e2b193541efdf96175513ae0651dd0b5"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqScanLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          107
+        ],
+        [
+          244,
+          275
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 275,
+      "sha256": "0d146a509d22e2fd0429670ced2ce37702bc8621bd17950d8df974c5e7ffee21"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QrLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          64
+        ],
+        [
+          207,
+          280
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 280,
+      "sha256": "62b72b6791f791c027ff7e16523adb1385b5921389e12ce0e5df853d32075391"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/navigation/NavGraph.kt",
+      "regions": [
+        [
+          1,
+          19
+        ],
+        [
+          146,
+          189
+        ],
+        [
+          476,
+          520
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 520,
+      "sha256": "bafe91a26a6106779550108a197e2ca6fc253874b3b0fba63cc27351f6659641"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/NcmApi.kt",
+      "regions": [
+        [
+          1,
+          30
+        ],
+        [
+          40,
+          62
+        ],
+        [
+          87,
+          99
+        ],
+        [
+          113,
+          141
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 141,
+      "sha256": "151c36472091b05ce921bbb2a9487d5070d314fdf88c39ce5089658f0f6ba232"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/PlaylistEditApi.kt",
+      "regions": [
+        [
+          191,
+          219
+        ],
+        [
+          271,
+          300
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 300,
+      "sha256": "5445fcb7bcba127a05811d323922a742e2d6273aa99aa6e2f4980be83ae09ceb"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SettingsRows.kt",
+      "regions": [
+        [
+          1,
+          129
+        ],
+        [
+          213,
+          290
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 290,
+      "sha256": "92051b3d11508d8f31d13056f8053aeef80a1495c8f85acfc3bb13ccecd520cf"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongCard.kt",
+      "regions": [
+        [
+          286,
+          324
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 324,
+      "sha256": "be73aaa2e7fbff45d8b62552f98e9142245a4f30061ed4eecea1d5ee136980c7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SongDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          64
+        ],
+        [
+          283,
+          319
+        ],
+        [
+          346,
+          368
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 368,
+      "sha256": "b5835bd61f0ac7689d68b44cd6e0ce3e6d5d848bff4599704f47091a0a05ea1a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackStateManager.kt",
+      "regions": [
+        [
+          1,
+          28
+        ],
+        [
+          155,
+          177
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 381,
+      "sha256": "1bffad8b1a3b9c71f0dfaaf206b480b2a6f410c9d87fbc4bf16774222c811dfc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/TransparentWaveformSink.kt",
+      "regions": [
+        [
+          1,
+          79
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 469,
+      "sha256": "15ff46726d0125a552021f6bfcd41fbe22323a03d2750937f4e940d9e19dbd59"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/MqttCodec.kt",
+      "regions": [
+        [
+          1,
+          57
+        ],
+        [
+          401,
+          408
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 580,
+      "sha256": "679395c186290ca505718ef8624021ee4f337d7da3c43f6cd53d6ea1c5c7b686"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationLayout.kt",
+      "regions": [
+        [
+          1,
+          38
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 132,
+      "sha256": "225abac5080a57eb0919f1e3933e66bdf1875d573541a71bb6bcc28b9ed023d7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerLayout.kt",
+      "regions": [
+        [
+          1,
+          39
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 303,
+      "sha256": "e5f16741296c7a0c80dcbf16bc81dd2c5c18d1bb8be31db2e5df0faf0a414b46"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBindings.kt",
+      "regions": [
+        [
+          1,
+          89
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 267,
+      "sha256": "ec7bc2f11e54ed4a21670fc60f36542cb8a07ba2e00e88f1bd564510cc854793"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerTier.kt",
+      "regions": [
+        [
+          1,
+          24
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 261,
+      "sha256": "d7f18ae2202bd6f8a96978dbaf8f2c1745802ff1b941c0edb1967e2340af70a2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AlbumSourceTag.kt",
+      "regions": [
+        [
+          1,
+          29
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 179,
+      "sha256": "0b06ae03d71759f02864a79b095495e0f8ee1382ef8720f9818d0bf3ba83b136"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardTray.kt",
+      "regions": [
+        [
+          90,
+          286
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 464,
+      "sha256": "795f919de0175590b70a6fe03f407ef2d2551915a1837d56f67343976f9a109f"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt",
+      "regions": [
+        [
+          380,
+          450
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 514,
+      "sha256": "201a3be3cc3af8b584f641ae4c925adca8f6a7bc492fb0ffbf27320d6b04531d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardState.kt",
+      "regions": [
+        [
+          104,
+          124
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 394,
+      "sha256": "75c39df0f6f7ab0ad8b56c2d12ed7bd0567cca814ddbe5f7ebddac3d963e27e7"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          262
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 262,
+      "sha256": "c99e9523cc2b1c893b1e4777040f69d9a269746f38b22f91a1af36161b588a37"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumDetailScreen.kt",
+      "regions": [
+        [
+          1,
+          84
+        ],
+        [
+          451,
+          455
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 455,
+      "sha256": "d5afd1e97fec3fef26798214fcd753989c29b49679fdcac35abf06998f5f9e75"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/CacheUsage.kt",
+      "regions": [
+        [
+          91,
+          93
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 93,
+      "sha256": "b5ac86b28f67aeeaba3f45ffa782285f92f55c927bfeb38431965c8df7a1bf25"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/UserScreen.kt",
+      "regions": [
+        [
+          1,
+          71
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 156,
+      "sha256": "df8fc19d08d4d21f8cde8ea654071eccc9e78045a035733fe5c6849976bb4b0e"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/Strings.kt",
+      "regions": [
+        [
+          1,
+          2334
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 2334,
+      "sha256": "1520ab1fd831c5bb08df6e0f45b7fe0e3059f151655124c9dfa8a53ed2c4c713"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt",
+      "regions": [
+        [
+          1,
+          723
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 723,
+      "sha256": "3233fb41fbda391e21d8e6fd89b7973d9d7f5b3c5a7ce69512c67bd05dff4b77"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt",
+      "regions": [
+        [
+          1355,
+          1415
+        ],
+        [
+          2018,
+          2044
+        ],
+        [
+          2093,
+          2110
+        ]
+      ],
+      "lines_total": 3479,
+      "sha256": "f2dd95373138eccb93017da0f34869b25817322f4eb660bcda78280bb6e6d953",
+      "mode": "partial_call_chain"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt",
+      "regions": [
+        [
+          485,
+          585
+        ]
+      ],
+      "lines_total": 1011,
+      "sha256": "0daa1009f2ce11783ff1168ea25054a7cbc2181a9c92b88aafd6b61592988f18",
+      "mode": "partial_call_chain"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardOverlays.kt",
+      "regions": [
+        [
+          245,
+          302
+        ]
+      ],
+      "lines_total": 343,
+      "sha256": "604f4b097e0b58bdd904a6166ecef55f48514354bf60961296883e1cb56eee36",
+      "mode": "partial_call_chain"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt",
+      "regions": [
+        [
+          188,
+          195
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 725,
+      "sha256": "86e6e7a5bcfd2d4dbbf9ca34a306467166fb68f8819699ce3f6338673aa0f577"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt",
+      "regions": [
+        [
+          188,
+          195
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 726,
+      "sha256": "47bd314f82524c26228d17039fcebe347cb5ffb3798bf6f8b493260e5b88e35c"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt",
+      "regions": [
+        [
+          187,
+          194
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 723,
+      "sha256": "e9fd76533c1f8a1845cc5167aa552ca7671afea64998592ca6fc25199c346c0b"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt",
+      "regions": [
+        [
+          186,
+          193
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 722,
+      "sha256": "c27d07f580e6b3ab4d4866e73d4f6387e142abaee5ec1bd0d38349e820211069"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt",
+      "regions": [
+        [
+          186,
+          193
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 722,
+      "sha256": "7ccb5446dfc17c66b2aaf07d9d2555db59793dc1c61c7ca97f65cd1bc82c2e47"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt",
+      "regions": [
+        [
+          188,
+          195
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 725,
+      "sha256": "81fe32ac583cc7b005819dd92a03635403f9859867f9a2fabd7ecec5239a93c3"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt",
+      "regions": [
+        [
+          187,
+          194
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 723,
+      "sha256": "e818846eed63f679ba7ea690155c28d6b469a267f75dacd83b9b7925ff28f2cb"
+    }
+  ],
+  "non_kotlin_boundaries": [],
+  "quota_reads": [
+    {
+      "stage": "start",
+      "primary_remaining_percent": 90,
+      "weekly_remaining_percent": 39,
+      "checked_at_utc": "2026-10-27 12:52:37 UTC"
+    },
+    {
+      "stage": "pre_archive",
+      "primary_remaining_percent": 14,
+      "weekly_remaining_percent": 27,
+      "checked_at_utc": "2026-10-27 13:15:00 UTC"
+    },
+    {
+      "stage": "final",
+      "primary_remaining_percent": 10,
+      "weekly_remaining_percent": 27,
+      "checked_at_utc": "2026-10-27 13:17:30 UTC"
+    }
+  ],
+  "counts": {
+    "full_executable_code": 15,
+    "partial_call_chain": 79,
+    "recorded": 94,
+    "without_this_round_record": 288
+  }
+}

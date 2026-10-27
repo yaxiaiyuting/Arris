@@ -1,0 +1,40 @@
+{
+  "meaning": "通过断言表示错误存在，不代表修复通过；5 类、8 条缺陷断言，无 Android UI 或真实网络。",
+  "suites": [
+    {
+      "class": "EveningAlbumAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "EveningBiliCancelAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "EveningCacheAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "EveningLyricAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "EveningQueueAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

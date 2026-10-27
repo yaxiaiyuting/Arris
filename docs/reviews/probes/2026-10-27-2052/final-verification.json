@@ -1,0 +1,19 @@
+{
+  "head_before_audit_commit": "f09b0edda1424929a4d70528ee4988382eb1fe3f",
+  "application_baseline": "15237f8c06ba160632c9096101386f821b85a723",
+  "application_diff_empty": true,
+  "source_hashes_verified": 382,
+  "temporary_test_sources_removed": true,
+  "counts": {
+    "full_executable_code": 375,
+    "partial_call_chain": 7,
+    "recorded": 382,
+    "without_record": 0
+  },
+  "quota_final_remaining": {
+    "five_hour": 10,
+    "weekly": 27
+  },
+  "device_or_visible_browser_used": false,
+  "push_or_release_performed": false
+}

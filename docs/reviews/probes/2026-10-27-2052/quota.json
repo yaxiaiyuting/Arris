@@ -1,0 +1,62 @@
+{
+  "start": {
+    "observed_utc": "2026-10-27 12:52:37 UTC",
+    "primary_remaining_percent": 90,
+    "weekly_remaining_percent": 39
+  },
+  "pre_archive": {
+    "observed_utc": "2026-10-27 13:15:00 UTC",
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "normalModelSlug": null,
+      "primary": {
+        "usedPercent": 86,
+        "windowDurationMins": 300,
+        "resetsAt": 1793123207
+      },
+      "secondary": {
+        "usedPercent": 73,
+        "windowDurationMins": 10080,
+        "resetsAt": 1793623294
+      },
+      "credits": {
+        "hasCredits": false,
+        "unlimited": false,
+        "balance": "0"
+      },
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    }
+  },
+  "final": {
+    "observed_utc": "2026-10-27 13:17:30 UTC",
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "normalModelSlug": null,
+      "primary": {
+        "usedPercent": 90,
+        "windowDurationMins": 300,
+        "resetsAt": 1793123207
+      },
+      "secondary": {
+        "usedPercent": 73,
+        "windowDurationMins": 10080,
+        "resetsAt": 1793623294
+      },
+      "credits": {
+        "hasCredits": false,
+        "unlimited": false,
+        "balance": "0"
+      },
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    }
+  },
+  "stop_reason": "五小时窗口剩余 10%，停止扩大审查范围并收尾；没有使用额度重置。"
+}

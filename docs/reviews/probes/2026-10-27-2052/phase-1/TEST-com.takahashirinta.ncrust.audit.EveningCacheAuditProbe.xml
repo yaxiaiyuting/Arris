@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.EveningCacheAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T13:01:45.610Z" hostname="cachyos-x8664" time="0.041">
+  <properties/>
+  <testcase name="failedSingleDeletionDropsPersistedMetadataAndUrlEvenThoughNoCacheCanBeOpened" classname="com.takahashirinta.ncrust.audit.EveningCacheAuditProbe" time="0.038"/>
+  <testcase name="failedClearStillErasesBothOfflineIndexesAndHasNoFailureResult" classname="com.takahashirinta.ncrust.audit.EveningCacheAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT deletion failure: real removeSong returns false after injected local cache-opening failure, but both track metadata and URL are removed and remain missing after a cold metadata reload. No Cache/Android file operations or network performed; UI success toast is source evidence only
+AUDIT clear failure: real clear swallows a local cache-opening failure and persists empty URL/track indexes, so existing bytes cannot have been removed by that invocation but their management metadata is lost. Fault injection at Context.filesDir, not a real filesystem or device reproduction
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

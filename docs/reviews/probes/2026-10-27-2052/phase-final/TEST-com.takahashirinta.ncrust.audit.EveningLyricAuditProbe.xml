@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.EveningLyricAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T13:12:41.703Z" hostname="cachyos-x8664" time="0.004">
+  <properties/>
+  <testcase name="earlierCandidateBeatsExactTimestampEvenWhenTranslationsAreNotReused" classname="com.takahashirinta.ncrust.audit.EveningLyricAuditProbe" time="0.002"/>
+  <testcase name="exactTimeTranslationsAreDuplicatedAndShiftedWhenLinesAreOneSecondApart" classname="com.takahashirinta.ncrust.audit.EveningLyricAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT real QQ aligner chooses a 1000ms-earlier candidate and rewrites its timestamp to 2000ms instead of choosing the available exact match. Same production function serves translations and romanization
+AUDIT real QQ aligner: exact timestamp translations at 0/1000/2000/3000ms become 0/0/1/2; the last translation is lost. No parser, network, rendering or device used
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

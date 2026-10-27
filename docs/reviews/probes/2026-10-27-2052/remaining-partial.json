@@ -1,0 +1,100 @@
+[
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt",
+    "regions": [
+      [
+        188,
+        195
+      ],
+      [
+        640,
+        653
+      ]
+    ],
+    "lines_total": 725
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt",
+    "regions": [
+      [
+        188,
+        195
+      ],
+      [
+        640,
+        653
+      ]
+    ],
+    "lines_total": 726
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt",
+    "regions": [
+      [
+        187,
+        194
+      ],
+      [
+        638,
+        651
+      ]
+    ],
+    "lines_total": 723
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt",
+    "regions": [
+      [
+        186,
+        193
+      ],
+      [
+        637,
+        650
+      ]
+    ],
+    "lines_total": 722
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt",
+    "regions": [
+      [
+        186,
+        193
+      ],
+      [
+        637,
+        650
+      ]
+    ],
+    "lines_total": 722
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt",
+    "regions": [
+      [
+        188,
+        195
+      ],
+      [
+        640,
+        653
+      ]
+    ],
+    "lines_total": 725
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt",
+    "regions": [
+      [
+        187,
+        194
+      ],
+      [
+        638,
+        651
+      ]
+    ],
+    "lines_total": 723
+  }
+]

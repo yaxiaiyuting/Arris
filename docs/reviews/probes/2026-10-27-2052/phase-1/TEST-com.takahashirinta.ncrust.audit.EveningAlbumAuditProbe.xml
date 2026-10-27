@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.EveningAlbumAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-27T13:01:45.582Z" hostname="cachyos-x8664" time="0.024">
+  <properties/>
+  <testcase name="neteaseAlbumGetsQqImageTemplateInEitherSideOfProductionAssembler" classname="com.takahashirinta.ncrust.audit.EveningAlbumAuditProbe" time="0.022"/>
+  <system-out><![CDATA[AUDIT real assembleAlbums routes a NETEASE numeric album ID into QQ cover URL in both primary and secondary branches. No HTTP/CDN request; this proves wrong URL construction, not a measured HTTP failure
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

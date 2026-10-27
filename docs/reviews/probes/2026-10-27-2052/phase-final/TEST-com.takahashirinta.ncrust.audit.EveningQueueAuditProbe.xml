@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.EveningQueueAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-27T13:12:41.708Z" hostname="cachyos-x8664" time="0.016">
+  <properties/>
+  <testcase name="realQueueRowsGiveTwoSourcesTheSameLazyItemKey" classname="com.takahashirinta.ncrust.audit.EveningQueueAuditProbe" time="0.016"/>
+  <system-out><![CDATA[AUDIT invokes real private buildQueueRows: allowed distinct-source songs share s-12345. No Compose layout executed; duplicate-key layout exception and drag visuals remain static call-chain consequences
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
