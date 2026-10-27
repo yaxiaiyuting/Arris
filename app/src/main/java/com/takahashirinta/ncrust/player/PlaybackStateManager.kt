@@ -18,6 +18,7 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.source.SourceIds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -146,7 +147,17 @@ object PlaybackStateManager {
         val prefs = getPrefs(context)
         if (!prefs.getBoolean(KEY_HAS_STATE, false)) return null
         return SavedState(
-            songId = prefs.getLong(KEY_SONG_ID, 0),
+            // H14 残余：旧版本落盘的 B 站视频 id 没有位 60，与 queue 走**同一条**纯函数
+            // 补位。少这一处的话，「续播的那一首」与「迁移后的队列条目」会算成两首歌
+            // （表现：冷启动后当前项高亮丢失、队列里那一行点不动）。
+            // 只改返回值、不回写：判据幂等，重复读得到同一个结果，没有必要在 getter 里写盘。
+            songId = run {
+                val raw = prefs.getLong(KEY_SONG_ID, 0)
+                val payload = prefs.getString(KEY_SONG_SOURCE_ID, null)
+                // J10：单曲状态里没有 qqSongId 落盘（历史形状），但队列那条路径会带上；
+                // 这里能判出的只有 B 站补位，QQ 散列 id 在队列侧迁移后再回来。
+                SourceIds.migrateBiliAvPartition(raw, payload)
+            },
             songName = prefs.getString(KEY_SONG_NAME, "") ?: "",
             songArtist = prefs.getString(KEY_SONG_ARTIST, "") ?: "",
             songArtwork = prefs.getString(KEY_SONG_ARTWORK, "") ?: "",
@@ -161,6 +172,12 @@ object PlaybackStateManager {
     //   - 正常播完 → **清除**记录，重播必定从 0:00 开始。
     // 清除这一步很关键：若播完仍留着旧进度，重播时播放器从 0 开始而歌词面板/
     // 进度条可能停在旧位置，就会出现「歌词对不上歌」。
+    //
+    // ⚠️ H14 残余：**这张表故意不参与 B 站分区位迁移**。它的 key 是裸 `Long` 且**没有**
+    // `sourceId` 可查，因此 `BILI_ID_FLAG|101` 到底是 `au101` 还是「没补位的 av101」
+    // **无法判定**。补错方向就是把两条不同曲目的续播点合成一个（比「少一条续播」严重得多）；
+    // 代价只是老视频条目的续播点读不出来（从 0:00 开始播，一次性的）。
+    // 队列与单曲状态那边有载荷可判，所以在那里迁移（见 [migrateQueueSongs] / [getState]）。
     /**
      * 某首歌的续播记录。
      *
@@ -355,7 +372,9 @@ object PlaybackStateManager {
         return try {
             // Gson 反射反序列化是 CPU 密集，切 Default 避免主线程卡顿（队列几百首时 50ms+）。
             val queue: List<SongItem> = withContext(Dispatchers.Default) {
-                gson.fromJson(json, songListType)
+                val restored: List<SongItem> = gson.fromJson(json, songListType)
+                // H14 残余：读盘后过一次「旧 B 站视频腿补分区位」（纯函数 + 幂等）。
+                migrateQueueSongs(restored)
             }
             val index = prefs.getInt(KEY_QUEUE_INDEX, 0)
             Pair(queue, index)
@@ -367,6 +386,47 @@ object PlaybackStateManager {
             // 交回 null 让上层走空队列，而不是把用户队列删掉。
             null
         }
+    }
+
+    /**
+     * **H14 残余**：队列条目的读时身份迁移（**纯函数**，不碰 Context，JVM 可单测）。
+     *
+     * ## 为什么必须在这里做
+     *
+     * 队列 JSON 里只有 `List<SongItem>`，**没有**独立的 trackKey —— 判重、待播槽位、
+     * 切歌定位全都由 `TrackKey.ofSong(song)` 现算，也就是说「身份」就是 `song.id` 本身。
+     * 旧版本写下的 B 站**视频腿** id 没有位 60（分区位是 v3.7.9 才加的），
+     * 不在这里补，它就会与「现在搜出来的同一首视频曲目」算成两首歌：
+     * 队列判重拦不住、点它也不会复用正在播的那一项。
+     *
+     * ## 只动 `id`
+     *
+     * `sourceId`（`au:<auid>` / `bv:<bvid>:<cid>`）是**取链载荷**，一个字节都不改 ——
+     * 改了旧条目会变成「不可解析」，那才是真正的播放回归。判据与幂等性全在
+     * [SourceIds.migrateBiliAvPartition]：`au:` 不动、已经补过的再读一遍也不动。
+     *
+     * 没有任何条目需要迁移时**返回同一个实例**（`===`），调用方据此可以零成本判断
+     * 「这次读盘有没有搬家」。
+     */
+    internal fun migrateQueueSongs(songs: List<SongItem>): List<SongItem> {
+        if (songs.isEmpty()) return songs
+        var changed = false
+        val out = ArrayList<SongItem>(songs.size)
+        for (song in songs) {
+            val migrated = migrateQueueSong(song)
+            if (migrated !== song) changed = true
+            out.add(migrated)
+        }
+        return if (changed) out else songs
+    }
+
+    /** 单条队列条目的迁移；不需要迁移时**返回同一个实例**。 */
+    internal fun migrateQueueSong(song: SongItem): SongItem {
+        // J10：旧散列合成 id → 规范 id（幂等；没有 qqSongId 的原样保留）。
+        val qqMigrated = SourceIds.migrateSynthesizedQqId(song.id, song.sourceId, song.qqSongId)
+        val withQq = if (qqMigrated == song.id) song else song.copy(id = qqMigrated)
+        val migrated = SourceIds.migrateBiliAvPartition(withQq.id, withQq.sourceId)
+        return if (migrated == withQq.id) withQq else withQq.copy(id = migrated)
     }
 
     /**

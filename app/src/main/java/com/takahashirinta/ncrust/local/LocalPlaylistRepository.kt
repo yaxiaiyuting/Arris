@@ -20,6 +20,7 @@ import com.takahashirinta.ncrust.qq.QqPlaylistRepository
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.source.TrackKey
+import kotlinx.coroutines.CancellationException
 
 /**
  * 一次同步的结果（v2.3.0 · B）。
@@ -90,7 +91,7 @@ enum class LocalPartialCause {
  *
  * | 用途 | 依赖 |
  * |---|---|
- * | 拉 ncm 歌单曲目 | `PlaylistApi.getPlaylistDetail`（GET 语义，只读） |
+ * | 拉 ncm 歌单曲目 | `PlaylistApi.getPlaylistDetailResult`（GET 语义，只读；带上完整性） |
  * | 拉 QQ 歌单曲目 | `QqPlaylistRepository.loadDetail`（v2.2.0 的只读镜像） |
  * | 落盘 | `LocalPlaylistStore`（应用私有 prefs） |
  *
@@ -110,6 +111,10 @@ object LocalPlaylistRepository {
      *
      * 现在失败与不完整各有自己的类型：[songs] 只表示"能用的那一部分"，
      * 它是否权威由 [partialCause] 回答（null = 完整）。
+     *
+     * H10 的收尾：网易那一路不再把 `complete` 写死成 true —— 上游
+     * `PlaylistApi.getPlaylistDetailResult` 已经把「声明总数 / 失败批次数 / 是否完整」
+     * 带回来了，[loadRemote] 直接按它分流（见 `MusicSource.NETEASE` 分支）。
      */
     internal sealed interface RemoteRead {
 
@@ -141,9 +146,15 @@ object LocalPlaylistRepository {
     ): RemoteRead {
         return when (key.source) {
             MusicSource.QQMUSIC -> {
-                val result = runCatching {
+                // 与网易那一路同一条纪律：协程取消**原样抛出**，不用 runCatching
+                // 把它折成"读取失败"（否则取消会被上层当成网络错误，再也停不下来）。
+                val result = try {
                     QqPlaylistRepository.loadDetail(key, dirId, forceRefresh)
-                }.getOrNull() ?: return RemoteRead.Failed
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return RemoteRead.Failed
+                }
                 when (result) {
                     is PlaylistResult.Data -> {
                         val outcome = result.outcome
@@ -159,14 +170,26 @@ object LocalPlaylistRepository {
             }
             MusicSource.NETEASE -> {
                 val pid = key.id.toLongOrNull() ?: return RemoteRead.Failed
-                // ⚠️ 网易这一路目前**判不出"不完整"**（H10 仍缺的上游信号）：
-                // `PlaylistApi.getPlaylistDetail` 把「声明 N 首、批量详情失败」折成了一个
-                // 更短的 List，`trackCount` / `trackIds` 完整性 / 失败批次数全部没带出来。
-                // 所以这里只能保证「失败不再冒充成功」；要判截断，得让 PlaylistApi 返回
-                // (songs, declaredCount, failedBatches)，不在这几个文件的范围里。
-                val songs = runCatching { PlaylistApi.getPlaylistDetail(pid) }.getOrNull()
-                    ?: return RemoteRead.Failed
-                RemoteRead.Complete(songs)
+                // H10：`PlaylistDetailResult` 把完整性一起带回来了 ——
+                // 请求/解析失败是 [RemoteRead.Failed]；拿到了但「有批次没取回」或
+                // 「条数少于服务端声明」是 [RemoteRead.Incomplete]，上层据此只合并、
+                // **不推进 lastSyncedAt**，TTL 之后还能再补取。
+                // 取消异常必须原样抛出：runCatching 会把协程取消吞成"读取失败"，
+                // 于是取消看起来像网络错误（项目纪律：CancellationException 不吞）。
+                val detail = try {
+                    PlaylistApi.getPlaylistDetailResult(pid)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return RemoteRead.Failed
+                }
+                if (detail.complete) {
+                    RemoteRead.Complete(detail.songs)
+                } else {
+                    // 条数对不上 / 某批详情失败 / 响应缺 playlist 对象 —— 都归 TRUNCATED
+                    // （该枚举的语义正是「服务端声明的曲目数没取全」）。
+                    RemoteRead.Incomplete(detail.songs, LocalPartialCause.TRUNCATED)
+                }
             }
             MusicSource.BILIBILI -> RemoteRead.Failed
         }

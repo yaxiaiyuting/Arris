@@ -126,6 +126,44 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
+ * 播放器红心的**唯一订阅点**（v3.8.0 · K05 根治）。
+ *
+ * ## 为什么是这里，而不是 `PlayerCard` 顶层
+ *
+ * 旧实现是 `PlayerCard` 里的 `remember(song?.id, ui.libraryTick, ui.cardExpandedForInput)`，
+ * 两个键都是补丁：
+ *  - `libraryTick` **只由播放器自己**的收藏按钮推进 ⇒ 库页 / 搜索页改同一首歌推不动它，
+ *    而播放器缩成 mini bar 时仍然挂载，于是「库页取消收藏当前歌 → 展开播放器」还是旧红心；
+ *  - `cardExpandedForInput`（折叠→展开必然翻转）只是把「已经能看到错误状态」的那条路堵掉。
+ *
+ * 根治是订阅 [LibraryManager.savedRevision]：**任何页面**写完收藏表都会推进它，与「谁点的」
+ * 无关；订阅方拿到信号后按身份查一次真相（[LibraryManager.isSongSaved]）。
+ *
+ * ## 为什么订阅点必须留在叶子
+ *
+ * 本仓库的硬约束是「GPU 零重组」：订阅点每抬一层，一次收藏变更就多重组一层。
+ * 放在 `PlayerCard` / `PlayerCardExpanded` 顶层会让封面、歌词面板、队列跟着重组。
+ * 所以它是两个红心调用点（`PlayerPanelToggles` / `FullPlayerControls`）**各自**的最小订阅：
+ * 值真的翻转时，重组范围 = 那一行图标 + 它自己的子节点。
+ *
+ * ## 切歌时同步给出真相
+ *
+ * `remember(songId, …)` 带身份键：切歌那一刻就同步查一次（与旧实现同一个内存读，
+ * 不加锁外的新 IO），不会出现「先显示上一首的红心、下一帧才纠正」。
+ *
+ * @param songId 当前曲目 id（`PlayerCardExpanded` 的 `song` 非空，故非空）。
+ */
+@Composable
+private fun rememberLibrarySaved(songId: Long): Boolean {
+    val context = LocalContext.current
+    // 订阅全局修订：库页 / 搜索页 / 云端刷新推进它时，这里都会重查一次。
+    val revision by LibraryManager.savedRevision.collectAsState()
+    // 修订号是全局的（收藏**别的**歌也会推进它），所以最终产出的仍是「这一个身份」的布尔值；
+    // 只有它翻转时下游才看到新值，无关变更不会把红心点亮/熄灭。
+    return remember(songId, revision) { LibraryManager.isSongSaved(context, songId) }
+}
+
+/**
  * 展开态子树（原 `PlayerCard` 的 `if (hasSong && expandedMounted)` 块，逐行搬移）。
  */
 @Composable
@@ -152,7 +190,9 @@ internal fun ColumnScope.PlayerCardExpanded(
     lyricsSweepQuality: Int,
     lyricsReady: Boolean,
     lyricsUnavailable: Boolean,
-    isSongSaved: Boolean,
+    // v3.8.0 · K05：原来的 `isSongSaved: Boolean` 形参已删除 —— 它由调用方（`PlayerCard`）
+    // 计算 ⇒ 订阅点偏高、且依赖组件局部 tick。现在红心自己订阅
+    // `LibraryManager.savedRevision`（见 [rememberLibrarySaved]）。
     controlsCollapseDrag: () -> Modifier,
     onToggleControlsCollapse: () -> Unit,
     /** 动效能力位（组合期读一次，帧路径只读捕获值）。 */
@@ -200,14 +240,17 @@ internal fun ColumnScope.PlayerCardExpanded(
                             Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
                         }
                     }
-                    ui.libraryTick++
+                    // v3.8.0 · K05：`ui.libraryTick++` 已删除。红心的刷新不再靠「本组件自己
+                    // 通知自己」——`saveSong`/`removeSong` 会推进 `LibraryManager.savedRevision`，
+                    // 订阅了它的红心叶子（[rememberLibrarySaved]）自动重查，与「谁点的」无关。
                 }
             }
             val panelToggles: @Composable (Dp, Dp) -> Unit = { btn, icon ->
                 PlayerPanelToggles(
                     showLyrics = ui.showLyrics,
                     showQueue = ui.showQueue,
-                    isInLibrary = isSongSaved,
+                    // K05：订阅点下沉到这里 —— 只有这一行图标会因收藏变更重组。
+                    isInLibrary = rememberLibrarySaved(song.id),
                     lyricsUnavailable = lyricsUnavailable,
                     onToggleLyrics = onToggleLyricsAction,
                     onToggleQueue = onToggleQueueAction,
@@ -251,7 +294,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onToggleLyrics = onToggleLyricsAction,
                     onToggleQueue = onToggleQueueAction,
                     onAddToLibrary = onAddToLibraryAction,
-                    isInLibrary = isSongSaved,
+                    // K05：控制条上那颗红心同样自己订阅（第二个、也是最后一个订阅点）。
+                    isInLibrary = rememberLibrarySaved(song.id),
                     isBufferingFlow = playerViewModel.isBuffering,
                     onSeek = { fraction ->
                         val dur = playerViewModel.duration.value

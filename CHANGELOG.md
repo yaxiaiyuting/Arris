@@ -13,6 +13,15 @@
 已知未修：H13、J15 后半（与官方端口 parity）、H10/H21 上游、J10/H14/E10 残余。详见
 `docs/verification/v3.7.9/RELEASE_NOTES.md`。
 
+## v3.7.10-gpl（2026-10-27）
+
+把 v3.7.9 的「已知未修」全部落地：H13 单曲路由带载荷（QQ 详情可播、缺载荷行禁用）、
+J15 两处（剪枝按簇号读距离 + `maximize` Int 平方溢出，八色图 8 色全还原）、
+H10 `PlaylistDetailResult` 暴露完整性、H21 游标改原始条目数与 `songlist` 存在性、
+J10 `qq_songid` 落盘 + 旧散列 id 幂等迁移、H14 收藏/队列/单曲状态的 AV 补位、
+E10 队列重排按身份、K05 收藏修订可观察（删除组件局部 tick）。
+详见 `docs/verification/v3.7.10/RELEASE_NOTES.md`。
+
 > **日期口径**：该版本 git tag 的创建时间（`git for-each-ref --format='%(creatordate:short)' refs/tags`）。
 > `v1.4.0` 起是 fork 的 `-gpl` 版本线；`v1.3.1` 及以前是上游版本（本 fork 基于 `v1.3.1`）。
 > `v1.4.1` / `v1.4.2` 是 `v1.4.0` 的补丁；**`v2.7.x` 从未存在**（`v2.6.2` 之后直接是 `v2.8.0`）。

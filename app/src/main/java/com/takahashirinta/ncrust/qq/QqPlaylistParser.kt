@@ -59,6 +59,12 @@ data class QqUserBrief(
  * @property name 歌单名（`dirinfo.title`）。
  * @property coverUrl 封面（`dirinfo.picurl`）。
  * @property encryptUin 加密账号（`dirinfo.encrypt_uin`）—— 收藏歌单接口必须用它。
+ * @property rawCount 本页 `songlist` 的**原始条目数**（含解析不出、被丢掉的条目）。
+ *   H21：分页游标必须用它前进 —— 用映射后的 [tracks] 条数会把"解析不出的那一行"跳过，
+ *   下一页的 offset 就与上一页重叠（探针实测拿到 A、A、B）。
+ * @property hasSonglist `songlist` 数组是否存在。false = 结构异常，
+ *   **不能**当成「空页或者已经取全」：服务端声明了 N 首却连数组都没给时，
+ *   旧实现靠 `hasMore=0` 把它判成"权威空表"。
  */
 data class QqPlaylistPage(
     val tracks: List<PlaylistTrack>,
@@ -70,6 +76,10 @@ data class QqPlaylistPage(
     val name: String?,
     val coverUrl: String?,
     val encryptUin: String?,
+    /** 见类文档的 `rawCount`；默认 = 映射后条数（只有解析器会在丢条目时把它改大）。 */
+    val rawCount: Int = tracks.size,
+    /** 见类文档的 `hasSonglist`。默认 true：只有真的缺数组时才置 false。 */
+    val hasSonglist: Boolean = true,
 )
 
 /**
@@ -277,6 +287,10 @@ object QqPlaylistParser {
                 name = info.optString("title").takeIf { it.isNotBlank() },
                 coverUrl = normalizeCover(info.optString("picurl")),
                 encryptUin = info.optString("encrypt_uin").takeIf { it.isNotBlank() },
+                // H21：游标与完整性只看**原始条目数**（被 QqSongMapper 丢掉的条目在歌单里
+                // 仍然占一个位置）；缺数组是结构异常，交给上层的完整性判据处置。
+                rawCount = arr?.length() ?: 0,
+                hasSonglist = arr != null,
             )
         )
     }

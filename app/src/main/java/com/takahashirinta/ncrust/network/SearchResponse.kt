@@ -70,6 +70,15 @@ data class SongItem(
      */
     @SerializedName("media_id") val mediaId: String? = null,
     /**
+     * QQ 的**原始数字 songid**（J10）。只有 QQ 一侧会填，ncm/B站恒为 null。
+     *
+     * 为什么必须落盘：`id` 是**合成身份**（`QQ_ID_FLAG or songid`，songid 缺失时退化成
+     * `FNV-1a(mid)` 的散列）。旧代码只读 `id`、把响应里明明存在的 `songid` 丢了，
+     * 于是历史条目存的是散列值 —— 单向哈希反推不回来，同一首歌在收藏里变成两条身份。
+     * 有了这个字段，读路径才能把旧散列 id 幂等地改写成规范 id。
+     */
+    @SerializedName("qq_songid") val qqSongId: Long? = null,
+    /**
      * ncm 的付费类型原始值（v2.1.4）。**只用于派生「播放是否需要会员」，不参与取链。**
      *
      * 实测语义（2026-09，登录态，cloudsearch/pc）：

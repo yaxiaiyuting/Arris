@@ -28,7 +28,8 @@
  * ⚠️ 有意**不**搬的两样东西：
  *  - `autoSwitchedForSong`：它是 `remember(song?.id)`，**换歌要重置** —— 放进持有者会让
  *    「每首歌只自动切一次歌词」变成「一辈子只切一次」；
- *  - `isSongSaved`：`remember(song?.id, libraryTick)` + 需要 `Context`，键语义同上。
+ *  - `isSongSaved`：**已移除**（K05）。现在由 `LibraryManager.savedRevision` 驱动，
+ *    见 `PlayerCardExpanded.rememberLibrarySaved`。
  *
  * ## 几何计算为什么要单独抽成纯函数
  *
@@ -75,7 +76,10 @@ internal class PlayerCardUiState(
     // ---- 可变状态（原来是一个个 remember { mutableStateOf }）----
     var showLyrics by mutableStateOf(false)
     var showQueue by mutableStateOf(false)
-    var libraryTick by mutableIntStateOf(0)
+    // K05 根治后此字段已无读写方（红心改订阅 LibraryManager.savedRevision）。
+    // 保留注释说明来处，不再暴露字段 —— 旧写法依赖"本组件自己 ++"推进刷新，
+    // 跨页面改收藏永远不生效。
+
     var coverArtKey by mutableStateOf<String?>(null)
     var coverArtBitmap by mutableStateOf<Bitmap?>(null)
 

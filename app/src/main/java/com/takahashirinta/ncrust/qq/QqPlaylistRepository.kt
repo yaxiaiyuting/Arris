@@ -201,20 +201,25 @@ object QqPlaylistRepository {
      * 数组」这种结构异常被当成**权威空表**：0 首 + `hasMore=0` ⇒ `complete=true`、
      * 写进缓存，上层（本地同步）也就无从判断"其实一首都没拿到"。
      *
-     * 现在同时校验**声明总数**与**实际拿到的条数**：只有"不再有下一页"且"条数对得上"
-     * （或服务端没声明总数）才算完整。
-     *
-     * 代价写在明处：[collected] 是**映射后**的条数 —— 缺 `songmid` 的原始条目会在
-     * `QqSongMapper` 那一步被丢掉（H21 探针的夹具正是这种形状）。这样的歌单会一直留在
-     * "不完整"，每次 TTL 到期都会再补取一次。这是有意的取舍：宁可多拉一次，
-     * 也不能把"少了几首"报成"已经取全"。
+     * 现在同时校验**声明总数**、**实际拿到的条数**与 **`songlist` 是否存在**：
+     * 只有"不再有下一页"且"条数对得上"（或服务端没声明总数）且"数组在"才算完整。
      *
      * @param declaredTotal 服务端声明的曲目总数（`total_song_num`，缺失时为 0）。
-     * @param collected 本次实际拿到的（映射成功的）条数。
+     * @param collected 本次实际拿到的**原始条目数**（[QqPlaylistPage.rawCount]）。
+     *   用原始条目而不是映射后条数：被 `QqSongMapper` 丢掉的条目在歌单里仍然占位置，
+     *   服务端也是按它们计数 —— 拿映射后条数比会把这类歌单**永远**判成不完整。
+     *   分页游标同样必须用原始条目数前进，否则 offset 重叠（见 [QqPlaylistApi.fetchAllPages]）。
      * @param hasMore 服务端是否还有下一页。
+     * @param hasSonglist `songlist` 数组是否存在。缺数组 = 结构异常，**一律不算完整**；
+     *   默认 true 让既有三参调用点（以及历史缓存形状）语义不变。
      */
-    internal fun detailIsComplete(declaredTotal: Int, collected: Int, hasMore: Boolean): Boolean =
-        !hasMore && (declaredTotal <= 0 || collected >= declaredTotal)
+    internal fun detailIsComplete(
+        declaredTotal: Int,
+        collected: Int,
+        hasMore: Boolean,
+        hasSonglist: Boolean = true,
+    ): Boolean =
+        hasSonglist && !hasMore && (declaredTotal <= 0 || collected >= declaredTotal)
 
     /**
      * 加载某个歌单的全部曲目（分页累积）。
@@ -261,8 +266,13 @@ object QqPlaylistRepository {
             is QqPlaylistResult.Ok -> {
                 val page = r.value
                 // 完整性由 detailIsComplete 统一判定：分页截断、缺 songlist、条数对不上
-                // 都算"没取全"（H21）。旧实现在这里只看 hasMore。
-                val complete = detailIsComplete(page.total, page.tracks.size, page.hasMore)
+                // 都算"没取全"（H21）。旧实现在这里只看 hasMore，且拿**映射后**条数比总数。
+                val complete = detailIsComplete(
+                    declaredTotal = page.total,
+                    collected = page.rawCount,
+                    hasMore = page.hasMore,
+                    hasSonglist = page.hasSonglist,
+                )
                 // 部分结果**不覆盖**已知完整的那份缓存：一次网络抖动/结构异常不该把之前
                 // 取全的数据降级成不完整（用户下次打开看到的是更少的曲目）。
                 if (complete || cachedDetail?.complete != true) {

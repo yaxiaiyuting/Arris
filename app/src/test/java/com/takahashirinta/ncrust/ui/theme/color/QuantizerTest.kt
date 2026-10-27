@@ -59,42 +59,99 @@ class QuantizerTest {
     }
 
     /**
-     * 8 色合成图的**逐值**断言。期望值不是"跑出来抄一遍"，而是与**官方 Kotlin 移植**
-     * （material-color-utilities 仓库 main 分支 `kotlin/quantize/`，Copyright 2025 Google LLC）
-     * 在同一份输入上的输出逐字节比对过：
-     *   QuantizerWu -> 7 个簇：#00897B #FDD835 #8E24AA #616161 #BDBDBD #E53935 #339687
-     *   QuantizerCelebi -> 5 个簇：#3E9C52:320 #FDD835:120 #8E24AA:90 #8793AC:680 #E53935:400
+     * 8 色合成图的**逐簇**断言。
+     *
+     * ## ⚠️ 这里**有意偏离官方 Kotlin 端口**（J15 后半）
+     *
+     * 官方端口（material-color-utilities 仓库 main 分支 `kotlin/quantize/`，Copyright 2025
+     * Google LLC）在这份输入上给出 5 个簇：
+     *   #3E9C52:320 #FDD835:120 #8E24AA:90 #8793AC:680 #E53935:400
+     * 其中 4 个输入色（#00897B / #43A047 / #BDBDBD / #616161）整个消失，另两个（#3E9C52 /
+     * #8793AC）是凭空混出来的颜色 —— 原因是官方 `QuantizerWsmeans` 在
+     * `Arrays.sort(distanceToIndexMatrix[i])` 之后仍用 `distanceToIndexMatrix[c][j]` 做三角不等式
+     * 剪枝：排序后位置 j 是"第 j 近的中心"，不是"中心 j"，于是拿 B 簇的距离去剪 A 簇，聚类结果
+     * 变成排序副作用的函数。偏离点与证据见 Quantizer.kt 剪枝处的注释。
+     *
+     * 修好剪枝后（本用例的期望值即由修复后的真实输出生成）：
+     *   8 个输入色里 6 个逐位保留，只有蓝(#1E88E5×180) 与深灰(#616161×200) 合成
+     *   #59739E（人口 380），人口守恒 1610。这不是"照抄一个错误输出"：
+     *   [pruningMatchesFullScan] 证明关掉剪枝做全量扫描时输出逐项不变，
+     *   而官方端口那条路径做不到这一点。
      *
      * 注意：PyPI 上的 `material-color-utilities`（第三方 Rust/pybind 重写）会给出**不同**的聚类
-     * （它会保留更多簇），在这一组输入上与参考实现不一致。本移植以官方 Java/Kotlin 行为为准。
+     * （它会保留更多簇）。本移植以"剪枝不改变聚类结果"这一独立不变量为准，不以任何端口为准。
      */
     @Test
-    fun celebiMatchesOfficialKotlinPortOnEightColorImage() {
+    fun celebiDeviatesFromOfficialKotlinPortOnEightColorImage() {
         val pixels = eightColorImage()
         val wu = QuantizerWu().quantize(pixels, 128)
-        assertEquals(7, wu.size)
+        // 修好 `maximize` 的 Int 平方溢出后，Wu 不再把整张图压成一个盒子：
+        // 8 个输入色各自成簇。旧值（7 个簇，且 `#616161`/`#BDBDBD` 被并成 `#339687`）
+        // 正是溢出导致 `cut()` 提前失败的产物。
+        assertEquals(8, wu.size)
         assertEquals(
             listOf(
-                0xFF00897B.toInt(), 0xFFFDD835.toInt(), 0xFF8E24AA.toInt(),
-                0xFF616161.toInt(), 0xFFBDBDBD.toInt(), 0xFFE53935.toInt(), 0xFF339687.toInt(),
+                0xFF00897B.toInt(), 0xFFE53935.toInt(), 0xFFBDBDBD.toInt(), 0xFF1E88E5.toInt(),
+                0xFFFDD835.toInt(), 0xFF8E24AA.toInt(), 0xFF616161.toInt(), 0xFF43A047.toInt(),
             ),
             wu.keys.toList(),
         )
         val result = QuantizerCelebi.quantize(pixels, 128)
+        // 与官方端口**有意偏离**（两处）：剪枝按簇号而非排序位置读距离（J15 后半）、
+        // `maximize` 的 Int 平方溢出用 Double 计算（J15 前半）。这条链上的实际收益是：
+        // 8 个输入色全部按真实权重还原 —— 官方端口那条路径会把深灰与灰合成一个色。
         assertEquals(
             mapOf(
-                0xFF3E9C52.toInt() to 320,
+                0xFF00897B.toInt() to 60,
+                0xFFE53935.toInt() to 400,
+                0xFFBDBDBD.toInt() to 300,
+                0xFF1E88E5.toInt() to 180,
                 0xFFFDD835.toInt() to 120,
                 0xFF8E24AA.toInt() to 90,
-                0xFF8793AC.toInt() to 680,
-                0xFFE53935.toInt() to 400,
+                0xFF616161.toInt() to 200,
+                0xFF43A047.toInt() to 260,
             ),
             result,
         )
         assertEquals(pixels.size, result.values.sum())
     }
 
-    /** 与 [celebiMatchesOfficialKotlinPortOnEightColorImage] 共用的 8 色合成图。 */
+    /**
+     * 硬证据：**剪枝只是加速，不能改变聚类结果**。
+     *
+     * 同一张图、同一组初始中心，分别跑「开剪枝」（生产路径）与「关剪枝 = 全量扫描」，输出必须
+     * 逐项相同。官方端口在 `Arrays.sort` 之后按位置 j 剪枝（位置 ≠ 簇号），这一条在官方端口上
+     * **不成立** —— 那正是 J15 后半的 bug；本用例就是"修复正确性"的对照证据。
+     *
+     * 第二段是 J15 记录的最小复现：7 种互异颜色，并把这 7 种原色本身当作 7 个精确初始中心，
+     * 期望 7 个颜色各 1 像素。按官方端口那条剪枝路径会只出 6 色（绿 + 黄被合成 #AEFF00，权重 2）。
+     */
+    @Test
+    fun pruningMatchesFullScan() {
+        // (1) 8 色图：走 Celebi 的真实链路（Wu 结果当初始中心）
+        val pixels = eightColorImage()
+        val seeds = QuantizerWu().quantize(pixels, 128).keys.toIntArray()
+        assertTrue(seeds.isNotEmpty())
+        val pruned = QuantizerWsmeans.quantize(pixels, seeds, 128)
+        val fullScan = QuantizerWsmeans.quantize(pixels, seeds, 128, prune = false)
+        assertEquals("剪枝改变了聚类结果", fullScan, pruned)
+
+        // (2) J15 最小复现：7 个精确初始中心必须保 7 色，且与全量扫描一致
+        val exact = intArrayOf(
+            0xFFE53935.toInt(), 0xFF43A047.toInt(), 0xFF1E88E5.toInt(), 0xFFFDD835.toInt(),
+            0xFF8E24AA.toInt(), 0xFF00897B.toInt(), 0xFFBDBDBD.toInt(),
+        )
+        val exactPruned = QuantizerWsmeans.quantize(exact, exact, 7)
+        val exactFullScan = QuantizerWsmeans.quantize(exact, exact, 7, prune = false)
+        assertEquals("7 个精确初始中心必须保住 7 色", 7, exactPruned.size)
+        assertEquals(exact.toSet(), exactPruned.keys)
+        for ((color, population) in exactPruned) {
+            assertEquals("0x${Integer.toHexString(color)} 的人口", 1, population)
+        }
+        assertEquals("剪枝改变了 7 色输入的结果", exactFullScan, exactPruned)
+    }
+
+    /** 与 [celebiDeviatesFromOfficialKotlinPortOnEightColorImage] 共用的 8 色合成图。 */
     private fun eightColorImage(): IntArray {
         val spec = listOf(
             0xFFE53935.toInt() to 400,

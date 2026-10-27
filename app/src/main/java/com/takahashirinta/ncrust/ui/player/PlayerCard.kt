@@ -68,7 +68,6 @@ import com.takahashirinta.ncrust.ui.player.motion.MotionFrameClock
 import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import coil.compose.rememberAsyncImagePainter
-import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.player.SongUrlFetcher
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.CoverUrls
@@ -206,24 +205,16 @@ internal fun PlayerCard(
     val lyricsFontScale by playerViewModel.lyricsFontScale.collectAsStateWithLifecycle()
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。
     val lyricsSweepQuality by playerViewModel.lyricsSweepQuality.collectAsStateWithLifecycle()
-    // 收藏库状态: 当前歌是否已收藏(右下角 加号/对号 切换用)。切歌或操作后刷新。
-    // ⚠️ 这个 remember **有意留在 PlayerCard**：键里带着 `song?.id`，
-    // 搬进持有者会让「切歌后重新查一次」的语义消失。
+    // 收藏库状态: 当前歌是否已收藏(右下角 加号/对号 切换用)。
     //
-    // v3.8.0 · K05：键里再加 `ui.cardExpandedForInput`。
-    //
-    // 旧键只有 `(song?.id, libraryTick)`，而 `libraryTick` 只由**播放器自己的**收藏按钮递增
-    // （`PlayerCardExpanded`）。库页 / 搜索页长按收藏改的是同一份数据，却推不动这个 tick
-    // —— 而播放器缩成 mini bar 时**仍然挂载**，于是「在库页取消收藏当前歌 → 展开播放器」
-    // 会继续显示旧红心（数据没丢，只是这一格的心没刷新）。
-    //
-    // 折叠 → 展开必然是 `cardExpandedForInput` 的一次翻转，所以用它当键就能保证
-    // 「每次真正要看到这颗心的时候重新查一次」。真正的根治是让收藏仓库暴露一个
-    // 按身份的**可观察修订**（`LibraryManager` 现在没有），那属于跨文件改动，
-    // 记在交付说明里；这里先把「已经能看到错误状态」的路径堵掉。
-    val isSongSaved = remember(song?.id, ui.libraryTick, ui.cardExpandedForInput) {
-        song?.let { LibraryManager.isSongSaved(context, it.id) } ?: false
-    }
+    // v3.8.0 · K05 根治：这里**不再**持有 `isSongSaved`。
+    // 旧实现是 `remember(song?.id, ui.libraryTick, ui.cardExpandedForInput) { … }` ——
+    // `libraryTick` 只由播放器自己的收藏按钮推进，库页 / 搜索页改同一首歌推不动它，
+    // 于是「库页取消收藏当前歌 → 展开播放器」会继续显示旧红心（播放器缩成 mini bar 时仍挂载）。
+    // 现在由 red-heart 叶子自己订阅 `LibraryManager.savedRevision` 并按键查真相，
+    // 见 `PlayerCardExpanded.kt` 的 `rememberLibrarySaved`。放在这里会多一层重组：
+    // 一次收藏变更就会把封面 / 歌词面板 / 队列一起拖进重组，违反「GPU 零重组」。
+
     // currentPosition / progress 是 4Hz 更新的 StateFlow，直接传引用给需要的子组件，
     // 让它们在最小作用域（graphicsLayer / Canvas draw / derivedStateOf / 叶子 Text）内订阅，
     // 避免 PlayerCard 本身随位置更新 4Hz 重组
@@ -613,7 +604,6 @@ internal fun PlayerCard(
                     lyricsSweepQuality = lyricsSweepQuality,
                     lyricsReady = lyricsReady,
                     lyricsUnavailable = lyricsUnavailable,
-                    isSongSaved = isSongSaved,
                     controlsCollapseDrag = ::controlsCollapseDrag,
                     onToggleControlsCollapse = ::toggleControlsCollapse,
                     motion = motion,

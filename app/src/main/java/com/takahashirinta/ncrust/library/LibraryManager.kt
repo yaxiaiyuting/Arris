@@ -36,6 +36,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -377,6 +381,54 @@ object LibraryManager {
     private val latestAlbumIntent = java.util.concurrent.ConcurrentHashMap<Long, AlbumSubIntent>()
     private val albumIntentSeq = AtomicLong()
 
+    // ==================== 可观察修订（v3.8.0 · K05 根治） ====================
+
+    /**
+     * 收藏单曲表（`saved_songs`）的**可观察修订号**：每次内存真源真的换了就 +1。
+     *
+     * ## 为什么需要它（K05 的根因）
+     *
+     * 播放器那颗红心原先靠**组件局部**的一个 `libraryTick` 驱动重新查询，
+     * 而只有播放器自己点的收藏会推进它。库页 / 搜索页改的是**同一份数据**
+     * （[cachedEntries]），却推不动播放器的 tick —— 播放器缩成 mini bar 时仍然挂载，
+     * 于是「在库页取消收藏当前歌 → 展开播放器」会继续显示旧红心。
+     *
+     * 修法不是「让别的页面也去戳播放器的 tick」（那是 N 个生产者 × N 个消费者的
+     * 手动通知，漏掉一个就重现 bug），而是让**仓库自己**暴露可观察的修订：
+     * 任何写路径（本进程内所有页面，含将来新增的页面）改完表都会推进它；
+     * 消费方订阅它 + 按 [TrackKey] 查一次真相即可。
+     *
+     * ## 为什么在「内存真源被替换」的事务里推进，而不是等落盘之后
+     *
+     * 修订号的语义是「**你现在去查会看到新值**」，而 [isSongSaved] 读的是内存表。
+     * 若把推进挂在 300ms 去抖之后的 [flushToDisk] 上，`refreshFromCloud` /
+     * `loadMoreLikedSongs` 这类走 [scheduleFlush] 的路径会让 UI 晚 300ms 才刷新；
+     * 反过来「先推进修订、后换表」则会出现「UI 收到信号但读到的还是旧值，且不会再有
+     * 第二次信号」的**漏刷新**（比晚刷新更糟）。所以推进点与换表点必须在同一个事务里，
+     * 且**只有真的换了表**（`changed` / `after !== before`）才推进 —— 幂等写入不推进，
+     * 否则「已在库」的重复点击会白白让每个订阅点重算一次。
+     *
+     * ## 线程安全
+     *
+     * [MutableStateFlow.update] 是原子的（CAS 循环），可以从 IO 线程（[flushNow] 的调用方、
+     * [loadMoreLikedSongs] 的 IO 协程）安全推进；订阅方在自己的调度器上被唤醒，
+     * **不要求**调用方在主线程，也不引入新的锁序（推进点在 [songsLock] 之外）。
+     */
+    private val savedRevisionState = MutableStateFlow(0)
+
+    /**
+     * 只读句柄：订阅方用 `collect` / `collectAsState`。
+     *
+     * 现状消费点只有一个叶子（`PlayerCardExpanded` 的红心），但它必须**下沉到叶子**：
+     * 订阅点每抬一层，一次收藏变更就会多重组一层 —— 整卡（封面 / 歌词 / 队列）不参与。
+     */
+    val savedRevision: StateFlow<Int> = savedRevisionState.asStateFlow()
+
+    /** 推进修订号。**只在内存真源真的换了之后**调用（见 [savedRevisionState] 的 KDoc）。 */
+    private fun bumpSavedRevision() {
+        savedRevisionState.update { it + 1 }
+    }
+
     // ==================== 单曲（收藏） ====================
 
     /**
@@ -410,6 +462,9 @@ object LibraryManager {
             if (changed) cachedEntries = after.toMutableList()
         }
         if (changed) {
+            // K05：表真的换了 ⇒ 先推进修订（**在锁外**），再排队落盘。订阅方（播放器红心）
+            // 此刻去查 [isSongSaved] 一定拿到新值，不需要等 300ms 去抖之后的磁盘写。
+            bumpSavedRevision()
             flushNow(context)
             if (isLoggedIn(context)) pushLike(key.id, true)
             return SavedSongOutcome.ADDED
@@ -437,6 +492,8 @@ object LibraryManager {
             }
         }
         if (added.isNotEmpty()) {
+            // K05：只有**可见表真的多了条目**才推进修订。
+            bumpSavedRevision()
             flushNow(context)
             if (isLoggedIn(context)) added.forEach { pushLike(TrackKey.ofSong(it).id, true) }
         }
@@ -463,6 +520,8 @@ object LibraryManager {
             if (changed) cachedEntries = after.toMutableList()
         }
         if (changed) {
+            // K05：取消收藏同样是一次真表变更（tombstone），红心必须跟着灭。
+            bumpSavedRevision()
             flushNow(context)
             if (isLoggedIn(context)) pushLike(songId, false)
         }
@@ -479,9 +538,24 @@ object LibraryManager {
         return synchronized(songsLock) { ensureSongsLoaded(context).toList() }
     }
 
-    fun isSongSaved(context: Context, songId: Long): Boolean {
-        return synchronized(songsLock) { ensureSongsLoaded(context).any { it.isVisible && it.trackKey.id == songId } }
+    /**
+     * 按**身份**查询是否已收藏（v3.8.0 · K05 的读取入口）。
+     *
+     * 判据与 [removeSong] 同源：那边也是用 `TrackKey.of(null, songId)` 定位条目，
+     * 所以「红心亮着」与「点下去删得掉」永远是同一个答案 —— 不会出现
+     * 「显示已收藏、点了却删不掉」这种读写不一致。
+     *
+     * 这里**不新增数据源**：读的仍是唯一的真源 [cachedEntries]，只把「按什么查」
+     * 从裸 id 换成身份（`(source, id)`）。
+     */
+    fun isSongSaved(context: Context, key: TrackKey): Boolean {
+        // `id <= 0` 不是任何真实曲目（[saveSong] 同样拒绝），不必进锁扫表。
+        if (key.id <= 0L) return false
+        return synchronized(songsLock) { ensureSongsLoaded(context).any { it.isVisible && it.trackKey == key } }
     }
+
+    fun isSongSaved(context: Context, songId: Long): Boolean =
+        isSongSaved(context, TrackKey.of(null, songId))
 
     fun getSongsByAlbumId(context: Context, albumId: Long): List<SongItem> {
         return synchronized(songsLock) {
@@ -606,6 +680,9 @@ object LibraryManager {
                             .toHashSet()
                         likedIdCursor = likedIds.takeWhile { it in coveredIds }.size
                     }
+                    // K05：云端合并（只加不减）也可能真的往表里加了条目 —— 推进修订。
+                    // 放在锁外：订阅方是 Compose，不需要在持锁期间唤醒。
+                    bumpSavedRevision()
                     anySuccess = true
                 }
             }
@@ -684,7 +761,11 @@ object LibraryManager {
             val after = SavedSongSync.appendRemote(before, fetched, System.currentTimeMillis())
             cachedEntries = after.toMutableList()
             after.filter { it.isVisible }.map { it.song }
-        }.also { scheduleFlush(context) }
+        }.also {
+            // K05：分页追加也是一次真表变更（哪怕只补进一首），红心必须能感知。
+            if (fetched.isNotEmpty()) bumpSavedRevision()
+            scheduleFlush(context)
+        }
     }
 
     /**
@@ -744,6 +825,8 @@ object LibraryManager {
                             .appendRemote(before, fetched, System.currentTimeMillis())
                             .toMutableList()
                     }
+                    // K05：这一批真的补进了表 —— 推进修订（锁外），红心与新库页同时刷新。
+                    bumpSavedRevision()
                 }
                 if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
             }

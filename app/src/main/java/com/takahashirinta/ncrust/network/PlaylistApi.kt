@@ -236,7 +236,47 @@ object PlaylistApi {
         response.body?.string() ?: throw Exception("empty response")
     }
 
-    suspend fun getPlaylistDetail(playlistId: Long): List<SongItem> = withContext(Dispatchers.IO) {
+    /**
+     * 歌单详情的**显式结果**（H10）。
+     *
+     * 旧签名只返回 `List<SongItem>`，把三种完全不同的情况压成同一个形状：
+     * ① 歌单确实只有 5 首；② 服务端说 20 首却只给了 5 首（`trackIds` 被截断）；
+     * ③ 第二批 `v3/song/detail` 请求失败（少了一截）。调用方（本地同步）无从区分，
+     * 于是「读了一半」会被当成「读全了」写进缓存、推进 `lastSyncedAt`。
+     *
+     * 现在把完整性**带出函数**，由调用方决定不完整要不要重试/降级。
+     * 只要列表的既有调用点继续用 [getPlaylistDetail]（便利包装），签名不变。
+     */
+    @Immutable
+    data class PlaylistDetailResult(
+        /** 能用的曲目，保持 `trackIds` 的歌单顺序。 */
+        val songs: List<SongItem>,
+        /** 服务端声明的曲目总数（`playlist.trackCount`）。0 = 服务端没声明，判不了。 */
+        val declaredCount: Int,
+        /** 有多少批「补详情」请求没拿全（重试后仍失败，或只回来一部分）。 */
+        val failedBatches: Int,
+        /** 是否取全。判据见 [detailCompleteness]。 */
+        val complete: Boolean,
+    )
+
+    /**
+     * 完整性的**纯判定**（不碰网络，JVM 可单测）。
+     *
+     * 「有失败批次」一定不完整；声明了总数时还要求拿到的条数对得上。
+     * 声明 0 首意味着服务端没给 `trackCount` —— 只能按失败批次判，
+     * **不能**因为"没声明"就把未知当完整。
+     */
+    internal fun detailCompleteness(declaredCount: Int, collected: Int, failedBatches: Int): Boolean =
+        failedBatches == 0 && (declaredCount <= 0 || collected >= declaredCount)
+
+    /**
+     * 只返回曲目列表的便利包装。**看不出完整性需求的调用点用它**（详情页、一键播放），
+     * 需要区分「不完整」与「失败」的调用方用 [getPlaylistDetailResult]。
+     */
+    suspend fun getPlaylistDetail(playlistId: Long): List<SongItem> =
+        getPlaylistDetailResult(playlistId).songs
+
+    suspend fun getPlaylistDetailResult(playlistId: Long): PlaylistDetailResult = withContext(Dispatchers.IO) {
         // n=1000 requests more full-detail tracks; server still caps at ~20 in `tracks`,
         // but always returns the complete list in `trackIds`.
         val payload = mapOf(
@@ -253,7 +293,12 @@ object PlaylistApi {
             throw Exception("API error: code=$code")
         }
 
-        val playlistObj = json.optJSONObject("playlist") ?: return@withContext emptyList()
+        // 200 但缺 `playlist` 对象 = 结构异常：曲目当然是空的，但**不能**报"完整"。
+        val playlistObj = json.optJSONObject("playlist") ?: return@withContext PlaylistDetailResult(
+            songs = emptyList(), declaredCount = 0, failedBatches = 0, complete = false,
+        )
+        // 声明总数是判"截断"的唯一权威：服务端说 20 首、只给 5 首时必须能被发现（H10）。
+        val declaredCount = playlistObj.optInt("trackCount", 0).coerceAtLeast(0)
         // 权益信息与 tracks[] 并列，按 id 关联到每首歌（无版权判定靠 privilege.st）。
         val privileges = parsePrivileges(playlistObj.optJSONArray("privileges"))
 
@@ -277,22 +322,40 @@ object PlaylistApi {
         }
 
         // If trackIds is absent (e.g. very short playlists already fully in tracks), use tracks order.
-        if (allIds.isEmpty()) return@withContext tracksMap.values.toList()
+        // 没有 trackIds 时 `tracks` 就是全部 —— 完整性只能拿声明总数比（H10）。
+        if (allIds.isEmpty()) {
+            val fetchedAll = tracksMap.values.toList()
+            return@withContext PlaylistDetailResult(
+                songs = fetchedAll,
+                declaredCount = declaredCount,
+                failedBatches = 0,
+                complete = detailCompleteness(declaredCount, fetchedAll.size, 0),
+            )
+        }
 
         // Batch-fetch details for IDs not covered by the partial `tracks` array.
         val missingIds = allIds.filter { it !in tracksMap }
         val batchSize = 500
+        // 只拿回一部分也算这一批没成功：少的那几首正是"没取全"的证据（H10）。
+        var failedBatches = 0
         for (start in missingIds.indices step batchSize) {
             val batch = missingIds.subList(start, minOf(start + batchSize, missingIds.size))
             val fetched = fetchSongDetails(batch)
-            if (fetched.isEmpty() && batch.isNotEmpty()) {
-                Log.w("PlaylistApi", "batch of ${batch.size} songs returned empty from server")
+            if (fetched.size < batch.size) {
+                failedBatches++
+                Log.w("PlaylistApi", "batch returned ${fetched.size}/${batch.size} songs from server")
             }
             fetched.forEach { tracksMap[it.id] = it }
         }
 
         // Return songs in the original playlist order defined by trackIds.
-        allIds.mapNotNull { tracksMap[it] }
+        val songs = allIds.mapNotNull { tracksMap[it] }
+        PlaylistDetailResult(
+            songs = songs,
+            declaredCount = declaredCount,
+            failedBatches = failedBatches,
+            complete = detailCompleteness(declaredCount, songs.size, failedBatches),
+        )
     }
 
     private fun parseSongTrack(track: JSONObject): SongItem {
@@ -355,6 +418,10 @@ object PlaylistApi {
                     val song = parseSongTrack(songArray.getJSONObject(i))
                     privileges[song.id]?.let { song.copy(privilege = it) } ?: song
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 取消/超时**原样抛出**：吞掉它会让上层以为"这批就是没歌"，
+                // 于是取消被伪装成数据缺失（H10 之后这里会直接变成 failedBatches）。
+                throw e
             } catch (e: Exception) {
                 lastError = e
                 Log.w("PlaylistApi", "fetchSongDetails attempt ${attempt + 1} failed: ${e.message}")

@@ -139,15 +139,26 @@ class ScoreTest {
     }
 
     /**
-     * 8 色合成图（population 分别 400/260/180/120/90/60/300/200）的排序，期望值同样与
-     * **官方 Kotlin 移植**的输出逐值一致：
+     * 8 色合成图（population 分别 400/260/180/120/90/60/300/200）的排序。
+     *
+     * ## ⚠️ 这里**有意偏离官方 Kotlin 端口**（J15 后半）
+     *
+     * 官方端口在同一份输入上给出
      *   score4 -> #E53935 #8793AC #3E9C52 #8E24AA
-     *   score8 -> 上面 4 个 + #FDD835
-     * 其中 #8793AC（灰蓝混合，人口 680）与 #3E9C52（绿混合，人口 320）是量化阶段真实产生的簇，
-     * 说明"颜色数少但人口大"的混合色确实会排到前面 —— 这是参考实现的行为。
+     * score8 -> 上面 4 个 + #FDD835
+     * 它那两个"混合色"（#8793AC 人口 680、#3E9C52 人口 320）**不是量化阶段的正确结果**，而是
+     * `QuantizerWsmeans` 在 `Arrays.sort` 之后按位置剪枝、读错距离后把 4 个输入色硬合出来的。
+     *
+     * 本仓库修好剪枝（J15 后半）**和** `maximize` 的 Int 平方溢出（J15 前半）后，
+     * 量化输出是 8 个簇 —— 8 个输入原色全部按真实权重还原（旧路径会把深灰与灰合掉）。
+     * 排序随之改变（期望值由修复后的真实输出生成）：
+     *   score4 -> #E53935 #43A047 #1E88E5 #8E24AA
+     *   score8 -> 上面 4 个 + #FDD835 #00897B
+     * 偏离点、理由与对照证据见 [QuantizerTest.celebiDeviatesFromOfficialKotlinPortOnEightColorImage]
+     * 与 [QuantizerTest.pruningMatchesFullScan]（后者证明关掉剪枝做全量扫描时结果不变）。
      */
     @Test
-    fun rankingMatchesOfficialKotlinPortOnEightColorImage() {
+    fun rankingDeviatesFromOfficialKotlinPortOnEightColorImage() {
         val spec = listOf(
             0xFFE53935.toInt() to 400,
             0xFF43A047.toInt() to 260,
@@ -164,13 +175,13 @@ class ScoreTest {
         }
         val quantized = QuantizerCelebi.quantize(pixels.toIntArray(), 128)
         assertEquals(
-            listOf(0xFFE53935.toInt(), 0xFF8793AC.toInt(), 0xFF3E9C52.toInt(), 0xFF8E24AA.toInt()),
+            listOf(0xFFE53935.toInt(), 0xFF43A047.toInt(), 0xFF1E88E5.toInt(), 0xFF8E24AA.toInt()),
             Score.score(quantized, 4),
         )
         assertEquals(
             listOf(
-                0xFFE53935.toInt(), 0xFF8793AC.toInt(), 0xFF3E9C52.toInt(),
-                0xFF8E24AA.toInt(), 0xFFFDD835.toInt(),
+                0xFFE53935.toInt(), 0xFF43A047.toInt(), 0xFF1E88E5.toInt(),
+                0xFF8E24AA.toInt(), 0xFFFDD835.toInt(), 0xFF00897B.toInt(),
             ),
             Score.score(quantized, 8),
         )

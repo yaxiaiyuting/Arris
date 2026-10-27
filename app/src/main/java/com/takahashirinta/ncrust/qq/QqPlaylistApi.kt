@@ -139,13 +139,18 @@ object QqPlaylistApi {
     /**
      * 顺序拉完整个歌单（分页累积）。
      *
-     * ## 三条实测出来的边界规则
+     * ## 四条实测出来的边界规则
      *
      * 1. **结束判据是 `hasmore`，不是「返回数 < 页大小」**：末页 `hasmore=0`；
-     * 2. **返回 0 首也当结束**：实测越界 `song_begin` 返回 `code=0` + 0 首 + `hasmore=0`，
+     * 2. **返回 0 个原始条目也当结束**：实测越界 `song_begin` 返回 `code=0` + 0 首 + `hasmore=0`，
      *    所以「空页」必须能终止循环，否则会一直翻下去；
      * 3. **`order` 用全局 offset**：第 n 页的 `order` 从 `song_begin` 起算
-     *    （由 [QqPlaylistParser.parseDetailPage] 保证），合并时不会互相覆盖。
+     *    （由 [QqPlaylistParser.parseDetailPage] 保证），合并时不会互相覆盖；
+     * 4. **游标按原始条目数前进（H21）**：`begin += page.rawCount`，不是映射后的
+     *    `page.tracks.size`。有解析不出的条目时后者少走一格，下一页 offset 与上一页
+     *    重叠（原探针实测 A、A、B）。缺 `songlist` 数组时既不能前进也不能当成
+     *    「空页/完整」：本函数把它记进 [QqPlaylistPage.hasSonglist]，
+     *    由 `QqPlaylistRepository.detailIsComplete` 判成不完整。
      *
      * @param onPage 每拉到一页就回调一次，让 UI 能**渐进显示**（大歌单不必等全部拉完）。
      *   回调在调用者的协程上下文里同步执行，实现方不要在里面做重活。
@@ -166,6 +171,10 @@ object QqPlaylistApi {
         var pages = 0
         var last: QqPlaylistPage? = null
         var truncated = false
+        // H21：聚合页必须自己累计「原始条目数」与「songlist 是否出现过」——
+        // copy() 只保留**最后一页**的那两个字段，照搬会让整张歌单的完整性判错。
+        var rawTotal = 0
+        var pagesHaveSonglist = true
         while (pages < maxPages) {
             when (val r = fetchDetailPage(key, disstid, dirId, begin, pageSize)) {
                 is QqPlaylistResult.Ok -> {
@@ -173,14 +182,20 @@ object QqPlaylistApi {
                     last = page
                     all.addAll(page.tracks)
                     allSongs.addAll(page.songs)
+                    rawTotal += page.rawCount
+                    pagesHaveSonglist = pagesHaveSonglist && page.hasSonglist
                     onPage(page)
                     pages++
-                    // 「空页」与「hasmore=0」都可终止（实测两者都会出现在正常路径上）。
-                    if (!page.hasMore || page.tracks.isEmpty()) {
+                    // 终止：① 服务端说没有下一页；② 本页连**原始条目**都没有 —— 越界空页、
+                    // 以及缺 `songlist` 的结构异常。后者再翻也是同一个 offset，必须停。
+                    if (!page.hasMore || page.rawCount == 0) {
                         truncated = false
                         break
                     }
-                    begin += page.tracks.size
+                    // ★ H21：游标按**原始条目数**前进。用映射后的 `tracks.size` 会在有
+                    //   解析不出的条目时少走一格，下一页的 offset 与上一页重叠
+                    //   （原探针实测拿到 A、A、B）。
+                    begin += page.rawCount
                     if (pages >= maxPages) truncated = true
                 }
                 // 第一页失败 ⇒ 整个请求失败；后续页失败 ⇒ 返回已经拿到的部分，
@@ -188,14 +203,22 @@ object QqPlaylistApi {
                 else -> if (pages == 0) return r else {
                     Log.w(TAG, "detail paging stopped early at begin=$begin: $r")
                     return QqPlaylistResult.Ok(
-                        (last ?: emptyPage(key)).copy(tracks = all, songs = allSongs, hasMore = true)
+                        (last ?: emptyPage(key)).copy(
+                            tracks = all, songs = allSongs,
+                            rawCount = rawTotal, hasSonglist = pagesHaveSonglist,
+                            hasMore = true,
+                        )
                     )
                 }
             }
         }
         val base = last ?: emptyPage(key)
         return QqPlaylistResult.Ok(
-            base.copy(tracks = all, songs = allSongs, hasMore = base.hasMore || truncated)
+            base.copy(
+                tracks = all, songs = allSongs,
+                rawCount = rawTotal, hasSonglist = pagesHaveSonglist,
+                hasMore = base.hasMore || truncated,
+            )
         )
     }
 
@@ -209,5 +232,8 @@ object QqPlaylistApi {
         name = null,
         coverUrl = null,
         encryptUin = null,
+        // 兜底页没有服务端的 songlist：按结构异常处理（宁可报不完整，也别报"取全了"）。
+        rawCount = 0,
+        hasSonglist = false,
     )
 }

@@ -206,6 +206,8 @@ object QqSongMapper {
             source = MusicSource.QQMUSIC.key,
             sourceId = mid,
             mediaId = mediaMidOf(item, mid),
+            // J10：把服务端给的原始 songid 一起落盘，供读路径做一次性身份迁移。
+            qqSongId = rawId.takeIf { it > 0L && it < SourceIds.QQ_ID_FLAG },
             // v2.1.4：会员专享判定。`pay.pay_play == 1` 表示「播放需要付费」，
             // 官方搜索响应里 VIP 专享曲就是它。与 [isPaywalled] 共用同一个出口，
             // 避免同一个字段在两处各写一遍（那正是会漂移的地方）。

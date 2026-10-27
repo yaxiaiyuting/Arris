@@ -242,6 +242,80 @@ object SourceIds {
     fun biliRawId(id: Long): Long? = if (isBiliId(id)) id and (BILI_ID_FLAG - 1L) else null
 
     /**
+     * **H14 残余**：「视频腿」分区位（位 60）在 [SourceIds] 里的镜像。
+     *
+     * 权威定义在 `bili.BiliTrack.AV_PARTITION_FLAG`，这里**必须**与它逐位相同
+     * （`BiliAvPartitionMigrationTest` 用 `assertEquals` 把这两份钉在一起）。
+     *
+     * 为什么不在本文件直接引用那个常量：`source` 包是 `bili` 包的下层
+     * （`BiliModels` → `MusicSource` / `SourceIds`），反过来依赖会造出一个包级循环。
+     * 为了一个常量把分层搞坏不值得，所以**镜像一份 + 单测钉住**：
+     * 将来谁改了 B 站那边的取值，用例会立刻变红，而不是让迁移静默失效。
+     */
+    const val BILI_AV_PARTITION_FLAG: Long = 1L shl 60
+
+    /** B 站**视频腿**的取链载荷前缀（`bv:<bvid>:<cid>`，见 `BiliTrack.sourceId`）。 */
+    private const val BILI_VIDEO_PAYLOAD_PREFIX = "bv:"
+
+    /**
+     * **H14 残余**：把「分区位还没落盘的那个年代」写下的 B 站**视频腿** id 补上位 60。
+     *
+     * ## 为什么要读时补位
+     *
+     * v3.7.9 起 `BiliTrack.numericId` 是 `BILI_ID_FLAG or (AV_PARTITION_FLAG or aid)`
+     * （音频区保持原值）。**在那之前**写进磁盘的收藏 / 队列里，视频腿的 id 是
+     * `BILI_ID_FLAG or aid` —— 没有位 60。于是同一首视频曲目在「旧收藏」与
+     * 「现在搜出来的那一份」之间是两个 [TrackKey]（判等只看 `(source, id)`），
+     * 收藏里一行、搜索结果里另一行，互相删不掉，队列去重也拦不住。
+     *
+     * ## 三个判据，缺一个就原样返回
+     *
+     * 1. [isBiliId]：位 61 置位且位 62 清零 ⇒ **ncm / QQ 的 id 永远进不来**；
+     * 2. 位 60 仍是 0 ⇒ 已经补过的直接返回，于是**幂等**（重复读不会反复 or）；
+     * 3. 载荷 `sourceId` 以 `bv:` 开头 ⇒ 只有视频腿才带分区位。
+     *
+     * `au:`（音频区）**一律不动**：它的 id 历史上就是这个值，改它等于让音频区的
+     * 旧收藏全部失联（`BiliTrack.numericId` 的 KDoc 把这条写成了硬约束）。
+     * `sourceId` 缺失 / 为空 / 形状不认识 ⇒ **判不出是哪条腿 ⇒ 也原样返回**：
+     * 宁可少迁一条，也不能把 au101 当成 av101 合并掉。
+     *
+     * ## 值域（不需要额外守卫）
+     *
+     * 位 60 为 0 ⇒ 原值 `< 2⁶⁰` ⇒ 补位后 `< 2⁶¹ = BILI_ID_FLAG`，仍在 [biliId]
+     * 接受、[biliRawId] 能原样掩回的区间内；补出来的原值也正好等于
+     * `BiliTrack.numericIdOf(aid = aid)` 的那个值 —— 与**新写入**逐位一致。
+     *
+     * 播放不受影响：B 站取链走的是 `sourceId`（`au:` / `bv:`），从不看这个数字 id。
+     *
+     * @param id 落盘的身份 id（可能是视频腿的旧形状）。
+     * @param sourceId 载荷里的取链串（`SongItem.sourceId`）。
+     * @return 补位后的 id；任何一条判据不满足时**原样返回**（数值不变）。
+     */
+    /**
+     * J10：把**旧散列合成 id** 幂等改写成规范 id。
+     *
+     * 旧代码只读响应里的 `id`，而旧形状的 QQ 响应把 songid 放在 `songid` 字段里 ——
+     * 于是 id 为 0，`qqId(0, mid)` 走了 `FNV-1a(mid)` 散列。那个散列不可反推，
+     * 所以迁移**只能**依赖后来落盘的 [qqSongId]；没有它就不动（宁可不迁，也不合并两条身份）。
+     *
+     * 幂等：改写后的 id 是 `QQ_ID_FLAG or songid`，`isSynthesizedQqId` 第二遍为 false。
+     */
+    fun migrateSynthesizedQqId(id: Long, sourceId: String?, qqSongId: Long?): Long {
+        if (id <= 0L || qqSongId == null || qqSongId <= 0L || qqSongId >= QQ_ID_FLAG) return id
+        val mid = sourceId?.trim().orEmpty()
+        if (mid.isEmpty() || !isSynthesizedQqId(id, mid)) return id
+        return qqId(qqSongId, mid)
+    }
+
+    fun migrateBiliAvPartition(id: Long, sourceId: String?): Long {
+        if (id <= 0L || !isBiliId(id)) return id
+        if ((id and BILI_AV_PARTITION_FLAG) != 0L) return id
+        val payload = sourceId?.trim().orEmpty()
+        if (!payload.startsWith(BILI_VIDEO_PAYLOAD_PREFIX)) return id
+        return id or BILI_AV_PARTITION_FLAG
+    }
+
+    /**
      * 从**裸 id** 反推音源（v2.1.5）。纯逻辑，JVM 可单测。
      *
      * 只有一个判据能用：[QQ_ID_FLAG]。ncm 的 songId 是十进制百万~十亿量级

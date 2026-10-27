@@ -18,6 +18,7 @@ import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.TrackKey
 
@@ -160,6 +161,16 @@ internal object SavedSongCodec {
     }
 
     /**
+     * 单条解码的**唯一出口**：先按形状解出条目，再做一次读时身份迁移。
+     *
+     * 为什么迁移挂在这个出口、而不是塞进每个 `decodeEnvelope*`：本文件有**四种**
+     * 落盘形状（v1 裸 `SongItem` / 稳定名字信封 / 旧单字母 / 未知 key 集合），
+     * 逐条去加一定会漏掉一种 —— 而漏掉的恰好可能是真实存在的 v1 老数据。
+     */
+    internal fun decodeEntry(obj: JsonObject): SavedSongEntry? =
+        decodeEntryRaw(obj)?.withLegacyBiliAvPartition()?.withLegacyQqSynthesizedId()
+
+    /**
      * 单条解码：**先判形状**，再走对应路径。
      *
      * - 信封 → 稳定名字 / 已知旧单字母 / 声明顺序；
@@ -171,7 +182,7 @@ internal object SavedSongCodec {
      * 没有身份就没有判重、没有 delete、没有 tombstone，留着它只会在
      * `LazyColumn` 的 `key` 上撞车。
      */
-    internal fun decodeEntry(obj: JsonObject): SavedSongEntry? {
+    private fun decodeEntryRaw(obj: JsonObject): SavedSongEntry? {
         // ★ 形状 1 的**决定性**判据：`SongItem` 一定有 `id` 与 `name` 两个 primitive
         // （它们是必填的非空构造参数），而 v2 信封的五个 key 里**没有这两个名字**。
         //
@@ -213,6 +224,47 @@ private fun SavedSongEntry.withPayloadSourceAligned(): SavedSongEntry {
         source = expected.key.takeIf { expected != MusicSource.NETEASE },
     )
     return copy(song = aligned)
+}
+
+/**
+ * **H14 残余**：把旧收藏条目里那个「还没有分区位」的 B 站**视频腿** id 补上位 60。
+ *
+ * 只改身份，不改任何用户可见内容：歌名 / 歌手 / 封面 / `sourceId`（取链串）一个字节都不动，
+ * 所以「播放不受影响」是**结构性**的 —— B 站取链只按 `sourceId` 的 `au:` / `bv:` 前缀分派。
+ *
+ * `trackKey` 与 `song.id` **必须同时改**：`decodeEnvelope*` 在 `trackKey` 字符串缺失/解析
+ * 失败时会回落到 `TrackKey.ofSong(song)`（它读的是 `song.id`），只改一边会让同一条记录
+ * 在同一次运行里算出两个不同的身份 —— 那正是 H14 要修的那种「一条数据两种身份」。
+ *
+ * 判据、幂等性与值域全部在 [SourceIds.migrateBiliAvPartition]（纯函数 + 单测）；
+ * 这里只负责「解出来之后过一遍」，不重复任何判定。
+ */
+/**
+ * J10：把旧**散列合成 id** 的 QQ 条目幂等改写成规范 id。
+ *
+ * 旧代码丢掉了响应里的 `songid`，于是 `id` 是 `FNV-1a(mid)` 的散列（不可反推）。
+ * 现在载荷里多了 [SongItem.qqSongId]，能判出「这条就是旧散列」时改写成规范 id；
+ * 没有这个字段（更早的数据）就**原样保留** —— 宁可留两条身份，也不能把两首歌合成一首。
+ */
+private fun SavedSongEntry.withLegacyQqSynthesizedId(): SavedSongEntry {
+    if (trackKey.source != MusicSource.QQMUSIC) return this
+    val migrated = SourceIds.migrateSynthesizedQqId(
+        trackKey.id,
+        song.sourceId ?: trackKey.sourceId,
+        song.qqSongId,
+    )
+    if (migrated == trackKey.id) return this
+    return copy(trackKey = trackKey.copy(id = migrated), song = song.copy(id = migrated))
+}
+
+private fun SavedSongEntry.withLegacyBiliAvPartition(): SavedSongEntry {
+    // 载荷优先：`trackKey` 是我们自己拼的字符串，`song.sourceId` 才是取链真正用的那一份。
+    val migrated = SourceIds.migrateBiliAvPartition(
+        trackKey.id,
+        song.sourceId ?: trackKey.sourceId,
+    )
+    if (migrated == trackKey.id) return this
+    return copy(trackKey = trackKey.copy(id = migrated), song = song.copy(id = migrated))
 }
 
     /** 形状 2：v2 信封，稳定名字。 */

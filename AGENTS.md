@@ -62,7 +62,7 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- **Current: `versionName = "3.7.9-gpl"`, `versionCode = 95`.** 本轮草稿标签 `v3.7.9-gpl`。
+- **Current: `versionName = "3.7.10-gpl"`, `versionCode = 96`.** 本轮草稿标签 `v3.7.10-gpl`。
   定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 92，取 93；另核对 dist/v3.7.6-gpl 的实际 APK 为 92。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）

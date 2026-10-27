@@ -107,7 +107,28 @@ object NavRoutes {
      */
     const val ARTIST_SRC = "artist/{source}/{artistId}/{artistName}"
     const val ALBUM_SRC = "album/{source}/{albumId}"
-    const val SONG_SRC = "song/{source}/{songId}"
+
+    /**
+     * v2.4.0 · E / v3.8.1 · H13：带音源的单曲路由（**可选载荷走查询段**）。
+     *
+     * ## 为什么载荷必须是可选段
+     *
+     * `song/{source}/{songId}` 是 QQ 单曲页唯一的信息来源，而 QQ 的取链与跨源召回都需要
+     * 路由里**没有**的东西：
+     *  - 取链：`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null` —— songmid 是硬依赖；
+     *  - 召回：`CrossSourceMatcher` 没有共享 id 空间，关键词只能由「曲名 + 艺人」构成。
+     *
+     * 旧路由把这些全部丢掉，于是页面拿到的锚点既取不了链也搜不了（H13 的本体）。
+     *
+     * 载荷走**查询段**而不是新增路径段，是因为查询参数可以带默认值：老的
+     * `song/{source}/{songId}`（一个载荷都不带）仍然匹配同一个目的地 —— 若换成
+     * 更多路径段，就必须再注册一个 `composable`，两套页面会各自漂移。
+     * 匹配语义有据可查：navigation-common 2.8.5 的 `NavDeepLink.parsePath` 在第一个
+     * `?` 处切开，路径正则只覆盖 path 部分并允许 `($|(\?(.)*)|(\#(.)*))`；缺省的查询参数
+     * 由 `navArgument(defaultValue = "")` 兜底（`missingRequiredArguments` 会跳过带默认值的参数）。
+     */
+    const val SONG_SRC =
+        "song/{source}/{songId}?sourceId={sourceId}&mediaId={mediaId}&name={name}&artist={artist}"
 
     /**
      * v2.8.0：**设置二级页**（一级分组卡片点进来的详情页）。
@@ -162,8 +183,42 @@ object NavRoutes {
     /** v2.4.0 · E：带音源的专辑路由。 */
     fun album(source: MusicSource, id: String) = "album/${source.key}/$id"
 
-    /** v2.4.0 · E：带音源的单曲路由。 */
-    fun song(source: MusicSource, id: String) = "song/${source.key}/$id"
+    /**
+     * v2.4.0 · E：带音源的单曲路由。
+     *
+     * v3.8.1 · H13：多了四个**可选载荷**（songmid / media_mid / 曲名 / 艺人）。
+     *
+     * 为什么不带它们页面就是坏的：单曲页的锚点原先只由 `(source, id)` 构造，而
+     *  - QQ 取链硬依赖 songmid（`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null`）；
+     *  - 跨源召回硬依赖「曲名 + 艺人」（[com.takahashirinta.ncrust.crosssource.CrossSourceMatcher]
+     *    没有共享 id 空间）—— 名字为空时搜索关键词为空，静默零结果。
+     *
+     * 载荷**按值取舍**：空的字段不进查询串，所以
+     *  - 老调用点（只给两个参数）产出的路由与 v3.8.0 **逐字节相同**；
+     *  - ncm 侧 sourceId/mediaId 恒为 null，路由里也不会多出空段。
+     * 编码一律走 [NavRouteCodec.encodePathSegment]（`%XX`，空格写成 `%20` 而不是 `+`），
+     * 读侧**不再解码** —— 导航库已经解过一次（见 [NavRouteCodec] 的 H08 说明）。
+     */
+    fun song(
+        source: MusicSource,
+        id: String,
+        sourceId: String? = null,
+        mediaId: String? = null,
+        name: String = "",
+        artist: String = "",
+    ): String {
+        val base = "song/${source.key}/$id"
+        val extras = ArrayList<String>(4)
+        sourceId?.takeIf { it.isNotBlank() }
+            ?.let { extras += "sourceId=" + NavRouteCodec.encodePathSegment(it) }
+        mediaId?.takeIf { it.isNotBlank() }
+            ?.let { extras += "mediaId=" + NavRouteCodec.encodePathSegment(it) }
+        name.takeIf { it.isNotBlank() }
+            ?.let { extras += "name=" + NavRouteCodec.encodePathSegment(it) }
+        artist.takeIf { it.isNotBlank() }
+            ?.let { extras += "artist=" + NavRouteCodec.encodePathSegment(it) }
+        return if (extras.isEmpty()) base else base + "?" + extras.joinToString("&")
+    }
 
     fun qqPlaylistDetail(id: String, ownerId: String, dirId: Long, name: String) =
         "qqplaylist/$id/$ownerId/$dirId/" + NavRouteCodec.encodePathSegment(name)
@@ -449,7 +504,8 @@ fun MainNavGraph(
                 sourceKey = MusicSource.NETEASE.key,
                 songId = songId.toString(),
                 onBack = { navController.popBackStack() },
-                onPlay = onSongClick
+                onPlay = onSongClick,
+                onAddToNext = onSongInsertNext
             )
         }
 
@@ -457,16 +513,33 @@ fun MainNavGraph(
             route = NavRoutes.SONG_SRC,
             arguments = listOf(
                 navArgument("source") { type = NavType.StringType },
-                navArgument("songId") { type = NavType.StringType }
+                navArgument("songId") { type = NavType.StringType },
+                // v3.8.1 · H13：四个**可选**载荷。`defaultValue = ""` 是「老路由继续可用」的关键：
+                // navigation-common 2.8.5 的 `NavDeepLink.getMatchingArguments` 只对**声明了**的参数
+                // 逐个从 URI 取值（缺省时循环体不执行、不判失败），随后 `missingRequiredArguments`
+                // 会跳过 `isDefaultValuePresent` 的参数 —— 所以不带查询串的
+                // `song/qqmusic/123` 仍然匹配本目的地，四个参数取到空串（= 没有载荷）。
+                navArgument("sourceId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("mediaId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                navArgument("artist") { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStackEntry ->
+            // 四个载荷都是导航库**已经解码过**的值（H08：读侧不再解码）。
             val sourceKey = backStackEntry.arguments?.getString("source") ?: return@composable
             val songId = backStackEntry.arguments?.getString("songId") ?: return@composable
             SongDetailScreen(
                 sourceKey = sourceKey,
                 songId = songId,
+                sourceId = backStackEntry.arguments?.getString("sourceId").orEmpty(),
+                mediaId = backStackEntry.arguments?.getString("mediaId").orEmpty(),
+                songName = backStackEntry.arguments?.getString("name").orEmpty(),
+                artistName = backStackEntry.arguments?.getString("artist").orEmpty(),
                 onBack = { navController.popBackStack() },
-                onPlay = onSongClick
+                onPlay = onSongClick,
+                // v3.8.1 · H13：「添加到下一首播放」此前默认空实现（点了没反应）。
+                // 本页这一行的行内动作要能被"不可播放时禁用"，前提是它本来就能用。
+                onAddToNext = onSongInsertNext
             )
         }
     }

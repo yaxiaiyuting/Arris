@@ -23,6 +23,9 @@
 //   https://github.com/material-foundation/material-color-utilities/blob/main/java/quantize/PointProviderLab.java
 // 上游用 QuantizerResult 包一层 Map，这里直接返回 Map<ARGB, 人口>，其余逐行一致
 // （5bit 直方图、moments/directions、Wu 的方差切分、Wsmeans 的三角不等式剪枝与 k-means 精修）。
+// **唯一有意偏离上游的地方**：Wsmeans 的三角不等式剪枝改读「未排序」的距离矩阵 ——
+// 官方端口在 `Arrays.sort` 之后按位置 j 剪枝，读到的其实是「第 j 近的中心」而不是「中心 j」，
+// 该处偏离的理由、证据与对照用例见 `QuantizerWsmeans.quantize` 里的剪枝注释。
 // 确定性：Wsmeans 用 `java.util.Random(0x42688)`（与上游同一个种子、同一个 JDK 算法），
 // 所有 Map 都是 LinkedHashMap ⇒ 同样的输入必然得到同样的输出。不得引入 android.* / androidx.*。
 
@@ -348,7 +351,11 @@ class QuantizerWu : Quantizer {
                 continue
             }
 
-            var tempNumerator = (halfR * halfR + halfG * halfG + halfB * halfB).toDouble()
+            // J15：`halfR/halfG/halfB` 是 Int，`halfR * halfR` 先在 Int 里算完才转 Double。
+            // 任一半的通道和超过 46341 就溢出成负数 ⇒ `temp` 永远比不过 `max` ⇒
+            // `cutLocation` 停在 -1、`cut()` 返回 false，Wu 把**整张图压成 1 个盒子**
+            // （实测：红/绿各半的 50×50 输入，输出只剩一个 0xFF7F7F00）。
+            var tempNumerator = halfR.toDouble() * halfR + halfG.toDouble() * halfG + halfB.toDouble() * halfB
             var tempDenominator = halfW.toDouble()
             var temp = tempNumerator / tempDenominator
 
@@ -360,7 +367,7 @@ class QuantizerWu : Quantizer {
                 continue
             }
 
-            tempNumerator = (halfR * halfR + halfG * halfG + halfB * halfB).toDouble()
+            tempNumerator = halfR.toDouble() * halfR + halfG.toDouble() * halfG + halfB.toDouble() * halfB
             tempDenominator = halfW.toDouble()
             temp += (tempNumerator / tempDenominator)
 
@@ -461,7 +468,10 @@ object QuantizerWsmeans {
     private const val MAX_ITERATIONS = 10
     private const val MIN_MOVEMENT_DISTANCE = 3.0
 
-    /** 可排序的距离项；上游用 `Arrays.sort`（稳定排序）决定剪枝顺序，这里保持一致。 */
+    /**
+     * 可排序的距离项。排序（`Arrays.sort`，稳定排序）只用来生成 `indexMatrix` 的中心顺序，
+     * **不参与剪枝** —— 剪枝读的是未排序的 [quantize] 局部矩阵 `clusterDistances`。
+     */
     private class Distance : Comparable<Distance> {
         var index = -1
         var distance = -1.0
@@ -479,6 +489,18 @@ object QuantizerWsmeans {
         inputPixels: IntArray,
         startingClusters: IntArray,
         maxColors: Int,
+    ): Map<Int, Int> = quantize(inputPixels, startingClusters, maxColors, prune = true)
+
+    /**
+     * @param prune 三角不等式剪枝开关；`false` = 全量扫描（每个点到每个中心都算一次距离）。
+     *   只用于 `QuantizerTest` 的对照用例 —— **正确的剪枝必须与全量扫描给出逐项相同的结果**，
+     *   不相等就说明剪枝读错了距离。生产调用点一律走 [quantize]（等价于 `prune = true`）。
+     */
+    internal fun quantize(
+        inputPixels: IntArray,
+        startingClusters: IntArray,
+        maxColors: Int,
+        prune: Boolean,
     ): Map<Int, Int> {
         // 空输入时 clusterCount 会是 0，`random.nextInt(0)` 会抛异常；上游没有这个判断。
         if (inputPixels.isEmpty() || maxColors <= 0) {
@@ -547,11 +569,18 @@ object QuantizerWsmeans {
 
         val distanceToIndexMatrix = Array(clusterCount) { Array(clusterCount) { Distance() } }
 
+        // 剪枝要的是「中心 previousClusterIndex 到中心 j 的距离」，下标必须是簇号。
+        // `distanceToIndexMatrix[i]` 每轮都会被 `Arrays.sort` 按距离升序重排，位置 ≠ 簇号，
+        // 所以另存一份**未排序**的矩阵专门给剪枝用；对角线恒为 0（中心到自身）。
+        val clusterDistances = Array(clusterCount) { DoubleArray(clusterCount) }
+
         val pixelCountSums = IntArray(clusterCount)
         for (iteration in 0 until MAX_ITERATIONS) {
             for (i in 0 until clusterCount) {
                 for (j in i + 1 until clusterCount) {
                     val distance = pointProvider.distance(clusters[i], clusters[j])
+                    clusterDistances[j][i] = distance
+                    clusterDistances[i][j] = distance
                     distanceToIndexMatrix[j][i].distance = distance
                     distanceToIndexMatrix[j][i].index = i
                     distanceToIndexMatrix[i][j].distance = distance
@@ -573,11 +602,21 @@ object QuantizerWsmeans {
                 var minimumDistance = previousDistance
                 var newClusterIndex = -1
                 for (j in 0 until clusterCount) {
-                    // 三角不等式剪枝：距离已经 >= 4 倍当前距离的中心不可能更近。
-                    // J15（后半）：官方 MCU 端口同样在 `Arrays.sort` 之后按位置 j 剪枝。
-                    // 这里**保持与官方端口逐字节一致**（QuantizerTest/ScoreTest 是 parity 守卫）；
-                    // 偏离它属于产品决策，不是单方面"修 bug"。
-                    if (distanceToIndexMatrix[previousClusterIndex][j].distance >= 4 * previousDistance) {
+                    // 三角不等式剪枝（Celebi 2011 的 annihilation 规则）：
+                    // 中心 c 与候选 j 的**平方**距离 >= 4 ×「点到 c 的平方距离」
+                    //   ⇒ d(p,j) >= d(c,j) - d(p,c) >= d(p,c)，即 j 不可能比 c 更近，可以跳过。
+                    //
+                    // J15（后半）——官方 MCU Kotlin 端口（以及 Java 参考实现）在这里写的是
+                    //   distanceToIndexMatrix[previousClusterIndex][j].distance
+                    // 但这个矩阵在这一轮里刚被 `Arrays.sort` 按距离**升序重排**：位置 j 存的是
+                    // 「第 j 近的中心」，不是「中心 j」（j = 0 甚至是对角线占位项，距离为 -1.0）。
+                    // 照抄它 ⇒ 拿 B 簇的距离去剪 A 簇：该剪的不剪、不该剪的剪掉，聚类结果变成
+                    // 排序副作用的函数（J15 的实测症状：7 种互异颜色 + 7 个精确初始中心仍只出 6 色）。
+                    // 所以我们**有意不跟官方端口**：改读未排序的 `clusterDistances`，
+                    // `Arrays.sort` 只负责 `indexMatrix` 的生成顺序。
+                    // 硬对照见 QuantizerTest 的 `pruningMatchesFullScan`：关掉剪枝做全量扫描，
+                    // 8 色图与「7 个精确初始中心」两种输入的输出都必须与开剪枝逐项一致。
+                    if (prune && clusterDistances[previousClusterIndex][j] >= 4 * previousDistance) {
                         continue
                     }
                     val distance = pointProvider.distance(point, clusters[j])

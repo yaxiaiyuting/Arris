@@ -12,6 +12,7 @@
  */
 
 package com.takahashirinta.ncrust
+import com.takahashirinta.ncrust.ui.player.QueueMoveCommit
 import com.takahashirinta.ncrust.ui.player.TrayLayout
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
 import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
@@ -784,6 +785,51 @@ private fun songIdForRoute(song: SongItem): String =
     }
 
 /**
+ * v3.8.1 · E10（残余）：**按身份**把队列里的一首挪到另一首的位置 —— 纯逻辑，JVM 可单测。
+ *
+ * ## 为什么这一层必须是身份
+ *
+ * 拖拽把「拖谁」「落到谁那儿」在两处表达：视觉上是行，语义上是 `TrackKey(source, id)`。
+ * 旧提交只带两个**下标**，而提交要跨层（`QueueView` → callbacks → `MainScreen`），
+ * 期间队列可能已被行内删除/插播改过：原队列 `[A,B,C,D,E]` 的 `from=2,to=3` 在删掉 `B` 之后
+ * 仍然合法，但 `queue[2]` 已经是 `D` —— 结果是「拖 C」变成了移动 `D`。
+ *
+ * 所以身份才是可校验的输入：两端各回查一次，**任何一端回查不到就整次作废**。
+ * 「这一下没反应」是可接受的失败；「挪错一首」不是。
+ *
+ * ## 与 `PlaybackQueueLogic.removeAt` 的关系
+ *
+ * 不动它：那只管删除后的当前索引修正，语义与「移动」不同（移动是「先删后插」，两端都存在）。
+ * 这里只复用它的 [PlaybackQueueLogic.indexOfKey]（身份 → 下标的唯一实现）与
+ * [PlaybackQueueLogic.QueueState]（整块回写用）。
+ *
+ * @return null = 放弃这次移动（任一端不在队列里 / 两端是同一首）。
+ */
+internal fun reorderByIdentity(
+    queue: List<SongItem>,
+    currentIndex: Int,
+    fromKey: TrackKey,
+    toKey: TrackKey,
+): PlaybackQueueLogic.QueueState? {
+    val from = PlaybackQueueLogic.indexOfKey(queue, fromKey)
+    val to = PlaybackQueueLogic.indexOfKey(queue, toKey)
+    if (from < 0 || to < 0 || from == to) return null
+    val item = queue[from]
+    val moved = queue.toMutableList().apply {
+        removeAt(from)
+        add(to, item)
+    }
+    // 当前播放项的索引修正：歌曲本身移动了，索引跟着它走（与 v2.x 的三分支逐条相同）。
+    val newCurrent = when {
+        from == currentIndex -> to
+        from < currentIndex && to >= currentIndex -> currentIndex - 1
+        from > currentIndex && to <= currentIndex -> currentIndex + 1
+        else -> currentIndex
+    }
+    return PlaybackQueueLogic.QueueState(queue = moved, currentIndex = newCurrent)
+}
+
+/**
  * v2.6.1 · P0：底部导航里「搜索」是第 2 个 tab（首页 0 / 库 1 / 搜索 2 / 用户 3）。
  *
  * 抽成常量而不是就地写 `2`：这条索引同时被「跳搜索兜底」和导航栏本身消费，
@@ -1378,21 +1424,65 @@ fun MainScreen(
     }
 
     // 队列拖拽排序：移动后修正 currentQueueIndex（当前播放项跟随其歌曲移动）。
-    fun moveInQueue(from: Int, to: Int) {
-        if (from !in playbackQueue.indices || to !in playbackQueue.indices || from == to) return
-        val item = playbackQueue[from]
-        val newQueue = playbackQueue.toMutableList().apply { removeAt(from); add(to, item) }
-        // 当前播放项的索引修正：歌曲本身移动了，索引跟随歌曲。
-        currentQueueIndex = when {
-            from == currentQueueIndex -> to
-            from < currentQueueIndex && to >= currentQueueIndex -> currentQueueIndex - 1
-            from > currentQueueIndex && to <= currentQueueIndex -> currentQueueIndex + 1
-            else -> currentQueueIndex
+    //
+    // v3.8.1 · E10（残余）：**提交按身份**，按下标只是兜底。
+    //
+    // 旧实现只校验两个下标合法就动手（`from/to in indices`）。可「下标合法」与「下标指着同一首歌」
+    // 是两件事：`QueueView` 的提交要经过 callbacks → 中间层才到这里，这期间队列完全可能被改过
+    // （行内删除、插播、上层任意队列操作）。原队列 [A,B,C,D,E] 的 from=2/to=3 在「删掉 B」之后
+    // 仍然合法，但 `queue[2]` 已经是 D ⇒「拖 C」变成了移动 D —— 用户看到的是"拖错了一首"。
+    //
+    // `QueueView` 现在在提交时登记两端身份（`QueueMoveCommit`），这里先按身份重新定位：
+    //  - 两端都能找到 ⇒ 用定位出来的下标移动（与拖动开始时是同一首歌）；
+    //  - 任一端已经不在队列里 ⇒ **放弃这次移动**（返回 false + 日志）。宁可不动，也不要动错。
+    //
+    // 返回值：true = 真的移动了；false = 放弃了（身份缺失/相同/越界）。
+    fun moveInQueueByIdentity(fromKey: TrackKey, toKey: TrackKey): Boolean {
+        // 重排的**纯逻辑**在文件末尾的 [reorderByIdentity]（JVM 单测直接钉住），
+        // 这里只负责把结果写回 Compose 状态 + 持久化。
+        val moved = reorderByIdentity(playbackQueue, currentQueueIndex, fromKey, toKey)
+        if (moved == null) {
+            // 「身份两端都在、且不是同一首」不成立时**放弃这次移动**：
+            // 宁可这一下没反应，也不能把相邻的另一首挪走。
+            Log.w(
+                "MainScreen",
+                "moveInQueueByIdentity abandoned: from=${fromKey.tag} to=${toKey.tag} " +
+                    "size=${playbackQueue.size} current=$currentQueueIndex",
+            )
+            return false
         }
         playerViewModel.invalidatePreload()
-        playbackQueue = newQueue
+        playbackQueue = moved.queue
+        // 当前播放项的索引修正：歌曲本身移动了，索引跟随歌曲（同旧实现的三分支）。
+        currentQueueIndex = moved.currentIndex
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+        Log.d(
+            "MainScreen",
+            "moveInQueueByIdentity ${fromKey.tag} -> ${toKey.tag} (current=$currentQueueIndex)",
+        )
+        return true
+    }
+
+    fun moveInQueue(from: Int, to: Int) {
+        // 优先用 `QueueView` 在提交那一刻登记的身份（唯一的真实调用点）。
+        val commit = QueueMoveCommit.take()
+        if (commit != null) {
+            moveInQueueByIdentity(commit.first, commit.second)
+            return
+        }
+        // 没有身份载荷（预览/单测里的空实现，或将来新增的其它调用点）：把下标就地翻译成身份，
+        // 再走同一条身份路径 —— 语义与旧实现一致（越界即放弃），但**不再有第二条移动实现**。
+        val fromKey = playbackQueue.getOrNull(from)?.let { QueueKeys.keyOf(it) }
+        val toKey = playbackQueue.getOrNull(to)?.let { QueueKeys.keyOf(it) }
+        if (fromKey == null || toKey == null) {
+            Log.w(
+                "MainScreen",
+                "moveInQueue ignored: from=$from to=$to out of range (size=${playbackQueue.size})",
+            )
+            return
+        }
+        moveInQueueByIdentity(fromKey, toKey)
     }
 
     /**
@@ -3368,7 +3458,21 @@ fun MainScreen(
                         // 不该挤在「转到歌手 / 转到专辑」这两个高频操作前面。
                         SongMenuAction(Icons.Default.Info, LocalStrings.current.source.aggSongDetailAction) {
                             if (progress.value > 0.01f) collapseCard()
-                            navController.navigate(NavRoutes.song(song.musicSource, songIdForRoute(song)))
+                            // v3.8.1 · H13：**必须**把载荷一起带进路由。
+                            // 单曲页原先只拿得到 `(source, id)`，而 QQ 的取链硬依赖 songmid
+                            // （`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null`）、
+                            // 跨源召回硬依赖曲名（关键词为空 ⇒ 静默零结果）——
+                            // 于是 QQ 单曲页的播放按钮必然失败。这里手上正好有完整的 `SongItem`。
+                            navController.navigate(
+                                NavRoutes.song(
+                                    source = song.musicSource,
+                                    id = songIdForRoute(song),
+                                    sourceId = song.sourceId,
+                                    mediaId = song.mediaId,
+                                    name = song.name,
+                                    artist = song.artists?.firstOrNull()?.name.orEmpty(),
+                                )
+                            )
                         },
                     ),
                     onDismiss = { menuSong = null }

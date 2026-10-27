@@ -55,6 +55,47 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
+ * v3.8.1 · E10（残余）：拖拽重排提交时**附带的两端身份**。
+ *
+ * ## 为什么还需要这个对象（而不是直接把 `onMove` 换成身份签名）
+ *
+ * `onMove` 是 `PlayerCardState` 里那份 callbacks 的字段（`(Int, Int) -> Unit`），
+ * 中间还隔着 `PlayerCardExpanded` / `PlayerCardOverlay` 两层转发。改类型要同时动那三个文件 ——
+ * 本轮改动被限定在「队列面板 + MainScreen」这一条链上，所以用**一次性载荷**把身份带过去：
+ *
+ *  - `QueueView` 在真正调用 `onMove(from, to)` **之前**登记两端身份；
+ *  - `MainScreen.moveInQueue` 消费它，**按身份**重新定位后再移动（见那边的 KDoc）。
+ *
+ * ## 契约（很小，但必须守住）
+ *
+ * 1. **只写一次、只读一次**：[publish] 之后紧接着同步调用回调，`MainScreen` 在同一帧、
+ *    同一线程（Compose 主线程）里 [take]。取走即清空，不会影响下一次拖拽。
+ * 2. **取不到就退回下标口径**：预览/单测里的 `onMove` 是空实现，`take` 自然拿不到东西；
+ *    此时 `MainScreen.moveInQueue` 走老的下标路径，行为与 v3.8.0 完全一致。
+ * 3. **不能跨线程**：拖拽手势、Compose 状态写入、队列重排都在主线程；
+ *    这里刻意不加锁，也不持有队列引用（只存两个不可变值对象）。
+ */
+internal object QueueMoveCommit {
+    private var from: TrackKey? = null
+    private var to: TrackKey? = null
+
+    /** 登记一次待提交的「从谁移到谁的后面」。 */
+    fun publish(fromKey: TrackKey?, toKey: TrackKey?) {
+        from = fromKey
+        to = toKey
+    }
+
+    /** 取走并清空。任一端为空 ⇒ 返回 null（等价于「这次提交没有身份可用」）。 */
+    fun take(): Pair<TrackKey, TrackKey>? {
+        val f = from
+        val t = to
+        from = null
+        to = null
+        return if (f != null && t != null) f to t else null
+    }
+}
+
+/**
  * 队列面板 —— 三区视图（Apple Music 式）：过去播放 / 现在播放 / 将要播放。
  *
  * 语义约定：
@@ -353,6 +394,15 @@ fun QueueView(
                         val fromNow = if (dragged == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dragged }
                         val toNow = if (dropTarget == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dropTarget }
                         if (fromNow >= 0 && toNow >= 0 && fromNow != toNow && toNow > currentIndexRef) {
+                            // v3.8.1 · E10（残余）：把两端**身份**一并交给上层。
+                            //
+                            // 这里已经按身份重定位出 `fromNow/toNow` 了，为什么还要传身份？
+                            // 因为「索引合法」不等于「索引指着同一首歌」：这次提交是一次**跨层
+                            // 调用**（QueueView → callbacks → MainScreen），上层真正执行移动时
+                            // 看到的队列已经可能是另一份（回调里若先做了别的队列操作、或未来的
+                            // 中间层插入了去抖/异步）。身份跟着提交走，上层就能自己重新定位，
+                            // 而不是盲信两个整数 —— 这也是 E10 残余要收口的最后一段。
+                            QueueMoveCommit.publish(dragged, dropTarget)
                             onMove(fromNow, toNow)
                         }
                         draggingQueueIndex = -1
