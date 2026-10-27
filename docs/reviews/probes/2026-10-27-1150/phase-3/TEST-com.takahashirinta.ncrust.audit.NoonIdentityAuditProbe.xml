@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonIdentityAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T05:51:35.726Z" hostname="cachyos-x8664" time="0.062">
+  <properties/>
+  <testcase name="staleConfirmedTrackReceivesTheNewManualSongsListeningTime" classname="com.takahashirinta.ncrust.audit.NoonIdentityAuditProbe" time="0.061"/>
+  <testcase name="queueIdentityBackfillRejectsNewMidBecauseTrackEqualityIgnoresPayload" classname="com.takahashirinta.ncrust.audit.NoonIdentityAuditProbe" time="0.001"/>
+  <system-out><![CDATA[AUDIT confirmed identity: after an auto transition pins A, a later manual B leaves playingTrack=A because onSongTransitioned updates it only when nextTrack != currentTrack; the real StatsRecorder sampler writes B's 500ms and metadata under A. State fixture plus source lifecycle evidence, no audio transition executed
+AUDIT identity backfill: real adoptTrackIdentity sees the same logical track and returns before copying missing QQ payload from the restored queue; constructorless isolated method fixture, not an Activity restoration test
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

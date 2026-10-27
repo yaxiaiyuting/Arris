@@ -8,6 +8,8 @@
 
 阶段二已追加音频特征、身份回填、统计和搜索的六条缺陷用例，累计 **11 tests / 0 failures / 0 errors**。J07/J08 属于 v3.7.8 对 S7/S9 的修复残余，不能称为新引入的问题；S9 的来源计数重复部分已经修复。
 
+阶段三累计 **15 tests / 0 failures / 0 errors**，追加 QQ 旧接口形状映射、失败提示占位符、两条手势方向组合用例。另补三项 UI 源码问题及实际依赖字节码证据；尚未执行设备视觉或触摸验证。
+
 ## 阶段一确认
 
 | 编号 | 优先级 | 问题 | 证据范围 |
@@ -21,8 +23,14 @@
 | J07 | P2 | 一次自动过渡固定 playingTrack 后，手动切歌不再更新，后续统计归到旧歌 | 真实统计采样器状态探针 + 过渡调用链，S7 残余 |
 | J08 | P2 | 新分页结构仍把失败网易页确认并清掉待补标记，QQ 成功时继续跳页 | 真实 SearchViewModel + 本地 HTTP，S9 残余 |
 | J09 | P2 | 清空搜索框未取消请求，晚到专辑响应重新填回空白页面 | 真实 clearQuery/searchByType + 本地 HTTP |
+| J10 | P2 | QQ 旧字段 songmid/songid/songname 只兼容 mid，数字身份散列化且标题丢失；与新接口同曲重复收藏 | 真实旧响应解析和收藏合并；远端当前返回形状频率未测 |
+| J11 | P3 | 换源失败提示在全部八种语言都暴露字面 `%s` | 真实提示函数，八语言对照 |
+| J12 | P2 | 播放器与控制栏把进度速度当屏幕 Y 速度，快甩方向判反 | 两条真实吸附决策与入口公式组合，未注入触摸事件 |
 | K01 | P1 | MainScreen 的异步私人 FM、立即播放和续播返回时缺少播放意图提交闸门，旧结果可夺回播放权 | 静态调用链；未执行 Compose/音频复现 |
 | K02 | P2 | 启动时异步恢复旧队列，无条件覆盖等待期间用户新建的队列 | 静态调用链；尚无页面竞态复现 |
+| K03 | P2 | 海报在最小字号仍放不下且当前行靠后时，不裁掉前文也不剪裁，歌词可越过页脚 | 静态渲染边界，未运行 Android Canvas |
+| K04 | P2 | 播放器触摸协程捕获旧 geo，面板变化后命中边界不更新 | 静态代码 + 实际 Compose 1.7.6 字节码，未执行设备手势 |
+| K05 | P3 | 库页或搜索页修改当前歌曲收藏后，播放器红心可保留旧值 | 静态状态依赖链，未运行 Compose |
 
 ### J01：同一 clear 代次内的持久化反序
 
@@ -108,10 +116,55 @@
 
 建议清空、换查询、换类型统一取消并推进代次，所有结果、错误、loading 和 hasMore 都按代次提交。不要只给歌曲聚合分支加字符串相等检查；同关键字重查也可能属于不同请求。
 
+## 阶段三确认与边界
+
+### J10：旧 QQ 字段兼容不对称
+
+`qq/QqSongMapper.kt:132–136` 接受旧 songmid，但 rawId 只读 id；`:193–195` 只读 name/title，不读 songname。`:93–97` 的公开旧搜索解析和 `QqApi.kt:118/160` 的正常/歌词搜索回退确实使用该映射。
+
+`legacySongidAndSongnameAreIgnoredAndTheSameMidBecomesTwoSavedSongs` 输入带 songid=97773/songmid/songname 的旧形状，解析器将 ID 变成 mid 散列且标题为空；同一 mid 的新形状 id=97773 得到另一 TrackKey。经真实 SavedSongSync.addManualAll 后成为两项收藏。全部为本地 JSON/纯逻辑，没有声称当下服务端每次都回旧形状。
+
+建议旧字段成组归一化（songid/songmid/songname 和对应专辑信息），避免“支持 mid 却丢掉同一形状其它字段”。已有散列身份需要可控迁移或别名合并，覆盖收藏、队列、缓存，不应只给之后的新搜索换 ID。
+
+### J11：提示后缀的源名称未格式化
+
+`player/ResolveFailureText.kt:63` 直接拼接 switchSource(otherLabel)；八语言的 `ui/i18n/*:647–650` 都在 lambda 中保留字面 `%s`。`Strings.kt:1482` 的 lambda 只接受另一源名称，没有当前源参数。真实 resolveFailureText 的八语言用例全部输出 `%s`。
+
+建议后缀写成不含当前源占位的通用文案，或把当前/目标源都作为明确参数；回归检查最终完整提示，不只检查词条存在。本项为低优先级展示错误，不影响取链。
+
+### J12：进度方向和屏幕 Y 方向相反
+
+`ui/player/PlayerCard.kt:458/484` 向上拖动令 progress 增加，但 `:492–495` 直接将这个差值乘距离/时间作为 velocityY。`:981/992` 控制栏也相同。`PlayerDragSnap.kt:72/75/109–110` 却约定向上 velocityY 为负。
+
+两条纯组合探针使用源码入口公式调用真实决策：主卡上甩 40px/10ms（4% 距离）传入 +4000，回到收起；正确屏幕 Y 符号会展开。控制栏上拖 120px/50ms（30% 距离）传入 +2400，速度分支甚至覆盖已越过的 12% 距离阈值，把它还原展开；正确符号会收起。没有向 Compose 注入触摸事件。
+
+同一控制栏 `:970–983` 的 startMs/lastMs 在 onDragStart 未重置，后续手势耗时还会带上上次与间隔；此为静态伴随观察，未加算一项/一次动态复现。建议用屏幕坐标的 VelocityTracker，逐手势重置时间与速度，保留进度距离判定自身的符号。
+
+### K03：海报缩到最小仍超高时没有完整收尾
+
+`share/LyricPosterRenderer.kt:247–265` 到最小字号仍超 available 时，只能从尾部移除“当前行后”的行；若当前行靠近末尾，end-1>keepCurrent 很快为 false，即便 total 仍超高也结束。`:273–308` 绘制时没有 lyrics 区域 clip、也不裁前文；页脚随后仍按固定位置绘制。`LyricShareSelection.selectionForPoster` 支持最多 20 行，整首选段且当前句靠后时可走到这个边界。
+
+结论限定为最小字号测量后仍超高的输入（长原文/翻译/音译组合），本轮没有执行 Android 字体测量或导出实际图片，不能给出具体机型的溢出像素。建议优先保留当前行，按实际高度同时裁前后上下文，仍超高则对歌词区域剪裁/省略，不能继续画进页脚。
+
+### K04：长寿命触摸协程保留旧几何
+
+`PlayerCard.kt:239–252` 每次重组计算新的 geo；局部 isOverPanel/isOverCardVisibleArea 在 `:349–381` 读取该值，`:403` 的 pointerInput(Unit) 和 `:419` 的 pointerInput(hasSong,bigScreenActive) 捕获它，但 key 不含 panelBoundary/屏幕尺寸，未用 rememberUpdatedState。宽屏打开歌词时 wideSplit 从 0→1，`PlayerLayout.kt:248–251/276–277` 的边界由全宽变成约 44%，旧闭包仍可能按全宽拦截面板手势。
+
+本机实际依赖解析为 Compose UI **1.7.6**；其 SuspendingPointerInputModifierNodeImpl.update 字节码仅 key 变化才 reset 运行协程，换 handler 引用只更新字段。实际编译 PlayerCard$3/$4 协程各捕获 final $geo。证据归档于阶段三的 compose-version/pointer-node-update/player-pointer-captures 文件及依赖 AAR SHA-256。没有运行设备触摸，不能把它直接称为之前某次错位的唯一原因。
+
+建议稳定触摸协程通过最新状态读取命中几何；避免把每帧动画几何都作为 key 造成拖动被不断取消。静态复核还应覆盖总拖动距离、密度和回调所需其它变化值。
+
+### K05：播放器红心依赖本组件局部 tick
+
+`PlayerCard.kt:212–214` 只 remember(song.id,ui.libraryTick) 读取是否收藏；`PlayerCardExpanded.kt:189–204` 只在播放器内收藏按钮动作后增加 tick。`LibraryScreen.kt:452–455` 和 `SearchScreen.kt:434–442` 可修改同一歌曲收藏，但不通知该 PlayerCardUiState。播放器缩为小条时仍挂载，所以在库页删除当前歌后，再展开可继续显示旧红心。
+
+源码状态链确认，未执行 Compose 画面。建议收藏仓库提供按身份的可观察修订/状态，播放器订阅它；不要依赖页面私有 tick 或靠切歌触发刷新。本项为展示状态问题，不能称为收藏数据已经丢失。
+
 ## 证据与执行说明
 
 - 阶段一源码探针、XML 和 Gradle 日志：[phase-1/](probes/2026-10-27-1150/phase-1/)。5 tests / 0 failures / 0 errors，均断言错误存在。
 - 阶段二完整累计证据：[phase-2/](probes/2026-10-27-1150/phase-2/)。11 tests / 0 failures / 0 errors。搜索夹具的网易 HTTP 由应用拦截器直接返回，QQ/B站 Provider 均被本地替身覆盖并恢复；未产生真实账号/云端请求。
+- 阶段三完整累计证据：[phase-3/](probes/2026-10-27-1150/phase-3/)。15 tests / 0 failures / 0 errors；含真实依赖版本和触摸节点字节码，属于静态证据而非额外设备复现。
 - 统计探针通过修改测试中对象实例的 CoroutineContext/Gson factories 控制时序，恢复全部原值，不改磁盘业务源码。初次尝试静态 final 字段赋值被 JDK21 拒绝、字段名猜测失败，均属探针环境错误，修正后才采纳上述证据，不算应用问题。
 - 本轮逐文件/行段与源码 SHA-256：[coverage.json](probes/2026-10-27-1150/coverage.json)。阶段未结束，不提供全项目完成比例。
 - 开始实测额度：五小时剩余 99%、周剩余 55%；阶段一读取：88% / 53%。未使用重置。

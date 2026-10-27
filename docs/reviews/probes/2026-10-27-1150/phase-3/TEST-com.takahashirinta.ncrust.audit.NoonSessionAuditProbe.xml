@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonSessionAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T05:51:36.110Z" hostname="cachyos-x8664" time="0.035">
+  <properties/>
+  <testcase name="aFailedInitialSessionCheckPreventsAHealthyResumeRetry" classname="com.takahashirinta.ncrust.audit.NoonSessionAuditProbe" time="0.03"/>
+  <testcase name="aServerValidatedQrDeltaIsDiscardedWhileTheOldCompleteCookieSurvives" classname="com.takahashirinta.ncrust.audit.NoonSessionAuditProbe" time="0.005"/>
+  <system-out><![CDATA[AUDIT session failure throttle: failed initial check records the 30-minute throttle, so a healthy onResume sends zero requests and remains Unknown; an explicit forced check succeeds
+AUDIT QR delta boundary: a valid account/get result for B is handed to saveCookieMerged, which rejects the missing-CSRF delta and keeps A; the UI success callback ignores this result. Production response frequency was not measured
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

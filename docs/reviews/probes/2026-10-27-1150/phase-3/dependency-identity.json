@@ -1,0 +1,6 @@
+{
+  "module": "androidx.compose.ui:ui-android:1.7.6",
+  "aar_sha256": "42df06e3390808c85256a7efd74d448da71cbc168b41497a30535045c926f5b0",
+  "app_source_baseline": "15237f8",
+  "method": "javap -c -p / app compiled lambda fields; no UI executed"
+}

@@ -1,0 +1,62 @@
+  public final void update$ui_release(java.lang.Object, java.lang.Object, java.lang.Object[], kotlin.jvm.functions.Function2<? super androidx.compose.ui.input.pointer.PointerInputScope, ? super kotlin.coroutines.Continuation<? super kotlin.Unit>, ? extends java.lang.Object>);
+    Code:
+         0: iconst_0
+         1: istore        5
+         3: aload_0
+         4: getfield      #22                 // Field key1:Ljava/lang/Object;
+         7: aload_1
+         8: invokestatic  #90                 // Method kotlin/jvm/internal/Intrinsics.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z
+        11: ifne          17
+        14: iconst_1
+        15: istore        5
+        17: aload_0
+        18: aload_1
+        19: putfield      #22                 // Field key1:Ljava/lang/Object;
+        22: aload_0
+        23: getfield      #25                 // Field key2:Ljava/lang/Object;
+        26: aload_2
+        27: invokestatic  #90                 // Method kotlin/jvm/internal/Intrinsics.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z
+        30: ifne          36
+        33: iconst_1
+        34: istore        5
+        36: aload_0
+        37: aload_2
+        38: putfield      #25                 // Field key2:Ljava/lang/Object;
+        41: aload_0
+        42: getfield      #29                 // Field keys:[Ljava/lang/Object;
+        45: ifnull        55
+        48: aload_3
+        49: ifnonnull     55
+        52: iconst_1
+        53: istore        5
+        55: aload_0
+        56: getfield      #29                 // Field keys:[Ljava/lang/Object;
+        59: ifnonnull     69
+        62: aload_3
+        63: ifnull        69
+        66: iconst_1
+        67: istore        5
+        69: aload_0
+        70: getfield      #29                 // Field keys:[Ljava/lang/Object;
+        73: ifnull        94
+        76: aload_3
+        77: ifnull        94
+        80: aload_3
+        81: aload_0
+        82: getfield      #29                 // Field keys:[Ljava/lang/Object;
+        85: invokestatic  #96                 // Method java/util/Arrays.equals:([Ljava/lang/Object;[Ljava/lang/Object;)Z
+        88: ifne          94
+        91: iconst_1
+        92: istore        5
+        94: aload_0
+        95: aload_3
+        96: putfield      #29                 // Field keys:[Ljava/lang/Object;
+        99: iload         5
+       101: ifeq          108
+       104: aload_0
+       105: invokevirtual #99                 // Method resetPointerInputHandler:()V
+       108: aload_0
+       109: aload         4
+       111: putfield      #33                 // Field _pointerInputHandler:Lkotlin/jvm/functions/Function2;
+       114: return
+
