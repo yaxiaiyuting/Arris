@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonMotionMigrationAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.265Z" hostname="cachyos-x8664" time="0.003">
+  <properties/>
+  <testcase name="upgradingAnAlreadyMigratedPreferenceReappliesAnObsoleteShowcaseChoice" classname="com.takahashirinta.ncrust.audit.NoonMotionMigrationAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT migration: a version-4 preference already migrated to motion_tier and later explicitly set to SIMPLE is upgraded to version 5 by reapplying preserved legacy visualizer SHOWCASE; the user's current setting is overwritten
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+{
+  "scope": "isolated JVM defect assertions only, not the full app test suite",
+  "baseline": "15237f8c06ba160632c9096101386f821b85a723",
+  "tests": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "test_suites": 14,
+  "http": "all probe HTTP intercepted in memory; no proceed; no real account/cloud writes",
+  "ui": "headless Compose Runtime used for list animation; no window, Canvas, browser, emulator, device or audio playback",
+  "optional_go": "3 separate defect assertions archived in phase-4; not used by current Android application",
+  "interpretation": "passing means the asserted defect exists, not fixed"
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonAudioFeatureAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.027Z" hostname="cachyos-x8664" time="0.022">
+  <properties/>
+  <testcase name="duplicatingMonoIntoStereoAdvancesTheEnvelopeClockFourTimesAsFast" classname="com.takahashirinta.ncrust.audit.NoonAudioFeatureAuditProbe" time="0.017"/>
+  <testcase name="stereoCanRetriggerWithinTheNinetyMillisecondCooldown" classname="com.takahashirinta.ncrust.audit.NoonAudioFeatureAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT audio envelope: identical 100ms mono/stereo signal has equal RMS and frameMs, but baseline mono=0.05875155 stereo=0.19673467; stereo envelope behaves as if 400ms passed
+AUDIT cooldown: duplicated stereo pulse retriggers only 40ms after the initial onset despite the configured 90ms cooldown; mono control does not
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

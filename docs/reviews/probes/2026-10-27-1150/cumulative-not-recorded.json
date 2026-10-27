@@ -1,0 +1,8 @@
+[
+  "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt",
+  "app/src/main/java/com/takahashirinta/ncrust/celebration/FireworkPainter.kt",
+  "app/src/main/java/com/takahashirinta/ncrust/qq/QqDes.kt",
+  "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/CelebrationStrings.kt",
+  "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerStrings.kt",
+  "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AboutScreen.kt"
+]

@@ -1,0 +1,16 @@
+{
+  "current_round": {
+    "recorded": 210,
+    "full_executable_code": 167,
+    "partial_call_chain": 43,
+    "without_record": 172
+  },
+  "cumulative": {
+    "recorded": 376,
+    "full_executable_code": 300,
+    "partial_call_chain": 76,
+    "without_record": 6
+  },
+  "total_kotlin_files": 382,
+  "total_lines": 108633
+}

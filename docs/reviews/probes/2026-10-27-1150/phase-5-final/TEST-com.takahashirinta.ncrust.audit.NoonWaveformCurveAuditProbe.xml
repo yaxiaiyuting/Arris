@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonWaveformCurveAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.673Z" hostname="cachyos-x8664" time="0.002">
+  <properties/>
+  <testcase name="productionThreeLanePointCountExceedsTheTangentLimitAndOvershootsTheSeam" classname="com.takahashirinta.ncrust.audit.NoonWaveformCurveAuditProbe" time="0.002"/>
+  <system-out><![CDATA[AUDIT production waveform: renderer requests 85 points, tangent helper clamps to 64; segment 63→64 inherits the truncated prefix endpoint slope and overshoots normalized height to 1.0243. Pure production-count/curve math; no Canvas or visual playback
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

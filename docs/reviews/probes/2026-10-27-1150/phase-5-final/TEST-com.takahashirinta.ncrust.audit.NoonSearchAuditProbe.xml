@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonSearchAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.303Z" hostname="cachyos-x8664" time="0.32">
+  <properties/>
+  <testcase name="failedNeteasePageIsStillConfirmedAndSkippedDespiteThePerSourceCursor" classname="com.takahashirinta.ncrust.audit.NoonSearchAuditProbe" time="0.272"/>
+  <testcase name="anHttpSuccessWithABusinessErrorBecomesASuccessfulEmptySearch" classname="com.takahashirinta.ncrust.audit.NoonSearchAuditProbe" time="0.044"/>
+  <testcase name="clearingTheQueryDoesNotStopALateAlbumResultFromRepopulatingThePage" classname="com.takahashirinta.ncrust.audit.NoonSearchAuditProbe" time="0.004"/>
+  <system-out><![CDATA[AUDIT S9 residual: real searchByType requests offsets 0,30(failed),60 instead of retrying 30; accumulateAndPublish confirms an empty failed page and erases pendingPage. The previous duplicate source count is fixed: 60 unique Netease rows and count=60
+AUDIT S9 status boundary: HTTP 200/code500 without result is counted as a successful empty Netease search, error=null, badge DONE, hasMore=false; actual JSON model discards business code
+AUDIT clear query: real clearQuery clears the input and lists, but the already-started real album HTTP result publishes afterward and repopulates the blank-query page; no visible browser or Main dispatcher is used
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

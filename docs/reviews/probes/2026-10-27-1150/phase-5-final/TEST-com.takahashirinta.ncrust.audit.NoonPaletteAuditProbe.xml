@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonPaletteAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.269Z" hostname="cachyos-x8664" time="0.019">
+  <properties/>
+  <testcase name="aConstantColorHasLargeNonzeroVarianceBecauseChannelSumsAreSquaredAsInts" classname="com.takahashirinta.ncrust.audit.NoonPaletteAuditProbe" time="0.008"/>
+  <testcase name="sortedDistancePruningMergesExactGreenAndYellowStartingCenters" classname="com.takahashirinta.ncrust.audit.NoonPaletteAuditProbe" time="0.001"/>
+  <testcase name="theProductionFiftyByFiftyTwoColorImageCollapsesIntoOneInventedColor" classname="com.takahashirinta.ncrust.audit.NoonPaletteAuditProbe" time="0.01"/>
+  <system-out><![CDATA[AUDIT palette variance: constant white population2500 has mathematical variance0, actual=4.879082848256E8; Int multiplications overflow before conversion to Double
+AUDIT Wsmeans: seven distinct input colors are also supplied as seven exact starting centers, but sorted distance pruning still skips the matching center; green/yellow merge into ffaeff00. This bypasses Wu, so it is independent of the Int overflow defect
+AUDIT palette production size: a 50x50 image with exactly red/green and budget128 quantizes to {ffc9ab00=2500}; Wu's Int square overflow makes valid split gains negative, leaving Wsmeans one starting cluster
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

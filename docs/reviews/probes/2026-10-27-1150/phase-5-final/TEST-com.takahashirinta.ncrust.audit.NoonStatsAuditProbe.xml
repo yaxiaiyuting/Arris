@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NoonStatsAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-27T06:46:36.654Z" hostname="cachyos-x8664" time="0.018">
+  <properties/>
+  <testcase name="olderSerializedSnapshotOverwritesANewerSuccessfulFlushWithoutAnyClear" classname="com.takahashirinta.ncrust.audit.NoonStatsAuditProbe" time="0.013"/>
+  <testcase name="delayedClearRemovesNewListeningDataThatWasAlreadyFlushed" classname="com.takahashirinta.ncrust.audit.NoonStatsAuditProbe" time="0.005"/>
+  <system-out><![CDATA[AUDIT stats flush order: older 100ms serialization commits after a newer 500ms snapshot; no clear/generation change occurs, yet disk regresses to 100ms
+AUDIT stats clear order: clear's queued remove runs after a newer listening tick and successful flush in the same generation; memory has 500ms but a cold load has zero
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
