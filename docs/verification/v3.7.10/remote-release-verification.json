@@ -1,0 +1,39 @@
+{
+  "verification_date": "2026-10-27",
+  "release_id": 425597205,
+  "tag_name": "v3.7.10-gpl",
+  "source_commit": "e28a958",
+  "all_remote_sizes_and_sha256_match": true,
+  "assets": [
+    {
+      "name": "mapping-v3.7.10-gpl.txt.gz",
+      "size": 5858083,
+      "state": "uploaded",
+      "matches_local": true
+    },
+    {
+      "name": "Ncrust-v3.7.10-gpl-debug.apk",
+      "size": 33969625,
+      "state": "uploaded",
+      "matches_local": true
+    },
+    {
+      "name": "Ncrust-v3.7.10-gpl-release.apk",
+      "size": 12105420,
+      "state": "uploaded",
+      "matches_local": true
+    },
+    {
+      "name": "RELEASE_NOTES.md",
+      "size": 4060,
+      "state": "uploaded",
+      "matches_local": true
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 285,
+      "state": "uploaded",
+      "matches_local": true
+    }
+  ]
+}
