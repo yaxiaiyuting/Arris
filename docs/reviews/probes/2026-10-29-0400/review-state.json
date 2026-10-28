@@ -1,8 +1,8 @@
 {
-  "phase": "REVIEW_COMPLETE_PENDING_AUTOMATION_DELETE",
+  "phase": "COMPLETE",
   "source_commit": "2aa6657d062bc57e892bf0ca4173d4196cc56f6e",
   "schedule_id": "arris-11-50",
-  "schedule_local": "Asia/Shanghai 04:00,09:00,14:00 daily",
+  "schedule_local": null,
   "requested_formal_version_name": "3.7.11-gpl",
   "minimum_next_version_code": 99,
   "files": [
@@ -5515,7 +5515,7 @@
     "app/src/main/res/xml/file_paths.xml",
     "app/proguard-rules.pro"
   ],
-  "completion": "all core entries full_executable_code at same SHA, boundary checks documented, all known issues reconciled; then delete review automation and repair confirmed issues, regression and formal package",
+  "completion": "Core review closed; confirmed repair scope integrated; full JVM/Lint and signed local formal package verified; no push or device validation.",
   "findings": [
     "O01 (J03 residual)",
     "O02 (H15 read residual + warmup static boundaries)",
@@ -5527,12 +5527,8 @@
     "P02 clipboard metadata replaces active playback identity (static)",
     "P03 unmergeable counterpart included in aggregation (static)"
   ],
-  "next_focus": [
-    "Delete all Arris review automations before repairs",
-    "Repair confirmed open families in CORE_FIX_TRACKER.md; no new review expansion",
-    "Regression, full JVM, Lint, fresh versionCode and formal local 3.7.11-gpl package; U01 record only"
-  ],
-  "media_track_info_fix": "82401ec: 96 targeted checks passed; included in future formal package, old APK unchanged",
+  "next_focus": [],
+  "media_track_info_fix": "82401ec included in formal 3.7.11-gpl/99; old 3.7.12 test APK unchanged",
   "boundary_checks": [
     {
       "path": "app/src/main/AndroidManifest.xml",
@@ -5572,5 +5568,16 @@
     "core_full": 343,
     "core_remaining": 0
   },
-  "issue_reconciliation": "docs/reviews/CORE_FIX_TRACKER.md"
+  "issue_reconciliation": "docs/reviews/CORE_FIX_TRACKER.md",
+  "schedule_status": "DELETED: all Arris review automations removed",
+  "formal_version_code": 99,
+  "repair_source_commit": "f05a88a317168204f0af4013824c4832c331fb5a",
+  "repair_app_tree": "88993fd7d4847c728706b59afd68906db9cd24b4",
+  "verification": "docs/verification/v3.7.11-formal/RELEASE_VERIFICATION.md",
+  "review_scope_note": "files/boundary_files retain historical review baseline fingerprints; repair delta and callers verified separately, no claim of another full reread",
+  "retained_limits": [
+    "U01 record only; no geometry changes",
+    "Legacy bare Bilibili IDs without AV/AU payload not guessed",
+    "No device validation; Android/ROM may choose extra lyric metadata visibility"
+  ]
 }
