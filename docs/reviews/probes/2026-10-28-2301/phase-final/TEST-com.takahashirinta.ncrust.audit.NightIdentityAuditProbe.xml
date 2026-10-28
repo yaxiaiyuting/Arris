@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.555Z" hostname="cachyos-x8664" time="0.052">
+  <properties/>
+  <testcase name="realHistoricalBiliAliasesBecomeUndeletableDuplicates" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.05"/>
+  <testcase name="earlierAliasTombstoneMasksRemovalOfVisibleCanonicalEntry" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.001"/>
+  <testcase name="migratedAliasDuplicatesCannotBothBeRemoved" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.0"/>
+  <testcase name="historicalBiliTombstoneStopsRemovalOfVisibleMigratedVideo" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.001"/>
+  <system-out><![CDATA[AUDIT Bili AV records need no new field: pre-3.7.9 ID plus 3.7.9 partitioned ID normalize to same key at 3.7.10; removal becomes permanently no-op for the visible duplicate
+AUDIT a migrated tombstone first in persisted order makes a visible canonical duplicate undeletable through production remove; payload contains real qq_songid required by the new migration
+AUDIT production decode migrates two historical IDs to the same key without consolidation; remove tombstones first only and every later removal is a no-op. No Android/UI/network
+AUDIT Bili historical delete marker collides with visible new partitioned entry. Existing sourceId is sufficient for migration; unlike the conditional QQ fixtures, no newly added metadata is assumed
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightQueueIdentityAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.626Z" hostname="cachyos-x8664" time="0.003">
+  <properties/>
+  <testcase name="draggingAnUpcomingDuplicateMovesCurrentOccurrenceInstead" classname="com.takahashirinta.ncrust.audit.NightQueueIdentityAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT real reorderByIdentity with current A and upcoming same-key A: dragging upcoming A past B moves CURRENT A to index 2. Duplicate queue rows are explicitly allowed by the new occurrence-suffixed keys; no Compose UI executed
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

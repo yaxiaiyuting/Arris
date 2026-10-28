@@ -1,0 +1,16 @@
+[
+  {
+    "class": "NightBiliGenerationAuditProbe",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "class": "NightIdentityAuditProbe",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+]

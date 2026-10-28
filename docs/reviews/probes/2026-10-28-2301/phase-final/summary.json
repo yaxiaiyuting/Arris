@@ -1,0 +1,57 @@
+{
+  "formal_new_issue_assertions": 7,
+  "conditional_qq_logic_assertions": 2,
+  "existing_issue_residual_assertions": 4,
+  "suites": [
+    {
+      "class": "NightBiliGenerationAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightIdentityAuditProbe",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightLocalStoreResidualAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightQueueIdentityAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightQueueSpinAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightRedirectAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightSearchResidualAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "meaning": "缺陷断言通过表示错误存在；阶段重复不累加。QQ 历史可达性未确认。"
+}

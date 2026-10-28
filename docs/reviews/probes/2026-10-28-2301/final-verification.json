@@ -1,0 +1,13 @@
+{
+  "head_before_review_commit": "e56adcc704ce88aea43721aa56343bf32c8a34e0",
+  "baseline": "e28a9583762075cbfbc9453679c83f89f110f053",
+  "original_dirty_files": 31,
+  "original_dirty_files_changed_since_start": [],
+  "only_audit_documents_staged": true,
+  "snapshot_probe_sources_removed": true,
+  "stop_reason": "explicit_user_stop",
+  "paused_automations": [
+    "arris-11-50",
+    "arris-17-00"
+  ]
+}

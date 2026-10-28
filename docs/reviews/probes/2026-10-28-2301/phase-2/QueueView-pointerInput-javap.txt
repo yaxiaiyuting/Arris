@@ -1,0 +1,425 @@
+Compiled from "QueueView.kt"
+final class com.takahashirinta.ncrust.ui.player.QueueViewKt$QueueView$dragGesturesModifier$1 extends kotlin.coroutines.jvm.internal.SuspendLambda implements kotlin.jvm.functions.Function2<androidx.compose.ui.input.pointer.PointerInputScope, kotlin.coroutines.Continuation<? super kotlin.Unit>, java.lang.Object> {
+  int label;
+
+  private java.lang.Object L$0;
+
+  final boolean $interactive;
+
+  final androidx.compose.foundation.lazy.LazyListState $listState;
+
+  final androidx.compose.ui.unit.Density $density;
+
+  final kotlinx.coroutines.CoroutineScope $dragScrollScope;
+
+  final kotlinx.coroutines.CoroutineScope $dragSettleScope;
+
+  final androidx.compose.ui.hapticfeedback.HapticFeedback $haptic;
+
+  final androidx.compose.runtime.State<java.util.List<com.takahashirinta.ncrust.ui.player.RowInfo>> $rowsRef$delegate;
+
+  final androidx.compose.runtime.State<java.lang.Integer> $currentIndexRef$delegate;
+
+  final androidx.compose.runtime.State<java.lang.Boolean> $infinityActiveRef$delegate;
+
+  final androidx.compose.runtime.State<java.util.List<com.takahashirinta.ncrust.network.SongItem>> $queueRef$delegate;
+
+  final androidx.compose.runtime.MutableIntState $draggingQueueIndex$delegate;
+
+  final androidx.compose.runtime.MutableIntState $dragTargetQueueIndex$delegate;
+
+  final androidx.compose.runtime.MutableState<java.lang.Boolean> $overlayVisible$delegate;
+
+  final androidx.compose.runtime.MutableState<com.takahashirinta.ncrust.source.TrackKey> $draggedIdentity$delegate;
+
+  final androidx.compose.runtime.MutableState<com.takahashirinta.ncrust.source.TrackKey> $dragTargetIdentity$delegate;
+
+  final androidx.compose.runtime.MutableState<java.lang.String> $hiddenRowKey$delegate;
+
+  final androidx.compose.runtime.MutableFloatState $slotOffset0$delegate;
+
+  final androidx.compose.runtime.MutableFloatState $downY$delegate;
+
+  final androidx.compose.runtime.MutableFloatState $scrollDelta$delegate;
+
+  final androidx.compose.runtime.MutableFloatState $overlayTop$delegate;
+
+  final androidx.compose.runtime.MutableFloatState $autoScrollDir$delegate;
+
+  final androidx.compose.runtime.MutableState<kotlinx.coroutines.Job> $dragScrollJob$delegate;
+
+  final boolean $isActive;
+
+  final androidx.compose.runtime.MutableFloatState $draggedRowHeight$delegate;
+
+  final kotlin.jvm.functions.Function2<java.lang.Integer, java.lang.Integer, kotlin.Unit> $onMove;
+
+  com.takahashirinta.ncrust.ui.player.QueueViewKt$QueueView$dragGesturesModifier$1(boolean, androidx.compose.foundation.lazy.LazyListState, androidx.compose.ui.unit.Density, kotlinx.coroutines.CoroutineScope, kotlinx.coroutines.CoroutineScope, androidx.compose.ui.hapticfeedback.HapticFeedback, androidx.compose.runtime.State<? extends java.util.List<com.takahashirinta.ncrust.ui.player.RowInfo>>, androidx.compose.runtime.State<java.lang.Integer>, androidx.compose.runtime.State<java.lang.Boolean>, androidx.compose.runtime.State<? extends java.util.List<com.takahashirinta.ncrust.network.SongItem>>, androidx.compose.runtime.MutableIntState, androidx.compose.runtime.MutableIntState, androidx.compose.runtime.MutableState<java.lang.Boolean>, androidx.compose.runtime.MutableState<com.takahashirinta.ncrust.source.TrackKey>, androidx.compose.runtime.MutableState<com.takahashirinta.ncrust.source.TrackKey>, androidx.compose.runtime.MutableState<java.lang.String>, androidx.compose.runtime.MutableFloatState, androidx.compose.runtime.MutableFloatState, androidx.compose.runtime.MutableFloatState, androidx.compose.runtime.MutableFloatState, androidx.compose.runtime.MutableFloatState, androidx.compose.runtime.MutableState<kotlinx.coroutines.Job>, boolean, androidx.compose.runtime.MutableFloatState, kotlin.jvm.functions.Function2<? super java.lang.Integer, ? super java.lang.Integer, kotlin.Unit>, kotlin.coroutines.Continuation<? super com.takahashirinta.ncrust.ui.player.QueueViewKt$QueueView$dragGesturesModifier$1>);
+    Code:
+       0: aload_0
+       1: iload_1
+       2: putfield      #14                 // Field $interactive:Z
+       5: aload_0
+       6: aload_2
+       7: putfield      #18                 // Field $listState:Landroidx/compose/foundation/lazy/LazyListState;
+      10: aload_0
+      11: aload_3
+      12: putfield      #22                 // Field $density:Landroidx/compose/ui/unit/Density;
+      15: aload_0
+      16: aload         4
+      18: putfield      #26                 // Field $dragScrollScope:Lkotlinx/coroutines/CoroutineScope;
+      21: aload_0
+      22: aload         5
+      24: putfield      #29                 // Field $dragSettleScope:Lkotlinx/coroutines/CoroutineScope;
+      27: aload_0
+      28: aload         6
+      30: putfield      #33                 // Field $haptic:Landroidx/compose/ui/hapticfeedback/HapticFeedback;
+      33: aload_0
+      34: aload         7
+      36: putfield      #37                 // Field $rowsRef$delegate:Landroidx/compose/runtime/State;
+      39: aload_0
+      40: aload         8
+      42: putfield      #40                 // Field $currentIndexRef$delegate:Landroidx/compose/runtime/State;
+      45: aload_0
+      46: aload         9
+      48: putfield      #43                 // Field $infinityActiveRef$delegate:Landroidx/compose/runtime/State;
+      51: aload_0
+      52: aload         10
+      54: putfield      #46                 // Field $queueRef$delegate:Landroidx/compose/runtime/State;
+      57: aload_0
+      58: aload         11
+      60: putfield      #50                 // Field $draggingQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      63: aload_0
+      64: aload         12
+      66: putfield      #53                 // Field $dragTargetQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      69: aload_0
+      70: aload         13
+      72: putfield      #57                 // Field $overlayVisible$delegate:Landroidx/compose/runtime/MutableState;
+      75: aload_0
+      76: aload         14
+      78: putfield      #60                 // Field $draggedIdentity$delegate:Landroidx/compose/runtime/MutableState;
+      81: aload_0
+      82: aload         15
+      84: putfield      #63                 // Field $dragTargetIdentity$delegate:Landroidx/compose/runtime/MutableState;
+      87: aload_0
+      88: aload         16
+      90: putfield      #66                 // Field $hiddenRowKey$delegate:Landroidx/compose/runtime/MutableState;
+      93: aload_0
+      94: aload         17
+      96: putfield      #70                 // Field $slotOffset0$delegate:Landroidx/compose/runtime/MutableFloatState;
+      99: aload_0
+     100: aload         18
+     102: putfield      #73                 // Field $downY$delegate:Landroidx/compose/runtime/MutableFloatState;
+     105: aload_0
+     106: aload         19
+     108: putfield      #76                 // Field $scrollDelta$delegate:Landroidx/compose/runtime/MutableFloatState;
+     111: aload_0
+     112: aload         20
+     114: putfield      #79                 // Field $overlayTop$delegate:Landroidx/compose/runtime/MutableFloatState;
+     117: aload_0
+     118: aload         21
+     120: putfield      #82                 // Field $autoScrollDir$delegate:Landroidx/compose/runtime/MutableFloatState;
+     123: aload_0
+     124: aload         22
+     126: putfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     129: aload_0
+     130: iload         23
+     132: putfield      #88                 // Field $isActive:Z
+     135: aload_0
+     136: aload         24
+     138: putfield      #91                 // Field $draggedRowHeight$delegate:Landroidx/compose/runtime/MutableFloatState;
+     141: aload_0
+     142: aload         25
+     144: putfield      #95                 // Field $onMove:Lkotlin/jvm/functions/Function2;
+     147: aload_0
+     148: iconst_2
+     149: aload         26
+     151: invokespecial #98                 // Method kotlin/coroutines/jvm/internal/SuspendLambda."<init>":(ILkotlin/coroutines/Continuation;)V
+     154: return
+
+  public final java.lang.Object invokeSuspend(java.lang.Object);
+    Code:
+       0: invokestatic  #123                // Method kotlin/coroutines/intrinsics/IntrinsicsKt.getCOROUTINE_SUSPENDED:()Ljava/lang/Object;
+       3: astore        4
+       5: aload_0
+       6: getfield      #127                // Field label:I
+       9: tableswitch   { // 0 to 1
+                     0: 32
+                     1: 178
+               default: 381
+          }
+      32: aload_1
+      33: invokestatic  #133                // Method kotlin/ResultKt.throwOnFailure:(Ljava/lang/Object;)V
+      36: aload_0
+      37: getfield      #137                // Field L$0:Ljava/lang/Object;
+      40: checkcast     #139                // class androidx/compose/ui/input/pointer/PointerInputScope
+      43: astore_2
+      44: nop
+      45: aload_2
+      46: new           #141                // class com/takahashirinta/ncrust/ui/player/QueueViewKt$QueueView$dragGesturesModifier$1$1
+      49: dup
+      50: aload_0
+      51: getfield      #14                 // Field $interactive:Z
+      54: aload_0
+      55: getfield      #18                 // Field $listState:Landroidx/compose/foundation/lazy/LazyListState;
+      58: aload_0
+      59: getfield      #22                 // Field $density:Landroidx/compose/ui/unit/Density;
+      62: aload_0
+      63: getfield      #26                 // Field $dragScrollScope:Lkotlinx/coroutines/CoroutineScope;
+      66: aload_0
+      67: getfield      #29                 // Field $dragSettleScope:Lkotlinx/coroutines/CoroutineScope;
+      70: aload_0
+      71: getfield      #33                 // Field $haptic:Landroidx/compose/ui/hapticfeedback/HapticFeedback;
+      74: aload_0
+      75: getfield      #37                 // Field $rowsRef$delegate:Landroidx/compose/runtime/State;
+      78: aload_0
+      79: getfield      #40                 // Field $currentIndexRef$delegate:Landroidx/compose/runtime/State;
+      82: aload_0
+      83: getfield      #43                 // Field $infinityActiveRef$delegate:Landroidx/compose/runtime/State;
+      86: aload_0
+      87: getfield      #46                 // Field $queueRef$delegate:Landroidx/compose/runtime/State;
+      90: aload_0
+      91: getfield      #50                 // Field $draggingQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      94: aload_0
+      95: getfield      #53                 // Field $dragTargetQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      98: aload_0
+      99: getfield      #57                 // Field $overlayVisible$delegate:Landroidx/compose/runtime/MutableState;
+     102: aload_0
+     103: getfield      #60                 // Field $draggedIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     106: aload_0
+     107: getfield      #63                 // Field $dragTargetIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     110: aload_0
+     111: getfield      #66                 // Field $hiddenRowKey$delegate:Landroidx/compose/runtime/MutableState;
+     114: aload_0
+     115: getfield      #70                 // Field $slotOffset0$delegate:Landroidx/compose/runtime/MutableFloatState;
+     118: aload_0
+     119: getfield      #73                 // Field $downY$delegate:Landroidx/compose/runtime/MutableFloatState;
+     122: aload_0
+     123: getfield      #76                 // Field $scrollDelta$delegate:Landroidx/compose/runtime/MutableFloatState;
+     126: aload_0
+     127: getfield      #79                 // Field $overlayTop$delegate:Landroidx/compose/runtime/MutableFloatState;
+     130: aload_0
+     131: getfield      #82                 // Field $autoScrollDir$delegate:Landroidx/compose/runtime/MutableFloatState;
+     134: aload_0
+     135: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     138: aload_0
+     139: getfield      #88                 // Field $isActive:Z
+     142: aload_0
+     143: getfield      #91                 // Field $draggedRowHeight$delegate:Landroidx/compose/runtime/MutableFloatState;
+     146: aload_0
+     147: getfield      #95                 // Field $onMove:Lkotlin/jvm/functions/Function2;
+     150: aconst_null
+     151: invokespecial #143                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt$QueueView$dragGesturesModifier$1$1."<init>":(ZLandroidx/compose/foundation/lazy/LazyListState;Landroidx/compose/ui/unit/Density;Lkotlinx/coroutines/CoroutineScope;Lkotlinx/coroutines/CoroutineScope;Landroidx/compose/ui/hapticfeedback/HapticFeedback;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/MutableIntState;Landroidx/compose/runtime/MutableIntState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableState;ZLandroidx/compose/runtime/MutableFloatState;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)V
+     154: checkcast     #7                  // class kotlin/jvm/functions/Function2
+     157: aload_0
+     158: checkcast     #145                // class kotlin/coroutines/Continuation
+     161: aload_0
+     162: iconst_1
+     163: putfield      #127                // Field label:I
+     166: invokestatic  #151                // Method androidx/compose/foundation/gestures/ForEachGestureKt.awaitEachGesture:(Landroidx/compose/ui/input/pointer/PointerInputScope;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+     169: dup
+     170: aload         4
+     172: if_acmpne     184
+     175: aload         4
+     177: areturn
+     178: nop
+     179: aload_1
+     180: invokestatic  #133                // Method kotlin/ResultKt.throwOnFailure:(Ljava/lang/Object;)V
+     183: aload_1
+     184: pop
+     185: aload_0
+     186: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     189: invokestatic  #157                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$37:(Landroidx/compose/runtime/MutableState;)Lkotlinx/coroutines/Job;
+     192: dup
+     193: ifnull        205
+     196: aconst_null
+     197: iconst_1
+     198: aconst_null
+     199: invokestatic  #163                // Method kotlinx/coroutines/Job$DefaultImpls.cancel$default:(Lkotlinx/coroutines/Job;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V
+     202: goto          206
+     205: pop
+     206: aload_0
+     207: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     210: aconst_null
+     211: invokestatic  #167                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$38:(Landroidx/compose/runtime/MutableState;Lkotlinx/coroutines/Job;)V
+     214: aload_0
+     215: getfield      #82                 // Field $autoScrollDir$delegate:Landroidx/compose/runtime/MutableFloatState;
+     218: fconst_0
+     219: invokestatic  #171                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$35:(Landroidx/compose/runtime/MutableFloatState;F)V
+     222: aload_0
+     223: getfield      #50                 // Field $draggingQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+     226: iconst_m1
+     227: invokestatic  #175                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$2:(Landroidx/compose/runtime/MutableIntState;I)V
+     230: aload_0
+     231: getfield      #53                 // Field $dragTargetQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+     234: iconst_m1
+     235: invokestatic  #178                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$5:(Landroidx/compose/runtime/MutableIntState;I)V
+     238: aload_0
+     239: getfield      #63                 // Field $dragTargetIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     242: aconst_null
+     243: invokestatic  #182                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$14:(Landroidx/compose/runtime/MutableState;Lcom/takahashirinta/ncrust/source/TrackKey;)V
+     246: aload_0
+     247: getfield      #57                 // Field $overlayVisible$delegate:Landroidx/compose/runtime/MutableState;
+     250: iconst_0
+     251: invokestatic  #186                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$8:(Landroidx/compose/runtime/MutableState;Z)V
+     254: aload_0
+     255: getfield      #60                 // Field $draggedIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     258: aconst_null
+     259: invokestatic  #189                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$11:(Landroidx/compose/runtime/MutableState;Lcom/takahashirinta/ncrust/source/TrackKey;)V
+     262: aload_0
+     263: getfield      #66                 // Field $hiddenRowKey$delegate:Landroidx/compose/runtime/MutableState;
+     266: aconst_null
+     267: invokestatic  #193                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$17:(Landroidx/compose/runtime/MutableState;Ljava/lang/String;)V
+     270: aload_0
+     271: getfield      #79                 // Field $overlayTop$delegate:Landroidx/compose/runtime/MutableFloatState;
+     274: fconst_0
+     275: invokestatic  #196                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$20:(Landroidx/compose/runtime/MutableFloatState;F)V
+     278: goto          377
+     281: astore_3
+     282: aload_0
+     283: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     286: invokestatic  #157                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$37:(Landroidx/compose/runtime/MutableState;)Lkotlinx/coroutines/Job;
+     289: dup
+     290: ifnull        302
+     293: aconst_null
+     294: iconst_1
+     295: aconst_null
+     296: invokestatic  #163                // Method kotlinx/coroutines/Job$DefaultImpls.cancel$default:(Lkotlinx/coroutines/Job;Ljava/util/concurrent/CancellationException;ILjava/lang/Object;)V
+     299: goto          303
+     302: pop
+     303: aload_0
+     304: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+     307: aconst_null
+     308: invokestatic  #167                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$38:(Landroidx/compose/runtime/MutableState;Lkotlinx/coroutines/Job;)V
+     311: aload_0
+     312: getfield      #82                 // Field $autoScrollDir$delegate:Landroidx/compose/runtime/MutableFloatState;
+     315: fconst_0
+     316: invokestatic  #171                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$35:(Landroidx/compose/runtime/MutableFloatState;F)V
+     319: aload_0
+     320: getfield      #50                 // Field $draggingQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+     323: iconst_m1
+     324: invokestatic  #175                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$2:(Landroidx/compose/runtime/MutableIntState;I)V
+     327: aload_0
+     328: getfield      #53                 // Field $dragTargetQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+     331: iconst_m1
+     332: invokestatic  #178                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$5:(Landroidx/compose/runtime/MutableIntState;I)V
+     335: aload_0
+     336: getfield      #63                 // Field $dragTargetIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     339: aconst_null
+     340: invokestatic  #182                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$14:(Landroidx/compose/runtime/MutableState;Lcom/takahashirinta/ncrust/source/TrackKey;)V
+     343: aload_0
+     344: getfield      #57                 // Field $overlayVisible$delegate:Landroidx/compose/runtime/MutableState;
+     347: iconst_0
+     348: invokestatic  #186                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$8:(Landroidx/compose/runtime/MutableState;Z)V
+     351: aload_0
+     352: getfield      #60                 // Field $draggedIdentity$delegate:Landroidx/compose/runtime/MutableState;
+     355: aconst_null
+     356: invokestatic  #189                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$11:(Landroidx/compose/runtime/MutableState;Lcom/takahashirinta/ncrust/source/TrackKey;)V
+     359: aload_0
+     360: getfield      #66                 // Field $hiddenRowKey$delegate:Landroidx/compose/runtime/MutableState;
+     363: aconst_null
+     364: invokestatic  #193                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$17:(Landroidx/compose/runtime/MutableState;Ljava/lang/String;)V
+     367: aload_0
+     368: getfield      #79                 // Field $overlayTop$delegate:Landroidx/compose/runtime/MutableFloatState;
+     371: fconst_0
+     372: invokestatic  #196                // Method com/takahashirinta/ncrust/ui/player/QueueViewKt.access$QueueView$lambda$20:(Landroidx/compose/runtime/MutableFloatState;F)V
+     375: aload_3
+     376: athrow
+     377: getstatic     #202                // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+     380: areturn
+     381: new           #204                // class java/lang/IllegalStateException
+     384: dup
+     385: ldc           #206                // String call to \'resume\' before \'invoke\' with coroutine
+     387: invokespecial #209                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+     390: athrow
+    Exception table:
+       from    to  target type
+          44   169   281   any
+         178   185   281   any
+         281   282   281   any
+
+  public final kotlin.coroutines.Continuation<kotlin.Unit> create(java.lang.Object, kotlin.coroutines.Continuation<?>);
+    Code:
+       0: new           #2                  // class com/takahashirinta/ncrust/ui/player/QueueViewKt$QueueView$dragGesturesModifier$1
+       3: dup
+       4: aload_0
+       5: getfield      #14                 // Field $interactive:Z
+       8: aload_0
+       9: getfield      #18                 // Field $listState:Landroidx/compose/foundation/lazy/LazyListState;
+      12: aload_0
+      13: getfield      #22                 // Field $density:Landroidx/compose/ui/unit/Density;
+      16: aload_0
+      17: getfield      #26                 // Field $dragScrollScope:Lkotlinx/coroutines/CoroutineScope;
+      20: aload_0
+      21: getfield      #29                 // Field $dragSettleScope:Lkotlinx/coroutines/CoroutineScope;
+      24: aload_0
+      25: getfield      #33                 // Field $haptic:Landroidx/compose/ui/hapticfeedback/HapticFeedback;
+      28: aload_0
+      29: getfield      #37                 // Field $rowsRef$delegate:Landroidx/compose/runtime/State;
+      32: aload_0
+      33: getfield      #40                 // Field $currentIndexRef$delegate:Landroidx/compose/runtime/State;
+      36: aload_0
+      37: getfield      #43                 // Field $infinityActiveRef$delegate:Landroidx/compose/runtime/State;
+      40: aload_0
+      41: getfield      #46                 // Field $queueRef$delegate:Landroidx/compose/runtime/State;
+      44: aload_0
+      45: getfield      #50                 // Field $draggingQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      48: aload_0
+      49: getfield      #53                 // Field $dragTargetQueueIndex$delegate:Landroidx/compose/runtime/MutableIntState;
+      52: aload_0
+      53: getfield      #57                 // Field $overlayVisible$delegate:Landroidx/compose/runtime/MutableState;
+      56: aload_0
+      57: getfield      #60                 // Field $draggedIdentity$delegate:Landroidx/compose/runtime/MutableState;
+      60: aload_0
+      61: getfield      #63                 // Field $dragTargetIdentity$delegate:Landroidx/compose/runtime/MutableState;
+      64: aload_0
+      65: getfield      #66                 // Field $hiddenRowKey$delegate:Landroidx/compose/runtime/MutableState;
+      68: aload_0
+      69: getfield      #70                 // Field $slotOffset0$delegate:Landroidx/compose/runtime/MutableFloatState;
+      72: aload_0
+      73: getfield      #73                 // Field $downY$delegate:Landroidx/compose/runtime/MutableFloatState;
+      76: aload_0
+      77: getfield      #76                 // Field $scrollDelta$delegate:Landroidx/compose/runtime/MutableFloatState;
+      80: aload_0
+      81: getfield      #79                 // Field $overlayTop$delegate:Landroidx/compose/runtime/MutableFloatState;
+      84: aload_0
+      85: getfield      #82                 // Field $autoScrollDir$delegate:Landroidx/compose/runtime/MutableFloatState;
+      88: aload_0
+      89: getfield      #85                 // Field $dragScrollJob$delegate:Landroidx/compose/runtime/MutableState;
+      92: aload_0
+      93: getfield      #88                 // Field $isActive:Z
+      96: aload_0
+      97: getfield      #91                 // Field $draggedRowHeight$delegate:Landroidx/compose/runtime/MutableFloatState;
+     100: aload_0
+     101: getfield      #95                 // Field $onMove:Lkotlin/jvm/functions/Function2;
+     104: aload_2
+     105: invokespecial #222                // Method "<init>":(ZLandroidx/compose/foundation/lazy/LazyListState;Landroidx/compose/ui/unit/Density;Lkotlinx/coroutines/CoroutineScope;Lkotlinx/coroutines/CoroutineScope;Landroidx/compose/ui/hapticfeedback/HapticFeedback;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/State;Landroidx/compose/runtime/MutableIntState;Landroidx/compose/runtime/MutableIntState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableFloatState;Landroidx/compose/runtime/MutableState;ZLandroidx/compose/runtime/MutableFloatState;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)V
+     108: astore_3
+     109: aload_3
+     110: aload_1
+     111: putfield      #137                // Field L$0:Ljava/lang/Object;
+     114: aload_3
+     115: checkcast     #145                // class kotlin/coroutines/Continuation
+     118: areturn
+
+  public final java.lang.Object invoke(androidx.compose.ui.input.pointer.PointerInputScope, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: aload_2
+       3: invokevirtual #228                // Method create:(Ljava/lang/Object;Lkotlin/coroutines/Continuation;)Lkotlin/coroutines/Continuation;
+       6: checkcast     #2                  // class com/takahashirinta/ncrust/ui/player/QueueViewKt$QueueView$dragGesturesModifier$1
+       9: getstatic     #202                // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+      12: invokevirtual #230                // Method invokeSuspend:(Ljava/lang/Object;)Ljava/lang/Object;
+      15: areturn
+
+  public java.lang.Object invoke(java.lang.Object, java.lang.Object);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: checkcast     #139                // class androidx/compose/ui/input/pointer/PointerInputScope
+       5: aload_2
+       6: checkcast     #145                // class kotlin/coroutines/Continuation
+       9: invokevirtual #235                // Method invoke:(Landroidx/compose/ui/input/pointer/PointerInputScope;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+      12: areturn
+}
