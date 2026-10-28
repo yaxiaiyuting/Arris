@@ -349,12 +349,11 @@ object PlaybackStateManager {
             withContext(Dispatchers.IO) {
                 // 提交前复核代次：期间若有更新的 saveQueue / clearQueue，本次写盘作废。
                 // 否则「A 的旧快照」会覆盖「B 的新队列」，或把刚清掉的队列写回来。
-                val current = synchronized(flushLock) { pendingGeneration == generation }
-                if (!current) return@withContext
-                ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-                    .putString(KEY_QUEUE, json)
-                    .putInt(KEY_QUEUE_INDEX, index)
-                    .apply()
+                val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                synchronized(flushLock) {
+                    if (pendingGeneration != generation) return@synchronized
+                    prefs.edit().putString(KEY_QUEUE, json).putInt(KEY_QUEUE_INDEX, index).apply()
+                }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             // 取消是正常路径（下一次 saveQueue / clearQueue 会取消上一次去抖）。
@@ -459,16 +458,13 @@ object PlaybackStateManager {
 
     fun clearQueue(context: Context) {
         // 也取消任何飞行中的 debounce 写，避免 clearQueue 之后又被延迟写覆盖回去
+        val prefs = getPrefs(context)
         synchronized(flushLock) {
             flushJob?.cancel()
             pendingQueue = null
             pendingAppContext = null
             pendingGeneration++
+            prefs.edit().remove(KEY_QUEUE).remove(KEY_QUEUE_INDEX).remove(KEY_SHUFFLE).apply()
         }
-        getPrefs(context).edit()
-            .remove(KEY_QUEUE)
-            .remove(KEY_QUEUE_INDEX)
-            .remove(KEY_SHUFFLE)
-            .apply()
     }
 }

@@ -1170,7 +1170,8 @@ object PlaylistApi {
         sub: Boolean,
         pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
     ): Boolean = withContext(Dispatchers.IO) {
-        if (pinned != null && !sameAccount(pinned)) {
+        val session = CookieManager.snapshot()
+        if (pinned != null && session.loginGeneration != pinned.loginGeneration) {
             Log.w("PlaylistApi", "subAlbum aborted: session changed id=$albumId sub=$sub")
             return@withContext false
         }
@@ -1178,10 +1179,11 @@ object PlaylistApi {
         val payload = mapOf("id" to albumId.toString())
         // 复核与发包之间没有挂起点：不传 cookieOverride 是为了让请求保留会话 tag，
         // 迟到的 301 仍能走 SessionMonitor 把会话转 Expired。
-        val response = RetrofitClient.eapiPost("/eapi/album/$action", payload)
-        val body = response.body?.string() ?: return@withContext false
-        val code = JSONObject(body).optInt("code", -1)
-        reportBusinessCode(code, response)
-        code == 200
+        RetrofitClient.eapiPost("/eapi/album/$action", payload, pinnedSession = session).use { response ->
+            val body = response.body?.string() ?: return@withContext false
+            val code = JSONObject(body).optInt("code", -1)
+            reportBusinessCode(code, response)
+            code == 200
+        }
     }
 }

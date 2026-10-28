@@ -242,11 +242,11 @@ fun QueueView(
     val infinityActiveRef by rememberUpdatedState(infinityActive)
     val queueRef by rememberUpdatedState(queue)
     val dragGesturesModifier = Modifier.pointerInput(interactive) {
+        if (!interactive) return@pointerInput
         try {
             awaitEachGesture {
                 // v3.8.0 · E10：`interactive` 是 pointerInput 的 key，但**入口也要判一次**——
                 // 面板不可交互时（折叠态、播放器收起）根本不该开始一次拖拽。
-                if (!interactive) return@awaitEachGesture
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val rowsNow = rowsRef
                 val idxNow = currentIndexRef

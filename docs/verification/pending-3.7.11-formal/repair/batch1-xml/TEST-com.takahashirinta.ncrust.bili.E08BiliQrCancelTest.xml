@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:19:05.626Z" hostname="cachyos-x8664" time="0.006">
+  <properties/>
+  <testcase name="轮询循环中被取消 迟到的成功响应不许落成 CONFIRMED" classname="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" time="0.003"/>
+  <testcase name="取消在途申请后 迟到的二维码响应不许把状态改回 WAITING" classname="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" time="0.001"/>
+  <testcase name="单步轮询在途时被取消 响应不许 apply" classname="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" time="0.001"/>
+  <testcase name="重置之后上一轮的迟到响应不许写进新会话" classname="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" time="0.001"/>
+  <testcase name="未取消时成功响应正常落成 CONFIRMED" classname="com.takahashirinta.ncrust.bili.E08BiliQrCancelTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

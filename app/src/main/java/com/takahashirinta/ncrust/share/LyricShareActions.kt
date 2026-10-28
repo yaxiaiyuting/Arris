@@ -184,7 +184,7 @@ object LyricShareActions {
         }
 
     /** 分享图的系统图库目录（相对 `Pictures/`）与保留时长。 */
-    private const val SHARE_RELATIVE_PATH = "Pictures/Arris"
+    private const val SHARE_RELATIVE_PATH = "Pictures/Arris/Shared"
     private const val SHARE_MEDIA_TTL_SECONDS = 600L
 
     private fun publishToMediaStore(
