@@ -62,7 +62,7 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- **Current: `versionName = "3.7.10-gpl"`, `versionCode = 96`.** 本轮草稿标签 `v3.7.10-gpl`。
+- **Current: `versionName = "3.7.12-gpl"`, `versionCode = 98`.** 本轮为本地双语歌词测试包，尚未创建发布标签。
   定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 92，取 93；另核对 dist/v3.7.6-gpl 的实际 APK 为 92。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）
@@ -5116,3 +5116,10 @@ QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串�
 网络重试和播放降档共用 PlaybackRetryScheduler；等待前保存完整请求与播放代次，醒来先核对原 owner，切歌/同歌重播/换档/暂停/停止撤销。不得拿旧 songId 与醒来时的全局 source/title 拼装新请求。系统媒体暂停也撤销旧意图。
 
 收藏库的读改写必须持有对应锁并先 ensureLoaded，初始化只返回同一份可变真源；flush 的快照与写盘整体串行。网易专辑只接受 code 200 且具有数组的结果，完整分页成功后才替换缓存；QQ 附加歌单失败时保留旧收藏、标记降级且不刷新整表 TTL。未知结构不能当成功空表。
+
+
+## v3.7.12 双语媒体歌词
+
+媒体面板与 Live Updates 共用 MediaLyricFrame 的原文/译文/显示偏好，整帧发布；主行切换和迟到译文也改变通知去重键。设置位于「歌词」：media_bilingual_lyrics 默认 true，media_lyric_primary 默认 0（原文在上），1 为译文在上。lyrics_in_media_session 仍是总开关，保留已有设置。无译文/译文空白或与原文相同时，双语模式只发原文，副行为空；无歌词时回到歌名与艺人。关闭双语则保留旧版单歌词与歌曲信息排布。
+
+主副行共用主轨时间戳，译文按最近主行匹配且优先精确时间，不得让上一句借用下一句译文；只在轨道变化时重新匹配，位置采样二分选择。暂停时变更设置也必须刷新 MediaSession metadata，不能只更新通知正文。系统模板控制最终字体/行数；不承诺收起的系统胶囊支持双层。默认不自动翻译，不增加网络请求、音频焦点操作或播放调度。

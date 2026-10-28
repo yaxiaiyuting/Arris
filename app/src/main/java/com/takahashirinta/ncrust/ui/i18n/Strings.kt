@@ -493,6 +493,9 @@ data class Strings(
      */
     val likedPlayAll: LikedPlayAllStrings,
 ) {
+    val mediaLyrics: MediaLyricStrings get() = mediaLyricStringsForCode(
+        languagePresets.firstOrNull { it.strings === this }?.code ?: "zh-CN"
+    )
     val sessionExpiredBanner: String get() = account.sessionExpiredBanner
     val dailySongsLoginHint: String get() = account.dailySongsLoginHint
     val vipKindSvip: String get() = account.vipKindSvip

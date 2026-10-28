@@ -180,17 +180,16 @@ class PlaybackService : MediaLibraryService() {
          * 「艺人 · 当前歌词行」，并**同时**写 SUBTITLE/DISPLAY_SUBTITLE 兜住老车机与蓝牙路径；
          * 关闭或没有歌词时这里保持 null，ARTIST 一字不变。
          */
-        @Volatile var mediaLyricLine: String? = null
+        @Volatile var mediaLyricFrame = MediaLyricFrame()
             set(value) {
                 if (field == value) return
                 field = value
-                // v2.0.2：跨行时重 post 通知，**所有 API 版本都发**（v1.8.0 的 `SDK_INT < P`
-                // 闸门已被真机推翻，见 LyricNotifyGate 的完整论证）。
-                // 为什么必须挂在这里：媒体通知的正文是**应用 post 时**烘进去的，
-                // 系统只在「通知被 post」的那一刻读一次会话 metadata，之后不轮询
-                // —— 不重发就等于不刷新。字段是唯一的变化点，散在 ViewModel 里迟早会漏。
-                instance?.onMediaLyricLineChanged(value)
+                instance?.onMediaLyricLineChanged(value.notificationKey)
             }
+        /** Compatibility for callers publishing original-only lyrics. */
+        var mediaLyricLine: String?
+            get() = mediaLyricFrame.original
+            set(value) { mediaLyricFrame = MediaLyricFrame(original = value) }
         var onPlaybackEnded: (() -> Unit)? = null
         var onPlaybackPrevious: (() -> Unit)? = null
         var onPlaybackNext: (() -> Unit)? = null
@@ -1589,7 +1588,7 @@ class PlaybackService : MediaLibraryService() {
 
     /** v2.0.2：被限流时用的延迟重试（保证密集段落的最后一行一定会到达，不丢内容）。 */
     private val lyricNotifyHandler = Handler(Looper.getMainLooper())
-    private val lyricNotifyRetry = Runnable { onMediaLyricLineChanged(mediaLyricLine) }
+    private val lyricNotifyRetry = Runnable { onMediaLyricLineChanged(mediaLyricFrame.notificationKey) }
 
     // v2.1.6 · 会话合并：`setPlaybackState` 的去重状态（lastPlaybackStateInt /
     // lastPlaybackStateSentAt / STATE_MIN_INTERVAL_MS）随 legacy 会话一起删掉了 ——
@@ -1642,6 +1641,11 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun currentMediaDisplay(): MediaDisplayLines.Lines {
+        val frame = mediaLyricFrame
+        return MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
+    }
+
     private fun updatePlaybackState() {
         val dur = if (player.duration > 0) player.duration else 0L
         // v2.0.0 · T3：起播后 500ms 内的第一次心跳就把这首歌写进离线曲目索引（幂等，见该函数）。
@@ -1660,7 +1664,8 @@ class PlaybackService : MediaLibraryService() {
         // title/artist/duration/封面变化时才重发，绝不每 250ms 走一遍跨进程 IPC。
         // v1.5.1 · D：媒体面板歌词。有歌词行时第一行 = 当前歌词、第二行 = 「歌名 · 艺人」；
         // 没有就走「歌名 / 艺人」。排布规则抽在 MediaDisplayLines（JVM 单测覆盖）。
-        val display = MediaDisplayLines.of(mediaTitle, mediaArtist, mediaLyricLine)
+        val frame = mediaLyricFrame
+        val display = MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
         if (display.title != lastMetadataTitle || display.subtitle != lastMetadataArtist ||
             dur != lastMetadataDuration || currentArtworkUrl != lastMetadataArtwork ||
             currentArtworkBitmap !== lastMetadataBitmap
@@ -1671,8 +1676,10 @@ class PlaybackService : MediaLibraryService() {
             val sessionLines = MediaSessionMerge.sessionLines(
                 songTitle = mediaTitle,
                 songArtist = mediaArtist,
-                lyricLine = mediaLyricLine,
+                lyricLine = frame.original,
                 followLyrics = sessionMetadataFollowsLyrics,
+                translatedLine = frame.translation,
+                options = frame.options,
             )
             publishSessionMetadata(sessionLines, dur)
             // v2.1.5 · P1：记下**这一份发布了什么**，供探针与 dumpsys 对照。
@@ -1938,6 +1945,8 @@ class PlaybackService : MediaLibraryService() {
             LyricNotifyGate.Decision.Post -> {
                 probeGatePost++
                 lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
+                // Paused playback has no ticker: refresh session metadata with the same frame now.
+                runCatching { updatePlaybackState() }
                 updateNotify()
                 if (BuildConfig.DEBUG) {
                     Log.d(TAG_LYRIC_NOTIFY, "re-post on lyric line change: $line")
@@ -1983,7 +1992,7 @@ class PlaybackService : MediaLibraryService() {
         runCatching {
             val songId = player.currentMediaItem?.mediaId
             if (songId != null) {
-                val display = MediaDisplayLines.of(mediaTitle, mediaArtist, mediaLyricLine)
+                val display = currentMediaDisplay()
                 LiveUpdateNotifier.update(
                     this,
                     title = display.title,
@@ -2006,7 +2015,7 @@ class PlaybackService : MediaLibraryService() {
             // v2.0.2：记下「通知里现在到底是哪两行 / 什么时候发的」——这是
             // [LyricNotifyGate] 的两个输入。必须放在真的发出去之后（buildNotification
             // 抛异常时不能记账，否则会被误判成"已经显示了这一行"而永久跳过）。
-            lastPostedLyricLine = mediaLyricLine
+            lastPostedLyricLine = mediaLyricFrame.notificationKey
             lastLyricNotifyAt = SystemClock.elapsedRealtime()
         } catch (e: Exception) {
             Log.e("PlaybackService", "Failed to update notification", e)
@@ -2065,7 +2074,7 @@ class PlaybackService : MediaLibraryService() {
         val isPlaying = player.isPlaying
         // v1.6.0（用户反馈修正）：通知与系统媒体面板共用同一份两行文案 —— 否则会出现
         // 「面板第一行是歌词、通知第一行是歌名」的不一致。规则见 MediaDisplayLines。
-        val display = MediaDisplayLines.of(mediaTitle, mediaArtist, mediaLyricLine)
+        val display = currentMediaDisplay()
 
         val builder = NotificationCompat.Builder(this, "ncrust_playback")
             .setContentTitle(display.title)

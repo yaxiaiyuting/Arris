@@ -262,6 +262,8 @@ private fun SettingsPreferenceGroupPage(
         mutableStateOf(prefs.getBoolean("lyrics_in_media_session", false))
     }
     /** v3.1.0 · B：B 站音源开关的进程内镜像（初值 = `BiliPrefs.read(context)`）。 */
+    var mediaBilingual by remember { mutableStateOf(com.takahashirinta.ncrust.player.MediaLyricOptions.read(prefs).bilingual) }
+    var mediaTranslationFirst by remember { mutableStateOf(com.takahashirinta.ncrust.player.MediaLyricOptions.read(prefs).translationFirst) }
     var biliEnabled by remember { mutableStateOf(BiliPrefs.read(context)) }
     // v3.4.8 · 问题 3：B 站音质上限 / 优先无损 FLAC。回显走**各自的 read\***（不是 registry 默认值）——
     // 盘上可能是一个非法值，而 `read*` 会按既有纪律回落默认；用 registry 默认值回显会让
@@ -390,6 +392,7 @@ private fun SettingsPreferenceGroupPage(
         "update_auto_check" -> updateAutoCheck
         "artist_reco_enabled" -> artistRecoEnabled
         "page_transition_enabled" -> pageTransitionEnabled
+        "media_bilingual_lyrics" -> mediaBilingual
         "lyrics_translation" -> lyricsTranslation
         "lyrics_in_media_session" -> lyricsInMediaSession
         "lyrics_ttml_enabled" -> lyricsTtmlEnabled
@@ -457,6 +460,10 @@ private fun SettingsPreferenceGroupPage(
             // 状态提升在 MainScreen：它自己写 PageTransitionSetting.writeEnabled
             "page_transition_enabled" -> onPageTransitionChange(value)
             // UserScreen.kt:538 裸 prefs + PlayerViewModel.setLyricsTranslation()
+            "media_bilingual_lyrics" -> {
+                mediaBilingual = value
+                playerViewModel.setMediaBilingualLyrics(value)
+            }
             "lyrics_translation" -> {
                 lyricsTranslation = value
                 prefs.edit().putBoolean("lyrics_translation", value).apply()
@@ -646,6 +653,16 @@ private fun SettingsPreferenceGroupPage(
 
                     SettingsRowKind.DROPDOWN -> item(key = entry.id) {
                         when (entry.id) {
+                            "media_lyric_primary" -> MetroDropdownRow(
+                                label = strings.mediaLyrics.primary,
+                                selectedIndex = if (mediaTranslationFirst) 1 else 0,
+                                options = listOf(strings.mediaLyrics.original, strings.mediaLyrics.translation),
+                                hint = strings.mediaLyrics.primaryHint,
+                                onSelect = {
+                                    mediaTranslationFirst = it == 1
+                                    playerViewModel.setMediaLyricTranslationFirst(mediaTranslationFirst)
+                                },
+                            )
                             // v3.6.9：波形滚动倍速（0.5× / 0.75× / 1× / 1.5× / 2×）
                             "visualizer_speed_step" -> MetroDropdownRow(
                                 label = strings.waveform.visualizerSpeedLabel,
@@ -1087,6 +1104,8 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: Upda
     "bilibili_prefer_flac" -> strings.bili.biliPreferFlacLabel
     "bilibili_subtitle_lang" -> strings.bili.biliSubtitleLangLabel
     "page_transition_enabled" -> strings.motion.pageTransitionLabel
+    "media_bilingual_lyrics" -> strings.mediaLyrics.bilingual
+    "media_lyric_primary" -> strings.mediaLyrics.primary
     "lyrics_translation" -> strings.lyricsTranslationLabel
     "lyrics_word_animation" -> strings.lyricsWordAnimationLabel
     "lyrics_sweep_quality" -> strings.lyricsSweepQualityLabel
@@ -1156,6 +1175,8 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry, updateStrings: U
     "bilibili_quality_cap" -> strings.bili.biliQualityCapDescription
     "bilibili_prefer_flac" -> strings.bili.biliPreferFlacDescription
     "bilibili_subtitle_lang" -> strings.bili.biliSubtitleLangDescription
+    "media_bilingual_lyrics" -> strings.mediaLyrics.bilingualHint
+    "media_lyric_primary" -> strings.mediaLyrics.primaryHint
     "lyrics_translation" -> strings.lyricsTranslationHint
     else -> null
 }

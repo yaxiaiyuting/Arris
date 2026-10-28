@@ -156,7 +156,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     val showDynamicLyricFont = MutableStateFlow(false)
     // v1.5.1 · D：上一次推给媒体面板的歌词行（去重用，避免 2Hz 采样反复写同一个值）。
-    private var lastMediaLyricLine: String? = null
+    val mediaLyricOptions = MutableStateFlow(com.takahashirinta.ncrust.player.MediaLyricOptions())
 
     // v1.5.1 · E：字号落盘防抖窗口 —— A-/A+ 连点时只写最后一次。
     private val FONT_SCALE_WRITE_DEBOUNCE_MS = 150L
@@ -701,16 +701,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // v1.5.1 · D：把「当前行」推给 PlaybackService —— 只在**跨行**时写一次
         // （currentPosition 是 2Hz 采样，这里每次采样只做一次 O(行数) 的二分/线性比较，
         // 值没变就不写），通知栏因此不会逐帧重绘。关掉开关或无歌词时推 null。
+        mediaLyricOptions.value = com.takahashirinta.ncrust.player.MediaLyricOptions.read(lyricPrefs)
         viewModelScope.launch {
-            combine(lyrics, currentPosition, lyricsInMediaSession) { lines, pos, on ->
-                Triple(lines, pos, on)
-            }.collect { (lines, pos, on) ->
-                val line = if (!on || lines.isEmpty()) null else lines.lastOrNull { it.timeMs <= pos }?.text
-                if (line != lastMediaLyricLine) {
-                    lastMediaLyricLine = line
-                    PlaybackService.mediaLyricLine = line
+            var cachedMain: List<LrcLine>? = null
+            var cachedTranslation: List<LrcLine>? = null
+            var track = com.takahashirinta.ncrust.player.MediaLyricTrack.from(emptyList(), emptyList())
+            combine(lyrics, translatedLyrics, currentPosition, lyricsInMediaSession, mediaLyricOptions) {
+                    lines, translated, pos, enabled, options ->
+                if (lines !== cachedMain || translated !== cachedTranslation) {
+                    track = com.takahashirinta.ncrust.player.MediaLyricTrack.from(lines, translated)
+                    cachedMain = lines
+                    cachedTranslation = translated
                 }
-            }
+                track.at(pos, enabled, options)
+            }.collect { frame -> PlaybackService.mediaLyricFrame = frame }
         }
 
         PlaybackService.onProgressUpdate = { pos, dur ->
@@ -1016,6 +1020,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * PlayerCard 自动切回歌词视图; 确无歌词则由大封面盖住。
      */
     private fun resetLyricsForNewSong() {
+        PlaybackService.mediaLyricFrame = com.takahashirinta.ncrust.player.MediaLyricFrame(options = mediaLyricOptions.value)
         lyrics.value = emptyList()
         translatedLyrics.value = emptyList()
         romanizedLyrics.value = emptyList()
@@ -1083,8 +1088,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .getSharedPreferences("ncrust_settings", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("lyrics_in_media_session", enabled).apply()
         if (!enabled) {
-            lastMediaLyricLine = null
-            PlaybackService.mediaLyricLine = null
+            PlaybackService.mediaLyricFrame = com.takahashirinta.ncrust.player.MediaLyricFrame(options = mediaLyricOptions.value)
         }
     }
 
@@ -1092,6 +1096,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * v1.5.1 · E：设置歌词字号倍率。立即生效；落盘防抖（3GB 设备上连续点 A-/A+
      * 不该每次都同步写一遍 SharedPreferences）。
      */
+    fun setMediaBilingualLyrics(enabled: Boolean) {
+        getApplication<Application>().getSharedPreferences("ncrust_settings", 0).edit()
+            .putBoolean(com.takahashirinta.ncrust.player.MediaLyricOptions.KEY_BILINGUAL, enabled).apply()
+        mediaLyricOptions.value = mediaLyricOptions.value.copy(bilingual = enabled)
+    }
+
+    fun setMediaLyricTranslationFirst(enabled: Boolean) {
+        getApplication<Application>().getSharedPreferences("ncrust_settings", 0).edit()
+            .putInt(com.takahashirinta.ncrust.player.MediaLyricOptions.KEY_PRIMARY, if (enabled) 1 else 0).apply()
+        mediaLyricOptions.value = mediaLyricOptions.value.copy(translationFirst = enabled)
+    }
+
     fun setLyricsFontScale(scale: Float) {
         val clamped = scale.coerceIn(LyricsDisplayPrefs.FONT_SCALE_MIN, LyricsDisplayPrefs.FONT_SCALE_MAX)
         lyricsFontScale.value = clamped
