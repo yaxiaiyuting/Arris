@@ -158,14 +158,14 @@ object LocalPlaylistCodec {
             val rows = runCatching {
                 gson.fromJson<List<LocalTrackDto>>(trimmed, trackListType)
             }.getOrNull() ?: return emptyList()
-            return rows.mapNotNull { it.toModel() }
+            return consolidate(rows.mapNotNull { it.toModel() })
         }
         val env = runCatching {
             gson.fromJson(trimmed, PlaylistEnvelopeDto::class.java)
         }.getOrNull() ?: return emptyList()
         val version = env.schemaVersion
         if (version != null && version > SCHEMA_VERSION) return emptyList()
-        return env.tracks.orEmpty().mapNotNull { it.toModel() }
+        return consolidate(env.tracks.orEmpty().mapNotNull { it.toModel() })
     }
 
     // ------------------------------------------------------------- 映射 ----
@@ -197,6 +197,20 @@ object LocalPlaylistCodec {
         )
     }
 
+    private fun consolidate(tracks: List<LocalPlaylistTrack>): List<LocalPlaylistTrack> =
+        tracks.groupBy { it.trackKey }.values.map { group ->
+            if (group.size == 1) return@map group.single()
+            val deletedAt = group.filter { it.tombstoned }.maxOfOrNull { it.addedAt }
+            val manual = group.filter { it.origin == LocalTrackOrigin.LOCAL && !it.tombstoned }.maxByOrNull { it.addedAt }
+            val winner = manual ?: group.maxBy { it.addedAt }
+            winner.copy(
+                origin = if (group.any { it.origin == LocalTrackOrigin.LOCAL }) LocalTrackOrigin.LOCAL else winner.origin,
+                addedAt = group.maxOf { it.addedAt },
+                tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
+                song = winner.song ?: group.firstNotNullOfOrNull { it.song },
+            )
+        }
+
     private fun LocalPlaylistTrack.toDto(): LocalTrackDto = LocalTrackDto(
         source = trackKey.source.key,
         trackId = trackKey.id,
@@ -213,7 +227,12 @@ object LocalPlaylistCodec {
         if (tid <= 0L) return null
         // `source == null` 的解释与 [TrackKey.of] 完全一致：先看 id 有没有 QQ 的标志位，
         // 都没有才回落 ncm。**不猜成 ncm**（v2.1.5 的教训）。
-        val key = TrackKey.of(source, tid, sourceId, mediaId)
+        val payload = song?.takeIf { it.isNotBlank() }?.let {
+            runCatching { gson.fromJson<SongItem>(it, songListType) }.getOrNull()
+        }
+        val canonicalId = if (MusicSource.fromKey(source) == MusicSource.BILIBILI)
+            com.takahashirinta.ncrust.source.SourceIds.migrateBiliAvPartition(tid, sourceId ?: payload?.sourceId) else tid
+        val key = TrackKey.of(source, canonicalId, sourceId ?: payload?.sourceId, mediaId ?: payload?.mediaId)
         return LocalPlaylistTrack(
             trackKey = key,
             // 缺 origin ⇒ REMOTE 是保守的一侧：LOCAL 会在任何未来策略变化里被当作
@@ -224,9 +243,8 @@ object LocalPlaylistCodec {
             addedAt = addedAt ?: 0L,
             // ★ 缺 tombstoned ⇒ false（「没有删除记录」= 没删过）。见类文档的取值表。
             tombstoned = tombstoned ?: false,
-            song = song?.takeIf { it.isNotBlank() }?.let {
-                runCatching { gson.fromJson<SongItem>(it, songListType) }.getOrNull()
-            },
+            song = if (canonicalId == tid) payload else payload?.copy(
+                id = canonicalId, source = key.source.key, sourceId = key.sourceId, mediaId = key.mediaId),
         )
     }
 }

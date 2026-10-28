@@ -186,7 +186,7 @@ val koNK = Strings(
         visualizerPerspectiveDescription = "파형 기둥에 고정된 기울기를 줍니다. 그리기 층이 하나 늘어나며, 화려 단계에서 합성 부담이 가장 큰 항목입니다.",
         visualizerDragLabel = "눌러서 색 바꾸기",
         visualizerDragDescription = "파형을 누르면 '그라데이션 흐름'과 '차례대로 색칠하기' 사이를 바꿉니다. 이번 버전에서는 끌기가 구현되지 않았습니다(손짓과 재생기 충돌 위험은 실제 기기에서 검증되지 않았습니다).",
-        visualizerNotSpectrumHint = "파형 밝기는 시간의 새로움을 나타내며 스펙트럼이 아닙니다. 이번 버전에는 주파수 자료가 없어 낮은/중간/높은 주파수를 가리지 않습니다.",
+        visualizerNotSpectrumHint = "파형은 저음·중음·고음 대역의 에너지 변화를 시간순으로 표시합니다. FFT 스펙트럼은 아닙니다.",
         visualizerSpeedLabel = "파형 스크롤 속도",
         visualizerSpeedDescription = "1×는 오디오 데이터를 따릅니다. 더 빠르면 데이터가 부족할 때 마지막 열을 반복합니다(더 빠르지만 모양이 늘어남). 더 느리면 기록만 천천히 흐릅니다.",
         // v2.9.0: 모션 강도 (통합 단계) + 인터페이스 모션 총스위치.
@@ -269,6 +269,7 @@ val koNK = Strings(
         offlineCacheDeleteTitle = "캐시 삭제",
         offlineCacheDeleteConfirm = { name -> "「${name}」의 이 장치 캐시 부분을 삭제하시겠습니까?" },
         offlineCacheDeleted = "이 곡의 캐시를 삭제했습니다",
+        offlineCacheOperationFailed = "캐시 작업을 마치지 못했습니다. 일부 파일이 남아 있을 수 있습니다.",
         categoryOffline = "오프라인",
         offlineCachePlayingLocked = "재생 중이라 삭제할 수 없습니다",
         offlineCacheFragmentNotice = "재생한 오디오 부분만 캐시되며, 곡 전체가 보장되지는 않습니다.",

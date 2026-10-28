@@ -218,6 +218,7 @@ object BiliApi {
      */
     private val realClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addNetworkInterceptor(BiliCredentialBoundary)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()

@@ -1001,31 +1001,19 @@ private fun SettingsPreferenceGroupPage(
             onConfirm = {
                 showClearCacheConfirm = false
                 coroutineScope.launch {
-                    val usage = withContext(Dispatchers.IO) {
-                        ContentCache.clearAll()
-                        runCatching { coil.Coil.imageLoader(context).memoryCache?.clear() }
-                        // 图片缓存走 Coil 自己的 API（它要维护 journal，绕过它直接删目录会让
-                        // DiskCache 的状态与磁盘不一致）。这一份对应 CacheUsage.imageBytes。
-                        runCatching { coil.Coil.imageLoader(context).diskCache?.clear() }
-                        // 其余 cacheDir 子项全清 —— 口径与 CacheUsage.otherCacheBytes 一一对应：
-                        // 「显示多少就能清掉多少」是 v1.6.0 起的不变量。cacheDir 里的东西按
-                        // Android 的契约本来就可以被系统随时回收，全清是安全的。
-                        // image_cache 跳过：交给上面的 Coil API，避免两边同时对同一个目录动手。
-                        runCatching {
-                            context.cacheDir?.let { dir ->
-                                dir.listFiles()
-                                    ?.filter { it.name != CacheUsage.IMAGE_CACHE_DIR }
-                                    ?.forEach { it.deleteRecursively() }
-                            }
-                        }
-                        // v1.6.0 · D1：离线音频缓存在 filesDir/offline/audio（不随系统清缓存消失），
-                        // 用户点「清除缓存」时一并清掉，并作废离线 URL 清单与离线曲目索引，
-                        // 避免留下死条目（v2.0.0 · T3 起索引也在清理范围内）。
-                        runCatching { OfflineAudioCache.clear(context) }
-                        measureCacheUsage(context)
+                    val (usage, cleared) = withContext(Dispatchers.IO) {
+                        var ok = runCatching { ContentCache.clearAll() }.isSuccess
+                        ok = runCatching { coil.Coil.imageLoader(context).memoryCache?.clear() }.isSuccess && ok
+                        ok = runCatching { coil.Coil.imageLoader(context).diskCache?.clear() }.isSuccess && ok
+                        ok = runCatching {
+                            context.cacheDir?.listFiles()?.filter { it.name != CacheUsage.IMAGE_CACHE_DIR }
+                                ?.map { it.deleteRecursively() }?.all { it } ?: true
+                        }.getOrDefault(false) && ok
+                        ok = runCatching { OfflineAudioCache.clear(context) }.getOrDefault(false) && ok
+                        measureCacheUsage(context) to ok
                     }
                     cacheUsage = usage
-                    Toast.makeText(context, strings.cacheCleared, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (cleared) strings.cacheCleared else strings.offlineCacheOperationFailed, Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { showClearCacheConfirm = false }

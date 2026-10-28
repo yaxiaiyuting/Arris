@@ -132,6 +132,25 @@ object PlaylistApi {
                 ?: account?.optString("avatarUrl", "") ?: ""
         )
     }
+    /** Full user playlist list, advancing by raw rows (including hidden special playlists). */
+    suspend fun getAllUserPlaylists(
+        uid: Long,
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot = CookieManager.snapshot(),
+    ): List<PlaylistInfo> {
+        val all = LinkedHashMap<Long, PlaylistInfo>()
+        var offset = 0
+        repeat(100) {
+            if (!sameAccount(pinned)) throw java.io.IOException("playlist account changed")
+            val page = getUserPlaylists(uid, 100, offset)
+            if (!sameAccount(pinned)) throw java.io.IOException("playlist account changed")
+            page.playlists.forEach { all[it.id] = it }
+            if (!page.more) return all.values.toList()
+            if (page.rawCount <= 0) throw java.io.IOException("playlist paging incomplete")
+            offset += page.rawCount
+        }
+        throw java.io.IOException("playlist paging limit reached")
+    }
+
     suspend fun getUserPlaylists(uid: Long, limit: Int = 100, offset: Int = 0): UserPlaylistResult = withContext(Dispatchers.IO) {
         val payload = mapOf(
             "uid" to uid.toString(),
@@ -172,7 +191,8 @@ object PlaylistApi {
         UserPlaylistResult(
             playlists = playlists,
             total = json.optInt("total", 0),
-            more = json.optBoolean("more", false)
+            more = json.optBoolean("more", false),
+            rawCount = playlistArray.length(),
         )
     }
 
@@ -479,7 +499,8 @@ object PlaylistApi {
     data class UserPlaylistResult(
         val playlists: List<PlaylistInfo>,
         val total: Int,
-        val more: Boolean
+        val more: Boolean,
+        val rawCount: Int = playlists.size,
     )
 
     @Immutable

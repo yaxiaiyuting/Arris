@@ -1341,6 +1341,16 @@ fun MainScreen(
                     )
                 }
             }
+            val activity = context as? android.app.Activity
+            if (activity?.intent?.action == com.takahashirinta.ncrust.player.PlaybackActionReceiver.ACTION_RESUME) {
+                activity.intent.action = android.content.Intent.ACTION_MAIN
+                playbackQueue.getOrNull(currentQueueIndex)?.let { song ->
+                    val (title, artist, artwork) = songParams(song)
+                    playerViewModel.playSong(song.id, title, artist, artwork,
+                        sourceKey = song.source, sourceId = song.sourceId, mediaId = song.mediaId,
+                        privilege = song.privilege)
+                }
+            }
         }
     }
 
@@ -2206,8 +2216,10 @@ fun MainScreen(
         applyPlayMode(QueueModes.INFINITY)
         pendingPlayRequests.launch(load = {
             withContext(Dispatchers.IO) {
-                val fm = PlaylistApi.getPersonalFm()
-                if (fm.isNotEmpty()) fm else PlaylistApi.getDailyRecommendSongs()
+                val fm = try { PlaylistApi.getPersonalFm() }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { emptyList() }
+                if (fm.isNotEmpty()) fm else runCatching { PlaylistApi.getDailyRecommendSongs() }.getOrDefault(emptyList())
             }
         }) { songs ->
             if (songs.isNotEmpty()) {
@@ -3323,6 +3335,7 @@ fun MainScreen(
                 // NavGraph 在 tab 屏之上（上层）：空 HOME destination 不遮挡 tab 屏，
                 // 打开详情页时详情页 opaque bg 从上层盖住 tab 屏；返回时 slide 出去露出 tab 屏。
                 MainNavGraph(
+                    onQqRelogin = { showQqLogin = true },
                     navController = navController,
                     onSongClick = { playSongItem(it) },
                     onReplaceAndPlay = { replaceQueueAndPlay(it) },

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "com.takahashirinta.ncrust.ui.theme.BackgroundImportGateTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.player.PlaybackCommandCapabilityTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.network.PlaylistDetailResultTest",
+    "tests": "8",
+    "failures": "0",
+    "errors": "0"
+  }
+]

@@ -284,7 +284,7 @@ object OfflineAudioCache {
         // E01：缓存操作**失败**与「缓存里确实没有片段」不是一回事。
         // 旧写法把异常折成 false 之后仍然继续，紧接着就把离线索引删了 ——
         // 磁盘上字节还在、管理页里的条目却先消失（用户以为删干净了）。
-        val removedSpans = try {
+        try {
             val c = get(app)
             var removed = false
             songKeys(app, songId).forEach { key ->
@@ -298,7 +298,8 @@ object OfflineAudioCache {
         }
         // 缓存里没有片段也要清两条清单：用户点了「删除」，列表里就不能再留着它。
         OfflineLibrary.remove(app, songId)
-        return removedSpans
+        // 已不存在的缓存是幂等成功；异常路径已在上面返回false并保留索引。
+        return true
     }
 
     /**

@@ -507,3 +507,5 @@ TTML 在本项目里的角色是「给 ncm 没有逐字 / 没有译文的那部�
 [问题反馈](https://github.com/yaxiaiyuting/Arris/issues) · [Wiki](https://github.com/GuitaristRin/Ncrust/wiki) · [Releases](https://github.com/yaxiaiyuting/Ncrust/releases)
 
 </div>
+
+正式整合版：**3.7.11-gpl / versionCode99**（2026-10-29），包含双语媒体歌词与核心审查修复。此前3.7.12-gpl/98为测试包；显示版本按用户要求，内部code继续递增。验证与已知限制见[正式验证目录](docs/verification/v3.7.11-formal/)。

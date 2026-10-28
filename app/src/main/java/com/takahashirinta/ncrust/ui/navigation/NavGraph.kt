@@ -234,6 +234,7 @@ object NavRoutes {
 fun MainNavGraph(
     navController: NavHostController,
     onSongClick: (SongItem) -> Unit,
+    onQqRelogin: () -> Unit = {},
     onReplaceAndPlay: (List<SongItem>) -> Unit = {},
     onInsertNext: (List<SongItem>) -> Unit = {},
     onSongInsertNext: (SongItem) -> Unit = {},
@@ -453,6 +454,7 @@ fun MainNavGraph(
             // 已由导航库解码过一次（见 [NavRouteCodec]），不再解第二次。
             val name = backStackEntry.arguments?.getString("playlistName") ?: ""
             QqPlaylistDetailScreen(
+                onRelogin = onQqRelogin,
                 playlistId = pid,
                 ownerId = owner,
                 dirId = dirId,

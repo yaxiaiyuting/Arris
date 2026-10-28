@@ -749,10 +749,13 @@ class PlaybackService : MediaLibraryService() {
                     itemArtist?.let { mediaArtist = it }
                     // 手动 playUrl 已经按原始 URL 起过封面加载，这里不要用 item 上
                     // CoverUrls.large 后的 URI 再加载一遍（重复网络 + 改变缓存口径）。
-                    if (!sameAsConfigured && itemArtwork != null && itemArtwork != currentArtworkUrl) {
-                        currentArtworkUrl = itemArtwork
-                        artworkPreloadGeneration++
-                        loadArtwork(itemArtwork)
+                    if (!sameAsConfigured) {
+                        if (itemArtwork.isNullOrBlank()) clearCurrentArtwork()
+                        else if (itemArtwork != currentArtworkUrl || currentArtworkBitmap == null) {
+                            currentArtworkUrl = itemArtwork
+                            artworkPreloadGeneration++
+                            loadArtwork(itemArtwork)
+                        }
                     }
                     updatePlaybackState()
                     updateNotify()
@@ -802,7 +805,9 @@ class PlaybackService : MediaLibraryService() {
                     // 否则会污染下一次切换
                     artworkPreloadGeneration++
                     if (preloaded != null && slotArtwork != null) {
+                        val gen = ++artworkGeneration
                         currentArtworkBitmap = preloaded
+                        applyCoverAccent(preloaded, artwork, gen)
                         scope.launch(Dispatchers.Main) {
                             updatePlaybackState()
                             updateNotify()
@@ -871,7 +876,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
+        val platformResult = super.onStartCommand(intent, flags, startId)
+        // Public media-session commands remain handled by Media3; custom start extras are private.
+        if (!PlaybackCommands.authorized(intent)) return platformResult
         Log.d("PlaybackService", "onStartCommand action=${intent?.getStringExtra("action")}")
 
         when (intent?.getStringExtra("action")) {
@@ -901,6 +908,8 @@ class PlaybackService : MediaLibraryService() {
                     }
                     PreloadSlot.Decision.APPEND -> Unit
                 }
+                artworkPreloadGeneration++
+                pendingNextArtworkBitmap = null
                 pendingNextTitle = intent.getStringExtra("title")
                 pendingNextArtist = intent.getStringExtra("artist")
                 pendingNextArtwork = intent.getStringExtra("artwork")
@@ -978,15 +987,12 @@ class PlaybackService : MediaLibraryService() {
             mediaMediaId = identity.mediaId
         }
 
-        if (artwork != null && artwork != currentArtworkUrl) {
-            currentArtworkUrl = artwork
-            loadArtwork(artwork)
-        } else if (artwork != null && artwork.isEmpty()) {
-            // 这首歌没有封面：清掉主题色，UI 回落预设色（不然会沿用上一首的颜色）。
-            paletteUrl = null
-            paletteTheme = null
-            paletteRgb = null
-            onCoverAccent?.invoke(null)
+        if (url != null) {
+            if (artwork.isNullOrBlank()) clearCurrentArtwork()
+            else if (artwork != currentArtworkUrl || currentArtworkBitmap == null) {
+                currentArtworkUrl = artwork
+                loadArtwork(artwork)
+            }
         }
 
         if (url != null) {
@@ -1419,6 +1425,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun applyCoverAccent(bitmap: Bitmap, url: String, gen: Int) {
         if (url == paletteUrl) {
+            currentDominantColor = paletteDominant
             paletteRgb?.let { onCoverAccent?.invoke(it) }
             // 同一张封面（URL 未变，例如空闲释放后恢复播放触发的重载）直接复用，
             // 不重复量化 —— HCT 量化比 Palette 贵，这条早退是它唯一的省法。
@@ -1455,14 +1462,15 @@ class PlaybackService : MediaLibraryService() {
                 null
             }
             // 取色期间又切了歌：结果作废，别把上一首的颜色推给新歌。
-            if (gen != artworkGeneration) return@launch
+            withContext(Dispatchers.Main) {
+            if (gen != artworkGeneration || currentArtworkUrl != url) return@withContext
             if (palette == null) {
                 onCoverAccent?.invoke(null)
                 // 两条通路的降级是独立的：Palette 失败不代表 HCT 也失败（反之亦然），
                 // 所以各自推各自的结果，不互相牵连。
                 paletteTheme = theme
                 onCoverTheme?.invoke(theme)
-                return@launch
+                return@withContext
             }
             val dominant = palette.getDominantColor(0xFF1DB954.toInt())
             // 主题色优先取 vibrant（更鲜亮，随后会被 processAccentColor 压饱和度）；
@@ -1477,7 +1485,8 @@ class PlaybackService : MediaLibraryService() {
             currentDominantColor = dominant
             onCoverAccent?.invoke(accent)
             onCoverTheme?.invoke(theme)
-            scope.launch(Dispatchers.Main) { updateNotify() }
+            updateNotify()
+            }
         }
     }
 
@@ -1492,15 +1501,27 @@ class PlaybackService : MediaLibraryService() {
                         .build()
                 )
                 if (result is SuccessResult) {
-                    if (gen != artworkPreloadGeneration) return@launch
-                    pendingNextArtworkBitmap = downscaleArtwork(
-                        (result.drawable as BitmapDrawable).bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                    )
+                    val bitmap = downscaleArtwork((result.drawable as BitmapDrawable).bitmap.copy(Bitmap.Config.ARGB_8888, false))
+                    withContext(Dispatchers.Main) {
+                        if (gen == artworkPreloadGeneration && pendingNextArtwork == url) pendingNextArtworkBitmap = bitmap
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("PlaybackService", "Preload artwork failed", e)
             }
         }
+    }
+
+    private fun clearCurrentArtwork() {
+        artworkGeneration++
+        currentArtworkUrl = null
+        currentArtworkBitmap = null
+        paletteUrl = null
+        paletteTheme = null
+        paletteRgb = null
+        currentDominantColor = 0xFF1DB954.toInt()
+        onCoverAccent?.invoke(null)
+        onCoverTheme?.invoke(null)
     }
 
     private fun loadArtwork(url: String) {
@@ -1524,16 +1545,13 @@ class PlaybackService : MediaLibraryService() {
                     val srcBitmap = (result.drawable as BitmapDrawable).bitmap
                     // B：先拷成 ARGB_8888（Palette 读不了硬件位图）再降到通知栏够用的尺寸。
                     val bitmap = downscaleArtwork(srcBitmap.copy(Bitmap.Config.ARGB_8888, false))
-                    currentArtworkBitmap = bitmap
-                    // 立即重发 metadata(不等 500ms 心跳): 新封面尽快上任务栏
-                    scope.launch(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
+                        if (gen != artworkGeneration || currentArtworkUrl != url) return@withContext
+                        currentArtworkBitmap = bitmap
+                        applyCoverAccent(bitmap, url, gen)
                         updatePlaybackState()
                         updateNotify()
                     }
-
-                    // B2-C：取色统一走 applyCoverAccent —— 112×112 采样、Dispatchers.Default
-                    // 计算、按封面 URL 去重。
-                    applyCoverAccent(bitmap, url, gen)
                 }
             } catch (e: Exception) {
                 Log.e("PlaybackService", "Load artwork failed", e)
@@ -1848,6 +1866,8 @@ class PlaybackService : MediaLibraryService() {
      * IDLE 时，prepare 才是真正的重试）。判定抽成纯函数
      * [PlaybackQueueLogic.needsRestartBeforePlay]，已有 JVM 单测。
      */
+    internal fun hasPlayableItem(): Boolean = player.currentMediaItem != null
+
     private fun resumePlayback() {
         if (PlaybackQueueLogic.needsRestartBeforePlay(
                 player.playbackState, player.currentMediaItem != null,
@@ -2125,7 +2145,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun buildPI(action: String): PendingIntent {
-        val i = Intent(this, PlaybackService::class.java).apply { putExtra("action", action) }
+        val i = PlaybackCommands.intent(this).apply { putExtra("action", action) }
         return PendingIntent.getService(this, action.hashCode(), i,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }

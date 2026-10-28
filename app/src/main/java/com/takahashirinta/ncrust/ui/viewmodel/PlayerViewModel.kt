@@ -1688,7 +1688,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentSongName.value = title
             currentSongArtist.value = artist
             currentSongArtwork.value = artworkUrl
-            val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+            val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                 putExtra("playRevision", playGate.current)
                 putExtra("url", cachedEntry.url)
                 putExtra("title", title)
@@ -1806,7 +1806,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     currentSongArtist.value = artist
                     currentSongArtwork.value = artworkUrl
 
-                    val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                    val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                         putExtra("playRevision", playGate.current)
                         putExtra("url", result.url)
                         putExtra("title", title)
@@ -2117,7 +2117,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 的码率会让人以为还在放。
         currentBitrate.value = 0L
         // 静音停下（保留当前歌与队列，用户点一下就能重来）。
-        val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
             putExtra("action", "pause")
         }
         runCatching { getApplication<Application>().startService(intent) }
@@ -2399,7 +2399,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             currentSongName.value = title
                             currentSongArtist.value = artist
                             currentSongArtwork.value = artworkUrl
-                            val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                            val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                                 putExtra("playRevision", playGate.current)
                                 putExtra("url", result.url)
                                 putExtra("title", title)
@@ -2460,7 +2460,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // v2.1.5：槽位的**完整身份**。少了这一行，自动接续时 ViewModel
                     // 无从知道起播的是哪个音源的歌 —— 那就是用户报的跨源串台。
                     preloadedTrack = nextTrack
-                    val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+                    val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                         putExtra("action", "preload_next")
                         putExtra("preloadRevision", queueRevision)
                         putExtra("preloadOwner", preloadOwner?.let { com.takahashirinta.ncrust.source.SourceIds.mediaId(it.source, it.id) })
@@ -3111,7 +3111,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         isPlaying.value = !isPlaying.value
         if (!isPlaying.value) invalidatePlaybackIntent()
-        val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
             putExtra("action", if (isPlaying.value) "resume" else "pause")
         }
         getApplication<Application>().startService(intent)
@@ -3121,7 +3121,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun pausePlayback() {
         invalidatePlaybackIntent()
         isPlaying.value = false
-        val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
             putExtra("action", "pause")
         }
         getApplication<Application>().startService(intent)
@@ -3145,7 +3145,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
 
-        val intent = Intent(getApplication(), PlaybackService::class.java).apply {
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
             putExtra("action", "seek")
             putExtra("position", position)
         }
@@ -3160,7 +3160,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // v1.9.0：退出播放器时作废所有在途的歌词请求，别让它们的响应落回已经清空的播放器状态。
         lyricCoordinator.invalidate()
 
-        val intent = Intent(app, PlaybackService::class.java).apply {
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(app).apply {
             putExtra("action", "stop")
         }
         app.startService(intent)

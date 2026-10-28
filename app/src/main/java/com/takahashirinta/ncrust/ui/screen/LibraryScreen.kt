@@ -188,9 +188,11 @@ fun LibraryScreen(
                 if (!CookieManager.hasCookie(context)) {
                     playlistError = strings.notLoggedInForPlaylists
                 } else {
+                    val started = CookieManager.snapshot()
                     val userId = PlaylistApi.getCurrentUserId()
-                    val result = PlaylistApi.getUserPlaylists(userId)
-                    playlists = result.playlists
+                    val result = PlaylistApi.getAllUserPlaylists(userId, started)
+                    val live = CookieManager.snapshot()
+                    if (live.loginGeneration == started.loginGeneration) CookieManager.ifCurrent(live) { playlists = result }
                 }
             } catch (e: Exception) {
                 playlistError = if (!CookieManager.hasCookie(context))
