@@ -1,0 +1,104 @@
+# 核心审查问题对照与集中修复清单
+
+对照基线：`2aa6657`（业务 `82401ec`），2026-10-29 04:00轮。此表区分历史分支已改与仍开放的残余；“源码已改”只说明当前实现，既有修复验证沿用各版报告，正式包仍需统一回归。历史探针成功表示错误存在，不算修复通过。
+
+## 集中修复范围（当前 OPEN）
+
+| 家族 | 当前边界、证据与处理方向 |
+|---|---|
+| N01（E08残余） | BiliQrLogin 旧代次响应仍 emitTerminal，污染新状态；2301两项真实控制器探针。失去发布权则直接退出。 |
+| N02（H14/J10迁移） | Bili收藏归一身份后重复、首墓碑挡删除；2301编解码/删除探针。规范身份合并，删除处理全部同key。QQ旧字段历史可达性不冒充已确认，但共享合并函数保持一致。 |
+| N03（H17残余） | 显式Cookie默认自动重定向可带往域外；2301真实OkHttp后续请求构造，未发送。逐跳过滤，保留合法同域链。 |
+| N04（E10残余） | 禁用队列手势在 awaitFirstDown 之前反复return；2301实际编译协程有界探针。禁用时退出整个pointerInput。 |
+| N05/K01 | 联网开播发起时未领新意图，旧Job未撤销；FM、歌单/专辑、收藏冷加载、推荐、搜索批量及Infinity调用链。静态。起点领意图、撤销旧任务、Main提交复核。 |
+| N06（E10/E11残余） | TrackKey不能区分重复队列实例；2301真实重排函数探针。拖拽事务按出现实例/快照校验。 |
+| O01/J03 | 业务code500仍缓存30分钟；0025真实SessionMonitor入口探针。失败短退避，成功才长TTL；首次uptime零值不能充当成功时间。 |
+| O02/H15/S14 | HomeSnapshot读取后未再验owner；AppWarmup共享Deferred无owner，旧预热反向bindOwner；0025入口探针+静态调用链。owner/登录代次贯穿读取、发布与页面消费。 |
+| O03/H21 | QQ歌单详情批次翻页使用最新全局账号，跨账号混合结果进旧key；0025真实仓库+本地HTTP探针。整个批次钉原登录代次与会话，完成时复核。 |
+| O04 | 临时分享清理按相册路径+年龄会删除永久保存海报；0025真实谓词SQLite回放。临时文件独立目录或自有URI登记，永久保存不参与清理。 |
+| O05/H02/S18 | 写接口检查登录代次后又读当前全局凭据；静态。会话钉到传输层，含subAlbum、create→add多步操作同归属；不持登录锁做网络。 |
+| O06/S15 | flush校验与apply不在同提交锁，clear后旧队列可复活；0025真实saveQueue/clearQueue探针。清空与最终写入同提交门。 |
+| J04 | 删除在播项只改索引不改音频，下一首跳过继任者；1150纯生产逻辑+MainActivity静态。明确定义并同步在播删除行为。 |
+| J08/S9 | SearchViewModel先到发布/失败仍确认网易页；HTTP200/code500无code字段被当成功空页；2301真实搜索本地HTTP补证。各源Pending/Success/Failure独立提交，只确认成功页。 |
+| H09/R3/S5残余 | LocalPlaylistStore.deletePlaylist元数据失败仍删曲目；adoptRemote忽略写盘失败。2301真实存储/仓库入口探针。事务返回结果贯穿所有编辑入口。 |
+| E01界面残余 | OfflineAudioCache失败保索引已改；OfflineCacheOverlay和SettingsGroupScreen仍无条件成功Toast。静态。按真实结果反馈并重读，含批量/部分失败。 |
+| E06 | 当前图片/预载图片/取色发布代次未统一，旧图可覆盖快路径；2052及本轮Service静态复核。槽位身份校验、统一图片接管与Main提交。 |
+| E07 | 设置仍说不区分低中高，当前已有三频带包络；静态文案。更正为三带能量包络、非FFT频谱，八语言一致。 |
+| K07导入残余 | 监听早退已改；BackgroundImageManager导入与clear仍无提交代次，临时文件共用。静态。独立临时文件、最新意图原子提交，clear撤销旧导入。 |
+| F02（0643） | QQ歌单重登默认空回调，NavGraph未传。静态。接通当前QQ登录入口。 |
+| F03（0643） | LibraryScreen网易歌单仅默认100条，忽略more。静态。完整分页/明确失败与重试，owner校验。 |
+| F04（0643） | 冷服务桌面卡片resume无MediaItem，无法恢复。静态。私有动作入口恢复完整身份/取链或引导应用恢复。 |
+| F05（0643） | 导出MediaLibraryService直接接受内部start Intent且无凭据门。静态清单/服务。保留公开媒体绑定，保护内部命令通道。 |
+| H14次级表 | v3.7.10已知：OfflineTrackCodec、LyricsCache、LocalPlaylistStore旧AV身份键未迁。静态。按来源安全归一，保留载荷和删除意图，处理键碰撞。 |
+| P01 | VM清理遗漏onTrackTransitioned/onCoverTheme。0400静态。完整且按owner解绑。 |
+| P02 | 剪贴板单曲预装覆盖正在播放身份/队列，未停止服务或复核新意图。0400静态。活动播放只预览，空闲导入加意图检查。 |
+| P03 | 不可合并counterpart仍参与实体聚合。0400静态。同一mergeable准入贯穿aliases和列表。 |
+
+## 历史分支已改（按编号对照，不重复开项）
+
+| 编号 | 当前源码核对结果及残余去向 |
+|---|---|
+| S1 | RemoteRead/完整性与Partial提交结果已改；跨账号详情批次另见O03。 |
+| S2 | 本地同步writeIfUnchanged与删除修订已改。 |
+| S3 | QqPlaylistCache按owner段清理已改。 |
+| S4 | StatsCommitGate统一清空/提交门已改。 |
+| S5 | 普通编辑失败回滚已改；删除/转存残余见H09行。 |
+| S6 | BiliAuthStore登录代次收尾已改；控制器重开残余见N01。 |
+| S7 | PlayingIdentity每次真实媒体过渡settle，停止清理已改。 |
+| S8 | cache打开/枚举失败保离线索引已改；界面反馈见E01。 |
+| S9 | 唯一曲目计数已改；失败页与业务码残余见J08。 |
+| S10/S11 | UpdateDownloader独立part、validator、进程级尝试门已改。 |
+| S12/S13 | ContentCache.clear失效新鲜度、空快照替换已改。 |
+| S14 | 写快照owner检查已改；读/预热另见O02。 |
+| S15 | CancellationException透传、读失败不删队列已改；提交排序见O06。 |
+| S16 | clearState保留播放模式已改。 |
+| S17 | 同曲收藏最新意图串行已改；跨账号worker条件删除R1已改。 |
+| S18 | like回退钉凭据已改；其它写出口残余见O05。 |
+| S19 | QrPair2 secret认证、HMAC密文完整性已改。 |
+| S20 | 车机resolveMissingIdentity回查载荷已改。 |
+| S21 | SavedSongCodec以TrackKey修正载荷来源已改；重复归一见N02。 |
+| S22 | PlaylistEditApi拒绝非网易trackKey已改。 |
+| F1/F2/F3（BUG_SUMMARY） | 车机试听秒/网络音质、云歌单失败提示已改；与0643的F02–F05不是同一组编号。 |
+| C1 | VersionKinds比较及MatchCache算法版本已改；实体候选准入另见P03。 |
+| R1/R2 | 收藏worker条件清除、专辑刷新editRevision保护已改。 |
+| R3/R4 | Partial提交核查及暂停显式seek卡片闸门已改；R3其它出口残余见H09。 |
+| H01 | albumId串行+最新意图已改；transport归属见O05。 |
+| H02 | 门控释放后核对已改；检查后的全局凭据读取见O05。 |
+| H03 | PlayReporter捕获登录代次、dispatchReport传pinnedCookie/pinnedGeneration已改（发送端不重读B凭据）。 |
+| H04 | 下载进程级尝试门已改。 |
+| H05/H06 | 候选艺人证据/冲突三态及两侧取数已改；准入见P03。 |
+| H07/H08 | 设备标识初始化串行、导航仅一次解码已改。 |
+| H09/H10/H11 | create可失败、远程完整性结果、跳过不可解析回查已改；H09删除转存另列。 |
+| H12 | musicuOutcome请求绑定的HTTP失败分类已改；lastRejection/lastSip并发后果未补强证据，保留观察，不冒充原缺陷重现。 |
+| H13 | song路由四字段和缺载荷行禁用已改。 |
+| H14 | AV/AU分区及主收藏/队列迁移已改；重复与次级表见开放行。 |
+| H15/H16 | 首页写owner及seek回起点撤销续播已改；首页读取见O02。 |
+| H17/H18 | 初始Bili GET域白名单、100分钟歌词正则已改；逐跳重定向见N03。 |
+| H19/H20 | StatsStore快照锁、QQ连接代次与关闭帧已改。 |
+| H21 | rawCount游标、缺数组失败、完整缓存保护已改；owner批次见O03。 |
+| H22/H23/H24 | 逐视觉行扫光轨道、配对载荷HMAC、specialType红心身份已改。 |
+| J01/J02 | StatsCommitGate单调提交、LoginCredentialAcceptance三态已改。 |
+| J03/J04 | 见开放行（J03网络异常分支已改，业务错误仍有残余）。 |
+| J05/J06/J07 | PCM按声道除、补载荷逐字段比较、PlayingIdentity无条件settle已改。 |
+| J08/J09 | J08开放；clearQuery取消searchJob已改，后续回归检查取消状态。 |
+| J10/J11/J12 | QQ旧字段成组、八语言失败提示、屏幕Y速度反号与手势时间清零已改；迁移冲突见N02。 |
+| J13/J14/J15 | 96点曲线切线、新键优先迁移、量化平方与簇号矩阵已改。 |
+| J16/J17 | onPreFling归零、移出入场范围收敛终态已改。 |
+| K01/K02 | K01开放；启动恢复前核对队列修订已改。 |
+| K03/K04/K05 | 海报前后裁/clip、手势读最新几何、savedRevision红心订阅已改。 |
+| K06/K07/K08/K09 | 单泳道相位、背景监听无条件挂载、后台权限恢复重读、试听标记透传已改；K07导入另列。 |
+| E01/E02/E03/E04/E05 | 缓存底层、QQ副行最近匹配、网易封面URL、验证码换值识别、专辑艺人listState已改；E01界面另列。 |
+| E06/E07 | 开放。 |
+| E08/E09/E10/E11 | 取消代次、透明托盘子点击门、队列finally/TrackKey行身份已改；新的N01/N04/N06分别保留。 |
+| F01（0643） | 两个SongDetailScreen的onAddToNext均已接线。 |
+
+## 仅记录或不作修复目标
+
+- U01：封面偶发遮挡，用户明确当前仅记录；未定尺寸、未设备复现，本轮不改布局。
+- H12诊断全局字段的进一步并发影响、多Activity回调覆盖、备份策略、真实服务器是否跨域重定向：均不冒充已复现事件；N03只修传输边界。
+- 纯Go服务、纯装饰/文案未读区段不扩大本轮核心；E07是已明确的可见错误文案，仍在修复集合。
+- 旧QQ散列没有qq_songid无法反推，不编造迁移；媒体系统是否额外显示双语的歌曲信息由ROM决定。
+
+## 统一交付门
+
+集中修复各行后填写提交/回归证据，不删除旧错误探针；正式构建前复核修改调用方、完整JVM与Lint。正式名3.7.11-gpl，内部code重新运行next-version并大于98。只本地正式包，无真机/模拟器验证，不推送/发布。用户关于歌名歌手的修正82401ec与全部WIP、双语歌词一并包含，旧测试包保持原样。
