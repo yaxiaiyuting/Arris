@@ -16,25 +16,25 @@ class MediaBilingualLyricsTest {
 
     @Test fun defaultKeepsOriginalAboveTranslation() {
         val frame = MediaLyricTrack.from(original, translated).at(1500, true, MediaLyricOptions())
-        assertEquals(MediaDisplayLines.Lines("One", "一"), display(frame))
+        assertEquals(MediaDisplayLines.Lines("One", "一", "Song · Artist"), display(frame))
     }
 
     @Test fun translationCanBeThePrimaryLine() {
         val frame = MediaLyricTrack.from(original, translated).at(2500, true, MediaLyricOptions(translationFirst = true))
-        assertEquals(MediaDisplayLines.Lines("二", "Two"), display(frame))
+        assertEquals(MediaDisplayLines.Lines("二", "Two", "Song · Artist"), display(frame))
     }
 
-    @Test fun missingTranslationFallsBackToOriginalOnlyInEitherOrder() {
+    @Test fun missingTranslationKeepsOriginalAndSongIdentityInEitherOrder() {
         for (first in listOf(false, true)) {
             val frame = MediaLyricTrack.from(original, emptyList()).at(2500, true, MediaLyricOptions(translationFirst = first))
-            assertEquals(MediaDisplayLines.Lines("Two", ""), display(frame))
+            assertEquals(MediaDisplayLines.Lines("Two", "Song · Artist"), display(frame))
         }
     }
 
     @Test fun untranslatedSentenceDoesNotBorrowTheNextSentenceTranslation() {
         val track = MediaLyricTrack.from(original, listOf(line(1000, "一"), line(3000, "三")))
-        assertEquals(MediaDisplayLines.Lines("Two", ""), display(track.at(2500, true, MediaLyricOptions())))
-        assertEquals(MediaDisplayLines.Lines("Three", "三"), display(track.at(3500, true, MediaLyricOptions())))
+        assertEquals(MediaDisplayLines.Lines("Two", "Song · Artist"), display(track.at(2500, true, MediaLyricOptions())))
+        assertEquals(MediaDisplayLines.Lines("Three", "三", "Song · Artist"), display(track.at(3500, true, MediaLyricOptions())))
     }
 
     @Test fun nearbyTranslationBelongsToTheNearestOriginalAndExactMatchWins() {
@@ -66,9 +66,9 @@ class MediaBilingualLyricsTest {
         assertNull(frame.translation)
     }
 
-    @Test fun blankOrDuplicateTranslationDoesNotCreateASecondLyricLine() {
+    @Test fun blankOrDuplicateTranslationKeepsSongIdentityBelowTheSingleLyric() {
         for (text in listOf("", "  ", "One", " One ")) {
-            assertEquals(MediaDisplayLines.Lines("One", ""), display(MediaLyricFrame("One", text)))
+            assertEquals(MediaDisplayLines.Lines("One", "Song · Artist"), display(MediaLyricFrame("One", text)))
         }
     }
 
@@ -93,6 +93,26 @@ class MediaBilingualLyricsTest {
         val frame = MediaLyricFrame("One", "一", MediaLyricOptions(translationFirst = true))
         assertEquals(display(frame), MediaSessionMerge.sessionLines("Song", "Artist", frame.original, true, frame.translation, frame.options))
         assertEquals(MediaDisplayLines.Lines("Song", "Artist"), MediaSessionMerge.sessionLines("Song", "Artist", frame.original, false, frame.translation, frame.options))
+    }
+
+    @Test fun chineseLyricsKeepSongAndArtistWithoutTranslation() {
+        val lines = MediaDisplayLines.of("七里香", "周杰伦", "窗外的麻雀", options = MediaLyricOptions())
+        assertEquals(MediaDisplayLines.Lines("窗外的麻雀", "七里香 · 周杰伦"), lines)
+    }
+
+    @Test fun bilingualLyricsKeepTrackInfoForNotificationAndSessionDescription() {
+        for (first in listOf(false, true)) {
+            val lines = MediaDisplayLines.of("Imagine", "John Lennon", "Imagine all the people", "想象所有的人", MediaLyricOptions(translationFirst = first))
+            assertEquals("Imagine · John Lennon", lines.trackInfo)
+            assertEquals(if (first) "想象所有的人" else "Imagine all the people", lines.title)
+            assertEquals(if (first) "Imagine all the people" else "想象所有的人", lines.subtitle)
+        }
+    }
+
+    @Test fun missingSongFieldsDoNotLeaveDanglingSeparatorsInBilingualTrackInfo() {
+        assertEquals("Song", MediaDisplayLines.of("Song", "", "One", "一", MediaLyricOptions()).trackInfo)
+        assertEquals("Artist", MediaDisplayLines.of("", "Artist", "One", "一", MediaLyricOptions()).trackInfo)
+        assertNull(MediaDisplayLines.of("", "", "One", "一", MediaLyricOptions()).trackInfo)
     }
 
     @Test fun preferenceDefaultsAndMalformedValuesAreSafe() {

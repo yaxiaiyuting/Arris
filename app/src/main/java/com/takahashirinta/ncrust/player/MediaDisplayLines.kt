@@ -20,7 +20,8 @@ package com.takahashirinta.ncrust.player
  *
  * ## v3.7.12 双语模式
  * 显式传入 bilingual 选项时，第一行是选定的主歌词，第二行是另一语言；
- * 缺少译文或译文重复时仅显示原文。三参数旧调用仍保持原排布。
+ * 缺少译文或译文重复时只显示一行歌词，第二行保留歌名与艺人。
+ * 双语占用两行时，歌曲信息另交给通知附加文案和会话 description。
  * PlaybackService 统一使用 MediaLyricFrame 的同一句与偏好。
  *
  * ## 原有单歌词规则
@@ -41,7 +42,7 @@ package com.takahashirinta.ncrust.player
 internal object MediaDisplayLines {
 
     /** 面板/通知的两行文字。 */
-    data class Lines(val title: String, val subtitle: String)
+    data class Lines(val title: String, val subtitle: String, val trackInfo: String? = null)
 
     fun of(
         songTitle: String,
@@ -54,14 +55,18 @@ internal object MediaDisplayLines {
             ?: return Lines(title = songTitle, subtitle = songArtist)
         if (options.bilingual) {
             val translation = translatedLine?.takeIf { it.isNotBlank() && it.trim() != lyric.trim() }
-            return if (options.translationFirst && translation != null) Lines(translation, lyric)
-                else Lines(lyric, translation.orEmpty())
+            if (translation != null) {
+                val info = songInfo(songTitle, songArtist).takeIf { it.isNotBlank() }
+                return if (options.translationFirst) Lines(translation, lyric, info)
+                    else Lines(lyric, translation, info)
+            }
         }
-        val subtitle = when {
+        return Lines(title = lyric, subtitle = songInfo(songTitle, songArtist))
+    }
+
+    private fun songInfo(songTitle: String, songArtist: String): String = when {
             songArtist.isBlank() -> songTitle
             songTitle.isBlank() -> songArtist
             else -> songTitle + " · " + songArtist
         }
-        return Lines(title = lyric, subtitle = subtitle)
-    }
 }

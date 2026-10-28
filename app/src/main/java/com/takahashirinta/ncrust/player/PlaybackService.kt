@@ -1543,6 +1543,7 @@ class PlaybackService : MediaLibraryService() {
     // 上一次 setMetadata 时的 title/artist/duration 快照，用于跳过等值重发
     private var lastMetadataTitle: String? = null
     private var lastMetadataArtist: String? = null
+    private var lastMetadataTrackInfo: String? = null
     private var lastMetadataDuration: Long = -1L
     private var lastMetadataArtwork: String? = null
     // 上一次 setMetadata 的 ART 位图引用。光比 URL 不够: 位图是异步换的,
@@ -1667,6 +1668,7 @@ class PlaybackService : MediaLibraryService() {
         val frame = mediaLyricFrame
         val display = MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
         if (display.title != lastMetadataTitle || display.subtitle != lastMetadataArtist ||
+            display.trackInfo != lastMetadataTrackInfo ||
             dur != lastMetadataDuration || currentArtworkUrl != lastMetadataArtwork ||
             currentArtworkBitmap !== lastMetadataBitmap
         ) {
@@ -1694,6 +1696,7 @@ class PlaybackService : MediaLibraryService() {
             logMediaPanelSnapshot()
             lastMetadataTitle = display.title
             lastMetadataArtist = display.subtitle
+            lastMetadataTrackInfo = display.trackInfo
             lastMetadataDuration = dur
             lastMetadataArtwork = currentArtworkUrl
             lastMetadataBitmap = currentArtworkBitmap
@@ -1762,6 +1765,7 @@ class PlaybackService : MediaLibraryService() {
         val meta = MediaMetadata.Builder()
             .setTitle(lines.title)
             .setArtist(lines.subtitle)
+            .setDescription(lines.trackInfo)
             .setDurationMs(dur)
         // 保留 item 原有的 albumTitle / mediaType / isPlayable 等字段（buildUpon 已经带了，
         // 这里只覆盖我们要动的那几个，其余原样透传）。
@@ -1997,6 +2001,7 @@ class PlaybackService : MediaLibraryService() {
                     this,
                     title = display.title,
                     artist = display.subtitle,
+                    trackInfo = display.trackInfo,
                     positionMs = player.currentPosition.coerceAtLeast(0L),
                     durationMs = player.duration.takeIf { it > 0L } ?: 0L,
                     isPlaying = player.isPlaying,
@@ -2079,6 +2084,7 @@ class PlaybackService : MediaLibraryService() {
         val builder = NotificationCompat.Builder(this, "ncrust_playback")
             .setContentTitle(display.title)
             .setContentText(display.subtitle)
+            .setSubText(display.trackInfo)
             .setSmallIcon(com.takahashirinta.ncrust.R.drawable.ic_tux_notification)
             .setOngoing(false)
             // v1.8.0 · T5：逐行重 post 时不要再次提醒。媒体通知本身在 S6 上
