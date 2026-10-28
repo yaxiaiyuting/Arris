@@ -371,12 +371,34 @@ object PlaylistApi {
         val album: AlbumItem? = albumJson?.let {
             AlbumItem(id = it.optLong("id"), name = it.optString("name"), picUrl = it.optString("picUrl"))
         }
+        // 原唱/翻唱标注（v2.3.0 的字段，这里长期漏解析）。
+        //
+        // **症状**：搜索结果里有「原唱」角标，收藏库/歌单详情里同一首歌却没有 ——
+        // 因为详情接口（`/eapi/v3/song/detail`、`/eapi/v6/playlist/detail` 等）也下发
+        // `originCoverType`，但 `parseSongTrack` 只挑了 id/name/ar/al/dt，把它丢了。
+        // 判据仍然只在 `SongTags` 一处（0/3/缺失 = 不打标签），这里只负责**把字段带出去**。
+        val originCoverType = track.optInt("originCoverType", -1).takeIf { it >= 0 }
+        val originSong = track.optJSONObject("originSongSimpleData")?.let { ref ->
+            OriginSongRef(
+                songId = ref.optLong("songId").takeIf { it > 0L },
+                name = ref.optString("name").takeIf { it.isNotEmpty() },
+                artists = ref.optJSONArray("artists")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        val a = arr.optJSONObject(i) ?: return@mapNotNull null
+                        val n = a.optString("name").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                        ArtistItem(id = a.optLong("id").takeIf { v -> v != 0L }, name = n)
+                    }
+                },
+            )
+        }
         return SongItem(
             id = track.optLong("id"),
             name = track.optString("name"),
             artists = artists,
             album = album,
-            duration = track.optLong("dt")
+            duration = track.optLong("dt"),
+            originCoverType = originCoverType,
+            originSong = originSong,
         )
     }
 

@@ -63,6 +63,14 @@ data class LyricShareLine(
 enum class LyricShareScope {
     CURRENT_SECTION,
     WHOLE_SONG,
+
+    /**
+     * 手动选段：用户自己点选起止行。
+     *
+     * 前两档是"按播放位置自动取窗口"，对"我想发第 12 到第 16 句"这种需求无能为力；
+     * 这一档把选择权完整交给用户，行数上限仍是 [LyricShareSelection.MAX_POSTER_LINES]。
+     */
+    MANUAL,
 }
 
 /**

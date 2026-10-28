@@ -519,7 +519,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var transitionedArtist: String = ""
     private var transitionedArtwork: String = ""
     // Song ID most recently requested by playSong; lets a concurrent preload detect a same-song race.
-    private var latestPlaySongId = -1L
+    /**
+     * 最后一次**请求开播**的曲目 id（-1 = 还没有过请求）。
+     *
+     * UI 用它丢掉"过期的过渡"：连点时播放器会把中间几次 setMediaItem 依次应用完，
+     * 那些过渡不是用户最后要的那首，不该刷新底栏/封面（否则手停下后界面还在补播动画）。
+     */
+    @Volatile
+    var latestPlaySongId = -1L
+        private set
 
     // v3.1.0 · P0-B：条目与新鲜度判据搬到 `player/PreloadCachePolicy.kt`，
     // 原因是判据原本在这一处内联表达式里被抄了三遍，而 B 站需要**第二种 TTL 模型**

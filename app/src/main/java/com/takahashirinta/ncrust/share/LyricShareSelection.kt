@@ -96,6 +96,50 @@ object LyricShareSelection {
      * 整首就是整首 —— **不截断**。文本没有排版高度约束，截断只会让用户拿到半首歌
      * 却不知道少了什么（这也是它和 [linesForPoster] 唯一的区别）。
      */
+    /**
+     * 手动选段的区间：把用户点的两个端点归一化（升序、夹取、空表返回空区间）。
+     *
+     * 端点来源是 UI 状态，可能是 `-1`（还没点）或超出表长（歌词换了），
+     * 所以这里必须**容错**而不是抛：任何非法组合都退化成"只有起点那一行"。
+     */
+    fun manualRange(total: Int, start: Int, end: Int): IntRange {
+        if (total <= 0) return IntRange.EMPTY
+        val a = start.coerceIn(0, total - 1)
+        val b = if (end < 0) a else end.coerceIn(0, total - 1)
+        return if (a <= b) a..b else b..a
+    }
+
+    /** 手动选段的文本行（整段，不截断 —— 与 [linesForText] 同一口径）。 */
+    fun linesForManual(
+        lines: List<LyricShareLine>,
+        start: Int,
+        end: Int,
+    ): List<LyricShareLine> {
+        val range = manualRange(lines.size, start, end)
+        if (range.isEmpty()) return emptyList()
+        return lines.subList(range.first, range.last + 1).toList()
+    }
+
+    /** 手动选段的出图选择：行数超过 [maxLines] 时从区间尾部截断，并给出提示所需的真实行数。 */
+    fun posterSelectionForManual(
+        lines: List<LyricShareLine>,
+        start: Int,
+        end: Int,
+        maxLines: Int = MAX_POSTER_LINES,
+    ): PosterSelection {
+        val range = manualRange(lines.size, start, end)
+        if (range.isEmpty()) return PosterSelection(emptyList(), -1, -1)
+        val cap = maxLines.coerceAtLeast(1)
+        val capped = range.first..minOf(range.last, range.first + cap - 1)
+        return PosterSelection(
+            lines = lines.subList(capped.first, capped.last + 1).toList(),
+            currentIndex = -1,
+            // 手动选段没有"正在唱的那句"概念：中心取区间中点，只为保持字段语义完整。
+            centerIndex = (capped.first + capped.last) / 2,
+            requestedCount = range.last - range.first + 1,
+        )
+    }
+
     fun linesForText(
         lines: List<LyricShareLine>,
         positionMs: Long,
@@ -157,5 +201,7 @@ object LyricShareSelection {
         val lines: List<LyricShareLine>,
         val currentIndex: Int,
         val centerIndex: Int,
+        /** 用户**请求**的行数（手动选段可能超过出图上限，UI 用它提示"已截断"）。 */
+        val requestedCount: Int = -1,
     )
 }

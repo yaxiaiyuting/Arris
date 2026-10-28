@@ -1550,6 +1550,14 @@ data class ShareStrings(
     val scopeSection: String,
     /** 范围：整首歌词。 */
     val scopeWhole: String,
+    /** 范围：手动选段（自己点起止行）。 */
+    val scopeManual: String,
+    /** 手动选段的操作提示。 */
+    val manualHint: String,
+    /** 已选行数（参数是行数）。 */
+    val manualCount: (Int) -> String,
+    /** 超过出图上限时的提示（参数是上限行数）。 */
+    val manualTruncated: (Int) -> String,
     /** 选项：把译文一起复制 / 出图。 */
     val optionTranslation: String,
     /** 选项：把音译一起复制 / 出图。 */

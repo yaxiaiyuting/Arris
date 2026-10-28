@@ -126,12 +126,19 @@ object LyricShareText {
         return "ncrust-lyrics-$slug-$stamp.png"
     }
 
-    /** 歌名合法化后的片段（空歌名 ⇒ `lyrics`，绝不产出 `--` 或空段）。 */
+    /**
+     * 歌名合法化后的片段（空歌名 ⇒ `lyrics`，绝不产出 `--` 或空段）。
+     *
+     * **只保留 ASCII 字母数字**：文件名要经过系统分享交给别的应用（微信 / QQ / 相册），
+     * 而微信在部分版本上读不了非 ASCII 的 `content://` 文件名，表现就是
+     * 「无法获取资源」。中文歌名曾经原样进过文件名（`ncrust-lyrics-成都-….png`），
+     * 这里改成丢弃非 ASCII 后回落 `lyrics` —— 图里本来就有完整歌名，文件名只用于区分。
+     */
     fun slugify(raw: String): String {
         val sb = StringBuilder()
         var lastDash = false
         for (ch in raw) {
-            if (Character.isLetterOrDigit(ch)) {
+            if (ch in 'A'..'Z' || ch in 'a'..'z' || ch in '0'..'9') {
                 sb.append(ch)
                 lastDash = false
             } else if (!lastDash && sb.isNotEmpty()) {

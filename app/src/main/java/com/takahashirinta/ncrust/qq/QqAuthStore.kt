@@ -153,6 +153,8 @@ object QqAuthStore {
      * 要么看到「版本已变」，两条都会拒绝落盘。
      */
     fun clear(context: Context) = withAuthLock {
+        // 登出/换号后不能再按"我是会员"隐藏「需会员」角标。
+        vipSnapshot = false
         QqRefreshStore.clear(context)
         prefs(context).edit()
             .remove(KEY_COOKIE)
@@ -167,7 +169,22 @@ object QqAuthStore {
 
     // ---------- 资料 / 会员 ----------
 
+    /**
+     * 无 Context 场景用的会员状态快照（角标/排序等纯函数需要它）。
+     *
+     * 为什么必须缓存：`TrackAvailability.of(song)` 是个**纯函数**，没有 Context 可读
+     * `ncrust_qq_prefs`；而「这条 QQ 曲目对我是不是会员专享」必须看当前账号。
+     * 快照在 [profile]/[saveProfile] 被调用时更新 —— 这两个入口本来就发生在
+     * 「账号状态变了」或「界面在读账号」的时刻，足够新，也避免了每次画卡片都读盘。
+     */
+    @Volatile
+    private var vipSnapshot: Boolean = false
+
+    /** 最近一次读到的 qm 会员状态。未登录/未读取时是 false（保守：仍显示「需会员」）。 */
+    fun isVipCached(): Boolean = vipSnapshot
+
     fun saveProfile(context: Context, profile: QqProfile) {
+        vipSnapshot = profile.isVip()
         prefs(context).edit()
             .putString(KEY_NICK, profile.nick)
             .putLong(KEY_UID, profile.uid)
@@ -189,7 +206,7 @@ object QqAuthStore {
         uid = prefs(context).getLong(KEY_UID, 0L),
         vipType = prefs(context).getInt(KEY_VIP_TYPE, 0),
         vipExpireAt = prefs(context).getLong(KEY_VIP_EXPIRE, 0L),
-    )
+    ).also { vipSnapshot = it.isVip() }
 
     /**
      * 资料是否需要重新拉取。**未登录时恒为 false**（没登录就没有资料可拉，
