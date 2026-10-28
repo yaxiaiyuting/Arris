@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.library.SavedSongCodecTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:26:23.379Z" hostname="cachyos-x8664" time="0.068">
+  <properties/>
+  <testcase name="trackKey 缺失时用 song 回落 且认得出 QQ 的 bit62" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.042"/>
+  <testcase name="写出去的 JSON key 是字段本名" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.011"/>
+  <testcase name="v2 信封没有已知的旧单字母形状" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="坏条目逐条丢弃 其余条目存活" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.005"/>
+  <testcase name="未知 key 集合但字段数不足时丢弃该条而不是错位读" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.001"/>
+  <testcase name="未知 origin 取值回落到 REMOTE" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="v1 样本经编码再解码形状不变（写回之后仍然是同一批歌）" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.001"/>
+  <testcase name="顶层不是 JSON 数组时返回空列表而不是抛异常" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="v1 裸数组不会被误判成信封" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.001"/>
+  <testcase name="song 里缺失的可空字段读成 null 而不是崩" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="SerializedName 与 stableKeys 一致" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="v2 信封往返：身份 来源 tombstone 全部保真" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.001"/>
+  <testcase name="空串与 null 都返回空列表" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.002"/>
+  <testcase name="真机 v1 样本必须完整读出来（升级不丢收藏）" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="v1 里非法 id 的条目被丢弃" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <testcase name="未知 key 集合按声明顺序兜底" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.001"/>
+  <testcase name="未知音源前缀的 trackKey 不解析 回落到 song" classname="com.takahashirinta.ncrust.library.SavedSongCodecTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

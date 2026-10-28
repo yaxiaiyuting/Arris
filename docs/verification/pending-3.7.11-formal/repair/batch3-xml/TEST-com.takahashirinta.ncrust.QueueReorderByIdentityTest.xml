@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.QueueReorderByIdentityTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:31:02.579Z" hostname="cachyos-x8664" time="0.005">
+  <properties/>
+  <testcase name="当前播放项跟着自己的歌走" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.002"/>
+  <testcase name="身份不在队列里就放弃" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.001"/>
+  <testcase name="空队列不崩" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.0"/>
+  <testcase name="跨源同号按身份分开" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.0"/>
+  <testcase name="窗口内队列被改过时按身份定位到拖动开始时的那一首" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.0"/>
+  <testcase name="两端是同一首时放弃" classname="com.takahashirinta.ncrust.QueueReorderByIdentityTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

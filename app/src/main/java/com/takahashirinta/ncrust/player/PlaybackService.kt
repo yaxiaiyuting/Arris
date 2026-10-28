@@ -162,6 +162,7 @@ class PlaybackService : MediaLibraryService() {
     private var paletteDominant: Int = 0xFF1DB954.toInt()
 
     companion object {
+        internal var callbackOwner: Any? = null
         // 车机浏览树节点 id。
         const val ROOT_ID = "ncrust_root"
         const val DAILY_ID = "ncrust_daily"

@@ -17,6 +17,7 @@ import com.takahashirinta.ncrust.search.TrackAvailability
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.trackKey
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -357,20 +358,18 @@ class SearchViewModel : ViewModel() {
         neteasePage: Int = 1,
         qqPage: Int = 1,
         biliPage: Int = 1,
+        neteaseConfirmed: Boolean = true,
+        qqConfirmed: Boolean = qq.isNotEmpty(),
+        biliConfirmed: Boolean = bili.isNotEmpty(),
     ): List<SongItem> {
-        if (!append) {
-            pageItems.clear()
-            confirmedPages.clear()
-            pendingPage.clear()
-        }
         fun put(source: String, page: Int, items: List<SongItem>) {
             pageItems.getOrPut(source) { mutableMapOf() }[page] = items
             confirmedPages.getOrPut(source) { mutableSetOf() }.add(page)
             pendingPage.remove(source)
         }
-        put("netease", neteasePage, netease)
-        if (qq.isNotEmpty()) put("qqmusic", qqPage, qq)
-        if (bili.isNotEmpty() && !append) put("bilibili", 1, bili)
+        if (neteaseConfirmed) put("netease", neteasePage, netease)
+        if (qqConfirmed) put("qqmusic", qqPage, qq)
+        if (biliConfirmed && !append) put("bilibili", 1, bili)
 
         // 逐源按页展平 → 跨页去重 → 再整体重排。
         // 来源计数从"展平后的唯一列表"算：分批发布不会把同一页数两遍（S9 的第二个表现）。
@@ -488,7 +487,9 @@ class SearchViewModel : ViewModel() {
                                     // v3.4.11：翻页靠的就是这个 offset（接口本来就是分页的）。
                                     offset = com.takahashirinta.ncrust.search.SearchPaging
                                         .offsetOf(neteasePage, PAGE_SIZE),
-                                ).result?.also { r ->
+                                ).also { response ->
+                                    if (response.code != null && response.code != 200) throw java.io.IOException("netease search code=${response.code}")
+                                }.result?.also { r ->
                                     // v3.4.11：总数（实测 `s=周杰伦` → songCount=273）。
                                     r.songCount?.let { lastTotals["netease"] = it }
                                 }?.songs
@@ -613,6 +614,7 @@ class SearchViewModel : ViewModel() {
                         // 写进去只会闪一下过期数据。补守卫**不会**留下空白 ——
                         // 新的一轮搜索自己会发布。
                         if (_query.value == keyword) {
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
                             // v3.4.11：`append` 时并进累计并整体重排（见 accumulateAndPublish）。
                             accumulateAndPublish(
                                 netease.orEmpty(),
@@ -621,6 +623,9 @@ class SearchViewModel : ViewModel() {
                                 append = append,
                                 neteasePage = neteasePage,
                                 qqPage = qqPage,
+                                neteaseConfirmed = netease != null && neteaseError == null,
+                                qqConfirmed = qqOutcome?.let { !it.timedOut && !it.failed } == true,
+                                biliConfirmed = biliOutcome?.let { !it.timedOut && !it.failed } == true,
                             )
                             _albums.value = emptyList()
                             _artists.value = emptyList()
@@ -629,10 +634,10 @@ class SearchViewModel : ViewModel() {
                                 neteaseCount = lastSongs.size,
                                 // 还没回来的那一侧写 PENDING，**不是** DONE + 0 ——
                                 // 「搜索中…」与「0 首」在界面上必须是两句话（v2.5.5 · G 的既有契约）。
-                                neteaseStatus = if (netease != null) {
-                                    SourceSearchStatus.DONE
-                                } else {
-                                    SourceSearchStatus.PENDING
+                                neteaseStatus = when {
+                                    neteaseError != null -> SourceSearchStatus.ERROR
+                                    netease != null -> SourceSearchStatus.DONE
+                                    else -> SourceSearchStatus.PENDING
                                 },
                                 qqCount = lastQqSongs.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
@@ -672,15 +677,16 @@ class SearchViewModel : ViewModel() {
                         // list 实例，白白触发一次列表重组（铁律 17）。
                         // v2.5.5 原来的守卫是 `qq.isNotEmpty()`（只覆盖「QQ 后到」），
                         // 本版把它推广到两侧 —— 「ncm 后到且为空」同样不需要重发。
-                        val shouldRepublish = if (neteaseArrivedSecond) {
-                            neteaseList.isNotEmpty()
-                        } else {
-                            qq.isNotEmpty() || bili.isNotEmpty()
-                        }
-                        if (shouldRepublish && _query.value == keyword) {
+                        if (neteaseError != null) pendingPage["netease"] = neteasePage
+                        if (qqOutcome?.let { it.failed || it.timedOut } == true) pendingPage["qqmusic"] = qqPage
+                        if (_query.value == keyword) {
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
                             accumulateAndPublish(
                                 neteaseList, qq, bili, append = append,
                                 neteasePage = neteasePage, qqPage = qqPage,
+                                neteaseConfirmed = neteaseError == null,
+                                qqConfirmed = qqOutcome?.let { !it.timedOut && !it.failed } == true,
+                                biliConfirmed = biliOutcome?.let { !it.timedOut && !it.failed } == true,
                             )
                             trace.mark(SearchLatencyTrace.MARK_MERGED_PUBLISH)
                         }
@@ -693,7 +699,7 @@ class SearchViewModel : ViewModel() {
                         // 这里内联是因为答案已经在手上（不必为了问一句再发一次请求）。
                         if (_query.value == keyword) {
                             _hasMore.value = com.takahashirinta.ncrust.search.SearchPaging
-                                .hasMoreAny(neteaseList.size, qq.size, pageSize = PAGE_SIZE)
+                                .hasMoreAny(neteaseList.size, qq.size, pageSize = PAGE_SIZE) || pendingPage.isNotEmpty()
                         }
                         if (_query.value == keyword) {
                             _sourceCounts.value = SourceCounts(
@@ -705,7 +711,7 @@ class SearchViewModel : ViewModel() {
                                 // 填本页条数会让它翻页前后都显示 30，看起来像「没有实时更新」
                                 // （用户报的正是这句话）。
                                 neteaseCount = lastSongs.size,
-                                neteaseStatus = SourceSearchStatus.DONE,
+                                neteaseStatus = if (neteaseError == null) SourceSearchStatus.DONE else SourceSearchStatus.ERROR,
                                 qqCount = lastQqSongs.size,
                                 qqStatus = qqStatusOf(qqOutcome, qqAllowed),
                                 biliCount = bili.size,
@@ -839,6 +845,8 @@ class SearchViewModel : ViewModel() {
                         limit = PAGE_SIZE,
                         offset = offset,
                     )
+                    if (response.code != null && response.code != 200) throw java.io.IOException("netease search code=${response.code}")
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     val page = response.result?.albums ?: emptyList()
                     // 跨页去重：服务端分页边界可能重发同一条（`id` 是它的身份）。
                     _albums.value = if (append) {
@@ -876,6 +884,8 @@ class SearchViewModel : ViewModel() {
                         limit = PAGE_SIZE,
                         offset = offset,
                     )
+                    if (response.code != null && response.code != 200) throw java.io.IOException("netease search code=${response.code}")
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     val page = response.result?.artists ?: emptyList()
                     _artists.value = if (append) {
                         (_artists.value + page).distinctBy { it.id }

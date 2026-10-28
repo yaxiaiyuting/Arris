@@ -292,6 +292,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playJob?.cancel()
     }
 
+    /** Claim playback intent at the user action, before loading a remote list. */
+    fun beginUserPlayIntent(): Int {
+        invalidatePlaybackIntent()
+        invalidatePreload()
+        return playGate.current
+    }
+
     companion object {
         /**
          * 音质档位（低 → 高）。索引与 i18n qualityOptions 顺序、以及 eapi level 取值一一对应；
@@ -664,6 +671,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
 
     init {
+        PlaybackService.callbackOwner = this
         refreshGaplessSetting()
         // 从设置读歌词开关(默认开);设置页切换时经 setLyricsTranslation /
         // setLyricsWordAnimation 实时生效。readWordAnimation 顺带完成 v1.5.0 布尔开关的迁移。
@@ -3170,6 +3178,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        if (PlaybackService.callbackOwner === this) {
         invalidatePlaybackIntent()
         PlaybackService.onProgressUpdate = null
         PlaybackService.onPlaybackEnded = null
@@ -3184,6 +3193,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onBitrateChanged = null
         PlaybackService.onCoverAccent = null
         PlaybackService.onPlaybackError = null
+        PlaybackService.onTrackTransitioned = null
+        PlaybackService.onCoverTheme = null
+        PlaybackService.callbackOwner = null
+        } else {
+            playbackRetries.cancel()
+            playJob?.cancel()
+        }
         super.onCleared()
     }
 }

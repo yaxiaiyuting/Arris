@@ -157,7 +157,7 @@ internal object SavedSongCodec {
             val obj = element as? JsonObject ?: continue
             decodeEntry(obj)?.let { out.add(it) }
         }
-        return out
+        return SavedSongSync.consolidate(out)
     }
 
     /**

@@ -105,15 +105,16 @@ object QqPlaylistRepository {
         playlistAuthFailure(QqPlaylistApi.checkLoginValid())?.let { (degradation, failure) ->
             return degradedOrFail(cachedList?.playlists, degradation, failure)
         }
+        val session = QqClient.pinReadSession()
         if (currentOwnerId(ctx) != ownerId) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
 
-        return when (val r = QqPlaylistApi.fetchOwnedPlaylists(ownerId)) {
+        return when (val r = QqPlaylistApi.fetchOwnedPlaylists(ownerId, session)) {
             is QqPlaylistResult.Ok -> {
-                val fav = fetchFavoritesSafely(ownerId, r.value)
+                val fav = fetchFavoritesSafely(ownerId, r.value, session)
                 val retained = if (fav.degradation != null) cachedList?.playlists.orEmpty().filterNot { it.isOwned } else emptyList()
                 val merged = (r.value + fav.playlists + retained).distinctBy { it.key }
                 val stored = QqAuthStore.withAuthLock {
-                    if (currentOwnerId(ctx) != ownerId) false else {
+                    if (currentOwnerId(ctx) != ownerId || session?.isCurrent() == false) false else {
                         QqPlaylistStore.writeList(ctx, ownerId, merged, if (fav.degradation == null) now() else 0L); true
                     }
                 }
@@ -164,10 +165,10 @@ object QqPlaylistRepository {
     private data class FavoritesLoad(val playlists: List<Playlist>, val degradation: PlaylistDegradation? = null)
 
     /** A failed optional read is partial data, never a confirmed empty collection. */
-    private suspend fun fetchFavoritesSafely(ownerId: String, owned: List<Playlist>): FavoritesLoad {
+    private suspend fun fetchFavoritesSafely(ownerId: String, owned: List<Playlist>, session: QqReadSession?): FavoritesLoad {
         val favorite = owned.firstOrNull { it.isFavorite }
             ?: return FavoritesLoad(emptyList(), PlaylistDegradation.TRUNCATED)
-        val detail = QqPlaylistApi.fetchDetailPage(favorite.key, 0L, QqPlaylistParser.FAVORITE_DIR_ID, 0, 1)
+        val detail = QqPlaylistApi.fetchDetailPage(favorite.key, 0L, QqPlaylistParser.FAVORITE_DIR_ID, 0, 1, session)
         val euin = (detail as? QqPlaylistResult.Ok)?.value?.encryptUin
         if (euin.isNullOrBlank()) return FavoritesLoad(emptyList(),
             playlistAuthFailure(detail)?.first ?: PlaylistDegradation.OFFLINE)
@@ -175,7 +176,8 @@ object QqPlaylistRepository {
         val pageSize = 50
         var offset = 0
         repeat(40) {
-            when (val page = QqPlaylistApi.fetchFavPlaylists(ownerId, euin, offset, pageSize)) {
+            if (session?.isCurrent() == false) return FavoritesLoad(emptyList(), PlaylistDegradation.NEED_LOGIN)
+            when (val page = QqPlaylistApi.fetchFavPlaylists(ownerId, euin, offset, pageSize, session)) {
                 is QqPlaylistResult.Ok -> {
                     val oldSize = all.size
                     page.value.forEach { all[it.key] = it }
@@ -255,15 +257,17 @@ object QqPlaylistRepository {
         playlistAuthFailure(QqPlaylistApi.checkLoginValid())?.let { (degradation, failure) ->
             return detailDegradedOrFail(cachedDetail, degradation, failure)
         }
+        val session = QqClient.pinReadSession()
         if (currentOwnerId(ctx) != key.ownerId) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
 
         val disstid = key.id.toLongOrNull() ?: 0L
         return when (
             val r = QqPlaylistApi.fetchAllPages(
-                key = key, disstid = disstid, dirId = dirId, onPage = onPage,
+                key = key, disstid = disstid, dirId = dirId, onPage = onPage, session = session,
             )
         ) {
             is QqPlaylistResult.Ok -> {
+                if (session?.isCurrent() == false) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
                 val page = r.value
                 // 完整性由 detailIsComplete 统一判定：分页截断、缺 songlist、条数对不上
                 // 都算"没取全"（H21）。旧实现在这里只看 hasMore，且拿**映射后**条数比总数。
@@ -276,10 +280,13 @@ object QqPlaylistRepository {
                 // 部分结果**不覆盖**已知完整的那份缓存：一次网络抖动/结构异常不该把之前
                 // 取全的数据降级成不完整（用户下次打开看到的是更少的曲目）。
                 if (complete || cachedDetail?.complete != true) {
-                    QqPlaylistStore.writeDetail(
-                        ctx, key, page.songs, now(),
-                        complete = complete, total = page.total,
-                    )
+                    val stored = QqAuthStore.withAuthLock {
+                        if (session?.isCurrent() == false) false else {
+                            QqPlaylistStore.writeDetail(ctx, key, page.songs, now(), complete = complete, total = page.total)
+                            true
+                        }
+                    }
+                    if (!stored) return PlaylistResult.Failed(PlaylistHardFailure.NeedLogin)
                 }
                 PlaylistResult.Data(
                     PlaylistLoadOutcome(

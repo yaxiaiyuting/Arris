@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:26:23.986Z" hostname="cachyos-x8664" time="0.047">
+  <properties/>
+  <testcase name="successfulPartialCommitReportsPartialWithCauseAndKeepsTtl" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.033"/>
+  <testcase name="failedPartialCommitReturnsFailedInsteadOfPartial" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.001"/>
+  <testcase name="partialCauseMapsEveryDegradation" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.0"/>
+  <testcase name="storeCreatePlaylistReturnsNullWhenCommitFails" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.0"/>
+  <testcase name="userEditDuringPartialSyncIsRejected" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.009"/>
+  <testcase name="createLocalOnlyReturnsNullAndRollsBackMemoryWhenCommitFails" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.002"/>
+  <testcase name="createLocalOnlyReturnsTheCreatedPlaylistWhenCommitSucceeds" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.0"/>
+  <testcase name="unreadableNeteaseKeyIsAFailureNotAnEmptySuccess" classname="com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

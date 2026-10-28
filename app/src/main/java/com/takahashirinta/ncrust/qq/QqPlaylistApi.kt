@@ -89,8 +89,8 @@ object QqPlaylistApi {
      *
      * @param ownerId 当前账号 uin。它进 [PlaylistKey]，是双账号隔离的根据。
      */
-    suspend fun fetchOwnedPlaylists(ownerId: String): QqPlaylistResult<List<Playlist>> {
-        val resp = QqClient.musicu(QqRequests.playlistList(ownerId), appIdentity = true)
+    suspend fun fetchOwnedPlaylists(ownerId: String, session: QqReadSession? = null): QqPlaylistResult<List<Playlist>> {
+        val resp = QqClient.musicu(QqRequests.playlistList(ownerId), appIdentity = true, session = session)
             ?: return QqPlaylistResult.Network
         return QqPlaylistParser.parseOwnedPlaylists(resp, ownerId)
     }
@@ -106,10 +106,11 @@ object QqPlaylistApi {
         encryptUin: String,
         offset: Int = 0,
         size: Int = 50,
+        session: QqReadSession? = null,
     ): QqPlaylistResult<List<Playlist>> {
         val resp = QqClient.musicu(
             QqRequests.playlistFavList(encryptUin, offset, size),
-            appIdentity = true,
+            appIdentity = true, session = session,
         ) ?: return QqPlaylistResult.Network
         return QqPlaylistParser.parseFavPlaylists(resp, ownerId)
     }
@@ -128,11 +129,14 @@ object QqPlaylistApi {
         dirId: Long,
         songBegin: Int,
         songNum: Int = DEFAULT_PAGE_SIZE,
+        session: QqReadSession? = null,
     ): QqPlaylistResult<QqPlaylistPage> {
+        if (session != null && !session.isCurrent()) return QqPlaylistResult.NeedLogin
         val resp = QqClient.musicu(
             QqRequests.playlistDetail(disstid, dirId, songBegin, songNum),
-            appIdentity = true,
+            appIdentity = true, session = session,
         ) ?: return QqPlaylistResult.Network
+        if (session != null && !session.isCurrent()) return QqPlaylistResult.NeedLogin
         return QqPlaylistParser.parseDetailPage(resp, key, songBegin)
     }
 
@@ -164,6 +168,7 @@ object QqPlaylistApi {
         pageSize: Int = DEFAULT_PAGE_SIZE,
         maxPages: Int = MAX_PAGES,
         onPage: (QqPlaylistPage) -> Unit = {},
+        session: QqReadSession? = QqClient.pinReadSession(),
     ): QqPlaylistResult<QqPlaylistPage> {
         val all = ArrayList<PlaylistTrack>()
         val allSongs = ArrayList<com.takahashirinta.ncrust.network.SongItem>()
@@ -176,7 +181,8 @@ object QqPlaylistApi {
         var rawTotal = 0
         var pagesHaveSonglist = true
         while (pages < maxPages) {
-            when (val r = fetchDetailPage(key, disstid, dirId, begin, pageSize)) {
+            if (session != null && !session.isCurrent()) return QqPlaylistResult.NeedLogin
+            when (val r = fetchDetailPage(key, disstid, dirId, begin, pageSize, session)) {
                 is QqPlaylistResult.Ok -> {
                     val page = r.value
                     last = page
@@ -185,6 +191,7 @@ object QqPlaylistApi {
                     rawTotal += page.rawCount
                     pagesHaveSonglist = pagesHaveSonglist && page.hasSonglist
                     onPage(page)
+                    if (session != null && !session.isCurrent()) return QqPlaylistResult.NeedLogin
                     pages++
                     // 终止：① 服务端说没有下一页；② 本页连**原始条目**都没有 —— 越界空页、
                     // 以及缺 `songlist` 的结构异常。后者再翻也是同一个 offset，必须停。

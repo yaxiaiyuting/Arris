@@ -163,10 +163,15 @@ object QqClient {
      *   false 用 web 身份（搜索，实测有效）。两套都在各自场景下实测过，
      *   不混用是因为服务端会按身份切换响应形状。
      */
+    fun pinReadSession(): QqReadSession? = appContext?.let { ctx ->
+        QqAuthStore.withAuthLock { QqReadSession(QqAuthStore.currentAuthRevision(), QqAuthStore.getCookie(ctx)) }
+    }
+
     suspend fun musicu(
         request: JSONObject,
         appIdentity: Boolean,
-    ): JSONObject? = musicuOutcome(request, appIdentity).payload
+        session: QqReadSession? = null,
+    ): JSONObject? = musicuOutcome(request, appIdentity, session).payload
 
     /**
      * 与 [musicu] 同一条通道，但把**传输层事实**（HTTP 状态码 / 失败原因）一起带回来
@@ -178,12 +183,16 @@ object QqClient {
     suspend fun musicuOutcome(
         request: JSONObject,
         appIdentity: Boolean,
+        session: QqReadSession? = null,
     ): QqMusicuOutcome = withContext(Dispatchers.IO) {
         val ctx = appContext ?: return@withContext QqMusicuOutcome.notInitialized()
+        if (session != null && !session.isCurrent()) return@withContext QqMusicuOutcome(null, null, "session changed")
         val body = JSONObject()
-            .put("comm", if (appIdentity) appComm(ctx) else webComm(ctx))
+            .put("comm", if (appIdentity) appComm(ctx, if (session != null) session.cookie else QqAuthStore.getCookie(ctx)) else webComm(ctx))
             .put("req", request)
-        execute(ctx, body, request.optString("module"), appIdentity)
+        execute(ctx, body, request.optString("module"), appIdentity,
+            sendCookie = session == null,
+            overrideCookie = session?.let { QqCookie.requestCookie(it.cookie) })
     }
 
     /**
@@ -511,7 +520,7 @@ object QqClient {
      * **匿名态**跑出来（`uin=0`），匿名态本来就没有 `authst` 可发，所以「登录态少发什么」
      * 从来没进过验证范围。表现就是用户报的「超级会员取链被当成免费用户」。
      */
-    private fun appComm(context: Context): JSONObject {
+    private fun appComm(context: Context, cookie: String? = QqAuthStore.getCookie(context)): JSONObject {
         val base = JSONObject()
             .put("ct", 11)
             .put("cv", 14090008)
@@ -526,7 +535,7 @@ object QqClient {
             .put("phonetype", "MI 10")
             .put("uin", "0")
             .put("format", "json")
-        return QqCookie.applyIdentity(base, QqAuthStore.getCookie(context))
+        return QqCookie.applyIdentity(base, cookie)
     }
 
     /** 未登录时 `comm.uin` 用 `"0"`（实测匿名可用）。 */
@@ -541,4 +550,9 @@ object QqClient {
      */
     private fun maskDigits(value: String): String =
         if (value.length <= 4) "****" else value.take(2) + "****" + value.takeLast(2)
+}
+
+/** 批次只使用这份凭据；续期/换号期间的旧批次停止，不拼接不同会话结果。 */
+class QqReadSession internal constructor(internal val revision: Long, internal val cookie: String?) {
+    fun isCurrent(): Boolean = QqAuthStore.currentAuthRevision() == revision
 }

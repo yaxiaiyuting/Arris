@@ -1,0 +1,32 @@
+[
+  {
+    "name": "com.takahashirinta.ncrust.QueueOccurrenceMoveTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.player.PendingPlayRequestsTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.QueueReorderByIdentityTest",
+    "tests": "6",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.ui.viewmodel.SearchFailedPageRecoveryTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0"
+  }
+]

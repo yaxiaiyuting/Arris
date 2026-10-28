@@ -367,11 +367,7 @@ object LocalPlaylistRepository {
      *
      * 幂等：已经建过就返回那一个，**不覆盖**用户已经攒下的曲目。
      *
-     * ⚠️ 与 [createLocalOnly] 同属 H09 那一类，但**签名本轮不改**（调用方在
-     * `QqPlaylistDetailScreen`，不在本次改动范围）：写盘失败时这里仍会返回一个
-     * 「只在内存里存在」的对象。所幸它的下一个动作就是 `sync(force = true)`，
-     * 而那条路径会因为「key 不存在」返回 Failed，不会把失败伪装成成功。
-     * 后续把本函数也改成可空返回时，调用方需要按 null 分支提示失败。
+     * 写盘失败返回 null；元数据创建与读取共用 Store 提交锁，不能虚报转存成功。
      */
     fun adoptRemote(
         context: Context,
@@ -379,9 +375,9 @@ object LocalPlaylistRepository {
         name: String,
         dirId: Long,
         now: Long = System.currentTimeMillis(),
-    ): LocalPlaylist {
+    ): LocalPlaylist? = synchronized(LocalPlaylistStore) {
         val existing = LocalPlaylistStore.readPlaylists(context).firstOrNull { it.key == key }
-        if (existing != null) return existing
+        if (existing != null) return@synchronized existing
         val created = LocalPlaylist(
             key = key,
             name = name,
@@ -391,8 +387,7 @@ object LocalPlaylistRepository {
             dirId = dirId,
         )
         val list = LocalPlaylistStore.readPlaylists(context)
-        LocalPlaylistStore.writePlaylists(context, list + created)
-        return created
+        created.takeIf { LocalPlaylistStore.writePlaylists(context, list + created) }
     }
 
     /**
