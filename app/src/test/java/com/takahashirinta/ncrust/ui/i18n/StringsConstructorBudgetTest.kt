@@ -788,7 +788,7 @@ class StringsConstructorBudgetTest {
 
         // ---- 事实约束 2：必须写明「不是频谱」 ----
         val spectrumWords = listOf(
-            "频谱", "頻譜", "frequency", "スペクトラ", "スペクトル", "스펙트럼", "spektrum", "спектр",
+            "频谱", "頻譜", "frequency", "spectrum", "スペクトラ", "スペクトル", "스펙트럼", "spektrum", "спектр",
         )
         presets.forEach { s ->
             val hint = s.waveform.visualizerNotSpectrumHint.lowercase()

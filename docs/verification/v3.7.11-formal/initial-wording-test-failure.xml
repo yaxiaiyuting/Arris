@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" tests="20" skipped="0" failures="1" errors="0" timestamp="2026-10-28T20:44:48.452Z" hostname="cachyos-x8664" time="0.061">
+  <properties/>
+  <testcase name="v2_6_0 的布局与折叠文案在八种语言里都可用且不撞词" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="嵌套组自身也受参数数量监控" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="添加到下一首的文案搬家后仍然可达（转发属性没写错）" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_5_5 的搜索加载态文案在八种语言里都可用" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="v2_8_0 之后 Strings 主构造器只涨组参数（v3_3_0 起 141）" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_5_1 的页面转场文案组在 8 种语言里都非空且不撞词" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_8_0 的 14 条设置分组文案进了 SettingsStrings 且八种语言都可用" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.026"/>
+  <testcase name="Strings 家族全部可以被 JVM 加载（超过 255 槽会在类加载期抛 ClassFormatError）" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="v2_5_4 只往主构造器加了搜索历史那一条文案" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v3_3_0 的 8 条桌面卡片文案进了 WidgetStrings" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_6_0 没有往 Strings 主构造器加任何参数" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="离线空态文案搬家后仍然可达（转发属性没写错）" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_8_0 的 16 条 + v2_9_0 的 4 条 + v3_0_0 的 10 条动效文案都在 WaveformStrings 且八种语言都可用" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.029">
+    <failure message="java.lang.AssertionError: visualizerNotSpectrumHint 必须点名频谱：The waveform shows low, mid and high band energy over time. It is not an FFT spectrum." type="java.lang.AssertionError">java.lang.AssertionError: visualizerNotSpectrumHint 必须点名频谱：The waveform shows low, mid and high band energy over time. It is not an FFT spectrum.
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest.v2_8_0 的 16 条 + v2_9_0 的 4 条 + v3_0_0 的 10 条动效文案都在 WaveformStrings 且八种语言都可用(StringsConstructorBudgetTest.kt:795)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:115)
+	at org.gradle.api.internal.tasks.testing.junit.JUnitTestExecutor.runRequest(JUnitTestExecutor.java:175)
+	at org.gradle.api.internal.tasks.testing.junit.JUnitTestExecutor.accept(JUnitTestExecutor.java:84)
+	at org.gradle.api.internal.tasks.testing.junit.JUnitTestExecutor.accept(JUnitTestExecutor.java:47)
+	at org.gradle.api.internal.tasks.testing.junit.AbstractJUnitTestDefinitionProcessor.processTestDefinition(AbstractJUnitTestDefinitionProcessor.java:65)
+	at org.gradle.api.internal.tasks.testing.SuiteTestDefinitionProcessor.processTestDefinition(SuiteTestDefinitionProcessor.java:54)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.gradle.internal.dispatch.MethodInvocation.invokeOn(MethodInvocation.java:77)
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:28)
+	at org.gradle.internal.dispatch.ReflectionDispatch.dispatch(ReflectionDispatch.java:19)
+	at org.gradle.internal.dispatch.ContextClassLoaderDispatch.dispatch(ContextClassLoaderDispatch.java:33)
+	at org.gradle.internal.dispatch.ProxyDispatchAdapter$DispatchingInvocationHandler.invoke(ProxyDispatchAdapter.java:88)
+	at jdk.proxy1/jdk.proxy1.$Proxy4.processTestDefinition(Unknown Source)
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker$2.run(TestWorker.java:178)
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.executeAndMaintainThreadName(TestWorker.java:126)
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:103)
+	at org.gradle.api.internal.tasks.testing.worker.TestWorker.execute(TestWorker.java:63)
+	at org.gradle.process.internal.worker.child.ActionExecutionWorker.execute(ActionExecutionWorker.java:56)
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:122)
+	at org.gradle.process.internal.worker.child.SystemApplicationClassLoaderWorker.call(SystemApplicationClassLoaderWorker.java:72)
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.run(GradleWorkerMain.java:69)
+	at worker.org.gradle.process.internal.worker.GradleWorkerMain.main(GradleWorkerMain.java:74)
+</failure>
+  </testcase>
+  <testcase name="v3_4_12 的整列收藏反馈在 LikedPlayAllStrings 且八种语言都可用" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v3_2_0 的 9 条取链失败文案进了 PlaybackFailureStrings 且八种语言都可用" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="v2_5_5 统计行的新路径与旧格式逐字一致" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="v2_5_3 三个新组的规模被钉住" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="每一位文案提供者都填满了两个新组（漏填会编译错 这里再钉一次语义）" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.001"/>
+  <testcase name="v2_5_5 往主构造器加了 6 条搜索加载态文案" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <testcase name="Strings 的构造参数不超过预算" classname="com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest" time="0.0"/>
+  <system-out><![CDATA[WARN[StringsConstructorBudgetTest] 组 SettingsStrings 参数 = 88，已超过预警线 80 —— 该考虑再拆一层了。
+INFO[StringsConstructorBudgetTest] 各组参数：OfflineStrings=23 SourceStrings=77 PlaylistsStrings=21 TagsStrings=7 LocalPlaylistStrings=26 QueueStrings=8 MotionStrings=2 SettingsStrings=88 AboutStrings=26 CelebrationStrings=34 PlayerUiStrings=31 WaveformStrings=40 WidgetStrings=8 ShareStrings=24 StatsStrings=37 BiliStrings=17 LikedPlayAllStrings=2 AccountStrings=27 UpdateStrings=28
+WARN[StringsConstructorBudgetTest] Strings 主构造器参数 = 148，已超过预警线 140（硬上限 150）。下一个要加文案的人请先拆组。
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

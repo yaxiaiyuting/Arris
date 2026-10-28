@@ -1,0 +1,6 @@
+{
+  "tests": 3366,
+  "classes": 308,
+  "failures": 1,
+  "note": "Only failure: vocabulary guard omitted the English word spectrum despite correct localized not-FFT wording."
+}
