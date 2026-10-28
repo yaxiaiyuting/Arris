@@ -1,0 +1,8 @@
+{
+  "feature_worktree_app_clean": true,
+  "original_worktree_differs_from_saved_baseline": [
+    "app/build.gradle.kts"
+  ],
+  "original_patch_sha256_now": "0664df2268aeb625a0d232ddac2a53b7223978915392efb1a60dcc7c729dd057",
+  "note": "Original build.gradle.kts changed during this round by an external actor; not reverted. Current review/source baseline remains the isolated branch; reconcile version change before formal packaging."
+}
