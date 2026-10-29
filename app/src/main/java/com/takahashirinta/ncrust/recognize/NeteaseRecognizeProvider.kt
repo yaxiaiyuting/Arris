@@ -116,10 +116,10 @@ class NeteaseRecognizeProvider(
                         "服务端回空体（HTTP ${response.code}，audio=${bytes.size}B）",
                     )
                 }
-                val decrypted = EapiCrypto.decryptRawBytes(raw).ifBlank { String(raw, Charsets.UTF_8) }
-                // 解出来可能是 JSON 文本，也可能是 gzip 字节序列（抓包里两种都出现过）
-                val json = decrypted.takeIf { it.trimStart().startsWith("{") }
-                    ?: gunzip(raw).ifBlank { decrypted }
+                // 三层可能：明文 JSON → AES 密文 → AES 解密后还是 gzip 流。
+                // 抓包实证：成功响应就是"AES 密文，解开后是 gzip 的 JSON"，
+                // 之前只对密文 gunzip，必然得到乱码 + JSON 报错。
+                val json = decodeResponseBytes(raw)
                 Log.i(TAG, "HTTP ${response.code} raw=${raw.size}B plain=${json.take(240)}")
                 when {
                     response.code >= 500 -> RecogOutcome.Failed(RecogFailure.SERVER_ERROR, "HTTP ${response.code}")
@@ -134,6 +134,18 @@ class NeteaseRecognizeProvider(
         } catch (t: Throwable) {
             RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, t.message.orEmpty())
         }
+    }
+
+    /** 响应解码：明文 JSON / AES 密文 / AES 密文里套 gzip，三种都覆盖。 */
+    private fun decodeResponseBytes(raw: ByteArray): String {
+        if (raw.isEmpty()) return ""
+        if (raw[0] == '{'.code.toByte()) return String(raw, Charsets.UTF_8)
+        val decrypted = EapiCrypto.decryptRawToBytes(raw)
+        if (decrypted.isEmpty()) return String(raw, Charsets.UTF_8)
+        if (decrypted.size >= 2 && decrypted[0] == 0x1f.toByte() && decrypted[1] == 0x8b.toByte()) {
+            return gunzip(decrypted).ifBlank { String(decrypted, Charsets.UTF_8) }
+        }
+        return String(decrypted, Charsets.UTF_8)
     }
 
     /** 抓包还原的请求体字段（顺序无关，eapi 签名对的是序列化后的整串）。 */

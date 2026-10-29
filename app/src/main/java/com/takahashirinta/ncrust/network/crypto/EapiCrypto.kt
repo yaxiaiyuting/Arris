@@ -35,6 +35,18 @@ object EapiCrypto {
      * 上层再把乱码丢进 `JSONObject` 就得到 "Value ... of type java.lang.String cannot be
      * converted to JSONObject" 这种看起来像"字符串问题"的报错。
      */
+    /** 解密成**原始字节**：识曲响应解密后仍是 gzip 流，必须先拿到字节再解压。 */
+    fun decryptRawToBytes(bytes: ByteArray): ByteArray {
+        if (bytes.isEmpty()) return ByteArray(0)
+        return try {
+            val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(AES_KEY, "AES"))
+            cipher.doFinal(bytes)
+        } catch (_: Exception) {
+            ByteArray(0)
+        }
+    }
+
     fun decryptRawBytes(bytes: ByteArray): String {
         if (bytes.isEmpty()) return ""
         return try {
