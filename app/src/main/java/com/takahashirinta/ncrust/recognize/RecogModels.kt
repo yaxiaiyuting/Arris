@@ -19,6 +19,8 @@ sealed interface RecogInput {
     data class Encoded(
         val bytes: ByteArray,
         val mime: String,
+        /** 音频时长（毫秒）。网易云识曲端点必须显式上报 `duration`。 */
+        val durationMs: Long = 0L,
     ) : RecogInput
 }
 

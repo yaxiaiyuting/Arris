@@ -41,6 +41,7 @@ import com.takahashirinta.ncrust.listen.RoomClock
 import com.takahashirinta.ncrust.listen.RoomEngine
 import com.takahashirinta.ncrust.listen.RoomOp
 import com.takahashirinta.ncrust.listen.RoomState
+import com.takahashirinta.ncrust.recognize.AacRecorder
 import com.takahashirinta.ncrust.recognize.MicCapture
 import com.takahashirinta.ncrust.recognize.NeteaseRecognizeProvider
 import com.takahashirinta.ncrust.recognize.RecogInput
@@ -198,22 +199,22 @@ fun LabScreen(onClose: () -> Unit) {
                 }
             }
 
-            LabButton("⑤ 网易云识曲（录 3.4 秒 → eapi/music/audio/match）", enabled = !busy) {
+            LabButton("⑤ 网易云识曲（录 10 秒 AAC → hum/audio/unifymatch）", enabled = !busy) {
                 val cookie = com.takahashirinta.ncrust.auth.CookieManager.snapshot().cookie.orEmpty()
                 if (cookie.isBlank()) {
                     micReport = "未登录网易云：识曲接口需要本机账号（先登录再试）"
                 } else {
                     busy = true
-                    micReport = "录音中（3.4 秒）…"
+                    micReport = "录音中（10 秒 AAC）…"
                     scope.launch(Dispatchers.Default) {
-                        // 官方片段长度 3.4 秒（逆向记录里的 duration 字段就是这个量级）
-                        val captured = MicCapture.recordDetailed(3_400)
-                        val text = if (captured == null) {
-                            "采集失败：所有音源都没出数据"
+                        // 官方客户端单次识曲约 10 秒、容器是 MP4/AAC（抓包实证）
+                        val audio = AacRecorder.record(context, 10_000)
+                        val text = if (audio == null) {
+                            "录音失败（权限/占用/编码器）"
                         } else {
                             val provider = NeteaseRecognizeProvider(cookieProvider = { cookie })
                             val outcome = provider.recognize(
-                                RecogInput.Pcm(captured.samples, ShazamFingerprint.SAMPLE_RATE)
+                                RecogInput.Encoded(audio, "audio/mp4", durationMs = 10_000)
                             )
                             when (outcome) {
                                 is RecogOutcome.Matched -> buildString {
@@ -225,11 +226,11 @@ fun LabScreen(onClose: () -> Unit) {
                                     if (outcome.match.providerTrackId.isNotBlank()) {
                                         append(" id=").append(outcome.match.providerTrackId)
                                     }
-                                    append("（源=").append(MicCapture.sourceName(captured.source)).append("）")
+                                    append("（audio=").append(audio.size / 1024).append("KB）")
                                 }
                                 is RecogOutcome.Failed ->
                                     "失败：${outcome.failure}" + if (outcome.detail.isBlank()) "" else "（${outcome.detail}）" +
-                                        "｜源=${MicCapture.sourceName(captured.source)}"
+                                        "｜audio=${audio.size / 1024}KB"
                             }
                         }
                         withContext(Dispatchers.Main) {

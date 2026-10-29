@@ -23,25 +23,25 @@ class ProvidersTest {
 
     @Test
     fun `网易云命中解析`() {
-        // 真实形状：data.result.song（2026-10-30 真机复现的响应外壳）
+        // 真实形状（抓包 + 回放实证）：data.result 是数组，每项带 startTime + song
         val json = """
-            {"code":200,"data":{"type":0,"queryId":"q","mv":null,
-              "result":{"song":{"id":186016,"name":"晴天","duration":269000,
-                "artists":[{"name":"周杰伦"}],"album":{"name":"叶惠美"}}}}}
+            {"code":200,"data":{"type":1,"queryId":"64f9ce00","result":[
+              {"startTime":1000,"song":{"id":108251,"name":"当你","duration":274000,
+                "artists":[{"name":"林俊杰"}],"album":{"name":"她说 概念自选辑"}}}]}}
         """.trimIndent()
         val provider = NeteaseRecognizeProvider(cookieProvider = { "MUSIC_U=x" })
         val match = (provider.parse(json) as RecogOutcome.Matched).match
-        assertEquals("晴天", match.title)
-        assertEquals("周杰伦", match.artist)
-        assertEquals("叶惠美", match.album)
-        assertEquals(269_000L, match.durationMs)
-        assertEquals("186016", match.providerTrackId)
+        assertEquals("当你", match.title)
+        assertEquals("林俊杰", match.artist)
+        assertEquals("她说 概念自选辑", match.album)
+        assertEquals(274_000L, match.durationMs)
+        assertEquals("108251", match.providerTrackId)
     }
 
     @Test
     fun `result 为 null 是没匹配（真机实测形状）`() {
         val provider = NeteaseRecognizeProvider(cookieProvider = { "MUSIC_U=x" })
-        val json = """{"data":{"type":0,"queryId":"q","result":null,"mv":null}}"""
+        val json = """{"code":200,"data":{"type":0,"queryId":"q","result":null,"mv":null}}"""
         assertEquals(
             RecogFailure.NO_MATCH,
             (provider.parse(json) as RecogOutcome.Failed).failure,
@@ -61,11 +61,11 @@ class ProvidersTest {
     }
 
     @Test
-    fun `网易云 400 视为没匹配 404 视为端点变更`() {
+    fun `参数错误 400 属于协议变更而不是没匹配`() {
         val provider = NeteaseRecognizeProvider(cookieProvider = { "MUSIC_U=x" })
         assertEquals(
-            RecogFailure.NO_MATCH,
-            (provider.parse("""{"code":400,"message":""}""") as RecogOutcome.Failed).failure,
+            RecogFailure.PROTOCOL_CHANGED,
+            (provider.parse("""{"code":400,"msg":"参数错误"}""") as RecogOutcome.Failed).failure,
         )
         assertEquals(
             RecogFailure.PROTOCOL_CHANGED,
@@ -74,24 +74,30 @@ class ProvidersTest {
     }
 
     @Test
-    fun `rawdata 是 zlib 头加 base64`() {
-        // 官方报文里 rawdata 以 eJx 开头 = zlib(deflate)。这条钉住编码方式：改了就解不出来。
-        val pcm = ShortArray(16_000) { (it % 200 - 100).toShort() }
-        val encoded = NeteaseRecognizeProvider.base64Zlib(NeteaseRecognizeProvider.pcm16le(pcm))
-        assertTrue("zlib+base64 应以 eJ 开头，实际=${encoded.take(4)}", encoded.startsWith("eJ"))
-        // 解回来必须与输入逐字节一致
-        val raw = java.util.Base64.getDecoder().decode(encoded)
-        val inflated = java.util.zip.Inflater().run {
-            setInput(raw); val out = ByteArray(pcm.size * 2)
-            val n = inflate(out); end(); out.copyOf(n)
-        }
-        assertTrue("解压后长度应等于 2×样本数", inflated.size == pcm.size * 2)
-        assertEquals(NeteaseRecognizeProvider.pcm16le(pcm).toList(), inflated.toList())
+    fun `请求体包含抓包还原的字段`() {
+        val p = NeteaseRecognizeProvider(cookieProvider = { "MUSIC_U=x" })
+        val payload = p.buildPayload("AAAA", 10.0, "qid-1")
+        assertEquals("ASR", payload.getString("algorithmCode"))
+        assertEquals("10", payload.getString("duration"))
+        assertEquals("qid-1", payload.getString("queryId"))
+        assertEquals("app", payload.getString("from"))
+        assertTrue(payload.getString("recordAudio").isNotEmpty())
+        assertTrue(payload.getString("Url").endsWith("/api/music/hum/audio/unifymatch"))
     }
 
     @Test
-    fun `端点必须带 nmclfl 查询参数`() {
-        assertTrue(NeteaseRecognizeProvider.DEFAULT_ENDPOINT.contains("/eapi/music/audio/match"))
+    fun `gzip 往返`() {
+        val raw = """{"a":1}""".toByteArray()
+        assertEquals("{\"a\":1}", NeteaseRecognizeProvider.gunzip(NeteaseRecognizeProvider.gzip(raw)))
+    }
+
+    @Test
+    fun `端点必须是抓包实证的 hum unifymatch`() {
+        // 旧端点 /eapi/music/audio/match 已废弃（服务端恒回 result:null），这条防止回退
+        assertEquals(
+            "https://interface3.music.163.com/eapi/music/hum/audio/unifymatch",
+            NeteaseRecognizeProvider.DEFAULT_ENDPOINT,
+        )
     }
 
     @Test

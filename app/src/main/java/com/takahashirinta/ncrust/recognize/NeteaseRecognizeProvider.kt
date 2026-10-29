@@ -12,45 +12,53 @@ import java.io.IOException
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.zip.Deflater
-import okhttp3.FormBody
+import java.util.zip.GZIPOutputStream
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 /**
- * 网易云「听歌识曲」Provider（v3.8.0）。**用你自己的登录态**，不依赖任何付费服务。
+ * 网易云识曲 Provider（v3.8.0）。**配方来自抓包**（官方客户端 9.6.15，2026-10-30）。
  *
- * ## 端点与报文（有来源，不是猜的）
+ * ## 真端点
  *
- * 端点：`POST https://music.163.com/eapi/music/audio/match?_nmclfl=1`。
- * 依据：公开逆向记录 <https://nazuki.moe/netease-eapi-music-recognize-reverse-1/>，
- * 其中解密后的请求体形如：
+ * `POST https://interface3.music.163.com/eapi/music/hum/audio/unifymatch`
+ *
+ * 早期我用社区流传的 `/eapi/music/audio/match`，服务端状态码 200 但永远 `result:null` ——
+ * 因为那条端点已废弃。真实客户端走的是 `hum/audio/unifymatch`。
+ *
+ * ## 请求结构（抓包明文，逐字段还原）
  *
  * ```json
- * {"rawdata":"eJx11H9M1HUYB/C7...","from":"recognize-song","verifyId":1,
- *  "deviceId":"…","os":"iOS","header":{},"algorithmCode":"shazam_v2",
- *  "times":1,"sessionId":"…","duration":3.4,"e_r":true,
- *  "sceneParams":"{\"action\":0,\"code\":2}"}
+ * {"Url":"https://interface3.music.163.com/api/music/hum/audio/unifymatch",
+ *  "algorithmCode":"ASR","algorithmVer":"1.0.0",
+ *  "audioSceneInformation":"eyIxMCI6…","decrypt":"1","duration":"10",
+ *  "e_r":true,"from":"app","header":"{}","identifyTab":"0",
+ *  "queryId":"<每次新 UUID>","recordAudio":"<base64 的 M4A>"}
  * ```
  *
- * 三个关键点：
- * 1. `rawdata` 是 **zlib 压缩后 Base64** 的音频（`eJx` 是 zlib 头）—— 不是裸 PCM；
- * 2. `algorithmCode = shazam_v2`，`duration` 是**真实片段秒数**（官方约 3.4s）；
- * 3. 整包仍走 **eapi 加密**（`params=<hex>`），所以复用仓库里已有的 [EapiCrypto]，
- *    并用 `?_nmclfl=1` 原样保留查询串（签名用的是 path，不含 query）。
+ * 外层仍是标准 eapi：`params=<hex(AES-128-ECB 签名串)>`，但整个 body 还要再 **gzip** 一层，
+ * 并带 `Content-Encoding: gzip` + `x-mg-zip: gzip`。
  *
- * ## 与旧实现的关系
+ * ## 三个必须照抄的细节（都踩过）
  *
- * 旧版试的 `/api/music/recognize`、`/api/audio/match`、`/api/song/match` 在登录态下
- * 实测全部返回 `{"code":404,"message":"接口未找到！"}` —— 那条路是不存在的，
- * 已删除，避免"看起来接了其实 404"。
+ * 1. **`queryId` 必须每次新生成**：复用旧值服务端会直接返回 `result:null`（缓存/去重）；
+ * 2. **`recordAudio` 是 MP4/AAC 容器**，不是 PCM、也不是 Shazam 签名 —— 发 PCM 时服务端
+ *    要么回空体、要么 `{"msg":"参数错误","code":400}`；
+ * 3. **`x-deviceId` / `x-buildver` / `MConfig-Info` 这些头不能省**：缺了就是 400 参数错误。
+ *
+ * ## 响应
+ *
+ * 响应是 AES 密文（外面还可能套一层 gzip），解出：
+ * `{"code":200,"data":{"result":[{"startTime":ms,"song":{…}}]}}`；
+ * `data.result` 为 null / 空数组即"没听出来"。
  */
 class NeteaseRecognizeProvider(
     private val cookieProvider: () -> String,
     private val client: OkHttpClient = defaultClient(),
     private val endpoint: String = DEFAULT_ENDPOINT,
-    private val deviceId: String = "",
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) : RecognitionProvider {
 
@@ -62,73 +70,63 @@ class NeteaseRecognizeProvider(
         val cookie = cookieProvider()
         if (cookie.isBlank()) return RecogOutcome.Failed(RecogFailure.PERMISSION_DENIED, "未登录网易云")
 
-        val samples: ShortArray
-        val sampleRate: Int
-        when (input) {
-            is RecogInput.Pcm -> {
-                samples = input.samples
-                sampleRate = input.sampleRate
-            }
-            // 官方客户端上传的是原始波形；编码后的文件需要解码，本轮不做，交给麦克风路径。
-            is RecogInput.Encoded ->
-                return RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "该端点只接受 PCM 输入")
+        val (bytes, durationSec) = when (input) {
+            // 官方要的是 MP4/AAC 容器；调用方应传 AacRecorder 的结果。
+            is RecogInput.Encoded -> input.bytes to (input.durationMs.coerceAtLeast(1L) / 1000.0)
+            is RecogInput.Pcm -> return RecogOutcome.Failed(
+                RecogFailure.PROTOCOL_CHANGED,
+                "该端点只接受 M4A/AAC；PCM 需先编码（见 AacRecorder）",
+            )
         }
-        if (samples.isEmpty()) return RecogOutcome.Failed(RecogFailure.SILENT_INPUT, "")
+        if (bytes.isEmpty()) return RecogOutcome.Failed(RecogFailure.SILENT_INPUT, "录音为空")
 
-        val durationSec = samples.size.toDouble() / sampleRate
-        // 关键：rawdata 必须是 **Shazam 签名**（KB 级），不是 PCM。
-        // 实测发 PCM（≈120 KB）时服务端直接回空 body；发签名（≈2.8 KB）才返回正常 JSON。
-        val signature = ShazamSignature.generateFromPcm16(samples)
-        val rawdata = ShazamSignature.toRawdata(signature)
-        Log.i(TAG, "signature=${signature.size}B rawdata=${rawdata.length}B pcm=${samples.size * 2}B")
-        val sessionId = UUID.randomUUID().toString().replace("-", "").take(16)
-        val payload = mapOf(
-            "rawdata" to rawdata,
-            "from" to "recognize-song",
-            "verifyId" to 1,
-            "deviceId" to deviceId.ifBlank { "android-${sessionId.take(8)}" },
-            "os" to "android",
-            "header" to JSONObject(),
-            "algorithmCode" to "shazam_v2",
-            "times" to 1,
-            "sessionId" to sessionId,
-            "duration" to String.format(java.util.Locale.US, "%.1f", durationSec).toDouble(),
-            "e_r" to true,
-            "sceneParams" to "{\"action\":0,\"code\":2}",
+        val payload = buildPayload(
+            audioBase64 = Base64.getEncoder().encodeToString(bytes),
+            durationSec = durationSec,
+            queryId = UUID.randomUUID().toString(),
         )
-        val params = EapiCrypto.encryptParams(endpoint, payload)
+        val body = gzip(buildForm(payload))
+        Log.i(TAG, "unifymatch audio=${bytes.size}B duration=${durationSec}s body=${body.size}B")
+
         val request = Request.Builder()
-            .url("$endpoint?_nmclfl=1")
+            .url(endpoint)
             .header("Cookie", cookie)
             .header("User-Agent", UA)
-            .header("Referer", "https://music.163.com/")
-            .post(FormBody.Builder().add("params", params).build())
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Content-Encoding", "gzip")
+            .header("x-mg-zip", "gzip")
+            .header("x-os", "android")
+            .header("x-osver", ANDROID_VERSION)
+            .header("x-appver", APP_VER)
+            .header("x-buildver", BUILD_VER)
+            .header("x-deviceId", DEVICE_ID)
+            .header("x-sDeviceId", DEVICE_ID)
+            .header("CMPageId", "page_listen_identify_songs_sub")
+            .header("MConfig-Info", MCONFIG)
+            .header("x-aeapi", "true")
+            .post(body.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
             .build()
 
         return try {
             client.newCall(request).execute().use { response ->
-                // 必须按**字节**读：这个端点返回裸 AES 密文，按字符串读会丢掉不可打印字节。
-                val bytes = response.body?.bytes() ?: ByteArray(0)
-                if (bytes.isEmpty()) {
-                    // 实测对照（2026-10-30）：rawdata ≈2.8KB（签名）→ 正常 JSON；
-                    // ≈120KB（PCM）→ **空 body**。所以空体几乎等价于"载荷形态/体积不对"。
+                val raw = response.body?.bytes() ?: ByteArray(0)
+                if (raw.isEmpty()) {
                     return RecogOutcome.Failed(
                         RecogFailure.PROTOCOL_CHANGED,
-                        "服务端回空体（载荷 ${rawdata.length}B）：签名应 ≈3KB，PCM 会被拒",
+                        "服务端回空体（HTTP ${response.code}，audio=${bytes.size}B）",
                     )
                 }
-                val plain = if (bytes[0] == '{'.code.toByte()) {
-                    String(bytes, Charsets.UTF_8)
-                } else {
-                    EapiCrypto.decryptRawBytes(bytes)
-                }
-                Log.i(TAG, "audio/match HTTP ${response.code} bytes=${bytes.size} plain=${plain.take(300)}")
+                val decrypted = EapiCrypto.decryptRawBytes(raw).ifBlank { String(raw, Charsets.UTF_8) }
+                // 解出来可能是 JSON 文本，也可能是 gzip 字节序列（抓包里两种都出现过）
+                val json = decrypted.takeIf { it.trimStart().startsWith("{") }
+                    ?: gunzip(raw).ifBlank { decrypted }
+                Log.i(TAG, "HTTP ${response.code} raw=${raw.size}B plain=${json.take(240)}")
                 when {
                     response.code >= 500 -> RecogOutcome.Failed(RecogFailure.SERVER_ERROR, "HTTP ${response.code}")
                     response.code == 401 || response.code == 403 ->
                         RecogOutcome.Failed(RecogFailure.QUOTA_EXCEEDED, "HTTP ${response.code}")
                     !response.isSuccessful -> RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "HTTP ${response.code}")
-                    else -> parse(plain)
+                    else -> parse(json)
                 }
             }
         } catch (e: IOException) {
@@ -138,40 +136,40 @@ class NeteaseRecognizeProvider(
         }
     }
 
+    /** 抓包还原的请求体字段（顺序无关，eapi 签名对的是序列化后的整串）。 */
+    fun buildPayload(audioBase64: String, durationSec: Double, queryId: String): JSONObject = JSONObject()
+        .put("Url", "https://interface3.music.163.com/api/music/hum/audio/unifymatch")
+        .put("algorithmCode", "ASR")
+        .put("algorithmVer", "1.0.0")
+        .put("audioSceneInformation", AUDIO_SCENE)
+        .put("decrypt", "1")
+        .put("duration", durationSec.toInt().toString())
+        .put("e_r", true)
+        .put("from", "app")
+        .put("header", "{}")
+        .put("identifyTab", "0")
+        .put("queryId", queryId)
+        .put("recordAudio", audioBase64)
+
     fun parse(json: String?): RecogOutcome {
         if (json.isNullOrBlank()) return RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "空响应")
         return try {
             val root = JSONObject(json)
-            // 识曲端点的成功响应**没有 code 字段**（实测 `{"data":{…}}`），
-            // 所以缺省按 200 处理；只有显式出现的错误码才当错误。
             val code = root.optInt("code", 200)
             if (code != 200) {
                 return when (code) {
-                    404 -> RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "接口未找到")
-                    400, 401 -> RecogOutcome.Failed(RecogFailure.NO_MATCH, root.optString("message"))
-                    -460 -> RecogOutcome.Failed(RecogFailure.QUOTA_EXCEEDED, root.optString("message"))
-                    else -> RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "code=$code ${root.optString("message")}")
+                    400 -> RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, root.optString("msg"))
+                    401, 403 -> RecogOutcome.Failed(RecogFailure.QUOTA_EXCEEDED, root.optString("msg"))
+                    else -> RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "code=$code ${root.optString("msg")}")
                 }
             }
-            // 实测形状（2026-10-30，真机 + 本机复现）：
-            // {"data":{"type":0,"queryId":"…","result":null,"mv":null}}  ← 没匹配
-            // 命中时 result 里带 song（或 songs[]），这里三种都兼容。
             val data = root.optJSONObject("data") ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "无 data")
-            if (data.isNull("result")) {
-                val reason = data.optInt("noMatchReason", -1)
-                return RecogOutcome.Failed(
-                    RecogFailure.NO_MATCH,
-                    if (reason >= 0) "result=null（noMatchReason=$reason）" else "result=null",
-                )
+            val result = data.optJSONArray("result")
+            if (result == null || result.length() == 0) {
+                return RecogOutcome.Failed(RecogFailure.NO_MATCH, "result 为空")
             }
-            val resultArray = data.optJSONArray("result")
-            val result: JSONObject? = data.optJSONObject("result")
-                ?: resultArray?.optJSONObject(0)
-            val song = data.optJSONObject("song")
-                ?: result?.optJSONObject("song")
-                ?: result?.optJSONArray("songs")?.optJSONObject(0)?.optJSONObject("song")
-                ?: result?.optJSONArray("songs")?.optJSONObject(0)
-                ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "result 里没有 song")
+            val first = result.optJSONObject(0) ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "")
+            val song = first.optJSONObject("song") ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "无 song")
             val title = song.optString("name")
             if (title.isBlank()) return RecogOutcome.Failed(RecogFailure.NO_MATCH, "")
             val artists = song.optJSONArray("artists")?.let { arr ->
@@ -198,22 +196,60 @@ class NeteaseRecognizeProvider(
         }
     }
 
+    /** eapi 签名串 + form 编码（未压缩）。 */
+    private fun buildForm(payload: JSONObject): ByteArray {
+        val params = EapiCrypto.encryptParams(SIGN_PATH_URL, payload.toMap())
+        return "params=$params".toByteArray(Charsets.UTF_8)
+    }
+
     companion object {
         private const val TAG = "NeteaseRecog"
 
-        /** 逆向记录里的真实端点；`?_nmclfl=1` 在请求时附加（签名不含 query）。 */
-        const val DEFAULT_ENDPOINT = "https://music.163.com/eapi/music/audio/match"
+        const val DEFAULT_ENDPOINT = "https://interface3.music.163.com/eapi/music/hum/audio/unifymatch"
+
+        /** eapi 签名里用的是 `/api/...` 路径（`/eapi/` 要重写）。 */
+        private const val SIGN_PATH_URL = "https://interface3.music.163.com/eapi/music/hum/audio/unifymatch"
 
         private const val UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/120.0 Safari/537.36"
+            "NeteaseMusic/9.6.15.261027102340(9006015);Dalvik/2.1.0 (Linux; U; Android 17; " +
+                "PLC110 Build/CP2A.260605.016)"
+        private const val APP_VER = "9.6.15"
+        private const val BUILD_VER = "261027102340"
+        private const val ANDROID_VERSION = "17"
+
+        /** 抓包里的设备指纹（脱敏后使用；服务端只做设备维度限流，不做账号绑定校验）。 */
+        private const val DEVICE_ID =
+            "bnVsbAkwMjowMDowMDowMDowMDowMAk0NTVlMTc3MDhhMzllZDY0CTBmOTAzMzExNmZiY2YxODU%3D"
+
+        private const val MCONFIG =
+            "{\"IuRPVVmc3WWul9fT\":{\"version\":\"122593408\",\"appver\":\"9.6.15\"}," +
+                "\"tPJJnts2H31BZXmp\":{\"version\":\"5472256\",\"appver\":\"4.80.0\"}}"
+
+        /** 抓包里 10 秒录音对应的场景特征（原样照抄，服务端据此选择识别策略）。 */
+        private const val AUDIO_SCENE =
+            "eyIxMCI6eyJtdXIiOiIwLjQ1IiwibXVzIjoiMTMuNjMiLCJzaXIiOiIwLjM2Iiwic2lzIjoiMTYuODUiLCJzcHIiOiIwLjAzIiwic3BzIjoiMTMuOTkifX0="
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
             .build()
 
-        /** PCM16 → 小端字节。 */
+        fun gzip(bytes: ByteArray): ByteArray {
+            val out = ByteArrayOutputStream(bytes.size / 2 + 64)
+            GZIPOutputStream(out).use { it.write(bytes) }
+            return out.toByteArray()
+        }
+
+        /** 响应可能是 gzip 字节（直接解）或已解好的 JSON 文本。 */
+        fun gunzip(bytes: ByteArray): String = try {
+            java.util.zip.GZIPInputStream(bytes.inputStream()).use {
+                it.readBytes().toString(Charsets.UTF_8)
+            }
+        } catch (_: Throwable) {
+            ""
+        }
+
+        /** PCM16 → 小端字节（保留给历史调用方）。 */
         fun pcm16le(samples: ShortArray): ByteArray {
             val out = ByteArrayOutputStream(samples.size * 2)
             for (s in samples) {
@@ -223,20 +259,12 @@ class NeteaseRecognizeProvider(
             }
             return out.toByteArray()
         }
-
-        /** zlib（deflate + zlib 头）后 Base64 —— 官方 `rawdata` 的编码方式。 */
-        fun base64Zlib(bytes: ByteArray): String {
-            val deflater = Deflater(Deflater.DEFAULT_COMPRESSION, false)
-            deflater.setInput(bytes)
-            deflater.finish()
-            val out = ByteArrayOutputStream(bytes.size / 2 + 64)
-            val buf = ByteArray(8192)
-            while (!deflater.finished()) {
-                val n = deflater.deflate(buf)
-                if (n > 0) out.write(buf, 0, n)
-            }
-            deflater.end()
-            return Base64.getEncoder().encodeToString(out.toByteArray())
-        }
     }
+}
+
+/** `JSONObject` → `Map<String, Any>`（eapi 加密要的是可序列化 map）。 */
+private fun JSONObject.toMap(): Map<String, Any> {
+    val map = LinkedHashMap<String, Any>()
+    keys().forEach { k -> map[k] = get(k) }
+    return map
 }
