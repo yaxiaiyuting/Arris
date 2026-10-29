@@ -37,6 +37,14 @@ sealed interface RoomWire {
     data class Ping(val t0: Long) : RoomWire
     data class Pong(val t0: Long, val relayNow: Long) : RoomWire
 
+    /** 服务端广播的在线状态（谁进来了、谁走了、当前几个人）。 */
+    data class Presence(
+        val role: String,
+        val name: String,
+        val members: Int,
+        val left: Boolean,
+    ) : RoomWire
+
     companion object {
         fun decode(line: String): RoomWire? = try {
             val o = JSONObject(line)
@@ -46,6 +54,12 @@ sealed interface RoomWire {
                 "op" -> decodeOp(o.getJSONObject("op"))?.let { Op(it) }
                 "ping" -> Ping(o.optLong("t0"))
                 "pong" -> Pong(o.optLong("t0"), o.optLong("tr"))
+                "presence" -> Presence(
+                    role = o.optString("role"),
+                    name = o.optString("name"),
+                    members = o.optInt("members", 0),
+                    left = o.optBoolean("left", false),
+                )
                 else -> null
             }
         } catch (t: Throwable) {
@@ -168,5 +182,7 @@ fun RoomWire.encode(): String = when (this) {
     is RoomWire.Op -> JSONObject().put("t", "op").put("op", RoomWire.encodeOp(op)).toString()
     is RoomWire.Ping -> JSONObject().put("t", "ping").put("t0", t0).toString()
     is RoomWire.Pong -> JSONObject().put("t", "pong").put("t0", t0).put("tr", relayNow).toString()
+    is RoomWire.Presence -> JSONObject().put("t", "presence").put("role", role)
+        .put("name", name).put("members", members).put("left", left).toString()
 }
 

@@ -94,7 +94,13 @@ object TogetherSession {
                 relay = null
             }
         }
-        ws.onMessage = { msg -> if (msg is RoomWire.Ping) ws.send(RoomWire.Pong(msg.t0, nowMs())) }
+        ws.onMessage = { msg ->
+            when (msg) {
+                is RoomWire.Ping -> ws.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> _members.value = msg.members
+                else -> Unit
+            }
+        }
         ws.connect()
         relay = ws
     }
@@ -117,6 +123,12 @@ object TogetherSession {
             when (msg) {
                 is RoomWire.Snapshot -> followSnapshot(msg.state)
                 is RoomWire.Ping -> ws.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> {
+                    _members.value = msg.members
+                    if (msg.role == "host" && !msg.left && msg.name.isNotBlank()) {
+                        _status.value = "已加入房间 ${_roomId.value}（房主 ${msg.name}）"
+                    }
+                }
                 is RoomWire.Hello -> Unit
                 else -> Unit
             }

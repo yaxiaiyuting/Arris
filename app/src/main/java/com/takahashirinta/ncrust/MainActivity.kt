@@ -1025,6 +1025,12 @@ fun MainScreen(
     // 一起听：把播放器能力注入会话（listen 包不直接依赖 ViewModel）。
     // 房主侧每秒读一次当前状态；成员侧只在偏差 >800ms 或播放态不一致时才动播放器，
     // 避免每秒 seek 一次把播放打断成"咔哒"声。
+    val bridgeScope = androidx.compose.runtime.rememberCoroutineScope()
+    // playSongItem 是本 composable 里更靠后才定义的局部函数，桥接层不能直接引用 ——
+    // 用持有者在它定义之后再赋值（见紧随 playSongItem 的 SideEffect）。
+    val playItemHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
+    }
     androidx.compose.runtime.DisposableEffect(playerViewModel) {
         val bridge = object : com.takahashirinta.ncrust.listen.PlaybackSource {
             override fun current(): com.takahashirinta.ncrust.listen.PlaybackSnapshot? {
@@ -1040,10 +1046,40 @@ fun MainScreen(
             override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
                 val localTitle = playerViewModel.currentSongName.value.orEmpty()
                 if (localTitle != snapshot.title) {
-                    // 跨曲跟随需要 songId + 跨源解析，本轮只报告不硬切（宁可不放，也不放错歌）。
+                    // 跨曲跟随：先双源搜索（ncm + qm），命中就切过去并 seek 到房主进度。
+                    // 找不到就如实提示，不猜也不放错歌。
                     com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                        "房主在放：${snapshot.title}（本地无此曲，暂不跟随）"
+                        "房主切歌：${snapshot.title}，正在曲库中查找…"
                     )
+                    bridgeScope.launch {
+                        val keyword = listOf(snapshot.title, snapshot.artist)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                        val candidates = com.takahashirinta.ncrust.source.MusicSource.entries
+                            .filter { it != com.takahashirinta.ncrust.source.MusicSource.BILIBILI }
+                            .flatMap { src ->
+                                com.takahashirinta.ncrust.source.SourceRouter
+                                    .searchSongs(src, keyword, 5)
+                            }
+                        // 同名优先、时长接近优先；都不满足就取第一条（搜索结果本身就是相关度排序）
+                        val best = candidates.firstOrNull {
+                            it.name.contains(snapshot.title) || snapshot.title.contains(it.name)
+                        } ?: candidates.firstOrNull()
+                        if (best != null) {
+                            playItemHolder.value?.invoke(best)
+                            if (snapshot.positionMs > 3_000) {
+                                kotlinx.coroutines.delay(1_200)
+                                playerViewModel.seekTo(snapshot.positionMs)
+                            }
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "已跟随：${best.name} - ${best.artists?.joinToString("/") { it.name }.orEmpty()}"
+                            )
+                        } else {
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "房主在放：${snapshot.title}（曲库里没找到，暂不跟随）"
+                            )
+                        }
+                    }
                     return
                 }
                 if (playerViewModel.isPlaying.value != snapshot.playing) {
@@ -2119,6 +2155,11 @@ fun MainScreen(
      * 另外把「它就是当前歌」从**静默 return** 改成**有反馈的幂等**
      * （原先用户点下去什么都不会发生，看起来像按钮坏了）。
      */
+    // 桥接层拿到真实的「播放某一首」入口（一起听跨曲跟随用）
+    androidx.compose.runtime.SideEffect {
+        playItemHolder.value = { song -> playSongItem(song) }
+    }
+
     fun insertNext(song: SongItem) {
         // v2.5.3 · P1：身份从裸 `song.id` 换成 `TrackKey`（音源感知）。
         // 探针确认跨源裸 id 撞号的实际发生率是 0（QQ 的 id 带 bit62 标志位），
@@ -3260,6 +3301,8 @@ fun MainScreen(
                         )
 
                         1 -> LibraryScreen(
+                            onOpenRecognize = { showRecognize = true },
+                            onOpenTogether = { showTogether = true },
                             onSongClick = { playSongItem(it) },
                             // 会话失效横幅点击 → 现有登录流程。
                             onRelogin = onRelogin,
@@ -3372,8 +3415,6 @@ fun MainScreen(
                             onRelogin = onRelogin,
                             // v3.4.13：用户页顶部「发现新版本」横幅 → 更新页。
                             onOpenUpdate = { showUpdate = true },
-                            onOpenRecognize = { showRecognize = true },
-                            onOpenTogether = { showTogether = true },
                         )
 
                         // v3.3.0 · 用户需求第 10 条：播放统计。
