@@ -50,6 +50,8 @@ object LyricShareActions {
 
     /** 产出文件名里带的时刻戳格式见 [LyricShareText.stamp]。 */
     private const val MIME_PNG = "image/png"
+    /** 分享用的通配类型：朋友圈那条链只对通配类型做匹配（见 [shareImage]）。 */
+    private const val MIME_IMAGE = "image/*"
 
     /** 缓存里最多留几张历史海报；超出的按修改时间从旧到新删。 */
     private const val SHARE_CACHE_MAX_FILES = 20
@@ -103,17 +105,43 @@ object LyricShareActions {
      */
     fun shareImage(context: Context, uri: Uri, chooserTitle: String): Boolean {
         val send = Intent(Intent.ACTION_SEND).apply {
-            type = MIME_PNG
+            // 用 image/* 而不是 image/png：微信朋友圈那条转发链只对通配类型做匹配，
+            // 精确到 png 时部分版本不会出现在「分享到朋友圈」列表里。
+            type = MIME_IMAGE
             putExtra(Intent.EXTRA_STREAM, uri)
             clipData = ClipData.newUri(context.contentResolver, "lyrics", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        // 三条都要，少一条就可能在微信里变成「无法获取资源」：
+        //  ① `send` 上的 flag —— 标准实现；
+        //  ② `chooser` 上的 flag —— createChooser 会新建一层 Intent，部分系统只透传它自己的 flag；
+        //  ③ 对**每个可接收的应用**显式 grantUriPermission —— 有的 IM 用自己进程的 ContentResolver
+        //     直接打开 uri，而不是走系统临时授权，没这一步就拿到 SecurityException。
+        grantImageRead(context, send, uri)
         Log.i(TAG, "shareImage chooser: $uri")
         return startChooser(context, send, chooserTitle)
     }
 
+    /** 给所有能处理这条 ACTION_SEND 的应用显式授予读权限（见 [shareImage] 的第 ③ 条）。 */
+    private fun grantImageRead(context: Context, send: Intent, uri: Uri) {
+        val targets = runCatching {
+            context.packageManager.queryIntentActivities(send, 0)
+        }.getOrDefault(emptyList())
+        targets.forEach { info ->
+            runCatching {
+                context.grantUriPermission(
+                    info.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+        }
+    }
+
     private fun startChooser(context: Context, send: Intent, chooserTitle: String): Boolean {
         val chooser = Intent.createChooser(send, chooserTitle)
+        // 见 shareImage 的第 ② 条：chooser 自己也要带上读权限 flag。
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         // Compose 的 LocalContext 在 Activity 里就是 Activity；不是的话必须补 NEW_TASK，
         // 否则 startActivity 直接抛 AndroidRuntimeException。
         if (context !is Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -134,6 +162,83 @@ object LyricShareActions {
      *
      * 返回 null = 写失败（磁盘满 / provider 配置对不上），上层走降级。
      */
+    /**
+     * 把海报**发布成系统图片**并返回分享用的 uri（v3.7.11）。
+     *
+     * ## 为什么分享不能只用 FileProvider
+     *
+     * 现场：FileProvider 的 `content://…fileprovider/share/xxx.png` + 三种授权都给了，
+     * 微信朋友圈仍然提示「无法获取资源」。原因是朋友圈那条链会**自己再取一次**这张图
+     * （它的转发/压缩流程在别的进程里跑），只认 `MediaStore` 里的 `content://media/…`
+     * 条目 —— 第三方 provider 的临时授权在这种二次读取里会失效。
+     *
+     * 所以 API 29+ 一律走 MediaStore：先插一条 `Pictures/Arris` 的待发布记录，写完字节
+     * 再清 `IS_PENDING`，返回的 uri 就是系统图库条目，任何 IM 都能读。API ≤ 28 没有
+     * 免权限的 MediaStore 写入，仍退回 FileProvider（那里朋友圈不是主要场景）。
+     */
+    fun publishShareImage(context: Context, bitmap: android.graphics.Bitmap, fileName: String): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            publishToMediaStore(context, bitmap, fileName)
+        } else {
+            writeShareImage(context, bitmap, fileName)
+        }
+
+    /** 分享图的系统图库目录（相对 `Pictures/`）与保留时长。 */
+    private const val SHARE_RELATIVE_PATH = "Pictures/Arris"
+    private const val SHARE_MEDIA_TTL_SECONDS = 600L
+
+    private fun publishToMediaStore(
+        context: Context,
+        bitmap: android.graphics.Bitmap,
+        fileName: String,
+    ): Uri? {
+        // 先清理过期条目：分享出去的图留在图库只是"中转"，不该长期堆着。
+        prunePublishedImages(context)
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, MIME_PNG)
+            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, SHARE_RELATIVE_PATH)
+            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = runCatching {
+            resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        }.getOrNull() ?: return null
+        return try {
+            resolver.openOutputStream(uri)?.use { out ->
+                if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) {
+                    throw java.io.IOException("compress failed")
+                }
+            } ?: throw java.io.IOException("no output stream")
+            val done = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            }
+            resolver.update(uri, done, null, null)
+            Log.i(TAG, "share image published to MediaStore: $uri")
+            uri
+        } catch (t: Throwable) {
+            Log.w(TAG, "publishToMediaStore failed", t)
+            runCatching { resolver.delete(uri, null, null) }
+            null
+        }
+    }
+
+    /** 删掉我们自己发布、且超过 [SHARE_MEDIA_TTL_SECONDS] 的分享图。 */
+    private fun prunePublishedImages(context: Context) {
+        runCatching {
+            val cutoff = System.currentTimeMillis() / 1000L - SHARE_MEDIA_TTL_SECONDS
+            val resolver = context.contentResolver
+            val selection = "${android.provider.MediaStore.Images.Media.RELATIVE_PATH} = ? AND " +
+                "${android.provider.MediaStore.Images.Media.DATE_ADDED} < ?"
+            val args = arrayOf("$SHARE_RELATIVE_PATH/", cutoff.toString())
+            resolver.delete(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                selection,
+                args,
+            )
+        }.onFailure { Log.w(TAG, "prunePublishedImages failed", it) }
+    }
+
     fun writeShareImage(context: Context, bitmap: android.graphics.Bitmap, fileName: String): Uri? {
         return try {
             pruneShareCache(context)

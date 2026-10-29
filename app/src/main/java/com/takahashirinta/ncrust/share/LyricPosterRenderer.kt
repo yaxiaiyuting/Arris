@@ -54,6 +54,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object LyricPosterRenderer {
 
+    /** 页脚吉祥物的边长（1080×1920 版式像素；实际按 scale 缩放）。 */
+    private const val MASCOT_SIZE_DP = 116
+
+    /** 吉祥物不透明度：够显眼但不抢歌词。 */
+    private const val MASCOT_ALPHA = 236
+
     /** 出图规格。所有依赖 Compose 运行时的东西都在这里被「拍平」成普通值。 */
     data class LyricPosterSpec(
         val track: LyricShareTrack,
@@ -69,6 +75,14 @@ object LyricPosterRenderer {
         val cover: Bitmap? = null,
         /** 版式缩放（1f = 1080×1920，[LyricPosterLayout.FALLBACK_SCALE] = 720×1280）。 */
         val scale: Float = 1f,
+        /**
+         * 吉祥物 Tux（已解码）。null = 不画。
+         *
+         * 由 [LyricSharePoster] 从 `R.drawable.tux_rest` 栅格化后传进来 ——
+         * 渲染层刻意不接 `Context`：这样它能继续在 JVM 单测里被调用（[Bitmap] 是桩，
+         * 但布局计算与分支仍可测），也避免在这里 import 资源 id。
+         */
+        val mascot: Bitmap? = null,
     )
 
     /** 主色条 / 色块用（直角，无圆角，无阴影）。 */
@@ -96,7 +110,17 @@ object LyricPosterRenderer {
      * 画一张海报。**可能 OOM**（调用方负责捕获与降级），也**必须在后台线程调用**。
      */
     fun render(spec: LyricPosterSpec): Bitmap {
-        val basePlan = LyricPosterLayout.plan(hasCover = spec.cover != null)
+        // 先量后画：用**首选字号**把歌词排一遍，拿到真实内容高度，再据此决定画布高度。
+        // 宽度与高度无关（都是 MARGIN 内定宽），所以可以先量后定高度。
+        val probeSize = (LyricPosterLayout.TEXT_SIZES.first() * spec.scale).toInt()
+        val probeWidth = LyricPosterLayout.WIDTH_PX - 2 * LyricPosterLayout.MARGIN_PX
+        val contentHeight = if (spec.lines.isEmpty()) 0 else {
+            spec.lines.sumOf { buildBlock(it, spec, probeSize, probeWidth, spec.scale).height }
+        }
+        val basePlan = LyricPosterLayout.plan(
+            hasCover = spec.cover != null,
+            lyricsContentHeightPx = contentHeight,
+        )
         val plan = if (spec.scale == 1f) basePlan else LyricPosterLayout.scalePlan(basePlan, spec.scale)
         val scale = spec.scale
 
@@ -197,6 +221,26 @@ object LyricPosterRenderer {
             (markTop + markSize).toFloat(),
             barPaint,
         )
+        // 页脚右侧的 Tux：页脚左半边是"色块 + 署名"，右边一直是空的，
+        // 放在这里既不压歌词区，也不会和署名打架。尺寸按缩放走，垂直居中于页脚。
+        spec.mascot?.let { mascot ->
+            val mascotSize = LyricPosterLayout.scaled(MASCOT_SIZE_DP, scale).toFloat()
+            val right = (plan.lyricsLeftPx + plan.lyricsWidthPx).toFloat()
+            val footerCenter = plan.footerTopPx + (plan.heightPx - plan.footerTopPx) / 2f
+            val top = footerCenter - mascotSize / 2f
+            val paint = Paint().apply {
+                isAntiAlias = true
+                isFilterBitmap = true
+                alpha = MASCOT_ALPHA
+            }
+            canvas.drawBitmap(
+                mascot,
+                null,
+                android.graphics.RectF(right - mascotSize, top, right, top + mascotSize),
+                paint,
+            )
+        }
+
         val credit = spec.credit.trim()
         if (credit.isNotEmpty()) {
             val creditPaint = textPaint(spec.colors.onSurfaceVariant, 28f * scale)

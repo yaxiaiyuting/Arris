@@ -41,8 +41,17 @@ object LyricPosterLayout {
     /** 画布宽（px）。 */
     const val WIDTH_PX = 1080
 
-    /** 画布高（px）。 */
+    /** 画布**最大**高度（px）。实际高度按歌词行数自适应，见 [plan]。 */
     const val HEIGHT_PX = 1920
+
+    /**
+     * 画布**最小**高度（px）。
+     *
+     * 只分享两三句歌词时，如果还按 1920 出图，下半张就是一大片空白 ——
+     * 用户在聊天窗口里看到的是一张"图片下方空白"的怪图。这里给一个下限
+     * （封面 + 两三行 + 页脚仍然像一张海报），低于它就按它算。
+     */
+    const val MIN_HEIGHT_PX = 1080
 
     /**
      * OOM 降级档的缩放比（720×1280 = 2/3）。见 [LyricPosterRenderer] 的两级降级。
@@ -126,7 +135,11 @@ object LyricPosterLayout {
      * @param hasCover 封面是否可用 —— **降级路径也走这里**：拿不到封面时不是把封面位置
      *                 留空，而是把标题挪到左边缘、歌词区上移，图因此不会有一块难看的空洞。
      */
-    fun plan(hasCover: Boolean): Plan {
+    /**
+     * @param lyricsContentHeightPx 歌词区**实际需要**的高度（渲染侧用 `StaticLayout` 量出来）。
+     *   传 0 表示不参与自适应（按 [HEIGHT_PX] 出图，用于单测与降级）。
+     */
+    fun plan(hasCover: Boolean, lyricsContentHeightPx: Int = 0): Plan {
         val coverSize = if (hasCover) COVER_SIZE_PX else 0
         val titleLeft = if (hasCover) {
             MARGIN_PX + COVER_SIZE_PX + COVER_TEXT_GAP_PX
@@ -137,11 +150,20 @@ object LyricPosterLayout {
         val headerHeight = if (hasCover) COVER_SIZE_PX else TEXT_ONLY_HEADER_PX
         val headerBottom = HEADER_TOP_PX + headerHeight
         val lyricsTop = headerBottom + HEADER_LYRICS_GAP_PX
-        val footerTop = HEIGHT_PX - ACCENT_BAR_PX - FOOTER_HEIGHT_PX
+
+        // 自适应高度：把"表头 + 实际歌词 + 页脚 + 底条"加起来，夹在 [MIN_HEIGHT_PX, HEIGHT_PX]。
+        // 这样只分享两句时图是"海报"，不是"上半张字、下半张空白"。
+        val desiredHeight = if (lyricsContentHeightPx <= 0) {
+            HEIGHT_PX
+        } else {
+            (lyricsTop + lyricsContentHeightPx + LYRICS_BOTTOM_GAP_PX +
+                FOOTER_HEIGHT_PX + ACCENT_BAR_PX + MARGIN_PX).coerceIn(MIN_HEIGHT_PX, HEIGHT_PX)
+        }
+        val footerTop = desiredHeight - ACCENT_BAR_PX - FOOTER_HEIGHT_PX
         val lyricsHeight = (footerTop - LYRICS_BOTTOM_GAP_PX - lyricsTop).coerceAtLeast(0)
         return Plan(
             widthPx = WIDTH_PX,
-            heightPx = HEIGHT_PX,
+            heightPx = desiredHeight,
             accentBarPx = ACCENT_BAR_PX,
             coverLeftPx = MARGIN_PX,
             coverTopPx = HEADER_TOP_PX,
