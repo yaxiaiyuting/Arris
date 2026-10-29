@@ -11,7 +11,7 @@ import org.junit.Test
 class CoverGeometryTest {
 
     @Test
-    fun `regular phone keeps full width and original anchor`() {
+    fun `regular phone keeps safety margin and original anchor`() {
         // 384x896dp @ 3x：宽 1152px、高 2688px；顶栏 56dp、控件 260dp、标题 90dp。
         val g = narrowCoverGeometry(
             availableWidthPx = 1152f,
@@ -22,7 +22,7 @@ class CoverGeometryTest {
             minGapPx = 36f,
             preferredCenterYPx = 2688f * 0.3f + 72f,
         )
-        assertEquals(1152f, g.sizePx, 0.01f)
+        assertEquals(1152f * 0.88f, g.sizePx, 0.01f)
         assertEquals(576f, g.centerXPx, 0.01f)
         assertEquals(2688f * 0.3f + 72f, g.centerYPx, 0.01f)
     }

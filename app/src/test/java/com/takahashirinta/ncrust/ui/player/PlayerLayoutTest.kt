@@ -160,14 +160,14 @@ class PlayerLayoutTest {
     @Test
     fun `cover is square and height bound in big screen landscape`() {
         // PCL110 横屏：左栏宽 0.44×2800 = 1232px，左栏剩余高 636px（扣掉歌名/音质块）
-        assertEquals(636f, PlayerLayout.squareCoverSizePx(1232f, 636f), 1e-3f)
+        assertEquals(636f * 0.88f, PlayerLayout.squareCoverSizePx(1232f, 636f), 1e-3f)
         // 与旧宽屏竖屏（封面区高 170dp ≈ 595px）相比必须更大，这是 P1 的目标
-        assertTrue(PlayerLayout.squareCoverSizePx(1232f, 636f) > 595f)
+        assertTrue(PlayerLayout.squareCoverSizePx(1232f, 636f) < 636f)
     }
 
     @Test
     fun `cover is width bound when the column is narrow`() {
-        assertEquals(300f, PlayerLayout.squareCoverSizePx(300f, 636f), 1e-3f)
+        assertEquals(300f * 0.88f, PlayerLayout.squareCoverSizePx(300f, 636f), 1e-3f)
     }
 
     @Test

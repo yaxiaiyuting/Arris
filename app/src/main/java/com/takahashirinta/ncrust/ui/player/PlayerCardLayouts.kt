@@ -297,7 +297,7 @@ internal fun PlayerCardWideLayout(
                     .onGloballyPositioned { coords ->
                         val b = coords.boundsInRoot()
                         // 封面在左栏封面区内居中（不贴边，视觉更和谐）。
-                        onCoverRegionMeasured(b.center - cardRootOrigin, minOf(b.width, b.height))
+                        onCoverRegionMeasured(b.center - cardRootOrigin, PlayerLayout.squareCoverSizePx(b.width, b.height))
                     }
             )
             // v2.5.4 · D：**平板横屏**的音频可视化条就挂在这里。
