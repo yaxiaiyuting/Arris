@@ -1027,6 +1027,13 @@ fun MainScreen(
 
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
+    val queueStartActions = remember(playerViewModel) {
+        com.takahashirinta.ncrust.player.LatestPlaybackAction(coroutineScope,
+            playerViewModel::beginUserPlayIntent,
+            com.takahashirinta.ncrust.player.playRequestGeneration::isCurrent,
+            SKIP_TAP_SETTLE_MS)
+    }
+
 
     // v2.5.1 · F：页面切换动效开关（默认**开**）。
     //
@@ -1369,6 +1376,7 @@ fun MainScreen(
     // v2.5.3 · P1：身份是 [TrackKey]（音源 + id），不是裸 id ——「ncm 123」与「QQ 123」
     // 是两首歌，按 id 回查会互相认领。
     LaunchedEffect(vmCurrentSongId) {
+        if (queueStartActions.hasPending) return@LaunchedEffect
         val id = vmCurrentSongId ?: return@LaunchedEffect
         val vmKey = playerViewModel.currentTrackKey ?: TrackKey.of(null, id)
         val mapped = PlaybackQueueLogic.indexOfKey(playbackQueue, vmKey)
@@ -1544,6 +1552,8 @@ fun MainScreen(
      * `playSong(origin=USER)` 冲掉，熔断永远不生效 —— 而这正是用户报的
      * 「不关应用就一直切」。默认 USER 保证既有调用点零改动。
      */
+    // Repeated skips advance the queue cursor immediately; only the final selection starts IO.
+    var deferQueueStart = false
     fun playFromQueue(index: Int, origin: PlayOrigin = PlayOrigin.USER) {
         if (index in playbackQueue.indices) {
             currentQueueIndex = index
@@ -1566,37 +1576,44 @@ fun MainScreen(
                 "MainScreen",
                 "playFromQueue index=$index key=${QueueKeys.keyOf(song).tag} mode=$playMode",
             )
-            // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
-            infinityNeedsPlay.value = false
-            playerViewModel.playSong(
-                song.id,
-                title = title,
-                artist = artist,
-                artworkUrl = artwork,
-                sourceKey = song.source,
-                sourceId = song.sourceId,
-                mediaId = song.mediaId,
-                origin = origin,
-                privilege = song.privilege,
-            )
-            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+            val selectedQueue = playbackQueue
+            val startSelected: () -> Unit = {
+                if (playbackQueue === selectedQueue && currentQueueIndex == index) {
+                    // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
+                    infinityNeedsPlay.value = false
+                    playerViewModel.playSong(
+                        song.id,
+                        title = title,
+                        artist = artist,
+                        artworkUrl = artwork,
+                        sourceKey = song.source,
+                        sourceId = song.sourceId,
+                        mediaId = song.mediaId,
+                        origin = origin,
+                        privilege = song.privilege,
+                    )
+                    PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
 
-            // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
-            // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
-            // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
-            val nextIdx = preloadIndex()
-            val nextSong = playbackQueue.getOrNull(nextIdx)
-            if (nextSong != null) {
-                val (nTitle, nArtist, nArtwork) = songParams(nextSong)
-                playerViewModel.preloadNextSong(
-                    nextSong.id, nTitle, nArtist, nArtwork,
-                    allowCurrent = playMode == QueueModes.SINGLE,
-                    sourceKey = nextSong.source,
-                    sourceId = nextSong.sourceId,
-                    mediaId = nextSong.mediaId,
-                    privilege = nextSong.privilege,
-                )
+                    // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
+                    // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
+                    // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
+                    val nextIdx = preloadIndex()
+                    val nextSong = playbackQueue.getOrNull(nextIdx)
+                    if (nextSong != null) {
+                        val (nTitle, nArtist, nArtwork) = songParams(nextSong)
+                        playerViewModel.preloadNextSong(
+                            nextSong.id, nTitle, nArtist, nArtwork,
+                            allowCurrent = playMode == QueueModes.SINGLE,
+                            sourceKey = nextSong.source,
+                            sourceId = nextSong.sourceId,
+                            mediaId = nextSong.mediaId,
+                            privilege = nextSong.privilege,
+                        )
+                    }
+                }
             }
+            if (deferQueueStart) queueStartActions.submit(startSelected)
+            else { queueStartActions.cancel(); startSelected() }
         }
     }
 
@@ -1857,6 +1874,7 @@ fun MainScreen(
     LaunchedEffect(songTransitioned) {
         if (!songTransitioned) return@LaunchedEffect
         songTransitioned = false
+        if (queueStartActions.hasPending) return@LaunchedEffect
         if (playbackQueue.isEmpty()) return@LaunchedEffect
 
         val actualKey = playerViewModel.currentTrackKey
@@ -3010,24 +3028,11 @@ fun MainScreen(
     LaunchedEffect(playerViewModel) {
         StatsRecorder.attach(context, playerViewModel)
     }
-    /**
-     * 底栏「上一首 / 下一首」的**只认最后一次**入口（v3.7.11）。
-     *
-     * 症状：连点切歌按钮，手停下之后底栏还会把中间几次挨个演一遍。
-     * 原因：每一下点击都会真的换一首（这是既有行为，别的路径也在用 `playNext()`），
-     * 而播放器把多次换歌依次应用完需要时间，界面就跟着补播。
-     *
-     * 这里**不改播放链路**，只在按钮这一层合并：窗口内的连点只保留最后一次，
-     * 窗口结束后执行一次 `playNext()`/`playPrevious()` —— 一次点击换一首、只演一次动画。
-     * 其余入口（队列面板、锁屏、耳机线控）完全不受影响。
-     */
-    var skipJob by remember { mutableStateOf<Job?>(null) }
+    // One final visual/audio transition per tap burst, while preserving every cursor step.
     val onSkipTap: (Boolean) -> Unit = { forward ->
-        skipJob?.cancel()
-        skipJob = coroutineScope.launch {
-            delay(SKIP_TAP_SETTLE_MS)
-            if (forward) playNext() else playPrevious()
-        }
+        deferQueueStart = true
+        try { if (forward) playNext() else playPrevious() }
+        finally { deferQueueStart = false }
     }
 
     val onNavSelected: (Int) -> Unit = { tab ->
@@ -3074,7 +3079,7 @@ fun MainScreen(
             playbackQueue = playbackQueue,
             currentQueueIndex = currentQueueIndex,
             playMode = playMode,
-            onPlayPause = { playerViewModel.togglePlayPause() },
+            onPlayPause = { queueStartActions.cancel(); playerViewModel.togglePlayPause() },
             onDismiss = { collapseCard() },
             onPlayPrevious = { onSkipTap(false) },
             onPlayNext = { onSkipTap(true) },
