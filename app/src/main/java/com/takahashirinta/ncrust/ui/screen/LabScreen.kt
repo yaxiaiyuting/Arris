@@ -240,12 +240,90 @@ fun LabScreen(onClose: () -> Unit) {
                 }
             }
 
+            LabButton("⑥ 一起听局域网自测（真 socket：创建房间→成员连接→收快照→算时钟）", enabled = !busy) {
+                busy = true
+                micReport = "自测中…"
+                scope.launch(Dispatchers.Default) {
+                    val text = runCatching {
+                        val server = com.takahashirinta.ncrust.listen.RoomRelayServer(0)
+                        server.start()
+                        val port = server.listenPort
+                        server.onMessage = { _, msg ->
+                            if (msg is com.takahashirinta.ncrust.listen.RoomWire.Ping) {
+                                server.broadcast(
+                                    com.takahashirinta.ncrust.listen.RoomWire.Pong(
+                                        msg.t0, System.nanoTime() / 1_000_000,
+                                    )
+                                )
+                            }
+                        }
+                        val client = com.takahashirinta.ncrust.listen.RoomRelayClient("127.0.0.1", port)
+                        var snapshot: com.takahashirinta.ncrust.listen.RoomState? = null
+                        val pongBox = java.util.concurrent.atomic.AtomicReference<com.takahashirinta.ncrust.listen.RoomClock.Sample?>()
+                        client.onMessage = { msg ->
+                            when (msg) {
+                                is com.takahashirinta.ncrust.listen.RoomWire.Snapshot -> snapshot = msg.state
+                                is com.takahashirinta.ncrust.listen.RoomWire.Pong -> pongBox.set(
+                                    com.takahashirinta.ncrust.listen.RoomClock.Sample(
+                                        msg.t0, System.nanoTime() / 1_000_000, msg.relayNow,
+                                    )
+                                )
+                                else -> Unit
+                            }
+                        }
+                        client.connect()
+                        Thread.sleep(300)
+                        val state = com.takahashirinta.ncrust.listen.RoomState(
+                            roomId = "lab-room",
+                            epoch = 1L,
+                            seq = 2L,
+                            hostUserId = "host",
+                            members = listOf(com.takahashirinta.ncrust.listen.RoomMember("host", "本机", 0L, true)),
+                            queue = listOf(
+                                com.takahashirinta.ncrust.listen.CanonicalTrack(
+                                    roomTrackId = "rt1", title = "测试曲", artist = "测试",
+                                    album = "", durationMs = 200_000, editionKinds = emptySet(),
+                                    publicIds = mapOf("ncm" to "1"),
+                                )
+                            ),
+                            currentRoomTrackId = "rt1",
+                            transport = com.takahashirinta.ncrust.listen.RoomTransport(true, 5_000L, 1.0f),
+                            stampedAtMs = 1L,
+                        )
+                        server.broadcast(com.takahashirinta.ncrust.listen.RoomWire.Snapshot(state))
+                        Thread.sleep(300)
+                        client.send(
+                            com.takahashirinta.ncrust.listen.RoomWire.Ping(System.nanoTime() / 1_000_000)
+                        )
+                        Thread.sleep(300)
+                        val estimate = pongBox.get()?.let {
+                            com.takahashirinta.ncrust.listen.RoomClock.estimateOffset(listOf(it))
+                        }
+                        client.close()
+                        server.close()
+                        val got = snapshot
+                        if (got == null) {
+                            "失败：成员没收到快照"
+                        } else {
+                            "端口=$port 快照 seq=${got.seq} 曲目=${got.queue.firstOrNull()?.title} " +
+                                "位置=${got.transport.positionMs}ms｜时钟 offset=${estimate?.offsetMs}ms " +
+                                "rtt=${estimate?.rttMs}ms"
+                        }
+                    }.getOrElse { "失败：${it.message}" }
+                    withContext(Dispatchers.Main) {
+                        micReport = text
+                        busy = false
+                    }
+                }
+            }
+
             MetroText(micReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 
             MetroText(
-                "识曲后端：网易云 eapi/music/audio/match（已确认可用）。请求 rawdata = zlib+base64 的 PCM、" +
-                    "algorithmCode=shazam_v2；响应是**裸 AES 密文**，解出来是 {\"data\":{\"result\":…}}，" +
-                    "result=null 表示没听出来。⑤ 录 3.4 秒后直接问它。",
+                "识曲后端：网易云 eapi/music/audio/match（已确认可用）。rawdata 是 zlib+base64 的 " +
+                    "**Shazam 签名**（≈2.8KB，与 SongRec 逐字节对齐），发 PCM 会被服务端回空体；" +
+                    "响应是裸 AES 密文，解出 {\"data\":{\"result\":…,\"noMatchReason\":N}}。" +
+                    "result=null 即没听出来（noMatchReason 会一并显示）。",
                 color = colors.onSurfaceVariant,
                 style = TextStyle(fontSize = 12.sp),
             )

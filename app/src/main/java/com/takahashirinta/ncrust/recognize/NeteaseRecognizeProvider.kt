@@ -76,7 +76,11 @@ class NeteaseRecognizeProvider(
         if (samples.isEmpty()) return RecogOutcome.Failed(RecogFailure.SILENT_INPUT, "")
 
         val durationSec = samples.size.toDouble() / sampleRate
-        val rawdata = base64Zlib(pcm16le(samples))
+        // 关键：rawdata 必须是 **Shazam 签名**（KB 级），不是 PCM。
+        // 实测发 PCM（≈120 KB）时服务端直接回空 body；发签名（≈2.8 KB）才返回正常 JSON。
+        val signature = ShazamSignature.generateFromPcm16(samples)
+        val rawdata = ShazamSignature.toRawdata(signature)
+        Log.i(TAG, "signature=${signature.size}B rawdata=${rawdata.length}B pcm=${samples.size * 2}B")
         val sessionId = UUID.randomUUID().toString().replace("-", "").take(16)
         val payload = mapOf(
             "rawdata" to rawdata,
@@ -193,7 +197,13 @@ class NeteaseRecognizeProvider(
             // {"data":{"type":0,"queryId":"…","result":null,"mv":null}}  ← 没匹配
             // 命中时 result 里带 song（或 songs[]），这里三种都兼容。
             val data = root.optJSONObject("data") ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "无 data")
-            if (data.isNull("result")) return RecogOutcome.Failed(RecogFailure.NO_MATCH, "result=null")
+            if (data.isNull("result")) {
+                val reason = data.optInt("noMatchReason", -1)
+                return RecogOutcome.Failed(
+                    RecogFailure.NO_MATCH,
+                    if (reason >= 0) "result=null（noMatchReason=$reason）" else "result=null",
+                )
+            }
             val resultArray = data.optJSONArray("result")
             val result: JSONObject? = data.optJSONObject("result")
                 ?: resultArray?.optJSONObject(0)
