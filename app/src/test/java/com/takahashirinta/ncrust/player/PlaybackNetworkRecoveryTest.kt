@@ -30,6 +30,24 @@ class PlaybackNetworkRecoveryTest {
             ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
         }).result)
     }
+    @Test fun networkTimeoutStillFallsBackToCompleteCache() = runBlocking {
+        val cached = SongUrlResult("https://fixture.invalid/cached", "standard")
+        var networkCancelled = false
+        val outcome = resolveOfflineFirst(true, MusicSource.NETEASE, { cached }, {
+            try { awaitCancellation() } finally { networkCancelled = true }
+        }, networkTimeoutMs = 20)
+        assertTrue(networkCancelled)
+        assertSame(cached, outcome.result)
+    }
+    @Test fun newSelectionCancellationDoesNotCommitOldCacheFallback() = runBlocking {
+        var offlineCalls = 0
+        val pending = async(start = CoroutineStart.UNDISPATCHED) {
+            resolveOfflineFirst(true, MusicSource.QQMUSIC, { offlineCalls++; null }, { awaitCancellation() })
+        }
+        pending.cancelAndJoin()
+        assertTrue(pending.isCancelled)
+        assertEquals(0, offlineCalls)
+    }
     @Test fun networkReturnRecoversTheLastUncachedChoice() {
         val gate = PlaybackRecoveryGate(wifi)
         gate.begin(); gate.failed(true)

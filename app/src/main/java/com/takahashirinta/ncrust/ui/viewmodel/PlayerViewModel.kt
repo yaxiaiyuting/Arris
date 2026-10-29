@@ -1821,8 +1821,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // v2.0.0 · T3：离线优先取链（见 fetchUrlOfflineFirst）。
                 // 旧顺序是「先把 5~6 档 eapi 全试一遍（每档都要等 connectTimeout）才回落缓存」，
                 // 断网首播要干等数秒；现在明确离线时先离线兜底，命中就一个字节都不发。
-                val outcome = withTimeoutOrNull(15_000L) { fetchUrlOfflineFirst(ref, selectedQuality) }
-                    ?: ResolveOutcome.failed(ResolveFailureKind.NETWORK, track.source)
+                val outcome = fetchUrlOfflineFirst(ref, selectedQuality)
                 val result = outcome.result
                 if (result == null) {
                     // ★ 移植 981e9b3：**过期的取链结果不能盖新歌**。
