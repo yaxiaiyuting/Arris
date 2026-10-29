@@ -63,3 +63,45 @@ B peaks=540 hashes=11615
 - `amp.shazam.com` 真实识别请求：**仍未发**（协议未验证，见调研报告 §1 的私钥与许可问题）。
 - 内部音频（`AudioPlaybackCapture`）需 `MediaProjection` 授权，本轮未测。
 - 识别结果 → 网易云/QQ 双源匹配（`CandidateRanker` 已就绪且有 8 个 JVM 用例），待 Provider 接通后接真数据。
+
+---
+
+## 6. 识曲端点：两轮复现的结论（2026-10-30 01:50）
+
+### 6.1 端点已确认可用
+
+`https://music.163.com/eapi/music/audio/match?_nmclfl=1`（`interface*.music.163.com` 同样可用），
+eapi 加密的 `params=<hex>`，响应是**裸 AES-ECB 密文**（不是 base64、不是 zlib）。
+用本机脚本 + 手机上的 cookie 复现，三台主机都返回：
+
+```json
+{"data":{"type":0,"queryId":"467c74be-…","result":null,"mv":null …}}
+```
+
+### 6.2 `rawdata` **不是 PCM**，是 shazam_v2 签名
+
+同一天做的体积对照（同一端点、同一 cookie、只改 `rawdata` 内容）：
+
+| 输入 | rawdata（zlib+base64） | 服务端响应 |
+|---|---|---|
+| 3.4 s 16 kHz 正弦（极易压缩） | **2 KB** | ✅ 160 B 正常 JSON |
+| 3.4 s 16 kHz 噪声（模拟真实音乐的熵） | ≈80–100 KB | ❌ **空 body** |
+| 真机录音（3.4 s，麦克风） | ≈90 KB | ❌ 空 body（App 里显示"空响应"） |
+
+结合两条旁证：
+1. 逆向文章原话：「猜测 rawdata 就是录音的 Base64，尝试解码扔进 ffprobe，**但是失败了**」；
+2. 请求体里有 `algorithmCode: "shazam_v2"`。
+
+⇒ `rawdata` 是 **Shazam 签名（KB 级二进制）**，不是原始波形。
+
+### 6.3 因此现在的状态
+
+- 采集 ✅、eapi 加密 ✅、端点 ✅、AES 解密 ✅、`data.result` 解析 ✅
+- **唯一缺口**：用 PCM 生成 Shazam 兼容签名
+
+### 6.4 下一步（需要实现的东西）
+
+把 SongRec（GPL-3.0+）的 `algorithm.rs` + `signature_format.rs` 移植成 Kotlin：
+FFT 2048 / hop 128、6 个频带的峰值选取、签名编码（magic `0xcafe2580` / `0x94119c00`、
+`fft_pass_number` 差值编码、CRC32）。本机有 Rust 工具链，可先用 SongRec 生成参考签名，
+再让 Kotlin 实现逐字节对齐（黄金文件测试）。
