@@ -352,12 +352,10 @@ fun LabScreen(onClose: () -> Unit) {
             MetroText(micReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 
             MetroText(
-                "识曲后端：网易云 eapi/music/audio/match（已确认可用）。rawdata 是 zlib+base64 的 " +
-                    "**Shazam 签名**（≈2.8KB，与 SongRec 逐字节对齐），发 PCM 会被服务端回空体；" +
-                    "响应是裸 AES 密文，解出 {\"data\":{\"result\":…,\"noMatchReason\":N}}。" +
-                    "result=null 即没听出来（noMatchReason 会一并显示）。",
-                color = colors.onSurfaceVariant,
-                style = TextStyle(fontSize = 12.sp),
+                            "识曲后端：网易云 hum/audio/unifymatch（抓包实证）。载荷是 base64 的 M4A 录音，"
+                    + "外层 eapi params 再 gzip；响应解出 {\"data\":{\"result\":[{\"song\":…}]}}，" +
+                    "result 为空即没听出来。关键头 x-deviceId / x-buildver / MConfig-Info 缺一即 400。",
+
             )
 
             LabButton("关闭", enabled = true) { onClose() }

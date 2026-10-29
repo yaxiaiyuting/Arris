@@ -40,7 +40,7 @@ object RoomDirectory {
         val http = base.replace("wss://", "https://").replace("ws://", "http://").trimEnd('/')
         val request = Request.Builder()
             .url("$http/rooms")
-            .header("User-Agent", "Arris/1.0 (Android; 一起听)")
+            .header("User-Agent", "Arris/1.0 (Android; listen-together)")
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")

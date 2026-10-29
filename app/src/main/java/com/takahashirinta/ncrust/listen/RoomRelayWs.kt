@@ -72,7 +72,7 @@ class RoomRelayWs(
         private const val TAG = "RoomRelayWs"
 
         /** 用应用自己的 UA：Cloudflare 会拦 `Python-urllib` 这类默认 UA（实测 403）。 */
-        private const val UA = "Arris/1.0 (Android; 一起听)"
+        private const val UA = "Arris/1.0 (Android; listen-together)"
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .pingInterval(20, TimeUnit.SECONDS)
