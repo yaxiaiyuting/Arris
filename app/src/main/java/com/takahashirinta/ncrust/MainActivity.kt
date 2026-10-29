@@ -1021,6 +1021,40 @@ fun MainScreen(
     var rootHeightPx by remember { mutableStateOf(0f) }
     val playerViewModel: PlayerViewModel = viewModel()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+
+    // 一起听：把播放器能力注入会话（listen 包不直接依赖 ViewModel）。
+    // 房主侧每秒读一次当前状态；成员侧只在偏差 >800ms 或播放态不一致时才动播放器，
+    // 避免每秒 seek 一次把播放打断成"咔哒"声。
+    androidx.compose.runtime.DisposableEffect(playerViewModel) {
+        val bridge = object : com.takahashirinta.ncrust.listen.PlaybackSource {
+            override fun current(): com.takahashirinta.ncrust.listen.PlaybackSnapshot? {
+                val title = playerViewModel.currentSongName.value ?: return null
+                return com.takahashirinta.ncrust.listen.PlaybackSnapshot(
+                    title = title,
+                    artist = playerViewModel.currentSongArtist.value.orEmpty(),
+                    positionMs = playerViewModel.currentPosition.value,
+                    playing = playerViewModel.isPlaying.value,
+                )
+            }
+
+            override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
+                val localTitle = playerViewModel.currentSongName.value.orEmpty()
+                if (localTitle != snapshot.title) {
+                    // 跨曲跟随需要 songId + 跨源解析，本轮只报告不硬切（宁可不放，也不放错歌）。
+                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                        "房主在放：${snapshot.title}（本地无此曲，暂不跟随）"
+                    )
+                    return
+                }
+                if (playerViewModel.isPlaying.value != snapshot.playing) {
+                    playerViewModel.togglePlayPause()
+                }
+                playerViewModel.seekTo(snapshot.positionMs)
+            }
+        }
+        com.takahashirinta.ncrust.listen.TogetherSession.bind(bridge)
+        onDispose { com.takahashirinta.ncrust.listen.TogetherSession.bind(null) }
+    }
     var currentSong by remember { mutableStateOf<SongItem?>(null) }
     val vmCurrentSongId by playerViewModel.currentSongId.collectAsState()
     val context = LocalContext.current
@@ -2659,6 +2693,16 @@ fun MainScreen(
         UpdatePageOverlay(onClose = { showUpdate = false })
         return
     }
+    var showRecognize by remember { mutableStateOf(false) }
+    var showTogether by remember { mutableStateOf(false) }
+    if (showRecognize) {
+        RecognizeScreen(onBack = { showRecognize = false })
+        return
+    }
+    if (showTogether) {
+        TogetherScreen(onBack = { showTogether = false })
+        return
+    }
     if (showAbout) {
         AboutScreen(
             onBack = { showAbout = false },
@@ -3328,6 +3372,8 @@ fun MainScreen(
                             onRelogin = onRelogin,
                             // v3.4.13：用户页顶部「发现新版本」横幅 → 更新页。
                             onOpenUpdate = { showUpdate = true },
+                            onOpenRecognize = { showRecognize = true },
+                            onOpenTogether = { showTogether = true },
                         )
 
                         // v3.3.0 · 用户需求第 10 条：播放统计。

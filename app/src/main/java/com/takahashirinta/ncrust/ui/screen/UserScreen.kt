@@ -76,6 +76,9 @@ fun UserScreen(
     onRelogin: () -> Unit = {},
     // v3.4.13：用户页顶部「发现新版本」横幅 → 更新页。
     onOpenUpdate: () -> Unit = {},
+    // v3.8.0：正式功能入口
+    onOpenRecognize: () -> Unit = {},
+    onOpenTogether: () -> Unit = {},
 ) {
     val strings = LocalStrings.current
     // 会话/VIP 状态：会员文案只在这里显示（接口失败显示为未知，绝不显示「未开通」）。
@@ -136,6 +139,26 @@ fun UserScreen(
                         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                     )
                 }
+            }
+
+            // v3.8.0 正式入口（放在设置分组之前：这两个是"用"的功能，不是设置）
+            item(key = "user.feature.recognize") {
+                SettingsCardDivider()
+                SettingsGroupCard(
+                    icon = settingsGroupIcon("Search"),
+                    title = "听歌识曲",
+                    subtitle = "录 10 秒，用你的网易云账号识别",
+                    onClick = onOpenRecognize,
+                )
+            }
+            item(key = "user.feature.together") {
+                SettingsCardDivider()
+                SettingsGroupCard(
+                    icon = settingsGroupIcon("Group"),
+                    title = "一起听",
+                    subtitle = "房主放什么，房间里的每个人都同步",
+                    onClick = onOpenTogether,
+                )
             }
 
             // 分组顺序 = registry 的枚举声明顺序（一级页卡片列表 == SettingsRenderPlan.cardGroups()，

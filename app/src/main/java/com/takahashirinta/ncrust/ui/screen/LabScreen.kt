@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -244,54 +245,14 @@ fun LabScreen(onClose: () -> Unit) {
                 }
             }
 
-            // ⑥ 一起听（公网中继）：输入房间码进入 / 扫描活跃房间
+            // ⑥ 一起听（公网中继 + 真实播放器）：由 TogetherSession 统一管理
             var base by remember { mutableStateOf(com.takahashirinta.ncrust.listen.RoomDirectory.DEFAULT_BASE) }
             var roomCode by remember { mutableStateOf("") }
-            var roomStatus by remember { mutableStateOf("未连接") }
-            var relayRef by remember { mutableStateOf<com.takahashirinta.ncrust.listen.RoomRelayWs?>(null) }
-            var scanning by remember { mutableStateOf(false) }
+            val sessionStatus by com.takahashirinta.ncrust.listen.TogetherSession.status.collectAsState()
+            val sessionRoom by com.takahashirinta.ncrust.listen.TogetherSession.roomId.collectAsState()
+            val sessionHost by com.takahashirinta.ncrust.listen.TogetherSession.isHost.collectAsState()
             var scoped by remember { mutableStateOf<List<com.takahashirinta.ncrust.listen.RoomSummary>>(emptyList()) }
-
-            fun leaveRoom() {
-                relayRef?.close()
-                relayRef = null
-                roomStatus = "未连接"
-            }
-
-            fun enterRoom(code: String, isHost: Boolean) {
-                leaveRoom()
-                if (code.length < 4) {
-                    roomStatus = "房间码至少 4 位"
-                    return
-                }
-                val url = com.takahashirinta.ncrust.listen.RoomDirectory.roomUrl(
-                    base, code, if (isHost) "host" else "member", if (isHost) "房主" else "成员",
-                )
-                roomStatus = "连接中…（$code）"
-                val ws = com.takahashirinta.ncrust.listen.RoomRelayWs(url)
-                ws.onOpen = {
-                    roomStatus = (if (isHost) "已创建房间 " else "已加入房间 ") + code
-                }
-                ws.onClosed = { code2, reason -> roomStatus = "断开（$code2 $reason）" }
-                ws.onMessage = { msg ->
-                    when (msg) {
-                        is com.takahashirinta.ncrust.listen.RoomWire.Snapshot -> {
-                            val st = msg.state
-                            val t = st.queue.getOrNull(
-                                st.queue.indexOfFirst { it.roomTrackId == st.currentRoomTrackId }.coerceAtLeast(0)
-                            )
-                            roomStatus = "房间 ${st.roomId} seq=${st.seq}｜" +
-                                (t?.let { "${it.title} - ${it.artist}" } ?: "（还没同步曲目）") +
-                                "｜位置 ${st.transport.positionMs}ms"
-                        }
-                        is com.takahashirinta.ncrust.listen.RoomWire.Ping ->
-                            ws.send(com.takahashirinta.ncrust.listen.RoomWire.Pong(msg.t0, System.nanoTime() / 1_000_000))
-                        else -> Unit
-                    }
-                }
-                ws.connect()
-                relayRef = ws
-            }
+            var scanning by remember { mutableStateOf(false) }
 
             androidx.compose.foundation.text.BasicTextField(
                 value = roomCode,
@@ -313,30 +274,29 @@ fun LabScreen(onClose: () -> Unit) {
                     }
                 },
             )
-            LabButton("⑥ 创建房间（公网中继）", enabled = !busy) {
-                val code = (100000 until 1000000).random().toString().take(6)
+            LabButton("⑥ 创建房间（房主，自动生成房间码）", enabled = !busy) {
+                val code = com.takahashirinta.ncrust.listen.TogetherSession.newRoomCode()
                 roomCode = code
-                enterRoom(code, isHost = true)
+                com.takahashirinta.ncrust.listen.TogetherSession.create(base, code)
             }
             LabButton("⑦ 加入房间（用上面的房间码）", enabled = !busy) {
-                enterRoom(roomCode, isHost = false)
+                com.takahashirinta.ncrust.listen.TogetherSession.join(base, roomCode)
             }
             LabButton("⑧ 扫描活跃房间", enabled = !busy) {
                 scanning = true
-                roomStatus = "扫描中…"
                 scope.launch(Dispatchers.IO) {
                     val list = runCatching { com.takahashirinta.ncrust.listen.RoomDirectory.scan(base) }
                     withContext(Dispatchers.Main) {
                         scanning = false
                         list.onSuccess { rooms ->
                             scoped = rooms
-                            roomStatus = if (rooms.isEmpty()) "当前没有活跃房间"
-                            else "发现 ${rooms.size} 个房间"
-                        }.onFailure { roomStatus = "扫描失败：${it.message}" }
+                        }.onFailure { com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("扫描失败：${it.message}") }
                     }
                 }
             }
-            LabButton("⑨ 断开房间", enabled = !busy) { leaveRoom() }
+            LabButton("⑨ 断开房间", enabled = !busy) {
+                com.takahashirinta.ncrust.listen.TogetherSession.leave()
+            }
 
             if (scoped.isNotEmpty()) {
                 MetroText(
@@ -346,7 +306,8 @@ fun LabScreen(onClose: () -> Unit) {
                 )
             }
             MetroText(
-                "中继：$base\n房间码：${roomCode.ifBlank { "（未设置）" }}\n状态：$roomStatus",
+                "中继：$base\n房间码：${sessionRoom.ifBlank { roomCode.ifBlank { "（未设置）" } }}" +
+                    "（${if (sessionHost) "房主" else if (sessionRoom.isNotBlank()) "成员" else "—"}）\n状态：$sessionStatus",
                 color = colors.onSurfaceVariant,
                 style = TextStyle(fontSize = 12.sp),
             )
