@@ -18,6 +18,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,8 +30,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -95,7 +99,19 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                         )
                         Spacer(Modifier.height(16.dp))
                         MetroText("Arris", color = accent, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
-                        MetroText(VERSION, color = accent.copy(alpha = 0.72f), style = TextStyle(fontSize = 14.sp))
+                        // v3.8.0：长按版本号打开开发者实验室（临时诊断面，功能上线后整体删除）。
+                        var showLab by remember { mutableStateOf(false) }
+                        MetroText(
+                            VERSION,
+                            color = accent.copy(alpha = 0.72f),
+                            style = TextStyle(fontSize = 14.sp),
+                            modifier = Modifier.pointerInput(Unit) {
+                                detectTapGestures(onLongPress = { showLab = true })
+                            },
+                        )
+                        if (showLab) {
+                            LabScreen(onClose = { showLab = false })
+                        }
                         Spacer(Modifier.height(6.dp))
                         MetroText(s.aboutAppSubtitle, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
                         Spacer(Modifier.height(28.dp))
