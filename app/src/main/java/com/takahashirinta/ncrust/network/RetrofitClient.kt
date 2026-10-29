@@ -175,6 +175,14 @@ object RetrofitClient {
             .build()
     }
 
+    /** Playback read fallback only: do not reuse an h2 route rejected by the remote peer. */
+    private val playbackHttp1Client: OkHttpClient by lazy {
+        plainClient.newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .connectionPool(ConnectionPool(2, 30, TimeUnit.SECONDS))
+            .build()
+    }
+
     /** 易盾 token 与业务客户端共用连接池；获取失败发空串，避免阻塞收藏。 */
     private val antiCheatClient: OkHttpClient by lazy {
         plainClient.newBuilder()
@@ -326,7 +334,11 @@ object RetrofitClient {
         val call = plainClient.newCall(request).apply {
             timeout().timeout(8, TimeUnit.SECONDS)
         }
-        return call.awaitBufferedResponse()
+        return if (request.url.encodedPath == "/eapi/song/enhance/player/url/v1") {
+            call.awaitPlaybackRead {
+                playbackHttp1Client.newCall(request).apply { timeout().timeout(8, TimeUnit.SECONDS) }
+            }
+        } else call.awaitBufferedResponse()
     }
 
     /**
