@@ -150,6 +150,13 @@ class NeteaseRecognizeProvider(
         .put("identifyTab", "0")
         .put("queryId", queryId)
         .put("recordAudio", audioBase64)
+        // 下面四个字段是抓包里唯一被我漏抄、且缺了就 400 的一组（2026-10-30 本机复现）：
+        // 补齐后同一份 M4A 立即命中，缺任意一个服务端都只回 {"msg":"参数错误","code":400}。
+        .put("recordAudioFormat", "AAC")
+        .put("recordType", 10)
+        .put("sceneParams", "{\"code\":2}")
+        .put("sessionId", UUID.randomUUID().toString())
+        .put("times", 1)
 
     fun parse(json: String?): RecogOutcome {
         if (json.isNullOrBlank()) return RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, "空响应")

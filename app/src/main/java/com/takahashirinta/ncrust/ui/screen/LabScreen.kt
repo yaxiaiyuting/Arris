@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -241,82 +242,112 @@ fun LabScreen(onClose: () -> Unit) {
                 }
             }
 
-            LabButton("⑥ 一起听局域网自测（真 socket：创建房间→成员连接→收快照→算时钟）", enabled = !busy) {
-                busy = true
-                micReport = "自测中…"
-                scope.launch(Dispatchers.Default) {
-                    val text = runCatching {
-                        val server = com.takahashirinta.ncrust.listen.RoomRelayServer(0)
-                        server.start()
-                        val port = server.listenPort
-                        server.onMessage = { _, msg ->
-                            if (msg is com.takahashirinta.ncrust.listen.RoomWire.Ping) {
-                                server.broadcast(
-                                    com.takahashirinta.ncrust.listen.RoomWire.Pong(
-                                        msg.t0, System.nanoTime() / 1_000_000,
-                                    )
-                                )
-                            }
+            // ⑥ 一起听（公网中继）：输入房间码进入 / 扫描活跃房间
+            var base by remember { mutableStateOf(com.takahashirinta.ncrust.listen.RoomDirectory.DEFAULT_BASE) }
+            var roomCode by remember { mutableStateOf("") }
+            var roomStatus by remember { mutableStateOf("未连接") }
+            var relayRef by remember { mutableStateOf<com.takahashirinta.ncrust.listen.RoomRelayWs?>(null) }
+            var scanning by remember { mutableStateOf(false) }
+            var scoped by remember { mutableStateOf<List<com.takahashirinta.ncrust.listen.RoomSummary>>(emptyList()) }
+
+            fun leaveRoom() {
+                relayRef?.close()
+                relayRef = null
+                roomStatus = "未连接"
+            }
+
+            fun enterRoom(code: String, isHost: Boolean) {
+                leaveRoom()
+                if (code.length < 4) {
+                    roomStatus = "房间码至少 4 位"
+                    return
+                }
+                val url = com.takahashirinta.ncrust.listen.RoomDirectory.roomUrl(
+                    base, code, if (isHost) "host" else "member", if (isHost) "房主" else "成员",
+                )
+                roomStatus = "连接中…（$code）"
+                val ws = com.takahashirinta.ncrust.listen.RoomRelayWs(url)
+                ws.onOpen = {
+                    roomStatus = (if (isHost) "已创建房间 " else "已加入房间 ") + code
+                }
+                ws.onClosed = { code2, reason -> roomStatus = "断开（$code2 $reason）" }
+                ws.onMessage = { msg ->
+                    when (msg) {
+                        is com.takahashirinta.ncrust.listen.RoomWire.Snapshot -> {
+                            val st = msg.state
+                            val t = st.queue.getOrNull(
+                                st.queue.indexOfFirst { it.roomTrackId == st.currentRoomTrackId }.coerceAtLeast(0)
+                            )
+                            roomStatus = "房间 ${st.roomId} seq=${st.seq}｜" +
+                                (t?.let { "${it.title} - ${it.artist}" } ?: "（还没同步曲目）") +
+                                "｜位置 ${st.transport.positionMs}ms"
                         }
-                        val client = com.takahashirinta.ncrust.listen.RoomRelayClient("127.0.0.1", port)
-                        var snapshot: com.takahashirinta.ncrust.listen.RoomState? = null
-                        val pongBox = java.util.concurrent.atomic.AtomicReference<com.takahashirinta.ncrust.listen.RoomClock.Sample?>()
-                        client.onMessage = { msg ->
-                            when (msg) {
-                                is com.takahashirinta.ncrust.listen.RoomWire.Snapshot -> snapshot = msg.state
-                                is com.takahashirinta.ncrust.listen.RoomWire.Pong -> pongBox.set(
-                                    com.takahashirinta.ncrust.listen.RoomClock.Sample(
-                                        msg.t0, System.nanoTime() / 1_000_000, msg.relayNow,
-                                    )
-                                )
-                                else -> Unit
-                            }
+                        is com.takahashirinta.ncrust.listen.RoomWire.Ping ->
+                            ws.send(com.takahashirinta.ncrust.listen.RoomWire.Pong(msg.t0, System.nanoTime() / 1_000_000))
+                        else -> Unit
+                    }
+                }
+                ws.connect()
+                relayRef = ws
+            }
+
+            androidx.compose.foundation.text.BasicTextField(
+                value = roomCode,
+                onValueChange = { roomCode = it.filter(Char::isLetterOrDigit).take(8) },
+                singleLine = true,
+                textStyle = TextStyle(fontSize = 14.sp, color = colors.onBackground),
+                modifier = Modifier.padding(vertical = 8.dp),
+                decorationBox = { inner ->
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(colors.surfaceVariant, RectangleShape)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                    ) {
+                        if (roomCode.isEmpty()) {
+                            MetroText("房间码（4–8 位，扫描或问房主）", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
                         }
-                        client.connect()
-                        Thread.sleep(300)
-                        val state = com.takahashirinta.ncrust.listen.RoomState(
-                            roomId = "lab-room",
-                            epoch = 1L,
-                            seq = 2L,
-                            hostUserId = "host",
-                            members = listOf(com.takahashirinta.ncrust.listen.RoomMember("host", "本机", 0L, true)),
-                            queue = listOf(
-                                com.takahashirinta.ncrust.listen.CanonicalTrack(
-                                    roomTrackId = "rt1", title = "测试曲", artist = "测试",
-                                    album = "", durationMs = 200_000, editionKinds = emptySet(),
-                                    publicIds = mapOf("ncm" to "1"),
-                                )
-                            ),
-                            currentRoomTrackId = "rt1",
-                            transport = com.takahashirinta.ncrust.listen.RoomTransport(true, 5_000L, 1.0f),
-                            stampedAtMs = 1L,
-                        )
-                        server.broadcast(com.takahashirinta.ncrust.listen.RoomWire.Snapshot(state))
-                        Thread.sleep(300)
-                        client.send(
-                            com.takahashirinta.ncrust.listen.RoomWire.Ping(System.nanoTime() / 1_000_000)
-                        )
-                        Thread.sleep(300)
-                        val estimate = pongBox.get()?.let {
-                            com.takahashirinta.ncrust.listen.RoomClock.estimateOffset(listOf(it))
-                        }
-                        client.close()
-                        server.close()
-                        val got = snapshot
-                        if (got == null) {
-                            "失败：成员没收到快照"
-                        } else {
-                            "端口=$port 快照 seq=${got.seq} 曲目=${got.queue.firstOrNull()?.title} " +
-                                "位置=${got.transport.positionMs}ms｜时钟 offset=${estimate?.offsetMs}ms " +
-                                "rtt=${estimate?.rttMs}ms"
-                        }
-                    }.getOrElse { "失败：${it.message}" }
+                        inner()
+                    }
+                },
+            )
+            LabButton("⑥ 创建房间（公网中继）", enabled = !busy) {
+                val code = (100000 until 1000000).random().toString().take(6)
+                roomCode = code
+                enterRoom(code, isHost = true)
+            }
+            LabButton("⑦ 加入房间（用上面的房间码）", enabled = !busy) {
+                enterRoom(roomCode, isHost = false)
+            }
+            LabButton("⑧ 扫描活跃房间", enabled = !busy) {
+                scanning = true
+                roomStatus = "扫描中…"
+                scope.launch(Dispatchers.IO) {
+                    val list = runCatching { com.takahashirinta.ncrust.listen.RoomDirectory.scan(base) }
                     withContext(Dispatchers.Main) {
-                        micReport = text
-                        busy = false
+                        scanning = false
+                        list.onSuccess { rooms ->
+                            scoped = rooms
+                            roomStatus = if (rooms.isEmpty()) "当前没有活跃房间"
+                            else "发现 ${rooms.size} 个房间"
+                        }.onFailure { roomStatus = "扫描失败：${it.message}" }
                     }
                 }
             }
+            LabButton("⑨ 断开房间", enabled = !busy) { leaveRoom() }
+
+            if (scoped.isNotEmpty()) {
+                MetroText(
+                    scoped.joinToString("\n") { "· ${it.roomId}（房主 ${it.host}，${it.members} 人）" },
+                    color = colors.onBackground,
+                    style = TextStyle(fontSize = 12.sp),
+                )
+            }
+            MetroText(
+                "中继：$base\n房间码：${roomCode.ifBlank { "（未设置）" }}\n状态：$roomStatus",
+                color = colors.onSurfaceVariant,
+                style = TextStyle(fontSize = 12.sp),
+            )
 
             MetroText(micReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 

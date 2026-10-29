@@ -7,6 +7,15 @@ compatibility_date = "2026-01-01"
 name = "ROOM"
 class_name = "Room"
 
+[[durable_objects.bindings]]
+name = "DIRECTORY"
+class_name = "Directory"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
+
+# v2：新增房间目录（v1 已部署，新增类必须走新 tag，不能改历史迁移）
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Directory"]

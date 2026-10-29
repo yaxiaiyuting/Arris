@@ -22,6 +22,11 @@ export default {
     if (url.pathname === "/health") {
       return new Response("ok", { headers: { "content-type": "text/plain" } });
     }
+    // GET /rooms —— 扫描当前活跃房间（App 里的"自动扫描"就靠它）
+    if (url.pathname === "/rooms" && request.method === "GET") {
+      const dir = env.DIRECTORY.get(env.DIRECTORY.idFromName("global"));
+      return dir.fetch("https://directory/list");
+    }
     // /room/<roomId>?role=host|member&name=昵称
     const m = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,32})$/);
     if (!m) return new Response("not found", { status: 404 });
@@ -34,7 +39,13 @@ export default {
   },
 };
 
-export class Room {
+/**
+ * 房间目录：记录「哪些房间现在有人」，给 App 的"扫描房间"用。
+ *
+ * 为什么要单独一个 DO：房间本身是一个个独立 DO，跨房间的枚举必须有一个单点。
+ * 用 alarm 定期清理过期条目（超过 90 秒没有心跳的房间视为已关闭）。
+ */
+export class Directory {
   constructor(state, env) {
     this.state = state;
     this.env = env;
@@ -42,6 +53,60 @@ export class Room {
 
   async fetch(request) {
     const url = new URL(request.url);
+    const rooms = (await this.state.storage.get("rooms")) || {};
+
+    if (url.pathname === "/list") {
+      const now = Date.now();
+      const alive = Object.entries(rooms)
+        .filter(([, r]) => now - r.seenAt < 90_000)
+        .map(([id, r]) => ({ roomId: id, host: r.host, members: r.members, title: r.title, seenAt: r.seenAt }));
+      return Response.json({ rooms: alive });
+    }
+    if (url.pathname === "/beat") {
+      const body = await request.json();
+      rooms[body.roomId] = {
+        host: body.host || "",
+        members: body.members || 0,
+        title: (body.title || "").slice(0, 40),
+        seenAt: Date.now(),
+      };
+      await this.state.storage.put("rooms", rooms);
+      // 保证有清理定时器
+      if (!(await this.state.storage.getAlarm())) {
+        await this.state.storage.setAlarm(Date.now() + 60_000);
+      }
+      return Response.json({ ok: true });
+    }
+    if (url.pathname === "/drop") {
+      const id = url.searchParams.get("roomId");
+      if (id && rooms[id]) { delete rooms[id]; await this.state.storage.put("rooms", rooms); }
+      return Response.json({ ok: true });
+    }
+    return new Response("not found", { status: 404 });
+  }
+
+  async alarm() {
+    const rooms = (await this.state.storage.get("rooms")) || {};
+    const now = Date.now();
+    let changed = false;
+    for (const [id, r] of Object.entries(rooms)) {
+      if (now - r.seenAt > 90_000) { delete rooms[id]; changed = true; }
+    }
+    if (changed) await this.state.storage.put("rooms", rooms);
+    if (Object.keys(rooms).length > 0) await this.state.storage.setAlarm(now + 60_000);
+  }
+}
+
+export class Room {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.roomId = "";
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    this.roomId = url.pathname.split("/").pop() || "";
     const role = url.searchParams.get("role") === "host" ? "host" : "member";
     const name = (url.searchParams.get("name") || "").slice(0, 24);
 
@@ -63,16 +128,36 @@ export class Room {
     for (const ws of members) {
       try { ws.send(hello); } catch (_) {}
     }
+    await this.beat();
     return new Response(null, { status: 101, webSocket: client });
   }
 
   /** 收到一条消息：原样转给同房间的其他人（含房主→成员、成员→房主）。 */
+  /** 房间状态变化时顺手更新目录，供 /rooms 扫描。 */
+  async beat(title = "") {
+    try {
+      const dir = this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("global"));
+      const sockets = this.state.getWebSockets();
+      const host = sockets.map((s) => s.deserializeAttachment() || {}).find((a) => a.role === "host");
+      await dir.fetch("https://directory/beat", {
+        method: "POST",
+        body: JSON.stringify({
+          roomId: this.roomId || "",
+          host: host?.name || "",
+          members: sockets.length,
+          title,
+        }),
+      });
+    } catch (_) {}
+  }
+
   async webSocketMessage(ws, message) {
     const meta = ws.deserializeAttachment() || {};
     for (const peer of this.state.getWebSockets()) {
       if (peer === ws) continue;
       try { peer.send(message); } catch (_) {}
     }
+    await this.beat();
   }
 
   async webSocketClose(ws, code, reason) {

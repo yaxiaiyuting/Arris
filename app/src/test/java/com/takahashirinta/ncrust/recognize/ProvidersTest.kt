@@ -83,6 +83,12 @@ class ProvidersTest {
         assertEquals("app", payload.getString("from"))
         assertTrue(payload.getString("recordAudio").isNotEmpty())
         assertTrue(payload.getString("Url").endsWith("/api/music/hum/audio/unifymatch"))
+        // 抓包里被我漏抄过、缺了就 400 的那四个字段
+        assertEquals("AAC", payload.getString("recordAudioFormat"))
+        assertEquals(10, payload.getInt("recordType"))
+        assertEquals("""{"code":2}""", payload.getString("sceneParams"))
+        assertTrue(payload.getString("sessionId").isNotBlank())
+        assertEquals(1, payload.getInt("times"))
     }
 
     @Test
