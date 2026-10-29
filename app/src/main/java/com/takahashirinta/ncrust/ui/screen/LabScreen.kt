@@ -42,6 +42,9 @@ import com.takahashirinta.ncrust.listen.RoomEngine
 import com.takahashirinta.ncrust.listen.RoomOp
 import com.takahashirinta.ncrust.listen.RoomState
 import com.takahashirinta.ncrust.recognize.MicCapture
+import com.takahashirinta.ncrust.recognize.NeteaseRecognizeProvider
+import com.takahashirinta.ncrust.recognize.RecogInput
+import com.takahashirinta.ncrust.recognize.RecogOutcome
 import com.takahashirinta.ncrust.recognize.ShazamFingerprint
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
@@ -195,10 +198,54 @@ fun LabScreen(onClose: () -> Unit) {
                 }
             }
 
+            LabButton("⑤ 网易云识曲（录 3.4 秒 → eapi/music/audio/match）", enabled = !busy) {
+                val cookie = com.takahashirinta.ncrust.auth.CookieManager.snapshot().cookie.orEmpty()
+                if (cookie.isBlank()) {
+                    micReport = "未登录网易云：识曲接口需要本机账号（先登录再试）"
+                } else {
+                    busy = true
+                    micReport = "录音中（3.4 秒）…"
+                    scope.launch(Dispatchers.Default) {
+                        // 官方片段长度 3.4 秒（逆向记录里的 duration 字段就是这个量级）
+                        val captured = MicCapture.recordDetailed(3_400)
+                        val text = if (captured == null) {
+                            "采集失败：所有音源都没出数据"
+                        } else {
+                            val provider = NeteaseRecognizeProvider(cookieProvider = { cookie })
+                            val outcome = provider.recognize(
+                                RecogInput.Pcm(captured.samples, ShazamFingerprint.SAMPLE_RATE)
+                            )
+                            when (outcome) {
+                                is RecogOutcome.Matched -> buildString {
+                                    append("命中（").append(outcome.match.provider).append("）：")
+                                    append(outcome.match.title)
+                                    if (outcome.match.artist.isNotBlank()) append(" — ").append(outcome.match.artist)
+                                    if (outcome.match.album.isNotBlank()) append(" 《").append(outcome.match.album).append("》")
+                                    append(" 时长=").append(outcome.match.durationMs / 1000).append("s")
+                                    if (outcome.match.providerTrackId.isNotBlank()) {
+                                        append(" id=").append(outcome.match.providerTrackId)
+                                    }
+                                    append("（源=").append(MicCapture.sourceName(captured.source)).append("）")
+                                }
+                                is RecogOutcome.Failed ->
+                                    "失败：${outcome.failure}" + if (outcome.detail.isBlank()) "" else "（${outcome.detail}）" +
+                                        "｜源=${MicCapture.sourceName(captured.source)}"
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            micReport = text
+                            busy = false
+                        }
+                    }
+                }
+            }
+
             MetroText(micReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 
             MetroText(
-                "网络识别未接通：Shazam 协议尚未用真实请求验证，第一版不接。",
+                "识曲后端：网易云 eapi/music/audio/match（rawdata = zlib+base64 的 3.4 秒 PCM，" +
+                    "algorithmCode=shazam_v2）。依据公开逆向记录；旧版试的 /api/music/recognize 等路径在登录态下实测 404，" +
+                    "已删除。⑤ 会录 3.4 秒并用你的登录态直接问这个端点。",
                 color = colors.onSurfaceVariant,
                 style = TextStyle(fontSize = 12.sp),
             )
