@@ -64,6 +64,27 @@ object AppWarmup {
     private val _homeFetchDone = MutableStateFlow(false)
     val homeFetchDone: StateFlow<Boolean> = _homeFetchDone.asStateFlow()
 
+    /**
+     * 首屏三块数据的**在途请求**（v3.7.11）。
+     *
+     * 为什么要把 Deferred 暴露出去：冷启动时首页与预热会取同一批接口。旧做法是
+     * HomeScreen「等 homeFetchDone 最多 1.2 秒，等不到就自己再发一遍」——
+     * 于是首屏要么白等、要么双发。现在 HomeScreen 直接 await 这三条在途请求，
+     * **谁先拿到谁发布**，既不重复请求也不白等。
+     *
+     * 为空 = 预热还没跑到网络阶段（或已经跑完并清空）⇒ 调用方自己发。
+     */
+    @Volatile
+    var homeLoads: HomeLoads? = null
+        private set
+
+    /** 首屏三块数据 + 榜单的在途请求。await 它们不会触发第二次网络请求。 */
+    class HomeLoads(
+        val daily: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.SongItem>?>,
+        val playlists: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.PlaylistApi.PlaylistCard>?>,
+        val newSongs: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.SongItem>?>,
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var started = false
 
@@ -159,6 +180,8 @@ object AppWarmup {
                         // 不留"缓存 10 条 → 刷新变 20 条"的可见 diff
                         runCatchingCancellable { PlaylistApi.getTopSongs(limit = 20, offset = 0) }
                     }
+                    // 暴露给 HomeScreen：它 await 同一批请求，避免"等超时后再发一遍"。
+                    homeLoads = HomeLoads(dailyDeferred, plsDeferred, topDeferred)
                     // H15：这批请求发出时属于某个账号；等它们回来时用户可能已经换号。
                     // 归属变了就整批丢弃 —— 否则新账号的首页会先闪一下上一个人的每日推荐。
                     val ownerAtStart = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
@@ -168,6 +191,9 @@ object AppWarmup {
                     plsDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeRecommendPlaylists = it }
                     topDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeNewSongs = it }
                     ContentCache.bindOwner(ownerAtStart)
+                    // 数据已经落到 ContentCache，HomeScreen 直接读缓存即可；清掉句柄避免
+                    // 之后有人 await 一批早已完成的 Deferred（无害但容易误读）。
+                    homeLoads = null
                 }
                 // 标记首页数据已预热：HomeScreen 进屏时据此跳过重复请求。
                 ContentCache.markHomeWarmed()
