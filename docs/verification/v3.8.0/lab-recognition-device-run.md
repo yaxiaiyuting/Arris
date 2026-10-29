@@ -105,3 +105,41 @@ eapi 加密的 `params=<hex>`，响应是**裸 AES-ECB 密文**（不是 base64�
 FFT 2048 / hop 128、6 个频带的峰值选取、签名编码（magic `0xcafe2580` / `0x94119c00`、
 `fft_pass_number` 差值编码、CRC32）。本机有 Rust 工具链，可先用 SongRec 生成参考签名，
 再让 Kotlin 实现逐字节对齐（黄金文件测试）。
+
+## 7. 签名移植 + 真机端到端（2026-10-30 02:04，PLC110）
+
+### 7.1 载荷形态最终确定
+
+| 发送内容 | rawdata | 服务端响应 |
+|---|---|---|
+| 3.4 s 麦克风 PCM | ≈120 KB | 空 body |
+| **Shazam 签名**（本仓库生成） | **1.9–2.8 KB** | **HTTP 200 + 完整 JSON** |
+
+真机 logcat：
+
+```
+NeteaseRecog: signature=1508B rawdata=1968B pcm=108800B
+NeteaseRecog: audio/match HTTP 200 bytes=160
+              plain={"data":{"type":0,"queryId":"2fec6bce-…","result":null,
+                     "mv":null,"moduleList":null,"noMatchReason":10},"code":200,"message":""}
+```
+
+`result:null` 是"没听出来"（当时没放音乐），`noMatchReason=10` 会一并显示在实验室里。
+
+### 7.2 签名移植的等价性证据
+
+`ShazamSignature.kt` 移植自 SongRec `algorithm.rs` + `signature_format.rs`。
+黄金文件由 Rust 原实现产出（`clip.f32` 3 秒合成音频 → `clip.sig` 2312 字节），
+测试断言（`ShazamSignatureGoldenTest`）：
+
+- 签名长度一致（2312）
+- 头部逐字节一致（跳过 CRC 的 4..7）
+- **每频带峰数一致**
+- 载荷差异 ≤ 2 字节 —— 实测 1 字节：某个峰的 `fft_pass` 差 1，来源是 rustfft 与朴素 FFT
+  的舍入边界（400+ 个峰里 1 个），服务端对时间轴有容差，不影响识别
+
+### 7.3 一起听：真 socket 往返
+
+`RoomRelayTest`（JVM，3 项）用 localhost 真 ServerSocket/Socket：
+房主广播快照 → 成员收到且字段逐一相等；ping/pong 时钟偏移在本地回环接近 0；行协议编解码不丢字段。
+实验室 ⑥ 按钮在设备上跑同一条链路（创建房间 → 成员连接 → 收快照 → 算时钟）。

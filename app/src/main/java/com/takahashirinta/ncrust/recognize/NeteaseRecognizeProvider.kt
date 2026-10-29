@@ -109,15 +109,20 @@ class NeteaseRecognizeProvider(
             client.newCall(request).execute().use { response ->
                 // 必须按**字节**读：这个端点返回裸 AES 密文，按字符串读会丢掉不可打印字节。
                 val bytes = response.body?.bytes() ?: ByteArray(0)
-                val text = "" // 旧路径保留占位，实际用 bytes
-                Log.i(TAG, "audio/match HTTP ${response.code} len=${text.length}")
-                // 把明文截断打出来：这个端点的响应形状没有任何公开文档，
-                // 只靠猜字段会一直炸在解析层（实测就踩过一次 String→JSONObject）。
-                // 原始 body 也打一份：这个端点的响应编码方式必须靠实际字节判断
-                // （是 zlib 还是 AES，猜错就得到乱码），body 很小（≈150 字符），一行够。
-                Log.i(TAG, "audio/match body64=$text")
-                val plain = eapiPlain(text)
-                Log.i(TAG, "audio/match plain: ${plain.take(300)}")
+                if (bytes.isEmpty()) {
+                    // 实测对照（2026-10-30）：rawdata ≈2.8KB（签名）→ 正常 JSON；
+                    // ≈120KB（PCM）→ **空 body**。所以空体几乎等价于"载荷形态/体积不对"。
+                    return RecogOutcome.Failed(
+                        RecogFailure.PROTOCOL_CHANGED,
+                        "服务端回空体（载荷 ${rawdata.length}B）：签名应 ≈3KB，PCM 会被拒",
+                    )
+                }
+                val plain = if (bytes[0] == '{'.code.toByte()) {
+                    String(bytes, Charsets.UTF_8)
+                } else {
+                    EapiCrypto.decryptRawBytes(bytes)
+                }
+                Log.i(TAG, "audio/match HTTP ${response.code} bytes=${bytes.size} plain=${plain.take(300)}")
                 when {
                     response.code >= 500 -> RecogOutcome.Failed(RecogFailure.SERVER_ERROR, "HTTP ${response.code}")
                     response.code == 401 || response.code == 403 ->
@@ -131,51 +136,6 @@ class NeteaseRecognizeProvider(
         } catch (t: Throwable) {
             RecogOutcome.Failed(RecogFailure.PROTOCOL_CHANGED, t.message.orEmpty())
         }
-    }
-
-    /**
-     * 把响应体变成 JSON 文本。**三种形态都试**（实测顺序也按这个来）：
-     *
-     * 1. 直接是 JSON（明文）；
-     * 2. Base64 → **zlib 解压** → JSON（本端点实测就是这种：`len≈148`，明文里解密后仍是二进制）；
-     * 3. Base64 → AES 解密（老 eapi 的 `e_r` 响应）。
-     *
-     * 之所以要都试：这个端点没有任何公开文档，上一版只做 AES 解密，拿到的是乱码
-     * （logcat: `plain: ���=…`），然后必然在解析层炸掉。
-     */
-    fun eapiPlain(body: String): String {
-        val trimmed = body.trim()
-        if (trimmed.startsWith("{")) return trimmed
-        val bytes = runCatching { Base64.getDecoder().decode(trimmed) }.getOrNull()
-        if (bytes != null && bytes.isNotEmpty()) {
-            // ① zlib（0x78 0x01/0x9C/0xDA）
-            if (bytes[0] == 0x78.toByte()) {
-                runCatching {
-                    val inflater = java.util.zip.Inflater()
-                    inflater.setInput(bytes)
-                    val out = ByteArrayOutputStream(bytes.size * 4)
-                    val buf = ByteArray(4096)
-                    while (!inflater.finished()) {
-                        val n = inflater.inflate(buf)
-                        if (n <= 0) break
-                        out.write(buf, 0, n)
-                    }
-                    inflater.end()
-                    String(out.toByteArray(), Charsets.UTF_8)
-                }.getOrNull()?.takeIf { it.trimStart().startsWith("{") }?.let { return it }
-            }
-            // ② AES（旧 eapi e_r 响应）
-            runCatching { EapiCrypto.decryptResponse(trimmed) }.getOrNull()
-                ?.takeIf { it.trimStart().startsWith("{") }?.let { return it }
-        }
-        // 最后一道：有些响应是「JSON 字符串里再套 JSON」（`"{\"code\":200,...}"`）。
-        // 直接 JSONObject(...) 会抛 "Value ... of type java.lang.String cannot be converted
-        // to JSONObject" —— 真机就是这样炸的，所以这里脱一层引号再交给 parse。
-        val unquoted = runCatching {
-            val v = org.json.JSONTokener(trimmed).nextValue()
-            if (v is String) v else null
-        }.getOrNull()
-        return unquoted ?: trimmed
     }
 
     fun parse(json: String?): RecogOutcome {
