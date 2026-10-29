@@ -62,6 +62,19 @@ class PlaybackNetworkRecoveryTest {
         assertTrue(gate.networkChanged(mobile))
         assertFalse(gate.needsRecovery(true))
     }
+    @Test fun explicitResumeRearmsBufferingRecoveryAfterPauseWithoutRestartingHealthyAudio() {
+        val gate = PlaybackRecoveryGate(wifi)
+        gate.begin(); gate.resolved(); gate.cancel()
+        assertFalse(gate.needsRecovery(true))
+        assertFalse(gate.shouldResolveBeforePlay(true, false))
+        // Production resume adopts the playable media item and its current playback epoch.
+        gate.begin(); gate.resolved()
+        assertFalse(gate.needsRecovery(false))
+        assertTrue(gate.needsRecovery(true))
+        assertTrue(gate.networkChanged(mobile))
+        gate.cancel()
+        assertFalse(gate.needsRecovery(true))
+    }
     @Test fun playButtonAfterUncachedFailureMustResolveInsteadOfResumingOldAudio() {
         val gate = PlaybackRecoveryGate(wifi)
         gate.begin(); gate.failed(true)

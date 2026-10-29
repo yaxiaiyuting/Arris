@@ -3223,8 +3223,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun resumeUnpreparedSelection(): Boolean {
         val songId = currentSongId.value?.takeIf { it > 0 } ?: return false
         val svc = PlaybackService.instance
-        if (!recovery.shouldResolveBeforePlay(svc?.hasPlayableItem() == true, svc?.player?.playerError != null)) return false
         val saved = latestRetryRequest?.takeIf { it.track == currentTrack }
+        if (!recovery.shouldResolveBeforePlay(svc?.hasPlayableItem() == true, svc?.player?.playerError != null)) {
+            // Pause revoked the old epoch. Explicit resume adopts the existing media item
+            // into the new epoch, so a later buffering/handover can recover it too.
+            currentTrack?.let { track ->
+                latestRetryRequest = RetryRequest(track, playGate.current, currentSongName.value.orEmpty(),
+                    currentSongArtist.value.orEmpty(), currentSongArtwork.value.orEmpty(),
+                    currentPosition.value, lastSongPrivilege)
+            }
+            recovery.begin()
+            recovery.resolved()
+            watchBuffering(isBuffering.value)
+            return false
+        }
         playSong(songId, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
             currentSongArtwork.value.orEmpty(), sourceKey = currentSongSourceKey,
             sourceId = currentSongSourceId, mediaId = currentSongMediaId,
