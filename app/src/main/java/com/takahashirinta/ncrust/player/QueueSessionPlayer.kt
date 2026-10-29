@@ -13,8 +13,10 @@ internal class QueueSessionPlayer(
     private val nextAction: () -> Unit,
     private val previousAction: () -> Unit,
     private val pauseOrStopAction: () -> Unit = {},
+    private val resumeAction: () -> Boolean = { false },
 ) : ForwardingSimpleBasePlayer(player) {
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+        if (playWhenReady && resumeAction()) return Futures.immediateVoidFuture()
         if (!playWhenReady) pauseOrStopAction()
         return super.handleSetPlayWhenReady(playWhenReady)
     }

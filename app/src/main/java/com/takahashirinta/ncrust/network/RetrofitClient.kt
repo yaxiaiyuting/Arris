@@ -326,17 +326,7 @@ object RetrofitClient {
         val call = plainClient.newCall(request).apply {
             timeout().timeout(8, TimeUnit.SECONDS)
         }
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            cont.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : okhttp3.Callback {
-                override fun onFailure(c: okhttp3.Call, e: java.io.IOException) {
-                    if (cont.isActive) cont.resumeWith(Result.failure(e))
-                }
-                override fun onResponse(c: okhttp3.Call, response: Response) {
-                    if (cont.isActive) cont.resumeWith(Result.success(response)) else response.close()
-                }
-            })
-        }
+        return call.awaitBufferedResponse()
     }
 
     /**

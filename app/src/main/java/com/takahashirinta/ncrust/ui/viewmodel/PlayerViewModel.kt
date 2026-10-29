@@ -104,6 +104,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 
@@ -286,7 +287,46 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private val networkObserver = com.takahashirinta.ncrust.network.DefaultNetworkObserver(application)
+    private val recovery = com.takahashirinta.ncrust.player.PlaybackRecoveryGate(networkObserver.snapshot())
+    private var bufferingWatch: Job? = null
+
+    /** No retry can survive a pause or a newer selection, including a default-route change. */
+    private fun recoverCurrentRequest(resetBudget: Boolean) {
+        val saved = latestRetryRequest?.takeIf {
+            recovery.needsRecovery(isBuffering.value) && it.track == currentTrack && playGate.isCurrent(it.revision)
+        } ?: return
+        if (!NetworkAvailability.isOnline(getApplication())) return
+        if (resetBudget) urlRetryGate.onUserAction()
+        if (!urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
+            recovery.failed(true)
+            isBuffering.value = false
+            stopForQualityFailure(saved.track.id, "缓冲恢复次数已用尽")
+            return
+        }
+        val position = if (recovery.resolving || recovery.waiting) saved.positionMs else currentPosition.value
+        preloadCache.remove(saved.track.id)
+        SongUrlFetcher.onNetworkRouteChanged()
+        RetrofitClient.evictConnections()
+        playSong(saved.track.id, saved.title, saved.artist, saved.artwork, lastRequestedLevel,
+            saved.track.source.key, saved.track.sourceId, saved.track.mediaId,
+            position, PlayOrigin.QUALITY_RETRY, saved.privilege)
+    }
+
+    private fun watchBuffering(buffering: Boolean) {
+        bufferingWatch?.cancel()
+        if (!buffering || !recovery.wanted || recovery.resolving) return
+        val epoch = playGate.current
+        bufferingWatch = viewModelScope.launch {
+            delay(12_000L)
+            if (playGate.isCurrent(epoch) && isBuffering.value) recoverCurrentRequest(resetBudget = false)
+        }
+    }
+
     private fun invalidatePlaybackIntent() {
+        recovery.cancel()
+        bufferingWatch?.cancel()
+        isBuffering.value = false
         playbackRetries.cancel()
         playGate.next()
         playJob?.cancel()
@@ -671,6 +711,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
 
     init {
+        viewModelScope.launch {
+            networkObserver.changes().collectLatest { route ->
+                val usableChange = recovery.networkChanged(route)
+                if (usableChange) {
+                    delay(500L) // Coalesce Wi-Fi/mobile handover callbacks, never each capabilities update.
+                    SongUrlFetcher.onNetworkRouteChanged()
+                    RetrofitClient.evictConnections()
+                    recoverCurrentRequest(resetBudget = true)
+                }
+            }
+        }
+
         PlaybackService.callbackOwner = this
         refreshGaplessSetting()
         // 从设置读歌词开关(默认开);设置页切换时经 setLyricsTranslation /
@@ -725,7 +777,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }.collect { frame -> PlaybackService.mediaLyricFrame = frame }
         }
 
-        PlaybackService.onProgressUpdate = { pos, dur ->
+        PlaybackService.onProgressUpdate = progressUpdate@{ pos, dur ->
+            if (recovery.resolving || recovery.waiting) return@progressUpdate
             currentPosition.value = pos
             duration.value = dur
             progress.value = if (dur > 0) pos.toFloat() / dur.toFloat() else 0f
@@ -774,7 +827,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
-        PlaybackService.onPlaybackEnded = {
+        PlaybackService.onPlaybackEnded = ended@{
+            if (recovery.resolving || recovery.waiting) return@ended
             // 自然播放结束时,若尚未上报则补一条 playend。试听片段的自然结束同样不上报。
             val sid = currentSongId.value ?: -1L
             // B4：正常播完 = 这首歌已「听完」，清除进度记录，重播时从 0 分 0 秒对齐。
@@ -789,6 +843,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onPlaybackPrevious = { onSongPreviousCallback?.invoke() }
         PlaybackService.onPlaybackNext = { onSongNextCallback?.invoke() }
         PlaybackService.onPlaybackInterrupted = { invalidatePlaybackIntent() }
+        PlaybackService.onPlaybackResumeRequested = { resumeUnpreparedSelection() }
         PlaybackService.onIsPlayingChanged = { playing ->
             listeningClock.setPlaying(playing)
             isPlaying.value = playing
@@ -810,7 +865,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 noticeTracker.recordTrial(sid, seconds, EntitlementReason.LOGIN)
             }
         }
-        PlaybackService.onBufferingChanged = { buffering -> isBuffering.value = buffering }
+        PlaybackService.onBufferingChanged = { buffering ->
+            isBuffering.value = buffering || recovery.resolving
+            watchBuffering(buffering)
+        }
         PlaybackService.onBitrateChanged = { source, id, bitrate ->
             if (currentTrack?.source == source && currentTrack?.id == id && bitrate > 0L) {
                 currentBitrate.value = bitrate
@@ -845,7 +903,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     " (source=${source.key} id=$songId)",
             )
         }
-        PlaybackService.onSongTransitioned = { auto ->
+        PlaybackService.onSongTransitioned = transition@{ auto ->
+            if ((recovery.resolving || recovery.waiting) && transitionedTrack != currentTrack) {
+                transitionedTrack = null
+                return@transition
+            }
             // 服务端上报的是**真正起播那一项**的身份/元数据；只有 AUTO 且没有身份时
             // 才退回本地预载槽位（老形状/无 id 项的兼容路径）。
             val nextTrack = transitionedTrack ?: if (auto) preloadedTrack else null
@@ -911,6 +973,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (nextArtist.isNotBlank()) currentSongArtist.value = nextArtist
                     if (nextArtwork.isNotBlank()) currentSongArtwork.value = nextArtwork
                 }
+                if (auto || changed) {
+                    latestRetryRequest = RetryRequest(nextTrack, playGate.current, nextTitle, nextArtist,
+                        nextArtwork, 0L, privilegeBySongId[nextTrack.id])
+                    recovery.begin()
+                    recovery.resolved()
+                }
                 clearPreloadedState()
                 needsPreload.value = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
@@ -969,6 +1037,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         currentPosition.value = livePos
                         duration.value = liveDur
                         progress.value = livePos.toFloat() / liveDur.toFloat()
+                    }
+                    if (p.playWhenReady) {
+                        currentTrack?.let { track ->
+                            latestRetryRequest = RetryRequest(track, playGate.current, savedState.songName,
+                                savedState.songArtist, savedState.songArtwork, livePos, null)
+                        }
+                        recovery.begin()
+                        recovery.resolved()
+                        watchBuffering(isBuffering.value)
                     }
                 }
             } else {
@@ -1568,13 +1645,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             else -> Unit
         }
-        if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(currentTrack.toString())
+        if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(TrackKey.of(sourceKey, songId, sourceId, mediaId).toString())
         // 换歌（含用户手点）时忘掉上一首的「最后成功档位」。
         if (origin != PlayOrigin.QUALITY_RETRY) lastGoodLevel = ""
         // v2.1.0 · C：记住当前歌的音源身份 —— 取链、歌词、媒体通知都要用它路由。
         // v2.1.5：只此一处写 [currentTrack]，三个音源字段都是它的只读派生值。
         val track = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         currentTrack = track
+        recovery.begin()
+        bufferingWatch?.cancel()
+        // Tell the UI which song was requested before any IO. Never leave old audio playing
+        // beneath a new request, or reuse the old duration/position when that request fails.
+        if (origin != PlayOrigin.QUALITY_SWITCH && origin != PlayOrigin.QUALITY_RETRY) {
+            if (PlaybackService.instance != null) {
+                val wait = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
+                    putExtra("action", "wait_for_url")
+                    putExtra("playRevision", fetchVersion)
+                }
+                getApplication<Application>().startService(wait)
+            }
+            playingIdentity.clear()
+            currentPosition.value = 0L
+            duration.value = 0L
+            progress.value = 0f
+            isPlaying.value = false
+        }
+        currentSongName.value = title
+        currentSongArtist.value = artist
+        currentSongArtwork.value = artworkUrl
+        currentSongId.value = songId
+        isBuffering.value = true
         lyricCoordinator.onTrackChanged(track)
         val ref = songRefOf(track.source, songId, sourceId, mediaId)
         Log.i(
@@ -1629,6 +1729,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         else PlaybackStateManager.getSongPosition(getApplication(), songId)
         latestRetryRequest = RetryRequest(track, fetchVersion, title, artist, artworkUrl, resumeMs, effectivePrivilege)
         lastSavedPositionMs = resumeMs
+        currentPosition.value = resumeMs
         resumedFromMs.value = resumeMs
         if (resumeMs > 0) {
             // GUI 提示：明确告诉用户这是「从上次退出的时间点续播」，
@@ -1679,6 +1780,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 else -> Unit
             }
+            recovery.resolved()
             applyQualityVerdict(selectedQuality, cachedResult)
             entitlement?.let { applyPlayableEntitlement(songId, it, cachedResult.actualLevel) }
             // v3.1.0 · P0-A：`resetLyricsForNewSong()` 与取词都已在 startAuxiliaryLoad 里
@@ -1719,7 +1821,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // v2.0.0 · T3：离线优先取链（见 fetchUrlOfflineFirst）。
                 // 旧顺序是「先把 5~6 档 eapi 全试一遍（每档都要等 connectTimeout）才回落缓存」，
                 // 断网首播要干等数秒；现在明确离线时先离线兜底，命中就一个字节都不发。
-                val outcome = fetchUrlOfflineFirst(ref, selectedQuality)
+                val outcome = withTimeoutOrNull(15_000L) { fetchUrlOfflineFirst(ref, selectedQuality) }
+                    ?: ResolveOutcome.failed(ResolveFailureKind.NETWORK, track.source)
                 val result = outcome.result
                 if (result == null) {
                     // ★ 移植 981e9b3：**过期的取链结果不能盖新歌**。
@@ -1799,6 +1902,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // 「等取链回来再开始取词」—— 那正是本版要拆掉的串行。
                 withContext(Dispatchers.Main) {
                     if (!playGate.isCurrent(fetchVersion)) return@withContext
+                    recovery.resolved()
                     applyQualityVerdict(selectedQuality, result)
                     entitlement?.let { applyPlayableEntitlement(songId, it, result.actualLevel) }
                     currentSongId.value = songId
@@ -1833,6 +1937,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 throw e
             } catch (e: Exception) {
                 Log.e("PlayerViewModel", "fetchUrl failed", e)
+                withContext(Dispatchers.Main) {
+                    if (playGate.isCurrent(fetchVersion)) onUrlUnavailable(songId, selectedQuality, origin,
+                        ResolveFailure(ResolveFailureKind.NETWORK, track.source))
+                }
             }
         }
     }
@@ -1885,21 +1993,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun fetchUrlOfflineFirst(ref: SongItem, level: String): ResolveOutcome {
         val app = getApplication<Application>()
         val songId = ref.id
-        if (!NetworkAvailability.isOnline(app)) {
-            recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
-        }
-        // v2.1.0 · A/C：取链从「直连 SongUrlFetcher」改为按音源路由。
-        // ncm 一侧走的就是 NeteaseSourceProvider → SongUrlFetcher.fetch(id, level)，
-        // 与 v2.0.2 **逐字节同一条路径**（8 档降级阶梯、FLAC 门控、离线 key 全在里面）。
-        // 在线取链失败（典型是取链途中断网）时仍回落离线缓存 —— v1.6.0 · D1 的兜底路径。
-        //
-        // v3.2.0 · P0：这里从 `SongUrlResult?` 换成 `ResolveOutcome`（**带失败分类**）。
-        // 离线兜底命中时是 Ok；在线取链失败**且离线也没命中**时才把分类交出去 ——
-        // 也就是说「离线缓存救回来了」这件事优先于失败分类（能播就是不失败）。
-        val outcome = SourceRouter.resolveUrlOutcome(ref, level)
-        outcome.result?.let { return ResolveOutcome.ok(OfflineUrlStore.rememberResult(app, it)) }
-        recallOfflineCache(songId, level)?.let { return ResolveOutcome.ok(it) }
-        return outcome
+        return com.takahashirinta.ncrust.player.resolveOfflineFirst(
+            online = NetworkAvailability.isOnline(app),
+            source = TrackKey.of(ref.source, ref.id).source,
+            offline = { recallOfflineCache(songId, level) },
+            network = {
+                val outcome = SourceRouter.resolveUrlOutcome(ref, level)
+                outcome.result?.let { ResolveOutcome.ok(OfflineUrlStore.rememberResult(app, it)) } ?: outcome
+            },
+        )
     }
 
     /**
@@ -1924,6 +2026,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             ResolveFailureKind.UNKNOWN,
             SourceIds.sourceOfId(songId),
         )
+        val networkFailure = effective.kind == ResolveFailureKind.NETWORK
+        recovery.failed(networkFailure)
+        isBuffering.value = false
+        if (networkFailure) {
+            if (!NetworkAvailability.isOnline(getApplication())) {
+                stopForQualityFailure(songId, "等待网络恢复")
+            } else if (urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
+                schedulePlaybackRetry(songId, requested, UrlRetryGate.MIN_INTERVAL_MS)
+            } else {
+                showResolveFailureHint(effective)
+                stopForQualityFailure(songId, "取链网络失败且重试额度已用尽")
+            }
+            return
+        }
         Log.w(
             "PlayerViewModel",
             "no playable url songId=$songId requested=$requested origin=$origin " +
@@ -1986,7 +2102,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
                 // ② 网络失败：**有界重试同一个档位**，不跳歌。额度用尽则停下 + 提示。
                 ResolveFailureAction.RETRY -> {
-                    if (urlRetryGate.requestRetry(System.currentTimeMillis())) {
+                    if (urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
                         Log.w(
                             "PlayerViewModel",
                             "network failure, retry #${UrlRetryGate.MAX_ATTEMPTS_PER_SONG -
@@ -2025,6 +2141,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun handlePlaybackError(songId: Long, failure: PlaybackFailure) {
         if (songId <= 0 || songId != currentSongId.value || currentTrack?.id != songId) return
         if (playbackRetries.hasPending) return
+        if (failure.looksLikeSource) {
+            if (lastPlayedLevel.isNotEmpty()) failedUrlKeys.add(OfflineKeys.key(songId, lastPlayedLevel))
+            preloadCache.remove(songId)
+            latestRetryRequest = latestRetryRequest?.copy(positionMs = currentPosition.value)
+            onUrlUnavailable(songId, lastRequestedLevel, lastPlayOrigin,
+                ResolveFailure(ResolveFailureKind.NETWORK, currentTrack!!.source))
+            return
+        }
         val kind = classifyFailure(failure)
         val now = System.currentTimeMillis()
 
@@ -2111,6 +2235,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             "PlayerViewModel",
             "quality pipeline gave up for songId=$songId: $reason — pausing for user action",
         )
+        bufferingWatch?.cancel()
+        isBuffering.value = false
+        if (!recovery.waiting) recovery.failed(false)
         isPlaying.value = false
         qualityStatus.value = QualityStatus.DOWNGRADED
         // 已经没有任何文件在播（这条链彻底放弃），码率随之作废 —— 挂着一个「刚失败那条链」
@@ -2118,7 +2245,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentBitrate.value = 0L
         // 静音停下（保留当前歌与队列，用户点一下就能重来）。
         val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
-            putExtra("action", "pause")
+            putExtra("action", "pause_failed")
+            putExtra("playRevision", playGate.current)
         }
         runCatching { getApplication<Application>().startService(intent) }
     }
@@ -3092,23 +3220,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
+    private fun resumeUnpreparedSelection(): Boolean {
+        val songId = currentSongId.value?.takeIf { it > 0 } ?: return false
+        val svc = PlaybackService.instance
+        if (!recovery.shouldResolveBeforePlay(svc?.hasPlayableItem() == true, svc?.player?.playerError != null)) return false
+        val saved = latestRetryRequest?.takeIf { it.track == currentTrack }
+        playSong(songId, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
+            currentSongArtwork.value.orEmpty(), sourceKey = currentSongSourceKey,
+            sourceId = currentSongSourceId, mediaId = currentSongMediaId,
+            startPositionMs = saved?.positionMs ?: currentPosition.value, privilege = lastSongPrivilege)
+        return true
+    }
+
     fun togglePlayPause() {
-        val songId = currentSongId.value
-        // 只有"已载入但从未开播"的场景才走全量 playSong(剪贴板单曲/冷启动恢复态)。
-        // duration==0 且当前曲正在播(如无缝过渡后心跳还没把 duration 同步回来)时
-        // 若走 playSong 会重取 URL + setMediaItem, 把正在播的歌从 0 重播一遍=拖带感。
-        if (duration.value == 0L && songId != null && songId > 0 && !isPlaying.value) {
-            playSong(
-                songId,
-                title = currentSongName.value ?: "",
-                artist = currentSongArtist.value ?: "",
-                artworkUrl = currentSongArtwork.value ?: "",
-                sourceKey = currentSongSourceKey,
-                sourceId = currentSongSourceId,
-                mediaId = currentSongMediaId,
-            )
-            return
-        }
+        if (!isPlaying.value && resumeUnpreparedSelection()) return
         isPlaying.value = !isPlaying.value
         if (!isPlaying.value) invalidatePlaybackIntent()
         val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
@@ -3185,6 +3310,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onPlaybackPrevious = null
         PlaybackService.onPlaybackNext = null
         PlaybackService.onPlaybackInterrupted = null
+        PlaybackService.onPlaybackResumeRequested = null
         PlaybackService.onIsPlayingChanged = null
         PlaybackService.onSongTransitioned = null
         PlaybackService.onTrackStarted = null

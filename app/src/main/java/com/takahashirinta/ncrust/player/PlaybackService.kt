@@ -195,6 +195,7 @@ class PlaybackService : MediaLibraryService() {
         var onPlaybackPrevious: (() -> Unit)? = null
         var onPlaybackNext: (() -> Unit)? = null
         var onPlaybackInterrupted: (() -> Unit)? = null
+        var onPlaybackResumeRequested: (() -> Boolean)? = null
         var onIsPlayingChanged: ((Boolean) -> Unit)? = null
         // Fired on the main thread when ExoPlayer reports a playback error (decode/source
         // failure). Carries the song id ExoPlayer was on; the ViewModel downgrades quality
@@ -585,7 +586,8 @@ class PlaybackService : MediaLibraryService() {
         // | 通知正文两行 | [buildNotification] 自己设（**不**从会话读，所以歌词行为与 v2.1.5 逐字节一致） |
         // | 声明「本应用是媒体应用」 | 清单里的 `androidx.media3.session.MediaButtonReceiver` |
         mediaSession = MediaLibrarySession.Builder(this,
-            QueueSessionPlayer(player, { onPlaybackNext?.invoke() }, { onPlaybackPrevious?.invoke() }, { onPlaybackInterrupted?.invoke() }),
+            QueueSessionPlayer(player, { onPlaybackNext?.invoke() }, { onPlaybackPrevious?.invoke() },
+                { onPlaybackInterrupted?.invoke() }, { resumePlayback(); true }),
             libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
@@ -932,6 +934,18 @@ class PlaybackService : MediaLibraryService() {
                 )
                 return START_NOT_STICKY
             }
+            "wait_for_url" -> {
+                if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+                clearPendingNext()
+                player.stop()
+                player.clearMediaItems()
+                return START_NOT_STICKY
+            }
+            "pause_failed" -> {
+                if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+                player.pause()
+                return START_NOT_STICKY
+            }
             "pause" -> { onPlaybackInterrupted?.invoke(); player.pause() }
             "resume" -> { resumePlayback() }
             "stop" -> {
@@ -1041,19 +1055,7 @@ class PlaybackService : MediaLibraryService() {
             controller: M3MediaSession.ControllerInfo,
             playerCommand: Int
         ): Int {
-            // media3 默认的 PLAY 就是 `player.play()`：STATE_ENDED 没有分支，队尾播完后
-            // 点系统媒体卡/蓝牙的播放键什么都不会发生（上游 #29）。只在「已经播完/停在
-            // IDLE」时把这一条命令接过来做 seekTo(0)+prepare；正常暂停态的播放/暂停
-            // 仍然走 media3 默认实现（不抢它的状态机与音频焦点）。
-            if (playerCommand == Player.COMMAND_PLAY_PAUSE && !player.isPlaying &&
-                PlaybackQueueLogic.needsRestartBeforePlay(
-                    player.playbackState, player.currentMediaItem != null,
-                )
-            ) {
-                Log.i(TAG_MEDIA_PANEL, "media button PLAY at ENDED/IDLE -> restart playback")
-                resumePlayback()
-                return SessionResult.RESULT_SUCCESS
-            }
+            // Execution belongs to QueueSessionPlayer, including recovery of an unresolved URL.
             // RESULT_SUCCESS only authorises a command. QueueSessionPlayer consumes navigation,
             // preventing Media3 from also seeking the small internal preload playlist.
             return super.onPlayerCommandRequest(session, controller, playerCommand)
@@ -1869,6 +1871,7 @@ class PlaybackService : MediaLibraryService() {
     internal fun hasPlayableItem(): Boolean = player.currentMediaItem != null
 
     private fun resumePlayback() {
+        if (onPlaybackResumeRequested?.invoke() == true) return
         if (PlaybackQueueLogic.needsRestartBeforePlay(
                 player.playbackState, player.currentMediaItem != null,
             )

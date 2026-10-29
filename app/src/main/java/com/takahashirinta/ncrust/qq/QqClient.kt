@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.qq
 
+import com.takahashirinta.ncrust.network.awaitBufferedResponse
 import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
@@ -357,7 +358,7 @@ object QqClient {
      * 返回值从 `JSONObject?` 换成 [QqMusicuOutcome]：HTTP 状态码与失败原因必须与
      * 「这一次」绑定，不能再经单例字段中转（并发请求会互相覆盖，见 [QqMusicuOutcome] 的 KDoc）。
      */
-    private fun execute(
+    private suspend fun execute(
         ctx: Context,
         body: JSONObject,
         module: String,
@@ -398,7 +399,7 @@ object QqClient {
                 .post(body.toString().toRequestBody(JSON))
                 .build()
 
-            http.newCall(httpRequest).execute().use { response ->
+            http.newCall(httpRequest).awaitBufferedResponse().use { response ->
                 val text = response.body?.string()
                 // v3.2.0 · P0：传输层事实既随返回值带走（H12：给失败分类用），
                 // 也照旧记在单例字段上（**只供诊断日志**，业务控制流不读它）。
@@ -470,7 +471,7 @@ object QqClient {
                 }
                 .get()
                 .build()
-            searchHttp.newCall(request).execute().use { response ->
+            searchHttp.newCall(request).awaitBufferedResponse().use { response ->
                 val text = response.body?.string()
                 if (BuildConfig.DEBUG) Log.d(TAG, "legacyGet http=${response.code} len=${text?.length ?: 0}")
                 if (!response.isSuccessful || text.isNullOrEmpty()) return@use null
