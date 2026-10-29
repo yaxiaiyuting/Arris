@@ -62,7 +62,7 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- **Current: `versionName = "3.7.11-gpl"`, `versionCode = 99`.** 用户指定的本地正式整合版；3.7.12/98 是之前的双语测试包，原产物保留。正式code经重新fetch核对最大值98后取99；无新推送/发布授权。
+- **Current: `versionName = "3.7.13-gpl"`, `versionCode = 100`.** 本地弱网切歌修复测试包；3.7.11/99正式整合包和3.7.12/98双语测试包均保留。重新运行带fetch的next-version核对最大值99后取100；无新推送/发布授权。
   上次双语测试定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 97，取 98；原始结果归档于 `docs/verification/v3.7.12/next-version.json`。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）
@@ -5123,3 +5123,11 @@ QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串�
 媒体面板与 Live Updates 共用 MediaLyricFrame 的原文/译文/显示偏好，整帧发布；主行切换和迟到译文也改变通知去重键。设置位于「歌词」：media_bilingual_lyrics 默认 true，media_lyric_primary 默认 0（原文在上），1 为译文在上。lyrics_in_media_session 仍是总开关，保留已有设置。2026-10-29 用户补充要求保留歌名/歌手：无译文/译文空白或与原文相同时，只发一行原文歌词，副行恢复「歌名 · 艺人」；双语两行占满时以 trackInfo 送入通知/Live Updates 的 subText 和会话 description，具体可见性取决于系统模板；无歌词时回到歌名与艺人。关闭双语则保留旧版单歌词与歌曲信息排布。
 
 主副行共用主轨时间戳，译文按最近主行匹配且优先精确时间，不得让上一句借用下一句译文；只在轨道变化时重新匹配，位置采样二分选择。暂停时变更设置也必须刷新 MediaSession metadata，不能只更新通知正文。系统模板控制最终字体/行数；不承诺收起的系统胶囊支持双层。默认不自动翻译，不增加网络请求、音频焦点操作或播放调度。
+
+## v3.7.13 弱网、切网与播放选择
+
+断网无缓存直接进入可重试的网络等待，不空跑远程阶梯、不自动跳歌。默认网络id/传输/验证变化合并500ms；INTERNET仍是在线判据，VALIDATED只作变化信号。只有最后未暂停且处于取链/网络失败/缓冲的请求可恢复，健康播放不因切网重启。12s缓冲观察与原样取链重试均有次数门，用户暂停/停止/新选择撤销旧意图。新网络或新曲重置重试次数和时间戳，计时用elapsedRealtime。
+
+新选曲在取链前发布元数据并停止旧媒体项；失败保留所选曲，播放键会重新解析缺项/失败项，应用与Media3执行入口共用。内部wait_for_url/pause_failed带代次，失败暂停不能当作用户取消。HTTP JSON请求的取消须覆盖响应体读取；网易音质能力补查最多1.2s且不得吞取消，整次当前取链最多15s。连续切歌每次推进游标，停手220ms后只提交最后曲目。
+
+U01用户已在本轮追加授权修复：竖屏封面和横屏实测封面统一保留12%可用区域留白，顶栏、标题、控件测量留位；动画仍复用同一个封面节点。无设备验收，不声称已动态验证具体ROM布局或真实网络切换。
