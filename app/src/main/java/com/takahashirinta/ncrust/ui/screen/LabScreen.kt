@@ -243,9 +243,9 @@ fun LabScreen(onClose: () -> Unit) {
             MetroText(micReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 
             MetroText(
-                "识曲后端：网易云 eapi/music/audio/match（rawdata = zlib+base64 的 3.4 秒 PCM，" +
-                    "algorithmCode=shazam_v2）。依据公开逆向记录；旧版试的 /api/music/recognize 等路径在登录态下实测 404，" +
-                    "已删除。⑤ 会录 3.4 秒并用你的登录态直接问这个端点。",
+                "识曲后端：网易云 eapi/music/audio/match（已确认可用）。请求 rawdata = zlib+base64 的 PCM、" +
+                    "algorithmCode=shazam_v2；响应是**裸 AES 密文**，解出来是 {\"data\":{\"result\":…}}，" +
+                    "result=null 表示没听出来。⑤ 录 3.4 秒后直接问它。",
                 color = colors.onSurfaceVariant,
                 style = TextStyle(fontSize = 12.sp),
             )

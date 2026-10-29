@@ -194,7 +194,9 @@ class NeteaseRecognizeProvider(
             // 命中时 result 里带 song（或 songs[]），这里三种都兼容。
             val data = root.optJSONObject("data") ?: return RecogOutcome.Failed(RecogFailure.NO_MATCH, "无 data")
             if (data.isNull("result")) return RecogOutcome.Failed(RecogFailure.NO_MATCH, "result=null")
+            val resultArray = data.optJSONArray("result")
             val result: JSONObject? = data.optJSONObject("result")
+                ?: resultArray?.optJSONObject(0)
             val song = data.optJSONObject("song")
                 ?: result?.optJSONObject("song")
                 ?: result?.optJSONArray("songs")?.optJSONObject(0)?.optJSONObject("song")
