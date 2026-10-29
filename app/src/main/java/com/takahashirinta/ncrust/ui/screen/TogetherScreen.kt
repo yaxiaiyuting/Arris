@@ -112,7 +112,10 @@ fun TogetherScreen(onBack: () -> Unit) {
                 if (!scanning) {
                     scanning = true
                     scope.launch {
-                        val list = runCatching { RoomDirectory.scan() }
+                        // 必须切 IO：rememberCoroutineScope() 默认是主线程，
+                        // 直接发 HTTP 会抛 NetworkOnMainThreadException（message 是 null，
+                        // UI 只显示"扫描失败：null"，完全看不出原因）。
+                        val list = runCatching { withContext(Dispatchers.IO) { RoomDirectory.scan() } }
                         withContext(Dispatchers.Main) {
                             scanning = false
                             list.onSuccess { rooms = it }

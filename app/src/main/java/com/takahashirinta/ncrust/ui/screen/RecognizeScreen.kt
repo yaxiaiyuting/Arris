@@ -61,6 +61,8 @@ fun RecognizeScreen(onBack: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RecogOutcome?>(null) }
     var status by remember { mutableStateOf("按下开始识别（录 10 秒，请把手机对着音源）") }
+    // 录音倒计时：用户需要知道"还要保持安静几秒"
+    var countdown by remember { mutableStateOf(0) }
 
     Column(
         Modifier
@@ -91,9 +93,20 @@ fun RecognizeScreen(onBack: () -> Unit) {
                     } else {
                         busy = true
                         result = null
-                        status = "录音中…（10 秒）"
+                        countdown = 10
+                        status = "录音中…"
                         scope.launch {
+                            // 倒计时与录音并行：每秒减 1，录完归零
+                            val ticker = launch {
+                                for (left in 10 downTo 1) {
+                                    countdown = left
+                                    kotlinx.coroutines.delay(1_000)
+                                }
+                                countdown = 0
+                            }
                             val audio = withContext(Dispatchers.IO) { AacRecorder.record(context, 10_000) }
+                            ticker.cancel()
+                            countdown = 0
                             if (audio == null) {
                                 status = "录音失败（权限被拒或麦克风被占用）"
                                 busy = false
@@ -123,7 +136,11 @@ fun RecognizeScreen(onBack: () -> Unit) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 BasicText(
-                    text = if (busy) "识别中…" else "开始识别",
+                    text = when {
+                        countdown > 0 -> "录音中 $countdown"
+                        busy -> "识别中…"
+                        else -> "开始识别"
+                    },
                     style = TextStyle(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,

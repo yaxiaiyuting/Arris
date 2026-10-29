@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
@@ -89,6 +90,9 @@ import android.widget.Toast
 
 @Composable
 fun LibraryScreen(
+    // v3.8.0：库页顶部两个功能图标（听歌识曲 / 一起听）
+    onOpenRecognize: () -> Unit = {},
+    onOpenTogether: () -> Unit = {},
     onSongClick: (SongItem) -> Unit,
     onAlbumClick: (Long) -> Unit,
     onPlayAlbum: (Long) -> Unit,
@@ -317,11 +321,28 @@ fun LibraryScreen(
                     .statusBarsPadding()
                     .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
             ) {
-                MetroText(
-                    strings.tabLibrary,
-                    color = LocalMetroColors.current.onBackground,
-                    style = LocalMetroTypography.current.pageHeading,
-                )
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    MetroText(
+                        strings.tabLibrary,
+                        color = LocalMetroColors.current.onBackground,
+                        style = LocalMetroTypography.current.pageHeading,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 两个功能图标：识曲（麦克风）/ 一起听（双人）。
+                    // 命中区按 48dp 给足（AGENTS.md 触摸陷阱 §7：视觉可以小，命中不能小）。
+                    TileAction(
+                        label = "听歌识曲",
+                        icon = androidx.compose.material.icons.Icons.Default.Mic,
+                    ) { onOpenRecognize() }
+                    Spacer(Modifier.width(4.dp))
+                    TileAction(
+                        label = "一起听",
+                        icon = androidx.compose.material.icons.Icons.Default.People,
+                    ) { onOpenTogether() }
+                }
             }
             Spacer(Modifier.height(4.dp))
             if (sessionExpired) {
@@ -782,5 +803,28 @@ fun LibraryAlbumGridItem(
         MetroText(album.name, color = LocalMetroColors.current.onBackground, style = LocalMetroTypography.current.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         MetroText(infoLine, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         Spacer(Modifier.height(6.dp))
+    }
+}
+
+/**
+ * 库页页头的图标按钮（v3.8.0）。
+ *
+ * 视觉 40dp，**命中区 48dp** —— AGENTS.md 触摸陷阱 §7 的同一条纪律。
+ */
+@androidx.compose.runtime.Composable
+private fun TileAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    val colors = io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors.current
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        io.github.takahashirinta.kanesumi.core.theme.MetroIcon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = colors.onBackground,
+            sizeDp = 22.dp,
+        )
     }
 }
