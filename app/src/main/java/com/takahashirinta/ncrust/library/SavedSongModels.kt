@@ -176,8 +176,21 @@ object SavedSongSync {
             when {
                 // 规则 4：云端有 + 在 tombstone ⇒ 跳过（绝不复活）。
                 cur != null && cur.tombstoned -> Unit
-                // 规则 2：云端有 + 本地有 ⇒ 保留，不动。
-                cur != null -> out[key] = cur
+                // 规则 2：云端有 + 本地有 ⇒ **保留身份与来源，但刷新载荷**。
+                //
+                // 旧实现整条不动，于是"老收藏"永远停在入库那天的字段上：
+                // 详情接口后来补出的 `originCoverType`（原唱/翻唱角标）压根进不来，
+                // 用户看到的就是"库里有原唱标签的只有少数几首、其余都没有"。
+                // 身份（trackKey/origin/addedAt/tombstone）仍然保留 —— 只换 song 载荷里
+                // 云端更完整的字段，本地独有的取链载荷不会被冲掉（见 [preferFreshPayload]）。
+                cur != null -> {
+                    val fresh = remoteSongs[id]
+                    val merged = if (fresh == null) cur.song else preferFreshPayload(cur.song, fresh)
+                    // **载荷没变就原样返回同一个对象**：Compose 的稳定性（以及老测试里
+                    // 「规则 2 不重建对象」的断言）都依赖这一点。只有云端确实带来了新字段
+                    // （例如这次补出的 `originCoverType`）才重建 entry。
+                    out[key] = if (merged == cur.song) cur else cur.copy(song = merged)
+                }
                 else -> {
                     val song = remoteSongs[id] ?: continue
                     out[key] = SavedSongEntry(key, SavedSongOrigin.REMOTE, now, false, song)
@@ -208,6 +221,25 @@ object SavedSongSync {
 
         return out.values.toList()
     }
+
+    /**
+     * 云端条目刷新载荷：**云端有的用云端的，本地独有的一律保留**。
+     *
+     * 为什么不是直接 `cur.copy(song = fresh)`：`remoteSongs` 来自详情接口，它没有
+     * `sourceId` / `mediaId` 那类"取链载荷"（那是搜索/QQ 链路填的），直接覆盖会让
+     * QQ 曲目丢掉 songmid，变成不可解析。判据很简单：**fresh 是空的就退回本地值**。
+     */
+    private fun preferFreshPayload(cur: SongItem, fresh: SongItem): SongItem = fresh.copy(
+        source = fresh.source ?: cur.source,
+        sourceId = fresh.sourceId ?: cur.sourceId,
+        mediaId = fresh.mediaId ?: cur.mediaId,
+        qqSongId = fresh.qqSongId ?: cur.qqSongId,
+        fee = fresh.fee ?: cur.fee,
+        memberOnly = fresh.memberOnly ?: cur.memberOnly,
+        originCoverType = fresh.originCoverType ?: cur.originCoverType,
+        originSong = fresh.originSong ?: cur.originSong,
+        privilege = fresh.privilege ?: cur.privilege,
+    )
 
     // ------------------------------------------------------------------ 规则 5 ----
 

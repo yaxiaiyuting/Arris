@@ -245,4 +245,30 @@ class PlaylistDetailResultTest {
             LocalPlaylistStore.readPlaylists(ctx).single().lastSyncedAt,
         )
     }
+
+    /**
+     * 回归：详情接口也必须把 `originCoverType` 带出来。
+     *
+     * 症状是「搜索里有『原唱』角标，收藏库/歌单详情里同一首歌没有」——
+     * 搜索走 `SearchResponse` 的映射，详情走 `parseSongTrack`，而后者长期只挑
+     * id/name/ar/al/dt，把版本字段丢了。
+     */
+    @Test
+    fun songDetailCarriesOriginCoverTag() = runBlocking {
+        val detail = JSONObject()
+            .put("id", 11L)
+            .put("name", "s11")
+            .put("dt", 1000L)
+            .put("ar", JSONArray().put(JSONObject().put("id", 1L).put("name", "artist")))
+            .put("al", JSONObject().put("id", 2L).put("name", "album"))
+            .put("originCoverType", 1)
+        // 歌单详情只给 trackIds（不带 tracks），歌曲对象由 `v3/song/detail` 补齐 ——
+        // 这正是收藏库读取时走的路径。
+        val playlist = detailJson(declaredCount = 1, trackIds = listOf(11L), tracks = emptyList())
+        val songDetail = JSONObject().put("code", 200).put("songs", JSONArray().put(detail)).toString()
+        intercept(route(playlist, songDetail))
+        val result = PlaylistApi.getPlaylistDetailResult(7L)
+        assertEquals(1, result.songs.size)
+        assertEquals("详情必须带 originCoverType", 1, result.songs.first().originCoverType)
+    }
 }
