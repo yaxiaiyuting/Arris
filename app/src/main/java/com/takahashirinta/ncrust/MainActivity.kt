@@ -838,6 +838,9 @@ internal fun reorderByIdentity(
  */
 private const val SEARCH_TAB_INDEX = 2
 
+/** 底栏切歌按钮的合并窗口（ms）：窗口内的连点只执行最后一次。 */
+private const val SKIP_TAP_SETTLE_MS = 220L
+
 /** v2.6.1 · P0：艺人跳转的日志标签。降级为搜索时必须留痕，否则线上只能看到「没反应」。 */
 private const val TAG_ARTIST_NAV = "ArtistNav"
 
@@ -2965,6 +2968,26 @@ fun MainScreen(
     LaunchedEffect(playerViewModel) {
         StatsRecorder.attach(context, playerViewModel)
     }
+    /**
+     * 底栏「上一首 / 下一首」的**只认最后一次**入口（v3.7.11）。
+     *
+     * 症状：连点切歌按钮，手停下之后底栏还会把中间几次挨个演一遍。
+     * 原因：每一下点击都会真的换一首（这是既有行为，别的路径也在用 `playNext()`），
+     * 而播放器把多次换歌依次应用完需要时间，界面就跟着补播。
+     *
+     * 这里**不改播放链路**，只在按钮这一层合并：窗口内的连点只保留最后一次，
+     * 窗口结束后执行一次 `playNext()`/`playPrevious()` —— 一次点击换一首、只演一次动画。
+     * 其余入口（队列面板、锁屏、耳机线控）完全不受影响。
+     */
+    var skipJob by remember { mutableStateOf<Job?>(null) }
+    val onSkipTap: (Boolean) -> Unit = { forward ->
+        skipJob?.cancel()
+        skipJob = coroutineScope.launch {
+            delay(SKIP_TAP_SETTLE_MS)
+            if (forward) playNext() else playPrevious()
+        }
+    }
+
     val onNavSelected: (Int) -> Unit = { tab ->
         selectedTab = tab
         if (!isInMain) navController.popBackStack(NavRoutes.HOME, false)
@@ -3011,8 +3034,8 @@ fun MainScreen(
             playMode = playMode,
             onPlayPause = { playerViewModel.togglePlayPause() },
             onDismiss = { collapseCard() },
-            onPlayPrevious = { playPrevious() },
-            onPlayNext = { playNext() },
+            onPlayPrevious = { onSkipTap(false) },
+            onPlayNext = { onSkipTap(true) },
             onRemoveFromQueue = { removeFromQueue(it) },
             onPlayFromQueue = { playFromQueue(it) },
             onMoveInQueue = ::moveInQueue,
