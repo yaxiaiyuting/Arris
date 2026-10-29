@@ -1,0 +1,512 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :Kanesumi-sec-a:kanesumi-core:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preDebugBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResources UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :Kanesumi-sec-a:kanesumi-controls:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugManifest UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugLibraryResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugLibraryResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugLibraryResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugRFile UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugLibraryResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:checkKotlinGradlePluginConfigurationErrors
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-core:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:stripDebugDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDebugAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:packageDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:prepareDebugArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:prepareLintJarForPublish UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeDebugJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:syncDebugLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleDebugLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:stripDebugDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDebugAnnotations UP-TO-DATE
+> Task :app:processDebugMainManifest
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:packageDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:prepareDebugArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:prepareLintJarForPublish UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeDebugJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:syncDebugLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleDebugLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:stripDebugDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDebugAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:packageDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:prepareDebugArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:prepareLintJarForPublish UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeDebugJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:syncDebugLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleDebugLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:stripDebugDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDebugAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:packageDebugAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:prepareDebugArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:prepareLintJarForPublish UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeDebugJavaResource UP-TO-DATE
+> Task :app:processDebugManifest
+> Task :Kanesumi-sec-a:kanesumi-anim:syncDebugLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleDebugLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeDebugLintModelMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:createFullJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:createFullJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:createFullJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:writeDebugLintModelMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:writeDebugLintModelMetadata UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:createFullJarDebug UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :Kanesumi-sec-a:kanesumi-structure:writeDebugLintModelMetadata UP-TO-DATE
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractProguardFiles UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeDebugStartupProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugLintModel UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractProguardFiles UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractProguardFiles UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugLintModel UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:generateReleaseBuildConfig
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:lintAnalyzeDebug UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:lintAnalyzeDebug UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:lintAnalyzeDebug UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :app:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :app:mergeReleaseStartupProfile UP-TO-DATE
+> Task :app:mergeReleaseShaders UP-TO-DATE
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:lintAnalyzeDebug UP-TO-DATE
+> Task :app:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preDebugUnitTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :app:collectReleaseDependencies UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preDebugAndroidTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:sdkReleaseDependencyData UP-TO-DATE
+> Task :app:validateSigningRelease UP-TO-DATE
+> Task :app:writeReleaseAppMetadata UP-TO-DATE
+> Task :app:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :app:processDebugManifestForPackage
+> Task :Kanesumi-sec-a:kanesumi-structure:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preDebugAndroidTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preDebugAndroidTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preDebugUnitTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preDebugUnitTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preDebugAndroidTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preDebugUnitTestBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preReleaseBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:writeReleaseAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preReleaseBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:writeReleaseAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preReleaseBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:writeReleaseAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preReleaseBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeReleaseAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:packageReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:packageReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:packageReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:packageReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processReleaseManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processReleaseManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processReleaseManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processReleaseManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:parseReleaseLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:parseReleaseLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:parseReleaseLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:parseReleaseLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileReleaseKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:javaPreCompileRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileReleaseJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileReleaseKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:javaPreCompileRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileReleaseJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileReleaseKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:javaPreCompileRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileReleaseJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileReleaseKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:javaPreCompileRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileReleaseJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processReleaseJavaRes UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:createFullJarRelease UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseLintModel UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processReleaseJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:createFullJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processReleaseJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:createFullJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseLintModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processReleaseJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:createFullJarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:stripReleaseDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractReleaseAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileReleaseShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:packageReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:prepareReleaseArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:mergeReleaseJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:syncReleaseLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:stripReleaseDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractReleaseAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileReleaseShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:packageReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:prepareReleaseArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:mergeReleaseJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:syncReleaseLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseNativeLibs NO-SOURCE
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:stripReleaseDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractReleaseAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileReleaseShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:packageReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:prepareReleaseArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:mergeReleaseJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:syncReleaseLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseNativeLibs NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:stripReleaseDebugSymbols NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractReleaseAnnotations UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseShaders UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileReleaseShaders NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:packageReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:prepareReleaseArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:mergeReleaseJavaResource UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:syncReleaseLibJars UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :app:processReleaseMainManifest
+> Task :Kanesumi-sec-a:kanesumi-anim:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :app:processReleaseManifest
+> Task :Kanesumi-sec-a:kanesumi-anim:generateReleaseLintVitalModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateReleaseLintVitalModel UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateReleaseLintVitalModel UP-TO-DATE
+> Task :app:mergeReleaseArtProfile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateReleaseLintVitalModel UP-TO-DATE
+> Task :app:mergeReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :app:compressReleaseAssets UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :app:processApplicationManifestReleaseForBundle
+> Task :Kanesumi-sec-a:kanesumi-structure:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :app:processReleaseManifestForPackage
+> Task :Kanesumi-sec-a:kanesumi-structure:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :app:mergeReleaseNativeLibs UP-TO-DATE
+> Task :app:stripReleaseDebugSymbols UP-TO-DATE
+> Task :app:extractReleaseNativeSymbolTables UP-TO-DATE
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:processDebugResources
+> Task :app:processReleaseResources
+> Task :app:bundleReleaseResources
+
+> Task :app:compileDebugKotlin
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:1085:58 Unnecessary safe call on a non-null receiver of type TrackKey?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:1085:96 Unnecessary safe call on a non-null receiver of type TrackKey?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:3154:9 Parameter 'load' is never used
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:generateDebugLintReportModel
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:mergeDebugJavaResource
+> Task :app:compileReleaseKotlin
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:dexBuilderDebug
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :app:compileReleaseKotlin
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:935:26 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:1061:9 Variable 'sidebarWidthPx' is never used
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:2579:55 'LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:3487:43 'PlaylistAdd: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistAdd
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt:3497:43 'PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:77:22 Parameter 'cookie' is never used
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:272:55 No cast needed
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt:312:85 No cast needed
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:693:77 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:696:40 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:697:45 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:725:90 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:732:68 Unnecessary safe call on a non-null receiver of type MediaItem?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:1053:22 This declaration overrides deprecated member but not marked as deprecated itself. Please add @Deprecated annotation or suppress. See https://youtrack.jetbrains.com/issue/KT-47902 for details
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:1061:26 'onPlayerCommandRequest(MediaSession, MediaSession.ControllerInfo, Int): Int' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt:2138:52 'getter for sessionCompatToken: MediaSessionCompat.Token' is deprecated. Deprecated in Java
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardLayouts.kt:390:5 Parameter 'geo' is never used
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:1085:58 Unnecessary safe call on a non-null receiver of type TrackKey?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:1085:96 Unnecessary safe call on a non-null receiver of type TrackKey?
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt:3154:9 Parameter 'load' is never used
+
+> Task :app:testDebugUnitTest
+
+BiliApiDispatchTest > 搜索的阻塞传输不在调用线程上跑 —— P0-C 的回归判据 FAILED
+    java.lang.AssertionError at BiliApiDispatchTest.kt:149
+
+BiliApiDispatchTest > 取消是控制流不是失败 —— CancellationException 必须原样抛出 FAILED
+    java.lang.AssertionError at BiliApiDispatchTest.kt:240
+
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:testDebugUnitTest
+
+BiliAuthRequestTest > CancellationException 从三个接口原样穿透（不吞成失败） FAILED
+    java.lang.AssertionError at BiliAuthRequestTest.kt:166
+
+3382 tests completed, 3 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+[Incubating] Problems report is available at: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 2m 56s
+372 actionable tasks: 34 executed, 338 up-to-date

@@ -1,0 +1,40 @@
+{
+  "finished_at": "2026-10-29 23:21:30 CST",
+  "version_name": "3.7.13-gpl",
+  "version_code": 100,
+  "source_commit": "2e64aed602df7caf9932fc853e4ea9eedfcdfcff",
+  "app_tree": "1a2d65c886ec8e66cea77eedfe80fa705d95b8c3",
+  "jvm": {
+    "classes": 311,
+    "tests": 3386,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Information": 7,
+    "Warning": 61
+  },
+  "signing_certificate_sha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "artifacts": {
+    "release": {
+      "path": "/home/duanjb666/deepseek/dist/v3.7.13-gpl-code100/Arris-v3.7.13-gpl-release.apk",
+      "bytes": 12121852,
+      "sha256": "6c0b3424302dde55d648e408362258d897f89de8441905664a7d2cc5c590f0be"
+    },
+    "debug": {
+      "path": "/home/duanjb666/deepseek/dist/v3.7.13-gpl-code100/Arris-v3.7.13-gpl-debug.apk",
+      "bytes": 34756213,
+      "sha256": "037a03a19eadaf528878773f3c8007f46ac19f296031bf6ea33ab813cdb2047f"
+    },
+    "mapping": {
+      "path": "/home/duanjb666/deepseek/dist/v3.7.13-gpl-code100/Arris-v3.7.13-gpl-mapping.txt",
+      "bytes": 80484200,
+      "sha256": "b0941189a40de7820c09edb38ff1397daf67d0250e7eeef5a15e6b14853bca49"
+    }
+  },
+  "device_tested": false,
+  "real_network_tested": false,
+  "pushed": false,
+  "github_published": false
+}
