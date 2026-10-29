@@ -428,6 +428,7 @@ val jpJP = Strings(
         aboutAppSubtitle = "ncm 非公式クライアント",
         aboutSectionProject = "プロジェクト情報",
         aboutVersion = "バージョン",
+            aboutLab = "ラボ（診断）",
         aboutDeveloperOriginal = "原作者",
         aboutDeveloperFork = "フォークメンテナー",
         aboutLicense = "ライセンス",

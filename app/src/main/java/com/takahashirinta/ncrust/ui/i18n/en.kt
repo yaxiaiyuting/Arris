@@ -429,6 +429,7 @@ val en = Strings(
         aboutAppSubtitle = "Unofficial ncm client",
         aboutSectionProject = "Project Info",
         aboutVersion = "Version",
+            aboutLab = "Lab (diagnostics)",
         aboutDeveloperOriginal = "Original author",
         aboutDeveloperFork = "Fork maintainer",
         aboutLicense = "License",

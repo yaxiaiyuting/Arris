@@ -87,26 +87,41 @@ object ShazamFingerprint {
             val bins = WINDOW / 2
             val binHz = SAMPLE_RATE.toFloat() / WINDOW
 
-            for (b in 0 until BANDS_HZ.size - 1) {
-                val lo = max(1, (BANDS_HZ[b] / binHz).toInt())
-                val hi = min(bins - 1, (BANDS_HZ[b + 1] / binHz).toInt())
-                if (hi <= lo) continue
-                var bestBin = -1
-                var bestMag = 0f
-                var floorMag = 0f
-                for (k in lo..hi) {
-                    val mag = sqrt(re[k] * re[k] + im[k] * im[k])
-                    if (mag > bestMag) {
-                        bestMag = mag
-                        bestBin = k
+            // 全频段局部极大 + 每帧限量。
+            //
+            // 旧实现"每个频带必取一个最强 bin" ⇒ 每帧固定 4 个峰，静音时也一样（实测 84 帧 ×4=336），
+            // 那些峰全是噪声，重合率自然是碰运气。现在：
+            //  ① 峰必须是 ±NEIGHBOR_BINS 邻域内的极大；
+            //  ② 幅度要高于**本帧全体均值**的 PEAK_RATIO 倍（不再用分带均值，避免低频泄漏主导）；
+            //  ③ 每帧只留最强的 MAX_PEAKS_PER_FRAME 个。
+            val mags = FloatArray(bins) { k ->
+                sqrt(re[k] * re[k] + im[k] * im[k])
+            }
+            var sum = 0f
+            for (k in 1 until bins) sum += mags[k]
+            val frameMean = sum / (bins - 1)
+            val floorMag = max(MIN_MAGNITUDE, frameMean * PEAK_RATIO)
+            val candidates = ArrayList<Int>(8)
+            for (k in max(1, NEIGHBOR_BINS) until bins - NEIGHBOR_BINS) {
+                val m = mags[k]
+                if (m <= floorMag) continue
+                var isLocalMax = true
+                for (d in -NEIGHBOR_BINS..NEIGHBOR_BINS) {
+                    if (d == 0) continue
+                    if (mags[k + d] > m) {
+                        isLocalMax = false
+                        break
                     }
-                    floorMag += mag
                 }
-                // 只收"明显高于本带均值"的峰：底噪与静音段会被这条挡掉。
-                val mean = floorMag / (hi - lo + 1)
-                if (bestBin > 0 && bestMag > mean * PEAK_RATIO && bestMag > MIN_MAGNITUDE) {
-                    peaks.add(Peak(f, bestBin, bestMag))
-                }
+                if (isLocalMax) candidates.add(k)
+            }
+            if (candidates.isEmpty()) continue
+            candidates.sortByDescending { mags[it] }
+            var kept = 0
+            for (k in candidates) {
+                peaks.add(Peak(f, k, mags[k]))
+                kept++
+                if (kept >= MAX_PEAKS_PER_FRAME) break
             }
         }
 
@@ -141,8 +156,14 @@ object ShazamFingerprint {
 
     // ------------------------------------------------------------ 内部实现
 
-    private const val PEAK_RATIO = 1.8f
-    private const val MIN_MAGNITUDE = 1e-4f
+    private const val PEAK_RATIO = 2.5f
+
+    /** 局部极大判据的邻域半宽（bin）。 */
+    private const val NEIGHBOR_BINS = 3
+
+    /** 每帧最多保留几个峰（Shazam 类实现通常在 3~10 之间）。 */
+    private const val MAX_PEAKS_PER_FRAME = 6
+    private const val MIN_MAGNITUDE = 5e-4f
 
     private val hannCache: FloatArray by lazy { hann(WINDOW) }
 

@@ -851,6 +851,9 @@ data class Strings(
     val aboutAppSubtitle: String get() = about.aboutAppSubtitle
     val aboutSectionProject: String get() = about.aboutSectionProject
     val aboutVersion: String get() = about.aboutVersion
+
+    /** 关于页 · 开发者实验室入口（v3.8.0 临时诊断面）。 */
+    val aboutLab: String get() = about.aboutLab
     val celebration: CelebrationStrings get() = about.celebration
     val aboutDeveloperOriginal: String get() = about.aboutDeveloperOriginal
     val aboutDeveloperFork: String get() = about.aboutDeveloperFork
@@ -1963,6 +1966,8 @@ data class AboutStrings(
     val aboutAppSubtitle: String,
     val aboutSectionProject: String,
     val aboutVersion: String,
+    /** 开发者实验室入口（v3.8.0 临时诊断面，功能上线后随 LabScreen 一起删除）。 */
+    val aboutLab: String = "实验室（诊断）",
     val aboutDeveloperOriginal: String,
     val aboutDeveloperFork: String,
     val aboutLicense: String,

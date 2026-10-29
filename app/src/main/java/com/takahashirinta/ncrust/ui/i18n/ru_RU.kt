@@ -429,6 +429,7 @@ val ruRU = Strings(
         aboutAppSubtitle = "Неофициальный клиент ncm",
         aboutSectionProject = "О проекте",
         aboutVersion = "Версия",
+            aboutLab = "Лаборатория",
         aboutDeveloperOriginal = "Автор оригинала",
         aboutDeveloperFork = "Сопровождающий форка",
         aboutLicense = "Лицензия",

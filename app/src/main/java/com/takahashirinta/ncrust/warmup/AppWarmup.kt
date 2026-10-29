@@ -139,6 +139,10 @@ object AppWarmup {
             // ================= 阶段一：本地阶段（**唯一**决定 splash 何时结束的部分） =================
             // 上次的首页磁盘快照灌回内存缓存。无网冷启动时这几乎是首屏唯一的内容来源。
             runCatchingCancellable { HomeSnapshot.restoreIntoCache(app) }
+            // 冷启动预热 qm 会员快照：`TrackAvailability.ofQq` 用的是无 Context 的缓存，
+            // 只有 profile()/saveProfile() 被调用过才是准的。不预热的话，先进库页再看 QQ 曲目，
+            // 会员用户也会看到「需会员」——搜索页才会把快照刷对。
+            runCatching { com.takahashirinta.ncrust.qq.QqAuthStore.profile(app) }
 
             // v1.5.2：splash 到此为止。
             //

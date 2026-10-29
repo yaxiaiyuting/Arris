@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -86,7 +87,9 @@ fun LabScreen(onClose: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                // 不做 statusBarsPadding 的话标题会被状态栏压住（真机第一次打开就是这样）
+                .statusBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             MetroText("实验室 · LAB", color = colors.primary, style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold))
@@ -109,14 +112,18 @@ fun LabScreen(onClose: () -> Unit) {
                     micReport = "录音中…"
                     // 采集 + 指纹是 CPU/IO 活，放到后台，避免主线程卡住（ANR）。
                     scope.launch(Dispatchers.Default) {
-                        val pcm = MicCapture.record(6_000)
+                        val captured = MicCapture.recordDetailed(6_000)
+                        val pcm = captured?.samples
                         val text = if (pcm == null) {
-                            "采集失败（设备占用或权限）"
+                            "采集失败：所有音源都没出数据（权限/占用/静音）"
                         } else {
                             val fp = ShazamFingerprint.compute(pcm)
                             lastFingerprint = fp
                             val rms = ShazamFingerprint.rms(pcm)
-                            "采样=${pcm.size} RMS=%.4f %s".format(rms, ShazamFingerprint.summarize(fp))
+                            "源=%s 尝试=%s｜采样=%d RMS=%.4f %s".format(
+                                MicCapture.sourceName(captured.source),
+                                captured.attempts.joinToString(","),
+                                pcm.size, rms, ShazamFingerprint.summarize(fp))
                         }
                         withContext(Dispatchers.Main) {
                             micReport = text
@@ -133,18 +140,57 @@ fun LabScreen(onClose: () -> Unit) {
                 } else {
                     busy = true
                     scope.launch(Dispatchers.Default) {
-                        val pcm = MicCapture.record(6_000)
+                        val captured = MicCapture.recordDetailed(6_000)
+                        val pcm = captured?.samples
                         val text = if (pcm == null) {
-                            "第二次采集失败"
+                            "第二次采集失败（静音/占用）"
                         } else {
                             val fp = ShazamFingerprint.compute(pcm)
                             val ratio = ShazamFingerprint.overlapRatio(base.hashes, fp.hashes)
-                            "第二次 %s；重合率=%.3f".format(ShazamFingerprint.summarize(fp), ratio)
+                            "第二次 源=%s RMS=%.4f %s；重合率=%.3f".format(
+                                MicCapture.sourceName(captured.source),
+                                ShazamFingerprint.rms(pcm), ShazamFingerprint.summarize(fp), ratio)
                         }
                         withContext(Dispatchers.Main) {
                             micReport = text
                             busy = false
                         }
+                    }
+                }
+            }
+
+            LabButton("④ 单次录音内自比对（同段音频切两半，验指纹稳定性）", enabled = !busy) {
+                busy = true
+                micReport = "录音中（8 秒）…"
+                scope.launch(Dispatchers.Default) {
+                    val captured = MicCapture.recordDetailed(8_000)
+                    val pcm = captured?.samples
+                    val text = if (pcm == null) {
+                        "采集失败：所有音源都没出数据"
+                    } else {
+                        // A = 前 6 秒，B = 第 2~8 秒：**同一段真实音频**，只差 2 秒偏移。
+                        // 这一条不受"两次录的是不是同一首歌"影响，专门衡量指纹本身稳不稳。
+                        val a = ShazamFingerprint.compute(pcm.copyOfRange(0, 6 * ShazamFingerprint.SAMPLE_RATE))
+                        val b = ShazamFingerprint.compute(pcm.copyOfRange(2 * ShazamFingerprint.SAMPLE_RATE, pcm.size))
+                        val ratio = ShazamFingerprint.overlapRatio(a.hashes, b.hashes)
+                        // A 覆盖 0–6s、B 覆盖 2–8s：共享帧只有 4/6，所以**理论最大重合率不是 1.0**。
+                        // 不做这个归一化，0.58 会被误读成"不稳"，实际上已经接近上限。
+                        val sharedFraction = 4.0 / 6.0
+                        val normalized = (ratio / sharedFraction).coerceAtMost(1.0)
+                        "源=%s（%s）RMS=%.4f｜A %s｜B %s｜自重合率=%.3f（理论上限%.2f，归一化%.2f）".format(
+                            MicCapture.sourceName(captured.source),
+                            captured.attempts.joinToString(","),
+                            ShazamFingerprint.rms(pcm),
+                            ShazamFingerprint.summarize(a),
+                            ShazamFingerprint.summarize(b),
+                            ratio,
+                            sharedFraction,
+                            normalized,
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        micReport = text
+                        busy = false
                     }
                 }
             }
@@ -192,9 +238,11 @@ private fun runRoomSelfTest(): String {
     log.appendLine("协议版本=${state.protocolVersion}")
     log.appendLine("SetQueue(a,b) → " + apply(RoomOp.SetQueue(seq = 1, byUserId = "host", tracks = listOf(a, b))))
     log.appendLine("Play(0) → " + apply(RoomOp.Play(seq = 2, byUserId = "host", positionMs = 0)))
-    log.appendLine("成员点歌被拒 → " + apply(RoomOp.Pause(seq = 3, byUserId = "member", positionMs = 5_000)))
-    log.appendLine("重复 seq 被拒 → " + apply(RoomOp.Pause(seq = 3, byUserId = "host", positionMs = 5_000)))
-    log.appendLine("Next → " + apply(RoomOp.Next(seq = 4, byUserId = "host")))
+    log.appendLine("成员操作被拒 → " + apply(RoomOp.Pause(seq = 3, byUserId = "member", positionMs = 5_000)))
+    // 注意：此时 state.seq 仍是 2（上一条被拒了），所以"重复序号"要用 **2** 才是真的重复。
+    // 用 3 会成功应用一条 Pause，把播放状态关掉，后面的位置验算就成了 0ms —— 上一版就踩了这个。
+    log.appendLine("重复序号被拒 → " + apply(RoomOp.Pause(seq = 2, byUserId = "host", positionMs = 5_000)))
+    log.appendLine("Next → " + apply(RoomOp.Next(seq = 3, byUserId = "host")))
     log.appendLine("当前曲=${state.currentTrack?.title} 下标=${state.currentIndex}")
 
     val estimate = RoomClock.estimateOffset(

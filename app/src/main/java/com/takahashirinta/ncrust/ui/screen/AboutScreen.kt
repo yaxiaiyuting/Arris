@@ -69,7 +69,12 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
     // 关于页的手动检查与用户页横幅共用同一份逻辑；检查中禁止重复点。
     val updateState by UpdateService.state.collectAsState()
     val manualUpdateCheck = rememberManualUpdateCheck(onFound = onOpenUpdate)
-    BackHandler { onBack() }
+    // v3.8.0 · 实验室开合状态。**必须放在最外层**：LabScreen 自己带 verticalScroll，
+    // 若塞进关于页那个可滚动 Column 里就是滚动套滚动，Compose 会抛
+    // IllegalStateException: Vertically scrollable component was measured with an
+    // infinity maximum height constraints（真机第一次点开就闪退，logcat 已抓到）。
+    var showLab by remember { mutableStateOf(false) }
+    BackHandler(enabled = !showLab) { onBack() }
     // Groove 无边框：不再套 M3 TopAppBar Surface，返回箭头浮在内容上方共用 TopScrimIconButton。
     Box(
         modifier = Modifier
@@ -99,19 +104,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                         )
                         Spacer(Modifier.height(16.dp))
                         MetroText("Arris", color = accent, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
-                        // v3.8.0：长按版本号打开开发者实验室（临时诊断面，功能上线后整体删除）。
-                        var showLab by remember { mutableStateOf(false) }
-                        MetroText(
-                            VERSION,
-                            color = accent.copy(alpha = 0.72f),
-                            style = TextStyle(fontSize = 14.sp),
-                            modifier = Modifier.pointerInput(Unit) {
-                                detectTapGestures(onLongPress = { showLab = true })
-                            },
-                        )
-                        if (showLab) {
-                            LabScreen(onClose = { showLab = false })
-                        }
+                        MetroText(VERSION, color = accent.copy(alpha = 0.72f), style = TextStyle(fontSize = 14.sp))
                         Spacer(Modifier.height(6.dp))
                         MetroText(s.aboutAppSubtitle, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
                         Spacer(Modifier.height(28.dp))
@@ -125,6 +118,14 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                         AboutSection(s.aboutSectionProject.uppercase(), accent)
                         com.takahashirinta.ncrust.celebration.VersionEggRow(s.aboutVersion, VERSION)
                         // v3.4.13：手动检查更新（不受自动检查 24 小时窗口限制）。
+                        // v3.8.0 · 临时诊断面：长按版本号会和生日彩蛋抢手势，改成可见入口。
+                        // 功能上线后这一行与 LabScreen 一起删除。
+                        AboutActionRow(
+                            label = s.aboutLab,
+                            value = "",
+                            enabled = true,
+                            onClick = { showLab = true },
+                        )
                         AboutActionRow(
                             label = updateStrings.checkNow,
                             value = if (updateState.checking) updateStrings.checking else "",
@@ -181,6 +182,9 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
             contentDescription = s.back,
             onClick = onBack
         )
+        if (showLab) {
+            LabScreen(onClose = { showLab = false })
+        }
     }
 }
 

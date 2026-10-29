@@ -428,6 +428,7 @@ val zhCN = Strings(
         aboutAppSubtitle = "ncm 第三方客户端",
         aboutSectionProject = "项目信息",
         aboutVersion = "版本",
+            aboutLab = "实验室（诊断）",
         aboutDeveloperOriginal = "原作者",
         aboutDeveloperFork = "fork 维护者",
         aboutLicense = "许可证",

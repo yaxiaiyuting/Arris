@@ -429,6 +429,7 @@ val deDE = Strings(
         aboutAppSubtitle = "Inoffizieller ncm Client",
         aboutSectionProject = "Projektinfo",
         aboutVersion = "Version",
+            aboutLab = "Labor (Diagnose)",
         aboutDeveloperOriginal = "Ursprünglicher Entwickler",
         aboutDeveloperFork = "Fork-Maintainer",
         aboutLicense = "Lizenz",

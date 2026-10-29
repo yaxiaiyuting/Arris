@@ -360,7 +360,7 @@ class StringsConstructorBudgetTest {
             // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
             "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 88,
-            "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 26,
+            "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 27,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
         expected.forEach { (name, n) ->

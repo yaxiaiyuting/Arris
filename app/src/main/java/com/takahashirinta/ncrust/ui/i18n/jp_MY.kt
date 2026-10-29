@@ -428,6 +428,7 @@ val jpMY = Strings(
         aboutAppSubtitle = "王易雲音楽 第三者 客",
         aboutSectionProject = "項目 情報",
         aboutVersion = "版",
+            aboutLab = "らぼ（しんだん）",
         aboutDeveloperOriginal = "元 作者",
         aboutDeveloperFork = "フォーク 維持者",
         aboutLicense = "許諾",
