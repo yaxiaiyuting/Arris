@@ -1,0 +1,143 @@
+{
+  "rows": 25,
+  "successful_http_responses": 4,
+  "tls_started": 3,
+  "comparison_valid": false,
+  "arms": [
+    {
+      "route": "direct",
+      "arm": "fresh_h2",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        "h2"
+      ],
+      "durations_ms": [
+        8002,
+        8002,
+        5450
+      ],
+      "errors": [
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        null
+      ]
+    },
+    {
+      "route": "direct",
+      "arm": "reuse_h2",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        "h2"
+      ],
+      "durations_ms": [
+        8002,
+        8002,
+        310
+      ],
+      "errors": [
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        null
+      ]
+    },
+    {
+      "route": "direct",
+      "arm": "fresh_h1",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        null
+      ],
+      "durations_ms": [
+        8002,
+        8002,
+        8002
+      ],
+      "errors": [
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        "InterruptedIOException: timeout; cause=IOException: Canceled",
+        "InterruptedIOException: timeout; cause=IOException: Canceled"
+      ]
+    },
+    {
+      "route": "capture_proxy",
+      "arm": "fresh_h2",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        null
+      ],
+      "durations_ms": [
+        2,
+        3,
+        3
+      ],
+      "errors": [
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 53816) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 50764) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 50784) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)"
+      ]
+    },
+    {
+      "route": "capture_proxy",
+      "arm": "reuse_h2",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        null
+      ],
+      "durations_ms": [
+        3,
+        2,
+        3
+      ],
+      "errors": [
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 53826) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 53840) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 50794) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)"
+      ]
+    },
+    {
+      "route": "capture_proxy",
+      "arm": "fresh_h1",
+      "requests": 3,
+      "negotiated_protocols": [
+        null,
+        null,
+        null
+      ],
+      "durations_ms": [
+        3,
+        3,
+        3
+      ],
+      "errors": [
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 53832) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 53852) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)",
+        "ConnectException: Failed to connect to /127.0.0.1:8888; cause=ConnectException: failed to connect to /127.0.0.1 (port 8888) from /127.0.0.1 (port 50780) after 30000ms: isConnected failed: ECONNREFUSED (Connection refused)"
+      ]
+    }
+  ],
+  "followup_device_state": "PLC110 disconnected at host UTC 2026-10-29 22:04",
+  "production_modified": false,
+  "interpretation": {
+    "direct_pre_tls_timeouts": 8,
+    "direct_h2_playable_responses": 4,
+    "capture_proxy_connection_refused": 12,
+    "historical_stream_resets_reproduced": false,
+    "actual_reuse_observed": "connection_id=2, after 22s idle, 85ms playable",
+    "idle_eviction_observed": "after35s acquired new connection_id=3,302ms playable",
+    "not_established": [
+      "fresh h1 vs fresh h2 performance under stable connectivity",
+      "cause of earlier REFUSED_STREAM/CANCEL",
+      "which resolved address timed out; v1 recorded address count only"
+    ]
+  }
+}
