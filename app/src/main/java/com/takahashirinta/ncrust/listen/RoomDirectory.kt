@@ -28,6 +28,14 @@ data class RoomSummary(
 object RoomDirectory {
 
     private val client = OkHttpClient.Builder()
+        // 与 RoomRelayWs 同因：IPv6 解析成功但连不通时优先 IPv4
+        .dns(object : okhttp3.Dns {
+            override fun lookup(hostname: String): List<java.net.InetAddress> {
+                val all = okhttp3.Dns.SYSTEM.lookup(hostname)
+                val v4 = all.filterIsInstance<java.net.Inet4Address>()
+                return if (v4.isNotEmpty()) v4 + all.filterNot { it is java.net.Inet4Address } else all
+            }
+        })
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
@@ -37,14 +45,24 @@ object RoomDirectory {
 
     /** [base] 形如 `https://xxx.workers.dev` 或 `wss://xxx.workers.dev`。 */
     fun scan(base: String = DEFAULT_BASE): List<RoomSummary> {
+        try { return scanInternal(base) } catch (t: Throwable) {
+            android.util.Log.e("RoomDir", "scan failed: ${t.javaClass.name}: ${t.message}", t)
+            throw t
+        }
+    }
+
+    private fun scanInternal(base: String): List<RoomSummary> {
         val http = base.replace("wss://", "https://").replace("ws://", "http://").trimEnd('/')
         val request = Request.Builder()
             .url("$http/rooms")
             .header("User-Agent", "Arris/1.0 (Android; listen-together)")
             .build()
+        android.util.Log.i("RoomDir", "GET ${request.url} ua=${request.header("User-Agent")}")
         client.newCall(request).execute().use { response ->
+            android.util.Log.i("RoomDir", "HTTP ${response.code}")
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             val body = response.body?.string().orEmpty()
+            android.util.Log.i("RoomDir", "body=${body.take(200)}")
             val rooms = JSONObject(body).optJSONArray("rooms") ?: return emptyList()
             return (0 until rooms.length()).mapNotNull { i ->
                 val o = rooms.optJSONObject(i) ?: return@mapNotNull null

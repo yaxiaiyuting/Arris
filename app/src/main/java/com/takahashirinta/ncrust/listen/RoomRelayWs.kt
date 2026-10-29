@@ -68,6 +68,15 @@ class RoomRelayWs(
         socket = null
     }
 
+    /** 优先返回 IPv4 地址；只有在没有 IPv4 时才回落到原始结果（保留纯 IPv6 网络可用性）。 */
+    private object Ipv4FirstDns : okhttp3.Dns {
+        override fun lookup(hostname: String): List<java.net.InetAddress> {
+            val all = okhttp3.Dns.SYSTEM.lookup(hostname)
+            val v4 = all.filterIsInstance<java.net.Inet4Address>()
+            return if (v4.isNotEmpty()) v4 + all.filterNot { it is java.net.Inet4Address } else all
+        }
+    }
+
     companion object {
         private const val TAG = "RoomRelayWs"
 
@@ -75,6 +84,10 @@ class RoomRelayWs(
         private const val UA = "Arris/1.0 (Android; listen-together)"
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            // 优先 IPv4：真机（华为平板 / 部分移动网络）能解析出 IPv6 但连不通，
+            // 表现为 "Failed to connect to …/2001::…:443"。OkHttp 默认会逐个尝试，
+            // 但失败重试会拖到超时；这里直接把 IPv6 排到后面。
+            .dns(Ipv4FirstDns)
             .pingInterval(20, TimeUnit.SECONDS)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // WebSocket 长连接不设读超时
