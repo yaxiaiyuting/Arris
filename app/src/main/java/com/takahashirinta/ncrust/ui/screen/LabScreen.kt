@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -358,6 +360,9 @@ fun LabScreen(onClose: () -> Unit) {
 
             )
 
+            // 播放器卡片折叠态覆盖 y≳collapsedOffsetY（本机 ≈1872px）的命中区（AGENTS.md 触摸陷阱 §2/§5），
+            // 实验室里靠下的按钮会正好落进那条死带 —— 留白让它们能被滚上去再点。
+            Spacer(Modifier.fillMaxWidth().height(260.dp))
             LabButton("关闭", enabled = true) { onClose() }
         }
     }
