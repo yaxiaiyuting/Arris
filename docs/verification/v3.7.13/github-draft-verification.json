@@ -1,0 +1,53 @@
+{
+  "id": 428079315,
+  "tag_name": "v3.7.13-gpl",
+  "target_commitish": "lts/3.7",
+  "draft": true,
+  "prerelease": true,
+  "published_at": null,
+  "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/untagged-cc96022f01c8e420b226",
+  "created_at": "2026-10-29T15:54:03Z",
+  "updated_at": "2026-10-29T15:54:57Z",
+  "assets": [
+    {
+      "id": 689069352,
+      "name": "Arris-v3.7.13-gpl-debug.apk",
+      "size": 34756213,
+      "state": "uploaded",
+      "digest": "sha256:037a03a19eadaf528878773f3c8007f46ac19f296031bf6ea33ab813cdb2047f",
+      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/untagged-cc96022f01c8e420b226/Arris-v3.7.13-gpl-debug.apk"
+    },
+    {
+      "id": 689069322,
+      "name": "Arris-v3.7.13-gpl-mapping.txt",
+      "size": 80484200,
+      "state": "uploaded",
+      "digest": "sha256:b0941189a40de7820c09edb38ff1397daf67d0250e7eeef5a15e6b14853bca49",
+      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/untagged-cc96022f01c8e420b226/Arris-v3.7.13-gpl-mapping.txt"
+    },
+    {
+      "id": 689069308,
+      "name": "Arris-v3.7.13-gpl-release.apk",
+      "size": 12121852,
+      "state": "uploaded",
+      "digest": "sha256:6c0b3424302dde55d648e408362258d897f89de8441905664a7d2cc5c590f0be",
+      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/untagged-cc96022f01c8e420b226/Arris-v3.7.13-gpl-release.apk"
+    },
+    {
+      "id": 689069305,
+      "name": "RELEASE_VERIFICATION.md",
+      "size": 7423,
+      "state": "uploaded",
+      "digest": "sha256:c670d062d52c2018dfbbb6342d228c5ffa0176c9a8805e8fe1cf85da2b6e445f",
+      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/untagged-cc96022f01c8e420b226/RELEASE_VERIFICATION.md"
+    },
+    {
+      "id": 689069323,
+      "name": "SHA256SUMS",
+      "size": 286,
+      "state": "uploaded",
+      "digest": "sha256:da779d520c97f8d6a2adee260d4f01a22c35e3a13b5b9e01674e437bd62eaef6",
+      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/untagged-cc96022f01c8e420b226/SHA256SUMS"
+    }
+  ]
+}
