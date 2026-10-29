@@ -134,6 +134,17 @@ class TrackAvailabilityTest {
     }
 
     @Test
+    fun `有 QQ 会员时不再显示需会员`() {
+        // 回归：`pay.pay_play` 是**曲目属性**，与账号无关。旧实现拿它直接当角标，
+        // 于是"已经开了会员的用户"看到的每一首 VIP 曲都写着「需会员」。
+        assertEquals(TrackAvailability.UNKNOWN, TrackAvailability.ofQq(true, accountIsVip = true))
+        // 非会员仍然照旧显示。
+        assertEquals(TrackAvailability.MEMBER_ONLY, TrackAvailability.ofQq(true, accountIsVip = false))
+        // 不是会员专享的曲目，两种账号状态都不显示角标。
+        assertEquals(TrackAvailability.UNKNOWN, TrackAvailability.ofQq(false, accountIsVip = true))
+    }
+
+    @Test
     fun `QQ 的 pay_play 等于 0 不判为可播放（免付费不等于有版权）`() {
         // 反向断言：QQ 侧没有 privilege/pl，也不该拿「不用付费」冒充「可播放」。
         assertEquals(TrackAvailability.UNKNOWN, TrackAvailability.ofQq(false))
