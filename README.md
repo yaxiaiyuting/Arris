@@ -383,6 +383,8 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.7.9-gpl | 2026-10-27 | 第二轮审查修复（H/J/K/E 共 40+ 条）：收藏与专辑写入归属、缓存枚举失败不清索引、直播间配对回传 MAC、B站凭据按域、字幕 100 分钟、AV/AU 身份分区、队列拖拽按身份、桌面卡片暂停 seek、播放意图代次 |
 | v3.7.10-gpl | 2026-10-27 | 落地 3.7.9 的已知未修：QQ 单曲详情载荷、颜色量化三处溢出+剪枝、歌单完整性上游、QQ songid 落盘迁移、B站 AV 补位、队列重排按身份、收藏修订可观察 |
 
+| v3.7.12-gpl（测试） | 2026-10-28 | 系统媒体面板与实况窗双语双层歌词，主行可切换、缺译文回退单行；基于现有 3.7.11 工作区 |
+
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 
 本 fork 的基线是上游 `v1.3.1`。下表是**上游**的版本历史，保留在这里是为了交代来处；
@@ -505,3 +507,5 @@ TTML 在本项目里的角色是「给 ncm 没有逐字 / 没有译文的那部�
 [问题反馈](https://github.com/yaxiaiyuting/Arris/issues) · [Wiki](https://github.com/GuitaristRin/Ncrust/wiki) · [Releases](https://github.com/yaxiaiyuting/Ncrust/releases)
 
 </div>
+
+正式整合版：**3.7.11-gpl / versionCode99**（2026-10-29），包含双语媒体歌词与核心审查修复。此前3.7.12-gpl/98为测试包；显示版本按用户要求，内部code继续递增。验证与已知限制见[正式验证目录](docs/verification/v3.7.11-formal/)。

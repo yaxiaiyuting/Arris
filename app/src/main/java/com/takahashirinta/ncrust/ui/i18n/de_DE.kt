@@ -187,7 +187,7 @@ val deDE = Strings(
         visualizerPerspectiveDescription = "Neigt den Wellenform-Streifen. Fügt eine Renderebene hinzu – der teuerste Compositing-Posten der Showcase-Stufe.",
         visualizerDragLabel = "Tippen wechselt die Färbung",
         visualizerDragDescription = "Ein Tippen auf den Streifen wechselt zwischen fließendem Verlauf und zeitlich geordneter Färbung. Ziehen ist in dieser Version nicht umgesetzt (Gestenkonflikte wurden nicht auf einem Gerät geprüft).",
-        visualizerNotSpectrumHint = "Die Helligkeit zeigt die Aktualität, kein Spektrum: Diese Version hat keine Frequenzdaten und trennt keine Tiefen, Mitten oder Höhen.",
+        visualizerNotSpectrumHint = "Die Wellenform zeigt den Energieverlauf tiefer, mittlerer und hoher Frequenzbänder. Sie ist kein FFT-Spektrum.",
         visualizerSpeedLabel = "Wellenform-Scrollgeschwindigkeit",
         visualizerSpeedDescription = "1× folgt den Audiodaten. Schneller wiederholt bei Datenmangel die letzte Spalte (schnellere Bewegung, gestreckte Form); langsamer verlangsamt nur den Verlauf.",
         // v2.9.0: Bewegungsintensität (vereinte Stufe) + Hauptschalter für die Oberflächenanimation.
@@ -270,6 +270,7 @@ val deDE = Strings(
         offlineCacheDeleteTitle = "Cache löschen",
         offlineCacheDeleteConfirm = { name -> "Die lokal gecachten Fragmente von \"$name\" löschen?" },
         offlineCacheDeleted = "Cache gelöscht",
+        offlineCacheOperationFailed = "Cache-Vorgang fehlgeschlagen; einige Dateien können verbleiben.",
         categoryOffline = "Offline",
         offlineCachePlayingLocked = "Wird gerade abgespielt – Löschen nicht möglich",
         offlineCacheFragmentNotice = "Nur abgespielte Audiofragmente werden gecacht; ein vollständiger Titel ist nicht garantiert.",

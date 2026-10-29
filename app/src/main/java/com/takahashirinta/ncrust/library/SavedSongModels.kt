@@ -291,14 +291,33 @@ object SavedSongSync {
      * 用 800 次加删把它照出来的：当时看到的是 800 条而不是 500 条）。
      */
     fun remove(local: List<SavedSongEntry>, key: TrackKey): List<SavedSongEntry> {
-        val idx = local.indexOfFirst { it.trackKey == key }
-        if (idx < 0) return local
-        if (local[idx].tombstoned) return local
-        val out = ArrayList<SavedSongEntry>(local.size)
-        out.addAll(local)
-        out[idx] = out[idx].copy(tombstoned = true)
-        return boundTombstones(out)
+        if (local.none { it.trackKey == key && !it.tombstoned }) return local
+        return boundTombstones(local.map { if (it.trackKey == key) it.copy(tombstoned = true) else it })
     }
+
+    /** 读时身份归一后合并；删除意图压过远端，只有更新的手动收藏可撤销旧墓碑。 */
+    internal fun consolidate(local: List<SavedSongEntry>): List<SavedSongEntry> =
+        local.groupBy { it.trackKey }.values.map { group ->
+            if (group.size == 1) return@map group.single()
+            val deletedAt = group.filter { it.tombstoned }.maxOfOrNull { it.addedAt }
+            val manual = group.filter { it.origin == SavedSongOrigin.LOCAL && !it.tombstoned }
+                .maxByOrNull { it.addedAt }
+            val winner = manual ?: group.maxBy { it.addedAt }
+            val payload = group.fold(winner.song) { song, e ->
+                preferFreshPayload(e.song, song).copy(
+                    name = song.name.ifBlank { e.song.name },
+                    artists = song.artists ?: e.song.artists,
+                    album = song.album ?: e.song.album,
+                    duration = song.duration ?: e.song.duration,
+                )
+            }
+            winner.copy(
+                trackKey = TrackKey.ofSong(payload), song = payload,
+                origin = if (group.any { it.origin == SavedSongOrigin.LOCAL }) SavedSongOrigin.LOCAL else winner.origin,
+                tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
+                addedAt = group.maxOf { it.addedAt },
+            )
+        }
 
     /**
      * tombstone 尾巴的有界化：可见条目**顺序与实例都不动**，tombstone 只保留

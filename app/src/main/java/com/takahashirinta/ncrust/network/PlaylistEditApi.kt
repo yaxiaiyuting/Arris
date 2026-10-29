@@ -283,7 +283,8 @@ object PlaylistEditApi {
             withContext(Dispatchers.IO) {
                 // 判据是登录代次：同账号续期只换票（revision 变），不该把这次写操作丢掉；
                 // 换号/登出才作废。复核与发包之间没有挂起点。
-                if (CookieManager.snapshot().loginGeneration != session.loginGeneration) {
+                val live = CookieManager.snapshot()
+                if (live.loginGeneration != session.loginGeneration) {
                     Log.w(TAG, "write " + path + " aborted: session changed")
                     return@withContext PlaylistWriteResult.NetworkError(
                         IOException("session changed before $path"),
@@ -292,16 +293,16 @@ object PlaylistEditApi {
                 // csrf_token 服务端不校验值，但带上最稳；身份 cookie 与它至少有其一，
                 // 否则 403 illegal request!（实测：只带原 cookie 必 403）。
                 val body = payload.toMutableMap()
-                RetrofitClient.getCsrfToken()?.takeIf { it.isNotEmpty() }?.let { body["csrf_token"] = it }
+                com.takahashirinta.ncrust.auth.NeteaseCookie.parse(live.cookie)["__csrf"]?.takeIf { it.isNotEmpty() }?.let { body["csrf_token"] = it }
                 Log.i(TAG, "write " + path + " keys=" + body.keys.sorted())
                 try {
                     val response = RetrofitClient.eapiPost(
                         path,
                         body,
-                        extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie()),
+                        extraCookie = ClientIdentity.extraCookieFor(live.cookie),
+                        pinnedSession = live,
                     )
-                    val text = response.body?.string()
-                    parseWriteResponse(response.code, text)
+                    response.use { parseWriteResponse(it.code, it.body?.string()) }
                 } catch (e: IOException) {
                     Log.w(TAG, "write " + path + " failed", e)
                     PlaylistWriteResult.NetworkError(e)

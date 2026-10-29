@@ -18,7 +18,13 @@ package com.takahashirinta.ncrust.player
  * `67` / `DJ R4 · You have a mental proble..` —— 用户认为这两行的位置反了：
  * 他要的是**第一行显示当前歌词**（真正在变的那条信息），**第二行显示「歌名 · 艺人」**。
  *
- * ## 规则（就这一条）
+ * ## v3.7.12 双语模式
+ * 显式传入 bilingual 选项时，第一行是选定的主歌词，第二行是另一语言；
+ * 缺少译文或译文重复时只显示一行歌词，第二行保留歌名与艺人。
+ * 双语占用两行时，歌曲信息另交给通知附加文案和会话 description。
+ * PlaybackService 统一使用 MediaLyricFrame 的同一句与偏好。
+ *
+ * ## 原有单歌词规则
  *
  * | 条件 | 第一行 | 第二行 |
  * |---|---|---|
@@ -36,16 +42,31 @@ package com.takahashirinta.ncrust.player
 internal object MediaDisplayLines {
 
     /** 面板/通知的两行文字。 */
-    data class Lines(val title: String, val subtitle: String)
+    data class Lines(val title: String, val subtitle: String, val trackInfo: String? = null)
 
-    fun of(songTitle: String, songArtist: String, lyricLine: String?): Lines {
+    fun of(
+        songTitle: String,
+        songArtist: String,
+        lyricLine: String?,
+        translatedLine: String? = null,
+        options: MediaLyricOptions = MediaLyricOptions(bilingual = false),
+    ): Lines {
         val lyric = lyricLine?.takeIf { it.isNotBlank() }
             ?: return Lines(title = songTitle, subtitle = songArtist)
-        val subtitle = when {
+        if (options.bilingual) {
+            val translation = translatedLine?.takeIf { it.isNotBlank() && it.trim() != lyric.trim() }
+            if (translation != null) {
+                val info = songInfo(songTitle, songArtist).takeIf { it.isNotBlank() }
+                return if (options.translationFirst) Lines(translation, lyric, info)
+                    else Lines(lyric, translation, info)
+            }
+        }
+        return Lines(title = lyric, subtitle = songInfo(songTitle, songArtist))
+    }
+
+    private fun songInfo(songTitle: String, songArtist: String): String = when {
             songArtist.isBlank() -> songTitle
             songTitle.isBlank() -> songArtist
             else -> songTitle + " · " + songArtist
         }
-        return Lines(title = lyric, subtitle = subtitle)
-    }
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.CoreQqOwnerAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-28T16:33:04.820Z" hostname="cachyos-x8664" time="0.248">
+  <properties/>
+  <testcase name="favoritePagingCanReadBAndCacheTheMergedSongsUnderA" classname="com.takahashirinta.ncrust.audit.CoreQqOwnerAuditProbe" time="0.245"/>
+  <system-out><![CDATA[DEFECT: real QQ loadDetail reads page0 as A and page1 as B, returns mixed account favorites, and writes complete cache under key.ownerId=A. All replies local; account switch injected between pages via the real onPage callback.
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

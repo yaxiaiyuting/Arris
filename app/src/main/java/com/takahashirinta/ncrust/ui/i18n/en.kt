@@ -187,7 +187,7 @@ val en = Strings(
         visualizerPerspectiveDescription = "Tilts the waveform strip. Adds one render layer — the most expensive compositing item in the Showcase tier.",
         visualizerDragLabel = "Tap to switch colouring",
         visualizerDragDescription = "Tap the strip to switch between the flowing gradient and time-ordered tinting. Dragging is not implemented in this version (gesture conflicts were not verified on a device).",
-        visualizerNotSpectrumHint = "Brightness shows recency, not frequency: this version has no frequency data and does not separate lows/mids/highs.",
+        visualizerNotSpectrumHint = "The waveform shows low, mid and high band energy over time. It is not an FFT spectrum.",
         visualizerSpeedLabel = "Waveform scroll speed",
         visualizerSpeedDescription = "1× follows the audio data. Faster speeds repeat the last column when data runs out (faster motion, stretched shape); slower speeds only slow the history down.",
         // v2.9.0: motion intensity (unified tier) + interface motion master switch.
@@ -270,6 +270,7 @@ val en = Strings(
         offlineCacheDeleteTitle = "Delete cache",
         offlineCacheDeleteConfirm = { name -> "Delete the cached fragments of \"$name\" on this device?" },
         offlineCacheDeleted = "Cache deleted",
+        offlineCacheOperationFailed = "Cache operation failed; some files may remain.",
         categoryOffline = "Offline",
         offlineCachePlayingLocked = "Playing now — cannot delete",
         offlineCacheFragmentNotice = "Only the audio fragments that were played are cached; a complete track is not guaranteed.",

@@ -186,7 +186,7 @@ val zhCN = Strings(
         visualizerPerspectiveDescription = "给波形条加一个固定倾角。会新增一层渲染层，是炫技档里合成开销最高的一项。",
         visualizerDragLabel = "点按切换着色",
         visualizerDragDescription = "点一下波形条，在「渐变流动」与「按时序着色」之间切换。本版未实现拖拽（手势与播放器冲突风险未在真机验证）。",
-        visualizerNotSpectrumHint = "波形亮度表示时间新旧，不是频谱：本版没有频域数据，不区分低/中/高频。",
+        visualizerNotSpectrumHint = "波形展示低、中、高频带的能量包络，并按时间滚动；它不是 FFT 频谱。",
         visualizerSpeedLabel = "波形滚动速度",
         visualizerSpeedDescription = "1× 跟随音频数据；更快时数据不够会重复最后一列（画面更快，形状会拉伸），更慢则只把历史滚慢。",
         // v2.9.0：动效强度（统一档位）+ 界面动效总开关。
@@ -269,6 +269,7 @@ val zhCN = Strings(
         offlineCacheDeleteTitle = "删除缓存",
         offlineCacheDeleteConfirm = { name -> "删除「$name」在本机的缓存片段？" },
         offlineCacheDeleted = "已删除该曲缓存",
+        offlineCacheOperationFailed = "缓存操作未完成，部分文件可能仍保留。",
         categoryOffline = "离线",
         offlineCachePlayingLocked = "正在播放，暂不能删除",
         offlineCacheFragmentNotice = "只缓存播放过的音频片段，不保证整曲完整。",

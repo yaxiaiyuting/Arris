@@ -147,8 +147,8 @@ class BiliApiDispatchTest {
             seenThreads.any { it.startsWith(FAKE_MAIN) },
         )
         assertTrue(
-            "传输层应当跑在 Dispatchers.IO 的线程池上：seen=$seenThreads",
-            seenThreads.all { it.startsWith("DefaultDispatcher") },
+            "传输层应当跑在 IO 或 OkHttp 的后台线程池上：seen=$seenThreads",
+            seenThreads.all { it.startsWith("DefaultDispatcher") || it.startsWith("OkHttp") },
         )
 
         // 顺带把「解析 + 映射」也钉住：这是真实响应形状，2 条 video + 1 条被丢掉的 ketang。

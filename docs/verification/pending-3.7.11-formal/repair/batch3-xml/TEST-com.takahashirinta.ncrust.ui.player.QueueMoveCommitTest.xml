@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:31:03.491Z" hostname="cachyos-x8664" time="0.001">
+  <properties/>
+  <testcase name="取空之后再 publish 仍然可用" classname="com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest" time="0.0"/>
+  <testcase name="任一端为空时 take 返回 null" classname="com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest" time="0.0"/>
+  <testcase name="后一次 publish 覆盖前一次" classname="com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest" time="0.001"/>
+  <testcase name="publish 之后 take 拿到两端身份并清空" classname="com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

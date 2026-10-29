@@ -142,7 +142,7 @@ object CatalogAggregator {
         // 而 alias 明明已经记下了那个 ncm 艺人。现在两侧先列成 [artistSides]，
         // 再**按各自 source 分派取数**：谁都不会漏，也不会拿 ncm 的数字 id
         // 去当 QQ 的 singerMID（那是「查到别人的专辑」的形状）。
-        val sides = artistSides(anchor, candidate?.first?.key)
+        val sides = artistSides(anchor, candidate?.takeIf { it.second.mergeable }?.first?.key)
         // 锚点那一侧的专辑已经在上面取过一次（候选校验要用），不再重复请求。
         val albumsBySide = sides.associateWith { key ->
             if (key == anchor) anchorAlbums else albumsOfSide(key)
@@ -204,7 +204,7 @@ object CatalogAggregator {
         // 旧写法是 `neSongs = if (锚点是 ncm) … else emptyList()` —— 以 QQ 为主源进专辑页时，
         // 网易侧的曲目整块缺失（有对面 alias，列表里却只有 QQ），
         // 而「对面那几个版本」正是用户进双源专辑页要看的东西。
-        val sides = albumSides(anchor, counterpart?.first?.key)
+        val sides = albumSides(anchor, counterpart?.takeIf { it.second.mergeable }?.first?.key)
         val songsBySide = sides.associateWith { key ->
             if (key == anchor) anchorSongs else albumSongsOf(key.source, key.id)
         }

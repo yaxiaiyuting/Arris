@@ -168,7 +168,7 @@ class BiliQrLogin(
         // E08：取消（或已经开了新一轮）之后才回来的申请响应，**不许**把状态推回 WAITING。
         if (sessionStale(started)) {
             Log.i(TAG, "prepare: 申请响应迟到（已取消 / 已换一轮）⇒ 丢弃")
-            return emitTerminal(State.CANCELLED, onState)
+            return State.CANCELLED
         }
         if (code == null) {
             // v3.2.1 · P0：失败**必须**留下痕迹，且与「已失效」分开 ——
@@ -244,7 +244,7 @@ class BiliQrLogin(
         val started = generation.get()
 
         while (true) {
-            if (cancelled) return emitTerminal(State.CANCELLED, onState)
+            if (sessionStale(started)) return State.CANCELLED
             // 三个上限，任一先到就停（有界轮询）。
             if (pollCount >= MAX_POLLS || clock() >= deadline) {
                 Log.i(TAG, "poll: 本地上限先到（pollCount=$pollCount）⇒ EXPIRED")
@@ -252,14 +252,14 @@ class BiliQrLogin(
             }
             // `sleep` 被取消时异常穿透出去 —— 取消不在这里被翻译成失败。
             sleep(POLL_INTERVAL_MS)
-            if (cancelled) return emitTerminal(State.CANCELLED, onState)
+            if (sessionStale(started)) return State.CANCELLED
             pollCount++
 
             val result = poll(code.qrcodeKey)
             // E08：等待期间被取消 ⇒ 这条响应属于已作废的会话，绝不 apply（它会写 credential）。
             if (sessionStale(started)) {
                 Log.i(TAG, "poll: 响应迟到（已取消）⇒ 丢弃")
-                return emitTerminal(State.CANCELLED, onState)
+                return State.CANCELLED
             }
             if (result is BiliQrPoll.Failed) {
                 when (result.reason) {
@@ -296,7 +296,7 @@ class BiliQrLogin(
         // E08：单步轮询也有同一个等待窗口 —— 取消后到达的成功响应同样不许写凭据。
         if (sessionStale(started)) {
             Log.i(TAG, "pollOnce: 响应迟到（已取消）⇒ 丢弃")
-            return emitTerminal(State.CANCELLED, null)
+            return State.CANCELLED
         }
         val next = apply(result, tolerateNetwork = false, networkStreak = 0, unavailableStreak = 0)
         emitIfChanged(next, null)

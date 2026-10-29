@@ -319,10 +319,10 @@ internal fun OfflineCacheManagerDialog(
                 deleteTarget = null
                 // 删除要动 SimpleCache 与 prefs，放 IO；完成后重读列表与用量（reload 变化即重跑）。
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        runCatching { OfflineAudioCache.removeSong(context, target.songId) }
+                    val removed = withContext(Dispatchers.IO) {
+                        runCatching { OfflineAudioCache.removeSong(context, target.songId) }.getOrDefault(false)
                     }
-                    Toast.makeText(context, strings.offlineCacheDeleted, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (removed) strings.offlineCacheDeleted else strings.offlineCacheOperationFailed, Toast.LENGTH_SHORT).show()
                     reload++
                 }
             },
@@ -597,10 +597,10 @@ internal fun OfflineLibraryTab(
             onConfirm = {
                 deleteTarget = null
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        runCatching { OfflineAudioCache.removeSong(context, target.songId) }
+                    val removed = withContext(Dispatchers.IO) {
+                        runCatching { OfflineAudioCache.removeSong(context, target.songId) }.getOrDefault(false)
                     }
-                    Toast.makeText(context, strings.offlineCacheDeleted, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (removed) strings.offlineCacheDeleted else strings.offlineCacheOperationFailed, Toast.LENGTH_SHORT).show()
                     reload++
                 }
             },

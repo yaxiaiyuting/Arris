@@ -83,6 +83,7 @@ object LiveUpdateNotifier {
         positionMs: Long,
         durationMs: Long,
         isPlaying: Boolean,
+        trackInfo: String? = null,
     ) {
         if (Build.VERSION.SDK_INT < 36) return
         if (!isActive(context)) return
@@ -103,6 +104,7 @@ object LiveUpdateNotifier {
                 .setSmallIcon(R.drawable.ic_tux_notification)
                 .setContentTitle(title)
                 .setContentText(artist)
+                .setSubText(trackInfo)
                 .setContentIntent(contentIntent)
                 .setStyle(style)
                 .setProgress(100, percent, durationMs <= 0L)

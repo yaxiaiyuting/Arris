@@ -271,4 +271,29 @@ class PlaylistDetailResultTest {
         assertEquals(1, result.songs.size)
         assertEquals("详情必须带 originCoverType", 1, result.songs.first().originCoverType)
     }
+
+    @Test fun `user playlist paging crosses the first hundred including hidden special rows`() = kotlinx.coroutines.runBlocking {
+        var requests = 0
+        val offsets = mutableListOf<Int>()
+        intercept { request ->
+            val hex = (request.body as okhttp3.FormBody).value(0)
+            val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val plain = com.takahashirinta.ncrust.network.crypto.EapiCrypto.decryptResponse(java.util.Base64.getEncoder().encodeToString(bytes))
+            val payload = JSONObject(plain.split("-36cd479b6b5-")[1])
+            offsets += payload.getInt("offset")
+            requests++
+            if (requests == 1) {
+                val rows = JSONArray().put(JSONObject().put("id",999).put("specialType",5))
+                repeat(99) { n -> rows.put(JSONObject().put("id",n+1).put("name","p$n")) }
+                JSONObject().put("code",200).put("more",true).put("playlist",rows).toString()
+            } else {
+                JSONObject().put("code",200).put("more",false)
+                    .put("playlist",JSONArray().put(JSONObject().put("id",1000).put("name","last"))).toString()
+            }
+        }
+        val all = PlaylistApi.getAllUserPlaylists(123)
+        assertEquals(listOf(0,100), offsets)
+        assertEquals(2, requests);assertEquals(100,all.size)
+        assertEquals(1000L,all.last().id);assertFalse(all.any { it.specialType != 0 })
+    }
 }

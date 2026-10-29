@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.bili.BiliSupersededSessionTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:19:05.613Z" hostname="cachyos-x8664" time="0.008">
+  <properties/>
+  <testcase name="supersededGenerateCannotChangeNewWaitingSession" classname="com.takahashirinta.ncrust.bili.BiliSupersededSessionTest" time="0.005"/>
+  <testcase name="supersededPollCannotChangeNewConfirmedSession" classname="com.takahashirinta.ncrust.bili.BiliSupersededSessionTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-28T16:36:53.917Z" hostname="cachyos-x8664" time="0.034">
+  <properties/>
+  <testcase name="preferenceDefaultsAndMalformedValuesAreSafe" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.002"/>
+  <testcase name="seekBothDirectionsSelectsOneCoherentSentencePair" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.009"/>
+  <testcase name="bilingualOffPreservesOriginalOnlyLegacyLayout" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.003"/>
+  <testcase name="mediaSessionAndNotificationUseTheSameBilingualOrder" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="defaultKeepsOriginalAboveTranslation" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="untranslatedSentenceDoesNotBorrowTheNextSentenceTranslation" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="missingSongFieldsDoNotLeaveDanglingSeparatorsInBilingualTrackInfo" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="clearingTrackClearsBothPublishedLines" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="missingTranslationKeepsOriginalAndSongIdentityInEitherOrder" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.005"/>
+  <testcase name="translationArrivingLatePassesTheExistingNotificationGate" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.005"/>
+  <testcase name="chineseLyricsKeepSongAndArtistWithoutTranslation" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="newSettingsAreReachableInLyricsAndPlaybackGroups" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.006"/>
+  <testcase name="bilingualLyricsKeepTrackInfoForNotificationAndSessionDescription" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="translationCanBeThePrimaryLine" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="nearbyTranslationBelongsToTheNearestOriginalAndExactMatchWins" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="blankOrDuplicateTranslationKeepsSongIdentityBelowTheSingleLyric" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="changingPrimaryLineAlsoChangesPublicationIdentity" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="disabledLyricsAndBeforeFirstSentenceKeepSongIdentity" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

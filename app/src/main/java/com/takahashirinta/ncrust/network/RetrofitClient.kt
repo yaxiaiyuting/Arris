@@ -260,9 +260,13 @@ object RetrofitClient {
         useInterface: Boolean = false,
         extraCookie: String? = null,
         // 扫码确认后校验尚未持久化的会话；其余调用保留原来的身份追加方式。
-        cookieOverride: String? = null
+        cookieOverride: String? = null,
+        pinnedSession: NeteaseSessionSnapshot? = null,
     ): Response {
-        val session = CookieManager.snapshot()
+        val session = pinnedSession ?: CookieManager.snapshot()
+        if (pinnedSession != null && CookieManager.snapshot().loginGeneration != session.loginGeneration) {
+            throw java.io.IOException("session changed before eapi write")
+        }
         val host = if (useInterface) INTERFACE_URL else API_URL
         val fullUrl = host + path
         val anyPayload = payload.mapValues { it.value as Any }
@@ -322,17 +326,7 @@ object RetrofitClient {
         val call = plainClient.newCall(request).apply {
             timeout().timeout(8, TimeUnit.SECONDS)
         }
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            cont.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : okhttp3.Callback {
-                override fun onFailure(c: okhttp3.Call, e: java.io.IOException) {
-                    if (cont.isActive) cont.resumeWith(Result.failure(e))
-                }
-                override fun onResponse(c: okhttp3.Call, response: Response) {
-                    if (cont.isActive) cont.resumeWith(Result.success(response)) else response.close()
-                }
-            })
-        }
+        return call.awaitBufferedResponse()
     }
 
     /**

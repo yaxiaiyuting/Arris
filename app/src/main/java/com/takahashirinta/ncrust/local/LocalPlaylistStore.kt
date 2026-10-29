@@ -238,9 +238,10 @@ object LocalPlaylistStore {
     fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): Boolean {
         revision++
         val list = readPlaylists(context)
-        val removed = writePlaylists(context, list.filterNot { it.key == key })
-        removeTracks(context, key)
-        return removed
+        return commitValues(prefs(context), linkedMapOf(
+            KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(list.filterNot { it.key == key }),
+            tracksKey(key) to null,
+        ))
     }
 
     /**

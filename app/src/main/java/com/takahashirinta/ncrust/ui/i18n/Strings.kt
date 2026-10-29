@@ -493,6 +493,9 @@ data class Strings(
      */
     val likedPlayAll: LikedPlayAllStrings,
 ) {
+    val mediaLyrics: MediaLyricStrings get() = mediaLyricStringsForCode(
+        languagePresets.firstOrNull { it.strings === this }?.code ?: "zh-CN"
+    )
     val sessionExpiredBanner: String get() = account.sessionExpiredBanner
     val dailySongsLoginHint: String get() = account.dailySongsLoginHint
     val vipKindSvip: String get() = account.vipKindSvip
@@ -546,6 +549,7 @@ data class Strings(
     val offlineCacheDeleteTrack: String get() = offline.offlineCacheDeleteTrack
     val offlineCacheDeleteTitle: String get() = offline.offlineCacheDeleteTitle
     val offlineCacheDeleted: String get() = offline.offlineCacheDeleted
+    val offlineCacheOperationFailed: String get() = offline.offlineCacheOperationFailed
     val categoryOffline: String get() = offline.categoryOffline
 
     // v2.3.0：这两条随字段一起搬进 [offline] 组，调用点（MainScreen / HomeScreen 的离线空态）
@@ -967,6 +971,7 @@ data class OfflineStrings(
     val cacheUsageImage: String,
     val cacheUsageOther: String,
     val cacheCleared: String,
+    val offlineCacheOperationFailed: String = "Cache operation failed; some files may remain.",
 )
 
 /**

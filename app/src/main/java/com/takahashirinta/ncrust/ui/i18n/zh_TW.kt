@@ -186,7 +186,7 @@ val zhTW = Strings(
         visualizerPerspectiveDescription = "給波形條加一個固定傾角。會新增一層渲染層，是炫技檔裡合成開銷最高的一項。",
         visualizerDragLabel = "點按切換著色",
         visualizerDragDescription = "點一下波形條，在「漸層流動」與「按時序著色」之間切換。本版未實作拖曳（手勢與播放器衝突風險未在真機驗證）。",
-        visualizerNotSpectrumHint = "波形亮度表示時間新舊，不是頻譜：本版沒有頻域資料，不區分低/中/高頻。",
+        visualizerNotSpectrumHint = "波形顯示低、中、高頻帶的能量包絡，並隨時間捲動；它不是 FFT 頻譜。",
         visualizerSpeedLabel = "波形捲動速度",
         visualizerSpeedDescription = "1× 跟隨音訊資料；更快時資料不夠會重複最後一欄（畫面更快，形狀會拉伸），更慢則只把歷史滾慢。",
         // v2.9.0：動效強度（統一檔位）+ 介面動效總開關。
@@ -269,6 +269,7 @@ val zhTW = Strings(
         offlineCacheDeleteTitle = "刪除快取",
         offlineCacheDeleteConfirm = { name -> "刪除「$name」在本機的快取片段？" },
         offlineCacheDeleted = "已刪除該曲快取",
+        offlineCacheOperationFailed = "快取操作未完成，部分檔案可能仍保留。",
         categoryOffline = "離線",
         offlineCachePlayingLocked = "正在播放，暫不能刪除",
         offlineCacheFragmentNotice = "只快取播放過的音訊片段，不保證整曲完整。",

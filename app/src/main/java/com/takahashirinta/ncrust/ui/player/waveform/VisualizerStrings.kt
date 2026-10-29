@@ -39,8 +39,8 @@ package com.takahashirinta.ncrust.ui.player.waveform
  * 1. **`visualizerDragLabel` 必须如实写成「点按切换着色」，不能写「拖拽」**：
  *    本版没有实现拖拽（理由是风险，见 `AudioVisualizerBars` 的 KDoc），实际行为是
  *    点一下波形条在「渐变流动」与「按时序着色」之间切换。文案写「拖拽」就是骗用户。
- * 2. **`visualizerNotSpectrumHint` 必须写明不是频谱**：本版没有频域数据源，
- *    亮度表达的是**时间新旧**，不是低/中/高频。不写清楚，用户一定会把它读成频谱。
+ * 2. **`visualizerNotSpectrumHint` 必须写明不是频谱**：本版显示三频带能量包络，
+ *    亮度可表达**时间新旧**，但不是FFT频谱。不写清楚，用户一定会把它读成频谱。
  * 3. **低端机默认档要说出来**：用户看到的「已选：简洁」可能是系统按设备判据解析出来的默认值，
  *    不是他自己选的（[VisualizerPrefs.hasExplicitTier]）。说明里写清「低端设备默认简洁」，
  *    用户才不会以为设置被改过。

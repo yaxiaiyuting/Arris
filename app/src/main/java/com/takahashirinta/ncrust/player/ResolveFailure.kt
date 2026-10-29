@@ -245,18 +245,20 @@ class UrlRetryGate(
 
     private var songKey: String = ""
     private var attempts: Int = 0
-    private var lastAttemptAtMs: Long = 0L
+    private var lastAttemptAtMs: Long = -1L
 
     /** 换歌：计数清零。**换歌是唯一的清零条件之一**（另一个是用户手动操作）。 */
     fun onNewSong(key: String) {
         if (key == songKey) return
         songKey = key
         attempts = 0
+        lastAttemptAtMs = -1L
     }
 
     /** 用户手动操作（点播放 / 切歌 / 手动改档位）→ 重新给满额度。 */
     fun onUserAction() {
         attempts = 0
+        lastAttemptAtMs = -1L
     }
 
     /**
@@ -267,7 +269,7 @@ class UrlRetryGate(
      */
     fun requestRetry(nowMs: Long): Boolean {
         if (attempts >= maxAttemptsPerSong) return false
-        if (lastAttemptAtMs != 0L && nowMs - lastAttemptAtMs < minIntervalMs) return false
+        if (lastAttemptAtMs >= 0L && nowMs - lastAttemptAtMs < minIntervalMs) return false
         attempts++
         lastAttemptAtMs = nowMs
         return true

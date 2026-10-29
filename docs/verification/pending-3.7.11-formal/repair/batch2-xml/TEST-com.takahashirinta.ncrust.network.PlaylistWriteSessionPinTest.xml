@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:26:24.173Z" hostname="cachyos-x8664" time="6.131">
+  <properties/>
+  <testcase name="transport rejects a pin after login changed without reading new credentials" classname="com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest" time="0.095"/>
+  <testcase name="queued rename still lands after same account renewal" classname="com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest" time="2.029"/>
+  <testcase name="queued rename is not sent with the next accounts credential" classname="com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest" time="4.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

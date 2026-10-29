@@ -6,7 +6,8 @@ import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
 
 data class SearchResponse(
-    @SerializedName("result") val result: SearchResult?
+    @SerializedName("result") val result: SearchResult?,
+    @SerializedName("code") val code: Int? = null,
 )
 
 data class SearchResult(

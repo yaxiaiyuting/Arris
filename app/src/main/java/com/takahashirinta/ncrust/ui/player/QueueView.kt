@@ -76,6 +76,10 @@ import kotlinx.coroutines.launch
  *    这里刻意不加锁，也不持有队列引用（只存两个不可变值对象）。
  */
 internal object QueueMoveCommit {
+    class Snapshot(val queue: List<SongItem>, val fromIndex: Int, val toIndex: Int)
+    private var snapshot: Snapshot? = null
+    fun publishSnapshot(queue: List<SongItem>, from: Int, to: Int) { snapshot = Snapshot(queue, from, to) }
+    fun takeSnapshot(): Snapshot? = snapshot.also { snapshot = null }
     private var from: TrackKey? = null
     private var to: TrackKey? = null
 
@@ -144,6 +148,7 @@ fun QueueView(
     // 而 ncm 与 qm 的曲目 id 各自独立编号，裸数字会撞号：同号的两行会一起消失、
     // 悬浮卡会取到另一源的那一首。
     var draggedIdentity by remember { mutableStateOf<TrackKey?>(null) }
+    var draggedSongSnapshot by remember { mutableStateOf<SongItem?>(null) }
     // 落点行的身份（与 draggedIdentity 成对使用，见提交段的「按身份重定位」）
     var dragTargetIdentity by remember { mutableStateOf<TrackKey?>(null) }
     // 被拖行本体(列表项)的隐藏状态, 独立于 draggingQueueIndex:
@@ -242,11 +247,11 @@ fun QueueView(
     val infinityActiveRef by rememberUpdatedState(infinityActive)
     val queueRef by rememberUpdatedState(queue)
     val dragGesturesModifier = Modifier.pointerInput(interactive) {
+        if (!interactive) return@pointerInput
         try {
             awaitEachGesture {
                 // v3.8.0 · E10：`interactive` 是 pointerInput 的 key，但**入口也要判一次**——
                 // 面板不可交互时（折叠态、播放器收起）根本不该开始一次拖拽。
-                if (!interactive) return@awaitEachGesture
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val rowsNow = rowsRef
                 val idxNow = currentIndexRef
@@ -256,7 +261,9 @@ fun QueueView(
                 val qi = row.queueIndex
                 if (qi <= idxNow || infinityActiveRef) return@awaitEachGesture
                 // 身份在**按下那一刻**钉住：之后队列怎么变，提交时都按它重新定位。
-                val pressedIdentity = queueRef.getOrNull(qi)?.trackKeyOf()
+                val pressedQueue = queueRef
+                val pressedSong = pressedQueue.getOrNull(qi)
+                val pressedIdentity = pressedSong?.trackKeyOf()
                 // 把手命中区: 行右端 16dp 内边距 + 16dp 尾距 + 48dp 移除钮左侧的 32dp 把手
                 val pad = with(density) { 16.dp.toPx() }
                 val spacer = with(density) { 16.dp.toPx() }
@@ -271,6 +278,7 @@ fun QueueView(
                 dragTargetQueueIndex = qi
                 overlayVisible = true
                 draggedIdentity = pressedIdentity
+                draggedSongSnapshot = pressedSong
                 dragTargetIdentity = pressedIdentity
                 hiddenRowKey = row.key
                 slotOffset0 = listState.layoutInfo.visibleItemsInfo
@@ -359,6 +367,7 @@ fun QueueView(
                         withFrameNanos { }
                         overlayVisible = false
                         draggedIdentity = null
+                        draggedSongSnapshot = null
                         overlayTop = 0f
                     }
                 } else if (from >= 0 && to >= 0) {
@@ -391,18 +400,11 @@ fun QueueView(
                         // 所以提交前按**身份**重新定位两端；任何一端已经不在队列里、
                         // 或者落点已经不在「将要播放」区，就作废这次提交（只收尾）。
                         val queueNow = queueRef
-                        val fromNow = if (dragged == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dragged }
-                        val toNow = if (dropTarget == null) -1 else queueNow.indexOfFirst { it.trackKeyOf() == dropTarget }
-                        if (fromNow >= 0 && toNow >= 0 && fromNow != toNow && toNow > currentIndexRef) {
-                            // v3.8.1 · E10（残余）：把两端**身份**一并交给上层。
-                            //
-                            // 这里已经按身份重定位出 `fromNow/toNow` 了，为什么还要传身份？
-                            // 因为「索引合法」不等于「索引指着同一首歌」：这次提交是一次**跨层
-                            // 调用**（QueueView → callbacks → MainScreen），上层真正执行移动时
-                            // 看到的队列已经可能是另一份（回调里若先做了别的队列操作、或未来的
-                            // 中间层插入了去抖/异步）。身份跟着提交走，上层就能自己重新定位，
-                            // 而不是盲信两个整数 —— 这也是 E10 残余要收口的最后一段。
-                            QueueMoveCommit.publish(dragged, dropTarget)
+                        val fromNow = if (queueNow === pressedQueue) qi else -1
+                        val toNow = if (queueNow === pressedQueue) to else -1
+                        if (fromNow > currentIndexRef && toNow > currentIndexRef &&
+                            fromNow in queueNow.indices && toNow in queueNow.indices && fromNow != toNow) {
+                            QueueMoveCommit.publishSnapshot(pressedQueue, fromNow, toNow)
                             onMove(fromNow, toNow)
                         }
                         draggingQueueIndex = -1
@@ -417,6 +419,7 @@ fun QueueView(
                         // 撤悬浮层, 交接完成
                         overlayVisible = false
                         draggedIdentity = null
+                        draggedSongSnapshot = null
                         overlayTop = 0f
                     }
                 } else {
@@ -425,6 +428,7 @@ fun QueueView(
                     dragTargetIdentity = null
                     overlayVisible = false
                     draggedIdentity = null
+                        draggedSongSnapshot = null
                     hiddenRowKey = null
                     overlayTop = 0f
                 }
@@ -445,6 +449,7 @@ fun QueueView(
             dragTargetIdentity = null
             overlayVisible = false
             draggedIdentity = null
+                        draggedSongSnapshot = null
             hiddenRowKey = null
             overlayTop = 0f
         }
@@ -604,7 +609,7 @@ fun QueueView(
         // 的透明度完全一致, 交接瞬间没有亮度跳变。
         if (overlayVisible) {
             // v3.8.0 · E11：按**身份**找（`queue.firstOrNull { it.id == id }` 会取到另一源同号的那首）
-            val draggedSong = draggedIdentity?.let { key -> queue.firstOrNull { it.trackKeyOf() == key } }
+            val draggedSong = draggedSongSnapshot
             if (draggedSong != null) {
                 SongCard(
                     song = draggedSong,

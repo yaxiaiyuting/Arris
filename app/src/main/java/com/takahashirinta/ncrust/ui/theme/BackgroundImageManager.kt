@@ -40,6 +40,7 @@ object BackgroundImageManager {
     private const val DIR = "background"
     private const val FILE_NAME = "bg.jpg"
     private const val JPEG_QUALITY = 88
+    private val imports = BackgroundImportGate()
 
     /**
      * 状态版本号：导入 / 关闭 / 内存压力 时自增，UI 观察它触发重组。
@@ -69,8 +70,11 @@ object BackgroundImageManager {
      * 两次解码：第一次只读边界（inJustDecodeBounds）算 inSampleSize，
      * 第二次才真正解码 —— 绝不把原图整张读进内存。
      */
-    suspend fun importFromUri(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
+    suspend fun importFromUri(context: Context, uri: Uri): Boolean {
+        val ticket = imports.begin()
+        return withContext(Dispatchers.IO) {
+        var tmp: File? = null
+        try { runCatching {
             val resolver = context.contentResolver
 
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -103,40 +107,36 @@ object BackgroundImageManager {
                 return@runCatching false
             }
 
-            val dir = File(context.filesDir, DIR).apply { mkdirs() }
-            val tmp = File(dir, "$FILE_NAME.tmp")
-            FileOutputStream(tmp).use { out ->
-                decoded.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            val file = File.createTempFile("arris-background-", ".jpg", context.cacheDir)
+            tmp = file
+            try {
+                FileOutputStream(file).use { out ->
+                    if (!decoded.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)) {
+                        throw java.io.IOException("background compression failed")
+                    }
+                }
+            } finally { decoded.recycle() }
+            imports.commit(ticket) {
+                File(context.filesDir, DIR).apply { if (!isDirectory && !mkdirs()) throw java.io.IOException("background directory unavailable") }
+                android.system.Os.rename(file.absolutePath, backgroundFile(context).absolutePath)
+                setEnabled(context, true)
             }
-            val w = decoded.width
-            val h = decoded.height
-            decoded.recycle()
-
-            val dst = backgroundFile(context)
-            if (dst.exists()) dst.delete()
-            if (!tmp.renameTo(dst)) {
-                tmp.copyTo(dst, overwrite = true)
-                tmp.delete()
-            }
-            Log.i(TAG, "import ok: ${w}x${h} sample=$sample bytes=${dst.length()}")
-            true
         }.getOrElse {
             Log.e(TAG, "import failed", it)
             false
-        }.also { ok ->
-            if (ok) setEnabled(context, true)
+        } } finally { tmp?.delete() }
         }
     }
 
-    /** 关闭并删除背景图，回落到纯色背景。 */
-    fun clear(context: Context) {
+    /** 清除和导入提交共用门；已开始的旧导入无权重新启用背景。 */
+    fun clear(context: Context) = imports.invalidate {
         setEnabled(context, false)
-        runCatching {
-            File(context.filesDir, DIR).deleteRecursively()
-        }
+        runCatching { File(context.filesDir, DIR).deleteRecursively() }
         suppressed.value = false
         revision.value++
     }
+
+    /** 关闭并删除背景图，回落到纯色背景。 */
 
     /** 内存压力：隐藏背景，让那张位图可以被回收。 */
     fun onMemoryPressure() {

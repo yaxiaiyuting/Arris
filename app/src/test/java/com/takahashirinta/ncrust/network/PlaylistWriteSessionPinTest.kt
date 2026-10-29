@@ -143,4 +143,15 @@ class PlaylistWriteSessionPinTest {
         assertTrue("同账号续期把排队的写操作丢掉了", withTimeout(10_000) { queued.await() })
         assertTrue("续期后仍属于 A 账号：${cookies}", cookies.single().contains("fixture-A"))
     }
+
+    @Test
+    fun `transport rejects a pin after login changed without reading new credentials`() {
+        val pinned = CookieManager.snapshot()
+        CookieManager.saveCookie(ctx, "MUSIC_U=fixture-B; __csrf=fixture-csrf-B")
+        val failed = runCatching {
+            RetrofitClient.eapiPost("/eapi/playlist/update/name", mapOf("id" to "1"), pinnedSession = pinned).close()
+        }.exceptionOrNull()
+        assertTrue(failed is java.io.IOException)
+        assertTrue(cookies.isEmpty())
+    }
 }

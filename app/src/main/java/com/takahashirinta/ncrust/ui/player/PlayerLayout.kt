@@ -288,7 +288,7 @@ object PlayerLayout {
      * 这里补一个 >= 1px 的下界，避免首帧 0 让 Coil 按 1px 解码成纯色）。
      */
     fun squareCoverSizePx(availableWidthPx: Float, availableHeightPx: Float): Float =
-        minOf(availableWidthPx, availableHeightPx).coerceAtLeast(1f)
+        (minOf(availableWidthPx, availableHeightPx) * 0.88f).coerceAtLeast(1f)
 
     /**
      * 唯一封面 overlay 在**实测之前**的兜底边长（px）。

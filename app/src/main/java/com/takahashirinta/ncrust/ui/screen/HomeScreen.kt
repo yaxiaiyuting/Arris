@@ -170,13 +170,16 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         // v1.5.1 · C：没网就别去要资料了（电台卡会退回通用标题）。
         if (!NetworkAvailability.isOnline(context)) return@LaunchedEffect
+        val started = CookieManager.snapshot()
         val profile = ContentCache.userProfile
             ?: runCatching { PlaylistApi.getUserProfile() }.getOrNull()
         if (profile != null && profile.userId > 0) {
-            fmProfile = profile
-            ContentCache.userProfile = profile
+            CookieManager.ifCurrent(started) {
+                fmProfile = profile
+                ContentCache.userProfile = profile
+            }
             val accent = runCatching { extractAvatarAccent(fmContext, profile.avatarUrl) }.getOrNull()
-            if (accent != null) fmAccent = accent
+            CookieManager.ifCurrent(started) { if (accent != null) fmAccent = accent }
         }
     }
 
@@ -304,7 +307,7 @@ fun HomeScreen(
         if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
 
         val inFlight = AppWarmup.homeLoads
-        if (inFlight != null && !ContentCache.isHomeFreshFor(owner)) {
+        if (inFlight != null && inFlight.isCurrent() && inFlight.owner == owner && !ContentCache.isHomeFreshFor(owner)) {
             // 只 await 很短一段时间：预热那三条本来就已经发出去了，通常几十~几百毫秒内就回来。
             // 超时也不空等 —— 下面照样自己发，用户不会对着转圈。
             val arrived = withTimeoutOrNull(WARMUP_AWAIT_MS) {
@@ -313,7 +316,7 @@ fun HomeScreen(
                 val top = runCatching { inFlight.newSongs.await() }.getOrNull()
                 Triple(daily, pls, top)
             }
-            arrived?.let { (daily, pls, top) ->
+            arrived?.takeIf { inFlight.isCurrent() }?.let { (daily, pls, top) ->
                 daily?.let { if (it.isNotEmpty() && sessionStillAt(owner)) dailySongs = it }
                 pls?.let { if (it.isNotEmpty() && sessionStillAt(owner)) playlists = it }
                 top?.let { list ->

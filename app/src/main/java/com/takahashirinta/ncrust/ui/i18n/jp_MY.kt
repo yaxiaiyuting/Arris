@@ -186,7 +186,7 @@ val jpMY = Strings(
         visualizerPerspectiveDescription = "波形 柱 に 固定 の 傾 を 加ふ。描畫 層 一 を 増 し、絢爛 の 段 に て 合成 費 最 も 高 き 項 な り。",
         visualizerDragLabel = "押 に て 着色 切替",
         visualizerDragDescription = "波形 柱 を 押 せ ば、「漸化 流動」と「時序 に 由る 着色」と の 間 に 切替 ふ。本 版 は 引 ずる 操作 未 実装（手 の 動き と 再世 器 の 衝突 は 実機 未 検証）。",
-        visualizerNotSpectrumHint = "波形 の 明暗 は 時 の 新旧 を 示 す のみ、スペクトル に 非 ず。本 版 に 周波數 の 情報 無 く、低/中/高 を 分 か ず。",
+        visualizerNotSpectrumHint = "波形 は 低・中・高域 の エネルギー 包絡 を 時間順 に 示 す。FFT スペクトル に 非 ず。",
         visualizerSpeedLabel = "波形のスクロール速度",
         visualizerSpeedDescription = "1× は音声データに追従。速くするとデータが尽きたとき最後の列を繰り返します（動きは速いが形は伸びます）。遅くすると履歴をゆっくり流すだけです。",
         // v2.9.0：動效 強度（統合 の 段）+ 界面 動效 の 總 スイッチ。
@@ -269,6 +269,7 @@ val jpMY = Strings(
         offlineCacheDeleteTitle = "貯 を 消 す",
         offlineCacheDeleteConfirm = { name -> "「$name」の 貯 を 消 す か" },
         offlineCacheDeleted = "貯 を 消 し た",
+        offlineCacheOperationFailed = "キャッシュ 操作 未完了。一部 の ファイル は 殘存 する 可能性 有 り。",
         categoryOffline = "オフライン",
         offlineCachePlayingLocked = "再世 中、消 す 不 可",
         offlineCacheFragmentNotice = "貯 は 再世 せ し 片 の み、全 曲 を 保 証 せ ず",

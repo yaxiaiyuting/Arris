@@ -1,0 +1,46 @@
+{
+  "version_name": "3.7.11-gpl",
+  "version_code": 99,
+  "build_source_commit": "f05a88a317168204f0af4013824c4832c331fb5a",
+  "build_app_tree": "88993fd7d4847c728706b59afd68906db9cd24b4",
+  "artifacts": [
+    {
+      "name": "Arris-v3.7.11-gpl-formal-release.apk",
+      "path": "/home/duanjb666/deepseek/dist/v3.7.11-gpl-formal-code99/Arris-v3.7.11-gpl-formal-release.apk",
+      "bytes": 12121836,
+      "sha256": "987504af32f3f9f0b0decaebba1e3049e65ca57682ed604e40c3c57bd3be4968"
+    },
+    {
+      "name": "Arris-v3.7.11-gpl-formal-debug.apk",
+      "path": "/home/duanjb666/deepseek/dist/v3.7.11-gpl-formal-code99/Arris-v3.7.11-gpl-formal-debug.apk",
+      "bytes": 34035189,
+      "sha256": "8010b040e72d74ad2b87c5639ccce0edff16829bd25dc1dfc50a3fc32c3174a4"
+    },
+    {
+      "name": "Arris-v3.7.11-gpl-formal-mapping.txt",
+      "path": "/home/duanjb666/deepseek/dist/v3.7.11-gpl-formal-code99/Arris-v3.7.11-gpl-formal-mapping.txt",
+      "bytes": 80148930,
+      "sha256": "6999d4396890cc7b44ffd85f54718471c41dd92f732cb87af648074c35b6a606"
+    }
+  ],
+  "release_signer_sha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "jvm": {
+    "tests": 3366,
+    "classes": 308,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Information": 7,
+    "Warning": 61
+  },
+  "birthday_asset_entries": 22,
+  "old_test_apk_sha256_unchanged": "ce9ca0abe3ec8afcd7d5d97a443091b998b9c41ad6e8191d75a54241c4990077",
+  "original_worktree_dirty_files": 31,
+  "original_app_diff_from_saved_wip": [
+    "app/build.gradle.kts"
+  ],
+  "no_device_validation": true,
+  "no_push_or_github_release": true
+}

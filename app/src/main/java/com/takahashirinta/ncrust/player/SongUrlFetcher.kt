@@ -188,6 +188,8 @@ object SongUrlFetcher {
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
     private fun coolingDown(): Boolean =
         System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
+    fun onNetworkRouteChanged() { transportCooldownUntil.set(0L) }
+
     private fun startCooldown() {
         transportCooldownUntil.set(System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS)
     }
@@ -261,7 +263,8 @@ object SongUrlFetcher {
             // A3：只有"实际文件可能低于请求档位"时才多问一次该曲的档位上限 ——
             // 用来把「账号无权限」和「该曲根本没这个档位」分开。平时不加这次往返。
             val songMaxLevel =
-                if (QualityAssessment.needsSongCapability(level, br, type)) fetchSongMaxLevel(songId)
+                if (QualityAssessment.needsSongCapability(level, br, type))
+                    kotlinx.coroutines.withTimeoutOrNull(1_200L) { fetchSongMaxLevel(songId) }
                 else null
             // v1.6.0 · D1：给播放 URL 挂上离线缓存的 key（query 参数是装饰，
             // CDN 只认路径里的签名，实测删改 query 仍 206）。挂上之后 CacheDataSource
@@ -319,7 +322,7 @@ object SongUrlFetcher {
         songMaxLevelCache[songId]?.let { return it }
         return try {
             val payload = mapOf("c" to JSONArray().put(JSONObject().put("id", songId)).toString())
-            val response = RetrofitClient.eapiPost(
+            val response = RetrofitClient.eapiPostCancellable(
                 SONG_DETAIL_PATH,
                 payload,
                 extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie())
@@ -335,6 +338,8 @@ object SongUrlFetcher {
             }
             Log.i(TAG, "song capability: songId=$songId maxBrLevel=${level ?: "unknown"}")
             level
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "song capability fetch failed for songId=$songId", e)
             null
