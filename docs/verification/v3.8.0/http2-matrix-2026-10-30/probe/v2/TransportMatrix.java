@@ -26,7 +26,7 @@ public class TransportMatrix {
     void put(String k,Object v){try{row.put(k,v);}catch(Exception ignored){}}
     void mark(String k){put(k,now()-start);}
     @Override public void dnsStart(Call c,String domain){mark("dns_start_ms");}
-    @Override public void dnsEnd(Call c,String domain,List<InetAddress> a){mark("dns_end_ms");put("dns_addresses",a.size()); JSONArray addresses=new JSONArray(); for(InetAddress x:a)addresses.put(new JSONObject().put("address",x.getHostAddress()).put("family",x instanceof Inet4Address?"IPv4":"IPv6")); put("dns_results",addresses);}
+    @Override public void dnsEnd(Call c,String domain,List<InetAddress> a){mark("dns_end_ms");put("dns_addresses",a.size()); try { JSONArray addresses=new JSONArray(); for(InetAddress x:a)addresses.put(new JSONObject().put("address",x.getHostAddress()).put("family",x instanceof Inet4Address?"IPv4":"IPv6")); put("dns_results",addresses); } catch(Exception ignored) {}}
     @Override public void connectStart(Call c,InetSocketAddress a,Proxy p){mark("connect_start_ms");put("proxy_type",p.type().name()); try{attempts.put(new JSONObject().put("ms",now()-start).put("address",a.toString()).put("proxy",p.type().name()));put("connect_attempts",attempts);}catch(Exception ignored){}}
     @Override public void secureConnectStart(Call c){mark("tls_start_ms");}
     @Override public void secureConnectEnd(Call c,Handshake h){mark("tls_end_ms");put("tls_version",h.tlsVersion().javaName());}
