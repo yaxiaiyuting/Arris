@@ -1070,6 +1070,48 @@ fun MainScreen(
              * 这时候调 `seekTo` / 切暂停会命中它的内部断言
              * （`isLoading only allowed when not in STATE_IDLE or STATE_ENDED`）→ 客机闪退。
              */
+            /**
+             * 把「房主正在放的那首歌」解析成本机可播放的 [SongItem]。
+             *
+             * 先按平台 ID 取详情（最准）；取不到退回双源搜索 ——
+             * 平板这类**没登录**的设备取详情常常失败，只认 ID 的话会停在
+             * 「房主在放：xxx」但什么都不播（真机复现过）。
+             */
+            suspend fun resolveRemoteSong(
+                snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot,
+            ): SongItem? {
+                val remoteId = snapshot.songId
+                if (remoteId != null) {
+                    val src = com.takahashirinta.ncrust.source.MusicSource.fromKey(snapshot.sourceKey)
+                    val stub = SongItem(
+                        id = remoteId,
+                        name = snapshot.title,
+                        artists = null,
+                        album = null,
+                        duration = null,
+                        source = src.key,
+                    )
+                    val full = runCatching {
+                        com.takahashirinta.ncrust.source.SourceRouter.provider(src)?.songDetail(stub)
+                    }.getOrNull()
+                    if (full != null) return full
+                }
+                val keyword = listOf(snapshot.title, snapshot.artist)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                if (keyword.isBlank()) return null
+                val candidates = com.takahashirinta.ncrust.source.MusicSource.entries
+                    .filter { it != com.takahashirinta.ncrust.source.MusicSource.BILIBILI }
+                    .flatMap { src ->
+                        runCatching {
+                            com.takahashirinta.ncrust.source.SourceRouter.searchSongs(src, keyword, 5)
+                        }.getOrDefault(emptyList())
+                    }
+                return candidates.firstOrNull {
+                    it.name.contains(snapshot.title) || snapshot.title.contains(it.name)
+                } ?: candidates.firstOrNull()
+            }
+
             fun alignAfterStart(songId: Long, target: Long, wantPlaying: Boolean) {
                 bridgeScope.launch {
                     repeat(24) {          // 最多等 6s
@@ -1108,27 +1150,13 @@ fun MainScreen(
                     lastFollowAtMs = System.currentTimeMillis()
                     com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
                     bridgeScope.launch {
-                        val src = com.takahashirinta.ncrust.source.MusicSource
-                            .fromKey(snapshot.sourceKey)
-                        val stub = SongItem(
-                            id = remoteId,
-                            name = snapshot.title,
-                            artists = null,
-                            album = null,
-                            duration = null,
-                            source = src.key,
-                        )
-                        // 拿不到详情就不播 —— 用半成品 SongItem 起播会在队列里引发空指针，
-                        // 这正是「切歌瞬间闪退」的来源。
-                        val full = runCatching {
-                            com.takahashirinta.ncrust.source.SourceRouter.provider(src)?.songDetail(stub)
-                        }.getOrNull()
-                        if (full != null) {
-                            playItemHolder.value?.invoke(full)
-                            alignAfterStart(remoteId, snapshot.positionMs, snapshot.playing)
+                        val target = resolveRemoteSong(snapshot)
+                        if (target != null) {
+                            playItemHolder.value?.invoke(target)
+                            alignAfterStart(target.id, snapshot.positionMs, snapshot.playing)
                         } else {
                             com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                                "找到歌曲ID但没有详情，改用搜索兜底"
+                                "房主在放：${snapshot.title}（本机曲库里找不到）"
                             )
                         }
                         inFlight.set(false)
