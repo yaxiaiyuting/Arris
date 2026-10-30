@@ -56,7 +56,7 @@ object TogetherSession {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var hostJob: Job? = null
-    private var relay: RoomRelayWs? = null
+    private var link: RoomLink? = null
     private var source: PlaybackSource? = null
 
     /** 供 UI 观察的状态文本 + 房间信息。 */
@@ -69,7 +69,7 @@ object TogetherSession {
     private val _isHost = MutableStateFlow(false)
     val isHost: StateFlow<Boolean> = _isHost
 
-    val connected: Boolean get() = relay != null
+    val connected: Boolean get() = link != null
 
     /** MainScreen 在启动时注入播放器能力。 */
     fun bind(playbackSource: PlaybackSource?) {
@@ -82,16 +82,16 @@ object TogetherSession {
         _isHost.value = true
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps = fixedIps)
+        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps = fixedIps)
         ws.onOpen = {
             _status.value = "已创建房间 $code"
             startHostLoop(ws)
         }
         ws.onClosed = { c, r ->
-            if (relay === ws) {
+            if (link === ws) {
                 _status.value = "断开（$c ${r.take(24)}）"
                 stopHostLoop()
-                relay = null
+                link = null
             }
         }
         ws.onMessage = { msg ->
@@ -102,7 +102,7 @@ object TogetherSession {
             }
         }
         ws.connect()
-        relay = ws
+        link = ws
     }
 
     /** 成员加入：收到房主快照就跟随。 */
@@ -111,12 +111,12 @@ object TogetherSession {
         _isHost.value = false
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
+        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
         ws.onOpen = { _status.value = "已加入房间 $code" }
         ws.onClosed = { c, r ->
-            if (relay === ws) {
+            if (link === ws) {
                 _status.value = "断开（$c ${r.take(24)}）"
-                relay = null
+                link = null
             }
         }
         ws.onMessage = { msg ->
@@ -134,20 +134,76 @@ object TogetherSession {
             }
         }
         ws.connect()
-        relay = ws
+        link = ws
+    }
+
+    /**
+     * 局域网建房（无需任何服务器）：本机监听，房间码就是 `IP:端口`。
+     * 返回连接串供界面展示（找不到局域网地址时返回 null）。
+     */
+    fun createLan(): String? {
+        leave()
+        _isHost.value = true
+        val lan = RoomLink.Lan.host()
+        _roomId.value = "LAN"
+        _status.value = "局域网房间启动中…"
+        lan.onMessage = { msg ->
+            when (msg) {
+                is RoomWire.Ping -> lan.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> _members.value = msg.members
+                else -> Unit
+            }
+        }
+        lan.onClosed = { _, _ -> }
+        lan.startHost()
+        startHostLoop(lan)
+        link = lan
+        val addr = lan.address()
+        _status.value = if (addr != null) "局域网房间：$addr（同一 WiFi/热点可加入）" else "局域网房间已启动，但没找到局域网地址"
+        return addr
+    }
+
+    /** 局域网加入：`ip:port`。 */
+    fun joinLan(address: String): Boolean {
+        val host = address.substringBeforeLast(':', "")
+        val port = address.substringAfterLast(':', "").toIntOrNull() ?: 0
+        if (host.isBlank() || port <= 0) {
+            _status.value = "地址格式应为 IP:端口"
+            return false
+        }
+        leave()
+        _isHost.value = false
+        _roomId.value = "LAN"
+        _status.value = "连接 $address …"
+        val lan = runCatching { RoomLink.Lan.join(host, port) }.getOrElse {
+            _status.value = "连不上 $address（${it.message}）"
+            return false
+        }
+        lan.onMessage = { msg ->
+            when (msg) {
+                is RoomWire.Snapshot -> followSnapshot(msg.state)
+                is RoomWire.Ping -> lan.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> _members.value = msg.members
+                else -> Unit
+            }
+        }
+        lan.onOpen = { _status.value = "已加入局域网 $address" }
+        lan.startMember()
+        link = lan
+        return true
     }
 
     fun leave() {
         stopHostLoop()
-        relay?.close()
-        relay = null
+        link?.close()
+        link = null
         _members.value = 0
         if (_status.value != "未连接") _status.value = "未连接"
     }
 
     // ---------------------------------------------------------------- 房主
 
-    private fun startHostLoop(ws: RoomRelayWs) {
+    private fun startHostLoop(ws: RoomLink) {
         stopHostLoop()
         hostJob = scope.launch {
             while (true) {

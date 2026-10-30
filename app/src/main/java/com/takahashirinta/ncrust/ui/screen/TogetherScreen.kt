@@ -78,7 +78,11 @@ fun TogetherScreen(onBack: () -> Unit) {
     ) {
         MetroText("一起听", color = colors.onBackground, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
         MetroText(
-            "房主的切歌与进度会同步给房间里的每个人；音频不经过服务器。",
+            "房主的切歌与进度会同步给房间里的每个人；音频不经过服务器。\n" +
+                "同一 WiFi/热点：用「局域网建房 / 局域网加入」（不需要任何服务器）。\n" +
+                "异地：① 一方开热点，另一方连上，同上去；" +
+                "② 双方装 Tailscale 后把 100.x 地址填进「局域网加入」；" +
+                "③ 有域名的话可把中继换成自己的域名。",
             color = colors.onSurfaceVariant,
             style = TextStyle(fontSize = 12.sp),
         )
@@ -178,6 +182,25 @@ fun TogetherScreen(onBack: () -> Unit) {
             "加入房间" to {
                 if (code.isNotBlank()) TogetherSession.join(base, code, ips)
                 else TogetherSessionStatus.note("先输入房间码")
+            },
+        )
+        Row2(
+            "局域网建房" to {
+                val addr = TogetherSession.createLan()
+                if (addr != null) {
+                    code = addr
+                    // 一键复制：房主把这句话发给朋友，对方粘贴到「局域网加入」即可
+                    val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    clip.setPrimaryClip(
+                        android.content.ClipData.newPlainText("Arris 一起听", addr)
+                    )
+                    TogetherSessionStatus.note("已复制 $addr，粘贴给朋友即可加入")
+                }
+            },
+            "局域网加入" to {
+                if (code.contains(':')) TogetherSession.joinLan(code)
+                else TogetherSessionStatus.note("房间码填 主机IP:端口")
             },
         )
         Row2(
