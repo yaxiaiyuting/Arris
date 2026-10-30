@@ -241,7 +241,21 @@ fun TogetherScreen(onBack: () -> Unit) {
                         withContext(Dispatchers.Main) {
                             scanning = false
                             list.onSuccess { rooms = it }
-                                .onFailure { TogetherSessionStatus.note("扫描失败：${it.message}") }
+                                .onFailure { e ->
+                                    // 失败时直接给"下一招"，而不是把异常文字甩给用户：
+                                    // 中继连不上在国内是常态（SNI 阻断/域名被投毒），
+                                    // 局域网和 P2P 是不依赖任何服务器的现成替代。
+                                    val why = when (e) {
+                                        is java.net.SocketException,
+                                        is java.net.SocketTimeoutException,
+                                        is java.net.UnknownHostException -> "中继连不上（${e.javaClass.simpleName}）"
+                                        else -> "扫描失败：${e.message ?: e.javaClass.simpleName}"
+                                    }
+                                    TogetherSessionStatus.note(
+                                        "$why —— 可以改用「局域网建房/加入」（同一 WiFi/热点，不需要服务器），" +
+                                            "或「P2P 建房」（家用宽带）"
+                                    )
+                                }
                         }
                     }
                 }
