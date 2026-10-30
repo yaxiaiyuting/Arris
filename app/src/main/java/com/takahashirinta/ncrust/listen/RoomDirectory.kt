@@ -29,13 +29,7 @@ object RoomDirectory {
 
     private val client = OkHttpClient.Builder()
         // 与 RoomRelayWs 同因：IPv6 解析成功但连不通时优先 IPv4
-        .dns(object : okhttp3.Dns {
-            override fun lookup(hostname: String): List<java.net.InetAddress> {
-                val all = okhttp3.Dns.SYSTEM.lookup(hostname)
-                val v4 = all.filterIsInstance<java.net.Inet4Address>()
-                return if (v4.isNotEmpty()) v4 + all.filterNot { it is java.net.Inet4Address } else all
-            }
-        })
+        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
