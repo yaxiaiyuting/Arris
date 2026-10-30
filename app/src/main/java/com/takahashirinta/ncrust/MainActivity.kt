@@ -1040,11 +1040,58 @@ fun MainScreen(
                     artist = playerViewModel.currentSongArtist.value.orEmpty(),
                     positionMs = playerViewModel.currentPosition.value,
                     playing = playerViewModel.isPlaying.value,
+                    // 带上平台 ID 与音源：成员据此**按 id 精确起播**，
+                    // 不必靠标题搜索（那正是「连上了但不同步」的根因之一）。
+                    songId = playerViewModel.currentSongId.value,
+                    sourceKey = playerViewModel.currentSource.value.key,
                 )
+            }
+
+            /** 起播后轮询，等目标曲目真正上播再 seek —— 刚点播就 seek 会被加载覆盖掉。 */
+            fun seekOncePlaying(target: Long) {
+                if (target <= 2_000) return
+                bridgeScope.launch {
+                    repeat(20) {          // 最多等 5s
+                        kotlinx.coroutines.delay(250)
+                        if (playerViewModel.currentSongId.value != null &&
+                            playerViewModel.currentPosition.value > 0
+                        ) {
+                            playerViewModel.seekTo(target)
+                            return@launch
+                        }
+                    }
+                }
             }
 
             override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
                 val localTitle = playerViewModel.currentSongName.value.orEmpty()
+                val localId = playerViewModel.currentSongId.value
+                // ① 已知平台 ID 且与本机不同 → 直接按 id 播放（不依赖搜索命中）
+                val remoteId = snapshot.songId
+                if (remoteId != null && remoteId != localId) {
+                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
+                    bridgeScope.launch {
+                        val src = com.takahashirinta.ncrust.source.MusicSource
+                            .fromKey(snapshot.sourceKey)
+                        val stub = SongItem(
+                            id = remoteId,
+                            name = snapshot.title,
+                            artists = null,
+                            album = null,
+                            duration = null,
+                            source = src.key,
+                        )
+                        val full = runCatching {
+                            com.takahashirinta.ncrust.source.SourceRouter.provider(src)?.songDetail(stub)
+                        }.getOrNull() ?: stub
+                        playItemHolder.value?.invoke(full)
+                        seekOncePlaying(snapshot.positionMs)
+                    }
+                    if (playerViewModel.isPlaying.value != snapshot.playing && !snapshot.playing) {
+                        playerViewModel.togglePlayPause()
+                    }
+                    return
+                }
                 if (localTitle != snapshot.title) {
                     // 跨曲跟随：先双源搜索（ncm + qm），命中就切过去并 seek 到房主进度。
                     // 找不到就如实提示，不猜也不放错歌。

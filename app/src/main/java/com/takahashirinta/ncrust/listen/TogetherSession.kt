@@ -30,6 +30,15 @@ data class PlaybackSnapshot(
     val artist: String,
     val positionMs: Long,
     val playing: Boolean,
+    /**
+     * 歌曲的**平台 ID** 与音源 key（v3.8.1）。
+     *
+     * 为什么必须带：成员侧原来只按 `title` 字符串对齐，一旦两边音源/命名不同就永远播不上，
+     * 于是表现为「连接正常但不同步播放」。带上 id 后成员可以直接按 id 起播，
+     * 搜索匹配只作为兜底。
+     */
+    val songId: Long? = null,
+    val sourceKey: String? = null,
 )
 
 /**
@@ -264,7 +273,10 @@ object TogetherSession {
                         album = "",
                         durationMs = 0,
                         editionKinds = emptySet(),
-                        publicIds = emptyMap(),
+                        publicIds = buildMap {
+                            snap.songId?.let { put("songId", it.toString()) }
+                            snap.sourceKey?.let { put("source", it) }
+                        },
                     )
                     val state = RoomState(
                         roomId = _roomId.value,
@@ -293,26 +305,28 @@ object TogetherSession {
 
     private fun followSnapshot(state: RoomState) {
         val src = source ?: return
-        val local = src.current() ?: return
+        val track = state.queue.firstOrNull()
         val target = state.transport.positionMs + (nowMs() - state.stampedAtMs)
-        val sameSong = local.title == state.queue.firstOrNull()?.title
-        if (!sameSong) {
-            // 换歌：直接把本地播放器拉到目标曲目与进度
-            src.follow(
-                PlaybackSnapshot(
-                    title = state.queue.firstOrNull()?.title.orEmpty(),
-                    artist = state.queue.firstOrNull()?.artist.orEmpty(),
-                    positionMs = target,
-                    playing = state.transport.playing,
-                )
-            )
-            _status.value = "房主在放：${state.queue.firstOrNull()?.title.orEmpty()}"
+        val remote = PlaybackSnapshot(
+            title = track?.title.orEmpty(),
+            artist = track?.artist.orEmpty(),
+            positionMs = target,
+            playing = state.transport.playing,
+            songId = track?.publicIds?.get("songId")?.toLongOrNull(),
+            sourceKey = track?.publicIds?.get("source")?.takeIf { it.isNotBlank() },
+        )
+        // 本地可能**根本没有在播的歌**（刚进房间的常态）。旧实现在这里 `?: return`，
+        // 于是整条快照被丢掉 —— 这就是「连上了但不同步」的根因。
+        val local = src.current()
+        if (!FollowPolicy.isSameSong(local, remote)) {
+            src.follow(remote)
+            _status.value = "房主在放：${remote.title}"
             return
         }
-        if (kotlin.math.abs(target - local.positionMs) > SEEK_TOLERANCE_MS) {
-            src.follow(local.copy(positionMs = target, playing = state.transport.playing))
-        } else if (local.playing != state.transport.playing) {
-            src.follow(local.copy(playing = state.transport.playing))
+        if (FollowPolicy.needsSeek(local, remote, SEEK_TOLERANCE_MS)) {
+            src.follow(local!!.copy(positionMs = target, playing = state.transport.playing))
+        } else if (FollowPolicy.needsTransportFix(local, remote)) {
+            src.follow(local!!.copy(playing = state.transport.playing))
         }
     }
 

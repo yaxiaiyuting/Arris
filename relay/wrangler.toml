@@ -19,3 +19,9 @@ new_sqlite_classes = ["Room"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Directory"]
+
+# 静态资源：首页 HTML 与 APK 直链（单文件上限 25MiB，APK 16MB）
+# 匹配到的路径直接由 CDN 返回；未匹配的（/health、/rooms、/room/*）落到 Worker
+[assets]
+directory = "./public"
+binding = "ASSETS"
