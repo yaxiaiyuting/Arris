@@ -45,6 +45,22 @@ object AddressPreference {
         return v4 + all.filterNot { it is Inet4Address }
     }
 
+    /**
+     * 把某个域名固定解析到给定 IP 列表（用于绕开被污染的 DNS）。
+     *
+     * 只对 [host] 生效，其它域名走系统解析 —— 避免影响正常请求。
+     * SNI/Host 仍是域名，TLS 证书校验照旧。
+     */
+    fun fixedFor(host: String, ips: List<String>): Dns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            if (hostname != host || ips.isEmpty()) return ipv4First.lookup(hostname)
+            val parsed = ips.mapNotNull { ip ->
+                runCatching { InetAddress.getByName(ip) }.getOrNull()
+            }
+            return if (parsed.isNotEmpty()) parsed else ipv4First.lookup(hostname)
+        }
+    }
+
     /** 给 OkHttp 用的 DNS 实现。 */
     val ipv4First: Dns = object : Dns {
         override fun lookup(hostname: String): List<InetAddress> =

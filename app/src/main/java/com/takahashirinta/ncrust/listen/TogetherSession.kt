@@ -77,12 +77,12 @@ object TogetherSession {
     }
 
     /** 房主建房：房间码由调用方给（6 位数字），连上后开始广播。 */
-    fun create(base: String, code: String) {
+    fun create(base: String, code: String, fixedIps: List<String> = emptyList()) {
         leave()
         _isHost.value = true
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "host", "房主"))
+        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps = fixedIps)
         ws.onOpen = {
             _status.value = "已创建房间 $code"
             startHostLoop(ws)
@@ -106,12 +106,12 @@ object TogetherSession {
     }
 
     /** 成员加入：收到房主快照就跟随。 */
-    fun join(base: String, code: String) {
+    fun join(base: String, code: String, fixedIps: List<String> = emptyList()) {
         leave()
         _isHost.value = false
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "member", "成员"))
+        val ws = RoomRelayWs(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
         ws.onOpen = { _status.value = "已加入房间 $code" }
         ws.onClosed = { c, r ->
             if (relay === ws) {

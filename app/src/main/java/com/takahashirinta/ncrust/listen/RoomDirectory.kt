@@ -38,21 +38,26 @@ object RoomDirectory {
     const val DEFAULT_BASE = "https://arris-listen.arris-listen.workers.dev"
 
     /** [base] 形如 `https://xxx.workers.dev` 或 `wss://xxx.workers.dev`。 */
-    fun scan(base: String = DEFAULT_BASE): List<RoomSummary> {
-        try { return scanInternal(base) } catch (t: Throwable) {
+    fun scan(base: String = DEFAULT_BASE, fixedIps: List<String> = emptyList()): List<RoomSummary> {
+        try { return scanInternal(base, fixedIps) } catch (t: Throwable) {
             android.util.Log.e("RoomDir", "scan failed: ${t.javaClass.name}: ${t.message}", t)
             throw t
         }
     }
 
-    private fun scanInternal(base: String): List<RoomSummary> {
+    private fun scanInternal(base: String, fixedIps: List<String>): List<RoomSummary> {
         val http = base.replace("wss://", "https://").replace("ws://", "http://").trimEnd('/')
+        val useClient = if (fixedIps.isEmpty()) client else client.newBuilder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.fixedFor(
+                java.net.URI(http).host, fixedIps,
+            ))
+            .build()
         val request = Request.Builder()
             .url("$http/rooms")
             .header("User-Agent", "Arris/1.0 (Android; listen-together)")
             .build()
         android.util.Log.i("RoomDir", "GET ${request.url} ua=${request.header("User-Agent")}")
-        client.newCall(request).execute().use { response ->
+        useClient.newCall(request).execute().use { response ->
             android.util.Log.i("RoomDir", "HTTP ${response.code}")
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
             val body = response.body?.string().orEmpty()

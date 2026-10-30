@@ -28,7 +28,10 @@ import okhttp3.WebSocketListener
 class RoomRelayWs(
     private val url: String,
     private val client: OkHttpClient = defaultClient(),
+    /** 可选：把中继域名固定到这些 IP（绕开被污染的 DNS）。 */
+    fixedIps: List<String> = emptyList(),
 ) {
+    private val fixedIpsForHost: List<String> = fixedIps
     private var socket: WebSocket? = null
 
     @Volatile var onMessage: ((RoomWire) -> Unit)? = null
@@ -38,7 +41,13 @@ class RoomRelayWs(
     /** 连接；失败通过 [onClosed] 回调（不抛异常，调用方不用 try/catch）。 */
     fun connect() {
         val request = Request.Builder().url(url).header("User-Agent", UA).build()
-        socket = client.newWebSocket(request, object : WebSocketListener() {
+        // 固定 IP：域名留给 SNI/Host，连接目标换成给到的 IP（DNS 被污染时的通路）
+        val useClient = if (fixedIpsForHost.isEmpty()) client else client.newBuilder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.fixedFor(
+                java.net.URI(url).host, fixedIpsForHost,
+            ))
+            .build()
+        socket = useClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.i(TAG, "ws open $url")
                 onOpen?.invoke()

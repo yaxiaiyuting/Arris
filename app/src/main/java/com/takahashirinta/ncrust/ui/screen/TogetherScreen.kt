@@ -52,7 +52,15 @@ import kotlinx.coroutines.withContext
 fun TogetherScreen(onBack: () -> Unit) {
     val colors = LocalMetroColors.current
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     var code by remember { mutableStateOf("") }
+    // 中继地址可改：workers.dev 在国内不可达，必须允许换成自定义域名/自建中继
+    var base by remember { mutableStateOf(com.takahashirinta.ncrust.listen.TogetherPrefs.base(ctx)) }
+    var editingBase by remember { mutableStateOf(false) }
+    var baseDraft by remember { mutableStateOf(base) }
+    // DNS 被污染时用固定 IP 直连（域名仍用于 SNI/Host，证书校验不变）
+    var ips by remember { mutableStateOf(com.takahashirinta.ncrust.listen.TogetherPrefs.ips(ctx)) }
+    var ipsDraft by remember { mutableStateOf(ips.joinToString(",")) }
     var rooms by remember { mutableStateOf<List<RoomSummary>>(emptyList()) }
     var scanning by remember { mutableStateOf(false) }
     val status by TogetherSession.status.collectAsState()
@@ -74,6 +82,71 @@ fun TogetherScreen(onBack: () -> Unit) {
             color = colors.onSurfaceVariant,
             style = TextStyle(fontSize = 12.sp),
         )
+
+        // 中继地址行（点一下展开编辑）
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .background(colors.surfaceVariant, RectangleShape)
+                .clickable { editingBase = !editingBase; baseDraft = base }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            MetroText(
+                if (editingBase) "" else buildString {
+                    append("中继：$base")
+                    if (ips.isNotEmpty()) append("\n固定 IP：").append(ips.joinToString(","))
+                    append("（点击修改）")
+                },
+                color = colors.onSurfaceVariant,
+                style = TextStyle(fontSize = 12.sp),
+            )
+            if (editingBase) {
+                Column {
+                    BasicTextField(
+                        value = baseDraft,
+                        onValueChange = { baseDraft = it },
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 13.sp, color = colors.onBackground),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    MetroText(
+                        "固定 IP（可空；workers.dev 域名被污染时填 Cloudflare 优选 IP）",
+                        color = colors.onSurfaceVariant,
+                        style = TextStyle(fontSize = 11.sp),
+                    )
+                    BasicTextField(
+                        value = ipsDraft,
+                        onValueChange = { ipsDraft = it },
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 13.sp, color = colors.onBackground),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row2(
+                        "保存" to {
+                            base = com.takahashirinta.ncrust.listen.TogetherPrefs.normalize(baseDraft)
+                            com.takahashirinta.ncrust.listen.TogetherPrefs.setBase(ctx, base)
+                            com.takahashirinta.ncrust.listen.TogetherPrefs.setIps(ctx, ipsDraft)
+                            ips = com.takahashirinta.ncrust.listen.TogetherPrefs.ips(ctx)
+                            editingBase = false
+                            TogetherSessionStatus.note(
+                                "中继已改为 $base" + if (ips.isEmpty()) "" else "（固定 IP ${ips.joinToString(",")}）"
+                            )
+                        },
+                        "用优选 IP" to {
+                            baseDraft = com.takahashirinta.ncrust.listen.TogetherPrefs.DEFAULT_BASE
+                            ipsDraft = com.takahashirinta.ncrust.listen.TogetherPrefs.DEFAULT_IPS
+                            base = com.takahashirinta.ncrust.listen.TogetherPrefs.DEFAULT_BASE
+                            com.takahashirinta.ncrust.listen.TogetherPrefs.setBase(ctx, base)
+                            com.takahashirinta.ncrust.listen.TogetherPrefs.setIps(ctx, ipsDraft)
+                            ips = com.takahashirinta.ncrust.listen.TogetherPrefs.ips(ctx)
+                            editingBase = false
+                        },
+                    )
+                }
+            }
+        }
 
         BasicTextField(
             value = code,
@@ -100,10 +173,10 @@ fun TogetherScreen(onBack: () -> Unit) {
             "创建房间" to {
                 val c = TogetherSession.newRoomCode()
                 code = c
-                TogetherSession.create(RoomDirectory.DEFAULT_BASE, c)
+                TogetherSession.create(base, c, ips)
             },
             "加入房间" to {
-                if (code.isNotBlank()) TogetherSession.join(RoomDirectory.DEFAULT_BASE, code)
+                if (code.isNotBlank()) TogetherSession.join(base, code, ips)
                 else TogetherSessionStatus.note("先输入房间码")
             },
         )
@@ -115,7 +188,7 @@ fun TogetherScreen(onBack: () -> Unit) {
                         // 必须切 IO：rememberCoroutineScope() 默认是主线程，
                         // 直接发 HTTP 会抛 NetworkOnMainThreadException（message 是 null，
                         // UI 只显示"扫描失败：null"，完全看不出原因）。
-                        val list = runCatching { withContext(Dispatchers.IO) { RoomDirectory.scan() } }
+                        val list = runCatching { withContext(Dispatchers.IO) { RoomDirectory.scan(base, ips) } }
                         withContext(Dispatchers.Main) {
                             scanning = false
                             list.onSuccess { rooms = it }
@@ -154,7 +227,7 @@ fun TogetherScreen(onBack: () -> Unit) {
                     Modifier
                         .fillMaxWidth()
                         .background(colors.surfaceVariant, RectangleShape)
-                        .clickable { code = r.roomId; TogetherSession.join(RoomDirectory.DEFAULT_BASE, r.roomId) }
+                        .clickable { code = r.roomId; TogetherSession.join(base, r.roomId, ips) }
                         .padding(12.dp),
                 ) {
                     MetroText(
