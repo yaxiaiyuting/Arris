@@ -113,6 +113,11 @@ export class Room {
   async fetch(request) {
     const url = new URL(request.url);
     this.roomId = url.pathname.split("/").pop() || "";
+    // 关键：Hibernation API 会在空闲后重建 DO 实例，内存字段会丢。
+    // roomId 必须落盘，否则 beat/drop 会写到空房间名上 ——
+    // 现象就是「房间永远不销毁」和「退出再进连不上」。
+    if (this.roomId) await this.state.storage.put("roomId", this.roomId);
+    else this.roomId = (await this.state.storage.get("roomId")) || "";
     const role = url.searchParams.get("role") === "host" ? "host" : "member";
     const name = (url.searchParams.get("name") || "").slice(0, 24);
 
@@ -126,6 +131,18 @@ export class Room {
     if (members.length > MAX_MEMBERS) {
       server.close(4001, "room full");
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    // 成员进来时如果房里已经没有房主，直接告诉他房间结束了 ——
+    // 否则他会连上一个「有连接但永远没有快照」的死房间（就是用户说的
+    //「退出去再连回来没法同步、报错」）。
+    if (role === "member") {
+      const hasHost = this.state.getWebSockets().some((ws) => {
+        try { return (ws.deserializeAttachment() || {}).role === "host"; } catch (_) { return false; }
+      });
+      if (!hasHost) {
+        try { server.send(JSON.stringify({ t: "closed", reason: "no-host" })); } catch (_) {}
+      }
     }
 
     // 给新成员一个稳定的 id，并广播「谁进来了」
@@ -166,18 +183,50 @@ export class Room {
     await this.beat();
   }
 
+  /** 把房间从目录里摘掉（房间空了或房主离开时）。 */
+  async drop(title = "") {
+    try {
+      const dir = this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("global"));
+      await dir.fetch(`https://directory/drop?roomId=${encodeURIComponent(this.roomId || "")}`);
+    } catch (_) {}
+  }
+
   async webSocketClose(ws, code, reason) {
-    const meta = ws.deserializeAttachment() || {};
-    const left = JSON.stringify({ t: "presence", role: meta.role, name: meta.name, left: true });
-    for (const peer of this.state.getWebSockets()) {
-      if (peer === ws) continue;
-      try { peer.send(left); } catch (_) {}
-    }
-    try { ws.close(code, reason); } catch (_) {}
+    await this.leave(ws, code, reason);
   }
 
   async webSocketError(ws) {
-    try { ws.close(1011, "error"); } catch (_) {}
+    await this.leave(ws, 1011, "error");
+  }
+
+  /**
+   * 有人离开（v3.8.1）。
+   *
+   * 旧实现只广播 presence，**从不清理目录、也不处理「房主走了」**：
+   * 房主退出后房间仍然挂在 /rooms 里，成员连着一个没有房主的房间等快照。
+   * 现在的规则：
+   * - 房主离开 ⇒ 房间作废，通知所有人后立刻从目录删除；
+   * - 普通成员离开且房间已空 ⇒ 删目录；
+   * - 还有人 ⇒ 刷新一次目录（成员数变了）。
+   */
+  async leave(ws, code, reason) {
+    const meta = ws.deserializeAttachment() || {};
+    const peers = this.state.getWebSockets().filter((p) => p !== ws);
+    const presence = JSON.stringify({
+      t: "presence", role: meta.role, name: meta.name, members: peers.length, left: true,
+    });
+    for (const peer of peers) { try { peer.send(presence); } catch (_) {} }
+    try { ws.close(code, reason); } catch (_) {}
+
+    if (meta.role === "host") {
+      const closed = JSON.stringify({ t: "closed", reason: "host-left" });
+      for (const peer of peers) { try { peer.send(closed); } catch (_) {} }
+      await this.drop();
+    } else if (peers.length === 0) {
+      await this.drop();
+    } else {
+      await this.beat();
+    }
   }
 }
 
