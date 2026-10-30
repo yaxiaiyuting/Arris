@@ -1060,6 +1060,14 @@ fun MainScreen(
     val playItemHolder = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
     }
+    /** 房主侧：队列里的下一首（供一起听同步「下一首」用）。 */
+    val nextItemHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<SongItem?>(null)
+    }
+    /** 成员侧：把房主的下一首追加进本机队列（起播入口在上面）。 */
+    val appendNextHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
+    }
     // 跟随去重：一次「房主切歌」只能触发一次起播。
     // 没有它的话，每秒一条快照会让成员反复调用 playSongItem：
     // 表现就是「把列表里的歌挨个放一遍」，并在切歌瞬间闪退。
@@ -1086,6 +1094,10 @@ fun MainScreen(
                     // 不必靠标题搜索（那正是「连上了但不同步」的根因之一）。
                     songId = playerViewModel.currentSongId.value,
                     sourceKey = playerViewModel.currentSource.value.key,
+                    nextTitle = nextItemHolder.value?.name,
+                    nextArtist = nextItemHolder.value?.artists?.joinToString("/") { it.name },
+                    nextSongId = nextItemHolder.value?.id,
+                    nextSourceKey = nextItemHolder.value?.musicSource?.key,
                 )
             }
 
@@ -1188,6 +1200,23 @@ fun MainScreen(
                         if (target != null) {
                             runCatching { playItemHolder.value?.invoke(target) }
                             alignAfterStart(target.id, snapshot.positionMs, snapshot.playing)
+                            // 把房主的下一首也准备好：这样房主切歌时成员是「顺播」而不是重新起播
+                            if (snapshot.nextSongId != null && snapshot.nextSongId != remoteId) {
+                                runCatching {
+                                    val next = resolveRemoteSong(
+                                        snapshot.copy(
+                                            title = snapshot.nextTitle.orEmpty(),
+                                            artist = snapshot.nextArtist.orEmpty(),
+                                            songId = snapshot.nextSongId,
+                                            sourceKey = snapshot.nextSourceKey,
+                                            nextSongId = null,
+                                        )
+                                    )
+                                    if (next != null && next.id != target.id) {
+                                        appendNextHolder.value?.invoke(next)
+                                    }
+                                }
+                            }
                         } else {
                             com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
                                 "房主在放：${snapshot.title}（本机曲库里找不到）"
@@ -2312,6 +2341,8 @@ fun MainScreen(
     // 桥接层拿到真实的「播放某一首」入口（一起听跨曲跟随用）
     androidx.compose.runtime.SideEffect {
         playItemHolder.value = { song -> playSongItem(song) }
+        // 队列里的下一首：房主广播时带上，成员据此提前准备
+        nextItemHolder.value = playbackQueue.getOrNull(currentQueueIndex + 1)
     }
 
     fun insertNext(song: SongItem) {
@@ -2432,6 +2463,12 @@ fun MainScreen(
             .coerceAtLeast(0)
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+    }
+
+    // 桥接层拿到「把一首歌追加到队尾」的入口（一起听同步下一首用）。
+    // 必须放在 appendToQueue 定义之后：Kotlin 的局部函数不能先用后声明。
+    androidx.compose.runtime.SideEffect {
+        appendNextHolder.value = { song -> appendToQueue(song) }
     }
 
     fun replaceQueueAndPlay(songs: List<SongItem>) {

@@ -92,6 +92,7 @@ fun TogetherScreen(onBack: () -> Unit) {
     val host by TogetherSession.isHost.collectAsState()
     val members by TogetherSession.members.collectAsState()
     val diag by TogetherSession.diag.collectAsState()
+    val nextUp by TogetherSession.nextUp.collectAsState()
 
     fun copy(text: String, note: String) {
         val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)

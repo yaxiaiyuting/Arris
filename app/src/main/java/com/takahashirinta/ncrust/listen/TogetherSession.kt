@@ -39,6 +39,17 @@ data class PlaybackSnapshot(
      */
     val songId: Long? = null,
     val sourceKey: String? = null,
+    /**
+     * 房主队列里的**下一首**（v3.8.2）。
+     *
+     * 为什么要带它：只同步「当前这首」时，成员拿到的是「换歌之后」的通知，
+     * 切歌瞬间会顿一下；而且成员的队列跟房主完全无关，下一首永远对不上。
+     * 带上下一首之后，成员可以在**当前歌还在放的时候**就把下一首准备好。
+     */
+    val nextTitle: String? = null,
+    val nextArtist: String? = null,
+    val nextSongId: Long? = null,
+    val nextSourceKey: String? = null,
 )
 
 /**
@@ -98,6 +109,11 @@ object TogetherSession {
      * 猜坐标，一次就是十分钟。把关键事件直接画在状态卡下面，
      * 一张截图就能判断断在哪一段。
      */
+    private val _nextUp = MutableStateFlow<String?>(null)
+
+    /** 房主队列里的下一首（界面显示用）。 */
+    val nextUp: StateFlow<String?> = _nextUp
+
     private val _diag = MutableStateFlow<List<String>>(emptyList())
     val diag: StateFlow<List<String>> = _diag
 
@@ -357,7 +373,23 @@ object TogetherSession {
                             seq = seq++,
                             hostUserId = "host",
                             members = emptyList(),
-                            queue = listOf(track),
+                            queue = listOfNotNull(
+                                track,
+                                snap.nextTitle?.let { nextTitle ->
+                                    CanonicalTrack(
+                                        roomTrackId = "rt-next-${Integer.toHexString(nextTitle.hashCode())}",
+                                        title = nextTitle,
+                                        artist = snap.nextArtist.orEmpty(),
+                                        album = "",
+                                        durationMs = 0,
+                                        editionKinds = emptySet(),
+                                        publicIds = buildMap {
+                                            snap.nextSongId?.let { put("songId", it.toString()) }
+                                            snap.nextSourceKey?.let { put("source", it) }
+                                        },
+                                    )
+                                },
+                            ),
                             currentRoomTrackId = track.roomTrackId,
                             transport = RoomTransport(snap.playing, snap.positionMs, 1f),
                             stampedAtMs = now,
@@ -381,7 +413,13 @@ object TogetherSession {
 
     private fun followSnapshot(state: RoomState) {
         val src = source ?: return
-        val track = state.queue.firstOrNull()
+        // 当前曲目以 currentRoomTrackId 为准（队列第一位是当前歌，后面可能跟着下一首）
+        val track = state.queue.firstOrNull { it.roomTrackId == state.currentRoomTrackId }
+            ?: state.queue.firstOrNull()
+        val nextTrack = state.queue.firstOrNull { it.roomTrackId != track?.roomTrackId }
+        if (nextTrack != null) {
+            _nextUp.value = nextTrack.title
+        }
         val target = state.transport.positionMs + (nowMs() - state.stampedAtMs)
         val remote = PlaybackSnapshot(
             title = track?.title.orEmpty(),
