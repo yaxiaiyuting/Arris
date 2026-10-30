@@ -36,3 +36,7 @@ v3.7.6/RELEASE_VERIFICATION.md记录：同设备同接口，h2真实参数343ms/
 - OkHttp4.12 RealConnection.trackFailure：https://github.com/square/okhttp/blob/parent-4.12.0/okhttp/src/main/kotlin/okhttp3/internal/connection/RealConnection.kt#L649
 - RealConnectionPool.evictAll/cleanup：https://github.com/square/okhttp/blob/parent-4.12.0/okhttp/src/main/kotlin/okhttp3/internal/connection/RealConnectionPool.kt#L110
 - Http2Connection PING周期：https://github.com/square/okhttp/blob/parent-4.12.0/okhttp/src/main/kotlin/okhttp3/internal/http2/Http2Connection.kt#L136
+
+## 2026-10-30 后续实测
+
+已完成同设备的系统地址顺序、IPv4控制、短连接阶段等待和恢复原参数反向确认。38次只读取链，当前持续8秒超时已定位到IPv6 TCP握手等待与截止预算的交互；h2/h1在IPv4下均可播，历史流重置未重现，不能统一归因。详见[补测结果](../../v3.8.1/http2-matrix-followup/RESULTS.md)，不覆盖前文当时的证据边界。

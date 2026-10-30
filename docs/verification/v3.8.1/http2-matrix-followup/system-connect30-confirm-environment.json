@@ -1,0 +1,14 @@
+{
+  "host_start_jst": "2026-10-30T21:49:28.322878+09:00",
+  "device_wall": "Fri Oct 30 20:49:28 CST 2026",
+  "app_uid": 10377,
+  "global_proxy_before": ":0",
+  "source_head": "aa189cd5eecaacef0ef1ba4073049c83a6920e39",
+  "dex_sha256": "8f5e39aaa8e30bb232cde129e1b5ac4370e84cb2e28aabd4b70812c07bf32cb2",
+  "credentials": "one live prefs snapshot, same device identity; not logged",
+  "tls": "system default; verification unchanged",
+  "apk_install": false,
+  "global_network_changed": false,
+  "global_proxy_after": ":0",
+  "host_end_jst": "2026-10-30T21:49:49.636211+09:00"
+}
