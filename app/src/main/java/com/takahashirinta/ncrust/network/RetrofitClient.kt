@@ -70,8 +70,23 @@ object RetrofitClient {
     internal fun probeClientWithProtocols(protocols: List<okhttp3.Protocol>): OkHttpClient =
         plainClient.newBuilder().protocols(protocols).build()
 
+    /**
+     * 清空连接池（切账号 / 换身份后让旧连接立刻失效）。
+     *
+     * ⚠️ **必须在后台线程执行**：`evictAll()` 会关闭底层的 TLS socket，
+     * 而 Conscrypt 在关闭时要写 close_notify —— 这是网络 I/O。
+     * 真机实测（PCL110 / Android 16）：调用方从主线程的协程恢复时进这里，
+     * 直接 `FATAL EXCEPTION: main android.os.NetworkOnMainThreadException`，
+     * 表现为「房主端用着用着就闪退、房间跟着没了、成员收不到任何快照」。
+     *
+     * 所以这里自己做线程切换，让调用方不必关心自己在哪个线程。
+     */
     fun evictConnections() {
-        sharedConnectionPool.evictAll()
+        // 单独开一条线程：不依赖任何 OkHttp 实例的 Dispatcher 是否还在就绪状态，
+        // 也不会因为调用方在主线程而抛 NetworkOnMainThreadException。
+        runCatching {
+            Thread({ runCatching { sharedConnectionPool.evictAll() } }, "ncrust-evict-conns").start()
+        }
     }
 
     fun updateCookie(cookie: String?) {
