@@ -755,6 +755,9 @@ internal fun reasonText(
 }
 
 /** 播放模式：0=顺序循环, 1=单曲循环, 2=乱序, 3=顺序线性(播完停), 4=相似无限(FM 电台)。 */
+/** 跟随同一首歌的最小间隔：避免每秒快照反复触发起播。 */
+private const val FOLLOW_COOLDOWN_MS = 8_000L
+
 object QueueModes {
     const val CYCLE = 0
     const val SINGLE = 1
@@ -1031,6 +1034,19 @@ fun MainScreen(
     val playItemHolder = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
     }
+    // 跟随去重：一次「房主切歌」只能触发一次起播。
+    // 没有它的话，每秒一条快照会让成员反复调用 playSongItem：
+    // 表现就是「把列表里的歌挨个放一遍」，并在切歌瞬间闪退。
+    val followGuard = androidx.compose.runtime.remember {
+        java.util.concurrent.atomic.AtomicLong(-1L) to java.util.concurrent.atomic.AtomicBoolean(false)
+    }
+    var lastFollowAtMs = 0L
+    // 致命点：跟随回调来自 OkHttp 的 WebSocket 线程，而 ExoPlayer 只允许主线程访问。
+    // 不切主线程的话会抛 "Player is accessed on the wrong thread." → 闪退，
+    // 而且在抛之前已经把队列动过了（用户看到「把列表的歌挨个放一遍」）。
+    val mainHandler = androidx.compose.runtime.remember {
+        android.os.Handler(android.os.Looper.getMainLooper())
+    }
     androidx.compose.runtime.DisposableEffect(playerViewModel) {
         val bridge = object : com.takahashirinta.ncrust.listen.PlaybackSource {
             override fun current(): com.takahashirinta.ncrust.listen.PlaybackSnapshot? {
@@ -1047,28 +1063,49 @@ fun MainScreen(
                 )
             }
 
-            /** 起播后轮询，等目标曲目真正上播再 seek —— 刚点播就 seek 会被加载覆盖掉。 */
-            fun seekOncePlaying(target: Long) {
-                if (target <= 2_000) return
+            /**
+             * 起播后**等曲目真的上播**再对齐进度与播放态。
+             *
+             * 为什么不能立刻 seek/暂停：刚 `setMediaItem` 时 ExoPlayer 还在 IDLE，
+             * 这时候调 `seekTo` / 切暂停会命中它的内部断言
+             * （`isLoading only allowed when not in STATE_IDLE or STATE_ENDED`）→ 客机闪退。
+             */
+            fun alignAfterStart(songId: Long, target: Long, wantPlaying: Boolean) {
                 bridgeScope.launch {
-                    repeat(20) {          // 最多等 5s
+                    repeat(24) {          // 最多等 6s
                         kotlinx.coroutines.delay(250)
-                        if (playerViewModel.currentSongId.value != null &&
-                            playerViewModel.currentPosition.value > 0
-                        ) {
-                            playerViewModel.seekTo(target)
-                            return@launch
+                        if (playerViewModel.currentSongId.value != songId) return@repeat
+                        if (target > 2_000) playerViewModel.seekTo(target)
+                        if (!wantPlaying && playerViewModel.isPlaying.value) {
+                            playerViewModel.togglePlayPause()
                         }
+                        return@launch
                     }
                 }
             }
 
             override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
+                // 一律切回主线程再碰播放器（同一 tick 内多次调用会被合并执行）
+                mainHandler.post { applyFollow(snapshot) }
+            }
+
+            private fun applyFollow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
                 val localTitle = playerViewModel.currentSongName.value.orEmpty()
                 val localId = playerViewModel.currentSongId.value
                 // ① 已知平台 ID 且与本机不同 → 直接按 id 播放（不依赖搜索命中）
                 val remoteId = snapshot.songId
                 if (remoteId != null && remoteId != localId) {
+                    val (lastFollowId, inFlight) = followGuard
+                    // 同一时刻只允许一个「起播」在飞：旧实现在每秒一条快照下会连续触发，
+                    // 于是把列表里的歌挨个播一遍，紧接着在切歌瞬间闪退。
+                    if (!inFlight.compareAndSet(false, true)) return
+                    if (lastFollowId.getAndSet(remoteId) == remoteId &&
+                        System.currentTimeMillis() - lastFollowAtMs < FOLLOW_COOLDOWN_MS
+                    ) {
+                        inFlight.set(false)
+                        return
+                    }
+                    lastFollowAtMs = System.currentTimeMillis()
                     com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
                     bridgeScope.launch {
                         val src = com.takahashirinta.ncrust.source.MusicSource
@@ -1081,14 +1118,20 @@ fun MainScreen(
                             duration = null,
                             source = src.key,
                         )
+                        // 拿不到详情就不播 —— 用半成品 SongItem 起播会在队列里引发空指针，
+                        // 这正是「切歌瞬间闪退」的来源。
                         val full = runCatching {
                             com.takahashirinta.ncrust.source.SourceRouter.provider(src)?.songDetail(stub)
-                        }.getOrNull() ?: stub
-                        playItemHolder.value?.invoke(full)
-                        seekOncePlaying(snapshot.positionMs)
-                    }
-                    if (playerViewModel.isPlaying.value != snapshot.playing && !snapshot.playing) {
-                        playerViewModel.togglePlayPause()
+                        }.getOrNull()
+                        if (full != null) {
+                            playItemHolder.value?.invoke(full)
+                            alignAfterStart(remoteId, snapshot.positionMs, snapshot.playing)
+                        } else {
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "找到歌曲ID但没有详情，改用搜索兜底"
+                            )
+                        }
+                        inFlight.set(false)
                     }
                     return
                 }
@@ -1126,13 +1169,16 @@ fun MainScreen(
                                 "房主在放：${snapshot.title}（曲库里没找到，暂不跟随）"
                             )
                         }
+                        followGuard.second.set(false)
                     }
                     return
                 }
-                if (playerViewModel.isPlaying.value != snapshot.playing) {
-                    playerViewModel.togglePlayPause()
+                if (playerViewModel.currentSongId.value != null) {
+                    if (playerViewModel.isPlaying.value != snapshot.playing) {
+                        playerViewModel.togglePlayPause()
+                    }
+                    playerViewModel.seekTo(snapshot.positionMs)
                 }
-                playerViewModel.seekTo(snapshot.positionMs)
             }
         }
         com.takahashirinta.ncrust.listen.TogetherSession.bind(bridge)

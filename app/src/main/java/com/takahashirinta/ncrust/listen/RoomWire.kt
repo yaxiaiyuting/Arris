@@ -37,6 +37,14 @@ sealed interface RoomWire {
     data class Ping(val t0: Long) : RoomWire
     data class Pong(val t0: Long, val relayNow: Long) : RoomWire
 
+    /**
+     * 房间结束（v3.8.1）：房主离开时服务端广播。
+     *
+     * 旧实现在房主退出后什么都不发，成员就对着一个空房间继续等快照 ——
+     * 界面上「已连接」但永远不动。
+     */
+    data class Closed(val reason: String) : RoomWire
+
     /** 服务端广播的在线状态（谁进来了、谁走了、当前几个人）。 */
     data class Presence(
         val role: String,
@@ -54,6 +62,7 @@ sealed interface RoomWire {
                 "op" -> decodeOp(o.getJSONObject("op"))?.let { Op(it) }
                 "ping" -> Ping(o.optLong("t0"))
                 "pong" -> Pong(o.optLong("t0"), o.optLong("tr"))
+                "closed" -> Closed(o.optString("reason"))
                 "presence" -> Presence(
                     role = o.optString("role"),
                     name = o.optString("name"),
@@ -182,6 +191,7 @@ fun RoomWire.encode(): String = when (this) {
     is RoomWire.Op -> JSONObject().put("t", "op").put("op", RoomWire.encodeOp(op)).toString()
     is RoomWire.Ping -> JSONObject().put("t", "ping").put("t0", t0).toString()
     is RoomWire.Pong -> JSONObject().put("t", "pong").put("t0", t0).put("tr", relayNow).toString()
+    is RoomWire.Closed -> JSONObject().put("t", "closed").put("reason", reason).toString()
     is RoomWire.Presence -> JSONObject().put("t", "presence").put("role", role)
         .put("name", name).put("members", members).put("left", left).toString()
 }

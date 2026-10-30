@@ -61,6 +61,12 @@ object TogetherSession {
 
     private const val TAG = "Together"
     private const val HOST_TICK_MS = 1_000L
+
+    /** 房主侧轮询间隔：只读 StateFlow，120ms 足够细，切歌能立刻上送。 */
+    private const val HOST_POLL_MS = 120L
+
+    /** 进度与「按上次快照推算的位置」偏差超过它就算跳变（seek），立刻补发。 */
+    private const val DRIFT_SEND_MS = 400L
     private const val SEEK_TOLERANCE_MS = 800L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -96,9 +102,12 @@ object TogetherSession {
             _status.value = "已创建房间 $code"
             startHostLoop(ws)
         }
+        // 必须**先**登记 link 再 connect：连接可能瞬间失败，回调里要靠它判断
+        // 「这次失败是不是当前连接」。反过来写的话状态会永远停在「连接中…」。
+        link = ws
         ws.onClosed = { c, r ->
             if (link === ws) {
-                _status.value = "断开（$c ${r.take(24)}）"
+                _status.value = closeReason(c, r)
                 stopHostLoop()
                 link = null
             }
@@ -111,7 +120,6 @@ object TogetherSession {
             }
         }
         ws.connect()
-        link = ws
     }
 
     /** 成员加入：收到房主快照就跟随。 */
@@ -122,9 +130,10 @@ object TogetherSession {
         _status.value = "连接中…"
         val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
         ws.onOpen = { _status.value = "已加入房间 $code" }
+        link = ws
         ws.onClosed = { c, r ->
             if (link === ws) {
-                _status.value = "断开（$c ${r.take(24)}）"
+                _status.value = closeReason(c, r)
                 link = null
             }
         }
@@ -137,6 +146,14 @@ object TogetherSession {
                     if (msg.role == "host" && !msg.left && msg.name.isNotBlank()) {
                         _status.value = "已加入房间 ${_roomId.value}（房主 ${msg.name}）"
                     }
+                }
+                is RoomWire.Closed -> {
+                    _status.value = when (msg.reason) {
+                        "host-left" -> "房主已离开，房间结束"
+                        "no-host" -> "房间里没有房主了（可能已结束），换个房间吧"
+                        else -> "房间已结束"
+                    }
+                    _members.value = 0
                 }
                 is RoomWire.Hello -> Unit
                 else -> Unit
@@ -260,38 +277,67 @@ object TogetherSession {
 
     // ---------------------------------------------------------------- 房主
 
+    /**
+     * 房主广播循环（v3.8.1 改为**变化即发**）。
+     *
+     * 旧实现固定每 1000ms 发一次：房主切歌后，成员最多要等一秒才收到新快照，
+     * 听起来就是「切歌慢半拍、上报太慢」。现在分两种触发：
+     *
+     * - **变化即发**：歌曲（id/标题）、播放态、进度跳变（seek 或者自然走位偏差 >400ms）
+     *   任一项变化，立刻发一条，不等节拍；
+     * - **心跳**：没有变化时仍按 [HOST_TICK_MS] 发一次，用来抵消时钟漂移、
+     *   也给新加入的成员一个基准（对方一进来就能对齐）。
+     *
+     * 轮询间隔压到 [HOST_POLL_MS]（只读 StateFlow，代价可以忽略），
+     * 这样切歌在 120ms 内就会触发上送。
+     */
     private fun startHostLoop(ws: RoomLink) {
         stopHostLoop()
         hostJob = scope.launch {
+            var lastSnap: PlaybackSnapshot? = null
+            var lastSentAt = 0L
             while (true) {
                 val snap = source?.current()
                 if (snap != null) {
-                    val track = CanonicalTrack(
-                        roomTrackId = "rt-${Integer.toHexString(snap.title.hashCode())}",
-                        title = snap.title,
-                        artist = snap.artist,
-                        album = "",
-                        durationMs = 0,
-                        editionKinds = emptySet(),
-                        publicIds = buildMap {
-                            snap.songId?.let { put("songId", it.toString()) }
-                            snap.sourceKey?.let { put("source", it) }
-                        },
-                    )
-                    val state = RoomState(
-                        roomId = _roomId.value,
-                        epoch = 0L,
-                        seq = seq++,
-                        hostUserId = "host",
-                        members = emptyList(),
-                        queue = listOf(track),
-                        currentRoomTrackId = track.roomTrackId,
-                        transport = RoomTransport(snap.playing, snap.positionMs, 1f),
-                        stampedAtMs = nowMs(),
-                    )
-                    ws.send(RoomWire.Snapshot(state))
+                    val now = nowMs()
+                    val prev = lastSnap
+                    val jumped = prev != null &&
+                        kotlin.math.abs(snap.positionMs - (prev.positionMs + (now - lastSentAt))) > DRIFT_SEND_MS
+                    val changed = prev == null ||
+                        prev.songId != snap.songId ||
+                        prev.title != snap.title ||
+                        prev.playing != snap.playing ||
+                        jumped
+                    if (changed || now - lastSentAt >= HOST_TICK_MS) {
+                        val track = CanonicalTrack(
+                            roomTrackId = "rt-${Integer.toHexString(snap.title.hashCode())}",
+                            title = snap.title,
+                            artist = snap.artist,
+                            album = "",
+                            durationMs = 0,
+                            editionKinds = emptySet(),
+                            publicIds = buildMap {
+                                snap.songId?.let { put("songId", it.toString()) }
+                                snap.sourceKey?.let { put("source", it) }
+                            },
+                        )
+                        val state = RoomState(
+                            roomId = _roomId.value,
+                            epoch = 0L,
+                            seq = seq++,
+                            hostUserId = "host",
+                            members = emptyList(),
+                            queue = listOf(track),
+                            currentRoomTrackId = track.roomTrackId,
+                            transport = RoomTransport(snap.playing, snap.positionMs, 1f),
+                            stampedAtMs = now,
+                        )
+                        ws.send(RoomWire.Snapshot(state))
+                        lastSnap = snap
+                        lastSentAt = now
+                    }
                 }
-                delay(HOST_TICK_MS)
+                delay(HOST_POLL_MS)
             }
         }
     }
@@ -331,6 +377,14 @@ object TogetherSession {
     }
 
     private var seq = 0L
+    /** 把 WebSocket 关闭码翻译成人话（-1 = 连接层失败，没有 HTTP 响应）。 */
+    private fun closeReason(code: Int, reason: String): String = when {
+        code == -1 -> "连不上中继（网络被重置或超时）"
+        code == 1000 -> "已退出房间"
+        code == 4001 -> "房间已满"
+        else -> "断开（$code ${reason.take(20)}）"
+    }
+
     private fun nowMs(): Long = System.currentTimeMillis()
 
     /** 供播放适配层回写提示（不改变连接状态）。 */
