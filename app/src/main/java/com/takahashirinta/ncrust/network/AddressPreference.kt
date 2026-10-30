@@ -36,13 +36,21 @@ import okhttp3.Dns
  */
 object AddressPreference {
 
-    /** 纯函数：IPv4 前置，IPv6 保持原相对顺序。 */
+    /**
+     * 纯函数：**只要有 IPv4 就只返回 IPv4**；没有 A 记录时才返回原始列表（纯 IPv6 网络）。
+     *
+     * 为什么不是"IPv4 排前面、IPv6 跟上"：OkHttp 对单个地址的连接预算是独立计时的，
+     * 而手机网络对 Cloudflare 的 IPv6 **完全不回包**（实测 `2606:4700:…` 8 秒零响应），
+     * 于是第一个地址就把整通预算吃干净，IPv4 根本没机会被尝试 —— 日志里只能看到
+     * `failed to connect to …/2606:4700:…`，看起来像"域名不通"，其实是地址族选择问题。
+     *
+     * 丢掉 IPv6 会不会影响可达性？不会：真正的纯 IPv6 网络（NAT64/仅 AAAA）里
+     * 通常没有 A 记录，此时这里原样返回 IPv6；而"有 A 也有 AAAA"的网络，v4 一定能用。
+     */
     fun order(all: List<InetAddress>): List<InetAddress> {
         if (all.isEmpty()) return all
         val v4 = all.filterIsInstance<Inet4Address>()
-        if (v4.isEmpty()) return all
-        if (v4.size == all.size) return all
-        return v4 + all.filterNot { it is Inet4Address }
+        return if (v4.isNotEmpty()) v4 else all
     }
 
     /**

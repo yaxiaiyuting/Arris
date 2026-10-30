@@ -25,10 +25,7 @@ class AddressPreferenceTest {
         val v6 = addr("2409:8c6a:b021:1400:0:4:0:3")
         val v4 = addr("117.135.207.67")
         val ordered = AddressPreference.order(listOf(v6, v4))
-        assertTrue("首个应是 IPv4", ordered.first() is Inet4Address)
-        assertEquals(v4, ordered[0])
-        assertEquals(v6, ordered[1])
-        assertEquals("地址不能丢", 2, ordered.size)
+        assertEquals("有 IPv4 时就只用 IPv4", listOf(v4), ordered)
     }
 
     @Test
@@ -36,7 +33,7 @@ class AddressPreferenceTest {
         val a = addr("1.1.1.1")
         val b = addr("2.2.2.2")
         val c = addr("2001::1")
-        assertEquals(listOf(a, b, c), AddressPreference.order(listOf(c, a, b)))
+        assertEquals(listOf(a, b), AddressPreference.order(listOf(c, a, b)))
     }
 
     @Test

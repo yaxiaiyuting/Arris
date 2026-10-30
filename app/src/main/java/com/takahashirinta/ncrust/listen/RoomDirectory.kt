@@ -28,14 +28,14 @@ data class RoomSummary(
 object RoomDirectory {
 
     private val client = OkHttpClient.Builder()
-        // 与 RoomRelayWs 同因：IPv6 解析成功但连不通时优先 IPv4
+        // 多地址回退：有 IPv4 就只用 IPv4（详见 AddressPreference 的注释）
         .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     /** 默认中继地址（我们部署的 Worker）。可在实验室里改。 */
-    const val DEFAULT_BASE = "https://arris-listen.arris-listen.workers.dev"
+    const val DEFAULT_BASE = com.takahashirinta.ncrust.listen.TogetherPrefs.DEFAULT_BASE
 
     /** [base] 形如 `https://xxx.workers.dev` 或 `wss://xxx.workers.dev`。 */
     fun scan(base: String = DEFAULT_BASE, fixedIps: List<String> = emptyList()): List<RoomSummary> {
@@ -55,8 +55,9 @@ object RoomDirectory {
         val request = Request.Builder()
             .url("$http/rooms")
             .header("User-Agent", "Arris/1.0 (Android; listen-together)")
+            .header("Accept", "application/json")
             .build()
-        android.util.Log.i("RoomDir", "GET ${request.url} ua=${request.header("User-Agent")}")
+
         useClient.newCall(request).execute().use { response ->
             android.util.Log.i("RoomDir", "HTTP ${response.code}")
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")

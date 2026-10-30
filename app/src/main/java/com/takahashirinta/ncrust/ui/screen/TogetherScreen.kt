@@ -60,6 +60,9 @@ fun TogetherScreen(onBack: () -> Unit) {
     var baseDraft by remember { mutableStateOf(base) }
     // DNS 被污染时用固定 IP 直连（域名仍用于 SNI/Host，证书校验不变）
     var ips by remember { mutableStateOf(com.takahashirinta.ncrust.listen.TogetherPrefs.ips(ctx)) }
+    // 固定 IP 只对「域名被污染」的场景有意义（典型就是 *.workers.dev）。
+    // 换成自有域名后 DNS 是干净的，再钉 IP 反而会被针对 IP 的阻断打死 —— 实测会 Connection reset。
+    fun effectiveIps(): List<String> = ips
     var ipsDraft by remember { mutableStateOf(ips.joinToString(",")) }
     var rooms by remember { mutableStateOf<List<RoomSummary>>(emptyList()) }
     var scanning by remember { mutableStateOf(false) }
@@ -178,10 +181,10 @@ fun TogetherScreen(onBack: () -> Unit) {
             "创建房间" to {
                 val c = TogetherSession.newRoomCode()
                 code = c
-                TogetherSession.create(base, c, ips)
+                TogetherSession.create(base, c, effectiveIps())
             },
             "加入房间" to {
-                if (code.isNotBlank()) TogetherSession.join(base, code, ips)
+                if (code.isNotBlank()) TogetherSession.join(base, code, effectiveIps())
                 else TogetherSessionStatus.note("先输入房间码")
             },
         )
@@ -234,7 +237,7 @@ fun TogetherScreen(onBack: () -> Unit) {
                         // 必须切 IO：rememberCoroutineScope() 默认是主线程，
                         // 直接发 HTTP 会抛 NetworkOnMainThreadException（message 是 null，
                         // UI 只显示"扫描失败：null"，完全看不出原因）。
-                        val list = runCatching { withContext(Dispatchers.IO) { RoomDirectory.scan(base, ips) } }
+                        val list = runCatching { withContext(Dispatchers.IO) { RoomDirectory.scan(base, effectiveIps()) } }
                         withContext(Dispatchers.Main) {
                             scanning = false
                             list.onSuccess { rooms = it }
@@ -273,7 +276,7 @@ fun TogetherScreen(onBack: () -> Unit) {
                     Modifier
                         .fillMaxWidth()
                         .background(colors.surfaceVariant, RectangleShape)
-                        .clickable { code = r.roomId; TogetherSession.join(base, r.roomId, ips) }
+                        .clickable { code = r.roomId; TogetherSession.join(base, r.roomId, effectiveIps()) }
                         .padding(12.dp),
                 ) {
                     MetroText(
