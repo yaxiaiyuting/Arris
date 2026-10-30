@@ -613,13 +613,13 @@ dependencies {
 
     // Media3 —— 1.5.0 是能与下面 FFmpeg 扩展版本严格对齐的最低版本（扩展版本号规则为
     // <media3版本>+<修订>，Maven Central 上没有 1.4.x 的构建）。
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
     // v1.6.0 · D1：离线缓存（SimpleCache / CacheDataSource / StandaloneDatabaseProvider）。
     // 这两个之前是 media3-exoplayer 的传递依赖，显式声明以免上游改依赖树时静默消失。
-    implementation("androidx.media3:media3-datasource:1.5.0")
-    implementation("androidx.media3:media3-database:1.5.0")
-    implementation("androidx.media3:media3-session:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-datasource:1.6.1")
+    implementation("androidx.media3:media3-database:1.6.1")
+    implementation("androidx.media3:media3-session:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
 
     // FFmpeg 软件音频解码扩展（Jellyfin 构建，GPL-3.0，与本项目 GPLv3 兼容）。
     // 目的：API 24–26（Android 7.0/7.1）系统只带 OMX.google.flac.encoder，

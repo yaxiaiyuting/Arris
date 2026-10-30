@@ -2144,9 +2144,15 @@ class PlaybackService : MediaLibraryService() {
                 androidx.media.app.NotificationCompat.MediaStyle()
                     // v2.1.6 · 会话合并：这里以前指向 legacy `MediaSessionCompat`
                     // （`NcrustSession`），于是通知栏引用一条会话、系统媒体面板引用另一条。
-                    // 现在指向**唯一**那条 media3 会话的 compat token —— media3 的
-                    // `getSessionCompatToken()` 就是为「应用自己发 MediaStyle 通知」提供的口子。
-                    .setMediaSession(mediaSession?.sessionCompatToken)
+                    // 现在指向**唯一**那条 media3 会话的 compat token。
+                    // media3 1.6 起 `sessionCompatToken` 被移除，官方给的口子换成
+                    // `platformToken`（android.media.session.MediaSession.Token），
+                    // 用 `MediaSessionCompat.Token.fromToken` 转成通知需要的类型。
+                    .setMediaSession(
+                        mediaSession?.platformToken?.let {
+                            android.support.v4.media.session.MediaSessionCompat.Token.fromToken(it)
+                        }
+                    )
                     .setShowActionsInCompactView(0, 1, 2)
             )            .setColor(currentDominantColor)
             .setColorized(true)
