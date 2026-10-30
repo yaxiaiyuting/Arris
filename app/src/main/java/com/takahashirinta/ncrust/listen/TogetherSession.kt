@@ -193,6 +193,54 @@ object TogetherSession {
         return true
     }
 
+    /**
+     * P2P 建房（无服务器、不装第三方软件）：绑定 UDP、问 STUN、返回房间码 `公网IP:端口#令牌`。
+     * 打洞成功率取决于 NAT 类型：家用锥形 NAT 通常可以，移动数据/CGNAT 基本不行。
+     */
+    fun createP2p(): String? {
+        leave()
+        _isHost.value = true
+        _roomId.value = "P2P"
+        val link = P2pLink.host(P2pLink.newToken())
+        link.onMessage = { msg ->
+            when (msg) {
+                is RoomWire.Ping -> link.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> _members.value = msg.members
+                else -> Unit
+            }
+        }
+        val code = link.startHost()
+        startHostLoop(link)
+        this.link = link
+        _status.value = "P2P 房间码：${code ?: "（获取公网地址失败）"}"
+        return code
+    }
+
+    /** P2P 加入：房间码 `公网IP:端口#令牌`。 */
+    fun joinP2p(code: String): Boolean {
+        val parsed = P2pLink.parseCode(code) ?: run {
+            _status.value = "房间码格式应为 IP:端口#令牌"
+            return false
+        }
+        leave()
+        _isHost.value = false
+        _roomId.value = "P2P"
+        _status.value = "正在打洞连接 ${parsed.first}:${parsed.second} …"
+        val link = P2pLink.join(parsed.third)
+        link.onMessage = { msg ->
+            when (msg) {
+                is RoomWire.Snapshot -> followSnapshot(msg.state)
+                is RoomWire.Ping -> link.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Presence -> _members.value = msg.members
+                else -> Unit
+            }
+        }
+        link.onOpen = { _status.value = "P2P 已连通（${parsed.first}:${parsed.second}）" }
+        link.startMember(parsed.first, parsed.second)
+        this.link = link
+        return true
+    }
+
     fun leave() {
         stopHostLoop()
         link?.close()

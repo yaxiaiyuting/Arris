@@ -82,8 +82,17 @@ sealed interface RoomLink {
         /** 房主侧：本机监听端口（0 = 系统分配）。 */
         val listenPort: Int get() = server?.localPort ?: -1
 
-        /** 房主侧的连接串（局域网 IPv4:端口）；找不到地址返回 null。 */
-        fun address(): String? = localIpv4()?.let { "$it:$listenPort" }
+        /**
+         * 房主侧的连接串：`IP:端口`。
+         *
+         * 取值顺序**刻意**是：Tailscale 的 `100.64.0.0/10` 优先，其次局域网 `192.168/10/172.16`。
+         * 原因：Tailscale 地址**跨网可达**（对方在另一个城市也能连），而局域网地址只在同一
+         * WiFi 下有效。两者同时存在时，房主想把"能用的那个"发出去，而不是"看起来像内网的那个"。
+         *
+         * 注意：Tailscale 需要双方各自安装它的客户端（免费）；这是它提供虚拟网卡的代价，
+         * 不是我们这个 App 能替掉的。
+         */
+        fun address(): String? = preferredAddress(localIpv4s())?.let { "$it:$listenPort" }
 
         fun startHost() {
             val srv = server ?: return
@@ -154,14 +163,26 @@ sealed interface RoomLink {
                 Socket().apply { connect(InetSocketAddress(ip, port), 5_000) },
             )
 
-            private fun localIpv4(): String? = runCatching {
+            /** 纯函数：从本机 IPv4 列表里挑最适合分享的那个（便于单测）。 */
+            fun preferredAddress(all: List<String>): String? {
+                fun isTailscale(ip: String): Boolean {
+                    val p = ip.split('.')
+                    if (p.size != 4) return false
+                    val a = p[0].toIntOrNull() ?: return false
+                    val b = p[1].toIntOrNull() ?: return false
+                    return a == 100 && b in 64..127   // 100.64.0.0/10
+                }
+                return all.firstOrNull(::isTailscale)
+                    ?: all.firstOrNull { it.startsWith("192.168.") || it.startsWith("10.") || it.startsWith("172.") }
+            }
+
+            private fun localIpv4s(): List<String> = runCatching {
                 java.net.NetworkInterface.getNetworkInterfaces().toList()
                     .filter { it.isUp && !it.isLoopback }
                     .flatMap { it.inetAddresses.toList() }
                     .filterIsInstance<java.net.Inet4Address>()
-                    .firstOrNull { it.isSiteLocalAddress }
-                    ?.hostAddress
-            }.getOrNull()
+                    .mapNotNull { it.hostAddress }
+            }.getOrDefault(emptyList())
         }
     }
 

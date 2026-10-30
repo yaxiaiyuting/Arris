@@ -81,6 +81,7 @@ fun TogetherScreen(onBack: () -> Unit) {
             "房主的切歌与进度会同步给房间里的每个人；音频不经过服务器。\n" +
                 "同一 WiFi/热点：用「局域网建房 / 局域网加入」（不需要任何服务器）。\n" +
                 "异地：① 一方开热点，另一方连上，同上去；" +
+                "①b P2P 直连（无服务器，家用宽带/NAT 成功率高，移动数据基本打不通）；" +
                 "② 双方装 Tailscale 后把 100.x 地址填进「局域网加入」；" +
                 "③ 有域名的话可把中继换成自己的域名。",
             color = colors.onSurfaceVariant,
@@ -201,6 +202,28 @@ fun TogetherScreen(onBack: () -> Unit) {
             "局域网加入" to {
                 if (code.contains(':')) TogetherSession.joinLan(code)
                 else TogetherSessionStatus.note("房间码填 主机IP:端口")
+            },
+        )
+        Row2(
+            "P2P 建房" to {
+                // STUN 查询是网络操作：必须在 IO 上跑，否则 NetworkOnMainThreadException
+                scope.launch {
+                    val c = withContext(Dispatchers.IO) { TogetherSession.createP2p() }
+                    if (c != null) {
+                        code = c
+                    val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager
+                    clip.setPrimaryClip(android.content.ClipData.newPlainText("Arris 一起听", c))
+                        TogetherSessionStatus.note("已复制 P2P 房间码 $c（家用宽带成功率最高）")
+                    }
+                }
+            },
+            "P2P 加入" to {
+                if (code.contains('#')) {
+                    scope.launch { withContext(Dispatchers.IO) { TogetherSession.joinP2p(code) } }
+                } else {
+                    TogetherSessionStatus.note("P2P 房间码形如 1.2.3.4:5678#123456")
+                }
             },
         )
         Row2(
