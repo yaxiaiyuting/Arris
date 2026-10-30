@@ -22,7 +22,7 @@ export default {
     // 首页：项目介绍（静态 HTML 打包在 Worker 里，域名一绑即可访问）
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(INDEX_HTML, {
-        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=600" },
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache, must-revalidate" },
       });
     }
     if (url.pathname === "/health") {

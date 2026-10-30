@@ -32,7 +32,7 @@ object TogetherPrefs {
      * 为什么不用 `*.workers.dev`：国内对那个域名是 SNI 阻断（ICMP 通、TLS ClientHello 被 RST），
      * 且 DNS 会被投毒；换成自有域名后 SNI 变成 `arris.ccwu.cc`，实测直连 200。
      */
-    const val DEFAULT_BASE = "https://arris.ccwu.cc"
+    const val DEFAULT_BASE = "https://arris.de5.net"
 
     /**
      * 老版本里默认值是 `*.workers.dev`，很多用户的 prefs 里存着它。
@@ -40,11 +40,14 @@ object TogetherPrefs {
      */
     private const val LEGACY_WORKERS_DEV = "https://arris-listen.arris-listen.workers.dev"
 
+    /** 曾经用过的默认值，也要迁移（这个域名在部分网络被 SNI 阻断）。 */
+    private const val LEGACY_CCWU = "https://arris.ccwu.cc"
+
     fun base(context: Context): String {
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_BASE, null)
             ?.takeIf { it.isNotBlank() }
-        if (stored == LEGACY_WORKERS_DEV) {
+        if (stored == LEGACY_WORKERS_DEV || stored == LEGACY_CCWU) {
             // 一次性迁移：旧默认值 → 新默认值（用户自定义过的地址不动）
             setBase(context, DEFAULT_BASE)
             return DEFAULT_BASE
