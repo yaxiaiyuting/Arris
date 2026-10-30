@@ -1872,6 +1872,16 @@ class PlaybackService : MediaLibraryService() {
 
     private fun resumePlayback() {
         if (onPlaybackResumeRequested?.invoke() == true) return
+        // **空播放列表绝不能 play()**（v3.8.1 修）。
+        // media3 在 `STATE_IDLE` + 没有 mediaItem 时收到 `play()`，会在自己的主线程
+        // Handler 里构造非法的 PlaybackInfo 并抛
+        //   IllegalArgumentException: isLoading only allowed when not in STATE_IDLE or STATE_ENDED
+        // 这个异常不经过我们的调用栈，直接把进程带走 —— 一起听切换队列时反复踩到，
+        // 表现为「主机/客机随机闪退」。
+        if (player.currentMediaItem == null) {
+            Log.w("PlaybackService", "resume: no media item, ignoring play()")
+            return
+        }
         if (PlaybackQueueLogic.needsRestartBeforePlay(
                 player.playbackState, player.currentMediaItem != null,
             )
@@ -1880,7 +1890,8 @@ class PlaybackService : MediaLibraryService() {
             player.seekTo(0)
             player.prepare()
         }
-        player.play()
+        runCatching { player.play() }
+            .onFailure { Log.w("PlaybackService", "play() rejected: ${it.message}") }
     }
 
     private fun startProgressUpdates() {

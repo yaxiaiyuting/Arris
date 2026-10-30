@@ -91,6 +91,7 @@ fun TogetherScreen(onBack: () -> Unit) {
     val room by TogetherSession.roomId.collectAsState()
     val host by TogetherSession.isHost.collectAsState()
     val members by TogetherSession.members.collectAsState()
+    val diag by TogetherSession.diag.collectAsState()
 
     fun copy(text: String, note: String) {
         val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -177,6 +178,16 @@ fun TogetherScreen(onBack: () -> Unit) {
             )
             Spacer(Modifier.height(6.dp))
             MetroText(status, color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
+            if (diag.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                diag.forEach { line ->
+                    MetroText(
+                        "· $line",
+                        color = colors.onSurfaceVariant.copy(alpha = 0.7f),
+                        style = TextStyle(fontSize = 10.sp, fontFamily = FontFamily.Monospace),
+                    )
+                }
+            }
             if (room.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {

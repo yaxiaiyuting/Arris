@@ -177,6 +177,31 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * 把未捕获异常写进 `filesDir/last_crash.txt`（v3.8.1）。
+     *
+     * 为什么需要：一起听/扫描这类问题的现场只能靠 logcat，而真机上 logcat 会被
+     * 反复刷掉、用户也不方便现场抓。写一份到应用私有目录后，
+     * `adb pull /sdcard/Android/data/<pkg>/files/last_crash.txt` 就能拿到完整栈，
+     * 不用再靠猜。**只记录、不吞异常** —— 记录完照常交给系统默认处理。
+     */
+    private fun installCrashRecorder() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                val text = buildString {
+                    appendLine("time=" + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                        .format(java.util.Date()))
+                    appendLine("thread=" + thread.name)
+                    appendLine("version=" + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")")
+                    appendLine(error.stackTraceToString())
+                }
+                java.io.File(filesDir, "last_crash.txt").writeText(text)
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
     /**
      * B2-D：系统强调色会在用户换壁纸/换主题后变化，系统此时会重发 Configuration。
      * 这里只维护一个"第几次读取"的计数器 —— 颜色本身永远从当前 Context 现读，
@@ -224,6 +249,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashRecorder()
         // 手机锁竖屏、大屏(平板/折叠展开/车机)放开方向。见 applyOrientationPolicy。
         applyOrientationPolicy()
         // v1.8.0：设置项的进程内镜像要在任何 UI 读它之前就位（同步读 SharedPreferences，
@@ -1117,9 +1143,12 @@ fun MainScreen(
                     repeat(24) {          // 最多等 6s
                         kotlinx.coroutines.delay(250)
                         if (playerViewModel.currentSongId.value != songId) return@repeat
-                        if (target > 2_000) playerViewModel.seekTo(target)
-                        if (!wantPlaying && playerViewModel.isPlaying.value) {
-                            playerViewModel.togglePlayPause()
+                        // 只对齐进度。**不要**在这里调 play/pause：
+                        // media3 在「队列为空 / STATE_IDLE」时收到 play() 会抛
+                        // `isLoading only allowed when not in STATE_IDLE or STATE_ENDED`
+                        // 并直接把进程干掉（主机、客机都复现过）。
+                        if (target > 2_000) {
+                            runCatching { playerViewModel.seekTo(target) }
                         }
                         return@launch
                     }
@@ -1150,9 +1179,14 @@ fun MainScreen(
                     lastFollowAtMs = System.currentTimeMillis()
                     com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
                     bridgeScope.launch {
-                        val target = resolveRemoteSong(snapshot)
+                        // 取详情/搜索都是网络请求，必须离开主线程 ——
+                        // 否则会抛 NetworkOnMainThreadException（真机上表现为
+                        // 「正好在点扫描房间时闪退」，因为两件事同时在跑）。
+                        val target = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            resolveRemoteSong(snapshot)
+                        }
                         if (target != null) {
-                            playItemHolder.value?.invoke(target)
+                            runCatching { playItemHolder.value?.invoke(target) }
                             alignAfterStart(target.id, snapshot.positionMs, snapshot.playing)
                         } else {
                             com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
@@ -1201,11 +1235,10 @@ fun MainScreen(
                     }
                     return
                 }
+                // 只同步进度：起播由上面的分支负责，播放/暂停态交给用户自己按。
+                // （在此处 toggle 会在空队列/IDLE 下触发 media3 断言 → 闪退）
                 if (playerViewModel.currentSongId.value != null) {
-                    if (playerViewModel.isPlaying.value != snapshot.playing) {
-                        playerViewModel.togglePlayPause()
-                    }
-                    playerViewModel.seekTo(snapshot.positionMs)
+                    runCatching { playerViewModel.seekTo(snapshot.positionMs) }
                 }
             }
         }

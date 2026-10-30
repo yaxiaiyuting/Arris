@@ -69,6 +69,9 @@ object TogetherSession {
     private const val DRIFT_SEND_MS = 400L
     private const val SEEK_TOLERANCE_MS = 800L
 
+    /** 界面诊断区保留的行数。 */
+    private const val DIAG_LINES = 8
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var hostJob: Job? = null
     private var link: RoomLink? = null
@@ -86,6 +89,25 @@ object TogetherSession {
 
     val connected: Boolean get() = link != null
 
+    // ---------------------------------------------------------------- 诊断
+    /**
+     * 最近若干条会话事件（v3.8.1）。
+     *
+     * 为什么要有它：一起听涉及「房主 → 中继 → 成员 → 播放器」四段，
+     * 任何一段断掉，用户看到的都是同一个「不同步」。真机排查时只能靠 logcat +
+     * 猜坐标，一次就是十分钟。把关键事件直接画在状态卡下面，
+     * 一张截图就能判断断在哪一段。
+     */
+    private val _diag = MutableStateFlow<List<String>>(emptyList())
+    val diag: StateFlow<List<String>> = _diag
+
+    internal fun trace(tag: String, detail: String = "") {
+        val line = if (detail.isBlank()) tag else "$tag $detail"
+        _diag.value = (_diag.value + line).takeLast(DIAG_LINES)
+        // 同一份事件也进 logcat：界面上看得到，远程也能读
+        Log.i("TogetherDiag", line)
+    }
+
     /** MainScreen 在启动时注入播放器能力。 */
     fun bind(playbackSource: PlaybackSource?) {
         source = playbackSource
@@ -93,6 +115,7 @@ object TogetherSession {
 
     /** 房主建房：房间码由调用方给（6 位数字），连上后开始广播。 */
     fun create(base: String, code: String, fixedIps: List<String> = emptyList()) {
+        trace("建房", "$code @ ${base.removePrefix("https://").removePrefix("wss://")}")
         leave()
         _isHost.value = true
         _roomId.value = code
@@ -100,6 +123,7 @@ object TogetherSession {
         val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps = fixedIps)
         ws.onOpen = {
             _status.value = "已创建房间 $code"
+            trace("房主已连接", "开始广播")
             startHostLoop(ws)
         }
         // 必须**先**登记 link 再 connect：连接可能瞬间失败，回调里要靠它判断
@@ -108,6 +132,7 @@ object TogetherSession {
         ws.onClosed = { c, r ->
             if (link === ws) {
                 _status.value = closeReason(c, r)
+                trace("连接断开", "$c ${r.take(16)}")
                 stopHostLoop()
                 link = null
             }
@@ -124,16 +149,21 @@ object TogetherSession {
 
     /** 成员加入：收到房主快照就跟随。 */
     fun join(base: String, code: String, fixedIps: List<String> = emptyList()) {
+        trace("加入", "$code @ ${base.removePrefix("https://").removePrefix("wss://")}")
         leave()
         _isHost.value = false
         _roomId.value = code
         _status.value = "连接中…"
         val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
-        ws.onOpen = { _status.value = "已加入房间 $code" }
+        ws.onOpen = {
+            _status.value = "已加入房间 $code"
+            trace("成员已连接")
+        }
         link = ws
         ws.onClosed = { c, r ->
             if (link === ws) {
                 _status.value = closeReason(c, r)
+                trace("连接断开", "$c ${r.take(16)}")
                 link = null
             }
         }
@@ -365,6 +395,7 @@ object TogetherSession {
         // 于是整条快照被丢掉 —— 这就是「连上了但不同步」的根因。
         val local = src.current()
         if (!FollowPolicy.isSameSong(local, remote)) {
+            trace("收到切歌", "${remote.title} id=${remote.songId ?: "?"}")
             src.follow(remote)
             _status.value = "房主在放：${remote.title}"
             return
