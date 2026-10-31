@@ -60,4 +60,26 @@ class CoverGeometryTest {
         assertTrue(g.sizePx >= 1f)
         assertTrue(g.centerYPx >= 900f)
     }
+    @Test
+    fun `measured panel reserves title with gesture navigation and large fonts`() {
+        for (density in listOf(1f, 2.625f, 3f)) {
+            for (height in listOf(568f, 640f, 800f, 896f)) {
+                for (fontScale in listOf(1f, 1.3f, 1.8f)) {
+                    val top = 80f * density
+                    val panel = (height - 80f - 280f - 32f - 24f - 24f) * density
+                    val title = 68f * fontScale * density
+                    val gap = 12f * density
+                    val g = narrowCoverGeometry(360f*density, height*density, top,
+                        280f*density, title, gap, height*density*0.3f,
+                        panelHeightPx = panel)
+                    val titleTop = top + panel - title
+                    if (titleTop - gap > top + 1f) {
+                        assertTrue("cover overlaps title: h=$height scale=$fontScale",
+                            g.centerYPx + g.sizePx / 2f <= titleTop-gap+0.01f)
+                    }
+                    assertTrue(g.centerYPx-g.sizePx/2f >= top-0.01f)
+                }
+            }
+        }
+    }
 }

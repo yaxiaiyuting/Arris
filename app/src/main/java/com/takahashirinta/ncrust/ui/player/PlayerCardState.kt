@@ -102,6 +102,8 @@ internal class PlayerCardUiState(
      */
     var narrowTopBarHeightPx by mutableFloatStateOf(0f)
     var narrowTitleHeightPx by mutableFloatStateOf(0f)
+    /** 面板实测高度已扣系统导航栏、手势把手和控制栏，封面不得按整屏高反推。 */
+    var narrowPanelHeightPx by mutableFloatStateOf(0f)
 
     /** 展开动作触发的歌词定位计数（每次展开 +1）。 */
     var lyricLocateTrigger by mutableIntStateOf(0)
