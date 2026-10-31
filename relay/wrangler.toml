@@ -22,6 +22,9 @@ new_sqlite_classes = ["Directory"]
 
 # 静态资源：首页 HTML 与 APK 直链（单文件上限 25MiB，APK 16MB）
 # 匹配到的路径直接由 CDN 返回；未匹配的（/health、/rooms、/room/*）落到 Worker
+# /dl/* 交给 Worker 自己处理：Cloudflare 静态资源服务不支持 Range，
+# 而 APK 下载在国内经常要断点续传/多线程，必须自己实现 206。
 [assets]
 directory = "./public"
 binding = "ASSETS"
+run_worker_first = ["/dl/*"]
