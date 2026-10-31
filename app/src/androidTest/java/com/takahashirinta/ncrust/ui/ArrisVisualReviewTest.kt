@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.People
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -68,7 +69,7 @@ class ArrisVisualReviewTest {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val out = File(target.getExternalFilesDir(null), "ui-review/$name.png")
         out.parentFile?.mkdirs()
-        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         try { out.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) } }
         finally { bitmap.recycle() }
     }
@@ -103,6 +104,7 @@ class ArrisVisualReviewTest {
     }
     @Test fun settingsLight() {
         show { UserScreen() }
+        compose.onNodeWithText(com.takahashirinta.ncrust.ui.i18n.zhCN.tabUser).assertIsDisplayed()
         screenshot("settings-light")
     }
     @Test fun libraryComponents() {
@@ -116,6 +118,7 @@ class ArrisVisualReviewTest {
                 SongCard(song = song, onClick = {})
             }
         }
+        compose.onNodeWithText("听歌识曲").assertIsDisplayed()
         screenshot("shared-components-light")
     }
     private fun player(dark: Boolean, scale: Float) {

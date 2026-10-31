@@ -1,0 +1,8 @@
+/dl/latest.apk
+  Cache-Control: no-store
+  Content-Type: application/vnd.android.package-archive
+/dl/latest.json
+  Cache-Control: no-store
+/dl/Arris-v3.8.3-gpl.apk
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Type: application/vnd.android.package-archive
