@@ -85,9 +85,13 @@
 直链（永远指向各自通道的最新）：
 
 ```
-https://arris.de5.net/dl/latest.apk        主线最新
-https://arris.de5.net/dl/lts-latest.apk   LTS 最新
+https://arris.de5.net/get/latest.apk        主线最新（支持 Range：断点续传 / 多线程）
+https://arris.de5.net/get/lts-latest.apk   LTS 最新（同上）
+https://arris.de5.net/dl/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
 ```
+
+> 国内线路慢的时候用 `/get/` + 下载器多线程（aria2 `-x8 -s8`、IDM、FDM），
+> 或者走 GitHub Releases；两处是同一份包，以 SHA-256 为准。
 
 ---
 
