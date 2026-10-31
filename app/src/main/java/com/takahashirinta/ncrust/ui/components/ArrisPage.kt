@@ -26,18 +26,20 @@ import io.github.takahashirinta.kanesumi.core.theme.*
 @Composable
 internal fun ArrisPageHeader(title: String, eyebrow: String, subtitle: String, onBack: () -> Unit) {
     val c = LocalMetroColors.current
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        MetroIconButtonSurface(Icons.AutoMirrored.Filled.ArrowBack, LocalStrings.current.back, onBack)
-        Spacer(Modifier.width(12.dp))
-        MetroText(eyebrow, color = c.primary,
-            style = TextStyle(fontSize = 10.sp, letterSpacing = 1.6.sp, fontWeight = FontWeight.Bold))
+    Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            MetroIconButtonSurface(Icons.AutoMirrored.Filled.ArrowBack, LocalStrings.current.back, onBack)
+            Spacer(Modifier.width(12.dp))
+            MetroText(eyebrow, color = c.primary,
+                style = TextStyle(fontSize = 10.sp, letterSpacing = 1.6.sp, fontWeight = FontWeight.Bold))
+        }
+        Spacer(Modifier.height(24.dp))
+        MetroText(title, color = c.onBackground, style = LocalMetroTypography.current.pageHeading)
+        Spacer(Modifier.height(8.dp))
+        MetroText(subtitle, color = c.onSurfaceVariant,
+            style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp))
+        Spacer(Modifier.height(8.dp))
     }
-    Spacer(Modifier.height(24.dp))
-    MetroText(title, color = c.onBackground, style = LocalMetroTypography.current.pageHeading)
-    Spacer(Modifier.height(8.dp))
-    MetroText(subtitle, color = c.onSurfaceVariant,
-        style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp))
-    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
