@@ -4,21 +4,21 @@
 
 ## ncm + qm + B站，三块曲库装进同一块直角玻璃
 
-**三音源各自独立登录 · Kanesumi Design · GPU 零重组动画 · 逐字歌词（yrc / QRC / TTML）· B站大会员 Hi-Res · 无缝播放 · 8 级音质 · 大屏模式 · 车机适配 · 8 语言 · 统一动效强度**
+**三音源各自独立登录 · 听歌识曲 · 一起听（局域网 / P2P / 中继）· 双语逐字歌词（yrc / QRC / TTML）· B站大会员 Hi-Res · 无缝播放 · 8 级音质 · 大屏模式 · 车机适配 · 8 语言**
 
 纯 Kotlin / Jetpack Compose · Media3 播放引擎 · 三音源直连（eapi 加密 / QQ 客户端协议 / B站 Wbi）· **无中间服务器、无账号代管**
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.7.7--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-12.07%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
+[![Version](https://img.shields.io/badge/version-3.8.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-15.31%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
 
-[**下载安装**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
+[**官网直链下载**](https://arris.de5.net/dl/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
 
 </div>
 
@@ -54,13 +54,57 @@
 | 🎤 **逐字歌词** | ncm `yrc` + AMLL TTML + **qm QRC** 三源，TTML → YRC → LRC 三级回退，逐字渐变三档质量。QRC 那套是 QQ 自研的非标准 3DES，本仓库自实现并与独立实现逐字节比对验证 |
 | 🔀 **5 种播放模式** | 顺序循环 / 单曲循环 / 乱序 / 顺序线性 / 相似无限（私人 FM 电台） |
 | 🚗 **车机就绪** | Android Auto / Automotive 媒体源与浏览树，车机系统栏 inset 专项适配 |
-| 🪶 **11.4 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来 API 24–26 的真无损）。冷启动预热，进程被杀也能恢复队列 |
+| 🪶 **15.3 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来低版本的真无损）。冷启动预热，进程被杀也能恢复队列 |
 | 🌐 **8 语言** | 运行时切换，不依赖系统 locale |
 | 🎂 **生日庆祝** | 在「外观与动效」里设置本地生日月日，生日当天打开首页播放 48 秒离线动画：Tux 端来蛋糕、点灯许愿，真实吹气或点按吹灭，黑场后七组烟花与三句祝福。错过可补 7 天；关于页版本号连点七次打开 Tux「自由听众席」，支持辅助功能操作。麦克风仅在前台本次许愿的短窗口使用，不保存不上传 |
 
 > **合规边界**：本项目**不破解 DRM、不做「解灰」、不绕过平台鉴权**。
 > 能否播放某首歌完全取决于你自己账号的权限 —— 服务端说不行就是不行，播放器跳歌。
 > 已知的一处权限异常（VIP 专享的 AI 伴奏轨匿名可取）被**明确排除在降级链之外**，并有单测钉住。
+
+---
+
+## 🤝 3.8.x：一起听与听歌识曲
+
+两个「要联网、要两端配合」的能力，v3.8.3 起在真机上跑通。
+
+### 一起听
+
+一个房间里的所有人听同一首歌、同一个进度。**服务器只转发播放状态，不碰音频**，
+每个人的音频由自己的音源取、用自己的账号权限播。
+
+| 连法 | 适用场景 | 说明 |
+|---|---|---|
+| **局域网直连** | 同一个 Wi-Fi / 热点 | 零服务器：房主监听 TCP，成员直连。最稳 |
+| **P2P 打洞** | 两边都在家用宽带 | 内置 STUN 问出公网映射，房间码就是 `IP:端口#令牌`。移动数据/CGNAT 打不通是物理限制，不是 bug |
+| **自建中继** | 跨网、且有一台能上网的机器 | 默认 `wss://arris.de5.net`，也可填自己的 Cloudflare Worker（`relay/` 目录） |
+
+- **队列与下一首同步**：快照带「当前曲目 + 下一首（含平台 ID 与音源）」，成员提前准备好下一首，
+  房主切歌时是**顺播**而不是重新起播。
+- **变化即发**：歌曲、播放态、进度跳变任一项变化立刻广播（120ms 轮询），不是固定一秒一次。
+- **房主权威**：只有房主能改状态；房主离开房间即结束，成员会收到明确提示。
+- **打洞失败会说实话**：连不上会直接告诉你改用局域网还是 P2P，不静默重试。
+
+### 听歌识曲
+
+录 10 秒 → 识别 → 直接进播放器。
+
+- 走**你自己的网易云账号**（`eapi/music/hum/audio/unifymatch`），不接任何第三方付费识别服务；
+- 录音只上传到你的账号，App 不落盘、不转发；
+- 识别结果可以直接播放、收藏、加入歌单。
+
+### 官网与直链
+
+```
+https://arris.de5.net/                    落地页（Cloudflare Worker）
+https://arris.de5.net/dl/latest.apk       最新版直链
+https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk   固定版本
+wss://arris.de5.net/room/<房间码>          一起听中继
+```
+
+同一个 Worker 同时托管页面、安装包与中继，不依赖第三方网盘。
+国内直连 Cloudflare 的速度取决于线路，慢的话可以用 GitHub Releases 或任意 GitHub 加速镜像
+（把 `https://github.com/yaxiaiyuting/Arris/releases/download/<tag>/<file>` 套到镜像前缀后面）。
 
 ---
 
@@ -191,7 +235,7 @@ UI 上是一套 8 级档位，各音源映射到自己平台的文件档位：
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v3.7.4 release APK **实测 12,072,652 字节 ≈ 12.07 MB**，debug 34,315,819 字节。
+> 体积说明（最新）：v3.8.3 release APK **实测 16,052,616 字节 ≈ 15.31 MB**。minSdk 29（Android 10）。
 > 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
 
 ### 🔐 登录
@@ -384,6 +428,11 @@ app/src/main/java/com/takahashirinta/ncrust/
 | v3.7.10-gpl | 2026-10-27 | 落地 3.7.9 的已知未修：QQ 单曲详情载荷、颜色量化三处溢出+剪枝、歌单完整性上游、QQ songid 落盘迁移、B站 AV 补位、队列重排按身份、收藏修订可观察 |
 
 | v3.7.12-gpl（测试） | 2026-10-28 | 系统媒体面板与实况窗双语双层歌词，主行可切换、缺译文回退单行；基于现有 3.7.11 工作区 |
+| v3.7.13-gpl | 2026-10-29 | 弱网/切网恢复、最后播放选择、连点切歌的最终目标、封面留白 |
+| v3.8.0-gpl | 2026-10-30 | **一起听**首版：房间码 + WSS 中继 + 房间目录 + 播放器桥接；**听歌识曲**正式入口 |
+| v3.8.1-gpl | 2026-10-30 | 一起听局域网直连（无需服务器）；内置 STUN 打洞与可靠 UDP；自有域名 `arris.de5.net` 接入中继 |
+| v3.8.2-gpl | 2026-10-31 | 一起听真正可用：成员起播、按歌曲 ID 跟随、**队列与下一首同步**、切歌即发、房间生命周期；修掉 media3 断言闪退（升 1.6.1）；APK 直链下载 |
+| v3.8.3-gpl | 2026-10-31 | 界面采用官网松绿纸感风格（识曲 / 一起听 / 首页 / 库 / 设置重构）；修竖屏封面遮挡；自动旋转默认关闭 |
 
 ### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
 
