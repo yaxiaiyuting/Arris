@@ -330,7 +330,7 @@ object SettingsRegistry {
             pref(
                 key = "auto_rotate",
                 type = SettingsEntryType.SWITCH,
-                default = true, // RotationSetting.DEFAULT_ENABLED（RotationSetting.kt:42）
+                default = false, // RotationSetting.DEFAULT_ENABLED；新安装默认锁定竖屏
                 group = SettingsGroup.GENERAL,
                 titleKey = "autoRotateLabel",
                 subtitleKey = "autoRotateDescription",
