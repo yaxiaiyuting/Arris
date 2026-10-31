@@ -330,7 +330,9 @@ object SettingsRegistry {
             pref(
                 key = "auto_rotate",
                 type = SettingsEntryType.SWITCH,
-                default = true, // RotationSetting.DEFAULT_ENABLED（RotationSetting.kt:42）
+                // 与 RotationSetting.DEFAULT_ENABLED 保持一致：新安装默认锁定竖屏
+                // （3.8.x 线已同步，LTS 回移时漏了这份注册表副本，被 SettingsDefaultsTest 抓到）
+                default = false,
                 group = SettingsGroup.GENERAL,
                 titleKey = "autoRotateLabel",
                 subtitleKey = "autoRotateDescription",
