@@ -30,7 +30,7 @@ import androidx.compose.runtime.mutableStateOf
  * **既不读取、也不修改** `Settings.System.ACCELEROMETER_ROTATION`。
  * 系统那一层的自动旋转锁与本开关互相独立。
  *
- * 默认开：与"手机系统默认允许旋转"一致。关掉时行为**逐字节等于 v1.7.0**：
+ * 默认关闭：手机锁定竖屏，用户仍可主动开启自动旋转；
  * 手机锁竖屏、平板不限制方向、大屏模式靠 ⤢ 按钮手动进出。
  */
 object RotationSetting {
@@ -38,8 +38,8 @@ object RotationSetting {
     private const val PREFS = "ncrust_settings"
     private const val KEY = "auto_rotate"
 
-    /** 默认**开**。 */
-    const val DEFAULT_ENABLED = true
+    /** 默认关闭；已保存的用户选择仍优先。 */
+    const val DEFAULT_ENABLED = false
 
     private val stateHolder = mutableStateOf(DEFAULT_ENABLED)
     private var loadedFromDisk = false

@@ -319,6 +319,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
             }
+            SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !isDark
+                    isAppearanceLightNavigationBars = !isDark
+                }
+            }
 
             // B2-C：主题色来源三选一（预设 / 封面 / 系统）。封面色由 PlaybackService 的
             // Palette 结果静态推送到 ViewModel；系统色仅 API 31+ 可用。
@@ -339,12 +345,12 @@ class MainActivity : ComponentActivity() {
             val accentColor = remember(accentSource, themeIndex, coverAccentRgb, isDark, systemAccent) {
                 when (accentSource) {
                     AccentSource.COVER -> coverAccentRgb?.let { processAccentColor(it, isDark) }
-                        ?: themeColorForIndex(themeIndex)
+                        ?: themeColorForIndex(themeIndex, isDark)
                     // systemAccentColor 在 API < 31 返回 null（跨设备同步 prefs 的防御），
                     // 拿不到就回落预设色 —— 不静默改变现有颜色。
                     AccentSource.SYSTEM -> systemAccent?.let { processAccentColor(it.toArgb(), isDark) }
-                        ?: themeColorForIndex(themeIndex)
-                    AccentSource.PRESET -> themeColorForIndex(themeIndex)
+                        ?: themeColorForIndex(themeIndex, isDark)
+                    AccentSource.PRESET -> themeColorForIndex(themeIndex, isDark)
                 }
             }
 
@@ -375,7 +381,7 @@ class MainActivity : ComponentActivity() {
                     // 组配色 -- Ncrust* 与 Metro* 组件可以并存,视觉一致。
                     val ncrust = LocalNcrustColors.current
                     val metroColors = remember(ncrust, isDark) { ncrust.toMetroColors(isDark) }
-                    MetroTheme(colors = metroColors) {
+                    MetroTheme(colors = metroColors, typography = com.takahashirinta.ncrust.ui.theme.ArrisMetroTypography) {
                     var showSplash by remember { mutableStateOf(true) }
                     var showBatteryPrompt by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -3422,11 +3428,10 @@ fun MainScreen(
                 // autoReserveBottomStack=false: Ncrust 用自己的 BottomOverlayInsetDp 常量管
                 // 底部预留,不接 MetroShell 的 MetroBottomStackScope,否则 rememberBottomStackReservation
                 // 会因缺 CompositionLocal 而 crash。
-                MetroBottomNav(
-                    selectedIndex = selectedTab,
-                    onSelected = onNavSelected,
-                    items = navTabs.map { MetroBottomNavItem(it.first, it.second) },
-                    autoReserveBottomStack = false,
+                com.takahashirinta.ncrust.ui.components.ArrisBottomNav(
+                    items = navTabs,
+                    selected = selectedTab,
+                    onSelect = onNavSelected,
                 )
                 // v3.4.13：「用户」图标右上角的小圆点。Arris 的底部导航有 5 格，
                 // 用户是第 4 格（index 3）；宽屏走左侧 sidebar，不画。

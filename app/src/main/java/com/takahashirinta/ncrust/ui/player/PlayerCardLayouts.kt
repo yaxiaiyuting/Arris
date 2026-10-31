@@ -29,6 +29,8 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.platform.testTag
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -474,6 +476,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
         modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
+            .onSizeChanged { ui.narrowPanelHeightPx = it.height.toFloat() }
             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
     ) {
         playerPanels(Modifier.fillMaxSize())
@@ -509,6 +512,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .testTag("player.cover.title")
                 .fillMaxWidth()
                 // 大封面模式标题块的实测高：从封面可用带里扣除，矮屏才不会压住控件。
                 .onSizeChanged { ui.narrowTitleHeightPx = it.height.toFloat() }
@@ -523,7 +527,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // 跑马灯只在标题真正可见时挂：这一层常驻、只在 graphicsLayer 里调 alpha，
             // 卡片收起或处于歌词模式时标题看不见，但无限跑马灯照样以 60fps 驱动重绘。
             val titleVisible = remember { derivedStateOf {
-                progress.value > 0.7f && lyricAnimProgress.value > 0.5f
+                progress.value > 0.7f && lyricAnimProgress.value < 0.5f
             } }
             ThresholdScope({ titleVisible.value }) { visible ->
                 MetroText(
