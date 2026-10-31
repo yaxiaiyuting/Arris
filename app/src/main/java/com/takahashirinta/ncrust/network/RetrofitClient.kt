@@ -153,7 +153,13 @@ object RetrofitClient {
             // PING 让 OkHttp 在连接失效时及时换新连接。
             .pingInterval(15, TimeUnit.SECONDS)
             .connectionPool(sharedConnectionPool)
-            .connectTimeout(30, TimeUnit.SECONDS)
+            // 多地址回退：真机实测（docs/verification/v3.8.1/address-family.md）
+            // DNS 首个 IPv6 地址不回 TCP，而 30s 的单地址连接等待远大于调用截止，
+            // 结果是在尝试 IPv4 之前就被取消 —— 表现为 8s 级超时、ttfb=-1。
+            // 两处配合：① IPv4 优先（IPv6 保底，纯 IPv6 网络不受影响）
+            //          ② 单地址连接预算 30s → 8s，让坏地址能在截止前让位给下一个地址
+            .dns(AddressPreference.ipv4First)
+            .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
