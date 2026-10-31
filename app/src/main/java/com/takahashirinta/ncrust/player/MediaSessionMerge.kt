@@ -60,6 +60,8 @@ internal object MediaSessionMerge {
      * 这是 [PlaybackService] 里 `session_metadata_lyrics` 回退开关的那一侧 ——
      * 用来在真机上 A/B 对照「会话 metadata 随歌词刷新」是否值得。
      *
+     * v3.7.12：传入译文和偏好时，跟随媒体双语排布；关闭跟随仍只显示歌曲身份。
+     *
      * **通知正文那一份永远走 [MediaDisplayLines.of] 的歌词分支，不受这个开关影响。**
      */
     fun sessionLines(
@@ -67,7 +69,9 @@ internal object MediaSessionMerge {
         songArtist: String,
         lyricLine: String?,
         followLyrics: Boolean,
+        translatedLine: String? = null,
+        options: MediaLyricOptions = MediaLyricOptions(bilingual = false),
     ): MediaDisplayLines.Lines =
-        if (followLyrics) MediaDisplayLines.of(songTitle, songArtist, lyricLine)
+        if (followLyrics) MediaDisplayLines.of(songTitle, songArtist, lyricLine, translatedLine, options)
         else MediaDisplayLines.of(songTitle, songArtist, null)
 }

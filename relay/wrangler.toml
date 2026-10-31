@@ -1,0 +1,30 @@
+name = "arris-listen"
+main = "src/index.mjs"
+compatibility_date = "2026-01-01"
+
+# 免费计划只能用 SQLite 后端的 Durable Object（官方文档明确）
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "DIRECTORY"
+class_name = "Directory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# v2：新增房间目录（v1 已部署，新增类必须走新 tag，不能改历史迁移）
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Directory"]
+
+# 静态资源：首页 HTML 与 APK 直链（单文件上限 25MiB，APK 16MB）
+# 匹配到的路径直接由 CDN 返回；未匹配的（/health、/rooms、/room/*）落到 Worker
+# /dl/* 交给 Worker 自己处理：Cloudflare 静态资源服务不支持 Range，
+# 而 APK 下载在国内经常要断点续传/多线程，必须自己实现 206。
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/dl/*"]

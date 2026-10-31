@@ -1,0 +1,139 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :Kanesumi-sec-a:kanesumi-core:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:preDebugBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:writeDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:preDebugBuild UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:writeDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResValues UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResValues UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:packageDebugResources UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:extractDeepLinksDebug UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugManifest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:parseDebugLocalResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugLibraryResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugLibraryResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugLibraryResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:generateDebugRFile UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugLibraryResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:parseDebugLocalResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:generateDebugRFile UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:checkKotlinGradlePluginConfigurationErrors
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-core:checkKotlinGradlePluginConfigurationErrors
+> Task :app:processDebugResources UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:checkKotlinGradlePluginConfigurationErrors
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugKotlin UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:javaPreCompileDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:compileDebugJavaWithJavac NO-SOURCE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-controls:processDebugJavaRes UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-anim:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-core:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :Kanesumi-sec-a:kanesumi-structure:processDebugJavaRes UP-TO-DATE
+
+> Task :app:compileDebugKotlin
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/library/SavedSongCodec.kt:220:21 Elvis operator (?:) always returns the left operand of non-nullable type SongItem
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt:77:5 Parameter 'onSongInsertNext' is never used
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt:78:5 Parameter 'onSongAppendToQueue' is never used
+w: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/qq/QqApi.kt:498:55 Destructured parameter 't' is never used
+
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+
+SavedSongCodecTest > 坏条目逐条丢弃 其余条目存活 FAILED
+    java.lang.AssertionError at SavedSongCodecTest.kt:240
+
+68 tests completed, 1 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+[Incubating] Problems report is available at: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/duanjb666/deepseek/Arris-bilingual-lyrics/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 35s
+85 actionable tasks: 10 executed, 75 up-to-date

@@ -245,4 +245,55 @@ class PlaylistDetailResultTest {
             LocalPlaylistStore.readPlaylists(ctx).single().lastSyncedAt,
         )
     }
+
+    /**
+     * 回归：详情接口也必须把 `originCoverType` 带出来。
+     *
+     * 症状是「搜索里有『原唱』角标，收藏库/歌单详情里同一首歌没有」——
+     * 搜索走 `SearchResponse` 的映射，详情走 `parseSongTrack`，而后者长期只挑
+     * id/name/ar/al/dt，把版本字段丢了。
+     */
+    @Test
+    fun songDetailCarriesOriginCoverTag() = runBlocking {
+        val detail = JSONObject()
+            .put("id", 11L)
+            .put("name", "s11")
+            .put("dt", 1000L)
+            .put("ar", JSONArray().put(JSONObject().put("id", 1L).put("name", "artist")))
+            .put("al", JSONObject().put("id", 2L).put("name", "album"))
+            .put("originCoverType", 1)
+        // 歌单详情只给 trackIds（不带 tracks），歌曲对象由 `v3/song/detail` 补齐 ——
+        // 这正是收藏库读取时走的路径。
+        val playlist = detailJson(declaredCount = 1, trackIds = listOf(11L), tracks = emptyList())
+        val songDetail = JSONObject().put("code", 200).put("songs", JSONArray().put(detail)).toString()
+        intercept(route(playlist, songDetail))
+        val result = PlaylistApi.getPlaylistDetailResult(7L)
+        assertEquals(1, result.songs.size)
+        assertEquals("详情必须带 originCoverType", 1, result.songs.first().originCoverType)
+    }
+
+    @Test fun `user playlist paging crosses the first hundred including hidden special rows`() = kotlinx.coroutines.runBlocking {
+        var requests = 0
+        val offsets = mutableListOf<Int>()
+        intercept { request ->
+            val hex = (request.body as okhttp3.FormBody).value(0)
+            val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            val plain = com.takahashirinta.ncrust.network.crypto.EapiCrypto.decryptResponse(java.util.Base64.getEncoder().encodeToString(bytes))
+            val payload = JSONObject(plain.split("-36cd479b6b5-")[1])
+            offsets += payload.getInt("offset")
+            requests++
+            if (requests == 1) {
+                val rows = JSONArray().put(JSONObject().put("id",999).put("specialType",5))
+                repeat(99) { n -> rows.put(JSONObject().put("id",n+1).put("name","p$n")) }
+                JSONObject().put("code",200).put("more",true).put("playlist",rows).toString()
+            } else {
+                JSONObject().put("code",200).put("more",false)
+                    .put("playlist",JSONArray().put(JSONObject().put("id",1000).put("name","last"))).toString()
+            }
+        }
+        val all = PlaylistApi.getAllUserPlaylists(123)
+        assertEquals(listOf(0,100), offsets)
+        assertEquals(2, requests);assertEquals(100,all.size)
+        assertEquals(1000L,all.last().id);assertFalse(all.any { it.specialType != 0 })
+    }
 }

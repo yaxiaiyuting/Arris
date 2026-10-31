@@ -1,0 +1,17 @@
+{
+  "jvm": {
+    "classes": 3,
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lint": {
+    "Information": 7,
+    "Warning": 76
+  },
+  "build": "Debug success",
+  "device_playback_tested": false,
+  "device_logs_read_only": true,
+  "real_network_requests": false
+}

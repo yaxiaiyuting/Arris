@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.account.SessionAndHomeBoundaryTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:19:05.292Z" hostname="cachyos-x8664" time="0.233">
+  <properties/>
+  <testcase name="accountChangeWhileReadingSnapshotCannotPublishPreviousAccount" classname="com.takahashirinta.ncrust.account.SessionAndHomeBoundaryTest" time="0.085"/>
+  <testcase name="businessFailureUsesShortRetryAndNeverSuccessfulTtl" classname="com.takahashirinta.ncrust.account.SessionAndHomeBoundaryTest" time="0.143"/>
+  <testcase name="matchingSnapshotRestoresNormallyWithoutAccountChange" classname="com.takahashirinta.ncrust.account.SessionAndHomeBoundaryTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

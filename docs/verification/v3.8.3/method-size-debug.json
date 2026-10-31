@@ -1,0 +1,67 @@
+{
+  "source": "/home/duanjb666/deepseek/Arris-ui-refresh/app/build/outputs/apk/debug/app-debug.apk",
+  "limit": 2000,
+  "warnLimit": 1200,
+  "totalMethods": 345,
+  "violations": [],
+  "warnings": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt.RecognitionContent(ZILjava/lang/String;Lcom/takahashirinta/ncrust/recognize/RecogOutcome;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt.RecognitionContent",
+      "class": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt",
+      "codeUnits": 1941,
+      "registers": 116,
+      "dex": "classes19.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TogetherScreen(Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TogetherScreen",
+      "class": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt",
+      "codeUnits": 1521,
+      "registers": 53,
+      "dex": "classes19.dex"
+    }
+  ],
+  "top": [
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt.RecognitionContent(ZILjava/lang/String;Lcom/takahashirinta/ncrust/recognize/RecogOutcome;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt.RecognitionContent",
+      "class": "com.takahashirinta.ncrust.ui.screen.RecognizeScreenKt",
+      "codeUnits": 1941,
+      "registers": 116,
+      "dex": "classes19.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TogetherScreen(Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TogetherScreen",
+      "class": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt",
+      "codeUnits": 1521,
+      "registers": 53,
+      "dex": "classes19.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.ArrisPageKt.ArrisPageHeader(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.components.ArrisPageKt.ArrisPageHeader",
+      "class": "com.takahashirinta.ncrust.ui.components.ArrisPageKt",
+      "codeUnits": 1197,
+      "registers": 99,
+      "dex": "classes14.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.components.ArrisPageKt.ArrisBottomNav(Ljava/util/List;ILkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.components.ArrisPageKt.ArrisBottomNav",
+      "class": "com.takahashirinta.ncrust.ui.components.ArrisPageKt",
+      "codeUnits": 1172,
+      "registers": 120,
+      "dex": "classes14.dex"
+    },
+    {
+      "name": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TransportTabs(Lcom/takahashirinta/ncrust/ui/screen/TransportMode;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V",
+      "obfuscated": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt.TransportTabs",
+      "class": "com.takahashirinta.ncrust.ui.screen.TogetherScreenKt",
+      "codeUnits": 1159,
+      "registers": 115,
+      "dex": "classes19.dex"
+    }
+  ]
+}

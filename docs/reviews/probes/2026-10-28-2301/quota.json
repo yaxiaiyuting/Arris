@@ -1,0 +1,39 @@
+{
+  "start_remaining": {
+    "five_hour": 96,
+    "weekly": 99
+  },
+  "phase_2_remaining": {
+    "five_hour": 71,
+    "weekly": 96,
+    "observed_utc": "2026-10-28 15:27:17 UTC"
+  },
+  "stop": {
+    "observed_utc": "2026-10-28 15:32:11 UTC",
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "normalModelSlug": null,
+      "primary": {
+        "usedPercent": 33,
+        "windowDurationMins": 300,
+        "resetsAt": 1793217626
+      },
+      "secondary": {
+        "usedPercent": 5,
+        "windowDurationMins": 10080,
+        "resetsAt": 1793804426
+      },
+      "credits": {
+        "hasCredits": false,
+        "unlimited": false,
+        "balance": "0"
+      },
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    }
+  },
+  "reason": "用户在额度充足时明确要求停止源码审查，转向双语双层歌词功能讨论；非额度阈值停止。"
+}

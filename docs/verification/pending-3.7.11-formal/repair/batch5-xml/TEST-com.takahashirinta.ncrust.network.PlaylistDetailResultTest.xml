@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:38:19.367Z" hostname="cachyos-x8664" time="0.233">
+  <properties/>
+  <testcase name="aShortPlaylistWithoutTrackIdsIsComplete" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.178"/>
+  <testcase name="completenessDistinguishesTheThreeCases" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.0"/>
+  <testcase name="anIncompleteNeteaseReadIsPartialAndKeepsTheTtl" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.027"/>
+  <testcase name="user playlist paging crosses the first hundred including hidden special rows" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.007"/>
+  <testcase name="declaredTwentyButOnlyFiveDeliveredIsIncomplete" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.002"/>
+  <testcase name="aFailedDetailBatchIsCountedNotSwallowed" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.007"/>
+  <testcase name="songDetailCarriesOriginCoverTag" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.003"/>
+  <testcase name="aCompleteNeteaseReadAdvancesTheTtl" classname="com.takahashirinta.ncrust.network.PlaylistDetailResultTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

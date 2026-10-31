@@ -1,0 +1,5526 @@
+{
+  "baseline": "e56adcc704ce88aea43721aa56343bf32c8a34e0",
+  "definition": "新基线仅继承 SHA 相同的旧阅读记录；变更行复核为 partial，不自动继承旧完整阅读。",
+  "counts": {
+    "total_kotlin_files": 386,
+    "recorded": 378,
+    "full_executable_code": 311,
+    "partial_call_chain": 67,
+    "without_current_baseline_record": 8,
+    "identical_sha_carried": 301,
+    "modified_since_previous": 81,
+    "new_files": 4
+  },
+  "files": [
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/BigScreenOrientation.kt",
+      "regions": [
+        [
+          1,
+          158
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 158,
+      "sha256": "165531b1b607adfec389a16f164d3248f6d13cc8be27203dff0a84d5ce507ed9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/KeepScreenOnSetting.kt",
+      "regions": [
+        [
+          1,
+          65
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 65,
+      "sha256": "d98b1e9a9b65fb39407e58c14828b09a3a0be76e8c7d12f6b56b804107a41ab3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/MainActivity.kt",
+      "regions": [
+        [
+          12,
+          18
+        ],
+        [
+          80,
+          86
+        ],
+        [
+          117,
+          123
+        ],
+        [
+          784,
+          834
+        ],
+        [
+          1293,
+          1305
+        ],
+        [
+          1424,
+          1488
+        ],
+        [
+          2146,
+          2171
+        ],
+        [
+          2173,
+          2182
+        ],
+        [
+          2233,
+          2248
+        ],
+        [
+          2256,
+          2263
+        ],
+        [
+          2266,
+          2277
+        ],
+        [
+          2674,
+          2701
+        ],
+        [
+          3458,
+          3478
+        ],
+        [
+          3553,
+          3564
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 3635,
+      "sha256": "cc002038d5f8e8421a14887b1e1ae4861900466cb589edc0278d6d15aef22608",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/NcrustApplication.kt",
+      "regions": [
+        [
+          1,
+          95
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 95,
+      "sha256": "bdb168aefb02e941ba44c976030486d0af2c5a3d578ea83e88e96b0ed0560a9d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/RotationSetting.kt",
+      "regions": [
+        [
+          1,
+          77
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 77,
+      "sha256": "414a1d50762435107358dc4a2a5e67d49d4ace2c4770585d662e85a739115c48",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/Entitlement.kt",
+      "regions": [
+        [
+          1,
+          169
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 169,
+      "sha256": "ee5b7808b9713d960a937e257d9f286658bfc7b475a847e2349926a5ede387f7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/PlaybackNotice.kt",
+      "regions": [
+        [
+          1,
+          35
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 35,
+      "sha256": "d287df1cb41290d318cc872dc167e0e22cfadebfed74540ecdcc9f0b17f8e30d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/PlaybackNoticeTracker.kt",
+      "regions": [
+        [
+          1,
+          86
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 86,
+      "sha256": "310d92f81363d3414cbf0c1057f0ae4f4f4cda1ab8ff103ce83f448cb863e2eb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/SessionMonitor.kt",
+      "regions": [
+        [
+          1,
+          132
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 132,
+      "sha256": "a2d5cd3fe7a3717c57224976da183314dd55e0c11364b0acff6f5a543788f014"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/SessionState.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          84
+        ]
+      ],
+      "lines_total": 84,
+      "sha256": "6b379bb276c050d82122f7d5af0ad2cf16efaf732e00f8f11b980cc85a78b28d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/VipState.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          85
+        ]
+      ],
+      "lines_total": 85,
+      "sha256": "b75e874829bab2ad10794d2e49316789b7b0efc837d8b9edbb3de957dd32c440",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/CookieManager.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          142
+        ]
+      ],
+      "lines_total": 142,
+      "sha256": "ae18c9b12a4db54cfdb31a96a108a01fb5b4dd6f5186ef00c08843e08acd57d3",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          142
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseCookie.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          155
+        ]
+      ],
+      "lines_total": 155,
+      "sha256": "dbab65b487d3b9d0994cf43a6e461f34fdd0c6afcbbb57e6befde3b0fde657ca",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseSessionGuard.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          17
+        ]
+      ],
+      "lines_total": 17,
+      "sha256": "b1e717971c3a2f6cb94f320ee914ea2269a1fd519684b2da119f50660a700ebc",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          17
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseSessionRequests.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          69
+        ]
+      ],
+      "lines_total": 69,
+      "sha256": "48e53c5cf4ee28dc03f39ad21c8f434b230be5e4c174611f9d4cc75091494381",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseTokenRefresher.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          109
+        ]
+      ],
+      "lines_total": 109,
+      "sha256": "f8a854a8b4e7098441ed2369e16a014388f6019d176f6e404882a8d8302295b1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseVipStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          144
+        ]
+      ],
+      "lines_total": 144,
+      "sha256": "7004b50fa605d2f90647ff65fb04305c76eebb71deccf2e01a04a4e7e2d1f694",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrLoginProtocol.kt",
+      "regions": [
+        [
+          1,
+          129
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 129,
+      "sha256": "99f3f63a304250c883b01b674aaf62e2a0aa81248b0e085c055cb4b443c6b460",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPair.kt",
+      "regions": [
+        [
+          107,
+          139
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 184,
+      "sha256": "9e2f2cc1b9d5d51ee3bc1ca4a473939274fe352bef635a0a692c4ec8c500db5c",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPairClient.kt",
+      "regions": [
+        [
+          32,
+          39
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 80,
+      "sha256": "c23f3f230288b95f877fcfbed0ce6e1e2b5107e8f9d180b26ab5f54166a7f54b",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPairServer.kt",
+      "regions": [
+        [
+          79,
+          90
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 100,
+      "sha256": "4ed7cd66e447e30bf7dbc87b56e10d98c03549f95ec3242a66285f95ba5b96b3",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliApi.kt",
+      "regions": [
+        [
+          1,
+          395
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 813,
+      "sha256": "a987e9478ee87b56520d68b1d11af3985a5ea480b13582514a100294098c3e74"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliAuthApi.kt",
+      "regions": [
+        [
+          1,
+          435
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 435,
+      "sha256": "a577abbd259843d93113822af59b4825a9c96daf0e53e86092d18665dc225d92",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliAuthStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          371
+        ]
+      ],
+      "lines_total": 371,
+      "sha256": "42150edb5c19954a24c47119c259d822c3dcf7ef31f02d7cb90cc2be7e74282d",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          240
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliCdn.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          227
+        ]
+      ],
+      "lines_total": 227,
+      "sha256": "187ebeefe65505d0682ab6b6285d7196fd4e39b9380897c6b31da90face17de5",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          227
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliModels.kt",
+      "regions": [
+        [
+          64,
+          93
+        ],
+        [
+          125,
+          154
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 686,
+      "sha256": "e751cfe20c5069a8bfb7f702cb4adf4f5d452b618c3d740f64c2701858ff6bb2",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliPrefs.kt",
+      "regions": [
+        [
+          1,
+          515
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 515,
+      "sha256": "7a023c2fc1a34ae9eb5e349bb9e98d56e2cd11c2b94b66bb362d675e0399f0f0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliQrLogin.kt",
+      "regions": [
+        [
+          1,
+          458
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 458,
+      "sha256": "eafdeaa394025aafa73bec0806fc17a5d6476c04da7d77f5f3010d14091e7065"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliSourceProvider.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          450
+        ]
+      ],
+      "lines_total": 450,
+      "sha256": "d2d22aa5cc76e52e85c955c0f0d5ea11a0ccc29e0253c749a5b128920631a415",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliSubtitle.kt",
+      "regions": [
+        [
+          522,
+          541
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 549,
+      "sha256": "cbe53bef3198f66f9d6d5171ee726c7b579e43bb302c5c3d27653e38108d0ed0",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/bili/BiliWbi.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          196
+        ]
+      ],
+      "lines_total": 196,
+      "sha256": "6585624e9d991f421880aa07de1845e3bcc7a93c5b1369a2ef52c917c80c9655",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/ContentCache.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          118
+        ]
+      ],
+      "lines_total": 118,
+      "sha256": "9c8da62e136b3aca0ee0e85c8a676f32fcb34ed4c6c8b05d33e3fdf9c00a124e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineAudioCache.kt",
+      "regions": [
+        [
+          279,
+          344
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 344,
+      "sha256": "e9bc3bfee72609ac9ec45fd2fdae0177c0e178f0bfcf0aa15abc191b890db92a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineContent.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          49
+        ]
+      ],
+      "lines_total": 49,
+      "sha256": "323515226b00b5d5237176d63f601d3bd685cfe968d28fa23225132174fda86c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineKeys.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          134
+        ]
+      ],
+      "lines_total": 134,
+      "sha256": "af59b074e05dab8a4a39293d42f47dedfd89f28dd07381c001ebb5604e0d8a6f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineLibrary.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          324
+        ]
+      ],
+      "lines_total": 324,
+      "sha256": "5bbc1204194a6686f8affe5c8bf7f46b52e1630885688108d33fa2008d1c1141",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineTrackCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          305
+        ]
+      ],
+      "lines_total": 305,
+      "sha256": "e3d011f75a4004f4d75b3aa63c4bb46e0e4f480f7383a3b748af006006c9653b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/OfflineUrlStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          204
+        ]
+      ],
+      "lines_total": 204,
+      "sha256": "e4122677621ca5a49a1e013b215887ed0d71b24f1b168e1bffe756fc02cf12e2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/SourceRoutingDataSource.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          101
+        ]
+      ],
+      "lines_total": 101,
+      "sha256": "c84638dde433dd96b70181387f56bdf49962c02964e4f0e73c517abadb61fbfe",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/BelatedBirthdayOverlay.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          45
+        ]
+      ],
+      "lines_total": 45,
+      "sha256": "5d6754f7fbdb5e4bec02d2f131e651a0e3a226c73010295d1dc4510a061f0eb5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/BirthdayOccasion.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          33
+        ]
+      ],
+      "lines_total": 33,
+      "sha256": "efcba06bcd51a4f520c8ceea091d68bd07c368c6f43230bd4e3781b8e7305faa",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/BirthdayWebOverlay.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          158
+        ]
+      ],
+      "lines_total": 158,
+      "sha256": "602373d16ec0f4a463735fcf8cbae8269188dcfa47dd3cfab632eb97871001a9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/BirthdayWebView.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          103
+        ]
+      ],
+      "lines_total": 103,
+      "sha256": "0493c09d057aa12e1da3cc415227999abfa07d3eb2c9e65302e3765bfa225d37",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/BlowRecorder.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          73
+        ]
+      ],
+      "lines_total": 73,
+      "sha256": "c88db34aa29d489bfedd7f5cc823ae05e6c5afd48222302e84aa4a955aca879c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationArtView.kt",
+      "regions": [
+        [
+          1,
+          155
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 155,
+      "sha256": "60202f0f9c45d89a4ee879eb782cff85077172441785efb72cb5c2a366187e67",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationHost.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          57
+        ]
+      ],
+      "lines_total": 57,
+      "sha256": "245a2475f17d19c2cf881585610bfc5b8e0142f5d66a7bc38820724af30cd628",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationLayout.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          132
+        ]
+      ],
+      "lines_total": 132,
+      "sha256": "225abac5080a57eb0919f1e3933e66bdf1875d573541a71bb6bcc28b9ed023d7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationOverlay.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          220
+        ]
+      ],
+      "lines_total": 220,
+      "sha256": "a9b4f9c1aa6ea1148d5666498f8e2ec7fe9d500289bfcce193f36fb6301c5f19",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationPrefs.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          64
+        ]
+      ],
+      "lines_total": 64,
+      "sha256": "7ae6266933d41da9aad8bf06722f580351a5bf28e197c0b8262586c8a1b8dce2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationRules.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          82
+        ]
+      ],
+      "lines_total": 82,
+      "sha256": "5e232d455b0eb7e208ae535c20dc68e69e5d8be6970a6588a37be4775105860a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/CelebrationSettings.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          65
+        ]
+      ],
+      "lines_total": 65,
+      "sha256": "0cc65a29756372f3c74db33b4d681e00ac52937380e3fefbdc77a7c08b982c5a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/FireworkPainter.kt",
+      "regions": [
+        [
+          1,
+          48
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 48,
+      "sha256": "7ecba90d459ffd14be8c4e5307ad04624d831a1431005fbe607b2349d751b81b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/FireworkSimulation.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          84
+        ]
+      ],
+      "lines_total": 84,
+      "sha256": "d0f51ee78af822c57c00338aca68fb18f46d847dd79a6cc9fb9a603ff1d278dd",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/celebration/VersionEggRow.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          47
+        ]
+      ],
+      "lines_total": 47,
+      "sha256": "b55103ada66818f7ed3a808b3a41d7d63bc4ed68132a3d5b5a29c1b6cfde7df7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/AlbumLookup.kt",
+      "regions": [
+        [
+          53,
+          113
+        ],
+        [
+          138,
+          158
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 187,
+      "sha256": "89a44870358872aefe3ac4677b58144bef0db49e94c67c0b77601905e139a1a1",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/CatalogAggregator.kt",
+      "regions": [
+        [
+          121,
+          127
+        ],
+        [
+          136,
+          165
+        ],
+        [
+          182,
+          192
+        ],
+        [
+          200,
+          216
+        ],
+        [
+          329,
+          335
+        ],
+        [
+          342,
+          348
+        ],
+        [
+          499,
+          543
+        ],
+        [
+          555,
+          563
+        ],
+        [
+          593,
+          598
+        ],
+        [
+          638,
+          644
+        ],
+        [
+          687,
+          693
+        ],
+        [
+          720,
+          745
+        ],
+        [
+          803,
+          831
+        ],
+        [
+          852,
+          878
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 884,
+      "sha256": "8013b2d03d6b3aa17c285409a01369f7c715877422ca3e0ab8989ba7f9e5eeb1",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/CrossSourceMatcher.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          428
+        ]
+      ],
+      "lines_total": 428,
+      "sha256": "b817f8f40bf0d9060d89a158739cf56bc40a83e907a06a8e54641747826c4a4d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/CrossSourceModels.kt",
+      "regions": [
+        [
+          1,
+          243
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 243,
+      "sha256": "4c0b8de209c11c76a3813907063d57897c52e67b645c6fc4efebb8b340666187",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/MatchCacheCodec.kt",
+      "regions": [
+        [
+          1,
+          282
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 282,
+      "sha256": "b92a53056f29ba24ca48ccf20e713a476caa9ee2b98c35a8464c2952f748d2c7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/MatchCacheStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          239
+        ]
+      ],
+      "lines_total": 239,
+      "sha256": "d5f1961d8b7f08c1ae3c118f01a17e5aef2d8e4f4fe6d8e8afe83ce398967c6b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/NameNormalizer.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          191
+        ]
+      ],
+      "lines_total": 191,
+      "sha256": "3dc2682af65001c9ebdbb1fb53ce65e1e8c01b45770f60fe623bb09c85863710",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/crosssource/PlayAllDedup.kt",
+      "regions": [
+        [
+          1,
+          213
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 213,
+      "sha256": "9a22e7437bccb5420308d76e8a5cc461086b93d758a254274a2c49b93b42bbf5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/LibraryManager.kt",
+      "regions": [
+        [
+          1,
+          889
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 889,
+      "sha256": "877853833ef94fc81ca43db7f32efde64e1ec7d727da0f73d0268bd7bcaf9f6d"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/LikedPlayAll.kt",
+      "regions": [
+        [
+          1,
+          89
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 89,
+      "sha256": "a8c31ed096a7fd8cc9ce787c0f9fb7a2512a92d996e020daf1c1f6b2feb3e76b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedAlbumCodec.kt",
+      "regions": [
+        [
+          1,
+          257
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 257,
+      "sha256": "804365be345dad2642e52330973baaf945c7eb3cf9a6225e46942da9416d055f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedSongCodec.kt",
+      "regions": [
+        [
+          1,
+          409
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 409,
+      "sha256": "0dc21ba638da049562dd073117925cce888a7a00bae0cfd3b303ca6103becee0"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SavedSongModels.kt",
+      "regions": [
+        [
+          1,
+          354
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 354,
+      "sha256": "2260f945205203a19822a02cc91d12a84aaa65ad397091ba3b1c301d4a6539c8",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          348
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SearchHistoryCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          284
+        ]
+      ],
+      "lines_total": 284,
+      "sha256": "e009c16e84325fbfba7edf756040ac884267093ced0597f4d3beb55bf03f66eb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SearchHistoryManager.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          177
+        ]
+      ],
+      "lines_total": 177,
+      "sha256": "7df2d549a4bbb268c0f4fa93924c072bc7603c9d3552e84160159af233c44697",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/library/SearchHistoryMigration.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          116
+        ]
+      ],
+      "lines_total": 116,
+      "sha256": "f04848f5f8bdbf29c6f49fe298369410a2b62db859ed80fba7b4d8125d24d7c0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          232
+        ]
+      ],
+      "lines_total": 232,
+      "sha256": "6d7032765bfe14ea17d88f2ed8077ce973f27c14ec45556183bb656e4e241943",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistModels.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          348
+        ]
+      ],
+      "lines_total": 348,
+      "sha256": "1e7b1a6c64a76bc79e091bad10100210475a10b1c023688ded970f5f6ae8d37a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistRepository.kt",
+      "regions": [
+        [
+          115,
+          429
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 429,
+      "sha256": "bb089915c4811537348b8d8039762a314f72d1becdc3edfcc0a5ecfa35a10656"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt",
+      "regions": [
+        [
+          1,
+          267
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 267,
+      "sha256": "748a87bdf70dd282a9d82f5db5191611239230f483c71e8f18870d0bf69ef723"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/AmllTtmlClient.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          243
+        ]
+      ],
+      "lines_total": 243,
+      "sha256": "c142eb3710d659e257aa3c27bb4f4089e761da12412b8576437f1ba8f9915c57",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/DynamicLyricFont.kt",
+      "regions": [
+        [
+          1,
+          155
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 155,
+      "sha256": "5067caad26cdb5961799c9bcc6cacf5f4403d1c991fc802e4ecfcadad527d9f2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LrcParser.kt",
+      "regions": [
+        [
+          44,
+          68
+        ],
+        [
+          76,
+          82
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 138,
+      "sha256": "52018d0539422f54c0db2e7125a2e914d8f607002045ef0b453e908a72724d45",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricClock.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          15
+        ]
+      ],
+      "lines_total": 15,
+      "sha256": "59a54494a66125c42bf9909f839709fce1183591e3827bb06ad94a608b0d06d8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricLoadCoordinator.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          203
+        ]
+      ],
+      "lines_total": 203,
+      "sha256": "a9ae919b7e351d9e55f9f021d5e94a61aa73215f6559f5e194109c1ebc2d1b1e",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricRequestGate.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          48
+        ]
+      ],
+      "lines_total": 48,
+      "sha256": "410a7a0c74886b38c464da7eeb45963b9c0c3c44b5b1285a17968e0d13f37553",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricSourceChain.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          90
+        ]
+      ],
+      "lines_total": 90,
+      "sha256": "0fdefc92f498f84bb2a9e769662bc74e1261643e3fa99274c1d98c7c6b449571",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricSubtitleText.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          80
+        ]
+      ],
+      "lines_total": 80,
+      "sha256": "ad47d497d73d7040cee1e0c6b279a9d37471e23450631134a31d8a8c7fee1463",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricTrackMerge.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          163
+        ]
+      ],
+      "lines_total": 163,
+      "sha256": "c947066c4bfc8b479bca11d0235ae6a94a7e986d6d233879adacd4c5afb84fc3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricsCache.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          288
+        ]
+      ],
+      "lines_total": 288,
+      "sha256": "726840a56d9c3924ddd85dbfdc385c4aad8709718155a36f34cbf75dc4da39a2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/LyricsDisplayPrefs.kt",
+      "regions": [
+        [
+          1,
+          281
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 281,
+      "sha256": "8c15972a25d73279234cf9586c834de6b44d10f88448c54fd824f2b12c7cfaa9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/SweepTrack.kt",
+      "regions": [
+        [
+          303,
+          328
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 352,
+      "sha256": "9f27c2aa9f122cc681fee0fdc9a561489327dc923f1b83b184e5b8ffcf479f30",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/TtmlParser.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          75
+        ]
+      ],
+      "lines_total": 75,
+      "sha256": "f1c7d2d193b1ac9d1cd2bc54be2c29033b1eec67798b5b07b8b0b9d306b27d69",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/TtmlScanner.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          599
+        ]
+      ],
+      "lines_total": 599,
+      "sha256": "cb50f7f2596a5ce598562fe459d765c2891c7c7e751530911043c19a8a5762f2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/YrcAligner.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          116
+        ]
+      ],
+      "lines_total": 116,
+      "sha256": "f0b6318af89190cbed1519edb594b2379738abe115c15fe6b04a19ad4e3f0781",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/lyric/YrcParser.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          242
+        ]
+      ],
+      "lines_total": 242,
+      "sha256": "65261ac4202b76ccd0880e2a319f3bd460f7c2d7d5ccb769c109bbddb15e6ad1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/BoundedParallel.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          140
+        ]
+      ],
+      "lines_total": 140,
+      "sha256": "0c359dd35d8847316a82b925b1b0fdadf1e20312d2d87b32394d12963f1f8047",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/ClientIdentity.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          148
+        ]
+      ],
+      "lines_total": 148,
+      "sha256": "41725c47ca70f1533b8925a9296f8d43a09dd64a1f5f2afb31a7e9b39ea19bac",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          1,
+          148
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/ConnectionWarmup.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          178
+        ]
+      ],
+      "lines_total": 178,
+      "sha256": "6be9789a361380aa1fff25c15fd700f322ad8700961b865e13bb86448ee4a776",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/CoverUrls.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          28
+        ]
+      ],
+      "lines_total": 28,
+      "sha256": "43b433cca785d92b96961c51aecadc6518d2e9fc2429c9553bd4a70a2b5ff153",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/HttpTimingListener.kt",
+      "regions": [
+        [
+          1,
+          147
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 147,
+      "sha256": "c3b0b8c35d8d2a05582103f32206eb338bdb907c9b22a4cbc6ab856bcc48a8b8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/LikedPlaylistPick.kt",
+      "regions": [
+        [
+          46,
+          76
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 82,
+      "sha256": "ab6d63b78a90914bd77b35d532f7e0c3237e7b884792deb58048c09dff4d882a",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/MonotonicWriteGate.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          22
+        ]
+      ],
+      "lines_total": 22,
+      "sha256": "b4a2265fb4afa7d136ff116a4078cc362bbbdd60d049c74e9f34b821efd7b6bd",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/NcmApi.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          141
+        ]
+      ],
+      "lines_total": 141,
+      "sha256": "151c36472091b05ce921bbb2a9487d5070d314fdf88c39ce5089658f0f6ba232",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/NeteaseAvailabilityApi.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          146
+        ]
+      ],
+      "lines_total": 146,
+      "sha256": "18a104617fc507d15051580f2c3c036dcd3560b06e9c5992e68e5dc678ce9749",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/NetworkAvailability.kt",
+      "regions": [
+        [
+          1,
+          43
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 43,
+      "sha256": "3a11b1a79ed902bcf1e1736d2026a40bd71271e6544b02b929d05abb3d0cf4b1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/PlaylistApi.kt",
+      "regions": [
+        [
+          100,
+          427
+        ],
+        [
+          930,
+          1165
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1165,
+      "sha256": "e81ee9d378019ba5700976bec72682b55189ae314b91d2edf3d751d1d1ec100e",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/PlaylistEditApi.kt",
+      "regions": [
+        [
+          273,
+          347
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 354,
+      "sha256": "8284123ce896f738ec77627867f8232189ed67939dac3b9813f0a68b1b60ba93"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/RetrofitClient.kt",
+      "regions": [
+        [
+          205,
+          420
+        ],
+        [
+          444,
+          740
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 817,
+      "sha256": "ac08f00c4533810c0bf10145c81cb024a94ceba7023f7da2aed1beb3ef58c5a2"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/SearchResponse.kt",
+      "regions": [
+        [
+          69,
+          83
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 217,
+      "sha256": "a0f6b6ff2ad59cf3e2d234d5dd0a71d28a644a124fca51f17b918b382fe35feb",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/WarmupTargetPlanner.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          104
+        ]
+      ],
+      "lines_total": 104,
+      "sha256": "45ea41e07f1e20df7a7896753ac71fea5604a232861fd5ae5d140e29eb55a8ca",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/XeapiState.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          205
+        ]
+      ],
+      "lines_total": 205,
+      "sha256": "4316d807e7b8989b761f7dda498c7284e763b0ed6e6d779a36da3c804ee28fcb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/EapiCrypto.kt",
+      "regions": [
+        [
+          1,
+          59
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 59,
+      "sha256": "3356494476e2a4e257e267259ac7d6f56920d84482cadf1d4e5737f40116e279",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/WeapiCrypto.kt",
+      "regions": [
+        [
+          1,
+          78
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 78,
+      "sha256": "1fc80d33b3b971fe8ba1df3c6c26be618635fe14159d4986adb5f3215d110610",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/crypto/XeapiCrypto.kt",
+      "regions": [
+        [
+          1,
+          384
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 384,
+      "sha256": "6c17d55258961fb503ec58d84865d374c0c936c12b8635904e52152ef04054cb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/AlbumDetail.kt",
+      "regions": [
+        [
+          1,
+          56
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 56,
+      "sha256": "5d32f668881c36a0f4addfa98859c193db27e091216867f312113253236b43ec",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/ArtistDetail.kt",
+      "regions": [
+        [
+          1,
+          39
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 39,
+      "sha256": "da439d646e14615f9e12405e74adb3cddf94d616263886dcf933169179ed255c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/DiscoveryModels.kt",
+      "regions": [
+        [
+          1,
+          53
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 53,
+      "sha256": "17ce9c72e75f1f026bc90dc26bb826c3aca64ca52af63e933ed4d7c479b39419",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/SongDetail.kt",
+      "regions": [
+        [
+          1,
+          131
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 131,
+      "sha256": "5a670b5eab379c876fe21e594dca6fa102e6a62f0c5b15dd77519ded8f22e3e4",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/model/SongUrlResponse.kt",
+      "regions": [
+        [
+          1,
+          16
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 16,
+      "sha256": "69d109554b10daa54ddb49b43e96bc9c030f920cc659203e19ebc11ff677d887",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/AudioFeatureExtractor.kt",
+      "regions": [
+        [
+          180,
+          310
+        ],
+        [
+          398,
+          490
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 771,
+      "sha256": "ed3aa104f99607f6b4e29382bb8c291425f63ba8201b12763c7bcbd8d148cca7",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/AudioOffloadGate.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          86
+        ]
+      ],
+      "lines_total": 86,
+      "sha256": "03a53c36fbf8fd4aaf1e5718a3ff89126f7e7e7101c00f1d260b88e858d33072",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ListeningClock.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          42
+        ]
+      ],
+      "lines_total": 42,
+      "sha256": "7ad7cbbc57186638649e36cb9974e26aa1e4feeb0f319912ac6f22fc4a795ba8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/LiveUpdateNotifier.kt",
+      "regions": [
+        [
+          1,
+          141
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 141,
+      "sha256": "0d9d7addb9b76f7a850b6eaa5aee3b3b57db0a65480ed4aa093d25b9b2da4ab3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/LyricNotifyGate.kt",
+      "regions": [
+        [
+          1,
+          100
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 100,
+      "sha256": "5f85270fd3c6e3f79032ca3170926efb4f554ac20a83b147367be87f1714ea03",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/MediaDisplayLines.kt",
+      "regions": [
+        [
+          1,
+          51
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 51,
+      "sha256": "b4dbe4bd520e49c03476dafaeaa1cc30c4e8f5ed73e6962bc1ea1a1bc73730b6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/MediaSessionMerge.kt",
+      "regions": [
+        [
+          1,
+          73
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 73,
+      "sha256": "1b31b5d4613eb2288ac634e117dc31248679cdd9755186271e6c0b21e07e0849",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlayReporter.kt",
+      "regions": [
+        [
+          130,
+          188
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 188,
+      "sha256": "289371f17d1124b1f039c1808bdcfbd8c259111d0a76efc43a57c836a034cec6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackGuard.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          463
+        ]
+      ],
+      "lines_total": 463,
+      "sha256": "070c431c03aadba8eda1385f86596ce89e2ddbcc9621d73de9a476e7df084e99",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackPositionCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          163
+        ]
+      ],
+      "lines_total": 163,
+      "sha256": "3f7663be52f31e6bbab5aab904b1af9c00d5f1904cf59d17a630007155ccc462",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackQueueLogic.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          167
+        ]
+      ],
+      "lines_total": 167,
+      "sha256": "8d6352e320032dad762b5ea4253297d2914bbe28f93b0bedb9ea6953037ff8ce",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackRequestPolicy.kt",
+      "regions": [
+        [
+          1,
+          26
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 26,
+      "sha256": "5976c04b0b72cda6416f7fa5ff3bca89fc4b11db9306b6eaa9560377d0f9c875",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackRetryScheduler.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          44
+        ]
+      ],
+      "lines_total": 44,
+      "sha256": "c15257b302db3a31932e44869d824473e1ea65fb012d763d6129c8774a9a1d1a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackStateManager.kt",
+      "regions": [
+        [
+          1,
+          210
+        ],
+        [
+          285,
+          415
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 474,
+      "sha256": "b1d7f14c460a9c648de1a354623f9740838ba1904b026d32b2d148897a01a5df"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadCachePolicy.kt",
+      "regions": [
+        [
+          1,
+          106
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 106,
+      "sha256": "e4bf5ecdbad909c368921ed268bf53718be54b455a3d2708e6cec806bd62638a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadRevision.kt",
+      "regions": [
+        [
+          1,
+          12
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 12,
+      "sha256": "53054b1a666dae04e33fe9fe29c721f2b90f881400a9ed1874b84652c6828195",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/PreloadSlot.kt",
+      "regions": [
+        [
+          1,
+          134
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 134,
+      "sha256": "30f65fca40818f6bda412d2e8797a1282bbca284e9661646d38cd52fde12437e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/QualityAssessment.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          237
+        ]
+      ],
+      "lines_total": 237,
+      "sha256": "f072fd7a27659b7de5f10a3fe46bad971aaf5a30d6f0f719c08afced24dc3a35",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/QualityLadder.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          64
+        ]
+      ],
+      "lines_total": 64,
+      "sha256": "ff35ebfe8629ea7e31524e2d7761f5ace945d320a27ff515e8d2f3a08142fadb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/QueueInsert.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          348
+        ]
+      ],
+      "lines_total": 348,
+      "sha256": "679d3e4b0e83333b3df9962bce18a37cc0f1a5603fdea8316b09c8ce9f48aadc",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/QueueKeys.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          286
+        ]
+      ],
+      "lines_total": 286,
+      "sha256": "f4f2093a171745d71cce03112da71447a2a391f0c9242b7f52b4c2f881b1072a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/QueueSessionPlayer.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          40
+        ]
+      ],
+      "lines_total": 40,
+      "sha256": "6d91eac2a67fec2d16407b0a75ec13d24092418c170cfbda5633e9121b4c9dfe",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ReportGate.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          292
+        ]
+      ],
+      "lines_total": 292,
+      "sha256": "bbeb63d76e0140f20191846dc0629c9e77d281637fba28096cd42298aff74eaf",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ReportGateStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          91
+        ]
+      ],
+      "lines_total": 91,
+      "sha256": "59f28b64201d2ef7adc5e16014285f72f97f983ba11454d476bd5453370f3ddd",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ResolveFailure.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          278
+        ]
+      ],
+      "lines_total": 278,
+      "sha256": "a2052500283fda38fb0c3e03fb9c6847409bfe9c71a3130339bc29fe7ba3f8f0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ResolveFailureText.kt",
+      "regions": [
+        [
+          1,
+          82
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 82,
+      "sha256": "4fe2b1534a3726b372c3a7c303de4b28365b5486854854046e57cff681d53fde",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ShuffleNav.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          71
+        ]
+      ],
+      "lines_total": 71,
+      "sha256": "208838e1a756d1c6ab98fa65d0e3edc8401683a0bdfbf428dfb124f3628e92c0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ShuffleRound.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          135
+        ]
+      ],
+      "lines_total": 135,
+      "sha256": "8c8f8a4d3cfcaaf47aff93ae6150ec1604781a53038127df28303f0dca54b7c1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/ShuffleSnapshot.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          25
+        ]
+      ],
+      "lines_total": 25,
+      "sha256": "d4521a042cf20db05d8fcac2bb02751e4b4a124659c566d1bdf8fed793bd31e4",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/SongUrlFetcher.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          426
+        ]
+      ],
+      "lines_total": 426,
+      "sha256": "06cf6f36ffc7b8295eaabfd6483acdaf1f233de42458abe3b978cfc0a947928f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/StreamBitrate.kt",
+      "regions": [
+        [
+          1,
+          18
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 18,
+      "sha256": "72b6ba60f50cb2627fd6af3da5626791f5a05f44833e33783e860f0b8f2f226d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/TransparentWaveformSink.kt",
+      "regions": [
+        [
+          1,
+          469
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 469,
+      "sha256": "15ff46726d0125a552021f6bfcd41fbe22323a03d2750937f4e940d9e19dbd59",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/player/VisualizerRenderersFactory.kt",
+      "regions": [
+        [
+          1,
+          78
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 78,
+      "sha256": "39709e01acf0d29065d5d1f91bf463551d5ce8eacf9d8ca280e7ed2e4901bd91",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PlaylistCacheCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          507
+        ]
+      ],
+      "lines_total": 507,
+      "sha256": "db8589dd1d2debf1174741206708d3ae4ee7eecd77fd672d0ab531b79bd7e843",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PlaylistLoadCoordinator.kt",
+      "regions": [
+        [
+          1,
+          201
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 201,
+      "sha256": "08d97231ff37f82cd89e1ad3b7c65337c06c4334ff307d7cd0d3bcc8c9087735",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PlaylistLoadTypes.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          71
+        ]
+      ],
+      "lines_total": 71,
+      "sha256": "83d49b66a8ac2cfb9249d64c9139022b54133ce3445a41ac90c540387af261e9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/playlist/PullToRefresh.kt",
+      "regions": [
+        [
+          1,
+          60
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 60,
+      "sha256": "e1ef86d3db718d42c63a68e6be65eb8338a140aec9e94b3a0482ed713026c760",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/power/BackgroundActivity.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          54
+        ]
+      ],
+      "lines_total": 54,
+      "sha256": "5b9440f4da6034433f08f114354b9609ecae37338e83a2943509af5e130ea049",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/MqttCodec.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          580
+        ]
+      ],
+      "lines_total": 580,
+      "sha256": "679395c186290ca505718ef8624021ee4f337d7da3c43f6cd53d6ea1c5c7b686",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/MqttWebSocketTransport.kt",
+      "regions": [
+        [
+          135,
+          141
+        ],
+        [
+          145,
+          172
+        ],
+        [
+          178,
+          189
+        ],
+        [
+          191,
+          200
+        ],
+        [
+          205,
+          211
+        ],
+        [
+          214,
+          256
+        ],
+        [
+          262,
+          301
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 358,
+      "sha256": "fdf14878395ac00d2f5fc25ba25b55dc8318caed648cba106f7a852afcd1034d",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqAccountAvailability.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          34
+        ]
+      ],
+      "lines_total": 34,
+      "sha256": "b0bcbbc0b9de753098693216c8e1a85d79b3d7d3e201d51b68df6f42a52a3468",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqAuthStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          203
+        ]
+      ],
+      "lines_total": 203,
+      "sha256": "8689a8591d8bdb19ee07d62022fb4206e17de5ca7e51dc556512c2a8299258ea",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqCatalog.kt",
+      "regions": [
+        [
+          42,
+          54
+        ],
+        [
+          59,
+          65
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 395,
+      "sha256": "0c4b3a0d176fd8463a0a1433ec988ef29e71fe5445547711fb9176a8dcaa63d4",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqCatalogApi.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          196
+        ]
+      ],
+      "lines_total": 196,
+      "sha256": "85887d9ec80eadb9bb9a8c5b76e88fc26002de2e5ca6c139db2bcbf785cc6ad7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqClient.kt",
+      "regions": [
+        [
+          72,
+          90
+        ],
+        [
+          166,
+          185
+        ],
+        [
+          201,
+          207
+        ],
+        [
+          239,
+          245
+        ],
+        [
+          276,
+          292
+        ],
+        [
+          339,
+          353
+        ],
+        [
+          356,
+          362
+        ],
+        [
+          391,
+          425
+        ],
+        [
+          430,
+          440
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 544,
+      "sha256": "1243c820c40e0b06306ca2491dee53cca09ed0d45466d9137cd79af46ec8acde",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqCookie.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          176
+        ]
+      ],
+      "lines_total": 176,
+      "sha256": "3461af75855ec6eefddac6d1c6d1b0c80e8d94d589fe4f61028d8ff17fa76503",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqDes.kt",
+      "regions": [
+        [
+          1,
+          489
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 489,
+      "sha256": "a44585c9e34dc105fc3d08ceddb0e3de724ccbe4f99f0b880b535f05c2a7a823",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqFallbackStats.kt",
+      "regions": [
+        [
+          1,
+          362
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 362,
+      "sha256": "15c67e90e478575483ec99b73995b1e73d42536f5809c047cb524ca0b5732d60",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqIdentity.kt",
+      "regions": [
+        [
+          44,
+          65
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 79,
+      "sha256": "9cc59a58151c3606cd531b1c2024f05265a9ec330daa3cee35f1479c7f063945",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqMembershipExpiry.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          39
+        ]
+      ],
+      "lines_total": 39,
+      "sha256": "b0b3ddc5b0650b91ba9c92c8fe75d5592cd3948473e81be11809759dbbcd7a22",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqMusicSourceProvider.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          218
+        ]
+      ],
+      "lines_total": 218,
+      "sha256": "c0407be1164a189ee23551de28ad60698ff0fced96a04297f84e8158abd684c1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPhoneLogin.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          249
+        ]
+      ],
+      "lines_total": 249,
+      "sha256": "2d901f2cf1c65ff53b77d068ed30d79cd10506f877ec20607f0feb322427b16a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistApi.kt",
+      "regions": [
+        [
+          139,
+          156
+        ],
+        [
+          171,
+          180
+        ],
+        [
+          182,
+          201
+        ],
+        [
+          203,
+          224
+        ],
+        [
+          232,
+          239
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 239,
+      "sha256": "d6489fc5b99231e419084f81562f61b69bb39eecd7961e435b3195ce906c6882",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistAuth.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          13
+        ]
+      ],
+      "lines_total": 13,
+      "sha256": "4b28b05b72aa99bf471a6f6cd44568fdfef85c8d985356235f105a85c597a398",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistParser.kt",
+      "regions": [
+        [
+          59,
+          70
+        ],
+        [
+          76,
+          85
+        ],
+        [
+          287,
+          296
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 320,
+      "sha256": "19454315cbcee2d4c68c431dab4d8e00df875ec33535d6941c0db99a6cf51e21",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistRepository.kt",
+      "regions": [
+        [
+          194,
+          226
+        ],
+        [
+          260,
+          337
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 337,
+      "sha256": "8ce927bd2a6e42577aa0027eb5bb4fd06ac66725b435c424bebb77ef7788efdc",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          195
+        ]
+      ],
+      "lines_total": 195,
+      "sha256": "a895741a974d10dc84737f673a1489932fdaf0cd0c6957e05872c0f369aefc9a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqProbeStore.kt",
+      "regions": [
+        [
+          1,
+          89
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 89,
+      "sha256": "a90224beef1c4175d2e8a12e59e214cc913057f3b45c82ab8a054aa2042cd775",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqQrClient.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          179
+        ]
+      ],
+      "lines_total": 179,
+      "sha256": "9eb8b319b962b2a8da03e0e974ede66714c8f4fb2719da33a95791071ef0cf9d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqQrLogin.kt",
+      "regions": [
+        [
+          1,
+          238
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 238,
+      "sha256": "7c39356c69453236b87e2971e5266bedc1b121b17d458f69175a1d8071ac78ed",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqQrMqttSession.kt",
+      "regions": [
+        [
+          113,
+          129
+        ],
+        [
+          291,
+          299
+        ],
+        [
+          321,
+          328
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 445,
+      "sha256": "1079569857bb351387dd1d094f5f93bba2b62f20cf0789dbd29cba3764149b03",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqQuality.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          184
+        ]
+      ],
+      "lines_total": 184,
+      "sha256": "396db4a0c0c0c7d9a0b7b678b02a3e8452d6b89527f2f21496f4feb48642ca4b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshCommitGuard.kt",
+      "regions": [
+        [
+          1,
+          84
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 84,
+      "sha256": "06aaf8534984b65f2483f8480ecf2207d750c1146c723cff950c2d2d0c194739",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshCredential.kt",
+      "regions": [
+        [
+          1,
+          467
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 467,
+      "sha256": "462564b0be4ce93baced8399469999ec84f6337e87b36d4f179b826a519a275d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshFlight.kt",
+      "regions": [
+        [
+          1,
+          29
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 29,
+      "sha256": "a81781e4fb414e2ec681b18e7d11e44c9d214da3f1c6ee7803c041d865d65207",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRefreshStore.kt",
+      "regions": [
+        [
+          1,
+          101
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 101,
+      "sha256": "8f037c372abc004554e913269c70a37e3c140d1b9f86c9f8120b5cfdfd32ac49",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRejection.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          208
+        ]
+      ],
+      "lines_total": 208,
+      "sha256": "3c81309a2aaa1121d0bf64203ea0494f90b3fd0002bf5e57d4177ae693f455ec",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqRequests.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          451
+        ]
+      ],
+      "lines_total": 451,
+      "sha256": "121f2f3765a7d30ac3c2f4255389bac65a1752e4494565cec35027bf5c844dd7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqSongMapper.kt",
+      "regions": [
+        [
+          126,
+          163
+        ],
+        [
+          188,
+          204
+        ],
+        [
+          206,
+          213
+        ],
+        [
+          215,
+          264
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 288,
+      "sha256": "fb9676e332969b0ab4b9359df61993f0f7f5a7a083993a0ceae34362dc7a74ca",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqTokenRefresher.kt",
+      "regions": [
+        [
+          297,
+          306
+        ],
+        [
+          308,
+          314
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 543,
+      "sha256": "4ac28513b60e03830d3d2ec1dda687ffe86c059780137c61b1f93668a0d82065",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqTransport.kt",
+      "regions": [
+        [
+          1,
+          71
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 71,
+      "sha256": "fa54317f80742516ba78f4c2845cdddb04aadec5a94169a4b6ea5b144d615e72"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QrcDecryptor.kt",
+      "regions": [
+        [
+          1,
+          99
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 99,
+      "sha256": "8a1fe14a7e4efda718966b4ed7ccc5fdfa0fa3082123a5c7ad19ce18251e55c9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QrcParser.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          232
+        ]
+      ],
+      "lines_total": 232,
+      "sha256": "ce9e9e2b94c2fce08572b415b62c75d534b8f03c398309b32772813bef57e64f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/reco/ArtistReco.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          193
+        ]
+      ],
+      "lines_total": 193,
+      "sha256": "38d0889d40623046236f91ee4739d09cfe267a27854504a265e30de0d96aabcc",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchLatencyTrace.kt",
+      "regions": [
+        [
+          1,
+          128
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 128,
+      "sha256": "76449f42a95dc2bef5a4b7ea309d202036df3e91632d95fc9cd09396e29fbb0a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchPageCursor.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          18
+        ]
+      ],
+      "lines_total": 18,
+      "sha256": "92528a81a22db97f749c2c2e296a871d1f96bf4d5652b124156c6fa5c570dbfc",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchPaging.kt",
+      "regions": [
+        [
+          1,
+          104
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 104,
+      "sha256": "0b7c5288f0840a270ca9a0d0b59662ff6644a10382a2b28d0f347057df35ced2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/SearchRanking.kt",
+      "regions": [
+        [
+          1,
+          245
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 245,
+      "sha256": "2968c47957b62c60f3d3508d33fafac03a4e90314f721b3fc206e872fdf69b6e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/search/TrackAvailability.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          233
+        ]
+      ],
+      "lines_total": 233,
+      "sha256": "f5a086494a957bc88e02c87bb6c6f18656bd0aa4b4a3c0ec8848a4bdd9cba530",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterLayout.kt",
+      "regions": [
+        [
+          1,
+          222
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 222,
+      "sha256": "b76cf5b2bba83f9a7908bccd3271ad9c5008fb6253c0c3df2c8f960aca641b7c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterRenderer.kt",
+      "regions": [
+        [
+          253,
+          283
+        ],
+        [
+          288,
+          303
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 433,
+      "sha256": "16f40db6d101b0d425dbaac95c81714211b5aa1e9a9ce35fc1d26fada871974c",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareActions.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          225
+        ]
+      ],
+      "lines_total": 225,
+      "sha256": "79a91a5d2fc5fcbc6709c9b175f7088ca7c249550dd1d30032ef3f042ace5d6e",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareModel.kt",
+      "regions": [
+        [
+          1,
+          108
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 108,
+      "sha256": "402c412c1511ab3081b3e32861e12e611a2d60b70c223fcb6244869c5302f030",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricSharePoster.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          141
+        ]
+      ],
+      "lines_total": 141,
+      "sha256": "c8e5880228d7b8ac88eb4db0ef1822daa7732d67cf3c5b594c2fd37f76af5159",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareSelection.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          161
+        ]
+      ],
+      "lines_total": 161,
+      "sha256": "01eec41bbf0a55647f80ef77dc4d85cff7b79853c7b92eeca055f039fed6b94d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareText.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          154
+        ]
+      ],
+      "lines_total": 154,
+      "sha256": "f3d7ec206388a990c94756e9c7e5c0183944b1b50c64b73b1782201bd58a38b6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/AlbumNavigator.kt",
+      "regions": [
+        [
+          1,
+          283
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 283,
+      "sha256": "d04d34343a2620e8d70e512ad8d5664623c88138ec1f0e7259961964f36bc561",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/ArtistNavigator.kt",
+      "regions": [
+        [
+          1,
+          215
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 215,
+      "sha256": "98bdf02b175061ab0d499def5083011921083bd6c180ad5546e46a29b5757ef9",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/MusicSource.kt",
+      "regions": [
+        [
+          1,
+          438
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 438,
+      "sha256": "b04d8c0508a21a1aea54b3cab89db0a3de4997e51e7a3d147c87e53df6965858"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/MusicSourceProvider.kt",
+      "regions": [
+        [
+          1,
+          136
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 136,
+      "sha256": "a3e39cbbdf6751c3af959b65f30c33c098f3cb8b249aaa3aa8fbe2680349c5fd",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/NeteaseSourceProvider.kt",
+      "regions": [
+        [
+          1,
+          127
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 127,
+      "sha256": "5e4dc00dab4a0514d22080bc2a5563b0bb98e5184e1a7d700779c36f9e98c4a4",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/PlaylistModels.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          160
+        ]
+      ],
+      "lines_total": 160,
+      "sha256": "de850b9640bfe64aa5624636664e830b2a046d915daf08fc84b663af8e7945ff",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SongSourceExt.kt",
+      "regions": [
+        [
+          118,
+          126
+        ],
+        [
+          128,
+          134
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 135,
+      "sha256": "4aebf0ed1361ed11c7eb34f771653c9fbce0bc4668a96138a29e9949d110cf25",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SourceIdDomain.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          118
+        ]
+      ],
+      "lines_total": 118,
+      "sha256": "dd6c813cbee9807e53bacb6e45af89c738f29980b3a79b946b372765a879a562",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SourceRouter.kt",
+      "regions": [
+        [
+          1,
+          156
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 156,
+      "sha256": "2788d7ce46694b312f636d72898000cc0870bb2a95dfbbd1001cfd66ebc56988",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/TrackKey.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          165
+        ]
+      ],
+      "lines_total": 165,
+      "sha256": "affb136d0e21bd05fc16065279fbe9c163669da2a6f13927261b6c5521b3f0df",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsCodec.kt",
+      "regions": [
+        [
+          1,
+          207
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 207,
+      "sha256": "36d1ba8fdd5a306f8c32443fdfe084871cd76190977b44f7940a46bd6e663b59",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsCommitGate.kt",
+      "regions": [
+        [
+          1,
+          99
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 99,
+      "sha256": "e82bd4feb820c01c6c271ea0e1efead317d6196bd39dd7dfc294855388a01757"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsMath.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          325
+        ]
+      ],
+      "lines_total": 325,
+      "sha256": "ec2afe5461d1e3f4ff06e0c8f6e9497846eaae201856f2318473547d0b0d8f8e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsModel.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          226
+        ]
+      ],
+      "lines_total": 226,
+      "sha256": "82d40954d025ef1aad4715ad38f3648ec76d0021f506b7c3611177a4129b888a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsRecorder.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          288
+        ]
+      ],
+      "lines_total": 288,
+      "sha256": "669ae872fe0b901d5bffc3094838e74bb54dd18e3c94ad99ada1d74383968b5e",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/stats/StatsStore.kt",
+      "regions": [
+        [
+          72,
+          93
+        ],
+        [
+          100,
+          258
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 258,
+      "sha256": "6b043f96ae9ea0ea96481657e1d79c84d4f63bf9000f18b40edc75074bf84e46",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/BottomOverlayInset.kt",
+      "regions": [
+        [
+          1,
+          30
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 30,
+      "sha256": "5b40eff1e506df0488dd4b14001c9a2857c16346a3c711441ae1d00d1bd46636",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/CustomBackgroundLayer.kt",
+      "regions": [
+        [
+          49,
+          57
+        ],
+        [
+          61,
+          75
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 97,
+      "sha256": "1c142beac3659e96a8d31134ca4034c924800d098d152c1fe7be54d4e4c88ddc",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/HeightClass.kt",
+      "regions": [
+        [
+          1,
+          35
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 35,
+      "sha256": "4325df26d668c04d822ebebaf5eb50afff7dd72c5a6b95ad342b7413e4f24056",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/ResponsiveContent.kt",
+      "regions": [
+        [
+          1,
+          66
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 66,
+      "sha256": "c29125732748b55b4496024442b26a6c6ba4bed1384a29691a507c6263eb41d1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AddToPlaylistSheet.kt",
+      "regions": [
+        [
+          1,
+          331
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 331,
+      "sha256": "16bba7ba8e1d030a8bb125b7c76018b8739848f0fa6bb8a7260a4b15ad8b73a6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AlbumSourceFilterRow.kt",
+      "regions": [
+        [
+          1,
+          110
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 110,
+      "sha256": "2798b0497bf490149d641fa3f5e96b4ddd20a1dd0f033d2a2546173a10efc6b2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AlbumSourceTag.kt",
+      "regions": [
+        [
+          1,
+          179
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 179,
+      "sha256": "0b06ae03d71759f02864a79b095495e0f8ee1382ef8720f9818d0bf3ba83b136",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AppSnackbar.kt",
+      "regions": [
+        [
+          1,
+          193
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 193,
+      "sha256": "e905ff5abf37610235fc6220aac22ed7baccb122d72c870960c08a5895f2dc91",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/AppVisualModifiers.kt",
+      "regions": [
+        [
+          1,
+          135
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 135,
+      "sha256": "a0920b1e672f4cd976b3f9f113b818e511698d46e39508068f94107877733b2b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ArtistRecoCard.kt",
+      "regions": [
+        [
+          1,
+          102
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 102,
+      "sha256": "39adb17de6e690452449b545adfe5e79d06888fdd869615ddf66fa5fcfa09b2a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ArtistSearchItem.kt",
+      "regions": [
+        [
+          1,
+          113
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 113,
+      "sha256": "0c0fc926fac7ba9fbe4300a220f70a68f9f5af1ccd8367686974317f7fe36aaa",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BackgroundActivityDialog.kt",
+      "regions": [
+        [
+          1,
+          83
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 83,
+      "sha256": "84daeadc6410a2cd17b9008aaea6bf214bb32f7e65fdd2f73192493308340add",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliAccountBlock.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          152
+        ]
+      ],
+      "lines_total": 152,
+      "sha256": "6e7d4737d6679df202e082fb34317f40fe375795fc3491aa4f4460d691182020",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliQrLoginDialog.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          331
+        ]
+      ],
+      "lines_total": 331,
+      "sha256": "ade34dc0dd3f76f9b90559b40df8ea5ff8b39a7c568a9ad46cc9b8f2510d2753",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          135,
+          205
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/CreatePlaylistDialog.kt",
+      "mode": "full_executable_code",
+      "functions": [
+        "onCreate 与对话框收尾"
+      ],
+      "lines_total": 181,
+      "sha256": "e697e6b3dd13e10f1c19f1d1c694430a7d581829d236284ad13ff512f593acb7",
+      "regions": [
+        [
+          1,
+          181
+        ]
+      ],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          350
+        ]
+      ],
+      "lines_total": 350,
+      "sha256": "efc7f7b77a188ab018149c9fd00d833d3d1f0056bb4217b9af88381fab72209d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/EditPlaylistDialog.kt",
+      "mode": "full_executable_code",
+      "functions": [
+        "onSave 与编辑提交"
+      ],
+      "lines_total": 179,
+      "sha256": "d8a3f28837f028798bc9310f4c261c732ddd0e7f76f9c7026a9b3d876b0fe0be",
+      "regions": [
+        [
+          1,
+          179
+        ]
+      ],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/ListItemAppear.kt",
+      "regions": [
+        [
+          89,
+          103
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 109,
+      "sha256": "39bd6f851275eb99115db81b33a7172e1ef9639dc960f88566a49c8b08074d82",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/LoginCredentialAcceptance.kt",
+      "regions": [
+        [
+          1,
+          58
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 58,
+      "sha256": "b8627f921b11dd6b984180e434def5b79a51375f692cf9a3e4dc9586477de7e6"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt",
+      "regions": [
+        [
+          1,
+          399
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 399,
+      "sha256": "be03649e2f9f4a81f1dc5e54ae302abcc0aa8e342d0c89c82c8a1980cef301a8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/PlayAllDialog.kt",
+      "regions": [
+        [
+          1,
+          147
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 147,
+      "sha256": "ab72123e93a3bb5ad7350f7b8ff0a5e4b3f55e8de7a0518bdc9ce1c882664555",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/PullToRefreshBox.kt",
+      "regions": [
+        [
+          25,
+          31
+        ],
+        [
+          73,
+          138
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 162,
+      "sha256": "c972bb7f199138bd7809c0df7de9bd7b4f4385e246c4e6819ebef055fade627a",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqCaptchaCookieGate.kt",
+      "regions": [
+        [
+          1,
+          53
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 53,
+      "sha256": "49a3fe3ebe0c4c764446eaff6c5b35094ebc5c20f8a46bbbe809f61ae04e7871"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqCaptchaOverlay.kt",
+      "regions": [
+        [
+          90,
+          185
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 213,
+      "sha256": "4e257eab12a94aab3793a5c9e427f7be03ad88bca9884ae8dd6ac8f45d5b3f60"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqLoginOverlay.kt",
+      "regions": [
+        [
+          1,
+          271
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 271,
+      "sha256": "9ba3dd3efa3a58066103d7deb51098d00d42cdadea5cc759565fdcaf1bb66feb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqPhoneLoginDialog.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          365
+        ]
+      ],
+      "lines_total": 365,
+      "sha256": "a78da1911049aabc5aa077ff48460333ec295d9fb54abafdda2f3e34e56275af",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqQrLoginDialog.kt",
+      "regions": [
+        [
+          1,
+          251
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 251,
+      "sha256": "e9d3488f1b282c51dca80e448131b864e2b193541efdf96175513ae0651dd0b5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QqScanLoginDialog.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          275
+        ]
+      ],
+      "lines_total": 275,
+      "sha256": "0d146a509d22e2fd0429670ced2ce37702bc8621bd17950d8df974c5e7ffee21",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QrLoginDialog.kt",
+      "regions": [
+        [
+          50,
+          63
+        ],
+        [
+          94,
+          104
+        ],
+        [
+          135,
+          149
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 297,
+      "sha256": "85919e6c863ee2b2ef50a6c38ee669f35ccfb448e0cb8034d4c928417678ce1f",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/QrScannerScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          296
+        ]
+      ],
+      "lines_total": 296,
+      "sha256": "09e38943a640a0b4fa10e40d3dbfda2131b20b4b6c30459da471329316596fa8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SessionBanner.kt",
+      "regions": [
+        [
+          1,
+          65
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 65,
+      "sha256": "fce1b66d68238a236650bf90564138dd073944941a30a51bd026eddeb154e96f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SettingsGroupCard.kt",
+      "regions": [
+        [
+          1,
+          176
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 176,
+      "sha256": "c094b767ced402228d3ff7c1217139d0694a3157ec75bb0963fe76f97be3dbfc",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SettingsRows.kt",
+      "regions": [
+        [
+          1,
+          290
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 290,
+      "sha256": "92051b3d11508d8f31d13056f8053aeef80a1495c8f85acfc3bb13ccecd520cf",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongCard.kt",
+      "regions": [
+        [
+          1,
+          324
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 324,
+      "sha256": "be73aaa2e7fbff45d8b62552f98e9142245a4f30061ed4eecea1d5ee136980c7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongMenuSheet.kt",
+      "regions": [
+        [
+          1,
+          163
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 163,
+      "sha256": "63c2beaf7c4c5611d4c07e4bf800ef82bd9a4adf1b214aecec9e6c305e6c5517",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongMenuSheetLayout.kt",
+      "regions": [
+        [
+          1,
+          88
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 88,
+      "sha256": "4c9c5ab761ccf0d0b861e0fbbdfccdeb7d1cfc549bbf435fd4e28ec4a15abee5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SongTags.kt",
+      "regions": [
+        [
+          1,
+          176
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 176,
+      "sha256": "4cde9e0dacdd273d1f11d652dd578ab000d81900754f45d60a812d9c4f5dfc61",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SourceCounts.kt",
+      "regions": [
+        [
+          1,
+          205
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 205,
+      "sha256": "29aa67cb2f779713b8037f6296478dac993f0c4127bc4548f6c8fdd979926b20",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/SourceFilter.kt",
+      "regions": [
+        [
+          1,
+          155
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 155,
+      "sha256": "654cea99cf4c9a1a136359b9f68d2718b8e3488955e9f4eae6dae6e7fcada68b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/UpdateBanner.kt",
+      "regions": [
+        [
+          1,
+          123
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 123,
+      "sha256": "120f01f76878a5cb2473abb6757a9f8debf71fcfbd82757da35b77ee38b6ddb5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/UpdateManualCheck.kt",
+      "regions": [
+        [
+          1,
+          55
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 55,
+      "sha256": "50934c6159c1e490b4b0e9ebb9078215b64ee5a405673ce4d3de2e1c012ea207",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/components/VipStatus.kt",
+      "regions": [
+        [
+          1,
+          44
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 44,
+      "sha256": "bca64e59eb7287967b5a844a8af93c584493b0d40327147c9ed90fbce567efa6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/CelebrationStrings.kt",
+      "regions": [
+        [
+          1,
+          87
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 87,
+      "sha256": "7856b9934c17e71e1c19764d3f67a597df4e5e086ae965ef8a39c18c55cfc00b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/LanguageManager.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          81
+        ]
+      ],
+      "lines_total": 81,
+      "sha256": "a1962d5e928aecf11fbd0bfb2c02b40d02166384bda9ec32718a0ecab7151f18",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/Strings.kt",
+      "regions": [
+        [
+          1,
+          2334
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 2334,
+      "sha256": "1520ab1fd831c5bb08df6e0f45b7fe0e3059f151655124c9dfa8a53ed2c4c713",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt",
+      "regions": [
+        [
+          647,
+          653
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 725,
+      "sha256": "02c05f8b4f8694762857008891950c8a01efe82a9a26b018e8fe1411215de8f0",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt",
+      "regions": [
+        [
+          647,
+          653
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 726,
+      "sha256": "2149ccaaa936dba324b25586d203a729267bb6556d8eae33dcb8627becb60af2",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt",
+      "regions": [
+        [
+          645,
+          651
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 723,
+      "sha256": "98d8066479377b5d21eb3aaa769b45580fb8958097c88d481792fba834a53a8b",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt",
+      "regions": [
+        [
+          644,
+          650
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 722,
+      "sha256": "bf7ddd57c85436f07cda71a2e5823c38a4085b5ec906f3140abceb34936699a5",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt",
+      "regions": [
+        [
+          644,
+          650
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 722,
+      "sha256": "0efc26a6be53e502ae64fe63401efde9d782de12ae285f330d475c93fd74fcc3",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt",
+      "regions": [
+        [
+          647,
+          653
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 725,
+      "sha256": "c155344f59318e4c55e5c4523fcbf7759b4216c459c221830a94fe90eda41b15",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt",
+      "regions": [
+        [
+          645,
+          651
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 723,
+      "sha256": "8a36be06f179cc056c06e6bed6823d9f9aa4b8d0d7612de5df837103d8b3a45f",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt",
+      "regions": [
+        [
+          645,
+          651
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 723,
+      "sha256": "f15f49cf0cec0748af4c6466bc4eb06e1b4221de45211bce92b929ec599ef8be",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/navigation/NavGraph.kt",
+      "regions": [],
+      "mode": "partial_call_chain",
+      "review_kind": "partial_diff_preview",
+      "lines_total": 608,
+      "sha256": "b60ca92b710da51448937a66f77a7c5130d4acf6808dd1366c455965717b8783",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc",
+      "functions": [
+        "NavRouteCodec.encodePathSegment",
+        "NavRoutes.song optional payload builder",
+        "SongDetailScreen argument consumption preview"
+      ],
+      "note": "该批 diff 输出被截断，移除整段行覆盖声明，仅记录确实看到的局部构造与消费。"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/AudioVisualizer.kt",
+      "regions": [
+        [
+          963,
+          990
+        ],
+        [
+          995,
+          1013
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 1598,
+      "sha256": "1ea96c5f70c6d07e24ce1df60c9d6d42e495620ee01758f46463a093998440db",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/CoverGeometry.kt",
+      "regions": [
+        [
+          1,
+          52
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 52,
+      "sha256": "1dc2e7940996ade7dfc0414870f846715c5077c5d73b32e21d9db950da1315f3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/FullPlayerControls.kt",
+      "regions": [
+        [
+          423,
+          431
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 896,
+      "sha256": "11c99d18508d784d51c646a46cb7692dd84e3f95ed600039d2e6a682757634b1",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsAutoCenter.kt",
+      "regions": [
+        [
+          1,
+          107
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 107,
+      "sha256": "cd8959982ed8b690bd849dda3a1fcc288781c4f2881a8008337b0db02504941c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsPanelScroll.kt",
+      "regions": [
+        [
+          1,
+          256
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 256,
+      "sha256": "102052a1967be552e5c89a36f90f840e420c130094a66ab7c4b801802a4363bf",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsView.kt",
+      "regions": [
+        [
+          1,
+          781
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 781,
+      "sha256": "d0d235350afdb74467643c341201a9f2681fe33b61d9c07225f74042fd762e23",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/NcrustLyricsPanel.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          960
+        ]
+      ],
+      "lines_total": 960,
+      "sha256": "6a208c53f3f3a20566aaa26621412af8e676acf09596c6d2b96ae066bf7d3b9b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt",
+      "regions": [
+        [
+          68,
+          73
+        ],
+        [
+          205,
+          220
+        ],
+        [
+          384,
+          411
+        ],
+        [
+          430,
+          461
+        ],
+        [
+          483,
+          490
+        ],
+        [
+          510,
+          517
+        ],
+        [
+          521,
+          539
+        ],
+        [
+          604,
+          609
+        ],
+        [
+          1013,
+          1023
+        ],
+        [
+          1034,
+          1048
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1064,
+      "sha256": "28e9b223531bff3c4e187ea527f049e7c6da5ceb5368ca3a32be497bf9097971",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardBackdrop.kt",
+      "regions": [
+        [
+          1,
+          188
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 188,
+      "sha256": "8acf34522506cb8051fc6a0aabe56e8f934182e495a9824d4b6349e77f8b244c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardEffects.kt",
+      "regions": [
+        [
+          1,
+          161
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 161,
+      "sha256": "d84f4782bc384d5812152c9f5645bb2edc365353da6b092d301783d147297697",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt",
+      "regions": [
+        [
+          125,
+          168
+        ],
+        [
+          190,
+          198
+        ],
+        [
+          240,
+          256
+        ],
+        [
+          294,
+          301
+        ],
+        [
+          437,
+          450
+        ],
+        [
+          480,
+          505
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 558,
+      "sha256": "de0b7f102ca10ad367f3998cd0979b3dc0498b0ef432483ef0c3a2d9fcdeb4ee",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardLayouts.kt",
+      "regions": [
+        [
+          205,
+          212
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 639,
+      "sha256": "fc433bd4a2565e01a951eed39a405babfd9fdd9dd60d950221abe976116eb7cd",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardOverlay.kt",
+      "regions": [
+        [
+          1,
+          95
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 95,
+      "sha256": "6919ac4d19634dbd6c9cb517185e2185f17a2216c14dc5d0d5dca6abff82883e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardOverlays.kt",
+      "regions": [
+        [
+          1,
+          343
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 343,
+      "sha256": "604f4b097e0b58bdd904a6166ecef55f48514354bf60961296883e1cb56eee36",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardState.kt",
+      "regions": [
+        [
+          28,
+          35
+        ],
+        [
+          76,
+          85
+        ],
+        [
+          110,
+          145
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 398,
+      "sha256": "a6ce0e376592775fba048b76de7fddc0f56f3fb69a780d2441a43e536fd22aa7",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardTray.kt",
+      "regions": [
+        [
+          142,
+          150
+        ],
+        [
+          183,
+          189
+        ],
+        [
+          216,
+          222
+        ],
+        [
+          269,
+          275
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 470,
+      "sha256": "5708a2efe6394d162acccc2f98e060dcd97bac726c83c8f81b51b8357aefa3b6",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerDragSnap.kt",
+      "regions": [
+        [
+          60,
+          94
+        ],
+        [
+          125,
+          133
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 143,
+      "sha256": "5dde0c04f1f3ded8854cfece1fcf6ef3582c6e01c060d2b6fe59a97701250636",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerLayout.kt",
+      "regions": [
+        [
+          1,
+          303
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 303,
+      "sha256": "e5f16741296c7a0c80dcbf16bc81dd2c5c18d1bb8be31db2e5df0faf0a414b46",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/QueueView.kt",
+      "regions": [
+        [
+          60,
+          190
+        ],
+        [
+          228,
+          470
+        ],
+        [
+          593,
+          685
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 726,
+      "sha256": "cdcc3e63c7d76869c3cd1375b0bf920074c32f3f1739c4dd1fccaa8a5ebc735a"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/SlimProgressBar.kt",
+      "regions": [
+        [
+          1,
+          241
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 241,
+      "sha256": "43661fe50e45a620db98b38d8e2f25121ba8ba97a4c823b7efb9c0d67c43a029",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/ThresholdScope.kt",
+      "regions": [
+        [
+          1,
+          26
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 26,
+      "sha256": "df5d8be1273aecf30c1bf22a226ee0bb100da4289a6f27fed749138d17dccade",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/TrayLayout.kt",
+      "regions": [
+        [
+          1,
+          236
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 236,
+      "sha256": "88d1abc54897b361aa3f005e9fa68c14ed6d8ce8e2e0a0c4d1229b0c4fdaec98",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/TrayLyric.kt",
+      "regions": [
+        [
+          1,
+          75
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 75,
+      "sha256": "9960fd95fbd930cb93edf746d9f5de0f4162d2d658f6f08139fa38fe6334499f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/WaveformRing.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          1432
+        ]
+      ],
+      "lines_total": 1432,
+      "sha256": "0481ad7d9168dbb5b15e51d4195cff6df632b9c962c3fd120821e93b55ffa782",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/CoverBlur.kt",
+      "regions": [
+        [
+          1,
+          443
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 443,
+      "sha256": "a0f3481ecc4d2da13c9a6835ed85a981a555a52e2d9c3addabca5d77594893df",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/DisplayRefresh.kt",
+      "regions": [
+        [
+          1,
+          184
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 184,
+      "sha256": "dfadfeb23d89d87154625825c9e6b23f01d2f09bf04d7b41939f5fd45f63cde7",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBackdrop.kt",
+      "regions": [
+        [
+          1,
+          335
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 335,
+      "sha256": "b131ca22a0b989c2a5e3d842a1f4032260df8cd771bffcb7de2c5b47c9aecb70",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBindings.kt",
+      "regions": [
+        [
+          1,
+          267
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 267,
+      "sha256": "ec7bc2f11e54ed4a21670fc60f36542cb8a07ba2e00e88f1bd564510cc854793",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionClock.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          276
+        ]
+      ],
+      "lines_total": 276,
+      "sha256": "be67a81e9355f8436bbcf95e764a8a17632fcdb7a6c681d182b60a98b2f21f9e",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionEffects.kt",
+      "regions": [
+        [
+          1,
+          471
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 471,
+      "sha256": "00792d52b818784ed9e440ed67af314dbcd511fd5384251f463237194db50fec",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionEnvelope.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          606
+        ]
+      ],
+      "lines_total": 606,
+      "sha256": "afa1f098bfae87bf08717b920ef9c2c49711293c4633595e5e3fb4931fadecc8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionPrefs.kt",
+      "regions": [
+        [
+          273,
+          281
+        ],
+        [
+          290,
+          312
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 509,
+      "sha256": "d0ec880f601a9d8fefdce876d0b4e0407e2b24fe2fc23aaf5adaed206989c8b9",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandBallistics.kt",
+      "regions": [
+        [
+          1,
+          542
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 542,
+      "sha256": "6172155fd338d129e8ada7c5c6ce7bdc1ecda351bf82857c194950f62609f45e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandColorRoles.kt",
+      "regions": [
+        [
+          1,
+          148
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 148,
+      "sha256": "a0402d3e9ee21020fce253acecbe5cdca8a08252423305e48586f045561dde6d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandDominance.kt",
+      "regions": [
+        [
+          1,
+          303
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 303,
+      "sha256": "5790226ef072dd4126b3b4d6cf1f630d219476c64b1a4450ec1935225375c631",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandLanes.kt",
+      "regions": [
+        [
+          1,
+          143
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 143,
+      "sha256": "27f4d3a38cb92b2cf9c254a550607a3dfec834be120595801ed9bfbb7b90d1e3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandMarkerGeometry.kt",
+      "regions": [
+        [
+          1,
+          187
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 187,
+      "sha256": "8bfc3deb2c8f4902a310601843f4e9b2bfd33511d09099e209476d348aa64487",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/BandScroll.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          123
+        ]
+      ],
+      "lines_total": 123,
+      "sha256": "70f47722d35319efb32376488118e84fc80130b9d243b22d2906c1a54b9584ae",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/FrameBudgetPolicy.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          112
+        ]
+      ],
+      "lines_total": 112,
+      "sha256": "4ec0c546ad2152207fa20f673e6eec21ebf9aff2368c6fa58d28a31a6313e374",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerFrameMonitor.kt",
+      "regions": [
+        [
+          1,
+          91
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 91,
+      "sha256": "252c439fb346bdb6e588ef9ba329e0ea8de98b6f7fe5b761bc8210b799b76034",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerPrefs.kt",
+      "regions": [
+        [
+          1,
+          337
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 337,
+      "sha256": "f1223af3726a8b678c134ffd6d3bbab67383516f681cf6591375893505182a88",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerStrings.kt",
+      "regions": [
+        [
+          1,
+          151
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 151,
+      "sha256": "15b1f326fc76b70aac4060e9b0e17dc6042af27325738cdae7f694cba339b611",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/VisualizerTier.kt",
+      "regions": [
+        [
+          1,
+          261
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 261,
+      "sha256": "d7f18ae2202bd6f8a96978dbaf8f2c1745802ff1b941c0edb1967e2340af70a2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformCurve.kt",
+      "regions": [
+        [
+          52,
+          81
+        ],
+        [
+          88,
+          97
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 193,
+      "sha256": "1a6452e9e94407883464caec5f4320fc664a2132e31163a6cba1fc7061bb613b",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformEffectsState.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          401
+        ]
+      ],
+      "lines_total": 401,
+      "sha256": "63e098c30d7a64b2837f7a45e04cb09c1bcc2cd17c03be418d7e394fda794e6d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/player/waveform/WaveformIsolation.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          42
+        ]
+      ],
+      "lines_total": 42,
+      "sha256": "2d34565b6815a3ec9aeb1915677c48c6eb9b2ce2feecd1841c6f2fe074a767ba",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AboutScreen.kt",
+      "regions": [
+        [
+          1,
+          259
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 259,
+      "sha256": "f146dce716469c0f3ee30fa7e9b57f11b214e908bd5c61d5ae6ef795dc09e86e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumDetailScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          455
+        ]
+      ],
+      "lines_total": 455,
+      "sha256": "d5afd1e97fec3fef26798214fcd753989c29b49679fdcac35abf06998f5f9e75",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/AlbumSearchItem.kt",
+      "regions": [
+        [
+          1,
+          99
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 99,
+      "sha256": "0016cb46fde2f29ffe3aceb7a6a3e6b82230777254acee121d62db757b90d424",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/ArtistDetailScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          526
+        ]
+      ],
+      "lines_total": 526,
+      "sha256": "c613fb3e999b9e240740b4d5917a85912303d707e1aeee56658294c0898511d6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/CacheUsage.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          93
+        ]
+      ],
+      "lines_total": 93,
+      "sha256": "b5ac86b28f67aeeaba3f45ffa782285f92f55c927bfeb38431965c8df7a1bf25",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/HomeScreen.kt",
+      "regions": [
+        [
+          123,
+          149
+        ],
+        [
+          185,
+          205
+        ],
+        [
+          207,
+          238
+        ],
+        [
+          240,
+          247
+        ],
+        [
+          265,
+          274
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 898,
+      "sha256": "33ce48e7f3baf4a70d89184276c73d2cc7f69b62dbfad65d1b0cb1cf0d0fabb3",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryPlaylistsTab.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          838
+        ]
+      ],
+      "lines_total": 838,
+      "sha256": "0d62f8f38e7d4ad0d018ef3672de067130f3e27390f3bc45c048775f3a99b35e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibraryScreen.kt",
+      "regions": [
+        [
+          290,
+          305
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 784,
+      "sha256": "bf9bb64335b63082490eb7060d78e127708bcdcb8d8e8bc5117c56153abc91d5",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LibrarySectionFoldSetting.kt",
+      "regions": [
+        [
+          1,
+          142
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 142,
+      "sha256": "0e750c0df703b08eac39323e1f9eea93dfc81224b8efb782cda59b206795b6d3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/LocalPlaylistDetailScreen.kt",
+      "regions": [
+        [
+          197,
+          211
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 346,
+      "sha256": "0f5f9885faa91fc9c4fc5c7ba96cdaf3ca9542b6a6647ce902c51a672ff15072",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/OfflineCacheOverlay.kt",
+      "regions": [
+        [
+          1,
+          609
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 609,
+      "sha256": "77f58fa186728ad3412e433784fe29524db5898ff824614fc5934a89e0ffea8b",
+      "carried_from": "2026-10-27-2052 identical SHA",
+      "this_round_regions": [
+        [
+          310,
+          329
+        ],
+        [
+          590,
+          609
+        ]
+      ]
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistDetailScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          326
+        ]
+      ],
+      "lines_total": 326,
+      "sha256": "0193077a2338a5e738a8b2745ef83d4e5c0cea0872742d36e9f4af07aa94219a",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/PlaylistLayoutSetting.kt",
+      "regions": [
+        [
+          1,
+          132
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 132,
+      "sha256": "9f4892e6c1ba33cd5e2dcdc0cc5b19d047de7758f82ee568e2d54ab684a822a6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/QqPlaylistDetailScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          262
+        ]
+      ],
+      "lines_total": 262,
+      "sha256": "c99e9523cc2b1c893b1e4777040f69d9a269746f38b22f91a1af36161b588a37",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SearchScreen.kt",
+      "regions": [
+        [
+          143,
+          158
+        ],
+        [
+          186,
+          192
+        ],
+        [
+          195,
+          201
+        ],
+        [
+          744,
+          750
+        ],
+        [
+          810,
+          816
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "lines_total": 1228,
+      "sha256": "c0516f6249962ed89e211a8eab6f28e184ec971ea5bd84940533a0111306bc26",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsAccountSection.kt",
+      "regions": [
+        [
+          20,
+          26
+        ],
+        [
+          45,
+          57
+        ],
+        [
+          317,
+          342
+        ],
+        [
+          590,
+          750
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 771,
+      "sha256": "94459e54c4b34407fd45fc6d952b337eef3789cc97cd23a71453c7dbcf17f1ca",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsGroupScreen.kt",
+      "regions": [
+        [
+          35,
+          43
+        ],
+        [
+          390,
+          445
+        ],
+        [
+          869,
+          889
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1316,
+      "sha256": "ea56820d26df46222a1b9f90a283d5baef1b712ffefde3ae517fa4ef41ec6a98",
+      "review_kind": "changed_hunks_and_recorded_ranges",
+      "diff_baseline": "4d3233c",
+      "diff_head": "e56adcc"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SplashScreen.kt",
+      "regions": [
+        [
+          1,
+          73
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 73,
+      "sha256": "ff942fdab75aefcfa3ab7987dc2faab04ec17af3cd60a0ba535b32eeb5fbd186",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/StatsScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          611
+        ]
+      ],
+      "lines_total": 611,
+      "sha256": "2d367baca49bd9a7b68546047da2e397a6a4655022befb31fcdf22ef7e398f2f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/UpdateScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          479
+        ]
+      ],
+      "lines_total": 479,
+      "sha256": "3f5b4250e0ebc8cd2acc4e28e7e179e13a8646257043ec0a8fd77b88e3d65909",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/UserScreen.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          156
+        ]
+      ],
+      "lines_total": 156,
+      "sha256": "df8fc19d08d4d21f8cde8ea654071eccc9e78045a035733fe5c6849976bb4b0e",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsGroupRoute.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          58
+        ]
+      ],
+      "lines_total": 58,
+      "sha256": "5750fc53425b2fb9438b8d971be40bad77c68927e8e5fd4a60dcc60eaa699453",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsRegistry.kt",
+      "regions": [
+        [
+          1,
+          1286
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 1286,
+      "sha256": "39c7ee61b2adc6111bbde031e5fef6a99449e7126f14d4d4f13362a6704424ec",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsRenderPlan.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          231
+        ]
+      ],
+      "lines_total": 231,
+      "sha256": "a52846e7446e1f025688fe21ebb2628d8c7b4e4bc67824f237580f1d14e92195",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/settings/SettingsVisibility.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          352
+        ]
+      ],
+      "lines_total": 352,
+      "sha256": "2e22a89acd18282cc43fb365c05bd2bc1c7b881e621eeb575cca638b7ade1413",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AccentSource.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          160
+        ]
+      ],
+      "lines_total": 160,
+      "sha256": "89e32c4fa2ad374c7b34b9f06a5832f3b83154299aabe332e71c4bcc629f5680",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AccentSourceSelector.kt",
+      "regions": [
+        [
+          1,
+          82
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 82,
+      "sha256": "2c95f705454c15814ce99f9a5009687b1107f1d127fd93339a7d7689ea25b722",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AppMotion.kt",
+      "regions": [
+        [
+          1,
+          379
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 379,
+      "sha256": "9a67d25b25955d2244c251400cb515f30f498c26590331998c086e76b8ff7b62",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/AppShapes.kt",
+      "regions": [
+        [
+          1,
+          116
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 116,
+      "sha256": "5bbcd834330d7cadabae2f947ac829240339f62be8e62722f31b5399dc143116",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/BackgroundImageManager.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          150
+        ]
+      ],
+      "lines_total": 150,
+      "sha256": "ae289e121096ccd0412cdf1e16c58441eb87fb0a689d64afcc474ce83b423df6",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/CoverTheme.kt",
+      "regions": [
+        [
+          1,
+          136
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 136,
+      "sha256": "1e5ece4caece6d70f0ced2c0edff479b1c05a6952b5ebb4e00a1439f61d570f5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/MarkdownText.kt",
+      "regions": [
+        [
+          1,
+          184
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 184,
+      "sha256": "6516b6c4e281eecc444fbaf08018ad25ddc867301a284c15c017cea3875e1555",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/NcrustColors.kt",
+      "regions": [
+        [
+          1,
+          128
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 128,
+      "sha256": "909c8d649a3251b65cc4ed0a5a41ab1dd90410dfb04162aca76af7950b67d368",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/NcrustTypography.kt",
+      "regions": [
+        [
+          1,
+          58
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 58,
+      "sha256": "3083db34c1861071b5eee3109633f1eb0311faf794df2bfb84e52a852b4be6d0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/PageTransitionSetting.kt",
+      "regions": [
+        [
+          1,
+          125
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 125,
+      "sha256": "14f22427e960150ff49ef0ec7d03a63d5675e754c3e9fd9ca015ccd08d4bb516",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/ThemeColorSelector.kt",
+      "regions": [
+        [
+          1,
+          87
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 87,
+      "sha256": "a328d3e9694fd307f382c14e2099e736c27c9ca5129849cf561ff7016cac4c9c",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/ThemeManager.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          139
+        ]
+      ],
+      "lines_total": 139,
+      "sha256": "5744ea153da0525f9ccd91cd750f23c4ac7e327362b779102a1f626e6586bd2d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Cam16.kt",
+      "regions": [
+        [
+          1,
+          422
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 422,
+      "sha256": "b39e810dca9633b0a096daaec60e6c598bb4721800adf56e8a9cb88b43b84a18",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/ColorUtils.kt",
+      "regions": [
+        [
+          1,
+          305
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 305,
+      "sha256": "7bdab03b1bb3adf09c968b9459bebda0aae57968fce76bda45d14c186814050d",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/CoverPalette.kt",
+      "regions": [
+        [
+          1,
+          174
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 174,
+      "sha256": "a7c02169f452a0835cec3d68439e40d8de096eada0bd7cc4f39d61419636c6e5",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/CoverPaletteExtractor.kt",
+      "regions": [
+        [
+          1,
+          161
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 161,
+      "sha256": "501928e5b2cafef901175ba10911afccd709d90ece1b06da020833bfc0c3fdb1",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Hct.kt",
+      "regions": [
+        [
+          1,
+          542
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 542,
+      "sha256": "49be2566bccf1f499f875fb8d876eb66712fb2870a6acfacfb1852d85cc703a0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Score.kt",
+      "regions": [
+        [
+          1,
+          158
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 158,
+      "sha256": "91b03bede3b6695b40872ece688e62ca3e33a7416390a6ba4b93dcd14afc01c2",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/TonalPalette.kt",
+      "regions": [
+        [
+          1,
+          173
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 173,
+      "sha256": "21a58a27a68d6fd92ca063696b1eea8e8530ba0a555f2b76665001201203872b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/PlayerViewModel.kt",
+      "regions": [
+        [
+          2700,
+          2860
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 3250,
+      "sha256": "6aea82159e732ac33d161c28833d841d2f1d1982a7c2903e95b9794f9b5af4af"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/SearchViewModel.kt",
+      "regions": [
+        [
+          280,
+          390
+        ],
+        [
+          780,
+          950
+        ]
+      ],
+      "mode": "partial_call_chain",
+      "lines_total": 1001,
+      "sha256": "a0f8cc83284bc0773adb81a530800a3ffc7ca8fda89073b84ade21d1ce82f156"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/viewmodel/SongViewModel.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          43
+        ]
+      ],
+      "lines_total": 43,
+      "sha256": "bfad202991d280410d4cbd95234fc5b9670ccfd4f59c53bcd2f2b58c2f5de83e",
+      "functions": [],
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/NcrustWidgetProvider.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          329
+        ]
+      ],
+      "lines_total": 329,
+      "sha256": "e2630f0ca22944016c2bf8542f38c4a0d2674c0add5a25088d30cdfe36adb8af",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetArtwork.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          91
+        ]
+      ],
+      "lines_total": 91,
+      "sha256": "60774dcadf3915239596487451c9a6c469c116b3ffbdf1dfe35c4da14423bed6",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetRenderer.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          223
+        ]
+      ],
+      "lines_total": 223,
+      "sha256": "820839a5acb022c5e8814927eaaef5ad411801cde694946ef057727431dca3f8",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetSize.kt",
+      "regions": [
+        [
+          1,
+          154
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 154,
+      "sha256": "5a6e6905e17d6f16d4573753e497b903d3f68c6c6e7f6d4fdfa26027643a9fdb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetSnapshot.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          221
+        ]
+      ],
+      "lines_total": 221,
+      "sha256": "b0c0ae1b555a2065573917f5b138028f803e0d5470953eb311f78a98d272e1c0",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetTextFormat.kt",
+      "regions": [
+        [
+          1,
+          83
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 83,
+      "sha256": "e41b5e6c22279ef1fc26a055b90bf76cd967817de2e10a3bd8d2866b2f974531",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ApkArchive.kt",
+      "regions": [
+        [
+          1,
+          83
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 83,
+      "sha256": "e5767b049d8fc812f93786d8f6abc4ec451a179272661bf1672c04644572ff49",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ApkVerification.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          90
+        ]
+      ],
+      "lines_total": 90,
+      "sha256": "d86833eca976ed506065710a56fe87cfd6c72c8686814f0e097fa3371910a06f",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/AppVersion.kt",
+      "regions": [
+        [
+          1,
+          73
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 73,
+      "sha256": "49ec6d138d11274176c2cc114d454214de56df58585ae9c5fc69f77db0863feb",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ForkRelease.kt",
+      "regions": [
+        [
+          1,
+          95
+        ]
+      ],
+      "mode": "full_executable_code",
+      "lines_total": 95,
+      "sha256": "71c2dbd9ad106ab56586d22ac2e63bb267f41128cc664b584ee3cfeaf0291b61",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/ReleaseFeed.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          62
+        ]
+      ],
+      "lines_total": 62,
+      "sha256": "97b450557b112a7e2f6ab573a85e831553a6317514267ca50c5e7cb36dbf67b3",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateChecker.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          170
+        ]
+      ],
+      "lines_total": 170,
+      "sha256": "6589b6d2c1d8674a9080cd1bf566a781495f8cfd80631bb7745c1fbf1558929b",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateRecovery.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          25
+        ]
+      ],
+      "lines_total": 25,
+      "sha256": "d9678def399256761f6909d3109af22446bdfc486c37e7db484b1fb6399621b4",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateService.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          485
+        ]
+      ],
+      "lines_total": 485,
+      "sha256": "2caffbaf9b92422f2680ae7a6cb027bb804ba0a0649dd84ef4d7a394619f2e60",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/warmup/ListPrefetch.kt",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          183
+        ]
+      ],
+      "lines_total": 183,
+      "sha256": "f1aa731b796501ec7911cc89e389465400f0c2df47945b951d91b9692da6b86a",
+      "carried_from": "2026-10-27-2052 identical SHA"
+    }
+  ]
+}

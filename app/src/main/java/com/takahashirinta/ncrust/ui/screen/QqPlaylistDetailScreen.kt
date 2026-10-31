@@ -203,7 +203,14 @@ fun QqPlaylistDetailScreen(
                                         name = resolvedName.ifBlank { strings.qqPlaylistsTitle },
                                         dirId = dirId,
                                     )
-                                    LocalPlaylistRepository.sync(context, local, force = true)
+                                    if (local == null) {
+                                        Toast.makeText(context, strings.localPlaylistSyncFailed, Toast.LENGTH_SHORT).show()
+                                        return@launch
+                                    }
+                                    if (LocalPlaylistRepository.sync(context, local, force = true) is com.takahashirinta.ncrust.local.LocalSyncOutcome.Failed) {
+                                        Toast.makeText(context, strings.localPlaylistSyncFailed, Toast.LENGTH_SHORT).show()
+                                        return@launch
+                                    }
                                     Toast.makeText(
                                         context,
                                         strings.localPlaylistAdopted(local.name),

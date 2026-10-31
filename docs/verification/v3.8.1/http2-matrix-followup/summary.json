@@ -1,0 +1,414 @@
+{
+  "finished_jst": "2026-10-30T21:50:11.718727+09:00",
+  "total_read_only_requests": 38,
+  "playable_responses": 24,
+  "failures_before_tls": 14,
+  "historical_stream_resets_reproduced": false,
+  "groups": {
+    "system-connect30": {
+      "setup": {
+        "kind": "setup",
+        "uid": 10377,
+        "sdk": 37,
+        "song_id": 25841325,
+        "request_snapshot": "fixed_all_arms",
+        "ping_seconds": 15,
+        "idle_pool_seconds": 30,
+        "deadline_seconds": 8,
+        "dns_mode": "system",
+        "connect_timeout_seconds": 30,
+        "concurrency": 1
+      },
+      "requests": 12,
+      "playable": 0,
+      "pre_tls_failures": 12,
+      "arms": {
+        "reuse_h2_seed": {
+          "requests": 1,
+          "playable": 0,
+          "durations_ms": [
+            8003
+          ],
+          "protocols": [
+            null
+          ],
+          "reused": [
+            null
+          ]
+        },
+        "fresh_h2": {
+          "requests": 3,
+          "playable": 0,
+          "durations_ms": [
+            8001,
+            8001,
+            8001
+          ],
+          "protocols": [
+            null,
+            null,
+            null
+          ],
+          "reused": [
+            null,
+            null,
+            null
+          ]
+        },
+        "reuse_h2": {
+          "requests": 3,
+          "playable": 0,
+          "durations_ms": [
+            8002,
+            8001,
+            8002
+          ],
+          "protocols": [
+            null,
+            null,
+            null
+          ],
+          "reused": [
+            null,
+            null,
+            null
+          ]
+        },
+        "fresh_h1": {
+          "requests": 3,
+          "playable": 0,
+          "durations_ms": [
+            8001,
+            8001,
+            8002
+          ],
+          "protocols": [
+            null,
+            null,
+            null
+          ],
+          "reused": [
+            null,
+            null,
+            null
+          ]
+        },
+        "reuse_h2_after20s": {
+          "requests": 1,
+          "playable": 0,
+          "durations_ms": [
+            8002
+          ],
+          "protocols": [
+            null
+          ],
+          "reused": [
+            null
+          ]
+        },
+        "reuse_h2_after35s": {
+          "requests": 1,
+          "playable": 0,
+          "durations_ms": [
+            8002
+          ],
+          "protocols": [
+            null
+          ],
+          "reused": [
+            null
+          ]
+        }
+      }
+    },
+    "ipv4_only-connect30": {
+      "setup": {
+        "kind": "setup",
+        "uid": 10377,
+        "sdk": 37,
+        "song_id": 25841325,
+        "request_snapshot": "fixed_all_arms",
+        "ping_seconds": 15,
+        "idle_pool_seconds": 30,
+        "deadline_seconds": 8,
+        "dns_mode": "ipv4_only",
+        "connect_timeout_seconds": 30,
+        "concurrency": 1
+      },
+      "requests": 12,
+      "playable": 12,
+      "pre_tls_failures": 0,
+      "arms": {
+        "reuse_h2_seed": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            315
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            false
+          ]
+        },
+        "fresh_h2": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            325,
+            286,
+            2487
+          ],
+          "protocols": [
+            "h2",
+            "h2",
+            "h2"
+          ],
+          "reused": [
+            false,
+            false,
+            false
+          ]
+        },
+        "reuse_h2": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            413,
+            88,
+            2362
+          ],
+          "protocols": [
+            "h2",
+            "h2",
+            "h2"
+          ],
+          "reused": [
+            true,
+            true,
+            true
+          ]
+        },
+        "fresh_h1": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            294,
+            322,
+            1674
+          ],
+          "protocols": [
+            "http/1.1",
+            "http/1.1",
+            "http/1.1"
+          ],
+          "reused": [
+            false,
+            false,
+            false
+          ]
+        },
+        "reuse_h2_after20s": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            92
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            true
+          ]
+        },
+        "reuse_h2_after35s": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            306
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            false
+          ]
+        }
+      }
+    },
+    "system-connect2": {
+      "setup": {
+        "kind": "setup",
+        "uid": 10377,
+        "sdk": 37,
+        "song_id": 25841325,
+        "request_snapshot": "fixed_all_arms",
+        "ping_seconds": 15,
+        "idle_pool_seconds": 30,
+        "deadline_seconds": 8,
+        "dns_mode": "system",
+        "connect_timeout_seconds": 2,
+        "concurrency": 1
+      },
+      "requests": 12,
+      "playable": 12,
+      "pre_tls_failures": 0,
+      "arms": {
+        "reuse_h2_seed": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            2335
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            false
+          ]
+        },
+        "fresh_h2": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            2312,
+            2468,
+            2331
+          ],
+          "protocols": [
+            "h2",
+            "h2",
+            "h2"
+          ],
+          "reused": [
+            false,
+            false,
+            false
+          ]
+        },
+        "reuse_h2": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            116,
+            108,
+            92
+          ],
+          "protocols": [
+            "h2",
+            "h2",
+            "h2"
+          ],
+          "reused": [
+            true,
+            true,
+            true
+          ]
+        },
+        "fresh_h1": {
+          "requests": 3,
+          "playable": 3,
+          "durations_ms": [
+            2297,
+            3886,
+            2290
+          ],
+          "protocols": [
+            "http/1.1",
+            "http/1.1",
+            "http/1.1"
+          ],
+          "reused": [
+            false,
+            false,
+            false
+          ]
+        },
+        "reuse_h2_after20s": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            96
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            true
+          ]
+        },
+        "reuse_h2_after35s": {
+          "requests": 1,
+          "playable": 1,
+          "durations_ms": [
+            2299
+          ],
+          "protocols": [
+            "h2"
+          ],
+          "reused": [
+            false
+          ]
+        }
+      }
+    },
+    "system-connect30-confirm": {
+      "setup": {
+        "kind": "setup",
+        "uid": 10377,
+        "sdk": 37,
+        "song_id": 25841325,
+        "request_snapshot": "fixed_all_arms",
+        "ping_seconds": 15,
+        "idle_pool_seconds": 30,
+        "deadline_seconds": 8,
+        "dns_mode": "system",
+        "connect_timeout_seconds": 30,
+        "concurrency": 1
+      },
+      "requests": 2,
+      "playable": 0,
+      "pre_tls_failures": 2,
+      "arms": {
+        "fresh_h2": {
+          "requests": 1,
+          "playable": 0,
+          "durations_ms": [
+            8003
+          ],
+          "protocols": [
+            null
+          ],
+          "reused": [
+            null
+          ]
+        },
+        "fresh_h1": {
+          "requests": 1,
+          "playable": 0,
+          "durations_ms": [
+            8001
+          ],
+          "protocols": [
+            null
+          ],
+          "reused": [
+            null
+          ]
+        }
+      }
+    }
+  },
+  "packet_observations": {
+    "ipv6_syn_packets": 14,
+    "ipv6_incoming_packets": 0,
+    "ipv4_syn_ack_packets": 2,
+    "capture_bounded_seconds": 90,
+    "capture_exit_124_expected": true,
+    "packet_payload_not_dumped": true
+  },
+  "production_code_modified": false,
+  "app_installed": false,
+  "media_playback": false
+}

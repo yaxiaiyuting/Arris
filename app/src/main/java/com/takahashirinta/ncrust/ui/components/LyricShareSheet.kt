@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,11 +42,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.share.LyricShareActions
 import com.takahashirinta.ncrust.share.LyricShareLine
 import com.takahashirinta.ncrust.share.LyricShareOptions
@@ -93,6 +99,73 @@ import java.util.TimeZone
  * - 出图期间 `busy = true`：所有动作行置灰、`onDismissRequest` 变空实现
  *   （用户点外面不会把正在生成的协程连根取消）。
  */
+/**
+ * 手动选行：点一行定起点，再点一行定终点（第三次点击重开一段）。
+ *
+ * 为什么不是"每行一个勾选框"：歌词动辄上百行，勾选要滚动上百次才能取到连续几行；
+ * 两次点击定区间在 20 行上限内是一步到位的，也天然保证区间连续（海报是连续排版）。
+ * 列表高度固定 168dp，避免长歌词把整个弹层撑出屏幕。
+ */
+@Composable
+private fun ManualLinePicker(
+    lines: List<LyricShareLine>,
+    start: Int,
+    end: Int,
+    hint: String,
+    countLabel: String,
+    onPick: (Int) -> Unit,
+) {
+    val colors = LocalMetroColors.current
+    val range = if (start < 0) IntRange.EMPTY else LyricShareSelection.manualRange(lines.size, start, end)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MetroText(
+                hint,
+                color = colors.onSurfaceVariant,
+                style = LocalMetroTypography.current.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            MetroText(
+                countLabel,
+                color = colors.primary,
+                style = LocalMetroTypography.current.bodySmall,
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(168.dp)
+                .clip(AppShapes.small)
+                .background(colors.surfaceVariant),
+        ) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                itemsIndexed(lines) { index, line ->
+                    val inRange = !range.isEmpty() && index in range
+                    val isEdge = index == range.first || index == range.last
+                    MetroText(
+                        text = "${index + 1}. ${line.text}",
+                        color = when {
+                            isEdge -> colors.primary
+                            inRange -> colors.onBackground
+                            else -> colors.onSurfaceVariant
+                        },
+                        style = LocalMetroTypography.current.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(index) }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun LyricShareSheet(
     track: LyricShareTrack,
@@ -112,10 +185,18 @@ fun LyricShareSheet(
     val coroutineScope = rememberCoroutineScope()
 
     var shareScope by remember { mutableStateOf(LyricShareScope.CURRENT_SECTION) }
+    // 手动选段的两个端点：-1 = 还没点。点第一行定起点，点第二行定终点，再点重开一段。
+    var manualStart by remember { mutableStateOf(-1) }
+    var manualEnd by remember { mutableStateOf(-1) }
     var includeTranslation by remember { mutableStateOf(defaultShowTranslation) }
     var includeRomanization by remember { mutableStateOf(defaultShowRomanization) }
     var includeTimestamps by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+
+    /** 手动选段的当前区间（升序、夹取）；未选时为空区间。 */
+    fun manualRange(): IntRange =
+        if (manualStart < 0) IntRange.EMPTY
+        else LyricShareSelection.manualRange(lyrics.size, manualStart, manualEnd)
 
     fun options() = LyricShareOptions(
         scope = shareScope,
@@ -126,7 +207,11 @@ fun LyricShareSheet(
 
     /** 复制 / 分享文本共用的正文；返回 null = 这段区间没有可分享的内容。 */
     fun buildText(): String? {
-        val lines = LyricShareSelection.linesForText(lyrics, positionMs, shareScope)
+        val lines = if (shareScope == LyricShareScope.MANUAL) {
+            LyricShareSelection.linesForManual(lyrics, manualStart, manualEnd)
+        } else {
+            LyricShareSelection.linesForText(lyrics, positionMs, shareScope)
+        }
         if (lines.isEmpty()) return null
         val text = LyricShareText.format(track, lines, options(), share.creditLine)
         return text.ifBlank { null }
@@ -138,7 +223,11 @@ fun LyricShareSheet(
 
     /** 出图请求：颜色从当前主题拍平成 ARGB，离屏渲染读不到 CompositionLocal（见 LyricPosterRenderer 的 KDoc）。 */
     fun posterRequest(): LyricSharePoster.Request {
-        val selection = LyricShareSelection.selectionForPoster(lyrics, positionMs, shareScope)
+        val selection = if (shareScope == LyricShareScope.MANUAL) {
+            LyricShareSelection.posterSelectionForManual(lyrics, manualStart, manualEnd)
+        } else {
+            LyricShareSelection.selectionForPoster(lyrics, positionMs, shareScope)
+        }
         return LyricSharePoster.Request(
             track = track,
             lines = selection.lines,
@@ -196,6 +285,28 @@ fun LyricShareSheet(
             ScopeRow(share.scopeWhole, shareScope == LyricShareScope.WHOLE_SONG) {
                 shareScope = LyricShareScope.WHOLE_SONG
             }
+            ScopeRow(share.scopeManual, shareScope == LyricShareScope.MANUAL) {
+                shareScope = LyricShareScope.MANUAL
+            }
+
+            if (shareScope == LyricShareScope.MANUAL) {
+                ManualLinePicker(
+                    lines = lyrics,
+                    start = manualStart,
+                    end = manualEnd,
+                    hint = share.manualHint,
+                    countLabel = share.manualCount(manualRange().count()),
+                    onPick = { index ->
+                        // 三击语义：定起点 → 定终点 → 重开一段（不会卡在"只能选一次"）。
+                        if (manualStart < 0 || manualEnd >= 0) {
+                            manualStart = index
+                            manualEnd = -1
+                        } else {
+                            manualEnd = index
+                        }
+                    },
+                )
+            }
 
             MetroDivider()
 
@@ -207,10 +318,12 @@ fun LyricShareSheet(
             MetroDivider()
 
             // ── 动作 ────────────────────────────────────────────────────────
+            // 手动选段还没选任何一行时，三个动作都没有内容可发 —— 直接禁用比"点了弹没有内容"清楚。
+            val manualEmpty = shareScope == LyricShareScope.MANUAL && manualRange().isEmpty()
             ActionRow(
                 icon = Icons.Default.ContentCopy,
                 label = share.copyLyrics,
-                enabled = !busy,
+                enabled = !busy && !manualEmpty,
             ) {
                 val text = buildText()
                 if (text == null) {
@@ -230,7 +343,7 @@ fun LyricShareSheet(
             ActionRow(
                 icon = Icons.Default.Send,
                 label = share.shareText,
-                enabled = !busy,
+                enabled = !busy && !manualEmpty,
             ) {
                 val text = buildText()
                 if (text == null) {
@@ -247,7 +360,7 @@ fun LyricShareSheet(
             ActionRow(
                 icon = Icons.Default.Share,
                 label = if (busy) share.generating else share.shareImage,
-                enabled = !busy,
+                enabled = !busy && !manualEmpty,
             ) {
                 busy = true
                 coroutineScope.launch {

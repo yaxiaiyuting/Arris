@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.library.SavedSongSyncTest" tests="28" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:26:23.885Z" hostname="cachyos-x8664" time="0.02">
+  <properties/>
+  <testcase name="rule6 手动删除设 tombstone 而不是物理删除" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule7 用户重新添加同一首 清除 tombstone 并回到最前" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="闸门 QQ 合成 id 不许发给ncm的写接口" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="反复 merge 的顺序是不动点" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.005"/>
+  <testcase name="tombstone 尾巴有界（最多 MAX_TOMBSTONES 条 按 addedAt 新到旧）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.003"/>
+  <testcase name="rule1 云端有 本地无 不在 tombstone 时追加为 REMOTE" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule2 云端顺序变化时既有条目跟着云端重排（与 v2_6_0 之前逐字一致）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.001"/>
+  <testcase name="rule1 云端有但这一批还没取到详情时 先不加 下次再补（不是丢数据）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule3 空云端列表不删任何本地条目" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.004"/>
+  <testcase name="rule5 手动新增幂等（重复点不改顺序也不改 origin）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule5 手动新增为 LOCAL 且插到最前" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="排序口径 本地手动新增 云端顺序 云端没有的本地 再 tombstone 尾巴" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule6 删除 QQ 条目用 bit62 反推出来的身份" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="闸门 ncm id 可以发写请求" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="appendRemote 只追加 不重排 不复活 tombstone" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.001"/>
+  <testcase name="闸门 非法 id 一律拒绝" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule5 手动新增的 QQ 曲目在同步里永远保留" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule4 重复刷新十次 tombstone 都不复活" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule6 删除幂等且零变化时返回同一实例" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule4 云端有 但在 tombstone 里 时跳过（删掉的歌不复活）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule5 云端同步来的歌被再加一次时不降级成 LOCAL" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.001"/>
+  <testcase name="appendRemote 对已有 id 幂等" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule3 云端无 本地有 时保留（只加不减）" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule2 云端有 本地有 时保留且不动 addedAt 与 origin" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="闸门 B站合成 id 不许发给ncm的写接口" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="rule7 复活之后再同步 云端也有的情况下不会被打回 tombstone" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="规则二 云端带来新字段时刷新载荷 但身份不动" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.0"/>
+  <testcase name="闸门判据与 ReportGate 的ncm方向逐值一致" classname="com.takahashirinta.ncrust.library.SavedSongSyncTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

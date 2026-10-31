@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:08:32.195Z" hostname="cachyos-x8664" time="0.047">
+  <properties/>
+  <testcase name="earlierAliasTombstoneMasksRemovalOfVisibleCanonicalEntry" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.046"/>
+  <testcase name="migratedAliasDuplicatesCannotBothBeRemoved" classname="com.takahashirinta.ncrust.audit.NightIdentityAuditProbe" time="0.001"/>
+  <system-out><![CDATA[AUDIT a migrated tombstone first in persisted order makes a visible canonical duplicate undeletable through production remove; payload contains real qq_songid required by the new migration
+AUDIT production decode migrates two historical IDs to the same key without consolidation; remove tombstones first only and every later removal is a no-op. No Android/UI/network
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,54 @@
+{
+  "suites": [
+    {
+      "class": "NightBiliGenerationAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightIdentityAuditProbe",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightLocalStoreResidualAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightQueueIdentityAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightQueueSpinAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightRedirectAuditProbe",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "class": "NightSearchResidualAuditProbe",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "meaning": "13 个缺陷断言：7 个支持本轮正式问题，2 个 QQ 条件逻辑用例尚缺历史可达性，4 个为旧问题/存储事务残余补证；不能当作 13 个新问题或修复成功。"
+}

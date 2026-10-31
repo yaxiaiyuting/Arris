@@ -229,6 +229,7 @@ data class SettingsEntry(
     val isNewInV3413: Boolean = false,
     val isNewInV360: Boolean = false,
     val isNewInV369: Boolean = false,
+    val isNewInV3712: Boolean = false,
     /**
      * v3.0.0 起**不再参与渲染**的历史键。
      *
@@ -329,7 +330,7 @@ object SettingsRegistry {
             pref(
                 key = "auto_rotate",
                 type = SettingsEntryType.SWITCH,
-                default = true, // RotationSetting.DEFAULT_ENABLED（RotationSetting.kt:42）
+                default = false, // RotationSetting.DEFAULT_ENABLED；新安装默认锁定竖屏
                 group = SettingsGroup.GENERAL,
                 titleKey = "autoRotateLabel",
                 subtitleKey = "autoRotateDescription",
@@ -1036,6 +1037,16 @@ object SettingsRegistry {
                 subtitleKey = "lyricsInMediaSessionHint",
             )
         )
+        add(pref(
+            key = "media_bilingual_lyrics", type = SettingsEntryType.SWITCH, default = true,
+            group = SettingsGroup.LYRICS, secondaryGroup = SettingsGroup.PLAYBACK,
+            titleKey = "mediaLyrics.bilingual", subtitleKey = "mediaLyrics.bilingualHint", newInV3712 = true,
+        ))
+        add(pref(
+            key = "media_lyric_primary", type = SettingsEntryType.CHOICE, default = 0,
+            choices = listOf(0, 1), group = SettingsGroup.LYRICS, secondaryGroup = SettingsGroup.PLAYBACK,
+            titleKey = "mediaLyrics.primary", subtitleKey = "mediaLyrics.primaryHint", newInV3712 = true,
+        ))
         add(
             pref(
                 key = "lyrics_ttml_enabled",
@@ -1240,6 +1251,7 @@ object SettingsRegistry {
         newInV3411: Boolean = false,
         newInV3413: Boolean = false,
         newInV369: Boolean = false,
+        newInV3712: Boolean = false,
         advanced: Boolean = false,
         internal: Boolean = false,
     ): SettingsEntry = SettingsEntry(
@@ -1264,6 +1276,7 @@ object SettingsRegistry {
         isNewInV3411 = newInV3411,
         isNewInV3413 = newInV3413,
         isNewInV369 = newInV369,
+        isNewInV3712 = newInV3712,
         isAdvanced = advanced,
         isInternal = internal,
     )

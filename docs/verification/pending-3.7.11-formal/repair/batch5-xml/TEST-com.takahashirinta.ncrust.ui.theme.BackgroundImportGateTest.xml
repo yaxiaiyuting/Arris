@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.ui.theme.BackgroundImportGateTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:38:20.267Z" hostname="cachyos-x8664" time="0.001">
+  <properties/>
+  <testcase name="onlyTheMostRecentlySelectedImageCanPublish" classname="com.takahashirinta.ncrust.ui.theme.BackgroundImportGateTest" time="0.001"/>
+  <testcase name="clearRejectsTheOldImportAndALaterSelectionCanCommit" classname="com.takahashirinta.ncrust.ui.theme.BackgroundImportGateTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

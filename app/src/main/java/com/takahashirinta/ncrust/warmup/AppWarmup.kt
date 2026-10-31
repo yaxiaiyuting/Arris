@@ -64,6 +64,31 @@ object AppWarmup {
     private val _homeFetchDone = MutableStateFlow(false)
     val homeFetchDone: StateFlow<Boolean> = _homeFetchDone.asStateFlow()
 
+    /**
+     * 首屏三块数据的**在途请求**（v3.7.11）。
+     *
+     * 为什么要把 Deferred 暴露出去：冷启动时首页与预热会取同一批接口。旧做法是
+     * HomeScreen「等 homeFetchDone 最多 1.2 秒，等不到就自己再发一遍」——
+     * 于是首屏要么白等、要么双发。现在 HomeScreen 直接 await 这三条在途请求，
+     * **谁先拿到谁发布**，既不重复请求也不白等。
+     *
+     * 为空 = 预热还没跑到网络阶段（或已经跑完并清空）⇒ 调用方自己发。
+     */
+    @Volatile
+    var homeLoads: HomeLoads? = null
+        private set
+
+    /** 首屏三块数据 + 榜单的在途请求。await 它们不会触发第二次网络请求。 */
+    class HomeLoads(
+        val daily: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.SongItem>?>,
+        val playlists: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.PlaylistApi.PlaylistCard>?>,
+        val newSongs: kotlinx.coroutines.Deferred<List<com.takahashirinta.ncrust.network.SongItem>?>,
+        val session: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot = CookieManager.snapshot(),
+        val owner: String? = CookieManager.accountOwner(),
+    ) {
+        fun isCurrent(): Boolean = CookieManager.isCurrent(session) && CookieManager.accountOwner() == owner
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var started = false
 
@@ -114,6 +139,10 @@ object AppWarmup {
             // ================= 阶段一：本地阶段（**唯一**决定 splash 何时结束的部分） =================
             // 上次的首页磁盘快照灌回内存缓存。无网冷启动时这几乎是首屏唯一的内容来源。
             runCatchingCancellable { HomeSnapshot.restoreIntoCache(app) }
+            // 冷启动预热 qm 会员快照：`TrackAvailability.ofQq` 用的是无 Context 的缓存，
+            // 只有 profile()/saveProfile() 被调用过才是准的。不预热的话，先进库页再看 QQ 曲目，
+            // 会员用户也会看到「需会员」——搜索页才会把快照刷对。
+            runCatching { com.takahashirinta.ncrust.qq.QqAuthStore.profile(app) }
 
             // v1.5.2：splash 到此为止。
             //
@@ -148,6 +177,8 @@ object AppWarmup {
             withTimeoutOrNull(NETWORK_BUDGET_MS) {
                 // 阶段一：三条 Home 请求并发写入 ContentCache
                 coroutineScope {
+                    val started = CookieManager.snapshot()
+                    val ownerAtStart = CookieManager.accountOwner()
                     val dailyDeferred = async {
                         runCatchingCancellable { PlaylistApi.getDailyRecommendSongs() }
                     }
@@ -159,18 +190,26 @@ object AppWarmup {
                         // 不留"缓存 10 条 → 刷新变 20 条"的可见 diff
                         runCatchingCancellable { PlaylistApi.getTopSongs(limit = 20, offset = 0) }
                     }
-                    // H15：这批请求发出时属于某个账号；等它们回来时用户可能已经换号。
-                    // 归属变了就整批丢弃 —— 否则新账号的首页会先闪一下上一个人的每日推荐。
-                    val ownerAtStart = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
-                    fun ownerStillSame() =
-                        com.takahashirinta.ncrust.auth.CookieManager.accountOwner() == ownerAtStart
-                    dailyDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeDailySongs = it }
-                    plsDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeRecommendPlaylists = it }
-                    topDeferred.await()?.let { if (ownerStillSame()) ContentCache.homeNewSongs = it }
-                    ContentCache.bindOwner(ownerAtStart)
+                    // 暴露给 HomeScreen：它 await 同一批请求，避免"等超时后再发一遍"。
+                    val loads = HomeLoads(dailyDeferred, plsDeferred, topDeferred, started, ownerAtStart)
+                    homeLoads = loads
+                    try {
+                        val daily = dailyDeferred.await()
+                        val playlists = plsDeferred.await()
+                        val top = topDeferred.await()
+                        CookieManager.ifCurrent(started) {
+                            if (CookieManager.accountOwner() != ownerAtStart) return@ifCurrent
+                            ContentCache.bindOwner(ownerAtStart)
+                            daily?.let { ContentCache.homeDailySongs = it }
+                            playlists?.let { ContentCache.homeRecommendPlaylists = it }
+                            top?.let { ContentCache.homeNewSongs = it }
+                            if (daily != null && playlists != null && top != null) ContentCache.markHomeWarmed()
+                        }
+                    } finally {
+                        if (homeLoads === loads) homeLoads = null
+                    }
                 }
                 // 标记首页数据已预热：HomeScreen 进屏时据此跳过重复请求。
-                ContentCache.markHomeWarmed()
 
                 // 阶段一·五：封面预取到 Coil 全局 ImageLoader 的内存+磁盘缓存。
                 // 必须紧跟在 Home 数据之后、其他网络任务之前——首页首帧的 AsyncImage

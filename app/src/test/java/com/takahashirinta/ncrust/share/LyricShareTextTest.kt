@@ -228,7 +228,10 @@ class LyricShareTextTest {
     fun `文件名_含歌名与时刻_同一首歌连出两张不会互相覆盖`() {
         val a = LyricShareText.fileName(track, "20261003-214800")
         val b = LyricShareText.fileName(track, "20261003-214801")
-        assertEquals("ncrust-lyrics-成都-20261003-214800.png", a)
+        // 回归：文件名**只保留 ASCII**。中文歌名曾原样进文件名（`ncrust-lyrics-成都-…`），
+        // 微信朋友圈读这种 name 会报「无法获取资源」——图里本来就有完整歌名，
+        // 文件名只用于区分，所以非 ASCII 一律丢弃后回落 `lyrics`。
+        assertEquals("ncrust-lyrics-lyrics-20261003-214800.png", a)
         assertTrue(a != b)
     }
 
@@ -249,10 +252,13 @@ class LyricShareTextTest {
 
     @Test
     fun `文件名_超长歌名被截断到上限_不撞文件系统名字限制`() {
-        val long = LyricShareTrack(name = "长".repeat(200))
+        // 用 ASCII 歌名测长度上限：中文会被 `slugify` 判成非 ASCII 全部丢弃（见上一条）。
+        val long = LyricShareTrack(name = "a".repeat(200))
         val slug = LyricShareText.slugify(long.name)
         assertEquals(LyricShareText.MAX_NAME_CHARS, slug.length)
         assertTrue(slug.length <= 24)
+        // 纯中文歌名 ⇒ 回落 lyrics（而不是空段或中文）
+        assertEquals("lyrics", LyricShareText.slugify("成都"))
     }
 
     @Test

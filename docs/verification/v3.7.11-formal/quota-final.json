@@ -1,0 +1,16 @@
+{
+  "recorded_at_utc": "2026-10-28 20:52:35 UTC",
+  "five_hour": {
+    "usedPercent": 87,
+    "windowDurationMins": 300,
+    "resetsAt": 1793235645,
+    "remainingPercent": 13
+  },
+  "weekly": {
+    "usedPercent": 29,
+    "windowDurationMins": 10080,
+    "resetsAt": 1793804426,
+    "remainingPercent": 71
+  },
+  "reason": "Formal package completed; no review or repair continuation scheduled."
+}

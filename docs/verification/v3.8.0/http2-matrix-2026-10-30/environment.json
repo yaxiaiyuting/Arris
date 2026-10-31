@@ -1,0 +1,23 @@
+{
+  "device": "PLC110",
+  "app_uid": 10377,
+  "source_base": "ed59055e42eb9b44b5df2208fa1e1efde4e26220",
+  "observed_global_proxy_before": [
+    "127.0.0.1:8888",
+    ":0"
+  ],
+  "adb_reverse": "tcp:8888 -> tcp:8888",
+  "configured_probe_routes": [
+    "explicit DIRECT",
+    "explicit HTTP 127.0.0.1:8888"
+  ],
+  "dependencies": [
+    "okhttp-4.12.0.jar",
+    "okio-jvm-3.9.1.jar",
+    "kotlin-stdlib-1.9.24.jar",
+    "annotations-23.0.0.jar"
+  ],
+  "requests_read_only": true,
+  "media_playback": false,
+  "tls_verification": "system CAs plus local capture CA; hostname verification retained"
+}

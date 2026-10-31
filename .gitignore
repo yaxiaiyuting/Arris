@@ -27,3 +27,6 @@ benchmark/output/
 .sh
 CLAUDE.md
 __pycache__/
+
+# 直链 APK：16MB 一个，不进版本库（部署时从 dist/ 拷进 public/dl/）
+relay/public/dl/*.apk

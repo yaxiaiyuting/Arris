@@ -1,0 +1,1766 @@
+{
+  "TEST-com.takahashirinta.ncrust.BigScreenOrientationTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ExampleUnitTest.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.QueueReorderByIdentityTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.RenameGuardTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.account.EntitlementFixtureTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.account.PlaybackNoticeTrackerTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.auth.NeteaseCookieTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.auth.NeteaseSessionRenewalTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.auth.QrLoginProtocolTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.auth.QrPairUnikeySourceTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliApiDispatchTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliApiIoContractTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliAuthParseTest.xml": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliAuthQrLoginTest.xml": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliAuthRequestTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliAuthStoreTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliCdnLearnedHostTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliCdnTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliCdnUserAgentTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliHiResTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliMirrorSeedingTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliParseTest.xml": {
+    "tests": 25,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliQualityTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliSignatureRejectionTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliSourceProviderTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliSubtitleLangTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliSubtitleLyricFetchTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliSubtitleTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliTrackMappingTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.BiliWbiTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.E08BiliQrCancelTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.H17BiliCredentialHostTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.bili.H18SubtitleStampChainTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.HomeSnapshotOwnerTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineContentRecoveryTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineKeysCoversStartTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineKeysTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineLibraryIndexTest.xml": {
+    "tests": 19,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineTrackCodecTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.cache.OfflineUrlIndexTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.celebration.BirthdayWindowTest.xml": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.celebration.CelebrationLayoutGeometryTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.celebration.CelebrationRulesTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.contract.PersistenceFieldNameContractTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.AggregateStringsTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.AlbumLookupTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.CatalogAggregatorTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.CrossSourceMatcherTest.xml": {
+    "tests": 40,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.EditionMatchAuditProbe.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.H05H06CatalogEvidenceTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.MatchCacheCodecTest.xml": {
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.NameNormalizerTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.crosssource.PlayAllDedupTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.LibraryBoundaryRegressionTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.LibraryImportPersistenceTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.LibrarySavedRevisionTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.LibrarySessionOwnershipTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.LikedPlayAllTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SavedAlbumMidMigrationTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SavedSongCodecIdentityMigrationTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SavedSongCodecTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SavedSongSyncTest.xml": {
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SearchHistoryCodecTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.library.SearchHistoryMigrationTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.local.LocalPlaylistCodecTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.local.LocalPlaylistSyncTest.xml": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.local.LocalPlaylistTransactionTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.local.LocalSyncRevisionAuditProbe.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.AmllTtmlClientTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.DynamicLyricFontTest.xml": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LrcParserLongMinutesTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LrcParserTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricClockTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricLoadCoordinatorTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricRequestGateTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricSourceChainTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricSubtitleTextTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricTrackMergeTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricsCacheModelTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.LyricsSourcePrefsTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.SweepTrackTest.xml": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.TtmlScannerTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.TtmlWordOrderTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.YrcAlignerTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.lyric.YrcParserTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.BoundedParallelTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.ClientIdentityCookieTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.LikedPlaylistPickTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.MonotonicWriteGateTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.PlaylistDetailResultTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.PlaylistEditApiTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.PlaylistMutationAuditProbe.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.RetrofitClientOsxHeaderTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.WarmupTargetPlannerTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.network.crypto.XeapiCryptoTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.AudioFeatureExtractorTest.xml": {
+    "tests": 29,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.AudioOffloadGateTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ListeningClockTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.LyricNotifyGateTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.MediaBilingualLyricsTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.MediaDisplayLinesTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.MediaSessionMergeTest.xml": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PcmBassAnalysisTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlayReporterSessionPinTest.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlayReporterTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaySongItemReorderTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackGuardTest.xml": {
+    "tests": 30,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackPositionCodecTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackQueueIdentityMigrationTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackQueueLogicTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackRequestPolicyTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PlaybackRetrySchedulerTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PreloadCachePolicyTest.xml": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PreloadGenerationTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.PreloadSlotTest.xml": {
+    "tests": 19,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.QualityAssessmentTest.xml": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.QualityBitrateLabelTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.QueueInsertTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.QueueKeysPlayItemTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.QueueKeysTest.xml": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ReportGateTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ResolveFailureTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ResumePositionRevocationTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.SavedAlbumCodecTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ShuffleNavTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ShuffleRoundTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.ShuffleSnapshotTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.SongUrlTransportRetryTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.StreamBitrateTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.TransientPublishBoundTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.player.TransparentWaveformSinkTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.playlist.PlaylistCacheCodecTest.xml": {
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.playlist.PlaylistLoadCoordinatorTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.playlist.PlaylistModelsTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.playlist.PullToRefreshTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.probe.V322ColorTransitionProbe.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.probe.V322CurveProbe.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.probe.V322DominantBandProbe.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.probe.V322RolesProbe.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.E02QqLyricAlignTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.J10QqLegacyFieldsTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.MqttCodecTest.xml": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.MqttConnectionOwnershipTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqAlbumMidMappingTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqArtistMidMappingTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqCookieTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqDesTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqFallbackStatsTest.xml": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqLiveProbeTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqMembershipExpiryTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqPhoneLoginTest.xml": {
+    "tests": 19,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqPlaylistAuthTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqPlaylistCompletenessTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqPlaylistCursorTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqPlaylistParserTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqProfileTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqQrLoginTest.xml": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqQualityTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqRefreshCommitGuardTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqRefreshCredentialTest.xml": {
+    "tests": 32,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqRefreshFlightTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqRejectionTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqRequestsTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqScanLoginProbeTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqSongMapperTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QqTransportClassificationTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QrcDecryptorGoldenTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QrcDecryptorTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.qq.QrcParserTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.reco.ArtistRecoTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.search.SearchLatencyTraceTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.search.SearchPageCursorTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.search.SearchPagingTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.search.SearchRankingTest.xml": {
+    "tests": 19,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.search.TrackAvailabilityTest.xml": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.MotionRhythmGatingTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.OfflineCacheBudgetTest.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.SettingsDefaultsTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.SettingsGroupRouteTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.SettingsRegistryTest.xml": {
+    "tests": 34,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.SettingsRenderPlanTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.SettingsVisibilityTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.settings.WaveformSettingsGatingTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.share.LyricPosterLayoutTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.share.LyricShareSelectionTest.xml": {
+    "tests": 19,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.share.LyricShareTextTest.xml": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.AlbumNavigatorTest.xml": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.ArtistNavigatorTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.BiliAvPartitionMigrationTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.MusicSourceTest.xml": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.RoutingAuditProbe.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.SongSourceExtTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.SourceIdDomainTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.SourceRouterTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.source.TrackKeyTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.stats.StatsAggregateTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.stats.StatsCodecTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.stats.StatsCommitGateTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.stats.StatsMathTest.xml": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.HeightClassTest.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.AlbumSourceTagTest.xml": {
+    "tests": 24,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.BiliQrPanelTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.ListItemAppearTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.LoginCredentialAcceptanceTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.PullToRefreshConnectionTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.QqCaptchaCookieGateTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SearchRankingThreeSourceTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SongMenuSheetLayoutTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SongTagsTest.xml": {
+    "tests": 29,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SourceCountsBiliTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SourceCountsTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.components.SourceFilterTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.i18n.BiliStringsTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.i18n.StringsConstructorBudgetTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.i18n.StringsMigrationTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.navigation.ArtistRouteContractTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.navigation.NavRouteCodecTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.navigation.SongDetailRoutePayloadTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.ControlsBarBudgetTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.CoverGeometryTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.LyricsAutoCenterTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.LyricsPanelScrollTest.xml": {
+    "tests": 31,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.PlayerCardGeometryTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.PlayerDragScreenVelocityTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.PlayerDragSnapTest.xml": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.PlayerLayoutTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.PlayerLayoutVisualizerTest.xml": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.QueueMoveCommitTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.QueueRowIdentityTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.TrayLayoutTest.xml": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.TrayLyricTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformBallisticsAbTest.xml": {
+    "tests": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformBallisticsTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformBandBallisticsTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformFrameRateTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformRingBandWindowTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformRingScrollTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformRingTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformRingTierTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformScrollBatchArrivalTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformScrollDeviceRegimeTest.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformScrollJitterRegressionTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformScrollPhaseAnchorTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformScrollUnderrunTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.WaveformSpeedTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.CoverBlurTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.DisplayRefreshTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.FrameStrideTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.MotionBindingsTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.MotionEffectsTest.xml": {
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.MotionEnvelopeTest.xml": {
+    "tests": 28,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.MotionPrefsTest.xml": {
+    "tests": 43,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.motion.MotionTierPrecedenceTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandBallisticsTest.xml": {
+    "tests": 26,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandColorRolesTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandColoringGatingTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandDominanceTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandLanesTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandMarkerGeometryTest.xml": {
+    "tests": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.BandScrollTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.FrameBudgetPolicyTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.VisualizerPrefsTest.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.VisualizerTierTest.xml": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.WaveformCurvePointBudgetTest.xml": {
+    "tests": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.WaveformCurveTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.WaveformEffectsStateTest.xml": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.player.waveform.WaveformIsolationTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.screen.CacheUsageTest.xml": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.screen.LibrarySectionFoldSettingTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.screen.PlaylistLayoutSettingTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.AccentColorTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.AppMotionSpecTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.AppShapesSingleSourceTest.xml": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.PageTransitionSettingTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.Cam16Test.xml": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.CoverPaletteExtractorTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.DownsampleTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.HctTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.QuantizerTest.xml": {
+    "tests": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.ScoreTest.xml": {
+    "tests": 11,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.theme.color.TonalPaletteTest.xml": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.viewmodel.PlayingIdentityTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.widget.WidgetPushGateTest.xml": {
+    "tests": 27,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.widget.WidgetSizeTest.xml": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.widget.WidgetStringsTest.xml": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.ui.widget.WidgetTextFormatTest.xml": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.ApkVerificationTest.xml": {
+    "tests": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.AppVersionTest.xml": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.UpdateDownloaderCrossInstanceTest.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.UpdateDownloaderTest.xml": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.UpdateFixtureTest.xml": {
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "TEST-com.takahashirinta.ncrust.update.UpdateFlowRulesTest.xml": {
+    "tests": 18,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

@@ -22,7 +22,7 @@ Toolchain:
 | | |
 |---|---|
 | compileSdk / targetSdk | 36 (Android 15) |
-| minSdk | 24 |
+| minSdk | **29**（v3.8.0 起；3.7.x LTS 线仍是 24） |
 | Java / jvmTarget | 11 |
 | Kotlin | 1.9.24 |
 | Compose BOM | 2024.12.01 (compiler ext 1.5.14) |
@@ -62,8 +62,8 @@ Single source of truth: `app/build.gradle.kts` → `defaultConfig.versionName` /
   一旦 release 发布过，就只能另起新版本，绝不移动 tag。
   **教训：tag 必须打在「产出这批 APK 的那个提交」上，而那个提交一定在 `git log` 里位于
   `build: 升级至 …` 之后。打 tag 前先 `git show vX.Y.Z:app/build.gradle.kts | grep version` 自证一次。**
-- **Current: `versionName = "3.7.10-gpl"`, `versionCode = 96`.** 本轮草稿标签 `v3.7.10-gpl`。
-  定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 92，取 93；另核对 dist/v3.7.6-gpl 的实际 APK 为 92。
+- **Current: `versionName = "3.8.0-gpl"`, `versionCode = 120`（3.8.x 线 120–199；3.7.x LTS 97–119）.** 本地弱网切歌修复测试包；3.7.11/99正式整合包和3.7.12/98双语测试包均保留。重新运行带fetch的next-version核对最大值99后取100；无新推送/发布授权。
+  上次双语测试定号：带 fetch 的 `/home/duanjb666/deepseek/tools/next-version.sh --json`，tag / APK / 工作树最大值 97，取 98；原始结果归档于 `docs/verification/v3.7.12/next-version.json`。
   （`v2.1.1-gpl` / `v2.1.2-gpl` 的 tag 存在但**均未发布**（只有 draft，已删），内容全部包含在 v2.1.3 里 ——
   它的 tag 已经推上去了，按本项目纪律**不移动已发布的 tag**，所以另起一版而不是改它。）
   （v2.1.4 定号：`tools/next-version.sh` 三源交叉验证最大值 = 33 ⇒ **34**；
@@ -938,6 +938,14 @@ su -c 'chcon $(ls -Z REF | cut -d" " -f1) TARGET'    # 或直接 restorecon TARG
 ```
 
 本次即用此法恢复，设置与登录态均完好无损。
+
+## 3.8.3 应用视觉更新（用户 2026-10-31 授权）
+
+用户明确要求应用采用 https://arris.de5.net/ 官网的风格；这覆盖历史「播放器无圆角 / 固定满宽封面 / OLED 纯黑」的外观限制。App 自有层采用米白、松绿与鼠尾草配色、圆角卡片和主播放按钮；深色、其他主题色与封面取色继续可选。外部 Kanesumi 库不修改，形状构造仍只允许位于 AppShapes.kt。
+
+播放器帧路径、音频身份、歌词时序、点击回调与底部浮层让位规则继续适用。竖屏大封面按实测面板高度减完整标题块和间距，不能再从整屏高推算可用空间。自动旋转默认 false（RotationSetting / SettingsRegistry 一致），已保存的用户选择保留。
+
+识曲必须由用户操作发起权限请求和录音；停止、返回、后台和卸载页面应中断录音，finally 释放录音器并删除临时文件，不能在界面恢复后提交上一轮录音。一起听邀请框必须保留 IP:端口#令牌所需标点，保持三种传输方式及现有会话逻辑。
 
 ## Key Constraints & Pitfalls
 
@@ -5116,3 +5124,22 @@ QQ 到期时间按服务端北京时间解析完整时分秒；日期字符串�
 网络重试和播放降档共用 PlaybackRetryScheduler；等待前保存完整请求与播放代次，醒来先核对原 owner，切歌/同歌重播/换档/暂停/停止撤销。不得拿旧 songId 与醒来时的全局 source/title 拼装新请求。系统媒体暂停也撤销旧意图。
 
 收藏库的读改写必须持有对应锁并先 ensureLoaded，初始化只返回同一份可变真源；flush 的快照与写盘整体串行。网易专辑只接受 code 200 且具有数组的结果，完整分页成功后才替换缓存；QQ 附加歌单失败时保留旧收藏、标记降级且不刷新整表 TTL。未知结构不能当成功空表。
+
+
+## v3.7.12 双语媒体歌词
+
+媒体面板与 Live Updates 共用 MediaLyricFrame 的原文/译文/显示偏好，整帧发布；主行切换和迟到译文也改变通知去重键。设置位于「歌词」：media_bilingual_lyrics 默认 true，media_lyric_primary 默认 0（原文在上），1 为译文在上。lyrics_in_media_session 仍是总开关，保留已有设置。2026-10-29 用户补充要求保留歌名/歌手：无译文/译文空白或与原文相同时，只发一行原文歌词，副行恢复「歌名 · 艺人」；双语两行占满时以 trackInfo 送入通知/Live Updates 的 subText 和会话 description，具体可见性取决于系统模板；无歌词时回到歌名与艺人。关闭双语则保留旧版单歌词与歌曲信息排布。
+
+主副行共用主轨时间戳，译文按最近主行匹配且优先精确时间，不得让上一句借用下一句译文；只在轨道变化时重新匹配，位置采样二分选择。暂停时变更设置也必须刷新 MediaSession metadata，不能只更新通知正文。系统模板控制最终字体/行数；不承诺收起的系统胶囊支持双层。默认不自动翻译，不增加网络请求、音频焦点操作或播放调度。
+
+## v3.7.13 弱网、切网与播放选择
+
+断网无缓存直接进入可重试的网络等待，不空跑远程阶梯、不自动跳歌。默认网络id/传输/验证变化合并500ms；INTERNET仍是在线判据，VALIDATED只作变化信号。只有最后未暂停且处于取链/网络失败/缓冲的请求可恢复，健康播放不因切网重启。12s缓冲观察与原样取链重试均有次数门，用户暂停/停止/新选择撤销旧意图。新网络或新曲重置重试次数和时间戳，计时用elapsedRealtime。
+
+新选曲在取链前发布元数据并停止旧媒体项；失败保留所选曲，播放键会重新解析缺项/失败项，应用与Media3执行入口共用。内部wait_for_url/pause_failed带代次，失败暂停不能当作用户取消。HTTP JSON请求的取消须覆盖响应体读取；网易音质能力补查最多1.2s且不得吞取消，整次当前取链最多15s。连续切歌每次推进游标，停手220ms后只提交最后曲目。
+
+U01用户已在本轮追加授权修复：竖屏封面和横屏实测封面统一保留12%可用区域留白，顶栏、标题、控件测量留位；动画仍复用同一个封面节点。无设备验收，不声称已动态验证具体ROM布局或真实网络切换。
+
+## 3.8.x 网易云播放传输恢复（2026-10-30）
+
+正常播放取链已有日志出现HTTP/2 REFUSED_STREAM/CANCEL以及8秒无头超时。RetrofitClient仅对/eapi/song/enhance/player/url/v1这条只读POST启用一次独立HTTP/1.1池回退；保持原请求快照，不改写接口、身份或全局协议。PlaybackReadTransport区分协程/显式Call取消与OkHttp callTimeout自身的取消标记，不能把用户切歌当作网络失败重试。现有15秒整体取链时限和播放代次守卫仍有效。证据与23项定向回归见docs/verification/v3.8.0/playback-h2-recovery/README.md；只读取既有手机日志，未安装/主动设备播放，真实网络回退效果尚未验收。识曲私有接口字符串错误是独立问题，勿混为播放根因。

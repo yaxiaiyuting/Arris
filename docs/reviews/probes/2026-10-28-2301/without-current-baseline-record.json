@@ -1,0 +1,50 @@
+[
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/cache/HomeSnapshot.kt",
+    "sha256": "d617188011843dba24ccced3c4284336bf350149e506b1c25de37baf31d38fa4",
+    "lines_total": 173,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/player/PlaybackService.kt",
+    "sha256": "b535e72de2e941a915c3130b083f2306a0dff6f572e85e6a7e5b482e2572a02d",
+    "lines_total": 2226,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqApi.kt",
+    "sha256": "900dc7a25a91a2b5bfb893f1df24932dace0edbda2d311bf6f134c80ce8a7779",
+    "lines_total": 1095,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/SongDetailScreen.kt",
+    "sha256": "18ae02acf37315f942c03fd5e56fb0dac71d5c90bf18c0b0b1f7e9cbfd2c104e",
+    "lines_total": 441,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/theme/color/Quantizer.kt",
+    "sha256": "e6860ee42ae92d16eed3f4d2de6d8f26c445033869110a695f1bce14e10b5f01",
+    "lines_total": 707,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetPushGate.kt",
+    "sha256": "2b4d47ae187ec6257cab0ae82988bee9a709600a9958da53a3cf9c73e431d7eb",
+    "lines_total": 200,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateDownloader.kt",
+    "sha256": "a4b9aa1eb600fc9eb3538dea0427f92ad110fda40eb7df1620d3c711c822b2c3",
+    "lines_total": 372,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  },
+  {
+    "path": "app/src/main/java/com/takahashirinta/ncrust/warmup/AppWarmup.kt",
+    "sha256": "afe5f2b362b0e4d3bc3838b64e10fe726d29a20349663304f66b45955ef750be",
+    "lines_total": 236,
+    "reason": "本轮新基线尚未有可归属的阅读记录，不沿用旧 SHA 的通读状态"
+  }
+]

@@ -133,8 +133,19 @@ enum class TrackAvailability {
          * `action.switch` 的 bit0 在 130/130 条上恒为 1，**零区分度**；`action.alert` 语义无权威定义）。
          * 把「不用付费」标成「可播放」正是任务书禁止的「在搜索阶段假设某源可播」。
          */
-        fun ofQq(memberOnly: Boolean?): TrackAvailability =
-            if (memberOnly == true) MEMBER_ONLY else UNKNOWN
+        fun ofQq(
+            memberOnly: Boolean?,
+            /** 当前 qm 账号是否有会员（`QqAuthStore.isVipCached()`）。 */
+            accountIsVip: Boolean = com.takahashirinta.ncrust.qq.QqAuthStore.isVipCached(),
+        ): TrackAvailability =
+            when {
+                // 会员专享 + 我是会员 ⇒ 对我这个账号**不是**门槛，不显示「需会员」。
+                // `pay.pay_play` 是**曲目属性**，与账号无关；把它直接当角标正是
+                // "所有 VIP 曲都显示需会员"的原因，哪怕账号本身已经开了会员。
+                memberOnly == true && accountIsVip -> UNKNOWN
+                memberOnly == true -> MEMBER_ONLY
+                else -> UNKNOWN
+            }
 
         /** 按曲目所属音源分派。**唯一入口**，调用方不要自己 when。 */
         fun of(song: SongItem): TrackAvailability = when (song.musicSource) {

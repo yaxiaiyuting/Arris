@@ -1,0 +1,62 @@
+{
+  "versionName": "3.7.12-gpl",
+  "versionCode": 98,
+  "applicationId": "com.takahashirinta.ncrust",
+  "verifiedAt": "2026-10-28T16:01:38.304012+00:00",
+  "sourceCommit": "774db289cce95e69de451f808ab0ffc27549bfa3",
+  "appTree": "806386dc85af15e2c7c4cab34b72179d9928ccf2",
+  "baselineCommit": "0fd05bf1067c518da1262cd1fa6f49d6fb9ad095",
+  "branch": "feat/bilingual-media-lyrics",
+  "compositeDependencyCommit": "acddf3e53d6a90f6b7d19d6a0445631457c3bda5",
+  "unitTests": {
+    "tests": 3332,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "classes": 294
+  },
+  "featureUnitTests": 15,
+  "targetedTests": 93,
+  "lint": {
+    "errors": 0,
+    "Information": 7,
+    "Warning": 61
+  },
+  "build": {
+    "debug": "passed",
+    "release": "passed",
+    "lintDebug": "passed",
+    "retryReason": "First combined build exhausted the default 2 GiB Gradle heap after unit tests; packaging succeeded with 6 GiB heap without app source changes."
+  },
+  "releaseCertificateSha256": "e62eca39b7e5e36bc9a05f83688dcfecc11fc5589a4097f7dbbaaa7ddfbbec82",
+  "debugCertificateSha256": "ae74dadb83dab08ac5a673879558886b15d89075bb9fdb2b9c0002f2ec3d27f4",
+  "sameSignerAsPreviousRelease": true,
+  "artifacts": [
+    {
+      "file": "Arris-v3.7.12-gpl-release.apk",
+      "bytes": 12105420,
+      "sha256": "ce9ca0abe3ec8afcd7d5d97a443091b998b9c41ad6e8191d75a54241c4990077"
+    },
+    {
+      "file": "Arris-v3.7.12-gpl-debug.apk",
+      "bytes": 34706721,
+      "sha256": "408011b7e3a443090e97e095c765d40b8ebe8e6bc174c3166b9059f89545c152"
+    },
+    {
+      "file": "mapping.txt",
+      "bytes": 80079934,
+      "sha256": "498db92580a6ec8a16cdb1b8a018c9a4be57972e4d773f25ae666a0c6ae3e6c2"
+    }
+  ],
+  "artifactDirectory": "/home/duanjb666/deepseek/dist/v3.7.12-gpl",
+  "originalWorktreePatchUnchanged": true,
+  "originalWorktreePatchSha256": "2e7212d88cfa24a0b3b37e7886fa7f8de81327900e7aa5e0e2d74f1d808891f6",
+  "deviceTested": false,
+  "emulatorTested": false,
+  "githubUploaded": false,
+  "limits": [
+    "System templates control font sizes, truncation and collapsed-capsule line count.",
+    "Translation availability depends on the existing lyric source; no online machine translation was added.",
+    "Existing 3.7.11 WIP is included in baseline; only bilingual media lyrics were developed in this task."
+  ]
+}

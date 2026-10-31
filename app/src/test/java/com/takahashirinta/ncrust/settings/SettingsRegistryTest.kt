@@ -51,7 +51,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712
             }
             .mapNotNull { it.key }
             .toSet()
@@ -88,7 +88,7 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712
             }
             .mapNotNull { it.key }
             .toSet()
@@ -456,8 +456,10 @@ class SettingsRegistryTest {
     fun `secondaryGroupIsOnlyUsedForTheDocumentedDualOwnershipEntries`() {
         val dual = SettingsRegistry.allEntries().filter { it.secondaryGroup != null }
         assertEquals(
-            "双归属项必须是这 6 条（probe-settings-inventory §4.5 / §6.6）",
+            "双归属项必须是这 8 条（v3.7.12 新增双语与主行设置）（probe-settings-inventory §4.5 / §6.6）",
             setOf(
+                "media_bilingual_lyrics",
+                "media_lyric_primary",
                 "lyrics_in_media_session", // 主：歌词；次：播放与音质
                 "session_metadata_lyrics", // 主：播放与音质；次：歌词（与上一项互为镜像）
                 "library_playlist_layout", // 主：存储与缓存；次：外观与动效

@@ -386,4 +386,28 @@ class SavedSongSyncTest {
             )
         }
     }
+
+    /**
+     * 回归：老收藏在同步时必须**刷新载荷**，否则详情接口后来补出的
+     * `originCoverType`（原唱标签）永远进不了库。
+     */
+    @Test
+    fun `规则二 云端带来新字段时刷新载荷 但身份不动`() {
+        val oldSong = song(10)
+        val local = listOf(
+            SavedSongEntry(
+                trackKey = TrackKey(MusicSource.NETEASE, 10),
+                origin = SavedSongOrigin.REMOTE,
+                addedAt = 1L,
+                tombstoned = false,
+                song = oldSong,
+            )
+        )
+        val fresh = oldSong.copy(originCoverType = 1)
+        val merged = SavedSongSync.merge(local, listOf(10L), mapOf(10L to fresh), now = 99L)
+        assertEquals(1, merged.size)
+        assertEquals("身份与来源保持不变", SavedSongOrigin.REMOTE, merged[0].origin)
+        assertEquals("addedAt 不被同步改写", 1L, merged[0].addedAt)
+        assertEquals("载荷刷新出原唱字段", 1, merged[0].song.originCoverType)
+    }
 }

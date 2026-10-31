@@ -1,0 +1,74 @@
+20:44:31.422825 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:32.441802 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:33.465889 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:34.489841 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:35.514046 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:36.537976 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:44:38.553973 IP6 [device-v6].46976 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 1625333895, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:14.425107 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:15.449859 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:16.473986 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:17.497785 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:18.521858 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:19.545857 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:21.561986 IP6 [device-v6].54158 > 2409:8c6a:b021:1400:0:4:0:3.443: Flags [S], seq 508863181, win 65535, options [mss 1440,sackOK, [|tcp]
+20:45:36.890672 IP [device-v4].55030 > 117.135.207.67.443: Flags [S], seq 845315104, win 65535, options [mss 1460,sackOK,TS val 30455997 ecr 0,nop,wscale 8], length 0
+20:45:36.949273 IP 117.135.207.67.443 > [device-v4].55030: Flags [S.], seq 742736525, ack 845315105, win 2920, options [mss 1400,nop,nop,sackOK,nop,wscale 9], length 0
+20:45:36.949846 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 1, win 256, length 0
+20:45:36.955083 IP [device-v4].55030 > 117.135.207.67.443: Flags [P.], seq 1:518, ack 1, win 256, length 517
+20:45:37.021281 IP 117.135.207.67.443 > [device-v4].55030: Flags [.], ack 518, win 6, length 0
+20:45:37.022360 IP 117.135.207.67.443 > [device-v4].55030: Flags [.], seq 1:1393, ack 518, win 6, length 1392
+20:45:37.022616 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 1393, win 268, length 0
+20:45:37.022388 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 1393:2785, ack 518, win 6, length 1392
+20:45:37.022729 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 2785, win 279, length 0
+20:45:37.022984 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 2785:4097, ack 518, win 6, length 1312
+20:45:37.023080 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 4097, win 290, length 0
+20:45:37.023805 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 4097:5169, ack 518, win 6, length 1072
+20:45:37.023932 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 5169, win 301, length 0
+20:45:37.031852 IP [device-v4].55030 > 117.135.207.67.443: Flags [P.], seq 518:598, ack 5169, win 301, length 80
+20:45:37.043144 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], seq 598:1998, ack 5169, win 301, length 1400
+20:45:37.043194 IP [device-v4].55030 > 117.135.207.67.443: Flags [P.], seq 1998:3398, ack 5169, win 301, length 1400
+20:45:37.091739 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5169:5472, ack 598, win 6, length 303
+20:45:37.091762 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5472:5775, ack 598, win 6, length 303
+20:45:37.091765 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5775:5837, ack 598, win 6, length 62
+20:45:37.092403 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 5837, win 323, length 0
+20:45:37.103176 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5837:5868, ack 1998, win 6, length 31
+20:45:37.103525 IP [device-v4].55030 > 117.135.207.67.443: Flags [P.], seq 3398:3726, ack 5868, win 323, length 328
+20:45:37.146684 IP 117.135.207.67.443 > [device-v4].55030: Flags [.], ack 3398, win 6, length 0
+20:45:37.165479 IP 117.135.207.67.443 > [device-v4].55030: Flags [.], ack 3726, win 6, length 0
+20:45:37.165492 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5868:5903, ack 3726, win 6, length 35
+20:45:37.193733 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 5903:7014, ack 3726, win 6, length 1111
+20:45:37.194096 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 7014, win 334, length 0
+20:45:37.193759 IP 117.135.207.67.443 > [device-v4].55030: Flags [P.], seq 7014:7055, ack 3726, win 6, length 41
+20:45:37.241797 IP [device-v4].55030 > 117.135.207.67.443: Flags [.], ack 7055, win 334, length 0
+20:45:39.204865 IP [device-v4].55034 > 117.135.207.67.443: Flags [S], seq 882509399, win 65535, options [mss 1460,sackOK,TS val 30458311 ecr 0,nop,wscale 8], length 0
+20:45:39.282538 IP 117.135.207.67.443 > [device-v4].55034: Flags [S.], seq 4137620114, ack 882509400, win 2920, options [mss 1400,nop,nop,sackOK,nop,wscale 9], length 0
+20:45:39.282963 IP [device-v4].55034 > 117.135.207.67.443: Flags [.], ack 1, win 256, length 0
+20:45:39.284825 IP [device-v4].55034 > 117.135.207.67.443: Flags [P.], seq 1:604, ack 1, win 256, length 603
+20:45:39.350712 IP 117.135.207.67.443 > [device-v4].55034: Flags [.], ack 604, win 6, length 0
+20:45:39.350731 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 1:255, ack 604, win 6, length 254
+20:45:39.351202 IP [device-v4].55034 > 117.135.207.67.443: Flags [.], ack 255, win 261, length 0
+20:45:39.352879 IP [device-v4].55034 > 117.135.207.67.443: Flags [P.], seq 604:684, ack 255, win 261, length 80
+20:45:39.360985 IP [device-v4].55034 > 117.135.207.67.443: Flags [.], seq 684:2084, ack 255, win 261, length 1400
+20:45:39.361196 IP [device-v4].55034 > 117.135.207.67.443: Flags [P.], seq 2084:3484, ack 255, win 261, length 1400
+20:45:39.419930 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 255:317, ack 684, win 6, length 62
+20:45:39.427680 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 317:348, ack 2084, win 6, length 31
+20:45:39.427926 IP [device-v4].55034 > 117.135.207.67.443: Flags [P.], seq 3484:3812, ack 348, win 261, length 328
+20:45:39.470964 IP 117.135.207.67.443 > [device-v4].55034: Flags [.], ack 3484, win 6, length 0
+20:45:39.495795 IP 117.135.207.67.443 > [device-v4].55034: Flags [.], ack 3812, win 6, length 0
+20:45:39.495826 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 348:383, ack 3812, win 6, length 35
+20:45:39.519636 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 383:1495, ack 3812, win 6, length 1112
+20:45:39.520756 IP [device-v4].55034 > 117.135.207.67.443: Flags [.], ack 1495, win 272, length 0
+20:45:39.519662 IP 117.135.207.67.443 > [device-v4].55034: Flags [P.], seq 1495:1536, ack 3812, win 6, length 41
+20:45:39.525689 IP [device-v4].55034 > 117.135.207.67.443: Flags [P.], seq 3812:3836, ack 1536, win 272, length 24
+20:45:39.526268 IP [device-v4].55034 > 117.135.207.67.443: Flags [F.], seq 3836, ack 1536, win 272, length 0
+20:45:39.593969 IP 117.135.207.67.443 > [device-v4].55034: Flags [F.], seq 1536, ack 3836, win 6, length 0
+20:45:39.594161 IP [device-v4].55034 > 117.135.207.67.443: Flags [.], ack 1537, win 272, length 0
+20:45:39.593981 IP 117.135.207.67.443 > [device-v4].55034: Flags [.], ack 3837, win 6, length 0
+
+
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on wlan0, link-type EN10MB (Ethernet), snapshot length 80 bytes
+67 packets captured
+67 packets received by filter
+0 packets dropped by kernel

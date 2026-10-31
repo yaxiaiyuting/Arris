@@ -133,26 +133,33 @@ fun HomeScreen(
      */
     fun sessionStillAt(startedOwner: String?): Boolean = CookieManager.accountOwner() == startedOwner
 
-    LaunchedEffect(Unit) {
-        if (ContentCache.toplistItems != null && ContentCache.isToplistFresh()) return@LaunchedEffect
-        // H15：榜单同样不能把「换号前发出的请求」的结果落进新会话的快照。
-        val ownerAtStart = CookieManager.accountOwner()
-        // v1.5.1 · C：没网就不发（榜单只是首屏一块内容，不值得为它等超时）。
-        if (!NetworkAvailability.isOnline(context)) {
-            offline = true
-            return@LaunchedEffect
-        }
-        runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
-            if (!sessionStillAt(ownerAtStart)) return@LaunchedEffect
-            ContentCache.putToplist(it)
-            toplists = it
-            HomeSnapshot.save(context, toplists = it)
-        }
-    }
     val gridState = rememberLazyGridState()
     // 宽屏：新歌从"整行列表"切到"自适应栅格单元"（Apple Music 式）；手机保持整行列表。
     val isWide = LocalConfiguration.current.screenWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
+    /**
+     * 榜单：与首屏另外三块**同批发出**（v3.7.11）。
+     *
+     * 旧实现是一个独立的 `LaunchedEffect(Unit)`，它要排在首页首次加载的那个 effect 之后才跑，
+     * 而后者当时还在等 800ms 轮询 + 1.2s 预热 —— 于是榜单永远是最后才出现的一块。
+     */
+    fun loadToplists() {
+        if (ContentCache.toplistItems != null && ContentCache.isToplistFresh()) {
+            if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
+            return
+        }
+        val ownerAtStart = CookieManager.accountOwner()
+        if (!NetworkAvailability.isOnline(context)) return
+        coroutineScope.launch(Dispatchers.IO) {
+            val list = runCatching { PlaylistApi.getToplists() }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) {
+                if (!sessionStillAt(ownerAtStart)) return@withContext
+                ContentCache.putToplist(list)
+                toplists = list
+                HomeSnapshot.save(context, toplists = list)
+            }
+        }
+    }
 
     // 私人 FM 电台卡需要登录用户资料: 昵称(卡标题"xx的电台") + 头像(取强调色做封面)。
     // 电台卡**常驻**——资料拿不到也照常显示(标题回退通用文案), 不再因此整卡消失。
@@ -163,13 +170,16 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         // v1.5.1 · C：没网就别去要资料了（电台卡会退回通用标题）。
         if (!NetworkAvailability.isOnline(context)) return@LaunchedEffect
+        val started = CookieManager.snapshot()
         val profile = ContentCache.userProfile
             ?: runCatching { PlaylistApi.getUserProfile() }.getOrNull()
         if (profile != null && profile.userId > 0) {
-            fmProfile = profile
-            ContentCache.userProfile = profile
+            CookieManager.ifCurrent(started) {
+                fmProfile = profile
+                ContentCache.userProfile = profile
+            }
             val accent = runCatching { extractAvatarAccent(fmContext, profile.avatarUrl) }.getOrNull()
-            if (accent != null) fmAccent = accent
+            CookieManager.ifCurrent(started) { if (accent != null) fmAccent = accent }
         }
     }
 
@@ -283,31 +293,41 @@ fun HomeScreen(
         if (ContentCache.isHomeFreshFor(owner)) return@LaunchedEffect
         // v1.5.1 · C 冷启动竞态：AppWarmup 把磁盘快照灌回 ContentCache 是异步的
         // （IO 线程 + JSON 解析），这里最多等 800ms 再接后面的判断，免得首帧先闪一个
-        // 空态、再被随后到达的快照顶掉。有内容时这个等待一次都不会发生。
-        if (dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty()) {
-            var waited = 0
-            while (waited < 800 &&
-                ContentCache.homeDailySongs == null &&
-                ContentCache.homeRecommendPlaylists == null &&
-                ContentCache.homeNewSongs == null
-            ) {
-                delay(50)
-                waited += 50
+        // v3.7.11：这里曾经有两段**白等**：先轮询 800ms 等 ContentCache 被填，
+        // 再 `withTimeoutOrNull(1200ms)` 等 AppWarmup 收尾。冷启动时用户看到的是
+        // 「转圈近两秒，然后只有推荐歌单和新歌速递，每日推荐与榜单过一会才冒出来」。
+        //
+        // 现在改成「能拿到就用、拿不到立刻自己发」，且**四块并发**：
+        //  ① 有缓存（磁盘快照 / 预热已写入）⇒ 直接显示；
+        //  ② 预热还在飞 ⇒ await 它的在途请求（同一批网络请求，不重复）；
+        //  ③ 预热没跑 / 已收尾 ⇒ 自己发。
+        ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
+        ContentCache.homeRecommendPlaylists?.let { if (playlists.isEmpty()) playlists = it }
+        ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
+        if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
+
+        val inFlight = AppWarmup.homeLoads
+        if (inFlight != null && inFlight.isCurrent() && inFlight.owner == owner && !ContentCache.isHomeFreshFor(owner)) {
+            // 只 await 很短一段时间：预热那三条本来就已经发出去了，通常几十~几百毫秒内就回来。
+            // 超时也不空等 —— 下面照样自己发，用户不会对着转圈。
+            val arrived = withTimeoutOrNull(WARMUP_AWAIT_MS) {
+                val daily = runCatching { inFlight.daily.await() }.getOrNull()
+                val pls = runCatching { inFlight.playlists.await() }.getOrNull()
+                val top = runCatching { inFlight.newSongs.await() }.getOrNull()
+                Triple(daily, pls, top)
             }
-            ContentCache.homeDailySongs?.let { dailySongs = it }
-            ContentCache.homeRecommendPlaylists?.let { playlists = it }
-            ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
-        }
-        // v1.5.2：AppWarmup 的网络阶段不再阻塞 splash，它此刻很可能**正在**取同一批数据。
-        // 冷启动时在这里等它收尾（它有硬预算，见 AppWarmup.NETWORK_BUDGET_MS），
-        // 免得同一批接口在启动瞬间打两遍。等不到就自己发 —— 下面那段逻辑原样保留。
-        if (!ContentCache.isHomeFreshFor(owner) && !AppWarmup.homeFetchDone.value) {
-            withTimeoutOrNull(HOME_WARMUP_JOIN_MS) { AppWarmup.homeFetchDone.first { it } }
-            ContentCache.homeDailySongs?.let { dailySongs = it }
-            ContentCache.homeRecommendPlaylists?.let { playlists = it }
-            ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
-            if (ContentCache.isHomeFreshFor(owner)) {
+            arrived?.takeIf { inFlight.isCurrent() }?.let { (daily, pls, top) ->
+                daily?.let { if (it.isNotEmpty() && sessionStillAt(owner)) dailySongs = it }
+                pls?.let { if (it.isNotEmpty() && sessionStillAt(owner)) playlists = it }
+                top?.let { list ->
+                    if (list.isNotEmpty() && sessionStillAt(owner) && newSongs.isEmpty()) {
+                        newSongs.addAll(list)
+                    }
+                }
+            }
+            if (dailySongs.isNotEmpty() && playlists.isNotEmpty() && newSongs.isNotEmpty()) {
                 isLoading = false
+                loadToplists()
                 return@LaunchedEffect
             }
         }
@@ -318,10 +338,13 @@ fun HomeScreen(
             isLoading = false
             return@LaunchedEffect
         }
+        // 每日推荐 + 推荐歌单 + 新歌速递 + 榜单**同时发出**，谁先回来谁先上图。
         loadDailySongs()
         loadPlaylists()
         loadNewSongs()
+        loadToplists()
     }
+
 
     // v1.5.1 · C：半死网络（连上了但实际不通）下请求最长会挂到 connectTimeout。
     // 转圈最多陪跑 [HOME_LOAD_TIMEOUT_MS]：到点撤掉转圈、给空态 + 重试，
@@ -375,7 +398,7 @@ fun HomeScreen(
                     // 背景由 MainScreen 外层 Box 统一填充，子屏不重复画一层（消除 overdraw）
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     flingBehavior = rememberMetroFlingBehavior()
                 ) {
@@ -392,6 +415,7 @@ fun HomeScreen(
                                 color = LocalMetroColors.current.onBackground,
                                 style = LocalMetroTypography.current.pageHeading,
                             )
+                            com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity()
                         }
                         Spacer(Modifier.height(12.dp))
                     }
@@ -412,7 +436,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 items(toplists, key = { it.id }) { tl ->
@@ -460,7 +484,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 0.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
@@ -499,7 +523,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 item(key = "fm") {
@@ -891,6 +915,14 @@ private const val HOME_LOAD_TIMEOUT_MS = 8_000L
  * 取 1.2s：正常网络下预热早就回来了，这个等待一次都不会真的走满。
  */
 private const val HOME_WARMUP_JOIN_MS = 1_200L
+
+/**
+ * await 预热的在途请求最多等多久（v3.7.11）。
+ *
+ * 这三条请求在预热阶段**已经发出**，正常几十~几百毫秒就回；等 700ms 还没回说明网络慢，
+ * 与其继续空转，不如照旧自己发（最坏只是慢网下多一次请求，用户看到的却是"立刻有内容"）。
+ */
+private const val WARMUP_AWAIT_MS = 700L
 
 /** 点击 + 长按合并到一个 modifier，避免每个 tile 内部重复样板。 */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)

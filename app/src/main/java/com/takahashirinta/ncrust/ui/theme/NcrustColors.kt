@@ -55,45 +55,25 @@ data class NcrustColors(
  * WCAG 对比度（最亮的一档 #2E2E2E 上）：onSurface #FFFFFF 13.6:1、onSurfaceVariant
  * #B3B3B3 6.5:1 —— 每档都 ≥4.5:1，抬升不回退可读性。
  */
+/** Website palette: pine, warm paper and sage. Dark surfaces retain readable separation. */
 val DefaultNcrustColors = NcrustColors(
-    primary = Color(0xFF1DB954),
-    background = Color(0xFF000000),
-    surface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFF1A1A1A),
-    onBackground = Color(0xFFFFFFFF),
-    onSurface = Color(0xFFFFFFFF),
-    onSurfaceVariant = Color(0xFFB3B3B3),
-    surfaceContainerLowest = Color(0xFF000000),
-    surfaceContainerLow = Color(0xFF0E0E0E),
-    surfaceContainerHigh = Color(0xFF242424),
-    surfaceContainerHighest = Color(0xFF2E2E2E),
-    outline = Color(0xFF4A4A4A),
-    outlineVariant = Color(0xFF2A2A2A),
+    primary = Color(0xFFB4CEA0), onPrimary = Color(0xFF173C2E),
+    background = Color(0xFF101A15), surface = Color(0xFF19271F),
+    surfaceVariant = Color(0xFF26372B), onBackground = Color(0xFFF4F6EF),
+    onSurface = Color(0xFFF4F6EF), onSurfaceVariant = Color(0xFFB2BFB1),
+    surfaceContainerLowest = Color(0xFF101A15), surfaceContainerLow = Color(0xFF15221A),
+    surfaceContainerHigh = Color(0xFF223229), surfaceContainerHighest = Color(0xFF2C4032),
+    outline = Color(0xFF6B806E), outlineVariant = Color(0xFF344A3B),
 )
 
-/**
- * 浅色配色：米色偏白底（暖调），近黑暖灰文字。
- * surface 比 background 更亮一档，作为弹窗/侧栏/卡背的抬升面。
- *
- * 层级：页面 #F6F2E9 → 过渡 #FBF7EE → 基准容器 #FFFDF8 → 弹窗 #F2EBDE → 浮层 #EDE6D8。
- * background / surface 的现值与二者相对关系一字未动。
- * WCAG 对比度：onSurface #1C1A16 在 #EDE6D8 上 14.0:1；onSurfaceVariant #6E6658 在
- * #F2EBDE 上 4.78:1、在 #EDE6D8 上 4.57:1 —— 均 ≥4.5:1。
- */
 val LightNcrustColors = NcrustColors(
-    primary = Color(0xFF1DB954),
-    background = Color(0xFFF6F2E9),
-    surface = Color(0xFFFFFDF8),
-    surfaceVariant = Color(0xFFEDE6D8),
-    onBackground = Color(0xFF1C1A16),
-    onSurface = Color(0xFF1C1A16),
-    onSurfaceVariant = Color(0xFF6E6658),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFBF7EE),
-    surfaceContainerHigh = Color(0xFFF2EBDE),
-    surfaceContainerHighest = Color(0xFFEDE6D8),
-    outline = Color(0xFFC4B9A4),
-    outlineVariant = Color(0xFFE2DACB),
+    primary = Color(0xFF274B36), onPrimary = Color(0xFFFFFFFF),
+    background = Color(0xFFF6F7F2), surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFE8EDDF), onBackground = Color(0xFF173C2E),
+    onSurface = Color(0xFF173C2E), onSurfaceVariant = Color(0xFF5B6958),
+    surfaceContainerLowest = Color(0xFFF6F7F2), surfaceContainerLow = Color(0xFFF0F3E9),
+    surfaceContainerHigh = Color(0xFFEEF1E7), surfaceContainerHighest = Color(0xFFE3EAD9),
+    outline = Color(0xFF85957A), outlineVariant = Color(0xFFD5DECC),
 )
 
 val LocalNcrustColors = compositionLocalOf { DefaultNcrustColors }

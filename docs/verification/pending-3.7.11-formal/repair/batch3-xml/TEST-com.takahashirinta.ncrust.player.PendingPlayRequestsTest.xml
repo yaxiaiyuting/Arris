@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.player.PendingPlayRequestsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:31:03.022Z" hostname="cachyos-x8664" time="0.034">
+  <properties/>
+  <testcase name="lastUserIntentWinsEvenWhenOldNetworkIgnoresCancellation" classname="com.takahashirinta.ncrust.player.PendingPlayRequestsTest" time="0.032"/>
+  <testcase name="directPlaybackInvalidatesAWaitingRemoteList" classname="com.takahashirinta.ncrust.player.PendingPlayRequestsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

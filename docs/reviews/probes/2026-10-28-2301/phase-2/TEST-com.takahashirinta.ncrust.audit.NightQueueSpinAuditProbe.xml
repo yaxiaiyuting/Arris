@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightQueueSpinAuditProbe" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.631Z" hostname="cachyos-x8664" time="0.031">
+  <properties/>
+  <testcase name="compiledDisabledQueueHandlerSpinsWithoutAwaitingAnEvent" classname="com.takahashirinta.ncrust.audit.NightQueueSpinAuditProbe" time="0.031"/>
+  <system-out><![CDATA[AUDIT invokes actual compiled QueueView pointerInput closure with interactive=false and an empty current pointer event. 64 current-event reads, zero awaitPointerEvent calls; bounded fixture stops the tight loop. No Compose UI, real input, device or busy unbounded process
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

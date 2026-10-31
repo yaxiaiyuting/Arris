@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightBiliGenerationAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.496Z" hostname="cachyos-x8664" time="0.056">
+  <properties/>
+  <testcase name="supersededGenerateResponseCancelsNewWaitingSession" classname="com.takahashirinta.ncrust.audit.NightBiliGenerationAuditProbe" time="0.049"/>
+  <testcase name="supersededPollResponseCancelsNewConfirmedSession" classname="com.takahashirinta.ncrust.audit.NightBiliGenerationAuditProbe" time="0.003"/>
+  <system-out><![CDATA[AUDIT real prepare generation mismatch emits CANCELLED into the NEW controller session; no HTTP/UI/finishLogin executed
+AUDIT stale poll does not adopt old credentials, but overwrites new CONFIRMED with CANCELLED. Coroutine Job deliberately remains active; Compose dismissal protection is outside this proof
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

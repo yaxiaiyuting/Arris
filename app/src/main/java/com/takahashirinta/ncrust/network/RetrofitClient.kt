@@ -70,8 +70,23 @@ object RetrofitClient {
     internal fun probeClientWithProtocols(protocols: List<okhttp3.Protocol>): OkHttpClient =
         plainClient.newBuilder().protocols(protocols).build()
 
+    /**
+     * 清空连接池（切账号 / 换身份后让旧连接立刻失效）。
+     *
+     * ⚠️ **必须在后台线程执行**：`evictAll()` 会关闭底层的 TLS socket，
+     * 而 Conscrypt 在关闭时要写 close_notify —— 这是网络 I/O。
+     * 真机实测（PCL110 / Android 16）：调用方从主线程的协程恢复时进这里，
+     * 直接 `FATAL EXCEPTION: main android.os.NetworkOnMainThreadException`，
+     * 表现为「房主端用着用着就闪退、房间跟着没了、成员收不到任何快照」。
+     *
+     * 所以这里自己做线程切换，让调用方不必关心自己在哪个线程。
+     */
     fun evictConnections() {
-        sharedConnectionPool.evictAll()
+        // 单独开一条线程：不依赖任何 OkHttp 实例的 Dispatcher 是否还在就绪状态，
+        // 也不会因为调用方在主线程而抛 NetworkOnMainThreadException。
+        runCatching {
+            Thread({ runCatching { sharedConnectionPool.evictAll() } }, "ncrust-evict-conns").start()
+        }
     }
 
     fun updateCookie(cookie: String?) {
@@ -138,7 +153,13 @@ object RetrofitClient {
             // PING 让 OkHttp 在连接失效时及时换新连接。
             .pingInterval(15, TimeUnit.SECONDS)
             .connectionPool(sharedConnectionPool)
-            .connectTimeout(30, TimeUnit.SECONDS)
+            // 多地址回退：真机实测（docs/verification/v3.8.1/address-family.md）
+            // DNS 首个 IPv6 地址不回 TCP，而 30s 的单地址连接等待远大于调用截止，
+            // 结果是在尝试 IPv4 之前就被取消 —— 表现为 8s 级超时、ttfb=-1。
+            // 两处配合：① IPv4 优先（IPv6 保底，纯 IPv6 网络不受影响）
+            //          ② 单地址连接预算 30s → 8s，让坏地址能在截止前让位给下一个地址
+            .dns(AddressPreference.ipv4First)
+            .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
@@ -172,6 +193,14 @@ object RetrofitClient {
             // v2.5.6 · P1：被动计时（真 TTFB / 响应体读完）。见 HttpTimingListener 的 KDoc ——
             // 它是纯观测，不改变请求行为；不加这一行，「TTFB 花在哪」在 release 包里无从取证。
             .eventListenerFactory(HttpTimingListener.factory)
+            .build()
+    }
+
+    /** Playback read fallback only: do not reuse an h2 route rejected by the remote peer. */
+    private val playbackHttp1Client: OkHttpClient by lazy {
+        plainClient.newBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .connectionPool(ConnectionPool(2, 30, TimeUnit.SECONDS))
             .build()
     }
 
@@ -260,9 +289,13 @@ object RetrofitClient {
         useInterface: Boolean = false,
         extraCookie: String? = null,
         // 扫码确认后校验尚未持久化的会话；其余调用保留原来的身份追加方式。
-        cookieOverride: String? = null
+        cookieOverride: String? = null,
+        pinnedSession: NeteaseSessionSnapshot? = null,
     ): Response {
-        val session = CookieManager.snapshot()
+        val session = pinnedSession ?: CookieManager.snapshot()
+        if (pinnedSession != null && CookieManager.snapshot().loginGeneration != session.loginGeneration) {
+            throw java.io.IOException("session changed before eapi write")
+        }
         val host = if (useInterface) INTERFACE_URL else API_URL
         val fullUrl = host + path
         val anyPayload = payload.mapValues { it.value as Any }
@@ -322,17 +355,11 @@ object RetrofitClient {
         val call = plainClient.newCall(request).apply {
             timeout().timeout(8, TimeUnit.SECONDS)
         }
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            cont.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : okhttp3.Callback {
-                override fun onFailure(c: okhttp3.Call, e: java.io.IOException) {
-                    if (cont.isActive) cont.resumeWith(Result.failure(e))
-                }
-                override fun onResponse(c: okhttp3.Call, response: Response) {
-                    if (cont.isActive) cont.resumeWith(Result.success(response)) else response.close()
-                }
-            })
-        }
+        return if (request.url.encodedPath == "/eapi/song/enhance/player/url/v1") {
+            call.awaitPlaybackRead {
+                playbackHttp1Client.newCall(request).apply { timeout().timeout(8, TimeUnit.SECONDS) }
+            }
+        } else call.awaitBufferedResponse()
     }
 
     /**

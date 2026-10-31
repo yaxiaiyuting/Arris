@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.bili
 
+import com.takahashirinta.ncrust.network.awaitBufferedResponse
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -218,6 +219,7 @@ object BiliApi {
      */
     private val realClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addNetworkInterceptor(BiliCredentialBoundary)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -268,7 +270,7 @@ object BiliApi {
      *
      * @param force 忽略 TTL 强制刷新（412 / -403 之后调用一次）。
      */
-    private fun wbiKeys(force: Boolean = false): Pair<String, String>? {
+    private suspend fun wbiKeys(force: Boolean = false): Pair<String, String>? {
         val fresh = System.currentTimeMillis() - wbiFetchedAtMs < WBI_KEY_TTL_MS
         if (!force && fresh && hasWbiKeys()) return wbiImgUrl!! to wbiSubUrl!!
         // ⚠️ v3.2.0 · P0-C：这里的 `runCatching` 是 v3.1.0「B站 0 首」的最后一环 ——
@@ -305,7 +307,7 @@ object BiliApi {
      * `StrictMode.enableDeathOnNetwork()` 直接拒绝（`NetworkOnMainThreadException`）。
      * 它是 `private` 的，就是为了让「谁在什么线程上调它」在本文件里一眼看完。
      */
-    private fun get(url: String, cookie: String? = null): String {
+    private suspend fun get(url: String, cookie: String? = null): String {
         // H17：**凭据按目标 host 白名单发放**。
         //
         // 旧实现不看 url，把 `BiliAuthStore.requestCookieHeader()`（SESSDATA / bili_jct /
@@ -342,14 +344,14 @@ object BiliApi {
         // 带上一个孤立的指纹只会让指纹在不同接口间不一致。
         if (cookieHeader != null) builder.header("Cookie", cookieHeader)
         val request = builder.build()
-        client.newCall(request).execute().use { resp ->
+        client.newCall(request).awaitBufferedResponse().use { resp ->
             // 失败也要把正文带出去：B 站的错误是**结构化**的（`code` 字段），
             // 只看 HTTP 状态码会把「-1200 被降级过滤」和「网络挂了」混成一件事故。
             return resp.body?.string().orEmpty()
         }
     }
 
-    private fun post(url: String, body: String): String {
+    private suspend fun post(url: String, body: String): String {
         val request = Request.Builder()
             .url(url)
             .post(body.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
@@ -357,7 +359,7 @@ object BiliApi {
             .header("Referer", REFERER)
             .header("Origin", "https://www.bilibili.com")
             .build()
-        client.newCall(request).execute().use { resp ->
+        client.newCall(request).awaitBufferedResponse().use { resp ->
             return resp.body?.string().orEmpty()
         }
     }
@@ -401,7 +403,7 @@ object BiliApi {
                 .header("Referer", REFERER)
                 .header("Origin", "https://www.bilibili.com")
             if (!cookieHeader.isNullOrBlank()) builder.header("Cookie", cookieHeader)
-            client.newCall(builder.build()).execute().use { resp ->
+            client.newCall(builder.build()).awaitBufferedResponse().use { resp ->
                 BiliRawResponse(
                     httpCode = resp.code,
                     body = resp.body?.string().orEmpty(),
@@ -414,8 +416,8 @@ object BiliApi {
     /** 带 wbi 签名的 GET；遇到 412 / -403 时**强制刷新一次密钥**再试一遍（失败处理有界：只重试一次）。
      *
      * ⚠️ **只能在 `withContext(Dispatchers.IO)` 的块里调用**（同 [get] 的理由）。 */
-    private fun signedGet(baseUrl: String, params: Map<String, String>): String {
-        fun attempt(force: Boolean): String {
+    private suspend fun signedGet(baseUrl: String, params: Map<String, String>): String {
+        suspend fun attempt(force: Boolean): String {
             val keys = wbiKeys(force) ?: return ""
             val query = BiliWbi.buildQuery(params, keys.first, keys.second)
             return get("$baseUrl?$query")
@@ -775,7 +777,7 @@ object BiliApi {
      */
     @Volatile private var buvid3: String? = null
 
-    private fun buvid3(): String? {
+    private suspend fun buvid3(): String? {
         buvid3?.let { return it }
         val body = try {
             get(FINGER_URL)

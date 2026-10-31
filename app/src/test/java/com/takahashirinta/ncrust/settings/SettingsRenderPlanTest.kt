@@ -81,7 +81,7 @@ class SettingsRenderPlanTest {
                 "playback" to 7,
                 // v3.4.8：+1（B 站字幕语言）⇒ 10。它与既有的「歌词翻译」相邻 ——
                 // 两者回答同一个问题（要哪个语言的歌词），只是各音源能给的东西不同。
-                "lyrics" to 10,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
+                "lyrics" to 12,       // 翻译 / 逐字 / 渐变质量 / 字号 / 媒体面板 / TTML×2 / 音译 / 动态字号
                 "storage" to 3,      // 离线缓存上限 / 清除缓存 / 离线缓存管理
                 // v3.4.13：+1（自动检查更新）⇒ 2。更新开关与「关于」同页。
                 "about" to 2,        // 自动检查更新 / 关于
@@ -95,7 +95,7 @@ class SettingsRenderPlanTest {
         // v3.4.8：42 → 45（B 站音质上限 / 优先无损 FLAC / 字幕语言，三条都是可见项）。
         // v3.4.11 / 981e9b3：45 → 46（非会员遇到 VIP 歌曲）。
         // v3.4.13：再 +1（自动检查更新）⇒ 47。两笔是不同分组的独立可见项，不能合并计数。
-        assertEquals(52, counts.values.sum())
+        assertEquals(54, counts.values.sum())
         // 78 条 registry 条目 = 27 条内部项（从来不渲染） + 4 条库页承载 + 47 条二级页渲染
         //
         // v2.9.0 的内部项从 16 涨到 25：+7 是 v2.8.0 的波形键（降级为迁移源，含此前漏枚举的
@@ -108,7 +108,7 @@ class SettingsRenderPlanTest {
         // v3.4.11 / 981e9b3：75 → 76（非会员遇到 VIP 歌曲，可见项）。
         // v3.4.13：再 +1（update_auto_check）⇒ 77；同轮注册 SessionMonitor 的
         // session_was_logged_in（内部项）⇒ 78。
-        assertEquals(87, SettingsRegistry.allEntries().size)
+        assertEquals(89, SettingsRegistry.allEntries().size)
         // 内部项 26 → 27（新增 session_was_logged_in；v3.0.0 的 5 个动效键与
         // v3.1.0 的 B 站开关**都是可见开关**）。
         assertEquals(31, SettingsRegistry.allEntries().count { it.isInternal })

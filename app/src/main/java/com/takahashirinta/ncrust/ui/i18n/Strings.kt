@@ -493,6 +493,9 @@ data class Strings(
      */
     val likedPlayAll: LikedPlayAllStrings,
 ) {
+    val mediaLyrics: MediaLyricStrings get() = mediaLyricStringsForCode(
+        languagePresets.firstOrNull { it.strings === this }?.code ?: "zh-CN"
+    )
     val sessionExpiredBanner: String get() = account.sessionExpiredBanner
     val dailySongsLoginHint: String get() = account.dailySongsLoginHint
     val vipKindSvip: String get() = account.vipKindSvip
@@ -546,6 +549,7 @@ data class Strings(
     val offlineCacheDeleteTrack: String get() = offline.offlineCacheDeleteTrack
     val offlineCacheDeleteTitle: String get() = offline.offlineCacheDeleteTitle
     val offlineCacheDeleted: String get() = offline.offlineCacheDeleted
+    val offlineCacheOperationFailed: String get() = offline.offlineCacheOperationFailed
     val categoryOffline: String get() = offline.categoryOffline
 
     // v2.3.0：这两条随字段一起搬进 [offline] 组，调用点（MainScreen / HomeScreen 的离线空态）
@@ -847,6 +851,9 @@ data class Strings(
     val aboutAppSubtitle: String get() = about.aboutAppSubtitle
     val aboutSectionProject: String get() = about.aboutSectionProject
     val aboutVersion: String get() = about.aboutVersion
+
+    /** 关于页 · 开发者实验室入口（v3.8.0 临时诊断面）。 */
+    val aboutLab: String get() = about.aboutLab
     val celebration: CelebrationStrings get() = about.celebration
     val aboutDeveloperOriginal: String get() = about.aboutDeveloperOriginal
     val aboutDeveloperFork: String get() = about.aboutDeveloperFork
@@ -967,6 +974,7 @@ data class OfflineStrings(
     val cacheUsageImage: String,
     val cacheUsageOther: String,
     val cacheCleared: String,
+    val offlineCacheOperationFailed: String = "Cache operation failed; some files may remain.",
 )
 
 /**
@@ -1550,6 +1558,14 @@ data class ShareStrings(
     val scopeSection: String,
     /** 范围：整首歌词。 */
     val scopeWhole: String,
+    /** 范围：手动选段（自己点起止行）。 */
+    val scopeManual: String,
+    /** 手动选段的操作提示。 */
+    val manualHint: String,
+    /** 已选行数（参数是行数）。 */
+    val manualCount: (Int) -> String,
+    /** 超过出图上限时的提示（参数是上限行数）。 */
+    val manualTruncated: (Int) -> String,
     /** 选项：把译文一起复制 / 出图。 */
     val optionTranslation: String,
     /** 选项：把音译一起复制 / 出图。 */
@@ -1950,6 +1966,8 @@ data class AboutStrings(
     val aboutAppSubtitle: String,
     val aboutSectionProject: String,
     val aboutVersion: String,
+    /** 开发者实验室入口（v3.8.0 临时诊断面，功能上线后随 LabScreen 一起删除）。 */
+    val aboutLab: String = "实验室（诊断）",
     val aboutDeveloperOriginal: String,
     val aboutDeveloperFork: String,
     val aboutLicense: String,

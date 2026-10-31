@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.CoreResumeAuditProbe" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-28T16:31:51.738Z" hostname="cachyos-x8664" time="0.3">
+  <properties/>
+  <testcase name="businessFailureStillConsumesThirtyMinuteSessionWindow" classname="com.takahashirinta.ncrust.audit.CoreResumeAuditProbe" time="0.287"/>
+  <testcase name="accountChangeWhileReadingSnapshotPublishesPreviousAccountsDailySongs" classname="com.takahashirinta.ncrust.audit.CoreResumeAuditProbe" time="0.008"/>
+  <testcase name="matchingSnapshotRestoresNormallyWithoutAccountChange" classname="com.takahashirinta.ncrust.audit.CoreResumeAuditProbe" time="0.002"/>
+  <system-out><![CDATA[DEFECT J03 residual: business code500 counts as a checked session; healthy onResume makes zero requests, forced refresh reaches Valid. JVM SystemClock stub is zero; no real timing was measured.
+DEFECT H15 read residual: B login clears persisted snapshot and binds cache to B, but the in-flight real restoreIntoCache publishes A's already-read JSON afterward. Only MemoryPrefs and production cache code ran.
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

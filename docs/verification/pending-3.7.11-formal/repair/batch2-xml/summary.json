@@ -1,0 +1,56 @@
+[
+  {
+    "name": "com.takahashirinta.ncrust.library.SavedSongCodecTest",
+    "tests": "17",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.library.SavedIdentityConsolidationTest",
+    "tests": "4",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.library.SavedSongSyncTest",
+    "tests": "28",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.local.LocalPlaylistFailureAtomicityTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.local.LocalSyncCommitOutcomeTest",
+    "tests": "8",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.player.PendingPlayRequestsTest",
+    "tests": "2",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.network.PlaylistWriteSessionPinTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.qq.QqPlaylistBatchOwnerTest",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0"
+  },
+  {
+    "name": "com.takahashirinta.ncrust.qq.QqPlaylistCompletenessTest",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0"
+  }
+]

@@ -62,6 +62,8 @@
             </intent-filter>
         </activity>
 
+        <receiver android:name=".player.PlaybackActionReceiver" android:exported="false" />
+
         <!-- exported=true: 车机 Media Center / 系统媒体控制需要跨进程绑定本服务。 -->
         <service
             android:name=".player.PlaybackService"

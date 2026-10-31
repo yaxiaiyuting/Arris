@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightLocalStoreResidualAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.608Z" hostname="cachyos-x8664" time="0.016">
+  <properties/>
+  <testcase name="failedAdoptionReturnsAPlaylistThatWasRolledBack" classname="com.takahashirinta.ncrust.audit.NightLocalStoreResidualAuditProbe" time="0.009"/>
+  <testcase name="failedMetadataDeletionStillDeletesItsTrackTable" classname="com.takahashirinta.ncrust.audit.NightLocalStoreResidualAuditProbe" time="0.005"/>
+  <system-out><![CDATA[AUDIT real adoptRemote ignores false from writePlaylists; returns success-shaped playlist absent from memory store. No cloud/UI requests
+AUDIT real deletePlaylist: metadata commit fails and rollback succeeds, but tracks are then removed; operation returns false while retained playlist loses its songs. In-memory prefs only; no disk
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

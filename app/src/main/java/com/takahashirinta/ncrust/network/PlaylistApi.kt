@@ -132,6 +132,25 @@ object PlaylistApi {
                 ?: account?.optString("avatarUrl", "") ?: ""
         )
     }
+    /** Full user playlist list, advancing by raw rows (including hidden special playlists). */
+    suspend fun getAllUserPlaylists(
+        uid: Long,
+        pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot = CookieManager.snapshot(),
+    ): List<PlaylistInfo> {
+        val all = LinkedHashMap<Long, PlaylistInfo>()
+        var offset = 0
+        repeat(100) {
+            if (!sameAccount(pinned)) throw java.io.IOException("playlist account changed")
+            val page = getUserPlaylists(uid, 100, offset)
+            if (!sameAccount(pinned)) throw java.io.IOException("playlist account changed")
+            page.playlists.forEach { all[it.id] = it }
+            if (!page.more) return all.values.toList()
+            if (page.rawCount <= 0) throw java.io.IOException("playlist paging incomplete")
+            offset += page.rawCount
+        }
+        throw java.io.IOException("playlist paging limit reached")
+    }
+
     suspend fun getUserPlaylists(uid: Long, limit: Int = 100, offset: Int = 0): UserPlaylistResult = withContext(Dispatchers.IO) {
         val payload = mapOf(
             "uid" to uid.toString(),
@@ -172,7 +191,8 @@ object PlaylistApi {
         UserPlaylistResult(
             playlists = playlists,
             total = json.optInt("total", 0),
-            more = json.optBoolean("more", false)
+            more = json.optBoolean("more", false),
+            rawCount = playlistArray.length(),
         )
     }
 
@@ -371,12 +391,34 @@ object PlaylistApi {
         val album: AlbumItem? = albumJson?.let {
             AlbumItem(id = it.optLong("id"), name = it.optString("name"), picUrl = it.optString("picUrl"))
         }
+        // 原唱/翻唱标注（v2.3.0 的字段，这里长期漏解析）。
+        //
+        // **症状**：搜索结果里有「原唱」角标，收藏库/歌单详情里同一首歌却没有 ——
+        // 因为详情接口（`/eapi/v3/song/detail`、`/eapi/v6/playlist/detail` 等）也下发
+        // `originCoverType`，但 `parseSongTrack` 只挑了 id/name/ar/al/dt，把它丢了。
+        // 判据仍然只在 `SongTags` 一处（0/3/缺失 = 不打标签），这里只负责**把字段带出去**。
+        val originCoverType = track.optInt("originCoverType", -1).takeIf { it >= 0 }
+        val originSong = track.optJSONObject("originSongSimpleData")?.let { ref ->
+            OriginSongRef(
+                songId = ref.optLong("songId").takeIf { it > 0L },
+                name = ref.optString("name").takeIf { it.isNotEmpty() },
+                artists = ref.optJSONArray("artists")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        val a = arr.optJSONObject(i) ?: return@mapNotNull null
+                        val n = a.optString("name").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                        ArtistItem(id = a.optLong("id").takeIf { v -> v != 0L }, name = n)
+                    }
+                },
+            )
+        }
         return SongItem(
             id = track.optLong("id"),
             name = track.optString("name"),
             artists = artists,
             album = album,
-            duration = track.optLong("dt")
+            duration = track.optLong("dt"),
+            originCoverType = originCoverType,
+            originSong = originSong,
         )
     }
 
@@ -457,7 +499,8 @@ object PlaylistApi {
     data class UserPlaylistResult(
         val playlists: List<PlaylistInfo>,
         val total: Int,
-        val more: Boolean
+        val more: Boolean,
+        val rawCount: Int = playlists.size,
     )
 
     @Immutable
@@ -1148,7 +1191,8 @@ object PlaylistApi {
         sub: Boolean,
         pinned: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot? = null,
     ): Boolean = withContext(Dispatchers.IO) {
-        if (pinned != null && !sameAccount(pinned)) {
+        val session = CookieManager.snapshot()
+        if (pinned != null && session.loginGeneration != pinned.loginGeneration) {
             Log.w("PlaylistApi", "subAlbum aborted: session changed id=$albumId sub=$sub")
             return@withContext false
         }
@@ -1156,10 +1200,11 @@ object PlaylistApi {
         val payload = mapOf("id" to albumId.toString())
         // 复核与发包之间没有挂起点：不传 cookieOverride 是为了让请求保留会话 tag，
         // 迟到的 301 仍能走 SessionMonitor 把会话转 Expired。
-        val response = RetrofitClient.eapiPost("/eapi/album/$action", payload)
-        val body = response.body?.string() ?: return@withContext false
-        val code = JSONObject(body).optInt("code", -1)
-        reportBusinessCode(code, response)
-        code == 200
+        RetrofitClient.eapiPost("/eapi/album/$action", payload, pinnedSession = session).use { response ->
+            val body = response.body?.string() ?: return@withContext false
+            val code = JSONObject(body).optInt("code", -1)
+            reportBusinessCode(code, response)
+            code == 200
+        }
     }
 }

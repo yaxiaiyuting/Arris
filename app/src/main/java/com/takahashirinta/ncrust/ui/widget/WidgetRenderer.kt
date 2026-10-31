@@ -72,10 +72,10 @@ internal object WidgetIntents {
     }
 
     fun service(context: Context, action: String): PendingIntent {
-        val intent = Intent(context, PlaybackService::class.java).apply {
+        val intent = Intent(context, com.takahashirinta.ncrust.player.PlaybackActionReceiver::class.java).apply {
             putExtra("action", action)
         }
-        return PendingIntent.getService(
+        return PendingIntent.getBroadcast(
             context,
             action.hashCode(),
             intent,

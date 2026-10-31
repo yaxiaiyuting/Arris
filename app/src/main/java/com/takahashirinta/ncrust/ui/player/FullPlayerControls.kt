@@ -12,6 +12,9 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.draw.clip
+import com.takahashirinta.ncrust.ui.theme.AppShapes
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -335,6 +338,8 @@ fun FullPlayerControls(
                     Box(
                         modifier = Modifier
                             .size(54.dp)
+                            .clip(AppShapes.full)
+                            .background(LocalMetroColors.current.primary)
                             .clickable {
                                 tick()
                                 onPlayPause()
@@ -344,7 +349,7 @@ fun FullPlayerControls(
                         MetroIcon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
-                            tint = LocalMetroColors.current.onBackground,
+                            tint = LocalMetroColors.current.onPrimary,
                             sizeDp = 36.dp
                         )
                     }
@@ -496,6 +501,8 @@ fun FullPlayerControls(
             Box(
                 modifier = Modifier
                     .size(playBtn)
+                    .clip(AppShapes.full)
+                    .background(LocalMetroColors.current.primary)
                     .clickable {
                         tick()
                         onPlayPause()
@@ -505,7 +512,7 @@ fun FullPlayerControls(
                 MetroIcon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
-                    tint = LocalMetroColors.current.onBackground,
+                    tint = LocalMetroColors.current.onPrimary,
                     sizeDp = playIcon
                 )
             }
@@ -730,6 +737,7 @@ fun PlayerQualityChip(
     ) {
         Box(
             modifier = Modifier
+                .clip(AppShapes.full)
                 .background(LocalMetroColors.current.surfaceVariant)
                 .clickable(
                     indication = null,

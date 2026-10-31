@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const file=path.join(root,'src/index.mjs');
+const html=fs.readFileSync(path.join(root,'public/index.html'),'utf8');
+const marker='// 首页内容';
+const source=fs.readFileSync(file,'utf8');
+if(!source.includes(marker))throw Error('Homepage marker missing; refusing to edit Worker backend');
+const prefix=source.slice(0,source.indexOf(marker));
+const next=prefix+'// 首页内容由 tools/sync-homepage.mjs 从 public/index.html 生成。\nconst INDEX_HTML = '+JSON.stringify(html)+';\n';
+fs.writeFileSync(file,next);
+console.log('Homepage embedded; backend prefix preserved byte-for-byte.');

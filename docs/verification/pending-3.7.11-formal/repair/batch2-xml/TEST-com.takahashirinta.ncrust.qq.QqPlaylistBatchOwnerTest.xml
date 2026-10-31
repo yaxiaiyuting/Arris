@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.qq.QqPlaylistBatchOwnerTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-28T20:26:30.653Z" hostname="cachyos-x8664" time="0.035">
+  <properties/>
+  <testcase name="accountChangeBetweenPagesStopsTheBatchWithoutCachingMixedOwners" classname="com.takahashirinta.ncrust.qq.QqPlaylistBatchOwnerTest" time="0.035"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

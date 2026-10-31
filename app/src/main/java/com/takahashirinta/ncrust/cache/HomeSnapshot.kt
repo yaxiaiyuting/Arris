@@ -78,6 +78,7 @@ object HomeSnapshot {
     ) {
         if (daily == null && playlists == null && newSongs == null && toplists == null) return
         val app = context.applicationContext
+        val started = com.takahashirinta.ncrust.auth.CookieManager.snapshot()
         ioScope.launch {
             runCatching {
                 // H15：**归属在发起调用时就已经定了**（默认参数在调用线程求值）。
@@ -117,7 +118,9 @@ object HomeSnapshot {
                 // 归属随快照一起落盘：换账号后 restore 会被 owner 过滤掉，不会读到别人的推荐。
                 // 这里写的是**调用时捕获的** owner（H15），不是在收尾时重新读的"当前账号"。
                 if (owner == null) editor.remove(KEY_OWNER) else editor.putString(KEY_OWNER, owner)
-                editor.apply()
+                com.takahashirinta.ncrust.auth.CookieManager.ifCurrent(started) {
+                    if (sameOwner(owner, com.takahashirinta.ncrust.auth.CookieManager.accountOwner())) editor.apply()
+                }
             }
         }
     }
@@ -135,20 +138,21 @@ object HomeSnapshot {
         val current = com.takahashirinta.ncrust.auth.CookieManager.accountOwner()
         val stored = p.getString(KEY_OWNER, null)
         if (!sameOwner(stored, current)) return false
-        var restored = false
-        if (ContentCache.homeDailySongs == null) {
-            readList<SongItem>(p, KEY_DAILY, songListType)?.let { ContentCache.homeDailySongs = it; restored = true }
-        }
-        if (ContentCache.homeRecommendPlaylists == null) {
-            readList<PlaylistApi.PlaylistCard>(p, KEY_PLAYLISTS, cardListType)?.let { ContentCache.homeRecommendPlaylists = it; restored = true }
-        }
-        if (ContentCache.homeNewSongs == null) {
-            readList<SongItem>(p, KEY_NEW_SONGS, songListType)?.let { ContentCache.homeNewSongs = it; restored = true }
-        }
-        if (ContentCache.toplistItems == null) {
-            readList<PlaylistApi.PlaylistCard>(p, KEY_TOPLISTS, cardListType)?.let { ContentCache.putToplist(it); restored = true }
-        }
-        return restored
+        val started = com.takahashirinta.ncrust.auth.CookieManager.snapshot()
+        val daily = readList<SongItem>(p, KEY_DAILY, songListType)
+        val playlists = readList<PlaylistApi.PlaylistCard>(p, KEY_PLAYLISTS, cardListType)
+        val newSongs = readList<SongItem>(p, KEY_NEW_SONGS, songListType)
+        val toplists = readList<PlaylistApi.PlaylistCard>(p, KEY_TOPLISTS, cardListType)
+        return com.takahashirinta.ncrust.auth.CookieManager.ifCurrent(started) {
+            if (!sameOwner(stored, com.takahashirinta.ncrust.auth.CookieManager.accountOwner())) return@ifCurrent false
+            ContentCache.bindOwner(current)
+            var restored = false
+            daily?.let { if (ContentCache.homeDailySongs == null) { ContentCache.homeDailySongs = it; restored = true } }
+            playlists?.let { if (ContentCache.homeRecommendPlaylists == null) { ContentCache.homeRecommendPlaylists = it; restored = true } }
+            newSongs?.let { if (ContentCache.homeNewSongs == null) { ContentCache.homeNewSongs = it; restored = true } }
+            toplists?.let { if (ContentCache.toplistItems == null) { ContentCache.putToplist(it); restored = true } }
+            restored
+        } ?: false
     }
 
     /** 清除整份首页快照（登出/换账号时调用）。 */

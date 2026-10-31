@@ -1,0 +1,422 @@
+{
+  "baseline": "35f8b01",
+  "files": [
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/SessionMonitor.kt",
+      "sha256": "a2d5cd3fe7a3717c57224976da183314dd55e0c11364b0acff6f5a543788f014",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          132
+        ]
+      ],
+      "lines_total": 132,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/account/SessionState.kt",
+      "sha256": "6b379bb276c050d82122f7d5af0ad2cf16efaf732e00f8f11b980cc85a78b28d",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          84
+        ]
+      ],
+      "lines_total": 84,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseSessionGuard.kt",
+      "sha256": "b1e717971c3a2f6cb94f320ee914ea2269a1fd519684b2da119f50660a700ebc",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          17
+        ]
+      ],
+      "lines_total": 17,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseTokenRefresher.kt",
+      "sha256": "f8a854a8b4e7098441ed2369e16a014388f6019d176f6e404882a8d8302295b1",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          109
+        ]
+      ],
+      "lines_total": 109,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqAuthStore.kt",
+      "sha256": "e4f8d46c98d94081c48987aeabd29652722e71956f312a4d71b22585dc920306",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          220
+        ]
+      ],
+      "lines_total": 220,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/ContentCache.kt",
+      "sha256": "9c8da62e136b3aca0ee0e85c8a676f32fcb34ed4c6c8b05d33e3fdf9c00a124e",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          118
+        ]
+      ],
+      "lines_total": 118,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/cache/HomeSnapshot.kt",
+      "sha256": "d617188011843dba24ccced3c4284336bf350149e506b1c25de37baf31d38fa4",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          173
+        ]
+      ],
+      "lines_total": 173,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/warmup/AppWarmup.kt",
+      "sha256": "473f08ef1d41c934bee37159aa62104c2568edbfb103ce4192cfafeb6293f5f1",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          262
+        ]
+      ],
+      "lines_total": 262,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/widget/WidgetPushGate.kt",
+      "sha256": "2b4d47ae187ec6257cab0ae82988bee9a709600a9958da53a3cf9c73e431d7eb",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          200
+        ]
+      ],
+      "lines_total": 200,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/update/UpdateDownloader.kt",
+      "sha256": "a4b9aa1eb600fc9eb3538dea0427f92ad110fda40eb7df1620d3c711c822b2c3",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          372
+        ]
+      ],
+      "lines_total": 372,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareSelection.kt",
+      "sha256": "35e247773711ef5bfcadc48aad836403a904f756e08bd424fcff909eb3ca83f5",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          207
+        ]
+      ],
+      "lines_total": 207,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareModel.kt",
+      "sha256": "b4a6368294eb4f049bab19de2b0dc3023b926c247dd933483a5735ad77a9cca2",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          116
+        ]
+      ],
+      "lines_total": 116,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareText.kt",
+      "sha256": "f34abd090c954bff3e2045a8be8331f658302578e81a9ba1bb903b409f0fd2cf",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          161
+        ]
+      ],
+      "lines_total": 161,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricShareActions.kt",
+      "sha256": "d3c953d2b9ee749be26a7416c9ce4e467e51d22ff71b499df111071eefbf5a9f",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          330
+        ]
+      ],
+      "lines_total": 330,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricSharePoster.kt",
+      "sha256": "83ad0c310edfedff866bd91dd370ab2fe2d10bcd791bdc4930056d9dccb4811f",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          169
+        ]
+      ],
+      "lines_total": 169,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterLayout.kt",
+      "sha256": "bff78dd6475e0309c6e2e27a9e1ca6cab34087ad92a85300f64b5119d619e84e",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          244
+        ]
+      ],
+      "lines_total": 244,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/share/LyricPosterRenderer.kt",
+      "sha256": "d21c18efe9dd321a8c8e11404418aa3dd3c8b3cd2c556dec8b575d4c7d41d468",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          477
+        ]
+      ],
+      "lines_total": 477,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPair.kt",
+      "sha256": "9e2f2cc1b9d5d51ee3bc1ca4a473939274fe352bef635a0a692c4ec8c500db5c",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          184
+        ]
+      ],
+      "lines_total": 184,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPairClient.kt",
+      "sha256": "c23f3f230288b95f877fcfbed0ce6e1e2b5107e8f9d180b26ab5f54166a7f54b",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          80
+        ]
+      ],
+      "lines_total": 80,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/QrPairServer.kt",
+      "sha256": "4ed7cd66e447e30bf7dbc87b56e10d98c03549f95ec3242a66285f95ba5b96b3",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          100
+        ]
+      ],
+      "lines_total": 100,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/LikedPlaylistPick.kt",
+      "sha256": "ab6d63b78a90914bd77b35d532f7e0c3237e7b884792deb58048c09dff4d882a",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          82
+        ]
+      ],
+      "lines_total": 82,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqIdentity.kt",
+      "sha256": "9cc59a58151c3606cd531b1c2024f05265a9ec330daa3cee35f1479c7f063945",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          79
+        ]
+      ],
+      "lines_total": 79,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/source/SongSourceExt.kt",
+      "sha256": "4aebf0ed1361ed11c7eb34f771653c9fbce0bc4668a96138a29e9949d110cf25",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          135
+        ]
+      ],
+      "lines_total": 135,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistRepository.kt",
+      "sha256": "bb089915c4811537348b8d8039762a314f72d1becdc3edfcc0a5ecfa35a10656",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          429
+        ]
+      ],
+      "lines_total": 429,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistRepository.kt",
+      "sha256": "8ce927bd2a6e42577aa0027eb5bb4fd06ac66725b435c424bebb77ef7788efdc",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          337
+        ]
+      ],
+      "lines_total": 337,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistApi.kt",
+      "sha256": "d6489fc5b99231e419084f81562f61b69bb39eecd7961e435b3195ce906c6882",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          239
+        ]
+      ],
+      "lines_total": 239,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/qq/QqClient.kt",
+      "sha256": "1243c820c40e0b06306ca2491dee53cca09ed0d45466d9137cd79af46ec8acde",
+      "mode": "full_executable_code",
+      "regions": [
+        [
+          1,
+          544
+        ]
+      ],
+      "lines_total": 544,
+      "baseline": "35f8b01",
+      "note": "complete executable code read; comments/imports/blank lines omitted; no device verification"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/auth/CookieManager.kt",
+      "sha256": "ae18c9b12a4db54cfdb31a96a108a01fb5b4dd6f5186ef00c08843e08acd57d3",
+      "mode": "partial_call_chain",
+      "regions": [
+        [
+          1,
+          160
+        ]
+      ],
+      "lines_total": 142,
+      "baseline": "35f8b01"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/ui/screen/HomeScreen.kt",
+      "sha256": "870a2485cc11b5023d0db7a3bf82b36da1fe6873d779c39886e3052fea757cdf",
+      "mode": "partial_call_chain",
+      "regions": [
+        [
+          90,
+          440
+        ]
+      ],
+      "lines_total": 926,
+      "baseline": "35f8b01"
+    },
+    {
+      "path": "app/src/main/java/com/takahashirinta/ncrust/network/PlaylistApi.kt",
+      "sha256": "4cf20af0ef79958e52d388fbaab3a487434006820e42dc942e6bec5fc1425d26",
+      "mode": "partial_call_chain",
+      "regions": [
+        [
+          1,
+          150
+        ]
+      ],
+      "lines_total": 1187,
+      "baseline": "35f8b01"
+    }
+  ]
+}

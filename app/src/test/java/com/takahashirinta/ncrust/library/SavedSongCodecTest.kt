@@ -236,8 +236,8 @@ class SavedSongCodecTest {
         val json = "[$good, 42, \"not an object\", {\"trackKey\":\"netease:2\"}, $good]"
         val decoded = SavedSongCodec.decode(json)
         // 第 4 条（只有 trackKey、没有 song）身份拿不到 ⇒ 丢弃；
-        // 非对象元素跳过；重复的 good 保留两份（去重是 SavedSongSync 的职责，不是 codec 的）。
-        assertEquals(2, decoded.size)
+        // 非对象元素跳过；读时迁移后的重复身份通过 SavedSongSync 合并。
+        assertEquals(1, decoded.size)
         decoded.forEach { assertEquals(1L, it.trackKey.id) }
     }
 

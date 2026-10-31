@@ -264,7 +264,7 @@ internal fun PlayerCard(
     val narrowMinGapPx = with(density) { 12.dp.toPx() }
     val narrowFallbackTopBarPx = with(density) { TrayLayout.TOP_BAR_HEIGHT_DP.dp.toPx() }
     val narrowFallbackControlsPx = with(density) { 280.dp.toPx() }
-    val narrowCover = remember(statusBarPx, screenHeightPx, screenWidthPx) {
+    val narrowCover = remember(statusBarPx, screenHeightPx, screenWidthPx, density) {
         derivedStateOf {
             narrowCoverGeometry(
                 availableWidthPx = screenWidthPx,
@@ -273,7 +273,9 @@ internal fun PlayerCard(
                     ui.narrowTopBarHeightPx.takeIf { it > 0f }.let { it ?: narrowFallbackTopBarPx },
                 controlsHeightPx = ui.controlsHeightPx.takeIf { it > 0f }
                     .let { it ?: narrowFallbackControlsPx } + narrowGapPx + narrowHandlePx,
-                titleReservePx = ui.narrowTitleHeightPx,
+                panelHeightPx = ui.narrowPanelHeightPx.takeIf { it > 0f },
+                titleReservePx = ui.narrowTitleHeightPx.takeIf { it > 0f }
+                    ?: with(density) { (90.dp.toPx() * density.fontScale) },
                 minGapPx = narrowMinGapPx,
                 preferredCenterYPx = screenHeightPx * 0.3f + with(density) { 24.dp.toPx() },
             )

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:55:32.406Z" hostname="cachyos-x8664" time="0.01">
+  <properties/>
+  <testcase name="preferenceDefaultsAndMalformedValuesAreSafe" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="seekBothDirectionsSelectsOneCoherentSentencePair" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="missingTranslationFallsBackToOriginalOnlyInEitherOrder" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="bilingualOffPreservesOriginalOnlyLegacyLayout" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="mediaSessionAndNotificationUseTheSameBilingualOrder" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="defaultKeepsOriginalAboveTranslation" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="untranslatedSentenceDoesNotBorrowTheNextSentenceTranslation" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="blankOrDuplicateTranslationDoesNotCreateASecondLyricLine" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="clearingTrackClearsBothPublishedLines" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="translationArrivingLatePassesTheExistingNotificationGate" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.005"/>
+  <testcase name="newSettingsAreReachableInLyricsAndPlaybackGroups" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.001"/>
+  <testcase name="translationCanBeThePrimaryLine" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="nearbyTranslationBelongsToTheNearestOriginalAndExactMatchWins" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="changingPrimaryLineAlsoChangesPublicationIdentity" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <testcase name="disabledLyricsAndBeforeFirstSentenceKeepSongIdentity" classname="com.takahashirinta.ncrust.player.MediaBilingualLyricsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

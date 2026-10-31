@@ -177,6 +177,31 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * 把未捕获异常写进 `filesDir/last_crash.txt`（v3.8.1）。
+     *
+     * 为什么需要：一起听/扫描这类问题的现场只能靠 logcat，而真机上 logcat 会被
+     * 反复刷掉、用户也不方便现场抓。写一份到应用私有目录后，
+     * `adb pull /sdcard/Android/data/<pkg>/files/last_crash.txt` 就能拿到完整栈，
+     * 不用再靠猜。**只记录、不吞异常** —— 记录完照常交给系统默认处理。
+     */
+    private fun installCrashRecorder() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                val text = buildString {
+                    appendLine("time=" + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
+                        .format(java.util.Date()))
+                    appendLine("thread=" + thread.name)
+                    appendLine("version=" + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")")
+                    appendLine(error.stackTraceToString())
+                }
+                java.io.File(filesDir, "last_crash.txt").writeText(text)
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
     /**
      * B2-D：系统强调色会在用户换壁纸/换主题后变化，系统此时会重发 Configuration。
      * 这里只维护一个"第几次读取"的计数器 —— 颜色本身永远从当前 Context 现读，
@@ -224,6 +249,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installCrashRecorder()
         // 手机锁竖屏、大屏(平板/折叠展开/车机)放开方向。见 applyOrientationPolicy。
         applyOrientationPolicy()
         // v1.8.0：设置项的进程内镜像要在任何 UI 读它之前就位（同步读 SharedPreferences，
@@ -319,6 +345,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
             }
+            SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !isDark
+                    isAppearanceLightNavigationBars = !isDark
+                }
+            }
 
             // B2-C：主题色来源三选一（预设 / 封面 / 系统）。封面色由 PlaybackService 的
             // Palette 结果静态推送到 ViewModel；系统色仅 API 31+ 可用。
@@ -339,12 +371,12 @@ class MainActivity : ComponentActivity() {
             val accentColor = remember(accentSource, themeIndex, coverAccentRgb, isDark, systemAccent) {
                 when (accentSource) {
                     AccentSource.COVER -> coverAccentRgb?.let { processAccentColor(it, isDark) }
-                        ?: themeColorForIndex(themeIndex)
+                        ?: themeColorForIndex(themeIndex, isDark)
                     // systemAccentColor 在 API < 31 返回 null（跨设备同步 prefs 的防御），
                     // 拿不到就回落预设色 —— 不静默改变现有颜色。
                     AccentSource.SYSTEM -> systemAccent?.let { processAccentColor(it.toArgb(), isDark) }
-                        ?: themeColorForIndex(themeIndex)
-                    AccentSource.PRESET -> themeColorForIndex(themeIndex)
+                        ?: themeColorForIndex(themeIndex, isDark)
+                    AccentSource.PRESET -> themeColorForIndex(themeIndex, isDark)
                 }
             }
 
@@ -375,7 +407,7 @@ class MainActivity : ComponentActivity() {
                     // 组配色 -- Ncrust* 与 Metro* 组件可以并存,视觉一致。
                     val ncrust = LocalNcrustColors.current
                     val metroColors = remember(ncrust, isDark) { ncrust.toMetroColors(isDark) }
-                    MetroTheme(colors = metroColors) {
+                    MetroTheme(colors = metroColors, typography = com.takahashirinta.ncrust.ui.theme.ArrisMetroTypography) {
                     var showSplash by remember { mutableStateOf(true) }
                     var showBatteryPrompt by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -755,6 +787,9 @@ internal fun reasonText(
 }
 
 /** 播放模式：0=顺序循环, 1=单曲循环, 2=乱序, 3=顺序线性(播完停), 4=相似无限(FM 电台)。 */
+/** 跟随同一首歌的最小间隔：避免每秒快照反复触发起播。 */
+private const val FOLLOW_COOLDOWN_MS = 8_000L
+
 object QueueModes {
     const val CYCLE = 0
     const val SINGLE = 1
@@ -811,9 +846,21 @@ internal fun reorderByIdentity(
     fromKey: TrackKey,
     toKey: TrackKey,
 ): PlaybackQueueLogic.QueueState? {
+    if (queue.count { QueueKeys.keyOf(it) == fromKey } != 1 || queue.count { QueueKeys.keyOf(it) == toKey } != 1) return null
     val from = PlaybackQueueLogic.indexOfKey(queue, fromKey)
     val to = PlaybackQueueLogic.indexOfKey(queue, toKey)
-    if (from < 0 || to < 0 || from == to) return null
+    return reorderByIndices(queue, currentIndex, from, to)
+}
+
+internal fun reorderBySnapshot(
+    queue: List<SongItem>, currentIndex: Int, expected: List<SongItem>, from: Int, to: Int,
+): PlaybackQueueLogic.QueueState? =
+    if (queue !== expected) null else reorderByIndices(queue, currentIndex, from, to)
+
+internal fun reorderByIndices(
+    queue: List<SongItem>, currentIndex: Int, from: Int, to: Int,
+): PlaybackQueueLogic.QueueState? {
+    if (from !in queue.indices || to !in queue.indices || from == to) return null
     val item = queue[from]
     val moved = queue.toMutableList().apply {
         removeAt(from)
@@ -837,6 +884,9 @@ internal fun reorderByIdentity(
  * 表现是「点转到歌手跳到了用户页」—— 一个只在特定入口复现的错页。
  */
 private const val SEARCH_TAB_INDEX = 2
+
+/** 底栏切歌按钮的合并窗口（ms）：窗口内的连点只执行最后一次。 */
+private const val SKIP_TAP_SETTLE_MS = 220L
 
 /** v2.6.1 · P0：艺人跳转的日志标签。降级为搜索时必须留痕，否则线上只能看到「没反应」。 */
 private const val TAG_ARTIST_NAV = "ArtistNav"
@@ -1006,12 +1056,243 @@ fun MainScreen(
     var rootHeightPx by remember { mutableStateOf(0f) }
     val playerViewModel: PlayerViewModel = viewModel()
     val isPlaying by playerViewModel.isPlaying.collectAsState()
+
+    // 一起听：把播放器能力注入会话（listen 包不直接依赖 ViewModel）。
+    // 房主侧每秒读一次当前状态；成员侧只在偏差 >800ms 或播放态不一致时才动播放器，
+    // 避免每秒 seek 一次把播放打断成"咔哒"声。
+    val bridgeScope = androidx.compose.runtime.rememberCoroutineScope()
+    // playSongItem 是本 composable 里更靠后才定义的局部函数，桥接层不能直接引用 ——
+    // 用持有者在它定义之后再赋值（见紧随 playSongItem 的 SideEffect）。
+    val playItemHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
+    }
+    /** 房主侧：队列里的下一首（供一起听同步「下一首」用）。 */
+    val nextItemHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<SongItem?>(null)
+    }
+    /** 成员侧：把房主的下一首追加进本机队列（起播入口在上面）。 */
+    val appendNextHolder = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
+    }
+    // 跟随去重：一次「房主切歌」只能触发一次起播。
+    // 没有它的话，每秒一条快照会让成员反复调用 playSongItem：
+    // 表现就是「把列表里的歌挨个放一遍」，并在切歌瞬间闪退。
+    val followGuard = androidx.compose.runtime.remember {
+        java.util.concurrent.atomic.AtomicLong(-1L) to java.util.concurrent.atomic.AtomicBoolean(false)
+    }
+    var lastFollowAtMs = 0L
+    // 致命点：跟随回调来自 OkHttp 的 WebSocket 线程，而 ExoPlayer 只允许主线程访问。
+    // 不切主线程的话会抛 "Player is accessed on the wrong thread." → 闪退，
+    // 而且在抛之前已经把队列动过了（用户看到「把列表的歌挨个放一遍」）。
+    val mainHandler = androidx.compose.runtime.remember {
+        android.os.Handler(android.os.Looper.getMainLooper())
+    }
+    androidx.compose.runtime.DisposableEffect(playerViewModel) {
+        val bridge = object : com.takahashirinta.ncrust.listen.PlaybackSource {
+            override fun current(): com.takahashirinta.ncrust.listen.PlaybackSnapshot? {
+                val title = playerViewModel.currentSongName.value ?: return null
+                return com.takahashirinta.ncrust.listen.PlaybackSnapshot(
+                    title = title,
+                    artist = playerViewModel.currentSongArtist.value.orEmpty(),
+                    positionMs = playerViewModel.currentPosition.value,
+                    playing = playerViewModel.isPlaying.value,
+                    // 带上平台 ID 与音源：成员据此**按 id 精确起播**，
+                    // 不必靠标题搜索（那正是「连上了但不同步」的根因之一）。
+                    songId = playerViewModel.currentSongId.value,
+                    sourceKey = playerViewModel.currentSource.value.key,
+                    nextTitle = nextItemHolder.value?.name,
+                    nextArtist = nextItemHolder.value?.artists?.joinToString("/") { it.name },
+                    nextSongId = nextItemHolder.value?.id,
+                    nextSourceKey = nextItemHolder.value?.musicSource?.key,
+                )
+            }
+
+            /**
+             * 起播后**等曲目真的上播**再对齐进度与播放态。
+             *
+             * 为什么不能立刻 seek/暂停：刚 `setMediaItem` 时 ExoPlayer 还在 IDLE，
+             * 这时候调 `seekTo` / 切暂停会命中它的内部断言
+             * （`isLoading only allowed when not in STATE_IDLE or STATE_ENDED`）→ 客机闪退。
+             */
+            /**
+             * 把「房主正在放的那首歌」解析成本机可播放的 [SongItem]。
+             *
+             * 先按平台 ID 取详情（最准）；取不到退回双源搜索 ——
+             * 平板这类**没登录**的设备取详情常常失败，只认 ID 的话会停在
+             * 「房主在放：xxx」但什么都不播（真机复现过）。
+             */
+            suspend fun resolveRemoteSong(
+                snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot,
+            ): SongItem? {
+                val remoteId = snapshot.songId
+                if (remoteId != null) {
+                    val src = com.takahashirinta.ncrust.source.MusicSource.fromKey(snapshot.sourceKey)
+                    val stub = SongItem(
+                        id = remoteId,
+                        name = snapshot.title,
+                        artists = null,
+                        album = null,
+                        duration = null,
+                        source = src.key,
+                    )
+                    val full = runCatching {
+                        com.takahashirinta.ncrust.source.SourceRouter.provider(src)?.songDetail(stub)
+                    }.getOrNull()
+                    if (full != null) return full
+                }
+                val keyword = listOf(snapshot.title, snapshot.artist)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                if (keyword.isBlank()) return null
+                val candidates = com.takahashirinta.ncrust.source.MusicSource.entries
+                    .filter { it != com.takahashirinta.ncrust.source.MusicSource.BILIBILI }
+                    .flatMap { src ->
+                        runCatching {
+                            com.takahashirinta.ncrust.source.SourceRouter.searchSongs(src, keyword, 5)
+                        }.getOrDefault(emptyList())
+                    }
+                return candidates.firstOrNull {
+                    it.name.contains(snapshot.title) || snapshot.title.contains(it.name)
+                } ?: candidates.firstOrNull()
+            }
+
+            fun alignAfterStart(songId: Long, target: Long, wantPlaying: Boolean) {
+                bridgeScope.launch {
+                    repeat(24) {          // 最多等 6s
+                        kotlinx.coroutines.delay(250)
+                        if (playerViewModel.currentSongId.value != songId) return@repeat
+                        // 只对齐进度。**不要**在这里调 play/pause：
+                        // media3 在「队列为空 / STATE_IDLE」时收到 play() 会抛
+                        // `isLoading only allowed when not in STATE_IDLE or STATE_ENDED`
+                        // 并直接把进程干掉（主机、客机都复现过）。
+                        if (target > 2_000) {
+                            runCatching { playerViewModel.seekTo(target) }
+                        }
+                        return@launch
+                    }
+                }
+            }
+
+            override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
+                // 一律切回主线程再碰播放器（同一 tick 内多次调用会被合并执行）
+                mainHandler.post { applyFollow(snapshot) }
+            }
+
+            private fun applyFollow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
+                val localTitle = playerViewModel.currentSongName.value.orEmpty()
+                val localId = playerViewModel.currentSongId.value
+                // ① 已知平台 ID 且与本机不同 → 直接按 id 播放（不依赖搜索命中）
+                val remoteId = snapshot.songId
+                if (remoteId != null && remoteId != localId) {
+                    val (lastFollowId, inFlight) = followGuard
+                    // 同一时刻只允许一个「起播」在飞：旧实现在每秒一条快照下会连续触发，
+                    // 于是把列表里的歌挨个播一遍，紧接着在切歌瞬间闪退。
+                    if (!inFlight.compareAndSet(false, true)) return
+                    if (lastFollowId.getAndSet(remoteId) == remoteId &&
+                        System.currentTimeMillis() - lastFollowAtMs < FOLLOW_COOLDOWN_MS
+                    ) {
+                        inFlight.set(false)
+                        return
+                    }
+                    lastFollowAtMs = System.currentTimeMillis()
+                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
+                    bridgeScope.launch {
+                        // 取详情/搜索都是网络请求，必须离开主线程 ——
+                        // 否则会抛 NetworkOnMainThreadException（真机上表现为
+                        // 「正好在点扫描房间时闪退」，因为两件事同时在跑）。
+                        val target = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            resolveRemoteSong(snapshot)
+                        }
+                        if (target != null) {
+                            runCatching { playItemHolder.value?.invoke(target) }
+                            alignAfterStart(target.id, snapshot.positionMs, snapshot.playing)
+                            // 把房主的下一首也准备好：这样房主切歌时成员是「顺播」而不是重新起播
+                            if (snapshot.nextSongId != null && snapshot.nextSongId != remoteId) {
+                                runCatching {
+                                    val next = resolveRemoteSong(
+                                        snapshot.copy(
+                                            title = snapshot.nextTitle.orEmpty(),
+                                            artist = snapshot.nextArtist.orEmpty(),
+                                            songId = snapshot.nextSongId,
+                                            sourceKey = snapshot.nextSourceKey,
+                                            nextSongId = null,
+                                        )
+                                    )
+                                    if (next != null && next.id != target.id) {
+                                        appendNextHolder.value?.invoke(next)
+                                    }
+                                }
+                            }
+                        } else {
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "房主在放：${snapshot.title}（本机曲库里找不到）"
+                            )
+                        }
+                        inFlight.set(false)
+                    }
+                    return
+                }
+                if (localTitle != snapshot.title) {
+                    // 跨曲跟随：先双源搜索（ncm + qm），命中就切过去并 seek 到房主进度。
+                    // 找不到就如实提示，不猜也不放错歌。
+                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                        "房主切歌：${snapshot.title}，正在曲库中查找…"
+                    )
+                    bridgeScope.launch {
+                        val keyword = listOf(snapshot.title, snapshot.artist)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                        val candidates = com.takahashirinta.ncrust.source.MusicSource.entries
+                            .filter { it != com.takahashirinta.ncrust.source.MusicSource.BILIBILI }
+                            .flatMap { src ->
+                                com.takahashirinta.ncrust.source.SourceRouter
+                                    .searchSongs(src, keyword, 5)
+                            }
+                        // 同名优先、时长接近优先；都不满足就取第一条（搜索结果本身就是相关度排序）
+                        val best = candidates.firstOrNull {
+                            it.name.contains(snapshot.title) || snapshot.title.contains(it.name)
+                        } ?: candidates.firstOrNull()
+                        if (best != null) {
+                            playItemHolder.value?.invoke(best)
+                            if (snapshot.positionMs > 3_000) {
+                                kotlinx.coroutines.delay(1_200)
+                                playerViewModel.seekTo(snapshot.positionMs)
+                            }
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "已跟随：${best.name} - ${best.artists?.joinToString("/") { it.name }.orEmpty()}"
+                            )
+                        } else {
+                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
+                                "房主在放：${snapshot.title}（曲库里没找到，暂不跟随）"
+                            )
+                        }
+                        followGuard.second.set(false)
+                    }
+                    return
+                }
+                // 只同步进度：起播由上面的分支负责，播放/暂停态交给用户自己按。
+                // （在此处 toggle 会在空队列/IDLE 下触发 media3 断言 → 闪退）
+                if (playerViewModel.currentSongId.value != null) {
+                    runCatching { playerViewModel.seekTo(snapshot.positionMs) }
+                }
+            }
+        }
+        com.takahashirinta.ncrust.listen.TogetherSession.bind(bridge)
+        onDispose { com.takahashirinta.ncrust.listen.TogetherSession.bind(null) }
+    }
     var currentSong by remember { mutableStateOf<SongItem?>(null) }
     val vmCurrentSongId by playerViewModel.currentSongId.collectAsState()
     val context = LocalContext.current
 
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
+    val queueStartActions = remember(playerViewModel) {
+        com.takahashirinta.ncrust.player.LatestPlaybackAction(coroutineScope,
+            playerViewModel::beginUserPlayIntent,
+            com.takahashirinta.ncrust.player.playRequestGeneration::isCurrent,
+            SKIP_TAP_SETTLE_MS)
+    }
+
 
     // v2.5.1 · F：页面切换动效开关（默认**开**）。
     //
@@ -1326,6 +1607,16 @@ fun MainScreen(
                     )
                 }
             }
+            val activity = context as? android.app.Activity
+            if (activity?.intent?.action == com.takahashirinta.ncrust.player.PlaybackActionReceiver.ACTION_RESUME) {
+                activity.intent.action = android.content.Intent.ACTION_MAIN
+                playbackQueue.getOrNull(currentQueueIndex)?.let { song ->
+                    val (title, artist, artwork) = songParams(song)
+                    playerViewModel.playSong(song.id, title, artist, artwork,
+                        sourceKey = song.source, sourceId = song.sourceId, mediaId = song.mediaId,
+                        privilege = song.privilege)
+                }
+            }
         }
     }
 
@@ -1344,6 +1635,7 @@ fun MainScreen(
     // v2.5.3 · P1：身份是 [TrackKey]（音源 + id），不是裸 id ——「ncm 123」与「QQ 123」
     // 是两首歌，按 id 回查会互相认领。
     LaunchedEffect(vmCurrentSongId) {
+        if (queueStartActions.hasPending) return@LaunchedEffect
         val id = vmCurrentSongId ?: return@LaunchedEffect
         val vmKey = playerViewModel.currentTrackKey ?: TrackKey.of(null, id)
         val mapped = PlaybackQueueLogic.indexOfKey(playbackQueue, vmKey)
@@ -1411,10 +1703,25 @@ fun MainScreen(
         // 删当前歌之前的项时必须按歌曲身份重新定位当前索引：只 clamp 索引的话它会
         // 一格一格指向「当前歌的后一首」，不变量 `queue[current] == 正在播的歌` 当场破坏。
         // 身份是 TrackKey（音源 + id），跨源同号不会被认成同一首。
+        if (index !in playbackQueue.indices) return
+        val removedCurrent = index == currentQueueIndex
         val next = PlaybackQueueLogic.removeAt(playbackQueue, currentQueueIndex, index)
         playerViewModel.invalidatePreload()
         playbackQueue = next.queue
         currentQueueIndex = next.currentIndex
+        if (removedCurrent) {
+            val replacement = next.queue.getOrNull(next.currentIndex)
+            if (replacement == null) {
+                playerViewModel.stopService()
+                currentSong = null
+            } else {
+                val (title, artist, artwork) = songParams(replacement)
+                playerViewModel.playSong(replacement.id, title, artist, artwork,
+                    sourceKey = replacement.source, sourceId = replacement.sourceId,
+                    mediaId = replacement.mediaId, privilege = replacement.privilege)
+                currentSong = replacement
+            }
+        }
         Log.d(
             "MainScreen",
             "removeFromQueue $index -> index=${next.currentIndex} size=${next.queue.size}",
@@ -1465,6 +1772,17 @@ fun MainScreen(
     }
 
     fun moveInQueue(from: Int, to: Int) {
+        val snapshot = QueueMoveCommit.takeSnapshot()
+        if (snapshot != null) {
+            val moved = reorderBySnapshot(playbackQueue, currentQueueIndex, snapshot.queue, snapshot.fromIndex, snapshot.toIndex)
+                ?: return
+            playerViewModel.invalidatePreload()
+            playbackQueue = moved.queue
+            currentQueueIndex = moved.currentIndex
+            if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
+            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+            return
+        }
         // 优先用 `QueueView` 在提交那一刻登记的身份（唯一的真实调用点）。
         val commit = QueueMoveCommit.take()
         if (commit != null) {
@@ -1493,6 +1811,8 @@ fun MainScreen(
      * `playSong(origin=USER)` 冲掉，熔断永远不生效 —— 而这正是用户报的
      * 「不关应用就一直切」。默认 USER 保证既有调用点零改动。
      */
+    // Repeated skips advance the queue cursor immediately; only the final selection starts IO.
+    var deferQueueStart = false
     fun playFromQueue(index: Int, origin: PlayOrigin = PlayOrigin.USER) {
         if (index in playbackQueue.indices) {
             currentQueueIndex = index
@@ -1515,37 +1835,44 @@ fun MainScreen(
                 "MainScreen",
                 "playFromQueue index=$index key=${QueueKeys.keyOf(song).tag} mode=$playMode",
             )
-            // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
-            infinityNeedsPlay.value = false
-            playerViewModel.playSong(
-                song.id,
-                title = title,
-                artist = artist,
-                artworkUrl = artwork,
-                sourceKey = song.source,
-                sourceId = song.sourceId,
-                mediaId = song.mediaId,
-                origin = origin,
-                privilege = song.privilege,
-            )
-            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+            val selectedQueue = playbackQueue
+            val startSelected: () -> Unit = {
+                if (playbackQueue === selectedQueue && currentQueueIndex == index) {
+                    // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
+                    infinityNeedsPlay.value = false
+                    playerViewModel.playSong(
+                        song.id,
+                        title = title,
+                        artist = artist,
+                        artworkUrl = artwork,
+                        sourceKey = song.source,
+                        sourceId = song.sourceId,
+                        mediaId = song.mediaId,
+                        origin = origin,
+                        privilege = song.privilege,
+                    )
+                    PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
 
-            // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
-            // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
-            // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
-            val nextIdx = preloadIndex()
-            val nextSong = playbackQueue.getOrNull(nextIdx)
-            if (nextSong != null) {
-                val (nTitle, nArtist, nArtwork) = songParams(nextSong)
-                playerViewModel.preloadNextSong(
-                    nextSong.id, nTitle, nArtist, nArtwork,
-                    allowCurrent = playMode == QueueModes.SINGLE,
-                    sourceKey = nextSong.source,
-                    sourceId = nextSong.sourceId,
-                    mediaId = nextSong.mediaId,
-                    privilege = nextSong.privilege,
-                )
+                    // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
+                    // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
+                    // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
+                    val nextIdx = preloadIndex()
+                    val nextSong = playbackQueue.getOrNull(nextIdx)
+                    if (nextSong != null) {
+                        val (nTitle, nArtist, nArtwork) = songParams(nextSong)
+                        playerViewModel.preloadNextSong(
+                            nextSong.id, nTitle, nArtist, nArtwork,
+                            allowCurrent = playMode == QueueModes.SINGLE,
+                            sourceKey = nextSong.source,
+                            sourceId = nextSong.sourceId,
+                            mediaId = nextSong.mediaId,
+                            privilege = nextSong.privilege,
+                        )
+                    }
+                }
             }
+            if (deferQueueStart) queueStartActions.submit(startSelected)
+            else { queueStartActions.cancel(); startSelected() }
         }
     }
 
@@ -1578,6 +1905,9 @@ fun MainScreen(
         // v2.5.3 · P1：续播去重同样走身份（TrackKey），避免"跨源同号被当成已有"。
         val existingKeys = QueueKeys.keysOf(playbackQueue).toHashSet()
         val fromFm = fmMode
+        val queueAtStart = playbackQueue
+        val modeAtStart = playMode
+        val epochAtStart = com.takahashirinta.ncrust.player.playRequestGeneration.current
         infinityJob.value = coroutineScope.launch(Dispatchers.IO) {
             val primary = if (fromFm) {
                 // 私人 FM 流: 一次只返回一小批, 队尾再拉一次即无限续播电台。
@@ -1598,6 +1928,9 @@ fun MainScreen(
                 return@launch
             }
             withContext(Dispatchers.Main) {
+                if (!com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(epochAtStart) ||
+                    playbackQueue !== queueAtStart || playMode != modeAtStart || fmMode != fromFm ||
+                    playbackQueue.getOrNull(currentQueueIndex)?.trackKey != seed.trackKey) return@withContext
                 playerViewModel.invalidatePreload()
                 playbackQueue = playbackQueue + continuation
                 val startIdx = playbackQueue.size - continuation.size
@@ -1800,6 +2133,7 @@ fun MainScreen(
     LaunchedEffect(songTransitioned) {
         if (!songTransitioned) return@LaunchedEffect
         songTransitioned = false
+        if (queueStartActions.hasPending) return@LaunchedEffect
         if (playbackQueue.isEmpty()) return@LaunchedEffect
 
         val actualKey = playerViewModel.currentTrackKey
@@ -2010,6 +2344,13 @@ fun MainScreen(
      * 另外把「它就是当前歌」从**静默 return** 改成**有反馈的幂等**
      * （原先用户点下去什么都不会发生，看起来像按钮坏了）。
      */
+    // 桥接层拿到真实的「播放某一首」入口（一起听跨曲跟随用）
+    androidx.compose.runtime.SideEffect {
+        playItemHolder.value = { song -> playSongItem(song) }
+        // 队列里的下一首：房主广播时带上，成员据此提前准备
+        nextItemHolder.value = playbackQueue.getOrNull(currentQueueIndex + 1)
+    }
+
     fun insertNext(song: SongItem) {
         // v2.5.3 · P1：身份从裸 `song.id` 换成 `TrackKey`（音源感知）。
         // 探针确认跨源裸 id 撞号的实际发生率是 0（QQ 的 id 带 bit62 标志位），
@@ -2130,6 +2471,12 @@ fun MainScreen(
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
     }
 
+    // 桥接层拿到「把一首歌追加到队尾」的入口（一起听同步下一首用）。
+    // 必须放在 appendToQueue 定义之后：Kotlin 的局部函数不能先用后声明。
+    androidx.compose.runtime.SideEffect {
+        appendNextHolder.value = { song -> appendToQueue(song) }
+    }
+
     fun replaceQueueAndPlay(songs: List<SongItem>) {
         if (songs.isEmpty()) return
         fmMode = false
@@ -2148,34 +2495,30 @@ fun MainScreen(
      */
     // 主页异步开播（电台/歌单/专辑）的在途任务：新的点击取消旧的。
     // 局部函数里不能声明字段，用 remember 的持有者跨重组保存。
-    val pendingPlayJob = remember {
-        java.util.concurrent.atomic.AtomicReference<kotlinx.coroutines.Job?>(null)
+    val pendingPlayRequests = remember(playerViewModel, coroutineScope) {
+        com.takahashirinta.ncrust.player.PendingPlayRequests(
+            coroutineScope, playerViewModel::beginUserPlayIntent,
+            com.takahashirinta.ncrust.player.playRequestGeneration::isCurrent,
+        )
     }
 
     fun startFm() {
         applyPlayMode(QueueModes.INFINITY)
-        // K01：记下"这一次点击"的意图代际。取数期间用户可能又点了别的歌/电台，
-        // 那种情况下这份迟到的结果**没有资格**再夺回播放权（旧实现会直接 replaceQueueAndPlay）。
-        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
-        pendingPlayJob.getAndSet(coroutineScope.launch(Dispatchers.IO) {
-            val fm = runCatching { PlaylistApi.getPersonalFm() }.getOrDefault(emptyList())
-            val songs = if (fm.isNotEmpty()) fm
-                else runCatching { PlaylistApi.getDailyRecommendSongs() }.getOrDefault(emptyList())
-            if (songs.isNotEmpty()) {
-                if (!com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)) {
-                    android.util.Log.i("MainScreen", "startFm: superseded by a newer play, drop result")
-                    return@launch
-                }
-                withContext(Dispatchers.Main) {
-                    replaceQueueAndPlay(songs)
-                    // replaceQueueAndPlay 会清 fmMode, 电台标记须在其后置位。
-                    fmMode = true
-                    expandCard()
-                }
+        pendingPlayRequests.launch(load = {
+            withContext(Dispatchers.IO) {
+                val fm = try { PlaylistApi.getPersonalFm() }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (_: Exception) { emptyList() }
+                if (fm.isNotEmpty()) fm else runCatching { PlaylistApi.getDailyRecommendSongs() }.getOrDefault(emptyList())
             }
-        })
+        }) { songs ->
+            if (songs.isNotEmpty()) {
+                replaceQueueAndPlay(songs)
+                fmMode = true
+                expandCard()
+            }
+        }
     }
-
 
     fun insertAllNext(songs: List<SongItem>) {
         if (songs.isEmpty()) return
@@ -2234,15 +2577,9 @@ fun MainScreen(
         }
         Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
         // K01：同样绑定点击时的意图代际，迟到的歌单不许顶掉用户后来点的歌。
-        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
-        pendingPlayJob.getAndSet(coroutineScope.launch {
-            val songs = runCatching { PlaylistApi.getPlaylistDetail(playlistId) }.getOrDefault(emptyList())
-            if (songs.isNotEmpty() &&
-                com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)
-            ) {
-                replaceQueueAndPlay(songs)
-            }
-        })
+        pendingPlayRequests.launch(load = {
+            runCatching { PlaylistApi.getPlaylistDetail(playlistId) }.getOrDefault(emptyList())
+        }) { songs -> if (songs.isNotEmpty()) replaceQueueAndPlay(songs) }
     }
 
     /**
@@ -2256,22 +2593,13 @@ fun MainScreen(
             return
         }
         Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
-        val intent = com.takahashirinta.ncrust.player.playRequestGeneration.current
-        pendingPlayJob.getAndSet(coroutineScope.launch {
-            val songs = runCatching {
-                RetrofitClient.api.getAlbumDetail(albumId).songs?.map {
-                    SongItem(
-                        id = it.id, name = it.name, artists = it.artists,
-                        album = it.album, duration = it.getDurationMs()
-                    )
-                }.orEmpty()
+        pendingPlayRequests.launch(load = {
+            runCatching {
+                RetrofitClient.api.getAlbumDetail(albumId).songs.orEmpty().map {
+                    SongItem(it.id, it.name, it.artists, it.album, it.getDurationMs())
+                }
             }.getOrDefault(emptyList())
-            if (songs.isNotEmpty() &&
-                com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(intent)
-            ) {
-                replaceQueueAndPlay(songs)
-            }
-        })
+        }) { songs -> if (songs.isNotEmpty()) replaceQueueAndPlay(songs) }
     }
 
     /**
@@ -2299,10 +2627,13 @@ fun MainScreen(
     fun loadAllLikedThen(action: LikedBulkAction) {
         if (likedBulkLoading) return
         likedBulkLoading = true
+        val epoch = if (action == LikedBulkAction.PLAY) playerViewModel.beginUserPlayIntent() else null
         coroutineScope.launch {
-            val selection = runCatching { LibraryManager.loadAllLikedSongsResult(context) }
-                .getOrNull()
-            likedBulkLoading = false
+            val selection = try { LibraryManager.loadAllLikedSongsResult(context) }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { null }
+                finally { likedBulkLoading = false }
+            if (epoch != null && !com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(epoch)) return@launch
             if (selection == null || selection.songs.isEmpty()) {
                 Toast.makeText(context, mainStrings.loading, Toast.LENGTH_SHORT).show()
                 return@launch
@@ -2529,6 +2860,7 @@ fun MainScreen(
             if (clip == lastHandledClip.value || !clip.contains("163")) return@LifecycleEventObserver
             lastHandledClip.value = clip
 
+            val clipEpoch = com.takahashirinta.ncrust.player.playRequestGeneration.current
             coroutineScope.launch(Dispatchers.IO) {
                 var target = clip
                 // 163cn.tv 短链: HEAD 跟随 302 拿真实地址
@@ -2536,10 +2868,8 @@ fun MainScreen(
                     target = runCatching {
                         val client = okhttp3.OkHttpClient.Builder()
                             .followRedirects(false).build()
-                        val resp = client.newCall(
-                            okhttp3.Request.Builder().url(target).head().build()
-                        ).execute()
-                        resp.header("Location") ?: ""
+                        client.newCall(okhttp3.Request.Builder().url(target).head().build())
+                            .execute().use { it.header("Location") ?: "" }
                     }.getOrDefault("")
                 }
                 fun idOf(pattern: Regex): Long? =
@@ -2571,6 +2901,11 @@ fun MainScreen(
                         }.getOrDefault(emptyList()).firstOrNull()
                             ?: return@launch
                         withContext(Dispatchers.Main) {
+                            if (!com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(clipEpoch)) return@withContext
+                            if (playerViewModel.currentSongId.value != null) {
+                                navController.navigate(NavRoutes.song(detail.id))
+                                return@withContext
+                            }
                             currentSong = detail
                             playerViewModel.invalidatePreload()
                             playbackQueue = listOf(detail)
@@ -2594,6 +2929,16 @@ fun MainScreen(
     var showUpdate by remember { mutableStateOf(false) }
     if (showUpdate) {
         UpdatePageOverlay(onClose = { showUpdate = false })
+        return
+    }
+    var showRecognize by remember { mutableStateOf(false) }
+    var showTogether by remember { mutableStateOf(false) }
+    if (showRecognize) {
+        RecognizeScreen(onBack = { showRecognize = false })
+        return
+    }
+    if (showTogether) {
+        TogetherScreen(onBack = { showTogether = false })
         return
     }
     if (showAbout) {
@@ -2965,6 +3310,13 @@ fun MainScreen(
     LaunchedEffect(playerViewModel) {
         StatsRecorder.attach(context, playerViewModel)
     }
+    // One final visual/audio transition per tap burst, while preserving every cursor step.
+    val onSkipTap: (Boolean) -> Unit = { forward ->
+        deferQueueStart = true
+        try { if (forward) playNext() else playPrevious() }
+        finally { deferQueueStart = false }
+    }
+
     val onNavSelected: (Int) -> Unit = { tab ->
         selectedTab = tab
         if (!isInMain) navController.popBackStack(NavRoutes.HOME, false)
@@ -3009,23 +3361,20 @@ fun MainScreen(
             playbackQueue = playbackQueue,
             currentQueueIndex = currentQueueIndex,
             playMode = playMode,
-            onPlayPause = { playerViewModel.togglePlayPause() },
+            onPlayPause = { queueStartActions.cancel(); playerViewModel.togglePlayPause() },
             onDismiss = { collapseCard() },
-            onPlayPrevious = { playPrevious() },
-            onPlayNext = { playNext() },
+            onPlayPrevious = { onSkipTap(false) },
+            onPlayNext = { onSkipTap(true) },
             onRemoveFromQueue = { removeFromQueue(it) },
             onPlayFromQueue = { playFromQueue(it) },
             onMoveInQueue = ::moveInQueue,
             onTogglePlayMode = onTogglePlayMode,
             onPlayNothing = {
                 // 暂无播放 → 一键开始: 优先缓存里的每日推荐, 否则现拉
-                coroutineScope.launch(Dispatchers.IO) {
-                    val songs = ContentCache.homeDailySongs?.takeIf { it.isNotEmpty() }
+                pendingPlayRequests.launch(load = {
+                    ContentCache.homeDailySongs?.takeIf { it.isNotEmpty() }
                         ?: runCatching { PlaylistApi.getDailyRecommendSongs() }.getOrDefault(emptyList())
-                    if (songs.isNotEmpty()) {
-                        withContext(Dispatchers.Main) { replaceQueueAndPlay(songs) }
-                    }
-                }
+                }) { songs -> if (songs.isNotEmpty()) replaceQueueAndPlay(songs) }
             },
             onClearQueue = {
                 // 显式清空: 停播 + 回到暂无播放态。进程重建保留队列是特性(接着听),
@@ -3149,6 +3498,8 @@ fun MainScreen(
                         )
 
                         1 -> LibraryScreen(
+                            onOpenRecognize = { showRecognize = true },
+                            onOpenTogether = { showTogether = true },
                             onSongClick = { playSongItem(it) },
                             // 会话失效横幅点击 → 现有登录流程。
                             onRelogin = onRelogin,
@@ -3208,6 +3559,7 @@ fun MainScreen(
                             onAppendToQueue = { appendToQueue(it) },
                             onShowSongMenu = { song, actions -> showSongMenu(song, actions) },
                             onAlbumBatch = { albumId, action ->
+                                val epoch = if (action == BatchQueueAction.PLAY_NOW) playerViewModel.beginUserPlayIntent() else null
                                 coroutineScope.launch {
                                     try {
                                         val response = RetrofitClient.api.getAlbumDetail(albumId)
@@ -3220,7 +3572,7 @@ fun MainScreen(
                                                 duration = s.getDurationMs()
                                             )
                                         }
-                                        if (songs.isNotEmpty()) {
+                                        if (songs.isNotEmpty() && (epoch == null || com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(epoch))) {
                                             when (action) {
                                                 BatchQueueAction.PLAY_NOW -> replaceQueueAndPlay(songs)
                                                 BatchQueueAction.INSERT_NEXT -> insertAllNext(songs)
@@ -3231,12 +3583,13 @@ fun MainScreen(
                                 }
                             },
                             onArtistBatch = { artistName, action ->
+                                val epoch = if (action == BatchQueueAction.PLAY_NOW) playerViewModel.beginUserPlayIntent() else null
                                 coroutineScope.launch {
                                     try {
                                         val searchResponse = RetrofitClient.api.search(keyword = artistName, type = 1, limit = 30)
                                         val songs = (searchResponse.result?.songs ?: emptyList())
                                             .filter { it.artists?.any { a -> a.name == artistName } == true }
-                                        if (songs.isNotEmpty()) {
+                                        if (songs.isNotEmpty() && (epoch == null || com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(epoch))) {
                                             when (action) {
                                                 BatchQueueAction.PLAY_NOW -> replaceQueueAndPlay(songs)
                                                 BatchQueueAction.INSERT_NEXT -> insertAllNext(songs)
@@ -3271,6 +3624,7 @@ fun MainScreen(
                 // NavGraph 在 tab 屏之上（上层）：空 HOME destination 不遮挡 tab 屏，
                 // 打开详情页时详情页 opaque bg 从上层盖住 tab 屏；返回时 slide 出去露出 tab 屏。
                 MainNavGraph(
+                    onQqRelogin = { showQqLogin = true },
                     navController = navController,
                     onSongClick = { playSongItem(it) },
                     onReplaceAndPlay = { replaceQueueAndPlay(it) },
@@ -3352,11 +3706,10 @@ fun MainScreen(
                 // autoReserveBottomStack=false: Ncrust 用自己的 BottomOverlayInsetDp 常量管
                 // 底部预留,不接 MetroShell 的 MetroBottomStackScope,否则 rememberBottomStackReservation
                 // 会因缺 CompositionLocal 而 crash。
-                MetroBottomNav(
-                    selectedIndex = selectedTab,
-                    onSelected = onNavSelected,
-                    items = navTabs.map { MetroBottomNavItem(it.first, it.second) },
-                    autoReserveBottomStack = false,
+                com.takahashirinta.ncrust.ui.components.ArrisBottomNav(
+                    items = navTabs,
+                    selected = selectedTab,
+                    onSelect = onNavSelected,
                 )
                 // v3.4.13：「用户」图标右上角的小圆点。Arris 的底部导航有 5 格，
                 // 用户是第 4 格（index 3）；宽屏走左侧 sidebar，不画。
@@ -3373,9 +3726,9 @@ fun MainScreen(
             songIds: List<Long>,
             toastText: () -> String,
             failureText: () -> String,
+            pinnedSession: com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot = CookieManager.snapshot(),
         ): AddToPlaylistResult {
             // 钉住当前会话：选择框可能开着，期间切了账号也不该用新账号重发（S18）。
-            val pinnedSession = CookieManager.snapshot()
             val count = PlaylistEditApi.addSongs(playlistId, songIds, pinnedSession)
             val result = if (count != null) AddToPlaylistResult.SUCCESS else AddToPlaylistResult.FAILED
             // F3：成功文案只在真的成功时弹。旧实现无条件弹 `toastText()`，
@@ -3511,6 +3864,7 @@ fun MainScreen(
                                     playlistId, ids,
                                     toastText = { createStrings.playlistSongsAdded(ids.distinct().size) },
                                     failureText = { createStrings.addToPlaylistFailed },
+                                    pinnedSession = pinnedSession,
                                 )
                                 if (outcome == AddToPlaylistResult.SUCCESS) {
                                     PlaylistCreateOutcome.SUCCESS

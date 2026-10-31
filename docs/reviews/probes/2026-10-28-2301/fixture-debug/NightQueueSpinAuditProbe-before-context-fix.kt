@@ -1,0 +1,62 @@
+package com.takahashirinta.ncrust.audit
+
+import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.*
+import java.lang.reflect.Proxy
+import kotlin.coroutines.Continuation
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Test
+
+class NightQueueSpinAuditProbe {
+    private class BoundedStop : RuntimeException()
+    @Suppress("UNCHECKED_CAST")
+    @Test fun compiledDisabledQueueHandlerSpinsWithoutAwaitingAnEvent() = runBlocking {
+        var reads = 0
+        var awaits = 0
+        val awaitScope = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(AwaitPointerEventScope::class.java)) { _, method, _ ->
+            when {
+                method.name == "getCurrentEvent" -> {
+                    reads++
+                    if (reads == 64) throw BoundedStop()
+                    PointerEvent(emptyList())
+                }
+                method.name == "awaitPointerEvent" -> { awaits++; throw AssertionError("unexpected event suspension") }
+                method.name == "getDensity" || method.name == "getFontScale" -> 1f
+                method.returnType == java.lang.Long.TYPE -> 0L
+                method.returnType == java.lang.Boolean.TYPE -> false
+                else -> null
+            }
+        } as AwaitPointerEventScope
+        val pointerScope = Proxy.newProxyInstance(javaClass.classLoader, arrayOf(PointerInputScope::class.java)) { _, method, args ->
+            when {
+                method.name == "awaitPointerEventScope" -> {
+                    val block = args!![0] as Function2<AwaitPointerEventScope, Continuation<Any?>, Any?>
+                    block.invoke(awaitScope, args[1] as Continuation<Any?>)
+                }
+                method.name == "getDensity" || method.name == "getFontScale" -> 1f
+                method.returnType == java.lang.Long.TYPE -> 0L
+                method.returnType == java.lang.Boolean.TYPE -> false
+                else -> null
+            }
+        } as PointerInputScope
+        val cls = Class.forName("com.takahashirinta.ncrust.ui.player.QueueViewKt\$QueueView\$dragGesturesModifier\$1")
+        val constructor = cls.declaredConstructors.single().apply { isAccessible = true }
+        val args = constructor.parameterTypes.map { type ->
+            when {
+                type == java.lang.Boolean.TYPE -> false
+                type == MutableIntState::class.java -> mutableIntStateOf(-1)
+                type == MutableFloatState::class.java -> mutableFloatStateOf(0f)
+                type == MutableState::class.java || type == State::class.java -> mutableStateOf<Any?>(null)
+                else -> null
+            }
+        }.toTypedArray()
+        val actual = constructor.newInstance(*args) as (suspend PointerInputScope.() -> Unit)
+        var bounded = false
+        try { actual.invoke(pointerScope) } catch (_: BoundedStop) { bounded = true }
+        assertTrue("fixture must terminate actual loop at the bounded observation count", bounded)
+        assertEquals(64, reads)
+        assertEquals(0, awaits)
+        println("AUDIT invokes actual compiled QueueView pointerInput closure with interactive=false and an empty current pointer event. 64 current-event reads, zero awaitPointerEvent calls; bounded fixture stops the tight loop. No Compose UI, real input, device or busy unbounded process")
+    }
+}

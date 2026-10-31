@@ -1,0 +1,10 @@
+{
+  "at_utc": "2026-10-28T16:49:12Z",
+  "timezone": "Asia/Shanghai",
+  "primaryUsedPercent": 91,
+  "primaryRemainingPercent": 9,
+  "secondaryUsedPercent": 14,
+  "secondaryRemainingPercent": 86,
+  "source": "mcp__codex_app__get_usage_limits actual read",
+  "decision": "stop expanding review, archive and await scheduled continuation"
+}

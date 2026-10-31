@@ -57,6 +57,29 @@ object LyricSharePoster {
         val scale: Float,
     )
 
+    /**
+     * 把矢量吉祥物（`R.drawable.tux_rest`）栅格化成一张小位图。
+     *
+     * 为什么在编排层做而不是渲染层：渲染层刻意不接 `Context`（见 [LyricPosterRenderer.LyricPosterSpec.mascot]）。
+     * 尺寸按版式缩放（1080 宽时 2× 密度足够，直接用 `MASCOT_PX` 一档即可 ——
+     * 它最终会被绘制到 ~116px 的框里，不需要跟随屏幕密度）。
+     */
+    private fun loadMascot(context: Context, scale: Float): Bitmap? = runCatching {
+        val drawable = androidx.core.content.ContextCompat.getDrawable(
+            context,
+            com.takahashirinta.ncrust.R.drawable.tux_rest,
+        ) ?: return null
+        val px = (MASCOT_PX * scale).toInt().coerceIn(64, 512)
+        val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        drawable.setBounds(0, 0, px, px)
+        drawable.draw(canvas)
+        bmp
+    }.getOrNull()
+
+    /** 吉祥物栅格化边长（1080×1920 版式下的像素）。 */
+    private const val MASCOT_PX = 232
+
     /** 出图并写进分享缓存；返回 null = 出图失败（调用方应退回纯文本分享）。 */
     suspend fun renderToShareCache(
         context: Context,
@@ -65,7 +88,8 @@ object LyricSharePoster {
     ): Uri? {
         val rendered = renderWithFallback(context, request) ?: return null
         return try {
-            LyricShareActions.writeShareImage(context, rendered.bitmap, fileName)
+            // v3.7.11：分享走 MediaStore（朋友圈只认系统图库条目），见 publishShareImage 的 KDoc。
+            LyricShareActions.publishShareImage(context, rendered.bitmap, fileName)
         } finally {
             // 我们自己创建的位图，用完即回收：不回收的话连续出图会很快把堆吃满。
             // （注意：**不能**回收封面位图 —— 它属于 Coil 的内存缓存。）
@@ -96,6 +120,9 @@ object LyricSharePoster {
      */
     private suspend fun renderWithFallback(context: Context, request: Request): Rendered? {
         val cover = LyricPosterCover.load(context, request.track.coverUrl)
+        // 吉祥物与版式缩放绑定，但同一轮三级降级里只有 1f 与 0.666f 两档 ——
+        // 各栅格化一次，代价是两张 ≤ 232px 的小位图。
+        val mascots = mutableMapOf<Float, Bitmap?>()
 
         val attempts = buildList {
             if (cover != null) {
@@ -118,6 +145,7 @@ object LyricSharePoster {
                 credit = request.credit,
                 cover = bitmapCover,
                 scale = scale,
+                mascot = mascots.getOrPut(scale) { loadMascot(context, scale) },
             )
             val bitmap = try {
                 LyricPosterRenderer.render(spec)

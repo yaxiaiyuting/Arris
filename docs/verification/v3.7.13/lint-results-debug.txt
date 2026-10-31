@@ -1,0 +1,368 @@
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/lint-baseline.xml: Information: 17 errors and 60 warnings were filtered out because they are listed in the baseline file, lint-baseline.xml [LintBaseline]
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/lint-baseline.xml: Information: 82 errors/warnings were listed in the baseline file (lint-baseline.xml) but not found in the project; perhaps they have been fixed? Another possible explanation is that lint recently stopped analyzing (and including results from) dependent projects by default. You can turn this back on with android.lintOptions.checkDependencies=true. Unmatched issue types: AndroidGradlePluginVersion (3), AutoboxingStateCreation (2), GradleDependency (35), KtxExtensionAvailable, MissingIntentFilterForMediaSearch, MissingOnPlayFromSearch, MonochromeLauncherIcon, UnsafeOptInUsageError (38) [LintBaselineFixed]
+
+   Explanation for issues of type "LintBaselineFixed":
+   If a lint baseline describes a problem which is no longer reported, then
+   the problem has either been fixed, or perhaps the issue type has been
+   disabled. In any case, the entry can be removed from the baseline (such
+   that if the issue is reintroduced at some point, lint will complain rather
+   than just silently starting to match the old baseline entry again.)
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/auth/CookieManager.kt:55: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+            if (!ok) { getPrefs(context).edit().putString(KEY_COOKIE, started.cookie).remove(KEY_REFRESHED_AT).commit(); return@synchronized false }
+                                                                                                               ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt:113: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+            .commit()
+             ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt:119: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+        prefs(context).edit().remove(tracksKey(key)).commit()
+                                                     ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/local/LocalPlaylistStore.kt:224: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+        rollback.commit()
+                 ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt:159: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+        e.commit()
+          ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt:164: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+        prefs(context).edit().clear().commit()
+                                      ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/qq/QqPlaylistStore.kt:185: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+        e.commit()
+          ~~~~~~~~
+
+   Explanation for issues of type "ApplySharedPref":
+   Consider using apply() instead of commit on shared preferences. Whereas
+   commit blocks and writes its data to persistent storage immediately, apply
+   will handle it in the background.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt:704: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("%d insgesamt", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt:727: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("Alle %d Titel werden geladen…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/de_DE.kt:728: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("%1\$d Titel geladen, %2\$d nicht verfügbar", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt:705: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("%d total", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt:728: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("Loading all %d tracks…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/en.kt:729: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("Loaded %1\$d tracks; %2\$d unavailable", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt:702: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("全 %d 曲", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt:725: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("全%d曲を読み込み中…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_JP.kt:726: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("%1\$d曲を読み込みました（%2\$d曲は取得できません）", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt:701: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("都 %d 曲", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt:724: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("全 %d 曲 読込中…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/jp_MY.kt:725: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("%1\$d 曲 読了、%2\$d 曲 取得不能", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt:701: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("총 %d곡", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt:724: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("전체 %d곡 불러오는 중…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ko_NK.kt:725: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("%1\$d곡을 불러왔고 %2\$d곡은 사용할 수 없습니다", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt:704: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("всего %d", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt:727: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("Загрузка всех треков: %d…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/ru_RU.kt:728: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("Загружено %1\$d, недоступно %2\$d", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt:702: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("共 %d 首", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt:725: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("正在加载全部 %d 首…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_CN.kt:726: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("已加载 %1\$d 首，%2\$d 首暂不可用", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt:702: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            searchSourceTotal = { n -> java.lang.String.format("共 %d 首", n) },
+                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt:725: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            loading = { n -> java.lang.String.format("正在載入全部 %d 首…", n) },
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/i18n/zh_TW.kt:726: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            partial = { loaded, missing -> java.lang.String.format("已載入 %1\$d 首，%2\$d 首暫時無法取得", loaded, missing) },
+                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DefaultLocale":
+   Calling String#toLowerCase() or #toUpperCase() without specifying an
+   explicit locale is a common source of bugs. The reason for that is that
+   those methods will use the current locale on the user's device, and even
+   though the code appears to work correctly when you are developing the app,
+   it will fail in some locales. For example, in the Turkish locale, the
+   uppercase replacement for i is not I.
+
+   If you want the methods to just perform ASCII replacement, for example to
+   convert an enum name, call String#toUpperCase(Locale.ROOT) instead. If you
+   really want to use the current locale, call
+   String#toUpperCase(Locale.getDefault()) instead.
+
+   https://developer.android.com/reference/java/util/Locale.html#default_locale
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/update/UpdateService.kt:351: Warning: Field requires API level 26 (current min is 24): android.provider.Settings#ACTION_MANAGE_UNKNOWN_APP_SOURCES [InlinedApi]
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "InlinedApi":
+   This check scans through all the Android API field references in the
+   application and flags certain constants, such as static final integers and
+   Strings, which were introduced in later versions. These will actually be
+   copied into the class files rather than being referenced, which means that
+   the value is available even when running on older devices. In some cases
+   that's fine, and in other cases it can result in a runtime crash or
+   incorrect behavior. It depends on the context, so consider the code
+   carefully and decide whether it's safe and can be suppressed or whether the
+   code needs to be guarded.
+
+   If you really want to use this API and don't need to support older devices
+   just set the minSdkVersion in your build.gradle or AndroidManifest.xml
+   files.
+
+   If your code is deliberately accessing newer APIs, and you have ensured
+   (e.g. with conditional execution) that this code will only ever be called
+   on a supported platform, then you can annotate your class or method with
+   the @TargetApi annotation specifying the local minimum SDK to apply, such
+   as @TargetApi(11), such that this check considers 11 rather than your
+   manifest file's minimum SDK as the required API level.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/share/LyricShareActions.kt:128: Warning: Consider adding a <queries> declaration to your manifest when calling this method; see https://g.co/dev/packagevisibility for details [QueryPermissionsNeeded]
+            context.packageManager.queryIntentActivities(send, 0)
+                                   ~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "QueryPermissionsNeeded":
+   Apps that target Android 11 cannot query or interact with other installed
+   apps by default. If you need to query or interact with other installed
+   apps, you may need to add a <queries> declaration in your manifest.
+
+   As a corollary, the methods PackageManager#getInstalledPackages and
+   PackageManager#getInstalledApplications will no longer return information
+   about all installed apps. To query specific apps or types of apps, you can
+   use methods like PackageManager#getPackageInfo or
+   PackageManager#queryIntentActivities.
+
+   https://g.co/dev/packagevisibility
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/drawable/tux_carry.xml:2: Warning: Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more [VectorRaster]
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="360dp" android:height="380dp" android:viewportWidth="360" android:viewportHeight="380"><group android:translateY="70"><group><path android:pathData="M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z" android:fillColor="#13251c" android:fillAlpha=".1" /><path android:pathData="M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z" android:fillColor="#13251c" /><path android:pathData="M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z" android:fillColor="#1C2A24" /><path android:pathData="M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z" android:fillColor="#F4E8C9" /><path android:pathData="M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z" android:fillColor="#1C2A24" /><path android:pathData="M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z" android:fillColor="#fff6dd" /><group><path android:pathData="M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><path android:pathData="M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><group><path android:pathData="M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /><path android:pathData="M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /></group></group><path android:pathData="M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z" android:fillColor="#e9b64d" /><path android:pathData="M117 108Q141 117 166 107" android:fillColor="#00000000" android:strokeColor="#f8ce86" android:strokeWidth="2" android:strokeLineCap="round" /><path android:pathData="M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z" android:fillColor="#e9b64d" /><path android:pathData="M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z" android:fillColor="#e9b64d" /><path android:pathData="M61 81Q60 1 140 0Q219 1 218 81" android:fillColor="#00000000" android:strokeColor="#6eaf7e" android:strokeWidth="13" android:strokeLineCap="round" /><path android:pathData="M70 70Q69 10 140 9Q210 10 209 70" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><path android:pathData="M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M81 143Q140 163 198 142L200 157Q140 181 79 157Z" android:fillColor="#6eaf7e" /><path android:pathData="M169 158L166 197L187 193L189 154Z" android:fillColor="#6eaf7e" /><path android:pathData="M168 182L185 178" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><group android:rotation="-9" android:pivotX="138" android:pivotY="18"><path android:pathData="M99 22L137 -53L174 23Z" android:fillColor="#e8ac9e" /><path android:pathData="M113 -5L160 -10M122 -26L149 -29" android:fillColor="#000000" android:strokeColor="#fff0d3" android:strokeWidth="9" /><path android:pathData="M97 24Q136 14 176 25" android:fillColor="#00000000" android:strokeColor="#fff0d3" android:strokeWidth="10" android:strokeLineCap="round" /><path android:pathData="M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z" android:fillColor="#e9b64d" /></group><path android:pathData="M206 146Q231 183 294 170Q317 163 327 175Q325 197 290 200Q230 210 201 184Z" android:fillColor="#13251c" /></group></group></vector>
+                                                                                  ~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/drawable/tux_light.xml:2: Warning: Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more [VectorRaster]
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="360dp" android:height="380dp" android:viewportWidth="360" android:viewportHeight="380"><group android:translateY="70"><group><path android:pathData="M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z" android:fillColor="#13251c" android:fillAlpha=".1" /><path android:pathData="M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z" android:fillColor="#13251c" /><path android:pathData="M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z" android:fillColor="#1C2A24" /><path android:pathData="M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z" android:fillColor="#F4E8C9" /><path android:pathData="M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z" android:fillColor="#1C2A24" /><path android:pathData="M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z" android:fillColor="#fff6dd" /><group><path android:pathData="M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><path android:pathData="M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><group><path android:pathData="M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /><path android:pathData="M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /></group></group><path android:pathData="M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z" android:fillColor="#e9b64d" /><path android:pathData="M117 108Q141 117 166 107" android:fillColor="#00000000" android:strokeColor="#f8ce86" android:strokeWidth="2" android:strokeLineCap="round" /><path android:pathData="M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z" android:fillColor="#e9b64d" /><path android:pathData="M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z" android:fillColor="#e9b64d" /><path android:pathData="M61 81Q60 1 140 0Q219 1 218 81" android:fillColor="#00000000" android:strokeColor="#6eaf7e" android:strokeWidth="13" android:strokeLineCap="round" /><path android:pathData="M70 70Q69 10 140 9Q210 10 209 70" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><path android:pathData="M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M81 143Q140 163 198 142L200 157Q140 181 79 157Z" android:fillColor="#6eaf7e" /><path android:pathData="M169 158L166 197L187 193L189 154Z" android:fillColor="#6eaf7e" /><path android:pathData="M168 182L185 178" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><group android:rotation="-9" android:pivotX="138" android:pivotY="18"><path android:pathData="M99 22L137 -53L174 23Z" android:fillColor="#e8ac9e" /><path android:pathData="M113 -5L160 -10M122 -26L149 -29" android:fillColor="#000000" android:strokeColor="#fff0d3" android:strokeWidth="9" /><path android:pathData="M97 24Q136 14 176 25" android:fillColor="#00000000" android:strokeColor="#fff0d3" android:strokeWidth="10" android:strokeLineCap="round" /><path android:pathData="M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z" android:fillColor="#e9b64d" /></group></group></group></vector>
+                                                                                  ~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/drawable/tux_listener.xml:2: Warning: Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more [VectorRaster]
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="360dp" android:height="380dp" android:viewportWidth="360" android:viewportHeight="380"><group android:translateY="70"><group><path android:pathData="M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z" android:fillColor="#13251c" android:fillAlpha=".1" /><path android:pathData="M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z" android:fillColor="#13251c" /><path android:pathData="M207 138C237 146 259 194 252 229Q247 244 229 229L194 189Z" android:fillColor="#13251c" /><path android:pathData="M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z" android:fillColor="#1C2A24" /><path android:pathData="M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z" android:fillColor="#F4E8C9" /><path android:pathData="M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z" android:fillColor="#1C2A24" /><path android:pathData="M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z" android:fillColor="#fff6dd" /><group><path android:pathData="M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><path android:pathData="M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><group><path android:pathData="M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /><path android:pathData="M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /></group></group><path android:pathData="M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z" android:fillColor="#e9b64d" /><path android:pathData="M117 108Q141 117 166 107" android:fillColor="#00000000" android:strokeColor="#f8ce86" android:strokeWidth="2" android:strokeLineCap="round" /><path android:pathData="M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z" android:fillColor="#e9b64d" /><path android:pathData="M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z" android:fillColor="#e9b64d" /><path android:pathData="M61 81Q60 1 140 0Q219 1 218 81" android:fillColor="#00000000" android:strokeColor="#6eaf7e" android:strokeWidth="13" android:strokeLineCap="round" /><path android:pathData="M70 70Q69 10 140 9Q210 10 209 70" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><path android:pathData="M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M81 143Q140 163 198 142L200 157Q140 181 79 157Z" android:fillColor="#6eaf7e" /><path android:pathData="M169 158L166 197L187 193L189 154Z" android:fillColor="#6eaf7e" /><path android:pathData="M168 182L185 178" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /></group><path android:fillColor="#0B1710" android:pathData="M182,210a48,48 0 1,0 96,0a48,48 0 1,0 -96,0Z" /><path android:fillColor="#243D2C" android:pathData="M194,210a36,36 0 1,0 72,0a36,36 0 1,0 -72,0Z" /><path android:fillColor="#8CBD86" android:pathData="M209,210a21,21 0 1,0 42,0a21,21 0 1,0 -42,0Z" /><path android:fillColor="#0B1710" android:pathData="M226,210a4,4 0 1,0 8,0a4,4 0 1,0 -8,0Z" /></group></vector>
+                                                                                  ~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/drawable/tux_rest.xml:2: Warning: Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more [VectorRaster]
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="360dp" android:height="380dp" android:viewportWidth="360" android:viewportHeight="380"><group android:translateY="70"><group><path android:pathData="M39.0,293.0a101.0,9.0 0 1,0 202.0,0a101.0,9.0 0 1,0 -202.0,0Z" android:fillColor="#13251c" android:fillAlpha=".1" /><path android:pathData="M75 139C43 145 21 191 26 229Q32 246 54 233L89 192Z" android:fillColor="#13251c" /><path android:pathData="M207 138C237 146 259 194 252 229Q247 244 229 229L194 189Z" android:fillColor="#13251c" /><path android:pathData="M67 173C63 132 75 102 93 88Q107 73 140 74Q177 75 193 93C213 114 222 147 216 185L227 238Q223 282 141 286Q58 280 56 238Z" android:fillColor="#1C2A24" /><path android:pathData="M73.0,191.0a67.0,86.0 0 1,0 134.0,0a67.0,86.0 0 1,0 -134.0,0Z" android:fillColor="#F4E8C9" /><path android:pathData="M72 103Q63 59 87 28Q106 5 139 7Q178 6 198 32Q219 59 207 111Q198 147 140 149Q80 145 72 103Z" android:fillColor="#1C2A24" /><path android:pathData="M97 100Q84 67 101 43Q116 24 133 57Q144 35 164 39Q194 49 187 100Q165 131 140 134Q114 130 97 100Z" android:fillColor="#fff6dd" /><group><path android:pathData="M110.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><path android:pathData="M156.0,75.0a9.0,14.0 0 1,0 18.0,0a9.0,14.0 0 1,0 -18.0,0Z" android:fillColor="#13251c" /><group><path android:pathData="M119.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /><path android:pathData="M165.0,71.0a3.0,3.0 0 1,0 6.0,0a3.0,3.0 0 1,0 -6.0,0Z" android:fillColor="#fff6dd" /></group></group><path android:pathData="M109 103Q140 85 174 103Q166 125 142 126Q121 125 109 103Z" android:fillColor="#e9b64d" /><path android:pathData="M117 108Q141 117 166 107" android:fillColor="#00000000" android:strokeColor="#f8ce86" android:strokeWidth="2" android:strokeLineCap="round" /><path android:pathData="M80 252C65 252 34 265 27 282Q25 293 47 296Q76 302 111 289Q117 277 107 265Z" android:fillColor="#e9b64d" /><path android:pathData="M200 252C215 252 246 265 253 282Q255 293 233 296Q204 302 169 289Q163 277 173 265Z" android:fillColor="#e9b64d" /><path android:pathData="M61 81Q60 1 140 0Q219 1 218 81" android:fillColor="#00000000" android:strokeColor="#6eaf7e" android:strokeWidth="13" android:strokeLineCap="round" /><path android:pathData="M70 70Q69 10 140 9Q210 10 209 70" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><path android:pathData="M63.0,68.0H66.0Q76.0,68.0 76.0,78.0V106.0Q76.0,116.0 66.0,116.0H63.0Q53.0,116.0 53.0,106.0V78.0Q53.0,68.0 63.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M215.0,68.0H218.0Q228.0,68.0 228.0,78.0V106.0Q228.0,116.0 218.0,116.0H215.0Q205.0,116.0 205.0,106.0V78.0Q205.0,68.0 215.0,68.0Z" android:fillColor="#6eaf7e" /><path android:pathData="M81 143Q140 163 198 142L200 157Q140 181 79 157Z" android:fillColor="#6eaf7e" /><path android:pathData="M169 158L166 197L187 193L189 154Z" android:fillColor="#6eaf7e" /><path android:pathData="M168 182L185 178" android:fillColor="#00000000" android:strokeColor="#658e5e" android:strokeWidth="3" /><group android:rotation="-9" android:pivotX="138" android:pivotY="18"><path android:pathData="M99 22L137 -53L174 23Z" android:fillColor="#e8ac9e" /><path android:pathData="M113 -5L160 -10M122 -26L149 -29" android:fillColor="#000000" android:strokeColor="#fff0d3" android:strokeWidth="9" /><path android:pathData="M97 24Q136 14 176 25" android:fillColor="#00000000" android:strokeColor="#fff0d3" android:strokeWidth="10" android:strokeLineCap="round" /><path android:pathData="M128.0,-53.0a9.0,9.0 0 1,0 18.0,0a9.0,9.0 0 1,0 -18.0,0Z" android:fillColor="#e9b64d" /></group></group></group></vector>
+                                                                                  ~~~~~
+
+   Explanation for issues of type "VectorRaster":
+   Vector icons require API 21 or API 24 depending on used features, but when
+   minSdkVersion is less than 21 or 24 and Android Gradle plugin 1.4 or higher
+   is used, a vector drawable placed in the drawable folder is automatically
+   moved to drawable-anydpi-v21 or drawable-anydpi-v24 and bitmap images are
+   generated for different screen resolutions for backwards compatibility.
+
+   However, there are some limitations to this raster image generation, and
+   this lint check flags elements and attributes that are not fully supported.
+   You should manually check whether the generated output is acceptable for
+   those older devices.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/build.gradle.kts:586: Warning: A newer version of androidx.core:core-ktx than 1.13.0 is available: 1.18.0 [GradleDependency]
+    implementation("androidx.core:core-ktx:1.13.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/build.gradle.kts:657: Warning: A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1 [GradleDependency]
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:3: Warning: A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0 [GradleDependency]
+coreKtx = "1.10.1"
+          ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:3: Warning: A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0 [GradleDependency]
+coreKtx = "1.10.1"
+          ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:3: Warning: A newer version of androidx.core:core-ktx than 1.10.1 is available: 1.18.0 [GradleDependency]
+coreKtx = "1.10.1"
+          ~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:5: Warning: A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1 [GradleDependency]
+junitVersion = "1.1.5"
+               ~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:5: Warning: A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1 [GradleDependency]
+junitVersion = "1.1.5"
+               ~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:5: Warning: A newer version of androidx.test.ext:junit than 1.1.5 is available: 1.2.1 [GradleDependency]
+junitVersion = "1.1.5"
+               ~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:9: Warning: A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0 [GradleDependency]
+activity = "1.8.0"
+           ~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:9: Warning: A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0 [GradleDependency]
+activity = "1.8.0"
+           ~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/gradle/libs.versions.toml:9: Warning: A newer version of androidx.activity:activity than 1.8.0 is available: 1.13.0 [GradleDependency]
+activity = "1.8.0"
+           ~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCard.kt:997: Warning: Modifier factory functions should be extensions on Modifier [ModifierFactoryExtensionFunction from androidx.compose.ui]
+internal fun controlsCollapseDragModifier(
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ModifierFactoryExtensionFunction":
+   Modifier factory functions should be defined as extension functions on
+   Modifier to allow modifiers to be fluently chained.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt:88: Warning: Modifier parameter should be named modifier [ModifierParameter from androidx.compose.ui]
+    contentModifier: Modifier = Modifier,
+    ~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/components/DetailScaffold.kt:88: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+    contentModifier: Modifier = Modifier,
+    ~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ModifierParameter":
+   The first (or only) Modifier parameter in a Composable function should
+   follow the following rules:
+   - Be named modifier
+   - Have a type of Modifier
+   - Either have no default value, or have a default value of Modifier
+   - If optional, be the first optional parameter in the parameter list
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/network/crypto/XeapiCrypto.kt:352: Warning: ECB encryption mode should not be used (was "AES/ECB/PKCS5Padding") [GetInstance]
+        val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
+                                        ~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "GetInstance":
+   Cipher#getInstance should not be called with ECB as the cipher mode or
+   without setting the cipher mode because the default mode on android is ECB,
+   which is insecure.
+
+   https://goo.gle/GetInstance
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/auth/CookieManager.kt:6: Warning: Do not place Android context classes in static fields (static reference to CookieManager which has field app pointing to Context); this is a memory leak [StaticFieldLeak]
+object CookieManager {
+^
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/auth/CookieManager.kt:11: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private var app: Context? = null
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseTokenRefresher.kt:18: Warning: Do not place Android context classes in static fields (static reference to NeteaseTokenRefresher which has field app pointing to Context); this is a memory leak [StaticFieldLeak]
+/** All renewal is demand driven. No alarm, heartbeat, or replay of write operations. */
+^
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/auth/NeteaseTokenRefresher.kt:23: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    @Volatile private var app: Context? = null
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "StaticFieldLeak":
+   A static field will leak contexts.
+
+   Non-static inner classes have an implicit reference to their outer class.
+   If that outer class is for example a Fragment or Activity, then this
+   reference means that the long-running handler/loader/task will hold a
+   reference to the activity which prevents it from getting garbage
+   collected.
+
+   Similarly, direct field references to activities and fragments from these
+   longer running instances can cause leaks.
+
+   ViewModel classes should never point to Views or non-application Contexts.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/layout/widget_player_empty.xml:41: Warning: This tag and its children can be replaced by one <TextView/> and a compound drawable [UseCompoundDrawables]
+    <LinearLayout
+     ~~~~~~~~~~~~
+
+   Explanation for issues of type "UseCompoundDrawables":
+   A LinearLayout which contains an ImageView and a TextView can be more
+   efficiently handled as a compound drawable (a single TextView, using the
+   drawableTop, drawableLeft, drawableRight and/or drawableBottom attributes
+   to draw one or more images adjacent to the text).
+
+   If the two widgets are offset from each other with margins, this can be
+   replaced with a drawablePadding attribute.
+
+   There's a lint quickfix to perform this conversion in the Eclipse plugin.
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/components/BiliQrLoginDialog.kt:150: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var generation by remember { mutableStateOf(0) }
+                                 ~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt:189: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var manualStart by remember { mutableStateOf(-1) }
+                                  ~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/components/LyricShareSheet.kt:190: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var manualEnd by remember { mutableStateOf(-1) }
+                                ~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/screen/OfflineCacheOverlay.kt:532: Information: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var reload by remember { mutableStateOf(0) }
+                             ~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/java/com/takahashirinta/ncrust/ui/screen/SettingsGroupScreen.kt:260: Information: Prefer mutableFloatStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var lyricsFontScale by remember { mutableStateOf(LyricsDisplayPrefs.readFontScale(prefs)) }
+                                      ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "AutoboxingStateCreation":
+   Calling mutableStateOf<T>() when T is either backed by a primitive type on
+   the JVM or is a value class results in a state implementation that requires
+   all state values to be boxed. This usually causes an additional allocation
+   for each state write, and adds some additional work to auto-unbox values
+   when reading the value of the state. Instead, prefer to use a specialized
+   primitive state implementation for Int, Long, Float, and Double when the
+   state does not need to track null values and does not override the default
+   SnapshotMutationPolicy. See mutableIntStateOf(), mutableLongStateOf(),
+   mutableFloatStateOf(), and mutableDoubleStateOf() for more information.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.runtime
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/layout/widget_player_empty.xml:64: Warning: Nested weights are bad for performance [NestedWeights]
+            android:layout_weight="1"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/layout/widget_player_large.xml:83: Warning: Nested weights are bad for performance [NestedWeights]
+            android:layout_weight="1"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/layout/widget_player_medium.xml:72: Warning: Nested weights are bad for performance [NestedWeights]
+            android:layout_weight="1"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/duanjb666/deepseek/Arris-bilingual-lyrics/app/src/main/res/layout/widget_player_small.xml:82: Warning: Nested weights are bad for performance [NestedWeights]
+            android:layout_weight="1"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NestedWeights":
+   Layout weights require a widget to be measured twice. When a LinearLayout
+   with non-zero weights is nested inside another LinearLayout with non-zero
+   weights, then the number of measurements increase exponentially.
+
+0 errors, 61 warnings (17 errors, 60 warnings filtered by baseline lint-baseline.xml)

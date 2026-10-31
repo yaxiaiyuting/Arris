@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.takahashirinta.ncrust.audit.NightSearchResidualAuditProbe" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T15:25:13.784Z" hostname="cachyos-x8664" time="0.219">
+  <properties/>
+  <testcase name="failedNeteasePageIsStillConfirmedAndSkippedDespiteThePerSourceCursor" classname="com.takahashirinta.ncrust.audit.NightSearchResidualAuditProbe" time="0.175"/>
+  <testcase name="anHttpSuccessWithABusinessErrorBecomesASuccessfulEmptySearch" classname="com.takahashirinta.ncrust.audit.NightSearchResidualAuditProbe" time="0.044"/>
+  <system-out><![CDATA[AUDIT S9 residual: real searchByType requests offsets 0,30(failed),60 instead of retrying 30; accumulateAndPublish confirms an empty failed page and erases pendingPage. The previous duplicate source count is fixed: 60 unique Netease rows and count=60
+AUDIT S9 status boundary: HTTP 200/code500 without result is counted as a successful empty Netease search, error=null, badge DONE, hasMore=false; actual JSON model discards business code
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

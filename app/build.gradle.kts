@@ -29,8 +29,21 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.takahashirinta.ncrust"
-        minSdk = 24
+        /**
+         * 伪装包名开关（仅用于**本机联调**，默认不启用）。
+         *
+         * 用途：某些 ROM（华为/荣耀控制中心的媒体卡片）按**包名白名单**决定要不要放出卡片，
+         * 我们自己的包名不在名单里时，媒体卡片/灵动岛那一格就不出现。
+         * `-PspoofId=com.netease.cloudmusic` 打出来的包会以那个包名安装，
+         * `getPackageName()`、FileProvider authority、MediaSession 归属全部跟着变，
+         * 于是可以验证「卡片到底认不认包名」。
+         *
+         * 注意：这只是**诊断工具**。伪装包名后的构建是一个独立应用（数据不共享、要重新登录），
+         * 也不能与实际同名应用共存（同一包名只能装一个）。
+         */
+        val spoofId = (project.findProperty("spoofId") as String?)?.trim().orEmpty()
+        applicationId = spoofId.ifEmpty { "com.takahashirinta.ncrust" }
+        minSdk = 29
         targetSdk = 36
         // 本 fork 自有的版本线：基于上游 1.3.1 (versionCode 6)。
         // versionCode 必须严格大于上游，否则后续 fork 版本无法覆盖安装。
@@ -511,8 +524,8 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 96
-        versionName = "3.7.10-gpl"
+        versionCode = 123
+        versionName = "3.8.3-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -600,13 +613,13 @@ dependencies {
 
     // Media3 —— 1.5.0 是能与下面 FFmpeg 扩展版本严格对齐的最低版本（扩展版本号规则为
     // <media3版本>+<修订>，Maven Central 上没有 1.4.x 的构建）。
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
     // v1.6.0 · D1：离线缓存（SimpleCache / CacheDataSource / StandaloneDatabaseProvider）。
     // 这两个之前是 media3-exoplayer 的传递依赖，显式声明以免上游改依赖树时静默消失。
-    implementation("androidx.media3:media3-datasource:1.5.0")
-    implementation("androidx.media3:media3-database:1.5.0")
-    implementation("androidx.media3:media3-session:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-datasource:1.6.1")
+    implementation("androidx.media3:media3-database:1.6.1")
+    implementation("androidx.media3:media3-session:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
 
     // FFmpeg 软件音频解码扩展（Jellyfin 构建，GPL-3.0，与本项目 GPLv3 兼容）。
     // 目的：API 24–26（Android 7.0/7.1）系统只带 OMX.google.flac.encoder，
@@ -656,4 +669,7 @@ dependencies {
     testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

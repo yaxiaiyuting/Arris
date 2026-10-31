@@ -22,7 +22,7 @@ object SessionMonitor {
     private val _state = MutableStateFlow<SessionState>(SessionState.Unknown)
     val state: StateFlow<SessionState> = _state.asStateFlow()
     @Volatile private var appContext: Context? = null
-    private var lastCheckAt = 0L
+    private var lastCheckAt = -1L
     private var lastRevision = -1L
     /**
      * J03：失败后的退避截止。
@@ -87,8 +87,8 @@ object SessionMonitor {
                 var started = CookieManager.snapshot()
                 val now = android.os.SystemClock.elapsedRealtime()
                 if (!force && lastRevision == started.revision && now < retryAfterAt) return@withLock
-                if (!force && lastRevision == started.revision && now - lastCheckAt in 0 until 30 * 60_000L) return@withLock
-                lastCheckAt = now
+                if (!force && lastCheckAt >= 0L && lastRevision == started.revision && now - lastCheckAt in 0 until 30 * 60_000L) return@withLock
+                lastCheckAt = -1L
                 lastRevision = started.revision
                 try {
                     NeteaseTokenRefresher.refreshIfNeeded()
@@ -97,6 +97,8 @@ object SessionMonitor {
                     if (started.cookie.isNullOrBlank()) {
                         CookieManager.ifCurrent(started) {
                             _state.value = if (prefs(app).getBoolean(KEY_WAS_LOGGED_IN, false)) SessionState.Expired else SessionState.LoggedOut
+                            lastCheckAt = now
+                            retryAfterAt = 0L
                         }
                         return@withLock
                     }
@@ -108,10 +110,14 @@ object SessionMonitor {
                             val vip = try { PlaylistApi.getVipInfo(derived.userId) }
                                 catch (e: CancellationException) { throw e }
                                 catch (_: Exception) { null }
-                            CookieManager.ifCurrent(started) { _state.value = derived.copy(vip = deriveVip(vip)) }
+                            CookieManager.ifCurrent(started) {
+                                _state.value = derived.copy(vip = deriveVip(vip))
+                                lastCheckAt = android.os.SystemClock.elapsedRealtime()
+                                retryAfterAt = 0L
+                            }
                         }
                         SessionState.Expired -> reportApiCode(301, started)
-                        else -> Unit
+                        else -> retryAfterAt = android.os.SystemClock.elapsedRealtime() + 60_000L
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (_: com.takahashirinta.ncrust.auth.NeteaseSessionChangedException) {
@@ -123,7 +129,7 @@ object SessionMonitor {
                 catch (_: Exception) {
                     // 失败：60 秒后可重试，但**不**把 30 分钟窗口当成"刚检查过"。
                     retryAfterAt = android.os.SystemClock.elapsedRealtime() + 60_000L
-                    lastCheckAt = 0L
+                    lastCheckAt = -1L
                     Log.w(TAG, "会话复核暂不可用，保留已知状态（60s 后重试）")
                 }
             }
