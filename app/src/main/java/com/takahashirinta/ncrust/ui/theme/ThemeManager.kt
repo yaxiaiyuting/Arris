@@ -21,10 +21,10 @@ data class ThemeColorPreset(
 /**
  * 6 种主题色预设，契合设计文档第十三节：
  * Spruce / Cobalt / Crimson / Amber / Violet / Mono
- * 背景一律采用 OLED 纯黑 #000000（surface 统一用 #1A1A1A）
+ * 云杉为官网松绿；深色模式使用对应的浅鼠尾草强调色。
  */
 val themeColorPresets = listOf(
-    ThemeColorPreset("云杉",  Color(0xFF1DB954)),
+    ThemeColorPreset("云杉",  Color(0xFF274B36)),
     ThemeColorPreset("钴蓝",  Color(0xFF3B82F6)),
     ThemeColorPreset("绯红",  Color(0xFFEF4444)),
     ThemeColorPreset("琥珀",  Color(0xFFF59E0B)),
@@ -74,13 +74,14 @@ fun saveThemeIndex(context: Context, index: Int) {
 /**
  * 根据索引获取对应的 Color 预设，索引越界时兜底云杉
  */
-fun themeColorForIndex(index: Int): Color {
-    return themeColorPresets.getOrElse(index) { themeColorPresets[0] }.color
+fun themeColorForIndex(index: Int, isDark: Boolean = false): Color {
+    val selected = themeColorPresets.getOrElse(index) { themeColorPresets[0] }.color
+    return if (selected == themeColorPresets[0].color && isDark) DefaultNcrustColors.primary else selected
 }
 
 @Composable
 fun NcrustTheme(
-    primaryColor: Color = Color(0xFF1DB954),
+    primaryColor: Color = Color(0xFF274B36),
     isDark: Boolean = true,
     /**
      * v2.5.0 · A（色调）：封面取色的多角色调色板。非 null 时**背景与强调色跟随封面**。
@@ -95,11 +96,13 @@ fun NcrustTheme(
     content: @Composable () -> Unit
 ) {
     val colors = remember(primaryColor, isDark, coverPalette) {
+        val accent = if (primaryColor == themeColorPresets[0].color && isDark)
+            DefaultNcrustColors.primary else primaryColor
         val base = (if (isDark) DefaultNcrustColors else LightNcrustColors).copy(
-            primary = primaryColor,
+            primary = accent,
             // B2-C：onPrimary 随主题色推导。原先恒为白色，浅色主题色（如琥珀）上
             // 文字/图标对比度不足 —— 这是 4.5:1 要求的前提。
-            onPrimary = onAccentColor(primaryColor),
+            onPrimary = onAccentColor(accent),
         )
         // v2.5.0：跟随封面时，背景/容器/描边/强调色整组来自封面调色板。
         // 注意 `toNcrustColors` **不覆盖** surfaceContainerHigh/Highest ——

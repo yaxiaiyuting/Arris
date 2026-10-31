@@ -939,6 +939,14 @@ su -c 'chcon $(ls -Z REF | cut -d" " -f1) TARGET'    # 或直接 restorecon TARG
 
 本次即用此法恢复，设置与登录态均完好无损。
 
+## 3.8.3 应用视觉更新（用户 2026-10-31 授权）
+
+用户明确要求应用采用 https://arris.de5.net/ 官网的风格；这覆盖历史「播放器无圆角 / 固定满宽封面 / OLED 纯黑」的外观限制。App 自有层采用米白、松绿与鼠尾草配色、圆角卡片和主播放按钮；深色、其他主题色与封面取色继续可选。外部 Kanesumi 库不修改，形状构造仍只允许位于 AppShapes.kt。
+
+播放器帧路径、音频身份、歌词时序、点击回调与底部浮层让位规则继续适用。竖屏大封面按实测面板高度减完整标题块和间距，不能再从整屏高推算可用空间。自动旋转默认 false（RotationSetting / SettingsRegistry 一致），已保存的用户选择保留。
+
+识曲必须由用户操作发起权限请求和录音；停止、返回、后台和卸载页面应中断录音，finally 释放录音器并删除临时文件，不能在界面恢复后提交上一轮录音。一起听邀请框必须保留 IP:端口#令牌所需标点，保持三种传输方式及现有会话逻辑。
+
 ## Key Constraints & Pitfalls
 
 - **Kanesumi Design**: no rounded corners in the player; no spring/bounce; cover always fills the full screen width (`fillMaxWidth().aspectRatio(1f)`, scale 1.0 in large mode).

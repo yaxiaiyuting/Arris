@@ -331,18 +331,21 @@ fun LibraryScreen(
                         style = LocalMetroTypography.current.pageHeading,
                         modifier = Modifier.weight(1f),
                     )
-                    // 两个功能图标：识曲（麦克风）/ 一起听（双人）。
-                    // 命中区按 48dp 给足（AGENTS.md 触摸陷阱 §7：视觉可以小，命中不能小）。
-                    TileAction(
-                        label = "听歌识曲",
-                        icon = androidx.compose.material.icons.Icons.Default.Mic,
-                    ) { onOpenRecognize() }
-                    Spacer(Modifier.width(4.dp))
-                    TileAction(
-                        label = "一起听",
-                        icon = androidx.compose.material.icons.Icons.Default.People,
-                    ) { onOpenTogether() }
                 }
+            }
+            androidx.compose.foundation.layout.Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            ) {
+                val chinese = com.takahashirinta.ncrust.ui.i18n.currentLanguageCode().startsWith("zh")
+                com.takahashirinta.ncrust.ui.components.ArrisShortcut(
+                    if (chinese) "听歌识曲" else "Recognize",
+                    if (chinese) "留住偶然的旋律" else "Find that melody",
+                    androidx.compose.material.icons.Icons.Default.Mic, Modifier.weight(1f), onOpenRecognize)
+                com.takahashirinta.ncrust.ui.components.ArrisShortcut(
+                    if (chinese) "一起听" else "Listen together",
+                    if (chinese) "分享同一个时刻" else "Share this moment",
+                    androidx.compose.material.icons.Icons.Default.People, Modifier.weight(1f), onOpenTogether)
             }
             Spacer(Modifier.height(4.dp))
             if (sessionExpired) {

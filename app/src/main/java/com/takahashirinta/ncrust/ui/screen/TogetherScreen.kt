@@ -5,6 +5,20 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
+import com.takahashirinta.ncrust.ui.theme.AppShapes
+import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
+import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
+import com.takahashirinta.ncrust.ui.components.ArrisButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,7 +45,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -124,285 +137,206 @@ fun TogetherScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        // ---------------------------------------------------------------- 标题
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                MetroText(
-                    "一起听",
-                    color = colors.onBackground,
-                    style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold),
-                )
-                Spacer(Modifier.height(4.dp))
-                MetroText(
-                    "同步的是播放状态，音频各放各的，账号留在自己设备",
-                    color = colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 12.sp),
-                )
+    val state = TogetherUi(code, base, editingBase, baseDraft, ipsDraft, rooms, scanning, mode,
+        status, room, host, members, diag, nextUp)
+    val actions = TogetherActions(
+        back = onBack,
+        code = { code = it.filterNot(Char::isWhitespace).take(160) },
+        mode = { mode = it },
+        copyInvite = { copy(room, "已复制房间码 $room") },
+        leave = { TogetherSession.leave() },
+        scan = { scan() },
+        create = {
+            when (mode) {
+                TransportMode.Relay -> {
+                    val c = TogetherSession.newRoomCode(); code = c
+                    TogetherSession.create(base, c, ips)
+                }
+                TransportMode.Lan -> TogetherSession.createLan()?.let {
+                    code = it; copy(it, "已复制 $it，把这句话发给朋友即可")
+                }
+                TransportMode.P2p -> scope.launch {
+                    val c = withContext(Dispatchers.IO) { TogetherSession.createP2p() }
+                    if (c != null) { code = c; copy(c, "已复制 P2P 房间码 $c") }
+                }.let { }
             }
-            TextAction("返回", accent = false, onClick = onBack)
+        },
+        join = {
+            when (mode) {
+                TransportMode.Relay -> if (code.isNotBlank()) TogetherSession.join(base, code, ips)
+                    else TogetherSessionStatus.note("先输入房间码")
+                TransportMode.Lan -> if (code.contains(':')) TogetherSession.joinLan(code)
+                    else TogetherSessionStatus.note("房间码要填「主机IP:端口」")
+                TransportMode.P2p -> if (code.contains('#')) {
+                    scope.launch { withContext(Dispatchers.IO) { TogetherSession.joinP2p(code) } }
+                } else TogetherSessionStatus.note("P2P 房间码形如 1.2.3.4:5678#123456")
+            }
+        },
+        joinRoom = { r -> code = r.roomId; TogetherSession.join(base, r.roomId, ips) },
+        toggleEdit = { editingBase = !editingBase; baseDraft = base; ipsDraft = ips.joinToString(",") },
+        base = { baseDraft = it }, ips = { ipsDraft = it },
+        save = {
+            base = TogetherPrefs.normalize(baseDraft)
+            TogetherPrefs.setBase(ctx, base); TogetherPrefs.setIps(ctx, ipsDraft)
+            ips = TogetherPrefs.ips(ctx); editingBase = false
+            TogetherSessionStatus.note("中继已改为 $base")
+        },
+        reset = {
+            base = TogetherPrefs.DEFAULT_BASE
+            TogetherPrefs.setBase(ctx, base); TogetherPrefs.setIps(ctx, "")
+            ips = emptyList(); editingBase = false
+            TogetherSessionStatus.note("中继已恢复默认")
+        },
+    )
+    BackHandler(onBack = onBack)
+    TogetherContent(state, actions)
+}
+
+/** Rendering snapshots carry values only; all remembered state and IO stay in TogetherScreen. */
+private data class TogetherUi(val code: String, val base: String, val editingBase: Boolean,
+    val baseDraft: String, val ipsDraft: String, val rooms: List<RoomSummary>, val scanning: Boolean,
+    val mode: TransportMode, val status: String, val room: String, val host: Boolean,
+    val members: Int, val diag: List<String>, val nextUp: String?)
+
+private class TogetherActions(val back: () -> Unit, val code: (String) -> Unit,
+    val mode: (TransportMode) -> Unit, val copyInvite: () -> Unit, val leave: () -> Unit,
+    val scan: () -> Unit, val create: () -> Unit, val join: () -> Unit,
+    val joinRoom: (RoomSummary) -> Unit, val toggleEdit: () -> Unit,
+    val base: (String) -> Unit, val ips: (String) -> Unit, val save: () -> Unit, val reset: () -> Unit)
+
+@Composable
+private fun TogetherContent(state: TogetherUi, actions: TogetherActions) {
+    val c = LocalMetroColors.current
+    Box(Modifier.fillMaxSize().background(c.background), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = 680.dp).fillMaxSize().statusBarsPadding()
+            .verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ArrisPageHeader("一起听", "ARRIS / TOGETHER", "相隔很远，也能听同一首。", actions.back)
+            MetroText("分享此刻的旋律，账号留在自己的设备。", color = c.onSurfaceVariant,
+                style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp))
+            RoomStatusCard(state, actions)
+            SectionLabel("连接方式")
+            TransportTabs(state.mode, actions.mode)
+            if (state.room.isBlank()) RoomInviteField(state, actions.code)
+            TransportControls(state, actions)
+            AvailableRooms(state.rooms, actions.joinRoom)
+            SectionLabel("中继设置")
+            RelaySettingsPanel(state, actions)
+            Hint("同一 Wi-Fi 或热点优先使用局域网；严格 NAT 环境直连困难时，可以使用中继或已配置的虚拟局域网。")
+            if (state.diag.isNotEmpty()) {
+                SectionLabel("连接诊断")
+                state.diag.forEach { Hint(it) }
+            }
+            Spacer(Modifier.height(24.dp))
         }
-
-        // ---------------------------------------------------------------- 状态卡
-        Card(bold = room.isNotBlank()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .width(7.dp)
-                        .height(7.dp)
-                        .background(if (room.isBlank()) colors.onSurfaceVariant.copy(alpha = 0.5f) else colors.primary),
-                )
-                Spacer(Modifier.width(8.dp))
-                MetroText(
-                    if (room.isBlank()) "未连接" else if (host) "房主 · 在线 $members 人" else "已连接 · 在线 $members 人",
-                    color = colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 11.sp),
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            MetroText(
-                if (room.isBlank()) "未加入房间" else room,
-                color = if (room.isBlank()) colors.onSurfaceVariant else colors.onBackground,
-                style = TextStyle(
-                    fontSize = if (room.isBlank()) 18.sp else 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                ),
-            )
-            Spacer(Modifier.height(6.dp))
-            MetroText(status, color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
-            if (diag.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                diag.forEach { line ->
-                    MetroText(
-                        "· $line",
-                        color = colors.onSurfaceVariant.copy(alpha = 0.7f),
-                        style = TextStyle(fontSize = 10.sp, fontFamily = FontFamily.Monospace),
-                    )
-                }
-            }
-            if (room.isNotBlank()) {
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    TextAction("复制邀请") { copy(room, "已复制房间码 $room") }
-                    TextAction("退出房间", accent = false) { TogetherSession.leave() }
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------- 房间码输入（已加入时不需要）
-        if (room.isBlank()) SectionLabel("房间码")
-        if (room.isBlank()) BasicTextField(
-            value = code,
-            onValueChange = { code = it.filter(Char::isLetterOrDigit).take(8) },
-            singleLine = true,
-            textStyle = TextStyle(
-                fontSize = 20.sp,
-                color = colors.onBackground,
-                fontFamily = FontFamily.Monospace,
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            decorationBox = { inner ->
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, colors.onSurfaceVariant.copy(alpha = 0.3f))
-                        .padding(horizontal = 14.dp, vertical = 13.dp),
-                ) {
-                    if (code.isEmpty()) {
-                        MetroText(
-                            "输入 6 位数字，或从下面挑一个房间",
-                            color = colors.onSurfaceVariant.copy(alpha = 0.65f),
-                            style = TextStyle(fontSize = 14.sp),
-                        )
-                    }
-                    inner()
-                }
-            },
-        )
-
-        // ---------------------------------------------------------------- 连接方式
-        SectionLabel("连接方式")
-        TransportTabs(mode) { mode = it }
-
-        when (mode) {
-            TransportMode.Relay -> {
-                Hint("双方都能上网即可，走我们的中继服务器（默认 $base）")
-                ActionRow(
-                    "创建房间" to {
-                        val c = TogetherSession.newRoomCode()
-                        code = c
-                        TogetherSession.create(base, c, ips)
-                    },
-                    "加入房间" to {
-                        if (code.isNotBlank()) TogetherSession.join(base, code, ips)
-                        else TogetherSessionStatus.note("先输入房间码")
-                    },
-                    primaryFirst = true,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    TextAction(if (scanning) "扫描中…" else "扫描附近房间", accent = false) { scan() }
-                    TextAction("检查中继连接", accent = false) { scan() }
-                }
-            }
-
-            TransportMode.Lan -> {
-                Hint("同一个 Wi-Fi 或热点，不经过任何服务器，最稳")
-                ActionRow(
-                    "局域网建房" to {
-                        val addr = TogetherSession.createLan()
-                        if (addr != null) {
-                            code = addr
-                            copy(addr, "已复制 $addr，把这句话发给朋友即可")
-                        }
-                    },
-                    "局域网加入" to {
-                        if (code.contains(':')) TogetherSession.joinLan(code)
-                        else TogetherSessionStatus.note("房间码要填「主机IP:端口」")
-                    },
-                    primaryFirst = true,
-                )
-            }
-
-            TransportMode.P2p -> {
-                Hint("无服务器打洞；家用宽带成功率高，移动数据基本打不通")
-                ActionRow(
-                    "P2P 建房" to {
-                        // STUN 查询是网络操作：必须在 IO 上跑，否则 NetworkOnMainThreadException
-                        scope.launch {
-                            val c = withContext(Dispatchers.IO) { TogetherSession.createP2p() }
-                            if (c != null) {
-                                code = c
-                                copy(c, "已复制 P2P 房间码 $c（家用宽带成功率最高）")
-                            }
-                        }
-                    },
-                    "P2P 加入" to {
-                        if (code.contains('#')) {
-                            scope.launch { withContext(Dispatchers.IO) { TogetherSession.joinP2p(code) } }
-                        } else {
-                            TogetherSessionStatus.note("P2P 房间码形如 1.2.3.4:5678#123456")
-                        }
-                    },
-                    primaryFirst = true,
-                )
-            }
-        }
-
-        // ---------------------------------------------------------------- 活跃房间
-        if (rooms.isNotEmpty()) {
-            SectionLabel("活跃房间")
-            rooms.forEach { r ->
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(colors.surfaceVariant, RectangleShape)
-                        .clickable {
-                            code = r.roomId
-                            TogetherSession.join(base, r.roomId, ips)
-                        }
-                        .padding(horizontal = 16.dp, vertical = 13.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MetroText(
-                            r.roomId,
-                            color = colors.onBackground,
-                            style = TextStyle(
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                            ),
-                        )
-                        Spacer(Modifier.width(14.dp))
-                        MetroText(
-                            "房主 ${r.host.ifBlank { "?" }} · ${r.members} 人",
-                            color = colors.onSurfaceVariant,
-                            style = TextStyle(fontSize = 12.sp),
-                        )
-                    }
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------- 中继设置
-        SectionLabel("中继设置")
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(colors.surfaceVariant, RectangleShape)
-                .clickable { editingBase = !editingBase; baseDraft = base; ipsDraft = ips.joinToString(",") }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            Column {
-                MetroText(
-                    if (editingBase) "中继地址" else "$base　·　点击修改",
-                    color = if (editingBase) colors.onBackground else colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 12.sp),
-                )
-                if (editingBase) {
-                    Spacer(Modifier.height(8.dp))
-                    BasicTextField(
-                        value = baseDraft,
-                        onValueChange = { baseDraft = it },
-                        singleLine = true,
-                        textStyle = TextStyle(fontSize = 14.sp, color = colors.onBackground),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    MetroText(
-                        "固定 IP（可空；只有域名被污染时才需要）",
-                        color = colors.onSurfaceVariant,
-                        style = TextStyle(fontSize = 11.sp),
-                    )
-                    BasicTextField(
-                        value = ipsDraft,
-                        onValueChange = { ipsDraft = it },
-                        singleLine = true,
-                        textStyle = TextStyle(fontSize = 14.sp, color = colors.onBackground),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ActionRow(
-                        "保存" to {
-                            base = TogetherPrefs.normalize(baseDraft)
-                            TogetherPrefs.setBase(ctx, base)
-                            TogetherPrefs.setIps(ctx, ipsDraft)
-                            ips = TogetherPrefs.ips(ctx)
-                            editingBase = false
-                            TogetherSessionStatus.note("中继已改为 $base")
-                        },
-                        "恢复默认" to {
-                            base = TogetherPrefs.DEFAULT_BASE
-                            TogetherPrefs.setBase(ctx, base)
-                            TogetherPrefs.setIps(ctx, "")
-                            ips = emptyList()
-                            editingBase = false
-                            TogetherSessionStatus.note("中继已恢复默认")
-                        },
-                        primaryFirst = true,
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(2.dp))
-        MetroText(
-            "异地连不上时：① 一方开热点，另一方连上，用「局域网」；" +
-                "② 双方装 Tailscale，把 100.x 地址填进「局域网加入」；" +
-                "③ 有自己域名的话，把中继换成它。",
-            color = colors.onSurfaceVariant.copy(alpha = 0.75f),
-            style = TextStyle(fontSize = 11.sp),
-        )
-        Spacer(Modifier.height(8.dp))
     }
+}
+
+@Composable
+private fun RoomStatusCard(s: TogetherUi, a: TogetherActions) {
+    val c = LocalMetroColors.current
+    Card(bold = s.room.isNotBlank()) {
+        MetroText(if (s.room.isBlank()) "尚未连接" else if (s.host) "房主 · 在线 ${s.members} 人" else "已连接 · 在线 ${s.members} 人",
+            color = c.primary, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold))
+        Spacer(Modifier.height(12.dp))
+        MetroText(s.room.ifBlank { "为朋友留一个位置。" }, color = c.onBackground,
+            style = TextStyle(fontSize = if (s.room.isBlank()) 22.sp else 26.sp,
+                lineHeight = 34.sp, fontWeight = FontWeight.SemiBold))
+        Spacer(Modifier.height(8.dp))
+        MetroText(s.status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 13.sp, lineHeight = 21.sp))
+        s.nextUp?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(10.dp))
+            MetroText("接下来 · $it", color = c.primary, style = TextStyle(fontSize = 13.sp))
+        }
+        if (s.room.isNotBlank()) {
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                TextAction("复制邀请", onClick = a.copyInvite)
+                TextAction("退出房间", accent = false, onClick = a.leave)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoomInviteField(s: TogetherUi, change: (String) -> Unit) {
+    val c = LocalMetroColors.current
+    SectionLabel("房间邀请")
+    BasicTextField(s.code, onValueChange = change, singleLine = true,
+        textStyle = TextStyle(fontSize = 18.sp, color = c.onBackground, fontFamily = FontFamily.Monospace),
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "房间邀请或地址" },
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface)
+                .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.large)
+                .heightIn(min = 56.dp).padding(16.dp), contentAlignment = Alignment.CenterStart) {
+                if (s.code.isEmpty()) MetroText(when (s.mode) {
+                    TransportMode.Relay -> "输入房间码"
+                    TransportMode.Lan -> "主机 IP:端口"
+                    TransportMode.P2p -> "IP:端口#令牌"
+                }, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp))
+                inner()
+            }
+        })
+}
+
+@Composable
+private fun TransportControls(s: TogetherUi, a: TogetherActions) {
+    Hint(when (s.mode) {
+        TransportMode.Relay -> "双方都能访问同一个中继即可，不需要直接连接彼此。"
+        TransportMode.Lan -> "连接同一个 Wi-Fi 或热点，音频与账号不经过中继。"
+        TransportMode.P2p -> "无服务器直连；连接成功率取决于双方网络和 NAT。"
+    })
+    val create = when (s.mode) { TransportMode.Relay -> "创建房间"; TransportMode.Lan -> "局域网建房"; TransportMode.P2p -> "P2P 建房" }
+    val join = when (s.mode) { TransportMode.Relay -> "加入房间"; TransportMode.Lan -> "局域网加入"; TransportMode.P2p -> "P2P 加入" }
+    ActionRow(create to a.create, join to a.join, primaryFirst = true)
+    if (s.mode == TransportMode.Relay) {
+        TextAction(if (s.scanning) "扫描中…" else "扫描可用房间", accent = false, onClick = a.scan)
+    }
+}
+
+@Composable
+private fun AvailableRooms(rooms: List<RoomSummary>, join: (RoomSummary) -> Unit) {
+    if (rooms.isEmpty()) return
+    val c = LocalMetroColors.current
+    SectionLabel("活跃房间")
+    rooms.forEach { room ->
+        Column(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface)
+            .clickable(role = Role.Button) { join(room) }.padding(16.dp)) {
+            MetroText(room.roomId, color = c.onBackground, style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
+            MetroText("房主 ${room.host.ifBlank { "?" }} · ${room.members} 人", color = c.onSurfaceVariant,
+                style = TextStyle(fontSize = 13.sp, lineHeight = 21.sp))
+        }
+    }
+}
+
+@Composable
+private fun RelaySettingsPanel(s: TogetherUi, a: TogetherActions) {
+    val c = LocalMetroColors.current
+    Column(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface).padding(16.dp)) {
+        MetroText(if (s.editingBase) "中继地址 · 点击收起" else "中继地址 · 点击修改\n${s.base}",
+            color = c.onSurfaceVariant, style = TextStyle(fontSize = 13.sp, lineHeight = 22.sp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = a.toggleEdit))
+        if (s.editingBase) {
+            RelayFields(s, a)
+            Spacer(Modifier.height(12.dp))
+            ActionRow("保存" to a.save, "恢复默认" to a.reset, primaryFirst = true)
+        }
+    }
+}
+
+@Composable
+private fun RelayFields(s: TogetherUi, a: TogetherActions) {
+    val c = LocalMetroColors.current
+    BasicTextField(s.baseDraft, onValueChange = a.base, singleLine = true,
+        textStyle = TextStyle(fontSize = 14.sp, color = c.onBackground),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 12.dp)
+            .semantics { contentDescription = "中继地址" })
+    Spacer(Modifier.height(8.dp))
+    Hint("固定 IP（可空；仅在域名解析异常时使用）")
+    BasicTextField(s.ipsDraft, onValueChange = a.ips, singleLine = true,
+        textStyle = TextStyle(fontSize = 14.sp, color = c.onBackground),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 12.dp)
+            .semantics { contentDescription = "中继固定 IP" })
 }
 
 /** 传输方式：界面上按它分页签，避免八个按钮糊在一起。 */
@@ -415,27 +349,17 @@ private enum class TransportMode(val label: String) {
 @Composable
 private fun TransportTabs(current: TransportMode, onSelect: (TransportMode) -> Unit) {
     val colors = LocalMetroColors.current
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        TransportMode.entries.forEach { m ->
-            val active = m == current
-            Column(
-                Modifier
-                    .weight(1f)
-                    .clickable { onSelect(m) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                MetroText(
-                    m.label,
-                    color = if (active) colors.onBackground else colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 14.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal),
-                    modifier = Modifier.padding(vertical = 10.dp),
-                )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(if (active) 2.dp else 1.dp)
-                        .background(if (active) colors.primary else colors.onSurfaceVariant.copy(alpha = 0.25f)),
-                )
+    Row(Modifier.fillMaxWidth().clip(AppShapes.full).background(colors.surface).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        TransportMode.entries.forEach { mode ->
+            val active = mode == current
+            Box(Modifier.weight(1f).clip(AppShapes.full)
+                .background(if (active) colors.primary else colors.surface)
+                .selectable(selected = active, role = Role.Tab, onClick = { onSelect(mode) })
+                .heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center) {
+                MetroText(mode.label, color = if (active) colors.onPrimary else colors.onSurfaceVariant,
+                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
             }
         }
     }
@@ -447,14 +371,14 @@ private fun SectionLabel(text: String) {
     MetroText(
         text,
         color = colors.onSurfaceVariant,
-        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+        style = TextStyle(fontSize = 12.sp, letterSpacing = 0.6.sp, fontWeight = FontWeight.Bold),
     )
 }
 
 @Composable
 private fun Hint(text: String) {
     val colors = LocalMetroColors.current
-    MetroText(text, color = colors.onSurfaceVariant.copy(alpha = 0.8f), style = TextStyle(fontSize = 11.sp))
+    MetroText(text, color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp, lineHeight = 21.sp))
 }
 
 @Composable
@@ -463,11 +387,12 @@ private fun Card(bold: Boolean = false, content: @Composable () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .background(colors.surfaceVariant, RectangleShape)
+            .clip(AppShapes.large)
+                        .background(colors.surface)
             .then(
-                if (bold) Modifier.border(2.dp, colors.primary, RectangleShape) else Modifier,
+                if (bold) Modifier.border(1.dp, colors.primary, AppShapes.large) else Modifier,
             )
-            .padding(16.dp),
+            .padding(20.dp),
     ) { Column { content() } }
 }
 
@@ -494,27 +419,9 @@ private fun ActionRow(
     right: Pair<String, () -> Unit>,
     primaryFirst: Boolean,
 ) {
-    val colors = LocalMetroColors.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         listOf(left, right).forEachIndexed { index, (label, action) ->
-            val filled = (index == 0) == primaryFirst
-            Box(
-                Modifier
-                    .weight(1f)
-                    .background(if (filled) colors.primary else colors.surfaceVariant, RectangleShape)
-                    .then(
-                        if (filled) Modifier else Modifier.border(1.dp, colors.onSurfaceVariant.copy(alpha = 0.35f)),
-                    )
-                    .clickable(onClick = action)
-                    .padding(vertical = 14.dp, horizontal = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                MetroText(
-                    label,
-                    color = if (filled) colors.onPrimary else colors.onBackground,
-                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
-                )
-            }
+            ArrisButton(label, Modifier.weight(1f), primary = (index == 0) == primaryFirst, onClick = action)
         }
     }
 }

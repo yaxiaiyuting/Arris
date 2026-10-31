@@ -398,7 +398,7 @@ fun HomeScreen(
                     // 背景由 MainScreen 外层 Box 统一填充，子屏不重复画一层（消除 overdraw）
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     flingBehavior = rememberMetroFlingBehavior()
                 ) {
@@ -415,6 +415,7 @@ fun HomeScreen(
                                 color = LocalMetroColors.current.onBackground,
                                 style = LocalMetroTypography.current.pageHeading,
                             )
+                            com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity()
                         }
                         Spacer(Modifier.height(12.dp))
                     }
@@ -435,7 +436,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 items(toplists, key = { it.id }) { tl ->
@@ -483,7 +484,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 0.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
@@ -522,7 +523,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 item(key = "fm") {

@@ -1,201 +1,194 @@
-/*
- * Ncrust —— ncm 第三方客户端
- * 本文件属于本 Fork（Arris）的修改部分，Copyright (c) 2026 yaxiaiyuting，GPLv3。
- */
-
+/* Arris · Copyright (c) 2026 yaxiaiyuting, GPLv3. */
 package com.takahashirinta.ncrust.ui.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
-import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.withResumed
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.takahashirinta.ncrust.auth.CookieManager
-import com.takahashirinta.ncrust.recognize.AacRecorder
-import com.takahashirinta.ncrust.recognize.NeteaseRecognizeProvider
-import com.takahashirinta.ncrust.recognize.RecogInput
-import com.takahashirinta.ncrust.recognize.RecogOutcome
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.takahashirinta.ncrust.recognize.*
+import com.takahashirinta.ncrust.ui.components.ArrisButton
+import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
+import com.takahashirinta.ncrust.ui.theme.AppShapes
+import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
+import io.github.takahashirinta.kanesumi.core.theme.*
+import kotlinx.coroutines.*
 
-/**
- * 听歌识曲（v3.8.0 正式入口）。
- *
- * 交互只有一件事：**按下 → 录 10 秒 → 出结果**。
- * 录音格式是官方客户端同款的 MP4/AAC（`MediaRecorder` 直出），
- * 请求走 `/eapi/music/hum/audio/unifymatch`（配方来自抓包，见 provider 注释）。
- *
- * 未登录时先提示登录：这个端点用**你自己的账号**发起，没有登录态会被服务端拒。
- */
-
+/** A bounded, explicit recording flow. Leaving/backgrounding cancels recording and submission. */
 @Composable
 fun RecognizeScreen(onBack: () -> Unit) {
-    val colors = LocalMetroColors.current
+    val c = LocalMetroColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var job by remember { mutableStateOf<Job?>(null) }
+    var generation by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<RecogOutcome?>(null) }
-    var status by remember { mutableStateOf("按下开始识别（录 10 秒，请把手机对着音源）") }
-    // 录音倒计时：用户需要知道"还要保持安静几秒"
     var countdown by remember { mutableStateOf(0) }
+    var status by remember { mutableStateOf("让手机靠近音源，留住偶然听见的喜欢。") }
+    var result by remember { mutableStateOf<RecogOutcome?>(null) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        MetroText("听歌识曲", color = colors.onBackground, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
-        MetroText(
-            "录音会上传到你的网易云账号，不会发给任何第三方服务。",
-            color = colors.onSurfaceVariant,
-            style = TextStyle(fontSize = 12.sp),
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .background(if (busy) colors.primary.copy(alpha = 0.3f) else colors.primary, RectangleShape)
-                .clickable(enabled = !busy) {
-                    val cookie = CookieManager.snapshot().cookie.orEmpty()
-                    if (cookie.isBlank()) {
-                        status = "未登录网易云：识别需要你的登录态"
-                    } else {
-                        busy = true
-                        result = null
-                        countdown = 10
-                        status = "录音中…"
-                        scope.launch {
-                            // 倒计时与录音并行：每秒减 1，录完归零
-                            val ticker = launch {
-                                for (left in 10 downTo 1) {
-                                    countdown = left
-                                    kotlinx.coroutines.delay(1_000)
-                                }
-                                countdown = 0
-                            }
-                            val audio = withContext(Dispatchers.IO) { AacRecorder.record(context, 10_000) }
-                            ticker.cancel()
-                            countdown = 0
-                            if (audio == null) {
-                                status = "录音失败（权限被拒或麦克风被占用）"
-                                busy = false
-                            } else {
-                                status = "上传识别…"
-                                val outcome = withContext(Dispatchers.IO) {
-                                    NeteaseRecognizeProvider(cookieProvider = { cookie })
-                                        .recognize(RecogInput.Encoded(audio, "audio/mp4", durationMs = 10_000))
-                                }
-                                result = outcome
-                                status = when (outcome) {
-                                    is RecogOutcome.Matched -> "识别完成"
-                                    is RecogOutcome.Failed -> when (outcome.failure.name) {
-                                        "NO_MATCH" -> "没听出来：换个安静环境、把音量调大再试"
-                                        "NO_NETWORK" -> "网络不通（${outcome.detail}）"
-                                        "PERMISSION_DENIED", "QUOTA_EXCEEDED" -> "登录态失效，请重新登录网易云"
-                                        else -> "失败：${outcome.detail}"
-                                    }
-                                }
-                                busy = false
-                            }
-                        }
+    fun cancel() {
+        generation++
+        job?.cancel(); job = null
+        busy = false; countdown = 0
+        status = "已停止识别，准备好后可以再试一次。"
+    }
+    fun start() {
+        if (busy || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        val snapshot = CookieManager.snapshot()
+        val cookie = snapshot.cookie.orEmpty()
+        if (cookie.isBlank()) { status = "请先登录网易云音乐，再开始识别。"; return }
+        busy = true; result = null; countdown = 10; status = "正在聆听，请保持音源清晰。"
+        val attempt = ++generation
+        job = scope.launch {
+            try {
+                val ticker = launch {
+                    for (left in 10 downTo 1) { if (generation == attempt) countdown = left; delay(1_000) }
+                }
+                val audio = try {
+                    runInterruptible(Dispatchers.IO) { AacRecorder.record(context, 10_000) }
+                } finally { ticker.cancel(); if (generation == attempt) countdown = 0 }
+                ensureActive()
+                if (audio == null) { status = "录音失败，请确认麦克风可用后重试。"; return@launch }
+                if (CookieManager.snapshot() != snapshot) {
+                    status = "账号状态已变化，请重新开始识别。"; return@launch
+                }
+                status = "正在寻找这段旋律…"
+                val outcome = withContext(Dispatchers.IO) {
+                    NeteaseRecognizeProvider(cookieProvider = { cookie })
+                        .recognize(RecogInput.Encoded(audio, "audio/mp4", durationMs = 10_000))
+                }
+                ensureActive()
+                if (CookieManager.snapshot() != snapshot) {
+                    status = "账号状态已变化，请重新开始识别。"; return@launch
+                }
+                result = outcome
+                status = when (outcome) {
+                    is RecogOutcome.Matched -> "找到这首歌了。"
+                    is RecogOutcome.Failed -> when (outcome.failure.name) {
+                        "NO_MATCH" -> "暂时没听出来，试试靠近音源，或换一段更清晰的旋律。"
+                        "NO_NETWORK" -> "网络暂时不可用，连接恢复后再试。"
+                        "PERMISSION_DENIED", "QUOTA_EXCEEDED" -> "请检查网易云登录状态后重试。"
+                        else -> "识别暂未成功，请稍后重试。"
                     }
                 }
-                .padding(16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                BasicText(
-                    text = when {
-                        countdown > 0 -> "录音中 $countdown"
-                        busy -> "识别中…"
-                        else -> "开始识别"
-                    },
-                    style = TextStyle(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onPrimary,
-                    ),
-                )
-                if (busy) {
-                    Spacer(Modifier.height(6.dp))
-                    BasicText("录 10 秒后自动上传", style = TextStyle(fontSize = 12.sp, color = colors.onPrimary))
-                }
-            }
-        }
-
-        MetroText(status, color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
-
-        val r = result
-        if (r is RecogOutcome.Matched) {
-            val m = r.match
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(colors.surfaceVariant, RectangleShape)
-                    .padding(16.dp),
-            ) {
-                Column {
-                    MetroText(m.title, color = colors.onBackground, style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold))
-                    Spacer(Modifier.height(4.dp))
-                    if (m.artist.isNotBlank()) {
-                        MetroText(m.artist, color = colors.onSurfaceVariant, style = TextStyle(fontSize = 14.sp))
-                    }
-                    if (m.album.isNotBlank()) {
-                        MetroText("《${m.album}》", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
-                    }
-                    if (m.durationMs > 0) {
-                        MetroText(
-                            "时长 ${m.durationMs / 1000 / 60}:${(m.durationMs / 1000 % 60).toString().padStart(2, '0')}",
-                            color = colors.onSurfaceVariant,
-                            style = TextStyle(fontSize = 12.sp),
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(colors.surfaceVariant, RectangleShape)
-                .clickable(onClick = onBack)
-                .padding(14.dp),
-        ) {
-            MetroText("返回", color = colors.primary, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold))
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { status = "识别暂未成功，请稍后重试。" }
+            finally { if (generation == attempt) { busy = false; countdown = 0 } }
         }
     }
-
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (it) scope.launch { lifecycle.withResumed { start() } } else status = "需要麦克风权限才能识曲，你可以在系统设置中开启。"
+    }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP && busy) cancel() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); job?.cancel() }
+    }
+    BackHandler { cancel(); onBack() }
+    RecognitionContent(busy, countdown, status, result, onBack = { cancel(); onBack() }) {
+        if (busy) cancel()
+        else if (CookieManager.snapshot().cookie.isNullOrBlank()) status = "请先登录网易云音乐，再开始识别。"
+        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
+        else permission.launch(Manifest.permission.RECORD_AUDIO)
+    }
 }
 
+@Composable
+private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, result: RecogOutcome?,
+                               onBack: () -> Unit, onAction: () -> Unit) {
+    val c = LocalMetroColors.current
+    Box(Modifier.fillMaxSize().background(c.background), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = 640.dp).fillMaxHeight().statusBarsPadding()
+            .verticalScroll(rememberScrollState()).navigationBarsPadding().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ArrisPageHeader("听歌识曲", "ARRIS / DISCOVER", "留住偶然听见的喜欢。", onBack = onBack)
+            RecognitionCard(busy, countdown, status, result is RecogOutcome.Matched, result != null, onAction)
+            val match = (result as? RecogOutcome.Matched)?.match
+            if (match != null) {
+                Row(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface).padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    MetroIcon(Icons.Default.MusicNote, null, tint = c.primary, sizeDp = 32.dp)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        MetroText(match.title, color = c.onBackground, style = LocalMetroTypography.current.titleMedium)
+                        if (match.artist.isNotBlank()) MetroText(match.artist, color = c.onSurfaceVariant)
+                        if (match.album.isNotBlank()) MetroText(match.album, color = c.onSurfaceVariant, style = LocalMetroTypography.current.caption)
+                    }
+                }
+            }
+            MetroText("10 秒聆听 · 网易云账号识别", color = c.primary, style = LocalMetroTypography.current.caption)
+            MetroText("仅在你点击开始后使用麦克风，录音将提交给网易云识曲服务。离开页面或退到后台会停止本次识别。",
+                color = c.onSurfaceVariant, style = TextStyle(fontSize = 12.sp, lineHeight = 20.sp))
+        }
+    }
+}
+
+@Composable
+private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, matched: Boolean,
+                            hasResult: Boolean, onAction: () -> Unit) {
+    val c = LocalMetroColors.current
+            Column(Modifier.fillMaxWidth().clip(AppShapes.extraLarge).background(c.surface)
+                .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.extraLarge).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                RecognitionGraphic(countdown, matched)
+                Spacer(Modifier.height(16.dp))
+                MetroText(if (countdown > 0) "正在聆听 · ${countdown}s" else if (busy) "正在识别" else "让旋律留下名字",
+                    color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold))
+                Spacer(Modifier.height(10.dp))
+                MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                Spacer(Modifier.height(24.dp))
+                ArrisButton(if (busy) "停止识别" else if (hasResult) "再听一次" else "开始识别", Modifier.fillMaxWidth(), onClick = onAction)
+
+            }
+}
+
+@Composable
+private fun RecognitionGraphic(countdown: Int, matched: Boolean) {
+    val c = LocalMetroColors.current
+                Box(Modifier.size(204.dp), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(c.primary.copy(alpha = 0.06f), radius = size.minDimension / 2)
+                        drawCircle(c.primary.copy(alpha = 0.12f), radius = size.minDimension * .4f, style = Stroke(1.dp.toPx()))
+                        drawCircle(c.primary.copy(alpha = 0.15f), radius = size.minDimension * .32f, style = Stroke(1.dp.toPx()))
+                        if (countdown > 0) drawArc(c.primary, -90f, (10-countdown)/10f*360f, false,
+                            topLeft = androidx.compose.ui.geometry.Offset(8.dp.toPx(),8.dp.toPx()),
+                            size = androidx.compose.ui.geometry.Size((size.width-16.dp.toPx()).coerceAtLeast(0f),(size.height-16.dp.toPx()).coerceAtLeast(0f)), style = Stroke(3.dp.toPx()))
+                    }
+                    Box(Modifier.size(104.dp).clip(AppShapes.full).background(c.primary), contentAlignment = Alignment.Center) {
+                        MetroIcon(if (matched) Icons.Default.Check else Icons.Default.Mic,
+                            contentDescription = null, tint = c.onPrimary, sizeDp = 38.dp)
+                    }
+                }
+}

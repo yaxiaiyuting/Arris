@@ -9,7 +9,6 @@ import android.annotation.SuppressLint
 import android.media.MediaRecorder
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
 
 /**
  * 识曲录音（v3.8.0）：直接录成 **AAC/M4A**。
@@ -37,38 +36,43 @@ object AacRecorder {
     /**
      * 录一段 M4A。失败返回 null（权限、设备占用、编码器不可用）。
      *
-     * 注意 `MediaRecorder.stop()` 在录制过短时必抛 `RuntimeException`，所以这里
-     * 捕获后仍尝试读取文件 —— 短片段依然可能带有效头部。
+     * 取消通过 runInterruptible 中断等待；finally 总是释放录音器并删除临时文件。
+     * 不提交录音失败或被中断时的残留文件。
      */
     @SuppressLint("MissingPermission")
     fun record(context: android.content.Context, durationMs: Int = DEFAULT_DURATION_MS): ByteArray? {
         val out = File(context.cacheDir, "recog_${System.currentTimeMillis()}.m4a")
+        var recorder: MediaRecorder? = null
         return try {
-            val recorder: MediaRecorder = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            val active: MediaRecorder = if (android.os.Build.VERSION.SDK_INT >= 31) {
                 MediaRecorder(context)
             } else {
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }
-            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            recorder.setAudioChannels(1)
-            recorder.setAudioSamplingRate(44_100)
-            recorder.setAudioEncodingBitRate(64_000)
-            recorder.setOutputFile(FileOutputStream(out).fd)
-            recorder.prepare()
-            recorder.start()
+            recorder = active
+            active.setAudioSource(MediaRecorder.AudioSource.MIC)
+            active.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            active.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            active.setAudioChannels(1)
+            active.setAudioSamplingRate(44_100)
+            active.setAudioEncodingBitRate(64_000)
+            active.setOutputFile(out.absolutePath)
+            active.prepare()
+            active.start()
             Thread.sleep(durationMs.toLong())
-            runCatching { recorder.stop() }
-            recorder.release()
+            active.stop()
             val bytes = out.readBytes()
             Log.i(TAG, "recorded ${bytes.size}B ($durationMs ms)")
             if (bytes.isEmpty()) null else bytes
-        } catch (t: Throwable) {
-            Log.w(TAG, "record failed", t)
-            out.takeIf { it.length() > 0 }?.readBytes()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "record failed", e)
+            null
         } finally {
+            runCatching { recorder?.release() }
             out.delete()
         }
     }

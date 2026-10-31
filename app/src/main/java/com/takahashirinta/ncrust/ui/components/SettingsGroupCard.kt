@@ -10,6 +10,8 @@
 
 package com.takahashirinta.ncrust.ui.components
 
+import androidx.compose.ui.draw.clip
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -71,6 +73,9 @@ internal fun SettingsGroupCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(AppShapes.large)
+            .background(LocalMetroColors.current.surface)
             .clickable(onClick = onClick)
             .appPressScale()
             .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -120,9 +125,7 @@ internal fun SettingsCardDivider() {
     Spacer(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp)
-            .height(1.dp)
-            .background(LocalMetroColors.current.divider)
+            .height(8.dp)
     )
 }
 

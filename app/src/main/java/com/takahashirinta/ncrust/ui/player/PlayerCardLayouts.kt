@@ -29,6 +29,8 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.platform.testTag
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -510,6 +512,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .testTag("player.cover.title")
                 .fillMaxWidth()
                 // 大封面模式标题块的实测高：从封面可用带里扣除，矮屏才不会压住控件。
                 .onSizeChanged { ui.narrowTitleHeightPx = it.height.toFloat() }

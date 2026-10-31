@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -244,11 +245,7 @@ fun SearchScreen(
         strings.searchCategoryArtists,
     )
 
-    val currentThemeColor = themeColorForIndex(themeIndex)
-    val desaturatedFill = desaturateColor(
-        currentThemeColor,
-        darkTheme = LocalMetroColors.current.background.luminance() < 0.5f
-    )
+    val currentThemeColor = LocalMetroColors.current.primary
 
     // 键盘治理: 点结果进详情/切 tab 后键盘不该还浮着
     val keyboard = LocalSoftwareKeyboardController.current
@@ -303,7 +300,8 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .background(desaturatedFill)
+                    .clip(AppShapes.full)
+                    .background(LocalMetroColors.current.surface)
             ) {
                 BasicTextField(
                     value = query,

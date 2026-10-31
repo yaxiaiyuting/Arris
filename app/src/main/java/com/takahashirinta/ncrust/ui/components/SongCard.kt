@@ -84,7 +84,7 @@ fun SongCard(
         SongCardStyle.LIST, SongCardStyle.COMPACT -> {
             val actualCoverSize = when {
                 coverSize != Dp.Unspecified -> coverSize
-                else -> 72.dp
+                else -> 60.dp
             }
 
             // 无边框版式：封面贴屏幕左沿（无左 padding），文字与右侧 actions 保留 16dp 右 padding。
@@ -100,7 +100,7 @@ fun SongCard(
                         onClick = onClick,
                         onLongClick = { onShowMenu?.invoke() }
                     )
-                    .padding(vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (showCover) {
