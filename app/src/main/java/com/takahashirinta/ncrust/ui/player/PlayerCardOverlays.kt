@@ -19,6 +19,8 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.platform.testTag
+
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
@@ -173,7 +175,7 @@ internal fun PlayerCardCoverOverlay(
                     rotationX = -beatPulse * AppMotion.COVER_3D_DEGREES * 0.4f
                     cameraDistance = AppMotion.COVER_3D_CAMERA_DISTANCE_FACTOR * density.density
                 }
-            },
+            }.testTag("player.cover"),
         contentScale = ContentScale.Crop,
         // v2.5.0 · B：大封面 = AppShapes.large(16dp) + 1dp outlineVariant 描边。
         // 描边色用 MetroColors.divider —— 它就是 NcrustColors.outlineVariant

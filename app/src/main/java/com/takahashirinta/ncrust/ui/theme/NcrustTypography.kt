@@ -56,3 +56,12 @@ val DefaultNcrustTypography = NcrustTypography(
 )
 
 val LocalNcrustTypography = compositionLocalOf { DefaultNcrustTypography }
+
+/** Shared app typography; the external Kanesumi library remains unchanged. */
+val ArrisMetroTypography = io.github.takahashirinta.kanesumi.core.theme.MetroTypography(
+    pageHeading = TextStyle(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
+    title = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+    headlineMedium = TextStyle(fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold),
+    titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+)
