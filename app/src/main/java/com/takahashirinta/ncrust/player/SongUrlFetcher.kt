@@ -188,7 +188,18 @@ object SongUrlFetcher {
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
     private fun coolingDown(): Boolean =
         System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
-    fun onNetworkRouteChanged() { transportCooldownUntil.set(0L) }
+    /**
+     * 网络形态变化（含代理开关）时调用。
+     *
+     * 除了解除传输冷却，还要**清 DNS 缓存**：代理的 fake-ip 与真实 IP 是两套解析结果，
+     * 而 `InetAddress` 的进程内缓存不随网络切换失效 —— 这正是「关掉代理后未缓存的歌
+     * 放不出来」的直接原因。
+     */
+    fun onNetworkRouteChanged() {
+        transportCooldownUntil.set(0L)
+        transportFailures.clear()
+        com.takahashirinta.ncrust.network.DnsCache.clear()
+    }
 
     private fun startCooldown() {
         transportCooldownUntil.set(System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS)
@@ -301,7 +312,10 @@ object SongUrlFetcher {
                     }
                     retriedTransport = true
                     Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
+                    // 连接池 + DNS 缓存一起清：代理开关会让同一域名的解析结果在
+                    // fake-ip 与真实 IP 之间切换，只清连接池仍会连到旧地址。
                     RetrofitClient.evictConnections()
+                    com.takahashirinta.ncrust.network.DnsCache.clear()
                     coroutineContext.ensureActive()
                 } catch (e: Exception) {
                     Log.w(TAG, "fetch failed for level=$tryLevel", e)

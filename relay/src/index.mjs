@@ -14,7 +14,12 @@
  * - 用 Hibernation API（`state.acceptWebSocket`）后，房间没人说话时**不产生时长费用**。
  */
 
+import { HOSTED_APK } from "./dl-manifest.mjs";
+
 const MAX_MEMBERS = 16;
+
+/** 本站托管的 APK 名单（部署时由 tools/sync-dl-manifest.mjs 生成）。 */
+const HOSTED = new Set(HOSTED_APK);
 
 export default {
   async fetch(request, env) {
@@ -88,17 +93,28 @@ export default {
       let list = await gh.json();
       if (!Array.isArray(list)) list = [];
       list = list.filter((r) => r && !r.draft);
-      // 只改写本站确实托管了的资产，避免给出 404 地址
-      for (const release of list) {
-        for (const asset of release.assets || []) {
-          if (!asset || !asset.name || !/\.apk$/i.test(asset.name)) continue;
-          const local = `${url.origin}/dl/${encodeURIComponent(asset.name)}`;
-          try {
-            const head = await env.ASSETS.fetch(new Request(local, { method: "HEAD" }));
-            if (head.ok) asset.browser_download_url = local;
-          } catch (_) {}
-        }
-      }
+      // 精简：只保留应用真正用到的字段，APK 之外的资产一律丢掉。
+      // 原样转发是 1.1MB（90 个 release 的完整 body），手机上拉一次很慢。
+      list = list.map((r) => ({
+        tag_name: r.tag_name,
+        name: r.name,
+        draft: !!r.draft,
+        prerelease: !!r.prerelease,
+        published_at: r.published_at,
+        html_url: r.html_url,
+        body: typeof r.body === "string" ? r.body.slice(0, 4000) : "",
+        assets: (r.assets || [])
+          .filter((a) => a && /\.apk$/i.test(a.name || ""))
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            size: a.size,
+            // 本站托管了就用直链（零 subrequest，只查部署时生成的清单）
+            browser_download_url: HOSTED.has(a.name)
+              ? `${url.origin}/dl/${encodeURIComponent(a.name)}`
+              : a.browser_download_url,
+          })),
+      }));
       const headers = {
         "content-type": "application/json; charset=utf-8",
         "cache-control": "public, max-age=300",
