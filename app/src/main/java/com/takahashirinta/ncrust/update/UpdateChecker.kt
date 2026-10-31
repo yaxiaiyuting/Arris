@@ -64,6 +64,27 @@ object UpdateChecker {
     /** 默认资产通道。调用方应传 [ForkRelease.variantFor] 的结果。 */
     const val DEFAULT_VARIANT = ForkRelease.VARIANT_RELEASE
 
+    /**
+     * 发布通道判定（v3.8.3）。
+     *
+     * - **LTS 线**（当前 < 3.8）：只接受同一 minor 线的版本，外加 `lts-*` 滚动条目；
+     * - **主线**（当前 ≥ 3.8）：接受所有普通版本条目，忽略 `lts-*`。
+     *
+     * 低于 3.8 的设备看不到 3.8+ 的包，避免「点了更新却装不上」。
+     */
+    internal fun sameChannel(tag: String?, candidate: AppVersion, current: AppVersion): Boolean {
+        val isLtsEntry = tag?.startsWith("lts-") == true
+        // 只有**被声明为 LTS 的那条线**受限（当前是 3.7）；更早的历史版本仍按主线处理，
+        // 否则 3.4 的用户会被卡在原地永远升不到 3.5（真机 fixture 用例抓到过）。
+        val currentIsLts = current.major * 100 + current.minor == LTS_LINE
+        if (isLtsEntry) return currentIsLts
+        if (!currentIsLts) return true
+        return candidate.major * 100 + candidate.minor == current.major * 100 + current.minor
+    }
+
+    /** 当前被声明为 LTS 的版本线（3.7）；新的 LTS 线出现时改这里。 */
+    private const val LTS_LINE = 307
+
     /** 解析失败 / 无更新 / 不是数组时返回 null；绝不抛。 */
     fun find(
         releasesJson: String?,
@@ -86,6 +107,8 @@ object UpdateChecker {
 
             val hit = bestAssetOf(release, wantedVariant) ?: continue
             if (hit.version <= current) continue
+            // 发布通道：3.7.x（LTS）不被推到 3.8.x（minSdk 29，Android 7 装不上）
+            if (!sameChannel(release.stringOrNull("tag_name"), hit.version, current)) continue
             if (best == null || hit.version > best.version) {
                 best = UpdateInfo(
                     version = hit.version,
