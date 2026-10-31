@@ -158,37 +158,37 @@ private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, re
 private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, matched: Boolean,
                             hasResult: Boolean, onAction: () -> Unit) {
     val c = LocalMetroColors.current
-            Column(Modifier.fillMaxWidth().clip(AppShapes.extraLarge).background(c.surface)
-                .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.extraLarge).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                RecognitionGraphic(countdown, matched)
-                Spacer(Modifier.height(16.dp))
-                MetroText(if (countdown > 0) "正在聆听 · ${countdown}s" else if (busy) "正在识别" else "让旋律留下名字",
-                    color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold))
-                Spacer(Modifier.height(10.dp))
-                MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                Spacer(Modifier.height(24.dp))
-                ArrisButton(if (busy) "停止识别" else if (hasResult) "再听一次" else "开始识别", Modifier.fillMaxWidth(), onClick = onAction)
+    Column(Modifier.fillMaxWidth().clip(AppShapes.extraLarge).background(c.surface)
+        .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.extraLarge).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        RecognitionGraphic(countdown, matched)
+        Spacer(Modifier.height(16.dp))
+        MetroText(if (countdown > 0) "正在聆听 · ${countdown}s" else if (busy) "正在识别" else "让旋律留下名字",
+            color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold))
+        Spacer(Modifier.height(10.dp))
+        MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Spacer(Modifier.height(24.dp))
+        ArrisButton(if (busy) "停止识别" else if (hasResult) "再听一次" else "开始识别", Modifier.fillMaxWidth(), onClick = onAction)
 
-            }
+    }
 }
 
 @Composable
 private fun RecognitionGraphic(countdown: Int, matched: Boolean) {
     val c = LocalMetroColors.current
-                Box(Modifier.size(204.dp), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        drawCircle(c.primary.copy(alpha = 0.06f), radius = size.minDimension / 2)
-                        drawCircle(c.primary.copy(alpha = 0.12f), radius = size.minDimension * .4f, style = Stroke(1.dp.toPx()))
-                        drawCircle(c.primary.copy(alpha = 0.15f), radius = size.minDimension * .32f, style = Stroke(1.dp.toPx()))
-                        if (countdown > 0) drawArc(c.primary, -90f, (10-countdown)/10f*360f, false,
-                            topLeft = androidx.compose.ui.geometry.Offset(8.dp.toPx(),8.dp.toPx()),
-                            size = androidx.compose.ui.geometry.Size((size.width-16.dp.toPx()).coerceAtLeast(0f),(size.height-16.dp.toPx()).coerceAtLeast(0f)), style = Stroke(3.dp.toPx()))
-                    }
-                    Box(Modifier.size(104.dp).clip(AppShapes.full).background(c.primary), contentAlignment = Alignment.Center) {
-                        MetroIcon(if (matched) Icons.Default.Check else Icons.Default.Mic,
-                            contentDescription = null, tint = c.onPrimary, sizeDp = 38.dp)
-                    }
-                }
+    Box(Modifier.size(204.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(c.primary.copy(alpha = 0.06f), radius = size.minDimension / 2)
+            drawCircle(c.primary.copy(alpha = 0.12f), radius = size.minDimension * .4f, style = Stroke(1.dp.toPx()))
+            drawCircle(c.primary.copy(alpha = 0.15f), radius = size.minDimension * .32f, style = Stroke(1.dp.toPx()))
+            if (countdown > 0) drawArc(c.primary, -90f, (10-countdown)/10f*360f, false,
+                topLeft = androidx.compose.ui.geometry.Offset(8.dp.toPx(),8.dp.toPx()),
+                size = androidx.compose.ui.geometry.Size((size.width-16.dp.toPx()).coerceAtLeast(0f),(size.height-16.dp.toPx()).coerceAtLeast(0f)), style = Stroke(3.dp.toPx()))
+        }
+        Box(Modifier.size(104.dp).clip(AppShapes.full).background(c.primary), contentAlignment = Alignment.Center) {
+            MetroIcon(if (matched) Icons.Default.Check else Icons.Default.Mic,
+                contentDescription = null, tint = c.onPrimary, sizeDp = 38.dp)
+        }
+    }
 }

@@ -345,6 +345,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
                 ThemeMode.LIGHT -> false
             }
+            SideEffect {
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !isDark
+                    isAppearanceLightNavigationBars = !isDark
+                }
+            }
 
             // B2-C：主题色来源三选一（预设 / 封面 / 系统）。封面色由 PlaybackService 的
             // Palette 结果静态推送到 ViewModel；系统色仅 API 31+ 可用。

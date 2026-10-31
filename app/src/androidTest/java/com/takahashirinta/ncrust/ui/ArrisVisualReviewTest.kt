@@ -43,7 +43,12 @@ class ArrisVisualReviewTest {
         album = AlbumItem(name = "界面验证", picUrl = "android.resource://com.takahashirinta.ncrust/${R.drawable.tux_listener}"), duration = 208000L)
 
     private fun show(dark: Boolean = false, scale: Float = 1f, content: @Composable () -> Unit) {
-        compose.activityRule.scenario.onActivity { WindowCompat.setDecorFitsSystemWindows(it.window, false) }
+        compose.activityRule.scenario.onActivity {
+            WindowCompat.setDecorFitsSystemWindows(it.window, false)
+            WindowCompat.getInsetsController(it.window, it.window.decorView).apply {
+                isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark
+            }
+        }
         compose.setContent {
             val density = LocalDensity.current
             val configuration = LocalConfiguration.current
@@ -69,7 +74,7 @@ class ArrisVisualReviewTest {
     }
     @Test fun recognitionIdleAndLoginHint() {
         show { RecognizeScreen {} }
-        compose.onNodeWithText("开始识别").assertIsDisplayed().performClick()
+        compose.onNodeWithText("开始识别").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("请先登录网易云音乐，再开始识别。").assertExists()
         screenshot("recognition-light")
     }
@@ -84,6 +89,7 @@ class ArrisVisualReviewTest {
         compose.onNodeWithText("局域网", useUnmergedTree = true).performClick()
         compose.onNodeWithContentDescription("房间邀请或地址").performTextInput("192.168.1.8:4567")
         compose.onNodeWithText("192.168.1.8:4567").assertExists()
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
         screenshot("together-lan-input")
         compose.onNodeWithText("P2P", useUnmergedTree = true).performClick()
         compose.onNodeWithContentDescription("房间邀请或地址").performTextClearance()
