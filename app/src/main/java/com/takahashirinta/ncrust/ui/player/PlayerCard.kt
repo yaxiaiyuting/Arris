@@ -273,6 +273,7 @@ internal fun PlayerCard(
                     ui.narrowTopBarHeightPx.takeIf { it > 0f }.let { it ?: narrowFallbackTopBarPx },
                 controlsHeightPx = ui.controlsHeightPx.takeIf { it > 0f }
                     .let { it ?: narrowFallbackControlsPx } + narrowGapPx + narrowHandlePx,
+                panelHeightPx = ui.narrowPanelHeightPx.takeIf { it > 0f },
                 titleReservePx = ui.narrowTitleHeightPx.takeIf { it > 0f }
                     ?: with(density) { (90.dp.toPx() * density.fontScale) },
                 minGapPx = narrowMinGapPx,

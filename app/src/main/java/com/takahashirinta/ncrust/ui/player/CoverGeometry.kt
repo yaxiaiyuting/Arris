@@ -34,10 +34,15 @@ fun narrowCoverGeometry(
     titleReservePx: Float,
     minGapPx: Float,
     preferredCenterYPx: Float,
+    panelHeightPx: Float? = null,
 ): CoverGeometry {
     val top = topBarBottomPx.coerceAtLeast(0f)
-    val bottom = (contentHeightPx - controlsHeightPx.coerceAtLeast(0f) -
-        titleReservePx.coerceAtLeast(0f) - minGapPx.coerceAtLeast(0f)).coerceAtLeast(top)
+    // The measured panel already excludes system bars, gesture lift, handle and controls.
+    // Reconstructing it from screen height omitted those insets and let the overlay cross the title.
+    val panelBottom = panelHeightPx?.let { top + it.coerceAtLeast(0f) }
+        ?: (contentHeightPx - controlsHeightPx.coerceAtLeast(0f))
+    val bottom = (panelBottom - titleReservePx.coerceAtLeast(0f) -
+        minGapPx.coerceAtLeast(0f)).coerceAtLeast(top)
     val width = availableWidthPx.coerceAtLeast(0f)
     val size = (minOf(width, bottom - top) * 0.88f).coerceAtLeast(1f)
     val minCenter = top + size / 2f

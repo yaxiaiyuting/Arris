@@ -474,6 +474,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
         modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
+            .onSizeChanged { ui.narrowPanelHeightPx = it.height.toFloat() }
             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
     ) {
         playerPanels(Modifier.fillMaxSize())
@@ -523,7 +524,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // 跑马灯只在标题真正可见时挂：这一层常驻、只在 graphicsLayer 里调 alpha，
             // 卡片收起或处于歌词模式时标题看不见，但无限跑马灯照样以 60fps 驱动重绘。
             val titleVisible = remember { derivedStateOf {
-                progress.value > 0.7f && lyricAnimProgress.value > 0.5f
+                progress.value > 0.7f && lyricAnimProgress.value < 0.5f
             } }
             ThresholdScope({ titleVisible.value }) { visible ->
                 MetroText(
