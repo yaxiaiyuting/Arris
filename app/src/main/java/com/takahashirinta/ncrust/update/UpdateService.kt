@@ -122,11 +122,13 @@ object UpdateService {
 
     const val USER_AGENT = "Arris-Android"
 
-    // per_page 取 GitHub 上限 100；再据响应 Link 头翻页（见 ReleaseFeed），
-    // 否则落在第 21 个及以后的资产会被漏掉并误判「已最新」。
-    // 仓库源固定为本 Fork（ForkRelease.REPO）；这是应用内检查的唯一源，不加镜像。
-    private const val RELEASES_API =
-        "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100"
+    // 首选**自有域名**的接口：`/api/releases` 由 Worker 代取 GitHub（服务端没有墙），
+    // 并把托管在本站的 APK 资产地址改写过去 —— 手机只要能访问本站，检查和下载都能完成。
+    // GitHub 原接口作为兜底：接口挂了 / 域名被污染时仍能退回直连。
+    private val RELEASES_SOURCES = listOf(
+        "https://arris.de5.net/api/releases",
+        "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
+    )
 
     /** 翻页上限，防病态的分页链把 60 次 / 小时限额烧光。 */
     private const val MAX_RELEASES_PAGES = 10
@@ -379,27 +381,38 @@ object UpdateService {
         }
     }
 
+    /** 逐页拉取某个源；任一步失败返回 null，交给调用方换下一个源。 */
+    private fun fetchAllPages(firstUrl: String): List<String>? {
+        val pages = mutableListOf<String>()
+        var url: String? = firstUrl
+        var page = 0
+        while (url != null && page < MAX_RELEASES_PAGES) {
+            page++
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/vnd.github+json")
+                .build()
+            val (body, next) = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val text = response.body?.string() ?: return null
+                text to nextPageUrl(response.header("Link"))
+            }
+            pages += body
+            url = next
+        }
+        return pages
+    }
+
     private suspend fun fetch(): CheckOutcome = withContext(Dispatchers.IO) {
         val current = currentVersion() ?: return@withContext CheckOutcome.Failed
         try {
-            val pages = mutableListOf<String?>()
-            var url: String? = RELEASES_API
-            var page = 0
-            while (url != null && page < MAX_RELEASES_PAGES) {
-                page++
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/vnd.github+json")
-                    .build()
-                val (body, next) = client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@withContext CheckOutcome.Failed
-                    val text = response.body?.string() ?: return@withContext CheckOutcome.Failed
-                    text to nextPageUrl(response.header("Link"))
-                }
-                pages += body
-                url = next
+            var pages: List<String>? = null
+            for (source in RELEASES_SOURCES) {
+                pages = runCatching { fetchAllPages(source) }.getOrNull()
+                if (pages != null) break
             }
+            if (pages == null) return@withContext CheckOutcome.Failed
             // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
             // 绝不能退化成 UpToDate 去清掉上次真实发现的结果。
             evaluateReleases(pages, current, preferredVariant()) ?: CheckOutcome.Failed
