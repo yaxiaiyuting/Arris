@@ -27,4 +27,4 @@ new_sqlite_classes = ["Directory"]
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = ["/dl/*"]
+run_worker_first = true
