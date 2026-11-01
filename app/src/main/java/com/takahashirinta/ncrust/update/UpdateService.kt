@@ -125,11 +125,19 @@ object UpdateService {
 
     // 首选自有域名：/api/releases 由 Worker 代取 GitHub（服务端没有墙），并把托管在本站的
     // APK 资产地址改写到 /get/；GitHub 原接口作兜底。
-    private val RELEASES_SOURCES = listOf(
-        "https://arris.de5.net/api/releases",
-        "https://arris.de5.net/api-fallback/releases-array.json",
-        "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
-    )
+    /**
+     * 更新源，按体积从小到大（v3.7.20）。裸连到 CF 的 RTT 450–560ms、丢包 50–66%，
+     * 500KB 的响应在 12s 预算里经常拿不完；最小的单对象接口只有 1.5KB。
+     */
+    private fun releasesSources(current: AppVersion): List<String> = buildList {
+        // `/api/latest` 只描述主线最新版，LTS 用它会被主线版本号带偏。
+        val onLts = current.major * 100 + current.minor == UpdateChecker.LTS_LINE
+        if (!onLts) add("https://arris.de5.net/api/latest")
+        add("https://arris.de5.net/api/releases")
+        add("https://cdn.jsdelivr.net/gh/yaxiaiyuting/Arris@master/relay/public/api-fallback/releases-array.json")
+        add("https://arris.de5.net/api-fallback/releases-array.json")
+        add("https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100")
+    }
 
     /** 翻页上限，防病态的分页链把 60 次 / 小时限额烧光。 */
     private const val MAX_RELEASES_PAGES = 10
@@ -168,6 +176,9 @@ object UpdateService {
     // 独立 OkHttpClient：RetrofitClient 的 client 会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的。
     private val client = OkHttpClient.Builder()
+        // 真机裸连实测：IPv6 到 Cloudflare 完全不通（IPv4 200 / IPv6 15s 超时）。
+        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+        .retryOnConnectionFailure(true)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         // 整条 call 的总预算：只设 connect/read 时，域名被黑洞会让检查挂上几分钟，
@@ -408,10 +419,37 @@ object UpdateService {
                 val text = response.body?.string() ?: return null
                 text to nextPageUrl(response.header("Link"))
             }
-            pages += body
+            pages += normalizePage(body)
             url = next
         }
         return pages
+    }
+
+    /** 把 `/api/latest` 的单对象响应归一成数组，让选择逻辑只认一种形状。 */
+    private fun normalizePage(text: String): String {
+        val parsed = runCatching { com.google.gson.JsonParser.parseString(text) }.getOrNull() ?: return text
+        if (!parsed.isJsonObject) return text
+        val obj = parsed.asJsonObject
+        val version = obj.get("version")?.takeIf { !it.isJsonNull }?.asString ?: return text
+        val release = com.google.gson.JsonObject()
+        release.addProperty("tag_name", version)
+        obj.get("publishedAt")?.let { release.add("published_at", it) }
+        obj.get("pageUrl")?.let { release.add("html_url", it) }
+        obj.get("body")?.let { release.add("body", it) }
+        val assets = com.google.gson.JsonArray()
+        val apk = obj.get("apk")?.takeIf { it.isJsonObject }?.asJsonObject
+        if (apk != null) {
+            val a = com.google.gson.JsonObject()
+            a.addProperty("id", 0L)
+            apk.get("name")?.let { a.add("name", it) }
+            apk.get("size")?.let { a.add("size", it) }
+            apk.get("url")?.let { a.add("browser_download_url", it) }
+            assets.add(a)
+        }
+        release.add("assets", assets)
+        val array = com.google.gson.JsonArray()
+        array.add(release)
+        return array.toString()
     }
 
     private suspend fun fetch(): CheckOutcome = withContext(Dispatchers.IO) {
@@ -427,7 +465,7 @@ object UpdateService {
     private suspend fun fetchFromSources(current: AppVersion): CheckOutcome = withContext(Dispatchers.IO) {
         try {
             var pages: List<String>? = null
-            for (source in RELEASES_SOURCES) {
+            for (source in releasesSources(current)) {
                 pages = runCatching { fetchAllPages(source) }.getOrNull()
                 if (pages != null) break
             }

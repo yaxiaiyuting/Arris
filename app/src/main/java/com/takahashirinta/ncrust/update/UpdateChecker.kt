@@ -83,7 +83,7 @@ object UpdateChecker {
     }
 
     /** 当前被声明为 LTS 的版本线（3.7）；新的 LTS 线出现时改这里。 */
-    private const val LTS_LINE = 307
+    internal const val LTS_LINE = 307
 
     /** 解析失败 / 无更新 / 不是数组时返回 null；绝不抛。 */
     fun find(

@@ -220,8 +220,13 @@ object BiliApi {
     private val realClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addNetworkInterceptor(BiliCredentialBoundary)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            // v3.7.20：这条客户端以前是裸的（30s 超时、双栈原样解析、协议自动协商），
+            // ncm 修过的三个坑在这儿全在：坏 IPv6 地址吃掉整个预算、h2 被重置、没有读超时。
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -244,6 +249,13 @@ object BiliApi {
     internal var clientForTest: OkHttpClient? = null
 
     private val client: OkHttpClient get() = clientForTest ?: realClient
+
+    /** 丢掉 B 站客户端池里的连接（网络切换 / 代理开关 / 回到前台时调用）。 */
+    internal fun evictConnections() {
+        runCatching {
+            Thread({ runCatching { client.connectionPool.evictAll() } }, "ncrust-evict-bili").start()
+        }
+    }
 
     // ---------------------------------------------------------------- wbi 密钥缓存 ----
 
