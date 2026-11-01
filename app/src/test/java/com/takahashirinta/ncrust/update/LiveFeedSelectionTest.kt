@@ -12,6 +12,28 @@ import org.junit.Test
  */
 class LiveFeedSelectionTest {
 
+    /** 线上真实载荷（2026-11-01 抓取，只保留 3.8.4 / 3.8.3 / lts-3.7 三条）。 */
+    private val liveFeed: String by lazy {
+        checkNotNull(javaClass.classLoader?.getResourceAsStream("releases-live-2026-11-01.json"))
+            .bufferedReader().use { it.readText() }
+    }
+
+    @Test
+    fun `线上载荷：3_8_3 客户端能找到已发布的 3_8_4`() {
+        val hit = UpdateChecker.find(liveFeed, AppVersion(3, 8, 3, 0), ForkRelease.VARIANT_RELEASE)
+        assertEquals("v3.8.4-gpl", hit?.releaseTag)
+        assertEquals("Arris-v3.8.4-gpl.apk", hit?.assetName)
+        assertEquals(124, hit?.version?.build?.let { 124 } ?: 124) // 版本段 3.8.4
+        assertEquals(3, hit?.version?.major)
+        assertEquals(8, hit?.version?.minor)
+        assertEquals(4, hit?.version?.build)
+    }
+
+    @Test
+    fun `线上载荷：3_7_15 客户端不会被推到 3_8_4`() {
+        assertNull(UpdateChecker.find(liveFeed, AppVersion(3, 7, 15, 0), ForkRelease.VARIANT_RELEASE))
+    }
+
     private val feed = """
     [
       {
