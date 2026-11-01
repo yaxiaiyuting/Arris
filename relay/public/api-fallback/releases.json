@@ -1,6 +1,60 @@
 {
- "generatedAt": "2026-11-01T15:55:04.868Z",
+ "generatedAt": "2026-11-01T16:48:23.308Z",
  "releases": [
+  {
+   "tag_name": "v3.8.14-gpl",
+   "name": "Arris v3.8.14-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T16:48:10Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.14-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.14-gpl（versionCode 134）\n\n### 一起听：不再「一同步就暂停」\n\n成员侧的漂移容差原来是 **800ms** —— 网络抖动 + 房主时间戳误差就能超过它，\n于是成员每隔一两份快照就被纠正一次，听感就是「一直在被同步打断、老是暂停」。\n\n现在的分层：\n\n| 偏差 | 行为 |\n|---|---|\n| ≤ **5s** | **完全不动**（人耳在这个量级听不出差别） |\n| 5s – 12s | 温和纠正：只把进度对到目标位置，**不动播放/暂停态** |\n| ≥ **12s** | 强制对齐：位置与播放态一起同步 |\n\n另外播放/暂停态现在要求**连续两次快照一致**才跟随（`TRANSPORT_CONFIRMATIONS=2`），\n房主瞬时缓冲不会再顺手把成员一起停掉。\n\n### 顺带修掉的两处网络问题（3.8.12 / 3.8.13 的内容）\n\n- **检查更新**：单对象响应归一化真正接上（此前一直判「解析失败」）；\n  更新客户端补 IPv4 优先；响应从 509KB 压到 11KB，源按体积从小到大取。\n- **应用内下载**：下载客户端同样补 IPv4 优先 —— 修「第一次必失败、重试才成功」\n  （本机 IPv6 到 Cloudflare 完全不通，IPv4 200 / IPv6 15s 超时，实测记录在仓库里）。\n\n### 校验\n\n- 全量 JVM 单测 3503 项；唯一失败项是 `QqLiveProbeTest` 的实时探针（本机出口 IP 被限，返回 403/500）\n- 新增 `DriftWindowTest` 6 例钉住窗口边界（2s / 恰好 5s / 16s / 硬阈值 / 未起播 / 播放态）\n",
+   "assets": [
+    {
+     "id": 698903620,
+     "name": "Arris-v3.8.14-gpl.apk",
+     "size": 16069004,
+     "browser_download_url": ""
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.8.13-gpl",
+   "name": "Arris v3.8.13-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T16:07:02Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.13-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.13-gpl（versionCode 133）\n\n### 应用内下载：第一次必失败，第二次才连上\n\n你报的现象 —— 第一次失败、重试成功 —— 是同一个根因的另一种表现：\n\n真机实测（同一台手机、裸连）：\n\n| 请求 | 结果 |\n|---|---|\n| `curl -4 https://arris.de5.net/...` | HTTP 200，conn 0.39s |\n| `curl -6` 同一地址 | **15 秒超时** |\n\n`UpdateDownloader` 自建的 OkHttp **没有 AddressPreference**：第一次下载把 20s 预算全花在死掉的\nIPv6 地址上 → 失败；重试时系统已把那个地址标记为不可用，才轮到 IPv4 → 成功。\n\n修：下载客户端补 `AddressPreference.ipv4First` + `retryOnConnectionFailure`，连接超时 20s → 10s。\n\n顺带加诊断日志（下次直接看得到卡在哪）：\n\n```\nI UpdateDownloader: start host=arris.de5.net resumeFrom=0\nI UpdateDownloader: response code=200 len=16069004 elapsed=3211ms\nI UpdateDownloader: failed after 10012ms: SocketTimeoutException timeout\n```\n\n### 一并包含（3.8.9–3.8.12）\n\n- 检查更新链路打通：单对象归一化、IPv4 优先、响应 509KB→11KB\n- 浏览器入口与下载地址都指向官网（`site_url`），GitHub 只作数据来源\n- B站音源：`BiliApi` 客户端硬化（IPv4 / h1 / 读超时）\n- 音频流走 OkHttp（读 10s、连接池可清）、回前台刷新、取链阶梯记忆\n\n### 校验\n\n真机裸连实测检查更新：`evaluate=Found(version=3.8.12, assetUrl=https://arris.de5.net/dl/...)`，\n3.1 秒完成。\n",
+   "assets": [
+    {
+     "id": 698802326,
+     "name": "Arris-v3.8.13-gpl.apk",
+     "size": 16069004,
+     "browser_download_url": ""
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.8.12-gpl",
+   "name": "Arris v3.8.12-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T15:59:00Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.12-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.12-gpl（versionCode 132）\n\n这一版把「检查更新」整条链路真正打通，顺带修掉 B站音源。\n\n### 应用内检查更新（真机裸连实测通过）\n\n联调测试：临时发过一版 3.8.12，手机（3.8.11、**无代理**）冷启动后日志：\n\n```\nupdate-source ok host=arris.de5.net pages=1 bytes=360 elapsed=3104ms\nupdate: head=[{\"tag_name\":\"v3.8.12-gpl\",...}]\nupdate: evaluate=Found(version=3.8.12, assetName=Arris-v3.8.12-gpl.apk, ...)\n```\n\n测完已把那一版删除，编号不留洞（正式就是本版 3.8.12）。\n\n过程中修掉的真问题：\n\n1. **单对象归一化没接线** —— `/api/latest` 返回的是对象，`normalizePage()` 写了却没被调用，\n   于是每次都判「解析失败」（日志里的 `evaluate=null(解析失败)` 就是它）。\n2. **更新客户端没有 IPv4 优先** —— 本机实测：IPv4 到 CF 是 200（0.39s 建连），\n   IPv6 是 15 秒超时；系统把 IPv6 排前面，请求全耗在死地址上。\n3. **响应太大** —— `/api/releases` 509KB → **11KB**；源按体积从小到大试：\n   `/api/latest`(1.5KB) → `/api/releases` → jsDelivr 镜像 → 静态快照 → GitHub。\n4. **浏览器入口指向 GitHub** —— 国内打不开。现在 Worker 给每条 release 附\n   `site_url = https://arris.de5.net/#download`，应用优先用它，老载荷才回落 `html_url`。\n\n### B站音源失效\n\n用你自己的 B 站 cookie 验过服务端整条链路都正常（search/view/playurl 全 `code 0`、\nCDN 带 Referer 取流 206）。问题在 `BiliApi` 那条**裸** OkHttp 客户端：\n没有 IPv4 优先、自动协商 h2、30s 才超时。现已对齐 ncm：IPv4 优先、强制 HTTP/1.1、\n连接 8s / 读 15s，并加 `BiliApi.evictConnections()`。\n\n### 校验\n\n- 全量单测 3497 项；5 项 `QqLiveProbeTest` 是直连腾讯服务器的实时探针（本机出口 IP 被限，返回 500），与改动无关\n",
+   "assets": [
+    {
+     "id": 698783421,
+     "name": "Arris-v3.8.12-gpl.apk",
+     "size": 16069004,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.9-gpl",
    "name": "Arris v3.8.9-gpl",
@@ -45,7 +99,7 @@
    "published_at": "2026-10-31T13:36:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
    "site_url": "https://arris.de5.net/#download",
-   "body": "# LTS 3.7.x · 长期维护线（滚动更新）\n\n这条 Release **不是某个具体版本**，而是 LTS 线的**固定入口**：每次 LTS 出包都会替换下面这些附件，\n版本号看附件文件名。本页不会被标记为 Latest，也不会顶掉主线的「最新版」徽章。\n\n## 当前 LTS 版本：`v3.7.15-gpl`（versionCode 102）\n\n| 项 | 值 |\n|---|---|\n| 最低系统 | **Android 7.0（minSdk 24）** —— 想装 3.8.x 需要 Android 10+ |\n| 附件 | `Arris-v3.7.15-gpl.apk`（≈ 12 MB） |\n| 官网直链 | `https://arris.de5.net/get/lts-latest.apk`（支持断点续传/多线程，永远指向最新 LTS） |\n| 旧版 | `v3.7.14-gpl`、`v3.7.13-gpl` 仍在 Releases 里，可回退 |\n\n## 本版（3.7.15）回移的内容\n\n- **开关代理后未缓存的歌放不出来**：代理的 fake-ip（`198.18.0.0/15`）与真实 IP 是两套解析结果，\n  而 JVM 的 DNS 缓存不随网络切换失效 —— 关掉代理后取链仍往假地址上连。\n  新增 `DnsCache`（反射清缓存）并在网络切换与取链重试两处调用。\n- **检查更新不再依赖 GitHub**：首选 `https://arris.de5.net/api/releases`，\n  GitHub 原接口仅作兜底；`api.github.com` 在国内经常裸连失败。\n- **按发布通道过滤**：3.7.x 只看到 3.7.x 与 `lts-3.7`，不会被推 `minSdk 29` 的 3.8.x。\n\n## LTS 线的取舍\n\nLTS **只回移「设备兼容 / 正确性」修复，不带新功能**：\n\n- ✅ 会回移：竖屏封面遮挡、自动旋转默认值、地址族回退、主线程 socket 崩溃、DNS 缓存、视觉统一\n- ❌ 不回移：听歌识曲、一起听（依赖 3.8 的协议与后端，且在 Android 7 设备上没有验证过）\n\n## 校验\n\n- 全量 JVM 单测 **3399 项 0 失败**\n- 与 3.8.x 同一证书（`CN=Ncrust, OU=Dev, O=Ncrust`），可直接覆盖安装\n",
+   "body": "",
    "assets": [
     {
      "id": 698746318,
@@ -63,7 +117,7 @@
    "published_at": "2026-10-31T16:58:41Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.4-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.4-gpl（versionCode 124）\r\n\r\n两个「网络相关」的修复，都来自真机反馈。\r\n\r\n### 开关代理后，未缓存的歌放不出来\r\n\r\n**现象**：开/关 Clash 一类 TUN 代理之后，已缓存的歌还能放，未缓存的歌直接取链失败、跳歌。\r\n\r\n**原因不在连接池**（那条路一直在 `evictAll()`），在 **JVM 的 DNS 解析缓存**：\r\n\r\n- 代理开：fake-ip 模式把域名解析成 `198.18.0.0/15`，由 TUN 接管；\r\n- 代理关：解析回真实 IP；\r\n- `InetAddress` 的进程内缓存**不随网络切换失效**，于是关掉代理后的一段时间里，取链仍往假地址上连 —— 不可达。\r\n- 已缓存的歌走本地文件、不经过解析，所以现象正好是「只有新歌不行」。\r\n\r\n修复：新增 `network/DnsCache`（反射调 `InetAddress.clearDnsCache()`，失败只记日志），\r\n在网络切换处理链与取链重试两处都清一次；`onNetworkRouteChanged()` 顺带清空传输失败记录。\r\n覆盖「只是切了代理模式、默认网络没变」的情况。\r\n\r\n### 应用内检查更新不再依赖 GitHub\r\n\r\n`api.github.com` 在国内经常裸连失败，之前会一直提示「检查更新失败」。现在首选\r\n`https://arris.de5.net/api/releases`（由 Worker 代取 GitHub，并把托管在本站的 APK 地址改写到\r\n`/get/`），GitHub 原接口只作兜底。\r\n\r\n同时新增**发布通道**判定：3.7.x 只看到 3.7.x 与 `lts-3.7`，主线看普通版本条目 —— 避免\r\nAndroid 7 用户被推一个 `minSdk 29` 装不上的包。\r\n\r\n### 官网直链支持断点续传\r\n\r\n`https://arris.de5.net/get/latest.apk` 支持 `Range`（206），可用 aria2 `-x8 -s8` / IDM 多线程。\r\n`/dl/latest.apk` 是同一份包的静态直出，最简单但不支持续传。\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3482 项 0 失败**\r\n- 与 3.8.3 同一证书，可直接覆盖安装\r\n- SHA-256：见附件页面（官网上是同一个包）\r\n",
+   "body": "",
    "assets": [
     {
      "id": 695929807,
@@ -81,7 +135,7 @@
    "published_at": "2026-10-31T13:23:08Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.3-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.3-gpl（versionCode 123）\r\n\r\n这一版把新官网的视觉语言搬进应用，并修掉竖屏封面的遮挡问题。\r\n\r\n### 界面重构（对齐官网 arris.de5.net）\r\n- **配色**：米白纸感底色 + 深松绿主色 + 鼠尾草绿点缀，深色模式与主题色选择保留。\r\n- **听歌识曲**：状态更清楚（待机 / 录音中 / 识别中 / 有结果 / 失败），录音与结果分区呈现。\r\n- **一起听**：房间状态卡、连接方式（中继 / 局域网 / P2P）、活跃房间、高级设置分层排布；\r\n  修掉了邀请输入框会把 `IP:端口` 里的标点吃掉的问题。\r\n- **首页 / 音乐库 / 搜索 / 设置 / 底部导航**：统一页头留白、字重、卡片与列表间距；\r\n  系统栏图标跟随应用深浅主题。\r\n\r\n### 修复\r\n- **竖屏封面遮挡**：封面位置原按整屏高度反推，未扣掉系统导航栏与手势留白，\r\n  小屏或大字体下会压到标题。改为读取真实面板尺寸，并补了屏高 / 密度 / 字体三组几何回归。\r\n- **自动旋转默认关闭**：设置注册表里的独立默认值也同步关掉，避免「设置页显示关、行为却开着」；\r\n  已明确保存过选择的用户不受影响。\r\n\r\n### 校验\r\n- JVM 单测 **3474 项 0 失败**（328 个测试类）\r\n- 独立后台模拟器 **8 项界面检查通过**：封面与标题实际边界、深浅色、1.5× 字体、\r\n  窄屏 320dp、局域网与 P2P 邀请输入\r\n- 签名 Release 包已完成 R8 优化；本版未操作真机，真实录音识别与双机一起听仍需自测\r\n\r\n### 下载\r\n- 官网直链：`https://arris.de5.net/dl/latest.apk`\r\n- 固定版本：`https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk`\r\n- SHA-256：`220031536e48b6f5a08956566b7fda21b92a8710f82b6302f3b033cbbf448bfa`\r\n",
+   "body": "",
    "assets": [
     {
      "id": 695402064,
