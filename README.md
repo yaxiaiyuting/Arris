@@ -527,8 +527,6 @@ app/src/main/java/com/takahashirinta/ncrust/
 <details>
 <summary><b>上游版本历史（点开）</b></summary>
 
-### 上游版本线（[GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）
-
 本 fork 的基线是上游 `v1.3.1`。下表是**上游**的版本历史，保留在这里是为了交代来处；
 其中的功能**全部已包含在本 fork 里**（`v1.3.1` 之后的功能见上表）。
 
