@@ -3,6 +3,15 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v3.7.21-gpl — LTS 与主线同构（2026-11-02）
+
+- **`AppHttp` 统一网络入口**：IPv4 优先 DNS、连接 8s / 读 15s、`retryOnConnectionFailure`、
+  进程级共享连接池；LTS 里 10 个文件 12 处 builder 全部改走它，裸 `OkHttpClient.Builder()` 绝迹。
+- **封面 / 艺人头像 / 专辑图**：Coil ImageLoader 补 IPv4 优先（LTS 用户同样受 IPv6 不通影响）。
+- **彩蛋推荐一首**：自由听众席从本地收藏随机推一首，「就听这首」进播放队列，「换一首」重新抽。
+- **分段下载**：4 段并发 + 任一段失败回落单流（服务端 `/get/` 支持 Range）。
+- **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
+
 ## v3.8.16-gpl — 彩蛋推荐 + 网络客户端统一接管（2026-11-02）
 
 - **彩蛋「推荐一首」**：自由听众席里从**本地收藏**随机挑一首（连续两次不重复），
