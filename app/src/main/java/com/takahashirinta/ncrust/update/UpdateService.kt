@@ -496,10 +496,19 @@ object UpdateService {
                     "update-source failed url=${source.take(60)} elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms",
                 )
             }
-            if (pages == null) return@withContext CheckOutcome.Failed
+            if (pages == null) {
+                android.util.Log.w("UpdateService", "update: 所有源都失败")
+                return@withContext CheckOutcome.Failed
+            }
+            android.util.Log.i(
+                "UpdateService",
+                "update: current=$current variant=${preferredVariant()} pages=${pages.size} head=${pages.firstOrNull()?.take(90)}",
+            )
             // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
             // 绝不能退化成 UpToDate 去清掉上次真实发现的结果。
-            evaluateReleases(pages, current, preferredVariant()) ?: CheckOutcome.Failed
+            val outcome = evaluateReleases(pages, current, preferredVariant())
+            android.util.Log.i("UpdateService", "update: evaluate=${outcome ?: "null(解析失败)"}")
+            outcome ?: CheckOutcome.Failed
         } catch (_: Exception) {
             CheckOutcome.Failed
         }
