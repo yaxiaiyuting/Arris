@@ -3,6 +3,27 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v3.8.15-gpl — 应用内多线程下载（2026-11-02）
+
+- **分段并发**：新增 `SegmentedDownload`，探测 `Range`（`bytes=0-0` 拿总长与 ETag）后并发 4 段下载，
+  每段用独立 `RandomAccessFile` seek 到自己的区间；收尾校验长度与 ETag（资产被替换则不认）。
+- **分流**：服务端不支持 `Range` / 体积 ≤4MB / 存在可续传残包 → 仍走原单流下载器；
+  任一段失败或取消 → 全体放弃并回落单流。快是加分项，下载成功是底线。
+- **服务端**：`/api/releases` 与 `/api/latest` 的资产地址从 `/dl/` 改为 `/get/`
+  （`/dl/` 是 Cloudflare 静态直出，不认 Range；`/get/` 走 Worker，返回 206）。
+
+## v3.8.14-gpl — 一起听不再一同步就暂停（2026-11-02）
+
+- 成员侧漂移容差 800ms → **5s**：窗口内完全不动；5–12s 只对进度不动播放态；≥12s 强制对齐。
+- 播放/暂停态需**连续两次快照一致**才跟随（`TRANSPORT_CONFIRMATIONS=2`），房主瞬时缓冲不会把成员一起停掉。
+- 新增 `DriftWindowTest` 6 例钉住边界。
+
+## v3.8.13-gpl — 应用内下载首次必失败（2026-11-02）
+
+- `UpdateDownloader` 的 OkHttp 缺 `AddressPreference`：第一次下载把 20s 预算全花在不通的 IPv6 上，
+  重试才走 IPv4（用户看到的「失败一次、第二次成功」）。现补 IPv4 优先，连接超时 20s → 10s。
+- 新增下载诊断日志：`start` / `response code/len/elapsed` / `failed`。
+
 ## v3.7.11-gpl — 正式整合版（2026-10-29）
 
 - 整合既有3.7.11工作区与双语媒体歌词：默认原文上、译文下，可切换主行，缺译文单行回退；单语保留歌名/歌手，双语附加歌曲信息由系统决定如何呈现。
