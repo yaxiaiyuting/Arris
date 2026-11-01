@@ -3,6 +3,18 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v3.8.16-gpl — 彩蛋推荐 + 网络客户端统一接管（2026-11-02）
+
+- **彩蛋「推荐一首」**：自由听众席里从**本地收藏**随机挑一首（连续两次不重复），
+  可「就听这首」直接进播放队列或「换一首」；收藏为空时如实提示「收藏里还没有歌」。
+  播放走 `AboutScreen → VersionEggRow → CelebrationOverlay` 回调 → `PlayerViewModel.playSong`。
+- **网络客户端统一入口**：新增 `network/AppHttp`，默认就带 IPv4 优先 DNS、连接 8s / 读 15s、
+  `retryOnConnectionFailure`、进程级共享连接池；**15 个文件 18 处** builder 全部改为 `AppHttp.builder()`。
+- **补齐漏掉的客户端**：Coil（封面/艺人头像/专辑图）、QqClient×2、QqQrClient、
+  MqttWebSocketTransport、NeteaseRecognizeProvider、163cn.tv 短链 HEAD。
+- **防回归**：`HttpClientDnsAuditTest` 扫描源码，主源码里出现裸 `OkHttpClient.Builder()` 即失败；
+  `AddressPreference.ipv4First` 改为具名类 `IPv4FirstDns` 以便断言。
+
 ## v3.8.15-gpl — 应用内多线程下载（2026-11-02）
 
 - **分段并发**：新增 `SegmentedDownload`，探测 `Range`（`bytes=0-0` 拿总长与 ETag）后并发 4 段下载，
