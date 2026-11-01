@@ -55,7 +55,12 @@ object ForkRelease {
      * 不是安装包。版本段最多四段，与 [AppVersion] 一致。
      */
     private val ASSET_PATTERN = Regex(
-        """^Ncrust-v?(\d{1,9}(?:\.\d{1,9}){0,3})-gpl-(release|debug)\.apk$""",
+        // 兼容三种实际出现过的命名（v3.8.5 放宽）：
+        //   Arris-v3.8.4-gpl.apk            ← 现在 GitHub Release 用的就是这种
+        //   Ncrust-v3.7.11-gpl-release.apk  ← 早期 CI 产物
+        //   Arris-v3.7.11-gpl-formal-code99-release.apk 的尾部 `-release.apk`
+        // 前缀（Arris-/Ncrust-…）可选，变体后缀可选；缺省按 release 处理。
+        """^(?:[A-Za-z][A-Za-z0-9]*-)?v?(\d{1,9}(?:\.\d{1,9}){0,3})-gpl(?:[-.](?:formal[-.][A-Za-z0-9]+|release|debug))*\.apk$""",
         RegexOption.IGNORE_CASE
     )
 
@@ -82,9 +87,13 @@ object ForkRelease {
 
     /** 解析本 Fork 的 APK 资产名；不合规（校验文件 / 上游命名 / 版本非法）返回 null。 */
     fun parseAsset(name: String?): Asset? {
-        val match = ASSET_PATTERN.matchEntire(name?.trim().orEmpty()) ?: return null
+        val trimmed = name?.trim().orEmpty()
+        val match = ASSET_PATTERN.matchEntire(trimmed) ?: return null
         val version = AppVersion.parseOrNull(match.groupValues[1]) ?: return null
-        return Asset(version, match.groupValues[2].lowercase())
+        // 变体缺省 = release：现在发布的资产就叫 `Arris-vX.Y.Z-gpl.apk`，没有 `-release` 后缀。
+        // 只有明确写了 `-debug` 的才算 debug 通道。
+        val variant = if (trimmed.contains("debug", ignoreCase = true)) VARIANT_DEBUG else VARIANT_RELEASE
+        return Asset(version, variant)
     }
 
     /** 便于诊断：本 Fork 期望的资产名前缀。 */

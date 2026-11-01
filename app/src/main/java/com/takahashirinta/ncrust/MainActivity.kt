@@ -499,8 +499,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        com.takahashirinta.ncrust.network.AppForegroundTracker.onBackground()
+    }
+
     override fun onResume() {
         super.onResume()
+        // 长时间挂后台后回来：连接池与 DNS 缓存都可能过期，进前台时顺手清掉，
+        // 避免回来第一次取链挂在半死的 socket 上（见 AppForegroundTracker）。
+        com.takahashirinta.ncrust.network.AppForegroundTracker.onForeground()
         // 回前台且距上次判定 ≥ 30 分钟才复核（登录失效最常见的时间窗就是"隔天再打开"）。
         SessionMonitor.onResume(this)
     }

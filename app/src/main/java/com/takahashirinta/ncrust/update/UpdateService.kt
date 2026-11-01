@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -153,6 +154,12 @@ object UpdateService {
     /** 24 小时最多自动检查一次（未认证的 GitHub API 限额是 60 次 / 小时 / IP）。 */
     private const val CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
 
+    /** 单次 HTTP call 的总预算（含连接、重定向、读响应体）。 */
+    private const val CHECK_CALL_TIMEOUT_MS = 12_000L
+
+    /** 整次检查（含换源重试）的总预算；到点就按失败处理，界面不会一直转圈。 */
+    private const val CHECK_TOTAL_TIMEOUT_MS = 22_000L
+
     private const val DOWNLOAD_DIR = "updates"
 
     // 应用级作用域：下载期间用户离开更新页（甚至旋转 / 回到首页）都不能中断。
@@ -161,8 +168,11 @@ object UpdateService {
     // 独立 OkHttpClient：RetrofitClient 的 client 会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的。
     private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        // 关键：整条 call 的总预算。只设 connect/read 时，域名被黑洞（SYN 不回）或
+        // 服务端慢慢吐字节会让一次检查挂上几分钟，界面就一直停在「正在检查…」。
+        .callTimeout(CHECK_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .build()
 
     private val _state = MutableStateFlow(UpdateState())
@@ -406,6 +416,15 @@ object UpdateService {
 
     private suspend fun fetch(): CheckOutcome = withContext(Dispatchers.IO) {
         val current = currentVersion() ?: return@withContext CheckOutcome.Failed
+        try {
+            return@withContext withTimeoutOrNull(CHECK_TOTAL_TIMEOUT_MS) { fetchFromSources(current) }
+                ?: CheckOutcome.Failed
+        } catch (_: Exception) {
+            CheckOutcome.Failed
+        }
+    }
+
+    private suspend fun fetchFromSources(current: AppVersion): CheckOutcome = withContext(Dispatchers.IO) {
         try {
             var pages: List<String>? = null
             for (source in RELEASES_SOURCES) {
