@@ -175,6 +175,38 @@ object SongUrlFetcher {
      * 绝不能当成「这首结构性不可播」去跳歌 —— 实测把两者混为一谈时，一次断流会让客户端
      * 在一分钟内自动跳掉两百多首。
      */
+    /**
+     * 账户级「这一档取不到」的短记忆（v3.8.7）。
+     *
+     * 取链是一条**串行降级阶梯**：lossless → exhigh → higher → standard，每一档一个来回。
+     * 没有会员的账号每首歌都要白跑 3 次才落到 standard —— 冷启动/待机后第一次播放尤其明显
+     * （每次来回 200–400ms，叠加起来就是「点了要等一两秒」）。
+     *
+     * 策略：**连续两首**都在某一档被业务拒绝，就把这一档记 10 分钟，期间降级阶梯从下一档开始。
+     * 用「连续两首」而不是「一次」是因为单首歌被拒可能只是那首歌没这个档位（版权/母带），
+     * 不代表账号不行。命中成功一次就把计数清零。
+     */
+    private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val levelRejectCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private const val DENIED_TTL_MS = 10 * 60_000L
+
+    private fun levelDenied(level: String): Boolean =
+        (deniedLevels[level] ?: 0L) > System.currentTimeMillis()
+
+    private fun noteLevelRejected(level: String) {
+        val n = (levelRejectCount[level] ?: 0) + 1
+        levelRejectCount[level] = n
+        if (n >= 2 && !levelDenied(level)) {
+            deniedLevels[level] = System.currentTimeMillis() + DENIED_TTL_MS
+            Log.i(TAG, "level $level denied account-wide for 10min (2 songs rejected)")
+        }
+    }
+
+    private fun noteLevelAccepted(level: String) {
+        levelRejectCount.remove(level)
+        if (deniedLevels.remove(level) != null) Log.i(TAG, "level $level usable again")
+    }
+
     private val transportFailures = java.util.Collections.newSetFromMap(
         java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
     )
@@ -195,6 +227,11 @@ object SongUrlFetcher {
      * 而 `InetAddress` 的进程内缓存不随网络切换失效 —— 这正是「关掉代理后未缓存的歌
      * 放不出来」的直接原因。
      */
+    /** 最近一次成功取链的音频 host（供 [com.takahashirinta.ncrust.network.ConnectionWarmup.warmHost] 预热）。 */
+    @Volatile
+    var lastAudioHost: String? = null
+        private set
+
     fun onNetworkRouteChanged() {
         transportCooldownUntil.set(0L)
         transportFailures.clear()
@@ -300,7 +337,11 @@ object SongUrlFetcher {
         }
 
         var retriedTransport = false
-        for (tryLevel in fallbackLevels) {
+        val effectiveLevels = fallbackLevels.filterNot { levelDenied(it) }.ifEmpty { fallbackLevels }
+        if (effectiveLevels.size != fallbackLevels.size) {
+            Log.i(TAG, "level ladder skip denied: ${fallbackLevels} -> $effectiveLevels (songId=$songId)")
+        }
+        for (tryLevel in effectiveLevels) {
             // 设备解不了 FLAC 时,flac 档位取来也是无声,直接跳到 mp3 档。
             if (tryLevel in FLAC_TIERS && !deviceCanDecodeFlac) continue
             // 用户已经切到别的歌：上一首的降级阶梯必须立刻停下，否则每次点"下一首"
@@ -308,7 +349,17 @@ object SongUrlFetcher {
             coroutineContext.ensureActive()
             while (true) {
                 try {
-                    attempt(tryLevel)?.let { return@withContext it }
+                    val attemptStarted = android.os.SystemClock.elapsedRealtime()
+                    val hit = attempt(tryLevel)
+                    val attemptMs = android.os.SystemClock.elapsedRealtime() - attemptStarted
+                    if (hit != null) {
+                        Log.i(TAG, "level=$tryLevel ok in ${attemptMs}ms songId=$songId")
+                        runCatching { java.net.URI(hit.url).host }.getOrNull()?.let { lastAudioHost = it }
+                        noteLevelAccepted(tryLevel)
+                        return@withContext hit
+                    }
+                    Log.i(TAG, "level=$tryLevel rejected in ${attemptMs}ms songId=$songId — next tier")
+                    noteLevelRejected(tryLevel)
                     break // A business rejection may still permit a lower tier.
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e

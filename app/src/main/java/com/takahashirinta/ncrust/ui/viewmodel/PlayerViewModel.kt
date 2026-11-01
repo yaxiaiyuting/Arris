@@ -718,6 +718,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (idleMs < com.takahashirinta.ncrust.network.AppForegroundTracker.IDLE_CLEANUP_MS) return@collect
                 SongUrlFetcher.onNetworkRouteChanged()
                 recoverCurrentRequest(resetBudget = true)
+                // 音频 CDN 的 host 不在固定预热清单里，但它才是「按播放后要建连」的那一个。
+                SongUrlFetcher.lastAudioHost?.let { host ->
+                    viewModelScope.launch { com.takahashirinta.ncrust.network.ConnectionWarmup.warmHost(host) }
+                }
                 if (!isBuffering.value && !isPlaying.value) {
                     // 有曲目但没在放：后台预热一次取链（失败静默，不影响任何状态）。
                     val key = currentTrack
