@@ -10,15 +10,15 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.8.5--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-15.31%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.8.15--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
 
-[**官网直链下载**](https://arris.de5.net/dl/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
+[**官网直链下载**](https://arris.de5.net/get/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
 
 </div>
 
@@ -87,7 +87,7 @@
 ```
 https://arris.de5.net/get/latest.apk        主线最新（支持 Range：断点续传 / 多线程）
 https://arris.de5.net/get/lts-latest.apk   LTS 最新（同上）
-https://arris.de5.net/dl/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
+https://arris.de5.net/get/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
 ```
 
 > 国内线路慢的时候用 `/get/` + 下载器多线程（aria2 `-x8 -s8`、IDM、FDM），
@@ -128,7 +128,7 @@ https://arris.de5.net/dl/latest.apk        同一份包的静态直出（最简�
 
 ```
 https://arris.de5.net/                    落地页（Cloudflare Worker）
-https://arris.de5.net/dl/latest.apk       最新版直链
+https://arris.de5.net/get/latest.apk       最新版直链
 https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk   固定版本
 wss://arris.de5.net/room/<房间码>          一起听中继
 ```
@@ -369,6 +369,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.8.15-gpl | 2026-11-02 | 应用内分段多线程下载（4 段，失败自动回落单流）；下载地址改走 `/get/`（支持 Range）|
 | v3.8.14-gpl | 2026-11-02 | 一起听成员侧漂移窗口 800ms→5s，超 12s 才强制对齐；播放态需连续两次确认 |
 | v3.8.13-gpl | 2026-11-02 | 应用内下载补 IPv4 优先（修首次下载必失败、重试才成功） |
 | v3.8.12-gpl | 2026-11-01 | 检查更新链路打通（单对象归一化接上 + IPv4 优先 + 11KB 响应）；浏览器入口与下载地址都指向官网；B站客户端硬化 |
