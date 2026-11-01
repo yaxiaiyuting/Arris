@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-01T18:21:16.105Z",
+ "generatedAt": "2026-11-01T18:34:28.228Z",
  "releases": [
+  {
+   "tag_name": "v3.8.17-gpl",
+   "name": "Arris v3.8.17-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T18:22:04Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.17-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.17-gpl（versionCode 137）\n\n### 音源不可播时，不再是一行「看不出原因」的日志\n\n排查 B站/QQ 失效时，logcat 里只有：\n\n```\nW PlayerViewModel: no playable url ... kind=UNKNOWN source=bilibili code=-\n```\n\n**既没有网络请求记录，也没有原因** —— 分不清是「音源被关掉」「未登录」还是「接口失败」。\n\n原因在 `MusicSourceProvider.resolveUrlOutcome`：provider 返回 null 时直接构造 `UNKNOWN`，不打日志。\n现在补一条：\n\n```\nW MusicSourceProvider: resolveUrl returned null source=bilibili id=… level=…\n（可能是该音源未启用、未登录，或该档位没有可播 URL）\n```\n\n> 这次 B站/QQ 失效的**真实根因**是设备上的 `ncrust_settings.xml` 被清空\n> （`bilibili_enabled` 丢失 ⇒ B站按 v3.1.0 的设计默认关闭），已恢复并验证。\n> 这条日志是为了让下次不必再靠猜。\n\n### 一并包含（3.8.16）\n\n彩蛋「推荐一首」、`AppHttp` 统一网络入口（IPv4 优先 / 超时 / 共享连接池）、封面与艺人图修复。\n\n### 校验\n\n全量 JVM 单测 **3505 项 0 失败**。\n",
+   "assets": [
+    {
+     "id": 699137384,
+     "name": "Arris-v3.8.17-gpl.apk",
+     "size": 16085384,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.16-gpl",
    "name": "Arris v3.8.16-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-01T15:59:00Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.12-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.12-gpl（versionCode 132）\n\n这一版把「检查更新」整条链路真正打通，顺带修掉 B站音源。\n\n### 应用内检查更新（真机裸连实测通过）\n\n联调测试：临时发过一版 3.8.12，手机（3.8.11、**无代理**）冷启动后日志：\n\n```\nupdate-source ok host=arris.de5.net pages=1 bytes=360 elapsed=3104ms\nupdate: head=[{\"tag_name\":\"v3.8.12-gpl\",...}]\nupdate: evaluate=Found(version=3.8.12, assetName=Arris-v3.8.12-gpl.apk, ...)\n```\n\n测完已把那一版删除，编号不留洞（正式就是本版 3.8.12）。\n\n过程中修掉的真问题：\n\n1. **单对象归一化没接线** —— `/api/latest` 返回的是对象，`normalizePage()` 写了却没被调用，\n   于是每次都判「解析失败」（日志里的 `evaluate=null(解析失败)` 就是它）。\n2. **更新客户端没有 IPv4 优先** —— 本机实测：IPv4 到 CF 是 200（0.39s 建连），\n   IPv6 是 15 秒超时；系统把 IPv6 排前面，请求全耗在死地址上。\n3. **响应太大** —— `/api/releases` 509KB → **11KB**；源按体积从小到大试：\n   `/api/latest`(1.5KB) → `/api/releases` → jsDelivr 镜像 → 静态快照 → GitHub。\n4. **浏览器入口指向 GitHub** —— 国内打不开。现在 Worker 给每条 release 附\n   `site_url = https://arris.de5.net/#download`，应用优先用它，老载荷才回落 `html_url`。\n\n### B站音源失效\n\n用你自己的 B 站 cookie 验过服务端整条链路都正常（search/view/playurl 全 `code 0`、\nCDN 带 Referer 取流 206）。问题在 `BiliApi` 那条**裸** OkHttp 客户端：\n没有 IPv4 优先、自动协商 h2、30s 才超时。现已对齐 ncm：IPv4 优先、强制 HTTP/1.1、\n连接 8s / 读 15s，并加 `BiliApi.evictConnections()`。\n\n### 校验\n\n- 全量单测 3497 项；5 项 `QqLiveProbeTest` 是直连腾讯服务器的实时探针（本机出口 IP 被限，返回 500），与改动无关\n",
+   "body": "",
    "assets": [
     {
      "id": 698783421,
@@ -138,8 +156,8 @@
    "body": "",
    "assets": [
     {
-     "id": 699052459,
-     "name": "Arris-v3.7.21-gpl.apk",
+     "id": 699168536,
+     "name": "Arris-v3.7.23-gpl.apk",
      "size": 12154624,
      "browser_download_url": ""
     }
