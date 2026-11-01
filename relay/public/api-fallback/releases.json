@@ -1,6 +1,23 @@
 {
- "generatedAt": "2026-11-01T07:46:46.160Z",
+ "generatedAt": "2026-11-01T08:01:54.982Z",
  "releases": [
+  {
+   "tag_name": "v3.8.8-gpl",
+   "name": "Arris v3.8.8-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T07:52:38Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.8-gpl",
+   "body": "## v3.8.8-gpl（versionCode 128）\r\n\r\n**裸连（不开代理）时「检查更新失败」**——根因不在手机上，在服务端。\r\n\r\n### 发生了什么\r\n\r\n`/api/releases` 是 Worker 现取 GitHub。而 GitHub 匿名 API 的限额是\r\n**60 次/小时/出口 IP**，Cloudflare 边缘出口 IP 是共享的，早就被打满了：\r\n\r\n```\r\n$ node tools/snapshot-releases.mjs   # 匿名抓取\r\nsnapshot failed: 403\r\n```\r\n\r\n于是链路变成：我们的接口 502 → 客户端回落直连 `api.github.com` → 裸连不通 → **检查更新失败**。\r\n\r\n### 三级取数（任何一级成功都能出结果）\r\n\r\n```\r\n1. 边缘缓存 caches.default（10 分钟）   ← 绝大多数请求走这里，不打 GitHub\r\n2. 现取 GitHub（服务端无墙，但会被限流）\r\n3. 部署时生成的静态快照 /api-fallback/releases.json   ← GitHub 挂了也能用\r\n```\r\n\r\n响应头 `x-arris-source: cache | github | snapshot` 直接告诉你这一级是谁出的。\r\n\r\n### 应用侧兜底顺序也改了\r\n\r\n```\r\n1. https://arris.de5.net/api/releases                    动态接口\r\n2. https://arris.de5.net/api-fallback/releases-array.json 纯静态快照（不经过 Worker 逻辑）\r\n3. https://api.github.com/...                            直连（最后手段）\r\n```\r\n\r\n快照用已认证的 `gh api` 生成（匿名限额拿不到数据），随每次部署一起发布 ——\r\n所以「能检查到更新」这件事不再依赖 GitHub 的可用性。\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3497 项 0 失败**\r\n- 线上实测：首次 `x-arris-source: github`，之后 `cache`；`/api-fallback/releases-array.json` 直接 200\r\n",
+   "assets": [
+    {
+     "id": 697686836,
+     "name": "Arris-v3.8.8-gpl.apk",
+     "size": 16068996,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.6-gpl",
    "name": "Arris v3.8.6-gpl",
