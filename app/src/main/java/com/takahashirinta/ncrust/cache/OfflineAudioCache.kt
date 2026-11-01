@@ -160,12 +160,20 @@ object OfflineAudioCache {
     fun dataSourceFactory(context: Context): DataSource.Factory {
         val app = context.applicationContext
         val c = get(app)
+        // 音频流统一走 OkHttp（v3.8.9）：默认的 DefaultHttpDataSource 用 HttpURLConnection，
+        // 不认我们的 DNS 策略、没有读超时、连接池也不受 evictConnections 管理 ——
+        // 网络切换后会一直卡在 BUFFERING（真机实测：取链 745ms，播放卡十几秒才出声）。
+        val plainHttp = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
+            com.takahashirinta.ncrust.player.MediaHttp.client,
+        )
         val upstream: DataSource.Factory = SourceRoutingDataSource.Factory(
-            plain = DefaultDataSource.Factory(app),
+            plain = DefaultDataSource.Factory(app, plainHttp),
             bili = DefaultDataSource.Factory(
                 app,
                 // ★ 唯一的 UA 注入点。@OptIn 见文件头。
-                DefaultHttpDataSource.Factory().setUserAgent(BiliCdn.USER_AGENT),
+                androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
+                    com.takahashirinta.ncrust.player.MediaHttp.client,
+                ).setUserAgent(BiliCdn.USER_AGENT),
             ),
         )
         return CacheDataSource.Factory()
