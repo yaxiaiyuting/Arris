@@ -1,0 +1,75 @@
+{
+  "workerVersionId": "21e13641-758c-460a-adad-a4bd1c437ae0",
+  "sourceCommit": "2d3b38f75772679a9e29b6012a3587e2d1c69979",
+  "site": "https://arris.de5.net",
+  "checkedAtUTC": "2026-11-01T15:53:43.797503+00:00",
+  "checks": [
+    {
+      "path": "/?site=20261101-final",
+      "http": "HTTP/2 200 ",
+      "bytes": 65746,
+      "sha256": "1e3cb2290974518fbaa6f6711d0be00eb173d472a2d4c5e419a378aa129a9a3c",
+      "matchesSource": true
+    },
+    {
+      "path": "/assets/discover.css?v=20261101",
+      "http": "HTTP/2 200 ",
+      "bytes": 16331,
+      "sha256": "e5c37a4dba9e24856c43c9c2d2f0dc5b8a2a8c51cba6bf3d1152b77f19547f45",
+      "matchesSource": true
+    },
+    {
+      "path": "/assets/discover.js?v=20261101",
+      "http": "HTTP/2 200 ",
+      "bytes": 2154,
+      "sha256": "8ae57e861ce38bce3db51a2fbe1d9e1caae3a5e994727c7a4baee8cd75009cdf",
+      "matchesSource": true
+    },
+    {
+      "path": "/assets/player-light.webp",
+      "http": "HTTP/2 200 ",
+      "bytes": 22210,
+      "sha256": "e6aa222162b9aeb82de2ef8c7f3ceb666cce15abde65e31ca3cdd67bc48d288d",
+      "matchesSource": true
+    },
+    {
+      "path": "/assets/introduction.zh-CN.vtt",
+      "http": "HTTP/2 200 ",
+      "bytes": 2637,
+      "sha256": "bc81dd7a06d17cf839be9d4caec3460bbb07864c08e4a38d493c0b92e5452a46",
+      "matchesSource": true
+    },
+    {
+      "path": "/get/latest.apk",
+      "http": "HTTP/2 206 ",
+      "bytes": 32,
+      "sha256": "eecb79726a9487be1e506842628d354664ca58e15462696ff261c957768174d0",
+      "contentRange": "content-range: bytes 0-31/16069000"
+    },
+    {
+      "path": "/get/lts-latest.apk",
+      "http": "HTTP/2 206 ",
+      "bytes": 32,
+      "sha256": "eecb79726a9487be1e506842628d354664ca58e15462696ff261c957768174d0",
+      "contentRange": "content-range: bytes 0-31/12138240"
+    },
+    {
+      "path": "/health",
+      "http": "HTTP/2 200 ",
+      "bytes": 2,
+      "sha256": "2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df"
+    },
+    {
+      "path": "/api/latest",
+      "http": "HTTP/2 200 ",
+      "bytes": 2150,
+      "sha256": "c07eef97c09c7524bfe6ccd26d07aa74daf62951632fb6764336c8af7f7b3735",
+      "jsonType": "dict"
+    }
+  ],
+  "status": "passed",
+  "retainedDownloads": {
+    "mainline": "3.8.11",
+    "lts": "3.7.20"
+  }
+}
