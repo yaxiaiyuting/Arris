@@ -416,6 +416,8 @@ object UpdateService {
 
     /** 逐页拉取某个源；任一步失败返回 null，交给调用方换下一个源。 */
     private fun fetchAllPages(firstUrl: String): List<String>? {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        val host = runCatching { java.net.URI(firstUrl).host }.getOrNull() ?: firstUrl
         val pages = mutableListOf<String>()
         var url: String? = firstUrl
         var page = 0
@@ -434,6 +436,11 @@ object UpdateService {
             pages += body
             url = next
         }
+        android.util.Log.i(
+            "UpdateService",
+            "update-source ok host=$host pages=${pages.size} bytes=${pages.sumOf { it.length }} " +
+                "elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms",
+        )
         return pages
     }
 
@@ -481,8 +488,13 @@ object UpdateService {
         try {
             var pages: List<String>? = null
             for (source in releasesSources(current)) {
+                val t0 = android.os.SystemClock.elapsedRealtime()
                 pages = runCatching { fetchAllPages(source) }.getOrNull()
                 if (pages != null) break
+                android.util.Log.w(
+                    "UpdateService",
+                    "update-source failed url=${source.take(60)} elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms",
+                )
             }
             if (pages == null) return@withContext CheckOutcome.Failed
             // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
