@@ -2,9 +2,10 @@
 export const HOSTED_APK = [
   "Arris-v3.7.14-gpl.apk",
   "Arris-v3.7.15-gpl.apk",
-  "Arris-v3.8.2-gpl.apk",
+  "Arris-v3.7.16-gpl.apk",
   "Arris-v3.8.3-gpl.apk",
   "Arris-v3.8.4-gpl.apk",
+  "Arris-v3.8.5-gpl.apk",
   "latest.apk",
   "lts-latest.apk"
 ];
@@ -13,9 +14,10 @@ export const HOSTED_APK = [
 export const DL_SIZE = {
   "Arris-v3.7.14-gpl.apk": 12121852,
   "Arris-v3.7.15-gpl.apk": 12121852,
-  "Arris-v3.8.2-gpl.apk": 16052392,
+  "Arris-v3.7.16-gpl.apk": 12121852,
   "Arris-v3.8.3-gpl.apk": 16052616,
   "Arris-v3.8.4-gpl.apk": 16052616,
-  "latest.apk": 16052616,
+  "Arris-v3.8.5-gpl.apk": 16069000,
+  "latest.apk": 16069000,
   "lts-latest.apk": 12121852
 };
