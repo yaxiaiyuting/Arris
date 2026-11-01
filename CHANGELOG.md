@@ -12,6 +12,19 @@
 - **分段下载**：4 段并发 + 任一段失败回落单流（服务端 `/get/` 支持 Range）。
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
+## v3.8.18-gpl — 音频三段计时 + 补掉最后一个裸客户端（2026-11-02）
+
+- `MediaHttp` 挂 `EventListener`：每条音频请求的**建连 / 响应头 / 结束**耗时进 logcat（tag=MediaHttp），
+  下次「前几秒卡住」能直接看出是链路、CDN 还是解码。
+- **TTML 歌词客户端**（`AmllTtmlClient`）此前是 `OkHttpClient().newBuilder()` —— 唯一一个绕过
+  `AppHttp` 的裸客户端，本机 IPv6 不通时会白等到超时（表现为「歌词一直不出来」）。现已并入 `AppHttp`。
+- `HttpClientDnsAuditTest` 扩容：`OkHttpClient()` 与 `.newBuilder()` 也一并禁止（就是从这个缝里漏过去的）。
+
+## v3.7.23-gpl — LTS 对齐（2026-11-02）
+
+- 同上的 TTML 客户端修复与音频三段计时；审计测试同步扩容。
+- 与主线保持同构：`AppHttp` 统一网络入口、彩蛋推荐、分段下载。
+
 ## v3.8.17-gpl — 音源不可播不再静默（2026-11-02）
 
 - `MusicSourceProvider.resolveUrlOutcome` 在 provider 返回 null 时补一条 W 级日志：
