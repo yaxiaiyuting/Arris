@@ -174,6 +174,8 @@ export default {
         prerelease: !!r.prerelease,
         published_at: r.published_at,
         html_url: r.html_url,
+        // 国内裸连打不开 GitHub：浏览器入口默认指向官网，GitHub 只作数据来源与兜底。
+        site_url: `${url.origin}/#download`,
         body: index < BODY_KEEP && typeof r.body === "string" ? r.body.slice(0, 4000) : "",
         assets: (r.assets || [])
           .filter((a) => a && /\.apk$/i.test(a.name || ""))
@@ -201,7 +203,7 @@ export default {
           version: latest?.tag_name || null,
           name: latest?.name || null,
           publishedAt: latest?.published_at || null,
-          pageUrl: latest?.html_url || null,
+          pageUrl: latest?.site_url || `${url.origin}/#download`,
           body: latest?.body || null,
           apk: apk ? { name: apk.name, size: apk.size, url: apk.browser_download_url } : null,
         }), { headers });

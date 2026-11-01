@@ -118,7 +118,8 @@ object UpdateChecker {
                     assetUrl = hit.url,
                     assetSize = hit.size,
                     releaseTag = release.stringOrNull("tag_name"),
-                    releasePageUrl = release.stringOrNull("html_url"),
+                    // 浏览器入口优先用官网（国内裸连打不开 GitHub）；没有 site_url 的老载荷才回落到 html_url。
+                    releasePageUrl = release.stringOrNull("site_url") ?: release.stringOrNull("html_url"),
                     publishedAt = release.stringOrNull("published_at"),
                     body = release.stringOrNull("body"),
                     assetId = hit.id
