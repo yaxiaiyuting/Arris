@@ -113,6 +113,190 @@ export default {
 
     // ---------------------------------------------------------------- 更新检查（不经 GitHub）
     if (url.pathname === "/api/releases" || url.pathname === "/api/latest") {
+      // 三级取数，任何一级成功都能出结果：
+      //   1. 边缘缓存（caches.default，10 分钟）—— 绝大多数请求走这里，不打 GitHub；
+      //   2. 现取 GitHub（服务端没有墙，但**匿名限额 60 次/小时/出口 IP**，共享 IP 常被限流）；
+      //   3. 部署时生成的静态快照 `public/api-fallback/releases.json` —— GitHub 挂了也能检查更新。
+      const cacheKey = new URL("/api/releases", url.origin).toString();
+      const cache = caches.default;
+      let list = null;
+      let source = "cache";
+
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        list = (await cached.json()).releases ?? null;
+      }
+
+      if (!Array.isArray(list)) {
+        source = "github";
+        try {
+          const gh = await fetch(
+            "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
+            {
+              headers: { "user-agent": "Arris-Relay/1.0", accept: "application/vnd.github+json" },
+              cf: { cacheEverything: true, cacheTtl: 300 },
+            },
+          );
+          if (gh.ok) {
+            const raw = await gh.json();
+            if (Array.isArray(raw)) list = raw.filter((r) => r && !r.draft);
+          }
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list)) {
+        source = "snapshot";
+        try {
+          const snap = await env.ASSETS.fetch(new URL("/api-fallback/releases.json", url.origin).toString());
+          if (snap.ok) {
+            const body = await snap.json();
+            if (Array.isArray(body?.releases)) list = body.releases;
+          }
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list)) {
+        return Response.json({ error: "no_source" }, { status: 503 });
+      }
+
+      const releases = list.map((r) => ({
+        tag_name: r.tag_name,
+        name: r.name,
+        draft: !!r.draft,
+        prerelease: !!r.prerelease,
+        published_at: r.published_at,
+        html_url: r.html_url,
+        body: typeof r.body === "string" ? r.body.slice(0, 4000) : "",
+        assets: (r.assets || [])
+          .filter((a) => a && /\.apk$/i.test(a.name || ""))
+          .map((a) => ({
+            id: a.id,
+            name: a.name,
+            size: a.size,
+            browser_download_url: HOSTED.has(a.name)
+              ? `${url.origin}/dl/${encodeURIComponent(a.name)}`
+              : a.browser_download_url || `${url.origin}/dl/${encodeURIComponent(a.name)}`,
+          })),
+      }));
+
+      const headers = {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "public, max-age=600",
+        "access-control-allow-origin": "*",
+        "x-arris-source": source,
+      };
+
+      if (url.pathname === "/api/latest") {
+        const latest = releases.find((r) => !r.prerelease) || releases[0] || null;
+        const apk = latest?.assets?.find((a) => /\.apk$/i.test(a.name || "")) || null;
+        return new Response(JSON.stringify({
+          version: latest?.tag_name || null,
+          name: latest?.name || null,
+          publishedAt: latest?.published_at || null,
+          pageUrl: latest?.html_url || null,
+          body: latest?.body || null,
+          apk: apk ? { name: apk.name, size: apk.size, url: apk.browser_download_url } : null,
+        }), { headers });
+      }
+
+      const body = JSON.stringify(releases);
+      if (source !== "cache") {
+        // 回填边缘缓存（不阻塞响应）
+        try {
+          await cache.put(
+            cacheKey,
+            new Response(JSON.stringify({ releases }), {
+              headers: { "content-type": "application/json", "cache-control": "public, max-age=600" },
+            }),
+          );
+        } catch (_) {}
+      }
+      return new Response(body, { headers });
+    }
+
+    // ---------------------------------------------------------------- APK 直链（支持 Range）
+    //
+    // Cloudflare 的静态资源服务**不认 Range**：`curl -r 0-1023` 会拿到整个 16MB。
+    // 国内网络抖动多，下载器（IDM / aria2 / 浏览器续传）没有 206 就只能从 0 重来，
+    // 体感就是「下载老是失败」。这里自己实现 206：边缘返回 200 时按 header 切片。
+    // `/get/*`：支持 Range 的下载入口。`/dl/*` 是静态资源直出（快，但 Cloudflare
+    // 的资产层不认 Range），所以续传/多线程走这里：路径本身没有同名静态文件，
+    // 保证请求一定进 Worker。
+    if (url.pathname.startsWith("/get/") || url.pathname.startsWith("/dl/")) {
+      const assetPath = url.pathname.startsWith("/get/")
+        ? "/dl/" + url.pathname.slice("/get/".length)
+        : url.pathname;
+      const assetUrl = new URL(assetPath, url.origin).toString();
+      const range = request.headers.get("range");
+      const mark = { "x-arris-route": "dl", "x-arris-range": String(range) };
+      if (request.method !== "GET") {
+        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
+        const h = new Headers(head.headers);
+        h.set("accept-ranges", "bytes");
+        for (const [k, v] of Object.entries(mark)) h.set(k, v);
+        return new Response(null, { status: head.status, headers: h });
+      }
+
+      // 1) 有 Range：先问 ASSETS 要这一段（转发 Range 头）。它若真给了 206 就直接用。
+      if (range) {
+        const part = await env.ASSETS.fetch(new Request(assetUrl, { headers: { range } }));
+        if (part.status === 206) {
+          const h = new Headers(part.headers);
+          for (const [k, v] of Object.entries(mark)) h.set(k, v);
+          h.set("accept-ranges", "bytes");
+          return new Response(part.body, { status: 206, headers: h });
+        }
+        // 2) 拿不到 206（资产层不认 Range）→ 自己按总量流式切片。
+        // ASSETS 的响应既没有 content-length、也不认 Range（实测：三种请求全 200 且 len=null），
+        // 总长只能来自部署时生成的清单。
+        const total = Number(DL_SIZE[decodeURIComponent(assetPath.slice("/dl/".length))] || 0);
+        const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+        if (total > 0 && m) {
+          const start = m[1] === "" ? 0 : parseInt(m[1], 10);
+          const rawEnd = m[2] === "" ? total - 1 : parseInt(m[2], 10);
+          const end = Math.min(Number.isFinite(rawEnd) ? rawEnd : total - 1, total - 1);
+          if (!Number.isFinite(start) || start >= total || start > end) {
+            return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}`, "accept-ranges": "bytes", ...mark } });
+          }
+          let cursor = 0;
+          const slicer = new TransformStream({
+            transform(chunk, controller) {
+              const cs = cursor;
+              const ce = cursor + chunk.byteLength - 1;
+              cursor += chunk.byteLength;
+              if (ce < start || cs > end) return;
+              const from = Math.max(start - cs, 0);
+              const to = Math.min(end - cs, chunk.byteLength - 1);
+              controller.enqueue(chunk.subarray(from, to + 1));
+            },
+          });
+          const full = await env.ASSETS.fetch(new Request(assetUrl));
+          return new Response(full.body.pipeThrough(slicer), {
+            status: 206,
+            headers: {
+              ...mark,
+              "content-type": full.headers.get("content-type") || "application/vnd.android.package-archive",
+              "content-range": `bytes ${start}-${end}/${total}`,
+              "content-length": String(end - start + 1),
+              "accept-ranges": "bytes",
+              "cache-control": "public, max-age=31536000, immutable",
+              "etag": full.headers.get("etag") || "",
+            },
+          });
+        }
+        return part;
+      }
+
+      // 3) 无 Range：整包直出，但补上 Accept-Ranges 说明支持续传。
+      const full = await env.ASSETS.fetch(new Request(assetUrl));
+      const h = new Headers(full.headers);
+      h.set("accept-ranges", "bytes");
+      for (const [k, v] of Object.entries(mark)) h.set(k, v);
+      return new Response(full.body, { status: full.status, headers: h });
+    }
+
+    // ---------------------------------------------------------------- 更新检查（不经 GitHub）
+    if (url.pathname === "/api/releases" || url.pathname === "/api/latest") {
       const gh = await fetch(
         "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
         {

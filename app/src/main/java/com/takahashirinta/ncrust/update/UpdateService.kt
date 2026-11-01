@@ -127,7 +127,11 @@ object UpdateService {
     // 并把托管在本站的 APK 资产地址改写过去 —— 手机只要能访问本站，检查和下载都能完成。
     // GitHub 原接口作为兜底：接口挂了 / 域名被污染时仍能退回直连。
     private val RELEASES_SOURCES = listOf(
+        // 1) 本站动态接口：Worker 三级取数（边缘缓存 / 现取 GitHub / 部署时快照）
         "https://arris.de5.net/api/releases",
+        // 2) 本站静态快照：纯文件、不经过 Worker 逻辑，GitHub 被限流时唯一可靠的兜底
+        "https://arris.de5.net/api-fallback/releases-array.json",
+        // 3) 直连 GitHub（裸连通常不通，仅作最后手段）
         "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
     )
 
