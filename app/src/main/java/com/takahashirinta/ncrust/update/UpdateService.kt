@@ -301,6 +301,57 @@ object UpdateService {
      *
      * 重复调用（页面重组 / 连点）时若已有下载在跑，直接忽略。
      */
+
+    /**
+     * 先试**分段多线程**（v3.8.15），不适合或失败就回落到原来的单流下载器。
+     *
+     * 分流原则写在 [SegmentedDownload] 里：服务端不支持 Range、已有可续传残包、
+     * 或任何一段失败，都退回单流 —— 快是加分项，下载成功是底线。
+     */
+    private fun downloadWithFallback(
+        downloader: UpdateDownloader,
+        info: UpdateInfo,
+        directory: File,
+        target: String,
+        onProgress: (Long, Long) -> Unit,
+    ): File {
+        val fileName = fileNameOf(info)
+        val probe = runCatching { SegmentedDownload.probe(info.assetUrl) }.getOrNull()
+        val resumable = File(directory, fileName).isFile
+        if (probe != null && !resumable && info.assetSize > 4L * 1024 * 1024) {
+            val temp = File(directory, "$fileName.seg")
+            try {
+                SegmentedDownload.download(
+                    url = info.assetUrl,
+                    target = temp,
+                    probe = probe,
+                    cancelled = { downloadGeneration.get() != activeGenerationSnapshot() },
+                    onProgress = onProgress,
+                )
+                val dest = File(directory, fileName)
+                runCatching { dest.delete() }
+                if (temp.renameTo(dest)) {
+                    android.util.Log.i("UpdateService", "segmented download ok → ${dest.name}")
+                    return dest
+                }
+                android.util.Log.w("UpdateService", "segmented rename failed, fallback to single stream")
+            } catch (t: Throwable) {
+                android.util.Log.w("UpdateService", "segmented failed (${t.javaClass.simpleName}), fallback")
+                runCatching { temp.delete() }
+            }
+        }
+        return downloader.download(
+            url = info.assetUrl,
+            fileName = fileName,
+            identity = target,
+            expectedSize = info.assetSize,
+            onProgress = onProgress,
+        )
+    }
+
+    /** 当前下载代次（用于让分段下载能感知取消）。 */
+    private fun activeGenerationSnapshot(): Long = downloadGeneration.get()
+
     fun startDownload(context: Context, info: UpdateInfo) {
         val target = info.targetKey
         // 同一目标的重复点击（重组 / 连点）直接忽略；换了目标则取消旧任务再开新的。
@@ -318,11 +369,11 @@ object UpdateService {
         publish(generation, DownloadState.Downloading(0L, info.assetSize, target))
         downloadJob = scope.launch {
             try {
-                val file = active.download(
-                    url = info.assetUrl,
-                    fileName = fileNameOf(info),
-                    identity = target,
-                    expectedSize = info.assetSize
+                val file = downloadWithFallback(
+                    downloader = active,
+                    info = info,
+                    directory = directory,
+                    target = target,
                 ) { downloaded, total ->
                     publish(
                         generation,

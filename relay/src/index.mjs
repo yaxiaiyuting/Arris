@@ -183,9 +183,10 @@ export default {
             id: a.id,
             name: a.name,
             size: a.size,
+            // 指向 /get/（Range 可用），不是 /dl/：静态直出不支持 206，多线程与续传都会退化。
             browser_download_url: HOSTED.has(a.name)
-              ? `${url.origin}/dl/${encodeURIComponent(a.name)}`
-              : a.browser_download_url || `${url.origin}/dl/${encodeURIComponent(a.name)}`,
+              ? `${url.origin}/get/${encodeURIComponent(a.name)}`
+              : a.browser_download_url || `${url.origin}/get/${encodeURIComponent(a.name)}`,
           })),
       }));
 
