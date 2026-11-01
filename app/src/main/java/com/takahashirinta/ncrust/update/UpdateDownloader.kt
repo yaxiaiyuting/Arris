@@ -107,7 +107,11 @@ class UpdateDownloader(private val directory: File) {
     // 独立 client：绝不能复用 RetrofitClient 的（那个会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的）。
     private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
+        // v3.8.13：补 IPv4 优先。真机实测本机 IPv6 到 Cloudflare 完全不通，
+        // 系统把 IPv6 排前面 ⇒ 第一次下载撞死在死地址上，用户重试才成功（他们报的正是这个现象）。
+        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+        .retryOnConnectionFailure(true)
+        .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .build()
@@ -324,6 +328,10 @@ class UpdateDownloader(private val directory: File) {
         }
     }
 
+    private fun logDownload(message: String) {
+        android.util.Log.i("UpdateDownloader", message)
+    }
+
     private fun execute(url: String, resumeFrom: Long, ifRange: String?): okhttp3.Response {
         val builder = Request.Builder()
             .url(url)
@@ -335,7 +343,16 @@ class UpdateDownloader(private val directory: File) {
         }
         val call = client.newCall(builder.build())
         currentCall = call
-        return call.execute()
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        logDownload("start host=${runCatching { java.net.URI(url).host }.getOrNull()} resumeFrom=$resumeFrom")
+        return try {
+            call.execute().also { resp ->
+                logDownload("response code=${resp.code} len=${resp.body?.contentLength()} elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms")
+            }
+        } catch (e: Exception) {
+            logDownload("failed after ${android.os.SystemClock.elapsedRealtime() - startedAt}ms: ${e.javaClass.simpleName} ${e.message?.take(80)}")
+            throw e
+        }
     }
 
     private fun markerNameFor(fileName: String): String = "$fileName.identity"

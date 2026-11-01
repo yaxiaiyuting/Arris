@@ -24,10 +24,24 @@ object FollowPolicy {
         return if (l != null && r != null) l == r else local.title == remote.title
     }
 
-    /** 偏差超过容差才 seek：每秒一次的 seek 会把播放打断成「咔哒」声。 */
+    /**
+     * 偏差超过容差才 seek（v3.8.14）。
+     *
+     * 原来容差是 800ms —— 网络抖动 + 房主侧 timestamp 误差就能超过它，
+     * 于是成员每一两份快照就被纠正一次，听起来就是「一直在被同步打断、老是暂停」。
+     *
+     * 现在：**窗口内（默认 5 秒）完全不干预**；超过窗口先按「温和纠正」（seek 到此位置但不动播放态）；
+     * 只有超过 [hardResyncMs] 才视为真的走远了，强制对齐。
+     */
     fun needsSeek(local: PlaybackSnapshot?, remote: PlaybackSnapshot, toleranceMs: Long): Boolean {
         if (local == null) return false // 起播由 START 负责，seek 留到真正上播之后
         return kotlin.math.abs(remote.positionMs - local.positionMs) > toleranceMs
+    }
+
+    /** 在容差窗口内：不做任何位置纠正。 */
+    fun withinDriftWindow(local: PlaybackSnapshot?, remote: PlaybackSnapshot, toleranceMs: Long): Boolean {
+        if (local == null) return false
+        return kotlin.math.abs(remote.positionMs - local.positionMs) <= toleranceMs
     }
 
     /** 需要纠正播放/暂停态（仅在已在播同一首歌时有意义）。 */
