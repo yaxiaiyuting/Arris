@@ -511,8 +511,8 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 105
-        versionName = "3.7.18-gpl"
+        versionCode = 106
+        versionName = "3.7.19-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -598,18 +598,19 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Media3 —— 1.5.0 是能与下面 FFmpeg 扩展版本严格对齐的最低版本（扩展版本号规则为
-    // <media3版本>+<修订>，Maven Central 上没有 1.4.x 的构建）。
-    implementation("androidx.media3:media3-exoplayer:1.5.0")
+    // Media3 1.6.1（v3.7.19 与主线对齐）。1.5.0 有个库内断言会在空队列上抛
+    // "isLoading only allowed when not in STATE_IDLE or STATE_ENDED"，真机闪退；
+    // 1.6.1 修掉了它，同时 `sessionCompatToken` 被移除、改走 `platformToken`。
+    implementation("androidx.media3:media3-exoplayer:1.6.1")
     // v1.6.0 · D1：离线缓存（SimpleCache / CacheDataSource / StandaloneDatabaseProvider）。
     // 这两个之前是 media3-exoplayer 的传递依赖，显式声明以免上游改依赖树时静默消失。
-    implementation("androidx.media3:media3-datasource:1.5.0")
+    implementation("androidx.media3:media3-datasource:1.6.1")
     // 音频流走 OkHttp：默认 DefaultHttpDataSource 用 HttpURLConnection，没有读超时、
     // 不认我们的 DNS 策略、连接池也不受 evictConnections 管理。
-    implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
-    implementation("androidx.media3:media3-database:1.5.0")
-    implementation("androidx.media3:media3-session:1.5.0")
-    implementation("androidx.media3:media3-ui:1.5.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.6.1")
+    implementation("androidx.media3:media3-database:1.6.1")
+    implementation("androidx.media3:media3-session:1.6.1")
+    implementation("androidx.media3:media3-ui:1.6.1")
 
     // FFmpeg 软件音频解码扩展（Jellyfin 构建，GPL-3.0，与本项目 GPLv3 兼容）。
     // 目的：API 24–26（Android 7.0/7.1）系统只带 OMX.google.flac.encoder，
