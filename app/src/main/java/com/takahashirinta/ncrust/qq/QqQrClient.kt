@@ -44,8 +44,7 @@ object QqQrClient {
     private val cookieJar = SimpleCookieJar()
 
     private val http: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .cookieJar(cookieJar)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

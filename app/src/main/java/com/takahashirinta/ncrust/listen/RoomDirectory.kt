@@ -27,9 +27,8 @@ data class RoomSummary(
  */
 object RoomDirectory {
 
-    private val client = OkHttpClient.Builder()
+    private val client = com.takahashirinta.ncrust.network.AppHttp.builder()
         // 多地址回退：有 IPv4 就只用 IPv4（详见 AddressPreference 的注释）
-        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .build()

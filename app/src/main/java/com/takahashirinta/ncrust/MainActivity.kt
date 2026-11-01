@@ -2874,9 +2874,8 @@ fun MainScreen(
                 // 163cn.tv 短链: HEAD 跟随 302 拿真实地址
                 if (target.contains("163cn.tv")) {
                     target = runCatching {
-                        val client = okhttp3.OkHttpClient.Builder()
+                        val client = com.takahashirinta.ncrust.network.AppHttp.builder()
                             // 短链解析同样要 IPv4 优先（本机 IPv6 到外网基本不通）
-                            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
                             .followRedirects(false).build()
                         client.newCall(okhttp3.Request.Builder().url(target).head().build())
                             .execute().use { it.header("Location") ?: "" }

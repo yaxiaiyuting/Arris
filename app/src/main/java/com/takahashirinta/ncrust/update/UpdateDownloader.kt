@@ -106,10 +106,9 @@ class UpdateDownloader(private val directory: File) {
 
     // 独立 client：绝不能复用 RetrofitClient 的（那个会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的）。
-    private val client = OkHttpClient.Builder()
+    private val client = com.takahashirinta.ncrust.network.AppHttp.builder()
         // v3.8.13：补 IPv4 优先。真机实测本机 IPv6 到 Cloudflare 完全不通，
         // 系统把 IPv6 排前面 ⇒ 第一次下载撞死在死地址上，用户重试才成功（他们报的正是这个现象）。
-        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
         .retryOnConnectionFailure(true)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

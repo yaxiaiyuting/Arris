@@ -37,8 +37,7 @@ internal object MediaHttp {
     /** 独立连接池（与 Retrofit 的分开计数，但同样受 [evict] 管理）。 */
     private val pool = ConnectionPool(8, 30, TimeUnit.SECONDS)
 
-    val client: OkHttpClient = OkHttpClient.Builder()
-        .dns(AddressPreference.ipv4First)
+    val client: OkHttpClient = com.takahashirinta.ncrust.network.AppHttp.builder()
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)

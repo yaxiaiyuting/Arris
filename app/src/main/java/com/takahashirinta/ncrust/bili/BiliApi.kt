@@ -218,7 +218,7 @@ object BiliApi {
      * 的性能结论里，少一个观测点就少一份开销）。
      */
     private val realClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .addNetworkInterceptor(BiliCredentialBoundary)
             // v3.8.10：这条客户端以前是裸的（30s 超时、双栈原样解析、协议自动协商），
             // 于是 ncm 在 v3.8.1 修过的三个坑在这儿全都在：
@@ -226,7 +226,6 @@ object BiliApi {
             //   ② h2 被中间设备/服务端重置（实测 curl 反复 "unexpected eof while reading"）；
             //   ③ 没有读超时兜底，界面一直转圈，看起来就是「B站音源失效」。
             // 三个都按 ncm 的解法处理：IPv4 优先、强制 h1、连接 8s / 读 15s。
-            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)

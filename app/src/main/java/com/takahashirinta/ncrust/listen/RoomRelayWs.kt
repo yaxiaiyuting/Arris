@@ -83,11 +83,10 @@ class RoomRelayWs(
         /** 用应用自己的 UA：Cloudflare 会拦 `Python-urllib` 这类默认 UA（实测 403）。 */
         private const val UA = "Arris/1.0 (Android; listen-together)"
 
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+        fun defaultClient(): OkHttpClient = com.takahashirinta.ncrust.network.AppHttp.builder()
             // 优先 IPv4：真机（华为平板 / 部分移动网络）能解析出 IPv6 但连不通，
             // 表现为 "Failed to connect to …/2001::…:443"。OkHttp 默认会逐个尝试，
             // 但失败重试会拖到超时；这里直接把 IPv6 排到后面。
-            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
             .pingInterval(20, TimeUnit.SECONDS)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // WebSocket 长连接不设读超时

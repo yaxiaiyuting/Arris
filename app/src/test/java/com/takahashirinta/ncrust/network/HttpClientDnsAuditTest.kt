@@ -5,56 +5,46 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 自建 OkHttpClient 必须显式 IPv4 优先（v3.8.16）。
+ * 网络客户端必须从 [AppHttp] 出发（v3.8.16）。
  *
- * ## 为什么用源码扫描，而不是逐个单测
+ * ## 为什么用源码扫描
  *
- * 这条坑已经踩了 **六次**：ncm 取链（3.8.1）、音频流（3.8.9）、B站（3.8.10）、
- * 检查更新（3.8.11）、应用内下载（3.8.13）、封面/艺人/专辑图与 QQ 链路（3.8.16）。
- * 每次都是「新建了一个 OkHttpClient，忘了加 dns」——单测抓不到，因为每个客户端
- * 各自的测试都只测自己的逻辑。
+ * 「本机 IPv6 到外网完全不通」这个坑，我们手动补了**六次** dns：
+ * ncm 取链 → 音频流 → B站 → 检查更新 → 应用内下载 → 封面/艺人图。
+ * 每次都是新建了一个裸 `OkHttpClient.Builder()`。单测抓不到（每个客户端只测自己的逻辑），
+ * 只能靠人记 —— 记不住。
  *
- * 真机事实：本机 Wi-Fi 是双栈，但 **IPv6 到外网完全不通**（IPv4 200 / IPv6 15s 超时）。
- * 系统解析把 IPv6 排前面，于是任何没设 `dns` 的客户端都会先把预算耗死在死地址上。
+ * 现在规则收紧成两条：
+ *  1. `app/src/main` 里**不允许**出现裸的 `OkHttpClient.Builder()`，只能用 `AppHttp.builder()`；
+ *  2. 测试里给客户端的注入口（`clientForTest` 之类）不受此限。
  *
- * 所以这里直接扫源码：`OkHttpClient.Builder()` 后面必须跟 `.dns(...)`。
- * 白名单里的文件是在**测试里构造假客户端**用的，不进入生产链路。
+ * 这条测试就是这套约定的看门人：加新客户端时如果绕过 AppHttp，CI 立刻红。
  */
 class HttpClientDnsAuditTest {
 
-    private val allowedWithoutDns = setOf(
-        // 单测里给客户端的传输层注入口，不参与生产请求
-        "UpdateService.kt",
-    )
-
     @Test
-    fun `每个自建 OkHttpClient 都显式指定了 DNS`() {
+    fun `主源码里不允许裸建 OkHttpClient`() {
         val root = File("src/main/java/com/takahashirinta/ncrust")
         assertTrue("找不到源码目录：${root.absolutePath}", root.isDirectory)
 
         val offenders = mutableListOf<String>()
-        root.walkTopDown().filter { it.extension == "kt" }.forEach { file ->
-            if (file.name in allowedWithoutDns) return@forEach
-            val text = file.readText()
-            var index = text.indexOf("OkHttpClient.Builder()")
-            while (index >= 0) {
-                val lineStart = text.lastIndexOf('\n', index) + 1
-                val line = text.substring(lineStart, text.indexOf('\n', index).let { if (it < 0) text.length else it })
-                // 跳过注释里出现的写法
-                if (!line.trimStart().startsWith("*") && !line.trimStart().startsWith("//")) {
-                    // 链式配置里常夹着长注释（RetrofitClient 那条主线客户端就有一大段），窗口放宽到 3000 字符
-                    val window = text.substring(index, minOf(text.length, index + 3000))
-                    if (!window.contains(".dns(")) {
-                        val lineNo = text.take(index).count { it == '\n' } + 1
-                        offenders += "${file.name}:$lineNo"
-                    }
+        root.walkTopDown().filter { it.extension == "kt" && it.name != "AppHttp.kt" }.forEach { file ->
+            file.readLines().forEachIndexed { index, line ->
+                val trimmed = line.trimStart()
+                if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) return@forEachIndexed
+                if (line.contains("OkHttpClient.Builder()")) {
+                    offenders += "${file.name}:${index + 1}"
                 }
-                index = text.indexOf("OkHttpClient.Builder()", index + 1)
             }
         }
         assertTrue(
-            "这些 OkHttpClient 没有 .dns(...)，本机 IPv6 不通时会把请求耗到超时：$offenders",
+            "这些地方绕过了 AppHttp（裸建 OkHttpClient 会丢掉 IPv4 优先/超时/连接池）：$offenders",
             offenders.isEmpty(),
         )
+    }
+
+    @Test
+    fun `AppHttp 默认就带 IPv4 优先与超时`() {
+        assertTrue(AppHttp.builder().build().dns is AddressPreference.IPv4FirstDns)
     }
 }
