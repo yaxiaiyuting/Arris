@@ -717,6 +717,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             com.takahashirinta.ncrust.network.AppForegroundTracker.events.collect { idleMs ->
                 if (idleMs < com.takahashirinta.ncrust.network.AppForegroundTracker.IDLE_CLEANUP_MS) return@collect
                 SongUrlFetcher.onNetworkRouteChanged()
+                com.takahashirinta.ncrust.player.MediaHttp.evict()
                 recoverCurrentRequest(resetBudget = true)
                 // 音频 CDN 的 host 不在固定预热清单里，但它才是「按播放后要建连」的那一个。
                 SongUrlFetcher.lastAudioHost?.let { host ->
@@ -741,6 +742,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     delay(500L) // Coalesce Wi-Fi/mobile handover callbacks, never each capabilities update.
                     SongUrlFetcher.onNetworkRouteChanged()
                     RetrofitClient.evictConnections()
+                    com.takahashirinta.ncrust.player.MediaHttp.evict()
                     // 代理开关会切换 fake-ip / 真实 IP 两套解析结果，JVM 缓存不会自动失效。
                     // 不清掉的话，关掉代理后取链仍会往假地址上连 —— 未缓存的歌直接放不出来。
                     com.takahashirinta.ncrust.network.DnsCache.clear()
