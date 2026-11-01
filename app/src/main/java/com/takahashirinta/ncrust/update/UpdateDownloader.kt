@@ -106,7 +106,7 @@ class UpdateDownloader(private val directory: File) {
 
     // 独立 client：绝不能复用 RetrofitClient 的（那个会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的）。
-    private val client = OkHttpClient.Builder()
+    private val client = com.takahashirinta.ncrust.network.AppHttp.builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS)

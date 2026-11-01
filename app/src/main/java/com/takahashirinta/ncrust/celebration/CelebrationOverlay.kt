@@ -63,7 +63,14 @@ internal fun rememberMotionAllowed(): Boolean {
 
 /** Fullscreen native layer. Closing/backgrounding removes both View clock and AudioRecord. */
 @Composable
-internal fun NativeCelebrationOverlay(kind:CelebrationKind,onClose:()->Unit,onVisible:()->Unit = {}) {
+internal fun NativeCelebrationOverlay(
+    kind:CelebrationKind,
+    onClose:()->Unit,
+    onVisible:()->Unit = {},
+    recommendation:com.takahashirinta.ncrust.network.SongItem? = null,
+    onPlayRecommendation:(com.takahashirinta.ncrust.network.SongItem)->Unit = {},
+    onRerollRecommendation:()->Unit = {},
+) {
     val context=LocalContext.current
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val s=LocalStrings.current.celebration
@@ -129,6 +136,9 @@ internal fun NativeCelebrationOverlay(kind:CelebrationKind,onClose:()->Unit,onVi
                     view.configure(phase,kind,animated)
                 })
             CelebrationText(kind,phase,animated,micRequested,micArmed,micFeedback,placement,
+                recommendation=recommendation,
+                onPlayRecommendation={ song -> onPlayRecommendation(song); close() },
+                onRerollRecommendation=onRerollRecommendation,
                 onClose={micRequested=false;close()},
                 onMic={
                     if(!micRequested) {
@@ -145,6 +155,9 @@ internal fun NativeCelebrationOverlay(kind:CelebrationKind,onClose:()->Unit,onVi
 @Composable
 private fun CelebrationText(kind:CelebrationKind,phase:CelebrationPhase,animated:Boolean,mic:Boolean,armed:Boolean,feedback:String,
     placement:CelebrationPlacement,
+    recommendation:com.takahashirinta.ncrust.network.SongItem? = null,
+    onPlayRecommendation:(com.takahashirinta.ncrust.network.SongItem)->Unit = {},
+    onRerollRecommendation:()->Unit = {},
     onClose:()->Unit,onMic:()->Unit,onBlow:()->Unit,onReplay:()->Unit) {
     val s=LocalStrings.current.celebration
     val night=phase==CelebrationPhase.BLACKOUT || phase==CelebrationPhase.FIREWORKS
@@ -188,8 +201,30 @@ private fun CelebrationText(kind:CelebrationKind,phase:CelebrationPhase,animated
                     Spacer(Modifier.height(8.dp))
                     CelebrationButton(s.manualBlow,onBlow,primary=false)
                 } else if(done) {
-                    Spacer(Modifier.height(18.dp));CelebrationButton(s.continueListening,onClose)
-                    if(kind==CelebrationKind.BIRTHDAY)CelebrationButton(s.replay,onReplay,primary=false)
+                    if(kind==CelebrationKind.LISTENER) {
+                        Spacer(Modifier.height(10.dp))
+                        if(recommendation!=null) {
+                            Column(Modifier.fillMaxWidth().heightIn(min=56.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                                MetroText("为你推荐",color=Color(0xff9fb3a2),style=TextStyle(fontSize=11.sp,letterSpacing=2.sp))
+                                Spacer(Modifier.height(4.dp))
+                                MetroText(recommendation.name,color=Color(0xfffff3df),style=TextStyle(fontSize=16.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center))
+                                MetroText(recommendation.artists?.joinToString(" / ") { it.name }.orEmpty().ifBlank { "未知艺人" },
+                                    color=Color(0xffb4c6b7),style=TextStyle(fontSize=12.sp,textAlign=TextAlign.Center))
+                            }
+                        } else {
+                            MetroText("收藏里还没有歌，先去挑一首吧。",color=Color(0xffb4c6b7),style=TextStyle(fontSize=13.sp,textAlign=TextAlign.Center))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        if(recommendation!=null) CelebrationButton("就听这首",{onPlayRecommendation(recommendation)})
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                            Box(Modifier.weight(1f)) { CelebrationButton("换一首",onRerollRecommendation,primary=false) }
+                            Box(Modifier.weight(1f)) { CelebrationButton(s.continueListening,onClose,primary=false) }
+                        }
+                    } else {
+                        Spacer(Modifier.height(18.dp));CelebrationButton(s.continueListening,onClose)
+                        if(kind==CelebrationKind.BIRTHDAY)CelebrationButton(s.replay,onReplay,primary=false)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

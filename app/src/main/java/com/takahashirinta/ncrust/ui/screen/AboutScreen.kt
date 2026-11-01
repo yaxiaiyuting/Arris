@@ -58,7 +58,11 @@ import com.takahashirinta.ncrust.update.UpdateService
 private val VERSION = "v${BuildConfig.VERSION_NAME}"
 
 @Composable
-fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
+fun AboutScreen(
+    onBack: () -> Unit,
+    onOpenUpdate: () -> Unit = {},
+    onPlaySong: (com.takahashirinta.ncrust.network.SongItem) -> Unit = {},
+) {
     val s = LocalStrings.current
     val updateStrings = LocalStrings.current.update
     val accent = LocalMetroColors.current.primary
@@ -107,7 +111,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenUpdate: () -> Unit = {}) {
                 CascadeBlock(delayMillis = 40) {
                     Column {
                         AboutSection(s.aboutSectionProject.uppercase(), accent)
-                        com.takahashirinta.ncrust.celebration.VersionEggRow(s.aboutVersion, VERSION)
+                        com.takahashirinta.ncrust.celebration.VersionEggRow(s.aboutVersion, VERSION, onPlaySong = onPlaySong)
                         // v3.4.13：手动检查更新（不受自动检查 24 小时窗口限制）。
                         AboutActionRow(
                             label = updateStrings.checkNow,

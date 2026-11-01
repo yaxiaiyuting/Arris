@@ -85,7 +85,7 @@ internal class MqttWebSocketTransport(private val clientId: String) {
         const val MAX_BUFFER_BYTES = 1 shl 20
     }
 
-    private val http: OkHttpClient = OkHttpClient.Builder()
+    private val http: OkHttpClient = com.takahashirinta.ncrust.network.AppHttp.builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         // 读超时**不用 OkHttp 的**：MQTT 的长连接本来就可能长时间没有数据
         // （等用户扫码），用 30 秒读超时会把一条正常的空闲连接掐掉。

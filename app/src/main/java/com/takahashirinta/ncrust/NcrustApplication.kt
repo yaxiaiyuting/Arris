@@ -42,7 +42,13 @@ class NcrustApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader {
         val memoryBytes = memoryCacheSizeBytes(this)
+        // 封面 / 艺人头像 / 专辑图全走 Coil：它默认自建客户端，本机 IPv6 不通时会一直等到超时。
+        val imageClient = com.takahashirinta.ncrust.network.AppHttp.builder()
+            .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
         return ImageLoader.Builder(this)
+            .okHttpClient(imageClient)
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizeBytes(memoryBytes)

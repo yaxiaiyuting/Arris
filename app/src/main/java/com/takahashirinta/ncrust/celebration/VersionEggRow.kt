@@ -21,7 +21,11 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 
 @Composable
-fun VersionEggRow(label:String,version:String) {
+fun VersionEggRow(
+    label:String,
+    version:String,
+    onPlaySong:(com.takahashirinta.ncrust.network.SongItem)->Unit = {},
+) {
     val s=LocalStrings.current.celebration
     val gate=remember {VersionTapGate()}
     var count by remember {mutableIntStateOf(0)}
@@ -43,5 +47,16 @@ fun VersionEggRow(label:String,version:String) {
             if(count in 4..6)MetroText(s.remaining(7-count),color=LocalMetroColors.current.primary,style=TextStyle(fontSize=12.sp,textAlign=TextAlign.End))
         }
     }
-    if(open)CelebrationOverlay(CelebrationKind.LISTENER,onClose={open=false;reset()})
+    // 彩蛋里的「推荐一首」：每次打开/换一首都从收藏里随机挑，本地为空时显示提示
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var pick by remember(open) {
+        mutableStateOf(if (open) EggSongPick.pick(context) else null)
+    }
+    if(open)CelebrationOverlay(
+        CelebrationKind.LISTENER,
+        onClose={open=false;reset()},
+        recommendation=pick,
+        onPlayRecommendation=onPlaySong,
+        onRerollRecommendation={ pick = EggSongPick.pick(context) },
+    )
 }

@@ -97,7 +97,7 @@ object ConnectionWarmup {
      *
      * ## v3.3.2：**必须与业务客户端同源**（本版修的性能缺陷，两处都错了）
      *
-     * 旧实现在这里 `OkHttpClient.Builder().build()` 出了一个**第三方客户端**。
+     * 旧实现在这里 `com.takahashirinta.ncrust.network.AppHttp.builder().build()` 出了一个**第三方客户端**。
      * 要让预热真的有用，需要同时满足两个条件，缺一不可：
      *
      * 1. **共用连接池** —— OkHttp 的 `ConnectionPool` 是 client 的私有字段，

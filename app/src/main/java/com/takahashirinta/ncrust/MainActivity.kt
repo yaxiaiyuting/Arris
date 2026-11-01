@@ -2606,7 +2606,7 @@ fun MainScreen(
                 // 163cn.tv 短链: HEAD 跟随 302 拿真实地址
                 if (target.contains("163cn.tv")) {
                     target = runCatching {
-                        val client = okhttp3.OkHttpClient.Builder()
+                        val client = com.takahashirinta.ncrust.network.AppHttp.builder()
                             .followRedirects(false).build()
                         client.newCall(okhttp3.Request.Builder().url(target).head().build())
                             .execute().use { it.header("Location") ?: "" }
@@ -2674,7 +2674,20 @@ fun MainScreen(
     if (showAbout) {
         AboutScreen(
             onBack = { showAbout = false },
-            onOpenUpdate = { showUpdate = true }
+            onOpenUpdate = { showUpdate = true },
+            onPlaySong = { song: com.takahashirinta.ncrust.network.SongItem ->
+                playerViewModel.playSong(
+                    song.id,
+                    title = song.name,
+                    artist = song.artists?.joinToString(" / ") { it.name }.orEmpty(),
+                    artworkUrl = song.album?.picUrl.orEmpty(),
+                    sourceKey = song.source,
+                    sourceId = song.sourceId,
+                    mediaId = song.mediaId,
+                    privilege = song.privilege,
+                )
+                showAbout = false
+            },
         )
         return
     }

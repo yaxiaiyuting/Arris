@@ -99,7 +99,7 @@ object QqClient {
      * 协程层面的超时只能让 UI 不再等，真正的连接要靠 OkHttp 自己的超时收掉。
      */
     private val searchHttp: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .connectTimeout(4, TimeUnit.SECONDS)
             .readTimeout(6, TimeUnit.SECONDS)
             .writeTimeout(6, TimeUnit.SECONDS)
@@ -108,7 +108,7 @@ object QqClient {
     }
 
     private val http: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
