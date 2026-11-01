@@ -220,8 +220,17 @@ object BiliApi {
     private val realClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addNetworkInterceptor(BiliCredentialBoundary)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            // v3.8.10：这条客户端以前是裸的（30s 超时、双栈原样解析、协议自动协商），
+            // 于是 ncm 在 v3.8.1 修过的三个坑在这儿全都在：
+            //   ① 首个 IPv6 地址不回 TCP ⇒ 30s 白白耗在一个坏地址上；
+            //   ② h2 被中间设备/服务端重置（实测 curl 反复 "unexpected eof while reading"）；
+            //   ③ 没有读超时兜底，界面一直转圈，看起来就是「B站音源失效」。
+            // 三个都按 ncm 的解法处理：IPv4 优先、强制 h1、连接 8s / 读 15s。
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -244,6 +253,19 @@ object BiliApi {
     internal var clientForTest: OkHttpClient? = null
 
     private val client: OkHttpClient get() = clientForTest ?: realClient
+
+    /**
+     * 丢掉 B 站客户端池里的连接（网络切换 / 代理开关 / 回到前台时调用）。
+     *
+     * `internal`：真正的 `evictAll()` 跑在专用线程上，这个函数自己只启动线程、
+     * 不发网络，所以不违反 `BiliApiIoContractTest` 对「对外函数必须是 suspend」的约定；
+     * 但为了不把这个口子暴露给模块外，仍然收成模块内可见。
+     */
+    internal fun evictConnections() {
+        runCatching {
+            Thread({ runCatching { client.connectionPool.evictAll() } }, "ncrust-evict-bili").start()
+        }
+    }
 
     // ---------------------------------------------------------------- wbi 密钥缓存 ----
 

@@ -126,14 +126,26 @@ object UpdateService {
     // 首选**自有域名**的接口：`/api/releases` 由 Worker 代取 GitHub（服务端没有墙），
     // 并把托管在本站的 APK 资产地址改写过去 —— 手机只要能访问本站，检查和下载都能完成。
     // GitHub 原接口作为兜底：接口挂了 / 域名被污染时仍能退回直连。
-    private val RELEASES_SOURCES = listOf(
-        // 1) 本站动态接口：Worker 三级取数（边缘缓存 / 现取 GitHub / 部署时快照）
-        "https://arris.de5.net/api/releases",
-        // 2) 本站静态快照：纯文件、不经过 Worker 逻辑，GitHub 被限流时唯一可靠的兜底
-        "https://arris.de5.net/api-fallback/releases-array.json",
-        // 3) 直连 GitHub（裸连通常不通，仅作最后手段）
-        "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
-    )
+    /**
+     * 更新源，**按体积从小到大**排（v3.9.0）。
+     *
+     * 真机裸连实测：手机到 Cloudflare 的 RTT 450–560ms、丢包 50–66%。
+     * 原来只有一个 500KB 的 `/api/releases`，12s 预算经常拿不完 —— 表现就是「裸连检查更新失败」。
+     * 现在第一档是 1.5KB 的 `/api/latest`（只要「有没有新版本」这一个事实），
+     * 大接口只在前者拿不到时兜底；再加一条 jsDelivr 镜像（国内 CDN，走 GitHub 仓库里的同一份快照）。
+     */
+    private fun releasesSources(current: AppVersion): List<String> {
+        val sources = mutableListOf<String>()
+        // `/api/latest` 只描述主线最新版；LTS 用户拿它会得到「主线比当前大」的错判，
+        // 所以 LTS 线跳过它，直接看完整列表（里面有 lts-3.7 那条滚动条目）。
+        val onLts = current.major * 100 + current.minor == UpdateChecker.LTS_LINE
+        if (!onLts) sources += "https://arris.de5.net/api/latest"
+        sources += "https://arris.de5.net/api/releases"
+        sources += "https://cdn.jsdelivr.net/gh/yaxiaiyuting/Arris@master/relay/public/api-fallback/releases-array.json"
+        sources += "https://arris.de5.net/api-fallback/releases-array.json"
+        sources += "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100"
+        return sources
+    }
 
     /** 翻页上限，防病态的分页链把 60 次 / 小时限额烧光。 */
     private const val MAX_RELEASES_PAGES = 10
@@ -172,6 +184,13 @@ object UpdateService {
     // 独立 OkHttpClient：RetrofitClient 的 client 会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的。
     private val client = OkHttpClient.Builder()
+        // v3.9.1：这条客户端一直没跟上 ncm 的地址族修复。
+        // 真机裸连实测（手机 Wi-Fi 同时有 IPv4/IPv6）：
+        //   curl -4 → HTTP 200，conn 0.39s / tls 1.43s
+        //   curl -6 → 15 秒超时（IPv6 到 Cloudflare 完全不通）
+        // 系统解析把 IPv6 排在前面，于是检查请求全耗在死地址上 —— 这就是「裸连找不到更新包」。
+        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+        .retryOnConnectionFailure(true)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         // 关键：整条 call 的总预算。只设 connect/read 时，域名被黑洞（SYN 不回）或
@@ -397,6 +416,8 @@ object UpdateService {
 
     /** 逐页拉取某个源；任一步失败返回 null，交给调用方换下一个源。 */
     private fun fetchAllPages(firstUrl: String): List<String>? {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        val host = runCatching { java.net.URI(firstUrl).host }.getOrNull() ?: firstUrl
         val pages = mutableListOf<String>()
         var url: String? = firstUrl
         var page = 0
@@ -412,10 +433,45 @@ object UpdateService {
                 val text = response.body?.string() ?: return null
                 text to nextPageUrl(response.header("Link"))
             }
-            pages += body
+            pages += normalizePage(body)
             url = next
         }
+        android.util.Log.i(
+            "UpdateService",
+            "update-source ok host=$host pages=${pages.size} bytes=${pages.sumOf { it.length }} " +
+                "elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms",
+        )
         return pages
+    }
+
+    /**
+     * 把 `/api/latest` 那种**单对象**响应归一成数组，让 [evaluateReleases] 只认一种形状。
+     * 非对象 / 没有 `version` 时原样返回（交给下游按解析失败处理）。
+     */
+    private fun normalizePage(text: String): String {
+        val parsed = runCatching { com.google.gson.JsonParser.parseString(text) }.getOrNull() ?: return text
+        if (!parsed.isJsonObject) return text
+        val obj = parsed.asJsonObject
+        val version = obj.get("version")?.takeIf { !it.isJsonNull }?.asString ?: return text
+        val release = com.google.gson.JsonObject()
+        release.addProperty("tag_name", version)
+        obj.get("publishedAt")?.let { release.add("published_at", it) }
+        obj.get("pageUrl")?.let { release.add("html_url", it) }
+        obj.get("body")?.let { release.add("body", it) }
+        val assets = com.google.gson.JsonArray()
+        val apk = obj.get("apk")?.takeIf { it.isJsonObject }?.asJsonObject
+        if (apk != null) {
+            val a = com.google.gson.JsonObject()
+            a.addProperty("id", 0L)
+            apk.get("name")?.let { a.add("name", it) }
+            apk.get("size")?.let { a.add("size", it) }
+            apk.get("url")?.let { a.add("browser_download_url", it) }
+            assets.add(a)
+        }
+        release.add("assets", assets)
+        val array = com.google.gson.JsonArray()
+        array.add(release)
+        return array.toString()
     }
 
     private suspend fun fetch(): CheckOutcome = withContext(Dispatchers.IO) {
@@ -431,14 +487,28 @@ object UpdateService {
     private suspend fun fetchFromSources(current: AppVersion): CheckOutcome = withContext(Dispatchers.IO) {
         try {
             var pages: List<String>? = null
-            for (source in RELEASES_SOURCES) {
+            for (source in releasesSources(current)) {
+                val t0 = android.os.SystemClock.elapsedRealtime()
                 pages = runCatching { fetchAllPages(source) }.getOrNull()
                 if (pages != null) break
+                android.util.Log.w(
+                    "UpdateService",
+                    "update-source failed url=${source.take(60)} elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms",
+                )
             }
-            if (pages == null) return@withContext CheckOutcome.Failed
+            if (pages == null) {
+                android.util.Log.w("UpdateService", "update: 所有源都失败")
+                return@withContext CheckOutcome.Failed
+            }
+            android.util.Log.i(
+                "UpdateService",
+                "update: current=$current variant=${preferredVariant()} pages=${pages.size} head=${pages.firstOrNull()?.take(90)}",
+            )
             // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
             // 绝不能退化成 UpToDate 去清掉上次真实发现的结果。
-            evaluateReleases(pages, current, preferredVariant()) ?: CheckOutcome.Failed
+            val outcome = evaluateReleases(pages, current, preferredVariant())
+            android.util.Log.i("UpdateService", "update: evaluate=${outcome ?: "null(解析失败)"}")
+            outcome ?: CheckOutcome.Failed
         } catch (_: Exception) {
             CheckOutcome.Failed
         }

@@ -31,14 +31,15 @@ try {
   console.error('snapshot failed:', String(e.message || e).split('\n')[0]);
   process.exit(1);
 }
-const list = raw.filter((r) => r && !r.draft).map((r) => ({
+const BODY_KEEP = 5; // 只留最近 5 条的更新说明：裸连 RTT 560ms，体积就是可用性
+const list = raw.filter((r) => r && !r.draft).map((r, index) => ({
   tag_name: r.tag_name,
   name: r.name,
   draft: false,
   prerelease: !!r.prerelease,
   published_at: r.published_at,
   html_url: r.html_url,
-  body: typeof r.body === 'string' ? r.body.slice(0, 4000) : '',
+  body: index < BODY_KEEP && typeof r.body === 'string' ? r.body.slice(0, 4000) : '',
   assets: (r.assets || [])
     .filter((a) => a && /\.apk$/i.test(a.name || ''))
     .map((a) => ({ id: a.id, name: a.name, size: a.size, browser_download_url: '' })),
