@@ -264,3 +264,11 @@ body:has(.screenshot-dialog[open]){overflow:hidden}
 @media(max-width:760px){.release-grid{grid-template-columns:1fr}
 }
 
+
+/* 更新记录：主线 5 个一行，LTS 单独一行（v3.8.14 起） */
+.release-grid.mainline{grid-template-columns:repeat(5,1fr);gap:20px}
+.release-grid.lts-row{grid-template-columns:1fr;margin-top:24px}
+.release-grid.lts-row>article{padding-top:18px}
+.release-grid.lts-row .release-version small{background:#e3e9d6}
+@media(max-width:1200px){.release-grid.mainline{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.release-grid.mainline{grid-template-columns:1fr;gap:22px}}
