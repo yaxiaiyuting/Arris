@@ -31,9 +31,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable
-fun CelebrationOverlay(kind: CelebrationKind, onClose: () -> Unit, onVisible: () -> Unit = {}) {
+fun CelebrationOverlay(
+    kind: CelebrationKind,
+    onClose: () -> Unit,
+    onVisible: () -> Unit = {},
+    // 彩蛋里的「推荐一首」（null = 本地收藏为空）
+    recommendation: com.takahashirinta.ncrust.network.SongItem? = null,
+    onPlayRecommendation: (com.takahashirinta.ncrust.network.SongItem) -> Unit = {},
+    onRerollRecommendation: () -> Unit = {},
+) {
     if (kind == CelebrationKind.BIRTHDAY) BirthdayWebOverlay(onClose, onVisible)
-    else NativeCelebrationOverlay(kind, onClose, onVisible)
+    else NativeCelebrationOverlay(kind, onClose, onVisible, recommendation, onPlayRecommendation, onRerollRecommendation)
 }
 
 @Composable

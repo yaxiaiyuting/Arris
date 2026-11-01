@@ -183,13 +183,12 @@ object UpdateService {
 
     // 独立 OkHttpClient：RetrofitClient 的 client 会往请求里塞网易云 cookie，
     // 把登录态发给 GitHub 是不可接受的。
-    private val client = OkHttpClient.Builder()
+    private val client = com.takahashirinta.ncrust.network.AppHttp.builder()
         // v3.9.1：这条客户端一直没跟上 ncm 的地址族修复。
         // 真机裸连实测（手机 Wi-Fi 同时有 IPv4/IPv6）：
         //   curl -4 → HTTP 200，conn 0.39s / tls 1.43s
         //   curl -6 → 15 秒超时（IPv6 到 Cloudflare 完全不通）
         // 系统解析把 IPv6 排在前面，于是检查请求全耗在死地址上 —— 这就是「裸连找不到更新包」。
-        .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
         .retryOnConnectionFailure(true)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)

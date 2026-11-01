@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.8.15--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.8.16--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -369,6 +369,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.8.16-gpl | 2026-11-02 | 彩蛋推荐一首（来自本地收藏）；封面/艺人/专辑图与 QQ 链路补 IPv4 优先；**OkHttp 统一走 `AppHttp`**，裸建即测试变红 |
 | v3.8.15-gpl | 2026-11-02 | 应用内分段多线程下载（4 段，失败自动回落单流）；下载地址改走 `/get/`（支持 Range）|
 | v3.8.14-gpl | 2026-11-02 | 一起听成员侧漂移窗口 800ms→5s，超 12s 才强制对齐；播放态需连续两次确认 |
 | v3.8.13-gpl | 2026-11-02 | 应用内下载补 IPv4 优先（修首次下载必失败、重试才成功） |

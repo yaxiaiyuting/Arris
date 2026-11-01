@@ -50,8 +50,7 @@ internal object SegmentedDownload {
     private const val MIN_SEGMENT = 1L * 1024 * 1024
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .dns(AddressPreference.ipv4First)
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .retryOnConnectionFailure(true)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

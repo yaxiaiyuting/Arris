@@ -100,7 +100,7 @@ object RetrofitClient {
      * **全应用唯一的连接池**。
      *
      * OkHttp 的 `ConnectionPool` 是 `OkHttpClient` 实例的私有字段，不是全局的：
-     * 不显式共享时每个 `OkHttpClient.Builder().build()` 都带一个自己的池子，
+     * 不显式共享时每个 `com.takahashirinta.ncrust.network.AppHttp.builder().build()` 都带一个自己的池子，
      * 连接复用（`ConnectionPool.transmitterAcquirePooledConnection`）只在**同一个池子**里找。
      *
      * `ConnectionWarmup` 从 v3.1.0 起就形同虚设，第一个原因就是它自建了一个第三方客户端：
@@ -142,7 +142,7 @@ object RetrofitClient {
      * 所以各客户端只在自己那一层加需要的东西（见 [plainClient] / [restClient]）。
      */
     private val baseClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             // 保持协议默认协商（HTTP/2 优先）。2026-10-25 的对照实验证明 h2 本身可用：
             // 同样的 client 配置强制 h2 时，取链接口 200 / 300 ms，与 h1 逐字节一致。
             // 之前观察到的 `REFUSED_STREAM` 是**请求风暴限流**（一次点击 6 档阶梯、取消不掉、
@@ -158,7 +158,6 @@ object RetrofitClient {
             // 结果是在尝试 IPv4 之前就被取消 —— 表现为 8s 级超时、ttfb=-1。
             // 两处配合：① IPv4 优先（IPv6 保底，纯 IPv6 网络不受影响）
             //          ② 单地址连接预算 30s → 8s，让坏地址能在截止前让位给下一个地址
-            .dns(AddressPreference.ipv4First)
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .build()

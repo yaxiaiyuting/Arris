@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-01T17:00:52.865Z",
+ "generatedAt": "2026-11-01T17:40:49.511Z",
  "releases": [
+  {
+   "tag_name": "v3.8.15-gpl",
+   "name": "Arris v3.8.15-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T17:01:59Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.15-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.15-gpl（versionCode 135）\n\n### 应用内下载：4 段并发\n\nAPK 16 MB，在裸连（手机 → Cloudflare，RTT 450–560ms、丢包 50–66%）上单连接要好几分钟。\n服务端其实一直支持 `Range`（实测 8 段并发各返回精确 1 MB），只是客户端没用。\n\n现在：\n\n1. 先 `Range: bytes=0-0` 探测，拿总长与 `ETag`；\n2. 4 段并发，每段独立 `RandomAccessFile` 写自己的区间（互不重叠）；\n3. 收尾校验文件长度与 `ETag`（资产被替换就整体重来，不拼混合包）。\n\n**分流规则**（什么时候不用多线程）：服务端不支持 Range / 体积 ≤4 MB / 存在可续传残包 → 仍走原单流下载器；\n任一段失败或用户取消 → 全体放弃并回落单流。**快是加分项，下载成功是底线。**\n\n### 服务端改动\n\n`/api/releases` 与 `/api/latest` 里的资产地址从 `/dl/` 改为 **`/get/`**：\n\n| 路径 | 行为 |\n|---|---|\n| `/dl/x.apk` | Cloudflare 静态直出，**不认 Range**（`curl -r` 返回整包） |\n| `/get/x.apk` | 走 Worker，自己实现 **206 + `Content-Range`**，支持续传与多线程 |\n\n手机实测：`HTTP/1.1 206`，`Content-Range: bytes 0-0/16069004`，带 `ETag`。\n\n### 一并修掉的\n\n- 一起听成员侧漂移窗口 5 秒（3.8.14）\n- 应用内下载补 IPv4 优先（3.8.13）\n- 检查更新单对象归一化 + 11KB 响应（3.8.12）\n",
+   "assets": [
+    {
+     "id": 698938515,
+     "name": "Arris-v3.8.15-gpl.apk",
+     "size": 16085388,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.14-gpl",
    "name": "Arris v3.8.14-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-01T09:03:31Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.6-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "回前台就刷新：离开 ≥10s 回来清连接池 + DNS 并预热当前曲目；修好应用内检查更新；修代理开关后未缓存的歌放不出来。",
+   "body": "",
    "assets": [
     {
      "id": 697709832,

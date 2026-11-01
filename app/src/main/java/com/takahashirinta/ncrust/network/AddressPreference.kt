@@ -69,9 +69,16 @@ object AddressPreference {
         }
     }
 
-    /** 给 OkHttp 用的 DNS 实现。 */
-    val ipv4First: Dns = object : Dns {
+    /**
+     * 给 OkHttp 用的 DNS 实现：**有 IPv4 就只用 IPv4**。
+     *
+     * 具名类（而不是匿名 object）是为了让 `HttpClientDnsAuditTest` 能断言
+     * 「AppHttp 建出来的客户端确实用的是这条策略」。
+     */
+    class IPv4FirstDns : Dns {
         override fun lookup(hostname: String): List<InetAddress> =
             order(Dns.SYSTEM.lookup(hostname))
     }
+
+    val ipv4First: Dns = IPv4FirstDns()
 }
