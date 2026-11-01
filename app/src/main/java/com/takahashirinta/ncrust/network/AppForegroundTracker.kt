@@ -7,6 +7,9 @@ package com.takahashirinta.ncrust.network
 
 import android.os.SystemClock
 import android.util.Log
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * 记录「应用回到前台」的时刻，并据此判断这次回来是不是**长时间挂后台之后**。
@@ -26,8 +29,18 @@ object AppForegroundTracker {
 
     private const val TAG = "AppForeground"
 
-    /** 超过这个时长没在前台，就认为连接与解析结果都可能过期。 */
-    const val LONG_IDLE_MS = 90_000L
+    /**
+     * 超过这个时长没在前台就做一次轻量清理（清连接池 + DNS）。
+     *
+     * 早先取 90s，实测反馈「还是太久」：手机锁屏看眼消息再回来通常只有 10–30s，
+     * 这段时间足以让后台网络被冻结、池里的 socket 变半死。10s 是个不打扰的界线
+     * ——清一次连接池的成本只有几十微秒。
+     */
+    const val IDLE_CLEANUP_MS = 10_000L
+
+    /** 回到前台时向外广播「离开时长」，播放层据此做刷新。 */
+    private val _events = MutableSharedFlow<Long>(replay = 0, extraBufferCapacity = 4)
+    val events: SharedFlow<Long> = _events.asSharedFlow()
 
     @Volatile
     private var lastForegroundAt = 0L
@@ -35,17 +48,19 @@ object AppForegroundTracker {
     @Volatile
     private var lastBackgroundAt = 0L
 
-    /** 进前台：返回这次是不是「长时间挂后台之后」的第一次回来。 */
+    /** 进前台：返回这次是不是「离开够久、做过清理」。 */
     fun onForeground(): Boolean {
         val now = SystemClock.elapsedRealtime()
         val idle = if (lastForegroundAt > 0L) now - lastForegroundAt else 0L
         lastForegroundAt = now
-        val longIdle = lastBackgroundAt > 0L && idle >= LONG_IDLE_MS
+        val longIdle = lastBackgroundAt > 0L && idle >= IDLE_CLEANUP_MS
         if (longIdle) {
             Log.i(TAG, "back after ${idle / 1000}s idle — dropping pooled connections + DNS cache")
             RetrofitClient.evictConnections()
             DnsCache.clear()
         }
+        // 无论多久都通知一次：播放层据此「回来就刷新」，让按播放不用等取链。
+        _events.tryEmit(idle)
         return longIdle
     }
 
