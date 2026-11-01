@@ -42,7 +42,16 @@ class NcrustApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader {
         val memoryBytes = memoryCacheSizeBytes(this)
+        // 封面 / 艺人头像 / 专辑图全部走 Coil：它默认自建 OkHttpClient（没有我们的 DNS 策略），
+        // 本机 IPv6 不通时图片会一直等到超时 —— 表现为「图一直灰着、列表滚动卡」。
+        val imageClient = okhttp3.OkHttpClient.Builder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
+            .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
         return ImageLoader.Builder(this)
+            .okHttpClient(imageClient)
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizeBytes(memoryBytes)

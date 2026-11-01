@@ -249,6 +249,7 @@ class NeteaseRecognizeProvider(
             "eyIxMCI6eyJtdXIiOiIwLjQ1IiwibXVzIjoiMTMuNjMiLCJzaXIiOiIwLjM2Iiwic2lzIjoiMTYuODUiLCJzcHIiOiIwLjAzIiwic3BzIjoiMTMuOTkifX0="
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(25, TimeUnit.SECONDS)
             .build()

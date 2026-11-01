@@ -192,7 +192,7 @@ export default {
 
       const headers = {
         "content-type": "application/json; charset=utf-8",
-        "cache-control": "public, max-age=600",
+        "cache-control": "public, max-age=120",
         "access-control-allow-origin": "*",
         "x-arris-source": source,
       };
@@ -217,7 +217,7 @@ export default {
           await cache.put(
             cacheKey,
             new Response(JSON.stringify({ releases }), {
-              headers: { "content-type": "application/json", "cache-control": "public, max-age=600" },
+              headers: { "content-type": "application/json", "cache-control": "public, max-age=120" },
             }),
           );
         } catch (_) {}

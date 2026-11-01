@@ -100,6 +100,7 @@ object QqClient {
      */
     private val searchHttp: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
             .connectTimeout(4, TimeUnit.SECONDS)
             .readTimeout(6, TimeUnit.SECONDS)
             .writeTimeout(6, TimeUnit.SECONDS)
@@ -109,6 +110,7 @@ object QqClient {
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .dns(com.takahashirinta.ncrust.network.AddressPreference.ipv4First)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
