@@ -711,6 +711,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
 
     init {
+        // 回到前台就刷新（v3.7.17）：离开 ≥10s 后回来先热一遍当前曲目的链路。
+        viewModelScope.launch {
+            com.takahashirinta.ncrust.network.AppForegroundTracker.events.collect { idleMs ->
+                if (idleMs < com.takahashirinta.ncrust.network.AppForegroundTracker.IDLE_CLEANUP_MS) return@collect
+                SongUrlFetcher.onNetworkRouteChanged()
+                recoverCurrentRequest(resetBudget = true)
+                if (!isBuffering.value && !isPlaying.value) {
+                    val key = currentTrack
+                    if (key != null) {
+                        val id = key.id
+                        runCatching { SongUrlFetcher.fetch(id) }
+                            .onSuccess { Log.i("PlayerViewModel", "foreground refresh songId=$id ok") }
+                            .onFailure { Log.i("PlayerViewModel", "foreground refresh songId=$id failed: ${it.javaClass.simpleName}") }
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             networkObserver.changes().collectLatest { route ->
                 val usableChange = recovery.networkChanged(route)
