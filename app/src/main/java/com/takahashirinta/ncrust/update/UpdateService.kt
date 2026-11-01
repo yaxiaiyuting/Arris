@@ -502,7 +502,7 @@ object UpdateService {
             }
             android.util.Log.i(
                 "UpdateService",
-                "update: current=$current variant=${preferredVariant()} pages=${pages.size} head=${pages.firstOrNull()?.take(90)}",
+                "update: current=$current variant=${preferredVariant()} pages=${pages.size} head=${pages.firstOrNull()?.take(90)}".take(300),
             )
             // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
             // 绝不能退化成 UpToDate 去清掉上次真实发现的结果。
