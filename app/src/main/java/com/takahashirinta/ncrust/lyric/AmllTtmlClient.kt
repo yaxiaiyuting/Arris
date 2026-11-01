@@ -220,7 +220,9 @@ object OkHttpTtmlFetcher : TtmlFetcher {
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient().newBuilder()
+        // v3.8.18：这里原来是 `OkHttpClient().newBuilder()` —— 又一个绕过 AppHttp 的裸客户端，
+        // 于是 TTML 歌词拉取在 IPv6 不通的网络里要白等到超时（表现为「歌词一直不出来」）。
+        com.takahashirinta.ncrust.network.AppHttp.builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .build()

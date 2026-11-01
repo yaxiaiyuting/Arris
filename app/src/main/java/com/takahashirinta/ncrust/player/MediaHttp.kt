@@ -37,12 +37,50 @@ internal object MediaHttp {
     /** 独立连接池（与 Retrofit 的分开计数，但同样受 [evict] 管理）。 */
     private val pool = ConnectionPool(8, 30, TimeUnit.SECONDS)
 
+    /**
+     * 音频流计时（v3.8.18）：把「建连 / 响应头 / 结束」三段打进 logcat。
+     *
+     * 「QQ 前几秒卡住」这类问题只看业务日志看不出来：vkey 200ms 就回来了、播放器也进了
+     * Playing，但出声要等音频字节 —— 需要知道那几秒花在链路、CDN 还是解码上。
+     */
+    private val timingListener = object : okhttp3.EventListener() {
+        private val startedAt = java.util.concurrent.ConcurrentHashMap<okhttp3.Call, Long>()
+
+        override fun callStart(call: okhttp3.Call) {
+            startedAt[call] = android.os.SystemClock.elapsedRealtime()
+        }
+
+        override fun responseHeadersEnd(call: okhttp3.Call, response: okhttp3.Response) {
+            val t0 = startedAt[call] ?: return
+            android.util.Log.i(
+                "MediaHttp",
+                "audio headers code=${response.code} host=${call.request().url.host} " +
+                    "elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms",
+            )
+        }
+
+        override fun callEnd(call: okhttp3.Call) {
+            val t0 = startedAt.remove(call) ?: return
+            android.util.Log.i("MediaHttp", "audio call end elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms")
+        }
+
+        override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
+            val t0 = startedAt.remove(call) ?: return
+            android.util.Log.w(
+                "MediaHttp",
+                "audio call failed after ${android.os.SystemClock.elapsedRealtime() - t0}ms: " +
+                    "${ioe.javaClass.simpleName} ${ioe.message?.take(60)}",
+            )
+        }
+    }
+
     val client: OkHttpClient = com.takahashirinta.ncrust.network.AppHttp.builder()
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .connectionPool(pool)
         .pingInterval(15, TimeUnit.SECONDS)
+        .eventListener(timingListener)
         .build()
 
     /** 丢掉池里的连接（网络变化 / 回到前台 / 代理开关时调用）。 */

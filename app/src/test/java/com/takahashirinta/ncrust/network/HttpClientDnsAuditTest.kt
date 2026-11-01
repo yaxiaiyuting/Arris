@@ -32,7 +32,12 @@ class HttpClientDnsAuditTest {
             file.readLines().forEachIndexed { index, line ->
                 val trimmed = line.trimStart()
                 if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) return@forEachIndexed
-                if (line.contains("OkHttpClient.Builder()")) {
+                // v3.8.18：也抓 `OkHttpClient()` 与 `OkHttpClient().newBuilder()` ——
+                // TTML 歌词客户端就是从这个缝里漏过去的。
+                if (line.contains("OkHttpClient.Builder()") ||
+                    line.contains("OkHttpClient()") ||
+                    line.contains("OkHttpClient().newBuilder()")
+                ) {
                     offenders += "${file.name}:${index + 1}"
                 }
             }
