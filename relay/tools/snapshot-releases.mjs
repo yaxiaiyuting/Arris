@@ -39,6 +39,7 @@ const list = raw.filter((r) => r && !r.draft).map((r, index) => ({
   prerelease: !!r.prerelease,
   published_at: r.published_at,
   html_url: r.html_url,
+  site_url: 'https://arris.de5.net/#download',
   body: index < BODY_KEEP && typeof r.body === 'string' ? r.body.slice(0, 4000) : '',
   assets: (r.assets || [])
     .filter((a) => a && /\.apk$/i.test(a.name || ''))

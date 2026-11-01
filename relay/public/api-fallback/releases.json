@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-01T15:19:55.701Z",
+ "generatedAt": "2026-11-01T15:55:04.868Z",
  "releases": [
   {
    "tag_name": "v3.8.9-gpl",
@@ -8,6 +8,7 @@
    "prerelease": false,
    "published_at": "2026-11-01T09:14:59Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.9-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "## v3.8.9-gpl（versionCode 129）\r\n\r\n### 修：取链 0.7 秒，播放却卡十几秒才出声\r\n\r\n真机日志：\r\n\r\n```\r\nNcrustHttpTiming: path=/eapi/.../player/url/v1  ttfb=264ms  total=411ms\r\nSongUrlFetcher:   level=jymaster ok in 745ms\r\nMediaSession:     state=BUFFERING(6) position=138024 buffered=138024 speed=0.0\r\n```\r\n\r\nURL 拿到了、播放器进了 BUFFERING，但音频**一个字节都没下来**。\r\n\r\n根因在音频流的数据源：media3 默认的 `DefaultHttpDataSource` 底层是 `HttpURLConnection`——\r\n\r\n1. 不认我们的 DNS 策略（代理 fake-ip、坏的 IPv6 地址照样往上连）；\r\n2. **没有读超时** —— 半死连接只能等系统 TCP 超时（分钟级）；\r\n3. 连接池不归我们管 —— `evictConnections()` 清不到它，网络切换后旧连接继续被复用。\r\n\r\n网络一变（开关代理 / 后台唤醒），音频流就挂在那条半死连接上。\r\n\r\n改为 `OkHttpDataSource`：\r\n\r\n| 项 | 值 |\r\n|---|---|\r\n| DNS | `AddressPreference.ipv4First` |\r\n| 连接超时 | 6s |\r\n| 读超时 | **10s**（半死连接 10s 内报错，交给 ExoPlayer 换新连接） |\r\n| 连接保活 | `pingInterval(15s)` |\r\n| 连接池 | 独立，网络变化 / 回前台时 `MediaHttp.evict()` 一并清 |\r\n\r\n### 一并包含（3.8.5–3.8.8）\r\n\r\n- 检查更新修好（资产名规则过时，此前永远「已是最新」）+ 裸连可用的三级取数\r\n- 代理开关后未缓存的歌放不出来（清 JVM DNS 缓存）\r\n- 回前台 ≥10s 自动刷新（清池 + 预热当前曲目）\r\n- 首次取链提速（降级档位按账户记忆）\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3497 项 0 失败**\r\n- 16 KB page 合规（`p_align=0x4000`、`.so` 未压缩、`zipalign -P 16` 通过）\r\n",
    "assets": [
     {
@@ -25,6 +26,7 @@
    "prerelease": false,
    "published_at": "2026-11-01T09:03:31Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.6-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "回前台就刷新：离开 ≥10s 回来清连接池 + DNS 并预热当前曲目；修好应用内检查更新；修代理开关后未缓存的歌放不出来。",
    "assets": [
     {
@@ -42,11 +44,12 @@
    "prerelease": false,
    "published_at": "2026-10-31T13:36:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
+   "site_url": "https://arris.de5.net/#download",
    "body": "# LTS 3.7.x · 长期维护线（滚动更新）\n\n这条 Release **不是某个具体版本**，而是 LTS 线的**固定入口**：每次 LTS 出包都会替换下面这些附件，\n版本号看附件文件名。本页不会被标记为 Latest，也不会顶掉主线的「最新版」徽章。\n\n## 当前 LTS 版本：`v3.7.15-gpl`（versionCode 102）\n\n| 项 | 值 |\n|---|---|\n| 最低系统 | **Android 7.0（minSdk 24）** —— 想装 3.8.x 需要 Android 10+ |\n| 附件 | `Arris-v3.7.15-gpl.apk`（≈ 12 MB） |\n| 官网直链 | `https://arris.de5.net/get/lts-latest.apk`（支持断点续传/多线程，永远指向最新 LTS） |\n| 旧版 | `v3.7.14-gpl`、`v3.7.13-gpl` 仍在 Releases 里，可回退 |\n\n## 本版（3.7.15）回移的内容\n\n- **开关代理后未缓存的歌放不出来**：代理的 fake-ip（`198.18.0.0/15`）与真实 IP 是两套解析结果，\n  而 JVM 的 DNS 缓存不随网络切换失效 —— 关掉代理后取链仍往假地址上连。\n  新增 `DnsCache`（反射清缓存）并在网络切换与取链重试两处调用。\n- **检查更新不再依赖 GitHub**：首选 `https://arris.de5.net/api/releases`，\n  GitHub 原接口仅作兜底；`api.github.com` 在国内经常裸连失败。\n- **按发布通道过滤**：3.7.x 只看到 3.7.x 与 `lts-3.7`，不会被推 `minSdk 29` 的 3.8.x。\n\n## LTS 线的取舍\n\nLTS **只回移「设备兼容 / 正确性」修复，不带新功能**：\n\n- ✅ 会回移：竖屏封面遮挡、自动旋转默认值、地址族回退、主线程 socket 崩溃、DNS 缓存、视觉统一\n- ❌ 不回移：听歌识曲、一起听（依赖 3.8 的协议与后端，且在 Android 7 设备上没有验证过）\n\n## 校验\n\n- 全量 JVM 单测 **3399 项 0 失败**\n- 与 3.8.x 同一证书（`CN=Ncrust, OU=Dev, O=Ncrust`），可直接覆盖安装\n",
    "assets": [
     {
-     "id": 697720396,
-     "name": "Arris-v3.7.19-gpl.apk",
+     "id": 698746318,
+     "name": "Arris-v3.7.20-gpl.apk",
      "size": 12138240,
      "browser_download_url": ""
     }
@@ -59,6 +62,7 @@
    "prerelease": false,
    "published_at": "2026-10-31T16:58:41Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "## v3.8.4-gpl（versionCode 124）\r\n\r\n两个「网络相关」的修复，都来自真机反馈。\r\n\r\n### 开关代理后，未缓存的歌放不出来\r\n\r\n**现象**：开/关 Clash 一类 TUN 代理之后，已缓存的歌还能放，未缓存的歌直接取链失败、跳歌。\r\n\r\n**原因不在连接池**（那条路一直在 `evictAll()`），在 **JVM 的 DNS 解析缓存**：\r\n\r\n- 代理开：fake-ip 模式把域名解析成 `198.18.0.0/15`，由 TUN 接管；\r\n- 代理关：解析回真实 IP；\r\n- `InetAddress` 的进程内缓存**不随网络切换失效**，于是关掉代理后的一段时间里，取链仍往假地址上连 —— 不可达。\r\n- 已缓存的歌走本地文件、不经过解析，所以现象正好是「只有新歌不行」。\r\n\r\n修复：新增 `network/DnsCache`（反射调 `InetAddress.clearDnsCache()`，失败只记日志），\r\n在网络切换处理链与取链重试两处都清一次；`onNetworkRouteChanged()` 顺带清空传输失败记录。\r\n覆盖「只是切了代理模式、默认网络没变」的情况。\r\n\r\n### 应用内检查更新不再依赖 GitHub\r\n\r\n`api.github.com` 在国内经常裸连失败，之前会一直提示「检查更新失败」。现在首选\r\n`https://arris.de5.net/api/releases`（由 Worker 代取 GitHub，并把托管在本站的 APK 地址改写到\r\n`/get/`），GitHub 原接口只作兜底。\r\n\r\n同时新增**发布通道**判定：3.7.x 只看到 3.7.x 与 `lts-3.7`，主线看普通版本条目 —— 避免\r\nAndroid 7 用户被推一个 `minSdk 29` 装不上的包。\r\n\r\n### 官网直链支持断点续传\r\n\r\n`https://arris.de5.net/get/latest.apk` 支持 `Range`（206），可用 aria2 `-x8 -s8` / IDM 多线程。\r\n`/dl/latest.apk` 是同一份包的静态直出，最简单但不支持续传。\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3482 项 0 失败**\r\n- 与 3.8.3 同一证书，可直接覆盖安装\r\n- SHA-256：见附件页面（官网上是同一个包）\r\n",
    "assets": [
     {
@@ -76,6 +80,7 @@
    "prerelease": false,
    "published_at": "2026-10-31T13:23:08Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "## v3.8.3-gpl（versionCode 123）\r\n\r\n这一版把新官网的视觉语言搬进应用，并修掉竖屏封面的遮挡问题。\r\n\r\n### 界面重构（对齐官网 arris.de5.net）\r\n- **配色**：米白纸感底色 + 深松绿主色 + 鼠尾草绿点缀，深色模式与主题色选择保留。\r\n- **听歌识曲**：状态更清楚（待机 / 录音中 / 识别中 / 有结果 / 失败），录音与结果分区呈现。\r\n- **一起听**：房间状态卡、连接方式（中继 / 局域网 / P2P）、活跃房间、高级设置分层排布；\r\n  修掉了邀请输入框会把 `IP:端口` 里的标点吃掉的问题。\r\n- **首页 / 音乐库 / 搜索 / 设置 / 底部导航**：统一页头留白、字重、卡片与列表间距；\r\n  系统栏图标跟随应用深浅主题。\r\n\r\n### 修复\r\n- **竖屏封面遮挡**：封面位置原按整屏高度反推，未扣掉系统导航栏与手势留白，\r\n  小屏或大字体下会压到标题。改为读取真实面板尺寸，并补了屏高 / 密度 / 字体三组几何回归。\r\n- **自动旋转默认关闭**：设置注册表里的独立默认值也同步关掉，避免「设置页显示关、行为却开着」；\r\n  已明确保存过选择的用户不受影响。\r\n\r\n### 校验\r\n- JVM 单测 **3474 项 0 失败**（328 个测试类）\r\n- 独立后台模拟器 **8 项界面检查通过**：封面与标题实际边界、深浅色、1.5× 字体、\r\n  窄屏 320dp、局域网与 P2P 邀请输入\r\n- 签名 Release 包已完成 R8 优化；本版未操作真机，真实录音识别与双机一起听仍需自测\r\n\r\n### 下载\r\n- 官网直链：`https://arris.de5.net/dl/latest.apk`\r\n- 固定版本：`https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk`\r\n- SHA-256：`220031536e48b6f5a08956566b7fda21b92a8710f82b6302f3b033cbbf448bfa`\r\n",
    "assets": [
     {
@@ -93,6 +98,7 @@
    "prerelease": false,
    "published_at": "2026-10-30T16:42:09Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -110,6 +116,7 @@
    "prerelease": false,
    "published_at": "2026-10-29T20:31:49Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -127,6 +134,7 @@
    "prerelease": false,
    "published_at": "2026-10-29T16:55:43Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.13-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -150,6 +158,7 @@
    "prerelease": false,
    "published_at": "2026-10-27T14:53:02Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.10-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -173,6 +182,7 @@
    "prerelease": false,
    "published_at": "2026-10-27T14:07:37Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.9-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -196,6 +206,7 @@
    "prerelease": false,
    "published_at": "2026-10-26T18:46:28Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.8-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -219,6 +230,7 @@
    "prerelease": false,
    "published_at": "2026-10-26T06:40:05Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.7-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -242,6 +254,7 @@
    "prerelease": false,
    "published_at": "2026-10-25T04:52:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.6-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -265,6 +278,7 @@
    "prerelease": false,
    "published_at": "2026-10-25T04:24:55Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.5-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -288,6 +302,7 @@
    "prerelease": false,
    "published_at": "2026-10-25T04:00:15Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -311,6 +326,7 @@
    "prerelease": false,
    "published_at": "2026-10-25T03:30:49Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -334,6 +350,7 @@
    "prerelease": false,
    "published_at": "2026-10-25T04:02:40Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -357,6 +374,7 @@
    "prerelease": false,
    "published_at": "2026-10-24T07:34:13Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -380,6 +398,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T16:14:40Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -397,6 +416,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T15:07:44Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.9-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -414,6 +434,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T15:01:12Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.8-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -437,6 +458,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T13:59:24Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.7-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -460,6 +482,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T13:59:10Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.5-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -483,6 +506,7 @@
    "prerelease": false,
    "published_at": "2026-10-23T13:58:52Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -506,6 +530,7 @@
    "prerelease": false,
    "published_at": "2026-10-22T17:26:34Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -529,6 +554,7 @@
    "prerelease": false,
    "published_at": "2026-10-22T17:27:42Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -546,6 +572,7 @@
    "prerelease": false,
    "published_at": "2026-10-22T17:27:09Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -569,6 +596,7 @@
    "prerelease": false,
    "published_at": "2026-10-22T17:26:50Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.6.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -592,6 +620,7 @@
    "prerelease": false,
    "published_at": "2026-10-21T13:59:57Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.5.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -615,6 +644,7 @@
    "prerelease": false,
    "published_at": "2026-10-10T06:34:50Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.12-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -632,6 +662,7 @@
    "prerelease": false,
    "published_at": "2026-10-09T19:44:11Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.11-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -649,6 +680,7 @@
    "prerelease": false,
    "published_at": "2026-10-08T18:18:59Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.10-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -666,6 +698,7 @@
    "prerelease": false,
    "published_at": "2026-10-08T17:42:06Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.9-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -683,6 +716,7 @@
    "prerelease": false,
    "published_at": "2026-10-07T16:42:05Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.8-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -700,6 +734,7 @@
    "prerelease": false,
    "published_at": "2026-10-05T17:53:46Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.7-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -717,6 +752,7 @@
    "prerelease": false,
    "published_at": "2026-10-05T16:39:52Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.6-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -734,6 +770,7 @@
    "prerelease": false,
    "published_at": "2026-10-04T16:44:44Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.5-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -751,6 +788,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T19:37:01Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -768,6 +806,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T17:39:46Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -785,6 +824,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T16:50:18Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -802,6 +842,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T16:33:56Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -819,6 +860,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T16:06:45Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.4.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -836,6 +878,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T14:47:31Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.3.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -853,6 +896,7 @@
    "prerelease": false,
    "published_at": "2026-10-03T14:31:17Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.3.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -870,6 +914,7 @@
    "prerelease": false,
    "published_at": "2026-09-28T19:44:43Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.2.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -887,6 +932,7 @@
    "prerelease": false,
    "published_at": "2026-09-28T16:31:56Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.2.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -904,6 +950,7 @@
    "prerelease": false,
    "published_at": "2026-09-28T16:34:57Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.2.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -921,6 +968,7 @@
    "prerelease": false,
    "published_at": "2026-09-28T13:15:24Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.2.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -938,6 +986,7 @@
    "prerelease": false,
    "published_at": "2026-09-28T11:32:00Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.2.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -955,6 +1004,7 @@
    "prerelease": false,
    "published_at": "2026-09-27T19:36:21Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.1.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -972,6 +1022,7 @@
    "prerelease": false,
    "published_at": "2026-09-27T16:40:17Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.0.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -989,6 +1040,7 @@
    "prerelease": false,
    "published_at": "2026-09-27T16:39:06Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.9.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1006,6 +1058,7 @@
    "prerelease": false,
    "published_at": "2026-09-27T13:17:50Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.8.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1023,6 +1076,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T16:48:38Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.6.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1040,6 +1094,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T16:42:25Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.6.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1063,6 +1118,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T14:37:55Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.6.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1086,6 +1142,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T12:31:00Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.6-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1109,6 +1166,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T12:31:08Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.5-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1126,6 +1184,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T07:41:28Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1143,6 +1202,7 @@
    "prerelease": false,
    "published_at": "2026-09-26T07:19:05Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1166,6 +1226,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T13:49:44Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1189,6 +1250,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T13:24:34Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1212,6 +1274,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T13:24:40Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.5.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1235,6 +1298,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T11:57:54Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.4.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1258,6 +1322,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T09:38:11Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.3.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1281,6 +1346,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T08:46:23Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.2.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1298,6 +1364,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T08:46:33Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.2.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1315,6 +1382,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T05:50:56Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.1.6-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1338,6 +1406,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T05:51:11Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.1.5-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1361,6 +1430,7 @@
    "prerelease": false,
    "published_at": "2026-09-25T05:51:19Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.1.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1384,6 +1454,7 @@
    "prerelease": false,
    "published_at": "2026-09-24T19:05:25Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.1.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1407,6 +1478,7 @@
    "prerelease": false,
    "published_at": "2026-09-24T18:27:56Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.1.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1430,6 +1502,7 @@
    "prerelease": false,
    "published_at": "2026-09-24T17:03:59Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.0.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1453,6 +1526,7 @@
    "prerelease": false,
    "published_at": "2026-09-24T14:34:27Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.0.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1476,6 +1550,7 @@
    "prerelease": false,
    "published_at": "2026-09-24T13:58:05Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v2.0.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1499,6 +1574,7 @@
    "prerelease": false,
    "published_at": "2026-09-23T16:14:32Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.9.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1522,6 +1598,7 @@
    "prerelease": false,
    "published_at": "2026-09-23T15:48:30Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.9.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1545,6 +1622,7 @@
    "prerelease": false,
    "published_at": "2026-09-23T14:47:27Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.9.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1568,6 +1646,7 @@
    "prerelease": false,
    "published_at": "2026-09-23T14:24:25Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.9.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1591,6 +1670,7 @@
    "prerelease": false,
    "published_at": "2026-09-22T18:01:54Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.7.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1614,6 +1694,7 @@
    "prerelease": false,
    "published_at": "2026-09-22T16:15:34Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.6.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1637,6 +1718,7 @@
    "prerelease": false,
    "published_at": "2026-09-22T15:51:35Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.6.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1660,6 +1742,7 @@
    "prerelease": false,
    "published_at": "2026-09-22T15:03:11Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.5.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1683,6 +1766,7 @@
    "prerelease": false,
    "published_at": "2026-09-22T13:44:33Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.5.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1700,6 +1784,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T19:43:38Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.5.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1723,6 +1808,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T19:10:27Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.4.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1740,6 +1826,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T18:59:00Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.4.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1757,6 +1844,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T18:17:33Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.4.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1774,6 +1862,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T17:26:33Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.3.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1791,6 +1880,7 @@
    "prerelease": false,
    "published_at": "2026-09-21T14:49:04Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.2.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1808,6 +1898,7 @@
    "prerelease": false,
    "published_at": "2026-09-20T17:58:23Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.1.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1825,6 +1916,7 @@
    "prerelease": false,
    "published_at": "2026-09-20T17:40:38Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.1.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
@@ -1842,6 +1934,7 @@
    "prerelease": false,
    "published_at": "2026-09-20T17:14:12Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v1.0.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
    "body": "",
    "assets": [
     {
