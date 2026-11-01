@@ -2954,7 +2954,21 @@ fun MainScreen(
     if (showAbout) {
         AboutScreen(
             onBack = { showAbout = false },
-            onOpenUpdate = { showUpdate = true }
+            onOpenUpdate = { showUpdate = true },
+            // 彩蛋「推荐一首」：直接进播放队列（与搜索/歌单同一套播放入口）
+            onPlaySong = { song: com.takahashirinta.ncrust.network.SongItem ->
+                playerViewModel.playSong(
+                    song.id,
+                    title = song.name,
+                    artist = song.artists?.joinToString(" / ") { it.name }.orEmpty(),
+                    artworkUrl = song.album?.picUrl.orEmpty(),
+                    sourceKey = song.source,
+                    sourceId = song.sourceId,
+                    mediaId = song.mediaId,
+                    privilege = song.privilege,
+                )
+                showAbout = false
+            },
         )
         return
     }
