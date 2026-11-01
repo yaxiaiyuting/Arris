@@ -78,7 +78,20 @@ object TogetherSession {
 
     /** 进度与「按上次快照推算的位置」偏差超过它就算跳变（seek），立刻补发。 */
     private const val DRIFT_SEND_MS = 400L
-    private const val SEEK_TOLERANCE_MS = 800L
+
+    /**
+     * 成员侧的**漂移容忍窗口**（v3.8.14）。
+     *
+     * 800ms 太紧：网络抖动 + 房主时间戳误差就能超过，成员会被反复纠正成「一直暂停」。
+     * 5 秒内的差异一律不动 —— 人耳在这个量级基本听不出不同步。
+     */
+    private const val SEEK_TOLERANCE_MS = 5_000L
+
+    /** 超过这个偏差才算真的走远，强制对齐（此前会一直忍着）。 */
+    private const val HARD_RESYNC_MS = 12_000L
+
+    /** 房主的播放/暂停态要连续这么多次快照一致，才跟着改（防瞬时缓冲导致成员被暂停）。 */
+    private const val TRANSPORT_CONFIRMATIONS = 2
 
     /** 界面诊断区保留的行数。 */
     private const val DIAG_LINES = 8
@@ -411,6 +424,10 @@ object TogetherSession {
 
     // ---------------------------------------------------------------- 成员
 
+    /** 传输态去抖：记录待确认的「房主播放态」与已连续看到它的次数。 */
+    private var pendingTransportPlaying: Boolean? = null
+    private var pendingTransportCount = 0
+
     private fun followSnapshot(state: RoomState) {
         val src = source ?: return
         // 当前曲目以 currentRoomTrackId 为准（队列第一位是当前歌，后面可能跟着下一首）
@@ -438,10 +455,37 @@ object TogetherSession {
             _status.value = "房主在放：${remote.title}"
             return
         }
-        if (FollowPolicy.needsSeek(local, remote, SEEK_TOLERANCE_MS)) {
-            src.follow(local!!.copy(positionMs = target, playing = state.transport.playing))
-        } else if (FollowPolicy.needsTransportFix(local, remote)) {
-            src.follow(local!!.copy(playing = state.transport.playing))
+        // 1) 播放/暂停态：房主的状态要连续确认两次才跟随，避免它缓冲一下就把成员也停掉。
+        if (FollowPolicy.needsTransportFix(local, remote)) {
+            if (pendingTransportPlaying == remote.playing) {
+                pendingTransportCount++
+            } else {
+                pendingTransportPlaying = remote.playing
+                pendingTransportCount = 1
+            }
+            if (pendingTransportCount >= TRANSPORT_CONFIRMATIONS) {
+                trace("跟随播放态", "playing=${remote.playing}（连续 $pendingTransportCount 次）")
+                src.follow(local!!.copy(playing = remote.playing))
+                pendingTransportPlaying = null
+                pendingTransportCount = 0
+            }
+            return
+        }
+        pendingTransportPlaying = null
+        pendingTransportCount = 0
+
+        // 2) 位置：容差窗口内完全不动；超窗才纠正，超过硬阈值强制对齐。
+        val drift = kotlin.math.abs(remote.positionMs - local!!.positionMs)
+        when {
+            drift <= SEEK_TOLERANCE_MS -> Unit
+            drift >= HARD_RESYNC_MS -> {
+                trace("强制对齐", "偏差 ${drift}ms ≥ ${HARD_RESYNC_MS}ms")
+                src.follow(local.copy(positionMs = target, playing = remote.playing))
+            }
+            else -> {
+                trace("温和纠正进度", "偏差 ${drift}ms（窗口 ${SEEK_TOLERANCE_MS}ms）")
+                src.follow(local.copy(positionMs = target))
+            }
         }
     }
 

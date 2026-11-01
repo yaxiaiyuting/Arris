@@ -1,7 +1,7 @@
 // 由 tools/sync-dl-manifest.mjs 生成；改动了 public/dl/*.apk 之后重跑一次。
 export const HOSTED_APK = [
   "Arris-v3.7.20-gpl.apk",
-  "Arris-v3.8.12-gpl.apk",
+  "Arris-v3.8.13-gpl.apk",
   "latest.apk",
   "lts-latest.apk"
 ];
@@ -9,7 +9,7 @@ export const HOSTED_APK = [
  * content-length 也不认 Range，只能靠部署时算好。 */
 export const DL_SIZE = {
   "Arris-v3.7.20-gpl.apk": 12138240,
-  "Arris-v3.8.12-gpl.apk": 16069004,
+  "Arris-v3.8.13-gpl.apk": 16069004,
   "latest.apk": 16069004,
   "lts-latest.apk": 12138240
 };
