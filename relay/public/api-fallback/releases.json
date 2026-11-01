@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-01T17:40:49.511Z",
+ "generatedAt": "2026-11-01T17:47:32.427Z",
  "releases": [
+  {
+   "tag_name": "v3.8.16-gpl",
+   "name": "Arris v3.8.16-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T17:41:56Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.16-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.16-gpl（versionCode 136）\n\n### 彩蛋里能推荐一首了\n\n自由听众席（关于页版本号连点七次）原来只有标题和「继续听歌」，点开没什么可做的。\n现在：\n\n- 从**你自己的收藏**里随机挑一首（连续两次不重复），显示「为你推荐 / 歌名 / 艺人」\n- **就听这首** 直接进播放队列（与搜索、歌单同一个播放入口）\n- **换一首** 换下一首推荐\n- 收藏为空时如实提示「收藏里还没有歌，先去挑一首吧」，不假装推荐\n\n### 网络客户端统一接管：`AppHttp`\n\n「本机 IPv6 到外网完全不通」这个坑，我们手动补了六次 `dns` ——\nncm 取链 → 音频流 → B站 → 检查更新 → 应用内下载 → **封面/艺人/专辑图**。\n每次都是有人新建了一个裸 `OkHttpClient.Builder()`。\n\n现在把默认值收进 `network/AppHttp`：\n\n```kotlin\nAppHttp.builder()   // 已带：IPv4 优先 DNS、连接 8s / 读 15s、retryOnConnectionFailure、共享连接池\n```\n\n- **15 个文件 18 处** builder 全部改走它；主源码里裸 `OkHttpClient.Builder()` 绝迹\n- 补齐此前漏掉的客户端：**Coil**（封面/艺人头像/专辑图）、QqClient×2、QqQrClient、\n  MqttWebSocketTransport、NeteaseRecognizeProvider、163cn.tv 短链 HEAD\n- 防回归：`HttpClientDnsAuditTest` 扫描源码，裸建即红；\n  `AddressPreference.ipv4First` 改成具名类 `IPv4FirstDns`，测试可断言「默认客户端确实用了它」\n\n### 校验\n\n- 全量 JVM 单测 **3505 项 0 失败**\n",
+   "assets": [
+    {
+     "id": 699039247,
+     "name": "Arris-v3.8.16-gpl.apk",
+     "size": 16085384,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.15-gpl",
    "name": "Arris v3.8.15-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-01T09:14:59Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.9-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.9-gpl（versionCode 129）\r\n\r\n### 修：取链 0.7 秒，播放却卡十几秒才出声\r\n\r\n真机日志：\r\n\r\n```\r\nNcrustHttpTiming: path=/eapi/.../player/url/v1  ttfb=264ms  total=411ms\r\nSongUrlFetcher:   level=jymaster ok in 745ms\r\nMediaSession:     state=BUFFERING(6) position=138024 buffered=138024 speed=0.0\r\n```\r\n\r\nURL 拿到了、播放器进了 BUFFERING，但音频**一个字节都没下来**。\r\n\r\n根因在音频流的数据源：media3 默认的 `DefaultHttpDataSource` 底层是 `HttpURLConnection`——\r\n\r\n1. 不认我们的 DNS 策略（代理 fake-ip、坏的 IPv6 地址照样往上连）；\r\n2. **没有读超时** —— 半死连接只能等系统 TCP 超时（分钟级）；\r\n3. 连接池不归我们管 —— `evictConnections()` 清不到它，网络切换后旧连接继续被复用。\r\n\r\n网络一变（开关代理 / 后台唤醒），音频流就挂在那条半死连接上。\r\n\r\n改为 `OkHttpDataSource`：\r\n\r\n| 项 | 值 |\r\n|---|---|\r\n| DNS | `AddressPreference.ipv4First` |\r\n| 连接超时 | 6s |\r\n| 读超时 | **10s**（半死连接 10s 内报错，交给 ExoPlayer 换新连接） |\r\n| 连接保活 | `pingInterval(15s)` |\r\n| 连接池 | 独立，网络变化 / 回前台时 `MediaHttp.evict()` 一并清 |\r\n\r\n### 一并包含（3.8.5–3.8.8）\r\n\r\n- 检查更新修好（资产名规则过时，此前永远「已是最新」）+ 裸连可用的三级取数\r\n- 代理开关后未缓存的歌放不出来（清 JVM DNS 缓存）\r\n- 回前台 ≥10s 自动刷新（清池 + 预热当前曲目）\r\n- 首次取链提速（降级档位按账户记忆）\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3497 项 0 失败**\r\n- 16 KB page 合规（`p_align=0x4000`、`.so` 未压缩、`zipalign -P 16` 通过）\r\n",
+   "body": "",
    "assets": [
     {
      "id": 697709049,
@@ -120,9 +138,9 @@
    "body": "",
    "assets": [
     {
-     "id": 698746318,
-     "name": "Arris-v3.7.20-gpl.apk",
-     "size": 12138240,
+     "id": 699052459,
+     "name": "Arris-v3.7.21-gpl.apk",
+     "size": 12154624,
      "browser_download_url": ""
     }
    ]
