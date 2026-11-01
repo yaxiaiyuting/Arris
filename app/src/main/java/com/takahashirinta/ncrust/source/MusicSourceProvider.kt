@@ -124,6 +124,14 @@ interface MusicSourceProvider {
         return if (result != null) {
             ResolveOutcome.ok(result)
         } else {
+            // v3.8.17：这里以前是**静默**返回 UNKNOWN —— 真机上只看到
+            // 「no playable url ... kind=UNKNOWN code=-」，既没有网络请求也没有原因，
+            // 排查时完全看不出「是这个音源被关掉了 / 没登录」还是「接口失败」。
+            android.util.Log.w(
+                "MusicSourceProvider",
+                "resolveUrl returned null source=${source.key} id=${song.id} level=$level " +
+                    "（可能是该音源未启用、未登录，或该档位没有可播 URL）",
+            )
             ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, source)
         }
     }

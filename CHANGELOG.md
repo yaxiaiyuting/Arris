@@ -12,6 +12,14 @@
 - **分段下载**：4 段并发 + 任一段失败回落单流（服务端 `/get/` 支持 Range）。
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
+## v3.8.17-gpl — 音源不可播不再静默（2026-11-02）
+
+- `MusicSourceProvider.resolveUrlOutcome` 在 provider 返回 null 时补一条 W 级日志：
+  `resolveUrl returned null source=… id=… level=…（可能是该音源未启用、未登录，或该档位没有可播 URL）`。
+  此前这里直接构造 `UNKNOWN` 且不打日志，真机上只剩一行 `no playable url … code=-`，无法定位。
+- 记录：本轮 B站/QQ 失效的真实根因是**设备端 `ncrust_settings.xml` 被清空**
+  （`bilibili_enabled` 丢失 ⇒ B站按设计默认关闭；QQ 亦受影响），已恢复并验证。
+
 ## v3.8.16-gpl — 彩蛋推荐 + 网络客户端统一接管（2026-11-02）
 
 - **彩蛋「推荐一首」**：自由听众席里从**本地收藏**随机挑一首（连续两次不重复），
