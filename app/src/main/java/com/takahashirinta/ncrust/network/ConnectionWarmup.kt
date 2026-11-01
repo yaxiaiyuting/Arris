@@ -125,6 +125,19 @@ object ConnectionWarmup {
      * 并发上限走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]：三个 host 用不上 4，
      * 但走同一个原语是为了让「并发上限只有一处定义」（本仓库的既有纪律）。
      */
+    /**
+     * 预热单个 host（v3.8.7）。
+     *
+     * 取链成功后才拿到的**音频 CDN host**（`m*.music.126.net` 之类）不在固定清单里，
+     * 但它是真正要建连下音频的那一个。回到前台/切歌时把它热一下，
+     * 冷启动那次「点播放要等一下」会小很多。
+     */
+    suspend fun warmHost(host: String) {
+        if (host.isBlank()) return
+        runCatching { warmOne("https://$host/") }
+            .onFailure { Log.d(TAG, "warmHost($host) skipped: ${it.javaClass.simpleName}") }
+    }
+
     suspend fun warmUp() {
         // lambda 必须显式标注成 suspend：`runAll` 收的是 `suspend () -> T?`，
         // 而这里要调 `warmOne`（suspend）。让类型推断去猜会得到一个非挂起的 lambda。
