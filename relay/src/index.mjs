@@ -119,12 +119,15 @@ export default {
       //   3. 部署时生成的静态快照 `public/api-fallback/releases.json` —— GitHub 挂了也能检查更新。
       const cacheKey = new URL("/api/releases", url.origin).toString();
       const cache = caches.default;
+      const bypass = url.searchParams.get("nocache") === "1";
       let list = null;
       let source = "cache";
 
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        list = (await cached.json()).releases ?? null;
+      if (!bypass) {
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          list = (await cached.json()).releases ?? null;
+        }
       }
 
       if (!Array.isArray(list)) {
