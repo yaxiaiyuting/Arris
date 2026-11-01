@@ -71,5 +71,15 @@
   "retainedDownloads": {
     "mainline": "3.8.11",
     "lts": "3.7.20"
+  },
+  "browserLive": {
+    "showcase": true,
+    "releaseCards": 4,
+    "mainlineLabel": "ARRIS / 3.8.11",
+    "screenshotDialog": "opens, closes, returns focus",
+    "horizontalOverflow": false,
+    "consoleWarningsErrors": [],
+    "videoPaused": true,
+    "videoPreload": "none"
   }
 }
