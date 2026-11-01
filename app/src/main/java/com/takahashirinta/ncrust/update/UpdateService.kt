@@ -433,7 +433,7 @@ object UpdateService {
                 val text = response.body?.string() ?: return null
                 text to nextPageUrl(response.header("Link"))
             }
-            pages += body
+            pages += normalizePage(body)
             url = next
         }
         android.util.Log.i(
