@@ -511,8 +511,8 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 104
-        versionName = "3.7.17-gpl"
+        versionCode = 105
+        versionName = "3.7.18-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -604,6 +604,9 @@ dependencies {
     // v1.6.0 · D1：离线缓存（SimpleCache / CacheDataSource / StandaloneDatabaseProvider）。
     // 这两个之前是 media3-exoplayer 的传递依赖，显式声明以免上游改依赖树时静默消失。
     implementation("androidx.media3:media3-datasource:1.5.0")
+    // 音频流走 OkHttp：默认 DefaultHttpDataSource 用 HttpURLConnection，没有读超时、
+    // 不认我们的 DNS 策略、连接池也不受 evictConnections 管理。
+    implementation("androidx.media3:media3-datasource-okhttp:1.5.0")
     implementation("androidx.media3:media3-database:1.5.0")
     implementation("androidx.media3:media3-session:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")

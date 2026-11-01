@@ -127,6 +127,7 @@ object UpdateService {
     // APK 资产地址改写到 /get/；GitHub 原接口作兜底。
     private val RELEASES_SOURCES = listOf(
         "https://arris.de5.net/api/releases",
+        "https://arris.de5.net/api-fallback/releases-array.json",
         "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
     )
 
