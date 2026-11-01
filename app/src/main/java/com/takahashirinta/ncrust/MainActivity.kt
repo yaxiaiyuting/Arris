@@ -473,8 +473,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        com.takahashirinta.ncrust.network.AppForegroundTracker.onBackground()
+    }
+
     override fun onResume() {
         super.onResume()
+        com.takahashirinta.ncrust.network.AppForegroundTracker.onForeground()
         // 回前台且距上次判定 ≥ 30 分钟才复核（登录失效最常见的时间窗就是"隔天再打开"）。
         SessionMonitor.onResume(this)
     }

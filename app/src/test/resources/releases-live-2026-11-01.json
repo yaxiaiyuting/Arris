@@ -1,0 +1,53 @@
+[
+ {
+  "tag_name": "v3.8.4-gpl",
+  "name": "Arris v3.8.4-gpl",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-31T16:58:41Z",
+  "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.4-gpl",
+  "body": "## v3.8.4-gpl（versionCode 124）\r\n\r\n两个「网络相关」的修复，都来自真机反馈。\r\n\r\n### 开关代理后，未缓存的歌放不出来\r\n\r\n**现象**：开/关 Clash 一类 TUN 代理之后，已缓存的歌还能放，未缓存的歌直接取链失败、跳歌。\r\n\r\n**原因不在连接池**（那条路一直在 `evictAll()`），在 **JVM 的 DNS 解析缓存**：\r\n\r\n- 代理开：fake-ip 模式把域名解析成 `198.18.0.0/15`，由 TUN 接管；\r\n- 代理关：解析回真实 IP；\r\n- `InetAddress` 的进程内缓存**不随网络切换失效**，于是关掉代理后的一段时间里，取链仍往假地址上连 —— 不可达。\r\n- 已缓存的歌走本地文件、不经过解析，所以现象正好是「只有新歌不行」。\r\n\r\n修复：新增 `network/DnsCache`（反射调 `InetAddress.clearDnsCache()`，失败只记日志），\r\n在网络切换处理链与取链重试两处都清一次；`onNetworkRouteChanged()` 顺带清空传输失败记录。\r\n覆盖「只是切了代理模式、默认网络没变」的情况。\r\n\r\n### 应用内检查更新不再依赖 GitHub\r\n\r\n`api.github.com` 在国内经常裸连失败，之前会一直提示「检查更新失败」。现在首选\r\n`https://arris.de5.net/api/releases`（由 Worker 代取 GitHub，并把托管在本站的 APK 地址改写到\r\n`/get/`），GitHub 原接口只作兜底。\r\n\r\n同时新增**发布通道**判定：3.7.x 只看到 3.7.x 与 `lts-3.7`，主线看普通版本条目 —— 避免\r\nAndroid 7 用户被推一个 `minSdk 29` 装不上的包。\r\n\r\n### 官网直链支持断点续传\r\n\r\n`https://arris.de5.net/get/latest.apk` 支持 `Range`（206），可用 aria2 `-x8 -s8` / IDM 多线程。\r\n`/dl/latest.apk` 是同一份包的静态直出，最简单但不支持续传。\r\n\r\n### 校验\r\n\r\n- 全量 JVM 单测 **3482 项 0 失败**\r\n- 与 3.8.3 同一证书，可直接覆盖安装\r\n- SHA-256：见附件页面（官网上是同一个包）\r\n",
+  "assets": [
+   {
+    "id": 695929807,
+    "name": "Arris-v3.8.4-gpl.apk",
+    "size": 16052616,
+    "browser_download_url": "https://arris.de5.net/dl/Arris-v3.8.4-gpl.apk"
+   }
+  ]
+ },
+ {
+  "tag_name": "v3.8.3-gpl",
+  "name": "Arris v3.8.3-gpl",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-31T13:23:08Z",
+  "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.3-gpl",
+  "body": "## v3.8.3-gpl（versionCode 123）\r\n\r\n这一版把新官网的视觉语言搬进应用，并修掉竖屏封面的遮挡问题。\r\n\r\n### 界面重构（对齐官网 arris.de5.net）\r\n- **配色**：米白纸感底色 + 深松绿主色 + 鼠尾草绿点缀，深色模式与主题色选择保留。\r\n- **听歌识曲**：状态更清楚（待机 / 录音中 / 识别中 / 有结果 / 失败），录音与结果分区呈现。\r\n- **一起听**：房间状态卡、连接方式（中继 / 局域网 / P2P）、活跃房间、高级设置分层排布；\r\n  修掉了邀请输入框会把 `IP:端口` 里的标点吃掉的问题。\r\n- **首页 / 音乐库 / 搜索 / 设置 / 底部导航**：统一页头留白、字重、卡片与列表间距；\r\n  系统栏图标跟随应用深浅主题。\r\n\r\n### 修复\r\n- **竖屏封面遮挡**：封面位置原按整屏高度反推，未扣掉系统导航栏与手势留白，\r\n  小屏或大字体下会压到标题。改为读取真实面板尺寸，并补了屏高 / 密度 / 字体三组几何回归。\r\n- **自动旋转默认关闭**：设置注册表里的独立默认值也同步关掉，避免「设置页显示关、行为却开着」；\r\n  已明确保存过选择的用户不受影响。\r\n\r\n### 校验\r\n- JVM 单测 **3474 项 0 失败**（328 个测试类）\r\n- 独立后台模拟器 **8 项界面检查通过**：封面与标题实际边界、深浅色、1.5× 字体、\r\n  窄屏 320dp、局域网与 P2P 邀请输入\r\n- 签名 Release 包已完成 R8 优化；本版未操作真机，真实录音识别与双机一起听仍需自测\r\n\r\n### 下载\r\n- 官网直链：`https://arris.de5.net/dl/latest.apk`\r\n- 固定版本：`https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk`\r\n- SHA-256：`220031536e48b6f5a08956566b7fda21b92a8710f82b6302f3b033cbbf448bfa`\r\n",
+  "assets": [
+   {
+    "id": 695402064,
+    "name": "Arris-v3.8.3-gpl.apk",
+    "size": 16052616,
+    "browser_download_url": "https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk"
+   }
+  ]
+ },
+ {
+  "tag_name": "lts-3.7",
+  "name": "LTS 3.7.x · 长期维护线（滚动更新）",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-31T13:36:47Z",
+  "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
+  "body": "# LTS 3.7.x · 长期维护线（滚动更新）\n\n这条 Release **不是某个具体版本**，而是 LTS 线的**固定入口**：每次 LTS 出包都会替换下面这些附件，\n版本号看附件文件名。本页不会被标记为 Latest，也不会顶掉主线的「最新版」徽章。\n\n## 当前 LTS 版本：`v3.7.15-gpl`（versionCode 102）\n\n| 项 | 值 |\n|---|---|\n| 最低系统 | **Android 7.0（minSdk 24）** —— 想装 3.8.x 需要 Android 10+ |\n| 附件 | `Arris-v3.7.15-gpl.apk`（≈ 12 MB） |\n| 官网直链 | `https://arris.de5.net/get/lts-latest.apk`（支持断点续传/多线程，永远指向最新 LTS） |\n| 旧版 | `v3.7.14-gpl`、`v3.7.13-gpl` 仍在 Releases 里，可回退 |\n\n## 本版（3.7.15）回移的内容\n\n- **开关代理后未缓存的歌放不出来**：代理的 fake-ip（`198.18.0.0/15`）与真实 IP 是两套解析结果，\n  而 JVM 的 DNS 缓存不随网络切换失效 —— 关掉代理后取链仍往假地址上连。\n  新增 `DnsCache`（反射清缓存）并在网络切换与取链重试两处调用。\n- **检查更新不再依赖 GitHub**：首选 `https://arris.de5.net/api/releases`，\n  GitHub 原接口仅作兜底；`api.github.com` 在国内经常裸连失败。\n- **按发布通道过滤**：3.7.x 只看到 3.7.x 与 `lts-3.7`，不会被推 `minSdk 29` 的 3.8.x。\n\n## LTS 线的取舍\n\nLTS **只回移「设备兼容 / 正确性」修复，不带新功能**：\n\n- ✅ 会回移：竖屏封面遮挡、自动旋转默认值、地址族回退、主线程 socket 崩溃、DNS 缓存、视觉统一\n- ❌ 不回移：听歌识曲、一起听（依赖 3.8 的协议与后端，且在 Android 7 设备上没有验证过）\n\n## 校验\n\n- 全量 JVM 单测 **3399 项 0 失败**\n- 与 3.8.x 同一证书（`CN=Ncrust, OU=Dev, O=Ncrust`），可直接覆盖安装\n",
+  "assets": [
+   {
+    "id": 695939734,
+    "name": "Arris-v3.7.15-gpl.apk",
+    "size": 12121852,
+    "browser_download_url": "https://arris.de5.net/dl/Arris-v3.7.15-gpl.apk"
+   }
+  ]
+ }
+]
