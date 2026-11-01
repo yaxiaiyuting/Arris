@@ -208,6 +208,17 @@ object SongUrlFetcher {
     // Returns null when no level yields a playable URL (e.g. VIP-only song without a
     // subscription, or no valid session). Callers must skip the song instead of playing.
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? = withContext(Dispatchers.IO) {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        // fetch timing：回来第一次取链如果卡，日志里能直接看到是哪一段耗的（毫秒）。
+        Log.i(TAG, "fetch start songId=$songId level=$level sinceForeground=${com.takahashirinta.ncrust.network.AppForegroundTracker.sinceForegroundMs()}ms")
+        try {
+            return@withContext fetchInner(songId, level)
+        } finally {
+            Log.i(TAG, "fetch end songId=$songId elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms")
+        }
+    }
+
+    private suspend fun fetchInner(songId: Long, level: String): SongUrlResult? = withContext(Dispatchers.IO) {
         com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
         transportFailures.remove(songId)
         if (coolingDown()) {
