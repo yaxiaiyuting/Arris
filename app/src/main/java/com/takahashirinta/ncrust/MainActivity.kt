@@ -2281,6 +2281,7 @@ fun MainScreen(
     }
 
     fun expandCard() {
+        android.util.Log.i("diagTap", "expandCard()")
         coroutineScope.launch {
             progress.animateTo(1f, tween(400, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)))
         }
@@ -3413,6 +3414,7 @@ fun MainScreen(
                 collapseCard()
             },
             onSongInfoClick = {
+                android.util.Log.i("diagTap", "onSongInfoClick()")
                 // 全屏播放器点歌名: 上拉"转到歌手/转到专辑"菜单(复用长按菜单 sheet)
                 currentSong?.let { menuSong = it; menuSongActions = emptyList() }
             },

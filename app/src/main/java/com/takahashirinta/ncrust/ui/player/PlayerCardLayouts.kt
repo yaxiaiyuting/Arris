@@ -74,6 +74,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.i18n.Strings
@@ -487,6 +488,11 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    // 4.0.0：**必须抬 z**。同一父 Box 里后面声明的「歌名/歌手」块是
+                    // `.fillMaxWidth()` 的整行点击区，绘制与命中都在这个按钮之上 ——
+                    // 真机表现：点右下角播放键，命中的是 onSongInfoClick（弹"转到歌手/专辑"），
+                    // 只有最右侧 16dp 边距那一小条能点到按钮。
+                    .zIndex(2f)
                     .padding(end = 16.dp, bottom = 16.dp)
                     .size(56.dp)
                     .background(LocalMetroColors.current.surfaceVariant)
@@ -495,6 +501,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
+                        android.util.Log.i("diagTap", "floatingPlayButton -> onPlayPause()")
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onPlayPause()
                     },
