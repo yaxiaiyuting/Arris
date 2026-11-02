@@ -525,8 +525,8 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 200
-        versionName = "4.0.0-gpl"
+        versionCode = 201
+        versionName = "4.0.1-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -625,11 +625,11 @@ dependencies {
     implementation("androidx.media3:media3-session:1.9.0")
     implementation("androidx.media3:media3-ui:1.9.0")
 
-    // FFmpeg 软件音频解码扩展（Jellyfin 构建，GPL-3.0，与本项目 GPLv3 兼容）。
-    // 目的：API 24–26（Android 7.0/7.1）系统只带 OMX.google.flac.encoder，
-    // 没有 FLAC 解码器，无损档位只能降级到 mp3；随包带 FFmpeg 后即可真正解 FLAC。
-    // 覆盖 arm64-v8a / armeabi-v7a / x86 / x86_64 四个 ABI。
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
+    // 4.0.1：**主线不再随包分发 FFmpeg 软解扩展**。
+    // 它唯一的作用是给"平台没有 FLAC 解码器"的设备兜底（旧实现：API 24–26 的 ROM）。
+    // 主线 minSdk 已是 29（Android 10），平台自带 FLAC/Opus/AAC 解码，音源给的也都是
+    // flac/mp3/m4a —— 这块 5.58 MB（占 APK 34%）换不到任何实际能力。
+    // LTS（minSdk 24）仍保留，那边 24–26 真的可能缺解码器。
 
     // Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
