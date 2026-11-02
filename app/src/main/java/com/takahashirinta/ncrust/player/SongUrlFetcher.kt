@@ -15,7 +15,6 @@ package com.takahashirinta.ncrust.player
 
 import android.media.MediaCodecList
 import android.os.Build
-import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.account.FreeTrialInfo
@@ -133,29 +132,21 @@ object SongUrlFetcher {
     }
 
     /**
-     * 随包分发的 FFmpeg 软件解码扩展（org.jellyfin.media3:media3-ffmpeg-decoder，GPL-3.0）。
-     * isAvailable() 只在对应 ABI 的 libffmpegJNI.so 真正加载成功时返回 true。
+     * 本机能否真正解码 FLAC。
+     *
+     * 4.0.1：主线（minSdk 29）**只认平台解码器** —— 随包 FFmpeg 扩展已移除。
+     * 依据：Android 10 起平台自带 FLAC 解码，而音源给的也是 flac/mp3/m4a；
+     * 那 5.58 MB 原生库（占 APK 34%）在主线换不到任何实际能力（LTS 仍保留）。
      */
-    private val ffmpegExtensionAvailable: Boolean by lazy {
-        runCatching { FfmpegLibrary.isAvailable() }.getOrDefault(false)
-    }
-
-    /**
-     * 本机能否真正解码 FLAC：**平台解码器或 FFmpeg 扩展，有其一即可**。
-     * 因此 API 24–26 也能走无损档位，不再被静默跳过。
-     */
-    private val deviceCanDecodeFlac: Boolean by lazy {
-        platformFlacDecoder || ffmpegExtensionAvailable
-    }
+    private val deviceCanDecodeFlac: Boolean by lazy { platformFlacDecoder }
 
     init {
         // 实测无损是否真的可解时，这一行是唯一权威依据（尤其 API 24–26 与各种 ROM）。
         Log.i(
             TAG,
             "FLAC capability: platformDecoder=$platformFlacDecoder " +
-                "ffmpegExtension=$ffmpegExtensionAvailable " +
-                "ffmpegVersion=" + runCatching { FfmpegLibrary.getVersion() }.getOrDefault("n/a") +
-                " => canDecodeFlac=$deviceCanDecodeFlac"
+                "ffmpegExtension=removed(4.0.1, minSdk29) " +
+                "=> canDecodeFlac=$deviceCanDecodeFlac"
         )
     }
 
