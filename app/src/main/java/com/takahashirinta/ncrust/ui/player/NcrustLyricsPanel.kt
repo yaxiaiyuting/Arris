@@ -527,7 +527,9 @@ fun NcrustLyricsPanel(
                 // 刻意不写成 `fontSize * 1f`：这样"关掉开关 ⇒ 渲染表达式与 v1.9.3 一致"
                 // 是可以逐行审计的，而不是"值相等但 diff 变了"。
                 // 译文/音译同乘同一个倍率 ⇒ 三层比例恒定（与 A-/A+ 的做法一致）。
-                val lineScale = line.fontScale
+                // 4.0.0：**当前行不叠加动态字号**。它已经有聚焦放大动画，再乘 1.15 会让这一句
+                // 折行 → 行高变化 → 面板按"整块居中"重新摆放时看起来整段偏离中心。
+                val lineScale = if (index == currentIndex) 1f else line.fontScale
                 val lineFontSize = if (lineScale == 1f) fontSize else fontSize * lineScale
                 val lineLineHeight = if (lineScale == 1f) lineHeight else lineHeight * lineScale
                 val lineTranslationFontSize =

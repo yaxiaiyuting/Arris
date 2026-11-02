@@ -69,6 +69,8 @@ import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
@@ -123,6 +125,9 @@ fun HomeScreen(
     // E（方案 2 瘦身版）：榜单入口。走 ContentCache 的 15s freshness 窗口 —— warmup/上次
     // 访问刚拉过就不再请求；卡片放在首屏，但请求不阻塞其它分节渲染（拿不到就整块不显示）。
     var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
+    // 4.0.0：榜单卡用「榜一那首歌」的专辑图当封面（用户认的是歌，不是榜单拼贴图）。
+    // 一次 /api/playlist/detail 就够；限制并发 3、只补前 12 个榜单，失败就退回原封面。
+    val firstSongCovers = remember { androidx.compose.runtime.mutableStateMapOf<Long, String>() }
     /**
      * H15：一次首页请求**发出时**的会话归属，用来挡住"换号之后才到达"的旧响应。
      *
@@ -183,6 +188,32 @@ fun HomeScreen(
         }
     }
 
+    /**
+     * 4.0.0：给榜单卡补「首曲封面」。
+     *
+     * 只在内存里缓存（进程级），不落盘：它是纯展示优化，重启后重拉一次的成本很低
+     * （每个榜单一次明文 GET）。失败静默 —— 榜单原本的拼贴封面照常显示。
+     */
+    fun loadChartCovers(charts: List<PlaylistApi.PlaylistCard>) {
+        val pending = charts.take(12).filter { firstSongCovers[it.id] == null }
+        if (pending.isEmpty() || !NetworkAvailability.isOnline(context)) return
+        coroutineScope.launch(Dispatchers.IO) {
+            // 分批（每批 3 个）串行推进：首页不要因为补封面把连接池占满（每张一次明文 GET）。
+            pending.chunked(3).forEach { chunk: List<PlaylistApi.PlaylistCard> ->
+                val fetched = kotlinx.coroutines.coroutineScope {
+                    chunk.map { chart ->
+                        async {
+                            chart.id to runCatching { PlaylistApi.getChartFirstSongCover(chart.id) }.getOrNull()
+                        }
+                    }.awaitAll()
+                }
+                withContext(Dispatchers.Main) {
+                    fetched.forEach { (id, cover) -> if (cover != null) firstSongCovers[id] = cover }
+                }
+            }
+        }
+    }
+
     /** v1.5.1 · C：把当前首页状态落盘（异步、失败无害），供下次无网冷启动使用。 */
     fun persistHomeSnapshot() {
         HomeSnapshot.save(
@@ -216,6 +247,15 @@ fun HomeScreen(
         }
     }
 
+    /**
+     * 4.0.0：该换批时自动换（每天 6:00 之后首次进入首页）。
+     * 只在"缓存里的日推日 ≠ 当前日推日"时发一次请求，其它时候零开销。
+     */
+    fun maybeAutoRefreshDaily() {
+        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context)) return
+        if (!NetworkAvailability.isOnline(context)) return
+        loadDailySongs()
+    }
     fun loadPlaylists() {
         val ownerAtStart = CookieManager.accountOwner()
         coroutineScope.launch(Dispatchers.IO) {
@@ -272,7 +312,14 @@ fun HomeScreen(
         }
         offline = false
         isLoading = true
-        loadDailySongs()
+        // 4.0.0：日推按天换批 —— 该换才发请求，否则直接用缓存，避免每次进首页白打一次接口。
+        maybeAutoRefreshDaily()
+        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context) &&
+            dailySongs.isEmpty()
+        ) {
+            // 缓存是今天这一批但内存里还没内容（如刚清过缓存）：正常拉一次，不标记为"换批"。
+            loadDailySongs()
+        }
         loadPlaylists()
         loadNewSongs()
         val ownerAtStart = CookieManager.accountOwner()
@@ -280,7 +327,10 @@ fun HomeScreen(
             runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
                 if (!sessionStillAt(ownerAtStart)) return@launch
                 ContentCache.putToplist(it)
-                withContext(Dispatchers.Main) { toplists = it }
+                withContext(Dispatchers.Main) {
+                    toplists = it
+                    loadChartCovers(it)
+                }
                 HomeSnapshot.save(context, toplists = it)
             }
         }
@@ -441,7 +491,9 @@ fun HomeScreen(
                             ) {
                                 items(toplists, key = { it.id }) { tl ->
                                     PlaylistTile(
-                                        playlist = tl,
+                                        playlist = tl.copy(
+                                            coverUrl = firstSongCovers[tl.id] ?: tl.coverUrl,
+                                        ),
                                         onClick = { onPlaylistClick(tl.id) },
                                         onPlayAll = { onPlayPlaylist(tl.id) }
                                     )

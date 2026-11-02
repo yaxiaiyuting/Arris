@@ -272,3 +272,86 @@ body:has(.screenshot-dialog[open]){overflow:hidden}
 .release-grid.lts-row .release-version small{background:#e3e9d6}
 @media(max-width:1200px){.release-grid.mainline{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:760px){.release-grid.mainline{grid-template-columns:1fr;gap:22px}}
+
+
+/* ============================================================
+   4.0.0 · 纸感三件套（参考 NeriPlayer 的信息密度，形状仍是我们的）
+   —— 噪点+网格纸底、章节眉标（编号 / 规则线 / 标签）、
+      每节一个强调色槽位、单向长阴影卡片。
+   全部零图片零请求；prefers-reduced-motion 下不动画。
+   ============================================================ */
+
+:root{
+  /* 纸面纹理用的两层颜色，跟着主题一起走 */
+  --grain:rgba(23,60,46,.05);
+  --grid-line:rgba(23,60,46,.045);
+  --acc:#286345;            /* 每节由 data-acc 覆盖 */
+  --shadow-long:0 18px 40px -26px rgba(23,60,46,.5);
+}
+
+/* 纸底：噪点（SVG feTurbulence，data-URI）+ 32px 方格 */
+body{
+  background-color:var(--paper);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E"),
+    linear-gradient(to right,var(--grid-line) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-line) 1px,transparent 1px);
+  background-size:180px 180px,32px 32px,32px 32px;
+  background-blend-mode:soft-light,normal,normal;
+}
+/* 深色段落不吃纸纹，避免脏 */
+.showcase-section,.together-section{background-image:none}
+
+/* 强调色槽位：只染编号与规则线，不染正文 */
+[data-acc]{--acc:var(--green)}
+[data-acc="pine"]{--acc:#286345}
+[data-acc="amber"]{--acc:#a8762b}
+[data-acc="indigo"]{--acc:#3f5f8a}
+[data-acc="ochre"]{--acc:#9a6a3a}
+
+/* 章节眉标 */
+.eyebrow{gap:0;align-items:center}
+.eyebrow:before{display:none}          /* 旧的前置短线由规则线取代 */
+.eyebrow__no{
+  font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.18em;color:var(--acc);
+}
+.eyebrow__rule{
+  display:block;width:42px;height:1px;margin:0 12px;
+  background:var(--acc);opacity:.55;
+  transform:scaleX(1);transform-origin:left center;
+  transition:transform .9s cubic-bezier(.16,1,.3,1);
+}
+[data-reveal]:not(.is-in) .eyebrow__rule{transform:scaleX(0)}
+.eyebrow__label{letter-spacing:2.2px}
+
+/* 节距与标题阶梯：比原来更呼吸，但不至于空 */
+.section{padding-block:clamp(96px,13vh,150px)}
+.section-heading h2,.download-heading h2{font-size:clamp(32px,3.4vw,46px)}
+
+/* 卡片：1px 细边 + 4px 圆角（与 App 的 AppShapes.extraSmall 同值）+ 单向长阴影 */
+.version,.everyday-card,.release-card{
+  border-radius:4px;border:1px solid var(--border);
+  box-shadow:var(--shadow-long);
+  transition:transform .22s ease,box-shadow .22s ease;
+}
+.version:hover,.everyday-card:hover,.release-card:hover{
+  transform:translateY(-3px);box-shadow:0 24px 48px -26px rgba(23,60,46,.55);
+}
+.feature-card{border-radius:4px}
+
+/* 入场：眉标规则线 + 卡片轻微上浮（reduced-motion 下整段跳过） */
+[data-reveal]{opacity:0;transform:translateY(10px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+[data-reveal].is-in{opacity:1;transform:none}
+
+@media(max-width:760px){
+  .section{padding-block:clamp(56px,9vh,84px)}
+  .eyebrow__rule{width:26px;margin:0 9px}
+  body{background-size:140px 140px,24px 24px,24px 24px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  [data-reveal]{opacity:1;transform:none;transition:none}
+  .eyebrow__rule{transition:none;transform:none}
+  .version:hover,.everyday-card:hover,.release-card:hover{transform:none}
+}

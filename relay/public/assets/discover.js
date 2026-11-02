@@ -12,3 +12,22 @@ dialog.addEventListener('close',()=>{if(trigger)trigger.focus()});
 const select=document.getElementById('android-version'),advice=document.getElementById('version-advice'),link=document.getElementById('recommended-download');
 select.addEventListener('change',()=>{const v=select.value;if(v==='older'){advice.textContent='当前版本最低支持 Android 7，暂不提供适配此系统的安装包。';link.hidden=true;return}link.hidden=false;const legacy=v==='legacy';advice.textContent=legacy?'推荐 3.7.x LTS，保留旧设备兼容并持续修复问题。':'推荐主线，获得新功能与持续修复。';link.textContent=legacy?'下载 LTS APK ↗':'下载主线 APK ↗';link.href=legacy?'/get/lts-latest.apk':'/get/latest.apk'});
 })();
+
+/* 4.0.0 · 章节入场：只观察 [data-reveal]，一次触发后即解绑；
+   尊重 prefers-reduced-motion（此时直接全部可见）。 */
+(()=>{
+  const targets=[...document.querySelectorAll('[data-reveal]')];
+  if(!targets.length)return;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches||!('IntersectionObserver' in window)){
+    targets.forEach(el=>el.classList.add('is-in'));
+    return;
+  }
+  const io=new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(!e.isIntersecting)return;
+      e.target.classList.add('is-in');
+      io.unobserve(e.target);
+    });
+  },{rootMargin:'0px 0px -12% 0px',threshold:.12});
+  targets.forEach(el=>io.observe(el));
+})();
