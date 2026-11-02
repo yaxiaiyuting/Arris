@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.0--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.1--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -54,7 +54,7 @@
 | 🎤 **逐字歌词** | ncm `yrc` + AMLL TTML + **qm QRC** 三源，TTML → YRC → LRC 三级回退，逐字渐变三档质量。QRC 那套是 QQ 自研的非标准 3DES，本仓库自实现并与独立实现逐字节比对验证 |
 | 🔀 **5 种播放模式** | 顺序循环 / 单曲循环 / 乱序 / 顺序线性 / 相似无限（私人 FM 电台） |
 | 🚗 **车机就绪** | Android Auto / Automotive 媒体源与浏览树，车机系统栏 inset 专项适配 |
-| 🪶 **15.3 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来低版本的真无损）。冷启动预热，进程被杀也能恢复队列 |
+| 🪶 **9.4 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来低版本的真无损）。冷启动预热，进程被杀也能恢复队列 |
 | 🌐 **8 语言** | 运行时切换，不依赖系统 locale |
 | 🎂 **生日庆祝** | 在「外观与动效」里设置本地生日月日，生日当天打开首页播放 48 秒离线动画：Tux 端来蛋糕、点灯许愿，真实吹气或点按吹灭，黑场后七组烟花与三句祝福。错过可补 7 天；关于页版本号连点七次打开 Tux「自由听众席」，支持辅助功能操作。麦克风仅在前台本次许愿的短窗口使用，不保存不上传 |
 
@@ -369,6 +369,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.1-gpl | 2026-11-03 | 主线移除 FFmpeg 软解扩展：APK 16.28 → **9.90 MB**（平台解码已覆盖在用格式）；LTS 保留 |
 | v4.0.0-gpl | 2026-11-02 | **10 段均衡器**（设置 → 播放与音质）、**间奏呼吸点**、Kotlin 2.0.21 + media3 1.9.0；动态字号/居中/播放键/日推/榜单修复 |
 | v3.8.18-gpl | 2026-11-02 | 音频流三段计时进日志（建连/响应头/结束）；**TTML 歌词客户端也走 `AppHttp`**（此前是裸 `OkHttpClient().newBuilder()`）|
 | v3.8.17-gpl | 2026-11-02 | 音源不可播不再静默（`resolveUrl` 返回 null 时给出可诊断日志）|
