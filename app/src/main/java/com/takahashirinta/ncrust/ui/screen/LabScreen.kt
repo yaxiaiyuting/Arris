@@ -109,6 +109,24 @@ fun LabScreen(onClose: () -> Unit) {
 
             MetroText(roomReport, color = colors.onBackground, style = TextStyle(fontSize = 12.sp))
 
+            // 4.0.0：歌词渲染引擎切换（卡拉 OK 渲染来自 NeriPlayer 移植，Apache-2.0）。
+            // 放在实验室而不是设置页：新引擎还在验证期，出问题一键退回自研渲染。
+            run {
+                val prefs = context.getSharedPreferences(
+                    com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs.PREFS_NAME, 0
+                )
+                var engine by remember {
+                    mutableStateOf(com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs.readKaraokeEngine(prefs))
+                }
+                LabButton(
+                    if (engine) "③ 歌词渲染：卡拉 OK（点击退回自研）" else "③ 歌词渲染：自研（点击切到卡拉 OK）",
+                    enabled = !busy
+                ) {
+                    engine = !engine
+                    com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs.writeKaraokeEngine(prefs, engine)
+                }
+            }
+
             LabButton("② 录 6 秒并算指纹", enabled = !busy) {
                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                     PackageManager.PERMISSION_GRANTED

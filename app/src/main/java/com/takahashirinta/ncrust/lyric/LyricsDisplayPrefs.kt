@@ -62,6 +62,15 @@ object LyricsSweepQuality {
  */
 object LyricsDisplayPrefs {
 
+    /** 4.0.0：读歌词渲染引擎开关（默认自研）。 */
+    fun readKaraokeEngine(prefs: android.content.SharedPreferences): Boolean =
+        prefs.getBoolean(KEY_KARAOKE_ENGINE, false)
+
+    /** 4.0.0：写歌词渲染引擎开关。 */
+    fun writeKaraokeEngine(prefs: android.content.SharedPreferences, value: Boolean) {
+        prefs.edit().putBoolean(KEY_KARAOKE_ENGINE, value).apply()
+    }
+
     const val PREFS_NAME = "ncrust_settings"
 
     /** 逐字动画模式（Int，取值见 [LyricsWordAnimationMode]）。 */
@@ -75,6 +84,15 @@ object LyricsDisplayPrefs {
 
     /** v1.5.2：扫过绘制质量（Int，取值见 [LyricsSweepQuality]）。 */
     const val KEY_SWEEP_QUALITY = "lyrics_sweep_quality"
+
+    /**
+     * 4.0.0：歌词渲染引擎。`true` = 卡拉 OK 渲染（移植自 NeriPlayer，逐字/双语/音译），
+     * `false` = 自研渲染（v3.x 的路径）。
+     *
+     * 默认 **false**：新引擎还在实验室阶段，出问题用户能一键退回；
+     * 关闭时渲染路径与 3.8.18 逐字节相同。
+     */
+    const val KEY_KARAOKE_ENGINE = "lyrics_karaoke_engine"
 
     /** v1.9.0：AMLL TTML 歌词源总开关。关掉 = 一个 TTML 请求都不发，行为与 v1.8.1 完全一致。 */
     const val KEY_TTML_ENABLED = "lyrics_ttml_enabled"
