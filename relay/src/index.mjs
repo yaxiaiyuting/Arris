@@ -120,7 +120,7 @@ export default {
       //   2. 现取 GitHub（服务端没有墙，但**匿名限额 60 次/小时/出口 IP**，共享 IP 常被限流）；
       //   3. 部署时生成的静态快照 `public/api-fallback/releases.json` —— GitHub 挂了也能检查更新。
       const cacheKey = new URL("/api/releases", url.origin).toString();
-      const cache = caches.default;
+            const cache = caches.default;
       const bypass = url.searchParams.get("nocache") === "1";
       let list = null;
       let source = "cache";
