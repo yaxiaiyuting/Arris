@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.0--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.1--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -369,6 +369,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.1-gpl | 2026-11-02 | 均衡器与卡拉 OK 进设置页（逐字四档）；卡拉 OK 渲染补空格/行间过渡/居中 |
 | v4.0.0-gpl | 2026-11-02 | **歌词引擎重做**（KRC/Lyricify + 卡拉 OK 渲染，Apache-2.0 移植）、**10 段均衡器**、Kotlin 2.0.21 + media3 1.9.0；动态字号/居中/播放键等修复 |
 | v3.8.18-gpl | 2026-11-02 | 音频流三段计时进日志（建连/响应头/结束）；**TTML 歌词客户端也走 `AppHttp`**（此前是裸 `OkHttpClient().newBuilder()`）|
 | v3.8.17-gpl | 2026-11-02 | 音源不可播不再静默（`resolveUrl` 返回 null 时给出可诊断日志）|
