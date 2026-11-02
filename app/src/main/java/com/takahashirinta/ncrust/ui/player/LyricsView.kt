@@ -172,14 +172,31 @@ fun LyricsView(
     val dynamicFontAvailablePx = with(LocalDensity.current) {
         (panelWidthPx - 40.dp.toPx()).coerceAtLeast(0f)
     }
+    /**
+     * 4.0.0：**宽度感知的字号上限**。
+     *
+     * 字号此前只按**高度档**给（Regular 32sp / Compact 24 / Tiny 20）。竖屏手机是"高而窄"：
+     * 高度档给 Regular ⇒ 32sp，可面板只有 ~360dp 宽，一句 15 字的中文要折成 3 行，
+     * 译文/音译再一叠就撑破面板 —— 也就是"横屏正常、竖屏用不了"。
+     *
+     * 这里按「一行至少放得下 9.5 个全角字」反推上限，下限 16sp；
+     * 只**降**不**升**（`min(基准, 上限)`），所以横屏/大屏行为不变。
+     */
+    val widthCapSp = with(LocalDensity.current) {
+        if (panelWidthPx <= 0f) baseFontSp
+        else (panelWidthPx.toDp().value / 9.5f).coerceIn(16f, baseFontSp)
+    }
+    /** 实际生效的倍率：用户 A± 的倍率 × 宽度上限带来的压缩。 */
+    val effectiveScale = fontScale * (widthCapSp / baseFontSp)
+
     // 基准字号（px）：判定折行数用，与面板拿到的 sp 同源（用户 A-/A+ 是"基准"，
     // 动态倍率在它之上浮动，不替换它）。
-    val baseOriginalFontPx = with(LocalDensity.current) { (baseFontSp * fontScale).sp.toPx() }
+    val baseOriginalFontPx = with(LocalDensity.current) { (baseFontSp * effectiveScale).sp.toPx() }
     // 每行的字号倍率。键里带上宽度与 fontScale：换歌/旋转/A-/A+ 才重算；面板宽度变化会
     // 触发一次重算（首帧一次，之后稳定）。刻意**不**写进歌词缓存 —— 它是派生显示量
     // （AGENTS.md：能不加缓存字段就不加）。
     val lineScales = remember(
-        lyrics, dynamicFontEnabled, dynamicFontAvailablePx, fontScale,
+        lyrics, dynamicFontEnabled, dynamicFontAvailablePx, effectiveScale,
     ) {
         if (!dynamicFontEnabled || dynamicFontAvailablePx <= 0f) {
             emptyList()
@@ -191,7 +208,7 @@ fun LyricsView(
                     fontSizePx = baseOriginalFontPx,
                 )
                 .map { raw ->
-                    DynamicLyricFont.clampScale(raw = raw, baseFontSizeSp = baseFontSp * fontScale)
+                    DynamicLyricFont.clampScale(raw = raw, baseFontSizeSp = baseFontSp * effectiveScale)
                 }
         }
     }
@@ -480,13 +497,13 @@ fun LyricsView(
             // v1.5.1 · E：字号倍率乘在基础字号上（行高同步乘，行距比例不变）。
             // 当前行的放大动画是紧跟在渲染里的 scale，与基础字号是乘数关系，所以字号变了
             // 缩放动画不需要任何额外处理。
-            fontSize = (baseFontSp * fontScale).sp,
-            lineHeight = (baseLineHeightSp * fontScale).sp,
-            translationFontSize = (baseTranslationSp * fontScale).sp,
-            translationLineHeight = (baseTranslationLineSp * fontScale).sp,
+            fontSize = (baseFontSp * effectiveScale).sp,
+            lineHeight = (baseLineHeightSp * effectiveScale).sp,
+            translationFontSize = (baseTranslationSp * effectiveScale).sp,
+            translationLineHeight = (baseTranslationLineSp * effectiveScale).sp,
             // v1.9.3：音译字号同样乘 fontScale（A- / A+ 三档一起缩放，层级比例恒定）。
-            romanizationFontSize = (LyricsDisplayPrefs.ROMANIZATION_FONT_SP * fontScale).sp,
-            romanizationLineHeight = (LyricsDisplayPrefs.ROMANIZATION_LINE_HEIGHT_SP * fontScale).sp,
+            romanizationFontSize = (LyricsDisplayPrefs.ROMANIZATION_FONT_SP * effectiveScale).sp,
+            romanizationLineHeight = (LyricsDisplayPrefs.ROMANIZATION_LINE_HEIGHT_SP * effectiveScale).sp,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp),
