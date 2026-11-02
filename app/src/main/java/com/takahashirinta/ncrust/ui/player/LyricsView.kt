@@ -184,16 +184,13 @@ fun LyricsView(
         if (!dynamicFontEnabled || dynamicFontAvailablePx <= 0f) {
             emptyList()
         } else {
-            lyrics.map {
-                DynamicLyricFont.clampScale(
-                    raw = DynamicLyricFont.scaleFor(
-                        text = it.text,
-                        availWidthPx = dynamicFontAvailablePx,
-                        fontSizePx = baseOriginalFontPx,
-                    ),
-                    baseFontSizeSp = baseFontSp * fontScale,
+            DynamicLyricFont
+                .scalesFor(
+                    lines = lyrics.map { it.text },
+                    availWidthPx = dynamicFontAvailablePx,
+                    fontSizePx = baseOriginalFontPx,
                 )
-            }
+                .map { raw -> DynamicLyricFont.clampScale(raw = raw, baseFontSizeSp = baseFontSp * fontScale) }
         }
     }
 

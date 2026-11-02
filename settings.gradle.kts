@@ -17,6 +17,8 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // 阿里云 Google 镜像：本机 dl.google.com 常 TLS 断连（拉 Compose 1.8 / media3 1.9 时踩过）
+        maven("https://maven.aliyun.com/repository/google") { content { includeGroupByRegex("androidx\\..*") } }
         google()
         mavenCentral()
     }

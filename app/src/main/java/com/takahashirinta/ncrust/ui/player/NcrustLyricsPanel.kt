@@ -44,6 +44,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -226,6 +227,8 @@ fun NcrustLyricsPanel(
     var userScrolling by remember { mutableStateOf(false) }
     var programmaticScrolling by remember { mutableStateOf(false) }
     var lastAutoScrolledIndex by remember { mutableIntStateOf(-1) }
+    /** 4.0.0：面板真实视口高度（收起/展开播放栏会变，定位是相对它的）。 */
+    var viewportHeightPx by remember { mutableIntStateOf(0) }
 
     // ─────────────────────────────────────────────────────────────────────
     // v2.5.2：条目**实测高度**缓存 + 「整条居中」的定位助手
@@ -380,6 +383,15 @@ fun NcrustLyricsPanel(
         lastAutoScrolledIndex = idx
     }
 
+    // 4.0.0：视口高度变了（收起/展开播放栏、旋转、分屏）⇒ 把当前行重新摆回 36% 处。
+    LaunchedEffect(viewportHeightPx) {
+        if (viewportHeightPx <= 0 || lines.isEmpty()) return@LaunchedEffect
+        if (userScrolling || programmaticScrolling) return@LaunchedEffect
+        smoothCurrentIndex.snapTo(currentIndex.coerceAtLeast(0).toFloat())
+        lastAutoScrolledIndex = currentIndex
+        placeLine(LyricsPanelScroll.targetItemIndex(currentIndex, lines.size), viewportHeightPx)
+    }
+
     // 跨行自动滚动:当前行滚到视口 36% 高处(有动画)。
     //
     // v2.0.1：`currentIndex == -1`（前奏 / 拖回开头 —— 还没到第一句）**也要定位**，目标按第 0 行算。
@@ -509,7 +521,9 @@ fun NcrustLyricsPanel(
         LazyColumn(
             state = listState,
             userScrollEnabled = enabled,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { size -> viewportHeightPx = size.height },
         ) {
             // v2.0.1：顶部留白 = min(200dp, 36% × 视口)。它同时是"列表顶端"与"第一句的定位槽"，
             // 所以"回顶"在大屏短面板下也不会把第一句推出可视区（详见 LyricsPanelScroll）。
@@ -527,7 +541,8 @@ fun NcrustLyricsPanel(
                 // 刻意不写成 `fontSize * 1f`：这样"关掉开关 ⇒ 渲染表达式与 v1.9.3 一致"
                 // 是可以逐行审计的，而不是"值相等但 diff 变了"。
                 // 译文/音译同乘同一个倍率 ⇒ 三层比例恒定（与 A-/A+ 的做法一致）。
-                val lineScale = line.fontScale
+                // 4.0.0：当前行不叠加动态字号（它已经聚焦放大，再乘会折行 → 整块居中偏移）
+                val lineScale = if (index == currentIndex) 1f else line.fontScale
                 val lineFontSize = if (lineScale == 1f) fontSize else fontSize * lineScale
                 val lineLineHeight = if (lineScale == 1f) lineHeight else lineHeight * lineScale
                 val lineTranslationFontSize =

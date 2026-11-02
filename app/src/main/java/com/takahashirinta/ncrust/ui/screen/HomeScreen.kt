@@ -1,5 +1,7 @@
 package com.takahashirinta.ncrust.ui.screen
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import android.graphics.drawable.BitmapDrawable
 import android.content.Context
 import androidx.compose.animation.Crossfade
@@ -206,6 +208,7 @@ fun HomeScreen(
                     dailySongs = list
                     ContentCache.homeDailySongs = list
                     offline = false
+                    com.takahashirinta.ncrust.network.DailyRecommendation.markFetched(context)
                     persistHomeSnapshot()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -214,6 +217,14 @@ fun HomeScreen(
                 android.util.Log.e("DailySongs", "Error", e)
             }
         }
+    }
+
+
+    /** 4.0.0：该换批时自动换（每天 6:00 之后首次进首页）。 */
+    fun maybeAutoRefreshDaily() {
+        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context)) return
+        if (!NetworkAvailability.isOnline(context)) return
+        loadDailySongs()
     }
 
     fun loadPlaylists() {
@@ -272,7 +283,10 @@ fun HomeScreen(
         }
         offline = false
         isLoading = true
-        loadDailySongs()
+        maybeAutoRefreshDaily()
+        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context) && dailySongs.isEmpty()) {
+            loadDailySongs()
+        }
         loadPlaylists()
         loadNewSongs()
         val ownerAtStart = CookieManager.accountOwner()
@@ -458,15 +472,12 @@ fun HomeScreen(
                                 title = strings.dailySongsTitle,
                                 onPlayAll = { onPlayDailyAll?.invoke(dailySongs) },
                                 actions = {
-                                    // 手动刷新每日推荐(#26):重新拉取并 diff 平滑替换
-                                    MetroIconButton(onClick = { loadDailySongs() }) {
-                                        MetroIcon(
-                                            Icons.Default.Refresh,
-                                            contentDescription = strings.refreshLabel,
-                                            tint = LocalMetroColors.current.onSurfaceVariant,
-                                            sizeDp = 22.dp
-                                        )
-                                    }
+                                    // 4.0.0：服务端按天生成（每天 6:00 换一批），刷新键没有意义
+                                    MetroText(
+                                        "每日 6:00 更新",
+                                        color = LocalMetroColors.current.onSurfaceVariant,
+                                        style = TextStyle(fontSize = 11.sp)
+                                    )
                                 }
                             )
                         }

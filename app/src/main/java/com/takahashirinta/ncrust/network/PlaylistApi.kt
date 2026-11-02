@@ -514,8 +514,10 @@ object PlaylistApi {
 
     // ==================== Discovery ====================
 
-    suspend fun getDailyRecommendSongs(): List<SongItem> = withContext(Dispatchers.IO) {
-        val response = readEapi("/eapi/v2/discovery/recommend/songs", emptyMap())
+    /** [forceRefresh] = true 时带 timestamp，绕过中间缓存层（服务端每天 6:00 才换歌）。 */
+    suspend fun getDailyRecommendSongs(forceRefresh: Boolean = false): List<SongItem> = withContext(Dispatchers.IO) {
+        val payload = if (forceRefresh) mapOf("timestamp" to System.currentTimeMillis().toString()) else emptyMap()
+        val response = readEapi("/eapi/v2/discovery/recommend/songs", payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         // 登录失效时这个接口**仍然 200**，只是返回非个性化的通用列表；

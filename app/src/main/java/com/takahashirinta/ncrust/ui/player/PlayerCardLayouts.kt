@@ -74,6 +74,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.i18n.Strings
@@ -487,6 +488,8 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    // 4.0.0：抬 z —— 同级「歌名/歌手」块是整行点击区，会把这一键盖住
+                    .zIndex(2f)
                     .padding(end = 16.dp, bottom = 16.dp)
                     .size(56.dp)
                     .background(LocalMetroColors.current.surfaceVariant)

@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // ---------- 安全加载签名配置 ----------
@@ -511,8 +512,8 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 110
-        versionName = "3.7.23-gpl"
+        versionCode = 111
+        versionName = "3.7.24-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -571,9 +572,6 @@ android {
         // 避免每次发版忘记同步硬编码。
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
 }
 
 dependencies {
@@ -589,7 +587,7 @@ dependencies {
     implementation("androidx.activity:activity:1.9.0")
 
     // Compose
-    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -601,22 +599,22 @@ dependencies {
     // Media3 1.6.1（v3.7.19 与主线对齐）。1.5.0 有个库内断言会在空队列上抛
     // "isLoading only allowed when not in STATE_IDLE or STATE_ENDED"，真机闪退；
     // 1.6.1 修掉了它，同时 `sessionCompatToken` 被移除、改走 `platformToken`。
-    implementation("androidx.media3:media3-exoplayer:1.6.1")
+    implementation("androidx.media3:media3-exoplayer:1.9.0")
     // v1.6.0 · D1：离线缓存（SimpleCache / CacheDataSource / StandaloneDatabaseProvider）。
     // 这两个之前是 media3-exoplayer 的传递依赖，显式声明以免上游改依赖树时静默消失。
-    implementation("androidx.media3:media3-datasource:1.6.1")
+    implementation("androidx.media3:media3-datasource:1.9.0")
     // 音频流走 OkHttp：默认 DefaultHttpDataSource 用 HttpURLConnection，没有读超时、
     // 不认我们的 DNS 策略、连接池也不受 evictConnections 管理。
-    implementation("androidx.media3:media3-datasource-okhttp:1.6.1")
-    implementation("androidx.media3:media3-database:1.6.1")
-    implementation("androidx.media3:media3-session:1.6.1")
-    implementation("androidx.media3:media3-ui:1.6.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.9.0")
+    implementation("androidx.media3:media3-database:1.9.0")
+    implementation("androidx.media3:media3-session:1.9.0")
+    implementation("androidx.media3:media3-ui:1.9.0")
 
     // FFmpeg 软件音频解码扩展（Jellyfin 构建，GPL-3.0，与本项目 GPLv3 兼容）。
     // 目的：API 24–26（Android 7.0/7.1）系统只带 OMX.google.flac.encoder，
     // 没有 FLAC 解码器，无损档位只能降级到 mp3；随包带 FFmpeg 后即可真正解 FLAC。
     // 覆盖 arm64-v8a / armeabi-v7a / x86 / x86_64 四个 ABI。
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
     // Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
@@ -660,7 +658,7 @@ dependencies {
     testImplementation("org.json:json:20231013")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -97,6 +97,8 @@ class AppShapesSingleSourceTest {
             scanned++
             // 唯一豁免文件：它自己就是落点。
             if (rel.endsWith(allowedFile)) continue
+            // 4.0.0：移植的歌词库（Apache-2.0）内部圆角按上游原样保留
+            if (rel.startsWith("com/mocharealm/")) continue
             file.readLines().forEachIndexed { index, line ->
                 for (token in forbidden) {
                     if (line.contains(token)) {

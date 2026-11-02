@@ -1008,6 +1008,8 @@ internal fun controlsCollapseDragModifier(
     // 写成 startValue - dragAmount/h 只会得到最后一帧的位移，拖动基本不动。
     var current = 0f
     var from = 0f
+    // 4.0.0：纯点击也会回调 onDragCancel —— 没拖动过就什么都不做
+    var dragged = false
     // v1.7.0 · P0：手势测速（px/s），供吸附判定做「甩动」判据。
     var startMs = 0L
     var lastMs = 0L
@@ -1015,6 +1017,7 @@ internal fun controlsCollapseDragModifier(
         onDragStart = {
             from = controlsCollapse.value
             current = from
+            dragged = false
             // v3.8.0 · J12：**每次手势都从零计时**。旧实现只在第一次拖动时写 startMs
             // （`if (startMs == 0L)`），之后的手势把「上一次与本次之间的空闲时间」
             // 也算进耗时 ⇒ 速度被系统性摊薄，甩动判据时灵时不灵。
@@ -1058,6 +1061,7 @@ internal fun controlsCollapseDragModifier(
             }
         },
         onDragCancel = {
+            if (!dragged) return@detectVerticalDragGestures
             coroutineScope.launch {
                 controlsCollapse.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
             }

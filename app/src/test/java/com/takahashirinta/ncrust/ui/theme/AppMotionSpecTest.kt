@@ -198,6 +198,9 @@ class AppMotionSpecTest {
             val rel = file.relativeTo(root).invariantSeparatorsPath
             scanned++
             if (rel.endsWith("ui/theme/AppMotion.kt")) continue
+            // 4.0.0：com/mocharealm 是从 NeriPlayer 移植的歌词库（Apache-2.0），
+            // 其内部动效按上游原样保留，不套我们的 AppMotion token。
+            if (rel.startsWith("com/mocharealm/")) continue
             file.readLines().forEachIndexed { index, line ->
                 // 只看真的调用：排除 import 行与注释里提到它的行。
                 val code = line.substringBefore("//")
