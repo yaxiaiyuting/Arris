@@ -12,6 +12,34 @@
 - **分段下载**：4 段并发 + 任一段失败回落单流（服务端 `/get/` 支持 Range）。
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
+## v4.0.0-gpl — 跨代：歌词引擎 / 均衡器 / 工具链（2026-11-02）
+
+跳过 3.9.x。
+
+**歌词（Apache-2.0 → GPLv3 兼容）**
+- 并入 NeriPlayer 歌词模块：TTML / yrc / **酷狗 KRC** / **Lyricify** / EnhancedLRC 解析器，
+  音节级 karaoke 模型（逐字 + 音译 + 对齐），`KaraokeLyricsView` 渲染器（双语行、日文间距、呼吸点）
+- KMP → 单平台 Android：`expect/actual` 展开、`kotlinx.serialization` 换 `org.json`、
+  material3 的 `Text/LocalTextStyle` 用 foundation 版 shim 替代、`graphicsLayer.blendMode`
+  改 `saveLayer + Paint`（Compose 1.8 没有该属性）
+- 实验室开关「歌词渲染：自研 ⇄ 卡拉 OK」，默认自研
+
+**均衡器（新）**
+- `AudioEffect.Equalizer` 挂 ExoPlayer audio session；关闭时不创建任何 effect
+- 5 预设 + 10 段可拖推子 + 自绘曲线；只存增益与预设名（不存设备 preset 索引）
+
+**工具链**
+- Kotlin 1.9.24 → **2.0.21**（Compose 编译器插件随 Kotlin 发布，`composeOptions` 移除）
+- Compose BOM 2024.12.01 → **2025.06.01**
+- media3 1.6.1 → **1.9.0**（jellyfin FFmpeg 扩展同步 1.9.0+1；1.10.1 无对应扩展版本）
+
+**体验修复**
+- 动态字号改按**名次分档**（30%/70% 分位）；放大前校验不折行；当前行不叠加倍率
+- 面板视口高度变化后重新摆放当前行（收起/展开播放栏不再偏离中心）
+- 收起态悬浮播放键 `.zIndex(2f)`（此前被整行「歌名/歌手」点击区盖住）+ `dragged` 判定
+- 日推：删除刷新键，改为每日 6:00 自动换批（凌晨沿用前一天）
+- 榜单卡改用「榜一那首歌」的专辑图
+
 ## v3.8.18-gpl — 音频三段计时 + 补掉最后一个裸客户端（2026-11-02）
 
 - `MediaHttp` 挂 `EventListener`：每条音频请求的**建连 / 响应头 / 结束**耗时进 logcat（tag=MediaHttp），

@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.8.18--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.0--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -369,6 +369,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.0-gpl | 2026-11-02 | **歌词引擎重做**（KRC/Lyricify + 卡拉 OK 渲染，Apache-2.0 移植）、**10 段均衡器**、Kotlin 2.0.21 + media3 1.9.0；动态字号/居中/播放键等修复 |
 | v3.8.18-gpl | 2026-11-02 | 音频流三段计时进日志（建连/响应头/结束）；**TTML 歌词客户端也走 `AppHttp`**（此前是裸 `OkHttpClient().newBuilder()`）|
 | v3.8.17-gpl | 2026-11-02 | 音源不可播不再静默（`resolveUrl` 返回 null 时给出可诊断日志）|
 | v3.8.16-gpl | 2026-11-02 | 彩蛋推荐一首（来自本地收藏）；封面/艺人/专辑图与 QQ 链路补 IPv4 优先；**OkHttp 统一走 `AppHttp`**，裸建即测试变红 |
@@ -403,6 +404,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.7.24-gpl | 2026-11-02 | LTS 与主线同代：Kotlin 2、media3 1.9、歌词库、均衡器、四项体验修复 |
 | v3.7.23-gpl | 2026-11-02 | LTS 对齐：TTML 客户端走 `AppHttp`、音频三段计时、审计测试扩容到 `OkHttpClient()`/`newBuilder()` |
 | v3.7.21-gpl | 2026-11-02 | LTS 与主线同代：`AppHttp` 统一网络（IPv4 优先）、彩蛋推荐一首、分段下载、封面/艺人图修复 |
 | v3.7.20-gpl | 2026-11-01 | LTS 对齐：B站客户端硬化、更新检查 IPv4/小响应/归一化 |
