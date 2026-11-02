@@ -591,6 +591,19 @@ class PlaybackService : MediaLibraryService() {
             libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
+            /**
+             * 4.0.0：音频 session 变化（首次出声、切歌换音轨、切换输出设备）时挂均衡器。
+             * 关着的时候这里什么都不做 —— [EqualizerController.attach] 只在 enabled 时创建 effect。
+             */
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                com.takahashirinta.ncrust.audio.EqualizerController.attach(
+                    this@PlaybackService,
+                    audioSessionId,
+                    com.takahashirinta.ncrust.audio.EqualizerPrefs.isEnabled(this@PlaybackService),
+                    com.takahashirinta.ncrust.audio.EqualizerPrefs.gains(this@PlaybackService),
+                )
+            }
+
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 publishStreamBitrate()
             }
@@ -2238,6 +2251,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        com.takahashirinta.ncrust.audio.EqualizerController.release()
         Log.d("PlaybackService", "onDestroy")
         LiveUpdateNotifier.cancel(this)
         instance = null

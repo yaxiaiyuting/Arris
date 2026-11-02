@@ -201,6 +201,7 @@ internal fun PlayerCard(
     // v1.5.1 · A：逐字动画模式（0 渐变扫过 / 1 逐字硬切 / 2 关闭逐字）。
     // 模式 2 时 karaokeEnabled=false，行内渲染退回 v1.4.1 的整行路径。
     val lyricsWordAnimation by playerViewModel.lyricsWordAnimation.collectAsStateWithLifecycle()
+    val karaokeEngine by playerViewModel.karaokeEngine.collectAsStateWithLifecycle()
     // v1.5.1 · E：歌词字号倍率（设置页与歌词界面的 A-/A+ 都改它）。
     val lyricsFontScale by playerViewModel.lyricsFontScale.collectAsStateWithLifecycle()
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。
@@ -602,6 +603,7 @@ internal fun PlayerCard(
                     showDynamicLyricFont = showDynamicLyricFont,
                     romanizedLyrics = romanizedLyrics,
                     lyricsWordAnimation = lyricsWordAnimation,
+                    karaokeEngine = karaokeEngine,
                     lyricsFontScale = lyricsFontScale,
                     lyricsSweepQuality = lyricsSweepQuality,
                     lyricsReady = lyricsReady,
@@ -1008,6 +1010,13 @@ internal fun controlsCollapseDragModifier(
     // 写成 startValue - dragAmount/h 只会得到最后一帧的位移，拖动基本不动。
     var current = 0f
     var from = 0f
+    // 4.0.0：这一轮手势**有没有真的拖动过**。
+    //
+    // `detectVerticalDragGestures` 在"按下又原样抬起"（= 一次纯点击）时也会回调
+    // onDragCancel —— 于是那块「收起态悬浮播放键」被点一下，除了播放/暂停，
+    // 还会顺手把控制栏拉回来（用户看到的就是"点播放键直接跳回歌曲详情页"）。
+    // 这里用 dragged 把"纯点击"与"拖动被取消"分开：没拖动过就什么都不做。
+    var dragged = false
     // v1.7.0 · P0：手势测速（px/s），供吸附判定做「甩动」判据。
     var startMs = 0L
     var lastMs = 0L
@@ -1015,6 +1024,7 @@ internal fun controlsCollapseDragModifier(
         onDragStart = {
             from = controlsCollapse.value
             current = from
+            dragged = false
             // v3.8.0 · J12：**每次手势都从零计时**。旧实现只在第一次拖动时写 startMs
             // （`if (startMs == 0L)`），之后的手势把「上一次与本次之间的空闲时间」
             // 也算进耗时 ⇒ 速度被系统性摊薄，甩动判据时灵时不灵。
@@ -1023,6 +1033,7 @@ internal fun controlsCollapseDragModifier(
         },
         onVerticalDrag = { change, dragAmount ->
             change.consume()
+            dragged = true
             val h = if (controlsHeightProvider() > 1f) controlsHeightProvider()
                     else with(density) { 200.dp.toPx() }
             current = (current - dragAmount / h).coerceIn(0f, 1f)
@@ -1031,6 +1042,9 @@ internal fun controlsCollapseDragModifier(
             coroutineScope.launch { controlsCollapse.snapTo(current) }
         },
         onDragEnd = {
+            // 纯点击（没有越过 slop 的位移）到这里也已经是"拖动已开始"的分支，
+            // 但保险起见仍要求 dragged：没有位移就交还给 clickable。
+            if (!dragged) return@detectVerticalDragGestures
             // 速度由收起进度反推（px/s）：把手挂在被平移的控制栏兄弟节点上，
             // 直接用 position 差分同样不可靠。h = 控制栏实测高度。
             val elapsedMs = lastMs - startMs
@@ -1058,6 +1072,9 @@ internal fun controlsCollapseDragModifier(
             }
         },
         onDragCancel = {
+            // 4.0.0：纯点击也会走到这里 —— 没拖动过就**不要**把控制栏拉回来，
+            // 否则点一下播放键就等于"展开播放器"（用户报的跳转 bug）。
+            if (!dragged) return@detectVerticalDragGestures
             coroutineScope.launch {
                 controlsCollapse.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
             }

@@ -514,8 +514,16 @@ object PlaylistApi {
 
     // ==================== Discovery ====================
 
-    suspend fun getDailyRecommendSongs(): List<SongItem> = withContext(Dispatchers.IO) {
-        val response = readEapi("/eapi/v2/discovery/recommend/songs", emptyMap())
+    /**
+     * 每日推荐。
+     *
+     * [forceRefresh] = true 时带上 `timestamp`：服务端每天 6:00 才换一批歌，但**中间可能有
+     * 缓存层**（含我们自己的 eapi 响应缓存）。带上时间戳能把「拿到的还是同一份」和
+     * 「服务端就是这份」区分开 —— 这也是刷新键之前"点了没反应"的原因之一。
+     */
+    suspend fun getDailyRecommendSongs(forceRefresh: Boolean = false): List<SongItem> = withContext(Dispatchers.IO) {
+        val payload = if (forceRefresh) mapOf("timestamp" to System.currentTimeMillis().toString()) else emptyMap()
+        val response = readEapi("/eapi/v2/discovery/recommend/songs", payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         // 登录失效时这个接口**仍然 200**，只是返回非个性化的通用列表；
@@ -576,6 +584,23 @@ object PlaylistApi {
                 trackCount = item.optInt("trackCount"),
             )
         }
+    }
+
+    /**
+     * 榜单的**首曲封面**（4.0.0）。
+     *
+     * `/eapi/toplist` 只给榜单自己那张拼贴封面（`coverImgUrl`），而用户认的是「榜一那首歌」的
+     * 专辑图。老接口 `/api/playlist/detail?id=` 是明文 GET，一次就能带回 100 首，
+     * 取 `tracks[0].album.picUrl` 即可 —— 实测 HTTP 200、无需加密参数。
+     */
+    suspend fun getChartFirstSongCover(chartId: Long): String? = withContext(Dispatchers.IO) {
+        val body = RetrofitClient.get("/api/playlist/detail?id=$chartId")
+        val json = JSONObject(body)
+        val tracks = json.optJSONObject("result")?.optJSONArray("tracks")
+            ?: json.optJSONArray("playlist")?.let { null }
+            ?: return@withContext null
+        val first = tracks.optJSONObject(0) ?: return@withContext null
+        first.optJSONObject("album")?.optString("picUrl")?.takeIf { it.isNotBlank() }
     }
 
     suspend fun getTopSongs(limit: Int = 30, offset: Int = 0): List<SongItem> = withContext(Dispatchers.IO) {

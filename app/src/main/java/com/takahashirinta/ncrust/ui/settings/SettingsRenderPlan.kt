@@ -65,6 +65,9 @@ enum class SettingsRowKind {
     /** 无 key 的跳转行（跳系统「允许后台活动」）。 */
     ACTION_JUMP,
 
+    /** 打开独立页面（均衡器）。与 ACTION_JUMP 的区别：目标是我们自己的页面，不是系统页。 */
+    EQUALIZER_OPEN,
+
     /** 缓存占用三项 + 「清除缓存」（二次确认弹窗）。 */
     CLEAR_CACHE,
 
@@ -182,6 +185,7 @@ object SettingsRenderPlan {
 
             // 关于
             "action.about_open" -> SettingsRowKind.ABOUT_OPEN
+            "action.equalizer_open" -> SettingsRowKind.EQUALIZER_OPEN
             "action.birthday_date", "action.birthday_preview", "birthday_celebration_enabled", "easter_egg_animation_enabled" -> SettingsRowKind.CELEBRATION
 
             else -> when (entry.type) {

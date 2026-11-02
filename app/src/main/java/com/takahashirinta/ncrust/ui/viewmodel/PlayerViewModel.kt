@@ -166,6 +166,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 取值见 LyricsWordAnimationMode（0 渐变扫过 / 1 逐字硬切 / 2 关闭逐字）。
     val lyricsWordAnimation = MutableStateFlow(LyricsWordAnimationMode.GRADIENT_SWEEP)
 
+    /**
+     * 4.0.0：歌词渲染引擎（true = 卡拉 OK）。默认读设置，实验室里可切换；
+     * 关闭时播放页走自研渲染，路径与 3.8.18 完全一致。
+     */
+    val karaokeEngine = MutableStateFlow(false)
+
+    /** 实验室里切换引擎后调用（设置页返回时也会走一次）。 */
+    fun reloadLyricsEngine() {
+        // 4.0.0：以「逐字模式 = 卡拉 OK」为准（设置页那一组选项），实验室旧开关只作为兼容回退。
+        val mode = LyricsDisplayPrefs.readWordAnimation(
+            getApplication<Application>()
+                .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        )
+        karaokeEngine.value = mode == LyricsWordAnimationMode.KARAOKE || LyricsDisplayPrefs.readKaraokeEngine(
+            getApplication<Application>()
+                .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        )
+    }
+
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。默认「自动」——
     // 按设备是否 low-RAM 决定；两种画法的**光标位置算法完全相同**，所以切到兼容档只是
     // 少了渐变带的柔化，不会退回 v1.5.1 那种按词跳变。取值见 LyricsSweepQuality。
@@ -757,6 +776,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         refreshGaplessSetting()
         // 从设置读歌词开关(默认开);设置页切换时经 setLyricsTranslation /
         // setLyricsWordAnimation 实时生效。readWordAnimation 顺带完成 v1.5.0 布尔开关的迁移。
+        karaokeEngine.value = LyricsDisplayPrefs.readKaraokeEngine(
+            getApplication<Application>()
+                .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        )
         lyricsWordAnimation.value = LyricsDisplayPrefs.readWordAnimation(
             getApplication<Application>()
                 .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
@@ -1173,6 +1196,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE),
             normalized
         )
+        // 4.0.0：切成/切出「卡拉 OK」要立刻换渲染器，不用回播放页再进一次。
+        karaokeEngine.value = normalized == LyricsWordAnimationMode.KARAOKE
     }
 
     /**

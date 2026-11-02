@@ -112,7 +112,8 @@ class SettingsVisibilityTest {
     fun `sweepQualityFollowsTheReadPathForDirtyValues`() {
         // 盘上越界脏值：真实读路径 LyricsDisplayPrefs.readWordAnimation 会 normalize 成
         // GRADIENT_SWEEP（LyricsWordAnimationMode.normalize），门控不能比读路径更严。
-        listOf(3, 7, -1, 99).forEach { dirty ->
+        // 4.0.0：3 = 卡拉 OK，已升级为合法档位；脏值从 4 起。
+        listOf(4, 7, -1, 99).forEach { dirty ->
             val availability = SettingsVisibility.availabilityOf(
                 "lyrics_sweep_quality",
                 reader(mapOf("lyrics_word_animation" to dirty)),

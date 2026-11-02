@@ -718,6 +718,10 @@ data class Strings(
     val lyricsWordByWordLabel: String get() = settings.lyricsWordByWordLabel
     val lyricsWordAnimationLabel: String get() = settings.lyricsWordAnimationLabel
     val lyricsWordAnimationOptions: List<String> get() = settings.lyricsWordAnimationOptions
+    // 4.0.0：均衡器入口（SettingsStrings 的字段在 Strings 上暴露成同名只读属性 ——
+    // SettingsRegistryTest 用 StringsSnapshot 反射采集可读路径，裸 key 必须在这里有落点）
+    val equalizerEntryLabel: String get() = settings.equalizerEntryLabel
+    val equalizerEntryHint: String get() = settings.equalizerEntryHint
     val lyricsInMediaSessionLabel: String get() = settings.lyricsInMediaSessionLabel
     val lyricsInMediaSessionHint: String get() = settings.lyricsInMediaSessionHint
     val lyricsSweepQualityLabel: String get() = settings.lyricsSweepQualityLabel
@@ -1703,6 +1707,8 @@ data class SettingsStrings(
     val lyricsWordByWordLabel: String,
     // v1.5.1 · A：逐字动画三选一（0 渐变扫过 / 1 逐字硬切 / 2 关闭逐字）。顺序必须与
     // LyricsWordAnimationMode 的常量一一对应。
+    val equalizerEntryLabel: String,
+    val equalizerEntryHint: String,
     val lyricsWordAnimationLabel: String,
     val lyricsWordAnimationOptions: List<String>,
     // v1.5.1 · D：媒体面板歌词开关（默认关）。开启后 ARTIST 变成「艺人 · 当前歌词行」。

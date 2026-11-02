@@ -222,6 +222,13 @@ private fun SettingsPreferenceGroupPage(
     /** v3.3.0：离线缓存列表「点行即播」的出口（见 [SettingsGroupScreen] 的同名参数）。 */
     onPlaySong: (SongItem) -> Unit,
 ) {
+    // 4.0.0：均衡器是独立页面，从设置里一行进去（返回键由它自己处理）。
+    var showEqualizer by remember { mutableStateOf(false) }
+    if (showEqualizer) {
+        com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { showEqualizer = false })
+        return
+    }
+
     val context = LocalContext.current
     val strings = LocalStrings.current
     val updateStrings = strings.update
@@ -869,6 +876,15 @@ private fun SettingsPreferenceGroupPage(
                                 onClick = { BackgroundImageManager.clear(context) }
                             )
                         }
+                    }
+
+                    SettingsRowKind.EQUALIZER_OPEN -> item(key = entry.id) {
+                        // 4.0.0：均衡器入口（自己的页面，不是系统页）
+                        SettingActionRow(
+                            label = strings.settings.equalizerEntryLabel,
+                            trailing = strings.settings.equalizerEntryHint,
+                            onClick = { showEqualizer = true },
+                        )
                     }
 
                     SettingsRowKind.ACTION_JUMP -> item(key = entry.id) {

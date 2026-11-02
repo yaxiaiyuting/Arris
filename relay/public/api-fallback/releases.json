@@ -1,6 +1,60 @@
 {
- "generatedAt": "2026-11-01T18:34:28.228Z",
+ "generatedAt": "2026-11-02T15:06:16.227Z",
  "releases": [
+  {
+   "tag_name": "v4.0.0-gpl",
+   "name": "Arris v4.0.0-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-02T15:05:38Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.0-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris 4.0.0-gpl（versionCode 200）\n\n跳过 3.9.x，直接跨代。四条工作流一次落地。\n\n### ① 歌词引擎重做（Apache-2.0 移植，GPLv3 兼容）\n\n来自 NeriPlayer 的歌词模块整套并入（KMP → 单平台 Android，去掉 material3）：\n\n- **解析器**：TTML / 网易 yrc / 酷狗 KRC / Lyricify / EnhancedLRC（新增 KRC、Lyricify 两种）\n- **模型**：音节级 karaoke（逐字）+ 音译层级 + 对齐信息\n- **渲染器**：`KaraokeLyricsView`（988 行）等，双语行、日文假名间距、呼吸点\n\n入口：关于页 → 实验室 → ③ 歌词渲染：自研 ⇄ 卡拉 OK（默认自研，出问题一键退回）。\n\n### ② 均衡器（新功能）\n\n- `AudioEffect.Equalizer` 挂 ExoPlayer 的 audio session（`onAudioSessionIdChanged`）\n- **关着的时候一个 effect 都不创建** —— 默认听感与 3.8.18 逐字节一致\n- 5 个预设（平直/流行/摇滚/人声/低音）+ 10 段可拖推子 + 自绘曲线\n- 存每段增益与预设名，**不存设备 preset 索引**（各厂商频段数不同，存索引换机必错位）\n\n入口：关于页 → 实验室 → ④ 均衡器。\n\n### ③ 工具链升级\n\n| | 3.8.18 | 4.0.0 |\n|---|---|---|\n| Kotlin | 1.9.24 | **2.0.21**（+ Compose 编译器插件） |\n| Compose BOM | 2024.12.01 | **2025.06.01** |\n| media3 | 1.6.1 | **1.9.0**（FFmpeg 扩展 1.9.0+1） |\n\n### ④ 这一轮修掉的体验问题\n\n- **动态字号「根本没用」**：旧判据是绝对三档，中文歌词句句一行半时整首不变；改成按名次分档（30%/70% 分位），短句放大、长句 0.90\n- **多行时整段偏离中心**：放大前校验不折行 + 当前行不叠加倍率\n- **收起播放栏后不居中**：监听面板真实视口高度，变化后重新摆放当前行\n- **右下角播放键点不了**：被同级整行「歌名/歌手」点击区盖住（只有最右侧 16dp 能点到）→ `.zIndex(2f)`\n- **日推刷新键**：服务端按天生成、每天 6:00 换一批，刷新键没有意义 → 删除，改为自动换批（凌晨算前一天）\n- **榜单封面**：卡片改用「榜一那首歌」的专辑图（明文 `/api/playlist/detail`，12 个榜单 / 3 并发 / 失败回退）\n\n### ⑤ 校验\n\n全量 JVM 单测 **3505 项（QqLiveProbeTest 为真机网络探针，本机网络下 5 项失败，与代码无关）**。\n",
+   "assets": [
+    {
+     "id": 702137307,
+     "name": "Arris-v4.0.0-gpl.apk",
+     "size": 16363777,
+     "browser_download_url": ""
+    }
+   ]
+  },
+  {
+   "tag_name": "lts-3.7",
+   "name": "LTS 3.7.x · 长期维护线（滚动更新）",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-10-31T13:36:47Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "# LTS 3.7.x · 长期维护线（滚动更新）\n\n这条 Release **不是某个具体版本**，而是 LTS 线的**固定入口**：每次 LTS 出包都会替换下面这些附件，\n版本号看附件文件名。本页不会被标记为 Latest，也不会顶掉主线的「最新版」徽章。\n\n## 当前 LTS 版本：`v3.7.15-gpl`（versionCode 102）\n\n| 项 | 值 |\n|---|---|\n| 最低系统 | **Android 7.0（minSdk 24）** —— 想装 3.8.x 需要 Android 10+ |\n| 附件 | `Arris-v3.7.15-gpl.apk`（≈ 12 MB） |\n| 官网直链 | `https://arris.de5.net/get/lts-latest.apk`（支持断点续传/多线程，永远指向最新 LTS） |\n| 旧版 | `v3.7.14-gpl`、`v3.7.13-gpl` 仍在 Releases 里，可回退 |\n\n## 本版（3.7.15）回移的内容\n\n- **开关代理后未缓存的歌放不出来**：代理的 fake-ip（`198.18.0.0/15`）与真实 IP 是两套解析结果，\n  而 JVM 的 DNS 缓存不随网络切换失效 —— 关掉代理后取链仍往假地址上连。\n  新增 `DnsCache`（反射清缓存）并在网络切换与取链重试两处调用。\n- **检查更新不再依赖 GitHub**：首选 `https://arris.de5.net/api/releases`，\n  GitHub 原接口仅作兜底；`api.github.com` 在国内经常裸连失败。\n- **按发布通道过滤**：3.7.x 只看到 3.7.x 与 `lts-3.7`，不会被推 `minSdk 29` 的 3.8.x。\n\n## LTS 线的取舍\n\nLTS **只回移「设备兼容 / 正确性」修复，不带新功能**：\n\n- ✅ 会回移：竖屏封面遮挡、自动旋转默认值、地址族回退、主线程 socket 崩溃、DNS 缓存、视觉统一\n- ❌ 不回移：听歌识曲、一起听（依赖 3.8 的协议与后端，且在 Android 7 设备上没有验证过）\n\n## 校验\n\n- 全量 JVM 单测 **3399 项 0 失败**\n- 与 3.8.x 同一证书（`CN=Ncrust, OU=Dev, O=Ncrust`），可直接覆盖安装\n",
+   "assets": [
+    {
+     "id": 702138800,
+     "name": "Arris-v3.7.24-gpl.apk",
+     "size": 12252793,
+     "browser_download_url": ""
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.8.18-gpl",
+   "name": "Arris v3.8.18-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-01T18:35:26Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.18-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## v3.8.18-gpl（versionCode 138）\n\n### 音频流三段计时进日志\n\n`MediaHttp` 挂上了 `EventListener`，每条音频请求都会打：\n\n```\nI MediaHttp: audio headers code=200 host=aqqmusic.tc.qq.com elapsed=449ms\nI MediaHttp: audio call end elapsed=1321ms\nI MediaHttp: audio call failed after 10012ms: SocketTimeoutException …\n```\n\n配合已有的 `SongUrlFetcher: level=… ok in Xms` 与 `NcrustHttpTiming`，\n「点了歌之后那几秒花在哪」现在是三条可对齐的线：取链 → 建连/响应头 → 传输/解码。\n\n实测参考（手机裸连）：QQ 的 CDN TTFB 0.45s、877 KB 共 1.3s —— 服务端侧不慢。\n\n### 补掉最后一个裸 `OkHttpClient`\n\n`AmllTtmlClient`（TTML 歌词拉取）此前是 `OkHttpClient().newBuilder()` ——\n唯一一个绕过 `AppHttp` 的客户端。本机 IPv6 不通时它会白等到超时，表现为「歌词一直不出来」。\n现已并入 `AppHttp`。\n\n`HttpClientDnsAuditTest` 也扩容了：`OkHttpClient()` 与 `.newBuilder()` 一并禁止 ——\n它正是从这个缝里漏过去的。\n\n### 校验\n\n全量 JVM 单测 **3505 项 0 失败**。\n",
+   "assets": [
+    {
+     "id": 699171036,
+     "name": "Arris-v3.8.18-gpl.apk",
+     "size": 16085384,
+     "browser_download_url": ""
+    }
+   ]
+  },
   {
    "tag_name": "v3.8.17-gpl",
    "name": "Arris v3.8.17-gpl",
@@ -45,7 +99,7 @@
    "published_at": "2026-11-01T17:01:59Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.15-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.15-gpl（versionCode 135）\n\n### 应用内下载：4 段并发\n\nAPK 16 MB，在裸连（手机 → Cloudflare，RTT 450–560ms、丢包 50–66%）上单连接要好几分钟。\n服务端其实一直支持 `Range`（实测 8 段并发各返回精确 1 MB），只是客户端没用。\n\n现在：\n\n1. 先 `Range: bytes=0-0` 探测，拿总长与 `ETag`；\n2. 4 段并发，每段独立 `RandomAccessFile` 写自己的区间（互不重叠）；\n3. 收尾校验文件长度与 `ETag`（资产被替换就整体重来，不拼混合包）。\n\n**分流规则**（什么时候不用多线程）：服务端不支持 Range / 体积 ≤4 MB / 存在可续传残包 → 仍走原单流下载器；\n任一段失败或用户取消 → 全体放弃并回落单流。**快是加分项，下载成功是底线。**\n\n### 服务端改动\n\n`/api/releases` 与 `/api/latest` 里的资产地址从 `/dl/` 改为 **`/get/`**：\n\n| 路径 | 行为 |\n|---|---|\n| `/dl/x.apk` | Cloudflare 静态直出，**不认 Range**（`curl -r` 返回整包） |\n| `/get/x.apk` | 走 Worker，自己实现 **206 + `Content-Range`**，支持续传与多线程 |\n\n手机实测：`HTTP/1.1 206`，`Content-Range: bytes 0-0/16069004`，带 `ETag`。\n\n### 一并修掉的\n\n- 一起听成员侧漂移窗口 5 秒（3.8.14）\n- 应用内下载补 IPv4 优先（3.8.13）\n- 检查更新单对象归一化 + 11KB 响应（3.8.12）\n",
+   "body": "",
    "assets": [
     {
      "id": 698938515,
@@ -63,7 +117,7 @@
    "published_at": "2026-11-01T16:48:10Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.14-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.14-gpl（versionCode 134）\n\n### 一起听：不再「一同步就暂停」\n\n成员侧的漂移容差原来是 **800ms** —— 网络抖动 + 房主时间戳误差就能超过它，\n于是成员每隔一两份快照就被纠正一次，听感就是「一直在被同步打断、老是暂停」。\n\n现在的分层：\n\n| 偏差 | 行为 |\n|---|---|\n| ≤ **5s** | **完全不动**（人耳在这个量级听不出差别） |\n| 5s – 12s | 温和纠正：只把进度对到目标位置，**不动播放/暂停态** |\n| ≥ **12s** | 强制对齐：位置与播放态一起同步 |\n\n另外播放/暂停态现在要求**连续两次快照一致**才跟随（`TRANSPORT_CONFIRMATIONS=2`），\n房主瞬时缓冲不会再顺手把成员一起停掉。\n\n### 顺带修掉的两处网络问题（3.8.12 / 3.8.13 的内容）\n\n- **检查更新**：单对象响应归一化真正接上（此前一直判「解析失败」）；\n  更新客户端补 IPv4 优先；响应从 509KB 压到 11KB，源按体积从小到大取。\n- **应用内下载**：下载客户端同样补 IPv4 优先 —— 修「第一次必失败、重试才成功」\n  （本机 IPv6 到 Cloudflare 完全不通，IPv4 200 / IPv6 15s 超时，实测记录在仓库里）。\n\n### 校验\n\n- 全量 JVM 单测 3503 项；唯一失败项是 `QqLiveProbeTest` 的实时探针（本机出口 IP 被限，返回 403/500）\n- 新增 `DriftWindowTest` 6 例钉住窗口边界（2s / 恰好 5s / 16s / 硬阈值 / 未起播 / 播放态）\n",
+   "body": "",
    "assets": [
     {
      "id": 698903620,
@@ -81,7 +135,7 @@
    "published_at": "2026-11-01T16:07:02Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.13-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.13-gpl（versionCode 133）\n\n### 应用内下载：第一次必失败，第二次才连上\n\n你报的现象 —— 第一次失败、重试成功 —— 是同一个根因的另一种表现：\n\n真机实测（同一台手机、裸连）：\n\n| 请求 | 结果 |\n|---|---|\n| `curl -4 https://arris.de5.net/...` | HTTP 200，conn 0.39s |\n| `curl -6` 同一地址 | **15 秒超时** |\n\n`UpdateDownloader` 自建的 OkHttp **没有 AddressPreference**：第一次下载把 20s 预算全花在死掉的\nIPv6 地址上 → 失败；重试时系统已把那个地址标记为不可用，才轮到 IPv4 → 成功。\n\n修：下载客户端补 `AddressPreference.ipv4First` + `retryOnConnectionFailure`，连接超时 20s → 10s。\n\n顺带加诊断日志（下次直接看得到卡在哪）：\n\n```\nI UpdateDownloader: start host=arris.de5.net resumeFrom=0\nI UpdateDownloader: response code=200 len=16069004 elapsed=3211ms\nI UpdateDownloader: failed after 10012ms: SocketTimeoutException timeout\n```\n\n### 一并包含（3.8.9–3.8.12）\n\n- 检查更新链路打通：单对象归一化、IPv4 优先、响应 509KB→11KB\n- 浏览器入口与下载地址都指向官网（`site_url`），GitHub 只作数据来源\n- B站音源：`BiliApi` 客户端硬化（IPv4 / h1 / 读超时）\n- 音频流走 OkHttp（读 10s、连接池可清）、回前台刷新、取链阶梯记忆\n\n### 校验\n\n真机裸连实测检查更新：`evaluate=Found(version=3.8.12, assetUrl=https://arris.de5.net/dl/...)`，\n3.1 秒完成。\n",
+   "body": "",
    "assets": [
     {
      "id": 698802326,
@@ -141,24 +195,6 @@
      "id": 697709832,
      "name": "Arris-v3.8.6-gpl.apk",
      "size": 16069000,
-     "browser_download_url": ""
-    }
-   ]
-  },
-  {
-   "tag_name": "lts-3.7",
-   "name": "LTS 3.7.x · 长期维护线（滚动更新）",
-   "draft": false,
-   "prerelease": false,
-   "published_at": "2026-10-31T13:36:47Z",
-   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
-   "site_url": "https://arris.de5.net/#download",
-   "body": "",
-   "assets": [
-    {
-     "id": 699168536,
-     "name": "Arris-v3.7.23-gpl.apk",
-     "size": 12154624,
      "browser_download_url": ""
     }
    ]
