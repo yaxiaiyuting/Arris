@@ -187,8 +187,6 @@ internal fun ColumnScope.PlayerCardExpanded(
     romanizedLyrics: List<LrcLine>,
     lyricsWordAnimation: Int,
     lyricsFontScale: Float,
-    /** 4.0.0：true = 卡拉 OK 渲染（实验室开关，见 LabScreen）。 */
-    karaokeEngine: Boolean = false,
     lyricsSweepQuality: Int,
     lyricsReady: Boolean,
     lyricsUnavailable: Boolean,
@@ -382,20 +380,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             animationSpec = SokuouTweens.CoverFade,
                             label = "LyricsCrossfade"
                         ) { _ ->
-                            if (karaokeEngine) {
-                                com.takahashirinta.ncrust.ui.player.karaoke.ArrisKaraokeLyricsView(
-                                    lyrics = lyrics,
-                                    translatedLyrics = translatedLyrics,
-                                    romanizedLyrics = romanizedLyrics,
-                                    positionFlow = positionFlow,
-                                    totalDurationMs = song?.duration ?: 0L,
-                                    fontScale = lyricsFontScale,
-                                    showTranslation = showLyricsTranslation,
-                                    showRomanization = showLyricsRomanization,
-                                    onSeekToMs = { ms -> playerViewModel.seekTo(ms) },
-                                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                                )
-                            } else LyricsView(
+                            LyricsView(
                                 lyrics = lyrics,
                                 translatedLyrics = translatedLyrics,
                                 showTranslation = showLyricsTranslation,

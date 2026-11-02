@@ -72,8 +72,6 @@ class SettingsDefaultsTest {
             listOf(
                 LyricsWordAnimationMode.GRADIENT_SWEEP,
                 LyricsWordAnimationMode.HARD_CUT,
-                // 4.0.0：卡拉 OK 渲染引擎也走这一组选项（三档变四档）
-                LyricsWordAnimationMode.KARAOKE,
                 LyricsWordAnimationMode.OFF,
             ),
             SettingsRegistry.entryById("lyrics_word_animation")!!.choices,
