@@ -404,7 +404,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
-| v3.7.24-gpl | 2026-11-02 | LTS 与主线同代：Kotlin 2、media3 1.9、歌词库、均衡器、四项体验修复 |
+| v3.7.24-gpl | 2026-11-02 | LTS 与主线同代：Kotlin 2、media3 1.9、均衡器、间奏呼吸点、竖屏字号修复 |
 | v3.7.23-gpl | 2026-11-02 | LTS 对齐：TTML 客户端走 `AppHttp`、音频三段计时、审计测试扩容到 `OkHttpClient()`/`newBuilder()` |
 | v3.7.21-gpl | 2026-11-02 | LTS 与主线同代：`AppHttp` 统一网络（IPv4 优先）、彩蛋推荐一首、分段下载、封面/艺人图修复 |
 | v3.7.20-gpl | 2026-11-01 | LTS 对齐：B站客户端硬化、更新检查 IPv4/小响应/归一化 |
