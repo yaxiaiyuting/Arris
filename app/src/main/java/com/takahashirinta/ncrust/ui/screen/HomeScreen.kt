@@ -1,5 +1,7 @@
 package com.takahashirinta.ncrust.ui.screen
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 import android.graphics.drawable.BitmapDrawable
 import android.content.Context
 import androidx.compose.animation.Crossfade
@@ -214,6 +216,13 @@ fun HomeScreen(
         }
     }
 
+    // 4.0.1：榜单到手就补首曲封面 —— 用 LaunchedEffect(toplists) 而不是只在网络回调里调，
+    // 因为首屏经常是**缓存命中**（ContentCache.toplistItems），那条路径不走网络回调，
+    // 只在回调里调用就会导致"榜单出来了但封面还是旧的拼贴图"。
+    LaunchedEffect(toplists) {
+        if (toplists.isNotEmpty()) loadChartCovers(toplists)
+    }
+
     /** v1.5.1 · C：把当前首页状态落盘（异步、失败无害），供下次无网冷启动使用。 */
     fun persistHomeSnapshot() {
         HomeSnapshot.save(
@@ -327,10 +336,7 @@ fun HomeScreen(
             runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
                 if (!sessionStillAt(ownerAtStart)) return@launch
                 ContentCache.putToplist(it)
-                withContext(Dispatchers.Main) {
-                    toplists = it
-                    loadChartCovers(it)
-                }
+                withContext(Dispatchers.Main) { toplists = it }
                 HomeSnapshot.save(context, toplists = it)
             }
         }
@@ -510,15 +516,13 @@ fun HomeScreen(
                                 title = strings.dailySongsTitle,
                                 onPlayAll = { onPlayDailyAll?.invoke(dailySongs) },
                                 actions = {
-                                    // 手动刷新每日推荐(#26):重新拉取并 diff 平滑替换
-                                    MetroIconButton(onClick = { loadDailySongs() }) {
-                                        MetroIcon(
-                                            Icons.Default.Refresh,
-                                            contentDescription = strings.refreshLabel,
-                                            tint = LocalMetroColors.current.onSurfaceVariant,
-                                            sizeDp = 22.dp
-                                        )
-                                    }
+                                    // 4.0.1：**删掉刷新键**。服务端按天生成（每天 6:00 换一批），
+                                    // 点多少次都是同一份；换批交给 DailyRecommendation 自动触发。
+                                    MetroText(
+                                        "每日 6:00 更新",
+                                        color = LocalMetroColors.current.onSurfaceVariant,
+                                        style = TextStyle(fontSize = 11.sp)
+                                    )
                                 }
                             )
                         }

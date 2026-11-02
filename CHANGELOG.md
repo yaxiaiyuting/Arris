@@ -13,7 +13,7 @@
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
 
-## v4.0.1-gpl — 主线瘦身：移除 FFmpeg 软解扩展（2026-11-03）
+## v4.0.1-gpl — 主线瘦身 + 首页两处补修（2026-11-03）
 
 - **APK 16.28 MB → 9.90 MB（−39%）**：去掉 `org.jellyfin.media3:media3-ffmpeg-decoder`
   （4 个 ABI 的 `libffmpegJNI.so`，合计 5.58 MB，占原包 34%）
@@ -21,6 +21,10 @@
   平台自带 FLAC / Opus / AAC，音源给的也是 flac / mp3 / m4a
 - `deviceCanDecodeFlac` 改为只认平台解码器；平台真解不了时仍走既有自动降级
 - **LTS 3.7.24 不动**：minSdk 24，24–26 上确实存在缺解码器的 ROM
+- **日推刷新键删除**：服务端按天生成，点多少次都是同一份 → 标题右侧写明「每日 6:00 更新」，
+  换批交给 `DailyRecommendation`（凌晨沿用前一天）
+- **榜单卡用榜一那首歌的封面**：此前只在网络回调里拉，而首屏常命中缓存榜单 ⇒ 永远不补；
+  改成 `LaunchedEffect(toplists)`，缓存路径也覆盖
 
 ## v4.0.0-gpl — 跨代：均衡器 / 工具链 / 歌词体验（2026-11-02）
 
