@@ -430,12 +430,14 @@ fun KaraokeLineText(
         }
     }
 
+    // Arris 修改（4.0.0）：本项目的歌词面板是**居中**排版，上游默认靠左。
+    // 这里统一改成居中（RTL 仍靠右），否则切到卡拉 OK 引擎会看到"居中对齐丢了"。
     val translationTextAlign = remember(isRightAligned) {
-        if (isRightAligned) TextAlign.End else TextAlign.Start
+        if (isRightAligned) TextAlign.End else TextAlign.Center
     }
 
     val columnHorizontalAlignment = remember(isRightAligned) {
-        if (isRightAligned) Alignment.End else Alignment.Start
+        if (isRightAligned) Alignment.End else Alignment.CenterHorizontally
     }
 
     val mainLine = line as? KaraokeLine.MainKaraokeLine

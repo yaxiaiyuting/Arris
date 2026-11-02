@@ -256,6 +256,8 @@ class WaveformSettingsGatingTest {
             listOf(
                 "wifi_quality", "mobile_quality", "gapless_playback", "vip_trial_playback",
                 "bilibili_quality_cap", "bilibili_prefer_flac", "keep_screen_on",
+                // 4.0.0：均衡器入口（播放与音质页）
+                "action.equalizer_open",
             ),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id },
         )

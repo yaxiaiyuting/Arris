@@ -66,8 +66,16 @@ internal object KaraokeBridge {
             val start = word.startMs.coerceAtLeast(0L).toInt()
             val end = (word.startMs + word.durationMs).coerceAtLeast(word.startMs).toInt()
                 .let { if (index == line.words.lastIndex && it <= start) lineEnd else it }
+            // 4.0.0：**内容从原句按字符区间切**，不要用 word.text。
+            // yrc 的英文逐词里，词与词之间的空格属于"前一个词的尾部"，我们自己的
+            // LrcWord.text 把它裁掉了；直接拼 word.text 会得到 "Hestheguywhosthe..."。
+            // charStart/charEndExclusive 是相对整行的，切出来天然带空格。
+            val content = line.text.substring(
+                word.charStart.coerceIn(0, line.text.length),
+                word.charEndExclusive.coerceIn(0, line.text.length),
+            ).ifEmpty { word.text }
             KaraokeSyllable(
-                content = word.text,
+                content = content,
                 start = start,
                 end = end.coerceAtLeast(start),
             )

@@ -956,6 +956,7 @@ object SettingsRegistry {
         )
 
         // ── 歌词 ─────────────────────────────────────────────────────────────────────
+        add(action("action.equalizer_open", SettingsGroup.PLAYBACK, "equalizerEntryLabel", "equalizerEntryHint"))
         add(
             pref(
                 key = "lyrics_translation",
@@ -990,6 +991,7 @@ object SettingsRegistry {
                 newInV348 = true,
             )
         )
+        // 4.0.0：均衡器入口（点击进入自绘页面）
         add(
             pref(
                 key = "lyrics_word_animation",
@@ -1000,6 +1002,7 @@ object SettingsRegistry {
                 choices = listOf(
                     LyricsWordAnimationMode.GRADIENT_SWEEP,
                     LyricsWordAnimationMode.HARD_CUT,
+                    LyricsWordAnimationMode.KARAOKE,
                     LyricsWordAnimationMode.OFF,
                 ),
             )

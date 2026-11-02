@@ -174,7 +174,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     /** 实验室里切换引擎后调用（设置页返回时也会走一次）。 */
     fun reloadLyricsEngine() {
-        karaokeEngine.value = LyricsDisplayPrefs.readKaraokeEngine(
+        // 4.0.0：以「逐字模式 = 卡拉 OK」为准（设置页那一组选项），实验室旧开关只作为兼容回退。
+        val mode = LyricsDisplayPrefs.readWordAnimation(
+            getApplication<Application>()
+                .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        )
+        karaokeEngine.value = mode == LyricsWordAnimationMode.KARAOKE || LyricsDisplayPrefs.readKaraokeEngine(
             getApplication<Application>()
                 .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE)
         )
@@ -1191,6 +1196,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 .getSharedPreferences(LyricsDisplayPrefs.PREFS_NAME, android.content.Context.MODE_PRIVATE),
             normalized
         )
+        // 4.0.0：切成/切出「卡拉 OK」要立刻换渲染器，不用回播放页再进一次。
+        karaokeEngine.value = normalized == LyricsWordAnimationMode.KARAOKE
     }
 
     /**

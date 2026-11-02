@@ -30,8 +30,17 @@ object LyricsWordAnimationMode {
     const val HARD_CUT = 1
     const val OFF = 2
 
+    /**
+     * 4.0.0：**卡拉 OK 渲染引擎**（移植自 NeriPlayer）。
+     *
+     * 与 0/1 是"逐字画法"不同，它是**另一套渲染器**：整块面板换成 karaoke 视图
+     * （音节级逐字 + 双语行 + 模糊过渡）。放在同一组选项里是因为对用户来说
+     * 这仍是"逐字歌词怎么显示"的选择。
+     */
+    const val KARAOKE = 3
+
     /** 越界值一律回落默认模式，绝不因为 prefs 被写坏而崩或不显示。 */
-    fun normalize(raw: Int): Int = if (raw in GRADIENT_SWEEP..OFF) raw else GRADIENT_SWEEP
+    fun normalize(raw: Int): Int = if (raw in GRADIENT_SWEEP..KARAOKE) raw else GRADIENT_SWEEP
 }
 
 /**

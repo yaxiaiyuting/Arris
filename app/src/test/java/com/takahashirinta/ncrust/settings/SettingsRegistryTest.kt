@@ -671,7 +671,8 @@ class SettingsRegistryTest {
          */
         val LEGACY_PREF_KEYS: Set<String> = setOf(
             // §2.1 ncrust_settings 有 UI 入口的 27 项
-            "wifi_quality", "mobile_quality", "gapless_playback", "keep_screen_on", "auto_rotate",
+            "wifi_quality", "mobile_quality", "gapless_playback", "keep_screen_on",
+            "auto_rotate",
             "audio_visualizer", "artist_reco_enabled", "page_transition_enabled", "lyrics_translation",
             "lyrics_word_animation", "lyrics_sweep_quality", "lyrics_font_scale", "lyrics_in_media_session",
             "lyrics_ttml_enabled", "lyrics_ttml_first", "lyrics_romanization", "lyrics_dynamic_font",
@@ -778,7 +779,8 @@ class SettingsRegistryTest {
             "action.birthday_date", "action.birthday_preview",
             "action.account_netease", "action.account_qq", "action.account_bili",
             "action.background_activity",
-            "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
+            "action.equalizer_open",
+        "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
         )
 
         /** 没有文案路径的条目（见 `titleLessEntriesAreExactlyTheDocumentedOnes`）。 */
