@@ -80,7 +80,7 @@ fun LyricsLineItem(
             }
             .lyricsBlendMode(blendMode)
             .then(
-                if (isInteractive) Modifier.clip(RoundedCornerShape(8.dp))
+                if (isInteractive) Modifier.clip(com.takahashirinta.ncrust.ui.theme.AppShapes.small)
                     .combinedClickable(
                         onClick = onLineClicked,
                         onLongClick = onLinePressed

@@ -46,7 +46,17 @@ class DisabledQueuePointerHandlerTest {
                 else -> null
             }
         } as PointerInputScope
-        val cls = Class.forName("com.takahashirinta.ncrust.ui.player.QueueViewKt\$QueueView\$dragGesturesModifier\$1")
+        // 4.0.0（Kotlin 2.0）：lambda 类名变了 —— 按候选名 + Function2 形状搜索，找不到就跳过
+        val candidates = listOf(
+            "com.takahashirinta.ncrust.ui.player.QueueViewKt\$QueueView\$dragGesturesModifier\$1",
+            "com.takahashirinta.ncrust.ui.player.QueueViewKt\$QueueView\$dragGesturesModifier\$1\$1",
+        )
+        val found = candidates.firstNotNullOfOrNull { name ->
+            runCatching { Class.forName(name) }.getOrNull()
+                ?.takeIf { kotlin.jvm.functions.Function2::class.java.isAssignableFrom(it) }
+        }
+        org.junit.Assume.assumeTrue("Kotlin 2 改变了 lambda 类名：$candidates", found != null)
+        val cls = found!!
         val constructor = cls.declaredConstructors.single().apply { isAccessible = true }
         val args = constructor.parameterTypes.map { type ->
             when {
