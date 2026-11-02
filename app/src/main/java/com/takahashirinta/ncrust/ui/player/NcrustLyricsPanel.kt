@@ -15,6 +15,10 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -616,6 +620,16 @@ fun NcrustLyricsPanel(
                                 fontWeight = FontWeight.Bold,
                             ),
                         )
+                        // 4.0.0：间奏呼吸点 —— 借鉴歌词库的"等下一句"提示，改成我们的直角小方块。
+                        // 只在「当前行已经唱完、下一句还早」的窗口里出现，其余时候不挂载（零开销）。
+                        if (index == currentIndex) {
+                            InterludeDots(
+                                nowMs = currentPosition(),
+                                lineEndMs = line.endMs,
+                                nextLineStartMs = lines.getOrNull(index + 1)?.timestampMillis,
+                                color = currentLineColor,
+                            )
+                        }
                         if (line.translation.isNotEmpty()) {
                             // Spotify 式双语:原句下方小号、降透明度渲染翻译。
                             MetroText(
@@ -984,4 +998,49 @@ internal fun currentLineIndex(positionMillis: Long, timestamps: LongArray): Int 
         if (timestamps[mid] <= positionMillis) lo = mid else hi = mid - 1
     }
     return lo
+}
+
+
+/**
+ * 间奏呼吸点（4.0.0）。
+ *
+ * 灵感来自移植过来的 karaoke 渲染器里的「呼吸点」：一句唱完之后到下一句之前，
+ * 面板什么都不动会让人以为卡住了。这里用**三个直角小方块**按 1/3 相位呼吸
+ * ——形状是我们自己的（不用圆点），节奏也只跟帧时钟走，不额外起协程。
+ *
+ * 触发条件刻意保守：
+ *  · 当前行必须有 `endMs`（yrc 才有），否则不知道"唱完了"这一刻；
+ *  · 距下一句还要 > 1.2s 才显示，避免快节奏歌里闪一下；
+ *  · 只有当前行挂载，其它行不参与任何计算。
+ */
+@Composable
+private fun InterludeDots(
+    nowMs: Long,
+    lineEndMs: Long?,
+    nextLineStartMs: Long?,
+    color: Color,
+) {
+    if (lineEndMs == null || nextLineStartMs == null) return
+    val start = lineEndMs + 250L
+    val end = nextLineStartMs - 1_200L
+    if (end <= start || nowMs !in start..end) return
+
+    val generation = MotionClock.generation
+    val phase = (generation % 90L) / 90f            // 0..1 循环，~1.5s 一轮
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        repeat(3) { i ->
+            val local = ((phase + i / 3f) % 1f)
+            val wave = 0.35f + 0.65f * kotlin.math.abs(1f - 2f * local)
+            Box(
+                Modifier
+                    .padding(horizontal = 4.dp)
+                    .size(6.dp)
+                    .graphicsLayer { alpha = wave }
+                    .background(color)
+            )
+        }
+    }
 }

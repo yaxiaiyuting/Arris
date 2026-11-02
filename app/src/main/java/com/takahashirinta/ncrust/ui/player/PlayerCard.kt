@@ -201,7 +201,6 @@ internal fun PlayerCard(
     // v1.5.1 · A：逐字动画模式（0 渐变扫过 / 1 逐字硬切 / 2 关闭逐字）。
     // 模式 2 时 karaokeEnabled=false，行内渲染退回 v1.4.1 的整行路径。
     val lyricsWordAnimation by playerViewModel.lyricsWordAnimation.collectAsStateWithLifecycle()
-    val karaokeEngine by playerViewModel.karaokeEngine.collectAsStateWithLifecycle()
     // v1.5.1 · E：歌词字号倍率（设置页与歌词界面的 A-/A+ 都改它）。
     val lyricsFontScale by playerViewModel.lyricsFontScale.collectAsStateWithLifecycle()
     // v1.5.2：逐字扫过的绘制质量（0 自动 / 1 高级软边 / 2 兼容硬边）。
@@ -603,7 +602,6 @@ internal fun PlayerCard(
                     showDynamicLyricFont = showDynamicLyricFont,
                     romanizedLyrics = romanizedLyrics,
                     lyricsWordAnimation = lyricsWordAnimation,
-                    karaokeEngine = karaokeEngine,
                     lyricsFontScale = lyricsFontScale,
                     lyricsSweepQuality = lyricsSweepQuality,
                     lyricsReady = lyricsReady,

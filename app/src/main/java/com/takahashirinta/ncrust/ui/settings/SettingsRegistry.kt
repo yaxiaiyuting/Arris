@@ -1002,7 +1002,6 @@ object SettingsRegistry {
                 choices = listOf(
                     LyricsWordAnimationMode.GRADIENT_SWEEP,
                     LyricsWordAnimationMode.HARD_CUT,
-                    LyricsWordAnimationMode.KARAOKE,
                     LyricsWordAnimationMode.OFF,
                 ),
             )
