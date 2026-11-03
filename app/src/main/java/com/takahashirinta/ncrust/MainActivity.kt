@@ -3698,7 +3698,8 @@ fun MainScreen(
                             // 它负责队列插入 + `currentQueueIndex` + 持久化，
                             // 而 URL 由离线兜底 `recallOfflineCache` 按 id 找回缓存里的那一条。
                             onPlaySong = { song -> playSongItem(song) },
-                        )
+                            onOpenUpdate = { showUpdate = true },
+                )
                     },
                     startDestination = NavRoutes.HOME
                 )

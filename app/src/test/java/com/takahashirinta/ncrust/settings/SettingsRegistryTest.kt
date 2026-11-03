@@ -778,6 +778,7 @@ class SettingsRegistryTest {
         val ACTION_IDS: Set<String> = setOf(
             "action.birthday_date", "action.birthday_preview",
             "action.account_netease", "action.account_qq", "action.account_bili",
+            "action.check_update",
             "action.background_activity",
             "action.equalizer_open",
         "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
