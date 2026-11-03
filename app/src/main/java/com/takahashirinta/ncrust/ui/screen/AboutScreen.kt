@@ -172,9 +172,13 @@ fun AboutScreen(
                 CascadeBlock(delayMillis = 160) {
                     Column {
                         AboutSection(s.aboutSectionCredits.uppercase(), accent)
-                        AboutRow(s.aboutCreditCli, "Suxiaoqinx/Netease_url (MIT)")
-                        AboutRow(s.aboutCreditAnim, "SaltPlayerSource")
-                        AboutRow(s.aboutCreditDesign, "Apple Music for Android")
+                        // 4.0.2：名单重写 —— 去掉那些"列了但其实没发挥作用的"，
+                        // 换成真参考过/借鉴过/在上游继续往前走了的东西。
+                        // 角色名用字面量，不占 8 套语言的键位。
+                        AboutRow("歌词与播放器参考", "NeriPlayer 音理 (GPL-3.0)")
+                        AboutRow("播放引擎", "AndroidX Media3 / ExoPlayer")
+                        AboutRow("接口逻辑参考", "Suxiaoqinx/Netease_url (MIT)")
+                        AboutRow("设计参考", "Apple Music for Android")
                         AboutRow("Tux", "Larry Ewing / The GIMP · Arris")
                         Spacer(Modifier.height(32.dp))
                     }
