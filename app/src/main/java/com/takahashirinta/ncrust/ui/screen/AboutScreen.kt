@@ -154,9 +154,11 @@ fun AboutScreen(
                 CascadeBlock(delayMillis = 160) {
                     Column {
                         AboutSection(s.aboutSectionCredits.uppercase(), accent)
-                        AboutRow(s.aboutCreditCli, "Suxiaoqinx/Netease_url (MIT)")
-                        AboutRow(s.aboutCreditAnim, "SaltPlayerSource")
-                        AboutRow(s.aboutCreditDesign, "Apple Music for Android")
+                        // 3.7.25：名单与主线同步 —— 去掉列了但没发挥作用的，补上真参考过的。
+                        AboutRow("歌词与播放器参考", "NeriPlayer 音理 (GPL-3.0)")
+                        AboutRow("播放引擎", "AndroidX Media3 / ExoPlayer")
+                        AboutRow("接口逻辑参考", "Suxiaoqinx/Netease_url (MIT)")
+                        AboutRow("设计参考", "Apple Music for Android")
                         AboutRow("Tux", "Larry Ewing / The GIMP · Arris")
                         Spacer(Modifier.height(32.dp))
                     }

@@ -304,7 +304,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                         }
                     },
                     lyricsUnavailable = lyricsUnavailable,
-                    previousEnabled = playMode != QueueModes.INFINITY,
+                    // 3.7.25：不再按模式置灰（电台下原来恒 false）。
+                    previousEnabled = playbackQueue.isNotEmpty(),
                     // 大屏模式也用扁平横向控制条（竖屏那套大按钮堆叠在 300dp 高里放不下）。
                     landscape = geo.usesSideCover,
                     compact = geo.usesSideCover || heightClass != HeightClass.Regular,

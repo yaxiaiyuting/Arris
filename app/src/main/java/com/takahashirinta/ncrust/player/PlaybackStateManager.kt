@@ -240,6 +240,25 @@ object PlaybackStateManager {
     }
 
     /**
+     * 3.7.25：**批量撤销续播进度**（一次性写盘）。
+     * 用于「整张新歌单 / 库页播放全部」这类全新队列：不该继承上次听到哪儿。
+     */
+    fun clearSongPositions(context: Context, songIds: Collection<Long>) {
+        if (songIds.isEmpty()) return
+        val map = ensurePositionsLoaded(context)
+        var removed = 0
+        synchronized(positionLock) {
+            songIds.forEach { id -> if (map.remove(id) != null) removed++ }
+        }
+        if (removed == 0) return
+        runCatching {
+            getPrefs(context).edit()
+                .putString(KEY_SONG_POSITIONS, PlaybackPositionCodec.encode(map))
+                .apply()
+        }
+    }
+
+    /**
      * 记录某首歌的播放位置（1s debounce 写盘）。
      *
      * 两条**撤销**路径（v3.7.9 · H16）：位置落回起点区间（用户把进度拖回开头），
