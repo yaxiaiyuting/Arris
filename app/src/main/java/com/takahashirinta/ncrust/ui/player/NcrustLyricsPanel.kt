@@ -15,6 +15,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -599,7 +600,20 @@ fun NcrustLyricsPanel(
                                 scaleX = scale
                                 scaleY = scale
                                 transformOrigin = TransformOrigin(0f, 0.5f)
-                            },
+                            }
+                            // 4.0.1：**非当前行模糊**（借鉴 karaoke 渲染器的景深效果）。
+                            // 距离 0 行 = 清晰；越远越糊，上限 0.9dp，别糊到读不出来。
+                            // `Modifier.blur` 在 API < 31 上是 no-op（RenderEffect 才支持），
+                            // 所以这里不需要额外的版本分支 —— 老机器自动退回纯透明度/缩放层次。
+                            .then(
+                                if (index == currentIndex) Modifier
+                                else Modifier.blur(
+                                    radius = (abs(index - smoothCurrentIndex.value) / 1.8f)
+                                        .coerceIn(0f, 1f)
+                                        .let { it * 0.9f }
+                                        .dp
+                                )
+                            ),
                     ) {
                         // v1.5.0 · B：有逐字数据且开关打开时走卡拉 OK 渲染，否则与 v1.4.1 完全一致。
                         LyricLineBody(

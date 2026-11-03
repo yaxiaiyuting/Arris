@@ -161,6 +161,8 @@ fun SettingsGroupScreen(
      * 「不给播放能力」应当是一个合法配置，而不是编译错误）。
      */
     onPlaySong: (SongItem) -> Unit = {},
+    /** 4.0.1：设置页「检查更新」发现新版本时，交给调用方打开更新页。 */
+    onOpenUpdate: () -> Unit = {},
 ) {
     // 账号组自带一整套覆盖层（账号弹窗 / 二维码登录 / 手机扫码授权），单独一页更清楚。
     if (group == SettingsGroup.ACCOUNT) {
@@ -194,6 +196,8 @@ fun SettingsGroupScreen(
         onOpenAbout = onOpenAbout,
         // v3.3.0：离线缓存列表的「点行即播」需要把意图交回 MainScreen（它拥有队列）。
         onPlaySong = onPlaySong,
+        onOpenUpdate = onOpenUpdate,
+
     )
 }
 
@@ -221,7 +225,14 @@ private fun SettingsPreferenceGroupPage(
     onOpenAbout: () -> Unit,
     /** v3.3.0：离线缓存列表「点行即播」的出口（见 [SettingsGroupScreen] 的同名参数）。 */
     onPlaySong: (SongItem) -> Unit,
+    /** 4.0.1：检查更新发现新版本时打开更新页。 */
+    onOpenUpdate: () -> Unit = {},
 ) {
+    // 4.0.1：检查更新（与关于页同一套逻辑：检查中禁用、发现新版本交给调用方开更新页）
+    val updateState by com.takahashirinta.ncrust.update.UpdateService.state.collectAsState()
+    val manualUpdateCheck = com.takahashirinta.ncrust.ui.components.rememberManualUpdateCheck(
+        onFound = onOpenUpdate
+    )
     // 4.0.0：均衡器是独立页面，从设置里一行进去（返回键由它自己处理）。
     var showEqualizer by remember { mutableStateOf(false) }
     if (showEqualizer) {
@@ -876,6 +887,16 @@ private fun SettingsPreferenceGroupPage(
                                 onClick = { BackgroundImageManager.clear(context) }
                             )
                         }
+                    }
+
+                    SettingsRowKind.CHECK_UPDATE -> item(key = entry.id) {
+                        // 4.0.1：检查更新的显式入口（通用组）。检查中显示「检查中…」并禁用，
+                        // 避免连点发多次请求（UpdateService.checkNow 本身有并发保护）。
+                        SettingActionRow(
+                            label = rowTitle(strings, entry, updateStrings),
+                            trailing = if (updateState.checking) updateStrings.checking else "",
+                            onClick = { if (!updateState.checking) manualUpdateCheck() },
+                        )
                     }
 
                     SettingsRowKind.EQUALIZER_OPEN -> item(key = entry.id) {

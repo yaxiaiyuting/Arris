@@ -396,6 +396,15 @@ object SettingsRegistry {
                 internal = true,
             )
         )
+        // 4.0.1：检查更新放到**通用组**（关于页那个入口总有人找不到）
+        add(
+            action(
+                "action.check_update",
+                SettingsGroup.GENERAL,
+                "update.checkNow",
+                "update.autoCheckDescription",
+            )
+        )
         add(action("action.background_activity", SettingsGroup.GENERAL, "batteryTitle"))
         // v3.1.0 · B：**B 站音源的独立开关**（铁律 24：用户可选择是否启用）。
         //
