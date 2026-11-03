@@ -13,6 +13,19 @@
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
 
+## v4.0.2-gpl — 退出无限模式 / 上一首可用 / 新队列从 0（2026-11-04）
+
+三个症状同一个根：`replaceQueueAndPlay` 只把 `fmMode` 置 false，`playMode` 仍是 `INFINITY`。
+
+- **退出无限模式**：新增 `lastNonInfinityMode`，换队列时 `applyPlayMode(...)` 恢复
+- **上一首恒可用**：UI 不再按模式置灰（`playbackQueue.isNotEmpty()`），
+  `playPrevious()` 删掉 INFINITY 早退，按线性队列回退
+- **全新队列从 0 播**：新增 `PlaybackStateManager.clearSongPositions()`，
+  歌单/专辑「播放全部」不再从上次中段开始
+- **致谢重写**：去掉 SaltPlayerSource 等实际没发挥作用的；
+  新增 NeriPlayer 音理 (GPL-3.0)、Media3/ExoPlayer、Netease_url (MIT)、Apple Music、Tux
+- **LTS 3.7.25 同步**：同源同修 + 致谢同步
+
 ## v4.0.1-gpl — 主线瘦身 + 首页两处补修（2026-11-03）
 
 - **APK 16.28 MB → 9.90 MB（−39%）**：去掉 `org.jellyfin.media3:media3-ffmpeg-decoder`

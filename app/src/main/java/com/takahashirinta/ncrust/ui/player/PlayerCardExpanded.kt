@@ -304,7 +304,9 @@ internal fun ColumnScope.PlayerCardExpanded(
                         }
                     },
                     lyricsUnavailable = lyricsUnavailable,
-                    previousEnabled = playMode != QueueModes.INFINITY,
+                    // 4.0.2：**不再按模式置灰**。原来 INFINITY（电台）下这里是 false，
+                    // 用户看到的就是"上一首完全没用"；现在有队列就能回退。
+                    previousEnabled = playbackQueue.isNotEmpty(),
                     // 大屏模式也用扁平横向控制条（竖屏那套大按钮堆叠在 300dp 高里放不下）。
                     landscape = geo.usesSideCover,
                     compact = geo.usesSideCover || heightClass != HeightClass.Regular,

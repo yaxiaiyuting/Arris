@@ -1567,8 +1567,13 @@ fun MainScreen(
     }
 
     /** 切换播放模式：写盘 + 维护乱序序列（唯一入口，避免漏掉落盘）。 */
+    // 4.0.2：记一个「上一次的非电台模式」。进电台前存，退出电台时恢复 ——
+    // 否则"电台听完播歌单"会停在无限模式（上一首还被锁灰）。
+    var lastNonInfinityMode by remember { mutableStateOf(QueueModes.CYCLE) }
+
     fun applyPlayMode(mode: Int) {
         playerViewModel.invalidatePreload()
+        if (mode != QueueModes.INFINITY) lastNonInfinityMode = mode
         playMode = mode
         PlaybackStateManager.savePlayMode(context, mode)
         if (mode == QueueModes.SHUFFLE) {
@@ -2041,8 +2046,8 @@ fun MainScreen(
 
     fun playPrevious() {
         if (playbackQueue.isEmpty()) return
-        // FM 电台(INFINITY)不可回退：上一首禁用
-        if (playMode == QueueModes.INFINITY) return
+        // 4.0.2：电台模式**不再拒绝上一首** —— 原来这里直接 return，加上 UI 把按钮置灰，
+        // 用户看到的就是"上一首完全没用"。现在按线性队列回退（与单曲循环同一条路径）。
         when (playMode) {
             QueueModes.SINGLE -> com.takahashirinta.ncrust.player.manualQueueIndex(playbackQueue.size, currentQueueIndex, -1)?.let { playFromQueue(it) }
             QueueModes.SHUFFLE -> {
@@ -2489,9 +2494,20 @@ fun MainScreen(
     fun replaceQueueAndPlay(songs: List<SongItem>) {
         if (songs.isEmpty()) return
         fmMode = false
+        // 4.0.2：**电台播完顺手播别的，要真的退出无限模式**。
+        // 旧实现只把 fmMode 置 false，playMode 仍是 INFINITY —— 队列照旧无限续播、
+        // 上一首也还按电台上锁。这里回到「上一次的非电台模式」（没有就是列表循环）。
+        if (playMode == QueueModes.INFINITY) {
+            applyPlayMode(lastNonInfinityMode)
+        }
         playerViewModel.invalidatePreload()
         playbackQueue = songs
         currentQueueIndex = 0
+        // 4.0.2：**全新队列从 0 开始**。此前每首歌都按「上次退出点」续播，
+        // 于是"点了播放全部，第一首却从中间开始"——整张新歌单不该继承旧进度。
+        com.takahashirinta.ncrust.player.PlaybackStateManager.clearSongPositions(
+            context, songs.map { it.id }
+        )
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
         playFromQueue(0)
         expandCard()
