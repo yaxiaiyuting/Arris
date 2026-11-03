@@ -396,15 +396,6 @@ object SettingsRegistry {
                 internal = true,
             )
         )
-        // 4.0.1：检查更新放到**通用组**（关于页那个入口总有人找不到）
-        add(
-            action(
-                "action.check_update",
-                SettingsGroup.GENERAL,
-                "update.checkNow",
-                "update.autoCheckDescription",
-            )
-        )
         add(action("action.background_activity", SettingsGroup.GENERAL, "batteryTitle"))
         // v3.1.0 · B：**B 站音源的独立开关**（铁律 24：用户可选择是否启用）。
         //
@@ -1204,6 +1195,16 @@ object SettingsRegistry {
         //
         // 默认**开**，与 UpdateService.init 的读默认值 / SettingsRegistryTest 的断言一致。
         // 读写唯一入口是 UpdateService.setAutoCheckEnabled（设置页不得直接写 prefs）。
+        // 4.0.1：**检查更新**就放在「自动检查更新」下面 —— 用户找更新一定看这一页，
+        // 放到「通用」里等于藏起来了（上一版就是这么被吐槽的）。
+        add(
+            action(
+                "action.check_update",
+                SettingsGroup.ABOUT,
+                "update.checkNow",
+                "update.autoCheckDescription",
+            )
+        )
         add(
             pref(
                 key = "update_auto_check",

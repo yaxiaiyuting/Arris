@@ -1120,6 +1120,9 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: Upda
     "auto_rotate" -> strings.autoRotateLabel                   // titleKey = autoRotateLabel
     // v3.4.13：文案暂住在 UpdateStrings（主 agent 并入 Strings.update 后改成 strings.update.autoCheckTitle）
     "update_auto_check" -> updateStrings.autoCheckTitle
+    // 4.0.1：检查更新的显式入口。**必须在这里有分支** —— rowTitle 的兜底是 entry.id，
+    // 漏了就会在屏幕上印出 "action.check_update" 这种原始 id（真机截图确认过）。
+    "action.check_update" -> updateStrings.checkNow
     "artist_reco_enabled" -> strings.artistRecoTitle           // titleKey = artistRecoTitle
     "bilibili_enabled" -> strings.bilibiliEnabledLabel         // titleKey = bilibiliEnabledLabel
     // v3.4.8：文案住在新的 `Strings.bili` 组（registry 的 titleKey 是 `bili.xxx` 裸路径）。
@@ -1180,6 +1183,7 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry, updateStrings: U
     "auto_rotate" -> strings.autoRotateDescription
     // v3.4.13：文案暂住在 UpdateStrings
     "update_auto_check" -> updateStrings.autoCheckDescription
+    "action.check_update" -> null
     "page_transition_enabled" -> strings.motion.pageTransitionDescription
     "lyrics_in_media_session" -> strings.lyricsInMediaSessionHint
     "lyrics_romanization" -> strings.lyricsRomanizationHint

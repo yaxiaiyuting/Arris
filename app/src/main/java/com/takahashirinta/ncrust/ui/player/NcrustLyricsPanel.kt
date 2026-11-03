@@ -601,18 +601,25 @@ fun NcrustLyricsPanel(
                                 scaleY = scale
                                 transformOrigin = TransformOrigin(0f, 0.5f)
                             }
-                            // 4.0.1：**非当前行模糊**（借鉴 karaoke 渲染器的景深效果）。
-                            // 距离 0 行 = 清晰；越远越糊，上限 0.9dp，别糊到读不出来。
-                            // `Modifier.blur` 在 API < 31 上是 no-op（RenderEffect 才支持），
-                            // 所以这里不需要额外的版本分支 —— 老机器自动退回纯透明度/缩放层次。
+                            // 4.0.1：**非当前行景深**（借鉴 karaoke 渲染器）。
+                            //
+                            // 第一版把 1~2 行外的邻居也糊了 0.9dp —— 中文笔画一糊就成灰块，
+                            // 整屏像失焦照片（真机截图确认过）。现在收紧到：
+                            //  · **2.2 行以内完全不糊**（当前行的上下邻居保持清晰可读）；
+                            //  · 更远的行才逐渐柔化，**上限 0.35dp**；
+                            //  · `Modifier.blur` 在 API < 31 是 no-op（RenderEffect 才支持），
+                            //    老机器自动退回原有的透明度/缩放层次。
                             .then(
-                                if (index == currentIndex) Modifier
-                                else Modifier.blur(
-                                    radius = (abs(index - smoothCurrentIndex.value) / 1.8f)
-                                        .coerceIn(0f, 1f)
-                                        .let { it * 0.9f }
-                                        .dp
-                                )
+                                run {
+                                    val distance = abs(index - smoothCurrentIndex.value)
+                                    if (index == currentIndex || distance <= 2.2f) Modifier
+                                    else Modifier.blur(
+                                        radius = ((distance - 2.2f) / 2f)
+                                            .coerceIn(0f, 1f)
+                                            .let { it * 0.35f }
+                                            .dp
+                                    )
+                                }
                             ),
                     ) {
                         // v1.5.0 · B：有逐字数据且开关打开时走卡拉 OK 渲染，否则与 v1.4.1 完全一致。
@@ -634,16 +641,6 @@ fun NcrustLyricsPanel(
                                 fontWeight = FontWeight.Bold,
                             ),
                         )
-                        // 4.0.0：间奏呼吸点 —— 借鉴歌词库的"等下一句"提示，改成我们的直角小方块。
-                        // 只在「当前行已经唱完、下一句还早」的窗口里出现，其余时候不挂载（零开销）。
-                        if (index == currentIndex) {
-                            InterludeDots(
-                                nowMs = currentPosition(),
-                                lineEndMs = line.endMs,
-                                nextLineStartMs = lines.getOrNull(index + 1)?.timestampMillis,
-                                color = currentLineColor,
-                            )
-                        }
                         if (line.translation.isNotEmpty()) {
                             // Spotify 式双语:原句下方小号、降透明度渲染翻译。
                             MetroText(
@@ -1015,46 +1012,3 @@ internal fun currentLineIndex(positionMillis: Long, timestamps: LongArray): Int 
 }
 
 
-/**
- * 间奏呼吸点（4.0.0）。
- *
- * 灵感来自移植过来的 karaoke 渲染器里的「呼吸点」：一句唱完之后到下一句之前，
- * 面板什么都不动会让人以为卡住了。这里用**三个直角小方块**按 1/3 相位呼吸
- * ——形状是我们自己的（不用圆点），节奏也只跟帧时钟走，不额外起协程。
- *
- * 触发条件刻意保守：
- *  · 当前行必须有 `endMs`（yrc 才有），否则不知道"唱完了"这一刻；
- *  · 距下一句还要 > 1.2s 才显示，避免快节奏歌里闪一下；
- *  · 只有当前行挂载，其它行不参与任何计算。
- */
-@Composable
-private fun InterludeDots(
-    nowMs: Long,
-    lineEndMs: Long?,
-    nextLineStartMs: Long?,
-    color: Color,
-) {
-    if (lineEndMs == null || nextLineStartMs == null) return
-    val start = lineEndMs + 250L
-    val end = nextLineStartMs - 1_200L
-    if (end <= start || nowMs !in start..end) return
-
-    val generation = MotionClock.generation
-    val phase = (generation % 90L) / 90f            // 0..1 循环，~1.5s 一轮
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        repeat(3) { i ->
-            val local = ((phase + i / 3f) % 1f)
-            val wave = 0.35f + 0.65f * kotlin.math.abs(1f - 2f * local)
-            Box(
-                Modifier
-                    .padding(horizontal = 4.dp)
-                    .size(6.dp)
-                    .graphicsLayer { alpha = wave }
-                    .background(color)
-            )
-        }
-    }
-}
