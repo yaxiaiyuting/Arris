@@ -20,13 +20,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
@@ -728,6 +730,7 @@ fun AudioVisualizerBars(
     val heights = remember(geomCount) { FloatArray(geomCount) }
     val tangents = remember(geomCount) { FloatArray(geomCount) }
     val path = remember { Path() }
+    val crest = remember { Path() }
     val bandWeights = remember { FloatArray(3) }
     val laneEmphasis = remember { FloatArray(BandLanes.LANE_COUNT) }
     val palette = remember { IntArray(3) }
@@ -748,13 +751,9 @@ fun AudioVisualizerBars(
     val peakCapPx = with(density) { BAR_PEAK_CAP_DP.dp.toPx() }
     val rippleStroke = remember(density) { Stroke(width = with(density) { RIPPLE_STROKE_DP.dp.toPx() }) }
     val particleRadiusPx = with(density) { PARTICLE_RADIUS_DP.dp.toPx() }
+    val crestStroke = remember(density) { Stroke(width = with(density) { 0.9.dp.toPx() }) }
     val perspectiveModifier = remember(effects.perspective, density) {
         if (effects.perspective) Modifier.visualizerPerspective(density.density) else Modifier
-    }
-    // C 档：涟漪/粒子会画到条带之外（粒子有重力、涟漪半径超过条带高），必须裁剪。
-    // 只在 C 档挂 clip：A/B 档保持"视觉零变化"（现状不裁剪也没有越界内容）。
-    val clipModifier = remember(effects.anyShowcase) {
-        if (effects.anyShowcase) Modifier.clipToBounds() else Modifier
     }
     // C 档的点按交互（「拖拽交互」的有界降级，理由见 AudioVisualizerBars 的 KDoc）。
     // **默认关 ⇒ 默认零新增命中面**：开关关掉时这里返回 Modifier，不挂任何 pointerInput。
@@ -779,7 +778,11 @@ fun AudioVisualizerBars(
     // 推进由 `MotionFrameClock`（在 `PlayerCard` 里挂载恰好一次）负责。
     // v2.8.0 的「不空转 / 零分配 / 零重组」三条契约一字未改，只是执行者换了地方。
 
-    Canvas(modifier.then(clipModifier).then(perspectiveModifier).then(tapModifier)) {
+    Canvas(
+        modifier.then(perspectiveModifier)
+            .drawWithContent { clipRect { this@drawWithContent.drawContent() } }
+            .then(tapModifier),
+    ) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
         WaveformStore.generation
         WaveformStore.snapshot(bars, peaks, dash)
@@ -802,10 +805,6 @@ fun AudioVisualizerBars(
         val breath = if (effects.breathe) WaveformStore.breatheScale() else 1f
         // 点按交互翻转着色模式：普通字段读 + 点按时手动失效一次（见 WaveformStore.toggleColoringMode）。
         val flow = effects.flow != WaveformStore.isColoringInverted()
-        // C 档：涟漪画在曲线**下面**（背景层），粒子画在曲线**上面**（前景层）。
-        if (effects.shockwave) {
-            drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
-        }
         // ── v3.2.2：颜色与几何 ────────────────────────────────────────────────
         // 主导频段权重来自 `BandDominance`（平滑 300ms + 滞回 20% + 静音闸门 + 100ms 过渡），
         // 在 `pump` 里推进。它的用途在三条泳道布局下变成**泳道强调**：
@@ -816,7 +815,18 @@ fun AudioVisualizerBars(
         // v3.4.6：**振幅**用带余量的尺度，**几何**（centerY / 曲线控制点 / 横向）仍用满幅
         // `heightPx`。两者必须分开：`drawWaveformCurve` 拿 heightPx 去算 `centerY`，
         // 那个值一改，整条曲线会离开垂直居中位。取值推导见 [WAVE_AMPLITUDE_FACTOR]。
-        val ampPx = heightPx * WAVE_AMPLITUDE_FACTOR
+        val ampPx = (heightPx - 2f * (dotRadiusPx * 3f + peakCapPx * 2f))
+            .coerceAtLeast(0f).coerceAtMost(heightPx * WAVE_AMPLITUDE_FACTOR)
+        // C 档：涟漪画在曲线**下面**（背景层），粒子画在曲线**上面**（前景层）。
+        if (effects.shockwave) {
+            drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
+        }
+        drawLine(
+            color = barColor.copy(alpha = 0.15f),
+            start = Offset(0f, heightPx * 0.5f),
+            end = Offset(size.width, heightPx * 0.5f),
+            strokeWidth = crestStroke.width,
+        )
         // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
         if (threeLane) {
             // 三条泳道共享同一个亚格位移（相位是全局的），在 lane 0 处记下。
@@ -900,6 +910,7 @@ fun AudioVisualizerBars(
             if (extend) {
                 heights[total] = heights[total - 1]
                 peaks[total] = peaks[total - 1]
+                dash[total] = dash[total - 1]
             }
             WaveformCurve.computeTangents(
                 heights, if (extend) total + 1 else total, step, tangents,
@@ -915,7 +926,7 @@ fun AudioVisualizerBars(
             // v3.2.2（铁律 28）：一帧的绘制整段隔离 —— 失败丢这一帧，不向上抛、不重试。
             isolateFrame(onFailure = { WaveformStore.noteCurveFailure() }) {
                 drawWaveformCurve(
-                    heights, peaks, drawCount, tangents, path, barColor,
+                    heights, peaks, drawCount, tangents, path, crest, crestStroke, barColor,
                     laneBrush, effects,
                     xShift = xShiftPx, step = step, firstX = 0f, heightPx = heightPx,
                     minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
@@ -929,14 +940,12 @@ fun AudioVisualizerBars(
                 if (flow) {
                     val phasePx = WaveformStore.flowPhase01() * size.width * FLOW_TILE_FRACTION
                     val sheen = brushCache.flow(size.width, palette[BandColorRoles.MID])
-                    if (sheen != null) {
-                        translate(left = -phasePx) {
-                            drawCurveSheen(
-                                heights, total, tangents, path, sheen, effects,
-                                xShift = phasePx, step = step, heightPx = heightPx,
-                                breath = breath,
-                            )
-                        }
+                    translate(left = -phasePx) {
+                        drawCurveSheen(
+                            heights, total, tangents, path, sheen, effects,
+                            xShift = phasePx, step = step, heightPx = heightPx,
+                            breath = breath,
+                        )
                     }
                 }
             }
@@ -998,7 +1007,7 @@ fun AudioVisualizerBars(
                         // 画布左移 phasePx ⇒ 这里补回**滚动位移 + phasePx**：
                         // 波形的净位移是 scrollShift（K06），刷色跟着画布走（与改前一致）。
                         drawWaveformCurve(
-                            heights, peaks, drawCount, tangents, path, ribbonColor, flowBrush, effects,
+                            heights, peaks, drawCount, tangents, path, crest, crestStroke, ribbonColor, flowBrush, effects,
                             xShift = scrollShift + phasePx, step = step, firstX = 0f, heightPx = heightPx,
                             minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                             breath = breath, dashHeights = dash,
@@ -1006,7 +1015,7 @@ fun AudioVisualizerBars(
                     }
                 } else {
                     drawWaveformCurve(
-                        heights, peaks, drawCount, tangents, path, ribbonColor, ageBrush, effects,
+                        heights, peaks, drawCount, tangents, path, crest, crestStroke, ribbonColor, ageBrush, effects,
                         xShift = scrollShift, step = step, firstX = 0f, heightPx = heightPx,
                         minBar = minBar, dotRadiusPx = dotRadiusPx, peakCapPx = peakCapPx,
                         breath = breath, dashHeights = dash,
@@ -1082,42 +1091,7 @@ private const val LANE_MARKER_STRIDE = 2
 /** 柱顶光点半径（dp）。细到能读出"这是柱顶"，又不会盖住柱子本身。 */
 private const val BAR_DOT_RADIUS_DP = 1.2f
 
-/**
- * v3.4.6：**振幅余量**（用户实测「竖屏…很容易顶满」）。
- *
- * ## 它修的是什么
- *
- * 柱高的归一化值域是 `[0,1]`，1.0 = 满幅，而画面上的"满幅"就是画布的**上沿**
- * （`centerY − heightPx/2 = 0`）。用户看到的是：高峰一撞到 1.0，柱顶与它上面的
- * 光点 / 峰值短横就一起贴死在画布边缘 —— 短横还会被画到画布**之外**（A/B 档不裁剪）。
- *
- * 这不是偶发：三泳道的显示增益 `BandLanes.DISPLAY_GAIN = [2.6, 3.5, 6.6]` 让高频带
- * 在输入 **0.152** 就饱和，而实测高频 RMS 的 p95 是 0.137、max 是 0.228 —— 也就是
- * **高峰必然撞 1.0**。所以"顶满"是常态，不是极端情况。
- *
- * ## 为什么改这一层（而不是值域 / 增益 / 背景带高度）
- *
- * 这里是**唯一**把归一化值换算成像素振幅的地方，改它一处同时覆盖
- * 「三泳道」与「单曲线降级」两条渲染路径、也同时压住柱顶与两个标记；
- * 不动物理（`[0,1]` 仍是硬契约）、不动 RMS、不动泳道增益标定、
- * 不动 `waveBackdropHeightDp`（按比例缩短背景带并不能阻止波峰贴到变矮后的上沿，
- * 而且会把安静段一起压扁）。
- *
- * ## 取值 0.88 的推导
- *
- * 最坏情况是"小球被顶到归一化 1.0、短横再抬 `2·dotRadius + peakCap`"，
- * 要它不越出上沿需 `(1 − f)·H/2 ≥ 2·r + cap = 2×1.2 + 1.5 = 3.9dp`（余量再算一层 cap）：
- *
- * | 画布高 H | 需求 |
- * |---|---|
- * | 120dp（竖屏背景级波形） | `f ≤ 0.91` |
- * | 56dp（横屏波形条） | `f ≤ 0.86` |
- * | 32dp（窄条） | `f ≤ 0.76` |
- *
- * 0.88 对 120dp 留出约 7dp 余量（短横距上沿 ~1.8dp），对 56/32dp 的横条仍不足 ——
- * **那两条要彻底不越界得上 `clipToBounds`，不在本次范围**（横条上短横偶尔出界是既有表现）。
- * 「稍微降低一点」也符合用户原话的措辞。
- */
+/** Nominal headroom; short slots reserve additional pixels for the peak markers. */
 private const val WAVE_AMPLITUDE_FACTOR = 0.88f
 
 /** 峰值横条高度（dp）。 */
@@ -1188,6 +1162,8 @@ private fun DrawScope.drawWaveformCurve(
     count: Int,
     tangents: FloatArray,
     path: Path,
+    crest: Path,
+    crestStroke: Stroke,
     color: Color,
     brush: Brush?,
     effects: VisualizerEffects,
@@ -1218,14 +1194,16 @@ private fun DrawScope.drawWaveformCurve(
     val third = step / 3f
     // 顶部包络（左→右），再底部包络（右→左）闭合。**只读写复用的 path**。
     path.reset()
-    path.moveTo(firstX + xShift, centerY - heights[0])
+    crest.reset()
+    crest.moveTo(firstX + xShift, centerY - heights[0])
     for (i in 0 until n - 1) {
         val xa = firstX + i * step + xShift
         val xb = xa + step
         val c1 = centerY - WaveformCurve.controlY1(heights[i], tangents[i], step)
         val c2 = centerY - WaveformCurve.controlY2(heights[i + 1], tangents[i + 1], step)
-        path.cubicTo(xa + third, c1, xb - third, c2, xb, centerY - heights[i + 1])
+        crest.cubicTo(xa + third, c1, xb - third, c2, xb, centerY - heights[i + 1])
     }
+    path.addPath(crest)
     val lastX = firstX + (n - 1) * step + xShift
     path.lineTo(lastX, centerY + heights[n - 1])
     for (i in n - 2 downTo 0) {
@@ -1237,9 +1215,11 @@ private fun DrawScope.drawWaveformCurve(
     }
     path.close()
     if (brush != null) {
-        drawPath(path = path, brush = brush, alpha = breath)
+        drawPath(path = path, brush = brush, alpha = 0.37f * breath)
+        drawPath(path = crest, brush = brush, alpha = 0.94f * breath, style = crestStroke)
     } else {
-        drawPath(path = path, color = color, alpha = breath)
+        drawPath(path = path, color = color, alpha = 0.29f * breath)
+        drawPath(path = crest, color = color, alpha = 0.88f * breath, style = crestStroke)
     }
     // 峰值保持：与 v2.8.0 **逐值同构**的短横条（同一个 sqrt 映射，否则峰值会看起来比曲线还矮），
     // 只在明显高于曲线时才画。位置跟着曲线走（峰值的半厚 → y）。
@@ -1269,16 +1249,17 @@ private fun DrawScope.drawWaveformCurve(
                 dotRadiusPx = dotRadiusPx,
                 peakCapPx = peakCapPx,
             )
-            if (peakHalf > heights[i] + peakVisibleDelta) {
-                val topLeft = Offset(x - markerWidth / 2f, centerY - peakHalf - peakCapPx)
-                val size = Size(markerWidth, peakCapPx)
+            if (ballHalf * 2f > dotThreshold && peakHalf > heights[i] + peakVisibleDelta) {
+                val topLeft = Offset(x - markerWidth * 0.34f, centerY - peakHalf - peakCapPx)
+                val size = Size(markerWidth * 0.68f, peakCapPx)
+                val corners = CornerRadius(peakCapPx * 0.5f)
                 // v3.2.2：三频带模式下峰值标记**跟着它所在泳道的颜色**（同一个渐变笔刷在
                 // 那个 x 处采样出来的就是那一段的颜色）—— 否则会变成一条横穿三条泳道的
                 // 主题色虚线，看起来像渲染错误。
                 if (brush != null) {
-                    drawRect(brush = brush, topLeft = topLeft, size = size, alpha = 0.9f * breath)
+                    drawRoundRect(brush = brush, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
                 } else {
-                    drawRect(color = color, topLeft = topLeft, size = size, alpha = 0.9f * breath)
+                    drawRoundRect(color = color, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
                 }
             }
         }
@@ -1428,6 +1409,7 @@ private class RibbonBrushCache {
     private var cachedKey = Int.MIN_VALUE
     private var cachedFlow: Brush? = null
     private var cachedAge: Brush? = null
+    private var cachedLaneWidth = Float.NaN
     private var cachedLaneKey = Int.MIN_VALUE
     private var cachedLanes: Brush? = null
 
@@ -1462,10 +1444,10 @@ private class RibbonBrushCache {
         for (i in 0 until minOf(3, emphasis.size)) {
             key = key * 31 + ((emphasis[i].coerceIn(0f, 1f) * 16f).toInt())
         }
-        if (cachedWidth == width && cachedLaneKey == key) {
+        if (cachedLaneWidth == width && cachedLaneKey == key) {
             cachedLanes?.let { return it }
         }
-        cachedWidth = width
+        cachedLaneWidth = width
         cachedLaneKey = key
         val seam = BandLanes.SEAM_FRACTION
         val oneThird = 1f / 3f
