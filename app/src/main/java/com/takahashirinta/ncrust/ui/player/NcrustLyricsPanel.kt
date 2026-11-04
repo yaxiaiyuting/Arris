@@ -544,6 +544,9 @@ fun NcrustLyricsPanel(
             // v2.0.1：顶部留白 = min(200dp, 36% × 视口)。它同时是"列表顶端"与"第一句的定位槽"，
             // 所以"回顶"在大屏短面板下也不会把第一句推出可视区（详见 LyricsPanelScroll）。
             item(key = "top_spacer") { Spacer(Modifier.height(topSpacerHeight)) }
+            // 4.0.2：**底部留白**。竖屏下歌词面板是 weight(1f) 的直接上方邻居是可视条/进度区，
+            // 最后一行贴到底边时会盖住那一条（用户截图里"可视条被挡一部分"就是这个）。
+            // 给列表留 28dp 尾巴，滚到底也不会贴边。
 
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
                 // 颜色离散:基于整数 currentIndex,跨行时翻转;连续 scale 会盖住这一瞬。
@@ -612,11 +615,13 @@ fun NcrustLyricsPanel(
                             .then(
                                 run {
                                     val distance = abs(index - smoothCurrentIndex.value)
-                                    if (index == currentIndex || distance <= 2.2f) Modifier
+                                    if (index == currentIndex || distance <= 1.2f) Modifier
                                     else Modifier.blur(
-                                        radius = ((distance - 2.2f) / 2f)
+                                        // 4.0.2：上一版收到 0.35dp 太弱（看着像没加），
+                                        // 回调到 0.7dp 上限；1.2 行内仍不糊，避免邻居变灰块。
+                                        radius = ((distance - 1.2f) / 1.6f)
                                             .coerceIn(0f, 1f)
-                                            .let { it * 0.35f }
+                                            .let { it * 0.7f }
                                             .dp
                                     )
                                 }

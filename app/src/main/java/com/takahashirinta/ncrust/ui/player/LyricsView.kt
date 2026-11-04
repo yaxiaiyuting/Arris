@@ -467,6 +467,9 @@ fun LyricsView(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            // 4.0.2：**面板不贴到底**。竖屏时歌词面板的下沿与进度条/可视条紧邻，
+            // 列表最后一行（含遮罩渐隐）压过去就会挡掉它一部分。留 10dp 缓冲。
+            .padding(bottom = 10.dp)
             .onSizeChanged {
                 panelHeightPx = it.height.toFloat()
                 // v2.0.0 · T4：动态字号要按可用宽度估算折行数（见上）。

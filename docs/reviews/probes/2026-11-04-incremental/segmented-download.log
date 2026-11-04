@@ -1,0 +1,3 @@
+Defect: after generation changes, all segments wrote 4194304 bytes and returned success.
+Defect: 206 segments with changed ETag and incorrect Content-Range accepted.
+Production SegmentedDownload, parser and extracted cancellation expression; synthetic interceptor, no network or APK verification.

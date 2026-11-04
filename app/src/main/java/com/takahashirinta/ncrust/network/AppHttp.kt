@@ -53,13 +53,28 @@ object AppHttp {
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        .connectionPool(pool)
+        .connectionPool(pool.also { pools.add(it) })
 
     /** 直接要一个成品（默认配置）。 */
     fun client(): OkHttpClient = builder().build()
 
+    /**
+     * I07：**所有由 [AppHttp] 派生出来的连接池**。
+     *
+     * 旧实现只驱逐默认池：QQ、更新、房间目录这些"自己 build 了一个 client"的地方
+     * 在切换网络后仍持有上一路由的空闲连接（真表现是切网后第一次请求莫名超时）。
+     * 现在任何 `builder()` 出来的 client 都把池登记进来，切网时一起驱逐。
+     */
+    private val pools: MutableSet<ConnectionPool> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     /** 丢掉所有池化连接（网络切换 / 代理开关 / 回到前台时调用）。 */
     fun evictAll() {
-        Thread({ runCatching { pool.evictAll() } }, "ncrust-evict-apphttp").start()
+        val snapshot = pools.toList() + pool
+        Thread({
+            snapshot.forEach { p -> runCatching { p.evictAll() } }
+        }, "ncrust-evict-apphttp").start()
     }
+
+    /** 留给测试断言：当前登记了几个池（默认池 + 派生池）。 */
+    internal fun registeredPoolCount(): Int = pools.size + 1
 }

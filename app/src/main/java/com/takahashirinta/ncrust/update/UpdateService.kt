@@ -318,7 +318,10 @@ object UpdateService {
         val probe = runCatching { SegmentedDownload.probe(info.assetUrl) }.getOrNull()
         val resumable = File(directory, fileName).isFile
         if (probe != null && !resumable && info.assetSize > 4L * 1024 * 1024) {
-            val temp = File(directory, "$fileName.seg")
+            // I03：临时文件**按代次分开**。上一代被取消后还没来得及退出的线程仍持有自己的
+            // 句柄，如果两代共用 "$fileName.seg"，新任务写进去的就是两段线程交错的数据。
+            val generation = activeGenerationSnapshot()
+            val temp = File(directory, "$fileName.seg.$generation")
             try {
                 SegmentedDownload.download(
                     url = info.assetUrl,
@@ -327,6 +330,13 @@ object UpdateService {
                     cancelled = { downloadGeneration.get() != activeGenerationSnapshot() },
                     onProgress = onProgress,
                 )
+                // I03：代次在下载期间变了（用户取消 / 换了目标）⇒ 这份产物作废，
+                // **不回落单流**、不改名、删掉自己的临时文件。
+                if (downloadGeneration.get() != generation) {
+                    android.util.Log.i("UpdateService", "segmented 代次已变（$generation → ${downloadGeneration.get()}），丢弃")
+                    runCatching { temp.delete() }
+                    throw DownloadCancelledException()
+                }
                 val dest = File(directory, fileName)
                 runCatching { dest.delete() }
                 if (temp.renameTo(dest)) {
@@ -335,8 +345,13 @@ object UpdateService {
                 }
                 android.util.Log.w("UpdateService", "segmented rename failed, fallback to single stream")
             } catch (t: Throwable) {
-                android.util.Log.w("UpdateService", "segmented failed (${t.javaClass.simpleName}), fallback")
+                // I03：取消**不是失败**，不许回落到单流（那会让旧任务继续写同一个目标文件）。
+                SegmentedDownload.cancelAll()
                 runCatching { temp.delete() }
+                if (t is DownloadCancelledException || downloadGeneration.get() != generation) {
+                    throw if (t is DownloadCancelledException) t else DownloadCancelledException()
+                }
+                android.util.Log.w("UpdateService", "segmented failed (${t.javaClass.simpleName}), fallback")
             }
         }
         return downloader.download(
@@ -404,7 +419,8 @@ object UpdateService {
         downloadJob = null
         downloader = null
         activeTarget = null
-        _download.value = DownloadState.Idle
+        _download.value = DownloadState.Idle        // I03：把在途的分段 Call 也掐掉（只置 boolean 拦不住已经发出的请求）。
+        SegmentedDownload.cancelAll()
     }
 
     /** 只有代次仍是当前任务的回调才允许写状态。 */

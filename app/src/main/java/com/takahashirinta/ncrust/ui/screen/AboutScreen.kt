@@ -180,6 +180,8 @@ fun AboutScreen(
                         AboutRow("接口逻辑参考", "Suxiaoqinx/Netease_url (MIT)")
                         AboutRow("设计参考", "Apple Music for Android")
                         AboutRow("Tux", "Larry Ewing / The GIMP · Arris")
+                        // 4.0.2：致谢不是只写给项目名的 —— 也写给真正在用它的每一个人。
+                        AboutRow("还有", "每一位屏幕前的使用者")
                         Spacer(Modifier.height(32.dp))
                     }
                 }

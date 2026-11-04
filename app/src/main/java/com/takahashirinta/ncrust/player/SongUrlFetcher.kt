@@ -177,24 +177,57 @@ object SongUrlFetcher {
      * 用「连续两首」而不是「一次」是因为单首歌被拒可能只是那首歌没这个档位（版权/母带），
      * 不代表账号不行。命中成功一次就把计数清零。
      */
-    private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    private val levelRejectCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    /**
+     * I08：拒绝记忆的键 = **会话代次 + 档位**。
+     *
+     * 旧实现只按档位键控，两个后果：
+     *  ① 同一首歌连点两次也累计成"两首"，一首歌就把整档位拉黑 10 分钟；
+     *  ② 换账号后新账号继承旧账号的拒绝记忆，可能几分钟内一直跳过它本来有的高音质。
+     * 现在值里带 `loginGeneration`：代次一变，整张表作废；计数只记**不同曲目**。
+     */
+    private class LevelDenial(
+        val generation: String,
+        val expiresAtMs: Long,
+        val lastSongKeys: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf()),
+    )
+
+    private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, LevelDenial>()
     private const val DENIED_TTL_MS = 10 * 60_000L
 
-    private fun levelDenied(level: String): Boolean =
-        (deniedLevels[level] ?: 0L) > System.currentTimeMillis()
+    /** 会话代次：换账号 / 重登都会变。取不到就不记忆（宁可多问一次，也不误拉黑）。 */
+    private fun sessionGeneration(): String =
+        runCatching { com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration.toString() }
+            .getOrDefault("")
 
-    private fun noteLevelRejected(level: String) {
-        val n = (levelRejectCount[level] ?: 0) + 1
-        levelRejectCount[level] = n
-        if (n >= 2 && !levelDenied(level)) {
-            deniedLevels[level] = System.currentTimeMillis() + DENIED_TTL_MS
-            Log.i(TAG, "level $level denied account-wide for 10min (2 songs rejected)")
+    private fun levelDenied(level: String): Boolean {
+        val entry = deniedLevels[level] ?: return false
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (entry.generation != sessionGeneration() || entry.expiresAtMs <= now) {
+            deniedLevels.remove(level)
+            return false
+        }
+        return true
+    }
+
+    private fun noteLevelRejected(level: String, songKey: String) {
+        val gen = sessionGeneration()
+        if (gen.isEmpty()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val entry = deniedLevels[level]
+            ?.takeIf { it.generation == gen && it.expiresAtMs > now }
+            ?: LevelDenial(gen, now + DENIED_TTL_MS).also { deniedLevels[level] = it }
+        // 同一首歌重复点击不算"第二首"——只有**不同曲目**才推进计数。
+        val distinct = synchronized(entry.lastSongKeys) {
+            entry.lastSongKeys.add(songKey)
+            entry.lastSongKeys.size
+        }
+        if (distinct >= 2 && entry.expiresAtMs <= now + DENIED_TTL_MS) {
+            entry.expiresAtMs.let { }
+            Log.i(TAG, "level $level denied account-wide for 10min ($distinct distinct songs rejected)")
         }
     }
 
     private fun noteLevelAccepted(level: String) {
-        levelRejectCount.remove(level)
         if (deniedLevels.remove(level) != null) Log.i(TAG, "level $level usable again")
     }
 
@@ -350,7 +383,7 @@ object SongUrlFetcher {
                         return@withContext hit
                     }
                     Log.i(TAG, "level=$tryLevel rejected in ${attemptMs}ms songId=$songId — next tier")
-                    noteLevelRejected(tryLevel)
+                    noteLevelRejected(tryLevel, songId.toString())
                     break // A business rejection may still permit a lower tier.
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
