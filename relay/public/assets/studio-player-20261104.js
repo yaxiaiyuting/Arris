@@ -131,6 +131,7 @@
     });
     lyricsShortcut.setAttribute('aria-pressed', String(lyrics));
     lyricsShortcut.setAttribute('aria-label', lyrics ? '返回封面' : '打开歌词');
+    lyricsShortcut.lastElementChild.textContent = lyrics ? '封面' : '歌词';
     updateText();
   }
 
@@ -251,8 +252,16 @@
   deck.querySelectorAll('[data-studio-skip]').forEach(button => button.addEventListener('click', () =>
     jump((pendingSeek ?? audio.currentTime) + Number(button.dataset.studioSkip))));
   tabs.forEach((tab, index) => {
-    tab.addEventListener('click', () => selectView(tab.dataset.studioView));
+    tab.addEventListener('click', event => {
+      event.preventDefault();
+      selectView(tab.dataset.studioView);
+    });
     tab.addEventListener('keydown', event => {
+      if (event.key === ' ') {
+        event.preventDefault();
+        selectView(tab.dataset.studioView);
+        return;
+      }
       const to = {ArrowLeft: 1 - index, ArrowRight: 1 - index, Home: 0, End: 1}[event.key];
       if (to === undefined) return;
       event.preventDefault();
@@ -300,7 +309,12 @@
   audio.controls = false;
   audio.hidden = true;
   deck.querySelector('.session-controls').hidden = false;
-  deck.querySelector('.session-tabs').hidden = false;
+  deck.querySelector('.session-tabs').setAttribute('role', 'tablist');
+  tabs.forEach(tab => tab.setAttribute('role', 'tab'));
+  [coverPane, lyricPane].forEach(pane => pane.setAttribute('role', 'tabpanel'));
+  selectView(location.hash === '#studio-pane-lyrics' ? 'lyrics' : 'cover');
+  deck.setAttribute('data-ready', '');
+  deck.querySelector('.session-line-options').hidden = false;
   deck.querySelector('.session-wavebox').hidden = false;
   new MutationObserver(resize).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
   resize();

@@ -34,8 +34,8 @@
 [data-playing] .session-now i {background:var(--deck-accent);box-shadow:0 0 10px var(--deck-accent)}
 .session-web {grid-column:3;text-align:right}
 .session-tabs,.session-line-options {display:flex;gap:2px;padding:2px;border:1px solid var(--deck-rule);background:var(--deck-paper);border-radius:30px}
-.session-tabs button,.session-line-options button {min-height:38px;border:0;border-radius:30px;padding:0 12px;font-size:12px;white-space:nowrap;background:transparent;color:var(--deck-muted)}
-.session-tabs button[aria-selected="true"],.session-line-options button[aria-pressed="true"] {color:var(--deck-ink);background:var(--deck-sel);font-weight:700}
+.session-tabs a,.session-line-options button {display:grid;place-items:center;text-decoration:none;min-height:38px;border:0;border-radius:30px;padding:0 12px;font-size:12px;white-space:nowrap;background:transparent;color:var(--deck-muted)}
+[data-ready] .session-tabs a[aria-selected="true"],[data-studio]:not([data-ready]):not(:has(#studio-pane-lyrics:target)) #studio-tab-cover,[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target) #studio-tab-lyrics,.session-line-options button[aria-pressed="true"] {color:var(--deck-ink);background:var(--deck-sel);font-weight:700}
 .session-stage {
   --cover-size:min(74%,276px);--mini:52px;
   position:relative;isolation:isolate;min-height:326px;
@@ -65,13 +65,13 @@
   opacity:0;transform:translateY(12px);visibility:hidden;pointer-events:none;
   transition:opacity .2s ease,transform .4s var(--deck-ease),visibility 0s .4s;
 }
-[data-view="lyrics"] .session-cover {left:0;width:var(--mini);transform:none;border-radius:10px}
-[data-view="lyrics"] :is(.session-cover-edition,.session-cover-name) {opacity:0}
-[data-view="lyrics"] .session-song {opacity:0;transform:translateY(4px);transition-delay:0s}
-[data-view="lyrics"] .session-song-mini {opacity:1;transform:none;transition-delay:.24s}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) .session-cover {left:0;width:var(--mini);transform:none;border-radius:10px}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) :is(.session-cover-edition,.session-cover-name) {opacity:0}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) .session-song {opacity:0;transform:translateY(4px);transition-delay:0s}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) .session-song-mini {opacity:1;transform:none;transition-delay:.24s}
 :root .session-song-mini p {font-size:10px}
-[data-view="lyrics"] .session-pane-cover {visibility:hidden}
-[data-view="lyrics"] .session-lyrics {opacity:1;transform:none;visibility:visible;pointer-events:auto;transition-delay:.11s,.05s,0s}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) .session-pane-cover {visibility:hidden}
+:is([data-view="lyrics"],[data-studio]:not([data-ready]):has(#studio-pane-lyrics:target)) .session-lyrics {opacity:1;transform:none;visibility:visible;pointer-events:auto;transition-delay:.11s,.05s,0s}
 .session-lyrics p {margin:0;overflow-wrap:anywhere}
 .session-neighbor {font-size:clamp(13px,1.9vw,16px);line-height:1.4;color:var(--deck-muted)}
 .session-active {align-self:center}
@@ -109,6 +109,9 @@
 .session-actions button {position:relative;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;padding:0;background:transparent}
 .session-actions button:hover,.session-actions button[aria-pressed="true"] {background:var(--deck-sel)}
 .session-actions svg {width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+#studio-open-lyrics {align-content:center;gap:1px}
+#studio-open-lyrics span {font-size:10px;line-height:1}
+.session-tabs a:focus-visible {outline:2px solid var(--deck-accent);outline-offset:2px}
 .session-actions small {position:absolute;right:5px;bottom:3px;color:var(--deck-muted);font:500 9px/1 ui-monospace,monospace}
 #studio-play {width:60px;height:60px;background:var(--deck-play);color:var(--deck-on-play);box-shadow:0 8px 15px -10px var(--deck-play)}
 #studio-play svg {width:24px;height:24px;fill:currentColor;stroke:none}
