@@ -1,0 +1,2 @@
+Member snapshots blocked, but member-forged Closed forwarded (I11).
+Host close closes members and normal close callback drops directory (I12).

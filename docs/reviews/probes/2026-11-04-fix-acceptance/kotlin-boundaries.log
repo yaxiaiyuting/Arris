@@ -1,0 +1,6 @@
+Production update selector: mixed release now finds the eligible LTS result (I10); deferred malformed [1] still reports UpToDate (I09).
+Production recognition provider: coroutine cancellation still leaves synchronous HTTP call active (I15).
+Production recognition provider: empty 503 now correctly classified as server error (I16).
+Configured peer DATA accepted before HELLO-ACK (I14).
+After one wrong-source DATA packet, subsequent expected-peer DATA is not received (I14).
+All HTTP responses are interceptor doubles. UDP stayed on loopback; no real network, microphone, or account.
