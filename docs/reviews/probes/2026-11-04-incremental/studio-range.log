@@ -1,0 +1,5 @@
+Control with matching ETag: 206. Defect: stale If-Range also 206 (expected full 200).
+Defect: Range plus matching If-None-Match also 206 (expected 304).
+Worker route executed with local ASSETS stub; no external network.
+Defect: APK fallback maps bytes=-3 to the first four bytes, not the final three.
+Defect: rolling APK alias gives stale If-Range a 206, and replaces upstream no-store with immutable.

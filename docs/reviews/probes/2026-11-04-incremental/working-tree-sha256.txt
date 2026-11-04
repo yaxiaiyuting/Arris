@@ -1,0 +1,6 @@
+d3c1f1de8e480af40acf0ff427ae310f672f4553f8ef786a0e477e20ba5981d2  app/src/main/assets/birthday/js/motion.js
+3735d111c458be620e5aa11728736f851f8fd13c2ff64bbff95c54a6131fef20  app/src/main/java/com/takahashirinta/ncrust/ui/player/LyricsView.kt
+53dbf6262a657e7be0c02d6f64484e8eef3f741c62109eaebb508b262c33f300  app/src/main/java/com/takahashirinta/ncrust/ui/player/NcrustLyricsPanel.kt
+ceede919298bdff1ffe2efed40f6d0081360a90901aab4f11ea031de80ed0b0f  app/src/main/java/com/takahashirinta/ncrust/ui/player/PlayerCardExpanded.kt
+deff2662af90f23cbf59a540b03e3b446d5614dff2145e21e0b8ce89deecbd09  app/src/main/java/com/takahashirinta/ncrust/ui/player/motion/MotionBackdrop.kt
+7965c3ea609d0a0a3c7fd668ab8969079685ea962e20ea1027a69d88b71289dd  app/src/main/java/com/takahashirinta/ncrust/ui/screen/AboutScreen.kt
