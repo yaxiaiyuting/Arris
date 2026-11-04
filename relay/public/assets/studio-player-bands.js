@@ -12,7 +12,7 @@
   const primary = deck.querySelector('.session-primary');
   const secondary = deck.querySelector('.session-secondary');
   const status = deck.querySelector('#studio-status');
-  const waveLabel = deck.querySelector('.session-wavebox > span');
+  const waveLabel = deck.querySelector('.session-wave-note');
   const canvas = deck.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -33,9 +33,22 @@
   const lyricsShortcut = deck.querySelector('#studio-open-lyrics');
   const tabs = [...deck.querySelectorAll('[data-studio-view]')];
   let words = [], freshnessTimer = 0, palette;
-  const history = new Float32Array(60);
-  let context, analyser, pcm, fill, cueIndex = -1, translationFirst = false;
-  let frame = 0, lastSample = -Infinity, width = 0, height = 0, started = false, requestedMetadata = false, pendingSeek = null;
+  // The Android visualizer reads left to right: bass, mids, treble.
+  // Match its crossover points; each ribbon has its own measured history.
+  const bands = [
+    { key: 'low', min: 20, max: 150, gain: 3.3 },
+    { key: 'mid', min: 150, max: 2000, gain: 5.4 },
+    { key: 'high', min: 2000, max: Infinity, gain: 15 },
+  ];
+  const cells = 22;
+  const sampleInterval = .066;
+  for (const band of bands) {
+    band.values = new Float32Array(cells + 2);
+    band.peaks = new Float32Array(cells + 2);
+    band.level = band.peak = 0;
+  }
+  let context, analyser, bins, cueIndex = -1, translationFirst = false;
+  let frame = 0, sampledAt = null, phase = 0, width = 0, height = 0, started = false, requestedMetadata = false, pendingSeek = null;
   const hasDuration = () => Number.isFinite(audio.duration) && audio.duration > 0;
   const format = value => {
     const n = Math.max(0, Math.floor(value));
@@ -137,25 +150,58 @@
 
   function draw() {
     if (!ctx || !width || !height) return;
-    const middle = height * .58;
-    const step = width / (history.length - 1);
+    const laneWidth = width / bands.length;
+    const middle = height * .52;
     ctx.clearRect(0, 0, width, height);
     ctx.strokeStyle = palette.rule;
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, middle); ctx.lineTo(width, middle); ctx.stroke();
     ctx.beginPath();
-    for (let i = 0; i < history.length; i++) {
-      const x = step * i, y = middle - history[i] * height * .36;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.quadraticCurveTo(x - step * .5, middle - history[i - 1] * height * .36, x, y);
+    ctx.moveTo(0, middle); ctx.lineTo(width, middle);
+    for (let lane = 1; lane < bands.length; lane++) {
+      const seam = laneWidth * lane;
+      ctx.moveTo(seam, 2); ctx.lineTo(seam, height - 4);
     }
-    ctx.strokeStyle = palette.accent;
-    ctx.lineWidth = 1.5;
     ctx.stroke();
-    for (let i = history.length - 1; i >= 0; i--) ctx.lineTo(step * i, middle + history[i] * height * .23);
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
+
+    for (let lane = 0; lane < bands.length; lane++) {
+      const band = bands[lane];
+      const left = lane * laneWidth + 2;
+      const span = laneWidth - 4;
+      const step = span / cells;
+      const shift = phase * step;
+      const amp = height * .43;
+      const { values, peaks, color, fill } = band;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(left, 0, span, height); ctx.clip();
+      ctx.beginPath();
+      ctx.moveTo(left - shift, middle - values[0] * amp);
+      for (let i = 1; i < values.length; i++) {
+        const x = left + i * step - shift;
+        const previous = middle - values[i - 1] * amp;
+        const next = middle - values[i] * amp;
+        ctx.bezierCurveTo(x - step * .6, previous, x - step * .4, next, x, next);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
+      for (let i = values.length - 1; i >= 0; i--) {
+        ctx.lineTo(left + i * step - shift, middle + values[i] * amp * .65);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      // Peak dots and short holds stay tied to their own sample and lane.
+      ctx.fillStyle = color;
+      for (let i = 1; i <= cells; i++) {
+        if (peaks[i] < .27 || peaks[i] <= peaks[i - 1] || peaks[i] < peaks[i + 1]) continue;
+        const x = left + i * step - shift;
+        const y = Math.max(4, middle - peaks[i] * amp - 3);
+        ctx.beginPath(); ctx.arc(x, y, 1.35, 0, Math.PI * 2); ctx.fill();
+        if (peaks[i] > .58) ctx.fillRect(x - 2, y - 3, 4, 1);
+      }
+      ctx.restore();
+    }
   }
 
   function resize() {
@@ -167,24 +213,59 @@
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    fill = ctx.createLinearGradient(0, 0, 0, Math.max(1, height));
     const css = getComputedStyle(deck);
-    palette = { accent: css.getPropertyValue('--deck-accent').trim(), rule: css.getPropertyValue('--deck-rule').trim() };
-    fill.addColorStop(0, palette.accent + '71');
-    fill.addColorStop(1, palette.accent + '09');
+    palette = { rule: css.getPropertyValue('--deck-rule').trim() };
+    for (const band of bands) {
+      band.color = css.getPropertyValue('--band-' + band.key).trim();
+      band.fill = ctx.createLinearGradient(0, 0, 0, Math.max(1, height));
+      band.fill.addColorStop(0, band.color + '80');
+      band.fill.addColorStop(.55, band.color + '31');
+      band.fill.addColorStop(1, band.color + '0a');
+    }
     draw();
   }
 
-  function paint(now) {
+  function resetWave() {
+    sampledAt = null;
+    phase = 0;
+    for (const band of bands) {
+      band.values.fill(0);
+      band.peaks.fill(0);
+      band.level = band.peak = 0;
+    }
+    draw();
+  }
+
+  function readBands(elapsed) {
+    analyser.getFloatFrequencyData(bins);
+    for (const band of bands) {
+      let power = 0;
+      for (let i = band.first; i < band.end; i++) {
+        if (bins[i] > -88) power += 10 ** (bins[i] / 10);
+      }
+      const target = Math.min(1, Math.sqrt(Math.sqrt(power) * band.gain));
+      const blend = 1 - Math.exp(-elapsed / (target > band.level ? .027 : .13));
+      band.level += (target - band.level) * blend;
+      band.peak = Math.max(band.level, band.peak * Math.exp(-elapsed / .19));
+      band.values.copyWithin(0, 1);
+      band.peaks.copyWithin(0, 1);
+      band.values.fill(band.level, cells);
+      band.peaks.fill(band.peak, cells);
+    }
+  }
+
+  function paint() {
     frame = 0;
     if (audio.paused || audio.ended || document.hidden || reduced.matches) return;
-    if (analyser && now - lastSample >= 1000 / 32) {
-      lastSample = now;
-      analyser.getFloatTimeDomainData(pcm);
-      let energy = 0;
-      for (let i = 0; i < pcm.length; i++) energy += pcm[i] * pcm[i];
-      history.copyWithin(0, 1);
-      history[history.length - 1] = Math.min(1, Math.sqrt(energy / pcm.length) * 4);
+    const position = audio.currentTime;
+    if (analyser && !audio.seeking && context.state === 'running') {
+      if (sampledAt === null || position - sampledAt >= sampleInterval) {
+        const elapsed = sampledAt === null ? sampleInterval : position - sampledAt;
+        // Preserve the sub-cell remainder without inserting invented samples after a stall.
+        sampledAt = elapsed < sampleInterval * 2 && sampledAt !== null ? sampledAt + sampleInterval : position;
+        readBands(Math.min(elapsed, sampleInterval * 2));
+      }
+      phase = Math.max(0, Math.min(1, (position - sampledAt) / sampleInterval));
       draw();
     }
     updateText();
@@ -208,11 +289,17 @@
     try {
       context = new AudioContext();
       const meter = context.createAnalyser();
-      meter.fftSize = 1024;
+      meter.fftSize = 4096;
+      meter.smoothingTimeConstant = 0;
+      bins = new Float32Array(meter.frequencyBinCount);
+      const hzPerBin = context.sampleRate / meter.fftSize;
+      for (const band of bands) {
+        band.first = Math.ceil(band.min / hzPerBin);
+        band.end = Math.min(bins.length, Math.ceil(band.max / hzPerBin));
+      }
       const source = context.createMediaElementSource(audio);
       source.connect(meter);
       meter.connect(context.destination);
-      pcm = new Float32Array(meter.fftSize);
       analyser = meter;
     } catch {}
   }
@@ -222,7 +309,7 @@
     if (!audio.paused && !audio.ended) { audio.pause(); return; }
     armAnalyser();
     if (context && context.state !== 'running') context.resume().catch(() => {});
-    if (audio.ended) audio.currentTime = 0;
+    if (audio.ended) { audio.currentTime = 0; resetWave(); }
     started = true;
     try { await audio.play(); } catch (e) {
       if (e.name !== 'AbortError') status.textContent = '暂时无法播放。请重试，或下载试听曲。';
@@ -240,8 +327,7 @@
       return;
     }
     audio.currentTime = Math.max(0, Math.min(position, audio.duration));
-    history.fill(0);
-    draw();
+    resetWave();
     updateText();
   }
 
@@ -291,14 +377,12 @@
 
   function applyMotion() {
     if (reduced.matches) {
-      history.fill(0);
-      draw();
+      resetWave();
       waveLabel.textContent = '已遵循系统设置：减少动画';
     } else {
       // Reconnecting a media element is restricted. If playback started with reduced motion,
       // leave the audio path alone and offer the full visualizer on the next play.
-      waveLabel.textContent = !analyser && started && !audio.paused ? '下次播放时开启实时波形' : '实时波形';
-      lastSample = -Infinity;
+      waveLabel.textContent = !analyser && started && !audio.paused ? '下次播放时开启实时波形' : '';
     }
     reconcile();
   }

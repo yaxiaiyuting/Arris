@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- build-marker 20261104-visible-lyrics -->
+<!-- build-marker 20261104-frequency-lanes -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -58,7 +58,7 @@
 </style>
 <link rel="stylesheet" href="/assets/discover.css?v=20261102b">
 <link rel="stylesheet" href="/assets/appearance.css?v=20261104-studio">
-<link rel="stylesheet" href="/assets/studio-player-20261104.css">
+<link rel="stylesheet" href="/assets/studio-player-bands.css">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -148,7 +148,7 @@
     <div class="studio-copy">
       <p class="eyebrow"><span class="eyebrow__no">试听室</span><i class="eyebrow__rule" aria-hidden="true"></i><span class="eyebrow__label">LISTENING SESSION</span></p>
       <h2 id="studio-title">按下播放，<br>看见声音。</h2>
-      <p>试听一段原创器乐。像在 Arris 里一样，从封面切到歌词，看双语文案随着同一段音乐逐字点亮。</p>
+      <p>试听一段原创器乐。看低、中、高三段波形各自流动，也可以切到歌词，让双语文案随音乐逐字点亮。</p>
       <p class="studio-credit">《雨后》 · 约 37 秒 · 为 Arris 合成的原创试听曲<br>曲目无人声，双语文案用于演示 · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a> · <a href="/assets/after-the-rain.mp3" download>下载试听曲</a></p>
     </div>
     <div class="studio-player" data-studio data-view="cover">
@@ -181,7 +181,15 @@
           <div class="session-line-options" role="group" aria-label="双语主行" hidden><button type="button" data-studio-line="original" aria-pressed="true">原文优先</button><button type="button" data-studio-line="translation" aria-pressed="false">译文优先</button></div>
         </div>
       </div>
-      <div class="session-wavebox" hidden><canvas class="session-wave" aria-hidden="true"></canvas><span>实时波形</span></div>
+      <div class="session-wavebox" hidden>
+        <div class="session-wave-labels">
+          <span class="studio-band-low"><i aria-hidden="true"></i>低频</span>
+          <span class="studio-band-mid"><i aria-hidden="true"></i>中频</span>
+          <span class="studio-band-high"><i aria-hidden="true"></i>高频</span>
+        </div>
+        <canvas class="session-wave" aria-hidden="true"></canvas>
+        <span class="session-wave-note" role="status"></span>
+      </div>
       <audio id="studio-audio" controls preload="none" src="/assets/after-the-rain.mp3" aria-label="播放原创试听曲《雨后》"></audio>
       <div class="session-controls" hidden>
         <label class="sr-only" for="studio-seek">试听播放进度</label>
@@ -260,5 +268,5 @@ document.querySelector('#check-health').addEventListener('click',async e=>{const
 })();
 </script>
 <script src="/assets/discover.js?v=20261102b" defer></script>
-<script src="/assets/studio-player-20261104.js" defer></script>
+<script src="/assets/studio-player-bands.js" defer></script>
 </body></html>
