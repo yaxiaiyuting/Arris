@@ -2,6 +2,7 @@
 (() => {
   'use strict';
   const deck = document.querySelector('[data-studio]');
+  if (!deck) return;
   const audio = deck.querySelector('audio');
   const play = deck.querySelector('#studio-play');
   const mute = deck.querySelector('#studio-mute');
@@ -15,12 +16,23 @@
   const canvas = deck.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  // Original demonstration verse. Each phrase lands on a four-bar boundary
+  // of the instrumental (106 BPM); the two scripts share that phrase clock.
+  const beat = 60 / 106;
   const cues = [
     [0, 'The rain has let the evening in.', '雨停了，傍晚悄悄进来。'],
-    [9.05, 'Leave a little room for the quiet.', '给安静留一点位置。'],
-    [18.10, 'The city is still humming.', '城市还在轻轻哼唱。'],
-    [27.17, 'Take this small light with you.', '带着这点微光，继续往前。'],
+    [16 * beat, 'Leave a little room for the quiet.', '给安静留一点位置。'],
+    [32 * beat, 'The city is still humming.', '城市还在轻轻哼唱。'],
+    [48 * beat, 'Take this small light with you.', '带着这点微光，继续往前。'],
   ];
+  const previous = deck.querySelector('.session-previous');
+  const next = deck.querySelector('.session-next');
+  const activeLyric = deck.querySelector('.session-active');
+  const coverPane = deck.querySelector('#studio-pane-cover');
+  const lyricPane = deck.querySelector('#studio-pane-lyrics');
+  const lyricsShortcut = deck.querySelector('#studio-open-lyrics');
+  const tabs = [...deck.querySelectorAll('[data-studio-view]')];
+  let words = [], freshnessTimer = 0, palette;
   const history = new Float32Array(60);
   let context, analyser, pcm, fill, cueIndex = -1, translationFirst = false;
   let frame = 0, lastSample = -Infinity, width = 0, height = 0, started = false, requestedMetadata = false, pendingSeek = null;
@@ -38,6 +50,7 @@
         duration.textContent = format(audio.duration);
       }
       if (Math.abs(Number(seek.value) - position) > .05) seek.value = position;
+      seek.style.setProperty('--seek-pct', (100 * position / audio.duration).toFixed(2) + '%');
     }
     const visibleTime = format(position);
     if (time.textContent !== visibleTime) {
@@ -47,12 +60,78 @@
     }
     let index = cues.length - 1;
     while (index > 0 && cues[index][0] > position) index--;
-    if (cueIndex === index) return;
-    cueIndex = index;
-    primary.textContent = cues[index][translationFirst ? 2 : 1];
-    secondary.textContent = cues[index][translationFirst ? 1 : 2];
-    primary.lang = translationFirst ? 'zh-CN' : 'en';
-    secondary.lang = translationFirst ? 'en' : 'zh-CN';
+    if (cueIndex !== index) {
+      const animate = cueIndex !== -1 && deck.dataset.view === 'lyrics' && !audio.seeking && !reduced.matches;
+      cueIndex = index;
+      const top = translationFirst ? 2 : 1;
+      const bottom = translationFirst ? 1 : 2;
+      words = [...renderLine(primary, index, top), ...renderLine(secondary, index, bottom)];
+      previous.textContent = cues[index - 1]?.[top] || '';
+      next.textContent = cues[index + 1]?.[top] || '';
+      previous.lang = next.lang = primary.lang;
+      if (animate && !activeLyric.hasAttribute('data-fresh')) {
+        activeLyric.setAttribute('data-fresh', '');
+        clearTimeout(freshnessTimer);
+        freshnessTimer = setTimeout(() => activeLyric.removeAttribute('data-fresh'), 340);
+      }
+    }
+    for (const word of words) {
+      const amount = Math.round(100 * Math.max(0, Math.min(1, (position - word.start) / (word.end - word.start))));
+      if (amount === word.amount) continue;
+      word.amount = amount;
+      word.el.toggleAttribute('data-lit', amount === 100);
+      word.el.toggleAttribute('data-sweeping', amount > 0 && amount < 100);
+      if (amount > 0 && amount < 100) word.el.style.setProperty('--word-pct', amount + '%');
+    }
+  }
+
+  function renderLine(line, index, language) {
+    const [start] = cues[index];
+    const parts = language === 1 ? cues[index][language].split(/(\s+)/) : Array.from(cues[index][language]);
+    const weights = parts.map(part => {
+      const letters = part.match(/[\p{L}\p{N}]/gu);
+      return letters ? (language === 1 ? Math.max(2, letters.length) : 1) : 0;
+    });
+    const total = weights.reduce((a, b) => a + b, 0);
+    // Leave the final beat and a half lit before moving to the next phrase.
+    const span = 14.5 * beat;
+    const fragment = document.createDocumentFragment();
+    const result = [];
+    let elapsed = 0;
+    parts.forEach((part, i) => {
+      if (!weights[i]) {
+        fragment.append(part);
+        return;
+      }
+      const el = document.createElement('span');
+      el.className = 'session-word';
+      el.textContent = part;
+      const length = weights[i] / total * span;
+      result.push({ el, start: start + elapsed, end: start + elapsed + length, amount: -1 });
+      elapsed += length;
+      fragment.append(el);
+    });
+    line.lang = language === 1 ? 'en' : 'zh-CN';
+    line.replaceChildren(fragment);
+    return result;
+  }
+
+  function selectView(view, focusTab = false) {
+    const lyrics = view === 'lyrics';
+    deck.dataset.view = view;
+    coverPane.inert = lyrics;
+    lyricPane.inert = !lyrics;
+    coverPane.setAttribute('aria-hidden', String(lyrics));
+    lyricPane.setAttribute('aria-hidden', String(!lyrics));
+    tabs.forEach(tab => {
+      const selected = tab.dataset.studioView === view;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected && focusTab) tab.focus();
+    });
+    lyricsShortcut.setAttribute('aria-pressed', String(lyrics));
+    lyricsShortcut.setAttribute('aria-label', lyrics ? '返回封面' : '打开歌词');
+    updateText();
   }
 
   function draw() {
@@ -60,7 +139,7 @@
     const middle = height * .58;
     const step = width / (history.length - 1);
     ctx.clearRect(0, 0, width, height);
-    ctx.strokeStyle = '#76958170';
+    ctx.strokeStyle = palette.rule;
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, middle); ctx.lineTo(width, middle); ctx.stroke();
     ctx.beginPath();
@@ -69,7 +148,7 @@
       if (i === 0) ctx.moveTo(x, y);
       else ctx.quadraticCurveTo(x - step * .5, middle - history[i - 1] * height * .36, x, y);
     }
-    ctx.strokeStyle = '#c7e6a5';
+    ctx.strokeStyle = palette.accent;
     ctx.lineWidth = 1.5;
     ctx.stroke();
     for (let i = history.length - 1; i >= 0; i--) ctx.lineTo(step * i, middle + history[i] * height * .23);
@@ -88,8 +167,10 @@
     canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     fill = ctx.createLinearGradient(0, 0, 0, Math.max(1, height));
-    fill.addColorStop(0, '#c7e6a594');
-    fill.addColorStop(1, '#9cc6a113');
+    const css = getComputedStyle(deck);
+    palette = { accent: css.getPropertyValue('--deck-accent').trim(), rule: css.getPropertyValue('--deck-rule').trim() };
+    fill.addColorStop(0, palette.accent + '71');
+    fill.addColorStop(1, palette.accent + '09');
     draw();
   }
 
@@ -148,20 +229,37 @@
     if (!analyser && !reduced.matches) waveLabel.textContent = '当前浏览器未启用实时波形';
   });
   mute.addEventListener('click', () => { audio.muted = !audio.muted; });
-  seek.addEventListener('input', () => {
+  function jump(position) {
     if (!hasDuration()) {
-      pendingSeek = Number(seek.value);
+      pendingSeek = Math.max(0, Math.min(position, Number(seek.max)));
       if (!started && !requestedMetadata) {
         requestedMetadata = true;
         audio.load();
       }
       return;
     }
-    audio.currentTime = Number(seek.value);
+    audio.currentTime = Math.max(0, Math.min(position, audio.duration));
     history.fill(0);
     draw();
     updateText();
+  }
+
+  seek.addEventListener('input', () => {
+    seek.style.setProperty('--seek-pct', (100 * Number(seek.value) / Number(seek.max)).toFixed(2) + '%');
+    jump(Number(seek.value));
   });
+  deck.querySelectorAll('[data-studio-skip]').forEach(button => button.addEventListener('click', () =>
+    jump((pendingSeek ?? audio.currentTime) + Number(button.dataset.studioSkip))));
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => selectView(tab.dataset.studioView));
+    tab.addEventListener('keydown', event => {
+      const to = {ArrowLeft: 1 - index, ArrowRight: 1 - index, Home: 0, End: 1}[event.key];
+      if (to === undefined) return;
+      event.preventDefault();
+      selectView(tabs[to].dataset.studioView, true);
+    });
+  });
+  lyricsShortcut.addEventListener('click', () => selectView(deck.dataset.view === 'cover' ? 'lyrics' : 'cover'));
   audio.addEventListener('loadedmetadata', () => {
     if (pendingSeek !== null && hasDuration()) audio.currentTime = Math.min(pendingSeek, audio.duration);
     pendingSeek = null;
@@ -202,6 +300,9 @@
   audio.controls = false;
   audio.hidden = true;
   deck.querySelector('.session-controls').hidden = false;
+  deck.querySelector('.session-tabs').hidden = false;
+  deck.querySelector('.session-wavebox').hidden = false;
+  new MutationObserver(resize).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
   resize();
   applyMotion();
 })();

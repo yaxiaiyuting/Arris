@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- build-marker 20261104-interactive-studio -->
+<!-- build-marker 20261104-player-panes -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -58,7 +58,7 @@
 </style>
 <link rel="stylesheet" href="/assets/discover.css?v=20261102b">
 <link rel="stylesheet" href="/assets/appearance.css?v=20261104-studio">
-<link rel="stylesheet" href="/assets/studio.css?v=20261104b">
+<link rel="stylesheet" href="/assets/studio.css?v=20261104-player-panes">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -148,32 +148,53 @@
     <div class="studio-copy">
       <p class="eyebrow"><span class="eyebrow__no">试听室</span><i class="eyebrow__rule" aria-hidden="true"></i><span class="eyebrow__label">LISTENING SESSION</span></p>
       <h2 id="studio-title">按下播放，<br>看见声音。</h2>
-      <p>这一次，画面跟着音乐走。听一小段原创器乐，看看波形怎样随节拍起伏，再试着拖动进度、交换双语主行。</p>
-      <p class="studio-credit">《雨后》 · 约 37 秒 · 为 Arris 合成的原创试听曲<br>未使用第三方音源 · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a> · <a href="/assets/after-the-rain.mp3" download>下载试听曲</a></p>
+      <p>试听一段原创器乐。像在 Arris 里一样，从封面切到歌词，看双语文案随着同一段音乐逐字点亮。</p>
+      <p class="studio-credit">《雨后》 · 约 37 秒 · 为 Arris 合成的原创试听曲<br>曲目无人声，双语文案用于演示 · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a> · <a href="/assets/after-the-rain.mp3" download>下载试听曲</a></p>
     </div>
-    <div class="studio-player" data-studio>
-      <div class="session-head"><span><i aria-hidden="true"></i> ARRIS STUDIO</span><span>试听曲 / 01</span></div>
-      <div class="session-track">
-        <div class="session-cover"><svg viewBox="0 0 280 315" aria-hidden="true"><use href="#tux-listener"/></svg></div>
-        <div class="session-song"><p>AFTER THE RAIN</p><h3>雨后</h3><p>Arris Studio · 原创器乐</p></div>
+    <div class="studio-player" data-studio data-view="cover">
+      <div class="session-head">
+        <span class="session-now"><i aria-hidden="true"></i>正在播放</span>
+        <div class="session-tabs" role="tablist" aria-label="播放器视图" hidden>
+          <button id="studio-tab-cover" type="button" role="tab" aria-selected="true" aria-controls="studio-pane-cover" data-studio-view="cover">封面</button>
+          <button id="studio-tab-lyrics" type="button" role="tab" aria-selected="false" aria-controls="studio-pane-lyrics" data-studio-view="lyrics" tabindex="-1">歌词</button>
+        </div>
+        <span class="session-web">网页演示</span>
       </div>
-      <div class="session-wavebox"><canvas class="session-wave" aria-hidden="true"></canvas><span>实时波形</span></div>
+      <div class="session-stage">
+        <div class="session-cover" aria-hidden="true">
+          <span class="session-cover-edition">ARRIS STUDIO<span>01</span></span>
+          <svg viewBox="0 0 280 315"><use href="#tux-listener"/></svg>
+          <span class="session-cover-name">AFTER THE RAIN</span>
+        </div>
+        <div class="session-song"><h3>雨后</h3><p>Arris Studio · 原创器乐</p></div>
+        <div class="session-song-mini" aria-hidden="true"><strong>雨后</strong><p>Arris Studio · 原创器乐</p></div>
+        <div id="studio-pane-cover" class="session-pane-cover" role="tabpanel" aria-labelledby="studio-tab-cover" tabindex="0">
+          <span class="sr-only">《雨后》的试听封面</span>
+        </div>
+        <div id="studio-pane-lyrics" class="session-lyrics" role="tabpanel" aria-labelledby="studio-tab-lyrics" aria-hidden="true" inert>
+          <p class="session-neighbor session-previous"></p>
+          <div class="session-active">
+            <p class="session-primary" lang="en">The rain has let the evening in.</p>
+            <p class="session-secondary" lang="zh-CN">雨停了，傍晚悄悄进来。</p>
+          </div>
+          <p class="session-neighbor session-next"></p>
+          <div class="session-line-options" role="group" aria-label="双语主行"><button type="button" data-studio-line="original" aria-pressed="true">原文优先</button><button type="button" data-studio-line="translation" aria-pressed="false">译文优先</button></div>
+        </div>
+      </div>
+      <div class="session-wavebox" hidden><canvas class="session-wave" aria-hidden="true"></canvas><span>实时波形</span></div>
       <audio id="studio-audio" controls preload="none" src="/assets/after-the-rain.mp3" aria-label="播放原创试听曲《雨后》"></audio>
       <div class="session-controls" hidden>
         <label class="sr-only" for="studio-seek">试听播放进度</label>
         <input id="studio-seek" type="range" min="0" max="37.48" step=".05" value="0" aria-valuetext="0 分 0 秒">
-        <div class="session-times"><span id="studio-time">0:00</span><span id="studio-duration">0:37</span></div>
+        <div class="session-times"><span id="studio-time">0:00</span><span class="session-format">原创试听</span><span id="studio-duration">0:37</span></div>
         <div class="session-actions">
-          <button id="studio-play" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="studio-icon-play" d="m6 3 11 7-11 7Z"/><path class="studio-icon-pause" d="M4 3h4v14H4zm8 0h4v14h-4z"/></svg><span>播放</span></button>
-          <button id="studio-mute" type="button" aria-pressed="false">静音</button>
-          <div class="session-line-options" role="group" aria-label="双语主行"><button type="button" data-studio-line="original" aria-pressed="true">原文优先</button><button type="button" data-studio-line="translation" aria-pressed="false">译文优先</button></div>
+          <button id="studio-mute" type="button" aria-label="静音" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path class="studio-sound-on" d="M16 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/><path class="studio-sound-off" d="m16 10 5 5m0-5-5 5"/></svg></button>
+          <button type="button" data-studio-skip="-5" aria-label="后退 5 秒"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 8 12l10 6zM5 6v12"/></svg><small>5</small></button>
+          <button id="studio-play" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="studio-icon-play" d="m6 3 11 7-11 7Z"/><path class="studio-icon-pause" d="M4 3h4v14H4zm8 0h4v14h-4z"/></svg><span class="sr-only">播放</span></button>
+          <button type="button" data-studio-skip="5" aria-label="快进 5 秒"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 10 6-10 6zm13 0v12"/></svg><small>5</small></button>
+          <button id="studio-open-lyrics" type="button" aria-label="打开歌词" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 11h16M4 16h10"/></svg></button>
         </div>
         <p id="studio-status" class="session-status" role="status"></p>
-      </div>
-      <div class="session-lyrics" aria-label="双语时间轴示意">
-        <p class="session-primary" lang="en">The rain has let the evening in.</p>
-        <p class="session-secondary">雨停了，傍晚悄悄进来。</p>
-        <span>网页版演示 · 双语文案随时间轴切换 · 曲目无人声</span>
       </div>
     </div>
   </div>
@@ -239,5 +260,5 @@ document.querySelector('#check-health').addEventListener('click',async e=>{const
 })();
 </script>
 <script src="/assets/discover.js?v=20261102b" defer></script>
-<script src="/assets/studio.js?v=20261104b" defer></script>
+<script src="/assets/studio.js?v=20261104-player-panes" defer></script>
 </body></html>
