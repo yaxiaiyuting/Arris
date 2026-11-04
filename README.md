@@ -10,10 +10,10 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.2--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-9.90%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.3--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-9.92%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
@@ -36,8 +36,10 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
-| **4.0.2** | 2026-11-04 | **退出无限模式**（电台播完切歌单不再无限续播）· **上一首恒可用**（不再按模式置灰）· **全新队列从 0 播**（歌单/专辑「播放全部」不继承上次进度）· **致谢重写** |
-| 4.0.2（预览） | 2026-11-04 | 视觉收尾：播放页光效、波形、**生日庆祝动画**横竖屏（Draft Release，版本号不变） |
+| **4.0.3** | 2026-11-05 | **审查清单 12 条落地**：私人 FM 意图（I01）· 分段下载取消/校验（I03/I04）· Worker Range 与别名缓存（I05）· 连接池统一驱逐（I07）· 音质拒绝记忆按会话（I08）· 更新资产按通道过滤（I10）· 房间房主唯一 + 成员快照拒转（I11/I12）· P2P 握手门禁（I14）· 识曲取消与状态分流（I15/I16） |
+| **LTS 3.7.26** | 2026-11-05 | 与主线同源同修：I01 + I07 |
+| 4.0.2 | 2026-11-04 | **退出无限模式**（电台播完切歌单不再无限续播）· **上一首恒可用**（不再按模式置灰）· **全新队列从 0 播**（歌单/专辑「播放全部」不继承上次进度）· **致谢重写** |
+| 4.0.2（预览） | 2026-11-04 | 视觉收尾：播放页光效、波形、生日庆祝动画横竖屏（已并入 4.0.3 的构建线） |
 | 4.0.1 | 2026-11-03 | **主线移除 FFmpeg 软解扩展**：16.28 MB → 9.90 MB（−39%）；设置页新增「检查更新」；日推 6:00 自动换批；榜单卡用榜一封面 |
 | LTS 3.7.25 | 2026-11-04 | 与主线 4.0.2 同源同修（退出无限模式 / 上一首可用 / 新队列从 0 / 致谢同步）+ **视觉收尾预览**（播放页光效 / 波形 / 生日动画） |
 | 4.0.0 | 2026-11-01 | 10 段均衡器 · 间奏呼吸点 · Kotlin 2 + Compose 2025.06 · media3 1.9 |
@@ -64,7 +66,7 @@
 | 🎤 **逐字歌词** | ncm `yrc` + AMLL TTML + **qm QRC** 三源，TTML → YRC → LRC 三级回退，逐字渐变三档质量。QRC 那套是 QQ 自研的非标准 3DES，本仓库自实现并与独立实现逐字节比对验证 |
 | 🔀 **5 种播放模式** | 顺序循环 / 单曲循环 / 乱序 / 顺序线性 / 相似无限（私人 FM 电台） |
 | 🚗 **车机就绪** | Android Auto / Automotive 媒体源与浏览树，车机系统栏 inset 专项适配 |
-| 🪶 **9.4 MiB** | R8 全量混淆 + 资源 shrink；体积主要来自 FFmpeg 解码扩展的 4 个 ABI（换来低版本的真无损）。冷启动预热，进程被杀也能恢复队列 |
+| 🪶 **9.5 MiB** | R8 全量混淆 + 资源 shrink；4.0.1 起**主线不再随包带 FFmpeg 软解扩展**（16.28 → 9.90 MB），冷启动预热，进程被杀也能恢复队列 |
 | 🌐 **8 语言** | 运行时切换，不依赖系统 locale |
 | 🎂 **生日庆祝** | 在「外观与动效」里设置本地生日月日，生日当天打开首页播放 48 秒离线动画：Tux 端来蛋糕、点灯许愿，真实吹气或点按吹灭，黑场后七组烟花与三句祝福。错过可补 7 天；关于页版本号连点七次打开 Tux「自由听众席」，支持辅助功能操作。麦克风仅在前台本次许愿的短窗口使用，不保存不上传 |
 
@@ -266,7 +268,7 @@ UI 上是一套 8 级档位，各音源映射到自己平台的文件档位：
 > 不会顺手给你 128k），所以降级由客户端做，且**一次请求把所有档位放进同一个 `filename[]`** 后按优先级挑 ——
 > 逐个档位发请求的话，一首会员曲最坏要 8 次往返才轮到能放的那一档。
 >
-> 设备没有 MediaCodec FLAC 解码器（API < 27 或精简 ROM）时会自动跳过无损档位，避免无声；本 fork 已集成 FFmpeg 解码扩展，API 24–26 也能真无损。
+> 设备没有 MediaCodec FLAC 解码器时自动跳过无损档位，避免无声。**主线（minSdk 29）不再随包带 FFmpeg 软解扩展** —— Android 10 起平台自带 FLAC/Opus/AAC 解码，音源也只给 flac/mp3/m4a；**LTS 3.7.x（minSdk 24）仍保留扩展**，那边 24–26 上确实存在缺解码器的 ROM。
 
 ---
 
@@ -276,8 +278,8 @@ UI 上是一套 8 级档位，各音源映射到自己平台的文件档位：
 2. 允许「未知来源」安装
 3. 打开 App，在用户页登录（见下）
 
-> 体积说明（最新）：v3.8.3 release APK **实测 16,052,616 字节 ≈ 15.31 MB**。minSdk 29（Android 10）。
-> 体积说明：v1.8.1 release APK **实测 9,761,344 字节 ≈ 9.76 MB**，主要来自 FFmpeg 解码扩展的 4 个 ABI（上游 v1.0.4 时代不含 FFmpeg，只有 3.9 MB）。v1.9.0 构建后按实际产物更新。
+> 体积说明（最新）：v4.0.3 release APK **实测 10,404,000 字节 ≈ 9.92 MB**。minSdk 29（Android 10）；LTS 3.7.26 ≈ 11.69 MB（含 FFmpeg 扩展）。
+> 历史：v1.8.1 为 9.76 MB（含 FFmpeg 4 个 ABI）；v3.8.3 因同代工具链升至 15.31 MB；4.0.1 移除主线 FFmpeg 后回到 9.90 MB。
 
 ### 🔐 登录
 
@@ -306,7 +308,7 @@ App 不提供手动粘贴 Cookie，登录方式：
 
 ### 环境要求
 
-Android Studio Hedgehog+ · JDK 11 · Kotlin 1.9.24 · Gradle 9.3.1 · Android SDK 36（minSdk 24）
+Android Studio Meerkat+ · JDK 21 · Kotlin 2.0.21 · Compose BOM 2025.06.01 · media3 1.9.0 · Gradle 9.3.1 · Android SDK 36（主线 minSdk 29 / LTS minSdk 24）
 
 ### ⚠️ 必须先克隆 Kanesumi
 
@@ -375,10 +377,11 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 ---
 
-### 🟢 主线 3.8.x（`minSdk 29`）
+### 🟢 主线 4.0.x（`minSdk 29`）
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.3-gpl | 2026-11-05 | 审查清单 12 条：FM 意图 / 分段下载取消与校验 / Worker Range 与别名缓存 / 连接池统一驱逐 / 音质拒绝记忆按会话 / 更新资产按通道过滤 / 房主唯一与成员快照拒转 / P2P 握手门禁 / 识曲取消与状态分流。未纳入：I02、I09、I13、I17、I18 |
 | v4.0.2-gpl | 2026-11-04 | 电台播完切歌单真的退出无限模式；上一首不再置灰；播放全部从头播；致谢重写 |
 | v4.0.1-gpl | 2026-11-03 | 主线移除 FFmpeg 软解扩展：APK 16.28 → **9.90 MB**（平台解码已覆盖在用格式）；LTS 保留 |
 | v4.0.0-gpl | 2026-11-02 | **10 段均衡器**（设置 → 播放与音质）、**间奏呼吸点**、Kotlin 2.0.21 + media3 1.9.0；动态字号/居中/播放键/日推/榜单修复 |
@@ -416,6 +419,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.7.26-gpl | 2026-11-05 | 与主线同源同修：私人 FM 意图（I01）、切网清理公共池 + 派生池（I07） |
 | v3.7.24-gpl | 2026-11-02 | LTS 与主线同代：Kotlin 2、media3 1.9、均衡器、间奏呼吸点、竖屏字号修复 |
 | v3.7.23-gpl | 2026-11-02 | LTS 对齐：TTML 客户端走 `AppHttp`、音频三段计时、审计测试扩容到 `OkHttpClient()`/`newBuilder()` |
 | v3.7.21-gpl | 2026-11-02 | LTS 与主线同代：`AppHttp` 统一网络（IPv4 优先）、彩蛋推荐一首、分段下载、封面/艺人图修复 |

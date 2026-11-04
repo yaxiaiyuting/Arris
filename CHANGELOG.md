@@ -13,6 +13,30 @@
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
 
+## v4.0.3-gpl — 审查清单落地（2026-11-05）
+
+按 `docs/reviews/2026-11-04-confirmed-bugs.md` 逐条修，本版落地 12 条：
+
+- **I01** 私人 FM：模式不再提前改；加载非空且仍属当前请求才一次性提交
+  「换队列 + 进 INFINITY + FM 来源」。顺带修掉 4.0.2 的回归 ——
+  `replaceQueueAndPlay` 的"退出无限模式"会把刚设好的 INFINITY 顶回去。
+- **I03** 分段下载取消：登记并 `cancel()` 在途 Call；临时文件按代次命名；
+  代次变了就丢弃产物，**不回落单流、不改名**。
+- **I04** 分段校验：逐段核对 `Content-Range`（起止 + 总长）与 ETag。
+- **I05** Worker Range：先处理 `If-Range` / `If-None-Match`；`bytes=-N` 按后缀换算；
+  `latest.apk` / `lts-latest.apk` 不再 `immutable` 一年。
+- **I07** `AppHttp` 登记派生连接池，切网一起驱逐。
+- **I08** 音质拒绝记忆按会话代次键控，只计不同曲目。
+- **I10** 更新资产：通道/变体过滤下沉到每个资产，再取最高版本。
+- **I11/I12** 房间：房主唯一由服务端保证；成员 `snapshot` 拒转；房主离开关闭成员连接。
+- **I14** P2P：只有校验通过的 HELLO / HELLO-ACK 才确定对端地址，握手前丢弃 DATA/ACK。
+- **I15/I16** 识曲：Call 绑协程 Job；先按非 2xx 分流再解析正文。
+
+未纳入：**I02**（持久化提交代次）、**I09**（更新源预算与单源校验完整改造）、
+**I13 / I17 / I18**（一起听跟随的房间代次与暂停语义）。
+
+**LTS 3.7.26** 同源同步了 I01 与 I07。
+
 ## v4.0.2-gpl — 退出无限模式 / 上一首可用 / 新队列从 0（2026-11-04）
 
 三个症状同一个根：`replaceQueueAndPlay` 只把 `fmMode` 置 false，`playMode` 仍是 `INFINITY`。
