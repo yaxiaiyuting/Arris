@@ -2220,13 +2220,15 @@ fun MainScreen(
         PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
     }
 
-    fun replaceQueueAndPlay(songs: List<SongItem>) {
+    fun replaceQueueAndPlay(songs: List<SongItem>, enterFm: Boolean = false) {
         if (songs.isEmpty()) return
-        fmMode = false
+        fmMode = enterFm
         // 3.7.25：**电台播完顺手播别的，要真的退出无限模式**（与主线 4.0.2 同源同修）。
         // 旧实现只把 fmMode 置 false，playMode 仍是 INFINITY —— 队列照旧无限续播、
         // 上一首也还按电台上锁。这里回到「上一次的非电台模式」。
-        if (playMode == QueueModes.INFINITY) {
+        if (enterFm) {
+            applyPlayMode(QueueModes.INFINITY)
+        } else if (playMode == QueueModes.INFINITY) {
             applyPlayMode(lastNonInfinityMode)
         }
         playerViewModel.invalidatePreload()
@@ -2256,7 +2258,7 @@ fun MainScreen(
     }
 
     fun startFm() {
-        applyPlayMode(QueueModes.INFINITY)
+        // 3.7.26 · I01：模式跟着"队列真的换了"一起提交，不在这里提前改。
         pendingPlayRequests.launch(load = {
             withContext(Dispatchers.IO) {
                 val fm = try { PlaylistApi.getPersonalFm() }
@@ -2266,8 +2268,7 @@ fun MainScreen(
             }
         }) { songs ->
             if (songs.isNotEmpty()) {
-                replaceQueueAndPlay(songs)
-                fmMode = true
+                replaceQueueAndPlay(songs, enterFm = true)
                 expandCard()
             }
         }

@@ -53,13 +53,17 @@ object AppHttp {
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        .connectionPool(pool)
+        .connectionPool(pool.also { pools.add(it) })
 
     /** 直接要一个成品（默认配置）。 */
     fun client(): OkHttpClient = builder().build()
 
     /** 丢掉所有池化连接（网络切换 / 代理开关 / 回到前台时调用）。 */
+    // 3.7.26 · I07：派生池也登记，切网一起清。
+    private val pools: MutableSet<ConnectionPool> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     fun evictAll() {
-        Thread({ runCatching { pool.evictAll() } }, "ncrust-evict-apphttp").start()
+        val snapshot = pools.toList() + pool
+        Thread({ snapshot.forEach { p -> runCatching { p.evictAll() } } }, "ncrust-evict-apphttp").start()
     }
 }
