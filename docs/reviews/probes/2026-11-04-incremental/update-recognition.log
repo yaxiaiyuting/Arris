@@ -1,0 +1,5 @@
+Production update selector: same batch with mainline and eligible LTS loses the LTS result; malformed [1] reports UpToDate.
+Production recognition provider: coroutine cancellation leaves synchronous HTTP call active.
+Production recognition provider: empty 503 classified as protocol change.
+Production P2P receive and RoomWire parser accepted DATA from a different UDP port before handshake, without token.
+All HTTP responses are interceptor doubles. UDP stayed on loopback; no real network, microphone, or account.

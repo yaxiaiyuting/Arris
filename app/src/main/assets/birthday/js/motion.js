@@ -346,7 +346,11 @@
       if (f) S(f, 0, { scaleX: 0.7, scaleY: 0.3 });
       if (N.glows[i]) S(N.glows[i], 0, { opacity: 0 });
     });
-    if (N.lines.length) S(N.lines, 0, { yPercent: 112, opacity: 0, filter: 'blur(6px)', rotation: 0.6 });
+    // v4.0.2 · 闪烁修复：**不要再动 filter: blur()**。
+    // 真机最后几下"背景升起"闪一下，和当年星空用 filter:brightness() 是同一类问题 ——
+    // 那组文字每帧都要重新栅格化整块（大字号 + 4 行同时动），合成层被打断就闪。
+    // 现在只动 yPercent / opacity / rotation 三个纯合成层属性，效果几乎一样但不重绘。
+    if (N.lines.length) S(N.lines, 0, { yPercent: 112, opacity: 0, rotation: 0.6 });
     S(N.bloom, 0, { opacity: 0 });
     S(EYES, 0, { scaleY: 1 });
     S(N.tray, 0, { opacity: 0, visibility: 'hidden' });   // P0-1：端盘期间木托全程不出现（白盘就是端盘本体）
@@ -357,7 +361,7 @@
       gsap.set(N.tux, { opacity: 0, x: WSTART.x, y: WSTART.y });
       gsap.set(N.cake, { opacity: 0 });
       gsap.set(N.cakeShadow, { opacity: 0 });
-      if (N.lines.length) gsap.set(N.lines, { yPercent: 112, opacity: 0, filter: 'blur(6px)', rotation: 0.6 });
+      if (N.lines.length) gsap.set(N.lines, { yPercent: 112, opacity: 0, rotation: 0.6 });
       gsap.set(N.bloom, { opacity: 0 });
       commitWalk(W0);
     } catch (e) { /* ignore */ }
@@ -809,8 +813,9 @@
       const isTitle = (i === 0);
       const t = BLESS + (isTitle ? 0.10 : 0.38 + i * (0.32 + jit(0.016)));
       const dur = isTitle ? 0.78 : 1.05 + jit(0.05);
-      F(el, t, { yPercent: 112, opacity: 0, filter: 'blur(6px)', rotation: 0.6 },
-        { yPercent: 0, opacity: 1, filter: 'blur(0px)', rotation: 0 }, dur, E.arrive);
+      // 同上：不起 filter，只走合成层（yPercent / opacity / rotation）。
+      F(el, t, { yPercent: 112, opacity: 0, rotation: 0.6 },
+        { yPercent: 0, opacity: 1, rotation: 0 }, dur, E.arrive);
     });
     if (N.bloom) {
       const lastT = BLESS + 0.38 + 3 * (0.32 + 0.016);

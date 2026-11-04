@@ -360,7 +360,14 @@ internal fun ColumnScope.PlayerCardExpanded(
 
             // 歌词 / 队列双面板（窄屏整宽 / 宽屏右栏共用）。
             val playerPanels: @Composable (Modifier) -> Unit = { panelModifier ->
-                Box(modifier = panelModifier) {
+                // 4.0.2：**给底部背景波形让位**。竖屏收起控制栏后，歌词面板会长到卡片底沿，
+                // 压在背景级波形（可视条）上，真机截图里就是"可视条被歌词挡住一部分"。
+                // 这里按波形条高度留出空间（0.75 折中：波形完整露出，又不会空出一整条）。
+                Box(
+                    modifier = panelModifier.padding(
+                        bottom = if (motion.fullScreenWaveform) geo.waveBackdropHeightDp * 0.75f else 0.dp
+                    )
+                ) {
                     // 歌词面板：translationX 从 0 滑至 -screenWidthPx，确保非歌词模式下完全移出屏幕，
                     // 彻底消除与列表面板的命中测试重叠（combinedClickable 忽略 isConsumed 标志）
                     // alpha 用阶梯而非交叉淡化: 切换时源面板瞬时隐藏、目标面板单层全宽滑入,
