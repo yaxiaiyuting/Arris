@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- build-marker 20261104-frequency-lanes -->
+<!-- build-marker 20261104-studio-motion -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -58,7 +58,7 @@
 </style>
 <link rel="stylesheet" href="/assets/discover.css?v=20261102b">
 <link rel="stylesheet" href="/assets/appearance.css?v=20261104-studio">
-<link rel="stylesheet" href="/assets/studio-player-bands.css">
+<link rel="stylesheet" href="/assets/studio-player-motion.css">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -168,8 +168,10 @@
         </div>
         <div class="session-song"><h3>雨后</h3><p>Arris Studio · 原创器乐</p></div>
         <div class="session-song-mini" aria-hidden="true"><strong>雨后</strong><p>Arris Studio · 原创器乐</p></div>
-        <div id="studio-pane-cover" class="session-pane-cover" role="region" aria-labelledby="studio-tab-cover" tabindex="0">
+        <div id="studio-pane-cover" class="session-pane-cover" role="region" aria-labelledby="studio-tab-cover">
           <span class="sr-only">《雨后》的试听封面</span>
+          <button type="button" class="session-knock" aria-label="轻敲 Tux 唱片封面" title="试试轻敲三下" hidden></button>
+          <span class="session-cover-reply" role="status"></span>
         </div>
         <div id="studio-pane-lyrics" class="session-lyrics" role="region" aria-labelledby="studio-tab-lyrics">
           <p class="session-neighbor session-previous"></p>
@@ -194,7 +196,7 @@
       <div class="session-controls" hidden>
         <label class="sr-only" for="studio-seek">试听播放进度</label>
         <input id="studio-seek" type="range" min="0" max="37.48" step=".05" value="0" aria-valuetext="0 分 0 秒">
-        <div class="session-times"><span id="studio-time">0:00</span><span class="session-format">原创试听</span><span id="studio-duration">0:37</span></div>
+        <div class="session-times"><span id="studio-time">0:00</span><span class="session-format">原创试听</span><button type="button" class="session-format session-liner-button" aria-haspopup="dialog" hidden>原创试听 <span aria-hidden="true">✦</span></button><span id="studio-duration">0:37</span></div>
         <div class="session-actions">
           <button id="studio-mute" type="button" aria-label="静音" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path class="studio-sound-on" d="M16 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/><path class="studio-sound-off" d="m16 10 5 5m0-5-5 5"/></svg></button>
           <button type="button" data-studio-skip="-5" aria-label="后退 5 秒"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 8 12l10 6zM5 6v12"/></svg><small>5</small></button>
@@ -203,6 +205,13 @@
           <button id="studio-open-lyrics" type="button" aria-label="打开歌词" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 11h16M4 16h10"/></svg><span>歌词</span></button>
         </div>
         <p id="studio-status" class="session-status" role="status"></p>
+        <dialog class="session-liner" aria-labelledby="studio-liner-title">
+          <p class="session-liner-kicker">ARRIS STUDIO · 01</p>
+          <h3 id="studio-liner-title">唱片内页</h3>
+          <p>《雨后》的底鼓、低音和镲片都是合成的。仔细看，底鼓会敲亮左边的暖色波形，镲片则在右边留下细小的波峰。</p>
+          <p class="session-liner-signature">Tux 留字 · 雨后适合慢慢听。</p>
+          <form method="dialog"><button type="submit" autofocus>继续听</button></form>
+        </dialog>
       </div>
     </div>
   </div>
@@ -268,5 +277,5 @@ document.querySelector('#check-health').addEventListener('click',async e=>{const
 })();
 </script>
 <script src="/assets/discover.js?v=20261102b" defer></script>
-<script src="/assets/studio-player-bands.js" defer></script>
+<script src="/assets/studio-player-motion.js" defer></script>
 </body></html>

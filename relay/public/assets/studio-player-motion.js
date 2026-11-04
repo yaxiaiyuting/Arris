@@ -32,6 +32,11 @@
   const lyricPane = deck.querySelector('#studio-pane-lyrics');
   const lyricsShortcut = deck.querySelector('#studio-open-lyrics');
   const tabs = [...deck.querySelectorAll('[data-studio-view]')];
+  const coverKnock = deck.querySelector('.session-knock');
+  const coverReply = deck.querySelector('.session-cover-reply');
+  const linerButton = deck.querySelector('.session-liner-button');
+  const liner = deck.querySelector('.session-liner');
+  let knocks = 0, lastKnock = 0, helloTimer = 0;
   let words = [], freshnessTimer = 0, palette;
   // The Android visualizer reads left to right: bass, mids, treble.
   // Match its crossover points; each ribbon has its own measured history.
@@ -40,12 +45,14 @@
     { key: 'mid', min: 150, max: 2000, gain: 5.4 },
     { key: 'high', min: 2000, max: Infinity, gain: 15 },
   ];
-  const cells = 22;
-  const sampleInterval = .066;
+  const cells = 24;
+  const sampleInterval = .057;
+  const gravity = 19;
+  const restitution = .27;
   for (const band of bands) {
     band.values = new Float32Array(cells + 2);
-    band.peaks = new Float32Array(cells + 2);
-    band.level = band.peak = 0;
+    band.launches = new Float32Array(cells + 2);
+    band.level = 0;
   }
   let context, analyser, bins, cueIndex = -1, translationFirst = false;
   let frame = 0, sampledAt = null, phase = 0, width = 0, height = 0, started = false, requestedMetadata = false, pendingSeek = null;
@@ -132,6 +139,12 @@
   function selectView(view, focusTab = false) {
     const lyrics = view === 'lyrics';
     deck.dataset.view = view;
+    if (lyrics) {
+      knocks = 0;
+      deck.removeAttribute('data-hello');
+      coverReply.textContent = '';
+      clearTimeout(helloTimer);
+    }
     coverPane.inert = lyrics;
     lyricPane.inert = !lyrics;
     coverPane.setAttribute('aria-hidden', String(lyrics));
@@ -151,7 +164,7 @@
   function draw() {
     if (!ctx || !width || !height) return;
     const laneWidth = width / bands.length;
-    const middle = height * .52;
+    const middle = height * .62;
     ctx.clearRect(0, 0, width, height);
     ctx.strokeStyle = palette.rule;
     ctx.lineWidth = 1;
@@ -169,8 +182,8 @@
       const span = laneWidth - 4;
       const step = span / cells;
       const shift = phase * step;
-      const amp = height * .43;
-      const { values, peaks, color, fill } = band;
+      const amp = height * .35;
+      const { values, launches, color, fill } = band;
       ctx.save();
       ctx.beginPath(); ctx.rect(left, 0, span, height); ctx.clip();
       ctx.beginPath();
@@ -184,21 +197,49 @@
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.25;
       ctx.stroke();
-      for (let i = values.length - 1; i >= 0; i--) {
-        ctx.lineTo(left + i * step - shift, middle + values[i] * amp * .65);
+      ctx.lineTo(left + (values.length - 1) * step - shift, middle + values[values.length - 1] * amp * .83);
+      for (let i = values.length - 1; i > 0; i--) {
+        const x = left + i * step - shift;
+        const current = middle + values[i] * amp * .83;
+        const previous = middle + values[i - 1] * amp * .83;
+        ctx.bezierCurveTo(x - step * .4, current, x - step * .6, previous, x - step, previous);
       }
       ctx.closePath();
       ctx.fillStyle = fill;
       ctx.fill();
 
-      // Peak dots and short holds stay tied to their own sample and lane.
-      ctx.fillStyle = color;
-      for (let i = 1; i <= cells; i++) {
-        if (peaks[i] < .27 || peaks[i] <= peaks[i - 1] || peaks[i] < peaks[i + 1]) continue;
+      // Age belongs to the sample, so the curve, ball and dash share one horizontal clock.
+      const baseRadius = laneWidth < 100 ? 1 : 1.25;
+      for (let i = 0; i <= cells; i++) {
+        const launch = launches[i];
+        const radius = launch > .5 ? baseRadius + .25 : baseRadius;
+        if (values[i] < .105 && launch === 0) continue;
+        const age = (cells - i + phase) * sampleInterval;
+        const flight = 2 * launch / gravity;
+        const rebound = age - flight;
+        const lift = rebound < 0
+          ? launch * age - gravity * age * age / 2
+          : Math.max(0, restitution * launch * rebound - gravity * rebound * rebound / 2);
+        const riseTime = Math.min(age, flight / 2);
+        const attained = launch * riseTime - gravity * riseTime * riseTime / 2;
+        const held = attained * Math.exp(-Math.max(0, age - .24) / .3);
         const x = left + i * step - shift;
-        const y = Math.max(4, middle - peaks[i] * amp - 3);
-        ctx.beginPath(); ctx.arc(x, y, 1.35, 0, Math.PI * 2); ctx.fill();
-        if (peaks[i] > .58) ctx.fillRect(x - 2, y - 3, 4, 1);
+        const crest = middle - values[i] * amp;
+        const y = Math.max(6, crest - lift * amp - radius);
+        if (launch > .63 && Math.max(lift, held) * amp > .55) {
+          const dashY = Math.max(2, Math.min(y - radius - 2.2, crest - held * amp - radius - 2));
+          ctx.globalAlpha = .66;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x - step * .31, dashY);
+          ctx.lineTo(x + step * .31, dashY);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
     }
@@ -228,10 +269,11 @@
   function resetWave() {
     sampledAt = null;
     phase = 0;
+    paintedPosition = -1;
     for (const band of bands) {
       band.values.fill(0);
-      band.peaks.fill(0);
-      band.level = band.peak = 0;
+      band.launches.fill(0);
+      band.level = 0;
     }
     draw();
   }
@@ -245,20 +287,24 @@
       }
       const target = Math.min(1, Math.sqrt(Math.sqrt(power) * band.gain));
       const blend = 1 - Math.exp(-elapsed / (target > band.level ? .027 : .13));
-      band.level += (target - band.level) * blend;
-      band.peak = Math.max(band.level, band.peak * Math.exp(-elapsed / .19));
-      band.values.copyWithin(0, 1);
-      band.peaks.copyWithin(0, 1);
+      const rise = (target - band.level) * blend;
+      band.level += rise;
+      const launch = rise > .024 ? Math.min(3.8, 9.5 * rise) : 0;
+      band.values.copyWithin(0, 1, cells + 1);
+      band.launches.copyWithin(0, 1, cells + 1);
+      // The extra point extends the ribbon over the right edge during subpixel scrolling.
       band.values.fill(band.level, cells);
-      band.peaks.fill(band.peak, cells);
+      band.launches[cells] = launch;
     }
   }
 
+  let paintedPosition = -1;
   function paint() {
     frame = 0;
     if (audio.paused || audio.ended || document.hidden || reduced.matches) return;
     const position = audio.currentTime;
-    if (analyser && !audio.seeking && context.state === 'running') {
+    if (analyser && position !== paintedPosition && !audio.seeking && context.state === 'running') {
+      paintedPosition = position;
       if (sampledAt === null || position - sampledAt >= sampleInterval) {
         const elapsed = sampledAt === null ? sampleInterval : position - sampledAt;
         // Preserve the sub-cell remainder without inserting invented samples after a stall.
@@ -316,6 +362,25 @@
     }
     if (!analyser && !reduced.matches) waveLabel.textContent = '当前浏览器未启用实时波形';
   });
+  coverKnock.addEventListener('click', () => {
+    const now = performance.now();
+    if (now - lastKnock > 1700) knocks = 0;
+    lastKnock = now;
+    if (++knocks < 3) return;
+    knocks = 0;
+    if (deck.hasAttribute('data-hello')) return;
+    deck.setAttribute('data-hello', '');
+    coverReply.textContent = 'Tux 收到。雨已经停啦。';
+    helloTimer = setTimeout(() => {
+      deck.removeAttribute('data-hello');
+      coverReply.textContent = '';
+    }, 3200);
+  });
+  if (typeof liner.showModal === 'function') {
+    linerButton.hidden = false;
+    linerButton.previousElementSibling.hidden = true;
+    linerButton.addEventListener('click', () => liner.showModal());
+  }
   mute.addEventListener('click', () => { audio.muted = !audio.muted; });
   function jump(position) {
     if (!hasDuration()) {
@@ -398,6 +463,7 @@
   [coverPane, lyricPane].forEach(pane => pane.setAttribute('role', 'tabpanel'));
   selectView(location.hash === '#studio-pane-lyrics' ? 'lyrics' : 'cover');
   deck.setAttribute('data-ready', '');
+  coverKnock.hidden = false;
   deck.querySelector('.session-line-options').hidden = false;
   deck.querySelector('.session-wavebox').hidden = false;
   new MutationObserver(resize).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
