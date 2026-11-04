@@ -5,10 +5,12 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -25,6 +27,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -150,17 +153,38 @@ private fun BirthdayActions(state: String, mic: Boolean, armed: Boolean, feedbac
     if (state != "WAITING") return
     val s = LocalStrings.current.celebration
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
-    Column(modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        MetroText(feedback.ifBlank { s.micHint }, color = Color(0xffe8cfa9), style = TextStyle(fontSize = 12.sp, textAlign = TextAlign.Center))
-        Spacer(Modifier.height(8.dp))
-        if (landscape) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) { CelebrationButton(if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, onMic, enabled = !mic) }
-                Box(Modifier.weight(1f)) { CelebrationButton(s.manualBlow, onBlow, primary = false) }
+    val panel = remember {
+        Brush.verticalGradient(listOf(Color(0xf21b3025), Color(0xfa0b1b14)))
+    }
+    Box(
+        modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.widthIn(max = 440.dp).fillMaxWidth()
+                .background(panel, AppShapes.large)
+                .border(1.dp, Color(0x60dfc095), AppShapes.large)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MetroText(
+                feedback.ifBlank { s.micHint },
+                color = Color(0xfff2ddbc),
+                style = TextStyle(fontSize = 13.sp, textAlign = TextAlign.Center),
+            )
+            Spacer(Modifier.height(8.dp))
+            val micLabel = if (!mic) s.micStart else if (armed) s.micListening else s.micCalibrating
+            if (landscape) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { CelebrationButton(micLabel, onMic, enabled = !mic) }
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        CelebrationButton(s.manualBlow, onBlow, primary = false)
+                    }
+                }
+            } else {
+                CelebrationButton(micLabel, onMic, enabled = !mic)
+                CelebrationButton(s.manualBlow, onBlow, primary = false)
             }
-        } else {
-            CelebrationButton(if (mic) if (armed) s.micListening else s.micCalibrating else s.micStart, onMic, enabled = !mic)
-            CelebrationButton(s.manualBlow, onBlow, primary = false)
         }
     }
 }

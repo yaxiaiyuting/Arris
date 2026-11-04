@@ -1295,6 +1295,8 @@
     ctx.clearRect(0, 0, W, H);
   }
 
+  const APP_SOFT_BURST = new URLSearchParams(location.search).has('app');
+
   function renderFlashes(t) {
     if (!ctxB || !flashes.length) return;
     const core = coreSprite();
@@ -1307,7 +1309,8 @@
       const e = easeOut(u);
       // ① 挂在整朵花后面的同色柔光（半径 ≈ 1.6 × 花半径）
       const r1 = fl.r * (0.9 + 0.75 * e);
-      ctxB.globalAlpha = 0.14 * Math.pow(1 - u, 1.25);
+      const spread = APP_SOFT_BURST ? Math.min(1, u * fl.dur / 0.18) * 0.64 : 1;
+      ctxB.globalAlpha = 0.14 * spread * Math.pow(1 - u, 1.25);
       ctxB.drawImage(SPR_SOFT[tint(fl.col)], fl.x - r1, fl.y - r1, r1 * 2, r1 * 2);
       // ② 爆心：0.15s 的刺点（r 5px，近白 #E8FFF8）+ 0.30s 的紧光圈
       const cu = clamp((t - fl.t0) / 0.30, 0, 1);
@@ -1324,7 +1327,7 @@
       if (!fl.lit && u < 0.4) {
         fl.lit = true;
         const L = window.Lighting;
-        if (L && typeof L.flash === 'function') {
+        if (!APP_SOFT_BURST && L && typeof L.flash === 'function') {
           safe(() => L.flash({ x: fl.x, y: fl.y, r: fl.r * 1.5, color: fl.col, intensity: 0.9, dur: 0.55 }));
         }
       }

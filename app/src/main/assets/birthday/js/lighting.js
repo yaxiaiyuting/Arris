@@ -22,6 +22,7 @@
   'use strict';
 
   const SVGNS = 'http://www.w3.org/2000/svg';
+  const APP = new URLSearchParams(location.search).has('app');
   const C = window.CUES || { dur: 48, act: {}, ignite: [], extinguish: [], shells: [] };
   const ACT = C.act || {};
 
@@ -266,7 +267,9 @@
       const burst = s.at + riseOf(i);
       const age = t - burst - EVENT.delay;
       const finale = s.kind === 'finale';
-      const e = finale ? eventCurve(age, 0.80, 0.10, 1.6) : eventCurve(age);
+      let e = finale ? eventCurve(age, 0.80, 0.10, 1.6) : eventCurve(age);
+      // In the app, the sparks carry the burst; the broad environmental light blooms in gently.
+      if (APP) e *= 0.48 * smoothstep(0, 0.16, age);
       if (e <= 0.001) continue;
       const k = clamp((s.r || 160) / 232, 0, 1);        // finale 最大
       let amp = e * (KIND_AMP[s.kind] || 0.86) * (0.86 + 0.14 * k);
