@@ -1,0 +1,3 @@
+I05: APK suffix, rolling cache and stale strong If-Range controls pass; matching If-None-Match plus Range and weak If-Range still give 206.
+I05: MP3 still returns 206 for stale If-Range and matching If-None-Match.
+I12: host leave closes existing member and removes directory entry, but member rejoin publishes hostless room again.

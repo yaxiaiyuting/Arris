@@ -1,0 +1,4 @@
+I08: one track rejection already denies the entire level; switching account generation clears it.
+I10: an lts-* release that contains both assets offers the 4.0.3 mainline APK to a 3.7.25 client.
+I16: empty 401/403/503 and 200 controls pass, but 401 and 503 with body-read failure are reported as network failures.
+Production level functions, update selector and recognition provider; fake account, intercepted HTTP.

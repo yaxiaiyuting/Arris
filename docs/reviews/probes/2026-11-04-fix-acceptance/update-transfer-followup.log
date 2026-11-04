@@ -1,0 +1,3 @@
+I03: a pre-cancel probe can resume after a same-target retry, take its .seg.3 path, and publish old bytes while the retry is in flight.
+I04: explicit incorrect Content-Range and changed ETag are rejected before writing. Missing validators at probe or segment time still allow assembly.
+Production SegmentedDownload and extracted UpdateService branch; no network or real APK.
