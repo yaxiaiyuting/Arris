@@ -39,15 +39,24 @@
   function fitBlessing() {
     const box = document.getElementById('blessing');
     box.style.setProperty('--wish-scale', '1');
-    // Include the real end actions in measurement even while the film is playing.
-    // Their native predecessor was pinned to the viewport, detached from the wishes.
+    box.style.removeProperty('--letter-lift');
     box.classList.add('measure-actions');
+    const stage = document.getElementById('stage').getBoundingClientRect();
+    // Centered landscape letterboxing may end above the viewport bottom.
+    const floor = Math.min(stage.bottom - 18, innerHeight - Math.max(48, Math.min(72, innerHeight * .08)) - 5);
+    const initialTop = box.getBoundingClientRect().top;
+    // Keep the portrait letter out of the character's face whenever possible.
+    const minTop = stage.top + stage.height * (document.body.classList.contains('portrait') ? .40 : .04);
+    const maxLift = Math.max(0, initialTop - minTop);
     let scale = 1;
-    const bottomGap = Math.max(48, Math.min(72, innerHeight * .08));
-    for (let i = 0; i < 12 && box.getBoundingClientRect().bottom > innerHeight - bottomGap; i++) {
-      scale *= .94;
+    for (let i = 0; i < 10 && box.getBoundingClientRect().bottom - maxLift > floor; i++) {
+      scale *= .95;
       box.style.setProperty('--wish-scale', scale.toFixed(3));
     }
+    const overflow = Math.max(0, box.getBoundingClientRect().bottom - floor);
+    // Translations and enlarged system text can exceed the preferred layout.
+    const safeLift = Math.max(0, initialTop - stage.top - 8);
+    box.style.setProperty('--letter-lift', Math.min(overflow, safeLift) + 'px');
     box.classList.remove('measure-actions');
   }
   function stop() {

@@ -793,6 +793,13 @@
        8. 祝福（CUES.act.bless）
        ══════════════════════════════════════════════════ */
     const BLESS = A.bless || 41.95;
+    if (new URLSearchParams(location.search).has('app')) {
+      // Ease the portrait floor and subject up together before the letter enters.
+      F($('stage'), BLESS - 1.82, { '--final-frame': 0 },
+        { '--final-frame': 1 }, 1.7, E.drift);
+      F($('blessing'), BLESS - 0.12, { '--letter-light': 0 },
+        { '--letter-light': 1 }, 1.35, E.drift);
+    }
     N.lines.forEach(function (el, i) {
       // 首行 = 标题，单独加速：42.05 起 / 0.78s（其余行 42.65/43.00/43.32，0.32 错峰）。
       // 依据：art-director 判据"42.60 标题区灰度 max ≥150"；按 1.32s 走时只有 132（滑出遮罩不够）。
