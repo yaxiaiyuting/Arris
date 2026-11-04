@@ -359,7 +359,11 @@ internal fun ColumnScope.PlayerCardExpanded(
 
             // 歌词 / 队列双面板（窄屏整宽 / 宽屏右栏共用）。
             val playerPanels: @Composable (Modifier) -> Unit = { panelModifier ->
-                Box(modifier = panelModifier) {
+                Box(
+                    modifier = panelModifier.padding(
+                        bottom = if (motion.fullScreenWaveform) geo.waveBackdropHeightDp * 0.75f else 0.dp
+                    )
+                ) {
                     // 歌词面板：translationX 从 0 滑至 -screenWidthPx，确保非歌词模式下完全移出屏幕，
                     // 彻底消除与列表面板的命中测试重叠（combinedClickable 忽略 isConsumed 标志）
                     // alpha 用阶梯而非交叉淡化: 切换时源面板瞬时隐藏、目标面板单层全宽滑入,
