@@ -108,13 +108,40 @@ class NeteaseRecognizeProvider(
             .build()
 
         return try {
-            client.newCall(request).execute().use { response ->
+            // I15：**把 Call 绑到协程取消**。旧实现是裸 `execute()`：用户点停止 / 退出页面时
+            // 协程被取消、界面状态清掉了，但这条 HTTP Call 会一直跑到拿完响应 —— 上传还在继续、
+            // 结果回来时也没人要。
+            //
+            // 这里用 `Job.invokeOnCompletion` 挂取消回调（公开 API，不碰 kotlinx 内部的
+            // CancelHandler），并在 IO 线程上同步执行：协程一取消，`call.cancel()` 立刻打断
+            // 连接与 body 读取，异常走下面的 IOException 分支。
+            val call = client.newCall(request)
+            kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
+                ?.invokeOnCompletion { runCatching { call.cancel() } }
+            val response = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                call.execute()
+            }
+            response.use { response ->
                 val raw = response.body?.bytes() ?: ByteArray(0)
+                // I16：**先按 HTTP 状态分流，再看正文**。空 503 / 空 401 原来会先撞上
+                // "空体 = 协议变了"，把一个明确的服务端状态误报成协议变更，还会绕过
+                // 401/403 的额度与凭证分流。
                 if (raw.isEmpty()) {
-                    return RecogOutcome.Failed(
-                        RecogFailure.PROTOCOL_CHANGED,
-                        "服务端回空体（HTTP ${response.code}，audio=${bytes.size}B）",
-                    )
+                    when {
+                        response.code >= 500 -> return RecogOutcome.Failed(
+                            RecogFailure.SERVER_ERROR, "HTTP ${response.code}（空体）"
+                        )
+                        response.code == 401 || response.code == 403 -> return RecogOutcome.Failed(
+                            RecogFailure.QUOTA_EXCEEDED, "HTTP ${response.code}（空体）"
+                        )
+                        !response.isSuccessful -> return RecogOutcome.Failed(
+                            RecogFailure.PROTOCOL_CHANGED, "HTTP ${response.code}（空体）"
+                        )
+                        else -> return RecogOutcome.Failed(
+                            RecogFailure.PROTOCOL_CHANGED,
+                            "服务端回空体（HTTP ${response.code}，audio=${bytes.size}B）",
+                        )
+                    }
                 }
                 // 三层可能：明文 JSON → AES 密文 → AES 解密后还是 gzip 流。
                 // 抓包实证：成功响应就是"AES 密文，解开后是 gzip 的 JSON"，

@@ -50,7 +50,7 @@ export default {
         ? "/dl/" + url.pathname.slice("/get/".length)
         : url.pathname;
       const assetUrl = new URL(assetPath, url.origin).toString();
-      const range = request.headers.get("range");
+      let range = request.headers.get("range");
       const mark = { "x-arris-route": "dl", "x-arris-range": String(range) };
       if (request.method !== "GET") {
         const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
@@ -58,6 +58,34 @@ export default {
         h.set("accept-ranges", "bytes");
         for (const [k, v] of Object.entries(mark)) h.set(k, v);
         return new Response(null, { status: head.status, headers: h });
+      }
+
+      // I05：**先处理条件请求，再谈 Range**。
+      // 旧序是先按 Range 切片、把 If-Range / If-None-Match 全忽略，于是"客户端拿着旧 ETag
+      // 要续传"也能拿到 206 —— 拼出来的包是两代资产的混合体。
+      // 滚动别名（latest.apk / lts-latest.apk）与带版本号文件名要区别对待缓存
+      const aliasName = /(^|\/)(latest|lts-latest)\.apk$/.test(decodeURIComponent(assetPath || ""));
+      const ifRange = request.headers.get("if-range");
+      const ifNoneMatch = request.headers.get("if-none-match");
+      if (range && ifRange) {
+        // If-Range 只接受强校验（ETag 或日期）。这里用资产自身的 etag 对比：
+        // 不匹配 ⇒ 按 RFC 当作**没有 Range**，回整个 200。
+        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
+        const etag = head.headers.get("etag") || "";
+        const lastMod = head.headers.get("last-modified") || "";
+        if (etag ? ifRange.trim() !== etag.trim() : lastMod ? ifRange.trim() !== lastMod.trim() : true) {
+          range = "";
+        }
+      }
+      if (!range && ifNoneMatch) {
+        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
+        const etag = head.headers.get("etag") || "";
+        if (etag && ifNoneMatch.split(",").map((v) => v.trim()).includes(etag.trim())) {
+          const h = new Headers();
+          for (const [k, v] of Object.entries(mark)) h.set(k, v);
+          h.set("etag", etag);
+          return new Response(null, { status: 304, headers: h });
+        }
       }
 
       // 1) 有 Range：先问 ASSETS 要这一段（转发 Range 头）。它若真给了 206 就直接用。
@@ -75,8 +103,13 @@ export default {
         const total = Number(DL_SIZE[decodeURIComponent(assetPath.slice("/dl/".length))] || 0);
         const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
         if (total > 0 && m) {
-          const start = m[1] === "" ? 0 : parseInt(m[1], 10);
-          const rawEnd = m[2] === "" ? total - 1 : parseInt(m[2], 10);
+          // I05：`bytes=-N` 是**后缀**范围（最后 N 字节），不是"从 0 开始到 N"。
+          // 旧写法把 `bytes=-3` 当成 0-3，客户端拿到前 4 字节还以为拿到了尾部。
+          const suffix = m[1] === "" && m[2] !== "";
+          const start = suffix
+            ? Math.max(total - parseInt(m[2], 10), 0)
+            : (m[1] === "" ? 0 : parseInt(m[1], 10));
+          const rawEnd = suffix ? total - 1 : (m[2] === "" ? total - 1 : parseInt(m[2], 10));
           const end = Math.min(Number.isFinite(rawEnd) ? rawEnd : total - 1, total - 1);
           if (!Number.isFinite(start) || start >= total || start > end) {
             return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}`, "accept-ranges": "bytes", ...mark } });
@@ -102,7 +135,9 @@ export default {
               "content-range": `bytes ${start}-${end}/${total}`,
               "content-length": String(end - start + 1),
               "accept-ranges": "bytes",
-              "cache-control": "public, max-age=31536000, immutable",
+              // I05：只有**带版本号**的文件名才能 immutable；latest.apk / lts-latest.apk
+              // 是滚动别名，写一年缓存等于把新版本锁在 CDN 外面。
+              "cache-control": aliasName ? "public, max-age=120" : "public, max-age=31536000, immutable",
               "etag": full.headers.get("etag") || "",
             },
           });
@@ -461,7 +496,15 @@ export class Room {
     // 现象就是「房间永远不销毁」和「退出再进连不上」。
     if (this.roomId) await this.state.storage.put("roomId", this.roomId);
     else this.roomId = (await this.state.storage.get("roomId")) || "";
-    const role = url.searchParams.get("role") === "host" ? "host" : "member";
+    // I11：`role=host` 不能只由请求参数决定。规则：
+    //  · 房间里没有房主 ⇒ 允许成为房主（首次进房）；
+    //  · 已有房主 ⇒ 再来的 host 一律降级为成员，并告诉它原因（客户端据此提示"房间已有房主"）。
+    // 这样"唯一房主"由服务端保证，不依赖客户端自觉。
+    const wantsHost = url.searchParams.get("role") === "host";
+    const existingHost = this.state.getWebSockets()
+      .map((s) => s.deserializeAttachment() || {})
+      .find((a) => a.role === "host");
+    const role = wantsHost && !existingHost ? "host" : "member";
     const name = (url.searchParams.get("name") || "").slice(0, 24);
 
     const pair = new WebSocketPair();
@@ -519,6 +562,16 @@ export class Room {
 
   async webSocketMessage(ws, message) {
     const meta = ws.deserializeAttachment() || {};
+    // I11：**按真实 socket 角色放行消息类型**。快照（t:"snapshot"）只允许房主发出；
+    // 普通成员发的快照直接丢弃（旧实现原样转发，其他成员会把成员当房主跟播）。
+    if (meta.role !== "host") {
+      let type = "";
+      try { type = JSON.parse(message)?.t || ""; } catch (_) { type = ""; }
+      if (type === "snapshot") {
+        try { ws.send(JSON.stringify({ t: "error", reason: "not-host" })); } catch (_) {}
+        return;
+      }
+    }
     for (const peer of this.state.getWebSockets()) {
       if (peer === ws) continue;
       try { peer.send(message); } catch (_) {}
@@ -562,8 +615,13 @@ export class Room {
     try { ws.close(code, reason); } catch (_) {}
 
     if (meta.role === "host") {
+      // I12：房主走了 ⇒ 房间这一代作废：通知 + **关掉成员连接**（只发通知的话成员 socket
+      // 还开着，它们再发消息又把这个房间刷回目录，已关闭的房间会被重新扫到）。
       const closed = JSON.stringify({ t: "closed", reason: "host-left" });
-      for (const peer of peers) { try { peer.send(closed); } catch (_) {} }
+      for (const peer of peers) {
+        try { peer.send(closed); } catch (_) {}
+        try { peer.close(4001, "host-left"); } catch (_) {}
+      }
       await this.drop();
     } else if (peers.length === 0) {
       await this.drop();

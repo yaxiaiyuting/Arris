@@ -2491,13 +2491,24 @@ fun MainScreen(
         appendNextHolder.value = { song -> appendToQueue(song) }
     }
 
-    fun replaceQueueAndPlay(songs: List<SongItem>) {
+    /**
+     * @param enterFm **I01**：这次换队列是"进私人 FM"。为 true 时换完队列**提交** INFINITY
+     *   并把来源标记成 FM；为 false 时按普通换队列处理（会退出无限模式、见 4.0.2 的说明）。
+     *
+     *   旧实现的顺序是"先 applyPlayMode(INFINITY) → 再异步加载 → 失败就什么都不做"，
+     *   于是两个错都出现了：① 加载失败时当前普通队列已经被切成无限模式、还会按 FM 续歌；
+     *   ② 加载成功后 replaceQueueAndPlay 里 4.0.2 的"退出无限模式"逻辑又把它顶回列表循环
+     *   ⇒ FM 根本进不去。模式必须跟着**队列真正换掉**这件事一起提交。
+     */
+    fun replaceQueueAndPlay(songs: List<SongItem>, enterFm: Boolean = false) {
         if (songs.isEmpty()) return
-        fmMode = false
+        fmMode = enterFm
         // 4.0.2：**电台播完顺手播别的，要真的退出无限模式**。
         // 旧实现只把 fmMode 置 false，playMode 仍是 INFINITY —— 队列照旧无限续播、
         // 上一首也还按电台上锁。这里回到「上一次的非电台模式」（没有就是列表循环）。
-        if (playMode == QueueModes.INFINITY) {
+        if (enterFm) {
+            applyPlayMode(QueueModes.INFINITY)
+        } else if (playMode == QueueModes.INFINITY) {
             applyPlayMode(lastNonInfinityMode)
         }
         playerViewModel.invalidatePreload()
@@ -2528,7 +2539,8 @@ fun MainScreen(
     }
 
     fun startFm() {
-        applyPlayMode(QueueModes.INFINITY)
+        // I01：**不要在这里改模式**。加载是异步的、可能失败或过时；
+        // 模式必须和"队列真的换成了 FM 的曲子"一起提交（见 replaceQueueAndPlay 的 enterFm）。
         pendingPlayRequests.launch(load = {
             withContext(Dispatchers.IO) {
                 val fm = try { PlaylistApi.getPersonalFm() }
@@ -2538,8 +2550,9 @@ fun MainScreen(
             }
         }) { songs ->
             if (songs.isNotEmpty()) {
-                replaceQueueAndPlay(songs)
-                fmMode = true
+                // I01：加载结果非空、且仍属于当前请求（pendingPlayRequests 已按意图代次过滤过）
+                // 才提交：换队列 + 进无限模式 + FM 来源标记，一次做完。
+                replaceQueueAndPlay(songs, enterFm = true)
                 expandCard()
             }
         }

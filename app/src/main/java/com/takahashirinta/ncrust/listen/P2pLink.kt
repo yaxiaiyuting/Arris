@@ -93,8 +93,19 @@ class P2pLink private constructor(
                 if (!ok) continue
                 val data = packet.data
                 val len = packet.length
-                // 成员侧：房主的任何回包都确认了对端地址
-                if (peer == null) peer = InetSocketAddress(packet.address, packet.port)
+                // I14：**先看报文来源，再谈绑定**。
+                // 旧实现是"成员侧收到任何包就把 peer 锁成它，房主侧连 DATA 都在校验前把来源
+                // 登记成对端" ⇒ 任意端口发一包就能劫持会话。现在只有**校验通过的 HELLO /
+                // HELLO-ACK**（带正确 token）才允许确定对端地址；DATA / ACK 在握手完成前一律丢弃。
+                val from = InetSocketAddress(packet.address, packet.port)
+                val text0 = runCatching { String(data, 0, len, Charsets.UTF_8) }.getOrNull()
+                val isHandshake = text0 == "HELLO:$token" || text0 == "HELLO-ACK:$token"
+                if (isHandshake) {
+                    if (peer == null) peer = from
+                } else if (peer == null || peer != from) {
+                    // 未握手 / 来源不符：直接丢，不 ACK、不重组、不回调
+                    return@thread
+                }
                 handlePacket(data, len)
             }
             onClosed?.invoke(0, "socket closed")

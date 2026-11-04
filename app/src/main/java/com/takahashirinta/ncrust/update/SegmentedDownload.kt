@@ -59,6 +59,23 @@ internal object SegmentedDownload {
 
     data class Probe(val total: Long, val etag: String?)
 
+    /**
+     * I03：本批次所有在途分段的 Call。
+     *
+     * 取消下载时只置一个 boolean 是不够的 —— 已经发出的请求会一直读到自己的区间结束
+     * （实测取消后旧线程照样写满 4 MiB），于是"取消完立刻重试"会让两代任务同时写同一个
+     * `.seg` 文件。这里登记 Call，取消时**主动 cancel()**，写入循环里也继续看 cancelled()。
+     */
+    private val activeCalls: MutableSet<okhttp3.Call> =
+        java.util.Collections.synchronizedSet(mutableSetOf())
+
+    /** 取消当前批次所有在途请求（幂等）。 */
+    fun cancelAll() {
+        val snapshot = synchronized(activeCalls) { activeCalls.toList() }
+        activeCalls.clear()
+        snapshot.forEach { runCatching { it.cancel() } }
+    }
+
     /** 探测服务端是否支持 Range；不支持返回 null。 */
     fun probe(url: String): Probe? {
         val request = Request.Builder()
@@ -123,7 +140,11 @@ internal object SegmentedDownload {
         }
         threads.forEach { it.join() }
 
-        if (cancelled()) throw DownloadCancelledException()
+        if (cancelled()) {
+            // I03：旧代次的任务必须**立刻退出**，不写文件、不改名、不回落单流。
+            cancelAll()
+            throw DownloadCancelledException()
+        }
         if (errors.isNotEmpty()) {
             val first = errors.first()
             Log.w(TAG, "segment failed: ${first.javaClass.simpleName} ${first.message?.take(80)}")
@@ -150,8 +171,25 @@ internal object SegmentedDownload {
             .header("Range", "bytes=$start-$endInclusive")
             .apply { if (!etag.isNullOrBlank()) header("If-Range", etag) }
             .build()
-        client.newCall(request).execute().use { resp ->
+        val call = client.newCall(request)
+        activeCalls.add(call)
+        try {
+        call.execute().use { resp ->
             if (resp.code != 206) throw IOException("段 $start 返回 ${resp.code}")
+            // I04：**先核对实体身份与范围，再写盘**。旧实现只看 206 + 字节数，
+            // 于是"等长的错误范围 / 另一版资产"也会被判成功，拼出来的包是坏的。
+            val range = parseContentRange(resp.header("Content-Range"))
+                ?: throw IOException("段 $start 没有 Content-Range")
+            if (range.start != start || range.end != endInclusive || range.total != total) {
+                throw IOException(
+                    "段 $start 范围不符：收到 ${range.start}-${range.end}/${range.total}" +
+                        "，期望 $start-$endInclusive/$total"
+                )
+            }
+            val segEtag = resp.header("ETag")
+            if (!etag.isNullOrBlank() && !segEtag.isNullOrBlank() && segEtag != etag) {
+                throw IOException("段 $start ETag 变了（$segEtag ≠ $etag）")
+            }
             val body = resp.body ?: throw IOException("段 $start 没有正文")
             val buffer = ByteArray(64 * 1024)
             var offset = start
@@ -168,6 +206,9 @@ internal object SegmentedDownload {
                 }
             }
             if (offset != endInclusive + 1) throw IOException("段 $start 长度不足 ${offset - start}")
+        }
+        } finally {
+            activeCalls.remove(call)
         }
     }
 }

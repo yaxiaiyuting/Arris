@@ -105,12 +105,16 @@ object UpdateChecker {
             if (release.boolOrFalse("draft")) continue
             if (release.boolOrFalse("prerelease")) continue
 
-            val hit = bestAssetOf(release, wantedVariant) ?: continue
+            // I10：通道与变体过滤必须在**每个资产**上先做，再比版本。
+            // 旧写法是"先取最高版本资产，再用通道否决整个 release" —— 同一 Release 里同时挂了
+            // 主线与 LTS 附件时，LTS 客户端把主线选出来、被通道判否，于是**同批里合规的 LTS 包也一起
+            // 被丢掉**（用户表现为"有新版本但检查不出来"）。
+            val tagName = release.stringOrNull("tag_name")
+            val hit = bestAssetOf(release, wantedVariant, tagName, current) ?: continue
             if (hit.version <= current) continue
             // 与 Linux 内核同样的「线」概念：3.7.x（LTS）只在该线内更新，不会被推到 3.8.x
             // —— 3.8.x 的 minSdk 是 29，Android 7 设备根本装不上。
             // 反过来主线用户不会被 `lts-*` 的滚动条目干扰（那条的附件版本更低，本来也不会中）。
-            if (!sameChannel(release.stringOrNull("tag_name"), hit.version, current)) continue
             if (best == null || hit.version > best.version) {
                 best = UpdateInfo(
                     version = hit.version,
@@ -130,7 +134,12 @@ object UpdateChecker {
     }
 
     /** 一个 release 里版本最高的合规资产；没有则 null。 */
-    private fun bestAssetOf(release: JsonObject, variant: String): AssetHit? {
+    private fun bestAssetOf(
+        release: JsonObject,
+        variant: String,
+        tagName: String?,
+        current: AppVersion,
+    ): AssetHit? {
         val assets = release.arrayOrNull("assets") ?: return null
         var hit: AssetHit? = null
         for (element in assets) {
@@ -139,6 +148,8 @@ object UpdateChecker {
             val name = asset.stringOrNull("name") ?: continue
             val parsed = ForkRelease.parseAsset(name) ?: continue
             if (parsed.variant != variant) continue
+            // I10：每个候选资产先过通道；不合规的**单个资产**跳过，不影响同 Release 的其它资产。
+            if (!sameChannel(tagName, parsed.version, current)) continue
 
             val url = asset.stringOrNull("browser_download_url") ?: continue
             if (hit == null || parsed.version > hit.version) {
