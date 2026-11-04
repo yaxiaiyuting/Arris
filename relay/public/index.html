@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- build-marker 20261104-night-studio -->
+<!-- build-marker 20261104-interactive-studio -->
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -57,7 +57,8 @@
 .orbit{width:min(500px,calc(100% + 30px));height:auto;aspect-ratio:1;left:50%;transform:translateX(-50%)}
 </style>
 <link rel="stylesheet" href="/assets/discover.css?v=20261102b">
-<link rel="stylesheet" href="/assets/appearance.css?v=20261104">
+<link rel="stylesheet" href="/assets/appearance.css?v=20261104-studio">
+<link rel="stylesheet" href="/assets/studio.css?v=20261104b">
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要内容</a>
@@ -108,7 +109,7 @@
 <a class="brand" href="#" aria-label="Arris 首页"><span class="brand-mark"><svg viewBox="55 -6 175 165" aria-hidden="true"><use href="#tux-base"/></svg></span>Arris<span class="brand-tagline">好好听歌。</span></a>
 <div class="nav-tools"><label class="appearance-control"><span class="sr-only">网站外观</span><select id="appearance-mode" disabled><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
 <button class="menu-toggle" aria-label="展开导航" aria-expanded="false" aria-controls="nav-links"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
-<div class="nav-links" id="nav-links"><a href="#features">体验亮点</a><a href="#showcase">看看界面</a><a href="#together">一起听</a><a href="#evolution">更新与演进</a><a href="https://github.com/yaxiaiyuting/Arris" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a class="nav-download" href="#download">获取 Arris <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg></a></div>
+<div class="nav-links" id="nav-links"><a href="#features">体验亮点</a><a href="#studio">在线试听</a><a href="#together">一起听</a><a href="#evolution">更新与演进</a><a href="https://github.com/yaxiaiyuting/Arris" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a class="nav-download" href="#download">获取 Arris <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg></a></div>
 </nav></header>
 <main id="main">
 <section class="hero shell" aria-labelledby="hero-title">
@@ -127,14 +128,14 @@
 <div class="demo-lyrics">让喜欢的声音，<br><strong>陪你再久一点。</strong></div>
 <svg class="waveform" viewBox="0 0 220 30" aria-hidden="true"><path d="M0 15Q5 14 9 16T18 14T27 18T36 11T45 17T54 8T63 20T72 6T81 21T90 4T99 23T108 8T117 21T126 5T135 24T144 9T153 19T162 11T171 18T180 12T189 16T198 14T210 16T220 15" fill="none" stroke="#739663" stroke-width="2"/><path d="M0 15Q9 12 18 15T36 14T54 18T72 12T90 18T108 10T126 21T144 11T162 19T180 12T198 17T220 15" fill="none" stroke="#afbf87" stroke-width="1" opacity=".6"/></svg>
 <div class="demo-progress"></div><div class="demo-times"><span>01:16</span><span>03:28</span></div>
-<div class="demo-controls"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m3 6 4 0 10 12h4M17 4l4 2-4 2M3 18h4l4-5m4-3 2-4h4"/></svg><span aria-hidden="true">⏮</span><button class="demo-play" aria-label="切换播放器视觉示意，不播放音频" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="play-symbol" d="m6 3 11 7-11 7Z"/><path class="pause-symbol" d="M4 3h4v14H4zm8 0h4v14h-4z"/></svg></button><span aria-hidden="true">⏭</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div><div class="phone-bottom"></div></div>
+<div class="demo-controls"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m3 6 4 0 10 12h4M17 4l4 2-4 2M3 18h4l4-5m4-3 2-4h4"/></svg><span aria-hidden="true">⏮</span><a class="demo-play" href="#studio" aria-label="前往在线试听"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 11 7-11 7Z"/></svg></a><span aria-hidden="true">⏭</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></div><div class="phone-bottom"></div></div>
 <div class="float-chip chip-lyrics"><span class="chip-icon"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3M4 13H2v7h5v-7zm16 0h2v7h-5v-7z"/></svg></span><div><strong>每一句，都听得懂。</strong><small>逐字高亮 · 双语对照</small></div></div>
 <div class="float-chip chip-together"><div class="avatars" aria-hidden="true"><span>T</span><span>A</span><span>♫</span></div><div><strong>好音乐，一起听。</strong><small>把此刻分享给朋友</small></div></div>
-<p class="visual-caption" id="demo-caption">原创播放器视觉示意 · 不播放音频</p>
+<p class="visual-caption" id="demo-caption">播放器插画 · <a href="#studio">听一听真实波形 ↘</a></p>
 </div></section>
 <div class="source-strip shell" aria-label="音源与格式支持"><span class="source-label">MORE MUSIC. ONE PLACE.</span><span class="source-name"><span class="source-symbol">云</span>网易云音乐</span><span class="source-name"><span class="source-symbol qq">Q</span>QQ 音乐</span><span class="strip-detail">LRC / TTML / YRC / QRC</span><span class="strip-detail">8 种界面语言</span></div>
 <nav class="chapter-nav shell" aria-label="探索 Arris">
-<a href="#showcase"><span class="chapter-no">01</span><span><strong>看播放器</strong><small>亮色、暗色与逐字歌词</small></span><span class="chapter-arrow" aria-hidden="true">↘</span></a>
+<a href="#studio"><span class="chapter-no">01</span><span><strong>试听播放器</strong><small>原创器乐与实时波形</small></span><span class="chapter-arrow" aria-hidden="true">↘</span></a>
 <a href="#together"><span class="chapter-no">02</span><span><strong>邀请朋友</strong><small>同一首歌，同一个时刻</small></span><span class="chapter-arrow" aria-hidden="true">↘</span></a>
 <a href="#download"><span class="chapter-no">03</span><span><strong>选下载版本</strong><small>主线与旧设备 LTS</small></span><span class="chapter-arrow" aria-hidden="true">↘</span></a>
 </nav>
@@ -142,6 +143,41 @@
 <div class="feature-grid"><article class="feature-card lyrics-card"><div class="feature-label"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3M4 13H2v7h5v-7zm16 0h2v7h-5v-7z"/></svg> 双语 · 逐字歌词</div><h3>听见旋律，也读懂每一句。</h3><p>原文和译文同步显示，你来决定哪一行更重要。</p><div class="lyric-example"><small>♪ 每一种心情，都有自己的声音。</small><div class="lyric-pair" data-primary="original"><p class="original" lang="en">Keep your favorite sound close.</p><p class="translation">把喜欢的声音，留在身边。</p></div></div><div class="segmented" role="group" aria-label="双语歌词主行示意"><button type="button" data-lyric="original" aria-pressed="true">原文优先</button><button type="button" data-lyric="translation" aria-pressed="false">译文优先</button></div><small class="example-note">排版示意 · 无翻译时自动回到单行</small></article>
 <article class="feature-card recognize-card"><div class="feature-label"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg> 听歌识曲</div><h3>留住偶然听见的喜欢。</h3><p>通过你的网易云账号识别身边的旋律。</p><div class="recognize-graphic" aria-hidden="true"><div class="sound-bar left"><i></i><i></i><i></i><i></i><i></i></div><div class="mic-orbit"><div class="mic-disc"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg></div></div><div class="sound-bar right"><i></i><i></i><i></i><i></i><i></i></div></div><div class="recognize-caption">听到 → 识别 → 找到下一首喜欢</div></article></div>
 <div class="mini-features"><article class="mini-feature"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18H5a4 4 0 0 1 0-8 7 7 0 0 1 13-2 5 5 0 0 1 1 10h-2M12 12v10m-4-4 4 4 4-4"/></svg><h3>离线，也有好声音。</h3><p>完整缓存的歌曲，断网也能继续听。容量按你的习惯调整。</p></article><article class="mini-feature"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z"/></svg><h3>账号独立，喜欢相通。</h3><p>网易云与 QQ 音乐分别登录，在一处搜索、播放和整理音乐。</p></article><article class="mini-feature"><svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/></svg><h3>用熟悉的语言听歌。</h3><p>支持 8 种界面语言，随时切换。还有 Tux 陪你发现小小的彩蛋。</p></article></div></section>
+<section class="studio-section" id="studio" aria-labelledby="studio-title">
+  <div class="shell studio-layout">
+    <div class="studio-copy">
+      <p class="eyebrow"><span class="eyebrow__no">试听室</span><i class="eyebrow__rule" aria-hidden="true"></i><span class="eyebrow__label">LISTENING SESSION</span></p>
+      <h2 id="studio-title">按下播放，<br>看见声音。</h2>
+      <p>这一次，画面跟着音乐走。听一小段原创器乐，看看波形怎样随节拍起伏，再试着拖动进度、交换双语主行。</p>
+      <p class="studio-credit">《雨后》 · 约 37 秒 · 为 Arris 合成的原创试听曲<br>未使用第三方音源 · <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0 ↗</a> · <a href="/assets/after-the-rain.mp3" download>下载试听曲</a></p>
+    </div>
+    <div class="studio-player" data-studio>
+      <div class="session-head"><span><i aria-hidden="true"></i> ARRIS STUDIO</span><span>试听曲 / 01</span></div>
+      <div class="session-track">
+        <div class="session-cover"><svg viewBox="0 0 280 315" aria-hidden="true"><use href="#tux-listener"/></svg></div>
+        <div class="session-song"><p>AFTER THE RAIN</p><h3>雨后</h3><p>Arris Studio · 原创器乐</p></div>
+      </div>
+      <div class="session-wavebox"><canvas class="session-wave" aria-hidden="true"></canvas><span>实时波形</span></div>
+      <audio id="studio-audio" controls preload="none" src="/assets/after-the-rain.mp3" aria-label="播放原创试听曲《雨后》"></audio>
+      <div class="session-controls" hidden>
+        <label class="sr-only" for="studio-seek">试听播放进度</label>
+        <input id="studio-seek" type="range" min="0" max="37.48" step=".05" value="0" aria-valuetext="0 分 0 秒">
+        <div class="session-times"><span id="studio-time">0:00</span><span id="studio-duration">0:37</span></div>
+        <div class="session-actions">
+          <button id="studio-play" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="studio-icon-play" d="m6 3 11 7-11 7Z"/><path class="studio-icon-pause" d="M4 3h4v14H4zm8 0h4v14h-4z"/></svg><span>播放</span></button>
+          <button id="studio-mute" type="button" aria-pressed="false">静音</button>
+          <div class="session-line-options" role="group" aria-label="双语主行"><button type="button" data-studio-line="original" aria-pressed="true">原文优先</button><button type="button" data-studio-line="translation" aria-pressed="false">译文优先</button></div>
+        </div>
+        <p id="studio-status" class="session-status" role="status"></p>
+      </div>
+      <div class="session-lyrics" aria-label="双语时间轴示意">
+        <p class="session-primary" lang="en">The rain has let the evening in.</p>
+        <p class="session-secondary">雨停了，傍晚悄悄进来。</p>
+        <span>网页版演示 · 双语文案随时间轴切换 · 曲目无人声</span>
+      </div>
+    </div>
+  </div>
+</section>
 <section class="showcase-section" data-acc="amber" data-reveal id="showcase" aria-labelledby="showcase-title">
 <div class="shell"><div class="showcase-heading"><div><p class="eyebrow"><span class="eyebrow__no">02</span><i class="eyebrow__rule" aria-hidden="true"></i><span class="eyebrow__label">A CLOSER LOOK</span></p><h2 id="showcase-title">让界面退后，<br>让音乐靠近。</h2></div><p>松绿与米白，安静也清晰。<br>从独自聆听，到把喜欢分享给别人。</p></div>
 <div class="showcase-tabs" role="tablist" aria-label="应用界面展示">
@@ -172,7 +208,7 @@
 
 <section class="download-section shell" data-acc="pine" data-reveal id="download" aria-labelledby="download-title"><div class="download-heading"><p class="eyebrow"><span class="eyebrow__no">07</span><i class="eyebrow__rule" aria-hidden="true"></i><span class="eyebrow__label">YOUR NEXT FAVORITE</span></p><h2 id="download-title">把喜欢，带在身边。</h2><p>选择适合你设备的版本。下一首喜欢，从这里开始。</p></div>
 <div class="version-helper"><div><label for="android-version">不确定选哪个？</label><p>按手机的 Android 版本选择。</p></div><select id="android-version" aria-describedby="version-advice"><option value="modern">Android 10 或更高</option><option value="legacy">Android 7 / 8 / 9</option><option value="older">低于 Android 7</option></select><p id="version-advice" role="status" aria-live="polite">推荐主线，获得新功能与持续修复。</p><a class="text-link" id="recommended-download" href="/get/latest.apk">下载主线 APK ↗</a></div>
-<div class="versions"><article class="version featured"><div class="version-top"><span>ARRIS / 4.0.2</span><span class="version-badge">主线 · Android 10+</span></div><h3>一起发现新声音。</h3><div class="requirements">Android 10 及以上</div><p>v4.0.2-gpl · 视觉收尾：播放页光效、波形、生日庆祝动画（横竖屏）；队列侧修复同一版本内已含。Android 10 起可安装。</p><a class="button button-primary" href="/get/latest.apk">直接下载 APK <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></article><article class="version"><div class="version-top"><span>ARRIS / 3.7.x LTS</span><span class="version-badge">LTS · Android 7+</span></div><h3>让熟悉的，一直好用。</h3><div class="requirements">Android 7.0 及以上</div><p>v3.7.25-gpl · 与主线同源同修：退出无限模式、上一首可用、全新队列从 0 播、致谢同步。</p><a class="button button-outline" href="/get/lts-latest.apk">下载 LTS 版 <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></article></div>
+<div class="versions"><article class="version featured"><div class="version-top"><span>ARRIS / 4.0.2</span><span class="version-badge">主线 · Android 10+</span></div><h3>一起发现新声音。</h3><div class="requirements">Android 10 及以上</div><p>v4.0.2-gpl · 视觉收尾：播放页光效、波形、生日庆祝动画（横竖屏）；队列侧修复同一版本内已含。Android 10 起可安装。</p><a class="button button-primary" href="/get/latest.apk">直接下载 APK <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></article><article class="version"><div class="version-top"><span>ARRIS / 3.7.x LTS</span><span class="version-badge">LTS · Android 7+</span></div><h3>让熟悉的，一直好用。</h3><div class="requirements">Android 7.0 及以上</div><p>v3.7.25-gpl · 与主线同源同修，并同步视觉收尾：播放页光效、波形、生日庆祝动画横竖屏。</p><a class="button button-outline" href="/get/lts-latest.apk">下载 LTS 版 <svg class="icon " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7m0-7L10 14M10 3H3v18h18v-7"/></svg></a></article></div>
 <p class="download-note">请在 GitHub Release 页面核对版本、最低系统要求和安装包说明。<br>音源账号、会员权益和曲目版权由平台决定，Arris 不提供或分发音乐内容。</p>
 <div class="faq"><h3 class="faq-heading">开始之前，你可能想知道。</h3>
 <details><summary>需要分别登录网易云和 QQ 音乐吗？</summary><p>是的，两个音源使用各自的账号和登录态。会员专享、高音质、付费曲目等权限仍由对应平台判断。</p></details>
@@ -193,7 +229,6 @@ const toggle=document.querySelector('.menu-toggle'),nav=document.querySelector('
 toggle.addEventListener('click',()=>{const open=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'收起导航':'展开导航');nav.classList.toggle('is-open',open)});
 nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','展开导航');nav.classList.remove('is-open')}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&toggle.getAttribute('aria-expanded')==='true'){toggle.click();toggle.focus()}});
-const play=document.querySelector('.demo-play');play.addEventListener('click',()=>{const active=play.getAttribute('aria-pressed')!=='true';play.setAttribute('aria-pressed',String(active));document.querySelector('#demo-caption').textContent=active?'播放器视觉示意已切换 · 无音频播放':'原创播放器视觉示意 · 不播放音频'});
 document.querySelectorAll('[data-lyric]').forEach(b=>b.addEventListener('click',()=>{document.querySelector('.lyric-pair').dataset.primary=b.dataset.lyric;document.querySelectorAll('[data-lyric]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)))}));
 const tabs=[...document.querySelectorAll('[data-tab]')];
 function selectTab(tab,focus){tabs.forEach(b=>{const active=b===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;document.getElementById(b.getAttribute('aria-controls')).hidden=!active});if(focus)tab.focus()}
@@ -204,4 +239,5 @@ document.querySelector('#check-health').addEventListener('click',async e=>{const
 })();
 </script>
 <script src="/assets/discover.js?v=20261102b" defer></script>
+<script src="/assets/studio.js?v=20261104b" defer></script>
 </body></html>
