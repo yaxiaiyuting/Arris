@@ -15,15 +15,21 @@ package com.takahashirinta.ncrust.ui.player
 import androidx.compose.ui.draw.clip
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.*
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,7 +38,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +67,34 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+@Composable
+private fun Modifier.transportSurface(interaction: MutableInteractionSource): Modifier {
+    val colors = LocalMetroColors.current
+    val primary = colors.primary
+    val onPrimary = colors.onPrimary
+    val brush = remember(primary, onPrimary) {
+        Brush.verticalGradient(
+            listOf(lerp(primary, onPrimary, 0.075f), primary, lerp(primary, Color.Black, 0.10f)),
+        )
+    }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(pressed) {
+        if (pressed || scale.value != 1f) {
+            scale.animateTo(
+                if (pressed) 0.94f else 1f,
+                tween(if (pressed) 100 else 210, easing = FastOutSlowInEasing),
+            )
+        }
+    }
+    return graphicsLayer {
+        scaleX = scale.value
+        scaleY = scale.value
+    }.clip(AppShapes.full)
+        .background(brush)
+        .border(1.dp, onPrimary.copy(alpha = 0.16f), AppShapes.full)
+}
 
 @Composable
 fun FullPlayerControls(
@@ -335,17 +372,17 @@ fun FullPlayerControls(
                             sizeDp = 28.dp
                         )
                     }
+                    val playInteraction = remember { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .size(54.dp)
-                            .clip(AppShapes.full)
-                            .background(LocalMetroColors.current.primary)
-                            .clickable {
+                            .clickable(interactionSource = playInteraction, indication = null) {
                                 tick()
                                 onPlayPause()
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        Box(Modifier.matchParentSize().transportSurface(playInteraction))
                         MetroIcon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
@@ -498,17 +535,17 @@ fun FullPlayerControls(
                 )
             }
             Spacer(Modifier.width(sideGap))
+            val playInteraction = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .size(playBtn)
-                    .clip(AppShapes.full)
-                    .background(LocalMetroColors.current.primary)
-                    .clickable {
+                    .clickable(interactionSource = playInteraction, indication = null) {
                         tick()
                         onPlayPause()
                     },
                 contentAlignment = Alignment.Center
             ) {
+                Box(Modifier.matchParentSize().transportSurface(playInteraction))
                 MetroIcon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
