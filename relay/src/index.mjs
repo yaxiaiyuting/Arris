@@ -15,6 +15,7 @@
  */
 
 import { HOSTED_APK, DL_SIZE } from "./dl-manifest.mjs";
+import { serveStudioAudio } from "./studio-audio.mjs";
 
 const MAX_MEMBERS = 16;
 
@@ -26,6 +27,10 @@ const BUILD_TAG = "4.0.0-paper";
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/assets/after-the-rain.mp3" &&
+        (request.method === "GET" || request.method === "HEAD")) {
+      return serveStudioAudio(request, env.ASSETS);
+    }
     // 首页：项目介绍（静态 HTML 打包在 Worker 里，域名一绑即可访问）
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(INDEX_HTML, {
