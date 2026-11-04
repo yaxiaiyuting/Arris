@@ -11,7 +11,7 @@
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
 [![Version](https://img.shields.io/badge/version-4.0.2--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-15.34%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-9.90%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -31,6 +31,16 @@
 > 请尊重版权，支持正版音乐。
 
 ---
+
+## 最近更新
+
+| 版本 | 日期 | 要点 |
+|---|---|---|
+| **4.0.2** | 2026-11-04 | **退出无限模式**（电台播完切歌单不再无限续播）· **上一首恒可用**（不再按模式置灰）· **全新队列从 0 播**（歌单/专辑「播放全部」不继承上次进度）· **致谢重写** |
+| 4.0.2（预览） | 2026-11-04 | 视觉收尾：播放页光效、波形、**生日庆祝动画**横竖屏（Draft Release，版本号不变） |
+| 4.0.1 | 2026-11-03 | **主线移除 FFmpeg 软解扩展**：16.28 MB → 9.90 MB（−39%）；设置页新增「检查更新」；日推 6:00 自动换批；榜单卡用榜一封面 |
+| LTS 3.7.25 | 2026-11-04 | 与主线 4.0.2 同源同修：退出无限模式 / 上一首可用 / 新队列从 0 / 致谢同步 |
+| 4.0.0 | 2026-11-01 | 10 段均衡器 · 间奏呼吸点 · Kotlin 2 + Compose 2025.06 · media3 1.9 |
 
 ## 为什么是 Arris
 

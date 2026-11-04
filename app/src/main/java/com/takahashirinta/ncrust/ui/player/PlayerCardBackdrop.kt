@@ -36,8 +36,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
 import com.takahashirinta.ncrust.ui.player.motion.MotionFrameClock
@@ -94,6 +95,35 @@ internal fun BoxScope.PlayerCardBackdrop(
                 }
                 .background(LocalMetroColors.current.surface)
         )
+
+        // Cached ambient lights give the full player depth even with live effects off.
+        // Follow the existing expansion progress; no new animation loop or change to content measurement.
+        if (hasSong && expandedMounted()) {
+            val colors = LocalMetroColors.current
+            Box(
+                Modifier.matchParentSize()
+                    .graphicsLayer {
+                        alpha = ((progress.value - 0.62f) / 0.38f).coerceIn(0f, 1f)
+                    }
+                    .drawWithCache {
+                        val extent = maxOf(size.width, size.height, 1f)
+                        val key = Brush.radialGradient(
+                            listOf(colors.primary.copy(alpha = 0.16f), colors.primary.copy(alpha = 0f)),
+                            center = Offset(size.width * 0.22f, size.height * 0.18f),
+                            radius = extent * 0.72f,
+                        )
+                        val floor = Brush.verticalGradient(
+                            0.54f to colors.surface.copy(alpha = 0f),
+                            1f to colors.surface.copy(alpha = 0.85f),
+                            endY = size.height.coerceAtLeast(1f),
+                        )
+                        onDrawBehind {
+                            drawRect(key)
+                            drawRect(floor)
+                        }
+                    },
+            )
+        }
 
         // ── v2.9.0：全屏动效背景层（竖屏 + 横屏共用同一个实现）────────────────────────
         //
@@ -162,20 +192,6 @@ internal fun BoxScope.PlayerCardBackdrop(
                             alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) *
                                 WAVE_BACKDROP_ALPHA
                         },
-                )
-                // v2.9.0（真机观感修正）：**上沿渐隐**。
-                // 平铺的一条带子在真机上是一条硬边（PCL110 截图复核：横跨整屏的一条直线，
-                // 看起来像渲染错误而不是设计）。这里在带子的上半部压一层由不透明到透明的
-                // 渐变，波形因此"从背景里浮出来"而不是"被裁了一刀"。
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.0f to LocalMetroColors.current.background,
-                                1.0f to Color.Transparent,
-                            )
-                        )
                 )
             }
         }
