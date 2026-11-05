@@ -125,6 +125,8 @@ fun LyricsView(
     // 而不是竖屏的 0.36 —— 短面板下 0.36 看起来是歪的（见 LyricsPanelScroll.CENTER_FRACTION）。
     // 默认 false ⇒ 竖屏调用点的渲染位置一个像素都不动。
     centeredLayout: Boolean = false,
+    /** 3.7.30：打开跟唱页（null = 不显示入口）。 */
+    onOpenKaraoke: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     // v3.4.12：歌词字号按高度档缩放（A- / A+ 的 fontScale 仍在其上乘算，层级比例不变）。
@@ -535,6 +537,8 @@ fun LyricsView(
                     .padding(top = 4.dp, end = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 3.7.30：跟唱入口（回移自主线 4.0.8）。
+                if (onOpenKaraoke != null) KaraokeEntryButton(onOpenKaraoke)
                 // v3.3.0 · 9：分享歌词。放在 A- / A+ 左边（先于字号调节）——
                 // 它是一次性的动作，而字号是会被反复调的，高频的贴近屏幕右边缘更顺手。
                 LyricShareButton(description = strings.share.action) {

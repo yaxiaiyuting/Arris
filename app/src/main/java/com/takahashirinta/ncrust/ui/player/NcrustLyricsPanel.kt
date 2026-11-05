@@ -15,6 +15,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -182,12 +183,20 @@ fun NcrustLyricsPanel(
     // （`scale` 就是原来的值，不额外乘 1f），这是"关掉开关等于没这功能"的机械保证。
     // 幅度上限见 `AppMotion.LYRIC_PULSE_SCALE`（3%，判据是"不干扰阅读"）。
     lyricPulseEnabled: Boolean = false,
+    /**
+     * 3.7.30：**跟唱用的聚焦模式**（从主线 4.0.8 回移）。
+     *
+     * 非空时用它代替「按时间算出来的当前行」，并且每行渲染交给 [focusedRow]；
+     * 为 null 时行为与 3.7.29 逐字节一致（主面板不受影响）。
+     */
+    focusIndex: Int? = null,
+    focusedRow: (@Composable (index: Int, line: NcrustLyricLine, browsing: Boolean) -> Unit)? = null,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
     // 离散当前行:二分定位,只在跨行时变 -> 面板只在跨行时重组。
-    val currentIndex by remember(lines) {
-        derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
+    val currentIndex by remember(lines, focusIndex) {
+        derivedStateOf { focusIndex ?: currentLineIndex(currentPosition(), timestamps) }
     }
     // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
     val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
@@ -530,6 +539,18 @@ fun NcrustLyricsPanel(
             item(key = "top_spacer") { Spacer(Modifier.height(topSpacerHeight)) }
 
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
+                if (focusedRow != null) {
+                    Column(
+                        Modifier.fillMaxWidth().clickable(enabled = enabled) {
+                            userScrolling = false
+                            lastAutoScrolledIndex = -1
+                            onLineClick(line.timestampMillis)
+                        }.padding(vertical = 8.dp),
+                    ) {
+                        focusedRow(index, line, userScrolling)
+                    }
+                    return@itemsIndexed
+                }
                 // 颜色离散:基于整数 currentIndex,跨行时翻转;连续 scale 会盖住这一瞬。
                 val color = when {
                     currentIndex < 0 -> futureLineColor
@@ -695,7 +716,7 @@ fun NcrustLyricsPanel(
  * 没有逐字数据、模式为 OFF、或不是当前行时，退回与 v1.4.1 完全相同的整行 MetroText。
  */
 @Composable
-private fun LyricLineBody(
+internal fun LyricLineBody(
     text: String,
     words: List<LrcWord>,
     endMs: Long?,
