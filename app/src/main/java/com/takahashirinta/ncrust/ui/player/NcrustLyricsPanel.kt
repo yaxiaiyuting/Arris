@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -149,7 +150,7 @@ data class NcrustLyricLine(
 )
 
 @Composable
-fun NcrustLyricsPanel(
+internal fun NcrustLyricsPanel(
     lines: List<NcrustLyricLine>,
     currentPositionMillis: () -> Long,
     modifier: Modifier = Modifier,
@@ -187,13 +188,16 @@ fun NcrustLyricsPanel(
     // （`scale` 就是原来的值，不额外乘 1f），这是"关掉开关等于没这功能"的机械保证。
     // 幅度上限见 `AppMotion.LYRIC_PULSE_SCALE`（3%，判据是"不干扰阅读"）。
     lyricPulseEnabled: Boolean = false,
+    focusIndex: Int? = null,
+    focusedRow: (@Composable (index: Int, line: NcrustLyricLine, browsing: Boolean) -> Unit)? = null,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
     // 离散当前行:二分定位,只在跨行时变 -> 面板只在跨行时重组。
-    val currentIndex by remember(lines) {
+    val timedIndex by remember(lines) {
         derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
     }
+    val currentIndex = focusIndex ?: timedIndex
     // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
     val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
     LaunchedEffect(currentIndex) {
@@ -549,6 +553,18 @@ fun NcrustLyricsPanel(
             // 给列表留 28dp 尾巴，滚到底也不会贴边。
 
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
+                if (focusedRow != null) {
+                    Column(
+                        Modifier.fillMaxWidth().clickable(enabled = enabled) {
+                            userScrolling = false
+                            lastAutoScrolledIndex = -1
+                            onLineClick(line.timestampMillis)
+                        }.padding(vertical = 8.dp),
+                    ) {
+                        focusedRow(index, line, userScrolling)
+                    }
+                    return@itemsIndexed
+                }
                 // 颜色离散:基于整数 currentIndex,跨行时翻转;连续 scale 会盖住这一瞬。
                 val color = when {
                     currentIndex < 0 -> futureLineColor

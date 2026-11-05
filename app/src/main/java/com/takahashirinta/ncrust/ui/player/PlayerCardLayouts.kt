@@ -538,36 +538,30 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             )
         }
     }
-    // The lyric footer keeps the scrubber when the rest of the controls are folded.
-    // Its measured height gives both lyric presentations the same safe bottom edge.
-    val compactScrubber = ui.showLyrics && !ui.showQueue
+    // Keep the same seek control mounted as the controls below it change height.
+    if (ui.lyricsPanelSelected) {
+        CompactPlaybackProgress(
+            positionFlow, progressFlow, durationFlow, bufferingFlow, onSeek,
+            modifier = Modifier.padding(horizontal = 22.dp),
+        )
+    }
     Box(
         Modifier.fillMaxWidth().clipToBounds()
             .collapsibleHeight { 1f - controlsCollapse.value }
-            .height(if (compactScrubber) 94.dp else 54.dp),
+            .height(54.dp),
         contentAlignment = Alignment.Center,
     ) {
         if (controlsCollapsedForInput) {
-            Column(
-                Modifier.fillMaxWidth().graphicsLayer {
+            CompactTransportControls(
+                isPlaying = isPlaying,
+                previousEnabled = previousEnabled,
+                transport = transport,
+                modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
                     val reveal = ((controlsCollapse.value - 0.40f) / 0.60f).coerceIn(0f, 1f)
                     alpha = reveal
                     translationY = (1f - reveal) * 8.dp.toPx()
                 },
-            ) {
-                if (compactScrubber) {
-                    CompactPlaybackProgress(
-                        positionFlow, progressFlow, durationFlow, bufferingFlow, onSeek,
-                        modifier = Modifier.padding(horizontal = 22.dp),
-                    )
-                }
-                CompactTransportControls(
-                    isPlaying = isPlaying,
-                    previousEnabled = previousEnabled,
-                    transport = transport,
-                    modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()),
-                )
-            }
+            )
         }
     }
     Spacer(Modifier.height(if (tiny) 6.dp else 12.dp))

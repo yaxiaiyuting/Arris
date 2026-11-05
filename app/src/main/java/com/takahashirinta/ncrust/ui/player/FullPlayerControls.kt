@@ -202,6 +202,7 @@ fun FullPlayerControls(
     tiny: Boolean = false,
     // 宽屏横向布局：进度行 + 操作行扁平铺开，替代手机的竖向大按钮堆叠。
     landscape: Boolean = false,
+    sharedLyricProgress: Boolean = false,
     // P1：大屏模式把音质控件搬到左栏（就地选择器）后，控制条右端不再重复画一个
     // 「点一下跳设置页」的音质角标 —— 同一屏里两个音质入口会互相打架。
     showQuality: Boolean = true,
@@ -512,7 +513,22 @@ fun FullPlayerControls(
             .padding(start = outerInset, end = outerInset, bottom = bottomPad)
             .padding(top = if (tiny) 3.dp else 8.dp, bottom = if (tiny) 3.dp else 6.dp)
     ) {
-        if (tiny) {
+        if (sharedLyricProgress) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                PlayerQualityChip(
+                    qualityIndexFlow = qualityIndexFlow,
+                    qualityStatusFlow = qualityStatusFlow,
+                    qualityBitrateFlow = qualityBitrateFlow,
+                    options = qualityOptions,
+                    trialFlow = trialFlow,
+                    preferredIndexProvider = preferredQualityIndexProvider,
+                    onSelect = onQualitySelect,
+                    maxHeightDp = qualityPickerMaxHeightDp,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    minHitHeightDp = if (tiny) 32.dp else 36.dp,
+                )
+            }
+        } else if (tiny) {
             // Tiny：位置 · 进度 · 时长 · 音质压成一行，把纵向空间全让给封面与传输键。
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = hPad),

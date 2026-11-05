@@ -208,11 +208,12 @@ internal fun ColumnScope.PlayerCardExpanded(
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
     val standaloneKaraoke = ui.focusLyricsActive && geo.usesSideCover
+    val unifiedLyrics = !geo.usesSideCover && ui.lyricsPanelSelected
     val exitFocus: () -> Unit = {
         ui.showKaraoke = false
         ui.lyricLocateTrigger++
     }
-    val karaokeControls = if (ui.focusLyricsActive) KaraokeControls(
+    val karaokeControls = if (unifiedLyrics || standaloneKaraoke) KaraokeControls(
         embedded = !geo.usesSideCover,
         title = song.name,
         artist = song.artists.orEmpty().joinToString(" / ") { it.name },
@@ -252,10 +253,10 @@ internal fun ColumnScope.PlayerCardExpanded(
             lyricPulseEnabled = motion.lyricPulse,
             trackKey = "${song.source}:${song.id}",
             karaoke = karaoke,
-            onOpenKaraoke = if (karaoke == null) ({ ui.showKaraoke = true }) else null,
+            onOpenKaraoke = if (geo.usesSideCover && karaoke == null) ({ ui.showKaraoke = true }) else null,
         )
     }
-    androidx.activity.compose.BackHandler(enabled = ui.focusLyricsActive && ui.cardExpandedForInput, onBack = exitFocus)
+    androidx.activity.compose.BackHandler(enabled = standaloneKaraoke && ui.cardExpandedForInput, onBack = exitFocus)
     if (standaloneKaraoke) {
         lyricsContent(karaokeControls)
         return
@@ -358,6 +359,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     previousEnabled = playbackQueue.isNotEmpty(),
                     // 大屏模式也用扁平横向控制条（竖屏那套大按钮堆叠在 300dp 高里放不下）。
                     landscape = geo.usesSideCover,
+                    sharedLyricProgress = unifiedLyrics,
                     compact = geo.usesSideCover || heightClass != HeightClass.Regular,
                     tiny = tinyPlayer,
                     // 大屏把音质搬到左栏就地选择器，控制条右端不再重复一个音质角标。
@@ -441,7 +443,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 label = "LyricsCrossfade",
                             ) { lyricsContent(null) }
                         } else {
-                            // Keep one lyric clock mounted while changing portrait presentation.
+                            // Portrait uses one scrolling lyric presentation and one playback clock.
                             lyricsContent(karaokeControls)
                         }
                     }

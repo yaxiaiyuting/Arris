@@ -578,7 +578,7 @@ internal fun PlayerCard(
             visualizerSlot = geo.visualizerSlot,
             sideCover = geo.usesSideCover,
             waveBackdropHeightDp = geo.waveBackdropHeightDp,
-            karaoke = ui.focusLyricsActive,
+            karaoke = standaloneKaraoke || (!geo.usesSideCover && ui.lyricsPanelSelected),
             currentCoverAvailable = ui.coverArtBitmap != null && ui.coverArtKey != null &&
                 ui.coverArtKey == CoverUrls.large(song?.album?.picUrl),
             isBufferingFlow = playerViewModel.isBuffering,
