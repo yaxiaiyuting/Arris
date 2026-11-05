@@ -56,6 +56,24 @@ LTS 只做全屏档；主线竖屏的「嵌入歌词面板」形态需要改播�
 
 构建与签名（v2）通过；真机核对未做（本轮设备未连接）。
 
+## v4.0.10-gpl（测试包）— Gitee 进入镜像队列（2026-11-05）
+
+- 整仓已镜像到 **https://gitee.com/yaxiaiyuting/arris**（17 分支 + 148 tag，公开）
+- 下载源顺序：本站 → **Gitee Release 附件** → ghfast.top → gh-proxy.com → ghproxy.net
+- 新增 `SegmentedDownload.probeAll`：分段前逐个探测，**只让支持 206 的源参与轮转**
+- 单流回退改为按镜像逐个试
+- `tools/gitee` 修掉 body 必填导致的 400/404
+
+### 实测：Gitee 不支持 Range
+
+| 源 | Range | 用途 |
+|---|---|---|
+| 本站 / ghproxy | 206 | 参与分段轮转 |
+| Gitee 附件 | 忽略 Range，回 200 全量 | 只做单流回退 |
+
+匿名下载校验（本机直连）：`HTTP 200`、10,490,856 B / 9.6s ≈ **1.09 MB/s**，
+下载包 SHA-256 与本地构建一致。
+
 ## v4.0.9-gpl（测试包）— 多镜像下载（2026-11-05）
 
 国内直链走 Cloudflare 会忽快忽慢，单源单线路无法解决。这版把下载改成多源：

@@ -3,6 +3,13 @@
 Gitee 上没有 `.git` 历史也能发 Release —— 只要仓库存在，`tools/gitee` 会直接调 OpenAPI 建仓、
 发 Release、传附件，然后打印附件的**直链**（不是 tag 拼出来的那种）。
 
+## 现状（2026-11-05 完成）
+
+- 仓库：**https://gitee.com/yaxiaiyuting/arris**（公开，已镜像 17 分支 + 148 tag）
+- 令牌已存在 `~/.config/gitee/token`
+- 已发两个发行版：`v4.0.9-gpl`、`v4.0.10-gpl`（附件直链可匿名下载）
+- **实测：Gitee 附件忽略 `Range`（回 200 全量）⇒ 只做单流回退，不参与分段轮转**
+
 ## 1. 拿一个私人令牌（只有你能做）
 
 Gitee → 头像 → **设置 → 私人令牌 → 生成新令牌**，勾上：
