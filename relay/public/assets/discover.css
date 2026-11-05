@@ -355,3 +355,13 @@ body{
   .eyebrow__rule{transition:none;transform:none}
   .version:hover,.everyday-card:hover,.release-card:hover{transform:none}
 }
+
+/* 下载镜像行（4.0.10）：官网直链不稳时让用户自己挑一条快的。 */
+.mirror-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px; padding-top:12px; border-top:1px dashed var(--border); font-size:11px; }
+.mirror-label { color:#6b7b5d; letter-spacing:.4px; }
+.mirror-link { color:#41623c; text-decoration:none; padding:5px 9px; border:1px solid var(--border); border-radius:6px; }
+.mirror-link:hover { background:#edf2e1; }
+.mirror-link[data-best="1"] { border-color:#a4b88d; background:#edf2e1; font-weight:600; }
+.mirror-probe { font:inherit; color:#41623c; background:transparent; border:1px solid var(--border); border-radius:6px; padding:5px 9px; cursor:pointer; min-height:28px; }
+.mirror-probe:disabled { opacity:.6; cursor:progress; }
+.mirror-status { color:#7c8c6e; font-size:10px; }

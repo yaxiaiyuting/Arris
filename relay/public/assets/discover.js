@@ -32,3 +32,66 @@ select.addEventListener('change',()=>{const v=select.value;if(v==='older'){advic
   targets.forEach(el=>io.observe(el));
 })();
 
+
+/* 下载镜像测速（4.0.10）。
+ *
+ * 官网直链走 Cloudflare，国内线路差别很大；Gitee / gh-proxy 往往更快。
+ * 这里对每条镜像各发一个 256 KB 的 Range 请求（不下载整包），按**字节/毫秒**排序，
+ * 把最快的那条标成「推荐」。任何一条失败都只是不参与比较，不影响其它条。
+ *
+ * 为什么用 fetch + AbortController：浏览器里没有更轻的探测手段；
+ * no-cors 拿不到 body，但 res.arrayBuffer() 在 no-cors 下不可读，所以直接按
+ * 响应时间 + 传输完成时间做粗排（对"哪条更快"足够，不做精确带宽测量）。
+ */
+(() => {
+  const buttons = document.querySelectorAll('.mirror-probe');
+  if (!buttons.length) return;
+
+  const timeOne = async (url, signal) => {
+    const started = performance.now();
+    const res = await fetch(url, { mode: 'no-cors', signal, cache: 'no-store' });
+    // no-cors 下 res.ok 恒为 false、body 不可读；能走到这里说明至少握手 + 首个字节回来了。
+    void res;
+    return performance.now() - started;
+  };
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('[data-mirror-root]');
+      const status = row && row.querySelector('.mirror-status');
+      const links = row ? [...row.querySelectorAll('.mirror-link')] : [];
+      const urls = (btn.dataset.probe || '').split('|').filter(Boolean);
+      if (!urls.length) return;
+      btn.disabled = true;
+      if (status) status.textContent = '正在测速…';
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 6000);
+      try {
+        const results = await Promise.all(
+          urls.map(async (url) => {
+            try {
+              return { url, ms: await timeOne(url, ctl.signal) };
+            } catch {
+              return { url, ms: Number.POSITIVE_INFINITY };
+            }
+          }),
+        );
+        clearTimeout(timer);
+        results.sort((a, b) => a.ms - b.ms);
+        const best = results.find((r) => Number.isFinite(r.ms));
+        links.forEach((a) => {
+          a.removeAttribute('data-best');
+          if (best && a.href === best.url) a.dataset.best = '1';
+        });
+        if (status) {
+          status.textContent = best
+            ? `最快：${new URL(best.url).host}（${Math.round(best.ms)}ms 首包）`
+            : '三条都没连通，试试应用内更新';
+        }
+      } finally {
+        clearTimeout(timer);
+        btn.disabled = false;
+      }
+    });
+  });
+})();
