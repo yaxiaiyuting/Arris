@@ -80,6 +80,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import kotlinx.coroutines.flow.StateFlow
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 分支 1：大屏幕模式（横屏桌面播放器布局）
@@ -402,6 +403,11 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
     onToggleControlsCollapse: () -> Unit,
     transport: PlayerCardCallbacks,
     previousEnabled: Boolean,
+    positionFlow: StateFlow<Long>,
+    progressFlow: StateFlow<Float>,
+    durationFlow: StateFlow<Long>,
+    bufferingFlow: StateFlow<Boolean>,
+    onSeek: (Long) -> Unit,
     onSongInfoClick: () -> Unit,
     onControlsMeasured: (heightPx: Float, topInCardPx: Float) -> Unit,
     playerPanels: @Composable (Modifier) -> Unit,
@@ -532,25 +538,36 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             )
         }
     }
-    // The compact row grows out of the space the full controls leave behind.
-    // Reserving this space in layout keeps the row clear of lyrics and the cover title.
+    // The lyric footer keeps the scrubber when the rest of the controls are folded.
+    // Its measured height gives both lyric presentations the same safe bottom edge.
+    val compactScrubber = ui.showLyrics && !ui.showQueue
     Box(
         Modifier.fillMaxWidth().clipToBounds()
             .collapsibleHeight { 1f - controlsCollapse.value }
-            .height(54.dp),
+            .height(if (compactScrubber) 94.dp else 54.dp),
         contentAlignment = Alignment.Center,
     ) {
         if (controlsCollapsedForInput) {
-            CompactTransportControls(
-                isPlaying = isPlaying,
-                previousEnabled = previousEnabled,
-                transport = transport,
-                modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
+            Column(
+                Modifier.fillMaxWidth().graphicsLayer {
                     val reveal = ((controlsCollapse.value - 0.40f) / 0.60f).coerceIn(0f, 1f)
                     alpha = reveal
                     translationY = (1f - reveal) * 8.dp.toPx()
                 },
-            )
+            ) {
+                if (compactScrubber) {
+                    CompactPlaybackProgress(
+                        positionFlow, progressFlow, durationFlow, bufferingFlow, onSeek,
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                    )
+                }
+                CompactTransportControls(
+                    isPlaying = isPlaying,
+                    previousEnabled = previousEnabled,
+                    transport = transport,
+                    modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()),
+                )
+            }
         }
     }
     Spacer(Modifier.height(if (tiny) 6.dp else 12.dp))

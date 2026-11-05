@@ -207,6 +207,26 @@ internal fun ColumnScope.PlayerCardExpanded(
 ) {
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
+    val standaloneKaraoke = ui.focusLyricsActive && geo.usesSideCover
+    val exitFocus = {
+        ui.showKaraoke = false
+        ui.lyricLocateTrigger++
+    }
+    val karaokeControls = if (ui.focusLyricsActive) KaraokeControls(
+        embedded = !geo.usesSideCover,
+        title = song.name,
+        artist = song.artists.orEmpty().joinToString(" / ") { it.name },
+        cover = ui.coverArtBitmap.takeIf { standaloneKaraoke && ui.coverArtKey == CoverUrls.large(song.album?.picUrl) },
+        position = positionFlow,
+        duration = playerViewModel.duration,
+        progress = progressFlow,
+        buffering = playerViewModel.isBuffering,
+        transport = callbacks,
+        previousEnabled = playbackQueue.isNotEmpty(),
+        exit = exitFocus,
+        translatedPrimary = ui.karaokeTranslationPrimary,
+        toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary },
+    ) else null
     val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
         LyricsView(
             lyrics = lyrics,
@@ -220,7 +240,7 @@ internal fun ColumnScope.PlayerCardExpanded(
             isVisible = ui.showLyrics || karaoke != null,
             forcedLocateTrigger = ui.lyricLocateTrigger,
             onSeekToMs = playerViewModel::seekTo,
-            enabled = (ui.lyricsEnabled || karaoke != null) && ui.cardExpandedForInput,
+            enabled = (ui.lyricsEnabled || standaloneKaraoke) && ui.cardExpandedForInput,
             isLoading = lyricsLoading,
             wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
             wordAnimationMode = lyricsWordAnimation,
@@ -235,24 +255,9 @@ internal fun ColumnScope.PlayerCardExpanded(
             onOpenKaraoke = if (karaoke == null) ({ ui.showKaraoke = true }) else null,
         )
     }
-    androidx.activity.compose.BackHandler(enabled = ui.showKaraoke) { ui.showKaraoke = false }
-    if (ui.showKaraoke) {
-        lyricsContent(
-            KaraokeControls(
-                title = song.name,
-                artist = song.artists.orEmpty().joinToString(" / ") { it.name },
-                cover = ui.coverArtBitmap.takeIf { ui.coverArtKey == CoverUrls.large(song.album?.picUrl) },
-                position = positionFlow,
-                duration = playerViewModel.duration,
-                progress = progressFlow,
-                buffering = playerViewModel.isBuffering,
-                transport = callbacks,
-                previousEnabled = playbackQueue.isNotEmpty(),
-                exit = { ui.showKaraoke = false },
-                translatedPrimary = ui.karaokeTranslationPrimary,
-                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary },
-            ),
-        )
+    androidx.activity.compose.BackHandler(enabled = ui.focusLyricsActive && ui.cardExpandedForInput, onBack = exitFocus)
+    if (standaloneKaraoke) {
+        lyricsContent(karaokeControls)
         return
     }
             val s = song!!
@@ -429,14 +434,15 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 translationX = -q * screenWidthPx
                             }
                     ) {
-                        // 切歌时旧歌词渐隐、新歌词渐显（Sokuou UWP 缓动）。
-                        // key = song?.id：同一首歌的歌词更新不触发 Crossfade, 只换内容。
-                        Crossfade(
-                            targetState = song?.id,
-                            animationSpec = SokuouTweens.CoverFade,
-                            label = "LyricsCrossfade"
-                        ) { _ ->
-                            lyricsContent(null)
+                        if (geo.usesSideCover) {
+                            Crossfade(
+                                targetState = song.id,
+                                animationSpec = SokuouTweens.CoverFade,
+                                label = "LyricsCrossfade",
+                            ) { lyricsContent(null) }
+                        } else {
+                            // Keep one lyric clock mounted while changing portrait presentation.
+                            lyricsContent(karaokeControls)
                         }
                     }
 
@@ -568,6 +574,11 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onToggleControlsCollapse = onToggleControlsCollapse,
                     transport = callbacks,
                     previousEnabled = playbackQueue.isNotEmpty(),
+                    positionFlow = positionFlow,
+                    progressFlow = progressFlow,
+                    durationFlow = playerViewModel.duration,
+                    bufferingFlow = playerViewModel.isBuffering,
+                    onSeek = playerViewModel::seekTo,
                     onSongInfoClick = callbacks.onSongInfoClick,
                     onControlsMeasured = { heightPx, topInCardPx ->
                         ui.controlsHeightPx = heightPx

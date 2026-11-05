@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -52,6 +51,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +73,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.flow.StateFlow
 
 internal class KaraokeControls(
+    val embedded: Boolean,
     val title: String,
     val artist: String,
     val cover: Bitmap?,
@@ -100,18 +102,20 @@ internal fun KaraokeScreen(
     animationMode: Int,
     sweep: LyricsSweepConfig,
     fontScale: Float,
+    interactive: Boolean,
 ) {
     val strings = LocalStrings.current
     val copy = strings.playerUi.karaoke
     val colors = LocalMetroColors.current
     val focusSweep = remember(sweep) { sweep.copy(inactiveAlpha = maxOf(sweep.inactiveAlpha, 0.62f)) }
-    val phraseTravel = with(LocalDensity.current) { 12.dp.roundToPx() }
+    val density = LocalDensity.current
+    val phraseTravel = with(density) { 10.dp.roundToPx() }
     val animateStage = ValueAnimator.areAnimatorsEnabled()
 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val compact = maxHeight < 430.dp
         val split = compact && maxWidth >= 600.dp
-        val horizontalMargin = if (compact) 16.dp else 24.dp
+        val horizontalMargin = if (compact) 16.dp else if (controls.embedded) 20.dp else 24.dp
         val stageWidth = minOf(maxWidth.value, 880f) - horizontalMargin.value * 2
         val phraseWidth = if (split) stageWidth * 0.62f else stageWidth
         val headline = (minOf(phraseWidth / 8.7f, if (compact) 41f else 54f)
@@ -119,9 +123,20 @@ internal fun KaraokeScreen(
 
         Column(
             Modifier.widthIn(max = 880.dp).fillMaxSize()
-                .padding(horizontal = horizontalMargin, vertical = if (compact) 2.dp else 10.dp),
+                .padding(horizontal = horizontalMargin, vertical = if (compact || controls.embedded) 2.dp else 10.dp),
         ) {
-            KaraokeHeader(controls, compact, hasTranslations = translations.isNotEmpty())
+            if (controls.embedded) {
+                if (interactive) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        KaraokeButton(PlayerGlyphs.Karaoke, copy.exit, controls.exit, isSelected = true)
+                        if (translations.isNotEmpty()) KaraokeLanguageButton(controls)
+                    }
+                }
+            } else KaraokeHeader(controls, compact, hasTranslations = translations.isNotEmpty())
 
             BoxWithConstraints(
                 Modifier.weight(1f).fillMaxWidth().clipToBounds(),
@@ -129,6 +144,9 @@ internal fun KaraokeScreen(
             ) {
                 val topSpace = if (compact) minOf(maxHeight * 0.13f, 28.dp)
                     else minOf(maxHeight * 0.26f, 148.dp)
+                val readingHeight = maxHeight.value / density.fontScale
+                val roomyContext = readingHeight >= 300f
+                val showContextTranslation = readingHeight >= 210f
                 if (lines.isEmpty()) {
                     MetroText(
                         if (loading) copy.loading else strings.noLyrics,
@@ -141,9 +159,10 @@ internal fun KaraokeScreen(
                         val current = lines.getOrNull(frame.current)
                         val next = lines.getOrNull(frame.next)
                         val isActiveFrame = frame.current == cue.current && frame.next == cue.next
+                        val canSeek = interactive && isActiveFrame
                         val focus: @Composable (Modifier) -> Unit = { modifier ->
                             if (current == null) {
-                                KaraokeCountIn(copy.ready, frame.count, headline, modifier)
+                                if (frame.count != null) KaraokeCountIn(copy.ready, frame.count, modifier)
                             } else {
                                 val translation = translations[current.timestampMillis]
                                 KaraokeFocus(
@@ -156,44 +175,60 @@ internal fun KaraokeScreen(
                                     sweep = focusSweep,
                                     headline = headline,
                                     animateRail = animateStage && isActiveFrame,
-                                    modifier = modifier.clickable(enabled = isActiveFrame, role = Role.Button) {
+                                    modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
                                         onSeek(current.timestampMillis)
                                     },
                                 )
                             }
                         }
+                        val context: @Composable (NcrustLyricLine, Modifier, Boolean) -> Unit = { line, modifier, subdued ->
+                            KaraokeContextPhrase(
+                                line = line,
+                                translatedPrimary = controls.translatedPrimary,
+                                headline = headline,
+                                subdued = subdued,
+                                showSecondary = controls.embedded && showContextTranslation && !subdued,
+                                modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
+                                    onSeek(line.timestampMillis)
+                                },
+                            )
+                        }
                         val upcoming: @Composable (Modifier) -> Unit = { modifier ->
-                            if (next != null) {
-                                val translated = translations[next.timestampMillis]?.text
-                                KaraokeNextPhrase(
-                                    label = copy.nextPhrase,
-                                    phrase = if (controls.translatedPrimary) translated ?: next.text else next.text,
-                                    headline = headline,
-                                    modifier = modifier.then(previewMotion).clickable(
-                                        enabled = isActiveFrame, role = Role.Button,
-                                    ) {
-                                        onSeek(next.timestampMillis)
-                                    },
-                                )
-                            }
+                            if (next != null) context(next, modifier.then(previewMotion), false)
                         }
 
                         key(frame.current, frame.next) {
-                            val contentModifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                                .padding(top = topSpace, bottom = if (compact) 6.dp else 16.dp)
-                            if (split) {
-                                Row(contentModifier, horizontalArrangement = Arrangement.spacedBy(36.dp)) {
-                                    focus(Modifier.weight(0.62f))
-                                    val preview = Modifier.weight(0.38f)
-                                    if (next == null) Spacer(preview) else upcoming(preview.padding(top = 4.dp))
+                            if (controls.embedded) {
+                                val before = lines.getOrNull((if (current != null) frame.current else frame.next) - 1)
+                                val after = if (frame.next >= 0 && roomyContext) lines.getOrNull(frame.next + 1) else null
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                                    Column(
+                                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(if (roomyContext) 12.dp else 8.dp),
+                                    ) {
+                                        if (before != null) context(before, Modifier.fillMaxWidth(), true)
+                                        focus(Modifier.fillMaxWidth())
+                                        upcoming(Modifier.fillMaxWidth())
+                                        if (after != null) context(after, Modifier.fillMaxWidth(), true)
+                                    }
                                 }
                             } else {
-                                Column(
-                                    contentModifier,
-                                    verticalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 24.dp),
-                                ) {
-                                    focus(Modifier.fillMaxWidth())
-                                    upcoming(Modifier.fillMaxWidth())
+                                val contentModifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                                    .padding(top = topSpace, bottom = if (compact) 6.dp else 16.dp)
+                                if (split) {
+                                    Row(contentModifier, horizontalArrangement = Arrangement.spacedBy(36.dp)) {
+                                        focus(Modifier.weight(0.62f))
+                                        val preview = Modifier.weight(0.38f)
+                                        if (next == null) Spacer(preview) else upcoming(preview.padding(top = 4.dp))
+                                    }
+                                } else {
+                                    Column(
+                                        contentModifier,
+                                        verticalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 24.dp),
+                                    ) {
+                                        focus(Modifier.fillMaxWidth())
+                                        upcoming(Modifier.fillMaxWidth())
+                                    }
                                 }
                             }
                         }
@@ -226,7 +261,7 @@ internal fun KaraokeScreen(
                 }
             }
 
-            KaraokeTransport(controls, playing, onSeek)
+            if (!controls.embedded) KaraokeTransport(controls, playing, onSeek)
         }
     }
 }
@@ -264,19 +299,24 @@ private fun KaraokeHeader(controls: KaraokeControls, compact: Boolean, hasTransl
                 )
             }
         }
-        if (hasTranslations) {
-            MetroText(
-                if (controls.translatedPrimary) copy.translation else copy.original,
-                Modifier.widthIn(max = 106.dp).clip(AppShapes.full).clickable(
-                    role = Role.Button, onClickLabel = copy.changeLanguage, onClick = controls.toggleLanguage,
-                ).padding(horizontal = 12.dp, vertical = 14.dp),
-                color = colors.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = TextStyle(fontWeight = FontWeight.Medium, fontSize = 13.sp),
-            )
-        }
+        if (hasTranslations) KaraokeLanguageButton(controls)
     }
+}
+
+@Composable
+private fun KaraokeLanguageButton(controls: KaraokeControls) {
+    val copy = LocalStrings.current.playerUi.karaoke
+    val colors = LocalMetroColors.current
+    MetroText(
+        if (controls.translatedPrimary) copy.translation else copy.original,
+        Modifier.widthIn(max = 106.dp).clip(AppShapes.full).clickable(
+            role = Role.Button, onClickLabel = copy.changeLanguage, onClick = controls.toggleLanguage,
+        ).padding(horizontal = 12.dp, vertical = 14.dp),
+        color = colors.primary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = TextStyle(fontWeight = FontWeight.Medium, fontSize = 13.sp),
+    )
 }
 
 @Composable
@@ -352,51 +392,59 @@ private fun KaraokeFocus(
 }
 
 @Composable
-private fun KaraokeNextPhrase(label: String, phrase: String, headline: Float, modifier: Modifier) {
+private fun KaraokeContextPhrase(
+    line: NcrustLyricLine,
+    translatedPrimary: Boolean,
+    headline: Float,
+    subdued: Boolean,
+    showSecondary: Boolean,
+    modifier: Modifier,
+) {
     val colors = LocalMetroColors.current
+    val preferTranslation = translatedPrimary && line.translation.isNotBlank()
+    val main = if (preferTranslation) line.translation else line.text
+    val secondary = if (preferTranslation) line.text else line.translation
+    val size = headline * if (subdued) 0.44f else 0.55f
+    val color = colors.onBackground.copy(alpha = if (subdued) 0.51f else 0.70f)
     Column(
-        modifier.cueRail(colors.primary, focused = false).padding(start = 19.dp, end = 4.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        modifier.padding(start = 19.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         MetroText(
-            label, color = colors.primary, style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+            main, color = color, maxLines = if (subdued) 1 else 2, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontSize = size.sp, lineHeight = (size * 1.23f).sp, fontWeight = FontWeight.Medium),
         )
-        MetroText(
-            phrase, color = colors.onBackground.copy(alpha = 0.58f), maxLines = 3, overflow = TextOverflow.Ellipsis,
-            style = TextStyle(
-                fontSize = (headline * 0.60f).sp, lineHeight = (headline * 0.78f).sp, fontWeight = FontWeight.Medium,
-            ),
-        )
+        if (showSecondary && secondary.isNotBlank()) {
+            MetroText(
+                secondary, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(fontSize = (size * 0.78f).sp),
+            )
+        }
     }
 }
 
 @Composable
-private fun KaraokeCountIn(label: String, remaining: Int?, headline: Float, modifier: Modifier) {
+private fun KaraokeCountIn(description: String, remaining: Int, modifier: Modifier) {
     val colors = LocalMetroColors.current
-    Column(
-        modifier.cueRail(colors.primary, focused = true).padding(start = 19.dp, top = 2.dp, bottom = 4.dp)
-            .clearAndSetSemantics { contentDescription = if (remaining != null) "$label $remaining" else label },
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    Row(
+        modifier.cueRail(colors.primary, focused = true).padding(start = 19.dp, top = 9.dp, bottom = 9.dp)
+            .clearAndSetSemantics { contentDescription = "$description $remaining" },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            repeat(3) { index ->
-                val brightness by animateFloatAsState(
-                    if (remaining != null && index < remaining) 1f else 0.23f,
-                    animationSpec = tween(185, easing = CueArrivalEasing),
-                    label = "count-in lamp",
-                )
-                Box(
-                    Modifier.size(width = (24 - index * 4).dp, height = 4.dp)
-                        .graphicsLayer { alpha = brightness }
-                        .clip(AppShapes.full)
-                        .background(colors.primary),
-                )
-            }
+        repeat(3) { index ->
+            val brightness by animateFloatAsState(
+                if (index < remaining) 1f else 0.23f,
+                animationSpec = tween(185, easing = CueArrivalEasing),
+                label = "count-in dot",
+            )
+            Box(
+                Modifier.size(7.dp)
+                    .graphicsLayer { alpha = brightness }
+                    .clip(AppShapes.full)
+                    .background(colors.primary),
+            )
         }
-        MetroText(
-            label, color = colors.onBackground,
-            style = TextStyle(fontSize = (headline * 0.67f).sp, fontWeight = FontWeight.SemiBold),
-        )
     }
 }
 
@@ -428,15 +476,22 @@ private fun Modifier.cueRail(accent: Color, focused: Boolean, progress: (() -> F
 }
 
 @Composable
-private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek: (Long) -> Unit) {
+internal fun CompactPlaybackProgress(
+    positionFlow: StateFlow<Long>,
+    progressFlow: StateFlow<Float>,
+    durationFlow: StateFlow<Long>,
+    bufferingFlow: StateFlow<Boolean>,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalMetroColors.current
-    val sampledPosition by controls.position.collectAsStateWithLifecycle()
-    val duration by controls.duration.collectAsStateWithLifecycle()
+    val sampledPosition by positionFlow.collectAsStateWithLifecycle()
+    val duration by durationFlow.collectAsStateWithLifecycle()
     val durationText = formatDuration(duration)
     val timeWidth = (durationText.length.coerceAtLeast(4) * 7).dp
     val timeStyle = TextStyle(fontSize = 11.sp, fontFamily = FontFamily.Monospace)
     Row(
-        Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         MetroText(
@@ -444,9 +499,9 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
             color = colors.onSurfaceVariant, style = timeStyle, maxLines = 1,
         )
         SlimProgressBar(
-            controls.progress, controls.duration, controls.buffering,
+            progressFlow, durationFlow, bufferingFlow,
             onSeek = { fraction ->
-                val length = controls.duration.value
+                val length = durationFlow.value
                 if (length > 0) onSeek((length * fraction).toLong())
             },
             modifier = Modifier.weight(1f),
@@ -457,6 +512,11 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
             color = colors.onSurfaceVariant, style = timeStyle.copy(textAlign = TextAlign.End), maxLines = 1,
         )
     }
+}
+
+@Composable
+private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek: (Long) -> Unit) {
+    CompactPlaybackProgress(controls.position, controls.progress, controls.duration, controls.buffering, onSeek)
     CompactTransportControls(
         isPlaying = playing,
         previousEnabled = controls.previousEnabled,
@@ -466,13 +526,17 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
 }
 
 @Composable
-internal fun KaraokeButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+internal fun KaraokeButton(icon: ImageVector, label: String, onClick: () -> Unit, isSelected: Boolean = false) {
+    val colors = LocalMetroColors.current
     Box(
-        Modifier.size(44.dp).clip(AppShapes.full).clickable(role = Role.Button, onClick = onClick),
+        Modifier.size(44.dp).clip(AppShapes.full)
+            .background(if (isSelected) colors.primary.copy(alpha = 0.13f) else Color.Transparent)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { selected = isSelected },
         contentAlignment = Alignment.Center,
     ) {
         MetroIcon(
-            imageVector = icon, contentDescription = label, tint = LocalMetroColors.current.onBackground, sizeDp = 20.dp,
+            imageVector = icon, contentDescription = label, tint = if (isSelected) colors.primary else colors.onBackground, sizeDp = 20.dp,
         )
     }
 }

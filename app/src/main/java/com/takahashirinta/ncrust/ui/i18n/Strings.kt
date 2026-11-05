@@ -2024,7 +2024,6 @@ data class KaraokeStrings(
     val original: String,
     val translation: String,
     val changeLanguage: String,
-    val nextPhrase: String,
 )
 
 data class PlayerUiStrings(

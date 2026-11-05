@@ -219,7 +219,7 @@ val jpMY = Strings(
         motionBarPulseDescription = "下の制御帯、拍子ごとにわづかに拡がる（最大 2%）。精緻以上のみ。",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("歌に合はす", "歌詞に戻る", "歌詞を読み込み中…", "歌ひ出しの支度", "原文", "譯文", "主たる歌詞の言葉を切り替ふ", "次の句"),
+        karaoke = KaraokeStrings("歌に合はす", "歌詞に戻る", "歌詞を読み込み中…", "歌ひ出しの支度", "原文", "譯文", "主たる歌詞の言葉を切り替ふ"),
         prevButton = "前",
         playButton = "奏",
         pauseButton = "休止",

@@ -220,7 +220,7 @@ val en = Strings(
         motionBarPulseDescription = "The bottom transport bar scales slightly on each beat (up to 2%). Refined tier and above only.",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("Sing along", "Back to lyrics", "Loading lyrics…", "Get ready", "Original", "Translation", "Switch primary lyric language", "Next line"),
+        karaoke = KaraokeStrings("Sing along", "Back to lyrics", "Loading lyrics…", "Get ready", "Original", "Translation", "Switch primary lyric language"),
         prevButton = "Previous",
         playButton = "Play",
         pauseButton = "Pause",

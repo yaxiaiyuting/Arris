@@ -76,6 +76,7 @@ internal class PlayerCardUiState(
     // ---- 可变状态（原来是一个个 remember { mutableStateOf }）----
     var showLyrics by mutableStateOf(false)
     var showKaraoke by mutableStateOf(false)
+    val focusLyricsActive: Boolean get() = showKaraoke && showLyrics && !showQueue
     var karaokeTranslationPrimary by mutableStateOf(false)
     var showQueue by mutableStateOf(false)
     // K05 根治后此字段已无读写方（红心改订阅 LibraryManager.savedRevision）。

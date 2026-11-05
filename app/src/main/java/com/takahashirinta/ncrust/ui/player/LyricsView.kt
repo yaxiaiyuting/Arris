@@ -397,19 +397,18 @@ internal fun LyricsView(
     //    行/词边界再写一次。静态时零状态写入、零帧调度，不会让渲染管线在整首歌里 60fps 空转。
     //
     // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
-    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, translationSweep, trackKey) {
-        // 恢复播放/联网时重新计时，不把缓冲、暂停或后台停留算成已播放时间。
-        anchor.speed = if (karaokeActive) currentPlaybackSpeed() else 1f
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, trackKey) {
+        // Reset on playback/lifecycle transitions. A change of lyric presentation merely
+        // replaces the wake-up schedule and must not rewind the live position to its last sample.
         anchor.anchorPosMs = positionState.value
         anchor.anchorNanos = System.nanoTime()
         anchor.anchorTrackKey = trackKey
         displayPosition.longValue = positionState.value
-        // v3.6.5：缓冲中 / 还没出声时不外推。旧实现只看 isPlaying —— 用户按下播放、
-        // 音频还在加载时 isPlaying 已经是 true，外推从 0 开始跑，歌词就先唱了。
-        if (!isPlaying || isBuffering || !isVisible || !enabled) {
-            displayPosition.longValue = positionState.value
-            return@LaunchedEffect
-        }
+    }
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, translationSweep, trackKey, karaokeActive) {
+        anchor.speed = if (karaokeActive) currentPlaybackSpeed() else 1f
+        // Buffering and the initial zero sample do not advance lyrics before audio starts.
+        if (!isPlaying || isBuffering || !isVisible || !enabled) return@LaunchedEffect
         while (true) {
             // 首条位置采样到达前（position 仍为 0）也不要外推：宁可让第一句晚 100~500ms，
             // 也不要让它在音频真正开始前先滚过去。
@@ -476,7 +475,8 @@ internal fun LyricsView(
         }
         androidx.compose.runtime.key(trackKey) {
             KaraokeScreen(karaoke, panelLines, karaokeTranslations, cue, { displayPosition.longValue },
-                seek, isPlaying, isLoading, wordByWordEnabled, wordAnimationMode, sweepConfig, fontScale)
+                seek, isPlaying, isLoading, wordByWordEnabled, wordAnimationMode, sweepConfig, fontScale,
+                interactive = enabled && isVisible)
         }
         return
     }

@@ -130,6 +130,7 @@ internal fun BoxScope.PlayerCardBackdrop(
                 useFluidBackdrop = motion.switches.fluidBackdrop && !environment.powerSaver,
                 currentCoverAvailable = currentCoverAvailable,
                 karaoke = karaoke,
+                quietLyricCenter = karaoke && !sideCover,
                 motion = motion,
                 parallaxProvider = { progress.value },
                 // 视差行程按屏幕高给（不是固定 dp）：横竖屏切换时行程跟着屏幕走，
