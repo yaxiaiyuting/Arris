@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalConfiguration
@@ -140,24 +139,22 @@ class ArrisKaraokeReviewTest {
     /** 跟唱页：当前句大字 + 下一句提前出现 + 逐字扫亮。 */
     private fun karaoke(dark: Boolean) {
         val position = MutableStateFlow(19_400L)
+        val controls = KaraokeControls(
+            embedded = false,
+            title = "夜行列车",
+            artist = "本地样例",
+            cover = null,
+            position = position,
+            duration = MutableStateFlow(299_000L),
+            progress = MutableStateFlow(0.35f),
+            buffering = MutableStateFlow(false),
+            transport = PlayerCardCallbacks(onPlayPause = {}, onDismiss = {}),
+            previousEnabled = true,
+            exit = {},
+            translatedPrimary = false,
+            toggleLanguage = {},
+        )
         show(dark) {
-            val controls = remember {
-                KaraokeControls(
-                    embedded = false,
-                    title = "夜行列车",
-                    artist = "本地样例",
-                    cover = null,
-                    position = position,
-                    duration = MutableStateFlow(299_000L),
-                    progress = MutableStateFlow(0.35f),
-                    buffering = MutableStateFlow(false),
-                    transport = PlayerCardCallbacks(onPlayPause = {}, onDismiss = {}),
-                    previousEnabled = true,
-                    exit = {},
-                    translatedPrimary = false,
-                    toggleLanguage = {},
-                )
-            }
             KaraokeScreen(
                 controls = controls,
                 lines = lines,

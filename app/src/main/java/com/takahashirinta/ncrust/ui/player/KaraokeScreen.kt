@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -35,7 +36,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -293,28 +294,25 @@ internal fun PortraitFocusLyrics(
                     onLineClick = onSeek,
                     onUserScrolled = onUserScrolled,
                     focusIndex = followIndex,
-                    focusedRow = { index, line, browsing ->
-                        if (index == cue.current) {
+                    focusActive = cue.current >= 0,
+                    focusedRowMetrics = headline to controls.translatedPrimary,
+                    inactiveScale = 0.60f,
+                    focusedRow = { index, line, browsing, emphasis, defocus ->
+                        Box(Modifier.fillMaxWidth()) {
                             KaraokeFocus(
                                 line, translations[line.timestampMillis], controls.translatedPrimary,
                                 position, wordsEnabled, animationMode, focusSweep, headline,
                                 animateRail = animateRail, modifier = Modifier.fillMaxWidth(),
+                                emphasis = emphasis,
+                                defocus = defocus,
+                                contextAlpha = if (browsing) 0.77f else 0.49f,
                             )
-                        } else {
                             if (index == cue.next && cue.count != null) {
-                                KaraokeCountIn(strings.playerUi.karaoke.ready, cue.count, Modifier.fillMaxWidth())
+                                KaraokeCountIn(
+                                    strings.playerUi.karaoke.ready, cue.count,
+                                    Modifier.fillMaxWidth().offset(y = (-25).dp),
+                                )
                             }
-                            val lower = !browsing && cue.current >= 0 && index > cue.current
-                            val blur = if (!lower) 0.dp else if (index == cue.current + 1) 0.7.dp else 1.3.dp
-                            KaraokeContextPhrase(
-                                line = line,
-                                translatedPrimary = controls.translatedPrimary,
-                                headline = headline,
-                                subdued = !browsing && index != cue.next,
-                                showSecondary = true,
-                                fullText = true,
-                                modifier = if (blur > 0.dp) Modifier.fillMaxWidth().blur(blur) else Modifier.fillMaxWidth(),
-                            )
                         }
                     },
                 )
@@ -388,6 +386,9 @@ private fun KaraokeFocus(
     headline: Float,
     animateRail: Boolean,
     modifier: Modifier,
+    emphasis: () -> Float = { 1f },
+    defocus: () -> Float = { 0f },
+    contextAlpha: Float = 0.49f,
 ) {
     val colors = LocalMetroColors.current
     val lastWordEnd = remember(line, translation) {
@@ -407,7 +408,8 @@ private fun KaraokeFocus(
         fontWeight = FontWeight.Bold,
     )
     Column(
-        modifier.cueRail(colors.primary, focused = true, progress = railProgress).padding(start = 19.dp, end = 4.dp),
+        modifier.cueRail(colors.primary, focused = true, progress = railProgress, emphasis = emphasis)
+            .padding(start = 19.dp, end = 4.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         LyricLineBody(
@@ -421,6 +423,9 @@ private fun KaraokeFocus(
             currentPositionMillis = position,
             style = mainStyle,
             sweepConfig = sweep,
+            emphasis = emphasis,
+            restingColor = { colors.onBackground.copy(alpha = contextAlpha) },
+            defocus = defocus,
         )
         val secondary = if (primaryTranslation != null) line.text else translation?.text
         if (!secondary.isNullOrBlank()) {
@@ -437,11 +442,19 @@ private fun KaraokeFocus(
                     fontSize = (headline * 0.53f).sp, lineHeight = (headline * 0.69f).sp, fontWeight = FontWeight.Medium,
                 ),
                 sweepConfig = sweep,
+                emphasis = emphasis,
+                restingColor = { colors.onBackground.copy(alpha = contextAlpha * 0.83f) },
+                defocus = defocus,
             )
         }
         if (line.romanization.isNotBlank()) {
-            MetroText(
-                line.romanization, Modifier.fillMaxWidth(), color = colors.onSurfaceVariant,
+            LyricCaption(
+                text = line.romanization,
+                modifier = Modifier.fillMaxWidth(),
+                color = {
+                    lerp(colors.onSurfaceVariant.copy(alpha = contextAlpha), colors.onSurfaceVariant, emphasis())
+                },
+                defocus = defocus,
                 style = TextStyle(fontSize = (headline * 0.38f).sp, textAlign = TextAlign.Start),
             )
         }
@@ -506,7 +519,12 @@ private fun KaraokeCountIn(description: String, remaining: Int, modifier: Modifi
     }
 }
 
-private fun Modifier.cueRail(accent: Color, focused: Boolean, progress: (() -> Float)? = null): Modifier = drawWithCache {
+private fun Modifier.cueRail(
+    accent: Color,
+    focused: Boolean,
+    progress: (() -> Float)? = null,
+    emphasis: () -> Float = { 1f },
+): Modifier = drawWithCache {
     val x = if (layoutDirection == LayoutDirection.Ltr) 3.dp.toPx() else size.width - 3.dp.toPx()
     val marker = Offset(x, 7.dp.toPx())
     val track = Brush.verticalGradient(
@@ -515,16 +533,18 @@ private fun Modifier.cueRail(accent: Color, focused: Boolean, progress: (() -> F
         endY = maxOf(marker.y + 1f, size.height),
     )
     onDrawBehind {
+        val focus = emphasis()
+        if (focus <= 0f) return@onDrawBehind
         if (focused) {
-            drawLine(track, start = marker, end = Offset(x, size.height), strokeWidth = 1.dp.toPx())
+            drawLine(track, start = marker, end = Offset(x, size.height), strokeWidth = 1.dp.toPx(), alpha = focus)
             val sung = progress?.invoke()?.coerceIn(0f, 1f) ?: 0f
             if (sung > 0f) {
                 val tail = Offset(x, marker.y + (size.height - marker.y) * sung)
-                drawLine(accent.copy(alpha = 0.16f), marker, tail, 5.dp.toPx(), StrokeCap.Round)
-                drawLine(accent.copy(alpha = 0.83f), marker, tail, 1.3.dp.toPx(), StrokeCap.Round)
+                drawLine(accent.copy(alpha = 0.16f * focus), marker, tail, 5.dp.toPx(), StrokeCap.Round)
+                drawLine(accent.copy(alpha = 0.83f * focus), marker, tail, 1.3.dp.toPx(), StrokeCap.Round)
             }
             drawLine(
-                accent, start = Offset(x, 3.dp.toPx()), end = Offset(x, 14.dp.toPx()),
+                accent.copy(alpha = accent.alpha * focus), start = Offset(x, 3.dp.toPx()), end = Offset(x, 14.dp.toPx()),
                 strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round,
             )
         } else {
