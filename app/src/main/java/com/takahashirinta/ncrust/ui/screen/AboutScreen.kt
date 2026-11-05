@@ -12,6 +12,7 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -21,6 +22,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,11 +31,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -48,9 +53,16 @@ import io.github.takahashirinta.kanesumi.anim.sokuou.MetroDefault
 import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.player.QualityLadder
+import com.takahashirinta.ncrust.qq.QqAuthStore
+import com.takahashirinta.ncrust.ui.components.FeedbackDialog
 import com.takahashirinta.ncrust.ui.components.TopScrimIconButton
 import com.takahashirinta.ncrust.ui.components.rememberManualUpdateCheck
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.i18n.currentLanguageCode
+import com.takahashirinta.ncrust.ui.theme.ThemeMode
+import com.takahashirinta.ncrust.ui.theme.getSavedThemeMode
 import com.takahashirinta.ncrust.update.UpdateService
 
 // 版本号动态读取 BuildConfig.VERSION_NAME（对应 build.gradle.kts 的 versionName），
@@ -69,6 +81,9 @@ fun AboutScreen(
     // 关于页的手动检查与用户页横幅共用同一份逻辑；检查中禁止重复点。
     val updateState by UpdateService.state.collectAsState()
     val manualUpdateCheck = rememberManualUpdateCheck(onFound = onOpenUpdate)
+    // 3.7.31（回移主线 4.0.11）：反馈弹层。诊断信息在弹层里就地采集
+    // （版本 / 机型 / 系统 / 语言主题 / 登录布尔），用户按下"发送"前能看到**将要发送的原文**。
+    var showFeedback by remember { mutableStateOf(false) }
     BackHandler { onBack() }
     // Groove 无边框：不再套 M3 TopAppBar Surface，返回箭头浮在内容上方共用 TopScrimIconButton。
     Box(
@@ -118,6 +133,14 @@ fun AboutScreen(
                             value = if (updateState.checking) updateStrings.checking else "",
                             enabled = !updateState.checking,
                             onClick = manualUpdateCheck
+                        )
+                        // 3.7.31（回移主线 4.0.11）：发送错误日志 / 提建议。走自有中转 → Gitee 仓库开 issue
+                        // （客户端不放任何令牌，理由见 FeedbackClient 的 KDoc）。
+                        AboutActionRow(
+                            label = "发送反馈",
+                            value = "错误日志 / 建议",
+                            enabled = true,
+                            onClick = { showFeedback = true }
                         )
                         AboutRow(s.aboutDeveloperOriginal, "Takahashi_Rinta")
                         AboutRow(s.aboutDeveloperFork, "yaxiaiyuting")
@@ -171,7 +194,45 @@ fun AboutScreen(
             contentDescription = s.back,
             onClick = onBack
         )
+        // 3.7.31：反馈弹层。诊断参数全部在 [FeedbackCallDialog] 里按 LTS 的实际 API 取。
+        if (showFeedback) {
+            FeedbackCallDialog(onDismiss = { showFeedback = false })
+        }
     }
+}
+
+/**
+ * 反馈弹层的挂载点（**3.7.31 回移主线 4.0.11**）。
+ *
+ * 单独抽一个 composable 是为了让「只能在 Composable 里读的东西」（`LocalContext` /
+ * `isSystemInDarkTheme()`）留在 Composable 上下文里，而不是塞进 `if` + `run {}` 的
+ * 内联 lambda（那里读 Compose 状态容易被误读成"在组合外读状态"）。
+ *
+ * 诊断参数按 **LTS 实际 API** 取（主线 4.0.11 的同名调用在这里签名不同）：
+ * - 主题：`getSavedThemeMode(context)`；跟随系统时记 `system(+实际明暗)`，否则记实际取值
+ *   —— 够定位"深色下才复现"这类问题。
+ * - 音质档：直接读设置里的 Wi-Fi 档位（缺省 -1 = 未知），不做单位换算。
+ * - 语言：`currentLanguageCode()`。
+ * - 登录态：ncm 用 `CookieManager.isLoggedIn`（`MUSIC_U` + `__csrf` 都齐才算），
+ *   qm 用 `QqAuthStore.isLoggedIn`；两者都只发**布尔**，不带任何凭证。
+ */
+@Composable
+private fun FeedbackCallDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    FeedbackDialog(
+        language = currentLanguageCode(),
+        themeMode = when (getSavedThemeMode(context)) {
+            ThemeMode.SYSTEM -> if (isSystemInDarkTheme()) "system-dark" else "system-light"
+            ThemeMode.DARK -> "dark"
+            ThemeMode.LIGHT -> "light"
+        },
+        qualityIndex = context
+            .getSharedPreferences("ncrust_settings", Context.MODE_PRIVATE)
+            .getInt(QualityLadder.KEY_WIFI, -1),
+        loggedInNcm = CookieManager.isLoggedIn(context),
+        loggedInQq = QqAuthStore.isLoggedIn(context),
+        onDismiss = onDismiss,
+    )
 }
 
 // 关于页专用的级联入场包装：每块内容独立 MutableTransitionState + AnimatedVisibility，

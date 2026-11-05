@@ -15,6 +15,12 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+// 4.0.11 回移（3.7.31）：跨行交接动画 + 横屏当前句竖条用到的五个 import。
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -144,6 +150,14 @@ data class NcrustLyricLine(
     val fontScale: Float = 1f,
 )
 
+/**
+ * 4.0.11（回移主线 cfc41da）：跨行「交接」动画时长（ms）。
+ *
+ * 参考动效都在 260–340ms：短于 220ms 看不出交接，长于 400ms 会拖到下一句，
+ * 连拍段落里会觉得歌词迟钝。320ms + 强减速曲线与参考一致。
+ */
+internal const val LYRIC_SWITCH_MS = 320
+
 @Composable
 fun NcrustLyricsPanel(
     lines: List<NcrustLyricLine>,
@@ -191,15 +205,50 @@ fun NcrustLyricsPanel(
      */
     focusIndex: Int? = null,
     focusedRow: (@Composable (index: Int, line: NcrustLyricLine, browsing: Boolean) -> Unit)? = null,
+    /**
+     * 4.0.11（回移主线 cfc41da）：**当前句左侧竖条**（横屏/宽屏用）。
+     *
+     * 竖屏跟唱页本来就有这根条（`KaraokeScreen` 的 focus 区），但横屏歌词面板一直没有，
+     * 于是"当前句在哪"只能靠字号差与颜色差判断，扫视成本高。开着它就给当前行画一条
+     * 主轴色的圆角短条，高度随行高自适应，横屏短面板里尤其明显。
+     *
+     * 只有当前行画条；透明度按 `abs(index - smoothCurrentIndex.value)` 交叉淡出，
+     * 于是跨行瞬间旧条淡出、新条淡入，不会闪。
+     */
+    currentMarker: Boolean = false,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
+    // 交接动画的位移量：10dp，按密度换算一次，避免在 graphicsLayer 里反复转。
+    val switchTravelPx = with(LocalDensity.current) { 10.dp.toPx() }
     // 离散当前行:二分定位,只在跨行时变 -> 面板只在跨行时重组。
     val currentIndex by remember(lines, focusIndex) {
         derivedStateOf { focusIndex ?: currentLineIndex(currentPosition(), timestamps) }
     }
     // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
     val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
+    // 4.0.11：**跨行瞬间的"交接"动画**（当前行从「虚、偏下、略小、带模糊」收到「实、就位」）。
+    // 只在 currentIndex 真正变化时重跑；动画全程只写 Animatable，靠 graphicsLayer 读取 ⇒ 零重组。
+    //
+    // `areAnimatorsEnabled()` 在「开发者选项 → 动画时长 = 关闭」或省电模式下降级时为 false：
+    // 此时直接 snapTo(1f)（也就是"已经就位"的终态），逐行 graphicsLayer 里的 p<1f 分支
+    // 永远不会进 —— 用户关掉系统动画时看到的画面与 3.7.30 逐字节相同。
+    val lineSwitch = remember { Animatable(1f) }
+    val switchAnimatorOn = remember { android.animation.ValueAnimator.areAnimatorsEnabled() }
+    LaunchedEffect(currentIndex) {
+        if (currentIndex < 0 || !switchAnimatorOn) {
+            lineSwitch.snapTo(1f)
+            return@LaunchedEffect
+        }
+        lineSwitch.snapTo(0f)
+        lineSwitch.animateTo(
+            1f,
+            tween(
+                durationMillis = LYRIC_SWITCH_MS,
+                easing = CubicBezierEasing(0.16f, 0.84f, 0.24f, 1f),
+            ),
+        )
+    }
     LaunchedEffect(currentIndex) {
         if (currentIndex >= 0) {
             smoothCurrentIndex.animateTo(currentIndex.toFloat(), SokuouTweens.QuickSwitch)
@@ -580,16 +629,67 @@ fun NcrustLyricsPanel(
                         .pointerInput(enabled, line.timestampMillis) {
                             if (enabled) detectTapGestures { onLineClick(line.timestampMillis) }
                         }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 10.dp)
+                        // 4.0.11：横屏/宽屏的当前句竖条。drawBehind 在**绘制阶段**读
+                        // `smoothCurrentIndex`，所以跨行时这条的淡入淡出不触发任何重组
+                        // （与整面板"只写 graphicsLayer"的原则一致）。
+                        .then(
+                            if (currentMarker) {
+                                Modifier.drawBehind {
+                                    // 只有"当前行"画条；用 smoothCurrentIndex 的连续值决定透明度，
+                                    // 跨行瞬间两条会做一次交叉淡出（旧条淡出、新条淡入），不闪。
+                                    val dist = abs(index - smoothCurrentIndex.value).coerceIn(0f, 1f)
+                                    if (dist < 1f) {
+                                        val barWidth = 3.dp.toPx()
+                                        val top = 6.dp.toPx()
+                                        val height = size.height - top * 2
+                                        drawRoundRect(
+                                            color = currentLineColor.copy(alpha = (1f - dist) * 0.9f),
+                                            topLeft = Offset(0f, top),
+                                            size = Size(barWidth, height),
+                                            cornerRadius = CornerRadius(barWidth / 2f),
+                                        )
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            },
+                        ),
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            // 竖条占 3dp + 9dp 间隙，行内容整体右移，避免文字压在条上。
+                            .padding(start = if (currentMarker) 12.dp else 0.dp)
                             .graphicsLayer {
                                 // 连续距离驱动缩放:无翻转瞬间,行间渐变交接。
                                 // 缩放放在整行(原句+翻译)外层,双语同时放大/缩小。
                                 val dist = abs(index - smoothCurrentIndex.value)
                                 var scale = lerp(1f, inactiveScale, (dist / 1.8f).coerceIn(0f, 1f))
+                                // 4.0.11：当前行跨行瞬间的交接（模糊→实、下方→就位、略小→原尺寸）。
+                                // 只写 graphicsLayer 参数，逐行零重组。
+                                //
+                                // API 31+ 才有 `RenderEffect`，而 LTS 的 minSdk 是 24 ——
+                                // 必须守卫，否则 24..30 上会 NoClassDefFoundError。低版本少一层模糊，
+                                // 缩放 + 位移 + 淡入仍在，交接感不丢。
+                                if (index == currentIndex && switchAnimatorOn) {
+                                    val p = lineSwitch.value
+                                    if (p < 1f) {
+                                        scale *= 0.94f + 0.06f * p
+                                        translationY = (1f - p) * switchTravelPx
+                                        if (android.os.Build.VERSION.SDK_INT >= 31 && p < 0.995f) {
+                                            val radius = (1f - p) * 7f
+                                            if (radius >= 0.1f) {
+                                                renderEffect =
+                                                    android.graphics.RenderEffect.createBlurEffect(
+                                                        radius,
+                                                        radius,
+                                                        android.graphics.Shader.TileMode.CLAMP,
+                                                    ).asComposeRenderEffect()
+                                            }
+                                        }
+                                    }
+                                }
                                 // v2.9.0 · B 档：只有**当前行**随节拍脉冲。
                                 //
                                 // `MotionClock.generation` 刻意写在 `if (index == currentIndex)`

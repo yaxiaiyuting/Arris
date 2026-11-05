@@ -512,8 +512,25 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 117
-        versionName = "3.7.30-gpl"
+        // v3.7.31：回移主线 4.0.11 的四项改动（**手工移植，不是 cherry-pick** —— 两条线的
+        //   NcrustLyricsPanel / PlaylistApi / LibraryManager 差异太大）：
+        //   ① 歌词跨行交接动画：当前行在 currentIndex 变化时做 320ms 交接
+        //      （模糊→实、偏下→就位、略小→原尺寸），全程只写 graphicsLayer，零重组。
+        //      **LTS 的 minSdk 是 24**，`RenderEffect` 只有 API 31+ 才有 —— 那一层必须守卫，
+        //      24..30 上退化成「缩放 + 位移」（交接感仍在，少一层模糊）。
+        //      系统关动画（`areAnimatorsEnabled() == false`）时直接 snapTo(1f)，画面与 3.7.30 相同。
+        //   ② 横屏当前句竖条：`currentMarker`（`LyricsView` 传 `centeredLayout`），
+        //      drawBehind 画主轴色圆角短条，透明度按 smoothCurrentIndex 交叉淡出。
+        //   ③ 收藏写入修复：xeapi `/api/v1/radio/like` 补官方 9.6.13 的五个字段
+        //      （rqRefer/songRqRefer/mode/subMode/source），判定改为 `isLikeWriteAccepted(200|502)`
+        //      **只给 xeapi 通道**（weapi/eapi 仍严格 200）；`LibraryManager` 的 isSongSaved
+        //      改成「红心 id 底表优先、未命中回落已加载表」，saveSong / saveSongs / removeSong
+        //      同步维护底表。把 502 当失败会让已收藏的歌掉进老通道被风控 524 反手取消。
+        //   ④ 关于页「发送反馈」：FeedbackClient（走 `AppHttp.builder()`，否则
+        //      HttpClientDnsAuditTest 判红）+ FeedbackDialog + AboutScreen 入口行。
+        // versionCode 出处：上一版（v3.7.30 / build.gradle 117）⇒ 本版 **118**（取 max+1）。
+        versionCode = 118
+        versionName = "3.7.31-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

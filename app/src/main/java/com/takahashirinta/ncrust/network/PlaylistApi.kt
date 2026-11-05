@@ -994,7 +994,7 @@ object PlaylistApi {
             Log.w("PlaylistApi", "likeSong aborted: session changed id=$songId like=$like")
             return@withContext false
         }
-        if (tryXeapiLike(songId, like, pinned?.loginGeneration) == 200) return@withContext true
+        if (isLikeWriteAccepted(tryXeapiLike(songId, like, pinned?.loginGeneration))) return@withContext true
         if (pinned != null && !sameAccount(pinned)) {
             Log.w("PlaylistApi", "likeSong aborted before weapi: session changed id=$songId")
             return@withContext false
@@ -1019,19 +1019,42 @@ object PlaylistApi {
         CookieManager.snapshot().loginGeneration == pinned.loginGeneration
 
     /**
+     * 收藏写入的业务码判定（纯函数，JVM 单测锁定）。**3.7.31 回移主线 4.0.11。**
+     *
+     * 200 正常成功；**502 = 歌曲已在期望状态**（仅 xeapi 通道背书）。
+     * 把 502 当失败的后果不是"多试一次"，而是**反手丢掉已有收藏**：一次「歌其实已经在红心歌单」
+     * 的收藏会被判失败 → 掉进 weapi 老通道 → 老通道对这类写入可能触发风控
+     * `524 当前环境异常，已取消喜欢` → 用户本来收藏着的歌被撤销，本地没有任何报错。
+     *
+     * **只用于 xeapi 通道**：weapi/eapi 老通道不放行 502（老通道语义没有背书，从严只认 200），
+     * 所以 [likeSong] 里只有 xeapi 那一处调用本函数，下面两处仍是严格的 `== 200`。
+     */
+    fun isLikeWriteAccepted(code: Int): Boolean = code == 200 || code == 502
+
+    /**
      * xeapi `/api/v1/radio/like`——与官方 Android 9.x 同形（xeapi 加密 + 持久 deviceId + 易盾 token）。
-     * 字段顺序固定，别改：顺序进加密体，换了顺序就是另一种指纹。
      */
     private fun tryXeapiLike(songId: Long, like: Boolean, pinnedGeneration: Long? = null): Int {
         val startedAt = System.currentTimeMillis()
         return try {
             val text = RetrofitClient.xeapiPost(
                 uri = "/api/v1/radio/like",
+                // 字段集对齐官方 Android 9.6.13（NeteaseMusicApiImpl.b7）：
+                // trackId/time/alg/like/rqRefer/songRqRefer/mode/subMode/source(+checkToken 由 xeapiPost 补)。
+                // 官方用 HashMap 组字段，**顺序不进指纹、字段齐不齐才进**；缺的五个本身就是可识别特征。
+                // rqRefer/songRqRefer 是"从哪个列表点的红心"，无场景时官方发空串；
+                // mode/subMode 是场景名，官方无场景也发空串；source 官方兜底值是 userfm。
+                // 我们这些场景都没有，按官方空值/兜底形态原样发，不臆造场景名。
                 pairs = listOf(
                     "alg" to "itembased",
                     "trackId" to songId.toString(),
                     "like" to like.toString(),
-                    "time" to "3"
+                    "time" to "3",
+                    "rqRefer" to "",
+                    "songRqRefer" to "",
+                    "mode" to "",
+                    "subMode" to "",
+                    "source" to "userfm"
                 ),
                 antiCheat = true,
                 pinnedGeneration = pinnedGeneration,
