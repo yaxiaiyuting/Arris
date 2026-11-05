@@ -361,7 +361,7 @@ class StringsConstructorBudgetTest {
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
             "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 90,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 27,
-            "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
+            "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 32,
         )
         expected.forEach { (name, n) ->
             assertEquals("$name 的参数数变了", n, primaryParams(Class.forName(name)))
@@ -686,13 +686,13 @@ class StringsConstructorBudgetTest {
             "WaveformStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言。" +
                 "（v2.8.0 = 16，v2.9.0 加 4 条 ⇒ 20；v3.0.0 加 5 个独立开关 × 2 条 ⇒ 30；" +
                 "v3.2.0 加界面律动 1 个闸 + 3 个细粒度开关 × 2 条 ⇒ 38；" +
-                "v3.6.9 加波形倍速 2 条 ⇒ 40。" +
+                "v3.6.9 加波形倍速 2 条 ⇒ 40；v4.0.5 加流体背景 2 条 ⇒ 42。" +
                 "组预算 120 还很宽，不必再拆组。）",
-            40,
+            42,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.WaveformStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
-        assertEquals(41, dexSlots(40, false))
+        assertEquals(43, dexSlots(42, false))
 
         val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
             "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },
@@ -724,8 +724,10 @@ class StringsConstructorBudgetTest {
             "motionWaveBandsDescription" to { w: WaveformStrings -> w.motionWaveBandsDescription },
             "motionBreathingLabel" to { w: WaveformStrings -> w.motionBreathingLabel },
             "motionBreathingDescription" to { w: WaveformStrings -> w.motionBreathingDescription },
+            "motionFluidBackdropLabel" to { w: WaveformStrings -> w.motionFluidBackdropLabel },
+            "motionFluidBackdropDescription" to { w: WaveformStrings -> w.motionFluidBackdropDescription },
         )
-        assertEquals("波形分级的字段数不对", 28, fields.size)
+        assertEquals("波形分级与流体背景的字段数不对", 30, fields.size)
 
         val presets = listOf(zhCN, zhTW, en, jpJP, jpMY, koNK, deDE, ruRU)
         presets.forEach { s ->

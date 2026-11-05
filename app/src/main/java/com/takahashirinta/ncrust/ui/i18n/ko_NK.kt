@@ -206,6 +206,8 @@ val koNK = Strings(
         motionWaveBandsDescription = "그 순간 저역／중역／고역 중 어느 대역이 우세한가에 따라 파형 기둥에 색을 입히고, 「화려」단계에서는 세 개의 대역 에너지 표시를 더 그립니다. 가로축은 그대로 시간이며 스펙트럼이 아닙니다.",
         motionBreathingLabel = "배경 숨쉬기",
         motionBreathingDescription = "배경의 밝기와 확대가 전체 음량을 따릅니다. 정교 단계 이상에서만. 간결은 정적 단계입니다.",
+        motionFluidBackdropLabel = "흐르는 배경",
+        motionFluidBackdropDescription = "배경 숨쉬기가 켜져 있으면 색이 흐릅니다(Android 13 이상). 절전 모드이거나 그래픽 그리기에 문제가 있으면 그라데이션을 사용합니다.",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "화면 율동(박자 반응)",
         motionRhythmDescription = "음악을 따라 움직이는 네 가지(배경 호흡·표지 부유·가사 율동·제어줄 맥동)를 다스립니다. 충격파·광륜·입자는 영향받지 않습니다(현기 단계의 표지 3D 회전도 멈춥니다).",
@@ -217,6 +219,7 @@ val koNK = Strings(
         motionBarPulseDescription = "아래 재생 제어줄이 박자마다 살짝 커집니다(최대 2%). 정교 단계 이상에서만.",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("따라 부르기", "가사로 돌아가기", "가사를 불러오는 중…", "따라 부를 준비", "원문", "번역", "주 가사의 언어 바꾸기"),
         prevButton = "이전곡",
         playButton = "재생",
         pauseButton = "일시멈춤",

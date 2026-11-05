@@ -51,7 +51,8 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712 &&
+                    it.key != "motion_fluid_backdrop"
             }
             .mapNotNull { it.key }
             .toSet()
@@ -88,7 +89,8 @@ class SettingsRegistryTest {
             .filter {
                 !it.isNewInV280 && !it.isNewInV290 && !it.isNewInV300 &&
                     !it.isNewInV310 && !it.isNewInV320 &&
-                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712
+                    !it.isNewInV348 && !it.isNewInV3411 && !it.isNewInV3413 && !it.isNewInV360 && !it.isNewInV369 && !it.isNewInV3712 &&
+                    it.key != "motion_fluid_backdrop"
             }
             .mapNotNull { it.key }
             .toSet()

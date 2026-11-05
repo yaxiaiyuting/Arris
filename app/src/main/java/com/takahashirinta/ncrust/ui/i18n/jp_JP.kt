@@ -206,6 +206,8 @@ val jpJP = Strings(
         motionWaveBandsDescription = "その瞬間に低域／中域／高域のどれが支配的なかで波形の柱を着色し、「ショーケース」段では三本の帯域エネルギー表示を追加します。横軸は時間のままで、スペクトルではありません。",
         motionBreathingLabel = "背景の呼吸",
         motionBreathingDescription = "背景の明暗と拡大縮小が全体のラウドネスに追従します。精緻以上でのみ有効で、簡潔は静的です。",
+        motionFluidBackdropLabel = "流れる背景",
+        motionFluidBackdropDescription = "背景の呼吸がオンのときに色が流れます（Android 13 以降）。省電力モードや描画に問題がある場合はグラデーションに戻ります。",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "UI リズム（ビート連動）",
         motionRhythmDescription = "音楽に合わせて動く 4 種類（背景の呼吸・ジャケットの浮動・歌詞の脈動・コントロールバーの脈動）を制御します。衝撃波・光輪・粒子は影響を受けません（炫技のジャケット 3D 回転も止まります）。",
@@ -217,6 +219,7 @@ val jpJP = Strings(
         motionBarPulseDescription = "下部の再生コントロールバーがビートごとにわずかに拡大します（最大 2%）。精緻以上でのみ有効です。",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("カラオケ", "歌詞に戻る", "歌詞を読み込み中…", "歌い出しの準備", "原文", "翻訳", "メインの歌詞の言語を切り替え"),
         prevButton = "前へ",
         playButton = "再生",
         pauseButton = "一時停止",

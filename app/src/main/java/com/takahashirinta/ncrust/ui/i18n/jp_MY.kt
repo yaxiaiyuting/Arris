@@ -206,6 +206,8 @@ val jpMY = Strings(
         motionWaveBandsDescription = "其 の 瞬 間 に 低域／中域／高域 の 孰 か が 主 な る か に 依 りて 波形 の 柱 を 彩 り、「炫技」の 段 に は 三 本 の 帶域 力 表 示 を 加 ふ。橫 軸 は 時間 の 儘 に て、スペクトル に は 非 ず。",
         motionBreathingLabel = "背景 の 呼吸",
         motionBreathingDescription = "背景の明暗と伸縮、全体の音量に随ふ。精緻以上のみ。簡潔は静かなる位なり。",
+        motionFluidBackdropLabel = "流るる背景",
+        motionFluidBackdropDescription = "背景の呼吸を用ゐると色が流る（Android 13 以降）。省電力や描畫に差し支へある時は漸變に戻る。",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "界面の律動（拍子に随ふ）",
         motionRhythmDescription = "音に合わせて動く四つ（背景の呼吸・表紙の浮動・歌詞の律動・制御帯の脈動）を司る。衝撃波・光輪・粒子は関はらず（炫技の表紙 3D 回転も亦止まる）。",
@@ -217,6 +219,7 @@ val jpMY = Strings(
         motionBarPulseDescription = "下の制御帯、拍子ごとにわづかに拡がる（最大 2%）。精緻以上のみ。",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("歌に合はす", "歌詞に戻る", "歌詞を読み込み中…", "歌ひ出しの支度", "原文", "譯文", "主たる歌詞の言葉を切り替ふ"),
         prevButton = "前",
         playButton = "奏",
         pauseButton = "休止",

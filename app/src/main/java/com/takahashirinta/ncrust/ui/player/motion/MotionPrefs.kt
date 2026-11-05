@@ -100,6 +100,7 @@ object MotionPrefs {
     const val KEY_PARTICLES = "motion_particles"
     const val KEY_WAVE_BANDS = "motion_wave_bands"
     const val KEY_BREATHING = "motion_breathing"
+    const val KEY_FLUID_BACKDROP = "motion_fluid_backdrop"
 
     // ---- v3.2.0：界面律动（节拍驱动）那一层的闸 ----
     const val KEY_RHYTHM = "motion_rhythm_enabled"
@@ -193,6 +194,7 @@ object MotionPrefs {
         particles = bool(prefs, KEY_PARTICLES, DEFAULT_SWITCH),
         waveBands = bool(prefs, KEY_WAVE_BANDS, DEFAULT_SWITCH),
         breathing = bool(prefs, KEY_BREATHING, DEFAULT_SWITCH),
+        fluidBackdrop = bool(prefs, KEY_FLUID_BACKDROP, false),
         rhythm = bool(prefs, KEY_RHYTHM, DEFAULT_SWITCH),
         coverFloat = bool(prefs, KEY_COVER_FLOAT, DEFAULT_SWITCH),
         lyricPulse = bool(prefs, KEY_LYRIC_PULSE, DEFAULT_SWITCH),

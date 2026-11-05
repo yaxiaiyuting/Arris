@@ -755,7 +755,7 @@ fun NcrustLyricsPanel(
  * 没有逐字数据、模式为 OFF、或不是当前行时，退回与 v1.4.1 完全相同的整行 MetroText。
  */
 @Composable
-private fun LyricLineBody(
+internal fun LyricLineBody(
     text: String,
     words: List<LrcWord>,
     endMs: Long?,

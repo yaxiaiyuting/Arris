@@ -314,6 +314,7 @@ private fun SettingsPreferenceGroupPage(
     var motionParticles by remember { mutableStateOf(motionSwitches.particles) }
     var motionWaveBands by remember { mutableStateOf(motionSwitches.waveBands) }
     var motionBreathing by remember { mutableStateOf(motionSwitches.breathing) }
+    var motionFluidBackdrop by remember { mutableStateOf(motionSwitches.fluidBackdrop) }
     // v3.2.0：界面律动那一层的闸（总闸 + 三个律动类细粒度开关）。初值同样走 MotionPrefs。
     var motionRhythm by remember { mutableStateOf(motionSwitches.rhythm) }
     var motionCoverFloat by remember { mutableStateOf(motionSwitches.coverFloat) }
@@ -384,6 +385,7 @@ private fun SettingsPreferenceGroupPage(
             "motion_particles" -> motionParticles
             "motion_wave_bands" -> motionWaveBands
             "motion_breathing" -> motionBreathing
+            MotionPrefs.KEY_FLUID_BACKDROP -> motionFluidBackdrop
             // v3.2.0：界面律动那一层（总闸 + 三个细粒度开关）——门控要用到它们
             "motion_rhythm_enabled" -> motionRhythm
             "motion_cover_float" -> motionCoverFloat
@@ -428,6 +430,7 @@ private fun SettingsPreferenceGroupPage(
         "motion_particles" -> motionParticles
         "motion_wave_bands" -> motionWaveBands
         "motion_breathing" -> motionBreathing
+        MotionPrefs.KEY_FLUID_BACKDROP -> motionFluidBackdrop
         // v3.2.0：界面律动那一层
         "motion_rhythm_enabled" -> motionRhythm
         "motion_cover_float" -> motionCoverFloat
@@ -544,6 +547,10 @@ private fun SettingsPreferenceGroupPage(
             "motion_breathing" -> {
                 motionBreathing = value
                 MotionPrefs.setSwitch(context, MotionPrefs.KEY_BREATHING, value)
+            }
+            MotionPrefs.KEY_FLUID_BACKDROP -> {
+                motionFluidBackdrop = value
+                MotionPrefs.setSwitch(context, MotionPrefs.KEY_FLUID_BACKDROP, value)
             }
             // v3.2.0：界面律动那一层。写入口同样只有 `MotionPrefs.setSwitch`。
             "motion_rhythm_enabled" -> {
@@ -1151,6 +1158,7 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: Upda
     "motion_particles" -> strings.waveform.motionParticlesLabel
     "motion_wave_bands" -> strings.waveform.motionWaveBandsLabel
     "motion_breathing" -> strings.waveform.motionBreathingLabel
+    MotionPrefs.KEY_FLUID_BACKDROP -> strings.waveform.motionFluidBackdropLabel
     // v3.2.0：界面律动那一层（律动总闸 + 三个细粒度开关），文案住在 Strings.waveform。
     "motion_rhythm_enabled" -> strings.waveform.motionRhythmLabel
     "motion_cover_float" -> strings.waveform.motionCoverFloatLabel
@@ -1194,6 +1202,7 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry, updateStrings: U
     "motion_particles" -> strings.waveform.motionParticlesDescription
     "motion_wave_bands" -> strings.waveform.motionWaveBandsDescription
     "motion_breathing" -> strings.waveform.motionBreathingDescription
+    MotionPrefs.KEY_FLUID_BACKDROP -> strings.waveform.motionFluidBackdropDescription
     "motion_rhythm_enabled" -> strings.waveform.motionRhythmDescription
     "motion_cover_float" -> strings.waveform.motionCoverFloatDescription
     "motion_lyric_pulse" -> strings.waveform.motionLyricPulseDescription

@@ -1926,6 +1926,8 @@ data class WaveformStrings(
     val motionBreathingLabel: String,
     /** 背景呼吸说明。**必须**写明：跟随整体响度。 */
     val motionBreathingDescription: String,
+    val motionFluidBackdropLabel: String,
+    val motionFluidBackdropDescription: String,
 
     // ---------- v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）----------
     // 归类判据：**驱动量是否来自 `MotionEnvelope` 的节拍 / 强拍 / 响度包络**。
@@ -2014,7 +2016,18 @@ data class AboutStrings(
  *
  * 参数数量监控见 `StringsConstructorBudgetTest`。
  */
+data class KaraokeStrings(
+    val enter: String,
+    val exit: String,
+    val loading: String,
+    val ready: String,
+    val original: String,
+    val translation: String,
+    val changeLanguage: String,
+)
+
 data class PlayerUiStrings(
+    val karaoke: KaraokeStrings,
 
     // Player controls
     val prevButton: String,

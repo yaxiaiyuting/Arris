@@ -10,6 +10,8 @@ package com.takahashirinta.ncrust.lyric
 
 /** 2Hz 位置采样间短暂外推；采样停止后最多走 750ms，不能把断网等待算成播放。 */
 object LyricClock {
-    fun positionAt(positionMs: Long, sampledNanos: Long, nowNanos: Long): Long =
-        positionMs.coerceAtLeast(0L) + ((nowNanos - sampledNanos) / 1_000_000L).coerceIn(0L, 750L)
+    fun positionAt(positionMs: Long, sampledNanos: Long, nowNanos: Long, speed: Float = 1f): Long {
+        val elapsedMs = ((nowNanos - sampledNanos) / 1_000_000L).coerceIn(0L, 750L)
+        return positionMs.coerceAtLeast(0L) + (elapsedMs * speed).toLong()
+    }
 }

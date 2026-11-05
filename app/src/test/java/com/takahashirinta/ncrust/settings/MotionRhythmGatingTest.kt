@@ -62,7 +62,7 @@ class MotionRhythmGatingTest {
     // ── 1. 无门控时全部可用 ──────────────────────────────────────────────────────────
 
     @Test
-    fun `默认盘下九个动效开关全部可用`() {
+    fun `默认盘下动效开关全部可用`() {
         SettingsVisibility.MOTION_SWITCH_IDS.forEach { id ->
             val a = SettingsVisibility.availabilityOf(id, read(defaults()))
             assertTrue("$id 应可见", a.visible)
@@ -72,17 +72,17 @@ class MotionRhythmGatingTest {
     }
 
     @Test
-    fun `四个开关确实落在律动类名单里`() {
+    fun `跟随音频的细分开关归入律动类`() {
         // 归类判据：渲染路径里是否读 MotionClock.pulse()/level()（probe-ui-jitter.md §5）。
         assertEquals(
-            setOf("motion_breathing", "motion_cover_float", "motion_lyric_pulse", "motion_bar_pulse"),
+            setOf("motion_breathing", "motion_fluid_backdrop", "motion_cover_float", "motion_lyric_pulse", "motion_bar_pulse"),
             SettingsVisibility.RHYTHM_DETAIL_IDS,
         )
         assertTrue(
             "律动类必须是动效开关集合的子集",
             SettingsVisibility.MOTION_SWITCH_IDS.containsAll(SettingsVisibility.RHYTHM_DETAIL_IDS),
         )
-        assertEquals("v3.0.0 五项 + v3.2.0 四项", 9, SettingsVisibility.MOTION_SWITCH_IDS.size)
+        assertEquals("既有九项 + 流体背景", 10, SettingsVisibility.MOTION_SWITCH_IDS.size)
         assertFalse(
             "冲击波/光晕/粒子/多频段波形**不是**律动类（关律动闸不许碰它们）",
             SettingsVisibility.RHYTHM_DETAIL_IDS.any {
@@ -116,7 +116,7 @@ class MotionRhythmGatingTest {
     // ── 3. 第二层：界面律动总闸 ─────────────────────────────────────────────────────
 
     @Test
-    fun `律动闸关掉时只有四个律动类细开关置灰`() {
+    fun `律动闸关掉时律动类细开关置灰`() {
         val map = defaults().apply { put("motion_rhythm_enabled", false) }
         SettingsVisibility.RHYTHM_DETAIL_IDS.forEach { id ->
             val a = SettingsVisibility.availabilityOf(id, read(map))
@@ -140,10 +140,20 @@ class MotionRhythmGatingTest {
         assertTrue("关掉自己之后仍然可用（能再打开）", a.enabled)
     }
 
+    @Test
+    fun `流体背景是背景呼吸的可选样式`() {
+        val map = defaults().apply { put("motion_breathing", false) }
+        val fluid = SettingsVisibility.availabilityOf("motion_fluid_backdrop", read(map))
+        assertTrue(fluid.visible)
+        assertFalse(fluid.enabled)
+        assertEquals(GatingReason.BACKGROUND_BREATHING_DISABLED, fluid.reason)
+        assertTrue(SettingsVisibility.isEnabled("motion_breathing", read(map)))
+    }
+
     // ── 4. 第三层：档位（简洁档是静态档 ⇒ 逐帧开关都是死开关）──────────────────────
 
     @Test
-    fun `简洁档下九个开关里除了律动闸之外全部置灰`() {
+    fun `简洁档下除了律动闸之外全部置灰`() {
         // P0-B 的连带后果：简洁档现在没有任何节拍驱动动效，那八个开关在那一档点了也没用。
         // 判据必须是"置灰 + 原因"，否则用户会以为"我关了冲击波怎么还抖"
         // （真实症状：抖的是封面浮动，而它当时根本没有开关 —— 探针 §3/§6）。

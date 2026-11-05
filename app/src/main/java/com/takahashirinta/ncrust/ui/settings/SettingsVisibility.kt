@@ -61,6 +61,8 @@ enum class GatingReason {
      */
     RHYTHM_DISABLED,
 
+    BACKGROUND_BREATHING_DISABLED,
+
     /**
      * v3.2.0 新增：动效强度是**简洁档** ⇒ 这一项在简洁档不参与渲染。
      *
@@ -155,6 +157,7 @@ object SettingsVisibility {
         "motion_particles",
         "motion_wave_bands",
         "motion_breathing",
+        "motion_fluid_backdrop",
         "motion_rhythm_enabled",
         "motion_cover_float",
         "motion_lyric_pulse",
@@ -170,6 +173,7 @@ object SettingsVisibility {
      */
     val RHYTHM_DETAIL_IDS: Set<String> = linkedSetOf(
         "motion_breathing",
+        "motion_fluid_backdrop",
         "motion_cover_float",
         "motion_lyric_pulse",
         "motion_bar_pulse",
@@ -294,6 +298,9 @@ object SettingsVisibility {
 
                 motionTier(read) < TIER_REFINED ->
                     SettingsAvailability.disabled(GatingReason.TIER_BASIC_ONLY)
+
+                entry.id == "motion_fluid_backdrop" && !boolValue("motion_breathing", read) ->
+                    SettingsAvailability.disabled(GatingReason.BACKGROUND_BREATHING_DISABLED)
 
                 else -> SettingsAvailability.FREE
             }

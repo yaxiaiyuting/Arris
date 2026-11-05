@@ -17,6 +17,8 @@ internal object PlayerGlyphs {
     val Next = glyph("Next", line = "M19 6V18", solid = "M6 5.7Q6 5 6.7 5.4L16.1 11.2Q17.3 12 16.1 12.8L6.7 18.6Q6 19 6 18.3Z")
 
     val Lyrics = glyph("Lyrics", "M6 5H18Q20 5 20 7V14Q20 16 18 16H10L5 19V16Q4 15.5 4 14V7Q4 5 6 5Z M8 9H16 M8 12H13")
+    val Karaoke = glyph("Karaoke", "M4 8V4H8 M16 4H20V8 M20 16V20H16 M8 20H4V16 M8 10H16 M9.5 14H14.5")
+    val Back = glyph("Back", "M19 12H5 M11 6L5 12L11 18", mirror = true)
     val Queue = glyph("Queue", "M4 6H20 M4 11H20 M4 16H11", "M15 14L20 17.5L15 21Z", mirror = true)
     val Add = glyph("Add", "M12 5V19 M5 12H19")
     val Saved = glyph("Saved", "M5 12.5L9.5 17L19 7.5")

@@ -68,6 +68,15 @@ object MotionClock {
     /** 只应在 draw / `graphicsLayer` 块里读（在组合阶段读会变成每帧重组）。 */
     val generation: Int get() = generationState.intValue
 
+    private val breathGenerationState = mutableIntStateOf(0)
+    internal val breathGeneration: Int get() = breathGenerationState.intValue
+    internal val breathing = BreathingMotion()
+
+    internal fun suspendBreathing() {
+        breathing.reset()
+        breathGenerationState.intValue++
+    }
+
     private val envelope = MotionEnvelope()
     private val backdrop = MotionBackdropState()
 
@@ -103,6 +112,7 @@ object MotionClock {
         motion: MotionEffects,
         nowMs: Long = 0L,
         holdWaveform: Boolean = false,
+        animateBreathing: Boolean = false,
     ): Boolean {
         WaveformStore.pump(active, dtMs, waveform, nowMs, holdHistory = holdWaveform)
         // 特征快照：优先用音频线程发布的真值；链路不可用时它对消费方呈现 available=false。
@@ -135,6 +145,10 @@ object MotionClock {
         if (motion.haloBloom || motion.particles || motion.shockwave) {
             if (backdrop.update(featureBindings, motion, dtMs, active)) changed = true
         }
+        if (animateBreathing && breathing.advance(
+                dtMs, active, featureBindings.available, featureBindings.low, featureBindings.mid, featureBindings.high,
+            )
+        ) breathGenerationState.intValue++
         if (changed) generationState.intValue++
         return changed
     }
@@ -159,6 +173,8 @@ object MotionClock {
         backdrop.clear()
         featureBindings.reset()
         generationState.intValue = 0
+        breathing.reset()
+        breathGenerationState.intValue = 0
     }
 }
 
@@ -215,6 +231,7 @@ fun MotionFrameClock(
     enabled: Boolean,
     waveformMounted: Boolean,
     bufferingProvider: () -> Boolean = { false },
+    animateBreathing: Boolean = false,
 ) {
     val context = LocalContext.current
     val currentActive = rememberUpdatedState(activeProvider)
@@ -228,8 +245,12 @@ fun MotionFrameClock(
 
     val clockNeeded = enabled && (motion.needsFrameClock || waveformMounted)
 
+    LaunchedEffect(animateBreathing) {
+        if (!animateBreathing) MotionClock.suspendBreathing()
+    }
+
     // ---- 唯一的帧循环 ----
-    LaunchedEffect(clockNeeded, stride, frameIntervalMs, motion, waveform) {
+    LaunchedEffect(clockNeeded, stride, frameIntervalMs, motion, waveform, animateBreathing) {
         if (!clockNeeded) return@LaunchedEffect
         // 帧时钟状态放进**循环外**的复用数组，回调也提升到循环外（v2.8.0 的零分配写法）。
         val clock = LongArray(2)
@@ -252,6 +273,7 @@ fun MotionFrameClock(
                     waveform = waveform,
                     motion = motion,
                     nowMs = now / 1_000_000L,
+                    animateBreathing = animateBreathing,
                 )
             }
         }
@@ -266,6 +288,7 @@ fun MotionFrameClock(
                 MotionClock.frame(
                     active = false,
                     holdWaveform = currentBuffering.value(),
+                    animateBreathing = animateBreathing,
                     dtMs = frameIntervalMs,
                     waveform = waveform,
                     motion = motion,

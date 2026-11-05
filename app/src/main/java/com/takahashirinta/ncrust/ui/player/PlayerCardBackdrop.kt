@@ -34,6 +34,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.takahashirinta.ncrust.ui.player.motion.BackdropEnvironment
+import com.takahashirinta.ncrust.ui.player.motion.rememberBackdropEnvironment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -66,6 +72,8 @@ internal fun BoxScope.PlayerCardBackdrop(
     screenHeightPx: Float,
     isPlaying: Boolean,
     hasSong: Boolean,
+    karaoke: Boolean,
+    currentCoverAvailable: Boolean,
     expandedMounted: () -> Boolean,
     visualizerSlot: Boolean,
     sideCover: Boolean,
@@ -73,6 +81,13 @@ internal fun BoxScope.PlayerCardBackdrop(
     /** 缓冲状态**传引用**：订阅发生在帧循环内部，不在组合期（见 AudioVisualizerSlot 的 KDoc）。 */
     isBufferingFlow: StateFlow<Boolean>,
 ) {
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        val lifecycleState by lifecycle.currentStateFlow.collectAsStateWithLifecycle()
+        val visible = hasSong && expandedMounted() && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+        val environment = if (motion.backgroundBreathing && visible) rememberBackdropEnvironment()
+            else BackdropEnvironment(animations = false, powerSaver = false)
+        val animateBreathing = visible && environment.animations && currentCoverAvailable
+
         // 全屏纯黑背景。展开时 translationY=0，卡片顶与封面顶/内容区顶等高；
         // 折叠时整体下移一个 statusBar 高，使顶边对齐 miniBar 内容。miniBar 自带
         // statusBarsPadding（内容被下推 statusBar 高），背景若不跟着下移，miniBar
@@ -110,6 +125,11 @@ internal fun BoxScope.PlayerCardBackdrop(
             MotionBackdrop(
                 coverKey = coverArtKey,
                 coverBitmap = coverArtBitmap,
+                animateBreathing = animateBreathing,
+                transitionBreathing = visible && environment.animations,
+                useFluidBackdrop = motion.switches.fluidBackdrop && !environment.powerSaver,
+                currentCoverAvailable = currentCoverAvailable,
+                karaoke = karaoke,
                 motion = motion,
                 parallaxProvider = { progress.value },
                 // 视差行程按屏幕高给（不是固定 dp）：横竖屏切换时行程跟着屏幕走，
@@ -171,8 +191,9 @@ internal fun BoxScope.PlayerCardBackdrop(
             activeProvider = { isPlaying && !isBufferingFlow.value },
             // ExoPlayer reports isPlaying=false during rebuffering too.
             bufferingProvider = { isBufferingFlow.value },
-            enabled = hasSong && expandedMounted(),
-            waveformMounted = visualizerSlot || motion.fullScreenWaveform,
+            enabled = visible,
+            waveformMounted = !karaoke && (visualizerSlot || motion.fullScreenWaveform),
+            animateBreathing = animateBreathing,
         )
 
         // ── v2.9.0 · B 档：**背景级波形**（横屏铺满底部横跨全屏 / 竖屏在歌词后面流动）──
@@ -186,7 +207,7 @@ internal fun BoxScope.PlayerCardBackdrop(
         // （圆角柱 / 峰值 / 渐变流动 / 光点 / 冲击波 / 粒子 / 3D）都已经在那里，
         // 复制一份必然分叉。绘制成本是每帧多一次 Canvas（B 档默认关，S6 这类低端机
         // 默认简洁档 ⇒ 这一层根本不挂载）。
-        if (motion.fullScreenWaveform) {
+        if (!karaoke && motion.fullScreenWaveform) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

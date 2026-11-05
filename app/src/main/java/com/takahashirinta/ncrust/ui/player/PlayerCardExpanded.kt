@@ -209,6 +209,45 @@ internal fun ColumnScope.PlayerCardExpanded(
 ) {
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
+    val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
+        LyricsView(
+            lyrics = lyrics,
+            translatedLyrics = translatedLyrics,
+            showTranslation = showLyricsTranslation,
+            romanizedLyrics = romanizedLyrics,
+            showRomanization = showLyricsRomanization,
+            positionFlow = positionFlow,
+            isPlaying = isPlaying,
+            isBufferingFlow = playerViewModel.isBuffering,
+            isVisible = ui.showLyrics || karaoke != null,
+            forcedLocateTrigger = ui.lyricLocateTrigger,
+            onSeekToMs = playerViewModel::seekTo,
+            enabled = (ui.lyricsEnabled || karaoke != null) && ui.cardExpandedForInput,
+            isLoading = lyricsLoading,
+            wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
+            wordAnimationMode = lyricsWordAnimation,
+            fontScale = lyricsFontScale,
+            sweepQuality = lyricsSweepQuality,
+            onFontScaleStep = playerViewModel::stepLyricsFontScale,
+            dynamicFontEnabled = showDynamicLyricFont,
+            centeredLayout = geo.usesSideCover,
+            lyricPulseEnabled = motion.lyricPulse,
+            trackKey = "${song.source}:${song.id}",
+            karaoke = karaoke,
+            onOpenKaraoke = if (karaoke == null) ({ ui.showKaraoke = true }) else null,
+        )
+    }
+    androidx.activity.compose.BackHandler(enabled = ui.showKaraoke) { ui.showKaraoke = false }
+    if (ui.showKaraoke) {
+        lyricsContent(
+            KaraokeControls(song.name.orEmpty(), song.artists.orEmpty().joinToString(" / ") { it.name },
+                playerViewModel.duration, progressFlow, playerViewModel.isBuffering, callbacks,
+                exit = { ui.showKaraoke = false },
+                translatedPrimary = ui.karaokeTranslationPrimary,
+                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary }),
+        )
+        return
+    }
             val s = song!!
             val heightClass = LocalHeightClass.current
             val tinyPlayer = !geo.usesSideCover && heightClass == HeightClass.Tiny
@@ -387,42 +426,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             animationSpec = SokuouTweens.CoverFade,
                             label = "LyricsCrossfade"
                         ) { _ ->
-                            LyricsView(
-                                lyrics = lyrics,
-                                translatedLyrics = translatedLyrics,
-                                showTranslation = showLyricsTranslation,
-                                romanizedLyrics = romanizedLyrics,
-                                showRomanization = showLyricsRomanization,
-                                positionFlow = positionFlow,
-                                isPlaying = isPlaying,
-                                isBufferingFlow = playerViewModel.isBuffering,
-                                isVisible = ui.showLyrics,
-                                forcedLocateTrigger = ui.lyricLocateTrigger,
-                                onSeekToMs = { ms -> playerViewModel.seekTo(ms) },
-                                enabled = ui.lyricsEnabled && ui.cardExpandedForInput,
-                                onUserScrolled = {},
-                                isLoading = lyricsLoading,
-                                wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
-                                wordAnimationMode = lyricsWordAnimation,
-                                fontScale = lyricsFontScale,
-                                sweepQuality = lyricsSweepQuality,
-                                onFontScaleStep = { delta -> playerViewModel.stepLyricsFontScale(delta) },
-                                // v2.0.0 · T4：动态字号（实验性，默认关）。
-                                dynamicFontEnabled = showDynamicLyricFont,
-                                // v2.3.0 · E：横屏 / 大屏右栏（usesSideCover = 宽屏或大屏模式）
-                                // 的歌词面板只有约 210~280dp 高，当前行定位到**正中**而不是
-                                // 竖屏的 36%；配合面板里的「5s 无触碰自动居中」，
-                                // 用户手动翻过歌词之后它会自己回到正中。
-                                centeredLayout = geo.usesSideCover,
-                                // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。
-                                lyricPulseEnabled = motion.lyricPulse,
-                                // v2.9.0 · P1：歌词引擎用它判断"外推锚点属于哪一首"。
-                                // 必须是一个**换歌必变、同曲不变**的稳定身份 ——
-                                // `(音源, id)` 是本仓库对曲目身份的既有口径（v2.6.1/v2.6.2 的
-                                // `TrackKey` 同源），不能只用 id（两个音源的 id 空间虽然结构性
-                                // 隔离，但把口径写全比依赖那个不变量便宜）。
-                                trackKey = song?.let { "${it.source}:${it.id}" },
-                            )
+                            lyricsContent(null)
                         }
                     }
 

@@ -88,13 +88,18 @@ fun MotionBackdrop(
     parallaxProvider: () -> Float,
     parallaxTravelPx: Float,
     modifier: Modifier = Modifier,
+    animateBreathing: Boolean = false,
+    transitionBreathing: Boolean = false,
+    useFluidBackdrop: Boolean = false,
+    currentCoverAvailable: Boolean = false,
+    karaoke: Boolean = false,
 ) {
     val fallback = LocalMetroColors.current.background
     val density = LocalDensity.current
 
     // ---- 模糊位图（异步算一次，失败回退 null）----
     var blurred by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(coverKey, coverBitmap) {
+    LaunchedEffect(coverKey, coverBitmap, motion.backgroundBlur) {
         if (!motion.backgroundBlur) {
             blurred = null
             return@LaunchedEffect
@@ -115,21 +120,6 @@ fun MotionBackdrop(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // 呼吸：随 RMS 的明暗 + 缩放（幅度见 AppMotion）。
-                        // 静态时 level() = 0 ⇒ 倍率恰好是 1f，与「没有呼吸」逐像素一致。
-                        // v3.2.0：本能力位已收窄到精致档起（简洁档这一层是静态的）。
-                        if (motion.backgroundBreathing) {
-                            MotionClock.generation
-                            val level = MotionClock.level()
-                            // 「亮度 ±5%」的落地方向是**安静时最多压暗 5%、满响度回到 1.0**
-                            // （而不是 0.95..1.05 —— 那会被 `coerceIn(0,1)` 夹掉上半段，
-                            // 实际变成"响度到一半就不再有变化"，S6 实测复核时发现）。
-                            alpha = (1f - AppMotion.BREATH_ALPHA_AMPLITUDE +
-                                AppMotion.BREATH_ALPHA_AMPLITUDE * level).coerceIn(0f, 1f)
-                            val breathScale = 1f + AppMotion.BREATH_SCALE_AMPLITUDE * level
-                            scaleX = breathScale
-                            scaleY = breathScale
-                        }
                         // 视差：背景走前景 [AppMotion.PARALLAX_FACTOR] 的行程（竖屏为主，任务书 §5.4）。
                         // 收起态（progress = 0）位移最大、展开态归零 —— 拖拽过程中背景与前景
                         // 速度不同，这就是"视差"的全部内容；静止时位移是恒定的，不产生额外重绘。
@@ -150,6 +140,17 @@ fun MotionBackdrop(
                     filterQuality = FilterQuality.High,
                 )
             }
+        }
+        if (motion.backgroundBreathing) {
+            BreathingBackdrop(
+                coverKey = coverKey.takeIf { currentCoverAvailable },
+                bitmap = coverBitmap.takeIf { currentCoverAvailable },
+                animate = animateBreathing,
+                canTransition = transitionBreathing,
+                fluid = useFluidBackdrop,
+            )
+        }
+        if ((image != null && motion.anyBasic) || motion.backgroundBreathing) {
             // 可读性遮罩（见 KDoc 第 2 条），**纵向渐变而不是一层平铺**。
             //
             // 为什么不用平铺（v2.9.0 真机观感修正）：平铺 62% 会把整屏压成同一个亮度，
@@ -178,7 +179,7 @@ fun MotionBackdrop(
         }
 
         // ---- v3.0.0：瞬态冲击波 / 光晕 + 中高频粒子（画在遮罩之上，才看得见）----
-        if (motion.shockwave || motion.haloBloom || motion.particles) {
+        if (!karaoke && (motion.shockwave || motion.haloBloom || motion.particles)) {
             val haloColor = LocalMetroColors.current.primary
             val particleColor = LocalMetroColors.current.onBackground
             val strokeWidth = with(density) { 2.dp.toPx() }

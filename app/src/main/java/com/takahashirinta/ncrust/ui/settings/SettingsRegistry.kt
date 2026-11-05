@@ -736,6 +736,17 @@ object SettingsRegistry {
 
         add(
             pref(
+                key = MotionPrefs.KEY_FLUID_BACKDROP,
+                type = SettingsEntryType.SWITCH,
+                default = false,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionFluidBackdropLabel",
+                subtitleKey = "waveform.motionFluidBackdropDescription",
+            )
+        )
+
+        add(
+            pref(
                 key = "motion_version",
                 type = SettingsEntryType.INFO,
                 // 缺 key 的读数是 `VERSION_PRE_V290`（= 0 = 「还没搬过」），
