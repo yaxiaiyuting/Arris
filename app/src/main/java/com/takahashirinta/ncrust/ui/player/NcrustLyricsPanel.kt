@@ -223,24 +223,20 @@ internal fun NcrustLyricsPanel(
     val currentIndex = focusIndex ?: timedIndex
     // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
     val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
-    // 4.0.11：**跨行瞬间的"交接"动画**（当前行从「虚、偏下、略小、带模糊」收到「实、就位」）。
-    // 只在 currentIndex 真正变化时重跑；动画全程只写 Animatable，靠 graphicsLayer 读取 ⇒ 零重组。
-    val lineSwitch = remember { Animatable(1f) }
-    val switchAnimatorOn = remember { android.animation.ValueAnimator.areAnimatorsEnabled() }
-    LaunchedEffect(currentIndex) {
-        if (currentIndex < 0 || !switchAnimatorOn) {
-            lineSwitch.snapTo(1f)
-            return@LaunchedEffect
-        }
-        lineSwitch.snapTo(0f)
-        lineSwitch.animateTo(
-            1f,
-            tween(durationMillis = LYRIC_SWITCH_MS, easing = CubicBezierEasing(0.16f, 0.84f, 0.24f, 1f)),
-        )
-    }
+    // 4.0.12：跨行过渡的开关与位移基准。系统关闭动画时只取消"位移"这一层 ——
+    // 缩放 / 透明度仍按 act 走（它们由播放进度驱动，与系统动画开关无关）。
+    val switchAnimatorOff = remember { !android.animation.ValueAnimator.areAnimatorsEnabled() }
+    val lyricTransitPx = switchTravelPx * 0.4f
+
     LaunchedEffect(currentIndex) {
         if (currentIndex >= 0) {
-            smoothCurrentIndex.animateTo(currentIndex.toFloat(), SokuouTweens.QuickSwitch)
+            // 4.0.12：**放慢到 420ms**。原来是 SokuouTweens.QuickSwitch（180ms）——
+            // 180ms 里同时完成"缩小旧行 + 放大新行 + 变色"，肉眼就是"啪一下切过去"。
+            // 参考动效都在 320–480ms，这里取 420ms + 强减速，才是"滑过去"的手感。
+            smoothCurrentIndex.animateTo(
+                currentIndex.toFloat(),
+                tween(durationMillis = LYRIC_SWITCH_MS, easing = CubicBezierEasing(0.22f, 0.61f, 0.24f, 1f)),
+            )
         }
     }
 
@@ -353,6 +349,34 @@ internal fun NcrustLyricsPanel(
      * 「跳到位、再弹一下」，比「跳到附近、再平滑滑正」更突兀。
      */
     suspend fun animateToLine(targetItemIndex: Int, viewportHeightPx: Int) {
+        // 4.0.12：**相邻行用固定时长的平滑滚动**，和缩放/透明度用同一个时长与曲线。
+        //
+        // 原来这里一律走 `animateScrollToItem`，而它对"只差一行"的位移会在一两帧内滑完：
+        // 文字先"啪"地跳到位，然后才慢慢放大 —— 这正是"硬切"的来源之一。
+        // 相邻行时我们自己按 LYRIC_SWITCH_MS 补间滚动，两者同步结束。
+        val current = listState.firstVisibleItemIndex
+        val adjacent = kotlin.math.abs(targetItemIndex - current) <= 1
+        if (adjacent && (itemHeights[targetItemIndex] ?: -1) > 0) {
+            val startOffset = listState.firstVisibleItemScrollOffset.toFloat()
+            val targetOffset = offsetFor(targetItemIndex, viewportHeightPx).toFloat()
+            val travel = (targetOffset - startOffset).let {
+                // 目标行在上方时 offsetFor 的符号与滚动方向相反，这里只关心幅度
+                if (targetItemIndex >= current) it else it
+            }
+            if (kotlin.math.abs(travel) > 1f) {
+                // 把总位移摊到 LYRIC_SWITCH_MS 的帧上，逐帧 scrollBy —— 位移很小（一行高度），
+                // 线性分摊就足够顺，不需要再叠一层缓动。
+                val frames = (LYRIC_SWITCH_MS / 16L).coerceAtLeast(1L).toInt()
+                val step = travel / frames
+                repeat(frames - 1) {
+                    listState.scrollBy(step)
+                    withFrameNanos { }
+                }
+                // 最后一帧补齐余量，避免累计误差留下半像素
+                listState.scrollBy(travel - step * (frames - 1))
+                return
+            }
+        }
         if ((itemHeights[targetItemIndex] ?: -1) <= 0) {
             listState.scrollToItem(
                 targetItemIndex,
@@ -658,33 +682,37 @@ internal fun NcrustLyricsPanel(
                             .fillMaxWidth()
                             .padding(start = if (currentMarker) 12.dp else 0.dp)
                             .graphicsLayer {
-                                // 连续距离驱动缩放:无翻转瞬间,行间渐变交接。
-                                // 缩放放在整行(原句+翻译)外层,双语同时放大/缩小。
-                                val dist = abs(index - smoothCurrentIndex.value)
-                                var scale = lerp(1f, inactiveScale, (dist / 1.8f).coerceIn(0f, 1f))
-                                // v2.9.0 · B 档：只有**当前行**随节拍脉冲。
+                                // 4.0.12：**整套过渡由一个连续量驱动**（act = 这一行"有多当前"）。
                                 //
-                                // `MotionClock.generation` 刻意写在 `if (index == currentIndex)`
-                                // **里面**：Compose 的快照观察是动态的，只有当前行这一层会订阅
-                                // 帧时钟 —— 若写在外面，28 行歌词每帧各失效一次，那是纯浪费。
-                                // 跨行时 `smoothCurrentIndex` 变化会让所有行重新执行本块，
-                                // 依赖因此自然迁移到新的当前行，不会留下悬空的订阅。
-                                // 4.0.11：当前行跨行瞬间的交接（模糊→实、下方→就位、略小→原尺寸、
-                                // 由淡到实）。只写 graphicsLayer 参数，逐行零重组。
-                                if (index == currentIndex && switchAnimatorOn) {
-                                    val p = lineSwitch.value
-                                    if (p < 1f) {
-                                        scale *= 0.94f + 0.06f * p
-                                        translationY = (1f - p) * switchTravelPx
-                                        if (android.os.Build.VERSION.SDK_INT >= 31 && p < 0.995f) {
-                                            val radius = (1f - p) * 7f
-                                            if (radius >= 0.1f) {
-                                                renderEffect =
-                                                    android.graphics.RenderEffect.createBlurEffect(
-                                                        radius, radius, android.graphics.Shader.TileMode.CLAMP,
-                                                    ).asComposeRenderEffect()
-                                            }
-                                        }
+                                // 4.0.11 有两套独立机制：`smoothCurrentIndex` 管缩放、`lineSwitch`
+                                // 只管当前行，而**颜色是按整数 currentIndex 瞬切**的 —— 三者不同步，
+                                // 观感就是"硬切"。现在统一成 act ∈ [0,1]：
+                                //   0 = 隔了一行以上（完全非当前），1 = 正处在当前行
+                                // 缩放 / 透明度 / 位移 / 模糊 / 高亮条全部从它派生，跨行时连续插值，
+                                // 不会出现任何一处"瞬间翻转"。
+                                val raw = abs(index - smoothCurrentIndex.value)
+                                val act = (1f - raw).coerceIn(0f, 1f)
+                                // 缩放：远处 inactiveScale（0.82），当前 1。
+                                var scale = lerp(inactiveScale, 1f, act)
+                                // 透明度：远处 0.55，当前 1 —— 这一层是"软"的关键，
+                                // 颜色再怎么翻，也是在半透明状态下翻的，眼睛看不到硬边。
+                                alpha *= lerp(0.55f, 1f, act)
+                                // 位移：还没轮到的那行略偏下、已经过去的那行略偏上，
+                                // 4dp 的差别就够"滑过去"的感觉，再多会像抖动。
+                                if (!switchAnimatorOff) {
+                                    val dir = if (index >= smoothCurrentIndex.value) 1f else -1f
+                                    translationY = dir * (1f - act) * lyricTransitPx
+                                }
+                                // 模糊：只在"行程中"（相距不到一行）的两行上挂，API 31+ 才有。
+                                // 静止的行一律 null —— 不给整屏挂 RenderEffect。
+                                if (android.os.Build.VERSION.SDK_INT >= 31) {
+                                    renderEffect = if (act > 0.02f && act < 0.98f) {
+                                        val radius = (1f - act) * 3.2f
+                                        android.graphics.RenderEffect.createBlurEffect(
+                                            radius, radius, android.graphics.Shader.TileMode.CLAMP,
+                                        ).asComposeRenderEffect()
+                                    } else {
+                                        null
                                     }
                                 }
                                 if (lyricPulseEnabled && index == currentIndex) {
