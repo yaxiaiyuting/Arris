@@ -208,7 +208,7 @@ internal fun ColumnScope.PlayerCardExpanded(
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
     val standaloneKaraoke = ui.focusLyricsActive && geo.usesSideCover
-    val exitFocus = {
+    val exitFocus: () -> Unit = {
         ui.showKaraoke = false
         ui.lyricLocateTrigger++
     }
