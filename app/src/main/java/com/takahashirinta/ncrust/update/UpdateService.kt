@@ -328,14 +328,16 @@ object UpdateService {
         requireCurrent()
         val fileName = fileNameOf(info)
         val dest = File(directory, fileName)
+        // 4.0.9：多镜像。本站 → Gitee（配置后）→ ghproxy 若干；段按轮转分配。
+        val mirrors = UpdateMirrors.sources(info.assetUrl, info.releaseTag, info.assetName)
         val probe = if (!dest.isFile && info.assetSize > 4L * 1024 * 1024) {
-            SegmentedDownload.probe(info.assetUrl, batch)
+            SegmentedDownload.probeAny(mirrors, batch)?.second
         } else null
         requireCurrent()
         if (probe != null && probe.total == info.assetSize && !dest.isFile) {
             val temp = File(directory, "$fileName.seg.$generation")
             try {
-                SegmentedDownload.download(info.assetUrl, temp, probe, batch, onProgress)
+                SegmentedDownload.download(mirrors, temp, probe, batch, onProgress)
                 synchronized(this) {
                     requireCurrent()
                     if (temp.renameTo(dest)) return dest

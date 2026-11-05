@@ -89,6 +89,19 @@ internal object SegmentedDownload {
         value?.trim()?.takeIf { it.length >= 2 && it.first() == '"' && it.last() == '"' }
 
     /** 探测服务端是否支持 Range；不支持返回 null。 */
+    /**
+     * 4.0.9：多源探测。返回「可用源 + 探测结果」；一条都不支持 Range 就返回 null。
+     * 顺序由调用方给（本站优先，反代最后）。
+     */
+    fun probeAny(sources: List<String>, batch: Batch): Pair<String, Probe>? {
+        for (u in sources) {
+            val p = runCatching { probe(u, batch) }.getOrNull() ?: continue
+            Log.i(TAG, "probe ok via ${u.take(40)} total=${p.total}")
+            return u to p
+        }
+        return null
+    }
+
     fun probe(url: String, batch: Batch): Probe? {
         val request = Request.Builder()
             .url(url)
@@ -117,7 +130,7 @@ internal object SegmentedDownload {
      * 失败抛 [IOException]，调用方回落单流。
      */
     fun download(
-        url: String,
+        sources: List<String>,
         target: File,
         probe: Probe,
         batch: Batch,
@@ -126,7 +139,8 @@ internal object SegmentedDownload {
         if (batch.cancelled) throw DownloadCancelledException()
         val total = probe.total
         val startedAt = android.os.SystemClock.elapsedRealtime()
-        Log.i(TAG, "start total=$total segments=$SEGMENTS url=${url.takeLast(40)}")
+        val hosts = sources.ifEmpty { listOf("") }
+        Log.i(TAG, "start total=$total segments=$SEGMENTS sources=${hosts.size}")
 
         target.parentFile?.mkdirs()
         if (target.isFile) target.delete()
@@ -145,12 +159,26 @@ internal object SegmentedDownload {
         val errors = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
         val threads = ranges.mapIndexed { index, (s, e) ->
             thread(name = "seg-dl-$index") {
-                try {
-                    fetchSegment(url, target, s, e, probe.etag, batch, done, total, onProgress)
-                } catch (t: Throwable) {
-                    errors += t
-                    batch.cancel()
+                // 4.0.9：段与源**轮转**分配 —— 同一条线上并发 4 段容易互相抢带宽，
+                // 分到不同镜像才是真正的多线路。失败时换下一条源重试这一段。
+                var lastError: Throwable? = null
+                val segWritten = java.util.concurrent.atomic.AtomicLong(0L)
+                for (attempt in hosts.indices) {
+                    if (batch.cancelled) break
+                    val host = hosts[(index + attempt) % hosts.size]
+                    try {
+                        fetchSegment(host, target, s, e, probe.etag, batch, done, total, segWritten, onProgress)
+                        return@thread
+                    } catch (t: Throwable) {
+                        if (t is DownloadCancelledException) throw t
+                        lastError = t
+                        // 这一段可能已经写了一部分：把总计回退掉，重试会覆盖同一区间。
+                        done.addAndGet(-segWritten.getAndSet(0L))
+                        Log.w(TAG, "seg $s via ${host.take(32)} failed (${t.javaClass.simpleName}), next source")
+                    }
                 }
+                errors += (lastError ?: IOException("段 $s 无可用源"))
+                batch.cancel()
             }
         }
         threads.forEach { it.join() }
@@ -174,6 +202,7 @@ internal object SegmentedDownload {
         batch: Batch,
         done: AtomicLong,
         total: Long,
+        segWritten: java.util.concurrent.atomic.AtomicLong,
         onProgress: (Long, Long) -> Unit,
     ) {
         val request = Request.Builder()
