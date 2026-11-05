@@ -9,6 +9,9 @@ Gitee 上没有 `.git` 历史也能发 Release —— 只要仓库存在，`tool
 - 令牌已存在 `~/.config/gitee/token`
 - 已发两个发行版：`v4.0.9-gpl`、`v4.0.10-gpl`（附件直链可匿名下载）
 - **实测：Gitee 附件忽略 `Range`（回 200 全量）⇒ 只做单流回退，不参与分段轮转**
+- **自动同步已打通**：Gitee「仓库镜像管理」配了 Pull（GitHub → Gitee），GitHub 侧 webhook 打在
+  `gitee.com/yaxiaiyuting/arris/sync_tasks/callback`，实测 `f931412 → fafe6ee → dd70833 → 3df0a38` 全部自动跟到
+- 手动兜底仍保留：`tools/gitee-sync`（零配置，一条命令推 master + tag）
 
 ## 1. 拿一个私人令牌（只有你能做）
 
