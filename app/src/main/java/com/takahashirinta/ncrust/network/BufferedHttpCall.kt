@@ -25,7 +25,8 @@ internal suspend fun Call.awaitBufferedResponse(
             try {
                 val buffered = response.use {
                     val body = it.body?.takeIf { _ -> bufferBody(it) }
-                    it.newBuilder().body(body?.bytes()?.toResponseBody(body.contentType())).build()
+                    val memoryBody = if (body == null) ByteArray(0).toResponseBody() else body.bytes().toResponseBody(body.contentType())
+                    it.newBuilder().body(memoryBody).build()
                 }
                 // The returned body owns only memory; the socket is already closed/released.
                 if (cont.isActive) cont.resumeWith(Result.success(buffered)) else buffered.close()
