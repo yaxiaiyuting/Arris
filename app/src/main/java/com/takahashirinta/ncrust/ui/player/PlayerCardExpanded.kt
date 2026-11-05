@@ -32,7 +32,6 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.widget.Toast
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -105,7 +104,6 @@ import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.player.motion.MotionEffects
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
-import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
@@ -436,16 +434,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 translationX = -q * screenWidthPx
                             }
                     ) {
-                        if (geo.usesSideCover) {
-                            Crossfade(
-                                targetState = song.id,
-                                animationSpec = SokuouTweens.CoverFade,
-                                label = "LyricsCrossfade",
-                            ) { lyricsContent(null) }
-                        } else {
-                            // Portrait uses one scrolling lyric presentation and one playback clock.
-                            lyricsContent(karaokeControls)
-                        }
+                        // Only one lyric viewport reads the current song, including during a track change.
+                        lyricsContent(karaokeControls)
                     }
 
                     // 列表面板：translationX 从 +screenWidthPx 滑至 0，稳定态时完全在屏幕外
