@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-05T18:11:59.118Z",
+ "generatedAt": "2026-11-05T18:20:15.688Z",
  "releases": [
+  {
+   "tag_name": "v4.0.13-gpl",
+   "name": "Arris v4.0.13-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-05T18:19:47Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.13-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## 歌词从这一句滑到下一句\n\n- 旧句缩小、淡出时，新句同步放大、变清晰。列表滚动、字色和侧边光轨共用 360 毫秒缓动。\n- 短句连续切换时，从画面已经到达的位置继续。拖进度跨越多句时，用淡入淡出衔接。\n- 保留卡拉 OK 逐字高亮、双语歌词和三点入唱提示。切换原文或译文主行、调整字号后，当前句重新对齐。\n- 景深改在字形绘制时完成，减少整行滤镜的开销。\n\n## 安装与验证\n\n主线 · Android 10 及以上 · versionCode 213\n\n本 Release 的签名 APK 已在 PLC110 上覆盖安装并试听。JVM 测试 3,532 项，0 失败、4 跳过。Debug Lint 0 错误。\n\n[官网下载 APK](https://arris.de5.net/get/Arris-v4.0.13-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n\nSHA-256 `3d4045ae2edd1b50bdec49397fa49b0deb8425e91170ebc3618267dcd50381d1`\n",
+   "assets": [
+    {
+     "id": 714339890,
+     "name": "Arris-v4.0.13-gpl.apk",
+     "size": 10523624,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.13-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.12-gpl",
    "name": "Arris v4.0.12-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T15:31:30Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.8-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 本版内容\n\n- **竖屏「留白跟唱」**：歌词页右上角进入；保留歌名与歌手，当前句大字，下一句提前出现；\n  有逐字时间戳时随音乐扫亮，只有 LRC 时整行高亮；有译文时可切换「原文／译文」主行\n- **竖屏歌词与进度条合并**：歌词面板与进度条同一套纵向分区，不再各自占位\n- **切歌时只挂载一个歌词视口**：去掉 Crossfade 期间的双视口，切歌瞬间不再有两份滚动状态\n\n## 校验\n\n| | |\n|---|---|\n| APK | 10,475,948 B |\n| SHA-256 | `a5035e69d6b52b236165b45206424fb936f7d1646b339ca5cad110b99b302e71` |\n| 签名 | v2 scheme 通过，单一签名者 |\n| 构建 | 离线 / 单 worker / in-process 编译，BUILD SUCCESSFUL |\n\n\n## LTS\n\nLTS 3.7.29 只回移了「切歌单视口」这一条 —— 跟唱功能依赖主线 4.0.7 的播放器布局重构，\ncherry-pick 在 LTS 上产生 18 处冲突，需要单独立项回移。\n",
+   "body": "",
    "assets": [
     {
      "id": 713623665,
