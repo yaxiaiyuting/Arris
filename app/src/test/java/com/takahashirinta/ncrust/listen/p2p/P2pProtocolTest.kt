@@ -97,11 +97,13 @@ class P2pProtocolTest {
 
     @Test
     fun `房间码解析 IP 端口与令牌`() {
-        val parsed = com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7:54321#123456")
+        val token = "0123456789abcdef0123456789abcdef"
+        val parsed = com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7:54321#$token")
         assertEquals("203.0.113.7", parsed?.first)
         assertEquals(54321, parsed?.second)
-        assertEquals("123456", parsed?.third)
+        assertEquals(token, parsed?.third)
         assertNull("缺令牌应拒绝", com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7:54321"))
-        assertNull("缺端口应拒绝", com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7#123456"))
+        assertNull("缺端口应拒绝", com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7#$token"))
+        assertNull("旧六位令牌应拒绝", com.takahashirinta.ncrust.listen.P2pLink.parseCode("203.0.113.7:54321#123456"))
     }
 }
