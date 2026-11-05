@@ -17,6 +17,10 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.takahashirinta.ncrust.BuildConfig
+import com.takahashirinta.ncrust.network.awaitBufferedResponse
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -224,6 +228,7 @@ object UpdateService {
      * 否则它捕获 `DownloadCancelledException` 时会把紧接着新开的下载覆盖成 Idle。
      */
     private val downloadGeneration = AtomicLong(0L)
+    private var segmentBatch: SegmentedDownload.Batch? = null
 
     /** 当前版本：唯一来源是 `build.gradle.kts` 的 `versionName`（经 BuildConfig 注入）。 */
     fun currentVersion(): AppVersion? = ForkRelease.parseVersionName(BuildConfig.VERSION_NAME)
@@ -312,60 +317,41 @@ object UpdateService {
         info: UpdateInfo,
         directory: File,
         target: String,
+        generation: Long,
+        batch: SegmentedDownload.Batch,
         onProgress: (Long, Long) -> Unit,
     ): File {
+        fun requireCurrent() {
+            if (downloadGeneration.get() != generation) throw DownloadCancelledException()
+        }
+        requireCurrent()
         val fileName = fileNameOf(info)
-        val probe = runCatching { SegmentedDownload.probe(info.assetUrl) }.getOrNull()
-        val resumable = File(directory, fileName).isFile
-        if (probe != null && !resumable && info.assetSize > 4L * 1024 * 1024) {
-            // I03：临时文件**按代次分开**。上一代被取消后还没来得及退出的线程仍持有自己的
-            // 句柄，如果两代共用 "$fileName.seg"，新任务写进去的就是两段线程交错的数据。
-            val generation = activeGenerationSnapshot()
+        val dest = File(directory, fileName)
+        val probe = if (!dest.isFile && info.assetSize > 4L * 1024 * 1024) {
+            SegmentedDownload.probe(info.assetUrl, batch)
+        } else null
+        requireCurrent()
+        if (probe != null && probe.total == info.assetSize && !dest.isFile) {
             val temp = File(directory, "$fileName.seg.$generation")
             try {
-                SegmentedDownload.download(
-                    url = info.assetUrl,
-                    target = temp,
-                    probe = probe,
-                    cancelled = { downloadGeneration.get() != activeGenerationSnapshot() },
-                    onProgress = onProgress,
-                )
-                // I03：代次在下载期间变了（用户取消 / 换了目标）⇒ 这份产物作废，
-                // **不回落单流**、不改名、删掉自己的临时文件。
-                if (downloadGeneration.get() != generation) {
-                    android.util.Log.i("UpdateService", "segmented 代次已变（$generation → ${downloadGeneration.get()}），丢弃")
-                    runCatching { temp.delete() }
-                    throw DownloadCancelledException()
+                SegmentedDownload.download(info.assetUrl, temp, probe, batch, onProgress)
+                synchronized(this) {
+                    requireCurrent()
+                    if (temp.renameTo(dest)) return dest
                 }
-                val dest = File(directory, fileName)
-                runCatching { dest.delete() }
-                if (temp.renameTo(dest)) {
-                    android.util.Log.i("UpdateService", "segmented download ok → ${dest.name}")
-                    return dest
-                }
-                android.util.Log.w("UpdateService", "segmented rename failed, fallback to single stream")
-            } catch (t: Throwable) {
-                // I03：取消**不是失败**，不许回落到单流（那会让旧任务继续写同一个目标文件）。
-                SegmentedDownload.cancelAll()
-                runCatching { temp.delete() }
-                if (t is DownloadCancelledException || downloadGeneration.get() != generation) {
-                    throw if (t is DownloadCancelledException) t else DownloadCancelledException()
-                }
-                android.util.Log.w("UpdateService", "segmented failed (${t.javaClass.simpleName}), fallback")
+            } catch (e: Exception) {
+                requireCurrent()
+                if (e is DownloadCancelledException) throw e
+                android.util.Log.w("UpdateService", "segmented failed, using single stream", e)
+            } finally {
+                temp.delete()
             }
         }
-        return downloader.download(
-            url = info.assetUrl,
-            fileName = fileName,
-            identity = target,
-            expectedSize = info.assetSize,
-            onProgress = onProgress,
-        )
+        requireCurrent()
+        return downloader.download(info.assetUrl, fileName, target, info.assetSize, onProgress)
     }
 
-    /** 当前下载代次（用于让分段下载能感知取消）。 */
-    private fun activeGenerationSnapshot(): Long = downloadGeneration.get()
-
+    @Synchronized
     fun startDownload(context: Context, info: UpdateInfo) {
         val target = info.targetKey
         // 同一目标的重复点击（重组 / 连点）直接忽略；换了目标则取消旧任务再开新的。
@@ -380,6 +366,8 @@ object UpdateService {
         downloader = active
         activeTarget = target
         val generation = downloadGeneration.incrementAndGet()
+        val batch = SegmentedDownload.Batch()
+        segmentBatch = batch
         publish(generation, DownloadState.Downloading(0L, info.assetSize, target))
         downloadJob = scope.launch {
             try {
@@ -388,6 +376,8 @@ object UpdateService {
                     info = info,
                     directory = directory,
                     target = target,
+                    generation = generation,
+                    batch = batch,
                 ) { downloaded, total ->
                     publish(
                         generation,
@@ -410,20 +400,23 @@ object UpdateService {
         }
     }
 
+    @Synchronized
     fun cancelDownload() {
         // 推高代次：旧任务之后的所有写状态（含 catch / finally）都被 publish 挡掉，
         // 不会覆盖紧接着新开的下载。
         downloadGeneration.incrementAndGet()
+        segmentBatch?.cancel()
+        segmentBatch = null
         downloader?.cancel()
         downloadJob?.cancel()
         downloadJob = null
         downloader = null
         activeTarget = null
-        _download.value = DownloadState.Idle        // I03：把在途的分段 Call 也掐掉（只置 boolean 拦不住已经发出的请求）。
-        SegmentedDownload.cancelAll()
+        _download.value = DownloadState.Idle
     }
 
     /** 只有代次仍是当前任务的回调才允许写状态。 */
+    @Synchronized
     private fun publish(generation: Long, state: DownloadState) {
         if (downloadGeneration.get() == generation) _download.value = state
     }
@@ -481,20 +474,21 @@ object UpdateService {
     }
 
     /** 逐页拉取某个源；任一步失败返回 null，交给调用方换下一个源。 */
-    private fun fetchAllPages(firstUrl: String): List<String>? {
+    private suspend fun fetchAllPages(firstUrl: String): List<String>? {
         val startedAt = android.os.SystemClock.elapsedRealtime()
         val host = runCatching { java.net.URI(firstUrl).host }.getOrNull() ?: firstUrl
         val pages = mutableListOf<String>()
         var url: String? = firstUrl
         var page = 0
         while (url != null && page < MAX_RELEASES_PAGES) {
+            currentCoroutineContext().ensureActive()
             page++
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", USER_AGENT)
                 .header("Accept", "application/vnd.github+json")
                 .build()
-            val (body, next) = client.newCall(request).execute().use { response ->
+            val (body, next) = client.newCall(request).awaitBufferedResponse { it.isSuccessful }.use { response ->
                 if (!response.isSuccessful) return null
                 val text = response.body?.string() ?: return null
                 text to nextPageUrl(response.header("Link"))
@@ -507,7 +501,7 @@ object UpdateService {
             "update-source ok host=$host pages=${pages.size} bytes=${pages.sumOf { it.length }} " +
                 "elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms",
         )
-        return pages
+        return pages.takeIf { url == null }
     }
 
     /**
@@ -542,42 +536,20 @@ object UpdateService {
 
     private suspend fun fetch(): CheckOutcome = withContext(Dispatchers.IO) {
         val current = currentVersion() ?: return@withContext CheckOutcome.Failed
-        try {
-            return@withContext withTimeoutOrNull(CHECK_TOTAL_TIMEOUT_MS) { fetchFromSources(current) }
-                ?: CheckOutcome.Failed
-        } catch (_: Exception) {
-            CheckOutcome.Failed
-        }
-    }
-
-    private suspend fun fetchFromSources(current: AppVersion): CheckOutcome = withContext(Dispatchers.IO) {
-        try {
-            var pages: List<String>? = null
+        withTimeoutOrNull(CHECK_TOTAL_TIMEOUT_MS) {
             for (source in releasesSources(current)) {
-                val t0 = android.os.SystemClock.elapsedRealtime()
-                pages = runCatching { fetchAllPages(source) }.getOrNull()
-                if (pages != null) break
-                android.util.Log.w(
-                    "UpdateService",
-                    "update-source failed url=${source.take(60)} elapsed=${android.os.SystemClock.elapsedRealtime() - t0}ms",
-                )
+                currentCoroutineContext().ensureActive()
+                val outcome = try {
+                    fetchAllPages(source)?.let { evaluateReleases(it, current, preferredVariant()) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                if (outcome != null) return@withTimeoutOrNull outcome
             }
-            if (pages == null) {
-                android.util.Log.w("UpdateService", "update: 所有源都失败")
-                return@withContext CheckOutcome.Failed
-            }
-            android.util.Log.i(
-                "UpdateService",
-                "update: current=$current variant=${preferredVariant()} pages=${pages.size} head=${pages.firstOrNull()?.take(90)}".take(300),
-            )
-            // 解析失败（含非 JSON / 非数组）由 evaluateReleases 返回 null → Failed，
-            // 绝不能退化成 UpToDate 去清掉上次真实发现的结果。
-            val outcome = evaluateReleases(pages, current, preferredVariant())
-            android.util.Log.i("UpdateService", "update: evaluate=${outcome ?: "null(解析失败)"}")
-            outcome ?: CheckOutcome.Failed
-        } catch (_: Exception) {
             CheckOutcome.Failed
-        }
+        } ?: CheckOutcome.Failed
     }
 
     /** 把一次检查的结果落进状态与 prefs。`checking` 由调用方的 finally 负责收尾。 */

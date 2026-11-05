@@ -43,8 +43,9 @@ sealed interface RoomLink {
     class Wss(
         private val url: String,
         fixedIps: List<String> = emptyList(),
+        hostKey: String? = null,
     ) : RoomLink {
-        private val inner = RoomRelayWs(url, fixedIps = fixedIps)
+        private val inner = RoomRelayWs(url, fixedIps = fixedIps, hostKey = hostKey)
         override var onMessage: ((RoomWire) -> Unit)?
             get() = inner.onMessage
             set(v) { inner.onMessage = v }

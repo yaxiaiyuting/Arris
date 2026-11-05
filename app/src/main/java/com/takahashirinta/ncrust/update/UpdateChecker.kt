@@ -77,9 +77,8 @@ object UpdateChecker {
         // 只有**被声明为 LTS 的那条线**受限（当前是 3.7）；更早的历史版本仍按主线处理，
         // 否则 3.4 的用户会被卡在原地永远升不到 3.5（真机 fixture 用例抓到过）。
         val currentIsLts = current.major * 100 + current.minor == LTS_LINE
-        if (isLtsEntry) return currentIsLts
-        if (!currentIsLts) return true
-        return candidate.major * 100 + candidate.minor == current.major * 100 + current.minor
+        if (!currentIsLts) return !isLtsEntry
+        return candidate.major == current.major && candidate.minor == current.minor
     }
 
     /** 当前被声明为 LTS 的版本线（3.7）；新的 LTS 线出现时改这里。 */

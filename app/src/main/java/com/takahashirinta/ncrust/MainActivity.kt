@@ -796,7 +796,6 @@ internal fun reasonText(
 
 /** 播放模式：0=顺序循环, 1=单曲循环, 2=乱序, 3=顺序线性(播完停), 4=相似无限(FM 电台)。 */
 /** 跟随同一首歌的最小间隔：避免每秒快照反复触发起播。 */
-private const val FOLLOW_COOLDOWN_MS = 8_000L
 
 object QueueModes {
     const val CYCLE = 0
@@ -1068,7 +1067,6 @@ fun MainScreen(
     // 一起听：把播放器能力注入会话（listen 包不直接依赖 ViewModel）。
     // 房主侧每秒读一次当前状态；成员侧只在偏差 >800ms 或播放态不一致时才动播放器，
     // 避免每秒 seek 一次把播放打断成"咔哒"声。
-    val bridgeScope = androidx.compose.runtime.rememberCoroutineScope()
     // playSongItem 是本 composable 里更靠后才定义的局部函数，桥接层不能直接引用 ——
     // 用持有者在它定义之后再赋值（见紧随 playSongItem 的 SideEffect）。
     val playItemHolder = androidx.compose.runtime.remember {
@@ -1082,20 +1080,15 @@ fun MainScreen(
     val appendNextHolder = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
     }
-    // 跟随去重：一次「房主切歌」只能触发一次起播。
-    // 没有它的话，每秒一条快照会让成员反复调用 playSongItem：
-    // 表现就是「把列表里的歌挨个放一遍」，并在切歌瞬间闪退。
-    val followGuard = androidx.compose.runtime.remember {
-        java.util.concurrent.atomic.AtomicLong(-1L) to java.util.concurrent.atomic.AtomicBoolean(false)
-    }
-    var lastFollowAtMs = 0L
-    // 致命点：跟随回调来自 OkHttp 的 WebSocket 线程，而 ExoPlayer 只允许主线程访问。
-    // 不切主线程的话会抛 "Player is accessed on the wrong thread." → 闪退，
-    // 而且在抛之前已经把队列动过了（用户看到「把列表的歌挨个放一遍」）。
-    val mainHandler = androidx.compose.runtime.remember {
-        android.os.Handler(android.os.Looper.getMainLooper())
-    }
     androidx.compose.runtime.DisposableEffect(playerViewModel) {
+        val session = com.takahashirinta.ncrust.listen.TogetherSession
+        var followJob: Job? = null
+        var nextJob: Job? = null
+        var activeFollow: com.takahashirinta.ncrust.listen.PlaybackSnapshot? = null
+        var resolvedLocal: TrackKey? = null
+        var nextRequest: Pair<Long, TrackKey>? = null
+        var lastStartMs = 0L
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
         val bridge = object : com.takahashirinta.ncrust.listen.PlaybackSource {
             override fun current(): com.takahashirinta.ncrust.listen.PlaybackSnapshot? {
                 val title = playerViewModel.currentSongName.value ?: return null
@@ -1164,129 +1157,114 @@ fun MainScreen(
                 } ?: candidates.firstOrNull()
             }
 
-            fun alignAfterStart(songId: Long, target: Long, wantPlaying: Boolean) {
-                bridgeScope.launch {
-                    repeat(24) {          // 最多等 6s
-                        kotlinx.coroutines.delay(250)
-                        if (playerViewModel.currentSongId.value != songId) return@repeat
-                        // 只对齐进度。**不要**在这里调 play/pause：
-                        // media3 在「队列为空 / STATE_IDLE」时收到 play() 会抛
-                        // `isLoading only allowed when not in STATE_IDLE or STATE_ENDED`
-                        // 并直接把进程干掉（主机、客机都复现过）。
-                        if (target > 2_000) {
-                            runCatching { playerViewModel.seekTo(target) }
-                        }
-                        return@launch
-                    }
+            override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
+                handler.post {
+                    if (!session.isCurrentFollow(snapshot.followGeneration)) return@post
+                    applyFollow(snapshot)
                 }
             }
 
-            override fun follow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
-                // 一律切回主线程再碰播放器（同一 tick 内多次调用会被合并执行）
-                mainHandler.post { applyFollow(snapshot) }
+            private fun sameRequest(
+                first: com.takahashirinta.ncrust.listen.PlaybackSnapshot?,
+                second: com.takahashirinta.ncrust.listen.PlaybackSnapshot,
+            ): Boolean = first?.let {
+                it.followGeneration == second.followGeneration &&
+                    it.songId == second.songId && it.sourceKey == second.sourceKey &&
+                    (it.songId != null || it.title == second.title && it.artist == second.artist)
+            } == true
+
+            private fun prepareNext(
+                snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot,
+                owner: TrackKey,
+            ) {
+                val id = snapshot.nextSongId
+                val candidate = id?.let { TrackKey.of(snapshot.nextSourceKey, it) }
+                val request = candidate?.let { snapshot.followGeneration to it }
+                if (request == nextRequest) return
+                nextJob?.cancel()
+                nextRequest = request
+                if (candidate == null || candidate == owner) return
+                val playbackEpoch = com.takahashirinta.ncrust.player.playRequestGeneration.current
+                nextJob = session.launchFollow(snapshot.followGeneration) {
+                    val next = withContext(Dispatchers.IO) {
+                        resolveRemoteSong(snapshot.copy(
+                            title = snapshot.nextTitle.orEmpty(),
+                            artist = snapshot.nextArtist.orEmpty(),
+                            songId = candidate.id,
+                            sourceKey = candidate.source.key,
+                        ))
+                    }
+                    if (next != null && QueueKeys.keyOf(next) != owner &&
+                        nextRequest == request && session.isCurrentFollow(snapshot.followGeneration) &&
+                        com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(playbackEpoch) &&
+                        com.takahashirinta.ncrust.player.PlaybackService.instance?.playingTrackKey() == owner
+                    ) {
+                        appendNextHolder.value?.invoke(next)
+                    } else if (nextRequest == request) {
+                        nextRequest = null
+                    }
+                }
             }
 
             private fun applyFollow(snapshot: com.takahashirinta.ncrust.listen.PlaybackSnapshot) {
-                val localTitle = playerViewModel.currentSongName.value.orEmpty()
-                val localId = playerViewModel.currentSongId.value
-                // ① 已知平台 ID 且与本机不同 → 直接按 id 播放（不依赖搜索命中）
-                val remoteId = snapshot.songId
-                if (remoteId != null && remoteId != localId) {
-                    val (lastFollowId, inFlight) = followGuard
-                    // 同一时刻只允许一个「起播」在飞：旧实现在每秒一条快照下会连续触发，
-                    // 于是把列表里的歌挨个播一遍，紧接着在切歌瞬间闪退。
-                    if (!inFlight.compareAndSet(false, true)) return
-                    if (lastFollowId.getAndSet(remoteId) == remoteId &&
-                        System.currentTimeMillis() - lastFollowAtMs < FOLLOW_COOLDOWN_MS
-                    ) {
-                        inFlight.set(false)
-                        return
-                    }
-                    lastFollowAtMs = System.currentTimeMillis()
-                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("跟随房主：${snapshot.title}")
-                    bridgeScope.launch {
-                        // 取详情/搜索都是网络请求，必须离开主线程 ——
-                        // 否则会抛 NetworkOnMainThreadException（真机上表现为
-                        // 「正好在点扫描房间时闪退」，因为两件事同时在跑）。
-                        val target = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            resolveRemoteSong(snapshot)
-                        }
-                        if (target != null) {
-                            runCatching { playItemHolder.value?.invoke(target) }
-                            alignAfterStart(target.id, snapshot.positionMs, snapshot.playing)
-                            // 把房主的下一首也准备好：这样房主切歌时成员是「顺播」而不是重新起播
-                            if (snapshot.nextSongId != null && snapshot.nextSongId != remoteId) {
-                                runCatching {
-                                    val next = resolveRemoteSong(
-                                        snapshot.copy(
-                                            title = snapshot.nextTitle.orEmpty(),
-                                            artist = snapshot.nextArtist.orEmpty(),
-                                            songId = snapshot.nextSongId,
-                                            sourceKey = snapshot.nextSourceKey,
-                                            nextSongId = null,
-                                        )
-                                    )
-                                    if (next != null && next.id != target.id) {
-                                        appendNextHolder.value?.invoke(next)
-                                    }
-                                }
-                            }
-                        } else {
-                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                                "房主在放：${snapshot.title}（本机曲库里找不到）"
-                            )
-                        }
-                        inFlight.set(false)
-                    }
-                    return
+                val same = sameRequest(activeFollow, snapshot)
+                if (!same) {
+                    followJob?.cancel()
+                    nextJob?.cancel()
+                    nextRequest = null
+                    resolvedLocal = null
                 }
-                if (localTitle != snapshot.title) {
-                    // 跨曲跟随：先双源搜索（ncm + qm），命中就切过去并 seek 到房主进度。
-                    // 找不到就如实提示，不猜也不放错歌。
-                    com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                        "房主切歌：${snapshot.title}，正在曲库中查找…"
+                activeFollow = snapshot
+                val requested = snapshot.songId?.let { TrackKey.of(snapshot.sourceKey, it) }
+                val local = com.takahashirinta.ncrust.player.PlaybackService.instance?.playingTrackKey()
+                val owner = resolvedLocal ?: requested
+                if (owner != null && local == owner) {
+                    com.takahashirinta.ncrust.player.PlaybackService.instance?.applyTogetherTransport(
+                        owner, snapshot.positionMs, snapshot.playing,
                     )
-                    bridgeScope.launch {
-                        val keyword = listOf(snapshot.title, snapshot.artist)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" ")
-                        val candidates = com.takahashirinta.ncrust.source.MusicSource.entries
-                            .filter { it != com.takahashirinta.ncrust.source.MusicSource.BILIBILI }
-                            .flatMap { src ->
-                                com.takahashirinta.ncrust.source.SourceRouter
-                                    .searchSongs(src, keyword, 5)
-                            }
-                        // 同名优先、时长接近优先；都不满足就取第一条（搜索结果本身就是相关度排序）
-                        val best = candidates.firstOrNull {
-                            it.name.contains(snapshot.title) || snapshot.title.contains(it.name)
-                        } ?: candidates.firstOrNull()
-                        if (best != null) {
-                            playItemHolder.value?.invoke(best)
-                            if (snapshot.positionMs > 3_000) {
-                                kotlinx.coroutines.delay(1_200)
-                                playerViewModel.seekTo(snapshot.positionMs)
-                            }
-                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                                "已跟随：${best.name} - ${best.artists?.joinToString("/") { it.name }.orEmpty()}"
-                            )
-                        } else {
-                            com.takahashirinta.ncrust.listen.TogetherSessionStatus.note(
-                                "房主在放：${snapshot.title}（曲库里没找到，暂不跟随）"
-                            )
-                        }
-                        followGuard.second.set(false)
-                    }
+                    prepareNext(snapshot, owner)
                     return
                 }
-                // 只同步进度：起播由上面的分支负责，播放/暂停态交给用户自己按。
-                // （在此处 toggle 会在空队列/IDLE 下触发 media3 断言 → 闪退）
-                if (playerViewModel.currentSongId.value != null) {
-                    runCatching { playerViewModel.seekTo(snapshot.positionMs) }
+                if (same && followJob?.isActive == true) return
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (same && now - lastStartMs < 2_000) return
+                lastStartMs = now
+                val beforeResolve = com.takahashirinta.ncrust.player.playRequestGeneration.current
+                followJob = session.launchFollow(snapshot.followGeneration) {
+                    val target = withContext(Dispatchers.IO) { resolveRemoteSong(snapshot) }
+                    if (!session.isCurrentFollow(snapshot.followGeneration) ||
+                        !com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(beforeResolve)) return@launchFollow
+                    if (target == null) {
+                        com.takahashirinta.ncrust.listen.TogetherSessionStatus.note("房主在放：${snapshot.title}（本机曲库里找不到）")
+                        return@launchFollow
+                    }
+                    val play = playItemHolder.value ?: return@launchFollow
+                    play(target)
+                    resolvedLocal = QueueKeys.keyOf(target)
+                    val playEpoch = com.takahashirinta.ncrust.player.playRequestGeneration.current
+                    repeat(60) {
+                        if (!session.isCurrentFollow(snapshot.followGeneration) ||
+                            !com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(playEpoch)) return@launchFollow
+                        val current = activeFollow?.takeIf { sameRequest(it, snapshot) } ?: return@launchFollow
+                        val applied = com.takahashirinta.ncrust.player.PlaybackService.instance?.applyTogetherTransport(
+                            QueueKeys.keyOf(target), current.positionMs, current.playing, align = true,
+                        )
+                        if (applied == true) {
+                            prepareNext(current, QueueKeys.keyOf(target))
+                            return@launchFollow
+                        }
+                        delay(250)
+                    }
                 }
             }
         }
-        com.takahashirinta.ncrust.listen.TogetherSession.bind(bridge)
-        onDispose { com.takahashirinta.ncrust.listen.TogetherSession.bind(null) }
+        session.bind(bridge)
+        onDispose {
+            session.bind(null)
+            followJob?.cancel()
+            nextJob?.cancel()
+            handler.removeCallbacksAndMessages(null)
+        }
     }
     var currentSong by remember { mutableStateOf<SongItem?>(null) }
     val vmCurrentSongId by playerViewModel.currentSongId.collectAsState()
@@ -2488,7 +2466,7 @@ fun MainScreen(
     // 桥接层拿到「把一首歌追加到队尾」的入口（一起听同步下一首用）。
     // 必须放在 appendToQueue 定义之后：Kotlin 的局部函数不能先用后声明。
     androidx.compose.runtime.SideEffect {
-        appendNextHolder.value = { song -> appendToQueue(song) }
+        appendNextHolder.value = { song -> insertNext(song) }
     }
 
     /**

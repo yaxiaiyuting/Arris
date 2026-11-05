@@ -1238,6 +1238,23 @@ class PlaybackService : MediaLibraryService() {
     fun playingTrackKey(): com.takahashirinta.ncrust.source.TrackKey? =
         com.takahashirinta.ncrust.source.TrackKey.fromMediaId(player.currentMediaItem?.mediaId)
 
+    /** Called on the player thread; a remote snapshot must not control a different or idle item. */
+    internal fun applyTogetherTransport(
+        track: com.takahashirinta.ncrust.source.TrackKey,
+        positionMs: Long,
+        playing: Boolean,
+        align: Boolean = false,
+    ): Boolean {
+        if (playingTrackKey() != track || player.playbackState == Player.STATE_IDLE) return false
+        val target = positionMs.coerceIn(0, player.duration.takeIf { it > 0 } ?: Long.MAX_VALUE)
+        val drift = kotlin.math.abs(target - player.currentPosition)
+        if ((align && drift > 500L) || drift > 5_000L || player.playbackState == Player.STATE_ENDED && playing) {
+            player.seekTo(target)
+        }
+        if (player.playWhenReady != playing) player.playWhenReady = playing
+        return true
+    }
+
     fun currentOfflineContent(): com.takahashirinta.ncrust.cache.OfflineContent? =
         player.currentMediaItem?.localConfiguration?.uri?.toString()?.let { OfflineUrlStore.contentForUrl(this, it) }
 

@@ -15,6 +15,7 @@
  */
 
 import { HOSTED_APK, DL_SIZE } from "./dl-manifest.mjs";
+import { serveRangedAsset } from "./asset-range.mjs";
 import { serveStudioAudio } from "./studio-audio.mjs";
 
 const MAX_MEMBERS = 16;
@@ -22,7 +23,7 @@ const MAX_MEMBERS = 16;
 /** 本站托管的 APK 名单与尺寸（部署时由 tools/sync-dl-manifest.mjs 生成）。 */
 const HOSTED = new Set(HOSTED_APK);
 
-const BUILD_TAG = "4.0.0-paper";
+const BUILD_TAG = "4.0.4";
 
 export default {
   async fetch(request, env) {
@@ -37,120 +38,15 @@ export default {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache, must-revalidate" },
       });
     }
-    // ---------------------------------------------------------------- APK 直链（支持 Range）
-    //
-    // Cloudflare 的静态资源服务**不认 Range**：`curl -r 0-1023` 会拿到整个 16MB。
-    // 国内网络抖动多，下载器（IDM / aria2 / 浏览器续传）没有 206 就只能从 0 重来，
-    // 体感就是「下载老是失败」。这里自己实现 206：边缘返回 200 时按 header 切片。
-    // `/get/*`：支持 Range 的下载入口。`/dl/*` 是静态资源直出（快，但 Cloudflare
-    // 的资产层不认 Range），所以续传/多线程走这里：路径本身没有同名静态文件，
-    // 保证请求一定进 Worker。
     if (url.pathname.startsWith("/get/") || url.pathname.startsWith("/dl/")) {
-      const assetPath = url.pathname.startsWith("/get/")
-        ? "/dl/" + url.pathname.slice("/get/".length)
-        : url.pathname;
-      const assetUrl = new URL(assetPath, url.origin).toString();
-      let range = request.headers.get("range");
-      const mark = { "x-arris-route": "dl", "x-arris-range": String(range) };
-      if (request.method !== "GET") {
-        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
-        const h = new Headers(head.headers);
-        h.set("accept-ranges", "bytes");
-        for (const [k, v] of Object.entries(mark)) h.set(k, v);
-        return new Response(null, { status: head.status, headers: h });
-      }
-
-      // I05：**先处理条件请求，再谈 Range**。
-      // 旧序是先按 Range 切片、把 If-Range / If-None-Match 全忽略，于是"客户端拿着旧 ETag
-      // 要续传"也能拿到 206 —— 拼出来的包是两代资产的混合体。
-      // 滚动别名（latest.apk / lts-latest.apk）与带版本号文件名要区别对待缓存
-      const aliasName = /(^|\/)(latest|lts-latest)\.apk$/.test(decodeURIComponent(assetPath || ""));
-      const ifRange = request.headers.get("if-range");
-      const ifNoneMatch = request.headers.get("if-none-match");
-      if (range && ifRange) {
-        // If-Range 只接受强校验（ETag 或日期）。这里用资产自身的 etag 对比：
-        // 不匹配 ⇒ 按 RFC 当作**没有 Range**，回整个 200。
-        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
-        const etag = head.headers.get("etag") || "";
-        const lastMod = head.headers.get("last-modified") || "";
-        if (etag ? ifRange.trim() !== etag.trim() : lastMod ? ifRange.trim() !== lastMod.trim() : true) {
-          range = "";
-        }
-      }
-      if (!range && ifNoneMatch) {
-        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
-        const etag = head.headers.get("etag") || "";
-        if (etag && ifNoneMatch.split(",").map((v) => v.trim()).includes(etag.trim())) {
-          const h = new Headers();
-          for (const [k, v] of Object.entries(mark)) h.set(k, v);
-          h.set("etag", etag);
-          return new Response(null, { status: 304, headers: h });
-        }
-      }
-
-      // 1) 有 Range：先问 ASSETS 要这一段（转发 Range 头）。它若真给了 206 就直接用。
-      if (range) {
-        const part = await env.ASSETS.fetch(new Request(assetUrl, { headers: { range } }));
-        if (part.status === 206) {
-          const h = new Headers(part.headers);
-          for (const [k, v] of Object.entries(mark)) h.set(k, v);
-          h.set("accept-ranges", "bytes");
-          return new Response(part.body, { status: 206, headers: h });
-        }
-        // 2) 拿不到 206（资产层不认 Range）→ 自己按总量流式切片。
-        // ASSETS 的响应既没有 content-length、也不认 Range（实测：三种请求全 200 且 len=null），
-        // 总长只能来自部署时生成的清单。
-        const total = Number(DL_SIZE[decodeURIComponent(assetPath.slice("/dl/".length))] || 0);
-        const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-        if (total > 0 && m) {
-          // I05：`bytes=-N` 是**后缀**范围（最后 N 字节），不是"从 0 开始到 N"。
-          // 旧写法把 `bytes=-3` 当成 0-3，客户端拿到前 4 字节还以为拿到了尾部。
-          const suffix = m[1] === "" && m[2] !== "";
-          const start = suffix
-            ? Math.max(total - parseInt(m[2], 10), 0)
-            : (m[1] === "" ? 0 : parseInt(m[1], 10));
-          const rawEnd = suffix ? total - 1 : (m[2] === "" ? total - 1 : parseInt(m[2], 10));
-          const end = Math.min(Number.isFinite(rawEnd) ? rawEnd : total - 1, total - 1);
-          if (!Number.isFinite(start) || start >= total || start > end) {
-            return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}`, "accept-ranges": "bytes", ...mark } });
-          }
-          let cursor = 0;
-          const slicer = new TransformStream({
-            transform(chunk, controller) {
-              const cs = cursor;
-              const ce = cursor + chunk.byteLength - 1;
-              cursor += chunk.byteLength;
-              if (ce < start || cs > end) return;
-              const from = Math.max(start - cs, 0);
-              const to = Math.min(end - cs, chunk.byteLength - 1);
-              controller.enqueue(chunk.subarray(from, to + 1));
-            },
-          });
-          const full = await env.ASSETS.fetch(new Request(assetUrl));
-          return new Response(full.body.pipeThrough(slicer), {
-            status: 206,
-            headers: {
-              ...mark,
-              "content-type": full.headers.get("content-type") || "application/vnd.android.package-archive",
-              "content-range": `bytes ${start}-${end}/${total}`,
-              "content-length": String(end - start + 1),
-              "accept-ranges": "bytes",
-              // I05：只有**带版本号**的文件名才能 immutable；latest.apk / lts-latest.apk
-              // 是滚动别名，写一年缓存等于把新版本锁在 CDN 外面。
-              "cache-control": aliasName ? "public, max-age=120" : "public, max-age=31536000, immutable",
-              "etag": full.headers.get("etag") || "",
-            },
-          });
-        }
-        return part;
-      }
-
-      // 3) 无 Range：整包直出，但补上 Accept-Ranges 说明支持续传。
-      const full = await env.ASSETS.fetch(new Request(assetUrl));
-      const h = new Headers(full.headers);
-      h.set("accept-ranges", "bytes");
-      for (const [k, v] of Object.entries(mark)) h.set(k, v);
-      return new Response(full.body, { status: full.status, headers: h });
+      const name = url.pathname.slice(url.pathname.indexOf("/", 1) + 1);
+      const assetUrl = new URL("/dl/" + name, url.origin);
+      const size = HOSTED.has(name) ? DL_SIZE[name] : undefined;
+      const rolling = name === "latest.apk" || name === "lts-latest.apk";
+      return serveRangedAsset(request, env.ASSETS, assetUrl, {
+        size,
+        cacheControl: rolling ? "no-store" : size ? "public, max-age=31536000, immutable" : undefined,
+      });
     }
 
     // ---------------------------------------------------------------- 更新检查（不经 GitHub）
@@ -159,8 +55,8 @@ export default {
       //   1. 边缘缓存（caches.default，10 分钟）—— 绝大多数请求走这里，不打 GitHub；
       //   2. 现取 GitHub（服务端没有墙，但**匿名限额 60 次/小时/出口 IP**，共享 IP 常被限流）；
       //   3. 部署时生成的静态快照 `public/api-fallback/releases.json` —— GitHub 挂了也能检查更新。
-      const cacheKey = new URL("/api/releases", url.origin).toString();
-            const cache = caches.default;
+      const cacheKey = new URL("/api/releases?feed=4.0.4", url.origin).toString();
+      const cache = caches.default;
       const bypass = url.searchParams.get("nocache") === "1";
       let list = null;
       let source = "cache";
@@ -218,7 +114,7 @@ export default {
         html_url: r.html_url,
         // 国内裸连打不开 GitHub：浏览器入口默认指向官网，GitHub 只作数据来源与兜底。
         site_url: `${url.origin}/#download`,
-        body: index < BODY_KEEP && typeof r.body === "string" ? r.body.slice(0, 4000) : "",
+        body: (index < BODY_KEEP || r.tag_name === "lts-3.7") && typeof r.body === "string" ? r.body.slice(0, 4000) : "",
         assets: (r.assets || [])
           .filter((a) => a && /\.apk$/i.test(a.name || ""))
           .map((a) => ({
@@ -240,7 +136,7 @@ export default {
       };
 
       if (url.pathname === "/api/latest") {
-        const latest = releases.find((r) => !r.prerelease) || releases[0] || null;
+        const latest = releases.find((r) => !r.prerelease && /^v4\./i.test(r.tag_name) && r.assets.length) || null;
         const apk = latest?.assets?.find((a) => /\.apk$/i.test(a.name || "")) || null;
         return new Response(JSON.stringify({
           version: latest?.tag_name || null,
@@ -265,138 +161,6 @@ export default {
         } catch (_) {}
       }
       return new Response(body, { headers });
-    }
-
-    // ---------------------------------------------------------------- APK 直链（支持 Range）
-    //
-    // Cloudflare 的静态资源服务**不认 Range**：`curl -r 0-1023` 会拿到整个 16MB。
-    // 国内网络抖动多，下载器（IDM / aria2 / 浏览器续传）没有 206 就只能从 0 重来，
-    // 体感就是「下载老是失败」。这里自己实现 206：边缘返回 200 时按 header 切片。
-    // `/get/*`：支持 Range 的下载入口。`/dl/*` 是静态资源直出（快，但 Cloudflare
-    // 的资产层不认 Range），所以续传/多线程走这里：路径本身没有同名静态文件，
-    // 保证请求一定进 Worker。
-    if (url.pathname.startsWith("/get/") || url.pathname.startsWith("/dl/")) {
-      const assetPath = url.pathname.startsWith("/get/")
-        ? "/dl/" + url.pathname.slice("/get/".length)
-        : url.pathname;
-      const assetUrl = new URL(assetPath, url.origin).toString();
-      const range = request.headers.get("range");
-      const mark = { "x-arris-route": "dl", "x-arris-range": String(range) };
-      if (request.method !== "GET") {
-        const head = await env.ASSETS.fetch(new Request(assetUrl, { method: "HEAD" }));
-        const h = new Headers(head.headers);
-        h.set("accept-ranges", "bytes");
-        for (const [k, v] of Object.entries(mark)) h.set(k, v);
-        return new Response(null, { status: head.status, headers: h });
-      }
-
-      // 1) 有 Range：先问 ASSETS 要这一段（转发 Range 头）。它若真给了 206 就直接用。
-      if (range) {
-        const part = await env.ASSETS.fetch(new Request(assetUrl, { headers: { range } }));
-        if (part.status === 206) {
-          const h = new Headers(part.headers);
-          for (const [k, v] of Object.entries(mark)) h.set(k, v);
-          h.set("accept-ranges", "bytes");
-          return new Response(part.body, { status: 206, headers: h });
-        }
-        // 2) 拿不到 206（资产层不认 Range）→ 自己按总量流式切片。
-        // ASSETS 的响应既没有 content-length、也不认 Range（实测：三种请求全 200 且 len=null），
-        // 总长只能来自部署时生成的清单。
-        const total = Number(DL_SIZE[decodeURIComponent(assetPath.slice("/dl/".length))] || 0);
-        const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-        if (total > 0 && m) {
-          const start = m[1] === "" ? 0 : parseInt(m[1], 10);
-          const rawEnd = m[2] === "" ? total - 1 : parseInt(m[2], 10);
-          const end = Math.min(Number.isFinite(rawEnd) ? rawEnd : total - 1, total - 1);
-          if (!Number.isFinite(start) || start >= total || start > end) {
-            return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}`, "accept-ranges": "bytes", ...mark } });
-          }
-          let cursor = 0;
-          const slicer = new TransformStream({
-            transform(chunk, controller) {
-              const cs = cursor;
-              const ce = cursor + chunk.byteLength - 1;
-              cursor += chunk.byteLength;
-              if (ce < start || cs > end) return;
-              const from = Math.max(start - cs, 0);
-              const to = Math.min(end - cs, chunk.byteLength - 1);
-              controller.enqueue(chunk.subarray(from, to + 1));
-            },
-          });
-          const full = await env.ASSETS.fetch(new Request(assetUrl));
-          return new Response(full.body.pipeThrough(slicer), {
-            status: 206,
-            headers: {
-              ...mark,
-              "content-type": full.headers.get("content-type") || "application/vnd.android.package-archive",
-              "content-range": `bytes ${start}-${end}/${total}`,
-              "content-length": String(end - start + 1),
-              "accept-ranges": "bytes",
-              "cache-control": "public, max-age=31536000, immutable",
-              "etag": full.headers.get("etag") || "",
-            },
-          });
-        }
-        return part;
-      }
-
-      // 3) 无 Range：整包直出，但补上 Accept-Ranges 说明支持续传。
-      const full = await env.ASSETS.fetch(new Request(assetUrl));
-      const h = new Headers(full.headers);
-      h.set("accept-ranges", "bytes");
-      for (const [k, v] of Object.entries(mark)) h.set(k, v);
-      return new Response(full.body, { status: full.status, headers: h });
-    }
-
-    // ---------------------------------------------------------------- 更新检查（不经 GitHub）
-    if (url.pathname === "/api/releases" || url.pathname === "/api/latest") {
-      const gh = await fetch(
-        "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
-        {
-          headers: { "user-agent": "Arris-Relay/1.0", accept: "application/vnd.github+json" },
-          cf: { cacheEverything: true, cacheTtl: 300 },
-        },
-      );
-      if (!gh.ok) return Response.json({ error: "upstream_unavailable" }, { status: 502 });
-      let list = await gh.json();
-      if (!Array.isArray(list)) list = [];
-      list = list.filter((r) => r && !r.draft).map((r) => ({
-        tag_name: r.tag_name,
-        name: r.name,
-        draft: !!r.draft,
-        prerelease: !!r.prerelease,
-        published_at: r.published_at,
-        html_url: r.html_url,
-        body: typeof r.body === "string" ? r.body.slice(0, 4000) : "",
-        assets: (r.assets || [])
-          .filter((a) => a && /\.apk$/i.test(a.name || ""))
-          .map((a) => ({
-            id: a.id,
-            name: a.name,
-            size: a.size,
-            browser_download_url: HOSTED.has(a.name)
-              ? `${url.origin}/dl/${encodeURIComponent(a.name)}`
-              : a.browser_download_url,
-          })),
-      }));
-      const headers = {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "public, max-age=300",
-        "access-control-allow-origin": "*",
-      };
-      if (url.pathname === "/api/latest") {
-        const latest = list.find((r) => !r.prerelease) || list[0] || null;
-        const apk = latest?.assets?.find((a) => /\.apk$/i.test(a.name || "")) || null;
-        return new Response(JSON.stringify({
-          version: latest?.tag_name || null,
-          name: latest?.name || null,
-          publishedAt: latest?.published_at || null,
-          pageUrl: latest?.html_url || null,
-          body: latest?.body || null,
-          apk: apk ? { name: apk.name, size: apk.size, url: apk.browser_download_url } : null,
-        }), { headers });
-      }
-      return new Response(JSON.stringify(list), { headers });
     }
 
     if (url.pathname === "/health" && url.searchParams.get("h") === "1") {
@@ -449,6 +213,7 @@ export class Directory {
     if (url.pathname === "/beat") {
       const body = await request.json();
       rooms[body.roomId] = {
+        session: body.session,
         host: body.host || "",
         members: body.members || 0,
         title: (body.title || "").slice(0, 40),
@@ -463,7 +228,10 @@ export class Directory {
     }
     if (url.pathname === "/drop") {
       const id = url.searchParams.get("roomId");
-      if (id && rooms[id]) { delete rooms[id]; await this.state.storage.put("rooms", rooms); }
+      if (id && rooms[id]?.session === url.searchParams.get("session")) {
+        delete rooms[id];
+        await this.state.storage.put("rooms", rooms);
+      }
       return Response.json({ ok: true });
     }
     return new Response("not found", { status: 404 });
@@ -485,106 +253,95 @@ export class Room {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.roomId = "";
+    this.directoryTail = Promise.resolve();
+  }
+
+  sockets(session) {
+    return this.state.getWebSockets().filter(ws => {
+      const meta = ws.deserializeAttachment();
+      return meta && !meta.closed && (!session || meta.session === session);
+    });
+  }
+
+  host(sockets) {
+    return sockets.find(ws => ws.deserializeAttachment().role === "host");
   }
 
   async fetch(request) {
     const url = new URL(request.url);
-    this.roomId = url.pathname.split("/").pop() || "";
-    // 关键：Hibernation API 会在空闲后重建 DO 实例，内存字段会丢。
-    // roomId 必须落盘，否则 beat/drop 会写到空房间名上 ——
-    // 现象就是「房间永远不销毁」和「退出再进连不上」。
-    if (this.roomId) await this.state.storage.put("roomId", this.roomId);
-    else this.roomId = (await this.state.storage.get("roomId")) || "";
-    // I11：`role=host` 不能只由请求参数决定。规则：
-    //  · 房间里没有房主 ⇒ 允许成为房主（首次进房）；
-    //  · 已有房主 ⇒ 再来的 host 一律降级为成员，并告诉它原因（客户端据此提示"房间已有房主"）。
-    // 这样"唯一房主"由服务端保证，不依赖客户端自觉。
+    const roomId = url.pathname.split("/").pop();
     const wantsHost = url.searchParams.get("role") === "host";
-    const existingHost = this.state.getWebSockets()
-      .map((s) => s.deserializeAttachment() || {})
-      .find((a) => a.role === "host");
-    const role = wantsHost && !existingHost ? "host" : "member";
+    if (wantsHost) {
+      const secret = request.headers.get("Authorization")?.match(/^Bearer ([0-9a-f]{32})$/)?.[1];
+      if (!secret || !/^[a-f0-9]{32}$/.test(secret)) return new Response("host key required", { status: 403 });
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+      const code = [...new Uint8Array(digest).slice(0, 12)].map(b => b.toString(16).padStart(2, "0")).join("");
+      if (code !== roomId) return new Response("wrong host key", { status: 403 });
+    }
+    const host = this.host(this.sockets());
+    if (wantsHost && host) return new Response("room already hosted", { status: 409 });
+    if (!wantsHost && !host) return new Response("no host", { status: 404 });
+    const session = host?.deserializeAttachment().session || crypto.randomUUID();
+    const members = this.sockets(session);
+    if (members.length >= MAX_MEMBERS) return new Response("room full", { status: 429 });
+
+    const [client, server] = Object.values(new WebSocketPair());
+    const role = wantsHost ? "host" : "member";
     const name = (url.searchParams.get("name") || "").slice(0, 24);
-
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-
-    // Hibernation API：连接交给运行时托管，房间静止时不烧时长
     this.state.acceptWebSocket(server, [role]);
-
-    const members = this.state.getWebSockets();
-    if (members.length > MAX_MEMBERS) {
-      server.close(4001, "room full");
-      return new Response(null, { status: 101, webSocket: client });
-    }
-
-    // 成员进来时如果房里已经没有房主，直接告诉他房间结束了 ——
-    // 否则他会连上一个「有连接但永远没有快照」的死房间（就是用户说的
-    //「退出去再连回来没法同步、报错」）。
-    if (role === "member") {
-      const hasHost = this.state.getWebSockets().some((ws) => {
-        try { return (ws.deserializeAttachment() || {}).role === "host"; } catch (_) { return false; }
-      });
-      if (!hasHost) {
-        try { server.send(JSON.stringify({ t: "closed", reason: "no-host" })); } catch (_) {}
-      }
-    }
-
-    // 给新成员一个稳定的 id，并广播「谁进来了」
-    server.serializeAttachment({ role, name, joinedAt: Date.now() });
-    const hello = JSON.stringify({ t: "presence", role, name, members: members.length });
-    for (const ws of members) {
-      try { ws.send(hello); } catch (_) {}
-    }
-    await this.beat();
+    server.serializeAttachment({ role, name, roomId, session });
+    const joined = JSON.stringify({ t: "presence", role, name, members: members.length + 1 });
+    for (const ws of [...members, server]) this.send(ws, joined);
+    if (host) this.send(server, JSON.stringify({
+      t: "presence", role: "host", name: host.deserializeAttachment().name, members: members.length + 1,
+    }));
+    await this.beat(session);
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  /** 收到一条消息：原样转给同房间的其他人（含房主→成员、成员→房主）。 */
-  /** 房间状态变化时顺手更新目录，供 /rooms 扫描。 */
-  async beat(title = "") {
-    try {
+  send(socket, message) {
+    try { socket.send(message); } catch (_) {}
+  }
+
+  directory(url, options) {
+    const send = () => {
       const dir = this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("global"));
-      const sockets = this.state.getWebSockets();
-      const host = sockets.map((s) => s.deserializeAttachment() || {}).find((a) => a.role === "host");
-      await dir.fetch("https://directory/beat", {
-        method: "POST",
-        body: JSON.stringify({
-          roomId: this.roomId || "",
-          host: host?.name || "",
-          members: sockets.length,
-          title,
-        }),
-      });
-    } catch (_) {}
+      return dir.fetch(url, options);
+    };
+    this.directoryTail = this.directoryTail.then(send).catch(() => {});
+    return this.directoryTail;
+  }
+
+  async beat(session, title = "") {
+    const sockets = this.sockets(session);
+    const host = this.host(sockets)?.deserializeAttachment();
+    if (!host) return;
+    await this.directory("https://directory/beat", {
+      method: "POST",
+      body: JSON.stringify({ roomId: host.roomId, session, host: host.name, members: sockets.length, title }),
+    });
   }
 
   async webSocketMessage(ws, message) {
-    const meta = ws.deserializeAttachment() || {};
-    // I11：**按真实 socket 角色放行消息类型**。快照（t:"snapshot"）只允许房主发出；
-    // 普通成员发的快照直接丢弃（旧实现原样转发，其他成员会把成员当房主跟播）。
-    if (meta.role !== "host") {
-      let type = "";
-      try { type = JSON.parse(message)?.t || ""; } catch (_) { type = ""; }
-      if (type === "snapshot") {
-        try { ws.send(JSON.stringify({ t: "error", reason: "not-host" })); } catch (_) {}
-        return;
-      }
+    if (typeof message !== "string" || message.length > 65_536) return;
+    const meta = ws.deserializeAttachment();
+    if (!meta?.session || meta.closed) return;
+    const sockets = this.sockets(meta.session);
+    const host = this.host(sockets);
+    if (!host || !sockets.includes(ws)) return;
+    let payload;
+    try { payload = JSON.parse(message); } catch (_) { return; }
+    if (ws !== host) {
+      if (payload?.t === "ping" && Number.isSafeInteger(payload.t0)) this.send(host, message);
+      return;
     }
-    for (const peer of this.state.getWebSockets()) {
-      if (peer === ws) continue;
-      try { peer.send(message); } catch (_) {}
+    if (payload?.t !== "snapshot" && payload?.t !== "pong") return;
+    for (const peer of sockets) if (peer !== ws) this.send(peer, message);
+    if (payload.t === "snapshot") {
+      const tracks = payload.state?.queue;
+      const current = Array.isArray(tracks) && tracks.find(track => track?.roomTrackId === payload.state.currentRoomTrackId);
+      await this.beat(meta.session, typeof current?.title === "string" ? current.title : "");
     }
-    await this.beat();
-  }
-
-  /** 把房间从目录里摘掉（房间空了或房主离开时）。 */
-  async drop(title = "") {
-    try {
-      const dir = this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("global"));
-      await dir.fetch(`https://directory/drop?roomId=${encodeURIComponent(this.roomId || "")}`);
-    } catch (_) {}
   }
 
   async webSocketClose(ws, code, reason) {
@@ -595,38 +352,24 @@ export class Room {
     await this.leave(ws, 1011, "error");
   }
 
-  /**
-   * 有人离开（v3.8.1）。
-   *
-   * 旧实现只广播 presence，**从不清理目录、也不处理「房主走了」**：
-   * 房主退出后房间仍然挂在 /rooms 里，成员连着一个没有房主的房间等快照。
-   * 现在的规则：
-   * - 房主离开 ⇒ 房间作废，通知所有人后立刻从目录删除；
-   * - 普通成员离开且房间已空 ⇒ 删目录；
-   * - 还有人 ⇒ 刷新一次目录（成员数变了）。
-   */
   async leave(ws, code, reason) {
-    const meta = ws.deserializeAttachment() || {};
-    const peers = this.state.getWebSockets().filter((p) => p !== ws);
-    const presence = JSON.stringify({
-      t: "presence", role: meta.role, name: meta.name, members: peers.length, left: true,
-    });
-    for (const peer of peers) { try { peer.send(presence); } catch (_) {} }
+    const meta = ws.deserializeAttachment();
+    if (!meta?.session || meta.closed) return;
+    const peers = this.sockets(meta.session).filter(p => p !== ws);
+    ws.serializeAttachment({ ...meta, closed: true });
     try { ws.close(code, reason); } catch (_) {}
-
     if (meta.role === "host") {
-      // I12：房主走了 ⇒ 房间这一代作废：通知 + **关掉成员连接**（只发通知的话成员 socket
-      // 还开着，它们再发消息又把这个房间刷回目录，已关闭的房间会被重新扫到）。
-      const closed = JSON.stringify({ t: "closed", reason: "host-left" });
       for (const peer of peers) {
-        try { peer.send(closed); } catch (_) {}
+        peer.serializeAttachment({ ...peer.deserializeAttachment(), closed: true });
+        this.send(peer, JSON.stringify({ t: "closed", reason: "host-left" }));
         try { peer.close(4001, "host-left"); } catch (_) {}
       }
-      await this.drop();
-    } else if (peers.length === 0) {
-      await this.drop();
+      const params = new URLSearchParams({ roomId: meta.roomId, session: meta.session });
+      await this.directory("https://directory/drop?" + params);
     } else {
-      await this.beat();
+      const presence = JSON.stringify({ t: "presence", role: meta.role, name: meta.name, members: peers.length, left: true });
+      for (const peer of peers) this.send(peer, presence);
+      await this.beat(meta.session);
     }
   }
 }

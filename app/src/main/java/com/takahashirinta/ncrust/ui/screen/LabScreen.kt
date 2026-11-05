@@ -281,9 +281,7 @@ fun LabScreen(onClose: () -> Unit) {
                 },
             )
             LabButton("⑥ 创建房间（房主，自动生成房间码）", enabled = !busy) {
-                val code = com.takahashirinta.ncrust.listen.TogetherSession.newRoomCode()
-                roomCode = code
-                com.takahashirinta.ncrust.listen.TogetherSession.create(base, code)
+                roomCode = com.takahashirinta.ncrust.listen.TogetherSession.create(base)
             }
             LabButton("⑦ 加入房间（用上面的房间码）", enabled = !busy) {
                 com.takahashirinta.ncrust.listen.TogetherSession.join(base, roomCode)

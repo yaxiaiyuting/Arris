@@ -59,42 +59,55 @@ internal object SegmentedDownload {
 
     data class Probe(val total: Long, val etag: String?)
 
-    /**
-     * I03：本批次所有在途分段的 Call。
-     *
-     * 取消下载时只置一个 boolean 是不够的 —— 已经发出的请求会一直读到自己的区间结束
-     * （实测取消后旧线程照样写满 4 MiB），于是"取消完立刻重试"会让两代任务同时写同一个
-     * `.seg` 文件。这里登记 Call，取消时**主动 cancel()**，写入循环里也继续看 cancelled()。
-     */
-    private val activeCalls: MutableSet<okhttp3.Call> =
-        java.util.Collections.synchronizedSet(mutableSetOf())
+    class Batch {
+        private val calls = mutableSetOf<okhttp3.Call>()
+        @Volatile var cancelled = false
+            private set
 
-    /** 取消当前批次所有在途请求（幂等）。 */
-    fun cancelAll() {
-        val snapshot = synchronized(activeCalls) { activeCalls.toList() }
-        activeCalls.clear()
-        snapshot.forEach { runCatching { it.cancel() } }
+        fun cancel() {
+            val pending = synchronized(calls) {
+                cancelled = true
+                calls.toList()
+            }
+            pending.forEach { it.cancel() }
+        }
+
+        fun <T> execute(call: okhttp3.Call, read: (okhttp3.Response) -> T): T {
+            synchronized(calls) {
+                if (cancelled) throw DownloadCancelledException()
+                calls.add(call)
+            }
+            try {
+                return call.execute().use(read)
+            } finally {
+                synchronized(calls) { calls.remove(call) }
+            }
+        }
     }
 
+    private fun strongEtag(value: String?): String? =
+        value?.trim()?.takeIf { it.length >= 2 && it.first() == '"' && it.last() == '"' }
+
     /** 探测服务端是否支持 Range；不支持返回 null。 */
-    fun probe(url: String): Probe? {
+    fun probe(url: String, batch: Batch): Probe? {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", UpdateService.USER_AGENT)
             .header("Range", "bytes=0-0")
             .build()
         return runCatching {
-            client.newCall(request).execute().use { resp ->
+            batch.execute(client.newCall(request)) { resp ->
                 if (resp.code != 206) {
                     Log.i(TAG, "probe: code=${resp.code} → 不走分段")
-                    return null
+                    return@execute null
                 }
                 val range = parseContentRange(resp.header("Content-Range"))
-                if (range == null || range.total <= 0L) {
+                if (range == null || range.start != 0L || range.end != 0L || range.total <= 0L) {
                     Log.i(TAG, "probe: 没有 Content-Range 总长 → 不走分段")
-                    return null
+                    return@execute null
                 }
-                Probe(range.total, resp.header("ETag"))
+                val etag = strongEtag(resp.header("ETag")) ?: return@execute null
+                Probe(range.total, etag)
             }
         }.getOrNull()
     }
@@ -107,9 +120,10 @@ internal object SegmentedDownload {
         url: String,
         target: File,
         probe: Probe,
-        cancelled: () -> Boolean,
+        batch: Batch,
         onProgress: (Long, Long) -> Unit,
     ) {
+        if (batch.cancelled) throw DownloadCancelledException()
         val total = probe.total
         val startedAt = android.os.SystemClock.elapsedRealtime()
         Log.i(TAG, "start total=$total segments=$SEGMENTS url=${url.takeLast(40)}")
@@ -132,24 +146,21 @@ internal object SegmentedDownload {
         val threads = ranges.mapIndexed { index, (s, e) ->
             thread(name = "seg-dl-$index") {
                 try {
-                    fetchSegment(url, target, s, e, probe.etag, cancelled, done, total, onProgress)
+                    fetchSegment(url, target, s, e, probe.etag, batch, done, total, onProgress)
                 } catch (t: Throwable) {
                     errors += t
+                    batch.cancel()
                 }
             }
         }
         threads.forEach { it.join() }
 
-        if (cancelled()) {
-            // I03：旧代次的任务必须**立刻退出**，不写文件、不改名、不回落单流。
-            cancelAll()
-            throw DownloadCancelledException()
-        }
         if (errors.isNotEmpty()) {
             val first = errors.first()
             Log.w(TAG, "segment failed: ${first.javaClass.simpleName} ${first.message?.take(80)}")
             throw IOException("分段下载失败", first)
         }
+        if (batch.cancelled) throw DownloadCancelledException()
         if (target.length() != total) throw IOException("长度不符 ${target.length()} != $total")
         Log.i(TAG, "done total=$total elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms")
     }
@@ -160,7 +171,7 @@ internal object SegmentedDownload {
         start: Long,
         endInclusive: Long,
         etag: String?,
-        cancelled: () -> Boolean,
+        batch: Batch,
         done: AtomicLong,
         total: Long,
         onProgress: (Long, Long) -> Unit,
@@ -172,9 +183,7 @@ internal object SegmentedDownload {
             .apply { if (!etag.isNullOrBlank()) header("If-Range", etag) }
             .build()
         val call = client.newCall(request)
-        activeCalls.add(call)
-        try {
-        call.execute().use { resp ->
+        batch.execute(call) { resp ->
             if (resp.code != 206) throw IOException("段 $start 返回 ${resp.code}")
             // I04：**先核对实体身份与范围，再写盘**。旧实现只看 206 + 字节数，
             // 于是"等长的错误范围 / 另一版资产"也会被判成功，拼出来的包是坏的。
@@ -186,8 +195,8 @@ internal object SegmentedDownload {
                         "，期望 $start-$endInclusive/$total"
                 )
             }
-            val segEtag = resp.header("ETag")
-            if (!etag.isNullOrBlank() && !segEtag.isNullOrBlank() && segEtag != etag) {
+            val segEtag = strongEtag(resp.header("ETag"))
+            if (segEtag == null || segEtag != etag) {
                 throw IOException("段 $start ETag 变了（$segEtag ≠ $etag）")
             }
             val body = resp.body ?: throw IOException("段 $start 没有正文")
@@ -196,9 +205,11 @@ internal object SegmentedDownload {
             RandomAccessFile(target, "rw").use { raf ->
                 raf.seek(start)
                 while (true) {
-                    if (cancelled()) throw DownloadCancelledException()
+                    if (batch.cancelled) throw DownloadCancelledException()
                     val read = body.source().read(buffer)
                     if (read == -1) break
+                    if (batch.cancelled) throw DownloadCancelledException()
+                    if (read.toLong() > endInclusive + 1 - offset) throw IOException("段 $start 正文越界")
                     raf.write(buffer, 0, read)
                     offset += read
                     val now = done.addAndGet(read.toLong())
@@ -207,8 +218,6 @@ internal object SegmentedDownload {
             }
             if (offset != endInclusive + 1) throw IOException("段 $start 长度不足 ${offset - start}")
         }
-        } finally {
-            activeCalls.remove(call)
-        }
+
     }
 }

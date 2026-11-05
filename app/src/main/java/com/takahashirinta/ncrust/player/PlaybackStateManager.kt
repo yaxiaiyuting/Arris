@@ -198,6 +198,7 @@ object PlaybackStateManager {
     )
 
     private val positionLock = Any()
+    private var positionGeneration = 0L
     @Volatile private var positionCache: MutableMap<Long, PositionEntry>? = null
     private var posFlushJob: Job? = null
 
@@ -248,16 +249,13 @@ object PlaybackStateManager {
     fun clearSongPositions(context: Context, songIds: Collection<Long>) {
         if (songIds.isEmpty()) return
         val map = ensurePositionsLoaded(context)
-        var removed = 0
-        synchronized(positionLock) {
-            songIds.forEach { id -> if (map.remove(id) != null) removed++ }
+        val changed = synchronized(positionLock) {
+            var removed = false
+            songIds.forEach { if (map.remove(it) != null) removed = true }
+            if (removed) positionGeneration++
+            removed
         }
-        if (removed == 0) return
-        runCatching {
-            getPrefs(context).edit()
-                .putString(KEY_SONG_POSITIONS, PlaybackPositionCodec.encode(map))
-                .apply()
-        }
+        if (changed) scheduleFlushPositions(context, immediate = true)
     }
 
     /**
@@ -284,6 +282,7 @@ object PlaybackStateManager {
         val map = ensurePositionsLoaded(context)
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
+            positionGeneration++
             if (map.size > MAX_SONG_POSITIONS) {
                 map.entries
                     .sortedBy { it.value.savedAtMs }
@@ -298,16 +297,21 @@ object PlaybackStateManager {
     fun clearSongPosition(context: Context, songId: Long) {
         if (songId <= 0) return
         val map = ensurePositionsLoaded(context)
-        val removed = synchronized(positionLock) { map.remove(songId) != null }
+        val removed = synchronized(positionLock) {
+            if (map.remove(songId) == null) false else {
+                positionGeneration++
+                true
+            }
+        }
         if (removed) scheduleFlushPositions(context)
     }
 
-    private fun scheduleFlushPositions(context: Context) {
+    private fun scheduleFlushPositions(context: Context, immediate: Boolean = false) {
         val appContext = context.applicationContext
         synchronized(flushLock) {
             posFlushJob?.cancel()
             posFlushJob = ioScope.launch {
-                delay(1_000L)
+                if (!immediate) delay(1_000L)
                 flushPositions(appContext)
             }
         }
@@ -315,13 +319,17 @@ object PlaybackStateManager {
 
     private suspend fun flushPositions(context: Context) {
         val map = positionCache ?: return
-        val snapshot = synchronized(positionLock) { map.toMap() }
+        val (generation, snapshot) = synchronized(positionLock) { positionGeneration to map.toMap() }
         try {
             // 与队列一样：序列化放 Default，IO 只做写盘。
             // v2.5.5 · A：序列化改走 codec（显式字段名），不再依赖 R8 后的类结构。
             val json = withContext(Dispatchers.Default) { PlaybackPositionCodec.encode(snapshot) }
             withContext(Dispatchers.IO) {
-                getPrefs(context).edit().putString(KEY_SONG_POSITIONS, json).apply()
+                synchronized(positionLock) {
+                    if (positionGeneration == generation) {
+                        getPrefs(context).edit().putString(KEY_SONG_POSITIONS, json).apply()
+                    }
+                }
             }
         } catch (_: Exception) {
             // 写失败不影响播放，下次变更再试。

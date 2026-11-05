@@ -15,6 +15,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicLong
 
 /** 一起听需要播放器提供的最小能力。由 MainScreen 实现并注入，避免把 ViewModel 拖进 listen 包。 */
 interface PlaybackSource {
@@ -50,6 +53,7 @@ data class PlaybackSnapshot(
     val nextArtist: String? = null,
     val nextSongId: Long? = null,
     val nextSourceKey: String? = null,
+    val followGeneration: Long = 0L,
 )
 
 /**
@@ -88,7 +92,6 @@ object TogetherSession {
     private const val SEEK_TOLERANCE_MS = 5_000L
 
     /** 超过这个偏差才算真的走远，强制对齐（此前会一直忍着）。 */
-    private const val HARD_RESYNC_MS = 12_000L
 
     /** 房主的播放/暂停态要连续这么多次快照一致，才跟着改（防瞬时缓冲导致成员被暂停）。 */
     private const val TRANSPORT_CONFIRMATIONS = 2
@@ -98,8 +101,70 @@ object TogetherSession {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var hostJob: Job? = null
-    private var link: RoomLink? = null
-    private var source: PlaybackSource? = null
+    @Volatile private var link: RoomLink? = null
+    private val followGeneration = AtomicLong()
+    @Volatile private var member: MemberSession? = null
+
+    private class MemberSession(val generation: Long, val owner: RoomLink) {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val samples = ArrayDeque<RoomClock.Sample>()
+        var lastPing = -1L
+        var pingSentAt = 0L
+        var lastSeq = Long.MIN_VALUE
+        var pendingPlaying: Boolean? = null
+        var transportCount = 0
+        var nextIdentity: CanonicalTrack? = null
+    }
+
+    fun isCurrentFollow(generation: Long): Boolean =
+        member?.let { it.generation == generation && it.owner === link } == true
+
+    fun launchFollow(generation: Long, block: suspend CoroutineScope.() -> Unit): Job? =
+        member?.takeIf { isCurrentFollow(generation) && it.generation == generation }?.scope?.launch(block = block)
+
+    private fun registerMember(owner: RoomLink) {
+        val session = MemberSession(followGeneration.incrementAndGet(), owner)
+        link = owner
+        member = session
+        session.scope.launch(Dispatchers.IO) {
+            while (isCurrentFollow(session.generation)) {
+                val ping = nowMs()
+                synchronized(session) {
+                    session.lastPing = ping
+                    session.pingSentAt = android.os.SystemClock.elapsedRealtime()
+                }
+                owner.send(RoomWire.Ping(ping))
+                delay(2_500)
+            }
+        }
+    }
+
+    private fun memberMessage(owner: RoomLink, msg: RoomWire) {
+        val session = member?.takeIf { it.owner === owner && owner === link } ?: return
+        when (msg) {
+            is RoomWire.Snapshot -> synchronized(session) { followSnapshot(session, msg.state) }
+            is RoomWire.Pong -> synchronized(session) {
+                if (msg.t0 != session.lastPing) return
+                val rtt = android.os.SystemClock.elapsedRealtime() - session.pingSentAt
+                session.lastPing = -1
+                if (rtt in 0..3_000) {
+                    if (session.samples.size == 8) session.samples.removeFirst()
+                    session.samples.addLast(RoomClock.Sample(msg.t0, msg.t0 + rtt, msg.relayNow))
+                }
+            }
+            is RoomWire.Presence -> _members.value = msg.members
+            is RoomWire.Closed -> connectionClosed(owner, 4001, msg.reason)
+            else -> Unit
+        }
+    }
+
+    @Synchronized
+    private fun connectionClosed(owner: RoomLink, code: Int, reason: String) {
+        if (link !== owner) return
+        leave()
+        _status.value = closeReason(code, reason)
+    }
+    @Volatile private var source: PlaybackSource? = null
 
     /** 供 UI 观察的状态文本 + 房间信息。 */
     private val _status = MutableStateFlow("未连接")
@@ -142,84 +207,49 @@ object TogetherSession {
         source = playbackSource
     }
 
-    /** 房主建房：房间码由调用方给（6 位数字），连上后开始广播。 */
-    fun create(base: String, code: String, fixedIps: List<String> = emptyList()) {
-        trace("建房", "$code @ ${base.removePrefix("https://").removePrefix("wss://")}")
+    /** The public invite is derived from a private, per-room host credential. */
+    fun create(base: String, fixedIps: List<String> = emptyList()): String {
         leave()
+        val secret = UUID.randomUUID().toString().replace("-", "")
+        val code = MessageDigest.getInstance("SHA-256").digest(secret.toByteArray())
+            .take(12).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
         _isHost.value = true
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps = fixedIps)
-        ws.onOpen = {
-            _status.value = "已创建房间 $code"
-            trace("房主已连接", "开始广播")
-            startHostLoop(ws)
-        }
-        // 必须**先**登记 link 再 connect：连接可能瞬间失败，回调里要靠它判断
-        // 「这次失败是不是当前连接」。反过来写的话状态会永远停在「连接中…」。
+        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps, secret)
         link = ws
-        ws.onClosed = { c, r ->
+        ws.onOpen = {
             if (link === ws) {
-                _status.value = closeReason(c, r)
-                trace("连接断开", "$c ${r.take(16)}")
-                stopHostLoop()
-                link = null
+                _status.value = "已创建房间 $code"
+                startHostLoop(ws)
             }
         }
+        ws.onClosed = { c, r -> connectionClosed(ws, c, r) }
         ws.onMessage = { msg ->
-            when (msg) {
+            if (link === ws) when (msg) {
                 is RoomWire.Ping -> ws.send(RoomWire.Pong(msg.t0, nowMs()))
                 is RoomWire.Presence -> _members.value = msg.members
                 else -> Unit
             }
         }
         ws.connect()
+        return code
     }
 
-    /** 成员加入：收到房主快照就跟随。 */
     fun join(base: String, code: String, fixedIps: List<String> = emptyList()) {
-        trace("加入", "$code @ ${base.removePrefix("https://").removePrefix("wss://")}")
+        if (!code.matches(Regex("[a-f0-9]{24}"))) {
+            _status.value = "请复制房主新版客户端的完整房间码"
+            return
+        }
         leave()
-        _isHost.value = false
         _roomId.value = code
         _status.value = "连接中…"
-        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps = fixedIps)
-        ws.onOpen = {
-            _status.value = "已加入房间 $code"
-            trace("成员已连接")
-        }
-        link = ws
-        ws.onClosed = { c, r ->
-            if (link === ws) {
-                _status.value = closeReason(c, r)
-                trace("连接断开", "$c ${r.take(16)}")
-                link = null
-            }
-        }
-        ws.onMessage = { msg ->
-            when (msg) {
-                is RoomWire.Snapshot -> followSnapshot(msg.state)
-                is RoomWire.Ping -> ws.send(RoomWire.Pong(msg.t0, nowMs()))
-                is RoomWire.Presence -> {
-                    _members.value = msg.members
-                    if (msg.role == "host" && !msg.left && msg.name.isNotBlank()) {
-                        _status.value = "已加入房间 ${_roomId.value}（房主 ${msg.name}）"
-                    }
-                }
-                is RoomWire.Closed -> {
-                    _status.value = when (msg.reason) {
-                        "host-left" -> "房主已离开，房间结束"
-                        "no-host" -> "房间里没有房主了（可能已结束），换个房间吧"
-                        else -> "房间已结束"
-                    }
-                    _members.value = 0
-                }
-                is RoomWire.Hello -> Unit
-                else -> Unit
-            }
-        }
+        val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps)
+        ws.onOpen = { if (link === ws) _status.value = "已加入房间 $code" }
+        ws.onClosed = { c, r -> connectionClosed(ws, c, r) }
+        ws.onMessage = { msg -> memberMessage(ws, msg) }
+        registerMember(ws)
         ws.connect()
-        link = ws
     }
 
     /**
@@ -264,17 +294,11 @@ object TogetherSession {
             _status.value = "连不上 $address（${it.message}）"
             return false
         }
-        lan.onMessage = { msg ->
-            when (msg) {
-                is RoomWire.Snapshot -> followSnapshot(msg.state)
-                is RoomWire.Ping -> lan.send(RoomWire.Pong(msg.t0, nowMs()))
-                is RoomWire.Presence -> _members.value = msg.members
-                else -> Unit
-            }
-        }
-        lan.onOpen = { _status.value = "已加入局域网 $address" }
+        lan.onMessage = { msg -> memberMessage(lan, msg) }
+        lan.onClosed = { c, r -> connectionClosed(lan, c, r) }
+        lan.onOpen = { if (link === lan) _status.value = "已加入局域网 $address" }
+        registerMember(lan)
         lan.startMember()
-        link = lan
         return true
     }
 
@@ -287,18 +311,29 @@ object TogetherSession {
         _isHost.value = true
         _roomId.value = "P2P"
         val link = P2pLink.host(P2pLink.newToken())
+        this.link = link
         link.onMessage = { msg ->
-            when (msg) {
+            if (this.link === link) when (msg) {
                 is RoomWire.Ping -> link.send(RoomWire.Pong(msg.t0, nowMs()))
                 is RoomWire.Presence -> _members.value = msg.members
                 else -> Unit
             }
         }
         val code = link.startHost()
-        startHostLoop(link)
-        this.link = link
-        _status.value = "P2P 房间码：${code ?: "（获取公网地址失败）"}"
-        return code
+        synchronized(this) {
+            if (this.link !== link) {
+                link.close()
+                return null
+            }
+            if (code == null) {
+                leave()
+                _status.value = "P2P 房间获取公网地址失败"
+                return null
+            }
+            startHostLoop(link)
+            _status.value = "P2P 房间码：$code"
+            return code
+        }
     }
 
     /** P2P 加入：房间码 `公网IP:端口#令牌`。 */
@@ -312,26 +347,32 @@ object TogetherSession {
         _roomId.value = "P2P"
         _status.value = "正在打洞连接 ${parsed.first}:${parsed.second} …"
         val link = P2pLink.join(parsed.third)
-        link.onMessage = { msg ->
-            when (msg) {
-                is RoomWire.Snapshot -> followSnapshot(msg.state)
-                is RoomWire.Ping -> link.send(RoomWire.Pong(msg.t0, nowMs()))
-                is RoomWire.Presence -> _members.value = msg.members
-                else -> Unit
-            }
+        link.onMessage = { msg -> memberMessage(link, msg) }
+        link.onClosed = { c, r -> connectionClosed(link, c, r) }
+        link.onOpen = { if (this.link === link) _status.value = "P2P 已连通（${parsed.first}:${parsed.second}）" }
+        registerMember(link)
+        try {
+            link.startMember(parsed.first, parsed.second)
+        } catch (e: Exception) {
+            connectionClosed(link, -1, e.message.orEmpty())
+            return false
         }
-        link.onOpen = { _status.value = "P2P 已连通（${parsed.first}:${parsed.second}）" }
-        link.startMember(parsed.first, parsed.second)
-        this.link = link
         return true
     }
 
+    @Synchronized
     fun leave() {
         stopHostLoop()
-        link?.close()
+        val old = link
         link = null
+        member?.scope?.cancel()
+        member = null
         _members.value = 0
-        if (_status.value != "未连接") _status.value = "未连接"
+        _nextUp.value = null
+        _roomId.value = ""
+        _isHost.value = false
+        _status.value = "未连接"
+        old?.close()
     }
 
     // ---------------------------------------------------------------- 房主
@@ -353,6 +394,7 @@ object TogetherSession {
     private fun startHostLoop(ws: RoomLink) {
         stopHostLoop()
         hostJob = scope.launch {
+            var seq = 0L
             var lastSnap: PlaybackSnapshot? = null
             var lastSentAt = 0L
             while (true) {
@@ -364,7 +406,8 @@ object TogetherSession {
                         kotlin.math.abs(snap.positionMs - (prev.positionMs + (now - lastSentAt))) > DRIFT_SEND_MS
                     val changed = prev == null ||
                         prev.songId != snap.songId ||
-                        prev.title != snap.title ||
+                        prev.title != snap.title || prev.sourceKey != snap.sourceKey ||
+                        prev.nextSongId != snap.nextSongId || prev.nextSourceKey != snap.nextSourceKey ||
                         prev.playing != snap.playing ||
                         jumped
                     if (changed || now - lastSentAt >= HOST_TICK_MS) {
@@ -424,77 +467,63 @@ object TogetherSession {
 
     // ---------------------------------------------------------------- 成员
 
-    /** 传输态去抖：记录待确认的「房主播放态」与已连续看到它的次数。 */
-    private var pendingTransportPlaying: Boolean? = null
-    private var pendingTransportCount = 0
-
-    private fun followSnapshot(state: RoomState) {
+    private fun followSnapshot(session: MemberSession, state: RoomState) {
         val src = source ?: return
-        // 当前曲目以 currentRoomTrackId 为准（队列第一位是当前歌，后面可能跟着下一首）
-        val track = state.queue.firstOrNull { it.roomTrackId == state.currentRoomTrackId }
-            ?: state.queue.firstOrNull()
-        val nextTrack = state.queue.firstOrNull { it.roomTrackId != track?.roomTrackId }
-        if (nextTrack != null) {
-            _nextUp.value = nextTrack.title
-        }
-        val target = state.transport.positionMs + (nowMs() - state.stampedAtMs)
+        if (!isCurrentFollow(session.generation) || state.roomId != _roomId.value ||
+            state.seq <= session.lastSeq) return
+        val track = state.queue.firstOrNull { it.roomTrackId == state.currentRoomTrackId } ?: return
+        session.lastSeq = state.seq
+        val nextTrack = state.queue.getOrNull(state.queue.indexOf(track) + 1)
+        val nextChanged = nextTrack != session.nextIdentity
+        session.nextIdentity = nextTrack
+        _nextUp.value = nextTrack?.title
+        val elapsed = RoomClock.estimateOffset(session.samples.toList())?.let {
+            (nowMs() + it.offsetMs - state.stampedAtMs).coerceIn(0L, 3_000L)
+        } ?: 0L
+        val advance = if (state.transport.playing) elapsed else 0L
+        val target = state.transport.positionMs.coerceIn(0L, Long.MAX_VALUE - 3_000) + advance
         val remote = PlaybackSnapshot(
-            title = track?.title.orEmpty(),
-            artist = track?.artist.orEmpty(),
+            title = track.title,
+            artist = track.artist,
             positionMs = target,
             playing = state.transport.playing,
-            songId = track?.publicIds?.get("songId")?.toLongOrNull(),
-            sourceKey = track?.publicIds?.get("source")?.takeIf { it.isNotBlank() },
+            songId = track.publicIds["songId"]?.toLongOrNull(),
+            sourceKey = track.publicIds["source"]?.takeIf(String::isNotBlank),
+            nextTitle = nextTrack?.title,
+            nextArtist = nextTrack?.artist,
+            nextSongId = nextTrack?.publicIds?.get("songId")?.toLongOrNull(),
+            nextSourceKey = nextTrack?.publicIds?.get("source"),
+            followGeneration = session.generation,
         )
-        // 本地可能**根本没有在播的歌**（刚进房间的常态）。旧实现在这里 `?: return`，
-        // 于是整条快照被丢掉 —— 这就是「连上了但不同步」的根因。
         val local = src.current()
-        if (!FollowPolicy.isSameSong(local, remote)) {
-            trace("收到切歌", "${remote.title} id=${remote.songId ?: "?"}")
+        if (!FollowPolicy.isSameSong(local, remote) || local == null) {
+            session.pendingPlaying = null
+            session.transportCount = 0
             src.follow(remote)
             _status.value = "房主在放：${remote.title}"
             return
         }
-        // 1) 播放/暂停态：房主的状态要连续确认两次才跟随，避免它缓冲一下就把成员也停掉。
-        if (FollowPolicy.needsTransportFix(local, remote)) {
-            if (pendingTransportPlaying == remote.playing) {
-                pendingTransportCount++
-            } else {
-                pendingTransportPlaying = remote.playing
-                pendingTransportCount = 1
-            }
-            if (pendingTransportCount >= TRANSPORT_CONFIRMATIONS) {
-                trace("跟随播放态", "playing=${remote.playing}（连续 $pendingTransportCount 次）")
-                src.follow(local!!.copy(playing = remote.playing))
-                pendingTransportPlaying = null
-                pendingTransportCount = 0
-            }
+        if (local.playing != remote.playing) {
+            if (session.pendingPlaying != remote.playing) session.transportCount = 0
+            session.pendingPlaying = remote.playing
+            session.transportCount++
+            if (session.transportCount >= TRANSPORT_CONFIRMATIONS) src.follow(remote)
             return
         }
-        pendingTransportPlaying = null
-        pendingTransportCount = 0
-
-        // 2) 位置：容差窗口内完全不动；超窗才纠正，超过硬阈值强制对齐。
-        val drift = kotlin.math.abs(remote.positionMs - local!!.positionMs)
-        when {
-            drift <= SEEK_TOLERANCE_MS -> Unit
-            drift >= HARD_RESYNC_MS -> {
-                trace("强制对齐", "偏差 ${drift}ms ≥ ${HARD_RESYNC_MS}ms")
-                src.follow(local.copy(positionMs = target, playing = remote.playing))
-            }
-            else -> {
-                trace("温和纠正进度", "偏差 ${drift}ms（窗口 ${SEEK_TOLERANCE_MS}ms）")
-                src.follow(local.copy(positionMs = target))
-            }
+        session.pendingPlaying = null
+        session.transportCount = 0
+        if (nextChanged || kotlin.math.abs(remote.positionMs - local.positionMs) > SEEK_TOLERANCE_MS) {
+            src.follow(remote)
         }
     }
 
-    private var seq = 0L
-    /** 把 WebSocket 关闭码翻译成人话（-1 = 连接层失败，没有 HTTP 响应）。 */
     private fun closeReason(code: Int, reason: String): String = when {
         code == -1 -> "连不上中继（网络被重置或超时）"
         code == 1000 -> "已退出房间"
-        code == 4001 -> "房间已满"
+        reason == "host-left" || code == 404 -> "房主已离开或房间不存在"
+        code == 403 -> "房主凭据无效，请重新建房"
+        code == 409 -> "该房间已有房主"
+        code == 429 || code == 4001 -> "房间已满"
         else -> "断开（$code ${reason.take(20)}）"
     }
 
@@ -506,7 +535,6 @@ object TogetherSession {
     }
 
     /** 生成一个 6 位房间码。 */
-    fun newRoomCode(): String = (100000..999999).random().toString()
     @Suppress("unused") private val sessionUuid = UUID.randomUUID()
     private fun log(msg: String) = Log.i(TAG, msg)
 }

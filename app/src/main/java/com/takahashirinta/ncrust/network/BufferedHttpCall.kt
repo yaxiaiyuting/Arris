@@ -9,7 +9,9 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 
 /** Keep cancellation attached through the JSON body, not just until headers arrive. */
-internal suspend fun Call.awaitBufferedResponse(): Response = suspendCancellableCoroutine { cont ->
+internal suspend fun Call.awaitBufferedResponse(
+    bufferBody: (Response) -> Boolean = { true },
+): Response = suspendCancellableCoroutine { cont ->
     cont.invokeOnCancellation { cancel() }
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
@@ -22,7 +24,7 @@ internal suspend fun Call.awaitBufferedResponse(): Response = suspendCancellable
         override fun onResponse(call: Call, response: Response) {
             try {
                 val buffered = response.use {
-                    val body = it.body
+                    val body = it.body?.takeIf { _ -> bufferBody(it) }
                     it.newBuilder().body(body?.bytes()?.toResponseBody(body.contentType())).build()
                 }
                 // The returned body owns only memory; the socket is already closed/released.

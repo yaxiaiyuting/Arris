@@ -54,7 +54,14 @@ internal fun evaluateReleases(
         if (page.isNullOrBlank()) return null
         val parsed = runCatching { JsonParser.parseString(page) }.getOrNull() ?: return null
         if (!parsed.isJsonArray) return null
-        parsed.asJsonArray.forEach { merged.add(it) }
+        for (entry in parsed.asJsonArray) {
+            if (!entry.isJsonObject) return null
+            val release = entry.asJsonObject
+            val tag = release.get("tag_name")
+            if (tag?.isJsonPrimitive != true || !tag.asJsonPrimitive.isString || tag.asString.isBlank() ||
+                release.get("assets")?.isJsonArray != true) return null
+            merged.add(release)
+        }
     }
     return UpdateChecker.find(merged.toString(), current, variant)
         ?.let { CheckOutcome.Found(it) }

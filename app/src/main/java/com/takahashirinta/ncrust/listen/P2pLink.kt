@@ -12,6 +12,10 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.security.MessageDigest
+import java.util.UUID
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -46,9 +50,15 @@ class P2pLink private constructor(
 
     private val running = AtomicBoolean(true)
     private val reassembler = UdpReliable.Reassembler()
-    private val pendingAcks = ConcurrentHashMap<Long, Boolean>()   // key = msgId<<16 | idx
+    private val pendingAcks = ConcurrentHashMap<Long, Boolean>()
+    private val delivered = LinkedHashSet<Int>()
+    private val nonce = UUID.randomUUID().toString()
+    private val key = SecretKeySpec(token.toByteArray(Charsets.UTF_8), "HmacSHA256")
 
-    @Volatile private var peer: InetSocketAddress? = null
+    private data class Peer(val address: InetSocketAddress, val session: String)
+
+    @Volatile private var peer: Peer? = null
+    private var expectedHost: InetSocketAddress? = null
     @Volatile var mappedAddress: String? = null
         private set
 
@@ -62,23 +72,20 @@ class P2pLink private constructor(
         val localPort = socket.localPort
         mappedAddress = mapped?.toString()
         startReader()
-        onOpen?.invoke()
         val addr = mapped?.let { "${it.address.hostAddress}:${it.port}" } ?: "$local:$localPort"
         Log.i(TAG, "host mapped=$mappedAddress local=$local:$localPort")
         return "$addr#$token"
     }
 
-    /** 成员：向房主地址发 HELLO，收到任何回包即视为打通。 */
     fun startMember(hostIp: String, hostPort: Int) {
-        peer = InetSocketAddress(InetAddress.getByName(hostIp), hostPort)
+        val host = InetSocketAddress(InetAddress.getByName(hostIp), hostPort)
+        expectedHost = host
         startReader()
         thread(isDaemon = true, name = "p2p-punch") {
-            val hello = "HELLO:$token".toByteArray()
+            val hello = seal("H2:$nonce".toByteArray(), "handshake")
             repeat(12) {
                 if (!running.get()) return@thread
-                runCatching {
-                    socket.send(DatagramPacket(hello, hello.size, peer))
-                }
+                sendPacket(hello, host)
                 Thread.sleep(300)
             }
         }
@@ -87,87 +94,121 @@ class P2pLink private constructor(
     private fun startReader() {
         thread(isDaemon = true, name = "p2p-reader") {
             val buf = ByteArray(2048)
-            while (running.get()) {
-                val packet = DatagramPacket(buf, buf.size)
-                val ok = runCatching { socket.soTimeout = 1_000; socket.receive(packet) }.isSuccess
-                if (!ok) continue
-                val data = packet.data
-                val len = packet.length
-                // I14：**先看报文来源，再谈绑定**。
-                // 旧实现是"成员侧收到任何包就把 peer 锁成它，房主侧连 DATA 都在校验前把来源
-                // 登记成对端" ⇒ 任意端口发一包就能劫持会话。现在只有**校验通过的 HELLO /
-                // HELLO-ACK**（带正确 token）才允许确定对端地址；DATA / ACK 在握手完成前一律丢弃。
-                val from = InetSocketAddress(packet.address, packet.port)
-                val text0 = runCatching { String(data, 0, len, Charsets.UTF_8) }.getOrNull()
-                val isHandshake = text0 == "HELLO:$token" || text0 == "HELLO-ACK:$token"
-                if (isHandshake) {
-                    if (peer == null) peer = from
-                } else if (peer == null || peer != from) {
-                    // 未握手 / 来源不符：直接丢，不 ACK、不重组、不回调
-                    return@thread
+            try {
+                while (running.get()) {
+                    val packet = DatagramPacket(buf, buf.size)
+                    val ok = runCatching { socket.soTimeout = 1_000; socket.receive(packet) }.isSuccess
+                    if (!ok) continue
+                    val from = InetSocketAddress(packet.address, packet.port)
+                    val bound = peer
+                    if (bound != null && bound.address != from) continue
+                    if (!isHost && from != expectedHost) continue
+                    val bytes = packet.data.copyOf(packet.length)
+                    val handshake = unseal(bytes, "handshake")
+                    if (handshake != null) {
+                        handleHandshake(String(handshake, Charsets.UTF_8), from)
+                    } else if (bound != null) {
+                        val incoming = if (isHost) "member" else "host"
+                        val message = unseal(bytes, "$incoming:${bound.session}") ?: continue
+                        handlePacket(message, bound)
+                    }
                 }
-                handlePacket(data, len)
+            } finally {
+                onClosed?.invoke(0, "socket closed")
             }
-            onClosed?.invoke(0, "socket closed")
         }
     }
 
-    private fun handlePacket(data: ByteArray, len: Int) {
-        // 控制帧：HELLO / HELLO-ACK（明文，仅用于打洞确认）
-        val text = runCatching { String(data, 0, len, Charsets.UTF_8) }.getOrNull()
-        if (text == "HELLO:$token") {
-            val p = peer
-            if (p != null) runCatching {
-                val ack = "HELLO-ACK:$token".toByteArray()
-                socket.send(DatagramPacket(ack, ack.size, p))
+    private fun handleHandshake(message: String, from: InetSocketAddress) {
+        val fields = message.split(':', limit = 4)
+        val memberNonce = fields.getOrNull(1)?.takeIf(::validNonce) ?: return
+        when (fields.first()) {
+            "H2" -> if (isHost && fields.size == 2) sendHandshake("A2:$memberNonce:$nonce", from)
+            "A2" -> if (!isHost && fields.size == 3 && memberNonce == nonce) {
+                val hostNonce = fields[2].takeIf(::validNonce) ?: return
+                sendHandshake("F2:$nonce:$hostNonce", from)
+                bindPeer(from, "$nonce:$hostNonce")
             }
-            if (isHost) onOpen?.invoke()
-            return
+            "F2" -> if (isHost && fields.size == 3 && fields[2] == nonce) {
+                bindPeer(from, "$memberNonce:$nonce")
+            }
         }
-        if (text == "HELLO-ACK:$token") {
-            onOpen?.invoke()
-            return
-        }
+    }
 
-        val h = UdpReliable.header(data, len) ?: return
+    private fun validNonce(value: String): Boolean =
+        runCatching { UUID.fromString(value).toString() == value }.getOrDefault(false)
+
+    private fun bindPeer(address: InetSocketAddress, session: String) {
+        if (peer != null) return
+        peer = Peer(address, session)
+        onOpen?.invoke()
+    }
+
+    private fun sendHandshake(message: String, address: InetSocketAddress) =
+        sendPacket(seal(message.toByteArray(), "handshake"), address)
+
+    private fun sendPacket(bytes: ByteArray, address: InetSocketAddress) {
+        runCatching { socket.send(DatagramPacket(bytes, bytes.size, address)) }
+    }
+
+    private fun authenticate(bytes: ByteArray, domain: String): ByteArray =
+        Mac.getInstance("HmacSHA256").apply {
+            init(key)
+            update(domain.toByteArray(Charsets.UTF_8))
+            update(0.toByte())
+        }.doFinal(bytes).copyOf(16)
+
+    private fun seal(bytes: ByteArray, domain: String): ByteArray = bytes + authenticate(bytes, domain)
+
+    private fun unseal(packet: ByteArray, domain: String): ByteArray? {
+        if (packet.size <= 16) return null
+        val bytes = packet.copyOf(packet.size - 16)
+        val tag = packet.copyOfRange(bytes.size, packet.size)
+        return bytes.takeIf { MessageDigest.isEqual(tag, authenticate(it, domain)) }
+    }
+
+    private fun handlePacket(data: ByteArray, bound: Peer) {
+        val h = UdpReliable.header(data, data.size) ?: return
         when (h.type) {
-            UdpReliable.TYPE_ACK -> {
-                pendingAcks[(h.msgId.toLong() shl 16) or h.index.toLong()] = true
-                return
-            }
+            UdpReliable.TYPE_ACK -> pendingAcks.replace((h.msgId.toLong() shl 16) or h.index.toLong(), true)
             UdpReliable.TYPE_DATA -> {
-                // 收到就 ACK（即使还没重组完）
-                val p = peer
-                if (p != null) runCatching {
-                    val a = UdpReliable.ack(h.msgId, h.index)
-                    socket.send(DatagramPacket(a, a.size, p))
-                }
-                val whole = reassembler.accept(h, data, len) ?: return
-                val text2 = runCatching { String(whole, Charsets.UTF_8) }.getOrNull() ?: return
-                RoomWire.decode(text2)?.let { onMessage?.invoke(it) }
+                if (h.count > 64) return
+                val outgoing = if (isHost) "host" else "member"
+                val ack = UdpReliable.ack(h.msgId, h.index)
+                sendPacket(seal(ack, "$outgoing:${bound.session}"), bound.address)
+                if (h.msgId in delivered) return
+                val whole = reassembler.accept(h, data, data.size) ?: return
+                delivered.add(h.msgId)
+                if (delivered.size > 256) delivered.remove(delivered.first())
+                RoomWire.decode(String(whole, Charsets.UTF_8))?.let { onMessage?.invoke(it) }
             }
         }
     }
 
     override fun send(message: RoomWire): Boolean {
-        val p = peer ?: return false
-        val payload = message.encode().toByteArray()
+        val bound = peer ?: return false
+        val outgoing = if (isHost) "host" else "member"
         val msgId = UdpReliable.nextMsgId()
-        val chunks = UdpReliable.fragment(msgId, payload)
-        for (chunk in chunks) {
-            var sent = false
-            repeat(UdpReliable.MAX_RETRY) { attempt ->
-                if (sent) return@repeat
-                runCatching { socket.send(DatagramPacket(chunk, chunk.size, p)) }
-                val deadline = System.currentTimeMillis() + UdpReliable.RETRY_INTERVAL_MS
-                while (System.currentTimeMillis() < deadline) {
-                    val h = UdpReliable.header(chunk, chunk.size) ?: return@repeat
-                    if (pendingAcks[(h.msgId.toLong() shl 16) or h.index.toLong()] == true) {
-                        sent = true
-                        return@repeat
+        val payload = message.encode().toByteArray()
+        if (payload.size > 64 * UdpReliable.CHUNK) return false
+        for ((index, chunk) in UdpReliable.fragment(msgId, payload).withIndex()) {
+            val packet = seal(chunk, "$outgoing:${bound.session}")
+            val ackKey = (msgId.toLong() shl 16) or index.toLong()
+            pendingAcks[ackKey] = false
+            try {
+                for (attempt in 0 until UdpReliable.MAX_RETRY) {
+                    if (!running.get() || Thread.currentThread().isInterrupted) return false
+                    sendPacket(packet, bound.address)
+                    val deadline = android.os.SystemClock.elapsedRealtime() + UdpReliable.RETRY_INTERVAL_MS
+                    while (running.get() && android.os.SystemClock.elapsedRealtime() < deadline) {
+                        if (pendingAcks[ackKey] == true) break
+                        Thread.sleep(20)
                     }
-                    Thread.sleep(20)
+                    if (pendingAcks[ackKey] == true) break
                 }
+                if (pendingAcks[ackKey] != true) return false
+            } finally {
+                pendingAcks.remove(ackKey)
             }
         }
         return true
@@ -193,13 +234,13 @@ class P2pLink private constructor(
         fun parseCode(code: String): Triple<String, Int, String>? {
             val main = code.substringBefore('#')
             val token = code.substringAfter('#', "")
-            if (token.isBlank()) return null
+            if (!token.matches(Regex("[0-9a-f]{32}"))) return null
             val ip = main.substringBeforeLast(':', "")
             val port = main.substringAfterLast(':', "").toIntOrNull() ?: return null
-            if (ip.isBlank() || port <= 0) return null
+            if (ip.isBlank() || port !in 1..65535) return null
             return Triple(ip, port, token)
         }
 
-        fun newToken(): String = (100000..999999).random().toString()
+        fun newToken(): String = UUID.randomUUID().toString().replace("-", "")
     }
 }

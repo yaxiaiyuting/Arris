@@ -21,7 +21,7 @@ object FollowPolicy {
         if (local == null) return false
         val l = local.songId
         val r = remote.songId
-        return if (l != null && r != null) l == r else local.title == remote.title
+        return if (l != null && r != null) l == r && (local.sourceKey == null || remote.sourceKey == null || local.sourceKey == remote.sourceKey) else local.title == remote.title
     }
 
     /**

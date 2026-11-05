@@ -149,8 +149,7 @@ fun TogetherScreen(onBack: () -> Unit) {
         create = {
             when (mode) {
                 TransportMode.Relay -> {
-                    val c = TogetherSession.newRoomCode(); code = c
-                    TogetherSession.create(base, c, ips)
+                    code = TogetherSession.create(base, ips)
                 }
                 TransportMode.Lan -> TogetherSession.createLan()?.let {
                     code = it; copy(it, "已复制 $it，把这句话发给朋友即可")
