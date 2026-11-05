@@ -736,8 +736,8 @@ class StringsConstructorBudgetTest {
                 assertTrue("${fields[i].first} 为空", value.isNotBlank())
             }
             assertEquals(
-                "同一语言里 28 条波形文案有重复：$values",
-                28,
+                "同一语言的波形与流体背景文案有重复：$values",
+                fields.size,
                 values.distinct().size,
             )
             // 档位三选一：三个词必须互不相同，否则用户分不出在选哪一档。
