@@ -205,7 +205,9 @@ val zhCN = Strings(
         motionWaveBandsLabel = "波形频带响应",
         motionWaveBandsDescription = "按那一刻低／中／高频哪一带占主导给波形柱子上色，并在「炫技」档多画三条频带能量条。横轴仍是时间，不是频谱。",
         motionBreathingLabel = "背景呼吸",
-        motionBreathingDescription = "背景的明暗与缩放跟随整体响度起伏。只在精致档及以上生效；简洁档是静态档。",
+        motionBreathingDescription = "从封面取色，低频舒展光晕，中高频轻推亮度。精致档及以上可用，简洁档保持静态。",
+        motionFluidBackdropLabel = "流体背景",
+        motionFluidBackdropDescription = "开启背景呼吸后，在 Android 13+ 使用流动色场；省电或渲染不顺时回退到渐变。",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "界面律动（随节拍）",
         motionRhythmDescription = "控制背景呼吸、封面浮动、歌词律动、控制条脉冲这四类「跟着音乐一起动」的效果；关掉后冲击波、光晕、粒子不受影响（炫技档的封面 3D 旋转也随之停用）。",
@@ -217,6 +219,7 @@ val zhCN = Strings(
         motionBarPulseDescription = "底部播放控制条随鼓点轻微放大（最多 2%）。只在精致档及以上生效。",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("卡拉 OK · 跟唱", "返回歌词", "正在加载歌词…", "准备跟唱", "原文", "译文", "切换主行语言"),
         prevButton = "上一首",
         playButton = "播放",
         pauseButton = "暂停",

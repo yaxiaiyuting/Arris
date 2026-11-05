@@ -1300,8 +1300,8 @@ fun MainScreen(
 
     // 宽屏（平板/折叠展开/车机）：左侧常驻 sidebar 取代底部导航，内容右移。
     // 与方向无关地按当前窗口宽度判定；窄屏(<600dp)完全走原底部导航路径。
-    val windowWidthDp = LocalConfiguration.current.screenWidthDp
-    val isWideLayout = windowWidthDp >= 600
+    val windowConfiguration = LocalConfiguration.current
+    val isWideLayout = windowConfiguration.screenWidthDp >= 600
     val sidebarWidthDp = 200.dp
     val sidebarWidthPx = with(density) { sidebarWidthDp.toPx() }
 
@@ -1309,7 +1309,7 @@ fun MainScreen(
     // 高度"这套兜底——手机/平板若也用 rootHeightPx 会改变 miniBar 落点(实测偏高)，
     // 属于车机改动外溢。这里显式隔离：车机走实测，其余设备沿用 screenHeightDp。
     val isAutomotive =
-        (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+        (windowConfiguration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
             Configuration.UI_MODE_TYPE_CAR
 
     // 卡片相关尺寸。宽屏无底部导航, navBar 高度记 0, miniBar 直接贴到系统栏之上。
@@ -1319,7 +1319,7 @@ fun MainScreen(
     // 「卡片收起后与托盘之间露出一条空白带」，同时让折叠态命中区判定（collapsedHitGate /
     // isOverCardVisibleArea）整体错位 —— 与「托盘高度」在代码上没有任何可见关联。
     val miniBarHeightPx = with(density) { TrayLayout.HEIGHT_DP.dp.toPx() }
-    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val screenHeightPx = with(density) { windowConfiguration.screenHeightDp.dp.toPx() }
     // 内容区高度：车机用根布局实测（CarSystemUI 把内容区 inset 到系统栏之间，但
     // WindowInsets 全为 0、screenHeightDp 又对不上）；手机/平板沿用 screenHeightDp，
     // 保持车机改动之前的行为。实测前先用整屏过渡。

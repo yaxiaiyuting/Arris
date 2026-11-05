@@ -200,6 +200,7 @@ class MotionSwitches(
     val coverFloat: Boolean = true,
     val lyricPulse: Boolean = true,
     val barPulse: Boolean = true,
+    val fluidBackdrop: Boolean = false,
 ) {
     /** 有没有任何一项「音频驱动的新动效」开着（v3.0.0 那五项的口径，保持不变）。 */
     val anyBinding: Boolean get() = shockwave || halo || particles || waveBands || breathing

@@ -1,6 +1,5 @@
 package com.takahashirinta.ncrust.ui.player
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,8 +22,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -75,7 +70,7 @@ private val NeverBuffering = MutableStateFlow(false)
  *  - tap-to-seek:点击行 → 本地立即跳 position + 回调解绑回调,瞬时反馈。
  */
 @Composable
-fun LyricsView(
+internal fun LyricsView(
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine> = emptyList(),
     // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。默认 **false** ——
@@ -125,6 +120,8 @@ fun LyricsView(
     // 而不是竖屏的 0.36 —— 短面板下 0.36 看起来是歪的（见 LyricsPanelScroll.CENTER_FRACTION）。
     // 默认 false ⇒ 竖屏调用点的渲染位置一个像素都不动。
     centeredLayout: Boolean = false,
+    karaoke: KaraokeControls? = null,
+    onOpenKaraoke: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     // v3.4.12：歌词字号按高度档缩放（A- / A+ 的 fontScale 仍在其上乘算，层级比例不变）。
@@ -148,10 +145,15 @@ fun LyricsView(
         HeightClass.Compact -> 21f
         HeightClass.Tiny -> 18f
     }
-    if (lyrics.isEmpty()) {
-        if (!isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    if (lyrics.isEmpty() && karaoke == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (!isLoading) {
                 MetroText(strings.noLyrics, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 18.sp))
+            }
+            if (enabled && onOpenKaraoke != null) {
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 2.dp)) {
+                    KaraokeButton(PlayerGlyphs.Karaoke, strings.playerUi.karaoke.enter, onOpenKaraoke)
+                }
             }
         }
         return
@@ -256,13 +258,30 @@ fun LyricsView(
     // 的"行边界"细化成"行边界 ∪ 词边界"，仍然是**按需唤醒**：静态时零状态写入、零帧调度，
     // 只在真正跨行/跨词的那一刻动一次。词密度约每秒 3~8 个，远低于 60fps。
     // 2Hz 采样到达时锚点会被重置回真实值，所以细粒度外推不会累积误差。
-    val boundaries = remember(lyrics) {
+    val karaokeActive = karaoke != null
+    val karaokeTranslations = remember(karaokeActive, showTranslation, lyrics, translatedLyrics) {
+        if (!karaokeActive || !showTranslation) emptyMap()
+        else {
+            val originals = lyrics.associateBy { it.timeMs }
+            translatedLyrics.filter { line ->
+                originals[line.timeMs]?.let { line.text.isNotBlank() && it.text != line.text } == true
+            }.associateBy { it.timeMs }
+        }
+    }
+    val karaokeTimeline = remember(karaokeActive, lyrics, karaokeTranslations) {
+        if (karaokeActive) KaraokeTimeline(lyrics, karaokeTranslations) else null
+    }
+    val boundaries = remember(lyrics, karaokeTimeline, karaokeTranslations) {
         val set = java.util.TreeSet<Long>()
         for (line in lyrics) {
             set.add(line.timeMs)
             for (w in line.words) set.add(w.startMs)
         }
-        LongArray(set.size) { set.elementAt(it) }
+        for (line in karaokeTranslations.values) {
+            for (word in line.words) set.add(word.startMs)
+        }
+        karaokeTimeline?.boundaries?.let(set::addAll)
+        set.toLongArray()
     }
 
     // v1.5.2：行时间戳数组。与面板内部用的是**同一个** currentLineIndex 二分查找 ——
@@ -275,6 +294,12 @@ fun LyricsView(
     // 一个窗口 ≈ 这一行真正在唱的 2~5 秒，所以整首歌的帧调度时间与「一直在唱」的直觉一致。
     val sweepWindows = remember(lyrics, wordByWordEnabled, wordAnimationMode) {
         buildSweepWindows(lyrics, wordByWordEnabled, wordAnimationMode)
+    }
+
+    val translationSweep = remember(lyrics, karaokeTranslations, wordByWordEnabled, wordAnimationMode) {
+        if (karaokeTranslations.isEmpty()) null
+        else buildSweepWindows(lyrics.map { karaokeTranslations[it.timeMs] ?: it.copy(words = emptyList()) },
+            wordByWordEnabled, wordAnimationMode)
     }
 
     // v1.5.2：扫过参数（渐变带宽度 / 未唱透明度 / 缓动 / 软边），由设备能力 + 设置解析。
@@ -309,13 +334,19 @@ fun LyricsView(
     // 直接捕获 `trackKey` 会永远读到首次组合时的那个值，于是「这条采样属于哪一首」永远错。
     val currentTrackKey = rememberUpdatedState(trackKey)
     val currentPlaying = rememberUpdatedState(isPlaying)
+    val currentBuffering = rememberUpdatedState(isBuffering)
+    val currentKaraokeActive = rememberUpdatedState(karaokeActive)
     LaunchedEffect(Unit) {
         snapshotFlow { positionState.value }.collect { pos ->
+            val now = System.nanoTime()
+            val sampleDiscontinuity = currentKaraokeActive.value &&
+                kotlin.math.abs(pos - anchor.positionAt(now)) > 320L
             anchor.anchorPosMs = pos
-            anchor.anchorNanos = System.nanoTime()
+            anchor.anchorNanos = now
+            anchor.speed = if (currentKaraokeActive.value) currentPlaybackSpeed() else 1f
             anchor.anchorTrackKey = currentTrackKey.value
             val drift = kotlin.math.abs(pos - displayPosition.longValue)
-            if (!currentPlaying.value || drift > 1_500L) {
+            if (!currentPlaying.value || currentBuffering.value || sampleDiscontinuity || drift > 1_500L) {
                 displayPosition.longValue = pos
             }
         }
@@ -366,8 +397,9 @@ fun LyricsView(
     //    行/词边界再写一次。静态时零状态写入、零帧调度，不会让渲染管线在整首歌里 60fps 空转。
     //
     // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
-    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, trackKey) {
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, translationSweep, trackKey) {
         // 恢复播放/联网时重新计时，不把缓冲、暂停或后台停留算成已播放时间。
+        anchor.speed = if (karaokeActive) currentPlaybackSpeed() else 1f
         anchor.anchorPosMs = positionState.value
         anchor.anchorNanos = System.nanoTime()
         anchor.anchorTrackKey = trackKey
@@ -401,7 +433,9 @@ fun LyricsView(
                 displayPosition.longValue = nowMs
             }
             // ① 正在唱的这一行 → 逐帧推进。
-            if (inSweepWindow(nowMs, sweepWindows, timestamps)) {
+            if (inSweepWindow(nowMs, sweepWindows, timestamps) ||
+                (translationSweep != null && inSweepWindow(nowMs, translationSweep, timestamps))
+            ) {
                 withFrameNanos { }
                 if (anchorValid) {
                     val t = anchor.positionAt(System.nanoTime())
@@ -416,7 +450,7 @@ fun LyricsView(
                 delay(500)
                 continue
             }
-            val waitMs = next - nowMs
+            val waitMs = ((next - nowMs) / anchor.speed).toLong().coerceAtLeast(1L)
             // 上限 1s:seek/tap 改变锚点后,最多 1s 重新对齐。
             if (waitMs > 0) delay(waitMs.coerceAtMost(1_000L))
             if (!anchorValid) continue
@@ -429,22 +463,22 @@ fun LyricsView(
         }
     }
 
-    // v1.7.0 · P1：上下渐隐高度跟随面板视口。
-    // 竖屏全屏播放器面板高约 700dp，100dp 渐隐只吃边角；但横屏大屏模式右栏只有
-    // 约 210dp 高（PCL110 实测：1272px 高 − 系统栏/挖孔 − 控制条 ~84dp），两条
-    // 100dp 的渐隐会把整块歌词糊掉。取 min(100dp, 30% 视口高)，竖屏数值分毫不变，
-    // 横屏自动收窄；不引入任何新的渲染路径（仍是同样两个 Box + 同一个 verticalGradient）。
-    //
-    // ★ v2.5.2：公式搬进 `LyricsPanelScroll.fadeHeightPx` —— 从本版起**面板自己也要用它**
-    //   （它是「整条歌词最高能摆到哪」的下限，见 `blockTopPx` 的 `minTopPx`）。
-    //   两处各写一份就是第二处真相：渐隐带调窄了而定位没跟着调，当前行就会被压在渐隐里发灰。
-    var panelHeightPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-    val fadeHeight = with(LocalDensity.current) {
-        LyricsPanelScroll.fadeHeightPx(
-            viewportHeightPx = if (panelHeightPx.isFinite()) panelHeightPx.toInt() else 0,
-            baseFadePx = LyricsPanelScroll.BASE_FADE_DP.dp.toPx(),
-            minFadePx = LyricsPanelScroll.MIN_FADE_DP.dp.toPx(),
-        ).toDp()
+    if (karaoke != null && karaokeTimeline != null) {
+        val cue by remember(karaokeTimeline, displayPosition) {
+            androidx.compose.runtime.derivedStateOf { karaokeTimeline.cueAt(displayPosition.longValue) }
+        }
+        val seek: (Long) -> Unit = { ms ->
+            anchor.anchorPosMs = ms
+            anchor.anchorNanos = System.nanoTime()
+            anchor.anchorTrackKey = trackKey
+            displayPosition.longValue = ms
+            onSeekToMs(ms)
+        }
+        androidx.compose.runtime.key(trackKey) {
+            KaraokeScreen(karaoke, panelLines, karaokeTranslations, cue, { displayPosition.longValue },
+                seek, isPlaying, isLoading, wordByWordEnabled, wordAnimationMode, sweepConfig, fontScale)
+        }
+        return
     }
 
     // ── v3.3.0 · 9：歌词复制 / 分享 / 出图的入口 ────────────────────────────────
@@ -471,7 +505,6 @@ fun LyricsView(
             // 列表最后一行（含遮罩渐隐）压过去就会挡掉它一部分。留 10dp 缓冲。
             .padding(bottom = 10.dp)
             .onSizeChanged {
-                panelHeightPx = it.height.toFloat()
                 // v2.0.0 · T4：动态字号要按可用宽度估算折行数（见上）。
                 panelWidthPx = it.width.toFloat()
             }
@@ -520,26 +553,6 @@ fun LyricsView(
             lyricPulseEnabled = lyricPulseEnabled,
         )
 
-        // 上下边缘淡出,让歌词从黑里浮出来(沿用原实现;高度见 fadeHeight)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(fadeHeight)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(listOf(LocalMetroColors.current.background, Color.Transparent))
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(fadeHeight)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, LocalMetroColors.current.background))
-                )
-        )
-
         // v1.5.1 · E：歌词界面里的快捷字号调节（A- / A+）。
         // 放右上角而不是底部：底部是控制栏把手与系统手势区（任务 B 刚处理过），
         // 贴边悬浮在这一行也不会跟歌词的点击/滚动抢手势（只在两个 44×28dp 的盒子里）。
@@ -553,6 +566,9 @@ fun LyricsView(
             ) {
                 // v3.3.0 · 9：分享歌词。放在 A- / A+ 左边（先于字号调节）——
                 // 它是一次性的动作，而字号是会被反复调的，高频的贴近屏幕右边缘更顺手。
+                if (onOpenKaraoke != null) {
+                    KaraokeButton(PlayerGlyphs.Karaoke, strings.playerUi.karaoke.enter, onOpenKaraoke)
+                }
                 LyricShareButton(description = strings.share.action) {
                     sharePayload = SharePayload(
                         track = LyricShareTrack(
@@ -644,7 +660,7 @@ private fun LyricShareButton(description: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         MetroIcon(
-            imageVector = Icons.Default.Share,
+            imageVector = PlayerGlyphs.Share,
             contentDescription = null,
             tint = LocalMetroColors.current.onSurfaceVariant,
             sizeDp = 16.dp,
@@ -694,11 +710,17 @@ private fun buildShareLines(
     }
 }
 
+// Only the UI thread reads Media3 parameters. The player may not be constructed yet.
+private fun currentPlaybackSpeed(): Float = runCatching {
+    com.takahashirinta.ncrust.player.PlaybackService.instance?.player?.playbackParameters?.speed
+}.getOrNull()?.takeIf { it.isFinite() && it > 0f } ?: 1f
+
 private class PositionAnchor {
     fun positionAt(nowNanos: Long): Long = com.takahashirinta.ncrust.lyric.LyricClock.positionAt(
-        anchorPosMs, anchorNanos, nowNanos,
+        anchorPosMs, anchorNanos, nowNanos, speed,
     )
 
+    var speed = 1f
     var anchorPosMs: Long = 0L
     var anchorNanos: Long = 0L
 

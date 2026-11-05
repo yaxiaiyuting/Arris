@@ -206,7 +206,9 @@ val en = Strings(
         motionWaveBandsLabel = "Waveform band response",
         motionWaveBandsDescription = "Tints the waveform bars by which of the low/mid/high bands dominates at that moment, and adds three band energy bars in the Showcase tier. The axis is still time, not a spectrum.",
         motionBreathingLabel = "Backdrop breathing",
-        motionBreathingDescription = "The backdrop brightness and scale follow the overall loudness. Refined tier and above only — Simple is a static tier.",
+        motionBreathingDescription = "Artwork colors drift with the music. Bass opens the glow; mids and highs lift its brightness. Available in Refined and above.",
+        motionFluidBackdropLabel = "Fluid backdrop",
+        motionFluidBackdropDescription = "Use a flowing color field when backdrop breathing is on (Android 13+). Falls back to gradients in Battery Saver or if GPU rendering is unavailable.",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "Interface rhythm (beat-driven)",
         motionRhythmDescription = "Controls the four effects that move with the music: backdrop breathing, cover float, lyric pulse and control-bar pulse. Shockwave, halo and particles are unaffected (the cover's 3D rotation in Showcase stops too).",
@@ -218,6 +220,7 @@ val en = Strings(
         motionBarPulseDescription = "The bottom transport bar scales slightly on each beat (up to 2%). Refined tier and above only.",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("Sing along", "Back to lyrics", "Loading lyrics…", "Get ready", "Original", "Translation", "Switch primary lyric language"),
         prevButton = "Previous",
         playButton = "Play",
         pauseButton = "Pause",

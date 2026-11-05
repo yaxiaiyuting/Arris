@@ -11,7 +11,7 @@
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
 [![Version](https://img.shields.io/badge/version-4.0.4--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-9.92%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-9.99%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -36,6 +36,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.0.6** | 2026-11-05 | **修竖屏控制栏展开时的歌词比例**：去掉 4.0.2 加的面板底部留白（它从歌词视口扣高度，把「当前行 36%」锚点整体顶上去）；整页一体化播放界面、Tux 图标、跟唱、背景呼吸同版本包含 · **LTS 3.7.28** 同源同修 |
 | **4.0.4** | 2026-11-05 | 续播保存、音质回退、更新下载、一起听房间认证与播放同步、识曲取消和错误提示 |
 | **LTS 3.7.27** | 2026-11-05 | 回移续播保存、音质回退与应用内更新修复 |
 | 4.0.3 | 2026-11-05 | **审查清单 12 条落地**：私人 FM 意图（I01）· 分段下载取消/校验（I03/I04）· Worker Range 与别名缓存（I05）· 连接池统一驱逐（I07）· 音质拒绝记忆按会话（I08）· 更新资产按通道过滤（I10）· 房间房主唯一 + 成员快照拒转（I11/I12）· P2P 握手门禁（I14）· 识曲取消与状态分流（I15/I16） |
@@ -384,6 +385,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v4.0.4-gpl | 2026-11-05 | 续播保存与更新下载修复；一起听认证、暂停和下一首同步；识曲可取消 |
+| v4.0.6-gpl | 2026-11-05 | 修竖屏控制栏展开时歌词比例（面板占满高度，锚点回到视口 36%）；4.0.5 的整页一体播放页 / Tux 图标 / 跟唱 / 背景呼吸一并进入正式版 |
 | v4.0.3-gpl | 2026-11-05 | 审查清单 12 条：FM 意图 / 分段下载取消与校验 / Worker Range 与别名缓存 / 连接池统一驱逐 / 音质拒绝记忆按会话 / 更新资产按通道过滤 / 房主唯一与成员快照拒转 / P2P 握手门禁 / 识曲取消与状态分流。未纳入：I02、I09、I13、I17、I18 |
 | v4.0.2-gpl | 2026-11-04 | 电台播完切歌单真的退出无限模式；上一首不再置灰；播放全部从头播；致谢重写 |
 | v4.0.1-gpl | 2026-11-03 | 主线移除 FFmpeg 软解扩展：APK 16.28 → **9.90 MB**（平台解码已覆盖在用格式）；LTS 保留 |
@@ -423,6 +425,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v3.7.27-gpl | 2026-11-05 | 回移续播保存、音质拒绝、更新源回退与断点续传修复 |
+| v3.7.28-gpl | 2026-11-05 | 与主线同源同修：控制栏展开时的歌词比例 |
 | v3.7.26-gpl | 2026-11-05 | 与主线同源同修：私人 FM 意图（I01）、切网清理公共池 + 派生池（I07） |
 | v3.7.24-gpl | 2026-11-02 | LTS 与主线同代：Kotlin 2、media3 1.9、均衡器、间奏呼吸点、竖屏字号修复 |
 | v3.7.23-gpl | 2026-11-02 | LTS 对齐：TTML 客户端走 `AppHttp`、音频三段计时、审计测试扩容到 `OkHttpClient()`/`newBuilder()` |

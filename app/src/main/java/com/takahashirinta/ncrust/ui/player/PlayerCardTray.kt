@@ -39,11 +39,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -331,7 +326,7 @@ private fun RowScope.TrayControls(
             onPlayPrevious()
         }) {
             MetroIcon(
-                imageVector = Icons.Default.SkipPrevious,
+                imageVector = PlayerGlyphs.Previous,
                 // 无障碍：三个图标按钮只有形状可辨，contentDescription 是
                 // TalkBack 用户唯一的识别途径（旧代码两个按钮都传 null，
                 // 是既有缺口，本版一并补上）。
@@ -345,7 +340,7 @@ private fun RowScope.TrayControls(
             onPlayPause()
         }) {
             MetroIcon(
-                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
                 contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
                 tint = onBackground
             )
@@ -356,7 +351,7 @@ private fun RowScope.TrayControls(
             onPlayNext()
         }) {
             MetroIcon(
-                imageVector = Icons.Default.SkipNext,
+                imageVector = PlayerGlyphs.Next,
                 contentDescription = strings.nextButton,
                 tint = onBackground
             )
@@ -394,7 +389,7 @@ private fun RowScope.TrayNoSong(
             onPlayNothing()
         }) {
             MetroIcon(
-                imageVector = Icons.Default.PlayArrow,
+                imageVector = PlayerGlyphs.Play,
                 contentDescription = strings.playButton,
                 tint = LocalMetroColors.current.onBackground
             )

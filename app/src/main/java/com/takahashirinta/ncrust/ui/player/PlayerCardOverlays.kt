@@ -35,8 +35,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +87,7 @@ internal fun PlayerCardCoverOverlay(
     coverFloatPx: Float,
     narrowCover: androidx.compose.runtime.State<CoverGeometry>,
     onCoverBitmap: (key: String?, bitmap: Bitmap?) -> Unit,
+    hideForKaraoke: () -> Boolean,
 ) {
     val density = LocalDensity.current
     StableCover(
@@ -114,6 +113,7 @@ internal fun PlayerCardCoverOverlay(
                 }
             )
             .graphicsLayer {
+                alpha = if (hideForKaraoke()) 0f else 1f
                 val p = progress.value
                 // 窄屏封面尺寸会随高度档变化：miniScale / 落点 / boundsCenter 必须用
                 // **当前实际边长**重算，不能沿用按整屏宽算出的 geo 值（否则 mini 封面
@@ -177,12 +177,8 @@ internal fun PlayerCardCoverOverlay(
                 }
             }.testTag("player.cover"),
         contentScale = ContentScale.Crop,
-        // v2.5.0 · B：大封面 = AppShapes.large(16dp) + 1dp outlineVariant 描边。
-        // 描边色用 MetroColors.divider —— 它就是 NcrustColors.outlineVariant
-        // 的桥接值（见 NcrustColors.toMetroColors），本文件已经只读 MetroColors，
-        // 不为了一个颜色再引第二个主题源进来。
         shape = AppShapes.large,
-        frameColor = LocalMetroColors.current.divider,
+        frameColor = LocalMetroColors.current.onBackground.copy(alpha = 0.16f),
     )
 }
 
@@ -218,7 +214,7 @@ internal fun PlayerCardDismissButton(
         if (dismissEnabled) {
             MetroIconButton(onClick = onDismiss) {
                 MetroIcon(
-                    Icons.Default.KeyboardArrowDown,
+                    PlayerGlyphs.Dismiss,
                     strings.collapsePlayer,
                     tint = LocalMetroColors.current.onBackground
                 )
@@ -319,6 +315,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
             boundsCenter = geo.boundsCenter,
             coverFloatPx = geo.coverFloatPx,
             narrowCover = narrowCover,
+            hideForKaraoke = { ui.showKaraoke },
             onCoverBitmap = { key, bitmap ->
                 // 只在真的换了图/键时写 state（这个回调会在每次 Coil 状态变化时被调到，
                 // 无条件赋值会让每次状态变化都触发一次背景层重组）。
@@ -332,7 +329,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
 
     // 收起按钮叠加层：z 序最高，保证触摸事件不被任何下层元素拦截。
     // 大屏幕模式下整层不挂载（判据在下面这一行，理由见 PlayerCardDismissButton 的 KDoc）。
-    if (hasSong && !geo.bigScreenActive) {
+    if (hasSong && !geo.bigScreenActive && !ui.showKaraoke) {
         ThresholdScope({ ui.dismissEnabled }) { dismissEnabled ->
             PlayerCardDismissButton(
                 progress = progress,

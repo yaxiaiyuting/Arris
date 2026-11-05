@@ -46,8 +46,6 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.systemGestureExclusion
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -211,6 +209,45 @@ internal fun ColumnScope.PlayerCardExpanded(
 ) {
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
+    val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
+        LyricsView(
+            lyrics = lyrics,
+            translatedLyrics = translatedLyrics,
+            showTranslation = showLyricsTranslation,
+            romanizedLyrics = romanizedLyrics,
+            showRomanization = showLyricsRomanization,
+            positionFlow = positionFlow,
+            isPlaying = isPlaying,
+            isBufferingFlow = playerViewModel.isBuffering,
+            isVisible = ui.showLyrics || karaoke != null,
+            forcedLocateTrigger = ui.lyricLocateTrigger,
+            onSeekToMs = playerViewModel::seekTo,
+            enabled = (ui.lyricsEnabled || karaoke != null) && ui.cardExpandedForInput,
+            isLoading = lyricsLoading,
+            wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
+            wordAnimationMode = lyricsWordAnimation,
+            fontScale = lyricsFontScale,
+            sweepQuality = lyricsSweepQuality,
+            onFontScaleStep = playerViewModel::stepLyricsFontScale,
+            dynamicFontEnabled = showDynamicLyricFont,
+            centeredLayout = geo.usesSideCover,
+            lyricPulseEnabled = motion.lyricPulse,
+            trackKey = "${song.source}:${song.id}",
+            karaoke = karaoke,
+            onOpenKaraoke = if (karaoke == null) ({ ui.showKaraoke = true }) else null,
+        )
+    }
+    androidx.activity.compose.BackHandler(enabled = ui.showKaraoke) { ui.showKaraoke = false }
+    if (ui.showKaraoke) {
+        lyricsContent(
+            KaraokeControls(song.name.orEmpty(), song.artists.orEmpty().joinToString(" / ") { it.name },
+                playerViewModel.duration, progressFlow, playerViewModel.isBuffering, callbacks,
+                exit = { ui.showKaraoke = false },
+                translatedPrimary = ui.karaokeTranslationPrimary,
+                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary }),
+        )
+        return
+    }
             val s = song!!
             val heightClass = LocalHeightClass.current
             val tinyPlayer = !geo.usesSideCover && heightClass == HeightClass.Tiny
@@ -346,7 +383,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 contentAlignment = Alignment.Center
                             ) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.CloseFullscreen,
+                                    imageVector = PlayerGlyphs.Shrink,
                                     contentDescription = strings.bigScreenExit,
                                     tint = LocalMetroColors.current.primary,
                                     sizeDp = 24.dp
@@ -360,14 +397,17 @@ internal fun ColumnScope.PlayerCardExpanded(
 
             // 歌词 / 队列双面板（窄屏整宽 / 宽屏右栏共用）。
             val playerPanels: @Composable (Modifier) -> Unit = { panelModifier ->
-                // 4.0.2：**给底部背景波形让位**。竖屏收起控制栏后，歌词面板会长到卡片底沿，
-                // 压在背景级波形（可视条）上，真机截图里就是"可视条被歌词挡住一部分"。
-                // 这里按波形条高度留出空间（0.75 折中：波形完整露出，又不会空出一整条）。
-                Box(
-                    modifier = panelModifier.padding(
-                        bottom = if (motion.fullScreenWaveform) geo.waveBackdropHeightDp * 0.75f else 0.dp
-                    )
-                ) {
+                // 4.0.6：**不再按波形高度给面板留白**（用户确认的问题就是这一条）。
+                //
+                // 4.0.2 为了"歌词别压住底部可视条"给面板加了 bottom padding
+                // （`waveBackdropHeightDp * 0.75` ≈ 90dp ≈ 275px）。真机复核：
+                // **控制栏没收起**时，这段留白直接从歌词视口里扣走 —— 视口被压矮，
+                // 「当前行落在视口 36%」的锚点跟着在屏幕上移，于是歌词挤在上半屏、
+                // 下面空出一条（截图为证）。收起态反而没有这个问题。
+                //
+                // 现在面板占满可用高度；可视条是**背景层**，本来就画在面板之下，
+                // 面板底部自带 [background→Transparent] 渐隐，两者不再互相遮挡。
+                Box(modifier = panelModifier) {
                     // 歌词面板：translationX 从 0 滑至 -screenWidthPx，确保非歌词模式下完全移出屏幕，
                     // 彻底消除与列表面板的命中测试重叠（combinedClickable 忽略 isConsumed 标志）
                     // alpha 用阶梯而非交叉淡化: 切换时源面板瞬时隐藏、目标面板单层全宽滑入,
@@ -389,42 +429,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             animationSpec = SokuouTweens.CoverFade,
                             label = "LyricsCrossfade"
                         ) { _ ->
-                            LyricsView(
-                                lyrics = lyrics,
-                                translatedLyrics = translatedLyrics,
-                                showTranslation = showLyricsTranslation,
-                                romanizedLyrics = romanizedLyrics,
-                                showRomanization = showLyricsRomanization,
-                                positionFlow = positionFlow,
-                                isPlaying = isPlaying,
-                                isBufferingFlow = playerViewModel.isBuffering,
-                                isVisible = ui.showLyrics,
-                                forcedLocateTrigger = ui.lyricLocateTrigger,
-                                onSeekToMs = { ms -> playerViewModel.seekTo(ms) },
-                                enabled = ui.lyricsEnabled && ui.cardExpandedForInput,
-                                onUserScrolled = {},
-                                isLoading = lyricsLoading,
-                                wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
-                                wordAnimationMode = lyricsWordAnimation,
-                                fontScale = lyricsFontScale,
-                                sweepQuality = lyricsSweepQuality,
-                                onFontScaleStep = { delta -> playerViewModel.stepLyricsFontScale(delta) },
-                                // v2.0.0 · T4：动态字号（实验性，默认关）。
-                                dynamicFontEnabled = showDynamicLyricFont,
-                                // v2.3.0 · E：横屏 / 大屏右栏（usesSideCover = 宽屏或大屏模式）
-                                // 的歌词面板只有约 210~280dp 高，当前行定位到**正中**而不是
-                                // 竖屏的 36%；配合面板里的「5s 无触碰自动居中」，
-                                // 用户手动翻过歌词之后它会自己回到正中。
-                                centeredLayout = geo.usesSideCover,
-                                // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。
-                                lyricPulseEnabled = motion.lyricPulse,
-                                // v2.9.0 · P1：歌词引擎用它判断"外推锚点属于哪一首"。
-                                // 必须是一个**换歌必变、同曲不变**的稳定身份 ——
-                                // `(音源, id)` 是本仓库对曲目身份的既有口径（v2.6.1/v2.6.2 的
-                                // `TrackKey` 同源），不能只用 id（两个音源的 id 空间虽然结构性
-                                // 隔离，但把口径写全比依赖那个不变量便宜）。
-                                trackKey = song?.let { "${it.source}:${it.id}" },
-                            )
+                            lyricsContent(null)
                         }
                     }
 
@@ -459,11 +464,11 @@ internal fun ColumnScope.PlayerCardExpanded(
                             MetroIconButton(onClick = callbacks.onTogglePlayMode) {
                                 MetroIcon(
                                     imageVector = when (playMode) {
-                                        QueueModes.SINGLE -> Icons.Default.RepeatOne
-                                        QueueModes.SHUFFLE -> Icons.Default.Shuffle
-                                        QueueModes.LINE -> Icons.Default.PlaylistPlay
-                                        QueueModes.INFINITY -> Icons.Default.AllInclusive
-                                        else -> Icons.Default.Repeat
+                                        QueueModes.SINGLE -> PlayerGlyphs.RepeatOne
+                                        QueueModes.SHUFFLE -> PlayerGlyphs.Shuffle
+                                        QueueModes.LINE -> PlayerGlyphs.Queue
+                                        QueueModes.INFINITY -> PlayerGlyphs.Infinity
+                                        else -> PlayerGlyphs.Repeat
                                     },
                                     contentDescription = strings.playModeButton,
                                     tint = if (playMode != QueueModes.CYCLE) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
@@ -472,7 +477,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             }
                             MetroIconButton(onClick = callbacks.onSavePlaylist) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.Add,
+                                    imageVector = PlayerGlyphs.Add,
                                     contentDescription = strings.saveAsPlaylist,
                                     tint = LocalMetroColors.current.onBackground,
                                     sizeDp = 24.dp
@@ -481,7 +486,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             // 清空队列: 停播并回到暂无播放态
                             MetroIconButton(onClick = callbacks.onClearQueue) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.DeleteSweep,
+                                    imageVector = PlayerGlyphs.ClearQueue,
                                     contentDescription = strings.clearQueue,
                                     tint = LocalMetroColors.current.onBackground,
                                     sizeDp = 24.dp

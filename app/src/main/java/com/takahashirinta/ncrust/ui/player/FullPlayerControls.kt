@@ -24,9 +24,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.*
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,10 +69,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 private fun Modifier.transportSurface(interaction: MutableInteractionSource): Modifier {
     val colors = LocalMetroColors.current
     val primary = colors.primary
-    val onPrimary = colors.onPrimary
-    val brush = remember(primary, onPrimary) {
+    val brush = remember(primary) {
         Brush.verticalGradient(
-            listOf(lerp(primary, onPrimary, 0.075f), primary, lerp(primary, Color.Black, 0.10f)),
+            listOf(lerp(primary, Color.White, 0.14f), primary, lerp(primary, Color.Black, 0.09f)),
         )
     }
     val pressed by interaction.collectIsPressedAsState()
@@ -93,7 +89,20 @@ private fun Modifier.transportSurface(interaction: MutableInteractionSource): Mo
         scaleY = scale.value
     }.clip(AppShapes.full)
         .background(brush)
-        .border(1.dp, onPrimary.copy(alpha = 0.16f), AppShapes.full)
+        .border(1.dp, Color.White.copy(alpha = 0.24f), AppShapes.full)
+}
+
+@Composable
+private fun BoxScope.PanelSelection(active: Boolean) {
+    if (active) {
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 4.dp)
+                .size(width = 12.dp, height = 2.dp)
+                .background(LocalMetroColors.current.primary),
+        )
+    }
 }
 
 @Composable
@@ -197,18 +206,19 @@ fun FullPlayerControls(
     val haptic = LocalHapticFeedback.current
     fun tick() = haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
-    val hPad = if (compact) 16.dp else 24.dp
-    val bottomPad = if (compact) 8.dp else 32.dp
+    val hPad = if (compact) 12.dp else 16.dp
+    val bottomPad = if (compact) 4.dp else 10.dp
+    val outerInset = if (tiny || LocalConfiguration.current.screenWidthDp < 320) 0.dp else 12.dp
     val gapTight = if (compact) 4.dp else 8.dp
     val gapLoose = if (compact) 8.dp else 16.dp
     val ctrlRowPad = if (compact) 2.dp else 16.dp
     val sideBtn = if (compact) 44.dp else 60.dp
-    val sideIcon = if (compact) 30.dp else 40.dp
+    val sideIcon = if (compact) 26.dp else 33.dp
     val playBtn = if (compact) 58.dp else 84.dp
-    val playIcon = if (compact) 38.dp else 56.dp
-    val sideGap = if (compact) 20.dp else 32.dp
+    val playIcon = if (compact) 32.dp else 44.dp
+    val sideGap = if (compact) 16.dp else 28.dp
     val toggleBtn = if (compact) 44.dp else 56.dp
-    val toggleIcon = if (compact) 26.dp else 32.dp
+    val toggleIcon = if (compact) 23.dp else 26.dp
 
     if (landscape) {
         // 宽屏横向控件条：进度行（位置 · 进度 · 时长）+ 操作行（面板开关 · 音质 · 传输），
@@ -218,6 +228,7 @@ fun FullPlayerControls(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(start = 4.dp, end = 8.dp, bottom = 6.dp)
                 .padding(horizontal = lPad, vertical = lTop)
         ) {
             Row(
@@ -285,8 +296,9 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        PanelSelection(showLyrics && !lyricsUnavailable)
                         MetroIcon(
-                            imageVector = Icons.Default.Lyrics,
+                            imageVector = PlayerGlyphs.Lyrics,
                             contentDescription = strings.lyricsButton,
                             tint = if (lyricsUnavailable) LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f)
                             else if (showLyrics) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
@@ -302,8 +314,9 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        PanelSelection(showQueue)
                         MetroIcon(
-                            imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                            imageVector = PlayerGlyphs.Queue,
                             contentDescription = strings.queueButton,
                             tint = if (showQueue) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
                             sizeDp = 24.dp
@@ -318,8 +331,9 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
+                        PanelSelection(isInLibrary)
                         MetroIcon(
-                            imageVector = if (isInLibrary) Icons.Default.Check else Icons.Default.Add,
+                            imageVector = if (isInLibrary) PlayerGlyphs.Saved else PlayerGlyphs.Add,
                             contentDescription = strings.addToLibraryButton,
                             tint = if (isInLibrary) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
                             sizeDp = 24.dp
@@ -340,7 +354,7 @@ fun FullPlayerControls(
                             contentAlignment = Alignment.Center
                         ) {
                             MetroIcon(
-                                imageVector = Icons.Default.OpenInFull,
+                                imageVector = PlayerGlyphs.Expand,
                                 contentDescription = strings.bigScreenEnter,
                                 tint = LocalMetroColors.current.onBackground,
                                 sizeDp = 24.dp
@@ -366,7 +380,7 @@ fun FullPlayerControls(
                         contentAlignment = Alignment.Center
                     ) {
                         MetroIcon(
-                            imageVector = Icons.Default.SkipPrevious,
+                            imageVector = PlayerGlyphs.Previous,
                             contentDescription = strings.prevButton,
                             tint = if (previousEnabled) LocalMetroColors.current.onBackground else LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f),
                             sizeDp = 28.dp
@@ -384,7 +398,7 @@ fun FullPlayerControls(
                     ) {
                         Box(Modifier.matchParentSize().transportSurface(playInteraction))
                         MetroIcon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
                             contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
                             tint = LocalMetroColors.current.onPrimary,
                             sizeDp = 36.dp
@@ -400,7 +414,7 @@ fun FullPlayerControls(
                         contentAlignment = Alignment.Center
                     ) {
                         MetroIcon(
-                            imageVector = Icons.Default.SkipNext,
+                            imageVector = PlayerGlyphs.Next,
                             contentDescription = strings.nextButton,
                             tint = LocalMetroColors.current.onBackground,
                             sizeDp = 28.dp
@@ -433,7 +447,12 @@ fun FullPlayerControls(
         return
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = bottomPad)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = outerInset, end = outerInset, bottom = bottomPad)
+            .padding(top = if (tiny) 3.dp else 8.dp, bottom = if (tiny) 3.dp else 6.dp)
+    ) {
         if (tiny) {
             // Tiny：位置 · 进度 · 时长 · 音质压成一行，把纵向空间全让给封面与传输键。
             Row(
@@ -507,7 +526,8 @@ fun FullPlayerControls(
             progressFlow = progressFlow,
             durationFlow = durationFlow,
             isBufferingFlow = isBufferingFlow,
-            onSeek = onSeek
+            onSeek = onSeek,
+            horizontalPadding = hPad,
         )
         }
         Spacer(Modifier.height(gapLoose))
@@ -528,7 +548,7 @@ fun FullPlayerControls(
                 contentAlignment = Alignment.Center
             ) {
                 MetroIcon(
-                    imageVector = Icons.Default.SkipPrevious,
+                    imageVector = PlayerGlyphs.Previous,
                     contentDescription = strings.prevButton,
                     tint = if (previousEnabled) LocalMetroColors.current.onBackground else LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f),
                     sizeDp = sideIcon
@@ -547,7 +567,7 @@ fun FullPlayerControls(
             ) {
                 Box(Modifier.matchParentSize().transportSurface(playInteraction))
                 MetroIcon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
                     contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
                     tint = LocalMetroColors.current.onPrimary,
                     sizeDp = playIcon
@@ -564,7 +584,7 @@ fun FullPlayerControls(
                 contentAlignment = Alignment.Center
             ) {
                 MetroIcon(
-                    imageVector = Icons.Default.SkipNext,
+                    imageVector = PlayerGlyphs.Next,
                     contentDescription = strings.nextButton,
                     tint = LocalMetroColors.current.onBackground,
                     sizeDp = sideIcon
@@ -572,6 +592,7 @@ fun FullPlayerControls(
             }
         }
         if (!tiny) {
+            Spacer(Modifier.height(4.dp))
             PlayerPanelToggles(
                 showLyrics = showLyrics,
                 showQueue = showQueue,
@@ -595,7 +616,7 @@ fun FullPlayerControls(
                         contentAlignment = Alignment.Center
                     ) {
                         MetroIcon(
-                            imageVector = if (bigScreen) Icons.Default.CloseFullscreen else Icons.Default.OpenInFull,
+                            imageVector = if (bigScreen) PlayerGlyphs.Shrink else PlayerGlyphs.Expand,
                             contentDescription = if (bigScreen) strings.bigScreenExit else strings.bigScreenEnter,
                             tint = if (bigScreen) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
                             sizeDp = toggleIcon
@@ -652,8 +673,9 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
+            PanelSelection(showLyrics && !lyricsUnavailable)
             MetroIcon(
-                imageVector = Icons.Default.Lyrics,
+                imageVector = PlayerGlyphs.Lyrics,
                 contentDescription = strings.lyricsButton,
                 tint = if (lyricsUnavailable) LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.5f)
                 else if (showLyrics) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
@@ -669,8 +691,9 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
+            PanelSelection(showQueue)
             MetroIcon(
-                imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+                imageVector = PlayerGlyphs.Queue,
                 contentDescription = strings.queueButton,
                 tint = if (showQueue) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
                 sizeDp = toggleIcon
@@ -685,8 +708,9 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
+            PanelSelection(isInLibrary)
             MetroIcon(
-                imageVector = if (isInLibrary) Icons.Default.Check else Icons.Default.Add,
+                imageVector = if (isInLibrary) PlayerGlyphs.Saved else PlayerGlyphs.Add,
                 contentDescription = strings.addToLibraryButton,
                 tint = if (isInLibrary) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
                 sizeDp = toggleIcon
@@ -722,7 +746,7 @@ fun RotationToggleButton(
         contentAlignment = Alignment.Center
     ) {
         MetroIcon(
-            imageVector = if (autoRotate) Icons.Default.ScreenRotation else Icons.Default.ScreenLockPortrait,
+            imageVector = if (autoRotate) PlayerGlyphs.Rotate else PlayerGlyphs.RotationLocked,
             contentDescription = null, // 语义在外层 Box 上，避免 TalkBack 读两遍
             tint = if (autoRotate) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
             sizeDp = iconSize

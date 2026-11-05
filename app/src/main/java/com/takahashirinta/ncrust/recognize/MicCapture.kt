@@ -194,7 +194,7 @@ object MicCapture {
     }
 
     private fun createRecorder(source: Int, bufferBytes: Int): AudioRecord? {
-        val r = runCatching {
+        val r = try {
             AudioRecord(
                 source,
                 ShazamFingerprint.SAMPLE_RATE,
@@ -202,7 +202,12 @@ object MicCapture {
                 AudioFormat.ENCODING_PCM_16BIT,
                 bufferBytes,
             )
-        }.getOrNull() ?: return null
+        } catch (_: SecurityException) {
+            // Permission can be revoked after the UI has checked it.
+            return null
+        } catch (_: RuntimeException) {
+            return null
+        }
         if (r.state == AudioRecord.STATE_INITIALIZED) return r
         runCatching { r.release() }
         return null

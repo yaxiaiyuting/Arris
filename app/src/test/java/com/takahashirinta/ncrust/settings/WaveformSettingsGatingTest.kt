@@ -229,6 +229,7 @@ class WaveformSettingsGatingTest {
                 "motion_particles",
                 "motion_wave_bands",
                 "motion_breathing",
+                "motion_fluid_backdrop",
                 // v3.2.0：界面律动那一层的闸（1 个总闸 + 3 个细粒度），同样按声明顺序。
                 "motion_rhythm_enabled",
                 "motion_cover_float",

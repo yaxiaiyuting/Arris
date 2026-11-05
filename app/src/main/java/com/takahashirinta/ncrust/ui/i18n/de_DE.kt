@@ -207,6 +207,8 @@ val deDE = Strings(
         motionWaveBandsDescription = "Färbt die Wellenform-Balken danach, welches der Bänder tief/mittel/hoch gerade dominiert, und zeichnet in der Stufe „Showcase“ drei Bandenergie-Balken. Die Achse bleibt die Zeit, kein Spektrum.",
         motionBreathingLabel = "Hintergrund-Atmen",
         motionBreathingDescription = "Helligkeit und Skalierung des Hintergrunds folgen der Gesamtlautstärke. Nur ab Stufe Feinschliff — Schlicht ist eine statische Stufe.",
+        motionFluidBackdropLabel = "Fließender Hintergrund",
+        motionFluidBackdropDescription = "Fließende Farben bei aktivem Hintergrund-Atmen (Android 13+). Im Energiesparmodus oder bei Grafikproblemen werden Farbverläufe verwendet.",
         // v3.2.0 · P1：界面律动（节拍驱动）那一层的独立开关（铁律 22）。
         motionRhythmLabel = "Interface-Rhythmus (beatgesteuert)",
         motionRhythmDescription = "Steuert die vier Effekte, die zur Musik mitgehen: Hintergrund-Atmung, Cover-Schweben, Text-Puls und Steuerleisten-Puls. Schockwelle, Halo und Partikel bleiben unberührt (die 3D-Drehung des Covers in Stufe Effektvoll stoppt ebenfalls).",
@@ -218,6 +220,7 @@ val deDE = Strings(
         motionBarPulseDescription = "Die untere Wiedergabeleiste skaliert leicht bei jedem Beat (bis 2%). Nur ab Stufe Feinschliff.",
     ),
     playerUi = PlayerUiStrings(
+        karaoke = KaraokeStrings("Mitsingen", "Zurück zum Liedtext", "Liedtext wird geladen …", "Gleich geht’s los", "Original", "Übersetzung", "Hauptsprache des Liedtexts wechseln"),
         prevButton = "Vorheriger",
         playButton = "Abspielen",
         pauseButton = "Pause",

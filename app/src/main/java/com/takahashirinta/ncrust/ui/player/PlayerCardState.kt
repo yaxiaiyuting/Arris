@@ -75,6 +75,8 @@ internal class PlayerCardUiState(
 ) {
     // ---- 可变状态（原来是一个个 remember { mutableStateOf }）----
     var showLyrics by mutableStateOf(false)
+    var showKaraoke by mutableStateOf(false)
+    var karaokeTranslationPrimary by mutableStateOf(false)
     var showQueue by mutableStateOf(false)
     // K05 根治后此字段已无读写方（红心改订阅 LibraryManager.savedRevision）。
     // 保留注释说明来处，不再暴露字段 —— 旧写法依赖"本组件自己 ++"推进刷新，
