@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
 import com.takahashirinta.ncrust.ui.player.motion.MotionFrameClock
@@ -67,6 +68,7 @@ internal fun BoxScope.PlayerCardBackdrop(
     hasSong: Boolean,
     expandedMounted: () -> Boolean,
     visualizerSlot: Boolean,
+    sideCover: Boolean,
     waveBackdropHeightDp: androidx.compose.ui.unit.Dp,
     /** 缓冲状态**传引用**：订阅发生在帧循环内部，不在组合期（见 AudioVisualizerSlot 的 KDoc）。 */
     isBufferingFlow: StateFlow<Boolean>,
@@ -96,35 +98,6 @@ internal fun BoxScope.PlayerCardBackdrop(
                 .background(LocalMetroColors.current.surface)
         )
 
-        // Cached ambient lights give the full player depth even with live effects off.
-        // Follow the existing expansion progress; no new animation loop or change to content measurement.
-        if (hasSong && expandedMounted()) {
-            val colors = LocalMetroColors.current
-            Box(
-                Modifier.matchParentSize()
-                    .graphicsLayer {
-                        alpha = ((progress.value - 0.62f) / 0.38f).coerceIn(0f, 1f)
-                    }
-                    .drawWithCache {
-                        val extent = maxOf(size.width, size.height, 1f)
-                        val key = Brush.radialGradient(
-                            listOf(colors.primary.copy(alpha = 0.16f), colors.primary.copy(alpha = 0f)),
-                            center = Offset(size.width * 0.22f, size.height * 0.18f),
-                            radius = extent * 0.72f,
-                        )
-                        val floor = Brush.verticalGradient(
-                            0.54f to colors.surface.copy(alpha = 0f),
-                            1f to colors.surface.copy(alpha = 0.85f),
-                            endY = size.height.coerceAtLeast(1f),
-                        )
-                        onDrawBehind {
-                            drawRect(key)
-                            drawRect(floor)
-                        }
-                    },
-            )
-        }
-
         // ── v2.9.0：全屏动效背景层（竖屏 + 横屏共用同一个实现）────────────────────────
         //
         // 位置：两张纯色底板**之上**、Column（封面/歌词/控件等全部前景）**之下**。
@@ -146,6 +119,43 @@ internal fun BoxScope.PlayerCardBackdrop(
                     // 与前景同样的折叠淡出曲线（复用既有 (p-0.7)/0.3 的形状）。
                     alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f)
                 },
+            )
+        }
+
+        // Keep the same ambient framing in every motion tier. Live artwork remains visible below
+        // the translucent lighting when enabled; the static floor is opaque when it is the base.
+        if (hasSong && expandedMounted()) {
+            val colors = LocalMetroColors.current
+            val floorAlpha = if (motion.anyUiMotion) 0.24f else 1f
+            Box(
+                Modifier.matchParentSize()
+                    .graphicsLayer {
+                        alpha = ((progress.value - 0.62f) / 0.38f).coerceIn(0f, 1f)
+                    }
+                    .drawWithCache {
+                        val extent = maxOf(size.width, size.height, 1f)
+                        val key = Brush.radialGradient(
+                            listOf(colors.primary.copy(alpha = 0.20f), colors.primary.copy(alpha = 0f)),
+                            center = Offset(size.width * (if (sideCover) 0.24f else 0.46f), size.height * 0.25f),
+                            radius = extent * 0.58f,
+                        )
+                        val rim = Brush.radialGradient(
+                            listOf(colors.primary.copy(alpha = 0.11f), colors.primary.copy(alpha = 0f)),
+                            center = Offset(size.width * 0.92f, size.height * 0.63f),
+                            radius = extent * 0.43f,
+                        )
+                        val floor = Brush.verticalGradient(
+                            0f to lerp(colors.background, colors.surface, 0.22f).copy(alpha = floorAlpha),
+                            0.57f to colors.background.copy(alpha = floorAlpha),
+                            1f to lerp(colors.background, colors.surface, 0.83f).copy(alpha = floorAlpha),
+                            endY = size.height.coerceAtLeast(1f),
+                        )
+                        onDrawBehind {
+                            drawRect(floor)
+                            drawRect(key)
+                            drawRect(rim)
+                        }
+                    },
             )
         }
 

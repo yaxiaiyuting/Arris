@@ -1,6 +1,5 @@
 package com.takahashirinta.ncrust.ui.player
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -9,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,8 +22,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -429,24 +424,6 @@ fun LyricsView(
         }
     }
 
-    // v1.7.0 · P1：上下渐隐高度跟随面板视口。
-    // 竖屏全屏播放器面板高约 700dp，100dp 渐隐只吃边角；但横屏大屏模式右栏只有
-    // 约 210dp 高（PCL110 实测：1272px 高 − 系统栏/挖孔 − 控制条 ~84dp），两条
-    // 100dp 的渐隐会把整块歌词糊掉。取 min(100dp, 30% 视口高)，竖屏数值分毫不变，
-    // 横屏自动收窄；不引入任何新的渲染路径（仍是同样两个 Box + 同一个 verticalGradient）。
-    //
-    // ★ v2.5.2：公式搬进 `LyricsPanelScroll.fadeHeightPx` —— 从本版起**面板自己也要用它**
-    //   （它是「整条歌词最高能摆到哪」的下限，见 `blockTopPx` 的 `minTopPx`）。
-    //   两处各写一份就是第二处真相：渐隐带调窄了而定位没跟着调，当前行就会被压在渐隐里发灰。
-    var panelHeightPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-    val fadeHeight = with(LocalDensity.current) {
-        LyricsPanelScroll.fadeHeightPx(
-            viewportHeightPx = if (panelHeightPx.isFinite()) panelHeightPx.toInt() else 0,
-            baseFadePx = LyricsPanelScroll.BASE_FADE_DP.dp.toPx(),
-            minFadePx = LyricsPanelScroll.MIN_FADE_DP.dp.toPx(),
-        ).toDp()
-    }
-
     // ── v3.3.0 · 9：歌词复制 / 分享 / 出图的入口 ────────────────────────────────
     //
     // 三条设计约束，读一眼再改：
@@ -471,7 +448,6 @@ fun LyricsView(
             // 列表最后一行（含遮罩渐隐）压过去就会挡掉它一部分。留 10dp 缓冲。
             .padding(bottom = 10.dp)
             .onSizeChanged {
-                panelHeightPx = it.height.toFloat()
                 // v2.0.0 · T4：动态字号要按可用宽度估算折行数（见上）。
                 panelWidthPx = it.width.toFloat()
             }
@@ -518,26 +494,6 @@ fun LyricsView(
             },
             // v2.9.0 · B 档：纯透传（判定在 PlayerCard，本组件不读设置）。
             lyricPulseEnabled = lyricPulseEnabled,
-        )
-
-        // 上下边缘淡出,让歌词从黑里浮出来(沿用原实现;高度见 fadeHeight)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(fadeHeight)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(listOf(LocalMetroColors.current.background, Color.Transparent))
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(fadeHeight)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, LocalMetroColors.current.background))
-                )
         )
 
         // v1.5.1 · E：歌词界面里的快捷字号调节（A- / A+）。
@@ -644,7 +600,7 @@ private fun LyricShareButton(description: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         MetroIcon(
-            imageVector = Icons.Default.Share,
+            imageVector = PlayerGlyphs.Share,
             contentDescription = null,
             tint = LocalMetroColors.current.onSurfaceVariant,
             sizeDp = 16.dp,

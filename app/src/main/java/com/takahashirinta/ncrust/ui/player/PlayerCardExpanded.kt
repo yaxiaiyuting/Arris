@@ -46,8 +46,6 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.systemGestureExclusion
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -346,7 +344,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 contentAlignment = Alignment.Center
                             ) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.CloseFullscreen,
+                                    imageVector = PlayerGlyphs.Shrink,
                                     contentDescription = strings.bigScreenExit,
                                     tint = LocalMetroColors.current.primary,
                                     sizeDp = 24.dp
@@ -459,11 +457,11 @@ internal fun ColumnScope.PlayerCardExpanded(
                             MetroIconButton(onClick = callbacks.onTogglePlayMode) {
                                 MetroIcon(
                                     imageVector = when (playMode) {
-                                        QueueModes.SINGLE -> Icons.Default.RepeatOne
-                                        QueueModes.SHUFFLE -> Icons.Default.Shuffle
-                                        QueueModes.LINE -> Icons.Default.PlaylistPlay
-                                        QueueModes.INFINITY -> Icons.Default.AllInclusive
-                                        else -> Icons.Default.Repeat
+                                        QueueModes.SINGLE -> PlayerGlyphs.RepeatOne
+                                        QueueModes.SHUFFLE -> PlayerGlyphs.Shuffle
+                                        QueueModes.LINE -> PlayerGlyphs.Queue
+                                        QueueModes.INFINITY -> PlayerGlyphs.Infinity
+                                        else -> PlayerGlyphs.Repeat
                                     },
                                     contentDescription = strings.playModeButton,
                                     tint = if (playMode != QueueModes.CYCLE) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
@@ -472,7 +470,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             }
                             MetroIconButton(onClick = callbacks.onSavePlaylist) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.Add,
+                                    imageVector = PlayerGlyphs.Add,
                                     contentDescription = strings.saveAsPlaylist,
                                     tint = LocalMetroColors.current.onBackground,
                                     sizeDp = 24.dp
@@ -481,7 +479,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                             // 清空队列: 停播并回到暂无播放态
                             MetroIconButton(onClick = callbacks.onClearQueue) {
                                 MetroIcon(
-                                    imageVector = Icons.Default.DeleteSweep,
+                                    imageVector = PlayerGlyphs.ClearQueue,
                                     contentDescription = strings.clearQueue,
                                     tint = LocalMetroColors.current.onBackground,
                                     sizeDp = 24.dp

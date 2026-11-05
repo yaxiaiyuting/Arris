@@ -35,8 +35,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,12 +175,8 @@ internal fun PlayerCardCoverOverlay(
                 }
             }.testTag("player.cover"),
         contentScale = ContentScale.Crop,
-        // v2.5.0 · B：大封面 = AppShapes.large(16dp) + 1dp outlineVariant 描边。
-        // 描边色用 MetroColors.divider —— 它就是 NcrustColors.outlineVariant
-        // 的桥接值（见 NcrustColors.toMetroColors），本文件已经只读 MetroColors，
-        // 不为了一个颜色再引第二个主题源进来。
         shape = AppShapes.large,
-        frameColor = LocalMetroColors.current.divider,
+        frameColor = LocalMetroColors.current.onBackground.copy(alpha = 0.16f),
     )
 }
 
@@ -218,7 +212,7 @@ internal fun PlayerCardDismissButton(
         if (dismissEnabled) {
             MetroIconButton(onClick = onDismiss) {
                 MetroIcon(
-                    Icons.Default.KeyboardArrowDown,
+                    PlayerGlyphs.Dismiss,
                     strings.collapsePlayer,
                     tint = LocalMetroColors.current.onBackground
                 )

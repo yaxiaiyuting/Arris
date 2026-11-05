@@ -603,6 +603,24 @@ fun NcrustLyricsPanel(
                                 scaleX = scale
                                 scaleY = scale
                                 transformOrigin = TransformOrigin(0f, 0.5f)
+
+                                // Fade the lyric row itself so the artwork and ambient light
+                                // remain continuous at the top and bottom of the viewport.
+                                val viewport = listState.layoutInfo
+                                val item = viewport.visibleItemsInfo.firstOrNull { it.index == index + 1 }
+                                alpha = if (item == null) 1f else {
+                                    val middle = item.offset + item.size * 0.5f
+                                    val edgeDistance = minOf(
+                                        middle - viewport.viewportStartOffset,
+                                        viewport.viewportEndOffset - middle,
+                                    )
+                                    val fade = LyricsPanelScroll.fadeHeightPx(
+                                        viewport.viewportEndOffset - viewport.viewportStartOffset,
+                                        baseFadePx,
+                                        minFadePx,
+                                    )
+                                    (edgeDistance / fade.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                }
                             }
                             // 4.0.1：**非当前行景深**（借鉴 karaoke 渲染器）。
                             //

@@ -567,6 +567,7 @@ internal fun PlayerCard(
             hasSong = hasSong,
             expandedMounted = { ui.expandedMounted },
             visualizerSlot = geo.visualizerSlot,
+            sideCover = geo.usesSideCover,
             waveBackdropHeightDp = geo.waveBackdropHeightDp,
             isBufferingFlow = playerViewModel.isBuffering,
         )

@@ -55,9 +55,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.systemGestureExclusion
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
@@ -72,10 +69,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
@@ -183,7 +182,7 @@ internal fun PlayerCardBigScreenLayout(
                     // v2.1.0 · F：音源角标（大屏左栏，两个音源都标）。
                     ArtistLineWithSource(
                         song = song,
-                        color = LocalMetroColors.current.primary,
+                        color = LocalMetroColors.current.onSurfaceVariant,
                         style = LocalMetroTypography.current.bodyMedium,
                         badgeStyle = LocalMetroTypography.current.bodySmall
                     )
@@ -331,15 +330,18 @@ internal fun PlayerCardWideLayout(
                     MetroText(
                         song.name,
                         color = LocalMetroColors.current.onBackground,
-                        style = LocalMetroTypography.current.titleLarge,
+                        style = LocalMetroTypography.current.titleLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.35).sp,
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     // v2.1.0 · F：音源角标（宽屏左栏，两个音源都标）。
                     ArtistLineWithSource(
                         song = song,
-                        color = LocalMetroColors.current.primary,
-                        style = LocalMetroTypography.current.bodyLarge,
+                        color = LocalMetroColors.current.onSurfaceVariant,
+                        style = LocalMetroTypography.current.bodyMedium,
                         badgeStyle = LocalMetroTypography.current.bodySmall
                     )
                 }
@@ -508,7 +510,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 contentAlignment = Alignment.Center
             ) {
                 MetroIcon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
                     contentDescription = null,
                     tint = LocalMetroColors.current.onBackground,
                     sizeDp = 30.dp
@@ -540,7 +542,10 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 MetroText(
                     song.name,
                     color = LocalMetroColors.current.onBackground,
-                    style = LocalMetroTypography.current.titleLarge,
+                    style = LocalMetroTypography.current.titleLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = (-0.35).sp,
+                    ),
                     maxLines = 1,
                     overflow = if (visible) TextOverflow.Clip else TextOverflow.Ellipsis,
                     modifier = if (visible) Modifier.basicMarquee(
@@ -555,13 +560,13 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // v2.1.0 · F：音源角标（窄屏大封面 overlay，两个音源都标）。
             ArtistLineWithSource(
                 song = song,
-                color = LocalMetroColors.current.primary,
-                style = LocalMetroTypography.current.bodyLarge,
+                color = LocalMetroColors.current.onSurfaceVariant,
+                style = LocalMetroTypography.current.bodyMedium,
                 badgeStyle = LocalMetroTypography.current.bodySmall
             )
         }
     }
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(if (tiny) 6.dp else 12.dp))
     // 底部控制栏（可收起）
     Box(
         modifier = Modifier
