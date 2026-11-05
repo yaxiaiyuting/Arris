@@ -3,7 +3,6 @@ package com.takahashirinta.ncrust.ui.player
 
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.foundation.shape.RoundedCornerShape
 import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -38,7 +38,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -75,12 +75,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * 3.7.30 · LTS 的跟唱文案。
- *
- * 主线把这组放在 `Strings.playerUi.karaoke`（8 语言齐全）。LTS 这条线不扩 i18n 面
- * （要动 Strings + 8 个 locale + 迁移测试），因此收敛成一个本地对象。
- */
+/** LTS 的跟唱文案（同 3.7.30 的做法：不扩 Strings 的 8 语言面）。 */
 internal object KaraokeCopy {
     const val enter = "跟唱"
     const val exit = "退出跟唱"
@@ -312,28 +307,25 @@ internal fun PortraitFocusLyrics(
                     onLineClick = onSeek,
                     onUserScrolled = onUserScrolled,
                     focusIndex = followIndex,
-                    focusedRow = { index, line, browsing ->
-                        if (index == cue.current) {
+                    focusActive = cue.current >= 0,
+                    focusedRowMetrics = headline to controls.translatedPrimary,
+                    inactiveScale = 0.60f,
+                    focusedRow = { index, line, browsing, emphasis, defocus ->
+                        Box(Modifier.fillMaxWidth()) {
                             KaraokeFocus(
                                 line, translations[line.timestampMillis], controls.translatedPrimary,
                                 position, wordsEnabled, animationMode, focusSweep, headline,
                                 animateRail = animateRail, modifier = Modifier.fillMaxWidth(),
+                                emphasis = emphasis,
+                                defocus = defocus,
+                                contextAlpha = if (browsing) 0.77f else 0.49f,
                             )
-                        } else {
                             if (index == cue.next && cue.count != null) {
-                                KaraokeCountIn(KaraokeCopy.ready, cue.count, Modifier.fillMaxWidth())
+                                KaraokeCountIn(
+                                    KaraokeCopy.ready, cue.count,
+                                    Modifier.fillMaxWidth().offset(y = (-25).dp),
+                                )
                             }
-                            val lower = !browsing && cue.current >= 0 && index > cue.current
-                            val blur = if (!lower) 0.dp else if (index == cue.current + 1) 0.7.dp else 1.3.dp
-                            KaraokeContextPhrase(
-                                line = line,
-                                translatedPrimary = controls.translatedPrimary,
-                                headline = headline,
-                                subdued = !browsing && index != cue.next,
-                                showSecondary = true,
-                                fullText = true,
-                                modifier = if (blur > 0.dp) Modifier.fillMaxWidth().blur(blur) else Modifier.fillMaxWidth(),
-                            )
                         }
                     },
                 )
@@ -407,6 +399,9 @@ private fun KaraokeFocus(
     headline: Float,
     animateRail: Boolean,
     modifier: Modifier,
+    emphasis: () -> Float = { 1f },
+    defocus: () -> Float = { 0f },
+    contextAlpha: Float = 0.49f,
 ) {
     val colors = LocalMetroColors.current
     val lastWordEnd = remember(line, translation) {
@@ -426,7 +421,8 @@ private fun KaraokeFocus(
         fontWeight = FontWeight.Bold,
     )
     Column(
-        modifier.cueRail(colors.primary, focused = true, progress = railProgress).padding(start = 19.dp, end = 4.dp),
+        modifier.cueRail(colors.primary, focused = true, progress = railProgress, emphasis = emphasis)
+            .padding(start = 19.dp, end = 4.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         LyricLineBody(
@@ -440,6 +436,9 @@ private fun KaraokeFocus(
             currentPositionMillis = position,
             style = mainStyle,
             sweepConfig = sweep,
+            emphasis = emphasis,
+            restingColor = { colors.onBackground.copy(alpha = contextAlpha) },
+            defocus = defocus,
         )
         val secondary = if (primaryTranslation != null) line.text else translation?.text
         if (!secondary.isNullOrBlank()) {
@@ -456,11 +455,19 @@ private fun KaraokeFocus(
                     fontSize = (headline * 0.53f).sp, lineHeight = (headline * 0.69f).sp, fontWeight = FontWeight.Medium,
                 ),
                 sweepConfig = sweep,
+                emphasis = emphasis,
+                restingColor = { colors.onBackground.copy(alpha = contextAlpha * 0.83f) },
+                defocus = defocus,
             )
         }
         if (line.romanization.isNotBlank()) {
-            MetroText(
-                line.romanization, Modifier.fillMaxWidth(), color = colors.onSurfaceVariant,
+            LyricCaption(
+                text = line.romanization,
+                modifier = Modifier.fillMaxWidth(),
+                color = {
+                    lerp(colors.onSurfaceVariant.copy(alpha = contextAlpha), colors.onSurfaceVariant, emphasis())
+                },
+                defocus = defocus,
                 style = TextStyle(fontSize = (headline * 0.38f).sp, textAlign = TextAlign.Start),
             )
         }
@@ -525,7 +532,12 @@ private fun KaraokeCountIn(description: String, remaining: Int, modifier: Modifi
     }
 }
 
-private fun Modifier.cueRail(accent: Color, focused: Boolean, progress: (() -> Float)? = null): Modifier = drawWithCache {
+private fun Modifier.cueRail(
+    accent: Color,
+    focused: Boolean,
+    progress: (() -> Float)? = null,
+    emphasis: () -> Float = { 1f },
+): Modifier = drawWithCache {
     val x = if (layoutDirection == LayoutDirection.Ltr) 3.dp.toPx() else size.width - 3.dp.toPx()
     val marker = Offset(x, 7.dp.toPx())
     val track = Brush.verticalGradient(
@@ -534,16 +546,18 @@ private fun Modifier.cueRail(accent: Color, focused: Boolean, progress: (() -> F
         endY = maxOf(marker.y + 1f, size.height),
     )
     onDrawBehind {
+        val focus = emphasis()
+        if (focus <= 0f) return@onDrawBehind
         if (focused) {
-            drawLine(track, start = marker, end = Offset(x, size.height), strokeWidth = 1.dp.toPx())
+            drawLine(track, start = marker, end = Offset(x, size.height), strokeWidth = 1.dp.toPx(), alpha = focus)
             val sung = progress?.invoke()?.coerceIn(0f, 1f) ?: 0f
             if (sung > 0f) {
                 val tail = Offset(x, marker.y + (size.height - marker.y) * sung)
-                drawLine(accent.copy(alpha = 0.16f), marker, tail, 5.dp.toPx(), StrokeCap.Round)
-                drawLine(accent.copy(alpha = 0.83f), marker, tail, 1.3.dp.toPx(), StrokeCap.Round)
+                drawLine(accent.copy(alpha = 0.16f * focus), marker, tail, 5.dp.toPx(), StrokeCap.Round)
+                drawLine(accent.copy(alpha = 0.83f * focus), marker, tail, 1.3.dp.toPx(), StrokeCap.Round)
             }
             drawLine(
-                accent, start = Offset(x, 3.dp.toPx()), end = Offset(x, 14.dp.toPx()),
+                accent.copy(alpha = accent.alpha * focus), start = Offset(x, 3.dp.toPx()), end = Offset(x, 14.dp.toPx()),
                 strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round,
             )
         } else {
@@ -594,7 +608,7 @@ internal fun CompactPlaybackProgress(
 @Composable
 private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek: (Long) -> Unit) {
     CompactPlaybackProgress(controls.position, controls.progress, controls.duration, controls.buffering, onSeek)
-    KaraokeTransport(
+    KaraokeTransportRow(
         isPlaying = playing,
         previousEnabled = controls.previousEnabled,
         transport = controls.transport,
@@ -617,14 +631,13 @@ internal fun KaraokeButton(icon: ImageVector, label: String, onClick: () -> Unit
 }
 
 /**
- * 3.7.30 · LTS 用的紧凑传输键（上一首 / 播放暂停 / 下一首）。
+ * LTS 版紧凑传输键（同 3.7.30 的做法）。
  *
- * 主线把它放在 `FullPlayerControls.CompactTransportControls`（同文件里还有玩家的
- * 巨型控制条）。LTS 那份文件里 `transportSurface` 是 private，直接搬会连带改它的可见性；
- * 这里保留同一套排布与触感，只让依赖留在跟唱页面内部。
+ * 主线那份在 `FullPlayerControls` 里（`CompactTransportControls`），但 LTS 的同名文件把
+ * `transportSurface` 设成了 private，直接搬要连带改它的可见性 —— 所以留在跟唱页面内部。
  */
 @Composable
-private fun KaraokeTransport(
+private fun KaraokeTransportRow(
     isPlaying: Boolean,
     previousEnabled: Boolean,
     transport: PlayerCardCallbacks,
@@ -643,8 +656,7 @@ private fun KaraokeTransport(
             transport.onPlayPrevious()
         }
         Box(
-            Modifier.size(56.dp).clip(AppShapes.full)
-                .background(colors.primary)
+            Modifier.size(56.dp).clip(AppShapes.full).background(colors.primary)
                 .clickable(role = Role.Button) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     transport.onPlayPause()
@@ -679,7 +691,7 @@ private fun KaraokeSkipButton(icon: ImageVector, label: String, enabled: Boolean
     }
 }
 
-/** 3.7.30：歌词页工具条上的「跟唱」入口。 */
+/** LTS：歌词页工具条上的「跟唱」入口（同 3.7.30）。 */
 @Composable
 internal fun KaraokeEntryButton(onClick: () -> Unit) {
     val colors = LocalMetroColors.current

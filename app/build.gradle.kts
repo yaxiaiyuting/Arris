@@ -529,8 +529,8 @@ android {
         //   ④ 关于页「发送反馈」：FeedbackClient（走 `AppHttp.builder()`，否则
         //      HttpClientDnsAuditTest 判红）+ FeedbackDialog + AboutScreen 入口行。
         // versionCode 出处：上一版（v3.7.30 / build.gradle 117）⇒ 本版 **118**（取 max+1）。
-        versionCode = 118
-        versionName = "3.7.31-gpl"
+        versionCode = 119
+        versionName = "3.7.32-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
