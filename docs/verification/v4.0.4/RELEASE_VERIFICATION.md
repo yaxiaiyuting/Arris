@@ -19,3 +19,9 @@
 ## 兼容性
 
 新版公网与 P2P 房间需要双方升级至 4.0.4 并使用新房间码。Android 前台服务接到过期房间的启动指令时会先完成平台要求的前台启动，再清理空闲实例。 [Android 前台服务排错](https://developer.android.com/develop/background-work/services/fgs/troubleshooting#foreground-service-exceptions)
+
+## 公开发布复核
+
+- GitHub 主线使用独立 Release，源码 tag 指向 `1090425`。LTS 保持 `lts-3.7` 滚动 Release，版本源码 tag 指向 `6e3284c`。两份远端 APK 的 SHA-256 均与本地相同，并且已重新下载做逐字节比对。
+- Cloudflare Worker 部署版本为 `5cb3528f-c13b-4c2d-8288-6c7e1942b70f`。官网两条版本直链及 `latest.apk`、`lts-latest.apk` 均下载并逐字节比对。两份 APK 首段与后缀 Range 返回 206，条件请求返回 304，滚动别名返回 `Cache-Control: no-store`。
+- 官网首页、`/api/latest`、`/api/releases` 与静态更新快照均展示新版本。上一版的两个版本化 APK 仍可请求 Range；房间目录 GET 返回正常 JSON。
