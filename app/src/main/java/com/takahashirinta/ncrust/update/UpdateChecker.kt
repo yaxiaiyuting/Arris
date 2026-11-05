@@ -77,9 +77,8 @@ object UpdateChecker {
         // 只有**被声明为 LTS 的那条线**受限（当前是 3.7）；更早的历史版本仍按主线处理，
         // 否则 3.4 的用户会被卡在原地永远升不到 3.5（真机 fixture 用例抓到过）。
         val currentIsLts = current.major * 100 + current.minor == LTS_LINE
-        if (isLtsEntry) return currentIsLts
-        if (!currentIsLts) return true
-        return candidate.major * 100 + candidate.minor == current.major * 100 + current.minor
+        if (!currentIsLts) return !isLtsEntry
+        return candidate.major == current.major && candidate.minor == current.minor
     }
 
     /** 当前被声明为 LTS 的版本线（3.7）；新的 LTS 线出现时改这里。 */
@@ -105,10 +104,16 @@ object UpdateChecker {
             if (release.boolOrFalse("draft")) continue
             if (release.boolOrFalse("prerelease")) continue
 
-            val hit = bestAssetOf(release, wantedVariant) ?: continue
+            // I10：通道与变体过滤必须在**每个资产**上先做，再比版本。
+            // 旧写法是"先取最高版本资产，再用通道否决整个 release" —— 同一 Release 里同时挂了
+            // 主线与 LTS 附件时，LTS 客户端把主线选出来、被通道判否，于是**同批里合规的 LTS 包也一起
+            // 被丢掉**（用户表现为"有新版本但检查不出来"）。
+            val tagName = release.stringOrNull("tag_name")
+            val hit = bestAssetOf(release, wantedVariant, tagName, current) ?: continue
             if (hit.version <= current) continue
-            // 发布通道：3.7.x（LTS）不被推到 3.8.x（minSdk 29，Android 7 装不上）
-            if (!sameChannel(release.stringOrNull("tag_name"), hit.version, current)) continue
+            // 与 Linux 内核同样的「线」概念：3.7.x（LTS）只在该线内更新，不会被推到 3.8.x
+            // —— 3.8.x 的 minSdk 是 29，Android 7 设备根本装不上。
+            // 反过来主线用户不会被 `lts-*` 的滚动条目干扰（那条的附件版本更低，本来也不会中）。
             if (best == null || hit.version > best.version) {
                 best = UpdateInfo(
                     version = hit.version,
@@ -116,7 +121,8 @@ object UpdateChecker {
                     assetUrl = hit.url,
                     assetSize = hit.size,
                     releaseTag = release.stringOrNull("tag_name"),
-                    releasePageUrl = release.stringOrNull("html_url"),
+                    // 浏览器入口优先用官网（国内裸连打不开 GitHub）；没有 site_url 的老载荷才回落到 html_url。
+                    releasePageUrl = release.stringOrNull("site_url") ?: release.stringOrNull("html_url"),
                     publishedAt = release.stringOrNull("published_at"),
                     body = release.stringOrNull("body"),
                     assetId = hit.id
@@ -127,7 +133,12 @@ object UpdateChecker {
     }
 
     /** 一个 release 里版本最高的合规资产；没有则 null。 */
-    private fun bestAssetOf(release: JsonObject, variant: String): AssetHit? {
+    private fun bestAssetOf(
+        release: JsonObject,
+        variant: String,
+        tagName: String?,
+        current: AppVersion,
+    ): AssetHit? {
         val assets = release.arrayOrNull("assets") ?: return null
         var hit: AssetHit? = null
         for (element in assets) {
@@ -136,6 +147,8 @@ object UpdateChecker {
             val name = asset.stringOrNull("name") ?: continue
             val parsed = ForkRelease.parseAsset(name) ?: continue
             if (parsed.variant != variant) continue
+            // I10：每个候选资产先过通道；不合规的**单个资产**跳过，不影响同 Release 的其它资产。
+            if (!sameChannel(tagName, parsed.version, current)) continue
 
             val url = asset.stringOrNull("browser_download_url") ?: continue
             if (hit == null || parsed.version > hit.version) {

@@ -146,6 +146,7 @@ class UpdateDownloader(private val directory: File) {
         expectedSize: Long = 0L,
         onProgress: (Long, Long) -> Unit
     ): File {
+        if (cancelled) throw DownloadCancelledException()
         directory.mkdirs()
         val target = File(directory, fileName)
         // 每次尝试独占一个 part 文件：旧任务即使还在跑，也只动自己那份。

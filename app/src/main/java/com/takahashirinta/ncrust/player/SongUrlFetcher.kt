@@ -175,36 +175,39 @@ object SongUrlFetcher {
      * 绝不能当成「这首结构性不可播」去跳歌 —— 实测把两者混为一谈时，一次断流会让客户端
      * 在一分钟内自动跳掉两百多首。
      */
-    /**
-     * 账户级「这一档取不到」的短记忆（v3.8.7）。
-     *
-     * 取链是一条**串行降级阶梯**：lossless → exhigh → higher → standard，每一档一个来回。
-     * 没有会员的账号每首歌都要白跑 3 次才落到 standard —— 冷启动/待机后第一次播放尤其明显
-     * （每次来回 200–400ms，叠加起来就是「点了要等一两秒」）。
-     *
-     * 策略：**连续两首**都在某一档被业务拒绝，就把这一档记 10 分钟，期间降级阶梯从下一档开始。
-     * 用「连续两首」而不是「一次」是因为单首歌被拒可能只是那首歌没这个档位（版权/母带），
-     * 不代表账号不行。命中成功一次就把计数清零。
-     */
-    private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    private val levelRejectCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private data class LevelDenial(
+        val session: Long,
+        val firstSong: Long,
+        val expiresAtMs: Long,
+        val confirmed: Boolean = false,
+    )
+
+    private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, LevelDenial>()
     private const val DENIED_TTL_MS = 10 * 60_000L
+    private fun sessionGeneration(): Long =
+        com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration
 
-    private fun levelDenied(level: String): Boolean =
-        (deniedLevels[level] ?: 0L) > System.currentTimeMillis()
+    private fun levelDenied(level: String, session: Long): Boolean {
+        val entry = deniedLevels[level] ?: return false
+        return entry.session == session && entry.confirmed &&
+            entry.expiresAtMs > android.os.SystemClock.elapsedRealtime()
+    }
 
-    private fun noteLevelRejected(level: String) {
-        val n = (levelRejectCount[level] ?: 0) + 1
-        levelRejectCount[level] = n
-        if (n >= 2 && !levelDenied(level)) {
-            deniedLevels[level] = System.currentTimeMillis() + DENIED_TTL_MS
-            Log.i(TAG, "level $level denied account-wide for 10min (2 songs rejected)")
+    private fun noteLevelRejected(level: String, song: Long, session: Long) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        deniedLevels.compute(level) { _, entry ->
+            when {
+                sessionGeneration() != session -> entry
+                entry == null || entry.session != session || entry.expiresAtMs <= now ->
+                    LevelDenial(session, song, now + DENIED_TTL_MS)
+                entry.confirmed || entry.firstSong == song -> entry
+                else -> entry.copy(confirmed = true, expiresAtMs = now + DENIED_TTL_MS)
+            }
         }
     }
 
-    private fun noteLevelAccepted(level: String) {
-        levelRejectCount.remove(level)
-        if (deniedLevels.remove(level) != null) Log.i(TAG, "level $level usable again")
+    private fun noteLevelAccepted(level: String, session: Long) {
+        deniedLevels.computeIfPresent(level) { _, entry -> entry.takeUnless { it.session == session } }
     }
 
     private val transportFailures = java.util.Collections.newSetFromMap(
@@ -282,6 +285,7 @@ object SongUrlFetcher {
         // 一次"档位尝试"：成功返回结果，档位不可用返回 null，连接层失败抛 IOException。
         // 拆成函数是为了让"传输失败"和"档位不可用"走两条不同的路 —— 以前它们被同一个
         // catch 吞掉，于是连接一断就会把整条阶梯跑完，把 1 次故障放大成 6 次请求。
+        val session = sessionGeneration()
         suspend fun attempt(tryLevel: String): SongUrlResult? {
             val payload = buildPayload(songId, tryLevel)
             // A1：服务端按 **Cookie 里的客户端身份** 判定音质上限。只带 MUSIC_U/__csrf 时，
@@ -315,6 +319,8 @@ object SongUrlFetcher {
             // There is no point accepting such an entry, so advance down the ladder.
             if (code != 200 || url.isNullOrEmpty()) {
                 logAttempt(tryLevel, actualLevel, br, type, code, accepted = false)
+                // Ambiguous 404, missing links and malformed responses are per-track failures.
+                if (item.code == 403) noteLevelRejected(tryLevel, songId, session)
                 return null
             }
             logAttempt(tryLevel, actualLevel, br, type, code, accepted = true)
@@ -336,7 +342,7 @@ object SongUrlFetcher {
         }
 
         var retriedTransport = false
-        val effectiveLevels = fallbackLevels.filterNot { levelDenied(it) }.ifEmpty { fallbackLevels }
+        val effectiveLevels = fallbackLevels.filterNot { levelDenied(it, session) }.ifEmpty { fallbackLevels }
         if (effectiveLevels.size != fallbackLevels.size) {
             Log.i(TAG, "level ladder skip denied: ${fallbackLevels} -> $effectiveLevels (songId=$songId)")
         }
@@ -354,11 +360,10 @@ object SongUrlFetcher {
                     if (hit != null) {
                         Log.i(TAG, "level=$tryLevel ok in ${attemptMs}ms songId=$songId")
                         runCatching { java.net.URI(hit.url).host }.getOrNull()?.let { lastAudioHost = it }
-                        noteLevelAccepted(tryLevel)
+                        noteLevelAccepted(tryLevel, session)
                         return@withContext hit
                     }
                     Log.i(TAG, "level=$tryLevel rejected in ${attemptMs}ms songId=$songId — next tier")
-                    noteLevelRejected(tryLevel)
                     break // A business rejection may still permit a lower tier.
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
