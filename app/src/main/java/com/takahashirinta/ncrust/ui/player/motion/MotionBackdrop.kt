@@ -9,6 +9,8 @@
 package com.takahashirinta.ncrust.ui.player.motion
 
 import android.graphics.Bitmap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -21,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -93,6 +96,7 @@ fun MotionBackdrop(
     useFluidBackdrop: Boolean = false,
     currentCoverAvailable: Boolean = false,
     karaoke: Boolean = false,
+    quietLyricCenter: Boolean = false,
 ) {
     val fallback = LocalMetroColors.current.background
     val density = LocalDensity.current
@@ -109,6 +113,11 @@ fun MotionBackdrop(
             ?: runCatching { CoverBlurCache.blurred(coverKey, coverBitmap) }.getOrNull()
     }
 
+    val centerShade = animateFloatAsState(
+        if (quietLyricCenter) 0.16f else 0f,
+        animationSpec = tween(235),
+        label = "lyric center contrast",
+    )
     Box(modifier.fillMaxSize()) {
         // 底色：无论模糊是否可用都先铺主题背景色。它同时是「模糊失败的回退」与
         // 「模糊图层之下的不透明底」——后者保证 alpha 呼吸不会透出更下一层的内容。
@@ -175,6 +184,19 @@ fun MotionBackdrop(
                             1.00f to fallback.copy(alpha = BACKDROP_SCRIM_BOTTOM),
                         )
                     )
+                    .drawWithCache {
+                        val center = Brush.horizontalGradient(
+                            0f to Color.Transparent,
+                            0.30f to fallback,
+                            0.66f to fallback,
+                            1f to Color.Transparent,
+                            endX = size.width.coerceAtLeast(1f),
+                        )
+                        onDrawBehind {
+                            val shade = centerShade.value
+                            if (shade > 0f) drawRect(center, alpha = shade)
+                        }
+                    }
             )
         }
 

@@ -315,7 +315,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
             boundsCenter = geo.boundsCenter,
             coverFloatPx = geo.coverFloatPx,
             narrowCover = narrowCover,
-            hideForKaraoke = { ui.showKaraoke },
+            hideForKaraoke = { geo.usesSideCover && ui.focusLyricsActive },
             onCoverBitmap = { key, bitmap ->
                 // 只在真的换了图/键时写 state（这个回调会在每次 Coil 状态变化时被调到，
                 // 无条件赋值会让每次状态变化都触发一次背景层重组）。
@@ -329,7 +329,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
 
     // 收起按钮叠加层：z 序最高，保证触摸事件不被任何下层元素拦截。
     // 大屏幕模式下整层不挂载（判据在下面这一行，理由见 PlayerCardDismissButton 的 KDoc）。
-    if (hasSong && !geo.bigScreenActive && !ui.showKaraoke) {
+    if (hasSong && !geo.bigScreenActive && !(geo.usesSideCover && ui.focusLyricsActive)) {
         ThresholdScope({ ui.dismissEnabled }) { dismissEnabled ->
             PlayerCardDismissButton(
                 progress = progress,

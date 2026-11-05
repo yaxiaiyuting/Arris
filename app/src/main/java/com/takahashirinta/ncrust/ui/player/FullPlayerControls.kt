@@ -39,10 +39,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -90,6 +92,63 @@ private fun Modifier.transportSurface(interaction: MutableInteractionSource): Mo
     }.clip(AppShapes.full)
         .background(brush)
         .border(1.dp, Color.White.copy(alpha = 0.24f), AppShapes.full)
+}
+
+@Composable
+internal fun CompactTransportControls(
+    isPlaying: Boolean,
+    previousEnabled: Boolean,
+    transport: PlayerCardCallbacks,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val colors = LocalMetroColors.current
+    val haptic = LocalHapticFeedback.current
+    val playInteraction = remember { MutableInteractionSource() }
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CompactSkipButton(PlayerGlyphs.Previous, strings.prevButton, previousEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            transport.onPlayPrevious()
+        }
+        Box(
+            Modifier.size(48.dp)
+                .clickable(interactionSource = playInteraction, indication = null, role = Role.Button) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    transport.onPlayPause()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.matchParentSize().transportSurface(playInteraction))
+            MetroIcon(
+                imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
+                contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
+                tint = colors.onPrimary,
+                sizeDp = 24.dp,
+            )
+        }
+        CompactSkipButton(PlayerGlyphs.Next, strings.nextButton, enabled = true) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            transport.onPlayNext()
+        }
+    }
+}
+
+@Composable
+private fun CompactSkipButton(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val colors = LocalMetroColors.current
+    Box(
+        Modifier.size(48.dp).clip(AppShapes.full).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            icon, contentDescription = label, sizeDp = 23.dp,
+            tint = if (enabled) colors.onBackground else colors.onSurfaceVariant.copy(alpha = 0.5f),
+        )
+    }
 }
 
 @Composable
@@ -143,6 +202,7 @@ fun FullPlayerControls(
     tiny: Boolean = false,
     // 宽屏横向布局：进度行 + 操作行扁平铺开，替代手机的竖向大按钮堆叠。
     landscape: Boolean = false,
+    sharedLyricProgress: Boolean = false,
     // P1：大屏模式把音质控件搬到左栏（就地选择器）后，控制条右端不再重复画一个
     // 「点一下跳设置页」的音质角标 —— 同一屏里两个音质入口会互相打架。
     showQuality: Boolean = true,
@@ -453,7 +513,22 @@ fun FullPlayerControls(
             .padding(start = outerInset, end = outerInset, bottom = bottomPad)
             .padding(top = if (tiny) 3.dp else 8.dp, bottom = if (tiny) 3.dp else 6.dp)
     ) {
-        if (tiny) {
+        if (sharedLyricProgress) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                PlayerQualityChip(
+                    qualityIndexFlow = qualityIndexFlow,
+                    qualityStatusFlow = qualityStatusFlow,
+                    qualityBitrateFlow = qualityBitrateFlow,
+                    options = qualityOptions,
+                    trialFlow = trialFlow,
+                    preferredIndexProvider = preferredQualityIndexProvider,
+                    onSelect = onQualitySelect,
+                    maxHeightDp = qualityPickerMaxHeightDp,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    minHitHeightDp = if (tiny) 32.dp else 36.dp,
+                )
+            }
+        } else if (tiny) {
             // Tiny：位置 · 进度 · 时长 · 音质压成一行，把纵向空间全让给封面与传输键。
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = hPad),

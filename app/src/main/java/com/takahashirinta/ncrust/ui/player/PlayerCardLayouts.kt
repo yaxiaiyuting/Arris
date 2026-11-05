@@ -60,10 +60,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -72,7 +71,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.network.SongItem
@@ -82,6 +80,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import kotlinx.coroutines.flow.StateFlow
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 分支 1：大屏幕模式（横屏桌面播放器布局）
@@ -399,11 +398,16 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
     isPlaying: Boolean,
     tiny: Boolean,
     panelToggles: @Composable (Dp, Dp) -> Unit,
-    haptic: HapticFeedback,
     gestureNavLiftDp: Dp,
     controlsCollapseDrag: () -> Modifier,
     onToggleControlsCollapse: () -> Unit,
-    onPlayPause: () -> Unit,
+    transport: PlayerCardCallbacks,
+    previousEnabled: Boolean,
+    positionFlow: StateFlow<Long>,
+    progressFlow: StateFlow<Float>,
+    durationFlow: StateFlow<Long>,
+    bufferingFlow: StateFlow<Boolean>,
+    onSeek: (Long) -> Unit,
     onSongInfoClick: () -> Unit,
     onControlsMeasured: (heightPx: Float, topInCardPx: Float) -> Unit,
     playerPanels: @Composable (Modifier) -> Unit,
@@ -485,40 +489,6 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
     ) {
         playerPanels(Modifier.fillMaxSize())
-        // 收起态悬浮播放键（v1.4.0 · A）：只在控制栏真的收起后挂载 ——
-        // alpha=0 却常挂载的按钮会变成一块"摸不着的命中区"（见 B-1 的教训）。
-        // 点 = 播放/暂停；向下拖 = 把控制栏拉回来（复用同一条收起进度轴）。
-        if (controlsCollapsedForInput) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    // 4.0.0：**必须抬 z**。同一父 Box 里后面声明的「歌名/歌手」块是
-                    // `.fillMaxWidth()` 的整行点击区，绘制与命中都在这个按钮之上 ——
-                    // 真机表现：点右下角播放键，命中的是 onSongInfoClick（弹"转到歌手/专辑"），
-                    // 只有最右侧 16dp 边距那一小条能点到按钮。
-                    .zIndex(2f)
-                    .padding(end = 16.dp, bottom = 16.dp)
-                    .size(56.dp)
-                    .background(LocalMetroColors.current.surfaceVariant)
-                    .then(controlsCollapseDrag())
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        android.util.Log.i("diagTap", "floatingPlayButton -> onPlayPause()")
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPlayPause()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                MetroIcon(
-                    imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
-                    contentDescription = null,
-                    tint = LocalMetroColors.current.onBackground,
-                    sizeDp = 30.dp
-                )
-            }
-        }
         // 大封面模式下的曲名/歌手信息：overlay 在内容区底部，不占高度。
         Column(
             modifier = Modifier
@@ -568,6 +538,32 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             )
         }
     }
+    // Keep the same seek control mounted as the controls below it change height.
+    if (ui.lyricsPanelSelected) {
+        CompactPlaybackProgress(
+            positionFlow, progressFlow, durationFlow, bufferingFlow, onSeek,
+            modifier = Modifier.padding(horizontal = 22.dp),
+        )
+    }
+    Box(
+        Modifier.fillMaxWidth().clipToBounds()
+            .collapsibleHeight { 1f - controlsCollapse.value }
+            .height(54.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (controlsCollapsedForInput) {
+            CompactTransportControls(
+                isPlaying = isPlaying,
+                previousEnabled = previousEnabled,
+                transport = transport,
+                modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
+                    val reveal = ((controlsCollapse.value - 0.40f) / 0.60f).coerceIn(0f, 1f)
+                    alpha = reveal
+                    translationY = (1f - reveal) * 8.dp.toPx()
+                },
+            )
+        }
+    }
     Spacer(Modifier.height(if (tiny) 6.dp else 12.dp))
     // 底部控制栏（可收起）
     Box(
@@ -585,7 +581,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             }
             // 收起：layout 阶段把高度收走（面板顺势长高），内容用 graphicsLayer
             // 平移出屏幕 —— 全程零 recomposition，只有这一棵子树重新布局。
-            .collapsibleHeight(controlsCollapse)
+            .collapsibleHeight { controlsCollapse.value }
             .then(controlsCollapseDrag())
             .graphicsLayer {
                 alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f)

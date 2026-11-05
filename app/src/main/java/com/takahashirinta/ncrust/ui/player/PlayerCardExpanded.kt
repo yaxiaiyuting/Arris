@@ -32,7 +32,6 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.widget.Toast
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -60,7 +59,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -106,7 +104,6 @@ import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.player.motion.MotionEffects
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
-import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
@@ -174,7 +171,6 @@ internal fun ColumnScope.PlayerCardExpanded(
     playerViewModel: PlayerViewModel,
     callbacks: PlayerCardCallbacks,
     isPlaying: Boolean,
-    haptic: HapticFeedback,
     gestureNavLiftDp: Dp,
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine>,
@@ -209,6 +205,27 @@ internal fun ColumnScope.PlayerCardExpanded(
 ) {
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
+    val standaloneKaraoke = ui.focusLyricsActive && geo.usesSideCover
+    val unifiedLyrics = !geo.usesSideCover && ui.lyricsPanelSelected
+    val exitFocus: () -> Unit = {
+        ui.showKaraoke = false
+        ui.lyricLocateTrigger++
+    }
+    val karaokeControls = if (unifiedLyrics || standaloneKaraoke) KaraokeControls(
+        embedded = !geo.usesSideCover,
+        title = song.name,
+        artist = song.artists.orEmpty().joinToString(" / ") { it.name },
+        cover = ui.coverArtBitmap.takeIf { standaloneKaraoke && ui.coverArtKey == CoverUrls.large(song.album?.picUrl) },
+        position = positionFlow,
+        duration = playerViewModel.duration,
+        progress = progressFlow,
+        buffering = playerViewModel.isBuffering,
+        transport = callbacks,
+        previousEnabled = playbackQueue.isNotEmpty(),
+        exit = exitFocus,
+        translatedPrimary = ui.karaokeTranslationPrimary,
+        toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary },
+    ) else null
     val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
         LyricsView(
             lyrics = lyrics,
@@ -222,7 +239,7 @@ internal fun ColumnScope.PlayerCardExpanded(
             isVisible = ui.showLyrics || karaoke != null,
             forcedLocateTrigger = ui.lyricLocateTrigger,
             onSeekToMs = playerViewModel::seekTo,
-            enabled = (ui.lyricsEnabled || karaoke != null) && ui.cardExpandedForInput,
+            enabled = (ui.lyricsEnabled || standaloneKaraoke) && ui.cardExpandedForInput,
             isLoading = lyricsLoading,
             wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
             wordAnimationMode = lyricsWordAnimation,
@@ -234,18 +251,12 @@ internal fun ColumnScope.PlayerCardExpanded(
             lyricPulseEnabled = motion.lyricPulse,
             trackKey = "${song.source}:${song.id}",
             karaoke = karaoke,
-            onOpenKaraoke = if (karaoke == null) ({ ui.showKaraoke = true }) else null,
+            onOpenKaraoke = if (geo.usesSideCover && karaoke == null) ({ ui.showKaraoke = true }) else null,
         )
     }
-    androidx.activity.compose.BackHandler(enabled = ui.showKaraoke) { ui.showKaraoke = false }
-    if (ui.showKaraoke) {
-        lyricsContent(
-            KaraokeControls(song.name.orEmpty(), song.artists.orEmpty().joinToString(" / ") { it.name },
-                playerViewModel.duration, progressFlow, playerViewModel.isBuffering, callbacks,
-                exit = { ui.showKaraoke = false },
-                translatedPrimary = ui.karaokeTranslationPrimary,
-                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary }),
-        )
+    androidx.activity.compose.BackHandler(enabled = standaloneKaraoke && ui.cardExpandedForInput, onBack = exitFocus)
+    if (standaloneKaraoke) {
+        lyricsContent(karaokeControls)
         return
     }
             val s = song!!
@@ -346,6 +357,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     previousEnabled = playbackQueue.isNotEmpty(),
                     // 大屏模式也用扁平横向控制条（竖屏那套大按钮堆叠在 300dp 高里放不下）。
                     landscape = geo.usesSideCover,
+                    sharedLyricProgress = unifiedLyrics,
                     compact = geo.usesSideCover || heightClass != HeightClass.Regular,
                     tiny = tinyPlayer,
                     // 大屏把音质搬到左栏就地选择器，控制条右端不再重复一个音质角标。
@@ -422,15 +434,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 translationX = -q * screenWidthPx
                             }
                     ) {
-                        // 切歌时旧歌词渐隐、新歌词渐显（Sokuou UWP 缓动）。
-                        // key = song?.id：同一首歌的歌词更新不触发 Crossfade, 只换内容。
-                        Crossfade(
-                            targetState = song?.id,
-                            animationSpec = SokuouTweens.CoverFade,
-                            label = "LyricsCrossfade"
-                        ) { _ ->
-                            lyricsContent(null)
-                        }
+                        // Only one lyric viewport reads the current song, including during a track change.
+                        lyricsContent(karaokeControls)
                     }
 
                     // 列表面板：translationX 从 +screenWidthPx 滑至 0，稳定态时完全在屏幕外
@@ -556,11 +561,16 @@ internal fun ColumnScope.PlayerCardExpanded(
                     isPlaying = isPlaying,
                     tiny = tinyPlayer,
                     panelToggles = panelToggles,
-                    haptic = haptic,
                     gestureNavLiftDp = gestureNavLiftDp,
                     controlsCollapseDrag = controlsCollapseDrag,
                     onToggleControlsCollapse = onToggleControlsCollapse,
-                    onPlayPause = callbacks.onPlayPause,
+                    transport = callbacks,
+                    previousEnabled = playbackQueue.isNotEmpty(),
+                    positionFlow = positionFlow,
+                    progressFlow = progressFlow,
+                    durationFlow = playerViewModel.duration,
+                    bufferingFlow = playerViewModel.isBuffering,
+                    onSeek = playerViewModel::seekTo,
                     onSongInfoClick = callbacks.onSongInfoClick,
                     onControlsMeasured = { heightPx, topInCardPx ->
                         ui.controlsHeightPx = heightPx

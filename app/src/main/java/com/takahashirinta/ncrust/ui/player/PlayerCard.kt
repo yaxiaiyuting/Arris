@@ -380,12 +380,14 @@ internal fun PlayerCard(
         }
     }
 
+    val standaloneKaraoke = geo.usesSideCover && ui.focusLyricsActive
+
     fun isOverCardVisibleArea(y: Float, x: Float): Boolean {
         // 宽屏左右分栏，左栏是封面区，触摸落在左栏时不属于卡片内容区。
         // P1：大屏模式**不**参与这条豁免 —— 它的左栏里有可点控件（音质选择器），
         // 整个屏幕都算卡片可见区，根节点不吞任何事件，避免把子控件的 UP 消费掉
         // （Compose 的 waitForUpOrCancellation 见到 isConsumed 就直接取消点击）。
-        if (!ui.showKaraoke && geo.isWidePlayer && !geo.bigScreenActive && x <= geo.panelBoundaryPx) return false
+        if (!standaloneKaraoke && geo.isWidePlayer && !geo.bigScreenActive && x <= geo.panelBoundaryPx) return false
         // 卡片可见上沿：收起时整体下移到 collapsedOffsetY，展开时回到 0。
         // 用 progress 插值而不是直接读 cardRootOrigin.y —— graphicsLayer 的平移
         // 不会重新触发布局，onGloballyPositioned 写入的坐标在动画期间会滞后。
@@ -452,8 +454,8 @@ internal fun PlayerCard(
             // Inner modifier → runs first within this node in Main pass.
             // Handles drag-to-expand/collapse; runs before the outer consumer so it sees unconsumed MOVE.
             // 仅在有歌（!hasSong = 暂无播放）时可拖拽；用 hasSong 作 key，来了歌后手势重新激活。
-            .pointerInput(hasSong, geo.bigScreenActive, ui.showKaraoke) {
-                if (!hasSong || ui.showKaraoke) return@pointerInput
+            .pointerInput(hasSong, geo.bigScreenActive, standaloneKaraoke) {
+                if (!hasSong || standaloneKaraoke) return@pointerInput
                 // P1：大屏模式下停用"整卡拖拽"。大屏是横屏桌面布局，"把卡片拖下去"没有
                 // 对应语义（折叠态的 mini bar 落点是按竖屏 contentHeightPx 算的），
                 // 出口固定为：同一个按钮 / 系统返回键 / 旋转回竖屏。
@@ -576,7 +578,7 @@ internal fun PlayerCard(
             visualizerSlot = geo.visualizerSlot,
             sideCover = geo.usesSideCover,
             waveBackdropHeightDp = geo.waveBackdropHeightDp,
-            karaoke = ui.showKaraoke,
+            karaoke = standaloneKaraoke || (!geo.usesSideCover && ui.lyricsPanelSelected),
             currentCoverAvailable = ui.coverArtBitmap != null && ui.coverArtKey != null &&
                 ui.coverArtKey == CoverUrls.large(song?.album?.picUrl),
             isBufferingFlow = playerViewModel.isBuffering,
@@ -603,7 +605,6 @@ internal fun PlayerCard(
                     playerViewModel = playerViewModel,
                     callbacks = callbacks,
                     isPlaying = isPlaying,
-                    haptic = haptic,
                     gestureNavLiftDp = gestureNavLiftDp,
                     lyrics = lyrics,
                     translatedLyrics = translatedLyrics,
@@ -675,10 +676,10 @@ private fun <T> rememberGatedFlow(source: StateFlow<T>, open: State<Boolean>): S
  * 内容本身由外层 graphicsLayer 平移出屏幕。这里在 layout 阶段直接读 Animatable，
  * **不触发 recomposition** —— 动画帧只重排这一棵子树。
  */
-internal fun Modifier.collapsibleHeight(collapse: Animatable<Float, AnimationVector1D>): Modifier =
+internal fun Modifier.collapsibleHeight(collapsedFraction: () -> Float): Modifier =
     this.layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
-        val shrink = (collapse.value.coerceIn(0f, 1f) * placeable.height).roundToInt()
+        val shrink = (collapsedFraction().coerceIn(0f, 1f) * placeable.height).roundToInt()
         layout(placeable.width, (placeable.height - shrink).coerceAtLeast(0)) {
             placeable.place(0, 0)
         }
