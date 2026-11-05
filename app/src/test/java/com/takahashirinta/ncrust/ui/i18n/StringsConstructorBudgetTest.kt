@@ -694,7 +694,7 @@ class StringsConstructorBudgetTest {
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。
         assertEquals(43, dexSlots(42, false))
 
-        val fields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
+        val legacyFields: List<Pair<String, (WaveformStrings) -> String>> = listOf(
             "visualizerTierLabel" to { w: WaveformStrings -> w.visualizerTierLabel },
             "visualizerTierDescription" to { w: WaveformStrings -> w.visualizerTierDescription },
             "visualizerTierSimple" to { w: WaveformStrings -> w.visualizerTierSimple },
@@ -724,6 +724,8 @@ class StringsConstructorBudgetTest {
             "motionWaveBandsDescription" to { w: WaveformStrings -> w.motionWaveBandsDescription },
             "motionBreathingLabel" to { w: WaveformStrings -> w.motionBreathingLabel },
             "motionBreathingDescription" to { w: WaveformStrings -> w.motionBreathingDescription },
+        )
+        val fields = legacyFields + listOf(
             "motionFluidBackdropLabel" to { w: WaveformStrings -> w.motionFluidBackdropLabel },
             "motionFluidBackdropDescription" to { w: WaveformStrings -> w.motionFluidBackdropDescription },
         )
@@ -756,9 +758,9 @@ class StringsConstructorBudgetTest {
             )
         }
 
-        // 转发属性（`Strings.visualizerXxx`）必须在，且与组内同值。
+        // 旧路径保留转发属性。新文案只从 waveform 组读取。
         presets.forEach { s ->
-            fields.forEach { (name, get) ->
+            legacyFields.forEach { (name, get) ->
                 val forward = Strings::class.java.methods.firstOrNull {
                     it.parameterCount == 0 && it.name == "get" + name.replaceFirstChar { c -> c.uppercaseChar() }
                 }
