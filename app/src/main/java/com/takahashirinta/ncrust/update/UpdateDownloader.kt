@@ -128,9 +128,19 @@ class UpdateDownloader(private val directory: File) {
     // 键取**目标文件的绝对路径**而不是裸文件名：同一个缓存目录下的同名文件才是同一个竞态域，
     // 不同目录（单测的临时目录、将来别的下载目录）互不干扰。见 [ATTEMPT_SEQ] / [LATEST_ATTEMPT]。
 
+    private var reservation: Pair<String, Long>? = null
+
+    /** Claims the target before range probing so an older single-stream attempt cannot publish. */
+    internal fun reserve(fileName: String) = synchronized(LATEST_ATTEMPT) {
+        val key = File(directory, fileName).absolutePath
+        val attempt = ATTEMPT_SEQ.incrementAndGet()
+        LATEST_ATTEMPT[key] = attempt
+        reservation = key to attempt
+    }
+
     fun cancel() {
-        cancelled = true
-        runCatching { currentCall?.cancel() }
+        synchronized(LATEST_ATTEMPT) { cancelled = true }
+        currentCall?.cancel()
     }
 
     /**
@@ -153,33 +163,32 @@ class UpdateDownloader(private val directory: File) {
         // H04：序号与「谁是最新尝试」都在**进程级**表里（见 [ATTEMPT_SEQ] / [LATEST_ATTEMPT]），
         // 否则 `UpdateService` 每次新建实例时两个任务的 part 会撞成同一个名字。
         val targetKey = target.absolutePath
-        val attempt = ATTEMPT_SEQ.incrementAndGet()
-        LATEST_ATTEMPT[targetKey] = attempt
-        val part = File(directory, "$fileName.part-$attempt")
         val markerFile = File(directory, markerNameFor(fileName))
-        fun superseded() = LATEST_ATTEMPT[targetKey] != attempt
-        // 清掉同一目标的其它 part（上一轮被杀的残留），只保留本次尝试的那份。
-        runCatching {
-            directory.listFiles()
-                ?.filter { it.name.startsWith("$fileName.part-") && it.name != part.name }
-                ?.forEach { it.delete() }
+        val (attempt, stored, localBytes) = synchronized(LATEST_ATTEMPT) {
+            if (cancelled) throw DownloadCancelledException()
+            val reserved = reservation?.takeIf { it.first == targetKey }?.second
+            reservation = null
+            val attempt = reserved ?: ATTEMPT_SEQ.incrementAndGet().also { LATEST_ATTEMPT[targetKey] = it }
+            if (LATEST_ATTEMPT[targetKey] != attempt) throw DownloadCancelledException()
+            val marker = readMarker(markerFile)
+            val length = if (target.isFile) target.length() else 0L
+            Triple(attempt, marker, length)
         }
+        val part = File(directory, "$fileName.part-$attempt")
+        fun superseded() = LATEST_ATTEMPT[targetKey] != attempt
 
-        // 1. 决定本地残包能否续传：有字节、有元数据、身份完全吻合，三者缺一不可。
-        val stored = readMarker(markerFile)
-        // 续传只对**已完成的目标文件**有意义；part 文件是本次尝试私有的，从 0 开始。
-        val localBytes = if (target.isFile) target.length() else 0L
-        // S11：URL 回退身份（没有稳定资产 id）只在**有验证器**时才允许拼接；
-        // 否则同一 URL 换了内容也能拼出"v1 前缀 + v2 后缀"的混合包。
-        val identityIsUrlFallback = identity == url
-        val validatorPresent = !stored?.etag.isNullOrBlank()
+        // A URL alone cannot prove the identity of an existing prefix.
         val canResume = localBytes > 0L && stored != null &&
             stored.matches(url, identity, expectedSize) &&
-            (!identityIsUrlFallback || validatorPresent)
-        if (localBytes > 0L && !canResume) {
-            target.delete() // 无元数据 / 身份不符的旧残包：安全重下，绝不拼接
+            (identity != url || !stored.etag.isNullOrBlank())
+        synchronized(LATEST_ATTEMPT) {
+            if (superseded() || cancelled) throw DownloadCancelledException()
+            directory.listFiles()
+                ?.filter { it.name.startsWith("$fileName.part-") &&
+                    (it.name.substringAfterLast('-').toLongOrNull() ?: Long.MAX_VALUE) < attempt }
+                ?.forEach { it.delete() }
+            if (localBytes > 0L && !canResume) target.delete()
         }
-        markerFile.delete()
 
         var resumeFrom = if (canResume) localBytes else 0L
         var ifRange = if (canResume) stored?.etag else null
@@ -190,7 +199,8 @@ class UpdateDownloader(private val directory: File) {
         // 这里写入的是本次请求的身份与期望总长；ETag 在没续传时为空，服务端会以 200 整体覆盖，
         // 不会拿旧前缀去拼新后缀。
         // H04：只有最新尝试才写（被取代的旧任务不许改这份共享标记）。
-        if (!superseded()) {
+        synchronized(LATEST_ATTEMPT) {
+            if (superseded() || cancelled) throw DownloadCancelledException()
             writeMarker(markerFile, ResumeMarker(url, identity, expectedSize, ifRange))
         }
 
@@ -237,7 +247,8 @@ class UpdateDownloader(private val directory: File) {
                 // H04：续传标记是**按目标文件**共享的一份，只有仍然是"最新尝试"的任务才许写它。
                 // 否则被取代的旧任务会用自己的身份 / 定长把新任务的标记冲掉，下一次续传就会
                 // 拿旧身份去拼新后缀。
-                if (effectiveEtag != null && !superseded()) {
+                if (effectiveEtag != null) synchronized(LATEST_ATTEMPT) {
+                    if (superseded() || cancelled) throw DownloadCancelledException()
                     writeMarker(markerFile, ResumeMarker(url, identity, expectedSize, effectiveEtag))
                 }
                 if (!append && ifRange == null && effectiveEtag != null) {
@@ -291,19 +302,13 @@ class UpdateDownloader(private val directory: File) {
 
                 // 完整落盘后清掉续传元数据：下一次若再从 0 开始（用户重下 / 校验失败重试），
                 // 不应把「已经完整的旧文件」当成残包去发 Range=全长（服务端会回 416）。
-                if (superseded() || cancelled) {
-                    // 这次尝试已经被更新的下载取代（或用户取消）：绝不交付，删掉自己的 part。
-                    part.delete()
-                    throw DownloadCancelledException()
+                synchronized(LATEST_ATTEMPT) {
+                    if (superseded() || cancelled) throw DownloadCancelledException()
+                    if (!part.renameTo(target)) {
+                        throw IOException("下载交付失败：无法重命名 ${part.name}")
+                    }
+                    markerFile.delete()
                 }
-                // 原子交付：先落到目标旁边再改名，避免"目标文件存在但只有半截"。
-                if (target.exists()) target.delete()
-                if (!part.renameTo(target)) {
-                    // rename 失败也不能回退成"写进目标"（那正是 S10 的竞态）。
-                    part.delete()
-                    throw IOException("下载交付失败：无法重命名 ${part.name}")
-                }
-                markerFile.delete()
                 return target
             }
             if (!restart) throw IOException("下载状态异常")
@@ -313,13 +318,12 @@ class UpdateDownloader(private val directory: File) {
         } catch (e: Throwable) {
             // 失败/取消：把本次 part 归还成目标文件，保持"残包留在目标上、下次可续传"的契约。
             // 只有仍是最新尝试才归还 —— 被新下载取代的旧任务不许动目标。
-            if (!superseded() && part.isFile && part.length() > 0L) {
-                runCatching {
-                    if (target.exists()) target.delete()
-                    part.renameTo(target)
+            synchronized(LATEST_ATTEMPT) {
+                if (!superseded() && part.isFile && part.length() > 0L) {
+                    if (!part.renameTo(target)) part.delete()
+                } else {
+                    part.delete()
                 }
-            } else {
-                runCatching { part.delete() }
             }
             throw e
         }
