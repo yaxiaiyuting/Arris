@@ -314,7 +314,9 @@ object TogetherSession {
         this.link = link
         link.onMessage = { msg ->
             if (this.link === link) when (msg) {
-                is RoomWire.Ping -> link.send(RoomWire.Pong(msg.t0, nowMs()))
+                is RoomWire.Ping -> scope.launch(Dispatchers.IO) {
+                    if (this@TogetherSession.link === link) link.send(RoomWire.Pong(msg.t0, nowMs()))
+                }
                 is RoomWire.Presence -> _members.value = msg.members
                 else -> Unit
             }
@@ -403,7 +405,7 @@ object TogetherSession {
                     val now = nowMs()
                     val prev = lastSnap
                     val jumped = prev != null &&
-                        kotlin.math.abs(snap.positionMs - (prev.positionMs + (now - lastSentAt))) > DRIFT_SEND_MS
+                        kotlin.math.abs(snap.positionMs - (prev.positionMs + if (prev.playing) now - lastSentAt else 0L)) > DRIFT_SEND_MS
                     val changed = prev == null ||
                         prev.songId != snap.songId ||
                         prev.title != snap.title || prev.sourceKey != snap.sourceKey ||
