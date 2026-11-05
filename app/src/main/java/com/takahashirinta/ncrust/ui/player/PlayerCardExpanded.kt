@@ -60,7 +60,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -174,7 +173,6 @@ internal fun ColumnScope.PlayerCardExpanded(
     playerViewModel: PlayerViewModel,
     callbacks: PlayerCardCallbacks,
     isPlaying: Boolean,
-    haptic: HapticFeedback,
     gestureNavLiftDp: Dp,
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine>,
@@ -240,11 +238,20 @@ internal fun ColumnScope.PlayerCardExpanded(
     androidx.activity.compose.BackHandler(enabled = ui.showKaraoke) { ui.showKaraoke = false }
     if (ui.showKaraoke) {
         lyricsContent(
-            KaraokeControls(song.name.orEmpty(), song.artists.orEmpty().joinToString(" / ") { it.name },
-                playerViewModel.duration, progressFlow, playerViewModel.isBuffering, callbacks,
+            KaraokeControls(
+                title = song.name,
+                artist = song.artists.orEmpty().joinToString(" / ") { it.name },
+                cover = ui.coverArtBitmap.takeIf { ui.coverArtKey == CoverUrls.large(song.album?.picUrl) },
+                position = positionFlow,
+                duration = playerViewModel.duration,
+                progress = progressFlow,
+                buffering = playerViewModel.isBuffering,
+                transport = callbacks,
+                previousEnabled = playbackQueue.isNotEmpty(),
                 exit = { ui.showKaraoke = false },
                 translatedPrimary = ui.karaokeTranslationPrimary,
-                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary }),
+                toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary },
+            ),
         )
         return
     }
@@ -556,11 +563,11 @@ internal fun ColumnScope.PlayerCardExpanded(
                     isPlaying = isPlaying,
                     tiny = tinyPlayer,
                     panelToggles = panelToggles,
-                    haptic = haptic,
                     gestureNavLiftDp = gestureNavLiftDp,
                     controlsCollapseDrag = controlsCollapseDrag,
                     onToggleControlsCollapse = onToggleControlsCollapse,
-                    onPlayPause = callbacks.onPlayPause,
+                    transport = callbacks,
+                    previousEnabled = playbackQueue.isNotEmpty(),
                     onSongInfoClick = callbacks.onSongInfoClick,
                     onControlsMeasured = { heightPx, topInCardPx ->
                         ui.controlsHeightPx = heightPx

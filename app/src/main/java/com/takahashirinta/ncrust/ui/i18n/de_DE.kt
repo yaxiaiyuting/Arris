@@ -220,7 +220,7 @@ val deDE = Strings(
         motionBarPulseDescription = "Die untere Wiedergabeleiste skaliert leicht bei jedem Beat (bis 2%). Nur ab Stufe Feinschliff.",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("Mitsingen", "Zurück zum Liedtext", "Liedtext wird geladen …", "Gleich geht’s los", "Original", "Übersetzung", "Hauptsprache des Liedtexts wechseln"),
+        karaoke = KaraokeStrings("Mitsingen", "Zurück zum Liedtext", "Liedtext wird geladen …", "Gleich geht’s los", "Original", "Übersetzung", "Hauptsprache des Liedtexts wechseln", "Nächste Zeile"),
         prevButton = "Vorheriger",
         playButton = "Abspielen",
         pauseButton = "Pause",

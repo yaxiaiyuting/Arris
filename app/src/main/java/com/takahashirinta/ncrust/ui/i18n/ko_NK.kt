@@ -219,7 +219,7 @@ val koNK = Strings(
         motionBarPulseDescription = "아래 재생 제어줄이 박자마다 살짝 커집니다(최대 2%). 정교 단계 이상에서만.",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("따라 부르기", "가사로 돌아가기", "가사를 불러오는 중…", "따라 부를 준비", "원문", "번역", "주 가사의 언어 바꾸기"),
+        karaoke = KaraokeStrings("따라 부르기", "가사로 돌아가기", "가사를 불러오는 중…", "따라 부를 준비", "원문", "번역", "주 가사의 언어 바꾸기", "다음 가사"),
         prevButton = "이전곡",
         playButton = "재생",
         pauseButton = "일시멈춤",

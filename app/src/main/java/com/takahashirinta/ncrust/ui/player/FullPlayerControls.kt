@@ -39,10 +39,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -90,6 +92,63 @@ private fun Modifier.transportSurface(interaction: MutableInteractionSource): Mo
     }.clip(AppShapes.full)
         .background(brush)
         .border(1.dp, Color.White.copy(alpha = 0.24f), AppShapes.full)
+}
+
+@Composable
+internal fun CompactTransportControls(
+    isPlaying: Boolean,
+    previousEnabled: Boolean,
+    transport: PlayerCardCallbacks,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val colors = LocalMetroColors.current
+    val haptic = LocalHapticFeedback.current
+    val playInteraction = remember { MutableInteractionSource() }
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CompactSkipButton(PlayerGlyphs.Previous, strings.prevButton, previousEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            transport.onPlayPrevious()
+        }
+        Box(
+            Modifier.size(48.dp)
+                .clickable(interactionSource = playInteraction, indication = null, role = Role.Button) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    transport.onPlayPause()
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.matchParentSize().transportSurface(playInteraction))
+            MetroIcon(
+                imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
+                contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
+                tint = colors.onPrimary,
+                sizeDp = 24.dp,
+            )
+        }
+        CompactSkipButton(PlayerGlyphs.Next, strings.nextButton, enabled = true) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            transport.onPlayNext()
+        }
+    }
+}
+
+@Composable
+private fun CompactSkipButton(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val colors = LocalMetroColors.current
+    Box(
+        Modifier.size(48.dp).clip(AppShapes.full).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            icon, contentDescription = label, sizeDp = 23.dp,
+            tint = if (enabled) colors.onBackground else colors.onSurfaceVariant.copy(alpha = 0.5f),
+        )
+    }
 }
 
 @Composable

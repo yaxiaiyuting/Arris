@@ -603,7 +603,6 @@ internal fun PlayerCard(
                     playerViewModel = playerViewModel,
                     callbacks = callbacks,
                     isPlaying = isPlaying,
-                    haptic = haptic,
                     gestureNavLiftDp = gestureNavLiftDp,
                     lyrics = lyrics,
                     translatedLyrics = translatedLyrics,
@@ -675,10 +674,10 @@ private fun <T> rememberGatedFlow(source: StateFlow<T>, open: State<Boolean>): S
  * 内容本身由外层 graphicsLayer 平移出屏幕。这里在 layout 阶段直接读 Animatable，
  * **不触发 recomposition** —— 动画帧只重排这一棵子树。
  */
-internal fun Modifier.collapsibleHeight(collapse: Animatable<Float, AnimationVector1D>): Modifier =
+internal fun Modifier.collapsibleHeight(collapsedFraction: () -> Float): Modifier =
     this.layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
-        val shrink = (collapse.value.coerceIn(0f, 1f) * placeable.height).roundToInt()
+        val shrink = (collapsedFraction().coerceIn(0f, 1f) * placeable.height).roundToInt()
         layout(placeable.width, (placeable.height - shrink).coerceAtLeast(0)) {
             placeable.place(0, 0)
         }

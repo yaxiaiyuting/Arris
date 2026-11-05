@@ -219,7 +219,7 @@ val jpJP = Strings(
         motionBarPulseDescription = "下部の再生コントロールバーがビートごとにわずかに拡大します（最大 2%）。精緻以上でのみ有効です。",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("カラオケ", "歌詞に戻る", "歌詞を読み込み中…", "歌い出しの準備", "原文", "翻訳", "メインの歌詞の言語を切り替え"),
+        karaoke = KaraokeStrings("カラオケ", "歌詞に戻る", "歌詞を読み込み中…", "歌い出しの準備", "原文", "翻訳", "メインの歌詞の言語を切り替え", "次の歌詞"),
         prevButton = "前へ",
         playButton = "再生",
         pauseButton = "一時停止",

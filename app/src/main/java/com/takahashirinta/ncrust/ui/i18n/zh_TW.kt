@@ -219,7 +219,7 @@ val zhTW = Strings(
         motionBarPulseDescription = "底部播放控制條隨鼓點輕微放大（最多 2%）。只在精緻檔以上生效。",
     ),
     playerUi = PlayerUiStrings(
-        karaoke = KaraokeStrings("卡拉 OK · 跟唱", "返回歌詞", "正在載入歌詞…", "準備跟唱", "原文", "譯文", "切換主行語言"),
+        karaoke = KaraokeStrings("卡拉 OK · 跟唱", "返回歌詞", "正在載入歌詞…", "準備跟唱", "原文", "譯文", "切換主行語言", "下一句"),
         prevButton = "前章",
         playButton = "奏",
         pauseButton = "憩",
