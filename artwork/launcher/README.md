@@ -1,7 +1,8 @@
 # Arris · Tux launcher
 
-The portrait reuses the face, eye proportions, beak and green headphones from
-`app/src/main/res/drawable/tux_listener.xml`, with a compact shoulder/scarf silhouette.
+The listening Tux from the Easter egg inspired a compact launcher mark. The
+ivory face and mint headphones sit over concentric record grooves, while the
+themed layer uses a separate one-color silhouette.
 Tux: Larry Ewing / The GIMP. Arris vector redraw and generator: GPL-3.0.
 
 Rebuild all vector layers, API 24/25 PNGs and the preview:

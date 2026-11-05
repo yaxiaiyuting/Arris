@@ -1,4 +1,4 @@
-Source: app/src/main/res/drawable/tux_listener.xml
-Foreground maximum alpha radius: 33.261dp
+Source: Arris listening Tux launcher redraw
+Foreground maximum alpha radius: 32.469dp
 Safety threshold: 34dp
 Generated with rsvg-convert and Pillow.
