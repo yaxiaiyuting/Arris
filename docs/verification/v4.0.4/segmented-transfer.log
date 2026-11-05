@@ -1,0 +1,3 @@
+I03: old probe is canceled, cannot publish or cancel replacement, and replacement delivers its own bytes.
+I04: missing validators, mismatched ranges, changed ETags and overlong segments reject parallel assembly.
+Production SegmentedDownload and extracted UpdateService branch; no network or real APK.
