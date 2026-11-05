@@ -93,6 +93,22 @@ internal object SegmentedDownload {
      * 4.0.9：多源探测。返回「可用源 + 探测结果」；一条都不支持 Range 就返回 null。
      * 顺序由调用方给（本站优先，反代最后）。
      */
+    /**
+     * 4.0.10：**按源逐个探测**，只留下真正支持 206 的源。
+     *
+     * 为什么需要：Gitee 的附件端点会忽略 `Range`、直接回 200 整个文件（实测 10.4 MB / 8.5s）。
+     * 这种源不能参与分段（每段都会拿到完整文件、校验必挂），只能当单流回退。
+     * 段分配前先筛一遍，避免"每段先撞一次 200 再换源"的浪费。
+     */
+    fun probeAll(sources: List<String>, batch: Batch): List<Pair<String, Probe>> {
+        val out = ArrayList<Pair<String, Probe>>(sources.size)
+        for (u in sources) {
+            val p = runCatching { probe(u, batch) }.getOrNull() ?: continue
+            out += u to p
+        }
+        return out
+    }
+
     fun probeAny(sources: List<String>, batch: Batch): Pair<String, Probe>? {
         for (u in sources) {
             val p = runCatching { probe(u, batch) }.getOrNull() ?: continue

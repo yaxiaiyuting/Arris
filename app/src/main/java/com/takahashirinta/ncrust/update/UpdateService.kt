@@ -330,14 +330,16 @@ object UpdateService {
         val dest = File(directory, fileName)
         // 4.0.9：多镜像。本站 → Gitee（配置后）→ ghproxy 若干；段按轮转分配。
         val mirrors = UpdateMirrors.sources(info.assetUrl, info.releaseTag, info.assetName)
-        val probe = if (!dest.isFile && info.assetSize > 4L * 1024 * 1024) {
-            SegmentedDownload.probeAny(mirrors, batch)?.second
-        } else null
+        // 只有支持 206 的源才能参与分段；Gitee 附件会忽略 Range（回 200 全量），只做单流回退。
+        val segmentation = if (!dest.isFile && info.assetSize > 4L * 1024 * 1024) {
+            SegmentedDownload.probeAll(mirrors, batch)
+        } else emptyList()
+        val probe = segmentation.firstOrNull()?.second
         requireCurrent()
         if (probe != null && probe.total == info.assetSize && !dest.isFile) {
             val temp = File(directory, "$fileName.seg.$generation")
             try {
-                SegmentedDownload.download(mirrors, temp, probe, batch, onProgress)
+                SegmentedDownload.download(segmentation.map { it.first }, temp, probe, batch, onProgress)
                 synchronized(this) {
                     requireCurrent()
                     if (temp.renameTo(dest)) return dest
@@ -351,7 +353,22 @@ object UpdateService {
             }
         }
         requireCurrent()
-        return downloader.download(info.assetUrl, fileName, target, info.assetSize, onProgress)
+        // 4.0.10：单流回退也按镜像列表逐个试 —— Gitee 附件不支持 Range，但单流能下，
+        // 而且是国内线路；本站挂了 / ghproxy 挂了都不至于整批失败。
+        var lastError: Throwable? = null
+        for (mirror in mirrors) {
+            requireCurrent()
+            try {
+                return downloader.download(mirror, fileName, target, info.assetSize, onProgress)
+            } catch (e: DownloadCancelledException) {
+                throw e
+            } catch (e: Throwable) {
+                requireCurrent()
+                lastError = e
+                android.util.Log.w("UpdateService", "single stream via ${mirror.take(40)} failed: ${e.javaClass.simpleName}")
+            }
+        }
+        throw (lastError ?: java.io.IOException("所有镜像都不可用"))
     }
 
     @Synchronized
