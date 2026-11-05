@@ -47,6 +47,12 @@ internal object SegmentedDownload {
     private const val MIN_SIZE = 4L * 1024 * 1024
 
     /** 每段至少这么大，避免出现大量极小的段。 */
+    /** 4.0.12：单条镜像的探测预算。取 2.5s —— 国内正常 RTT 500ms 内，死链也就多等这么久。 */
+    private const val PROBE_TIMEOUT_MS = 2500L
+
+    /** 拿到这么多条可用源就开跑，不等剩下的。 */
+    private const val PROBE_MIN_READY = 1
+
     private const val MIN_SEGMENT = 1L * 1024 * 1024
 
     private val client: OkHttpClient by lazy {
@@ -101,12 +107,37 @@ internal object SegmentedDownload {
      * 段分配前先筛一遍，避免"每段先撞一次 200 再换源"的浪费。
      */
     fun probeAll(sources: List<String>, batch: Batch): List<Pair<String, Probe>> {
-        val out = ArrayList<Pair<String, Probe>>(sources.size)
-        for (u in sources) {
-            val p = runCatching { probe(u, batch) }.getOrNull() ?: continue
-            out += u to p
+        if (sources.isEmpty()) return emptyList()
+        // 4.0.12：**并行探测 + 短超时 + 够用就走**。
+        //
+        // 4.0.11 是串行探的：一条死掉的反代要等它的连接超时（实测 ghfast.top 单条约 10s），
+        // 于是"抓包很快、进度却卡在 0% 十几秒"——那段时间全花在等死链上，一个字节都还没写真。
+        // 现在：所有源同时探，每条最多 [PROBE_TIMEOUT_MS]；拿到 [PROBE_MIN_READY] 条可用源就
+        // 立刻开始分段，剩下的在后台补（补进来的也能用，但不阻塞开始）。
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val ready = LinkedHashMap<String, Probe>()
+        val threads = sources.map { u ->
+            thread(name = "seg-probe") {
+                if (done.get()) return@thread
+                val p = runCatching { probe(u, batch) }.getOrNull() ?: return@thread
+                synchronized(ready) {
+                    ready[u] = p
+                    if (ready.size >= PROBE_MIN_READY) done.set(true)
+                }
+            }
         }
-        return out
+        // 最先到的那条也算数：只要有一条能分段，就不必等别人。
+        val deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS
+        var waiting = true
+        while (waiting && System.currentTimeMillis() < deadline) {
+            val enough = synchronized(ready) { ready.size >= PROBE_MIN_READY }
+            val allDead = threads.none { it.isAlive }
+            if (enough || allDead) waiting = false else Thread.sleep(40)
+        }
+        done.set(true)
+        val snapshot = synchronized(ready) { ready.toList() }
+        Log.i(TAG, "probeAll: ${snapshot.size}/${sources.size} 条可用，用时 ${PROBE_TIMEOUT_MS}ms 上限")
+        return snapshot
     }
 
     fun probeAny(sources: List<String>, batch: Batch): Pair<String, Probe>? {
