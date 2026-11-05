@@ -40,14 +40,19 @@ internal object UpdateMirrors {
     /**
      * Gitee 镜像（可选）。
      *
-     * 用法：在 Gitee 建仓 → 发 Release → 把附件地址填到这里（形如
-     * `https://gitee.com/<user>/<repo>/releases/download/<tag>/<file>`）。
-     * 留空表示未配置，不影响其它镜像。
+     * Gitee 的 Release 附件直链是 `https://gitee.com/<owner>/<repo>/attach_files/<id>/download/<name>`，
+     * 和 tag 不是一个可拼的前缀，所以这里按**文件名 → 完整直链**建表，由
+     * `tools/gitee` 上传后回填。表里没有的文件名会退回 [GITEE_BASE] + "/" + name。
      */
+    val GITEE_ASSETS: Map<String, String> = emptyMap()
+
+    /** 兜底前缀（形如 `https://gitee.com/<owner>/<repo>/releases/download/<tag>`）。 */
     const val GITEE_BASE: String = ""
 
     fun giteeAsset(assetName: String?): String? {
-        if (GITEE_BASE.isBlank() || assetName.isNullOrBlank()) return null
+        if (assetName.isNullOrBlank()) return null
+        GITEE_ASSETS[assetName]?.let { return it }
+        if (GITEE_BASE.isBlank()) return null
         return GITEE_BASE.trimEnd('/') + "/" + assetName
     }
 
