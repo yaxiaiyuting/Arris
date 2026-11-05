@@ -25,6 +25,33 @@ const HOSTED = new Set(HOSTED_APK);
 
 const BUILD_TAG = "4.0.4";
 
+
+// 反馈节流：每个出口 IP 每小时 5 条，够用且挡住脚本刷。
+// 用 isolate 内存表即可 —— 反馈是低频人工动作，丢一次限流不算故障。
+const feedbackHits = new Map();
+
+/** 小工具：统一 JSON 响应（feedback 路由用；其它路由沿用既有写法）。 */
+function jsonResponse(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
+function allowFeedback(ip) {
+  const now = Date.now();
+  const win = 60 * 60 * 1000;
+  const list = (feedbackHits.get(ip) || []).filter((t) => now - t < win);
+  if (list.length >= 5) {
+    feedbackHits.set(ip, list);
+    return false;
+  }
+  list.push(now);
+  feedbackHits.set(ip, list);
+  if (feedbackHits.size > 5000) feedbackHits.clear();
+  return true;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -50,6 +77,79 @@ export default {
         // 版本更新最多晚 5 分钟生效，但边缘能命中、浏览器也能复用。
         cacheControl: rolling ? "public, max-age=300" : size ? "public, max-age=31536000, immutable" : undefined,
       });
+    }
+
+
+    // ---------------------------------------------------------------- 反馈（4.0.11）
+    //
+    // 客户端不发令牌，也不直连 Gitee —— 令牌在服务端（wrangler secret GITEE_FEEDBACK_TOKEN），
+    // 这里只做"校验 + 节流 + 建 issue"。选 Gitee 是因为国内可达，反馈不该依赖能不能连 GitHub。
+    if (url.pathname === "/api/feedback") {
+      if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
+      const ip = request.headers.get("cf-connecting-ip") || "unknown";
+      if (!allowFeedback(ip)) {
+        return jsonResponse({ error: "too many requests" }, 429);
+      }
+      let payload;
+      try {
+        payload = await request.json();
+      } catch {
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+      const message = String(payload?.message ?? "").trim();
+      if (message.length < 5) return jsonResponse({ error: "message too short" }, 400);
+      const token = env.GITEE_FEEDBACK_TOKEN;
+      if (!token) return jsonResponse({ error: "feedback not configured" }, 503);
+
+      const title = String(payload?.title ?? "").trim() || "用户反馈";
+      const contact = String(payload?.contact ?? "").trim();
+      const body = [
+        "### " + title,
+        "",
+        message,
+        "",
+        contact ? "**联系方式**：" + contact : "",
+        "",
+        "| | |",
+        "|---|---|",
+        "| 版本 | " + String(payload?.app ?? "") + " (" + String(payload?.code ?? "") + ") |",
+        "| 系统 | " + String(payload?.android ?? "") + " |",
+        "| 设备 | " + String(payload?.device ?? "") + " |",
+        "| 语言 / 主题 | " + String(payload?.language ?? "") + " / " + String(payload?.theme ?? "") + " |",
+        "| 音质档 | " + String(payload?.quality ?? "") + " |",
+        "| 登录 | ncm=" + String(payload?.ncm ?? "") + " qm=" + String(payload?.qq ?? "") + " |",
+        payload?.extra ? "\n补充：" + String(payload.extra) : "",
+        "",
+        "_由客户端「发送反馈」自动创建_",
+      ].filter(Boolean).join("\n");
+
+      // 落到 Gitee 仓库的 feedback/ 目录（一条一个 markdown 文件）。
+      //
+      // 为什么不是 issue：Gitee 的建 issue 接口要 `issues` 授权，我们的服务端令牌只有 `projects`；
+      // 用「写文件」这条路径零额外授权就能通，而且一条反馈一个文件，翻起来比 issue 列表更清楚。
+      // 想升级成 issue：给令牌补 `issues` 权限后把这里换成 /issues 端点即可。
+      const now = new Date();
+      const stamp = now.toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      const rand = Math.random().toString(36).slice(2, 8);
+      const path = `feedback/${stamp}-${rand}.md`;
+      const content = btoa(unescape(encodeURIComponent(body)));
+      const res = await fetch(
+        `https://gitee.com/api/v5/repos/yaxiaiyuting/arris-feedback/contents/${path}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json;charset=UTF-8" },
+          body: JSON.stringify({
+            access_token: token,
+            content,
+            message: `feedback: ${title.slice(0, 50)}`,
+          }),
+        },
+      );
+      if (!res.ok) {
+        return jsonResponse({ error: "upstream " + res.status }, 502);
+      }
+      const saved = await res.json();
+      return jsonResponse({ ok: true, issue: saved?.content?.html_url || "" }, 200);
     }
 
     // ---------------------------------------------------------------- 更新检查（不经 GitHub）
