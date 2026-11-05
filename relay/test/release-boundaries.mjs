@@ -21,7 +21,7 @@ let r = await get(apk, { range: 'bytes=-3' });
 assert.equal(r.status, 206);
 assert.equal(r.headers.get('content-range'), `bytes ${data.length - 3}-${data.length - 1}/${data.length}`);
 assert.deepEqual([...new Uint8Array(await r.arrayBuffer())], [17, 18, 19]);
-assert.equal(r.headers.get('cache-control'), 'no-store');
+assert.equal(r.headers.get('cache-control'), 'public, max-age=300');
 r = await get(apk, { range: 'bytes=1-2', 'if-range': '"old"' });
 assert.equal(r.status, 200);
 assert.equal((await r.arrayBuffer()).byteLength, data.length);
