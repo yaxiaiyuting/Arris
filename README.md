@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
 
-[**官网直链下载**](https://arris.de5.net/dl/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
+[**官网直链下载**](https://arris.de5.net/get/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
 
 </div>
 
@@ -99,7 +99,7 @@
 ```
 https://arris.de5.net/get/latest.apk        主线最新（支持 Range：断点续传 / 多线程）
 https://arris.de5.net/get/lts-latest.apk   LTS 最新（同上）
-https://arris.de5.net/dl/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
+https://arris.de5.net/get/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
 ```
 
 > 国内线路慢的时候用 `/get/` + 下载器多线程（aria2 `-x8 -s8`、IDM、FDM），
@@ -140,7 +140,7 @@ https://arris.de5.net/dl/latest.apk        同一份包的静态直出（最简�
 
 ```
 https://arris.de5.net/                    落地页（Cloudflare Worker）
-https://arris.de5.net/dl/latest.apk       最新版直链
+https://arris.de5.net/get/latest.apk       最新版直链
 https://arris.de5.net/dl/Arris-v3.8.3-gpl.apk   固定版本
 wss://arris.de5.net/room/<房间码>          一起听中继
 ```
