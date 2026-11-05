@@ -15,6 +15,11 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
@@ -149,6 +154,14 @@ data class NcrustLyricLine(
     val fontScale: Float = 1f,
 )
 
+/**
+ * 4.0.11：跨行"交接"动画时长（ms）。
+ *
+ * 参考动效都在 260–340ms：短于 220ms 看不出交接，长于 400ms 会拖到下一句，
+ * 连拍段落里会觉得歌词迟钝。320ms + 强减速曲线与参考一致。
+ */
+internal const val LYRIC_SWITCH_MS = 320
+
 @Composable
 internal fun NcrustLyricsPanel(
     lines: List<NcrustLyricLine>,
@@ -190,9 +203,19 @@ internal fun NcrustLyricsPanel(
     lyricPulseEnabled: Boolean = false,
     focusIndex: Int? = null,
     focusedRow: (@Composable (index: Int, line: NcrustLyricLine, browsing: Boolean) -> Unit)? = null,
+    /**
+     * 4.0.11：**当前句左侧竖条**（横屏/宽屏用）。
+     *
+     * 竖屏跟唱页本来就有这根条（`KaraokeScreen` 的 focus 区），但横屏歌词面板一直没有，
+     * 于是"当前句在哪"只能靠字号差与颜色差判断，扫视成本高。开着它就给当前行画一条
+     * 主轴色的圆角短条，高度随行高自适应，横屏短面板里尤其明显。
+     */
+    currentMarker: Boolean = false,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
+    // 交接动画的位移量：10dp，按密度换算一次，避免在 graphicsLayer 里反复转。
+    val switchTravelPx = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
     // 离散当前行:二分定位,只在跨行时变 -> 面板只在跨行时重组。
     val timedIndex by remember(lines) {
         derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
@@ -200,6 +223,21 @@ internal fun NcrustLyricsPanel(
     val currentIndex = focusIndex ?: timedIndex
     // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
     val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
+    // 4.0.11：**跨行瞬间的"交接"动画**（当前行从「虚、偏下、略小、带模糊」收到「实、就位」）。
+    // 只在 currentIndex 真正变化时重跑；动画全程只写 Animatable，靠 graphicsLayer 读取 ⇒ 零重组。
+    val lineSwitch = remember { Animatable(1f) }
+    val switchAnimatorOn = remember { android.animation.ValueAnimator.areAnimatorsEnabled() }
+    LaunchedEffect(currentIndex) {
+        if (currentIndex < 0 || !switchAnimatorOn) {
+            lineSwitch.snapTo(1f)
+            return@LaunchedEffect
+        }
+        lineSwitch.snapTo(0f)
+        lineSwitch.animateTo(
+            1f,
+            tween(durationMillis = LYRIC_SWITCH_MS, easing = CubicBezierEasing(0.16f, 0.84f, 0.24f, 1f)),
+        )
+    }
     LaunchedEffect(currentIndex) {
         if (currentIndex >= 0) {
             smoothCurrentIndex.animateTo(currentIndex.toFloat(), SokuouTweens.QuickSwitch)
@@ -595,11 +633,30 @@ internal fun NcrustLyricsPanel(
                         .pointerInput(enabled, line.timestampMillis) {
                             if (enabled) detectTapGestures { onLineClick(line.timestampMillis) }
                         }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 10.dp)
+                        .then(
+                            if (currentMarker) Modifier.drawBehind {
+                                // 只有"当前行"画条；用 smoothCurrentIndex 的连续值决定透明度，
+                                // 跨行瞬间两条会做一次交叉淡出（旧条淡出、新条淡入），不闪。
+                                val dist = abs(index - smoothCurrentIndex.value).coerceIn(0f, 1f)
+                                if (dist < 1f) {
+                                    val barWidth = 3.dp.toPx()
+                                    val top = 6.dp.toPx()
+                                    val height = size.height - top * 2
+                                    drawRoundRect(
+                                        color = currentLineColor.copy(alpha = (1f - dist) * 0.9f),
+                                        topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+                                        size = androidx.compose.ui.geometry.Size(barWidth, height),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f),
+                                    )
+                                }
+                            } else Modifier,
+                        ),
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(start = if (currentMarker) 12.dp else 0.dp)
                             .graphicsLayer {
                                 // 连续距离驱动缩放:无翻转瞬间,行间渐变交接。
                                 // 缩放放在整行(原句+翻译)外层,双语同时放大/缩小。
@@ -612,6 +669,24 @@ internal fun NcrustLyricsPanel(
                                 // 帧时钟 —— 若写在外面，28 行歌词每帧各失效一次，那是纯浪费。
                                 // 跨行时 `smoothCurrentIndex` 变化会让所有行重新执行本块，
                                 // 依赖因此自然迁移到新的当前行，不会留下悬空的订阅。
+                                // 4.0.11：当前行跨行瞬间的交接（模糊→实、下方→就位、略小→原尺寸、
+                                // 由淡到实）。只写 graphicsLayer 参数，逐行零重组。
+                                if (index == currentIndex && switchAnimatorOn) {
+                                    val p = lineSwitch.value
+                                    if (p < 1f) {
+                                        scale *= 0.94f + 0.06f * p
+                                        translationY = (1f - p) * switchTravelPx
+                                        if (android.os.Build.VERSION.SDK_INT >= 31 && p < 0.995f) {
+                                            val radius = (1f - p) * 7f
+                                            if (radius >= 0.1f) {
+                                                renderEffect =
+                                                    android.graphics.RenderEffect.createBlurEffect(
+                                                        radius, radius, android.graphics.Shader.TileMode.CLAMP,
+                                                    ).asComposeRenderEffect()
+                                            }
+                                        }
+                                    }
+                                }
                                 if (lyricPulseEnabled && index == currentIndex) {
                                     MotionClock.generation
                                     scale *= 1f + MotionClock.pulse() * AppMotion.LYRIC_PULSE_SCALE

@@ -462,6 +462,14 @@ object LibraryManager {
             if (changed) cachedEntries = after.toMutableList()
         }
         if (changed) {
+            // 4.0.11：底表与已加载表是两份缓存，[isSongSaved] 以底表为真源 ⇒ 乐观写必须同时动，
+            // 否则刷新前判定读到的还是旧底表（issue #33）。新收藏插头部，与云端「最新在前」一致。
+            if (key.source == MusicSource.NETEASE) {
+                synchronized(idsLock) {
+                    val ids = cachedLikedIds.orEmpty()
+                    if (!ids.contains(key.id)) cachedLikedIds = listOf(key.id) + ids
+                }
+            }
             // K05：表真的换了 ⇒ 先推进修订（**在锁外**），再排队落盘。订阅方（播放器红心）
             // 此刻去查 [isSongSaved] 一定拿到新值，不需要等 300ms 去抖之后的磁盘写。
             bumpSavedRevision()
@@ -492,6 +500,15 @@ object LibraryManager {
             }
         }
         if (added.isNotEmpty()) {
+            // 4.0.11：批量收藏同样要动底表（同上）。
+            val ncmIds = added.map { TrackKey.ofSong(it) }.filter { it.source == MusicSource.NETEASE }.map { it.id }
+            if (ncmIds.isNotEmpty()) {
+                synchronized(idsLock) {
+                    val ids = cachedLikedIds.orEmpty()
+                    val fresh = ncmIds.filterNot { ids.contains(it) }
+                    if (fresh.isNotEmpty()) cachedLikedIds = fresh + ids
+                }
+            }
             // K05：只有**可见表真的多了条目**才推进修订。
             bumpSavedRevision()
             flushNow(context)
@@ -512,13 +529,26 @@ object LibraryManager {
         // 调用点传的是裸 `song.id`（SongItem 的 id 自带 bit62 标志），
         // 所以音源可以直接从 id 推出来，不需要额外参数。
         val key = TrackKey.of(null, songId)
-        val changed: Boolean
+        val changedInSongs: Boolean
         synchronized(songsLock) {
             val before = ensureSongsLoaded(context)
             val after = SavedSongSync.remove(before, key)
-            changed = after !== before
-            if (changed) cachedEntries = after.toMutableList()
+            changedInSongs = after !== before
+            if (changedInSongs) cachedEntries = after.toMutableList()
         }
+        // 4.0.11：歌在**底表**但不在已加载页时（issue #33 的典型场景），只清已加载表会：
+        // ① isSongSaved 仍返回 true（白心不灭）；② 连取消收藏的云端写都不发。
+        val changedInIds: Boolean
+        if (key.source == MusicSource.NETEASE) {
+            synchronized(idsLock) {
+                val ids = ensureLikedIdsLoaded(context)
+                changedInIds = ids.contains(key.id)
+                if (changedInIds) cachedLikedIds = ids.filterNot { it == key.id }
+            }
+        } else {
+            changedInIds = false
+        }
+        val changed = changedInSongs || changedInIds
         if (changed) {
             // K05：取消收藏同样是一次真表变更（tombstone），红心必须跟着灭。
             bumpSavedRevision()
@@ -551,6 +581,19 @@ object LibraryManager {
     fun isSongSaved(context: Context, key: TrackKey): Boolean {
         // `id <= 0` 不是任何真实曲目（[saveSong] 同样拒绝），不必进锁扫表。
         if (key.id <= 0L) return false
+        // 4.0.11（回移上游 c84c0fd）：**红心 id 底表优先**。
+        //
+        // `cachedEntries` 是分页落下来的「已加载」集合：云端有 id 但还没取过详情的歌
+        // 根本不在这张表里（`SavedSongModels` 会直接跳过）。于是「喜欢了但没滚到」的歌
+        // 会被判成未收藏 —— 播放器显示白心，用户再点一次就走一遍收藏写入，
+        // 叠加 502 被当失败的旧判定，掉进 weapi 老通道可能被风控 524 反手取消（issue #33）。
+        //
+        // 底表 `cachedLikedIds` 是云端**全量**的 id 集合，只有 ncm 有这个真源；
+        // qm / B 站的收藏没有等价物，仍按已加载表判断。
+        if (key.source == MusicSource.NETEASE) {
+            val ids = ensureLikedIdsLoaded(context)
+            if (ids.contains(key.id)) return true
+        }
         return synchronized(songsLock) { ensureSongsLoaded(context).any { it.isVisible && it.trackKey == key } }
     }
 

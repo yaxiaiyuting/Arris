@@ -12,6 +12,7 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -79,6 +80,9 @@ fun AboutScreen(
     // IllegalStateException: Vertically scrollable component was measured with an
     // infinity maximum height constraints（真机第一次点开就闪退，logcat 已抓到）。
     var showLab by remember { mutableStateOf(false) }
+    // 4.0.11：反馈弹层。诊断信息在这里就地采集（版本/机型/系统/语言主题/登录布尔），
+    // 用户按下"发送"前能看到**将要发送的原文**。
+    var showFeedback by remember { mutableStateOf(false) }
     BackHandler(enabled = !showLab) { onBack() }
     // Groove 无边框：不再套 M3 TopAppBar Surface，返回箭头浮在内容上方共用 TopScrimIconButton。
     Box(
@@ -137,6 +141,14 @@ fun AboutScreen(
                             enabled = !updateState.checking,
                             onClick = manualUpdateCheck
                         )
+                        // 4.0.11：发送错误日志 / 提建议。走自有中转 → Gitee 仓库开 issue
+                        // （客户端不放任何令牌，理由见 FeedbackClient 的 KDoc）。
+                        AboutActionRow(
+                            label = "发送反馈",
+                            value = "错误日志 / 建议",
+                            enabled = true,
+                            onClick = { showFeedback = true },
+                        )
                         AboutRow(s.aboutDeveloperOriginal, "Takahashi_Rinta")
                         AboutRow(s.aboutDeveloperFork, "yaxiaiyuting")
                         AboutRow(s.aboutLicense, s.aboutLicenseGplWithMit)
@@ -193,7 +205,29 @@ fun AboutScreen(
             contentDescription = s.back,
             onClick = onBack
         )
-        if (showLab) {
+        if (showFeedback) {
+        com.takahashirinta.ncrust.ui.components.FeedbackDialog(
+            language = com.takahashirinta.ncrust.ui.i18n.currentLanguageCode(),
+            // 主题：跟随系统时记 system(+实际明暗)，否则记实际取值 —— 够定位"深色下才复现"这类问题
+            themeMode = run {
+                val mode = com.takahashirinta.ncrust.ui.theme.getSavedThemeMode(LocalContext.current)
+                when (mode) {
+                    com.takahashirinta.ncrust.ui.theme.ThemeMode.SYSTEM ->
+                        if (androidx.compose.foundation.isSystemInDarkTheme()) "system-dark" else "system-light"
+                    com.takahashirinta.ncrust.ui.theme.ThemeMode.DARK -> "dark"
+                    com.takahashirinta.ncrust.ui.theme.ThemeMode.LIGHT -> "light"
+                }
+            },
+            // 音质档：直接读设置里的 Wi-Fi 档位（缺省 -1 = 未知），不做单位换算
+            qualityIndex = LocalContext.current
+                .getSharedPreferences("ncrust_settings", android.content.Context.MODE_PRIVATE)
+                .getInt(com.takahashirinta.ncrust.player.QualityLadder.KEY_WIFI, -1),
+            loggedInNcm = com.takahashirinta.ncrust.auth.CookieManager.isLoggedIn(LocalContext.current),
+            loggedInQq = com.takahashirinta.ncrust.qq.QqAuthStore.isLoggedIn(LocalContext.current),
+            onDismiss = { showFeedback = false },
+        )
+    }
+    if (showLab) {
             LabScreen(onClose = { showLab = false })
         }
     }
