@@ -29,6 +29,8 @@ internal object PlayerGlyphs {
     val RepeatOne = glyph("RepeatOne", "M17 3L20 6L17 9 M20 6H8A4 4 0 0 0 4 10 M7 21L4 18L7 15 M4 18H16A4 4 0 0 0 20 14 M10.5 11.5L12 10.5V14")
     val Shuffle = glyph("Shuffle", "M4 6H6.5C12 6 12 18 17.5 18H20 M17 15L20 18L17 21 M4 18H6.5Q8.5 18 10 15 M14 9Q15.5 6 17.5 6H20 M17 3L20 6L17 9")
     val Infinity = glyph("Infinity", "M12 12C9.7 8.2 8.4 7.5 6.7 7.5A4.5 4.5 0 0 0 6.7 16.5C11 16.5 13 7.5 17.3 7.5A4.5 4.5 0 0 1 17.3 16.5C15.6 16.5 14.3 15.8 12 12Z")
+    val Remove = glyph("Remove", "M7 7L17 17 M17 7L7 17")
+    val Drag = glyph("Drag", "M5 9H19 M5 15H19")
     val Share = glyph("Share", "M9 11L15 7 M9 13L15 17 M8 12A2 2 0 1 0 4 12A2 2 0 1 0 8 12Z M20 6A2 2 0 1 0 16 6A2 2 0 1 0 20 6Z M20 18A2 2 0 1 0 16 18A2 2 0 1 0 20 18Z")
     val ClearQueue = glyph("ClearQueue", "M5 6H19 M9 6V4H15V6 M7 6L8.2 20H15.8L17 6 M10.5 10V16 M13.5 10V16")
 

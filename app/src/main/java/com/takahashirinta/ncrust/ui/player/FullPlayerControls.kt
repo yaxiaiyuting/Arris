@@ -93,25 +93,14 @@ private fun Modifier.transportSurface(interaction: MutableInteractionSource): Mo
 }
 
 @Composable
-private fun Modifier.controlSurface(): Modifier {
-    val colors = LocalMetroColors.current
-    val (fill, edge) = remember(colors.surface, colors.background, colors.primary, colors.onBackground) {
-        Brush.verticalGradient(
-            listOf(lerp(colors.surface, colors.primary, 0.075f), lerp(colors.surface, colors.background, 0.26f)),
-        ) to Brush.verticalGradient(
-            listOf(colors.onBackground.copy(alpha = 0.19f), colors.onBackground.copy(alpha = 0.055f)),
-        )
-    }
-    return background(fill, AppShapes.large).border(1.dp, edge, AppShapes.large)
-}
-
-@Composable
-private fun PanelSelection(active: Boolean, buttonSize: Dp) {
+private fun BoxScope.PanelSelection(active: Boolean) {
     if (active) {
         Box(
             Modifier
-                .size((buttonSize - 8.dp).coerceAtLeast(24.dp))
-                .background(LocalMetroColors.current.primary.copy(alpha = 0.16f), AppShapes.medium),
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 4.dp)
+                .size(width = 12.dp, height = 2.dp)
+                .background(LocalMetroColors.current.primary),
         )
     }
 }
@@ -240,7 +229,6 @@ fun FullPlayerControls(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 4.dp, end = 8.dp, bottom = 6.dp)
-                .controlSurface()
                 .padding(horizontal = lPad, vertical = lTop)
         ) {
             Row(
@@ -308,7 +296,7 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        PanelSelection(showLyrics && !lyricsUnavailable, 40.dp)
+                        PanelSelection(showLyrics && !lyricsUnavailable)
                         MetroIcon(
                             imageVector = PlayerGlyphs.Lyrics,
                             contentDescription = strings.lyricsButton,
@@ -326,7 +314,7 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        PanelSelection(showQueue, 40.dp)
+                        PanelSelection(showQueue)
                         MetroIcon(
                             imageVector = PlayerGlyphs.Queue,
                             contentDescription = strings.queueButton,
@@ -343,7 +331,7 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        PanelSelection(isInLibrary, 40.dp)
+                        PanelSelection(isInLibrary)
                         MetroIcon(
                             imageVector = if (isInLibrary) PlayerGlyphs.Saved else PlayerGlyphs.Add,
                             contentDescription = strings.addToLibraryButton,
@@ -463,7 +451,6 @@ fun FullPlayerControls(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = outerInset, end = outerInset, bottom = bottomPad)
-            .controlSurface()
             .padding(top = if (tiny) 3.dp else 8.dp, bottom = if (tiny) 3.dp else 6.dp)
     ) {
         if (tiny) {
@@ -605,13 +592,7 @@ fun FullPlayerControls(
             }
         }
         if (!tiny) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = hPad)
-                    .height(1.dp)
-                    .background(LocalMetroColors.current.onBackground.copy(alpha = 0.12f)),
-            )
+            Spacer(Modifier.height(4.dp))
             PlayerPanelToggles(
                 showLyrics = showLyrics,
                 showQueue = showQueue,
@@ -692,7 +673,7 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
-            PanelSelection(showLyrics && !lyricsUnavailable, toggleBtn)
+            PanelSelection(showLyrics && !lyricsUnavailable)
             MetroIcon(
                 imageVector = PlayerGlyphs.Lyrics,
                 contentDescription = strings.lyricsButton,
@@ -710,7 +691,7 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
-            PanelSelection(showQueue, toggleBtn)
+            PanelSelection(showQueue)
             MetroIcon(
                 imageVector = PlayerGlyphs.Queue,
                 contentDescription = strings.queueButton,
@@ -727,7 +708,7 @@ fun PlayerPanelToggles(
                 },
             contentAlignment = Alignment.Center
         ) {
-            PanelSelection(isInLibrary, toggleBtn)
+            PanelSelection(isInLibrary)
             MetroIcon(
                 imageVector = if (isInLibrary) PlayerGlyphs.Saved else PlayerGlyphs.Add,
                 contentDescription = strings.addToLibraryButton,

@@ -426,14 +426,16 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // 封面 overlay 的落点就是用这两个数算出来的，写死字面量必然漂移。
             .height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)
             .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
-            .onSizeChanged { ui.narrowTopBarHeightPx = it.height.toFloat() }
-            // Tiny 顶栏右侧要放 3 个面板切换 + 收起键；标题区让出这段（长歌名仍可跑马灯）。
-            .padding(start = TrayLayout.topBarTextStartDp().dp, end = if (tiny) 196.dp else 56.dp),
+            .onSizeChanged { ui.narrowTopBarHeightPx = it.height.toFloat() },
         contentAlignment = Alignment.CenterStart
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(
+                    start = TrayLayout.topBarTextStartDp().dp,
+                    end = if (tiny) 164.dp else 56.dp,
+                )
                 .graphicsLayer { alpha = lyricAnimProgress.value }
                 // 歌名区域可点: 上拉"转到歌手/转到专辑"菜单(类 Apple Music)
                 .clickable { onSongInfoClick() }

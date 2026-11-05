@@ -14,15 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.runtime.*
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -550,7 +545,7 @@ fun QueueView(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             MetroIcon(
-                                                imageVector = Icons.Default.DragHandle,
+                                                imageVector = PlayerGlyphs.Drag,
                                                 contentDescription = null,
                                                 tint = LocalMetroColors.current.onSurfaceVariant,
                                                 sizeDp = 20.dp
@@ -565,7 +560,7 @@ fun QueueView(
                                         }
                                     ) {
                                         MetroIcon(
-                                            imageVector = Icons.Default.Close,
+                                            imageVector = PlayerGlyphs.Remove,
                                             contentDescription = null,
                                             tint = LocalMetroColors.current.onSurfaceVariant,
                                             sizeDp = 20.dp
@@ -579,31 +574,7 @@ fun QueueView(
             }
         }
 
-        // 上/下渐隐
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(LocalMetroColors.current.background, Color.Transparent)
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.Transparent, LocalMetroColors.current.background)
-                    )
-                )
-        )
-
-                        // 悬浮的被拖行: 拎出 LazyColumn 渲染(列表项本体隐藏)。
+        // 悬浮的被拖行: 拎出 LazyColumn 渲染(列表项本体隐藏)。
         // 位置 = overlayTop(手指驱动的视口位置), 与列表项生命周期无关,
         // 自动滚动把槽位滚出视口也不受影响。alpha=1: 与落定后列表项本体
         // 的透明度完全一致, 交接瞬间没有亮度跳变。
@@ -713,7 +684,7 @@ private fun InfinityPlaceholder(text: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         MetroIcon(
-            imageVector = Icons.Default.AllInclusive,
+            imageVector = PlayerGlyphs.Infinity,
             contentDescription = null,
             tint = LocalMetroColors.current.primary,
             sizeDp = 20.dp
