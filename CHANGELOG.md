@@ -59,6 +59,7 @@ LTS 只做全屏档；主线竖屏的「嵌入歌词面板」形态需要改播�
 ## v4.0.10-gpl（测试包）— Gitee 进入镜像队列（2026-11-05）
 
 - 整仓已镜像到 **https://gitee.com/yaxiaiyuting/arris**（17 分支 + 148 tag，公开）
+  并配好 Gitee 侧 Pull 镜像（GitHub → Gitee，webhook 自动触发），实测连续四次提交全部自动跟上
 - 下载源顺序：本站 → **Gitee Release 附件** → ghfast.top → gh-proxy.com → ghproxy.net
 - 新增 `SegmentedDownload.probeAll`：分段前逐个探测，**只让支持 206 的源参与轮转**
 - 单流回退改为按镜像逐个试
