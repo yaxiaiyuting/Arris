@@ -38,6 +38,24 @@
 - **防回归**：`HttpClientDnsAuditTest` 扫描源码，裸建 OkHttpClient 即失败。
 
 
+## v3.7.30-gpl（LTS 测试包）— 回移竖屏跟唱（2026-11-05）
+
+主线 4.0.8 的跟唱页移植到 LTS，**全屏档**。
+
+回移方式不是 cherry-pick（同一组提交在 LTS 上 18 处冲突），而是按依赖逐个补齐：
+
+- 新增 `KaraokeTimeline`（`KaraokeCue` / 间奏判定）+ 单测
+- 新增 `PlayerGlyphs`（24 单位网格描边图标，含 Karaoke 标记）
+- 新增 `KaraokeScreen`：文案收敛为本地 `KaraokeCopy`（LTS 不扩 i18n 面）、
+  `CompactTransportControls` 改为页内 `KaraokeTransport`（LTS 的 `transportSurface` 是 private）
+- `NcrustLyricsPanel` 补 `focusIndex` / `focusedRow`；`LyricLineBody` 提升为 internal
+- `PlayerCardState` 补 `showKaraoke`；`LyricsView` 工具条加「跟唱」入口；
+  `PlayerCardExpanded` 打开时渲染全屏 `KaraokeScreen` + BackHandler 退出
+
+LTS 只做全屏档；主线竖屏的「嵌入歌词面板」形态需要改播放器纵向分区，不在本次范围。
+
+构建与签名（v2）通过；真机核对未做（本轮设备未连接）。
+
 ## v4.0.8-gpl（测试包）— 竖屏留白跟唱（2026-11-05）
 
 - **竖屏留白跟唱**：歌词页右上角进入。保留歌名与歌手，当前句大字显示、下一句提前出现；
