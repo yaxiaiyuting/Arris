@@ -178,7 +178,10 @@ export default {
             "https://api.github.com/repos/yaxiaiyuting/Arris/releases?per_page=100",
             {
               headers: { "user-agent": "Arris-Relay/1.0", accept: "application/vnd.github+json" },
-              cf: { cacheEverything: true, cacheTtl: 300 },
+              // 4.0.11：这里原本又叠了一层 5 分钟的 CF 缓存，导致「刚发布的新版在 /api/latest
+              // 里看不到、要再等 5 分钟」。发布是低频动作、GitHub 那边本来就有自己的 CDN，
+              // 去掉这层；worker 自己的 caches.default 保留（可用 ?nocache=1 绕过）。
+              cf: { cacheTtl: 0 },
             },
           );
           if (gh.ok) {
