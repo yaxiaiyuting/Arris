@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,6 +76,7 @@ internal fun KaraokeScreen(
     val copy = strings.playerUi.karaoke
     val colors = LocalMetroColors.current
     val translatedPrimary = controls.translatedPrimary
+    val focusSweep = remember(sweep) { sweep.copy(inactiveAlpha = maxOf(sweep.inactiveAlpha, 0.62f)) }
 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val compact = maxHeight < 430.dp
@@ -143,7 +145,7 @@ internal fun KaraokeScreen(
                                         endMs = if (primaryTranslation != null) primaryTranslation.endMs else line.endMs,
                                         color = colors.onBackground, highlightColor = colors.onBackground,
                                         enabled = wordsEnabled, mode = animationMode, currentPositionMillis = position,
-                                        style = mainStyle, sweepConfig = sweep,
+                                        style = mainStyle, sweepConfig = focusSweep,
                                     )
                                     val secondary = if (preferTranslation) line.text else translation?.text
                                     if (!secondary.isNullOrBlank()) {
@@ -155,7 +157,7 @@ internal fun KaraokeScreen(
                                             enabled = wordsEnabled, mode = animationMode, currentPositionMillis = position,
                                             style = mainStyle.copy(fontSize = (headline * 0.52f).sp,
                                                 lineHeight = (headline * 0.7f).sp, fontWeight = FontWeight.Medium),
-                                            sweepConfig = sweep,
+                                            sweepConfig = focusSweep,
                                         )
                                     }
                                     if (line.romanization.isNotBlank()) {
@@ -171,7 +173,7 @@ internal fun KaraokeScreen(
                                 MetroText(
                                     text, Modifier.fillMaxWidth().clickable(role = Role.Button) { onSeek(upcoming.timestampMillis) }
                                         .padding(vertical = 5.dp),
-                                    color = colors.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                                    color = colors.onBackground.copy(alpha = 0.49f), maxLines = 3, overflow = TextOverflow.Ellipsis,
                                     style = TextStyle(fontSize = (headline * 0.59f).sp, textAlign = TextAlign.Center),
                                 )
                             }
