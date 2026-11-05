@@ -1,6 +1,78 @@
 {
- "generatedAt": "2026-11-02T15:06:16.227Z",
+ "generatedAt": "2026-11-05T01:06:21.697Z",
  "releases": [
+  {
+   "tag_name": "v4.0.4-gpl",
+   "name": "Arris v4.0.4-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-05T01:06:17Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.4-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris 4.0.4-gpl\n\n主线正式版 · Android 10 及以上 · versionCode 204\n\n- **播放与续播**。保存进度时检查写入代次，快速切歌或拖动后，后台旧快照无法覆盖新进度。网易云同一会话里，只有两个不同曲目明确拒绝同一档音质时，才暂时跳过该档。\n- **应用内更新**。取消和重试只影响所属下载，旧任务不能发布 APK。分段严格核对完整长度、区间和强 ETag，不能确认同一文件时改用单流。检查更新逐源校验并在总预算内回退，LTS 和主线安装包分开选取。\n- **一起听**。公网房主使用独立凭据；成员无法伪造房主的快照或关闭通知；房主离开后移除房间。P2P 握手、数据和确认报文加入认证。成员跟随按房间和曲目归属，正确跟随暂停与恢复，并在可用时预备房主的下一首。\n- **听歌识曲**。退出或取消识曲会取消在途请求；先按 HTTP 状态判定登录或服务端错误，再决定是否读取正文。\n- **官网直链与试听**。统一处理范围请求、缓存验证和滚动下载链接。\n\n**一起听兼容性**。公网和 P2P 的新协议需要参与者都更新到 4.0.4，并重新建房或加入。建议使用新复制的房间码。\n\n[官网直链](https://arris.de5.net/get/Arris-v4.0.4-gpl.apk) · [完整更新记录](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 711552768,
+     "name": "Arris-v4.0.4-gpl.apk",
+     "size": 10401136,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.4-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v4.0.3-gpl",
+   "name": "Arris v4.0.3-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-04T16:40:23Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.3-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris 4.0.3-gpl（versionCode 203）\n\n按 `docs/reviews/2026-11-04-confirmed-bugs.md` 逐条修，本版落地 12 条。\n\n### 私人 FM（I01）\n\n模式不再提前改。原先的顺序是「先切 INFINITY → 再异步加载 → 失败什么都不做」，\n于是加载失败会把**普通队列**留在无限模式、还会按 FM 续歌；而 4.0.2 引入的\n「换队列退出无限模式」又会把刚设好的 INFINITY 顶回去 —— FM 根本进不去。\n现在用 `enterFm` 明确意图：加载非空且仍属当前请求，才一次性提交「换队列 + 进 INFINITY + FM 来源」。\n\n### 下载（I03 / I04）\n\n- 取消时登记并 `cancel()` 在途分段 Call（只置 boolean 拦不住已发出的请求）\n- 临时文件按**代次**命名 `*.seg.<gen>`；代次变了就丢弃产物，**不回落单流、不改名**\n- 每段核对 `Content-Range`（起止 + 总长）与 ETag，不符立刻整批失败\n\n### 更新（I05 / I10）\n\n- Worker：先处理 `If-Range` / `If-None-Match` 再切片；`bytes=-N` 按**后缀**范围换算\n  （原来把 `-3` 当成 0-3）；滚动别名 `latest.apk` / `lts-latest.apk` 不再 `immutable` 一年\n- 资产选择：通道/变体过滤下沉到**每个资产**，同一 Release 混挂主线与 LTS 附件时\n  不再丢失合规包\n\n### 网络与音质（I07 / I08）\n\n- `AppHttp` 登记所有派生连接池，切网时连同公共池一起 `evictAll()`\n- 音质拒绝记忆按**会话代次**键控（换账号即失效），且只计**不同曲目**\n\n### 一起听（I11 / I12 / I14）\n\n- 房主唯一性由服务端保证（已有房主则降级为成员）；普通成员的 `snapshot` 一律拒转\n- 房主离开：通知后**关闭成员连接**并摘除目录\n- P2P：只有校验通过的 HELLO / HELLO-ACK 才能确定对端地址，握手前丢弃 DATA/ACK\n\n### 识曲（I15 / I16）\n\n- HTTP Call 绑到协程 Job，取消即 `cancel()`（含 body 读取）\n- 先按非 2xx 分流（5xx / 401 / 403），空体不再一律报「协议变更」\n\n### 未纳入本版\n\nI02（持久化提交代次）、I09（更新源预算与单源校验的完整改造）、\nI13 / I17 / I18（一起听跟随的房间代次与暂停语义）—— 已确认，留待下一轮。\n\n单测 3510 项 0 失败。\n",
+   "assets": [
+    {
+     "id": 710172405,
+     "name": "Arris-v4.0.3-gpl.apk",
+     "size": 10401136,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.3-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v4.0.2-gpl",
+   "name": "Arris v4.0.2-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-03T18:06:39Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.2-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris 4.0.2-gpl（versionCode 202）\n\n### 三个症状同一个根\n\n`replaceQueueAndPlay` 只把 `fmMode` 置 false，**`playMode` 还停在 `INFINITY`（电台/无限模式）**。\n于是：\n\n- 电台听完再播歌单 → 队列继续无限续播，像还挂在电台上\n- 上一首按钮在电台下被置灰 → 看起来\"完全没用\"\n- 「播放全部」不像新的一段开始\n\n修法：换队列时 `applyPlayMode(lastNonInfinityMode)`，回到上一次的非电台模式（默认列表循环）。\n\n### 逐条\n\n- **退出无限模式**：新增 `lastNonInfinityMode`，进电台前记录，换队列时恢复\n- **上一首恒可用**：UI 不再按模式置灰（改成 `playbackQueue.isNotEmpty()`）；\n  `playPrevious()` 删掉 INFINITY 的早退，按线性队列回退\n- **全新队列从 0 播**：新增 `PlaybackStateManager.clearSongPositions()`，\n  换队列时清掉这批歌的续播进度 —— 歌单「播放全部」、库页专辑「播放全部」都走这条路径，\n  不再\"点播放却从上次的中段开始\"\n- **致谢重写**：去掉列了但实际没发挥作用的（SaltPlayerSource 等），换成真参考过的：\n  NeriPlayer 音理 (GPL-3.0)、AndroidX Media3 / ExoPlayer、Suxiaoqinx/Netease_url (MIT)、\n  Apple Music for Android、Tux（Larry Ewing / The GIMP）\n\n### 同步\n\nLTS 3.7.25 同源同修（见 lts-3.7 滚动发布）。全量单测 **3510 项 0 失败**。\n",
+   "assets": [
+    {
+     "id": 706583391,
+     "name": "Arris-v4.0.2-gpl.apk",
+     "size": 10383328,
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v4.0.2-gpl/Arris-v4.0.2-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v4.0.1-gpl",
+   "name": "Arris v4.0.1-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-02T17:14:46Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.1-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris 4.0.1-gpl（versionCode 201）\n\n### 主线瘦身：移除 FFmpeg 软解扩展\n\n| | 4.0.0 | 4.0.1 |\n|---|---|---|\n| APK 体积 | 16.28 MB | **9.90 MB（−39%）** |\n\n它唯一的作用是给「平台没有 FLAC 解码器」的设备兜底。主线 minSdk 已是 29（Android 10），\n平台自带 FLAC / Opus / AAC，音源给的也是 flac / mp3 / m4a。**LTS 3.7.24 不动**。\n\n### 设置页新增「检查更新」\n\n设置 → 通用 → **检查更新**：检查中显示「检查中…」并禁用；发现新版本直接进更新页。\n关于页那个入口保留，只是不用再翻到那儿找了。\n\n### 首页两处补修\n\n- **每日推荐去掉刷新键**：服务端按天生成（每天 6:00 换一批），改成标题右侧「每日 6:00 更新」，\n  换批由 `DailyRecommendation` 自动触发（凌晨沿用前一天）\n- **榜单卡用「榜一那首歌」的封面**：此前只在网络回调里拉，而首屏常命中缓存榜单 ⇒ 永远不补；\n  改成 `LaunchedEffect(toplists)`，缓存路径也覆盖（12 个榜单 / 3 并发 / 失败回退）\n\n### 歌词：非当前行模糊\n\n距离当前行越远越糊（上限 0.9dp）。用 `Modifier.blur`，**API < 31 自动 no-op**\n（RenderEffect 才支持），老机器退回原来的透明度/缩放层次。\n\n### 校验\n\n全量单测 **3510 项 0 失败**；产物内 `libffmpegJNI.so` 计数 0。\n",
+   "assets": [
+    {
+     "id": 705813381,
+     "name": "Arris-v4.0.1-gpl.apk",
+     "size": 10383328,
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v4.0.1-gpl/Arris-v4.0.1-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.0-gpl",
    "name": "Arris v4.0.0-gpl",
@@ -9,13 +81,13 @@
    "published_at": "2026-11-02T15:05:38Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.0-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## Arris 4.0.0-gpl（versionCode 200）\n\n跳过 3.9.x，直接跨代。四条工作流一次落地。\n\n### ① 歌词引擎重做（Apache-2.0 移植，GPLv3 兼容）\n\n来自 NeriPlayer 的歌词模块整套并入（KMP → 单平台 Android，去掉 material3）：\n\n- **解析器**：TTML / 网易 yrc / 酷狗 KRC / Lyricify / EnhancedLRC（新增 KRC、Lyricify 两种）\n- **模型**：音节级 karaoke（逐字）+ 音译层级 + 对齐信息\n- **渲染器**：`KaraokeLyricsView`（988 行）等，双语行、日文假名间距、呼吸点\n\n入口：关于页 → 实验室 → ③ 歌词渲染：自研 ⇄ 卡拉 OK（默认自研，出问题一键退回）。\n\n### ② 均衡器（新功能）\n\n- `AudioEffect.Equalizer` 挂 ExoPlayer 的 audio session（`onAudioSessionIdChanged`）\n- **关着的时候一个 effect 都不创建** —— 默认听感与 3.8.18 逐字节一致\n- 5 个预设（平直/流行/摇滚/人声/低音）+ 10 段可拖推子 + 自绘曲线\n- 存每段增益与预设名，**不存设备 preset 索引**（各厂商频段数不同，存索引换机必错位）\n\n入口：关于页 → 实验室 → ④ 均衡器。\n\n### ③ 工具链升级\n\n| | 3.8.18 | 4.0.0 |\n|---|---|---|\n| Kotlin | 1.9.24 | **2.0.21**（+ Compose 编译器插件） |\n| Compose BOM | 2024.12.01 | **2025.06.01** |\n| media3 | 1.6.1 | **1.9.0**（FFmpeg 扩展 1.9.0+1） |\n\n### ④ 这一轮修掉的体验问题\n\n- **动态字号「根本没用」**：旧判据是绝对三档，中文歌词句句一行半时整首不变；改成按名次分档（30%/70% 分位），短句放大、长句 0.90\n- **多行时整段偏离中心**：放大前校验不折行 + 当前行不叠加倍率\n- **收起播放栏后不居中**：监听面板真实视口高度，变化后重新摆放当前行\n- **右下角播放键点不了**：被同级整行「歌名/歌手」点击区盖住（只有最右侧 16dp 能点到）→ `.zIndex(2f)`\n- **日推刷新键**：服务端按天生成、每天 6:00 换一批，刷新键没有意义 → 删除，改为自动换批（凌晨算前一天）\n- **榜单封面**：卡片改用「榜一那首歌」的专辑图（明文 `/api/playlist/detail`，12 个榜单 / 3 并发 / 失败回退）\n\n### ⑤ 校验\n\n全量 JVM 单测 **3505 项（QqLiveProbeTest 为真机网络探针，本机网络下 5 项失败，与代码无关）**。\n",
+   "body": "## Arris 4.0.0-gpl（versionCode 200）\n\n跳过 3.9.x，直接跨代。\n\n### 均衡器（新）\n\n- 设置 → 播放与音质 → **均衡器**\n- 系统 `AudioEffect.Equalizer` 挂在 ExoPlayer 的 audio session 上；\n  **关闭时一个 effect 都不创建**，默认听感与 3.8.18 一致\n- 5 个预设（平直 / 流行 / 摇滚 / 人声 / 低音）+ 10 段可拖推子 + 自绘曲线\n- 只存每段增益与预设名，不存设备预设索引 —— 各厂商频段数不同，存索引换机必然错位\n\n### 工具链\n\n| | 3.8.18 | 4.0.0 |\n|---|---|---|\n| Kotlin | 1.9.24 | **2.0.21**（Compose 编译器插件随 Kotlin 发布） |\n| Compose BOM | 2024.12.01 | **2025.06.01** |\n| media3 | 1.6.1 | **1.9.0**（FFmpeg 扩展 1.9.0+1 对齐） |\n\n### 歌词体验\n\n- **间奏呼吸点**：当前行唱完到下一句之前，三个直角小方块按相位呼吸（只挂当前行）\n- **竖屏字号上限**：按「一行至少 9.5 个全角字」反推上限（16sp 起、只降不升），\n  修掉「横屏正常、竖屏长句被撑成 3~4 行」\n- 动态字号改按**名次分档**（30%/70% 分位）；放大前校验不折行，当前行不叠加倍率\n- 面板视口高度变化后重新摆放当前行（收起/展开播放栏不再偏离中心）\n\n### 修复\n\n- 收起态悬浮播放键被整行「歌名/歌手」点击区盖住 → `.zIndex(2f)`，并区分「纯点击 vs 拖拽取消」\n- 日推删除刷新键（服务端按天生成），改为每天 6:00 自动换批，凌晨沿用前一天\n- 榜单卡改用「榜一那首歌」的专辑图（明文 `/api/playlist/detail`，12 个榜单 / 3 并发 / 失败回退）\n\n### 校验\n\n全量 JVM 单测 **3506 项通过**；`QqLiveProbeTest` 是真机网络探针（本机网络下 5 项失败，与代码无关）。\n",
    "assets": [
     {
-     "id": 702137307,
+     "id": 702292591,
      "name": "Arris-v4.0.0-gpl.apk",
-     "size": 16363777,
-     "browser_download_url": ""
+     "size": 16281857,
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v4.0.0-gpl/Arris-v4.0.0-gpl.apk"
     }
    ]
   },
@@ -27,13 +99,31 @@
    "published_at": "2026-10-31T13:36:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/lts-3.7",
    "site_url": "https://arris.de5.net/#download",
-   "body": "# LTS 3.7.x · 长期维护线（滚动更新）\n\n这条 Release **不是某个具体版本**，而是 LTS 线的**固定入口**：每次 LTS 出包都会替换下面这些附件，\n版本号看附件文件名。本页不会被标记为 Latest，也不会顶掉主线的「最新版」徽章。\n\n## 当前 LTS 版本：`v3.7.15-gpl`（versionCode 102）\n\n| 项 | 值 |\n|---|---|\n| 最低系统 | **Android 7.0（minSdk 24）** —— 想装 3.8.x 需要 Android 10+ |\n| 附件 | `Arris-v3.7.15-gpl.apk`（≈ 12 MB） |\n| 官网直链 | `https://arris.de5.net/get/lts-latest.apk`（支持断点续传/多线程，永远指向最新 LTS） |\n| 旧版 | `v3.7.14-gpl`、`v3.7.13-gpl` 仍在 Releases 里，可回退 |\n\n## 本版（3.7.15）回移的内容\n\n- **开关代理后未缓存的歌放不出来**：代理的 fake-ip（`198.18.0.0/15`）与真实 IP 是两套解析结果，\n  而 JVM 的 DNS 缓存不随网络切换失效 —— 关掉代理后取链仍往假地址上连。\n  新增 `DnsCache`（反射清缓存）并在网络切换与取链重试两处调用。\n- **检查更新不再依赖 GitHub**：首选 `https://arris.de5.net/api/releases`，\n  GitHub 原接口仅作兜底；`api.github.com` 在国内经常裸连失败。\n- **按发布通道过滤**：3.7.x 只看到 3.7.x 与 `lts-3.7`，不会被推 `minSdk 29` 的 3.8.x。\n\n## LTS 线的取舍\n\nLTS **只回移「设备兼容 / 正确性」修复，不带新功能**：\n\n- ✅ 会回移：竖屏封面遮挡、自动旋转默认值、地址族回退、主线程 socket 崩溃、DNS 缓存、视觉统一\n- ❌ 不回移：听歌识曲、一起听（依赖 3.8 的协议与后端，且在 Android 7 设备上没有验证过）\n\n## 校验\n\n- 全量 JVM 单测 **3399 项 0 失败**\n- 与 3.8.x 同一证书（`CN=Ncrust, OU=Dev, O=Ncrust`），可直接覆盖安装\n",
+   "body": "## Arris 3.7.27-gpl\n\nLTS 长期维护版 · Android 7.0 及以上 · versionCode 114\n\n- **续播进度**。切歌或拖动之后，旧的后台保存任务无法覆盖新的播放快照。\n- **网易云音质**。只有同一登录会话中两个不同曲目明确拒绝同一档音质时，才暂时跳过该档。\n- **应用内更新**。取消后重试同一 APK，旧任务无法写入或发布新任务的文件。分段严格核对区间、总长度和强 ETag，必要时回退到单流。更新检查逐源校验并设总预算；LTS 只选择 3.7.x 资产。\n- **官网直链**。修正断点续传时的缓存验证，滚动链接会提供当前版本。\n\nLTS 继续维护 Android 7–9 等旧设备，适用的是两条版本线共用的修复。\n\n[官网直链](https://arris.de5.net/get/Arris-v3.7.27-gpl.apk) · [LTS 更新记录](https://github.com/yaxiaiyuting/Arris/blob/lts/3.7/CHANGELOG.md)\n\n### 上一版 3.7.26\n\n同步私人 FM 播放模式提交和切网时的连接池清理。历史 APK 保留在本页附件。\n",
    "assets": [
     {
-     "id": 702138800,
+     "id": 702305533,
      "name": "Arris-v3.7.24-gpl.apk",
      "size": 12252793,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/lts-3.7/Arris-v3.7.24-gpl.apk"
+    },
+    {
+     "id": 706584077,
+     "name": "Arris-v3.7.25-lts-gpl.apk",
+     "size": 12252797,
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/lts-3.7/Arris-v3.7.25-lts-gpl.apk"
+    },
+    {
+     "id": 710172866,
+     "name": "Arris-v3.7.26-lts-gpl.apk",
+     "size": 12253937,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.26-lts-gpl.apk"
+    },
+    {
+     "id": 711542911,
+     "name": "Arris-v3.7.27-gpl.apk",
+     "size": 12270321,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.27-gpl.apk"
     }
    ]
   },
@@ -45,13 +135,13 @@
    "published_at": "2026-11-01T18:35:26Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.18-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.18-gpl（versionCode 138）\n\n### 音频流三段计时进日志\n\n`MediaHttp` 挂上了 `EventListener`，每条音频请求都会打：\n\n```\nI MediaHttp: audio headers code=200 host=aqqmusic.tc.qq.com elapsed=449ms\nI MediaHttp: audio call end elapsed=1321ms\nI MediaHttp: audio call failed after 10012ms: SocketTimeoutException …\n```\n\n配合已有的 `SongUrlFetcher: level=… ok in Xms` 与 `NcrustHttpTiming`，\n「点了歌之后那几秒花在哪」现在是三条可对齐的线：取链 → 建连/响应头 → 传输/解码。\n\n实测参考（手机裸连）：QQ 的 CDN TTFB 0.45s、877 KB 共 1.3s —— 服务端侧不慢。\n\n### 补掉最后一个裸 `OkHttpClient`\n\n`AmllTtmlClient`（TTML 歌词拉取）此前是 `OkHttpClient().newBuilder()` ——\n唯一一个绕过 `AppHttp` 的客户端。本机 IPv6 不通时它会白等到超时，表现为「歌词一直不出来」。\n现已并入 `AppHttp`。\n\n`HttpClientDnsAuditTest` 也扩容了：`OkHttpClient()` 与 `.newBuilder()` 一并禁止 ——\n它正是从这个缝里漏过去的。\n\n### 校验\n\n全量 JVM 单测 **3505 项 0 失败**。\n",
+   "body": "",
    "assets": [
     {
      "id": 699171036,
      "name": "Arris-v3.8.18-gpl.apk",
      "size": 16085384,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.18-gpl/Arris-v3.8.18-gpl.apk"
     }
    ]
   },
@@ -63,13 +153,13 @@
    "published_at": "2026-11-01T18:22:04Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.17-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.17-gpl（versionCode 137）\n\n### 音源不可播时，不再是一行「看不出原因」的日志\n\n排查 B站/QQ 失效时，logcat 里只有：\n\n```\nW PlayerViewModel: no playable url ... kind=UNKNOWN source=bilibili code=-\n```\n\n**既没有网络请求记录，也没有原因** —— 分不清是「音源被关掉」「未登录」还是「接口失败」。\n\n原因在 `MusicSourceProvider.resolveUrlOutcome`：provider 返回 null 时直接构造 `UNKNOWN`，不打日志。\n现在补一条：\n\n```\nW MusicSourceProvider: resolveUrl returned null source=bilibili id=… level=…\n（可能是该音源未启用、未登录，或该档位没有可播 URL）\n```\n\n> 这次 B站/QQ 失效的**真实根因**是设备上的 `ncrust_settings.xml` 被清空\n> （`bilibili_enabled` 丢失 ⇒ B站按 v3.1.0 的设计默认关闭），已恢复并验证。\n> 这条日志是为了让下次不必再靠猜。\n\n### 一并包含（3.8.16）\n\n彩蛋「推荐一首」、`AppHttp` 统一网络入口（IPv4 优先 / 超时 / 共享连接池）、封面与艺人图修复。\n\n### 校验\n\n全量 JVM 单测 **3505 项 0 失败**。\n",
+   "body": "",
    "assets": [
     {
      "id": 699137384,
      "name": "Arris-v3.8.17-gpl.apk",
      "size": 16085384,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.17-gpl/Arris-v3.8.17-gpl.apk"
     }
    ]
   },
@@ -81,13 +171,13 @@
    "published_at": "2026-11-01T17:41:56Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.8.16-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## v3.8.16-gpl（versionCode 136）\n\n### 彩蛋里能推荐一首了\n\n自由听众席（关于页版本号连点七次）原来只有标题和「继续听歌」，点开没什么可做的。\n现在：\n\n- 从**你自己的收藏**里随机挑一首（连续两次不重复），显示「为你推荐 / 歌名 / 艺人」\n- **就听这首** 直接进播放队列（与搜索、歌单同一个播放入口）\n- **换一首** 换下一首推荐\n- 收藏为空时如实提示「收藏里还没有歌，先去挑一首吧」，不假装推荐\n\n### 网络客户端统一接管：`AppHttp`\n\n「本机 IPv6 到外网完全不通」这个坑，我们手动补了六次 `dns` ——\nncm 取链 → 音频流 → B站 → 检查更新 → 应用内下载 → **封面/艺人/专辑图**。\n每次都是有人新建了一个裸 `OkHttpClient.Builder()`。\n\n现在把默认值收进 `network/AppHttp`：\n\n```kotlin\nAppHttp.builder()   // 已带：IPv4 优先 DNS、连接 8s / 读 15s、retryOnConnectionFailure、共享连接池\n```\n\n- **15 个文件 18 处** builder 全部改走它；主源码里裸 `OkHttpClient.Builder()` 绝迹\n- 补齐此前漏掉的客户端：**Coil**（封面/艺人头像/专辑图）、QqClient×2、QqQrClient、\n  MqttWebSocketTransport、NeteaseRecognizeProvider、163cn.tv 短链 HEAD\n- 防回归：`HttpClientDnsAuditTest` 扫描源码，裸建即红；\n  `AddressPreference.ipv4First` 改成具名类 `IPv4FirstDns`，测试可断言「默认客户端确实用了它」\n\n### 校验\n\n- 全量 JVM 单测 **3505 项 0 失败**\n",
+   "body": "",
    "assets": [
     {
      "id": 699039247,
      "name": "Arris-v3.8.16-gpl.apk",
      "size": 16085384,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.16-gpl/Arris-v3.8.16-gpl.apk"
     }
    ]
   },
@@ -105,7 +195,7 @@
      "id": 698938515,
      "name": "Arris-v3.8.15-gpl.apk",
      "size": 16085388,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.15-gpl/Arris-v3.8.15-gpl.apk"
     }
    ]
   },
@@ -123,7 +213,7 @@
      "id": 698903620,
      "name": "Arris-v3.8.14-gpl.apk",
      "size": 16069004,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.14-gpl/Arris-v3.8.14-gpl.apk"
     }
    ]
   },
@@ -141,7 +231,7 @@
      "id": 698802326,
      "name": "Arris-v3.8.13-gpl.apk",
      "size": 16069004,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.13-gpl/Arris-v3.8.13-gpl.apk"
     }
    ]
   },
@@ -159,7 +249,7 @@
      "id": 698783421,
      "name": "Arris-v3.8.12-gpl.apk",
      "size": 16069004,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.12-gpl/Arris-v3.8.12-gpl.apk"
     }
    ]
   },
@@ -177,7 +267,7 @@
      "id": 697709049,
      "name": "Arris-v3.8.9-gpl.apk",
      "size": 16069000,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.9-gpl/Arris-v3.8.9-gpl.apk"
     }
    ]
   },
@@ -195,7 +285,7 @@
      "id": 697709832,
      "name": "Arris-v3.8.6-gpl.apk",
      "size": 16069000,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.6-gpl/Arris-v3.8.6-gpl.apk"
     }
    ]
   },
@@ -213,7 +303,7 @@
      "id": 695929807,
      "name": "Arris-v3.8.4-gpl.apk",
      "size": 16052616,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.4-gpl/Arris-v3.8.4-gpl.apk"
     }
    ]
   },
@@ -231,7 +321,7 @@
      "id": 695402064,
      "name": "Arris-v3.8.3-gpl.apk",
      "size": 16052616,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.3-gpl/Arris-v3.8.3-gpl.apk"
     }
    ]
   },
@@ -249,7 +339,7 @@
      "id": 692720883,
      "name": "Arris-v3.8.2-gpl.apk",
      "size": 16052392,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.2-gpl/Arris-v3.8.2-gpl.apk"
     }
    ]
   },
@@ -267,7 +357,7 @@
      "id": 689759569,
      "name": "Arris-v3.8.1-gpl.apk",
      "size": 15986856,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.8.1-gpl/Arris-v3.8.1-gpl.apk"
     }
    ]
   },
@@ -285,13 +375,13 @@
      "id": 689069352,
      "name": "Arris-v3.7.13-gpl-debug.apk",
      "size": 34756213,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.13-gpl/Arris-v3.7.13-gpl-debug.apk"
     },
     {
      "id": 689069308,
      "name": "Arris-v3.7.13-gpl-release.apk",
      "size": 12121852,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.13-gpl/Arris-v3.7.13-gpl-release.apk"
     }
    ]
   },
@@ -309,13 +399,13 @@
      "id": 681904495,
      "name": "Ncrust-v3.7.10-gpl-debug.apk",
      "size": 33969625,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.10-gpl/Ncrust-v3.7.10-gpl-debug.apk"
     },
     {
      "id": 681904308,
      "name": "Ncrust-v3.7.10-gpl-release.apk",
      "size": 12105420,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.10-gpl/Ncrust-v3.7.10-gpl-release.apk"
     }
    ]
   },
@@ -333,13 +423,13 @@
      "id": 681781329,
      "name": "Ncrust-v3.7.9-gpl-debug.apk",
      "size": 33969629,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.9-gpl/Ncrust-v3.7.9-gpl-debug.apk"
     },
     {
      "id": 681781223,
      "name": "Ncrust-v3.7.9-gpl-release.apk",
      "size": 12089036,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.9-gpl/Ncrust-v3.7.9-gpl-release.apk"
     }
    ]
   },
@@ -357,13 +447,13 @@
      "id": 679113733,
      "name": "Ncrust-v3.7.8-gpl-debug.apk",
      "size": 33936861,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.8-gpl/Ncrust-v3.7.8-gpl-debug.apk"
     },
     {
      "id": 679113598,
      "name": "Ncrust-v3.7.8-gpl-release.apk",
      "size": 12089036,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.8-gpl/Ncrust-v3.7.8-gpl-release.apk"
     }
    ]
   },
@@ -381,13 +471,13 @@
      "id": 676554887,
      "name": "Ncrust-v3.7.7-gpl-debug.apk",
      "size": 33920477,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.7-gpl/Ncrust-v3.7.7-gpl-debug.apk"
     },
     {
      "id": 676570176,
      "name": "Ncrust-v3.7.7-gpl-release.apk",
      "size": 12072652,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.7-gpl/Ncrust-v3.7.7-gpl-release.apk"
     }
    ]
   },
@@ -405,13 +495,13 @@
      "id": 674125974,
      "name": "Ncrust-v3.7.6-gpl-debug.apk",
      "size": 34316917,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.6-gpl/Ncrust-v3.7.6-gpl-debug.apk"
     },
     {
      "id": 674125741,
      "name": "Ncrust-v3.7.6-gpl-release.apk",
      "size": 12072652,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.6-gpl/Ncrust-v3.7.6-gpl-release.apk"
     }
    ]
   },
@@ -429,13 +519,13 @@
      "id": 674076531,
      "name": "Ncrust-v3.7.5-gpl-debug.apk",
      "size": 34015755,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.5-gpl/Ncrust-v3.7.5-gpl-debug.apk"
     },
     {
      "id": 674076414,
      "name": "Ncrust-v3.7.5-gpl-release.apk",
      "size": 12072652,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.5-gpl/Ncrust-v3.7.5-gpl-release.apk"
     }
    ]
   },
@@ -453,13 +543,13 @@
      "id": 674034086,
      "name": "Ncrust-v3.7.4-gpl-debug.apk",
      "size": 34315819,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.4-gpl/Ncrust-v3.7.4-gpl-debug.apk"
     },
     {
      "id": 674033936,
      "name": "Ncrust-v3.7.4-gpl-release.apk",
      "size": 12072652,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.4-gpl/Ncrust-v3.7.4-gpl-release.apk"
     }
    ]
   },
@@ -477,13 +567,13 @@
      "id": 673079902,
      "name": "Ncrust-v3.7.3-gpl-debug.apk",
      "size": 34197075,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.3-gpl/Ncrust-v3.7.3-gpl-debug.apk"
     },
     {
      "id": 673079876,
      "name": "Ncrust-v3.7.3-gpl-release.apk",
      "size": 12039884,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.3-gpl/Ncrust-v3.7.3-gpl-release.apk"
     }
    ]
   },
@@ -501,13 +591,13 @@
      "id": 673031866,
      "name": "Ncrust-v3.7.2-gpl-debug.apk",
      "size": 33470677,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.2-gpl/Ncrust-v3.7.2-gpl-debug.apk"
     },
     {
      "id": 673031867,
      "name": "Ncrust-v3.7.2-gpl-release.apk",
      "size": 12039884,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.2-gpl/Ncrust-v3.7.2-gpl-release.apk"
     }
    ]
   },
@@ -525,13 +615,13 @@
      "id": 670972890,
      "name": "Ncrust-v3.7.1-gpl-debug.apk",
      "size": 33652209,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.1-gpl/Ncrust-v3.7.1-gpl-debug.apk"
     },
     {
      "id": 670962501,
      "name": "Ncrust-v3.7.1-gpl-release.apk",
      "size": 12039856,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.1-gpl/Ncrust-v3.7.1-gpl-release.apk"
     }
    ]
   },
@@ -549,7 +639,7 @@
      "id": 669514507,
      "name": "Ncrust-v3.7.0-gpl-release.apk",
      "size": 12039856,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.7.0-gpl/Ncrust-v3.7.0-gpl-release.apk"
     }
    ]
   },
@@ -567,7 +657,7 @@
      "id": 669460268,
      "name": "Ncrust-v3.6.9-gpl-release.apk",
      "size": 12023472,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.9-gpl/Ncrust-v3.6.9-gpl-release.apk"
     }
    ]
   },
@@ -585,13 +675,13 @@
      "id": 669323480,
      "name": "Ncrust-v3.6.8-gpl-debug.apk",
      "size": 33454245,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.8-gpl/Ncrust-v3.6.8-gpl-debug.apk"
     },
     {
      "id": 669322258,
      "name": "Ncrust-v3.6.8-gpl-release.apk",
      "size": 12023472,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.8-gpl/Ncrust-v3.6.8-gpl-release.apk"
     }
    ]
   },
@@ -609,13 +699,13 @@
      "id": 669221176,
      "name": "Ncrust-v3.6.7-gpl-debug.apk",
      "size": 33455905,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.7-gpl/Ncrust-v3.6.7-gpl-debug.apk"
     },
     {
      "id": 669280077,
      "name": "Ncrust-v3.6.7-gpl-release.apk",
      "size": 12022660,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.7-gpl/Ncrust-v3.6.7-gpl-release.apk"
     }
    ]
   },
@@ -633,13 +723,13 @@
      "id": 666732160,
      "name": "Ncrust-v3.6.5-gpl-debug.apk",
      "size": 33397947,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.5-gpl/Ncrust-v3.6.5-gpl-debug.apk"
     },
     {
      "id": 666719294,
      "name": "Ncrust-v3.6.5-gpl-release.apk",
      "size": 11947560,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.5-gpl/Ncrust-v3.6.5-gpl-release.apk"
     }
    ]
   },
@@ -657,13 +747,13 @@
      "id": 666652377,
      "name": "Ncrust-v3.6.4-gpl-debug.apk",
      "size": 33397947,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.4-gpl/Ncrust-v3.6.4-gpl-debug.apk"
     },
     {
      "id": 666639016,
      "name": "Ncrust-v3.6.4-gpl-release.apk",
      "size": 11947560,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.4-gpl/Ncrust-v3.6.4-gpl-release.apk"
     }
    ]
   },
@@ -681,13 +771,13 @@
      "id": 666552310,
      "name": "Ncrust-v3.6.3-gpl-debug.apk",
      "size": 33860076,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.3-gpl/Ncrust-v3.6.3-gpl-debug.apk"
     },
     {
      "id": 666551533,
      "name": "Ncrust-v3.6.3-gpl-release.apk",
      "size": 11946560,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.3-gpl/Ncrust-v3.6.3-gpl-release.apk"
     }
    ]
   },
@@ -705,7 +795,7 @@
      "id": 666289912,
      "name": "Ncrust-v3.6.2-gpl-release.apk",
      "size": 11945532,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.2-gpl/Ncrust-v3.6.2-gpl-release.apk"
     }
    ]
   },
@@ -723,13 +813,13 @@
      "id": 663564957,
      "name": "Ncrust-v3.6.1-gpl-debug.apk",
      "size": 32331973,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.1-gpl/Ncrust-v3.6.1-gpl-debug.apk"
     },
     {
      "id": 663564958,
      "name": "Ncrust-v3.6.1-gpl-release.apk",
      "size": 10527585,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.1-gpl/Ncrust-v3.6.1-gpl-release.apk"
     }
    ]
   },
@@ -747,13 +837,13 @@
      "id": 663474138,
      "name": "Ncrust-v3.6.0-gpl-debug.apk",
      "size": 32280438,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.0-gpl/Ncrust-v3.6.0-gpl-debug.apk"
     },
     {
      "id": 663474116,
      "name": "Ncrust-v3.6.0-gpl-release.apk",
      "size": 10527585,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.6.0-gpl/Ncrust-v3.6.0-gpl-release.apk"
     }
    ]
   },
@@ -771,13 +861,13 @@
      "id": 662632974,
      "name": "Ncrust-v3.5.0-gpl-debug.apk",
      "size": 31817714,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5.0-gpl/Ncrust-v3.5.0-gpl-debug.apk"
     },
     {
      "id": 662632970,
      "name": "Ncrust-v3.5.0-gpl-release.apk",
      "size": 10469728,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.5.0-gpl/Ncrust-v3.5.0-gpl-release.apk"
     }
    ]
   },
@@ -795,7 +885,7 @@
      "id": 627205127,
      "name": "Ncrust-v3.4.12-gpl-release.apk",
      "size": 10354948,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.12-gpl/Ncrust-v3.4.12-gpl-release.apk"
     }
    ]
   },
@@ -813,7 +903,7 @@
      "id": 625977829,
      "name": "Ncrust-v3.4.11-gpl-release.apk",
      "size": 10354948,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.11-gpl/Ncrust-v3.4.11-gpl-release.apk"
     }
    ]
   },
@@ -831,7 +921,7 @@
      "id": 622623094,
      "name": "Ncrust-v3.4.10-gpl-release.apk",
      "size": 10338564,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.10-gpl/Ncrust-v3.4.10-gpl-release.apk"
     }
    ]
   },
@@ -849,7 +939,7 @@
      "id": 622533724,
      "name": "Ncrust-v3.4.9-gpl-release.apk",
      "size": 10338560,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.9-gpl/Ncrust-v3.4.9-gpl-release.apk"
     }
    ]
   },
@@ -867,7 +957,7 @@
      "id": 619235166,
      "name": "Arris-v3.4.8-gpl-release.apk",
      "size": 10305792,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.8-gpl/Arris-v3.4.8-gpl-release.apk"
     }
    ]
   },
@@ -885,7 +975,7 @@
      "id": 613279593,
      "name": "Ncrust-v3.4.7-gpl-release.apk",
      "size": 10298972,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.7-gpl/Ncrust-v3.4.7-gpl-release.apk"
     }
    ]
   },
@@ -903,7 +993,7 @@
      "id": 613112469,
      "name": "Ncrust-v3.4.6-gpl-release.apk",
      "size": 10298968,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.6-gpl/Ncrust-v3.4.6-gpl-release.apk"
     }
    ]
   },
@@ -921,7 +1011,7 @@
      "id": 610206025,
      "name": "Ncrust-v3.4.5-gpl-release.apk",
      "size": 10298972,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.5-gpl/Ncrust-v3.4.5-gpl-release.apk"
     }
    ]
   },
@@ -939,7 +1029,7 @@
      "id": 608410709,
      "name": "Ncrust-v3.4.4-gpl-release.apk",
      "size": 10282568,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.4-gpl/Ncrust-v3.4.4-gpl-release.apk"
     }
    ]
   },
@@ -957,7 +1047,7 @@
      "id": 608240565,
      "name": "Ncrust-v3.4.3-gpl-release.apk",
      "size": 10282568,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.3-gpl/Ncrust-v3.4.3-gpl-release.apk"
     }
    ]
   },
@@ -975,7 +1065,7 @@
      "id": 608167073,
      "name": "Ncrust-v3.4.2-gpl-release.apk",
      "size": 10282568,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.2-gpl/Ncrust-v3.4.2-gpl-release.apk"
     }
    ]
   },
@@ -993,7 +1083,7 @@
      "id": 608141848,
      "name": "Ncrust-v3.4.1-gpl-release.apk",
      "size": 10282568,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.1-gpl/Ncrust-v3.4.1-gpl-release.apk"
     }
    ]
   },
@@ -1011,7 +1101,7 @@
      "id": 608100952,
      "name": "Ncrust-v3.4.0-gpl-release.apk",
      "size": 10282568,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.4.0-gpl/Ncrust-v3.4.0-gpl-release.apk"
     }
    ]
   },
@@ -1029,7 +1119,7 @@
      "id": 607976529,
      "name": "Ncrust-v3.3.1-gpl-release.apk",
      "size": 10282564,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.3.1-gpl/Ncrust-v3.3.1-gpl-release.apk"
     }
    ]
   },
@@ -1047,7 +1137,7 @@
      "id": 607951923,
      "name": "Ncrust-v3.3.0-gpl-release.apk",
      "size": 10282564,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.3.0-gpl/Ncrust-v3.3.0-gpl-release.apk"
     }
    ]
   },
@@ -1065,7 +1155,7 @@
      "id": 596256378,
      "name": "Ncrust-v3.2.4-gpl-release.apk",
      "size": 10206692,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.2.4-gpl/Ncrust-v3.2.4-gpl-release.apk"
     }
    ]
   },
@@ -1083,7 +1173,7 @@
      "id": 595867172,
      "name": "Ncrust-v3.2.3-gpl-release.apk",
      "size": 10206692,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.2.3-gpl/Ncrust-v3.2.3-gpl-release.apk"
     }
    ]
   },
@@ -1101,7 +1191,7 @@
      "id": 595867511,
      "name": "Ncrust-v3.2.2-gpl-release.apk",
      "size": 10206692,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.2.2-gpl/Ncrust-v3.2.2-gpl-release.apk"
     }
    ]
   },
@@ -1119,7 +1209,7 @@
      "id": 595452999,
      "name": "Ncrust-v3.2.1-gpl-release.apk",
      "size": 10206696,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.2.1-gpl/Ncrust-v3.2.1-gpl-release.apk"
     }
    ]
   },
@@ -1137,7 +1227,7 @@
      "id": 595253046,
      "name": "Ncrust-v3.2.0-gpl-release.apk",
      "size": 10190308,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.2.0-gpl/Ncrust-v3.2.0-gpl-release.apk"
     }
    ]
   },
@@ -1155,7 +1245,7 @@
      "id": 593625267,
      "name": "Ncrust-v3.1.0-gpl-release.apk",
      "size": 10157540,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.1.0-gpl/Ncrust-v3.1.0-gpl-release.apk"
     }
    ]
   },
@@ -1173,7 +1263,7 @@
      "id": 593306764,
      "name": "Ncrust-v3.0.0-gpl-release.apk",
      "size": 10141124,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v3.0.0-gpl/Ncrust-v3.0.0-gpl-release.apk"
     }
    ]
   },
@@ -1191,7 +1281,7 @@
      "id": 593131190,
      "name": "Ncrust-v2.9.0-gpl-release.apk",
      "size": 10124744,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.9.0-gpl/Ncrust-v2.9.0-gpl-release.apk"
     }
    ]
   },
@@ -1209,7 +1299,7 @@
      "id": 592949202,
      "name": "Ncrust-v2.8.0-gpl-release.apk",
      "size": 10108360,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.8.0-gpl/Ncrust-v2.8.0-gpl-release.apk"
     }
    ]
   },
@@ -1227,7 +1317,7 @@
      "id": 591034393,
      "name": "Ncrust-v2.6.2-gpl-release.apk",
      "size": 10075592,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.6.2-gpl/Ncrust-v2.6.2-gpl-release.apk"
     }
    ]
   },
@@ -1245,13 +1335,13 @@
      "id": 590922265,
      "name": "Ncrust-v2.6.1-gpl-debug.apk",
      "size": 30877038,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.6.1-gpl/Ncrust-v2.6.1-gpl-debug.apk"
     },
     {
      "id": 590922277,
      "name": "Ncrust-v2.6.1-gpl-release.apk",
      "size": 10075592,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.6.1-gpl/Ncrust-v2.6.1-gpl-release.apk"
     }
    ]
   },
@@ -1269,13 +1359,13 @@
      "id": 590819271,
      "name": "Ncrust-v2.6.0-gpl-debug.apk",
      "size": 30860654,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.6.0-gpl/Ncrust-v2.6.0-gpl-debug.apk"
     },
     {
      "id": 590819263,
      "name": "Ncrust-v2.6.0-gpl-release.apk",
      "size": 10075592,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.6.0-gpl/Ncrust-v2.6.0-gpl-release.apk"
     }
    ]
   },
@@ -1293,13 +1383,13 @@
      "id": 590618324,
      "name": "Ncrust-v2.5.6-gpl-debug.apk",
      "size": 30811502,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.6-gpl/Ncrust-v2.5.6-gpl-debug.apk"
     },
     {
      "id": 590618334,
      "name": "Ncrust-v2.5.6-gpl-release.apk",
      "size": 10059208,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.6-gpl/Ncrust-v2.5.6-gpl-release.apk"
     }
    ]
   },
@@ -1317,7 +1407,7 @@
      "id": 590526039,
      "name": "Ncrust-v2.5.5-gpl-release.apk",
      "size": 10059204,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.5-gpl/Ncrust-v2.5.5-gpl-release.apk"
     }
    ]
   },
@@ -1335,7 +1425,7 @@
      "id": 590171457,
      "name": "Ncrust-v2.5.4-gpl-release.apk",
      "size": 10042824,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.4-gpl/Ncrust-v2.5.4-gpl-release.apk"
     }
    ]
   },
@@ -1353,13 +1443,13 @@
      "id": 589636030,
      "name": "Ncrust-v2.5.3-gpl-debug.apk",
      "size": 30762350,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.3-gpl/Ncrust-v2.5.3-gpl-debug.apk"
     },
     {
      "id": 589636025,
      "name": "Ncrust-v2.5.3-gpl-release.apk",
      "size": 10042824,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.3-gpl/Ncrust-v2.5.3-gpl-release.apk"
     }
    ]
   },
@@ -1377,13 +1467,13 @@
      "id": 588459147,
      "name": "Ncrust-v2.5.2-gpl-debug.apk",
      "size": 30745966,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.2-gpl/Ncrust-v2.5.2-gpl-debug.apk"
     },
     {
      "id": 588459118,
      "name": "Ncrust-v2.5.2-gpl-release.apk",
      "size": 10042824,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.2-gpl/Ncrust-v2.5.2-gpl-release.apk"
     }
    ]
   },
@@ -1401,13 +1491,13 @@
      "id": 588411653,
      "name": "Ncrust-v2.5.1-gpl-debug.apk",
      "size": 30745966,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.1-gpl/Ncrust-v2.5.1-gpl-debug.apk"
     },
     {
      "id": 588411654,
      "name": "Ncrust-v2.5.1-gpl-release.apk",
      "size": 10042824,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.1-gpl/Ncrust-v2.5.1-gpl-release.apk"
     }
    ]
   },
@@ -1425,13 +1515,13 @@
      "id": 588301424,
      "name": "Ncrust-v2.5.0-gpl-debug.apk",
      "size": 31044436,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.0-gpl/Ncrust-v2.5.0-gpl-debug.apk"
     },
     {
      "id": 588301425,
      "name": "Ncrust-v2.5.0-gpl-release.apk",
      "size": 10042824,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.5.0-gpl/Ncrust-v2.5.0-gpl-release.apk"
     }
    ]
   },
@@ -1449,13 +1539,13 @@
      "id": 588181407,
      "name": "Ncrust-v2.4.0-gpl-debug.apk",
      "size": 31135189,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.4.0-gpl/Ncrust-v2.4.0-gpl-debug.apk"
     },
     {
      "id": 588181406,
      "name": "Ncrust-v2.4.0-gpl-release.apk",
      "size": 10010056,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.4.0-gpl/Ncrust-v2.4.0-gpl-release.apk"
     }
    ]
   },
@@ -1473,13 +1563,13 @@
      "id": 588020463,
      "name": "Ncrust-v2.3.0-gpl-debug.apk",
      "size": 30532915,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.3.0-gpl/Ncrust-v2.3.0-gpl-debug.apk"
     },
     {
      "id": 588020459,
      "name": "Ncrust-v2.3.0-gpl-release.apk",
      "size": 9944028,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.3.0-gpl/Ncrust-v2.3.0-gpl-release.apk"
     }
    ]
   },
@@ -1497,7 +1587,7 @@
      "id": 587777309,
      "name": "Ncrust-v2.2.1-gpl-release.apk",
      "size": 9909352,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.2.1-gpl/Ncrust-v2.2.1-gpl-release.apk"
     }
    ]
   },
@@ -1515,7 +1605,7 @@
      "id": 587696102,
      "name": "Ncrust-v2.2.0-gpl-release.apk",
      "size": 9909352,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.2.0-gpl/Ncrust-v2.2.0-gpl-release.apk"
     }
    ]
   },
@@ -1533,13 +1623,13 @@
      "id": 587636719,
      "name": "Ncrust-v2.1.6-gpl-debug.apk",
      "size": 30303535,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.6-gpl/Ncrust-v2.1.6-gpl-debug.apk"
     },
     {
      "id": 587636722,
      "name": "Ncrust-v2.1.6-gpl-release.apk",
      "size": 9860200,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.6-gpl/Ncrust-v2.1.6-gpl-release.apk"
     }
    ]
   },
@@ -1557,13 +1647,13 @@
      "id": 587554039,
      "name": "Ncrust-v2.1.5-gpl-debug.apk",
      "size": 30410395,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.5-gpl/Ncrust-v2.1.5-gpl-debug.apk"
     },
     {
      "id": 587554037,
      "name": "Ncrust-v2.1.5-gpl-release.apk",
      "size": 9860204,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.5-gpl/Ncrust-v2.1.5-gpl-release.apk"
     }
    ]
   },
@@ -1581,13 +1671,13 @@
      "id": 586686062,
      "name": "Ncrust-v2.1.4-gpl-debug.apk",
      "size": 30287083,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.4-gpl/Ncrust-v2.1.4-gpl-debug.apk"
     },
     {
      "id": 586686056,
      "name": "Ncrust-v2.1.4-gpl-release.apk",
      "size": 9860124,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.4-gpl/Ncrust-v2.1.4-gpl-release.apk"
     }
    ]
   },
@@ -1605,13 +1695,13 @@
      "id": 586618768,
      "name": "Ncrust-v2.1.3-gpl-debug.apk",
      "size": 30270699,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.3-gpl/Ncrust-v2.1.3-gpl-debug.apk"
     },
     {
      "id": 586618769,
      "name": "Ncrust-v2.1.3-gpl-release.apk",
      "size": 9860124,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.3-gpl/Ncrust-v2.1.3-gpl-release.apk"
     }
    ]
   },
@@ -1629,13 +1719,13 @@
      "id": 586557364,
      "name": "Ncrust-v2.1.0-gpl-debug.apk",
      "size": 30768395,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.0-gpl/Ncrust-v2.1.0-gpl-debug.apk"
     },
     {
      "id": 586557369,
      "name": "Ncrust-v2.1.0-gpl-release.apk",
      "size": 9843744,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.1.0-gpl/Ncrust-v2.1.0-gpl-release.apk"
     }
    ]
   },
@@ -1653,13 +1743,13 @@
      "id": 586411987,
      "name": "Ncrust-v2.0.2-gpl-debug.apk",
      "size": 30123184,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.2-gpl/Ncrust-v2.0.2-gpl-debug.apk"
     },
     {
      "id": 586411989,
      "name": "Ncrust-v2.0.2-gpl-release.apk",
      "size": 9810704,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.2-gpl/Ncrust-v2.0.2-gpl-release.apk"
     }
    ]
   },
@@ -1677,13 +1767,13 @@
      "id": 586144272,
      "name": "Ncrust-v2.0.1-gpl-debug.apk",
      "size": 30123184,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.1-gpl/Ncrust-v2.0.1-gpl-debug.apk"
     },
     {
      "id": 586144258,
      "name": "Ncrust-v2.0.1-gpl-release.apk",
      "size": 9810704,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.1-gpl/Ncrust-v2.0.1-gpl-release.apk"
     }
    ]
   },
@@ -1701,13 +1791,13 @@
      "id": 586073108,
      "name": "Ncrust-v2.0.0-gpl-debug.apk",
      "size": 30480268,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.0-gpl/Ncrust-v2.0.0-gpl-debug.apk"
     },
     {
      "id": 586073099,
      "name": "Ncrust-v2.0.0-gpl-release.apk",
      "size": 9810704,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v2.0.0-gpl/Ncrust-v2.0.0-gpl-release.apk"
     }
    ]
   },
@@ -1725,13 +1815,13 @@
      "id": 584129446,
      "name": "Ncrust-v1.9.3-gpl-debug.apk",
      "size": 30057644,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.3-gpl/Ncrust-v1.9.3-gpl-debug.apk"
     },
     {
      "id": 584129447,
      "name": "Ncrust-v1.9.3-gpl-release.apk",
      "size": 9794320,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.3-gpl/Ncrust-v1.9.3-gpl-release.apk"
     }
    ]
   },
@@ -1749,13 +1839,13 @@
      "id": 584083543,
      "name": "Ncrust-v1.9.2-gpl-debug.apk",
      "size": 30057644,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.2-gpl/Ncrust-v1.9.2-gpl-debug.apk"
     },
     {
      "id": 584083533,
      "name": "Ncrust-v1.9.2-gpl-release.apk",
      "size": 9794320,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.2-gpl/Ncrust-v1.9.2-gpl-release.apk"
     }
    ]
   },
@@ -1773,13 +1863,13 @@
      "id": 583971718,
      "name": "Ncrust-v1.9.1-gpl-debug.apk",
      "size": 30041260,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.1-gpl/Ncrust-v1.9.1-gpl-debug.apk"
     },
     {
      "id": 583971716,
      "name": "Ncrust-v1.9.1-gpl-release.apk",
      "size": 9777724,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.1-gpl/Ncrust-v1.9.1-gpl-release.apk"
     }
    ]
   },
@@ -1797,13 +1887,13 @@
      "id": 583930159,
      "name": "Ncrust-v1.9.0-gpl-debug.apk",
      "size": 30041260,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.0-gpl/Ncrust-v1.9.0-gpl-debug.apk"
     },
     {
      "id": 583930183,
      "name": "Ncrust-v1.9.0-gpl-release.apk",
      "size": 9777728,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.9.0-gpl/Ncrust-v1.9.0-gpl-release.apk"
     }
    ]
   },
@@ -1821,13 +1911,13 @@
      "id": 581946270,
      "name": "Ncrust-v1.7.0-gpl-debug.apk",
      "size": 29975728,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.7.0-gpl/Ncrust-v1.7.0-gpl-debug.apk"
     },
     {
      "id": 581946259,
      "name": "Ncrust-v1.7.0-gpl-release.apk",
      "size": 9744960,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.7.0-gpl/Ncrust-v1.7.0-gpl-release.apk"
     }
    ]
   },
@@ -1845,13 +1935,13 @@
      "id": 581762566,
      "name": "Ncrust-v1.6.1-gpl-debug.apk",
      "size": 29959344,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.6.1-gpl/Ncrust-v1.6.1-gpl-debug.apk"
     },
     {
      "id": 581759137,
      "name": "Ncrust-v1.6.1-gpl-release.apk",
      "size": 9738936,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.6.1-gpl/Ncrust-v1.6.1-gpl-release.apk"
     }
    ]
   },
@@ -1869,13 +1959,13 @@
      "id": 581722114,
      "name": "Ncrust-v1.6.0-gpl-debug.apk",
      "size": 29959344,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.6.0-gpl/Ncrust-v1.6.0-gpl-debug.apk"
     },
     {
      "id": 581722112,
      "name": "Ncrust-v1.6.0-gpl-release.apk",
      "size": 9738936,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.6.0-gpl/Ncrust-v1.6.0-gpl-release.apk"
     }
    ]
   },
@@ -1893,13 +1983,13 @@
      "id": 581635315,
      "name": "Ncrust-v1.5.2-gpl-debug.apk",
      "size": 29942928,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.5.2-gpl/Ncrust-v1.5.2-gpl-debug.apk"
     },
     {
      "id": 581635313,
      "name": "Ncrust-v1.5.2-gpl-release.apk",
      "size": 9721992,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.5.2-gpl/Ncrust-v1.5.2-gpl-release.apk"
     }
    ]
   },
@@ -1917,7 +2007,7 @@
      "id": 581490570,
      "name": "Ncrust-v1.5.1-gpl-release.apk",
      "size": 9705608,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.5.1-gpl/Ncrust-v1.5.1-gpl-release.apk"
     }
    ]
   },
@@ -1935,13 +2025,13 @@
      "id": 579736217,
      "name": "Ncrust-v1.5.0-gpl-debug.apk",
      "size": 29893776,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.5.0-gpl/Ncrust-v1.5.0-gpl-debug.apk"
     },
     {
      "id": 579736219,
      "name": "Ncrust-v1.5.0-gpl-release.apk",
      "size": 9689224,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.5.0-gpl/Ncrust-v1.5.0-gpl-release.apk"
     }
    ]
   },
@@ -1959,7 +2049,7 @@
      "id": 579684060,
      "name": "Ncrust-v1.4.2-gpl-release.apk",
      "size": 9672840,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.4.2-gpl/Ncrust-v1.4.2-gpl-release.apk"
     }
    ]
   },
@@ -1977,7 +2067,7 @@
      "id": 579665588,
      "name": "Ncrust-v1.4.1-gpl-release.apk",
      "size": 9672844,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.4.1-gpl/Ncrust-v1.4.1-gpl-release.apk"
     }
    ]
   },
@@ -1995,7 +2085,7 @@
      "id": 579598033,
      "name": "Ncrust-v1.4.0-gpl-release.apk",
      "size": 9672840,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.4.0-gpl/Ncrust-v1.4.0-gpl-release.apk"
     }
    ]
   },
@@ -2013,7 +2103,7 @@
      "id": 579512784,
      "name": "Ncrust-v1.3.0-gpl-release.apk",
      "size": 9672840,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.3.0-gpl/Ncrust-v1.3.0-gpl-release.apk"
     }
    ]
   },
@@ -2031,7 +2121,7 @@
      "id": 579232154,
      "name": "Ncrust-v1.2.0-gpl-release.apk",
      "size": 9623688,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.2.0-gpl/Ncrust-v1.2.0-gpl-release.apk"
     }
    ]
   },
@@ -2049,7 +2139,7 @@
      "id": 577284478,
      "name": "Ncrust-v1.1.1-gpl-release.apk",
      "size": 9606980,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.1.1-gpl/Ncrust-v1.1.1-gpl-release.apk"
     }
    ]
   },
@@ -2067,7 +2157,7 @@
      "id": 577241718,
      "name": "Ncrust-v1.1.0-gpl-release.apk",
      "size": 9606980,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.1.0-gpl/Ncrust-v1.1.0-gpl-release.apk"
     }
    ]
   },
@@ -2085,7 +2175,7 @@
      "id": 577213328,
      "name": "Ncrust-v1.0.4-gpl-release.apk",
      "size": 3919132,
-     "browser_download_url": ""
+     "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v1.0.4-gpl/Ncrust-v1.0.4-gpl-release.apk"
     }
    ]
   }
