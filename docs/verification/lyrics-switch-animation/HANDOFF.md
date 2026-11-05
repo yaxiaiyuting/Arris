@@ -117,3 +117,106 @@ adb -s 3B15CD00GB700000 install -r app/build/outputs/apk/release/app-release.apk
 
 真机上要放一首**换行密集**的歌才看得出差别（会话里用的是《心墙》林俊杰、《ありがとう》大橋卓弥）。
 模拟器没有登录态和曲库，验不了这条 —— 别在模拟器上浪费时间。
+
+---
+
+# 附：Codex 的解法（提交 `d4bf83e`，学习了它之后补记）
+
+> 我（上一任接手人）三次尝试都停在"调参"层面；Codex 这次是**改结构**。差别不在参数，在于**谁来驱动、在什么坐标系里驱动**。
+
+## 它做了四件事
+
+### ① 一个 tween 同时推「列表位置」和「聚焦进度」
+
+```kotlin
+private val LyricHandoff = tween<Float>(360, easing = SokuouTweens.CoverFade.easing)
+
+suspend fun handoff(goal: LyricFocusTarget, move: (Float) -> Unit = {}) {
+    val from = visualFocus
+    val source = from.weights()
+    animate(0f, 1f, animationSpec = LyricHandoff) { phase, _ ->
+        move(phase)                       // ← 同一帧里滚列表
+        visualFocus = if (phase == 1f) LyricFocusFrame(goal.index.toFloat(), goal) else {
+            LyricFocusFrame(lerp(from.center, goal.index.toFloat(), phase), goal, source, phase)
+        }                                 // ← 同一帧里更新聚焦
+    }
+}
+// 调用侧：scroll { handoff(goal) { phase -> scrollBy(travel * phase - applied); … } }
+```
+
+**我用两条时间线**（`smoothCurrentIndex: Animatable` 管缩放、`animateScrollToItem`/自绘 `scrollBy` 管滚动），
+它们永远差半拍；它把两者塞进**同一个 `animate` 回调的同一帧**，物理上不可能错拍。
+
+### ② 聚焦是 `source → target` 的交叉，而不是「从 A 跳到 B」
+
+```kotlin
+fun emphasis(row: Int) = lerp(source[row] ?: 0f, if (row == target.index) target.strength else 0f, phase)
+fun weights() = buildMap { for (row in source.keys + target.index) { … } }   // 只列"画面上已有的行"
+```
+
+`source` 是**打断瞬间画面上的权重表**。因此：
+- 密集短句被打断 → 新动画从"屏幕上现在的样子"接续，不跳
+- 跨段 seek → 只点亮起点与终点，**被跳过的中间行不会被误点亮**
+
+我原来的模型只有"当前 index"这一个整数 + 一个连续量，天然表达不了"两个行同时处于半亮"。
+
+### ③ 每句保留自己的排版（这是硬切的另一半根因）
+
+```kotlin
+val fontScale = line.fontScale            // 固定，不随"是不是当前行"变
+val textStyle = TextStyle(fontSize = fontSize * fontScale, …)
+// 放大只发生在绘制层：
+var scale = lerp(baseScale, 1f, emphasis()); scaleX = scale; scaleY = scale
+```
+
+我在竖屏踩的坑：切句时把上下文小字换成卡拉 OK 大字布局 → **行高当场变化** → 列表必须瞬移 → 硬切。
+它反过来：**行高恒定**，只缩绘制。位置可预测，滚动距离能跟缩放同一个 phase 走。
+逐字扫光、侧边光轨（`cueRail(emphasis=…)`）、三点入唱全部留在同一页。
+
+### ④ 景深放到字形绘制，不用逐行 `RenderEffect`
+
+```kotlin
+private fun DrawScope.drawDefocusedText(layout: TextLayoutResult, color: Color, radius: Float) {
+    if (radius < 0.4f) { drawText(layout, color = color); return }
+    // 同一份 TextLayoutResult 按 8 个方向低透明度重画 + 主画降 alpha = 廉价散景
+    drawText(layout, color = side,  topLeft = Offset(±radius, 0f)) … 8 次
+    drawText(layout, color = color.copy(alpha = color.alpha * (1f - 0.64f * spread)))
+}
+```
+
+半径变化**不重装滤镜、不把整行渲进离屏层**。这是它能做到"帧内连续变焦"、而我用
+`RenderEffect.createBlurEffect` 每帧新建 effect 会抖/掉帧的原因（任务描述里的"约半秒停顿"也是同源）。
+
+配套：
+- `defocus = maxDefocusPx * depth * (1f - emphasis())`，竖屏下方陡（`/1.9`）、上方缓（`/6`），横屏 `/2.4`
+- `userScrolling` 时 `defocus = 0`（拖动期间不做景深，省算力）
+
+### ⑤ 另外两处我没做到的细节
+
+- `snapshotFlow { LyricFollowRequest(target, viewport, userScrolling, rowMetrics) }` + `collectLatest`：
+  `rowMetrics`（译文主行 / 字号）变了先等两帧再量高度重新居中 —— 我版本里"字号变化后偏移"就是这么来的
+- 远距离定位藏在淡出里：`relocationAlpha` 1→0（`QuickSwitch`）→ `placeLine` → 0→1（`SheetAppear`）
+- 移除 `LYRIC_SWITCH_MS` 常量，改 `LyricHandoff`；`focusedRow` 回调签名加了 `emphasis` / `defocus` 两个 lambda
+
+## 结论：我的三次尝试错在哪
+
+| 维度 | 我的 4.0.11 / 4.0.12 / 4.0.13 | Codex `d4bf83e` |
+|---|---|---|
+| 时间线 | 缩放与滚动两条，靠"时长/曲线调成一样"去凑 | 同一 `animate` 回调里 `move(phase)` |
+| 中断 | 重启动画 ⇒ 从旧起点重来 | `source→target` 交叉，从当前画面接续 |
+| 行高 | 竖屏切布局 ⇒ 行高变 ⇒ 位置必跳 | 布局恒定，只缩绘制 |
+| 景深 | 逐行 `RenderEffect`（贵） | 字形 8 向重绘（便宜、无滤镜重装） |
+| 远距离 | `animateScrollToItem` 直接跳 | 淡出 → 定位 → 淡入 |
+
+**教训**：这类"两个视觉量必须同时到位"的过渡，调参救不回来 —— 必须让它们共享**同一个进度变量**，
+并且保证被动画的对象的**布局尺寸在动画期间不变**。
+
+## 交接状态更新（2026-11-05 晚）
+
+- 主线 `feat/4.0.0`：`ba60cd3`（测试整理）→ `d4bf83e`（本次修复），工作树版本号 `4.0.13 / 213`
+- JVM 单测 3,532 / 0 失败 / 4 跳过；Debug Lint 0 错误
+- QA 产物：`/home/duanjb666/deepseek/arris/dist/lyrics-switch-qa/handoff-comparison.mp4`（新旧同场景慢放）、
+  `handoff-frames.png`（逐帧对照）
+- **LTS（`lts/3.7`，3.7.31 / `defaad0`）仍是旧实现**（`smoothCurrentIndex` + `animateScrollBy`），
+  与主线已不同源；要同步请按本文件 §①–⑤ 重做
+- 真机帧率仍待实测（Codex 的流畅度数据来自隔离模拟器）
