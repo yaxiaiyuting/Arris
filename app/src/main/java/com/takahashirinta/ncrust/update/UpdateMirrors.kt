@@ -38,22 +38,26 @@ internal object UpdateMirrors {
     )
 
     /**
-     * Gitee 镜像（可选）。
+     * Gitee 镜像（镜像 4.0.10 起启用）。
      *
-     * Gitee 的 Release 附件直链是 `https://gitee.com/<owner>/<repo>/attach_files/<id>/download/<name>`，
-     * 和 tag 不是一个可拼的前缀，所以这里按**文件名 → 完整直链**建表，由
-     * `tools/gitee` 上传后回填。表里没有的文件名会退回 [GITEE_BASE] + "/" + name。
+     * 实测确认：Gitee 的 Release 附件直链是**可拼的** ——
+     * `https://gitee.com/<owner>/<repo>/releases/download/<tag>/<file>`，
+     * 与 GitHub 的形状一致（上传接口返回的 browser_download_url 就是这个）。
+     * 所以只要 tag 与文件名对得上就能拼，不需要按 id 建表。
+     *
+     * 特殊文件名（或临时指到别的 tag）仍可用 [GITEE_ASSETS] 覆盖。
      */
     val GITEE_ASSETS: Map<String, String> = emptyMap()
 
-    /** 兜底前缀（形如 `https://gitee.com/<owner>/<repo>/releases/download/<tag>`）。 */
-    const val GITEE_BASE: String = ""
+    /** 仓库前缀；空串 = 未启用 Gitee 镜像。 */
+    const val GITEE_BASE: String = "https://gitee.com/yaxiaiyuting/arris/releases/download"
 
-    fun giteeAsset(assetName: String?): String? {
+    fun giteeAsset(tag: String?, assetName: String?): String? {
         if (assetName.isNullOrBlank()) return null
         GITEE_ASSETS[assetName]?.let { return it }
         if (GITEE_BASE.isBlank()) return null
-        return GITEE_BASE.trimEnd('/') + "/" + assetName
+        val t = tag?.takeIf { it.isNotBlank() } ?: return null
+        return "${GITEE_BASE.trimEnd('/')}/$t/$assetName"
     }
 
     /**
@@ -69,7 +73,7 @@ internal object UpdateMirrors {
     ): List<String> {
         val out = LinkedHashSet<String>()
         if (siteUrl.isNotBlank()) out += siteUrl
-        giteeAsset(assetName)?.let { out += it }
+        giteeAsset(tag, assetName)?.let { out += it }
         githubAsset(tag, assetName)?.let { gh ->
             GH_PROXIES.forEach { prefix -> out += prefix + gh }
         }
