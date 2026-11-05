@@ -1,0 +1,6 @@
+I09/I10: malformed feeds are rejected and an eligible LTS asset survives a mixed release.
+I15: cancellation cancels the HTTP Call before its interceptor is released.
+Production recognition provider: empty 503 now correctly classified as server error (I16).
+I16: unreadable 503 body is not opened and status stays a server error.
+I14: pre-handshake data rejected; two real links authenticate, deliver and acknowledge after an outsider packet.
+All HTTP responses are interceptor doubles. UDP stayed on loopback; no real network, microphone, or account.

@@ -48,6 +48,9 @@ export async function serveRangedAsset(request, assets, assetUrl, { size, cacheC
   const headers = new Headers(asset.headers);
   headers.set('accept-ranges', 'bytes');
   if (cacheControl) headers.set('cache-control', cacheControl);
+  if (request.method === 'HEAD' && size != null && !headers.has('content-length')) {
+    headers.set('content-length', String(size));
+  }
   const etag = headers.get('etag');
   const noneMatch = request.headers.get('if-none-match');
   const tags = noneMatch?.match(/(?:W\/)?"[^"]*"|\*/g);

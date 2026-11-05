@@ -14,6 +14,9 @@ const bindings = { ASSETS: { async fetch(request) {
 } } };
 const get = (path, headers) => worker.fetch(new Request('https://audit.invalid' + path, { headers }), bindings);
 const apk = '/get/latest.apk';
+const head = await worker.fetch(new Request('https://audit.invalid' + apk, { method: 'HEAD' }), bindings);
+assert.equal(head.headers.get('content-length'), String(data.length));
+assert.equal(await head.text(), '');
 let r = await get(apk, { range: 'bytes=-3' });
 assert.equal(r.status, 206);
 assert.equal(r.headers.get('content-range'), `bytes ${data.length - 3}-${data.length - 1}/${data.length}`);

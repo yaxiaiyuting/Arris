@@ -175,7 +175,7 @@ export default {
       return dir.fetch("https://directory/list");
     }
     // /room/<roomId>?role=host|member&name=昵称
-    const m = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,32})$/);
+    const m = url.pathname.match(/^\/room\/([a-f0-9]{24})$/);
     // 其余路径交给静态资源（manifest.json 等）；不存在时由资产层自然 404。
     if (!m) return env.ASSETS.fetch(request);
     if (request.headers.get("Upgrade") !== "websocket") {
@@ -201,9 +201,8 @@ export class Directory {
 
   async fetch(request) {
     const url = new URL(request.url);
-    const rooms = (await this.state.storage.get("rooms")) || {};
-
     if (url.pathname === "/list") {
+      const rooms = (await this.state.storage.get("rooms")) || {};
       const now = Date.now();
       const alive = Object.entries(rooms)
         .filter(([, r]) => now - r.seenAt < 90_000)
@@ -212,6 +211,7 @@ export class Directory {
     }
     if (url.pathname === "/beat") {
       const body = await request.json();
+      const rooms = (await this.state.storage.get("rooms")) || {};
       rooms[body.roomId] = {
         session: body.session,
         host: body.host || "",
@@ -228,6 +228,7 @@ export class Directory {
     }
     if (url.pathname === "/drop") {
       const id = url.searchParams.get("roomId");
+      const rooms = (await this.state.storage.get("rooms")) || {};
       if (id && rooms[id]?.session === url.searchParams.get("session")) {
         delete rooms[id];
         await this.state.storage.put("rooms", rooms);
@@ -259,7 +260,7 @@ export class Room {
   sockets(session) {
     return this.state.getWebSockets().filter(ws => {
       const meta = ws.deserializeAttachment();
-      return meta && !meta.closed && (!session || meta.session === session);
+      return meta?.session && !meta.closed && (!session || meta.session === session);
     });
   }
 
