@@ -32,7 +32,6 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.widget.Toast
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.MarqueeAnimationMode
@@ -108,7 +107,6 @@ import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.player.motion.MotionEffects
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
-import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroSelectorFlyout
@@ -379,11 +377,6 @@ internal fun ColumnScope.PlayerCardExpanded(
                     ) {
                         // 切歌时旧歌词渐隐、新歌词渐显（Sokuou UWP 缓动）。
                         // key = song?.id：同一首歌的歌词更新不触发 Crossfade, 只换内容。
-                        Crossfade(
-                            targetState = song?.id,
-                            animationSpec = SokuouTweens.CoverFade,
-                            label = "LyricsCrossfade"
-                        ) { _ ->
                             LyricsView(
                                 lyrics = lyrics,
                                 translatedLyrics = translatedLyrics,
@@ -420,7 +413,6 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 // 隔离，但把口径写全比依赖那个不变量便宜）。
                                 trackKey = song?.let { "${it.source}:${it.id}" },
                             )
-                        }
                     }
 
                     // 列表面板：translationX 从 +screenWidthPx 滑至 0，稳定态时完全在屏幕外
