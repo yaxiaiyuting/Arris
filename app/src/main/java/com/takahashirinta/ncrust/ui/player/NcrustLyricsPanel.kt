@@ -293,6 +293,9 @@ internal fun NcrustLyricsPanel(
     //    换成 state map 会让每次布局都触发一次面板重组 —— 那是本仓库明令禁止的动画期重组。
     // ─────────────────────────────────────────────────────────────────────
     val itemHeights = remember { HashMap<Int, Int>() }
+    // 4.0.13：上一次"摆放的目标行"。相邻行平滑滚动必须跟它比 ——
+    // `firstVisibleItemIndex` 是视口最上面那一行，跟当前行差着 2~3 行，相邻判定永远不成立。
+    val lastPlaced = remember { intArrayOf(-1) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo }
             .collect { infos ->
@@ -325,6 +328,7 @@ internal fun NcrustLyricsPanel(
      * 多一段动画反而会看出「跳到位再弹一下」。
      */
     suspend fun placeLine(targetItemIndex: Int, viewportHeightPx: Int) {
+        lastPlaced[0] = targetItemIndex
         listState.scrollToItem(targetItemIndex, offsetFor(targetItemIndex, viewportHeightPx))
         if ((itemHeights[targetItemIndex] ?: -1) > 0) return
         withFrameNanos { }
@@ -388,6 +392,26 @@ internal fun NcrustLyricsPanel(
                 ?.let { itemHeights[targetItemIndex] = it.size }
         }
         listState.animateScrollToItem(targetItemIndex, offsetFor(targetItemIndex, viewportHeightPx))
+    }
+
+    /**
+     * 4.0.13：按 [LYRIC_SWITCH_MS] + 同一条减速曲线把列表推 [total] 像素。
+     *
+     * 为什么不用 `animateScrollToItem`：它没有时长参数，对一行的位移 150~200ms 就滑完，
+     * 和缩放动画不同步 —— 这就是"硬切"的观感来源。这里自己和缩放用同一个时长与曲线。
+     */
+    suspend fun animateScrollBy(total: Float) {
+        val frames = (LYRIC_SWITCH_MS / 16L).coerceAtLeast(1L).toInt()
+        var applied = 0f
+        for (i in 1..frames) {
+            val t = i.toFloat() / frames
+            // 与 graphicsLayer 用的曲线同一个手感：前快后收
+            val eased = 1f - (1f - t) * (1f - t) * (1f - t)
+            val want = total * eased
+            listState.scrollBy(want - applied)
+            applied = want
+            withFrameNanos { }
+        }
     }
 
     // 换歌 / 换歌词表：清状态 + 把当前行重新定位。
