@@ -994,8 +994,17 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val url = intent?.getStringExtra("url")
-        if (url != null && (!roomOwnsPlayback(intent) || intent.hasExtra("playRevision") &&
-            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1)))) return START_NOT_STICKY
+        if (url != null && !roomOwnsPlayback(intent)) {
+            // The request may have started a new foreground service before the member left.
+            // Satisfy Android's foreground-start contract before stopping this unused instance.
+            if (!isServiceStarted) {
+                updateNotify()
+                if (isServiceStarted) stopSelfResult(startId)
+            }
+            return START_NOT_STICKY
+        }
+        if (url != null && intent.hasExtra("playRevision") &&
+            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
         val title = intent?.getStringExtra("title")
         val artist = intent?.getStringExtra("artist")
         val artwork = intent?.getStringExtra("artwork")
