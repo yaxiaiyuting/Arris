@@ -3,6 +3,15 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.0.5-gpl — 播放页、卡拉 OK 跟唱与背景呼吸（测试）
+
+主线测试包 · Android 10 及以上 · versionCode 205
+
+- 更新 Tux 启动图标和播放器按钮，把进度条与传输键放回整页背景。
+- 歌词页新增全屏跟唱。按现有时间轴显示逐字高亮或 LRC 整行高亮，预显下一句，有译文时可切换主行。
+- 背景呼吸从封面取色。低频改变色光范围，中高频轻推亮度；Android 13 及以上可选流体样式。
+- GitHub 保持草稿，官网提供独立测试直链。
+
 ## v4.0.4-gpl — 播放与更新稳定性、一起听协议修复（2026-11-05）
 
 主线正式版 · Android 10 及以上 · versionCode 204
