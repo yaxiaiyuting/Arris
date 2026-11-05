@@ -1,5 +1,7 @@
 package com.takahashirinta.ncrust.update
 
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,5 +41,22 @@ class ReleaseChannelTest {
     fun `主线用户能跨 minor 升级`() {
         assertTrue(UpdateChecker.sameChannel("v3.9.0-gpl", v(3, 9, 0), v(3, 8, 3)))
         assertTrue(UpdateChecker.sameChannel("v3.8.4-gpl", v(3, 8, 4), v(3, 8, 3)))
+    }
+    @Test
+    fun `rolling LTS skips an accidentally attached mainline asset`() {
+        val json = """[{"tag_name":"lts-3.7","assets":[
+            {"name":"Arris-v4.0.4-gpl.apk","browser_download_url":"https://example.invalid/main"},
+            {"name":"Arris-v3.7.27-gpl.apk","browser_download_url":"https://example.invalid/lts"}
+        ]}]"""
+        assertEquals(v(3, 7, 27), UpdateChecker.find(json, v(3, 7, 26))?.version)
+        assertNull(UpdateChecker.find(json, v(4, 0, 3)))
+    }
+
+    @Test
+    fun `malformed release pages must fall back instead of reporting current`() {
+        val current = v(4, 0, 4)
+        assertNull(evaluateReleases(listOf("[1]"), current))
+        assertNull(evaluateReleases(listOf("[]", """[{"tag_name":"v4.0.4-gpl","assets":{}}]"""), current))
+        assertEquals(CheckOutcome.UpToDate, evaluateReleases(listOf("[]"), current))
     }
 }

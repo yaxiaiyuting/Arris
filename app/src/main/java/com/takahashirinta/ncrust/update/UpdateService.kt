@@ -35,6 +35,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -362,7 +363,7 @@ object UpdateService {
         }
         val appContext = context.applicationContext
         val directory = File(appContext.cacheDir, DOWNLOAD_DIR)
-        val active = UpdateDownloader(directory)
+        val active = UpdateDownloader(directory).apply { reserve(fileNameOf(info)) }
         downloader = active
         activeTarget = target
         val generation = downloadGeneration.incrementAndGet()
@@ -512,22 +513,25 @@ object UpdateService {
         val parsed = runCatching { com.google.gson.JsonParser.parseString(text) }.getOrNull() ?: return text
         if (!parsed.isJsonObject) return text
         val obj = parsed.asJsonObject
-        val version = obj.get("version")?.takeIf { !it.isJsonNull }?.asString ?: return text
+        val version = obj.get("version")
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString ?: return text
+        val apk = obj.get("apk")?.takeIf { it.isJsonObject }?.asJsonObject ?: return text
+        val name = apk.get("name")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+        val url = apk.get("url")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+        if (ForkRelease.parseTag(version) == null || name == null || ForkRelease.parseAsset(name) == null ||
+            url.isNullOrBlank() || url.toHttpUrlOrNull() == null) return text
         val release = com.google.gson.JsonObject()
         release.addProperty("tag_name", version)
         obj.get("publishedAt")?.let { release.add("published_at", it) }
         obj.get("pageUrl")?.let { release.add("html_url", it) }
         obj.get("body")?.let { release.add("body", it) }
         val assets = com.google.gson.JsonArray()
-        val apk = obj.get("apk")?.takeIf { it.isJsonObject }?.asJsonObject
-        if (apk != null) {
-            val a = com.google.gson.JsonObject()
-            a.addProperty("id", 0L)
-            apk.get("name")?.let { a.add("name", it) }
-            apk.get("size")?.let { a.add("size", it) }
-            apk.get("url")?.let { a.add("browser_download_url", it) }
-            assets.add(a)
-        }
+        val asset = com.google.gson.JsonObject()
+        apk.get("id")?.let { asset.add("id", it) }
+        asset.addProperty("name", name)
+        apk.get("size")?.let { asset.add("size", it) }
+        asset.addProperty("browser_download_url", url)
+        assets.add(asset)
         release.add("assets", assets)
         val array = com.google.gson.JsonArray()
         array.add(release)

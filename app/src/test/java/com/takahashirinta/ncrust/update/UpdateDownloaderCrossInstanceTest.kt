@@ -104,6 +104,34 @@ class UpdateDownloaderCrossInstanceTest {
         }
     }
 
+    @Test
+    fun `a replacement probing ranges already owns the target`() {
+        val server = GatedServer(slowBody, fastBody).also { it.start() }
+        try {
+            val url = "http://127.0.0.1:${server.port}/asset.apk"
+            val older = UpdateDownloader(directory)
+            val failure = AtomicReference<Throwable?>()
+            val first = Thread {
+                failure.set(runCatching { older.download(url, fileName) { _, _ -> } }.exceptionOrNull())
+            }.apply { isDaemon = true; start() }
+            assertTrue(server.firstBodyStarted.await(10, TimeUnit.SECONDS))
+
+            // The successor hasn't started writing while it decides whether to use ranges.
+            val replacement = UpdateDownloader(directory).apply { reserve(fileName) }
+            server.release()
+            first.join(15_000)
+            assertFalse(first.isAlive)
+            assertTrue(failure.get() is DownloadCancelledException)
+            assertFalse(File(directory, fileName).exists())
+
+            val result = replacement.download(url, fileName) { _, _ -> }
+            assertArrayEquals(fastBody, result.readBytes())
+        } finally {
+            server.release()
+            server.stop()
+        }
+    }
+
     /**
      * 键取**目标文件绝对路径**而不是裸文件名：不同目录下的同名文件互不构成竞态域。
      *

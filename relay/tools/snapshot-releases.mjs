@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HOSTED_APK } from '../src/dl-manifest.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'public/api-fallback');
@@ -21,16 +22,17 @@ import { execFileSync } from 'node:child_process';
 
 let raw;
 try {
-  const out = execFileSync('gh', ['api', '--paginate', 'repos/yaxiaiyuting/Arris/releases?per_page=100'], {
+  const out = execFileSync('gh', ['api', '--paginate', '--slurp', 'repos/yaxiaiyuting/Arris/releases?per_page=100'], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, http_proxy: process.env.http_proxy || 'http://127.0.0.1:7890', https_proxy: process.env.https_proxy || 'http://127.0.0.1:7890' },
   });
-  raw = JSON.parse(out);
+  raw = JSON.parse(out).flat();
 } catch (e) {
   console.error('snapshot failed:', String(e.message || e).split('\n')[0]);
   process.exit(1);
 }
+const hosted = new Set(HOSTED_APK);
 const BODY_KEEP = 5; // 只留最近 5 条的更新说明：裸连 RTT 560ms，体积就是可用性
 const list = raw.filter((r) => r && !r.draft).map((r, index) => ({
   tag_name: r.tag_name,
@@ -40,10 +42,15 @@ const list = raw.filter((r) => r && !r.draft).map((r, index) => ({
   published_at: r.published_at,
   html_url: r.html_url,
   site_url: 'https://arris.de5.net/#download',
-  body: index < BODY_KEEP && typeof r.body === 'string' ? r.body.slice(0, 4000) : '',
+  body: (index < BODY_KEEP || r.tag_name === 'lts-3.7') && typeof r.body === 'string' ? r.body.slice(0, 4000) : '',
   assets: (r.assets || [])
     .filter((a) => a && /\.apk$/i.test(a.name || ''))
-    .map((a) => ({ id: a.id, name: a.name, size: a.size, browser_download_url: '' })),
+    .map((a) => ({
+      id: a.id, name: a.name, size: a.size,
+      browser_download_url: hosted.has(a.name)
+        ? `https://arris.de5.net/get/${encodeURIComponent(a.name)}`
+        : a.browser_download_url,
+    })),
 }));
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(outFile, JSON.stringify({ generatedAt: new Date().toISOString(), releases: list }, null, 1) + '\n');

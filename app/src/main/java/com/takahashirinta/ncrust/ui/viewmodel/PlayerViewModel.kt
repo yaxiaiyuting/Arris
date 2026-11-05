@@ -1638,7 +1638,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         origin: PlayOrigin = PlayOrigin.USER,
         // 移植 981e9b3：歌曲详情的 privilege（无版权判定靠 st）。默认 null 让既有调用点零改动。
         privilege: SongPrivilege? = null,
+        roomGeneration: Long? = null,
+        startPlaying: Boolean = true,
     ) {
+        fun roomStillOwnsRequest() = roomGeneration == null ||
+            com.takahashirinta.ncrust.listen.TogetherSession.isCurrentFollow(roomGeneration)
+        if (!roomStillOwnsRequest()) return
         if (origin == PlayOrigin.USER || origin == PlayOrigin.AUTO_NEXT) {
             listeningClock.restartOnNextBegin(songId)
         }
@@ -1693,6 +1698,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val wait = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                     putExtra("action", "wait_for_url")
                     putExtra("playRevision", fetchVersion)
+                    roomGeneration?.let {
+                        putExtra("roomGeneration", it)
+                        putExtra("startPlaying", startPlaying)
+                    }
                 }
                 getApplication<Application>().startService(wait)
             }
@@ -1763,7 +1772,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         lastSavedPositionMs = resumeMs
         currentPosition.value = resumeMs
         resumedFromMs.value = resumeMs
-        if (resumeMs > 0) {
+        if (resumeMs > 0 && roomGeneration == null) {
             // GUI 提示：明确告诉用户这是「从上次退出的时间点续播」，
             // 而不是进度条/歌词出了错（B4）。
             val app = getApplication<Application>()
@@ -1824,6 +1833,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentSongArtwork.value = artworkUrl
             val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                 putExtra("playRevision", playGate.current)
+                roomGeneration?.let {
+                    putExtra("roomGeneration", it)
+                    putExtra("startPlaying", startPlaying)
+                }
                 putExtra("url", cachedEntry.url)
                 putExtra("title", title)
                 putExtra("artist", artist)
@@ -1839,8 +1852,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 getApplication<Application>().startForegroundService(intent)
             else
                 getApplication<Application>().startService(intent)
-            isPlaying.value = true
-            PlaybackStateManager.saveState(
+            isPlaying.value = startPlaying
+            if (roomGeneration == null) PlaybackStateManager.saveState(
                 getApplication(), songId, title, artist, artworkUrl, true,
                 sourceKey = ref.source, sourceId = sourceId, mediaId = mediaId,
             )
@@ -1859,7 +1872,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // ★ 移植 981e9b3：**过期的取链结果不能盖新歌**。
                     // 旧代码在版本检查之前就调 onUrlUnavailable，于是一次过期取链会替
                     // 用户刚点的那首弹「已跳过 / 失败」提示，甚至把新歌跳掉。
-                    if (!playGate.isCurrent(fetchVersion)) {
+                    if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) {
                         Log.i(
                             TAG_TRACK,
                             "fetch failure DISCARDED (superseded): songId=$songId gen=$fetchVersion " +
@@ -1890,7 +1903,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             "entitlement=$entitlement failure=${outcome.failure?.kind}",
                     )
                     withContext(Dispatchers.Main) {
-                        if (!playGate.isCurrent(fetchVersion)) return@withContext
+                        if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) return@withContext
                         onUrlUnavailable(songId, selectedQuality, origin, outcome.failure)
                     }
                     return@launch
@@ -1898,7 +1911,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // 取链期间若有更新的 playSong / 预载接管发生(版本号已前进),
                 // 本次结果作废: 再发一次 "url" intent 会让 ExoPlayer setMediaItem
                 // 把同一首歌重播一遍 —— 就是"听起来像拖带"的卡顿。
-                if (!playGate.isCurrent(fetchVersion)) {
+                if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) {
                     // v3.3.2 · P0：这条丢弃**以前是静默的**（一行日志都没有）。
                     // 它正是「点了歌却没切」最容易被误判成「点击没到达」的一处，
                     // 所以必须留下「谁作废了谁」这个事实。
@@ -1916,7 +1929,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (entitlement != null && actionFor(entitlement) == EntitlementAction.SKIP_TRIAL) {
                     val reason = (entitlement as PlaybackEntitlement.Trial).reason
                     withContext(Dispatchers.Main) {
-                        if (!playGate.isCurrent(fetchVersion)) return@withContext
+                        if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) return@withContext
                         emitTrialSkip(songId, title, reason)
                         if (autoSkipGuard.requestAutoSkip()) {
                             onUnplayableCallback?.invoke()
@@ -1932,7 +1945,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 // 这里**只**替换播放列表。原先那两行（reset + launch）留在这里的含义是
                 // 「等取链回来再开始取词」—— 那正是本版要拆掉的串行。
                 withContext(Dispatchers.Main) {
-                    if (!playGate.isCurrent(fetchVersion)) return@withContext
+                    if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) return@withContext
                     recovery.resolved()
                     applyQualityVerdict(selectedQuality, result)
                     entitlement?.let { applyPlayableEntitlement(songId, it, result.actualLevel) }
@@ -1943,6 +1956,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
                     val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                         putExtra("playRevision", playGate.current)
+                        roomGeneration?.let {
+                            putExtra("roomGeneration", it)
+                            putExtra("startPlaying", startPlaying)
+                        }
                         putExtra("url", result.url)
                         putExtra("title", title)
                         putExtra("artist", artist)
@@ -1957,7 +1974,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         getApplication<Application>().startForegroundService(intent)
                     else
                         getApplication<Application>().startService(intent)
-                    isPlaying.value = true
+                    isPlaying.value = startPlaying
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // v2.1.5：协程取消**不是**错误，必须原样抛出。
@@ -1969,8 +1986,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: Exception) {
                 Log.e("PlayerViewModel", "fetchUrl failed", e)
                 withContext(Dispatchers.Main) {
-                    if (playGate.isCurrent(fetchVersion)) onUrlUnavailable(songId, selectedQuality, origin,
+                    if (playGate.isCurrent(fetchVersion) && roomStillOwnsRequest()) onUrlUnavailable(songId, selectedQuality, origin,
                         ResolveFailure(ResolveFailureKind.NETWORK, track.source))
+                }
+            } finally {
+                if (!roomStillOwnsRequest()) withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main) {
+                    if (playGate.isCurrent(fetchVersion)) isBuffering.value = false
                 }
             }
         }

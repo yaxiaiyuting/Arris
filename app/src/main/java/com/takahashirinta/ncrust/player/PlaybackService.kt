@@ -890,6 +890,10 @@ class PlaybackService : MediaLibraryService() {
         }.onFailure { Log.w("PlaybackService", "cancel stale media3 notification failed", it) }
     }
 
+    private fun roomOwnsPlayback(intent: Intent): Boolean =
+        !intent.hasExtra("roomGeneration") || com.takahashirinta.ncrust.listen.TogetherSession
+            .isCurrentFollow(intent.getLongExtra("roomGeneration", -1L))
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val platformResult = super.onStartCommand(intent, flags, startId)
         // Public media-session commands remain handled by Media3; custom start extras are private.
@@ -948,6 +952,7 @@ class PlaybackService : MediaLibraryService() {
                 return START_NOT_STICKY
             }
             "wait_for_url" -> {
+                if (!roomOwnsPlayback(intent)) return START_NOT_STICKY
                 if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
                 clearPendingNext()
                 player.stop()
@@ -989,8 +994,8 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val url = intent?.getStringExtra("url")
-        if (url != null && intent.hasExtra("playRevision") &&
-            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+        if (url != null && (!roomOwnsPlayback(intent) || intent.hasExtra("playRevision") &&
+            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1)))) return START_NOT_STICKY
         val title = intent?.getStringExtra("title")
         val artist = intent?.getStringExtra("artist")
         val artwork = intent?.getStringExtra("artwork")
@@ -1032,13 +1037,14 @@ class PlaybackService : MediaLibraryService() {
             // QQ 曲目就再也取不到链，只能吃离线缓存里那条**别的档位**的旧 URL ——
             // 用户看到的就是「选了母带，播出来是无损」以及随后的循环重试。
             // 与 `mediaSourceKey/mediaSourceId/mediaMediaId` 同源，直接用这三个字段。
+            val startPlaying = intent?.getBooleanExtra("startPlaying", true) ?: true
             PlaybackStateManager.saveState(
-                this, songId, mediaTitle, mediaArtist, currentArtworkUrl ?: "", true,
+                this, songId, mediaTitle, mediaArtist, currentArtworkUrl ?: "", startPlaying,
                 sourceKey = mediaSourceKey,
                 sourceId = mediaSourceId,
                 mediaId = mediaMediaId,
             )
-            playUrl(url, startPositionMs)
+            playUrl(url, startPositionMs, startPlaying)
         } else if (!isServiceStarted && mediaTitle != "Arris") {
             updateNotify()
         }
@@ -1258,7 +1264,7 @@ class PlaybackService : MediaLibraryService() {
     fun currentOfflineContent(): com.takahashirinta.ncrust.cache.OfflineContent? =
         player.currentMediaItem?.localConfiguration?.uri?.toString()?.let { OfflineUrlStore.contentForUrl(this, it) }
 
-    private fun playUrl(url: String, startPositionMs: Long = 0L) {
+    private fun playUrl(url: String, startPositionMs: Long = 0L, startPlaying: Boolean = true) {
         // 只记 songId/标题：取链 URL 带签名参数与 authSecret，不能进 logcat（release 也会打）。
         Log.d(
             "PlaybackService",
@@ -1274,8 +1280,8 @@ class PlaybackService : MediaLibraryService() {
         artworkPreloadGeneration++
         val mediaItem = buildCurrentMediaItem(url)
         player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
+        player.playWhenReady = startPlaying
         player.prepare()
-        player.playWhenReady = true
         // 手动起播（点歌 / 下一首 / 上一首 / 降档重试）的「开始播放」时点。
         // 重复上报由 PlayerViewModel 按 songId 去重，这里不做业务判断。
         mediaSongId?.takeIf { it > 0L }?.let { onTrackStarted?.invoke(it) }

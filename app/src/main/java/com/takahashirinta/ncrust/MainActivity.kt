@@ -12,6 +12,7 @@
  */
 
 package com.takahashirinta.ncrust
+import com.takahashirinta.ncrust.listen.PlaybackSnapshot
 import com.takahashirinta.ncrust.ui.player.QueueMoveCommit
 import com.takahashirinta.ncrust.ui.player.TrayLayout
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
@@ -795,7 +796,6 @@ internal fun reasonText(
 }
 
 /** 播放模式：0=顺序循环, 1=单曲循环, 2=乱序, 3=顺序线性(播完停), 4=相似无限(FM 电台)。 */
-/** 跟随同一首歌的最小间隔：避免每秒快照反复触发起播。 */
 
 object QueueModes {
     const val CYCLE = 0
@@ -1070,7 +1070,7 @@ fun MainScreen(
     // playSongItem 是本 composable 里更靠后才定义的局部函数，桥接层不能直接引用 ——
     // 用持有者在它定义之后再赋值（见紧随 playSongItem 的 SideEffect）。
     val playItemHolder = androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
+        androidx.compose.runtime.mutableStateOf<((SongItem, PlaybackSnapshot) -> Unit)?>(null)
     }
     /** 房主侧：队列里的下一首（供一起听同步「下一首」用）。 */
     val nextItemHolder = androidx.compose.runtime.remember {
@@ -1239,7 +1239,7 @@ fun MainScreen(
                         return@launchFollow
                     }
                     val play = playItemHolder.value ?: return@launchFollow
-                    play(target)
+                    play(target, activeFollow?.takeIf { sameRequest(it, snapshot) } ?: return@launchFollow)
                     resolvedLocal = QueueKeys.keyOf(target)
                     val playEpoch = com.takahashirinta.ncrust.player.playRequestGeneration.current
                     repeat(60) {
@@ -1804,7 +1804,7 @@ fun MainScreen(
      */
     // Repeated skips advance the queue cursor immediately; only the final selection starts IO.
     var deferQueueStart = false
-    fun playFromQueue(index: Int, origin: PlayOrigin = PlayOrigin.USER) {
+    fun playFromQueue(index: Int, origin: PlayOrigin = PlayOrigin.USER, roomSnapshot: PlaybackSnapshot? = null) {
         if (index in playbackQueue.indices) {
             currentQueueIndex = index
             // v2.0.0 · T1-C：乱序游标必须跟着走。从队列面板手动点歌原先只改 currentQueueIndex，
@@ -1828,7 +1828,8 @@ fun MainScreen(
             )
             val selectedQueue = playbackQueue
             val startSelected: () -> Unit = {
-                if (playbackQueue === selectedQueue && currentQueueIndex == index) {
+                if (playbackQueue === selectedQueue && currentQueueIndex == index &&
+                    (roomSnapshot == null || com.takahashirinta.ncrust.listen.TogetherSession.isCurrentFollow(roomSnapshot.followGeneration))) {
                     // 明确指定要播的歌优先于「续播起播」意图：别让在途的 FM 续播把它顶掉。
                     infinityNeedsPlay.value = false
                     playerViewModel.playSong(
@@ -1841,6 +1842,9 @@ fun MainScreen(
                         mediaId = song.mediaId,
                         origin = origin,
                         privilege = song.privilege,
+                        startPositionMs = roomSnapshot?.positionMs ?: -1L,
+                        roomGeneration = roomSnapshot?.followGeneration,
+                        startPlaying = roomSnapshot?.playing ?: true,
                     )
                     PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
 
@@ -2289,7 +2293,7 @@ fun MainScreen(
      * 现在那条分支会走兜底（追加到队尾并播它），且 [QueueKeys.PlayItemPlan.fallbackUsed]
      * 为 true 时这里会留一条 warning —— 它是这类报告唯一的诊断锚点。
      */
-    fun playSongItem(song: SongItem) {
+    fun playSongItem(song: SongItem, roomSnapshot: PlaybackSnapshot? = null) {
         val plan = QueueKeys.planPlayItem(playbackQueue, currentQueueIndex, song)
         if (plan.queueChanged) {
             playerViewModel.invalidatePreload()
@@ -2307,7 +2311,7 @@ fun MainScreen(
                     "-> appended to tail and played (queue=${playbackQueue.size})",
             )
         }
-        playFromQueue(plan.playIndex)
+        playFromQueue(plan.playIndex, roomSnapshot = roomSnapshot)
         expandCard()
     }
 
@@ -2338,7 +2342,7 @@ fun MainScreen(
      */
     // 桥接层拿到真实的「播放某一首」入口（一起听跨曲跟随用）
     androidx.compose.runtime.SideEffect {
-        playItemHolder.value = { song -> playSongItem(song) }
+        playItemHolder.value = { song, snapshot -> playSongItem(song, snapshot) }
         // 队列里的下一首：房主广播时带上，成员据此提前准备
         nextItemHolder.value = playbackQueue.getOrNull(currentQueueIndex + 1)
     }
