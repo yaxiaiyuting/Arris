@@ -15,25 +15,23 @@
 
 package com.takahashirinta.ncrust.ui.player
 
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,17 +61,18 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
@@ -83,6 +82,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,41 +99,10 @@ import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.SweepGeometry
 import com.takahashirinta.ncrust.lyric.SweepSample
 import com.takahashirinta.ncrust.lyric.SweepTrack
-import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 
-/**
- * Metro 歌词面板 -- 左对齐大字,直接复刻 Ncrust 接入前的 LazyColumn 实现,
- * 叠加 Apple Music 式渐入加载。
- *
- * 静态 / 强调(复刻原版):
- *  - 左对齐 32sp 粗体;lineHeight 42sp;行间同字号。
- *  - 颜色离散:当前行 primary、过去行 White@0.6、未来行 Gray@0.4(alpha 烤进颜色,
- *    不走 graphicsLayer alpha,与原版一致)。
- *  - 缩放连续:单个 `smoothCurrentIndex: Animatable<Float>` 在跨行时用 QuickSwitch
- *    (180ms FastOutSlowIn,等同原版 tween(180, FastOutSlowInEasing))从旧行号滑到
- *    新行号;每行 graphicsLayer 按 `dist = abs(index - smoothCurrentIndex.value)` 连续
- *    算 `scale = lerp(1.0, 0.82, (dist/1.8).coerceIn(0,1))`,锚点左侧 TransformOrigin(0, 0.5)。
- *    行 i 退场与行 i+1 进场是同一时刻的连续交接,无翻转瞬间。
- *
- * 渐入加载(新增):歌词从空 -> 非空(或换歌)时,整面板 alpha 0 -> 1 用 CoverFade
- * (400ms CubicBezier(0.2,0,0,1))渐入;未完成时是空的,符合 Apple "没加载完是空的,
- * 然后渐入"。无弹簧、无过冲、无颜色动画。
- *
- * 性能:`smoothCurrentIndex.value` 与 `fadeIn.value` 只在 graphicsLayer lambda 里读,
- * 动画帧内零重组;面板只在离散当前行索引变化时重组(LazyColumn 懒渲染,离屏行不组合)。
- *
- * 滚动交互沿用原版:当前行自动滚到视口 36% 高处(animateScrollToItem,有动画);
- * 用户手动滚动暂停自动跟随 5 秒后恢复;面板显现瞬间 snap 到当前行;点某行回调
- * [onLineClick](tap-to-seek)。
- *
- * @param isVisible 首次变为 true 时瞬间跳到当前行,不等自动滚动慢慢滚过去。
- * @param currentPositionMillis draw phase / derived 阶段读取的播放位置(ms),
- *   内部必须读 snapshot state;面板据此二分定位当前行,只在跨行时重组。
- */
 @Immutable
 data class NcrustLyricLine(
     val timestampMillis: Long,
@@ -154,13 +123,38 @@ data class NcrustLyricLine(
     val fontScale: Float = 1f,
 )
 
-/**
- * 4.0.11：跨行"交接"动画时长（ms）。
- *
- * 参考动效都在 260–340ms：短于 220ms 看不出交接，长于 400ms 会拖到下一句，
- * 连拍段落里会觉得歌词迟钝。320ms + 强减速曲线与参考一致。
- */
-internal const val LYRIC_SWITCH_MS = 320
+private val LyricHandoff = tween<Float>(360, easing = SokuouTweens.CoverFade.easing)
+
+private data class LyricFocusTarget(val index: Int, val strength: Float)
+
+private data class LyricFollowRequest(
+    val focus: LyricFocusTarget,
+    val viewport: IntSize,
+    val browsing: Boolean,
+    val rowMetrics: Any,
+)
+
+private data class LyricFocusFrame(
+    val center: Float,
+    val target: LyricFocusTarget,
+    val source: Map<Int, Float> = emptyMap(),
+    val phase: Float = 1f,
+) {
+    fun emphasis(row: Int): Float = lerp(
+        source[row] ?: 0f,
+        if (row == target.index) target.strength else 0f,
+        phase,
+    )
+
+    // On interruption, keep exactly the rows already visible in the crossfade.
+    // A seek across several cues must not highlight the ones it skipped.
+    fun weights(): Map<Int, Float> = buildMap {
+        for (row in source.keys + target.index) {
+            val weight = emphasis(row)
+            if (weight > 0f) put(row, weight)
+        }
+    }
+}
 
 @Composable
 internal fun NcrustLyricsPanel(
@@ -202,7 +196,9 @@ internal fun NcrustLyricsPanel(
     // 幅度上限见 `AppMotion.LYRIC_PULSE_SCALE`（3%，判据是"不干扰阅读"）。
     lyricPulseEnabled: Boolean = false,
     focusIndex: Int? = null,
-    focusedRow: (@Composable (index: Int, line: NcrustLyricLine, browsing: Boolean) -> Unit)? = null,
+    focusActive: Boolean = true,
+    focusedRowMetrics: Any? = null,
+    focusedRow: (@Composable (Int, NcrustLyricLine, Boolean, () -> Float, () -> Float) -> Unit)? = null,
     /**
      * 4.0.11：**当前句左侧竖条**（横屏/宽屏用）。
      *
@@ -214,371 +210,143 @@ internal fun NcrustLyricsPanel(
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
     val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
-    // 交接动画的位移量：10dp，按密度换算一次，避免在 graphicsLayer 里反复转。
-    val switchTravelPx = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
-    // 离散当前行:二分定位,只在跨行时变 -> 面板只在跨行时重组。
-    val timedIndex by remember(lines) {
+    val timedIndex by remember(timestamps) {
         derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
     }
     val currentIndex = focusIndex ?: timedIndex
-    // 连续当前行:跨行时 QuickSwitch 滑过去,驱动每行 graphicsLayer 缩放。
-    val smoothCurrentIndex = remember { Animatable(currentIndex.coerceAtLeast(0).toFloat()) }
-    // 4.0.12：跨行过渡的开关与位移基准。系统关闭动画时只取消"位移"这一层 ——
-    // 缩放 / 透明度仍按 act 走（它们由播放进度驱动，与系统动画开关无关）。
-    val switchAnimatorOff = remember { !android.animation.ValueAnimator.areAnimatorsEnabled() }
-    val lyricTransitPx = switchTravelPx * 0.4f
-
-    LaunchedEffect(currentIndex) {
-        if (currentIndex >= 0) {
-            // 4.0.12：**放慢到 420ms**。原来是 SokuouTweens.QuickSwitch（180ms）——
-            // 180ms 里同时完成"缩小旧行 + 放大新行 + 变色"，肉眼就是"啪一下切过去"。
-            // 参考动效都在 320–480ms，这里取 420ms + 强减速，才是"滑过去"的手感。
-            smoothCurrentIndex.animateTo(
-                currentIndex.toFloat(),
-                tween(durationMillis = LYRIC_SWITCH_MS, easing = CubicBezierEasing(0.22f, 0.61f, 0.24f, 1f)),
-            )
-        }
-    }
-
-    // 渐入加载:空 -> 非空(或换歌)时整面板 alpha 0 -> 1。由 lines 直接派生,
-    // 不用手动 Animatable —— 否则一旦那个 LaunchedEffect 没跑完/没重启,
-    // 面板会永远停在 alpha=0, 表现为"歌词明明有却一片空白"。
-    val fadeIn by animateFloatAsState(
-        targetValue = if (lines.isNotEmpty()) 1f else 0f,
-        animationSpec = SokuouTweens.CoverFade,
-        label = "lyricsFadeIn",
+    val target by rememberUpdatedState(
+        LyricFocusTarget(currentIndex.coerceAtLeast(0), if (focusActive && currentIndex >= 0) 1f else 0f),
     )
-
-    // a11y:liveRegion 播报当前行文本,map + distinctUntilChanged 压掉帧级位置流。
-    val a11yText = remember { mutableStateOf("") }
-    LaunchedEffect(lines) {
-        snapshotFlow { currentPosition() }
-            .map { currentLineIndex(it, timestamps) }
-            .distinctUntilChanged()
-            .collect { idx ->
-                val line = if (idx >= 0 && idx < lines.size) lines[idx] else null
-                // v1.9.3：拼接收进 LyricSubtitleText（JVM 单测覆盖）。音译开关关掉时
-                // 它的输出与 v1.9.2 的表达式逐字节一致 —— TalkBack 播报内容不变。
-                val text = line?.let {
-                    LyricSubtitleText.a11yText(it.text, it.translation, it.romanization)
-                } ?: ""
-                if (text != a11yText.value) a11yText.value = text
-            }
+    var visualFocus by remember { mutableStateOf(LyricFocusFrame(target.index.toFloat(), target)) }
+    var relocationAlpha by remember { mutableStateOf(1f) }
+    val fadeIn = remember { Animatable(0f) }
+    LaunchedEffect(lines.isNotEmpty()) {
+        if (lines.isEmpty()) fadeIn.snapTo(0f)
+        else fadeIn.animateTo(1f, SokuouTweens.CoverFade)
     }
 
     val listState = rememberLazyListState()
     var userScrolling by remember { mutableStateOf(false) }
-    var programmaticScrolling by remember { mutableStateOf(false) }
-    var lastAutoScrolledIndex by remember { mutableIntStateOf(-1) }
-    /**
-     * 4.0.0：面板的**实际**视口高度（px）。
-     *
-     * 收起/展开播放栏会改变这块区域的高度，而「当前行落在 36% 高处」是**相对视口**的 ——
-     * 高度变了却不重新摆放，那一行就停在旧的绝对像素上：真机上看起来就是"整段偏离中心"。
-     */
-    var viewportHeightPx by remember { mutableIntStateOf(0) }
-
-    // ─────────────────────────────────────────────────────────────────────
-    // v2.5.2：条目**实测高度**缓存 + 「整条居中」的定位助手
-    //
-    // 用户反馈：「自动居中只是把第一行居中，多行歌词、尤其是带翻译的歌，
-    // 大屏模式下看起来很痛苦」。根因是定位语义是「**顶边**落在目标高度」，
-    // 而一个条目是 `原句 + 译文 + 音译`（含折行）的整块 —— 行数越多，整块越往下坠。
-    // 完整推导见 `LyricsPanelScroll.blockTopPx` 的 KDoc。
-    //
-    // 高度只能实测（折行数取决于可用宽度与字号），所以：
-    //  · 用 `snapshotFlow` 把**已经排版过的**条目高度记下来（只有可见的 5~8 条，
-    //    开销是每次布局写几个 int）；
-    //  · 用普通 `HashMap` 而不是 `mutableStateMapOf`：它**不参与重组**，只在滚动回调里读。
-    //    换成 state map 会让每次布局都触发一次面板重组 —— 那是本仓库明令禁止的动画期重组。
-    // ─────────────────────────────────────────────────────────────────────
-    val itemHeights = remember { HashMap<Int, Int>() }
-    // 4.0.13：上一次"摆放的目标行"。相邻行平滑滚动必须跟它比 ——
-    // `firstVisibleItemIndex` 是视口最上面那一行，跟当前行差着 2~3 行，相邻判定永远不成立。
-    val lastPlaced = remember { intArrayOf(-1) }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
-            .collect { infos ->
-                for (info in infos) itemHeights[info.index] = info.size
-            }
-    }
-
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    val rowMetrics by rememberUpdatedState(focusedRowMetrics ?: listOf(
+        fontSize, lineHeight, translationFontSize, translationLineHeight, romanizationFontSize, romanizationLineHeight,
+    ))
+    val onScrolled by rememberUpdatedState(onUserScrolled)
     val density = LocalDensity.current
+    val leftToRight = LocalLayoutDirection.current == LayoutDirection.Ltr
     val baseFadePx = with(density) { LyricsPanelScroll.BASE_FADE_DP.dp.toPx() }
     val minFadePx = with(density) { LyricsPanelScroll.MIN_FADE_DP.dp.toPx() }
+    val portrait = focusedRow != null
+    val maxDefocusPx = with(density) { (if (portrait) 1.4.dp else 0.8.dp).toPx() }
 
-    /** 顶边下限 = 上下渐隐带高度（与 `LyricsView` 画出来的是同一个数）。 */
-    fun minTopPxOf(viewportHeightPx: Int): Float =
-        LyricsPanelScroll.fadeHeightPx(viewportHeightPx, baseFadePx, minFadePx)
-
-    /** 「整条居中」的 offset；高度还没量到 ⇒ 自动回落 v2.5.1 的顶边语义。 */
-    fun offsetFor(targetItemIndex: Int, viewportHeightPx: Int): Int =
-        LyricsPanelScroll.blockOffsetPx(
-            viewportHeightPx = viewportHeightPx,
+    fun correction(height: Int, item: LazyListItemInfo): Int =
+        LyricsPanelScroll.blockCorrectionPx(
+            viewportHeightPx = height,
             leadFraction = leadFraction,
-            itemHeightPx = itemHeights[targetItemIndex] ?: -1,
-            minTopPx = minTopPxOf(viewportHeightPx),
+            itemHeightPx = item.size,
+            minTopPx = LyricsPanelScroll.fadeHeightPx(height, baseFadePx, minFadePx),
+            currentTopPx = item.offset,
         )
 
-    /**
-     * 直接摆到「整条居中」（无动画）。
-     *
-     * 高度未知时先按 v2.5.1 的位置摆一次（那一步同时让它**进入可见区**、从而被量到），
-     * 等一帧让排版落地，再用实测高度做一次纠正。纠正用 `scrollBy`：这条路径本来就是跳变，
-     * 多一段动画反而会看出「跳到位再弹一下」。
-     */
-    suspend fun placeLine(targetItemIndex: Int, viewportHeightPx: Int) {
-        lastPlaced[0] = targetItemIndex
-        listState.scrollToItem(targetItemIndex, offsetFor(targetItemIndex, viewportHeightPx))
-        if ((itemHeights[targetItemIndex] ?: -1) > 0) return
-        withFrameNanos { }
-        val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetItemIndex } ?: return
-        itemHeights[targetItemIndex] = info.size
-        val correction = LyricsPanelScroll.blockCorrectionPx(
-            viewportHeightPx = viewportHeightPx,
-            leadFraction = leadFraction,
-            itemHeightPx = info.size,
-            minTopPx = minTopPxOf(viewportHeightPx),
-            currentTopPx = info.offset,
-        )
-        if (correction != 0) listState.scrollBy(correction.toFloat())
-    }
-
-    /**
-     * 动画走到「整条居中」。
-     *
-     * 高度已知 ⇒ 一次动画到位（播放中的跨行跟随走的就是这条，也是用户见得最多的一条）。
-     * 高度未知（跳到很远、从未排版过的一行）⇒ 先**瞬时**摆到旧的顶边位置让它可见，
-     * 拿到高度后再动画走到居中位置。顺序刻意如此：反过来的话用户会先看到
-     * 「跳到位、再弹一下」，比「跳到附近、再平滑滑正」更突兀。
-     */
-    suspend fun animateToLine(targetItemIndex: Int, viewportHeightPx: Int) {
-        // 4.0.12：**相邻行用固定时长的平滑滚动**，和缩放/透明度用同一个时长与曲线。
-        //
-        // 原来这里一律走 `animateScrollToItem`，而它对"只差一行"的位移会在一两帧内滑完：
-        // 文字先"啪"地跳到位，然后才慢慢放大 —— 这正是"硬切"的来源之一。
-        // 相邻行时我们自己按 LYRIC_SWITCH_MS 补间滚动，两者同步结束。
-        val current = listState.firstVisibleItemIndex
-        val adjacent = kotlin.math.abs(targetItemIndex - current) <= 1
-        if (adjacent && (itemHeights[targetItemIndex] ?: -1) > 0) {
-            val startOffset = listState.firstVisibleItemScrollOffset.toFloat()
-            val targetOffset = offsetFor(targetItemIndex, viewportHeightPx).toFloat()
-            val travel = (targetOffset - startOffset).let {
-                // 目标行在上方时 offsetFor 的符号与滚动方向相反，这里只关心幅度
-                if (targetItemIndex >= current) it else it
-            }
-            if (kotlin.math.abs(travel) > 1f) {
-                // 把总位移摊到 LYRIC_SWITCH_MS 的帧上，逐帧 scrollBy —— 位移很小（一行高度），
-                // 线性分摊就足够顺，不需要再叠一层缓动。
-                val frames = (LYRIC_SWITCH_MS / 16L).coerceAtLeast(1L).toInt()
-                val step = travel / frames
-                repeat(frames - 1) {
-                    listState.scrollBy(step)
-                    withFrameNanos { }
-                }
-                // 最后一帧补齐余量，避免累计误差留下半像素
-                listState.scrollBy(travel - step * (frames - 1))
-                return
-            }
-        }
-        if ((itemHeights[targetItemIndex] ?: -1) <= 0) {
-            listState.scrollToItem(
-                targetItemIndex,
-                LyricsPanelScroll.leadOffsetPx(viewportHeightPx, leadFraction),
-            )
-            withFrameNanos { }
-            listState.layoutInfo.visibleItemsInfo
-                .firstOrNull { it.index == targetItemIndex }
-                ?.let { itemHeights[targetItemIndex] = it.size }
-        }
-        listState.animateScrollToItem(targetItemIndex, offsetFor(targetItemIndex, viewportHeightPx))
-    }
-
-    /**
-     * 4.0.13：按 [LYRIC_SWITCH_MS] + 同一条减速曲线把列表推 [total] 像素。
-     *
-     * 为什么不用 `animateScrollToItem`：它没有时长参数，对一行的位移 150~200ms 就滑完，
-     * 和缩放动画不同步 —— 这就是"硬切"的观感来源。这里自己和缩放用同一个时长与曲线。
-     */
-    suspend fun animateScrollBy(total: Float) {
-        val frames = (LYRIC_SWITCH_MS / 16L).coerceAtLeast(1L).toInt()
-        var applied = 0f
-        for (i in 1..frames) {
-            val t = i.toFloat() / frames
-            // 与 graphicsLayer 用的曲线同一个手感：前快后收
-            val eased = 1f - (1f - t) * (1f - t) * (1f - t)
-            val want = total * eased
-            listState.scrollBy(want - applied)
-            applied = want
-            withFrameNanos { }
-        }
-    }
-
-    // 换歌 / 换歌词表：清状态 + 把当前行重新定位。
-    //
-    // v2.0.1：这里原来是**无条件** `scrollToItem(0)`（回顶）。在大屏模式下（右栏歌词面板
-    // 只有约 260dp 高、而顶部留白 200dp 占掉 77%）「回顶」直接等于「第一句被推到面板底边
-    // 之外」，而前奏期间（第一句还没到，currentIndex == -1）下面三条自动路径**全部**提前返回，
-    // 于是这个错误位置会一直保持到第一句开唱为止 —— 用户报告的「歌词被自动拉到最顶端、
-    // 看不见第一句」。
-    //
-    // 改成复用同一条定位规则（当前行落在视口 36% 处，-1 视为第 0 行）之后：
-    //  - 切歌时位置本来就是 0（PlayerViewModel.resetLyricsForNewSong 显式归零）⇒ 与"回顶"等价；
-    //  - 「进大屏 / 点 A± 导致歌词表重建」时不再丢掉当前行（旧实现会把列表甩回顶端，
-    //    再等下一次跨行才纠正）。
-    // 配合 LyricsPanelScroll 的顶部留白夹取，"回顶"与"首句落在 36%"在数学上已经是同一个位置。
-    LaunchedEffect(lines) {
-        userScrolling = false
-        // v2.5.2：换歌词表 ⇒ 条目高度全部作废（行数/译文/音译都可能变），必须清缓存。
-        itemHeights.clear()
-        val idx = currentIndex.coerceAtLeast(0)
-        smoothCurrentIndex.snapTo(idx.toFloat())
-        lastAutoScrolledIndex = currentIndex
-        val vh = listState.layoutInfo.viewportSize.height
-        if (vh > 0) {
-            placeLine(
-                LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-                vh,
-            )
+    suspend fun placeLine(index: Int, height: Int) {
+        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+        if (item != null) {
+            listState.scrollBy(correction(height, item).toFloat())
         } else {
-            // 还没排版（首帧）：先回顶。顶部留白一旦按视口夹取，"回顶"就是"首句落在 36%"。
-            listState.scrollToItem(0)
-        }
-    }
-
-    // 面板显现瞬间直接跳到当前行,不等自动滚动逐行滚过去。
-    LaunchedEffect(isVisible) {
-        if (!isVisible || lines.isEmpty()) return@LaunchedEffect
-        var vh = listState.layoutInfo.viewportSize.height
-        if (vh == 0) {
-            delay(16)
-            vh = listState.layoutInfo.viewportSize.height
-        }
-        val idx = currentIndex.coerceAtLeast(0)
-        smoothCurrentIndex.snapTo(idx.toFloat())
-        placeLine(
-            LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-            vh,
-        )
-        lastAutoScrolledIndex = idx
-    }
-
-    // 外部强制定位(如播放器展开): 语义同 isVisible 定位, 但由调用方递增触发。
-    // 顺带解除用户手动滚动暂停——展开瞬间用户预期歌词就在当前行。
-    LaunchedEffect(forcedScrollTrigger) {
-        if (forcedScrollTrigger == 0 || !isVisible || lines.isEmpty()) return@LaunchedEffect
-        userScrolling = false
-        lastAutoScrolledIndex = -1
-        var vh = listState.layoutInfo.viewportSize.height
-        if (vh == 0) {
-            delay(16)
-            vh = listState.layoutInfo.viewportSize.height
-        }
-        val idx = currentIndex.coerceAtLeast(0)
-        smoothCurrentIndex.snapTo(idx.toFloat())
-        placeLine(
-            LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-            vh,
-        )
-        lastAutoScrolledIndex = idx
-    }
-
-    // 4.0.0：视口高度变了（收起/展开播放栏、旋转、分屏）⇒ 重新把当前行摆回 36% 处。
-    // 不重新摆放的话，绝对偏移量会沿用旧高度算出的值 —— 真机上表现为"收起播放栏后
-    // 歌词整段偏上/偏下，等下一次跨行才自己纠正"。
-    LaunchedEffect(viewportHeightPx) {
-        if (viewportHeightPx <= 0 || lines.isEmpty()) return@LaunchedEffect
-        if (userScrolling || programmaticScrolling) return@LaunchedEffect
-        val idx = currentIndex.coerceAtLeast(0)
-        smoothCurrentIndex.snapTo(idx.toFloat())
-        lastAutoScrolledIndex = currentIndex
-        placeLine(
-            LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-            viewportHeightPx,
-        )
-    }
-
-    // 跨行自动滚动:当前行滚到视口 36% 高处(有动画)。
-    //
-    // v2.0.1：`currentIndex == -1`（前奏 / 拖回开头 —— 还没到第一句）**也要定位**，目标按第 0 行算。
-    // 旧实现在这里 `currentIndex < 0` 直接 return，于是"歌首期间没有任何一条路径把歌词摆正"：
-    // 大屏下就表现为列表停在原地（或贴在最顶端），第一句看不见。
-    // lastAutoScrolledIndex 记的仍是**原始** currentIndex，所以启动时（-1 == -1）不会多滚一次。
-    LaunchedEffect(currentIndex) {
-        if (userScrolling || currentIndex == lastAutoScrolledIndex) return@LaunchedEffect
-        lastAutoScrolledIndex = currentIndex
-        val vh = listState.layoutInfo.viewportSize.height
-        programmaticScrolling = true
-        try {
-            animateToLine(
-                LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-                vh,
-            )
-        } finally {
-            programmaticScrolling = false
-        }
-    }
-
-    // 用户手动滚动 -> 暂停自动跟随（谁来解除见下面的 v2.3.0 · E 段）。
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress && !programmaticScrolling) {
-            if (!userScrolling) {
-                userScrolling = true
-                onUserScrolled()
+            listState.scrollToItem(index, LyricsPanelScroll.leadOffsetPx(height, leadFraction))
+            listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }?.let {
+                listState.scrollBy(correction(height, it).toFloat())
             }
         }
-        // ★ v2.3.0 · E：这里原来是 `else if (!isScrollInProgress && userScrolling) { delay(5000);
-        //   userScrolling = false; lastAutoScrolledIndex = -1 }` —— **只放旗子、不滚动**。
-        //   于是「手动调整后歌词留在原地」：重新定位要等 `LaunchedEffect(currentIndex)`，
-        //   而它只在**换行**时才跑；用户在间奏里、或暂停后翻看歌词时当前行不变，
-        //   那条 effect 一次都不会执行。解除旗子的职责已移交下面的世代计时器
-        //   （它做完「解除 + 真正滚回目标位置」两件事），见 LyricsAutoCenter。
     }
 
-    // ------------------------------------------------------------------ v2.3.0 · E
-    // 横屏 / 大屏「5s 无触碰自动居中」。
-    //
-    // ## 计时器凭什么能重来（而不是只跑一次）
-    //
-    // 每次用户**碰**面板（按下 / 抬起）就把 `touchGeneration` +1；它同时是
-    // `LaunchedEffect` 的 key。Compose 在 key 变化时取消上一个协程 ⇒ 天然得到
-    // 「最后一次交互之后 5 秒」的语义，不需要手写 Job 管理，也不可能有两个计时器并存。
-    //
-    // ## 为什么只认「触摸」而不认播放/暂停/seek（任务书 7.2 要求探针确认后决定）
-    //
-    // · `seek` 有它自己的两条重定位路径（点行 → `onLineClick` 立即定位；
-    //   拖动进度条 → 行变化触发 `LaunchedEffect(currentIndex)`），再让 seek 重置计时
-    //   只会**推迟**回正，没有任何额外收益；
-    // · `播放/暂停` 根本不移动列表，把它算作「交互」会让「暂停后翻看歌词」这种
-    //   **最需要回正**的场景永远等不到回正（用户不会每隔 5 秒按一次暂停）。
-    //
-    // 所以判据收窄成一句：**只有手指落在面板上才算交互**。这也是任务书 7.2 的字面语义。
+    suspend fun handoff(goal: LyricFocusTarget, move: (Float) -> Unit = {}) {
+        val from = visualFocus
+        val source = from.weights()
+        animate(0f, 1f, animationSpec = LyricHandoff) { phase, _ ->
+            move(phase)
+            visualFocus = if (phase == 1f) LyricFocusFrame(goal.index.toFloat(), goal) else {
+                LyricFocusFrame(lerp(from.center, goal.index.toFloat(), phase), goal, source, phase)
+            }
+        }
+    }
+
+    // Every visible handoff uses the current measured offset, including when the previous
+    // handoff was interrupted. The same frame moves the list and updates both lyric rows.
+    LaunchedEffect(lines, isVisible, forcedScrollTrigger, leadFraction) {
+        if (!isVisible || lines.isEmpty()) return@LaunchedEffect
+        userScrolling = false
+        var needsPlacement = true
+        var lastRowMetrics = rowMetrics
+        snapshotFlow { LyricFollowRequest(target, viewport, userScrolling, rowMetrics) }
+            .collectLatest { (goal, size, browsing, metrics) ->
+                val height = size.height
+                if (height <= 0) return@collectLatest
+                if (metrics != lastRowMetrics) {
+                    // A font or primary-language change can reflow rows without resizing the viewport.
+                    // Let the new text layout reach LazyList before measuring the next correction.
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    lastRowMetrics = metrics
+                }
+                val index = LyricsPanelScroll.targetItemIndex(goal.index, lines.size)
+                if (needsPlacement) {
+                    placeLine(index, height)
+                    visualFocus = LyricFocusFrame(goal.index.toFloat(), goal)
+                    relocationAlpha = 1f
+                    needsPlacement = false
+                    return@collectLatest
+                }
+
+                val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                val startAlpha = relocationAlpha
+                if (browsing) {
+                    relocationAlpha = 1f
+                    if (visualFocus.target != goal || visualFocus.phase < 1f) handoff(goal)
+                } else if (item == null) {
+                    // A distant seek can move the virtualized window. Conceal that layout
+                    // change and reveal the target without highlighting the skipped lines.
+                    animate(startAlpha, 0f, animationSpec = SokuouTweens.QuickSwitch) { alpha, _ ->
+                        relocationAlpha = alpha
+                    }
+                    placeLine(index, height)
+                    visualFocus = LyricFocusFrame(goal.index.toFloat(), goal)
+                    animate(0f, 1f, animationSpec = SokuouTweens.SheetAppear) { alpha, _ ->
+                        relocationAlpha = alpha
+                    }
+                } else {
+                    val distance = correction(height, item).toFloat()
+                    if (visualFocus.target == goal && visualFocus.phase == 1f &&
+                        abs(distance) < 1f && startAlpha == 1f
+                    ) return@collectLatest
+                    listState.scroll {
+                        var applied = 0f
+                        handoff(goal) { phase ->
+                            val travel = distance * phase
+                            scrollBy(travel - applied)
+                            applied = travel
+                            relocationAlpha = lerp(startAlpha, 1f, phase)
+                        }
+                    }
+                }
+            }
+    }
+
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start && !userScrolling) {
+                userScrolling = true
+                onScrolled()
+            }
+        }
+    }
+
     var pointerDown by remember { mutableStateOf(false) }
     var touchGeneration by remember { mutableIntStateOf(LyricsAutoCenter.GENERATION_NEVER_TOUCHED) }
-
-    LaunchedEffect(touchGeneration) {
-        if (!LyricsAutoCenter.shouldSchedule(touchGeneration)) return@LaunchedEffect
+    LaunchedEffect(touchGeneration, isVisible, enabled) {
+        if (!isVisible || !LyricsAutoCenter.shouldSchedule(touchGeneration)) return@LaunchedEffect
         delay(LyricsAutoCenter.IDLE_TIMEOUT_MS)
-        // 到点这一刻手指还按着 ⇒ 放弃（拖拽中不打断）。抬起时世代 +1，会重新计时。
-        if (!LyricsAutoCenter.shouldRecenter(pointerDown, lines.size, enabled)) return@LaunchedEffect
-        // 先解除「别跟着我」，再滚 —— 顺序不能反：animateScrollToItem 会让
-        // isScrollInProgress 变 true，若此时 userScrolling 还是 true，跨行 effect 会继续被挡住。
-        userScrolling = false
-        lastAutoScrolledIndex = currentIndex
-        val vh = listState.layoutInfo.viewportSize.height
-        if (vh <= 0) return@LaunchedEffect
-        programmaticScrolling = true
-        try {
-            // 用 animateScrollToItem 而不是 scrollToItem：任务书 7.3 要求「动画平滑、不突兀」。
-            // v2.5.2：目标是「**整条**歌词（原句+译文+音译）的中点落在视口正中」，
-            // 不再是「条目顶边落在正中」—— 后者正是用户报的「只把第一行居中」。
-            animateToLine(
-                LyricsPanelScroll.targetItemIndex(currentIndex, lines.size),
-                vh,
-            )
-        } finally {
-            programmaticScrolling = false
-        }
+        if (LyricsAutoCenter.shouldRecenter(pointerDown, lines.size, enabled)) userScrolling = false
     }
 
     // v2.0.1：面板根节点改用 BoxWithConstraints —— 顶部留白要按**视口高度**夹取
@@ -589,7 +357,7 @@ internal fun NcrustLyricsPanel(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = fadeIn }
+            .graphicsLayer { alpha = fadeIn.value * relocationAlpha }
             // v2.3.0 · E：只**观察**指针事件、绝不消费（Initial pass + 什么都不改），
             // 所以 LazyColumn 自己的滚动 / 点行 seek 的手势一个都不受影响。
             // key 用 Unit：检测器只读/写 state，不需要随参数重建。
@@ -613,7 +381,10 @@ internal fun NcrustLyricsPanel(
                 }
             }
             .semantics {
-                text = AnnotatedString(a11yText.value)
+                val line = lines.getOrNull(timedIndex)
+                text = AnnotatedString(line?.let {
+                    LyricSubtitleText.a11yText(it.text, it.translation, it.romanization)
+                }.orEmpty())
                 liveRegion = LiveRegionMode.Polite
             },
     ) {
@@ -629,7 +400,7 @@ internal fun NcrustLyricsPanel(
             userScrollEnabled = enabled,
             modifier = Modifier
                 .fillMaxSize()
-                .onSizeChanged { size -> viewportHeightPx = size.height },
+                .onSizeChanged { size -> viewport = size },
         ) {
             // v2.0.1：顶部留白 = min(200dp, 36% × 视口)。它同时是"列表顶端"与"第一句的定位槽"，
             // 所以"回顶"在大屏短面板下也不会把第一句推出可视区（详见 LyricsPanelScroll）。
@@ -639,213 +410,118 @@ internal fun NcrustLyricsPanel(
             // 给列表留 28dp 尾巴，滚到底也不会贴边。
 
             itemsIndexed(lines, key = { index, _ -> index }) { index, line ->
-                if (focusedRow != null) {
-                    Column(
-                        Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            userScrolling = false
-                            lastAutoScrolledIndex = -1
-                            onLineClick(line.timestampMillis)
-                        }.padding(vertical = 8.dp),
-                    ) {
-                        focusedRow(index, line, userScrolling)
+                val emphasis = { visualFocus.emphasis(index) }
+                val defocus = {
+                    if (userScrolling) 0f else {
+                        val distance = index - visualFocus.center
+                        val depth = if (portrait) {
+                            if (distance >= 0f) distance / 1.9f else -distance / 6f
+                        } else abs(distance) / 2.4f
+                        maxDefocusPx * depth.coerceIn(0f, 1f) * (1f - emphasis())
                     }
-                    return@itemsIndexed
                 }
-                // 颜色离散:基于整数 currentIndex,跨行时翻转;连续 scale 会盖住这一瞬。
-                val color = when {
-                    currentIndex < 0 -> futureLineColor
-                    index < currentIndex -> pastLineColor
-                    index == currentIndex -> currentLineColor
-                    else -> futureLineColor
+                val restingColor = {
+                    lerpColor(futureLineColor, pastLineColor, (visualFocus.center - index).coerceIn(0f, 1f))
                 }
-                // v2.0.0 · T4：动态字号（实验性）。倍率为 1f 时**原样使用面板字号**，
-                // 刻意不写成 `fontSize * 1f`：这样"关掉开关 ⇒ 渲染表达式与 v1.9.3 一致"
-                // 是可以逐行审计的，而不是"值相等但 diff 变了"。
-                // 译文/音译同乘同一个倍率 ⇒ 三层比例恒定（与 A-/A+ 的做法一致）。
-                // 4.0.0：**当前行不叠加动态字号**。它已经有聚焦放大动画，再乘 1.15 会让这一句
-                // 折行 → 行高变化 → 面板按"整块居中"重新摆放时看起来整段偏离中心。
-                val lineScale = if (index == currentIndex) 1f else line.fontScale
-                val lineFontSize = if (lineScale == 1f) fontSize else fontSize * lineScale
-                val lineLineHeight = if (lineScale == 1f) lineHeight else lineHeight * lineScale
-                val lineTranslationFontSize =
-                    if (lineScale == 1f) translationFontSize else translationFontSize * lineScale
-                val lineTranslationLineHeight =
-                    if (lineScale == 1f) translationLineHeight else translationLineHeight * lineScale
-                val lineRomanizationFontSize =
-                    if (lineScale == 1f) romanizationFontSize else romanizationFontSize * lineScale
-                val lineRomanizationLineHeight =
-                    if (lineScale == 1f) romanizationLineHeight else romanizationLineHeight * lineScale
+                // Font scale belongs to the line, so singing or pausing never reflows it.
+                val fontScale = line.fontScale
+                val textStyle = TextStyle(
+                    fontSize = fontSize * fontScale,
+                    lineHeight = lineHeight * fontScale,
+                    fontWeight = FontWeight.Bold,
+                )
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(enabled, line.timestampMillis) {
-                            if (enabled) detectTapGestures { onLineClick(line.timestampMillis) }
+                    Modifier.fillMaxWidth()
+                        .clickable(enabled = enabled) {
+                            userScrolling = false
+                            onLineClick(line.timestampMillis)
                         }
-                        .padding(vertical = 10.dp)
+                        .padding(vertical = if (portrait) 8.dp else 10.dp)
+                        .graphicsLayer {
+                            val focus = emphasis()
+                            val isBrowsing = userScrolling
+                            val baseScale = if (portrait && isBrowsing) 0.78f else inactiveScale
+                            var scale = lerp(baseScale, 1f, focus)
+                            if (lyricPulseEnabled && focus > 0f) {
+                                MotionClock.generation
+                                scale *= 1f + MotionClock.pulse() * AppMotion.LYRIC_PULSE_SCALE * focus
+                            }
+                            scaleX = scale
+                            scaleY = scale
+                            val textInset = if (portrait) 19.dp.toPx() else if (currentMarker) 12.dp.toPx() else 0f
+                            val pivot = (textInset / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            transformOrigin = TransformOrigin(
+                                if (leftToRight) pivot else 1f - pivot, 0.5f,
+                            )
+
+                            val viewport = listState.layoutInfo
+                            val item = viewport.visibleItemsInfo.firstOrNull { it.index == index + 1 }
+                            val fade = LyricsPanelScroll.fadeHeightPx(
+                                viewport.viewportEndOffset - viewport.viewportStartOffset, baseFadePx, minFadePx,
+                            )
+                            val edgeAlpha = if (item == null) 1f else {
+                                val middle = item.offset + item.size * 0.5f
+                                val distance = minOf(
+                                    middle - viewport.viewportStartOffset,
+                                    viewport.viewportEndOffset - middle,
+                                )
+                                (distance / fade.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            }
+                            alpha = edgeAlpha
+                        }
                         .then(
                             if (currentMarker) Modifier.drawBehind {
-                                // 只有"当前行"画条；用 smoothCurrentIndex 的连续值决定透明度，
-                                // 跨行瞬间两条会做一次交叉淡出（旧条淡出、新条淡入），不闪。
-                                val dist = abs(index - smoothCurrentIndex.value).coerceIn(0f, 1f)
-                                if (dist < 1f) {
-                                    val barWidth = 3.dp.toPx()
+                                val focus = emphasis()
+                                if (focus > 0f) {
+                                    val width = 3.dp.toPx()
                                     val top = 6.dp.toPx()
-                                    val height = size.height - top * 2
+                                    val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
                                     drawRoundRect(
-                                        color = currentLineColor.copy(alpha = (1f - dist) * 0.9f),
-                                        topLeft = androidx.compose.ui.geometry.Offset(0f, top),
-                                        size = androidx.compose.ui.geometry.Size(barWidth, height),
-                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2f),
+                                        color = currentLineColor.copy(alpha = focus * 0.9f),
+                                        topLeft = Offset(x, top),
+                                        size = Size(width, (size.height - top * 2).coerceAtLeast(0f)),
+                                        cornerRadius = CornerRadius(width / 2f),
                                     )
                                 }
                             } else Modifier,
                         ),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = if (currentMarker) 12.dp else 0.dp)
-                            .graphicsLayer {
-                                // 4.0.12：**整套过渡由一个连续量驱动**（act = 这一行"有多当前"）。
-                                //
-                                // 4.0.11 有两套独立机制：`smoothCurrentIndex` 管缩放、`lineSwitch`
-                                // 只管当前行，而**颜色是按整数 currentIndex 瞬切**的 —— 三者不同步，
-                                // 观感就是"硬切"。现在统一成 act ∈ [0,1]：
-                                //   0 = 隔了一行以上（完全非当前），1 = 正处在当前行
-                                // 缩放 / 透明度 / 位移 / 模糊 / 高亮条全部从它派生，跨行时连续插值，
-                                // 不会出现任何一处"瞬间翻转"。
-                                val raw = abs(index - smoothCurrentIndex.value)
-                                val act = (1f - raw).coerceIn(0f, 1f)
-                                // 缩放：远处 inactiveScale（0.82），当前 1。
-                                var scale = lerp(inactiveScale, 1f, act)
-                                // 透明度：远处 0.55，当前 1 —— 这一层是"软"的关键，
-                                // 颜色再怎么翻，也是在半透明状态下翻的，眼睛看不到硬边。
-                                alpha *= lerp(0.55f, 1f, act)
-                                // 位移：还没轮到的那行略偏下、已经过去的那行略偏上，
-                                // 4dp 的差别就够"滑过去"的感觉，再多会像抖动。
-                                if (!switchAnimatorOff) {
-                                    val dir = if (index >= smoothCurrentIndex.value) 1f else -1f
-                                    translationY = dir * (1f - act) * lyricTransitPx
-                                }
-                                // 模糊：只在"行程中"（相距不到一行）的两行上挂，API 31+ 才有。
-                                // 静止的行一律 null —— 不给整屏挂 RenderEffect。
-                                if (android.os.Build.VERSION.SDK_INT >= 31) {
-                                    renderEffect = if (act > 0.02f && act < 0.98f) {
-                                        val radius = (1f - act) * 3.2f
-                                        android.graphics.RenderEffect.createBlurEffect(
-                                            radius, radius, android.graphics.Shader.TileMode.CLAMP,
-                                        ).asComposeRenderEffect()
-                                    } else {
-                                        null
-                                    }
-                                }
-                                if (lyricPulseEnabled && index == currentIndex) {
-                                    MotionClock.generation
-                                    scale *= 1f + MotionClock.pulse() * AppMotion.LYRIC_PULSE_SCALE
-                                }
-                                scaleX = scale
-                                scaleY = scale
-                                transformOrigin = TransformOrigin(0f, 0.5f)
-
-                                // Fade the lyric row itself so the artwork and ambient light
-                                // remain continuous at the top and bottom of the viewport.
-                                val viewport = listState.layoutInfo
-                                val item = viewport.visibleItemsInfo.firstOrNull { it.index == index + 1 }
-                                alpha = if (item == null) 1f else {
-                                    val middle = item.offset + item.size * 0.5f
-                                    val edgeDistance = minOf(
-                                        middle - viewport.viewportStartOffset,
-                                        viewport.viewportEndOffset - middle,
+                    if (focusedRow != null) {
+                        focusedRow(index, line, userScrolling, emphasis, defocus)
+                    } else {
+                        Column(Modifier.fillMaxWidth().padding(start = if (currentMarker) 12.dp else 0.dp)) {
+                            LyricLineBody(
+                                text = line.text,
+                                words = line.words,
+                                endMs = line.endMs,
+                                color = currentLineColor,
+                                highlightColor = currentLineColor,
+                                enabled = karaokeEnabled,
+                                mode = wordAnimationMode,
+                                sweepConfig = sweepConfig,
+                                currentPositionMillis = currentPosition,
+                                style = textStyle,
+                                emphasis = emphasis,
+                                restingColor = restingColor,
+                                defocus = defocus,
+                            )
+                            listOf(
+                                Triple(line.translation, translationFontSize, translationLineHeight),
+                                Triple(line.romanization, romanizationFontSize, romanizationLineHeight),
+                            ).forEach { (subtitle, size, height) ->
+                                if (subtitle.isNotEmpty()) {
+                                    LyricCaption(
+                                        text = subtitle,
+                                        style = TextStyle(fontSize = size * fontScale, lineHeight = height * fontScale),
+                                        color = {
+                                            val color = lerpColor(restingColor(), currentLineColor, emphasis())
+                                            color.copy(alpha = color.alpha * 0.6f)
+                                        },
+                                        defocus = defocus,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                                     )
-                                    val fade = LyricsPanelScroll.fadeHeightPx(
-                                        viewport.viewportEndOffset - viewport.viewportStartOffset,
-                                        baseFadePx,
-                                        minFadePx,
-                                    )
-                                    (edgeDistance / fade.coerceAtLeast(1f)).coerceIn(0f, 1f)
                                 }
                             }
-                            // 4.0.1：**非当前行景深**（借鉴 karaoke 渲染器）。
-                            //
-                            // 第一版把 1~2 行外的邻居也糊了 0.9dp —— 中文笔画一糊就成灰块，
-                            // 整屏像失焦照片（真机截图确认过）。现在收紧到：
-                            //  · **2.2 行以内完全不糊**（当前行的上下邻居保持清晰可读）；
-                            //  · 更远的行才逐渐柔化，**上限 0.35dp**；
-                            //  · `Modifier.blur` 在 API < 31 是 no-op（RenderEffect 才支持），
-                            //    老机器自动退回原有的透明度/缩放层次。
-                            .then(
-                                run {
-                                    val distance = abs(index - smoothCurrentIndex.value)
-                                    if (index == currentIndex || distance <= 1.2f) Modifier
-                                    else Modifier.blur(
-                                        // 4.0.2：上一版收到 0.35dp 太弱（看着像没加），
-                                        // 回调到 0.7dp 上限；1.2 行内仍不糊，避免邻居变灰块。
-                                        radius = ((distance - 1.2f) / 1.6f)
-                                            .coerceIn(0f, 1f)
-                                            .let { it * 0.7f }
-                                            .dp
-                                    )
-                                }
-                            ),
-                    ) {
-                        // v1.5.0 · B：有逐字数据且开关打开时走卡拉 OK 渲染，否则与 v1.4.1 完全一致。
-                        LyricLineBody(
-                            text = line.text,
-                            words = line.words,
-                            endMs = line.endMs,
-                            color = color,
-                            highlightColor = currentLineColor,
-                            // 只有「当前行」才做逐字高亮：已唱完的行会切成 pastLineColor，
-                            // 若在那些行上再叠高亮色，整行会被重新点亮成 primary，破坏过去行的弱化。
-                            enabled = karaokeEnabled && index == currentIndex,
-                            mode = wordAnimationMode,
-                            sweepConfig = sweepConfig,
-                            currentPositionMillis = currentPosition,
-                            style = TextStyle(
-                                fontSize = lineFontSize,
-                                lineHeight = lineLineHeight,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
-                        if (line.translation.isNotEmpty()) {
-                            // Spotify 式双语:原句下方小号、降透明度渲染翻译。
-                            MetroText(
-                                text = line.translation,
-                                style = TextStyle(
-                                    fontSize = lineTranslationFontSize,
-                                    lineHeight = lineTranslationLineHeight,
-                                    fontWeight = FontWeight.Normal,
-                                ),
-                                softWrap = true,
-                                color = color.copy(alpha = color.alpha * 0.6f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp),
-                            )
-                        }
-                        // v1.9.3：音译槽（原文 → 译文 → 音译，与 ncm 官方客户端的三层顺序一致）。
-                        // 刻意**不**把上面那个译文槽重构成共用的私有 composable：本版的红线之一是
-                        // 「关掉音译开关时渲染路径与 v1.9.2 逐字节一致」，让译文分支源码保持原样是
-                        // 最省事的证明方式（同构的十来行重复一次，换一条可审计的不变量）。
-                        //
-                        // 隐藏走**条件挂载**：romanization 为空时这个 MetroText 根本不在 Composition 里
-                        // （AGENTS.md「Compose 触摸陷阱」第 1/4 条：alpha=0 的节点仍然参与命中测试）。
-                        // 也没有任何 pointerInput：它落在主行 Box 的 detectTapGestures 命中区内，
-                        // 点它 == 点主行（seek 到本行），不新增任何命中区。
-                        if (line.romanization.isNotEmpty()) {
-                            MetroText(
-                                text = line.romanization,
-                                style = TextStyle(
-                                    fontSize = lineRomanizationFontSize,
-                                    lineHeight = lineRomanizationLineHeight,
-                                    fontWeight = FontWeight.Normal,
-                                ),
-                                softWrap = true,
-                                color = color.copy(alpha = color.alpha * 0.6f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp),
-                            )
                         }
                     }
                 }
@@ -858,44 +534,8 @@ internal fun NcrustLyricsPanel(
 
 
 /**
- * v1.5.0 · B / v1.5.1 · A / v1.5.2 —— 单行歌词渲染。
- *
- * 三种模式（[mode]，见 [LyricsWordAnimationMode]）：
- *  - [LyricsWordAnimationMode.OFF]：不做逐字，当前行整行高亮 —— 与 v1.4.1 逐字节一致；
- *  - [LyricsWordAnimationMode.HARD_CUT]：v1.5.0 的逐词硬切，向后兼容保留（按**词**离散跳）；
- *  - [LyricsWordAnimationMode.GRADIENT_SWEEP]（默认）：连续光标 + 软边横扫。
- *
- * **v1.5.2 修掉的问题**（PCL110 上肉眼可见的「一顿一顿 + 行首硬切」）：
- *
- *  1. **光标不再按词跳变**。v1.5.1 的 [playedCutCharCount] 里那段「词内按时间线性插值」在真机上
- *     从未生效 —— 调用方 [LyricsView] 只在「行时间戳 ∪ 词起始时刻」写播放位置，绘制阶段永远读到
- *     词边界那一刻，于是每个词唱完才跳一格，软边只在替跳变磨圆。现在位置在**当前行正在唱**的
- *     窗口内逐帧推进，[SweepTrack] 给出任意时刻的连续光标。
- *  2. **渐变带宽度绑字号，不绑整行宽度**。v1.5.1 取整行宽度的 12%（`SWEEP_EDGE_FRACTION`），
- *     短行糊成一片、长行细得看不见，且与字号无关。现在取 [LyricsSweepConfig.fadeEm] × 字号
- *     （默认 0.65 em ≈ 0.65 个字宽），与 AMLL 的 `wordFadeWidth = 0.5 × 行高` 等效。
- *  3. **渐变带以光标为中心**，光标恰好落在 50% 透明度处 —— 「光标 == 播放进度」由单测断言，
- *     v1.5.1 的渐变带是「光标贴右沿、整条带向左展开」，光标与进度差着半个带宽。
- *  4. **首尾各外扩半个渐变带**，渐变完整地滑入 / 滑出整行，行首不再是硬切（v1.5.1 把
- *     `edge` 夹在「行左沿 → 扫过点」之间，行首那个词的软边会被夹到 ~1px，等于硬切）。
- *  5. **离屏层只开在渐变带这条窄带上**，而不是整行。离屏面积从「整行宽 × 行高」降到
- *     「0.65 em × 行高」（约 1/20），低端机的 render-target 切换代价随之下降。
- *     [LyricsSweepConfig.softEdge] = false 时完全不用离屏层，退化成纯 `clipRect` 硬边扫过 ——
- *     **位置仍然是连续的**，只是边缘不磨圆；这是 API 24 / 低内存设备的自动降级档。
- *
- * **v1.5.1 · A 的既有设计原样保留**：
- *  1. 弃用 `TextLayoutResult.getPathForRange` + `clipPath`（该 API 内部走
- *     `android.text.Layout.getSelectionPath`，在 Android 16 (API 36) 上取不到可用的裁剪区域，
- *     v1.5.0 因此在 PCL110 上完全没有逐字效果）；现在只用 `clipRect` 与
- *     `canvas.saveLayer` + `drawRect(blendMode = DstIn)` 这两条最稳定的原语。
- *     不用 `CompositingStrategy.Offscreen`：它在低版本上会回落成 Auto，DstIn 就会作用到
- *     整个目标画布、把底下的文字一起擦掉；
- *  2. **零重组**：播放位置只在 draw 阶段读 —— 逐字推进只让这一行重绘，不触发任何重组；
- *  3. **不自己排版**：高亮层与底层用同一 [TextStyle]（只差颜色）排版，换行 / 断字 / CJK
- *     避头尾完全交给 Compose，两层版面逐像素一致；
- *  4. **换行不跨行横扫**：软边遮罩逐行画，正在唱的那一行独立渐变，已唱完的行整行保留。
- *
- * 没有逐字数据、模式为 OFF、或不是当前行时，退回与 v1.4.1 完全相同的整行 MetroText。
+ * One measured text layout serves both the resting line and its word sweep.
+ * Reading emphasis in draw keeps the glyphs and their measured row stable during handoffs.
  */
 @Composable
 internal fun LyricLineBody(
@@ -909,109 +549,126 @@ internal fun LyricLineBody(
     currentPositionMillis: () -> Long,
     style: TextStyle,
     sweepConfig: LyricsSweepConfig,
+    emphasis: () -> Float = { 1f },
+    restingColor: (() -> Color)? = null,
+    defocus: () -> Float = { 0f },
 ) {
     if (!enabled || words.isEmpty() || mode == LyricsWordAnimationMode.OFF) {
-        MetroText(
+        LyricCaption(
             text = text,
             style = style,
-            softWrap = true,
-            color = color,
+            color = { restingColor?.let { lerpColor(it(), color, emphasis()) } ?: color },
+            defocus = defocus,
             modifier = Modifier.fillMaxWidth(),
         )
         return
     }
-    // 未唱部分弱化：当前行原来的整行 primary 变成「已唱的实心 + 未唱的淡影」，
-    // 与 Kanesumi 的离散取色一致；唱完的部分才回到满色 primary。
-    // 比例可配（默认 0.4，与 AMLL 当前行的 --dark-mask-alpha 同档）。
+
     val unsungColor = color.copy(alpha = color.alpha * sweepConfig.inactiveAlpha)
-    // 渐变带宽度绑字号：不随行宽变化，短行长行观感一致。
     val density = LocalDensity.current
     val fadePx = remember(style.fontSize, sweepConfig.fadeEm, density) {
         val fs = style.fontSize
         if (fs.isSp) with(density) { fs.toPx() * sweepConfig.fadeEm }
         else with(density) { LyricsSweepConfig.DEFAULT_FADE_DP.dp.toPx() }
     }
-    // 底层排版结果同时给高亮层用：两层 style 只差颜色，版面完全一致。
     var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
-    // 扫过轨道：由排版结果**派生**（不是塞在 onTextLayout 回调里 —— 否则 fadePx / 配置变化
-    // 不会触发重排版，轨道就永远停在 null）。remember 的键保证只在真正变样时重建。
     val track = remember(layout, words, endMs, fadePx, sweepConfig.easing, mode, text.length) {
         val lr = layout
         if (lr == null || mode == LyricsWordAnimationMode.HARD_CUT) {
             null
         } else {
-            SweepTrack.build(
-                words = words,
-                textLength = text.length,
-                endMs = endMs,
-                geo = TextLayoutSweepGeometry(lr),
-                fadePx = fadePx,
-                easing = sweepConfig.easing,
-            )
+            SweepTrack.build(words, text.length, endMs, TextLayoutSweepGeometry(lr), fadePx, sweepConfig.easing)
         }
     }
-    Box(modifier = Modifier.fillMaxWidth()) {
-        // 底层：整行用弱化色画一遍。
-        BasicText(
-            text = text,
-            style = style.copy(color = unsungColor),
-            softWrap = true,
-            modifier = Modifier.fillMaxWidth(),
-            onTextLayout = { layout = it },
-        )
-        // 高亮层：同一份文本、高亮色，按模式裁掉「还没唱到」的部分。
-        // clearAndSetSemantics：文本已经由底层节点暴露给无障碍，这一层不能再报一遍。
-        BasicText(
-            text = text,
-            style = style.copy(color = highlightColor),
-            softWrap = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clearAndSetSemantics { }
-                .drawWithContent {
-                    val lr = layout ?: return@drawWithContent
-                    val pos = currentPositionMillis()
-                    if (mode == LyricsWordAnimationMode.HARD_CUT) {
-                        drawHardCut(lr, pos, words, text.length, endMs)
-                        return@drawWithContent
-                    }
-                    val sweep = track
-                    if (sweep == null) {
-                        // 有词、但词的字符区间全部越界（坏数据）：整行高亮，与 v1.5.1 行为一致。
-                        drawContent()
-                        return@drawWithContent
-                    }
-                    // 还没唱到第一个词 → 高亮层整层不画，露出的就是底层的未唱色。
-                    val sample = sweep.sample(pos) ?: return@drawWithContent
-                    drawSweep(lr, sample, fadePx, sweepConfig.softEdge)
-                },
-        )
+    BasicText(
+        text = text,
+        style = style.copy(color = unsungColor),
+        onTextLayout = { layout = it },
+        modifier = Modifier.fillMaxWidth().drawWithContent {
+            val lr = layout
+            if (lr == null) {
+                drawContent()
+                return@drawWithContent
+            }
+            val focus = emphasis()
+            val base = restingColor?.let { lerpColor(it(), unsungColor, focus) } ?: unsungColor
+            drawDefocusedText(lr, base, defocus())
+            if (focus <= 0f) return@drawWithContent
+            val highlight = highlightColor.copy(alpha = highlightColor.alpha * focus)
+            val position = currentPositionMillis()
+            if (mode == LyricsWordAnimationMode.HARD_CUT) {
+                drawHardCut(lr, position, words, text.length, endMs, highlight)
+            } else if (track == null) {
+                drawText(lr, color = highlight)
+            } else {
+                track.sample(position)?.let { drawSweep(lr, it, fadePx, sweepConfig.softEdge, highlight) }
+            }
+        },
+    )
+}
+
+@Composable
+internal fun LyricCaption(
+    text: String,
+    style: TextStyle,
+    color: () -> Color,
+    defocus: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
+    BasicText(
+        text = text,
+        style = style,
+        onTextLayout = { layout = it },
+        modifier = modifier.drawWithContent {
+            val lr = layout ?: return@drawWithContent
+            drawDefocusedText(lr, color(), defocus())
+        },
+    )
+}
+
+// Soft focus lives in glyph draws. Changing the radius during a handoff does not
+// install a new blur shader or filter the entire lyric row into an offscreen layer.
+private fun DrawScope.drawDefocusedText(layout: TextLayoutResult, color: Color, radius: Float) {
+    if (radius < 0.4f) {
+        drawText(layout, color = color)
+        return
     }
+    val spread = (radius - 0.4f).coerceIn(0f, 1f)
+    val side = color.copy(alpha = color.alpha * 0.12f * spread)
+    val corner = color.copy(alpha = color.alpha * 0.04f * spread)
+    drawText(layout, color = side, topLeft = Offset(-radius, 0f))
+    drawText(layout, color = side, topLeft = Offset(radius, 0f))
+    drawText(layout, color = side, topLeft = Offset(0f, -radius))
+    drawText(layout, color = side, topLeft = Offset(0f, radius))
+    drawText(layout, color = corner, topLeft = Offset(-radius, -radius))
+    drawText(layout, color = corner, topLeft = Offset(radius, -radius))
+    drawText(layout, color = corner, topLeft = Offset(-radius, radius))
+    drawText(layout, color = corner, topLeft = Offset(radius, radius))
+    drawText(layout, color = color.copy(alpha = color.alpha * (1f - 0.64f * spread)))
 }
 
 /**
  * v1.5.0 的逐词硬切：按**词**离散推进（词内不插值），保留只为向后兼容。
  * 已唱完的行整行保留，正在唱的这行只保留到扫过点。
  */
-private fun ContentDrawScope.drawHardCut(
+private fun DrawScope.drawHardCut(
     lr: TextLayoutResult,
     positionMillis: Long,
     words: List<LrcWord>,
     textLength: Int,
     endMs: Long?,
+    color: Color,
 ) {
     val cut = playedCutCharCount(words, positionMillis, textLength, endMs)
     if (cut <= 0f) return
     val anchor = cutAnchor(lr, cut, textLength)
     val lineTop = lr.getLineTop(anchor.lineIndex)
     val lineBottom = lr.getLineBottom(anchor.lineIndex)
-    // clipRect 的 block 接收者是 DrawScope（没有 drawContent），
-    // 所以先把 ContentDrawScope 捕获下来，两条绘制路径都用显式接收者。
-    val content = this
     if (anchor.lineIndex > 0) {
-        clipRect(bottom = lr.getLineBottom(anchor.lineIndex - 1)) { content.drawContent() }
+        clipRect(bottom = lr.getLineBottom(anchor.lineIndex - 1)) { drawText(lr, color = color) }
     }
-    clipRect(top = lineTop, right = anchor.x, bottom = lineBottom) { content.drawContent() }
+    clipRect(top = lineTop, right = anchor.x, bottom = lineBottom) { drawText(lr, color = color) }
 }
 
 /**
@@ -1023,13 +680,13 @@ private fun ContentDrawScope.drawHardCut(
  *
  * [softEdge] = false 时跳过 ③，②的边界直接取光标 —— 硬边但仍然是连续运动。
  */
-private fun ContentDrawScope.drawSweep(
+private fun DrawScope.drawSweep(
     lr: TextLayoutResult,
     sample: SweepSample,
     fadePx: Float,
     softEdge: Boolean,
+    color: Color,
 ) {
-    val content = this
     val band = sample.band(fadePx)
     // 轨道保证 lineIndex 落在版面内，这里再夹一次纯粹是防御（版面在极端情况下可能先变）。
     val lineIndex = sample.lineIndex.coerceIn(0, (lr.lineCount - 1).coerceAtLeast(0))
@@ -1039,7 +696,7 @@ private fun ContentDrawScope.drawSweep(
     // ① 已经整行唱完的行。用「当前行上沿」而不是「上一行下沿」：两行之间的行距也归上一行，
     //    避免行距里的抗锯齿残影被切掉。
     if (lineIndex > 0) {
-        clipRect(bottom = lineTop) { content.drawContent() }
+        clipRect(bottom = lineTop) { drawText(lr, color = color) }
     }
 
     // ② 当前行的实心部分。软边时边界在渐变带的外端，硬边时边界就是光标本身。
@@ -1049,9 +706,9 @@ private fun ContentDrawScope.drawSweep(
         sample.x
     }
     if (band.litOnLeft) {
-        clipRect(top = lineTop, right = solidEdge, bottom = lineBottom) { content.drawContent() }
+        clipRect(top = lineTop, right = solidEdge, bottom = lineBottom) { drawText(lr, color = color) }
     } else {
-        clipRect(top = lineTop, left = solidEdge, bottom = lineBottom) { content.drawContent() }
+        clipRect(top = lineTop, left = solidEdge, bottom = lineBottom) { drawText(lr, color = color) }
     }
 
     if (!softEdge) return
@@ -1062,7 +719,7 @@ private fun ContentDrawScope.drawSweep(
     if (right <= left) return
     val canvas = drawContext.canvas
     canvas.saveLayer(Rect(left, lineTop, right, lineBottom), Paint())
-    clipRect(left = left, top = lineTop, right = right, bottom = lineBottom) { content.drawContent() }
+    clipRect(left = left, top = lineTop, right = right, bottom = lineBottom) { drawText(lr, color = color) }
     // 渐变用**未夹取**的原始带宽，这样夹取只影响离屏层大小、不影响渐变斜率。
     // 越界部分靠 TileMode.Clamp 自动钳到两端（实心侧全保留、未唱侧全擦除）。
     drawRect(
