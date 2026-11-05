@@ -79,20 +79,21 @@ class ArrisKaraokeReviewTest {
         )
     }
 
+    // ⚠️ 样例文案必须是**自写占位**：渲染产物会进站/进文档，真实歌词有版权问题。
     private val lines = listOf(
-        line(1_000, "波がさらう 足あとを", "海浪带走脚印"),
-        line(9_000, "遠い夏の においがした", "闻到了那个遥远夏天的味道"),
-        line(17_000, "ありがとう 君がいたから", "谢谢你 因为有你在"),
-        line(25_000, "この歌を 歌えるよ", "我才能唱出这首歌"),
-        line(33_000, "また会える 日まで", "直到重逢的那一天"),
+        line(1_000, "站台的风 把日历翻旧", "站台的风，把日历翻旧"),
+        line(9_000, "窗外的灯 一盏一盏退后", "窗外的灯，一盏一盏退后"),
+        line(17_000, "我把今天 折好放进口袋", "我把今天，折好放进口袋"),
+        line(25_000, "等下一次 再拆开来看", "等下一次，再拆开来看"),
+        line(33_000, "夜深了 城市还在走", "夜深了，城市还在走"),
     )
 
     private val translations = mapOf(
-        1_000L to LrcLine(timeMs = 1_000, text = "海浪带走脚印"),
-        9_000L to LrcLine(timeMs = 9_000, text = "闻到了那个遥远夏天的味道"),
-        17_000L to LrcLine(timeMs = 17_000, text = "谢谢你 因为有你在"),
-        25_000L to LrcLine(timeMs = 25_000, text = "我才能唱出这首歌"),
-        33_000L to LrcLine(timeMs = 33_000, text = "直到重逢的那一天"),
+        1_000L to LrcLine(timeMs = 1_000, text = "站台的风，把日历翻旧"),
+        9_000L to LrcLine(timeMs = 9_000, text = "窗外的灯，一盏一盏退后"),
+        17_000L to LrcLine(timeMs = 17_000, text = "我把今天，折好放进口袋"),
+        25_000L to LrcLine(timeMs = 25_000, text = "等下一次，再拆开来看"),
+        33_000L to LrcLine(timeMs = 33_000, text = "夜深了，城市还在走"),
     )
 
     private fun show(dark: Boolean, content: @Composable () -> Unit) {
@@ -143,8 +144,8 @@ class ArrisKaraokeReviewTest {
             val controls = remember {
                 KaraokeControls(
                     embedded = false,
-                    title = "ありがとう",
-                    artist = "大橋卓弥",
+                    title = "夜行列车",
+                    artist = "本地样例",
                     cover = null,
                     position = position,
                     duration = MutableStateFlow(299_000L),
