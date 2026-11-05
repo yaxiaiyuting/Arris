@@ -568,6 +568,9 @@ internal fun LyricsView(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp),
             // v2.3.0 · E：横屏把定位目标从「上方 36%」换成「正中 50%」。
+            // 4.0.11：横屏/宽屏（centeredLayout）给当前句补一根左侧竖条 —— 短面板里靠字号差
+            // 判断当前句太费眼。竖屏不加：竖屏的行距更宽，字号差已经够用。
+            currentMarker = centeredLayout,
             leadFraction = if (centeredLayout) {
                 LyricsPanelScroll.CENTER_FRACTION
             } else {
