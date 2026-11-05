@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.6--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-9.99%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.13--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-10.04%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -36,7 +36,8 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
-| **4.0.11** | 2026-11-05 | 歌词换行交接动画、横屏竖条、发送反馈、收藏修复 |
+| **4.0.13** | 2026-11-05 | 歌词跨行同步滚动，旧句逐渐缩小，新句从虚化到清晰。切换歌词主行后自动重新对齐 |
+| 4.0.11 | 2026-11-05 | 歌词换行交接动画、横屏竖条、发送反馈、收藏修复 |
 | 4.0.8 | 2026-11-05 | 竖屏**留白跟唱**（歌词页右上角进入，逐字扫亮 / 整行高亮可切换）、竖屏歌词与进度条合并、切歌只挂载一个歌词视口 |
 | **4.0.6** | 2026-11-05 | **修竖屏控制栏展开时的歌词比例**：去掉 4.0.2 加的面板底部留白（它从歌词视口扣高度，把「当前行 36%」锚点整体顶上去）；整页一体化播放界面、Tux 图标、跟唱、背景呼吸同版本包含 · **LTS 3.7.28** 同源同修 |
 | **4.0.4** | 2026-11-05 | 续播保存、音质回退、更新下载、一起听房间认证与播放同步、识曲取消和错误提示 |
@@ -386,6 +387,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.13-gpl | 2026-11-05 | **歌词换行连续交接**：滚动、缩放、亮度和光轨同步，快速换句从当前画面接续；原译文主行或字号改变后重新定位 |
 | v4.0.4-gpl | 2026-11-05 | 续播保存与更新下载修复；一起听认证、暂停和下一首同步；识曲可取消 |
 | v4.0.12-gpl | 2026-11-05 | **歌词换行过渡合一**（缩放/透明度/位移/模糊同一连续量，420ms）、下载镜像探测改并行（不再卡 0%） |
 | v3.7.31-gpl（LTS） | 2026-11-05 | 与主线同源同修：歌词过渡、横屏竖条、收藏 502、发送反馈 |
