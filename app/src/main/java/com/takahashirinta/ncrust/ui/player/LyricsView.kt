@@ -77,7 +77,7 @@ private val NeverBuffering = MutableStateFlow(false)
  *  - tap-to-seek:点击行 → 本地立即跳 position + 回调解绑回调,瞬时反馈。
  */
 @Composable
-fun LyricsView(
+internal fun LyricsView(
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine> = emptyList(),
     // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。默认 **false** ——
@@ -420,6 +420,24 @@ fun LyricsView(
             )
         }
         return
+    }
+
+    // v1.7.0 · P1：上下渐隐高度跟随面板视口。
+    // 竖屏全屏播放器面板高约 700dp，100dp 渐隐只吃边角；但横屏大屏模式右栏只有
+    // 约 210dp 高（PCL110 实测：1272px 高 − 系统栏/挖孔 − 控制条 ~84dp），两条
+    // 100dp 的渐隐会把整块歌词糊掉。取 min(100dp, 30% 视口高)，竖屏数值分毫不变，
+    // 横屏自动收窄；不引入任何新的渲染路径（仍是同样两个 Box + 同一个 verticalGradient）。
+    //
+    // ★ v2.5.2：公式搬进 `LyricsPanelScroll.fadeHeightPx` —— 从本版起**面板自己也要用它**
+    //   （它是「整条歌词最高能摆到哪」的下限，见 `blockTopPx` 的 `minTopPx`）。
+    //   两处各写一份就是第二处真相：渐隐带调窄了而定位没跟着调，当前行就会被压在渐隐里发灰。
+    var panelHeightPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val fadeHeight = with(LocalDensity.current) {
+        LyricsPanelScroll.fadeHeightPx(
+            viewportHeightPx = if (panelHeightPx.isFinite()) panelHeightPx.toInt() else 0,
+            baseFadePx = LyricsPanelScroll.BASE_FADE_DP.dp.toPx(),
+            minFadePx = LyricsPanelScroll.MIN_FADE_DP.dp.toPx(),
+        ).toDp()
     }
 
     // ── v3.3.0 · 9：歌词复制 / 分享 / 出图的入口 ────────────────────────────────
