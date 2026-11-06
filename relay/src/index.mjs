@@ -131,6 +131,17 @@ function apiDoc() {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // www → 主域（301）。
+    //
+    // 为什么放在最前面、且在 Worker 里做而不是用面板的 Redirect Rule：
+    // 面板规则不在仓库里，换账号/子域就丢；这里跟着代码走。`www` 的 DNS 记录与
+    // Worker 路由由 API 建（A 记录指向 100:: 占位、代理打开），命中这里后立刻 301。
+    const host = url.hostname.toLowerCase();
+    if (host.startsWith("www.")) {
+      const target = `https://${host.slice(4)}${url.pathname}${url.search}`;
+      return new Response(null, { status: 301, headers: { location: target, "cache-control": "public, max-age=3600" } });
+    }
+
     if (url.pathname === "/assets/after-the-rain.mp3" &&
         (request.method === "GET" || request.method === "HEAD")) {
       return serveStudioAudio(request, env.ASSETS);
