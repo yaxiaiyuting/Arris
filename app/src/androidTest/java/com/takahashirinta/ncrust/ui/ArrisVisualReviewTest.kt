@@ -110,7 +110,10 @@ class ArrisVisualReviewTest {
     @Test fun libraryComponents() {
         show {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 20.dp)) {
-                Column(Modifier.padding(start = 16.dp)) { ArrisHomeIdentity() }
+                ArrisHomeIdentity(
+                    title = com.takahashirinta.ncrust.ui.i18n.zhCN.tabHome,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ArrisShortcut("听歌识曲", "留住偶然的旋律", Icons.Default.Mic, Modifier.weight(1f)) {}
                     ArrisShortcut("一起听", "分享同一个时刻", Icons.Default.People, Modifier.weight(1f)) {}

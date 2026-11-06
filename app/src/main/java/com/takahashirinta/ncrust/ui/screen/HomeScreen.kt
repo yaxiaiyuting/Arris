@@ -2,11 +2,11 @@ package com.takahashirinta.ncrust.ui.screen
 
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import android.graphics.drawable.BitmapDrawable
 import android.content.Context
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -24,9 +24,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -69,6 +72,8 @@ import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity
+import com.takahashirinta.ncrust.ui.components.drawArrisGrooves
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -458,22 +463,12 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     flingBehavior = rememberMetroFlingBehavior()
                 ) {
-                    // Groove 风页头：statusBar + 大字页面名，代替 TopAppBar。
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
-                        ) {
-                            MetroText(
-                                strings.tabHome,
-                                color = LocalMetroColors.current.onBackground,
-                                style = LocalMetroTypography.current.pageHeading,
-                            )
-                            com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity()
-                        }
-                        Spacer(Modifier.height(12.dp))
+                        ArrisHomeIdentity(
+                            title = strings.tabHome,
+                            modifier = Modifier.statusBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                        )
                     }
 
                     // 登录失效横幅：放在页头之下、内容之上（列表第一个内容项），点击进登录流程。
@@ -493,6 +488,7 @@ fun HomeScreen(
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 items(toplists, key = { it.id }) { tl ->
@@ -541,7 +537,7 @@ fun HomeScreen(
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                contentPadding = PaddingValues(horizontal = 0.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 items(dailySongs.take(12), key = { it.id }) { song ->
@@ -580,6 +576,7 @@ fun HomeScreen(
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
                                 item(key = "fm") {
@@ -653,7 +650,10 @@ private fun SectionHeader(
         MetroText(
             title,
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.title,
+            style = LocalMetroTypography.current.title.copy(
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+            ),
             modifier = Modifier.weight(1f)
         )
         actions()
@@ -813,22 +813,25 @@ private fun FmRadioTile(
     subtitle: String,
     onClick: () -> Unit
 ) {
-    // 波形记号颜色只看与**底色 accent** 的对比，不能跟随主题明暗：
-    // 浅色主题下 onBackground 是近黑，压在深色头像强调色上会看不见。
-    // 深色主题用白、浅色主题用米色(主题背景色)。
-    val isLightTheme = LocalMetroColors.current.background.luminance() > 0.5f
-    val onAccent = when {
-        accent.luminance() > 0.5f -> Color.Black
-        isLightTheme -> LocalMetroColors.current.background
-        else -> Color.White
-    }
+    val onAccent = if (accent.luminance() > 0.18f) Color(0xFF0F221A) else Color(0xFFF6F7EF)
     Column(modifier = Modifier.width(160.dp).appPressScale().clickable { onClick() }) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(AppShapes.large)
-                .background(accent)
+                .drawWithCache {
+                    val center = Offset(size.width * 0.5f, size.height * 0.45f)
+                    val light = Brush.radialGradient(
+                        listOf(lerp(accent, Color.White, 0.10f), accent, lerp(accent, Color.Black, 0.24f)),
+                        center = Offset(size.width * 0.37f, size.height * 0.24f),
+                        radius = size.width,
+                    )
+                    onDrawBehind {
+                        drawRect(light)
+                        drawArrisGrooves(center, size.width * 0.63f, onAccent)
+                    }
+                }
         ) {
             // 对称音频波形：5 根方端竖条，包络 0.5→1→0.5，中线上下等幅。
             // 方端(非圆角)贴合 Kanesumi；包络收口让记号有"声音起伏"而不呆板。
@@ -837,10 +840,10 @@ private fun FmRadioTile(
                 val h = size.height
                 val cx = w / 2f
                 val cy = h * 0.45f
-                val envelope = floatArrayOf(0.5f, 0.82f, 1f, 0.82f, 0.5f)
-                val barW = w * 0.085f
-                val gap = w * 0.055f
-                val maxHalf = h * 0.22f
+                val envelope = floatArrayOf(0.30f, 0.66f, 1f, 0.66f, 0.30f)
+                val barW = w * 0.056f
+                val gap = w * 0.043f
+                val maxHalf = h * 0.16f
                 val totalW = envelope.size * barW + (envelope.size - 1) * gap
                 var x = cx - totalW / 2f
                 envelope.forEach { f ->

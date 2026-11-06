@@ -14,6 +14,7 @@ package com.takahashirinta.ncrust.ui.player
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.*
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -79,6 +81,7 @@ import androidx.compose.ui.semantics.semantics
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import androidx.compose.foundation.systemGestureExclusion
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
+import com.takahashirinta.ncrust.ui.components.drawArrisGrooves
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.controls.MetroDivider
@@ -729,8 +732,7 @@ internal fun StableCover(
     contentScale: ContentScale = ContentScale.Crop,
     /** v2.5.0 · B：圆角。默认 `AppShapes.large`（播放页封面是"大封面"档）。 */
     shape: Shape = AppShapes.large,
-    /** v2.5.0 · B：描边色。传 `null` 表示不画描边（留给将来的"无边框"场景）。 */
-    frameColor: Color? = null,
+    frame: Brush,
     /**
      * v2.9.0 · A 档：浮起阴影的高度。`null` = 不画阴影（= v2.8.0 的观感）。
      *
@@ -827,9 +829,7 @@ internal fun StableCover(
                 }
             )
             .clip(shape)
-            .then(
-                if (frameColor != null) Modifier.border(1.dp, frameColor, shape) else Modifier
-            )
+            .border(1.dp, frame, shape)
     ) {
         // 底层：切歌后旧图垫底（超阈值退化占位色）。
         val bg = if (timedOut) null else lastBitmap
@@ -841,7 +841,26 @@ internal fun StableCover(
                 contentScale = contentScale,
             )
         } else {
-            Box(Modifier.matchParentSize().background(placeholderColor))
+            val colors = LocalMetroColors.current
+            Box(Modifier.matchParentSize().drawWithCache {
+                val center = Offset(size.width * 0.5f, size.height * 0.5f)
+                val radius = size.minDimension * 0.62f
+                val paper = Brush.radialGradient(
+                    listOf(
+                        lerp(placeholderColor, colors.primary, 0.28f),
+                        placeholderColor,
+                        colors.surface,
+                    ),
+                    center = Offset(size.width * 0.32f, size.height * 0.29f),
+                    radius = size.maxDimension.coerceAtLeast(1f),
+                )
+                onDrawBehind {
+                    drawRect(paper)
+                    drawArrisGrooves(center, radius, colors.primary)
+                    drawCircle(colors.primary.copy(alpha = 0.17f), radius * 0.21f, center)
+                    drawCircle(colors.surface, radius * 0.038f, center)
+                }
+            })
         }
         // 上层：当前请求的 painter。必须真正绘制它，Coil 才会在 onRemembered 里发起
         // 请求；loading 时它不画东西，露出底层旧图/占位色。

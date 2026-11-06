@@ -26,9 +26,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -52,7 +54,7 @@ import kotlin.math.sin
 /**
  * 进度条，含三种状态：
  *  - 普通：强调色填充 + 手指离开时宽2dp
- *  - 拖动：手指按下即响应，进度跟随手指；轨道加厚至4dp，显示直角滑块指示器
+ *  - 拖动：手指按下即响应，进度跟随手指；轨道加厚至4dp，显示圆形滑块指示器
  *  - 缓冲：强调色短段在轨道上从左至右周期滑动，段长随时间脉动，直到 isBuffering=false
  *
  * progressFlow 在 Canvas draw scope 内读取，非拖动/seek 期间仅触发重绘，不触发 Composable 重组
@@ -112,11 +114,11 @@ fun SlimProgressBar(
     // 让 Canvas 每帧重跑一次 draw block（即便分支不进入）。低端机上纯浪费。
     val bufferingPhases: BufferingPhases? = if (showBuffering) rememberBufferingPhases() else null
 
-    val accent = LocalMetroColors.current.primary
-    val trackColor = LocalMetroColors.current.divider
-    // Canvas draw scope 内不能读 CompositionLocal，先在此处取好。
-    val thumbColor = LocalMetroColors.current.onBackground
-    val bubbleTextColor = LocalMetroColors.current.onSurfaceVariant
+    val colors = LocalMetroColors.current
+    val accent = colors.primary
+    val trackColor = lerp(colors.divider, colors.onBackground, 0.24f)
+    val thumbColor = colors.onBackground
+    val bubbleTextColor = colors.onSurfaceVariant
 
     Box(
         modifier = modifier
@@ -156,9 +158,14 @@ fun SlimProgressBar(
             }
             val trackH = if (isDragging) 4.dp.toPx() else 2.dp.toPx()
             val topY = (size.height - trackH) / 2f
+            val radius = CornerRadius(trackH / 2f)
 
-            // 轨道底色
-            drawRect(trackColor, topLeft = Offset(0f, topY), size = Size(size.width, trackH))
+            drawRoundRect(
+                color = trackColor,
+                topLeft = Offset(0f, topY),
+                size = Size(size.width, trackH),
+                cornerRadius = radius,
+            )
 
             if (showBuffering && bufferingPhases != null) {
                 // 脉动段：halfLen 在 0.10~0.16 之间震荡，center 从 -0.20 线性移动到 1.20
@@ -167,35 +174,33 @@ fun SlimProgressBar(
                 val segStart = (center - halfLen).coerceAtLeast(0f)
                 val segEnd   = (center + halfLen).coerceAtMost(1f)
                 if (segEnd > segStart) {
-                    drawRect(
+                    drawRoundRect(
                         color = accent,
                         topLeft = Offset(segStart * size.width, topY),
-                        size = Size((segEnd - segStart) * size.width, trackH)
+                        size = Size((segEnd - segStart) * size.width, trackH),
+                        cornerRadius = radius,
                     )
                 }
             } else {
                 // 普通播放进度填充
                 if (displayProgress > 0f) {
-                    drawRect(
+                    drawRoundRect(
                         color = accent,
                         topLeft = Offset(0f, topY),
-                        size = Size(displayProgress * size.width, trackH)
+                        size = Size(displayProgress * size.width, trackH),
+                        cornerRadius = radius,
                     )
                 }
             }
 
-            // 拖动时显示直角滑块指示器（3×14dp 白色矩形），符合 Metro 直角风格
             if (isDragging) {
-                val thumbW = 3.dp.toPx()
-                val thumbH = 14.dp.toPx()
-                val thumbX = (displayProgress * size.width - thumbW / 2f)
-                    .coerceIn(0f, size.width - thumbW)
-                val thumbY = (size.height - thumbH) / 2f
-                drawRect(
-                    color = thumbColor,
-                    topLeft = Offset(thumbX, thumbY),
-                    size = Size(thumbW, thumbH)
-                )
+                val thumbRadius = minOf(4.dp.toPx(), size.width / 2f)
+                val thumbX = (displayProgress * size.width)
+                    .coerceIn(thumbRadius, size.width - thumbRadius)
+                val thumbY = size.height / 2f
+                val center = Offset(thumbX, thumbY)
+                drawCircle(accent.copy(alpha = 0.22f), thumbRadius + 3.dp.toPx(), center)
+                drawCircle(thumbColor, thumbRadius, center)
 
                 // 拖动时在滑块上方显示当前时间气泡(直觉反馈,Apple Music 同款)。
                 // 纯 Canvas 绘制,拖动期间只 invalidate,不重组。
@@ -205,9 +210,9 @@ fun SlimProgressBar(
                         AnnotatedString(formatDuration((dragProgress * durMs).toLong())),
                         style = TextStyle(fontSize = 11.sp, color = bubbleTextColor)
                     )
-                    val textX = (thumbX + thumbW / 2f - layout.size.width / 2f)
-                        .coerceIn(0f, size.width - layout.size.width)
-                    val textY = thumbY - layout.size.height - 6.dp.toPx()
+                    val textX = (thumbX - layout.size.width / 2f)
+                        .coerceIn(0f, (size.width - layout.size.width).coerceAtLeast(0f))
+                    val textY = thumbY - thumbRadius - layout.size.height - 5.dp.toPx()
                     if (textY > 0f) {
                         drawText(layout, topLeft = Offset(textX, textY))
                     }

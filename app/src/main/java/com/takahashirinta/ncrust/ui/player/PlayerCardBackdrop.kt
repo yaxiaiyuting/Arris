@@ -147,7 +147,7 @@ internal fun BoxScope.PlayerCardBackdrop(
         // the translucent lighting when enabled; the static floor is opaque when it is the base.
         if (hasSong && expandedMounted()) {
             val colors = LocalMetroColors.current
-            val floorAlpha = if (motion.anyUiMotion) 0.24f else 1f
+            val floorAlpha = if (motion.anyUiMotion) 0.34f else 1f
             Box(
                 Modifier.matchParentSize()
                     .graphicsLayer {
@@ -156,19 +156,22 @@ internal fun BoxScope.PlayerCardBackdrop(
                     .drawWithCache {
                         val extent = maxOf(size.width, size.height, 1f)
                         val key = Brush.radialGradient(
-                            listOf(colors.primary.copy(alpha = 0.20f), colors.primary.copy(alpha = 0f)),
-                            center = Offset(size.width * (if (sideCover) 0.24f else 0.46f), size.height * 0.25f),
+                            listOf(
+                                colors.primary.copy(alpha = if (karaoke) 0.12f else 0.25f),
+                                colors.primary.copy(alpha = 0f),
+                            ),
+                            center = Offset(size.width * (if (sideCover) 0.22f else 0.37f), size.height * 0.18f),
                             radius = extent * 0.58f,
                         )
                         val rim = Brush.radialGradient(
-                            listOf(colors.primary.copy(alpha = 0.11f), colors.primary.copy(alpha = 0f)),
-                            center = Offset(size.width * 0.92f, size.height * 0.63f),
-                            radius = extent * 0.43f,
+                            listOf(colors.primary.copy(alpha = 0.09f), colors.primary.copy(alpha = 0f)),
+                            center = Offset(size.width, size.height * 0.58f),
+                            radius = extent * 0.31f,
                         )
                         val floor = Brush.verticalGradient(
-                            0f to lerp(colors.background, colors.surface, 0.22f).copy(alpha = floorAlpha),
-                            0.57f to colors.background.copy(alpha = floorAlpha),
-                            1f to lerp(colors.background, colors.surface, 0.83f).copy(alpha = floorAlpha),
+                            0f to lerp(colors.background, colors.surface, 0.54f).copy(alpha = floorAlpha),
+                            0.64f to colors.background.copy(alpha = floorAlpha),
+                            1f to lerp(colors.background, colors.surface, 0.36f).copy(alpha = floorAlpha),
                             endY = size.height.coerceAtLeast(1f),
                         )
                         onDrawBehind {

@@ -24,7 +24,6 @@ package com.takahashirinta.ncrust.ui.player
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -45,7 +44,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -99,6 +102,7 @@ internal fun PlayerCardTray(
     // 见 docs/verification/v2.5.5/probe-tray-regression.md §3）。
     // 这个高度有**三个**消费者（本行 / MainActivity.collapsedOffsetY / BottomOverlayInsetDp），
     // 所以它只有 TrayLayout 一个定义处。
+    val colors = LocalMetroColors.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,7 +119,16 @@ internal fun PlayerCardTray(
             .graphicsLayer {
                 alpha = (1f - progress.value * 5f).coerceIn(0f, 1f)
             }
-            .background(LocalMetroColors.current.surface)
+            .drawWithCache {
+                val wash = Brush.verticalGradient(
+                    listOf(lerp(colors.surface, colors.primary, 0.085f), colors.surface),
+                )
+                val edge = 1.dp.toPx()
+                onDrawBehind {
+                    drawRect(wash)
+                    drawLine(colors.divider, Offset(0f, edge / 2f), Offset(size.width, edge / 2f), edge)
+                }
+            }
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),

@@ -1,6 +1,7 @@
 /* Arris app visual system. Copyright (c) 2026 yaxiaiyuting, GPLv3. */
 package com.takahashirinta.ncrust.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.selection.selectable
@@ -12,12 +13,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -88,31 +98,87 @@ internal fun ArrisBottomNav(items: List<Pair<ImageVector, String>>, selected: In
 
 @Composable
 internal fun ArrisShortcut(title: String, detail: String, icon: ImageVector, modifier: Modifier, action: () -> Unit) {
-    val c = LocalMetroColors.current
-    Column(modifier.clip(AppShapes.large).background(c.surface)
-        .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.large)
-        .clickable(role = Role.Button, onClick = action).padding(16.dp)) {
-        MetroIcon(icon, null, tint = c.primary, sizeDp = 24.dp)
-        Spacer(Modifier.height(12.dp))
-        MetroText(title, color = c.onBackground, style = LocalMetroTypography.current.titleMedium)
-        MetroText(detail, color = c.onSurfaceVariant, style = LocalMetroTypography.current.caption)
+    val colors = LocalMetroColors.current
+    val wash = Brush.verticalGradient(listOf(lerp(colors.surface, colors.primary, 0.075f), colors.surface))
+    Column(
+        modifier.clip(AppShapes.large)
+            .background(wash)
+            .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.large)
+            .clickable(role = Role.Button, onClick = action)
+            .padding(16.dp),
+    ) {
+        Box(
+            Modifier.size(34.dp).background(colors.primary.copy(alpha = 0.11f), AppShapes.medium),
+            contentAlignment = Alignment.Center,
+        ) {
+            MetroIcon(icon, null, tint = colors.primary, sizeDp = 20.dp)
+        }
+        Spacer(Modifier.height(8.dp))
+        MetroText(title, color = colors.onBackground, style = LocalMetroTypography.current.titleMedium)
+        MetroText(detail, color = colors.onSurfaceVariant, style = LocalMetroTypography.current.caption)
     }
 }
 
 @Composable
-internal fun ArrisHomeIdentity() {
-    val c = LocalMetroColors.current
+internal fun ArrisHomeIdentity(title: String, modifier: Modifier = Modifier) {
+    val colors = LocalMetroColors.current
     val chinese = com.takahashirinta.ncrust.ui.i18n.currentLanguageCode().startsWith("zh")
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            MetroText("ARRIS / YOUR MUSIC", color = c.primary,
-                style = TextStyle(fontSize = 10.sp, letterSpacing = 1.6.sp, fontWeight = FontWeight.Bold))
-            Spacer(Modifier.height(8.dp))
-            MetroText(if (chinese) "喜欢的音乐，都在这里。" else "Your music, all in one place.",
-                color = c.onSurfaceVariant, style = LocalMetroTypography.current.bodyMedium)
+    val light = colors.background.luminance() > 0.5f
+    Box(
+        modifier.fillMaxWidth()
+            .clip(AppShapes.extraLarge)
+            .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.extraLarge)
+            .drawWithCache {
+                val end = if (layoutDirection == LayoutDirection.Ltr) 0.84f else 0.16f
+                val center = Offset(size.width * end, size.height * 0.44f)
+                val wash = Brush.radialGradient(
+                    listOf(
+                        lerp(colors.surface, colors.primary, if (light) 0.20f else 0.24f),
+                        lerp(colors.surface, colors.background, 0.12f),
+                    ),
+                    center = center,
+                    radius = size.width * 0.74f,
+                )
+                onDrawBehind {
+                    drawRect(wash)
+                    drawArrisGrooves(center, size.height * 0.83f, colors.primary)
+                }
+            },
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp, top = 18.dp, bottom = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                MetroText(
+                    "ARRIS / YOUR MUSIC",
+                    color = colors.primary,
+                    style = TextStyle(fontSize = 10.sp, letterSpacing = 1.7.sp, fontWeight = FontWeight.Bold),
+                )
+                Spacer(Modifier.height(4.dp))
+                MetroText(
+                    title,
+                    color = colors.onBackground,
+                    style = LocalMetroTypography.current.pageHeading.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = (-0.8).sp,
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                MetroText(
+                    if (chinese) "喜欢的音乐，都在这里。" else "Your music, all in one place.",
+                    color = colors.onSurfaceVariant,
+                    style = LocalMetroTypography.current.bodySmall,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Image(
+                painter = painterResource(R.drawable.tux_listener),
+                contentDescription = null,
+                modifier = Modifier.size(70.dp),
+            )
         }
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(com.takahashirinta.ncrust.R.drawable.tux_listener),
-            contentDescription = null, modifier = Modifier.size(64.dp))
     }
 }

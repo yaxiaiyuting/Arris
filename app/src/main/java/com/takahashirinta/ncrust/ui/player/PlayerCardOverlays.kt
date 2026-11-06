@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -178,7 +180,11 @@ internal fun PlayerCardCoverOverlay(
             }.testTag("player.cover"),
         contentScale = ContentScale.Crop,
         shape = AppShapes.large,
-        frameColor = LocalMetroColors.current.onBackground.copy(alpha = 0.16f),
+        frame = Brush.verticalGradient(
+            0f to Color.White.copy(alpha = 0.36f),
+            0.54f to Color.White.copy(alpha = 0.11f),
+            1f to Color.Black.copy(alpha = 0.24f),
+        ),
     )
 }
 
