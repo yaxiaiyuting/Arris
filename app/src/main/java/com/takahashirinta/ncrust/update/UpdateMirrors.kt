@@ -62,9 +62,23 @@ internal object UpdateMirrors {
      * 所以把它放在 Gitee 之后、反代之前 —— 顺序即代价，失败一次约 2.5s 预算（探针侧有超时）。
      * 布局是扁平的：`https://mirror.arris.de5.net/<assetName>`（不带 tag）。
      */
+    /**
+     * 自建镜像**默认不进客户端的下载源列表**（`MIRROR_ENABLED = false`）。
+     *
+     * 原因：这台机器在家宽后面，运营商在杀 PCDN（持续上行 + 多连接 + 反复给不同 IP 发大文件）。
+     * 一旦把它当所有用户的默认源，特征就和 PCDN 一模一样，轻则限速重则断网。
+     * 服务端已经做了四道约束（单连接 512KB/s、单 IP 并发 2、只放行 Range 分片、
+     * 日上行 1.5GB 预算到顶自动停），但**最有效的约束是不公开**。
+     *
+     * 想自己用时：把这里改成 true 重新打包，或在浏览器里直接用
+     * `https://mirror.arris.de5.net/<资产名>`（只对 IPv6 可达）。
+     */
+    const val MIRROR_ENABLED: Boolean = false
+
     const val MIRROR_BASE: String = "https://mirror.arris.de5.net"
 
     fun mirrorAsset(assetName: String?): String? {
+        if (!MIRROR_ENABLED) return null
         if (MIRROR_BASE.isBlank() || assetName.isNullOrBlank()) return null
         return "${MIRROR_BASE.trimEnd('/')}/$assetName"
     }

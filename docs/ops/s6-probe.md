@@ -139,3 +139,40 @@ CF 自家测速端点走了另一套 anycast，所以快 10 倍。
 - 这台机器**没有 RTC**：时间退回 10 月会让所有 HTTPS 报 `certificate is not yet valid`，
   `arris-clock-fix.service` 只在开机跑一次，必要时手动 `systemctl start arris-clock-fix`
 - 家宽上行未测；若以后发现镜像上行吃满，需要限速（nginx `limit_rate`）
+
+## 防 PCDN：把镜像做成"不像 CDN"
+
+运营商杀 PCDN 看三件事：**持续高上行、大量并发连接、反复给一堆不同 IP 发大文件**。
+这台机器只是给自己人下 APK，所以从四个层面压：
+
+### 服务端（nginx，已生效并逐条实测）
+
+| 约束 | 配置 | 实测 |
+|---|---|---|
+| 单连接限速 | `limit_rate 512k` + `limit_rate_after 1m`（≈4 Mbps） | 4 MB 分片 6.1s ≈ **687 KB/s 平均** |
+| 单 IP 并发 | `limit_conn perip 2` | 并发 4 条 → **2×206 + 2×429** |
+| **只给分片** | `.apk` 无 `Range` 直接 `403` | `latest.apk` / `Arris-v4.0.14-gpl.apk` 无 Range → **403** |
+| 请求速率 | `limit_req zone=arris_mirror burst=8` | 正常下载不触发 |
+
+> "只给分片"是最关键的一条：**整包直下这件事本身就是 CDN 特征**。我们的客户端本来就是
+> 分段下载，被 403 的只有"浏览器直接点链接"和"单流回退"，它们会回落其他源。
+
+### 流量预算（`arris-mirror-budget.timer`，每 10 分钟）
+
+- 用 `/proc/net/dev` 的累计 tx 差算当天上行（不需要 vnstat）
+- 默认 **1.5 GB/天**（≈15 次 APK 全量下载）
+- 超预算 → `systemctl stop nginx`，写 journal；跨天自动恢复
+- 改预算：`sed -i 's/BUDGET_MB:-1536/BUDGET_MB:-512/' /usr/local/sbin/arris-mirror-budget`
+
+### 客户端（最关键的一条：**不公开**）
+
+`UpdateMirrors.MIRROR_ENABLED = false` —— 自建镜像**不进默认下载源列表**。
+理由很直接：服务端那三道约束都是"限流"，而**最有效的约束是不让所有用户都来拉**。
+想自己用就改成 `true` 重新打包，或者浏览器直接开
+`https://mirror.arris.de5.net/<资产名>`（只对 IPv6 可达）。
+
+### 如果哪天还是被限速
+
+1. 先看 `journalctl -u arris-mirror-budget -n 20`（当天用了多少）
+2. 把预算降到 512 MB/天，或干脆 `systemctl disable --now nginx`
+3. 家用线路不要用来当公共分发；真正要加速应当走备案 + 国内对象存储（见本文开头“备案”一节的历史讨论）
