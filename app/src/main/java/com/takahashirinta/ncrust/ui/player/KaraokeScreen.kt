@@ -163,7 +163,7 @@ internal fun KaraokeScreen(
                                     headline = headline,
                                     animateRail = animateStage && isActiveFrame,
                                     modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
-                                        onSeek(current.timestampMillis)
+                                        onSeek(current.playbackStartMillis)
                                     },
                                 )
                             }
@@ -176,7 +176,7 @@ internal fun KaraokeScreen(
                                 subdued = subdued,
                                 showSecondary = false,
                                 modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
-                                    onSeek(line.timestampMillis)
+                                    onSeek(line.playbackStartMillis)
                                 },
                             )
                         }
@@ -397,8 +397,8 @@ private fun KaraokeFocus(
             translation?.words?.maxOfOrNull { it.startMs + it.durationMs } ?: line.timestampMillis,
         )
     }
-    val railProgress: (() -> Float)? = if (animateRail && wordsEnabled && lastWordEnd > line.timestampMillis) {
-        { (position() - line.timestampMillis).toFloat() / (lastWordEnd - line.timestampMillis) }
+    val railProgress: (() -> Float)? = if (animateRail && wordsEnabled && lastWordEnd > line.playbackStartMillis) {
+        { (position() - line.playbackStartMillis).toFloat() / (lastWordEnd - line.playbackStartMillis) }
     } else null
     val primaryTranslation = translation.takeIf { translatedPrimary }
     val mainStyle = TextStyle(
