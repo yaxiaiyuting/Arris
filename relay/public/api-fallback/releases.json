@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-05T18:20:15.688Z",
+ "generatedAt": "2026-11-06T06:25:49.394Z",
  "releases": [
+  {
+   "tag_name": "v4.0.14-gpl",
+   "name": "Arris v4.0.14-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T06:25:25Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.14-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## 修复部分歌曲歌词慢半拍\n\n- 逐字歌词的首字早于整行标记时，切句、逐字高亮和点歌词跳播对齐首字起点。译文继续按原行的源时间戳配对。\n- 播放位置更新时立即检查已经跨过的歌词边界，拖动进度后及时重新定位。\n\n## 安装与验证\n\n主线 · Android 10 及以上 · versionCode 214\n\n本次发布的是已在 PLC110 上覆盖安装并试听的签名包。同段音轨对齐后，《Dream On》约 1:46 的一次换句比 4.0.13 早约 0.6 秒，《Numb》抽查的两处换句差在 50 毫秒以内。\n\n[官网直链下载](https://arris.de5.net/get/Arris-v4.0.14-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 716154114,
+     "name": "Arris-v4.0.14-gpl.apk",
+     "size": 10523624,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.14-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.13-gpl",
    "name": "Arris v4.0.13-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T15:31:34Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.9-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版做的是下载速度\n\n国内直链走 Cloudflare，同一个包 200 KB/s 和 2 MB/s 都可能出现 —— 这是单源单线路的波动，\n不是\"某个源坏了\"。所以：\n\n- **多镜像**：本站 `/get/` → Gitee（配置后）→ ghproxy 三条公共反代，按优先级排\n- **段轮转**：4 个分段分别走不同镜像（同一线路并发 4 段只会互相抢带宽）\n- **失败换源**：某一段在某镜像失败，换下一条镜像重试**这一段**，不再整批回落单流\n- 每段仍然核对 `Content-Range` 起止与总长（I04 的校验没丢）；失败重试会把已写字节\n  从进度里回退，进度不虚高\n\n## 怎么启用 Gitee 镜像\n\n在 Gitee 建仓并发布 Release（附件放 APK），把附件地址前缀填进\n`app/src/main/java/com/takahashirinta/ncrust/update/UpdateMirrors.kt` 的 `GITEE_BASE`，\n下一版构建就会把它排在本站之后、反代之前。\n\n| | |\n|---|---|\n| APK | 10,4xx,xxx B |\n| SHA-256 | `26c2cb143d536f68daa60e558202256a2b8746198e158c415c56b18d1488200e` |\n| 签名 | v2 scheme 通过 |\n",
+   "body": "",
    "assets": [
     {
      "id": 713743864,
@@ -142,6 +160,24 @@
      "name": "Arris-v4.0.4-gpl.apk",
      "size": 10401136,
      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v4.0.4-gpl/Arris-v4.0.4-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.32-gpl",
+   "name": "Arris LTS v3.7.32-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-05T18:21:49Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.32-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "",
+   "assets": [
+    {
+     "id": 714362487,
+     "name": "Arris-v3.7.32-lts-gpl.apk",
+     "size": 12303089,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.32-lts-gpl.apk"
     }
    ]
   },
