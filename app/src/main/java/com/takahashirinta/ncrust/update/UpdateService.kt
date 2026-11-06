@@ -128,6 +128,15 @@ object UpdateService {
 
     const val USER_AGENT = "Arris-Android"
 
+    /**
+     * 参与分段轮转的源数量上限（4.0.15）。
+     *
+     * 分段数本身是 4：源少于 4 条时会有源被复用；源多于 4 条只是稀释带宽。
+     * 取 2 是因为实测里"最快那条"往往就是 gh-proxy/镜像这类单一 CDN，多一条同时下载
+     * 既能互补又能避免把鸡蛋放一个篮子；再多收益就小了，还多付探测时间的代价。
+     */
+    const val SEGMENT_SOURCES = 2
+
     // 首选**自有域名**的接口：`/api/releases` 由 Worker 代取 GitHub（服务端没有墙），
     // 并把托管在本站的 APK 资产地址改写过去 —— 手机只要能访问本站，检查和下载都能完成。
     // GitHub 原接口作为兜底：接口挂了 / 域名被污染时仍能退回直连。
@@ -334,12 +343,24 @@ object UpdateService {
         val segmentation = if (!dest.isFile && info.assetSize > 4L * 1024 * 1024) {
             SegmentedDownload.probeAll(mirrors, batch)
         } else emptyList()
-        val probe = segmentation.firstOrNull()?.second
+        // 4.0.15：**按实测速率挑源**，而不是按固定优先级。
+        // 实测（国内 CMCC 家宽）同一份包：本站经 CF 40~850KB/s 剧烈波动、gh-proxy 2.7MB/s、
+        // Gitee 不支持 Range。固定顺序在"某些时段 CF 刚好快"时反而拖慢；这里每次下载按当场测得的
+        // 首块速率排序，只让最快的 [SEGMENT_SOURCES] 条参与分段轮转，其余留给单流回退。
+        val ranked = segmentation.sortedByDescending { it.second.rateBps }
+        val picked = ranked.take(SEGMENT_SOURCES)
+        if (ranked.size > 1) {
+            android.util.Log.i(
+                "UpdateService",
+                "mirror ranking: " + ranked.joinToString { "${it.first.substringAfterLast('/').take(24)}=${it.second.rateBps / 1024}KB/s" },
+            )
+        }
+        val probe = picked.firstOrNull()?.second ?: segmentation.firstOrNull()?.second
         requireCurrent()
         if (probe != null && probe.total == info.assetSize && !dest.isFile) {
             val temp = File(directory, "$fileName.seg.$generation")
             try {
-                SegmentedDownload.download(segmentation.map { it.first }, temp, probe, batch, onProgress)
+                SegmentedDownload.download(picked.map { it.first }, temp, probe, batch, onProgress)
                 synchronized(this) {
                     requireCurrent()
                     if (temp.renameTo(dest)) return dest
