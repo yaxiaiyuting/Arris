@@ -116,3 +116,26 @@ CF 自家测速端点走了另一套 anycast，所以快 10 倍。
    （ISP 前缀约 2 小时变一次）② Let's Encrypt DNS-01 签证书（HTTP-01 需要 80 入站，也可）
 
 做完这两步，客户端 `UpdateMirrors` 加一条 `https://mirror.arris.de5.net` 就能参与分段轮转。
+
+## 镜像已通（2026-11-06 晚，用户手机流量实测可达）
+
+- AAAA `mirror.arris.de5.net`（DNS only，不走 CF 代理）
+- Let's Encrypt 证书（DNS-01）；`certbot.timer` 自动续期
+- nginx `443 ssl` 直发 `/srv/arris-dist`，原生 206；`8080` 保留排障
+- `arris-ddns.timer` 每 5 分钟同步 AAAA（前缀约 2h 变一次）
+- `tools/mirror-sync` 从官网拉当前包推过去（**不要**用工作区 `relay/public/dl/`）
+- 客户端：`UpdateMirrors.MIRROR_BASE = https://mirror.arris.de5.net`，
+  源顺序 本站 → Gitee → **自建镜像** → ghproxy（只对 IPv6 用户有效，连不上会超时跳过）
+
+### 路由器放行要点（中兴固件）
+
+`安全 → 本地服务控制 → 服务控制-IPv6 → 新建条目`：
+名称任意、允许服务=是、接口=WAN、**服务类型勾 HTTPS（+PING）**。
+「前缀」两个框必须填**完整 IPv6 地址**：`2409:8a7c:2453:1691::` + `64`
+（只写 4 段会报「请输入正确的 IPv6 地址」）。
+
+### 仍需注意
+
+- 这台机器**没有 RTC**：时间退回 10 月会让所有 HTTPS 报 `certificate is not yet valid`，
+  `arris-clock-fix.service` 只在开机跑一次，必要时手动 `systemctl start arris-clock-fix`
+- 家宽上行未测；若以后发现镜像上行吃满，需要限速（nginx `limit_rate`）
