@@ -25,4 +25,27 @@ fs.writeFileSync(
     'export const DL_SIZE = ' + JSON.stringify(sizes, null, 2) + ';\n',
 );
 fs.writeFileSync(path.join(dlDir, 'manifest.json'), JSON.stringify({ files }, null, 2) + '\n');
+
+// 别名 → (tag, 资产名)：给 Worker 的「国内 302 到 Gitee」用。
+// 之前那版在请求里现场打 GitHub/i自调 /api/releases，撞限流就**静默不跳转**（表现为"别名还是慢"）。
+// 部署时算好、运行时零 subrequest，行为才是确定的。
+const aliases = {};
+const pick = (file) => files.find((f) => f === file);
+const versioned = files.filter((f) => /^Arris-v\d/.test(f));
+const parse = (f) => {
+  const m = /^Arris-(v\d+\.\d+\.\d+)-(lts-)?gpl\.apk$/.exec(f);
+  return m ? { tag: `${m[1]}-gpl`, lts: Boolean(m[2]) } : null;
+};
+const mainline = versioned.map((f) => ({ f, ...parse(f) })).filter((x) => x.tag && !x.lts)
+  .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
+const lts = versioned.map((f) => ({ f, ...parse(f) })).filter((x) => x.tag && x.lts)
+  .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
+if (mainline.length && pick('latest.apk')) aliases['latest.apk'] = mainline[mainline.length - 1];
+if (lts.length && pick('lts-latest.apk')) aliases['lts-latest.apk'] = lts[lts.length - 1];
+fs.writeFileSync(
+  path.join(root, 'src/alias-tags.mjs'),
+  '// 由 tools/sync-dl-manifest.mjs 生成：别名 → (tag, 资产名)，供 Worker 做国内 302。\n' +
+    'export const ALIAS_TAGS = ' + JSON.stringify(aliases, null, 2) + ';\n',
+);
+console.log('alias-tags:', Object.entries(aliases).map(([k, v]) => `${k}→${v.tag}/${v.f}`).join(', ') || '(none)');
 console.log('hosted apk:', files.length, files.join(', '));
