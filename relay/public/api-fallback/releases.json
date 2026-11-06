@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-06T06:25:49.394Z",
+ "generatedAt": "2026-11-06T07:34:14.605Z",
  "releases": [
   {
    "tag_name": "v4.0.14-gpl",
@@ -16,6 +16,24 @@
      "name": "Arris-v4.0.14-gpl.apk",
      "size": 10523624,
      "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.14-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.33-gpl",
+   "name": "Arris LTS v3.7.33-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T07:33:35Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.33-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## LTS 回移歌词切句同步修复\n\n- 普通歌词和独立跟唱共用校正后的行起点与播放时钟。逐字轨先开始时，切句、高亮和点歌词跳播都对齐首字。\n- 播放位置变化后立即重新检查已跨过的歌词边界。译文继续按原行的源时间戳配对。\n- Android 7 的跟唱页可以从系统设置读取动画开关，修复进入跟唱时的崩溃。\n\n## 安装与验证\n\nLTS · Android 7.0 及以上 · versionCode 215\n\n在 Android 7.0（API 24）模拟器上，用此签名包从 3.7.32 覆盖安装并验证离线播放、普通歌词切句、点歌词跳播以及独立跟唱的播放和返回。全量 JVM 测试 3,424 项，0 失败、4 跳过。Release Lint 0 错误。\n\n从 3.7.33 LTS 切回主线时，Android 覆盖安装要求主线 APK 的 versionCode 至少为 215。\n\n[官网下载 LTS APK](https://arris.de5.net/get/Arris-v3.7.33-lts-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 716320767,
+     "name": "Arris-v3.7.33-lts-gpl.apk",
+     "size": 12303089,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.33-lts-gpl.apk"
     }
    ]
   },
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T15:31:37Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.10-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版：Gitee 进入镜像队列\n\nGitee 仓库已建好并把整仓镜像过去（17 个分支 + 148 个 tag）：\n**https://gitee.com/yaxiaiyuting/arris**\n\n下载源顺序（`UpdateMirrors`）：\n\n```\n本站 /get/  →  Gitee Release 附件  →  ghfast.top  →  gh-proxy.com  →  ghproxy.net\n```\n\n## 一个实测发现：Gitee 不支持 Range\n\n| 源 | Range 表现 | 用途 |\n|---|---|---|\n| 本站 / ghproxy | 206（支持分段） | 参与**分段轮转** |\n| **Gitee 附件** | **忽略 Range，回 200 整个文件** | 只做**单流回退** |\n\n所以新增 `probeAll`：分段前逐个探测，只把真正支持 206 的源放进轮转；\nGitee 保留在单流回退列表里（它国内线路最好）。\n\n单流回退也改成**按镜像逐个试**，不再只认 `assetUrl`。\n\n## 匿名下载校验（本机直连 Gitee）\n\n```\nHTTP 200  10,490,856 B  9.60s  ≈ 1.09 MB/s\n本地构建 SHA-256  31165652d99c4f7f…\nGitee 下载 SHA-256 31165652d99c4f7f…\n```\n\n两者一致，说明镜像包与签名产物完全相同。\n\n| | |\n|---|---|\n| APK | 10,490,856 B |\n| SHA-256 | `31165652d99c4f7f7fae959383f731b4e3de21fccf3d7bd0e3ea827d864f0842` |\n",
+   "body": "",
    "assets": [
     {
      "id": 713808709,
