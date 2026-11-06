@@ -15,6 +15,7 @@
  */
 
 import { HOSTED_APK, DL_SIZE } from "./dl-manifest.mjs";
+import { ALIAS_TAGS } from "./alias-tags.mjs";
 import { serveRangedAsset } from "./asset-range.mjs";
 import { serveStudioAudio } from "./studio-audio.mjs";
 
@@ -67,6 +68,48 @@ export default {
     }
     if (url.pathname.startsWith("/get/") || url.pathname.startsWith("/dl/")) {
       const name = url.pathname.slice(url.pathname.indexOf("/", 1) + 1);
+
+      // 国内直连 302 到 Gitee（4.0.15）。
+      //
+      // 为什么：探针实测中国移动家宽到本站被 CF 免费版路由到 **SEA（西雅图）**，APK 只有
+      // 40~50 KB/s；Gitee 是国内 CDN，通常 1~5 MB/s。把大陆用户直接甩给 Gitee 是最省的优化
+      // ——不花钱、不改客户端、立刻生效。
+      //
+      // 几个刻意的取舍：
+      //   · 只对 `get/` 生效，`dl/` 保留静态直出（方便排查、也给脚本用）
+      //   · 只对能推出 tag 的 APK 生效：`Arris-vX.Y.Z-gpl.apk` / `Arris-vX.Y.Z-lts-gpl.apk`
+      //   · 别名（latest.apk / lts-latest.apk）不跳转 —— 它们指向"当前版本"，跳过去容易拿到旧包
+      //   · `?geo=CN` 用于本地验证（CF 的 cf-ipcountry 外部无法伪造）
+      if (url.pathname.startsWith("/get/") && env.GITEE_REDIRECT !== "0") {
+        const country = (url.searchParams.get("geo") || request.headers.get("cf-ipcountry") || "").toUpperCase();
+        if (country === "CN") {
+          // ① 版本化文件名：直接拼 Gitee 地址
+          const m = /^Arris-(v\d+\.\d+\.\d+)-(lts-)?gpl\.apk$/.exec(name);
+          let target = m
+            ? `https://gitee.com/yaxiaiyuting/arris/releases/download/${m[1]}-gpl/${name}`
+            : null;
+          // ② 别名（latest.apk / lts-latest.apk）：用部署时生成的 `alias-tags.mjs`，
+          //    运行时零 subrequest —— 之前现场查 GitHub/自调 /api/releases，撞限流就静默不跳转。
+          if (!target) {
+            const a = ALIAS_TAGS[name];
+            if (a && a.tag && a.f) {
+              target = `https://gitee.com/yaxiaiyuting/arris/releases/download/${a.tag}/${a.f}`;
+            }
+          }
+          if (target) {
+            return new Response(null, {
+              status: 302,
+              headers: {
+                location: target,
+                // 短缓存：万一 Gitee 上没有这个资产，别让客户端记住一次坏跳转
+                "cache-control": "public, max-age=60",
+                "x-arris-mirror": "gitee",
+              },
+            });
+          }
+        }
+      }
+
       const assetUrl = new URL("/dl/" + name, url.origin);
       const size = HOSTED.has(name) ? DL_SIZE[name] : undefined;
       const rolling = name === "latest.apk" || name === "lts-latest.apk";
