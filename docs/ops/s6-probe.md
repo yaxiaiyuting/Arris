@@ -59,3 +59,60 @@ ssh root@192.168.5.34 'journalctl -u arris-probe.service -n 5 -o cat'  # 看历�
 - **一起听中继**：现在是 CF Worker + Durable Objects，搬不过来；要跑得重写轻量 WS 中继。
 - **备份目标**：`rsync dist/ → /srv/arris-dist`（剩 21GB），价值一般。
 - **不要做**：Gradle 构建（2.9GB RAM / 无 JDK / aarch64）。
+
+## 追加（2026-11-06 晚）：三件事都做了
+
+### ① Gitee 发行版补齐 + 自动核对
+
+新增 `tools/gitee-release-sync`：
+
+```bash
+tools/gitee-release-sync --missing     # 扫 GitHub 最近 10 个正式版，补齐 Gitee 缺的
+tools/gitee-release-sync v4.0.14-gpl   # 单个
+tools/gitee-release-sync --verify      # 逐版核对：资产名 + 字节数必须与 GitHub 完全一致
+```
+
+补齐了 `v4.0.13` / `v4.0.14` / `v3.7.32` / `v3.7.33`，并把 `v3.7.33` 上命名错误的附件
+（Gitee 是 `Arris-v3.7.33-gpl.apk`，GitHub 是 `Arris-v3.7.33-lts-gpl.apk`）补成正名 ——
+**名字不一致 = 客户端 `UpdateMirrors` 拼出来的地址静默 404**。
+
+两个踩过的坑已写进脚本注释：
+1. Gitee 的 `/releases/tags/<tag>` 对**不存在**的 tag 也回 `200`（body 是 `null`）⇒ 判定改成"列一遍再比对"
+2. 资产名**必须从 GitHub API 取**，不要自己按 tag 拼（LTS 命名是 `Arris-v3.7.33-lts-gpl.apk`）
+
+`--verify` 当前结果：10/10 全部一致。
+
+### ② 官网慢在哪：CF 把 CMCC 路由到了**西雅图**
+
+同一台设备、同一份 APK，三条路径实测：
+
+| 路径 | 速率 | TTFB |
+|---|---|---|
+| `/get/<apk>`（worker 自实现 206） | 40 KB/s | 3295 ms |
+| `/dl/<apk>`（静态直出） | 49 KB/s | 1619 ms |
+| `speed.cloudflare.com`（CF 自家测速） | 596 KB/s | — |
+| 清华源（家宽基线） | 3391 KB/s | — |
+
+响应头给了答案：`cf-cache-status: HIT` 但 `cf-ray: …-SEA` —— **边缘在美西**。
+所以不是 worker 的分块问题（两条路一样慢），是**免费版对中国移动的选路**；
+CF 自家测速端点走了另一套 anycast，所以快 10 倍。
+
+结论：靠调 worker 救不回来。要么付费 Argo，要么**绕开 CF**（下面 ③）。
+
+### ③ 国内 IPv6 直连镜像（已起服务，等入站放行）
+
+- nginx 1.22（`/etc/nginx/sites-available/arris-mirror`）监听 **8080**（v4+v6），
+  root `/srv/arris-dist`，只放行 `*.apk` / `latest.apk` / `lts-latest.apk` / `/health`，
+  原生支持 Range（这正是 CF 免费版经 worker 时丢掉的能力）
+- 探针的只读端口挪到 **8081**（原来 8080 被它占了）
+- 同步脚本 `tools/mirror-sync`：**从官网**拉当前包推到设备（不要用工作区 `relay/public/dl/`，
+  那个目录可能落后于线上 —— 今天就踩过：本地是 4.0.13/3.7.32，线上已经是 4.0.14/3.7.33）
+- 当前自测：`http://[2409:8a7c:2453:1691:7bf0:9691:e9f7:a09f]:8080/health` → 200，
+  `/latest.apk` → 206
+
+**还差两步（需要人来操作）**：
+1. 路由器放行入站 IPv6 到该地址的 **80/443**（以及测试用 8080）—— 否则只能在局域网访问
+2. 给一个 Cloudflare API Token（`Zone.DNS:Edit`，仅 `de5.net`）：用于 ① DDNS 更新 AAAA
+   （ISP 前缀约 2 小时变一次）② Let's Encrypt DNS-01 签证书（HTTP-01 需要 80 入站，也可）
+
+做完这两步，客户端 `UpdateMirrors` 加一条 `https://mirror.arris.de5.net` 就能参与分段轮转。
