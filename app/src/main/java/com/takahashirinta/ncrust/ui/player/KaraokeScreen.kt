@@ -5,6 +5,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import android.animation.ValueAnimator
 import android.graphics.Bitmap
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
@@ -51,6 +53,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -124,7 +127,7 @@ internal fun KaraokeScreen(
     val focusSweep = remember(sweep) { sweep.copy(inactiveAlpha = maxOf(sweep.inactiveAlpha, 0.62f)) }
     val density = LocalDensity.current
     val phraseTravel = with(density) { 10.dp.roundToPx() }
-    val animateStage = ValueAnimator.areAnimatorsEnabled()
+    val animateStage = karaokeAnimationsEnabled()
 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val compact = maxHeight < 430.dp
@@ -176,7 +179,7 @@ internal fun KaraokeScreen(
                                     headline = headline,
                                     animateRail = animateStage && isActiveFrame,
                                     modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
-                                        onSeek(current.timestampMillis)
+                                        onSeek(current.playbackStartMillis)
                                     },
                                 )
                             }
@@ -189,7 +192,7 @@ internal fun KaraokeScreen(
                                 subdued = subdued,
                                 showSecondary = false,
                                 modifier = modifier.clickable(enabled = canSeek, role = Role.Button) {
-                                    onSeek(line.timestampMillis)
+                                    onSeek(line.playbackStartMillis)
                                 },
                             )
                         }
@@ -272,7 +275,7 @@ internal fun PortraitFocusLyrics(
     val strings = LocalStrings.current
     val colors = LocalMetroColors.current
     val focusSweep = remember(sweep) { sweep.copy(inactiveAlpha = maxOf(sweep.inactiveAlpha, 0.62f)) }
-    val animateRail = ValueAnimator.areAnimatorsEnabled()
+    val animateRail = karaokeAnimationsEnabled()
     val followIndex = if (cue.current >= 0) cue.current else cue.next
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         val headline = (minOf(46f, (maxWidth.value - 19f) / 8.5f)
@@ -331,6 +334,15 @@ internal fun PortraitFocusLyrics(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun karaokeAnimationsEnabled(): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return ValueAnimator.areAnimatorsEnabled()
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
     }
 }
 
@@ -410,8 +422,8 @@ private fun KaraokeFocus(
             translation?.words?.maxOfOrNull { it.startMs + it.durationMs } ?: line.timestampMillis,
         )
     }
-    val railProgress: (() -> Float)? = if (animateRail && wordsEnabled && lastWordEnd > line.timestampMillis) {
-        { (position() - line.timestampMillis).toFloat() / (lastWordEnd - line.timestampMillis) }
+    val railProgress: (() -> Float)? = if (animateRail && wordsEnabled && lastWordEnd > line.playbackStartMillis) {
+        { (position() - line.playbackStartMillis).toFloat() / (lastWordEnd - line.playbackStartMillis) }
     } else null
     val primaryTranslation = translation.takeIf { translatedPrimary }
     val mainStyle = TextStyle(

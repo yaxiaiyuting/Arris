@@ -210,46 +210,32 @@ internal fun ColumnScope.PlayerCardExpanded(
     // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
     val context = LocalContext.current
             if (ui.showKaraoke) {
-                // 3.7.30：**全屏跟唱**（回移自主线 4.0.8）。
-                // LTS 只做这一档：主线竖屏还有"嵌入歌词面板"的形态，那要改播放器纵向分区，
-                // 不在本次范围内；这里的形态与主线宽屏的独立跟唱页一致。
-                // 行模型要转成面板用的 NcrustLyricLine（与 LyricsView 里那份 panelLines 同规则）。
-                val karaokeLines = remember(
-                    lyrics, translatedLyrics, showLyricsTranslation, showLyricsRomanization, romanizedLyrics,
-                ) {
-                    val tMap = if (showLyricsTranslation) translatedLyrics.associateBy { it.timeMs } else emptyMap()
-                    val rMap = if (showLyricsRomanization) romanizedLyrics.associateBy { it.timeMs } else emptyMap()
-                    lyrics.map { line ->
-                        NcrustLyricLine(
-                            timestampMillis = line.timeMs,
-                            text = line.text,
-                            translation = tMap[line.timeMs]?.text ?: "",
-                            romanization = com.takahashirinta.ncrust.lyric.LyricSubtitleText.visibleRomanization(
-                                main = line.text,
-                                romanization = rMap[line.timeMs]?.text ?: "",
-                                show = showLyricsRomanization,
-                            ),
-                            words = line.words,
-                            endMs = line.endMs,
-                            fontScale = 1f,
-                        )
-                    }
-                }
-                val karaokeTranslations = remember(karaokeLines, translatedLyrics) {
-                    translatedLyrics.associateBy { it.timeMs }
-                }
-                // KaraokeTimeline 吃的是**原始 LrcLine**（它靠 timeMs/knownEnd 判断间奏），
-                // 而 KaraokeScreen 渲染用的是面板行模型 —— 两者各取所需。
-                val timeline = remember(lyrics, karaokeTranslations) {
-                    KaraokeTimeline(lyrics, translatedLyrics.associateBy { it.timeMs })
-                }
-                val wordAnimation = lyricsWordAnimation
-                androidx.activity.compose.BackHandler(enabled = ui.cardExpandedForInput) {
+                val exitKaraoke: () -> Unit = {
                     ui.showKaraoke = false
                     ui.lyricLocateTrigger++
                 }
-                KaraokeScreen(
-                    controls = KaraokeControls(
+                androidx.activity.compose.BackHandler(
+                    enabled = ui.cardExpandedForInput, onBack = exitKaraoke,
+                )
+                LyricsView(
+                    lyrics = lyrics,
+                    translatedLyrics = translatedLyrics,
+                    showTranslation = showLyricsTranslation,
+                    romanizedLyrics = romanizedLyrics,
+                    showRomanization = showLyricsRomanization,
+                    trackKey = song?.let { "${it.source}:${it.id}" },
+                    positionFlow = positionFlow,
+                    isPlaying = isPlaying,
+                    isBufferingFlow = playerViewModel.isBuffering,
+                    isVisible = true,
+                    onSeekToMs = playerViewModel::seekTo,
+                    enabled = ui.cardExpandedForInput,
+                    isLoading = lyricsLoading,
+                    wordByWordEnabled = lyricsWordAnimation != LyricsWordAnimationMode.OFF,
+                    wordAnimationMode = lyricsWordAnimation,
+                    fontScale = lyricsFontScale,
+                    sweepQuality = lyricsSweepQuality,
+                    karaoke = KaraokeControls(
                         embedded = false,
                         title = song?.name.orEmpty(),
                         artist = song?.artists.orEmpty().joinToString(" / ") { it.name },
@@ -260,22 +246,10 @@ internal fun ColumnScope.PlayerCardExpanded(
                         buffering = playerViewModel.isBuffering,
                         transport = callbacks,
                         previousEnabled = playbackQueue.isNotEmpty(),
-                        exit = { ui.showKaraoke = false; ui.lyricLocateTrigger++ },
+                        exit = exitKaraoke,
                         translatedPrimary = showLyricsTranslation,
                         toggleLanguage = {},
                     ),
-                    lines = karaokeLines,
-                    translations = karaokeTranslations,
-                    cue = timeline.cueAt(positionFlow.value),
-                    position = { positionFlow.value },
-                    onSeek = { ms -> playerViewModel.seekTo(ms) },
-                    playing = isPlaying,
-                    loading = lyricsLoading,
-                    wordsEnabled = wordAnimation != LyricsWordAnimationMode.OFF,
-                    animationMode = wordAnimation,
-                    sweep = com.takahashirinta.ncrust.lyric.LyricsSweepConfig.DEFAULT,
-                    fontScale = lyricsFontScale,
-                    interactive = ui.cardExpandedForInput,
                 )
                 return
             }

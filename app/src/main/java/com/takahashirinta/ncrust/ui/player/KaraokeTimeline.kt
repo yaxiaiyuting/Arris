@@ -2,11 +2,15 @@
 package com.takahashirinta.ncrust.ui.player
 
 import com.takahashirinta.ncrust.lyric.LrcLine
+import com.takahashirinta.ncrust.lyric.LyricClock
 
 internal data class KaraokeCue(val current: Int, val next: Int, val count: Int? = null)
 
-internal class KaraokeTimeline(lines: List<LrcLine>, translations: Map<Long, LrcLine>) {
-    private val times = LongArray(lines.size) { lines[it].timeMs }
+internal class KaraokeTimeline(
+    lines: List<LrcLine>,
+    translations: Map<Long, LrcLine>,
+    private val times: LongArray = LyricClock.lineStarts(lines, useWordTiming = true),
+) {
     private val breaks = LongArray(lines.size) { -1L }
 
     // A plain LRC start cannot tell us when a phrase ends. Only show an instrumental cue
@@ -14,8 +18,8 @@ internal class KaraokeTimeline(lines: List<LrcLine>, translations: Map<Long, Lrc
     val boundaries: List<Long> = buildList {
         if (times.isNotEmpty() && times[0] >= INTRO_MS) addCountdown(times[0])
         for (i in 0 until lines.lastIndex) {
-            val end = lines[i].knownEnd() ?: continue
-            val translatedEnd = translations[times[i]]?.knownEnd() ?: end
+            val end = lines[i].knownEnd(times[i]) ?: continue
+            val translatedEnd = translations[lines[i].timeMs]?.knownEnd(times[i]) ?: end
             val latest = maxOf(end, translatedEnd)
             if (times[i + 1] - latest < BREAK_MS) continue
             breaks[i] = latest
@@ -40,9 +44,9 @@ internal class KaraokeTimeline(lines: List<LrcLine>, translations: Map<Long, Lrc
         for (second in 3 downTo 1) add(next - second * 1000L)
     }
 
-    private fun LrcLine.knownEnd(): Long? =
-        maxOf(endMs ?: timeMs, words.maxOfOrNull { it.startMs + it.durationMs } ?: timeMs)
-            .takeIf { it > timeMs }
+    private fun LrcLine.knownEnd(startMs: Long): Long? =
+        maxOf(endMs ?: startMs, words.maxOfOrNull { it.startMs + it.durationMs } ?: startMs)
+            .takeIf { it > startMs }
 
     private companion object {
         const val INTRO_MS = 3000L

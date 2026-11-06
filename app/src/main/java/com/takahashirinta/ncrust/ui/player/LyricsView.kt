@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.takahashirinta.ncrust.lyric.DynamicLyricFont
 import com.takahashirinta.ncrust.lyric.LrcLine
+import com.takahashirinta.ncrust.lyric.LyricClock
 import com.takahashirinta.ncrust.lyric.LyricSubtitleText
 import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsSweepPerf
@@ -54,7 +55,8 @@ import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -127,6 +129,7 @@ fun LyricsView(
     centeredLayout: Boolean = false,
     /** 3.7.30：打开跟唱页（null = 不显示入口）。 */
     onOpenKaraoke: (() -> Unit)? = null,
+    karaoke: KaraokeControls? = null,
 ) {
     val strings = LocalStrings.current
     // v3.4.12：歌词字号按高度档缩放（A- / A+ 的 fontScale 仍在其上乘算，层级比例不变）。
@@ -150,7 +153,7 @@ fun LyricsView(
         HeightClass.Compact -> 21f
         HeightClass.Tiny -> 18f
     }
-    if (lyrics.isEmpty()) {
+    if (lyrics.isEmpty() && karaoke == null) {
         if (!isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 MetroText(strings.noLyrics, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 18.sp))
@@ -202,8 +205,10 @@ fun LyricsView(
         }
     }
 
+    val useWordTiming = wordByWordEnabled && wordAnimationMode != LyricsWordAnimationMode.OFF
+    val lineStarts = remember(lyrics, useWordTiming) { LyricClock.lineStarts(lyrics, useWordTiming) }
     val panelLines = remember(
-        lyrics, translatedLyrics, showTranslation, romanizedLyrics, showRomanization, lineScales,
+        lyrics, translatedLyrics, showTranslation, romanizedLyrics, showRomanization, lineScales, lineStarts,
     ) {
         val tMap = if (showTranslation) translatedLyrics.associateBy { it.timeMs } else emptyMap()
         val rMap = if (showRomanization) romanizedLyrics.associateBy { it.timeMs } else emptyMap()
@@ -220,6 +225,7 @@ fun LyricsView(
                 words = line.words,
                 endMs = line.endMs,
                 fontScale = lineScales.getOrElse(index) { 1f },
+                playbackStartMillis = lineStarts[index],
             )
         }
     }
@@ -228,6 +234,7 @@ fun LyricsView(
     // 阶段被读,按需写一次也只重算当前行,不触发本 Composable 重组。
     val positionState = positionFlow.collectAsStateWithLifecycle()
     val isBuffering by isBufferingFlow.collectAsStateWithLifecycle()
+    val positionChanged = remember { Channel<Unit>(Channel.CONFLATED) }
     // 初值取当前流值而非 0:否则面板首次出现时会先按"位置 0"高亮第一行/吸顶,
     // 等锚点被采样纠正后才跳回真实行。按需唤醒把纠错窗口拉长到最多 1s, 这个初值
     // 尤为重要。
@@ -240,23 +247,13 @@ fun LyricsView(
         }
     }
 
-    // 唤醒时刻表（升序去重）：行时间戳 + 每个词的起始时间。
-    // v1.5.0 · B：逐字高亮要求唤醒精度到"词"，但绝不能改成逐帧轮询 —— 这里只是把原来
-    // 的"行边界"细化成"行边界 ∪ 词边界"，仍然是**按需唤醒**：静态时零状态写入、零帧调度，
-    // 只在真正跨行/跨词的那一刻动一次。词密度约每秒 3~8 个，远低于 60fps。
-    // 2Hz 采样到达时锚点会被重置回真实值，所以细粒度外推不会累积误差。
-    val boundaries = remember(lyrics) {
-        val set = java.util.TreeSet<Long>()
-        for (line in lyrics) {
-            set.add(line.timeMs)
-            for (w in line.words) set.add(w.startMs)
-        }
-        LongArray(set.size) { set.elementAt(it) }
+    val karaokeActive = karaoke != null
+    val karaokeTranslations = remember(karaokeActive, translatedLyrics) {
+        if (karaokeActive) translatedLyrics.associateBy { it.timeMs } else emptyMap()
     }
-
-    // v1.5.2：行时间戳数组。与面板内部用的是**同一个** currentLineIndex 二分查找 ——
-    // 两边必须是同一份判定，否则「面板高亮的行」和「正在逐帧推进的窗口」会错开一行。
-    val timestamps = remember(lyrics) { LongArray(lyrics.size) { lyrics[it].timeMs } }
+    val karaokeTimeline = remember(karaokeActive, lyrics, karaokeTranslations, lineStarts) {
+        if (karaokeActive) KaraokeTimeline(lyrics, karaokeTranslations, lineStarts) else null
+    }
 
     // v1.5.2：逐字扫过的「活动窗口」——每行从**第一个词开始**到**最后一个词唱完（含行尾收束）**。
     // 只有落在这个窗口里才逐帧推进位置；前奏 / 间奏 / 行尾留白一律回到按需唤醒，
@@ -264,6 +261,26 @@ fun LyricsView(
     // 一个窗口 ≈ 这一行真正在唱的 2~5 秒，所以整首歌的帧调度时间与「一直在唱」的直觉一致。
     val sweepWindows = remember(lyrics, wordByWordEnabled, wordAnimationMode) {
         buildSweepWindows(lyrics, wordByWordEnabled, wordAnimationMode)
+    }
+
+    val translationSweep = remember(lyrics, karaokeTranslations, wordByWordEnabled, wordAnimationMode) {
+        if (karaokeTranslations.isEmpty()) null
+        else buildSweepWindows(lyrics.map { karaokeTranslations[it.timeMs] ?: it.copy(words = emptyList()) },
+            wordByWordEnabled, wordAnimationMode)
+    }
+
+    val boundaries = remember(lineStarts, karaokeTimeline, karaokeTranslations, sweepWindows, translationSweep) {
+        val set = java.util.TreeSet<Long>()
+        lineStarts.forEach(set::add)
+        if (useWordTiming) {
+            for (line in lyrics) for (word in line.words) set.add(word.startMs)
+            for (line in karaokeTranslations.values) for (word in line.words) set.add(word.startMs)
+            // Publish the end even when the first frame past it leaves the sweep window.
+            for (end in sweepWindows.ends) if (end != NO_SWEEP_WINDOW) set.add(end)
+            translationSweep?.ends?.forEach { end -> if (end != NO_SWEEP_WINDOW) set.add(end) }
+        }
+        karaokeTimeline?.boundaries?.let(set::addAll)
+        set.toLongArray()
     }
 
     // v1.5.2：扫过参数（渐变带宽度 / 未唱透明度 / 缓动 / 软边），由设备能力 + 设置解析。
@@ -278,35 +295,26 @@ fun LyricsView(
         )
     }
 
-    // v1.5.2：换歌（歌词表身份变化）时，外推状态立刻按当前真实位置重来一次。
-    // ViewModel 侧已经在切歌路径把 currentPosition 归零，这里再兜一道：只要歌词换了，
-    // 就绝不允许继续用上一首的外推值去定位新歌词的行。
-    LaunchedEffect(lyrics) {
-        anchor.anchorPosMs = positionState.value
-        anchor.anchorNanos = System.nanoTime()
-        displayPosition.longValue = positionState.value
-    }
-
-    // 2Hz 采样到达时重置外推锚点(首帧前锚点已就位,避免一帧闪到末尾)。
-    // v1.4.1：同时把"位置流与显示位置脱节"的情况拉回来 —— 旧实现只在
-    // isPlaying/isVisible/timestamps 变化时同步 displayPosition，于是
-    // **暂停态点进度条跳到别处时歌词纹丝不动**，要按一下播放（或暂停）才跟上。
-    // 阈值 1.5s：正常播放时 displayPosition 只会比采样超前 ≤1 个 tick（500ms），
-    // 超过就说明发生了 seek（前进或后退），必须立刻对齐，否则前进跳转要等
-    // 下一行边界、后退跳转则永远追不上（外推循环只写更大的值）。
-    // `trackKey` 用 rememberUpdatedState 读取：本效果以 Unit 为 key（只订阅一次位置流），
-    // 直接捕获 `trackKey` 会永远读到首次组合时的那个值，于是「这条采样属于哪一首」永远错。
+    // An incoming audio sample re-anchors the clock and interrupts a pending wait.
+    // A change of lyric presentation replaces the schedule without rewinding the clock.
     val currentTrackKey = rememberUpdatedState(trackKey)
     val currentPlaying = rememberUpdatedState(isPlaying)
+    val currentBuffering = rememberUpdatedState(isBuffering)
+    val currentKaraokeActive = rememberUpdatedState(karaokeActive)
     LaunchedEffect(Unit) {
         snapshotFlow { positionState.value }.collect { pos ->
+            val now = System.nanoTime()
+            val sampleDiscontinuity = currentKaraokeActive.value &&
+                kotlin.math.abs(pos - anchor.positionAt(now)) > 320L
             anchor.anchorPosMs = pos
-            anchor.anchorNanos = System.nanoTime()
+            anchor.anchorNanos = now
+            anchor.speed = currentPlaybackSpeed()
             anchor.anchorTrackKey = currentTrackKey.value
             val drift = kotlin.math.abs(pos - displayPosition.longValue)
-            if (!currentPlaying.value || drift > 1_500L) {
+            if (!currentPlaying.value || currentBuffering.value || sampleDiscontinuity || drift > 1_500L) {
                 displayPosition.longValue = pos
             }
+            positionChanged.trySend(Unit)
         }
     }
 
@@ -345,95 +353,73 @@ fun LyricsView(
         displayPosition.longValue = 0L
     }
 
-    // 外推循环 = v1.4.1 的按需唤醒 + v1.5.2 的逐字逐帧窗口:
-    //
-    //  - **逐字活动窗口内**（当前行有 yrc 且正在唱）：用 `withFrameNanos` 逐帧把 displayPosition
-    //    推到真实时刻。这是 v1.5.2 修掉的核心问题 —— v1.5.1 只在「行时间戳 ∪ 词起始时刻」写一次
-    //    位置，绘制阶段永远读到词边界那一刻，于是 playedCutCharCount 里那段「词内线性插值」
-    //    在真机上**从未被喂到中间值**，光标每唱完一个词才跳一格，软边只是替跳变磨圆。
-    //  - **窗口外**（前奏 / 间奏 / 行尾留白 / 没有逐字数据）：原样回到按需唤醒 —— 睡到下一个
-    //    行/词边界再写一次。静态时零状态写入、零帧调度，不会让渲染管线在整首歌里 60fps 空转。
-    //
-    // 2Hz 采样会把锚点重置回真实值，所以两种模式下的外推误差都不累积。暂停 / 隐藏 / 面板不可交互即停。
-    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, trackKey) {
-        // 恢复播放/联网时重新计时，不把缓冲、暂停或后台停留算成已播放时间。
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, trackKey) {
         anchor.anchorPosMs = positionState.value
         anchor.anchorNanos = System.nanoTime()
         anchor.anchorTrackKey = trackKey
         displayPosition.longValue = positionState.value
-        // v3.6.5：缓冲中 / 还没出声时不外推。旧实现只看 isPlaying —— 用户按下播放、
-        // 音频还在加载时 isPlaying 已经是 true，外推从 0 开始跑，歌词就先唱了。
-        if (!isPlaying || isBuffering || !isVisible || !enabled) {
-            displayPosition.longValue = positionState.value
-            return@LaunchedEffect
-        }
+    }
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, translationSweep, trackKey) {
+        anchor.speed = currentPlaybackSpeed()
+        if (!isPlaying || isBuffering || !isVisible || !enabled) return@LaunchedEffect
         while (true) {
-            // 首条位置采样到达前（position 仍为 0）也不要外推：宁可让第一句晚 100~500ms，
-            // 也不要让它在音频真正开始前先滚过去。
-            if (positionState.value <= 0L) {
-                displayPosition.longValue = positionState.value
-                delay(100)
+            // Wait for the first real sample and do not advance another track's clock.
+            if (positionState.value <= 0L || anchor.anchorTrackKey != trackKey) {
+                positionChanged.receive()
                 continue
             }
-            // 锚点必须属于当前曲目才允许外推：迟到的旧采样可能把锚点重新指向上一首的位置，
-            // 那种值一旦参与外推就会让新歌的歌词跳到错误的行（见上面「换歌作废锚点」）。
-            // 不匹配时退化成"用画面上的值"，等第一条属于本曲的采样到达即可。
-            val anchorValid = anchor.anchorTrackKey == trackKey
-            val nowMs = if (anchorValid) {
-                anchor.positionAt(System.nanoTime())
-            } else {
-                displayPosition.longValue
-            }
-            // 位置回退（seek / 切歌）：外推值是**单调抬高**出来的，不主动跟下去就会停在旧位置；
-            // 把它拉回 nowMs，保证面板永远不会拿一个"未来"的位置去定位歌词行。
-            if (displayPosition.longValue > nowMs + POSITION_SNAP_BACK_MS) {
-                displayPosition.longValue = nowMs
-            }
-            // ① 正在唱的这一行 → 逐帧推进。
-            if (inSweepWindow(nowMs, sweepWindows, timestamps)) {
+
+            val nowMs = anchor.positionAt(System.nanoTime())
+            val sweeping = inSweepWindow(nowMs, sweepWindows, lineStarts) ||
+                (translationSweep != null && inSweepWindow(nowMs, translationSweep, lineStarts))
+            val previous = displayPosition.longValue
+            val current = LyricClock.displayPosition(previous, nowMs, boundaries, sweeping)
+            if (current != previous) displayPosition.longValue = current
+
+            if (sweeping) {
                 withFrameNanos { }
-                if (anchorValid) {
-                    val t = anchor.positionAt(System.nanoTime())
-                    if (t > displayPosition.longValue) displayPosition.longValue = t
+            } else {
+                val next = LyricClock.nextBoundaryAfter(boundaries, nowMs)
+                if (next == null) {
+                    positionChanged.receive()
+                } else {
+                    val waitMs = ((next - nowMs) / anchor.speed).toLong().coerceIn(1L, 1_000L)
+                    withTimeoutOrNull(waitMs) { positionChanged.receive() }
                 }
-                continue
-            }
-            // ② 其余时间 → 按需唤醒。
-            val next = nextLineBoundaryAfter(boundaries, nowMs)
-            if (next == null) {
-                // 已越过最后一行:无跨行可等,低频醒来等采样/seek 改变锚点。
-                delay(500)
-                continue
-            }
-            val waitMs = next - nowMs
-            // 上限 1s:seek/tap 改变锚点后,最多 1s 重新对齐。
-            if (waitMs > 0) delay(waitMs.coerceAtMost(1_000L))
-            if (!anchorValid) continue
-            val extrapolated =
-                anchor.positionAt(System.nanoTime())
-            // 只在真正越过该边界时写,长间隔里不会每秒写一次状态。
-            if (extrapolated >= next && extrapolated > displayPosition.longValue) {
-                displayPosition.longValue = extrapolated
             }
         }
     }
 
-    // v1.7.0 · P1：上下渐隐高度跟随面板视口。
-    // 竖屏全屏播放器面板高约 700dp，100dp 渐隐只吃边角；但横屏大屏模式右栏只有
-    // 约 210dp 高（PCL110 实测：1272px 高 − 系统栏/挖孔 − 控制条 ~84dp），两条
-    // 100dp 的渐隐会把整块歌词糊掉。取 min(100dp, 30% 视口高)，竖屏数值分毫不变，
-    // 横屏自动收窄；不引入任何新的渲染路径（仍是同样两个 Box + 同一个 verticalGradient）。
-    //
-    // ★ v2.5.2：公式搬进 `LyricsPanelScroll.fadeHeightPx` —— 从本版起**面板自己也要用它**
-    //   （它是「整条歌词最高能摆到哪」的下限，见 `blockTopPx` 的 `minTopPx`）。
-    //   两处各写一份就是第二处真相：渐隐带调窄了而定位没跟着调，当前行就会被压在渐隐里发灰。
-    var panelHeightPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
-    val fadeHeight = with(LocalDensity.current) {
-        LyricsPanelScroll.fadeHeightPx(
-            viewportHeightPx = if (panelHeightPx.isFinite()) panelHeightPx.toInt() else 0,
-            baseFadePx = LyricsPanelScroll.BASE_FADE_DP.dp.toPx(),
-            minFadePx = LyricsPanelScroll.MIN_FADE_DP.dp.toPx(),
-        ).toDp()
+    val seek: (Long) -> Unit = { ms ->
+        anchor.anchorPosMs = ms
+        anchor.anchorNanos = System.nanoTime()
+        anchor.anchorTrackKey = trackKey
+        displayPosition.longValue = ms
+        positionChanged.trySend(Unit)
+        onSeekToMs(ms)
+    }
+    if (karaoke != null && karaokeTimeline != null) {
+        val cue by remember(karaokeTimeline, displayPosition) {
+            androidx.compose.runtime.derivedStateOf { karaokeTimeline.cueAt(displayPosition.longValue) }
+        }
+        androidx.compose.runtime.key(trackKey) {
+            KaraokeScreen(
+                controls = karaoke,
+                lines = panelLines,
+                translations = karaokeTranslations,
+                cue = cue,
+                position = { displayPosition.longValue },
+                onSeek = seek,
+                playing = isPlaying,
+                loading = isLoading,
+                wordsEnabled = wordByWordEnabled,
+                animationMode = wordAnimationMode,
+                sweep = sweepConfig,
+                fontScale = fontScale,
+                interactive = enabled && isVisible,
+            )
+        }
+        return
     }
 
     // ── v3.3.0 · 9：歌词复制 / 分享 / 出图的入口 ────────────────────────────────
@@ -471,13 +457,7 @@ fun LyricsView(
             karaokeEnabled = wordByWordEnabled,
             wordAnimationMode = wordAnimationMode,
             sweepConfig = sweepConfig,
-            onLineClick = if (enabled) { ms ->
-                // 点击行:本地立即定位,不等 2Hz 采样回传,seek 手感即时。
-                anchor.anchorPosMs = ms
-                anchor.anchorNanos = System.nanoTime()
-                displayPosition.longValue = ms
-                onSeekToMs(ms)
-            } else { _ -> },
+            onLineClick = if (enabled) seek else { _ -> },
             onUserScrolled = onUserScrolled,
             // 已播/未播行颜色随主题适配：Kanesumi 面板默认写死 White@0.6 / Gray@0.4，
             // 浅色底上白色已播行会看不见。这里改用语义色。
@@ -685,11 +665,17 @@ private fun buildShareLines(
     }
 }
 
+// Only the UI thread reads Media3 parameters. The player may not be constructed yet.
+private fun currentPlaybackSpeed(): Float = runCatching {
+    com.takahashirinta.ncrust.player.PlaybackService.instance?.player?.playbackParameters?.speed
+}.getOrNull()?.takeIf { it.isFinite() && it > 0f } ?: 1f
+
 private class PositionAnchor {
-    fun positionAt(nowNanos: Long): Long = com.takahashirinta.ncrust.lyric.LyricClock.positionAt(
-        anchorPosMs, anchorNanos, nowNanos,
+    fun positionAt(nowNanos: Long): Long = LyricClock.positionAt(
+        anchorPosMs, anchorNanos, nowNanos, speed,
     )
 
+    var speed = 1f
     var anchorPosMs: Long = 0L
     var anchorNanos: Long = 0L
 
@@ -703,33 +689,8 @@ private class PositionAnchor {
     var anchorTrackKey: Any? = null
 }
 
-// 返回严格大于 positionMillis 的最小行时间戳;没有则 null。timestamps 升序。
-private fun nextLineBoundaryAfter(timestamps: LongArray, positionMillis: Long): Long? {
-    if (timestamps.isEmpty() || positionMillis >= timestamps.last()) return null
-    var lo = 0
-    var hi = timestamps.size - 1
-    while (lo < hi) {
-        val mid = (lo + hi) ushr 1
-        if (timestamps[mid] <= positionMillis) lo = mid + 1 else hi = mid
-    }
-    return timestamps[lo]
-}
-
-// ---------------------------------------------------------------------------
-// v1.5.2：逐字扫过的活动窗口
-// ---------------------------------------------------------------------------
-
-/** 该行没有逐字扫过窗口（无 yrc / 开关关掉 / 时间轴不可用）的哨兵值。 */
+/** 该行没有逐字扫过窗口。 */
 private const val NO_SWEEP_WINDOW = Long.MIN_VALUE
-
-/**
- * 外推值允许超前真实时刻多少毫秒。
- *
- * 正常播放时外推最多领先一个 2Hz 采样周期（500ms）再加一点调度抖动；超过这个量就说明
- * 发生了回退（seek 或切歌），必须立刻把 displayPosition 拉回来。取 1000ms 是为了不去
- * 干扰正常的采样抖动。
- */
-private const val POSITION_SNAP_BACK_MS = 1_000L
 
 /**
  * 每行的扫过活动窗口，与歌词行下标一一对应。

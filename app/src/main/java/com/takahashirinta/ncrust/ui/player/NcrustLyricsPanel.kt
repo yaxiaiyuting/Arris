@@ -121,6 +121,7 @@ data class NcrustLyricLine(
     // 它是"这一句自己的静态属性"，与"谁是当前行"无关 —— 绝不能按 currentIndex 改字号，
     // 否则每次切句都会有两行重排 + item 高度抖动。
     val fontScale: Float = 1f,
+    val playbackStartMillis: Long = timestampMillis,
 )
 
 private val LyricHandoff = tween<Float>(360, easing = SokuouTweens.CoverFade.easing)
@@ -209,7 +210,7 @@ internal fun NcrustLyricsPanel(
     currentMarker: Boolean = false,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
-    val timestamps = remember(lines) { LongArray(lines.size) { lines[it].timestampMillis } }
+    val timestamps = remember(lines) { LongArray(lines.size) { lines[it].playbackStartMillis } }
     val timedIndex by remember(timestamps) {
         derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
     }
@@ -434,7 +435,7 @@ internal fun NcrustLyricsPanel(
                     Modifier.fillMaxWidth()
                         .clickable(enabled = enabled) {
                             userScrolling = false
-                            onLineClick(line.timestampMillis)
+                            onLineClick(line.playbackStartMillis)
                         }
                         .padding(vertical = if (portrait) 8.dp else 10.dp)
                         .graphicsLayer {
