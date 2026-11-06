@@ -1,0 +1,6 @@
+application=0ba4602bd347ad8eeeb7c786d00dcd781625ffb7 website_snapshot=d211a7a0f9ee5a031f6725542a6e2f5edae8c4bb
+325e1ab9672380562cc50b2b96d1e82699bda3bb07ab098726936c67e50b9ec2
+LTS01 archived feed: releases=118, asset=Arris-v3.7.33-lts-gpl.apk, 3.7.32 -> UpToDate
+LTS01 name-only control: 3.7.32 -> 3.7.33, same URL and asset id
+LTS03 cached mainline: fresh channel gate=false, cold restore keeps 4.0.14
+LTS04 short backward seek: audio=9500 -> row=0, display=10200 -> row=1; stays at 10200 on the re-crossing
