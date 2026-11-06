@@ -3,6 +3,16 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v3.7.34-gpl（LTS）— 恢复应用内更新与 Android 7 收藏确认（2026-11-06）
+
+LTS · Android 7.0 及以上 · versionCode 216
+
+- 3.7.32 可识别并下载 3.7.34 的正式包。新版也能识别历史 `-lts-gpl` 资产名。
+- 冷启动恢复更新提示时复核通道与构建类型，清除跨线的旧提示并允许重新检查。
+- Android 7 的网易云收藏与取消收藏 EAPI 回退直接解密响应字节，保留明文业务码识别。
+- 播放中短距离往回拖动进度条时，歌词按跳转后的位置切句。
+- 跟唱页可以切换原文与译文的主行，没有该句译文时显示原文。
+
 ## v3.7.33-gpl（LTS）— 回移歌词切句同步修复（2026-11-06）
 
 LTS · Android 7.0 及以上 · versionCode 215

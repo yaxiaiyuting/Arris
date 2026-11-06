@@ -34,7 +34,7 @@ const pick = (file) => files.find((f) => f === file);
 const versioned = files.filter((f) => /^Arris-v\d/.test(f));
 const parse = (f) => {
   const m = /^Arris-(v\d+\.\d+\.\d+)-(lts-)?gpl\.apk$/.exec(f);
-  return m ? { tag: `${m[1]}-gpl`, lts: Boolean(m[2]) } : null;
+  return m ? { tag: `${m[1]}-gpl`, lts: Boolean(m[2]) || m[1].startsWith("v3.7.") } : null;
 };
 const mainline = versioned.map((f) => ({ f, ...parse(f) })).filter((x) => x.tag && !x.lts)
   .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
