@@ -50,6 +50,9 @@ internal object SegmentedDownload {
     /** 4.0.12：单条镜像的探测预算。取 2.5s —— 国内正常 RTT 500ms 内，死链也就多等这么久。 */
     private const val PROBE_TIMEOUT_MS = 2500L
 
+    /** 探测时顺带取的字节数（256KB）：一次性拿到 206 校验 + 速率。 */
+    private const val PROBE_SPAN_LAST = 262143L
+
     /** 拿到这么多条可用源就开跑，不等剩下的。 */
     private const val PROBE_MIN_READY = 1
 
@@ -63,7 +66,14 @@ internal object SegmentedDownload {
             .build()
     }
 
-    data class Probe(val total: Long, val etag: String?)
+    /**
+     * 探测结果。[rateBps] 是这次探测顺手测出来的**首块速率**（字节/秒）。
+     *
+     * 为什么要在探测里测速：不同源的实际速率差一个数量级（实测本站经 CF 40~850KB/s 波动、
+     * gh-proxy 2.7MB/s、Gitee 不支持 Range）。既然已经把 Range 请求发出去了，就让它多带
+     * 256KB 回来顺便量一次 —— 比"按固定优先级选源"靠谱，而且每次下载都按当时的网络重排。
+     */
+    data class Probe(val total: Long, val etag: String?, val rateBps: Long = 0L)
 
     class Batch {
         private val calls = mutableSetOf<okhttp3.Call>()
@@ -150,10 +160,12 @@ internal object SegmentedDownload {
     }
 
     fun probe(url: String, batch: Batch): Probe? {
+        // 探测同时测速：要 256KB（不是 0-0），这样一次往返既能验证 206/ETag/总长，
+        // 又能拿到这个源在当前网络下的真实吞吐。256KB 对 10MB 的包是 2.5% 的开销。
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", UpdateService.USER_AGENT)
-            .header("Range", "bytes=0-0")
+            .header("Range", "bytes=0-$PROBE_SPAN_LAST")
             .build()
         return runCatching {
             batch.execute(client.newCall(request)) { resp ->
@@ -161,13 +173,19 @@ internal object SegmentedDownload {
                     Log.i(TAG, "probe: code=${resp.code} → 不走分段")
                     return@execute null
                 }
+                val started = android.os.SystemClock.elapsedRealtime()
                 val range = parseContentRange(resp.header("Content-Range"))
-                if (range == null || range.start != 0L || range.end != 0L || range.total <= 0L) {
+                if (range == null || range.start != 0L || range.total <= 0L) {
                     Log.i(TAG, "probe: 没有 Content-Range 总长 → 不走分段")
                     return@execute null
                 }
                 val etag = strongEtag(resp.header("ETag")) ?: return@execute null
-                Probe(range.total, etag)
+                val read = resp.body?.bytes()?.size?.toLong() ?: 0L
+                val elapsed = (android.os.SystemClock.elapsedRealtime() - started).coerceAtLeast(1L)
+                val rate = read * 1000L / elapsed
+                if (read <= 0L) return@execute null
+                Log.i(TAG, "probe: ${url.takeLast(32)} rate=${rate / 1024}KB/s total=${range.total}")
+                Probe(range.total, etag, rate)
             }
         }.getOrNull()
     }
