@@ -52,6 +52,23 @@ internal object UpdateMirrors {
     /** 仓库前缀；空串 = 未启用 Gitee 镜像。 */
     const val GITEE_BASE: String = "https://gitee.com/yaxiaiyuting/arris/releases/download"
 
+    /**
+     * 自建国内镜像（4.0.15）：家里那台 S6，公网只有 IPv6，nginx 直发 APK。
+     *
+     * 为什么要它：探针实测中国移动家宽到 `arris.de5.net` 被 CF 免费版路由到 **SEA（西雅图）**，
+     * APK 只有 40~50 KB/s，而同一台机器直连国内 CDN 有 3.4 MB/s。这台镜像能把整条路绕开。
+     *
+     * 注意：**只对 IPv6 可达的用户有效**。没有 v6 的客户端连不上，探测会失败并自动跳过，
+     * 所以把它放在 Gitee 之后、反代之前 —— 顺序即代价，失败一次约 2.5s 预算（探针侧有超时）。
+     * 布局是扁平的：`https://mirror.arris.de5.net/<assetName>`（不带 tag）。
+     */
+    const val MIRROR_BASE: String = "https://mirror.arris.de5.net"
+
+    fun mirrorAsset(assetName: String?): String? {
+        if (MIRROR_BASE.isBlank() || assetName.isNullOrBlank()) return null
+        return "${MIRROR_BASE.trimEnd('/')}/$assetName"
+    }
+
     fun giteeAsset(tag: String?, assetName: String?): String? {
         if (assetName.isNullOrBlank()) return null
         GITEE_ASSETS[assetName]?.let { return it }
@@ -74,6 +91,7 @@ internal object UpdateMirrors {
         val out = LinkedHashSet<String>()
         if (siteUrl.isNotBlank()) out += siteUrl
         giteeAsset(tag, assetName)?.let { out += it }
+        mirrorAsset(assetName)?.let { out += it }
         githubAsset(tag, assetName)?.let { gh ->
             GH_PROXIES.forEach { prefix -> out += prefix + gh }
         }
