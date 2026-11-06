@@ -1076,7 +1076,7 @@ fun MainScreen(
     // 高度"这套兜底——手机/平板若也用 rootHeightPx 会改变 miniBar 落点(实测偏高)，
     // 属于车机改动外溢。这里显式隔离：车机走实测，其余设备沿用 screenHeightDp。
     val isAutomotive =
-        (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+        (LocalConfiguration.current.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
             Configuration.UI_MODE_TYPE_CAR
 
     // 卡片相关尺寸。宽屏无底部导航, navBar 高度记 0, miniBar 直接贴到系统栏之上。

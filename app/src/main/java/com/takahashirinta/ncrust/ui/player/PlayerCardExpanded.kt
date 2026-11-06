@@ -207,8 +207,8 @@ internal fun ColumnScope.PlayerCardExpanded(
     positionFlow: kotlinx.coroutines.flow.StateFlow<Long>,
     progressFlow: kotlinx.coroutines.flow.StateFlow<Float>,
 ) {
-    // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
-    val context = LocalContext.current
+            // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
+            val context = LocalContext.current
             if (ui.showKaraoke) {
                 val exitKaraoke: () -> Unit = {
                     ui.showKaraoke = false
