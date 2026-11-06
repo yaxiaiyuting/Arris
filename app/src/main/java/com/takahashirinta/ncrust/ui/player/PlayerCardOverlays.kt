@@ -331,8 +331,8 @@ internal fun BoxScope.PlayerCardOverlayLayers(
     }
 
     // 收起按钮叠加层：z 序最高，保证触摸事件不被任何下层元素拦截。
-    // 大屏幕模式下整层不挂载（判据在下面这一行，理由见 PlayerCardDismissButton 的 KDoc）。
-    if (hasSong && !geo.bigScreenActive) {
+    // 跟唱页有自己的退出键，播放器收起键会挡住右上角的主行切换。
+    if (hasSong && !geo.bigScreenActive && !ui.showKaraoke) {
         ThresholdScope({ ui.dismissEnabled }) { dismissEnabled ->
             PlayerCardDismissButton(
                 progress = progress,
