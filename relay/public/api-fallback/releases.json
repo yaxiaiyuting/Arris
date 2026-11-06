@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-06T07:34:14.605Z",
+ "generatedAt": "2026-11-06T15:53:51.691Z",
  "releases": [
   {
    "tag_name": "v4.0.14-gpl",
@@ -16,6 +16,24 @@
      "name": "Arris-v4.0.14-gpl.apk",
      "size": 10523624,
      "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.14-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.34-gpl",
+   "name": "Arris LTS v3.7.34-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T15:53:46Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.34-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris LTS 3.7.34-gpl\n\nAndroid 7.0 及以上 · versionCode 216\n\n- 恢复旧版 LTS 应用内更新。3.7.32 可识别 3.7.34 的正式安装包，新版也兼容历史 `-lts-gpl` 文件名。\n- 冷启动时清除不属于当前通道或构建类型的旧更新提示，允许重新检查。\n- 修复 Android 7 上网易云收藏或取消收藏走 EAPI 兜底时无法读取服务器确认的问题。\n- 小幅向后拖动播放进度后，普通歌词立即按跳转位置切句。\n- 跟唱页可以切换原文与译文主行。该句无译文时显示原文。\n\n已在 Android 7.0（API 24）模拟器用原版 3.7.32 通过应用内入口下载并覆盖安装最终签名包。收藏兼容性使用合成响应验证。\n\n[官网下载](https://arris.de5.net/get/Arris-v3.7.34-gpl.apk)\n\nLTS 与主线共用包名。日后从本版切回主线，覆盖安装要求主线包的 `versionCode` 至少为 216。\n",
+   "assets": [
+    {
+     "id": 717667601,
+     "name": "Arris-v3.7.34-gpl.apk",
+     "size": 12303093,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.34-gpl.apk"
     }
    ]
   },
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T16:39:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.11-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版：歌词换行的\"交接\"、横屏竖条、反馈通道、收藏不再反手取消\n\n### 歌词\n\n- **跨行交接动画**：当前句切换时，新的一句从「略模糊、偏下、略小」收到「清晰、就位」，\n  320ms 强减速曲线；全程只写 `graphicsLayer`（API 31+ 用 `RenderEffect` 做模糊），**零重组**。\n  系统关闭动画时直接跳过。\n- **横屏当前句竖条**：横屏/宽屏歌词面板给当前句补一根主轴色短条，短面板里不用再靠字号差找当前句。\n\n### 收藏（数据完整性，回移上游 `293430c` + `c84c0fd`）\n\n- 收藏状态改为**红心 id 底表优先**：超出已加载页的已收藏歌不再显示白心\n- xeapi 收藏写入补官方 9.6.13 的五个字段（`rqRefer/songRqRefer/mode/subMode/source`）\n- **502 视为成功**（歌曲已在期望状态），不再掉进 weapi 老通道 ——\n  老通道对重复写入可能返回 `524 已取消喜欢`，把已收藏的歌反手撤销\n\n### 反馈\n\n- 关于页新增「发送反馈」：描述 + 可选联系方式，发送前能看到**将要发送的诊断信息**\n- 只带版本 / 机型 / 系统 / 语言主题 / 音质档 / 登录与否（布尔）；**不采集** cookie、令牌、曲目历史\n- 走自有中转落到 [arris-feedback](https://gitee.com/yaxiaiyuting/arris-feedback) 仓库；\n  发送失败可一键复制全文手动提交\n\n### 其他\n\n- 更新说明里的表格与链接现在能正常渲染（回移上游 `f648d99`）\n\n| | |\n|---|---|\n| APK | 见附件 |\n| SHA-256 | `5341216cf32d50a449ef6322c60f37402ab225a7142134961cb8c446c48713c8` |\n| 测试 | 3532 项 / 0 失败 |\n| 签名 | v2 scheme 通过 |\n",
+   "body": "",
    "assets": [
     {
      "id": 714057261,
