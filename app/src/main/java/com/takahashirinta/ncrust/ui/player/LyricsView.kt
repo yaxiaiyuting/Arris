@@ -47,6 +47,7 @@ import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.SweepTrack
 import com.takahashirinta.ncrust.share.LyricShareLine
 import com.takahashirinta.ncrust.share.LyricShareTrack
+import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.ui.components.LyricShareSheet
 import com.takahashirinta.ncrust.ui.HeightClass
 import com.takahashirinta.ncrust.ui.LocalHeightClass
@@ -57,6 +58,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,8 +87,7 @@ internal fun LyricsView(
     lyricPulseEnabled: Boolean = false,
     // v2.9.0 · P1（用户报告「歌词会在歌曲没加载出来之前先播放」）：
     // **当前曲目的稳定身份**（换歌时必须变、同一首歌内必须不变）。
-    // 默认 null 时下面那条「换歌作废锚点」的效果不发生 —— 老调用点行为不变。
-    trackKey: Any? = null,
+    trackKey: TrackKey?,
     showTranslation: Boolean = true,
     // v1.9.3：音译轨（罗马音 / 粤拼），与 translatedLyrics 同构。数据来自 PlayerViewModel
     // 的 v1.9.2 音译轨，渲染层**不重新合并**，只按 timeMs 配对取用。
@@ -94,6 +95,7 @@ internal fun LyricsView(
     // v1.9.3：音译显示开关（默认关 ⇒ 渲染路径与 v1.9.2 逐字节一致）。
     showRomanization: Boolean = false,
     positionFlow: StateFlow<Long>,
+    seekRequests: Flow<Pair<TrackKey, Long>>,
     isPlaying: Boolean,
     // v3.6.5：音频还在缓冲 / 尚未真正出声时，歌词外推必须停住。
     // 传 StateFlow 引用而不是 Boolean：订阅发生在 LyricsView 内部，
@@ -249,7 +251,8 @@ internal fun LyricsView(
 
     val karaokeActive = karaoke != null
     val karaokeTranslations = remember(karaokeActive, translatedLyrics) {
-        if (karaokeActive) translatedLyrics.associateBy { it.timeMs } else emptyMap()
+        if (karaokeActive) translatedLyrics.filter { it.text.isNotBlank() }.associateBy { it.timeMs }
+        else emptyMap()
     }
     val karaokeTimeline = remember(karaokeActive, lyrics, karaokeTranslations, lineStarts) {
         if (karaokeActive) KaraokeTimeline(lyrics, karaokeTranslations, lineStarts) else null
@@ -390,12 +393,22 @@ internal fun LyricsView(
         }
     }
 
-    val seek: (Long) -> Unit = { ms ->
+    fun reanchorForSeek(ms: Long) {
         anchor.anchorPosMs = ms
         anchor.anchorNanos = System.nanoTime()
         anchor.anchorTrackKey = trackKey
         displayPosition.longValue = ms
         positionChanged.trySend(Unit)
+    }
+
+    // Explicit transport seeks can cross a lyric boundary even within normal sample jitter.
+    LaunchedEffect(seekRequests, trackKey) {
+        seekRequests.collect { (owner, ms) ->
+            if (owner == trackKey) reanchorForSeek(ms)
+        }
+    }
+    val seek: (Long) -> Unit = { ms ->
+        reanchorForSeek(ms)
         onSeekToMs(ms)
     }
     if (karaoke != null && karaokeTimeline != null) {
@@ -704,7 +717,7 @@ private class PositionAnchor {
      * 的快照，拿它去外推新歌的时间轴就是我们修的那个 bug（见 `LyricsView` 里
      * 「换歌作废锚点」那段注释）。
      */
-    var anchorTrackKey: Any? = null
+    var anchorTrackKey: TrackKey? = null
 }
 
 /** 该行没有逐字扫过窗口。 */

@@ -101,7 +101,10 @@ import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.stringsForCode
 import android.widget.Toast
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -111,6 +114,11 @@ import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     val isPlaying = MutableStateFlow(false)
     val currentPosition = MutableStateFlow(0L)
+    private val _lyricSeeks = MutableSharedFlow<Pair<TrackKey, Long>>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    internal val lyricSeeks = _lyricSeeks.asSharedFlow()
     val duration = MutableStateFlow(0L)
     val progress = MutableStateFlow(0f)
     val lyrics = MutableStateFlow<List<LrcLine>>(emptyList())
@@ -3291,6 +3299,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 服务端 seek 完成后会再广播一次权威值，覆盖这里的估算。
         val dur = duration.value
         currentPosition.value = position
+        currentTrack?.let { _lyricSeeks.tryEmit(it to position) }
         if (dur > 0) progress.value = (position.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
 
         // v3.7.9 · H16：用户把进度条拖回起点区间 ⇒ **立刻**撤销这首的续播记录。

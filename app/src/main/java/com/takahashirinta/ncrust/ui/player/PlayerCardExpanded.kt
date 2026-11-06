@@ -93,6 +93,7 @@ import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.player.SongUrlFetcher
 import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.ui.HeightClass
 import com.takahashirinta.ncrust.ui.LocalHeightClass
@@ -210,6 +211,7 @@ internal fun ColumnScope.PlayerCardExpanded(
             // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
             val context = LocalContext.current
             if (ui.showKaraoke) {
+                var translatedPrimary by remember { mutableStateOf(showLyricsTranslation) }
                 val exitKaraoke: () -> Unit = {
                     ui.showKaraoke = false
                     ui.lyricLocateTrigger++
@@ -223,8 +225,9 @@ internal fun ColumnScope.PlayerCardExpanded(
                     showTranslation = showLyricsTranslation,
                     romanizedLyrics = romanizedLyrics,
                     showRomanization = showLyricsRomanization,
-                    trackKey = song?.let { "${it.source}:${it.id}" },
+                    trackKey = song?.let(TrackKey::ofSong),
                     positionFlow = positionFlow,
+                    seekRequests = playerViewModel.lyricSeeks,
                     isPlaying = isPlaying,
                     isBufferingFlow = playerViewModel.isBuffering,
                     isVisible = true,
@@ -247,8 +250,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                         transport = callbacks,
                         previousEnabled = playbackQueue.isNotEmpty(),
                         exit = exitKaraoke,
-                        translatedPrimary = showLyricsTranslation,
-                        toggleLanguage = {},
+                        translatedPrimary = translatedPrimary,
+                        toggleLanguage = { translatedPrimary = !translatedPrimary },
                     ),
                 )
                 return
@@ -428,6 +431,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 romanizedLyrics = romanizedLyrics,
                                 showRomanization = showLyricsRomanization,
                                 positionFlow = positionFlow,
+                                seekRequests = playerViewModel.lyricSeeks,
                                 isPlaying = isPlaying,
                                 isBufferingFlow = playerViewModel.isBuffering,
                                 isVisible = ui.showLyrics,
@@ -457,7 +461,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                                 // `(音源, id)` 是本仓库对曲目身份的既有口径（v2.6.1/v2.6.2 的
                                 // `TrackKey` 同源），不能只用 id（两个音源的 id 空间虽然结构性
                                 // 隔离，但把口径写全比依赖那个不变量便宜）。
-                                trackKey = song?.let { "${it.source}:${it.id}" },
+                                trackKey = song?.let(TrackKey::ofSong),
                             )
                     }
 
