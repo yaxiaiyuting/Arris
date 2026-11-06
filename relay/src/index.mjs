@@ -53,6 +53,81 @@ function allowFeedback(ip) {
   return true;
 }
 
+
+// ---------------------------------------------------------------- agent 可读内容
+//
+// llms.txt：给 AI 代理的"这个站是什么"摘要（llmstxt.org 约定）。
+// 保持短、可机器解析、只放稳定事实；版本号之类易变的别写死。
+function llmsTxt(origin) {
+  return [
+    "# Arris",
+    "",
+    "> 开源 Android 音乐客户端（GPLv3 分发的 Ncrust fork）：网易云 / QQ 音乐 / B 站音源，",
+    "> 双语与逐字歌词、离线缓存、听歌识曲、一起听房间。",
+    "",
+    "## 下载",
+    `- 最新版：${origin}/get/latest.apk`,
+    `- LTS（Android 7+）：${origin}/get/lts-latest.apk`,
+    `- 版本列表：${origin}/api/releases`,
+    "",
+    "## 机器可读",
+    `- API 目录：${origin}/.well-known/api-catalog`,
+    `- OpenAPI：${origin}/openapi.json`,
+    `- 接口说明：${origin}/api-doc.md`,
+    "",
+    "## 源码",
+    "- GitHub: https://github.com/yaxiaiyuting/Arris",
+    "- Gitee: https://gitee.com/yaxiaiyuting/arris",
+    "",
+    "## 注意",
+    "- 本站只分发 APK 与更新元数据，不提供音乐内容与账号",
+    "- 反馈走 /api/feedback（不对外文档化，避免被脚本刷）",
+    "",
+  ].join("\n");
+}
+
+// 手写的最小 OpenAPI：只有 5 个端点，比引一个生成器便宜得多。
+function openapi(origin) {
+  const ok = { description: "成功" };
+  return {
+    openapi: "3.1.0",
+    info: { title: "Arris Relay API", version: "1", description: "更新检查、下载与一起听中继" },
+    servers: [{ url: origin }],
+    paths: {
+      "/api/latest": { get: { summary: "当前正式版（主线）", responses: { 200: ok } } },
+      "/api/releases": { get: { summary: "版本列表（本站已过滤为可分发的资产）", responses: { 200: ok } } },
+      "/health": { get: { summary: "健康检查，返回 ok", responses: { 200: ok } } },
+      "/rooms": { get: { summary: "一起听活跃房间目录", responses: { 200: ok } } },
+      "/get/{name}": {
+        get: {
+          summary: "APK 下载（支持 Range；中国内地请求会 302 到 Gitee）",
+          parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
+          responses: { 200: ok, 206: { description: "分段" }, 302: { description: "国内跳转到 Gitee" } },
+        },
+      },
+    },
+  };
+}
+
+function apiDoc() {
+  return [
+    "# Arris Relay API",
+    "",
+    "| 端点 | 说明 |",
+    "|---|---|",
+    "| `GET /api/latest` | 当前正式版（主线），含 APK 名称/大小/直链 |",
+    "| `GET /api/releases` | 版本列表；只保留可分发的资产 |",
+    "| `GET /get/<文件名>` | APK 下载，支持 `Range`；**中国内地会 302 到 Gitee** |",
+    "| `GET /health` | 健康检查，返回 `ok` |",
+    "| `GET /rooms` | 一起听活跃房间 |",
+    "| `WS /room/<房间码>` | 一起听房间（`role=host\|member`） |",
+    "",
+    "下载源顺序（客户端）：按实测首块速率排序，最快的 2 条参与分段轮转；",
+    "Gitee 不支持 `Range`，只作单流回退。",
+    "",
+  ].join("\n");
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -63,7 +138,18 @@ export default {
     // 首页：项目介绍（静态 HTML 打包在 Worker 里，域名一绑即可访问）
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return new Response(INDEX_HTML, {
-        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache, must-revalidate" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-cache, must-revalidate",
+          // RFC 8288 / RFC 9727：告诉 agent 机器可读资源在哪（浏览器完全忽略这些头）。
+          // 一条头里用逗号分隔多个 link-value，避免多 header 在 HTTP/2 下被合并得更难读。
+          link: [
+            '</.well-known/api-catalog>; rel="api-catalog"',
+            '</openapi.json>; rel="service-desc"',
+            '</api-doc.md>; rel="service-doc"',
+            '</llms.txt>; rel="describedby"',
+          ].join(", "),
+        },
       });
     }
     if (url.pathname.startsWith("/get/") || url.pathname.startsWith("/dl/")) {
@@ -122,6 +208,83 @@ export default {
       });
     }
 
+
+
+    // ---------------------------------------------------------------- 给 agent 的机器可读入口
+    //
+    // 这些文件对**浏览器用户没有任何影响**，但能让 AI 代理/爬虫正确理解这个站：
+    // 站点是什么、有哪些 API、能不能用来训练。成本是几段静态文本，走 Worker 路由，
+    // 不依赖 Cloudflare 面板上的开关（那样配置不在仓库里，换账号就丢）。
+    //
+    // AI 政策：本项目是 GPLv3 开源，被检索与训练对传播有利 ⇒ 默认全允许。
+    // 想改成禁止训练，把 CONTENT_SIGNAL 里的 ai-train 改成 no 即可，一处生效。
+    const CONTENT_SIGNAL = "ai-train=yes, search=yes, ai-input=yes";
+    const AI_BOTS = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "Claude-Web", "ClaudeBot", "Google-Extended", "PerplexityBot", "Bytespider"];
+
+    if (url.pathname === "/robots.txt") {
+      const body = [
+        "# Arris —— 开源 Android 音乐客户端（GPLv3）",
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /api/feedback",
+        "",
+        `Content-Signal: ${CONTENT_SIGNAL}`,
+        "",
+        "# AI 爬虫：显式放行，便于检索与引用（内容就是公开文档 + 下载页）",
+        ...AI_BOTS.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", ""]),
+        "Sitemap: " + url.origin + "/sitemap.xml",
+        "",
+      ].join("\n");
+      return new Response(body, {
+        headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
+
+    if (url.pathname === "/sitemap.xml") {
+      const pages = ["/", "/#download", "/#features", "/#studio", "/#together", "/#evolution"];
+      const xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ...pages.map((p) => `  <url><loc>${url.origin}${p}</loc><changefreq>weekly</changefreq></url>`),
+        "</urlset>",
+        "",
+      ].join("\n");
+      return new Response(xml, {
+        headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
+
+    if (url.pathname === "/llms.txt") {
+      return new Response(llmsTxt(url.origin), {
+        headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
+
+    if (url.pathname === "/api-doc.md") {
+      return new Response(apiDoc(), {
+        headers: { "content-type": "text/markdown; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
+
+    // RFC 9727 API 目录：告诉 agent「这个站有哪些机器可读资源」
+    if (url.pathname === "/.well-known/api-catalog") {
+      return new Response(JSON.stringify({
+        linkset: [{
+          anchor: url.origin + "/",
+          "service-desc": [{ href: url.origin + "/openapi.json", type: "application/vnd.oai.openapi+json" }],
+          "service-doc": [{ href: url.origin + "/api-doc.md", type: "text/markdown" }],
+          status: [{ href: url.origin + "/health", type: "text/plain" }],
+        }],
+      }, null, 2), {
+        headers: { "content-type": "application/linkset+json", "cache-control": "public, max-age=3600" },
+      });
+    }
+
+    if (url.pathname === "/openapi.json") {
+      return new Response(JSON.stringify(openapi(url.origin), null, 2), {
+        headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=3600" },
+      });
+    }
 
     // ---------------------------------------------------------------- 反馈（4.0.11）
     //
