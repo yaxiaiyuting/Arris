@@ -16,6 +16,14 @@ class AssetNameTest {
     }
 
     @Test
+    fun `兼容已经发布的 LTS 资产名`() {
+        assertEquals(
+            ForkRelease.Asset(AppVersion(3, 7, 33), ForkRelease.VARIANT_RELEASE),
+            ForkRelease.parseAsset("Arris-v3.7.33-lts-gpl.apk")
+        )
+    }
+
+    @Test
     fun `早期带变体后缀的名字仍能解析`() {
         assertEquals("release", ForkRelease.parseAsset("Ncrust-v3.7.11-gpl-release.apk")?.variant)
         assertEquals("debug", ForkRelease.parseAsset("Ncrust-v3.4.12-gpl-debug.apk")?.variant)

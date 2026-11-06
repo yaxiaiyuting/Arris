@@ -278,7 +278,7 @@ class PlaylistDetailResultTest {
         intercept { request ->
             val hex = (request.body as okhttp3.FormBody).value(0)
             val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-            val plain = com.takahashirinta.ncrust.network.crypto.EapiCrypto.decryptResponse(java.util.Base64.getEncoder().encodeToString(bytes))
+            val plain = com.takahashirinta.ncrust.network.crypto.EapiCrypto.decryptResponse(bytes)
             val payload = JSONObject(plain.split("-36cd479b6b5-")[1])
             offsets += payload.getInt("offset")
             requests++

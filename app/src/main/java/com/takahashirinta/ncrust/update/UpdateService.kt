@@ -236,13 +236,21 @@ object UpdateService {
     fun init(context: Context) {
         val prefs = prefs(context)
         val stored = loadFound(prefs)
-        val available = UpdateRecovery.restore(stored, currentVersion())
+        val current = currentVersion()
+        val available = UpdateRecovery.restore(stored, current, preferredVariant())
+        val dismissed = AppVersion.parseOrNull(prefs.getString(KEY_DISMISSED_VERSION, null))
+        val dismissedInChannel = dismissed?.takeIf {
+            current != null && UpdateChecker.sameChannel(null, it, current)
+        }
         if (stored != null && available == null) {
-            clearFound(context)
+            clearFound(context, resetCheck = true)
+        }
+        if (dismissed != null && dismissedInChannel == null) {
+            prefs.edit().remove(KEY_DISMISSED_VERSION).remove(KEY_LAST_CHECK_AT).apply()
         }
         _state.value = UpdateState(
             available = available,
-            dismissedVersion = AppVersion.parseOrNull(prefs.getString(KEY_DISMISSED_VERSION, null)),
+            dismissedVersion = dismissedInChannel,
             checking = false,
             autoCheckEnabled = prefs.getBoolean(KEY_AUTO_CHECK, true),
             lastCheckAt = prefs.getLong(KEY_LAST_CHECK_AT, 0L)
@@ -578,7 +586,7 @@ object UpdateService {
             .apply()
     }
 
-    private fun clearFound(context: Context) {
+    private fun clearFound(context: Context, resetCheck: Boolean = false) {
         prefs(context).edit()
             .remove(KEY_FOUND_VERSION)
             .remove(KEY_FOUND_ASSET_NAME)
@@ -589,6 +597,7 @@ object UpdateService {
             .remove(KEY_FOUND_PAGE_URL)
             .remove(KEY_FOUND_PUBLISHED_AT)
             .remove(KEY_FOUND_BODY)
+            .also { if (resetCheck) it.remove(KEY_LAST_CHECK_AT) }
             .apply()
     }
 

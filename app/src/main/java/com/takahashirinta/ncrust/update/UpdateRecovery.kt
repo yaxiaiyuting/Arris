@@ -18,8 +18,16 @@ package com.takahashirinta.ncrust.update
  */
 object UpdateRecovery {
 
-    fun restore(candidate: UpdateInfo?, current: AppVersion?): UpdateInfo? {
-        if (candidate == null || current == null) return null
-        return if (candidate.version > current) candidate else null
+    fun restore(
+        candidate: UpdateInfo?,
+        current: AppVersion?,
+        variant: String = UpdateChecker.DEFAULT_VARIANT,
+    ): UpdateInfo? {
+        if (candidate == null || current == null || candidate.version <= current) return null
+        val asset = ForkRelease.parseAsset(candidate.assetName) ?: return null
+        return candidate.takeIf {
+            asset.version == it.version && asset.variant == variant &&
+                UpdateChecker.sameChannel(it.releaseTag, it.version, current)
+        }
     }
 }

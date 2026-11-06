@@ -1122,13 +1122,12 @@ object PlaylistApi {
             return -1
         }
         val elapsed = System.currentTimeMillis() - startedAt
-        val raw = try { http.body?.bytes() } catch (_: Throwable) { null }
+        val raw = try { http.use { it.body?.bytes() } } catch (_: Exception) { null }
         if (raw == null) {
             Log.w("PlaylistApi", "likeSong(eapi) id=$songId like=$like http=${http.code} no body elapsedMs=$elapsed")
             return -1
         }
-        val plain = EapiCrypto.decryptResponse(java.util.Base64.getEncoder().encodeToString(raw))
-        val jsonText = plain.ifEmpty { String(raw) }
+        val jsonText = EapiCrypto.decryptResponse(raw).ifEmpty { raw.toString(Charsets.UTF_8) }
         var code = -1
         var parseOk = false
         try {

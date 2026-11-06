@@ -59,8 +59,8 @@ object ForkRelease {
         //   Arris-v3.8.4-gpl.apk            ← 现在 GitHub Release 用的就是这种
         //   Ncrust-v3.7.11-gpl-release.apk  ← 早期 CI 产物
         //   Arris-v3.7.11-gpl-formal-code99-release.apk 的尾部 `-release.apk`
-        // 前缀（Arris-/Ncrust-…）可选，变体后缀可选；缺省按 release 处理。
-        """^(?:[A-Za-z][A-Za-z0-9]*-)?v?(\d{1,9}(?:\.\d{1,9}){0,3})-gpl(?:[-.](?:formal[-.][A-Za-z0-9]+|release|debug))*\.apk$""",
+        // 也接受已发布的 Arris-v3.7.33-lts-gpl.apk；缺省按 release 处理。
+        """^(?:[A-Za-z][A-Za-z0-9]*-)?v?(\d{1,9}(?:\.\d{1,9}){0,3})(?:-lts)?-gpl(?:[-.](?:formal[-.][A-Za-z0-9]+|release|debug))*\.apk$""",
         RegexOption.IGNORE_CASE
     )
 

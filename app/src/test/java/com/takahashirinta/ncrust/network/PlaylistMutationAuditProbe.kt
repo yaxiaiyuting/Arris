@@ -15,7 +15,6 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
-import java.util.Base64
 
 class PlaylistMutationAuditProbe {
     private class MemoryContext : ContextWrapper(null) {
@@ -44,13 +43,39 @@ class PlaylistMutationAuditProbe {
             val request = chain.request()
             val hex = (request.body as FormBody).value(0)
             val data = ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
-            val text = EapiCrypto.decryptResponse(Base64.getEncoder().encodeToString(data))
+            val text = EapiCrypto.decryptResponse(data)
             val payload = JSONObject(text.split("-36cd479b6b5-")[1])
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("audit")
                 .body(block(request, payload).toResponseBody()).build()
         }.build()
         value.set(lazyClient, fake)
     }
+    @Test fun eapiLikeParsesBinaryAndPlainBodiesWithoutBase64() {
+        val cipher = javax.crypto.Cipher.getInstance("AES/ECB/PKCS5Padding")
+        cipher.init(
+            javax.crypto.Cipher.ENCRYPT_MODE,
+            javax.crypto.spec.SecretKeySpec("e82ckenh8dichen8".toByteArray(), "AES"),
+        )
+        val encrypted = cipher.doFinal("""{"code":200}""".toByteArray())
+        var body = encrypted
+        fake = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            assertEquals("/eapi/radio/like", request.url.encodedPath)
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
+                .body(body.toResponseBody()).build()
+        }.build()
+        value.set(lazyClient, fake)
+        val fallback = PlaylistApi::class.java.declaredMethods.single { it.name == "tryEapiLike" }
+        fallback.isAccessible = true
+        fun result(): Int = fallback.invoke(PlaylistApi, 123L, true, null, null) as Int
+
+        assertEquals(200, result())
+        body = """{"code":403}""".toByteArray()
+        assertEquals(403, result())
+        body = byteArrayOf()
+        assertEquals(-1, result())
+    }
+
     /**
      * 回归（原 S18 探针）：排队中的写操作**不能**在切账号后被新账号代发。
      *

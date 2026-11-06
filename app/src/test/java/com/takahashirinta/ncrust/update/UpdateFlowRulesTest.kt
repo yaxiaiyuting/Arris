@@ -73,6 +73,16 @@ class UpdateFlowRulesTest {
         assertNull("当前版本解析失败时宁可不动", UpdateRecovery.restore(candidate, null))
     }
 
+    @Test
+    fun `cold restore rejects old mainline and wrong variant for LTS`() {
+        val current = AppVersion(3, 7, 32)
+        assertNull(UpdateRecovery.restore(info("4.0.14"), current))
+        assertNull(UpdateRecovery.restore(info("3.7.34", variant = "debug"), current))
+        assertNull(UpdateRecovery.restore(info("3.7.34").copy(assetName = "Arris-v3.7.33-lts-gpl.apk"), current))
+        val lts = info("3.7.34")
+        assertEquals(lts, UpdateRecovery.restore(lts, current))
+    }
+
     // ---------- 稳定目标标识 / 页面按目标门控 ----------
 
     @Test
