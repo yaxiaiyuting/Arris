@@ -39,9 +39,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -691,11 +690,13 @@ internal fun Modifier.collapsibleHeight(collapsedFraction: () -> Float): Modifie
 // 新封面超过该阈值仍未就绪，才退化为纯色占位（"实在不出来再禁用"）。
 private const val COVER_HOLD_MS = 400L
 
+private data class PlayerArtwork(val key: String, val painter: Painter)
+
 /**
  * 切歌不闪的封面。Coil 的 [AsyncImagePainter] 在 model 变化时先进入 loading 态、
  * 画 placeholder（纯色），新图没秒出就会闪一下占位色。这里改为：
  *  - 记住最近一次成功加载的封面，切歌换图期间先沿用旧图（视觉无缝）；
- *  - 新图在 [COVER_HOLD_MS] 内就绪 → 直接换上新图；
+ *  - 新图在 [COVER_HOLD_MS] 内就绪 → 从旧图过渡到新图；
  *  - 超过阈值仍未就绪 → 才退化为占位色。
  *
  * ## v2.5.0 · B：圆角 + 边框**必须加在这里，不能在调用点加**
@@ -725,7 +726,7 @@ private const val COVER_HOLD_MS = 400L
  */
 @Composable
 internal fun StableCover(
-    model: Any?,
+    model: String?,
     contentDescription: String?,
     placeholderColor: Color,
     modifier: Modifier = Modifier,
@@ -746,7 +747,7 @@ internal fun StableCover(
      * v2.9.0 · A 档：把「当前正在显示的封面位图 + 它的缓存键」上抛给调用方。
      *
      * 为什么需要这个回调：背景模糊的输入必须是**前景正在显示的那张图**。这个 Box 是
-     * 全仓库唯一持有它的地方（`lastBitmap` 跨切歌保留）。在别处重新解码会多一份内存，
+     * 全仓库唯一持有它的地方（旧封面跨切歌短暂保留）。在别处重新解码会多一份内存，
      * 而且可能与前景不是同一张（Coil 缓存被清 / 请求尺寸不同）。
      *
      * `key` 传 `null` 表示"当前没有可用封面"（调用方据此回退纯色背景）。
@@ -761,49 +762,33 @@ internal fun StableCover(
         model = model,
         imageLoader = Coil.imageLoader(context),
     )
-    val state = painter.state
-    // 最近一次成功加载的封面位图（跨切歌保留）。
-    var lastBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    // v2.9.0 · A 档：这幅位图对应的缓存键（背景模糊用 URL 作键；与位图同时更新，
-    // 保证背景与前景永远是同一首歌的图）。
-    var lastKey by remember { mutableStateOf<String?>(null) }
-    // v2.9.0 · A 档：切歌淡入。**不卸载任何子树** —— 只驱动上层 Image 的 alpha。
-    // v2.6.0 的教训是 `AnimatedContent` 会在切换期把旧子树卸载掉（状态丢失 + 命中区抖动），
-    // 这里刻意用一个 `Animatable` + `graphicsLayer` 实现同一观感，子树始终挂载。
-    val crossfade = remember { Animatable(1f) }
-    val modelKey = model as? String
-    // 新图超过阈值仍未就绪 → 退化占位色。
-    var timedOut by remember { mutableStateOf(false) }
+    val ready = (painter.state as? AsyncImagePainter.State.Success)
+        ?.takeIf { it.result.request.data == model }
+    var artwork by remember { mutableStateOf<PlayerArtwork?>(null) }
+    var outgoing by remember { mutableStateOf<PlayerArtwork?>(null) }
+    val blend = remember { Animatable(1f) }
 
-    LaunchedEffect(state) {
-        val s = state
-        if (s is AsyncImagePainter.State.Success) {
-            (s.result.drawable as? BitmapDrawable)?.bitmap?.let {
-                lastBitmap = it
-                lastKey = modelKey
-                // 上抛给背景层。同键同实例时不重复回调（避免每次状态变化都重组背景层）。
-                onCoverBitmap(modelKey, it)
-            }
-            timedOut = false
+    LaunchedEffect(model, ready, crossfadeEnabled) {
+        if (model != null && ready == null) {
+            delay(COVER_HOLD_MS)
+            if (artwork?.key == model) return@LaunchedEffect
         }
-    }
-    LaunchedEffect(model) {
-        timedOut = false
-        delay(COVER_HOLD_MS)
-        if (painter.state !is AsyncImagePainter.State.Success) {
-            timedOut = true
-            // 超时且没有旧图可垫 ⇒ 当前确实没有封面，背景层据此回退纯色。
-            if (lastBitmap == null) onCoverBitmap(null, null)
-        }
-    }
-    // v2.9.0 · A 档：model 变化 ⇒ 淡入一次。关掉时 snap 到 1f（= 与 v2.8.0 逐帧一致）。
-    LaunchedEffect(model, crossfadeEnabled) {
-        if (!crossfadeEnabled) {
-            crossfade.snapTo(1f)
+        val next = if (model != null && ready != null) PlayerArtwork(model, ready.painter) else null
+        if (next == artwork) {
+            blend.snapTo(1f)
+            outgoing = null
             return@LaunchedEffect
         }
-        crossfade.snapTo(0f)
-        crossfade.animateTo(1f, AppMotion.coverFade)
+        // 连续切歌中断淡入时，沿用当前较显眼的那张图。
+        val previous = if (blend.value < 0.5f) outgoing else artwork
+        val fade = crossfadeEnabled && previous != next
+        blend.snapTo(if (fade) 0f else 1f)
+        outgoing = previous.takeIf { fade }
+        artwork = next
+        val bitmap = (ready?.result?.drawable as? BitmapDrawable)?.bitmap
+        onCoverBitmap(next?.key?.takeIf { bitmap != null }, bitmap)
+        if (fade) blend.animateTo(1f, AppMotion.coverFade)
+        outgoing = null
     }
 
     // ⚠️ 顺序：`modifier`（含调用点的 graphicsLayer 变换）在前，clip/border 在后。
@@ -831,16 +816,9 @@ internal fun StableCover(
             .clip(shape)
             .border(1.dp, frame, shape)
     ) {
-        // 底层：切歌后旧图垫底（超阈值退化占位色）。
-        val bg = if (timedOut) null else lastBitmap
-        if (bg != null) {
-            Image(
-                painter = remember(bg) { BitmapPainter(bg.asImageBitmap()) },
-                contentDescription = null,
-                modifier = Modifier.matchParentSize(),
-                contentScale = contentScale,
-            )
-        } else {
+        val prior = outgoing
+        val current = artwork
+        if (prior == null || current == null) {
             val colors = LocalMetroColors.current
             Box(Modifier.matchParentSize().drawWithCache {
                 val center = Offset(size.width * 0.5f, size.height * 0.5f)
@@ -862,19 +840,38 @@ internal fun StableCover(
                 }
             })
         }
-        // 上层：当前请求的 painter。必须真正绘制它，Coil 才会在 onRemembered 里发起
-        // 请求；loading 时它不画东西，露出底层旧图/占位色。
-        //
-        // v2.9.0 · A 档：`crossfade` 只驱动这一层的 alpha（在 graphicsLayer 块里读，
-        // 每帧只让这一层失效、不触发重组，也不卸载任何子树）。
-        Image(
-            painter = painter,
-            contentDescription = contentDescription,
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer { alpha = crossfade.value },
-            contentScale = contentScale,
-        )
+        if (prior != null) {
+            Image(
+                painter = prior.painter,
+                contentDescription = null,
+                modifier = Modifier.matchParentSize().graphicsLayer {
+                    alpha = if (current == null) 1f - blend.value else 1f
+                },
+                contentScale = contentScale,
+            )
+        }
+        if (current != null) {
+            Image(
+                painter = current.painter,
+                contentDescription = contentDescription,
+                modifier = Modifier.matchParentSize().graphicsLayer {
+                    val reveal = blend.value
+                    alpha = reveal
+                    scaleX = 1f + (1f - reveal) * 0.024f
+                    scaleY = scaleX
+                },
+                contentScale = contentScale,
+            )
+        }
+        // 请求加载期间，Coil 通过绘制尺寸确定解码大小。
+        if (painter.state is AsyncImagePainter.State.Empty || painter.state is AsyncImagePainter.State.Loading) {
+            Image(
+                painter = painter,
+                contentDescription = null,
+                modifier = Modifier.matchParentSize(),
+                contentScale = contentScale,
+            )
+        }
     }
 }
 

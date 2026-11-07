@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -106,6 +108,17 @@ private fun BoxScope.TransportDisc(
             .shadow(4.dp, AppShapes.full, clip = false)
             .clip(AppShapes.full)
             .background(brush)
+            .drawWithCache {
+                val reflection = Brush.radialGradient(
+                    listOf(Color.White, Color.White.copy(alpha = 0f)),
+                    center = Offset(size.width * 0.35f, size.height * 0.25f),
+                    radius = maxOf(size.width * 0.67f, 1f),
+                )
+                onDrawBehind {
+                    val compression = ((1f - scale.value) / 0.06f).coerceIn(0f, 1f)
+                    if (compression > 0f) drawRect(reflection, alpha = compression * 0.16f)
+                }
+            }
             .border(1.dp, rim, AppShapes.full),
         contentAlignment = Alignment.Center,
     ) {

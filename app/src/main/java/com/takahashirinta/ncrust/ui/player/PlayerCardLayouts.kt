@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.i18n.Strings
+import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
@@ -429,7 +430,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             // v3.2.0 · P0-A：高度与文字起始位都走 TrayLayout 的唯一来源 ——
             // 封面 overlay 的落点就是用这两个数算出来的，写死字面量必然漂移。
             .height(TrayLayout.TOP_BAR_HEIGHT_DP.dp)
-            .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
+            .graphicsLayer { alpha = AppMotion.playerReveal(progress.value, 0.67f, 0.95f) }
             .onSizeChanged { ui.narrowTopBarHeightPx = it.height.toFloat() },
         contentAlignment = Alignment.CenterStart
     ) {
@@ -486,7 +487,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             .weight(1f)
             .fillMaxWidth()
             .onSizeChanged { ui.narrowPanelHeightPx = it.height.toFloat() }
-            .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
+            .graphicsLayer { alpha = AppMotion.playerReveal(progress.value, 0.67f, 0.95f) }
     ) {
         playerPanels(Modifier.fillMaxSize())
         // 大封面模式下的曲名/歌手信息：overlay 在内容区底部，不占高度。
@@ -499,8 +500,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 .onSizeChanged { ui.narrowTitleHeightPx = it.height.toFloat() }
                 .padding(horizontal = 24.dp, vertical = 8.dp)
                 .graphicsLayer {
-                    alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) *
-                            (1f - lyricAnimProgress.value)
+                    alpha = 1f - lyricAnimProgress.value
                 }
                 // 歌名区域可点: 上拉"转到歌手/转到专辑"菜单(类 Apple Music)
                 .clickable { onSongInfoClick() }
@@ -557,7 +557,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 previousEnabled = previousEnabled,
                 transport = transport,
                 modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
-                    val reveal = ((controlsCollapse.value - 0.40f) / 0.60f).coerceIn(0f, 1f)
+                    val reveal = AppMotion.playerReveal(controlsCollapse.value, 0.40f)
                     alpha = reveal
                     translationY = (1f - reveal) * 8.dp.toPx()
                 },
@@ -584,8 +584,9 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
             .collapsibleHeight { controlsCollapse.value }
             .then(controlsCollapseDrag())
             .graphicsLayer {
-                alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f)
-                translationY = controlsCollapse.value * size.height
+                val reveal = AppMotion.playerReveal(progress.value, 0.76f)
+                alpha = reveal
+                translationY = controlsCollapse.value * size.height + (1f - reveal) * 6.dp.toPx()
             }
     ) {
         playerControls()

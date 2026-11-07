@@ -212,6 +212,12 @@ object AppMotion {
     /** 封面 / 大图淡入：400ms + `CubicBezier(0.2, 0, 0, 1)`（沿用 `SokuouTweens.CoverFade`）。 */
     val coverFade: TweenSpec<Float> = tween(400, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f))
 
+    /** 复用展开进度，手势拖拽经过起止点时也平滑接入。 */
+    fun playerReveal(progress: Float, start: Float, end: Float = 1f): Float {
+        val phase = ((progress - start) / (end - start)).coerceIn(0f, 1f)
+        return phase * phase * (3f - 2f * phase)
+    }
+
     /**
      * 列表 item **入场**：220ms 淡入 + 上滑（任务书 §3.3「列表 item 出现：淡入 + 上滑」）。
      *

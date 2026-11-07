@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
@@ -137,8 +138,7 @@ internal fun BoxScope.PlayerCardBackdrop(
                 // 两处尺寸来源（LocalConfiguration 与 PlayerCard）不会打架。
                 parallaxTravelPx = screenHeightPx * AppMotion.PARALLAX_TRAVEL_FRACTION,
                 modifier = Modifier.graphicsLayer {
-                    // 与前景同样的折叠淡出曲线（复用既有 (p-0.7)/0.3 的形状）。
-                    alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f)
+                    alpha = AppMotion.playerReveal(progress.value, 0.58f)
                 },
             )
         }
@@ -151,16 +151,17 @@ internal fun BoxScope.PlayerCardBackdrop(
             Box(
                 Modifier.matchParentSize()
                     .graphicsLayer {
-                        alpha = ((progress.value - 0.62f) / 0.38f).coerceIn(0f, 1f)
+                        alpha = AppMotion.playerReveal(progress.value, 0.47f)
                     }
                     .drawWithCache {
                         val extent = maxOf(size.width, size.height, 1f)
+                        val lightOrigin = Offset(size.width * (if (sideCover) 0.22f else 0.37f), size.height * 0.18f)
                         val key = Brush.radialGradient(
                             listOf(
                                 colors.primary.copy(alpha = if (karaoke) 0.12f else 0.25f),
                                 colors.primary.copy(alpha = 0f),
                             ),
-                            center = Offset(size.width * (if (sideCover) 0.22f else 0.37f), size.height * 0.18f),
+                            center = lightOrigin,
                             radius = extent * 0.58f,
                         )
                         val rim = Brush.radialGradient(
@@ -176,8 +177,12 @@ internal fun BoxScope.PlayerCardBackdrop(
                         )
                         onDrawBehind {
                             drawRect(floor)
-                            drawRect(key)
-                            drawRect(rim)
+                            val reveal = AppMotion.playerReveal(progress.value, 0.50f, 0.96f)
+                            val reach = 0.76f + 0.24f * reveal
+                            scale(reach, reach, pivot = lightOrigin) {
+                                drawRect(key, alpha = 0.62f + 0.38f * reveal)
+                            }
+                            drawRect(rim, alpha = reveal)
                         }
                     },
             )
