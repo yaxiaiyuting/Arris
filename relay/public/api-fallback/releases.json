@@ -1,6 +1,78 @@
 {
- "generatedAt": "2026-11-05T18:11:59.118Z",
+ "generatedAt": "2026-11-06T15:53:51.691Z",
  "releases": [
+  {
+   "tag_name": "v4.0.14-gpl",
+   "name": "Arris v4.0.14-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T06:25:25Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.14-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## 修复部分歌曲歌词慢半拍\n\n- 逐字歌词的首字早于整行标记时，切句、逐字高亮和点歌词跳播对齐首字起点。译文继续按原行的源时间戳配对。\n- 播放位置更新时立即检查已经跨过的歌词边界，拖动进度后及时重新定位。\n\n## 安装与验证\n\n主线 · Android 10 及以上 · versionCode 214\n\n本次发布的是已在 PLC110 上覆盖安装并试听的签名包。同段音轨对齐后，《Dream On》约 1:46 的一次换句比 4.0.13 早约 0.6 秒，《Numb》抽查的两处换句差在 50 毫秒以内。\n\n[官网直链下载](https://arris.de5.net/get/Arris-v4.0.14-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 716154114,
+     "name": "Arris-v4.0.14-gpl.apk",
+     "size": 10523624,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.14-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.34-gpl",
+   "name": "Arris LTS v3.7.34-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T15:53:46Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.34-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## Arris LTS 3.7.34-gpl\n\nAndroid 7.0 及以上 · versionCode 216\n\n- 恢复旧版 LTS 应用内更新。3.7.32 可识别 3.7.34 的正式安装包，新版也兼容历史 `-lts-gpl` 文件名。\n- 冷启动时清除不属于当前通道或构建类型的旧更新提示，允许重新检查。\n- 修复 Android 7 上网易云收藏或取消收藏走 EAPI 兜底时无法读取服务器确认的问题。\n- 小幅向后拖动播放进度后，普通歌词立即按跳转位置切句。\n- 跟唱页可以切换原文与译文主行。该句无译文时显示原文。\n\n已在 Android 7.0（API 24）模拟器用原版 3.7.32 通过应用内入口下载并覆盖安装最终签名包。收藏兼容性使用合成响应验证。\n\n[官网下载](https://arris.de5.net/get/Arris-v3.7.34-gpl.apk)\n\nLTS 与主线共用包名。日后从本版切回主线，覆盖安装要求主线包的 `versionCode` 至少为 216。\n",
+   "assets": [
+    {
+     "id": 717667601,
+     "name": "Arris-v3.7.34-gpl.apk",
+     "size": 12303093,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.34-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.33-gpl",
+   "name": "Arris LTS v3.7.33-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-06T07:33:35Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.33-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## LTS 回移歌词切句同步修复\n\n- 普通歌词和独立跟唱共用校正后的行起点与播放时钟。逐字轨先开始时，切句、高亮和点歌词跳播都对齐首字。\n- 播放位置变化后立即重新检查已跨过的歌词边界。译文继续按原行的源时间戳配对。\n- Android 7 的跟唱页可以从系统设置读取动画开关，修复进入跟唱时的崩溃。\n\n## 安装与验证\n\nLTS · Android 7.0 及以上 · versionCode 215\n\n在 Android 7.0（API 24）模拟器上，用此签名包从 3.7.32 覆盖安装并验证离线播放、普通歌词切句、点歌词跳播以及独立跟唱的播放和返回。全量 JVM 测试 3,424 项，0 失败、4 跳过。Release Lint 0 错误。\n\n从 3.7.33 LTS 切回主线时，Android 覆盖安装要求主线 APK 的 versionCode 至少为 215。\n\n[官网下载 LTS APK](https://arris.de5.net/get/Arris-v3.7.33-lts-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 716320767,
+     "name": "Arris-v3.7.33-lts-gpl.apk",
+     "size": 12303089,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.33-lts-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v4.0.13-gpl",
+   "name": "Arris v4.0.13-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-05T18:19:47Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.13-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## 歌词从这一句滑到下一句\n\n- 旧句缩小、淡出时，新句同步放大、变清晰。列表滚动、字色和侧边光轨共用 360 毫秒缓动。\n- 短句连续切换时，从画面已经到达的位置继续。拖进度跨越多句时，用淡入淡出衔接。\n- 保留卡拉 OK 逐字高亮、双语歌词和三点入唱提示。切换原文或译文主行、调整字号后，当前句重新对齐。\n- 景深改在字形绘制时完成，减少整行滤镜的开销。\n\n## 安装与验证\n\n主线 · Android 10 及以上 · versionCode 213\n\n本 Release 的签名 APK 已在 PLC110 上覆盖安装并试听。JVM 测试 3,532 项，0 失败、4 跳过。Debug Lint 0 错误。\n\n[官网下载 APK](https://arris.de5.net/get/Arris-v4.0.13-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n\nSHA-256 `3d4045ae2edd1b50bdec49397fa49b0deb8425e91170ebc3618267dcd50381d1`\n",
+   "assets": [
+    {
+     "id": 714339890,
+     "name": "Arris-v4.0.13-gpl.apk",
+     "size": 10523624,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.13-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.12-gpl",
    "name": "Arris v4.0.12-gpl",
@@ -27,7 +99,7 @@
    "published_at": "2026-11-05T16:39:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.11-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版：歌词换行的\"交接\"、横屏竖条、反馈通道、收藏不再反手取消\n\n### 歌词\n\n- **跨行交接动画**：当前句切换时，新的一句从「略模糊、偏下、略小」收到「清晰、就位」，\n  320ms 强减速曲线；全程只写 `graphicsLayer`（API 31+ 用 `RenderEffect` 做模糊），**零重组**。\n  系统关闭动画时直接跳过。\n- **横屏当前句竖条**：横屏/宽屏歌词面板给当前句补一根主轴色短条，短面板里不用再靠字号差找当前句。\n\n### 收藏（数据完整性，回移上游 `293430c` + `c84c0fd`）\n\n- 收藏状态改为**红心 id 底表优先**：超出已加载页的已收藏歌不再显示白心\n- xeapi 收藏写入补官方 9.6.13 的五个字段（`rqRefer/songRqRefer/mode/subMode/source`）\n- **502 视为成功**（歌曲已在期望状态），不再掉进 weapi 老通道 ——\n  老通道对重复写入可能返回 `524 已取消喜欢`，把已收藏的歌反手撤销\n\n### 反馈\n\n- 关于页新增「发送反馈」：描述 + 可选联系方式，发送前能看到**将要发送的诊断信息**\n- 只带版本 / 机型 / 系统 / 语言主题 / 音质档 / 登录与否（布尔）；**不采集** cookie、令牌、曲目历史\n- 走自有中转落到 [arris-feedback](https://gitee.com/yaxiaiyuting/arris-feedback) 仓库；\n  发送失败可一键复制全文手动提交\n\n### 其他\n\n- 更新说明里的表格与链接现在能正常渲染（回移上游 `f648d99`）\n\n| | |\n|---|---|\n| APK | 见附件 |\n| SHA-256 | `5341216cf32d50a449ef6322c60f37402ab225a7142134961cb8c446c48713c8` |\n| 测试 | 3532 项 / 0 失败 |\n| 签名 | v2 scheme 通过 |\n",
+   "body": "",
    "assets": [
     {
      "id": 714057261,
@@ -45,7 +117,7 @@
    "published_at": "2026-11-05T15:31:37Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.10-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版：Gitee 进入镜像队列\n\nGitee 仓库已建好并把整仓镜像过去（17 个分支 + 148 个 tag）：\n**https://gitee.com/yaxiaiyuting/arris**\n\n下载源顺序（`UpdateMirrors`）：\n\n```\n本站 /get/  →  Gitee Release 附件  →  ghfast.top  →  gh-proxy.com  →  ghproxy.net\n```\n\n## 一个实测发现：Gitee 不支持 Range\n\n| 源 | Range 表现 | 用途 |\n|---|---|---|\n| 本站 / ghproxy | 206（支持分段） | 参与**分段轮转** |\n| **Gitee 附件** | **忽略 Range，回 200 整个文件** | 只做**单流回退** |\n\n所以新增 `probeAll`：分段前逐个探测，只把真正支持 206 的源放进轮转；\nGitee 保留在单流回退列表里（它国内线路最好）。\n\n单流回退也改成**按镜像逐个试**，不再只认 `assetUrl`。\n\n## 匿名下载校验（本机直连 Gitee）\n\n```\nHTTP 200  10,490,856 B  9.60s  ≈ 1.09 MB/s\n本地构建 SHA-256  31165652d99c4f7f…\nGitee 下载 SHA-256 31165652d99c4f7f…\n```\n\n两者一致，说明镜像包与签名产物完全相同。\n\n| | |\n|---|---|\n| APK | 10,490,856 B |\n| SHA-256 | `31165652d99c4f7f7fae959383f731b4e3de21fccf3d7bd0e3ea827d864f0842` |\n",
+   "body": "",
    "assets": [
     {
      "id": 713808709,
@@ -63,7 +135,7 @@
    "published_at": "2026-11-05T15:31:34Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.9-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版做的是下载速度\n\n国内直链走 Cloudflare，同一个包 200 KB/s 和 2 MB/s 都可能出现 —— 这是单源单线路的波动，\n不是\"某个源坏了\"。所以：\n\n- **多镜像**：本站 `/get/` → Gitee（配置后）→ ghproxy 三条公共反代，按优先级排\n- **段轮转**：4 个分段分别走不同镜像（同一线路并发 4 段只会互相抢带宽）\n- **失败换源**：某一段在某镜像失败，换下一条镜像重试**这一段**，不再整批回落单流\n- 每段仍然核对 `Content-Range` 起止与总长（I04 的校验没丢）；失败重试会把已写字节\n  从进度里回退，进度不虚高\n\n## 怎么启用 Gitee 镜像\n\n在 Gitee 建仓并发布 Release（附件放 APK），把附件地址前缀填进\n`app/src/main/java/com/takahashirinta/ncrust/update/UpdateMirrors.kt` 的 `GITEE_BASE`，\n下一版构建就会把它排在本站之后、反代之前。\n\n| | |\n|---|---|\n| APK | 10,4xx,xxx B |\n| SHA-256 | `26c2cb143d536f68daa60e558202256a2b8746198e158c415c56b18d1488200e` |\n| 签名 | v2 scheme 通过 |\n",
+   "body": "",
    "assets": [
     {
      "id": 713743864,
@@ -81,7 +153,7 @@
    "published_at": "2026-11-05T15:31:30Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.8-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 本版内容\n\n- **竖屏「留白跟唱」**：歌词页右上角进入；保留歌名与歌手，当前句大字，下一句提前出现；\n  有逐字时间戳时随音乐扫亮，只有 LRC 时整行高亮；有译文时可切换「原文／译文」主行\n- **竖屏歌词与进度条合并**：歌词面板与进度条同一套纵向分区，不再各自占位\n- **切歌时只挂载一个歌词视口**：去掉 Crossfade 期间的双视口，切歌瞬间不再有两份滚动状态\n\n## 校验\n\n| | |\n|---|---|\n| APK | 10,475,948 B |\n| SHA-256 | `a5035e69d6b52b236165b45206424fb936f7d1646b339ca5cad110b99b302e71` |\n| 签名 | v2 scheme 通过，单一签名者 |\n| 构建 | 离线 / 单 worker / in-process 编译，BUILD SUCCESSFUL |\n\n\n## LTS\n\nLTS 3.7.29 只回移了「切歌单视口」这一条 —— 跟唱功能依赖主线 4.0.7 的播放器布局重构，\ncherry-pick 在 LTS 上产生 18 处冲突，需要单独立项回移。\n",
+   "body": "",
    "assets": [
     {
      "id": 713623665,
@@ -124,6 +196,24 @@
      "name": "Arris-v4.0.4-gpl.apk",
      "size": 10401136,
      "browser_download_url": "https://github.com/yaxiaiyuting/Arris/releases/download/v4.0.4-gpl/Arris-v4.0.4-gpl.apk"
+    }
+   ]
+  },
+  {
+   "tag_name": "v3.7.32-gpl",
+   "name": "Arris LTS v3.7.32-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-05T18:21:49Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.32-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "",
+   "assets": [
+    {
+     "id": 714362487,
+     "name": "Arris-v3.7.32-lts-gpl.apk",
+     "size": 12303089,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.32-lts-gpl.apk"
     }
    ]
   },

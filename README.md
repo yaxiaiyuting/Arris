@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.13--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.14--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-10.04%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -36,7 +36,9 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
-| **4.0.13** | 2026-11-05 | 歌词跨行同步滚动，旧句逐渐缩小，新句从虚化到清晰。切换歌词主行后自动重新对齐 |
+| **4.0.14** | 2026-11-06 | 修复部分逐字歌词切句偏晚。切句对齐首字时间，播放位置更新时立即检查跨行 |
+| **LTS 3.7.34** | 2026-11-06 | 恢复旧版应用内更新和 Android 7 收藏确认，修复回拖歌词与跟唱主行切换 |
+| 4.0.13 | 2026-11-05 | 歌词跨行同步滚动，旧句逐渐缩小，新句从虚化到清晰。切换歌词主行后自动重新对齐 |
 | 4.0.11 | 2026-11-05 | 歌词换行交接动画、横屏竖条、发送反馈、收藏修复 |
 | 4.0.8 | 2026-11-05 | 竖屏**留白跟唱**（歌词页右上角进入，逐字扫亮 / 整行高亮可切换）、竖屏歌词与进度条合并、切歌只挂载一个歌词视口 |
 | **4.0.6** | 2026-11-05 | **修竖屏控制栏展开时的歌词比例**：去掉 4.0.2 加的面板底部留白（它从歌词视口扣高度，把「当前行 36%」锚点整体顶上去）；整页一体化播放界面、Tux 图标、跟唱、背景呼吸同版本包含 · **LTS 3.7.28** 同源同修 |
@@ -387,6 +389,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.14-gpl | 2026-11-06 | **修复歌词慢半拍**。逐字歌词按首字切句，播放位置更新后立即重新计算歌词边界 |
 | v4.0.13-gpl | 2026-11-05 | **歌词换行连续交接**：滚动、缩放、亮度和光轨同步，快速换句从当前画面接续；原译文主行或字号改变后重新定位 |
 | v4.0.4-gpl | 2026-11-05 | 续播保存与更新下载修复；一起听认证、暂停和下一首同步；识曲可取消 |
 | v4.0.12-gpl | 2026-11-05 | **歌词换行过渡合一**（缩放/透明度/位移/模糊同一连续量，420ms）、下载镜像探测改并行（不再卡 0%） |
@@ -435,6 +438,8 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.7.34-gpl | 2026-11-06 | **LTS 稳定性修复**。旧版可直接更新，Android 7 收藏回退可读回结果，小幅回拖对齐歌词，跟唱可切换主行 |
+| v3.7.33-gpl | 2026-11-06 | **歌词切句同步**。普通歌词和独立跟唱共用校正后的首字时间，播放位置更新后及时切句 |
 | v3.7.27-gpl | 2026-11-05 | 回移续播保存、音质拒绝、更新源回退与断点续传修复 |
 | v3.7.30-gpl | 2026-11-05 | **跟唱回移（全屏档）**：KaraokeTimeline / PlayerGlyphs / KaraokeScreen + 面板聚焦模式 + 歌词页入口 |
 | v3.7.29-gpl | 2026-11-05 | 回移「切歌单视口」；跟唱未回移（需单独立项） |
