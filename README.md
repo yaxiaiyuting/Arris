@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.14--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-10.04%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.15--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-10.08%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -36,7 +36,8 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
-| **4.0.14** | 2026-11-06 | 修复部分逐字歌词切句偏晚。切句对齐首字时间，播放位置更新时立即检查跨行 |
+| **4.0.15** | 2026-11-07 | 播放器换用哑光光影，封面到达后再淡入，主界面支持左右滑动切换五个标签 |
+| 4.0.14 | 2026-11-06 | 修复部分逐字歌词切句偏晚。切句对齐首字时间，播放位置更新时立即检查跨行 |
 | **LTS 3.7.34** | 2026-11-06 | 恢复旧版应用内更新和 Android 7 收藏确认，修复回拖歌词与跟唱主行切换 |
 | 4.0.13 | 2026-11-05 | 歌词跨行同步滚动，旧句逐渐缩小，新句从虚化到清晰。切换歌词主行后自动重新对齐 |
 | 4.0.11 | 2026-11-05 | 歌词换行交接动画、横屏竖条、发送反馈、收藏修复 |
@@ -389,6 +390,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.15-gpl | 2026-11-07 | 哑光播放界面、切歌封面交接、五个主界面标签可左右滑动，致谢新增 quit |
 | v4.0.14-gpl | 2026-11-06 | **修复歌词慢半拍**。逐字歌词按首字切句，播放位置更新后立即重新计算歌词边界 |
 | v4.0.13-gpl | 2026-11-05 | **歌词换行连续交接**：滚动、缩放、亮度和光轨同步，快速换句从当前画面接续；原译文主行或字号改变后重新定位 |
 | v4.0.4-gpl | 2026-11-05 | 续播保存与更新下载修复；一起听认证、暂停和下一首同步；识曲可取消 |
