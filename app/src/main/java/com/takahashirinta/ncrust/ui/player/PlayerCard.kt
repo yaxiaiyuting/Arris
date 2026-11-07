@@ -715,7 +715,7 @@ private data class PlayerArtwork(val key: String, val painter: Painter)
  * ## mini bar 的取舍（如实记录）
  *
  * 大封面与 mini bar 封面是**同一个节点**：mini 态是整层被 `scale` 到 56dp 的结果。
- * 所以圆角与描边会**等比缩放** —— mini 态下 16dp 圆角渲染成约 2.5dp、
+ * 所以圆角与描边会**等比缩放** —— mini 态下 8dp 圆角渲染成约 1.25dp、
  * 1dp 描边渲染成约 0.16dp（基本不可见）。
  *
  * 这是**有意接受**的，不是遗漏。要让它不缩放，就得在动画的每一帧改
@@ -737,8 +737,7 @@ internal fun StableCover(
     /**
      * v2.9.0 · A 档：浮起阴影的高度。`null` = 不画阴影（= v2.8.0 的观感）。
      *
-     * **必须传 `AppShapes.large` 作为 shape**（见下面的实现）：阴影与裁切/描边共用同一个
-     * shape 才不会在圆角处露出错位的方角。
+     * 阴影与裁切、描边共用同一个 shape，保证圆角贴合。
      */
     shadowElevation: androidx.compose.ui.unit.Dp? = null,
     /** v2.9.0 · A 档：切歌时是否淡入（`AppMotion.coverFade`）。`false` = v2.8.0 的硬切。 */
@@ -825,7 +824,7 @@ internal fun StableCover(
                 val radius = size.minDimension * 0.62f
                 val paper = Brush.radialGradient(
                     listOf(
-                        lerp(placeholderColor, colors.primary, 0.28f),
+                        lerp(placeholderColor, colors.onSurfaceVariant, 0.10f),
                         placeholderColor,
                         colors.surface,
                     ),
@@ -834,8 +833,9 @@ internal fun StableCover(
                 )
                 onDrawBehind {
                     drawRect(paper)
-                    drawArrisGrooves(center, radius, colors.primary)
-                    drawCircle(colors.primary.copy(alpha = 0.17f), radius * 0.21f, center)
+                    val ink = lerp(placeholderColor, colors.onSurfaceVariant, 0.56f)
+                    drawArrisGrooves(center, radius, ink)
+                    drawCircle(ink.copy(alpha = 0.13f), radius * 0.21f, center)
                     drawCircle(colors.surface, radius * 0.038f, center)
                 }
             })
@@ -854,12 +854,7 @@ internal fun StableCover(
             Image(
                 painter = current.painter,
                 contentDescription = contentDescription,
-                modifier = Modifier.matchParentSize().graphicsLayer {
-                    val reveal = blend.value
-                    alpha = reveal
-                    scaleX = 1f + (1f - reveal) * 0.024f
-                    scaleY = scaleX
-                },
+                modifier = Modifier.matchParentSize().graphicsLayer { alpha = blend.value },
                 contentScale = contentScale,
             )
         }

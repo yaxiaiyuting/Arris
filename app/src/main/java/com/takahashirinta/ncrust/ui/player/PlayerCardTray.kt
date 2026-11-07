@@ -46,9 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -120,13 +118,10 @@ internal fun PlayerCardTray(
                 alpha = (1f - progress.value * 5f).coerceIn(0f, 1f)
             }
             .drawWithCache {
-                val wash = Brush.verticalGradient(
-                    listOf(lerp(colors.surface, colors.primary, 0.085f), colors.surface),
-                )
                 val edge = 1.dp.toPx()
                 onDrawBehind {
-                    drawRect(wash)
-                    drawLine(colors.divider, Offset(0f, edge / 2f), Offset(size.width, edge / 2f), edge)
+                    drawRect(colors.surface)
+                    drawLine(colors.divider.copy(alpha = 0.65f), Offset(0f, edge / 2f), Offset(size.width, edge / 2f), edge)
                 }
             }
     ) {

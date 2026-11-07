@@ -13,7 +13,6 @@
 package com.takahashirinta.ncrust.ui.player
 
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 
 import androidx.compose.animation.core.Animatable
@@ -36,10 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -78,54 +74,36 @@ private fun BoxScope.TransportDisc(
 ) {
     val colors = LocalMetroColors.current
     val strings = LocalStrings.current
-    val primary = colors.primary
-    val brush = remember(primary) {
-        Brush.verticalGradient(
-            0f to lerp(primary, Color.White, 0.17f),
-            0.55f to primary,
-            1f to lerp(primary, Color.Black, 0.11f),
-        )
-    }
-    val rim = remember {
-        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.40f), Color.Black.copy(alpha = 0.16f)))
-    }
+    val ink = colors.background
+    val fill = lerp(colors.onBackground, colors.primary, 0.18f)
     val pressed by interaction.collectIsPressedAsState()
     val scale = remember { Animatable(1f) }
     LaunchedEffect(pressed) {
         if (pressed || scale.value != 1f) {
             scale.animateTo(
-                if (pressed) 0.94f else 1f,
+                if (pressed) 0.97f else 1f,
                 tween(if (pressed) 100 else 210, easing = FastOutSlowInEasing),
             )
         }
     }
     Box(
         modifier = Modifier.matchParentSize()
+            .padding((iconSize * 0.12f).coerceIn(2.dp, 5.dp))
             .graphicsLayer {
                 scaleX = scale.value
                 scaleY = scale.value
             }
-            .shadow(4.dp, AppShapes.full, clip = false)
             .clip(AppShapes.full)
-            .background(brush)
-            .drawWithCache {
-                val reflection = Brush.radialGradient(
-                    listOf(Color.White, Color.White.copy(alpha = 0f)),
-                    center = Offset(size.width * 0.35f, size.height * 0.25f),
-                    radius = maxOf(size.width * 0.67f, 1f),
-                )
-                onDrawBehind {
-                    val compression = ((1f - scale.value) / 0.06f).coerceIn(0f, 1f)
-                    if (compression > 0f) drawRect(reflection, alpha = compression * 0.16f)
-                }
-            }
-            .border(1.dp, rim, AppShapes.full),
+            .drawBehind {
+                val pressure = ((1f - scale.value) / 0.03f).coerceIn(0f, 1f)
+                drawRect(lerp(fill, ink, pressure * 0.08f))
+            },
         contentAlignment = Alignment.Center,
     ) {
         MetroIcon(
             imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
             contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
-            tint = colors.onPrimary,
+            tint = ink,
             sizeDp = iconSize,
         )
     }
@@ -184,18 +162,12 @@ private fun CompactSkipButton(icon: ImageVector, label: String, enabled: Boolean
 @Composable
 private fun BoxScope.PanelSelection(active: Boolean) {
     if (active) {
-        val primary = LocalMetroColors.current.primary
-        Box(
-            Modifier.align(Alignment.Center)
-                .size(30.dp)
-                .background(primary.copy(alpha = 0.12f), AppShapes.medium),
-        )
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 4.dp)
-                .size(width = 12.dp, height = 2.dp)
-                .background(LocalMetroColors.current.primary),
+                .size(4.dp)
+                .background(LocalMetroColors.current.primary, AppShapes.full),
         )
     }
 }
@@ -309,9 +281,9 @@ fun FullPlayerControls(
     val gapLoose = if (compact) 8.dp else 16.dp
     val ctrlRowPad = if (compact) 2.dp else 16.dp
     val sideBtn = if (compact) 44.dp else 60.dp
-    val sideIcon = if (compact) 26.dp else 33.dp
+    val sideIcon = if (compact) 24.dp else 29.dp
     val playBtn = if (compact) 58.dp else 84.dp
-    val playIcon = if (compact) 32.dp else 44.dp
+    val playIcon = if (compact) 28.dp else 36.dp
     val sideGap = if (compact) 16.dp else 28.dp
     val toggleBtn = if (compact) 44.dp else 56.dp
     val toggleIcon = if (compact) 23.dp else 26.dp
@@ -492,7 +464,7 @@ fun FullPlayerControls(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        TransportDisc(playInteraction, isPlaying, 36.dp)
+                        TransportDisc(playInteraction, isPlaying, 29.dp)
                     }
                     Box(
                         modifier = Modifier
@@ -898,7 +870,7 @@ fun PlayerQualityChip(
         Box(
             modifier = Modifier
                 .clip(AppShapes.full)
-                .background(LocalMetroColors.current.surfaceVariant)
+                .border(1.dp, LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.28f), AppShapes.full)
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }

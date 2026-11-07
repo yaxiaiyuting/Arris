@@ -309,11 +309,9 @@ object AppMotion {
     /**
      * v2.9.0 · A 档：封面**浮起阴影**的高度（dp）。
      *
-     * 8dp：足够让封面从背景里「浮」出来，又不会在 OLED 纯黑底上显出一圈灰边。
-     * 阴影的 **shape 必须用 `AppShapes.large`**（与封面自身的裁切形状同一个）——
-     * 形状不一致时阴影会在圆角处露出来，看起来像一个错位的方框。
+     * 用 4dp 的低阴影勾出封面边缘，阴影与封面共用裁切形状。
      */
-    val COVER_SHADOW_ELEVATION_DP: Dp = 8.dp
+    val COVER_SHADOW_ELEVATION_DP: Dp = 4.dp
 
     /**
      * v2.9.0 · A 档：封面随节拍浮动的最大位移（dp）。任务书 §4.3：「幅度小（±2dp）」。

@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,10 +43,9 @@ import com.takahashirinta.ncrust.ui.player.motion.BackdropEnvironment
 import com.takahashirinta.ncrust.ui.player.motion.rememberBackdropEnvironment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
@@ -143,48 +143,26 @@ internal fun BoxScope.PlayerCardBackdrop(
             )
         }
 
-        // Keep the same ambient framing in every motion tier. Live artwork remains visible below
-        // the translucent lighting when enabled; the static floor is opaque when it is the base.
+        // Directional ambient light leaves room for the artwork's color below.
         if (hasSong && expandedMounted()) {
             val colors = LocalMetroColors.current
-            val floorAlpha = if (motion.anyUiMotion) 0.34f else 1f
+            val dark = colors.background.luminance() < 0.5f
+            val neutral = if (dark) Color(0xFF151715) else Color(0xFFF7F4EC)
+            val base = lerp(neutral, colors.background, 0.28f)
+            val veil = if (motion.anyUiMotion) 0.66f else 1f
+            val ambient = remember(base, colors.onBackground, dark, karaoke, veil) {
+                val light = if (karaoke) 0.025f else if (dark) 0.065f else 0.048f
+                val shoulder = lerp(base, colors.onBackground, light)
+                Brush.verticalGradient(
+                    0f to shoulder.copy(alpha = veil),
+                    0.60f to base.copy(alpha = veil),
+                    1f to base.copy(alpha = (veil + 0.20f).coerceAtMost(1f)),
+                )
+            }
             Box(
                 Modifier.matchParentSize()
-                    .graphicsLayer {
-                        alpha = AppMotion.playerReveal(progress.value, 0.47f)
-                    }
-                    .drawWithCache {
-                        val extent = maxOf(size.width, size.height, 1f)
-                        val lightOrigin = Offset(size.width * (if (sideCover) 0.22f else 0.37f), size.height * 0.18f)
-                        val key = Brush.radialGradient(
-                            listOf(
-                                colors.primary.copy(alpha = if (karaoke) 0.12f else 0.25f),
-                                colors.primary.copy(alpha = 0f),
-                            ),
-                            center = lightOrigin,
-                            radius = extent * 0.58f,
-                        )
-                        val rim = Brush.radialGradient(
-                            listOf(colors.primary.copy(alpha = 0.09f), colors.primary.copy(alpha = 0f)),
-                            center = Offset(size.width, size.height * 0.58f),
-                            radius = extent * 0.31f,
-                        )
-                        val floor = Brush.verticalGradient(
-                            0f to lerp(colors.background, colors.surface, 0.54f).copy(alpha = floorAlpha),
-                            0.64f to colors.background.copy(alpha = floorAlpha),
-                            1f to lerp(colors.background, colors.surface, 0.36f).copy(alpha = floorAlpha),
-                            endY = size.height.coerceAtLeast(1f),
-                        )
-                        onDrawBehind {
-                            drawRect(floor)
-                            val reveal = AppMotion.playerReveal(progress.value, 0.50f, 0.96f)
-                            val reach = 0.76f + 0.24f * reveal
-                            scale(reach, reach, pivot = lightOrigin) {
-                                drawRect(key, alpha = 0.62f + 0.38f * reveal)
-                            }
-                            drawRect(rim, alpha = reveal)
-                        }
-                    },
+                    .graphicsLayer { alpha = AppMotion.playerReveal(progress.value, 0.47f) }
+                    .background(ambient),
             )
         }
 
