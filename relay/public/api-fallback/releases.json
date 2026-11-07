@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-06T15:53:51.691Z",
+ "generatedAt": "2026-11-07T06:45:53.763Z",
  "releases": [
+  {
+   "tag_name": "v4.0.15-gpl",
+   "name": "Arris 4.0.15-gpl · 哑光播放器与滑动切换",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-07T06:45:48Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.15-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "\n主线 · Android 10 及以上 · versionCode 218\n\n- 播放器采用哑光配色。深色背景接近炭黑，浅色背景偏暖白。播放键改为纯色，封面收紧圆角与阴影。\n- 展开时背景、内容和控件依次出现。切歌时保留上一张封面，新图加载成功后再交叉淡入。\n- 主界面可左右滑动切换首页、库、搜索、用户和播放统计。底栏与宽屏侧栏同步选中标签。\n- 「关于」页新增致谢名单成员 quit。\n\n",
+   "assets": [
+    {
+     "id": 719883094,
+     "name": "Arris-v4.0.15-gpl.apk",
+     "size": 10572776,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.15-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.14-gpl",
    "name": "Arris v4.0.14-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T17:01:49Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.12-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 这版：歌词换行不再\"硬切\"\n\n上一版（4.0.11）的过渡是**两套机制并行**：`smoothCurrentIndex` 管缩放、`lineSwitch` 只管当前行，\n而**颜色是按整数 `currentIndex` 瞬切**的 —— 三者不同步，肉眼就是\"啪一下切过去\"。\n\n这版把它们合成**一个连续量** `act = 1 - |index - smoothCurrentIndex|`：\n\n- **缩放**：0.82 → 1.0\n- **透明度**：0.55 → 1.0（颜色翻转发生在半透明状态下，看不见硬边）\n- **位移**：上一行略上、下一行略下，各 4dp\n- **模糊**：只在\"行程中\"的行上挂（API 31+），静止行为 null\n- **索引动画**：180ms → **420ms** + 强减速（180ms 里同时做缩放+变色，就是硬切的来源）\n- **滚动**：相邻行改为按同一时长分帧推进，不再\"文字先跳到位、再慢慢放大\"\n\n系统关闭动画时只取消位移，缩放/透明度仍跟随播放进度。\n\n## 另含\n\n- 修「下载卡 0% 十几秒」：镜像探测从**串行**改为**并行 + 单条 2.5s 预算 + 拿到第一条可用源就开跑**\n  （原来一条死链要等到连接超时，三个反代排队探完才开始写第一个字节）\n- 歌词交接（4.0.11 起）：横屏当前句竖条、关于页发送反馈、收藏改底表判定 + 502 视为成功\n\n| | |\n|---|---|\n| APK | 见附件 |\n| SHA-256 | `4e6d4cfb47845fc68522f34ae02cab238aa32a611bd9c4baaa3e40010089e97f` |\n| 测试 | 3532 项 / 0 失败 |\n",
+   "body": "",
    "assets": [
     {
      "id": 714135786,
