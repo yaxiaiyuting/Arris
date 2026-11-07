@@ -103,7 +103,8 @@ fun HomeScreen(
     artistRecoArtistId: Long? = null,
     onArtistRecoClick: (Long) -> Unit = {},
     // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
-    onRelogin: () -> Unit = {}
+    onRelogin: () -> Unit = {},
+    active: Boolean = true,
 ) {
     val strings = LocalStrings.current
     // 会话状态：Expired 时顶部一条失效横幅；非 Valid 时每日推荐加一行「登录后为你推荐」
@@ -179,7 +180,8 @@ fun HomeScreen(
     // 头像主色调(Palette), 取不到就回退中性底色(不借用 Arris 主题色)
     var fmAccent by remember { mutableStateOf<Color?>(null) }
     val fmContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(Unit) {
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         // v1.5.1 · C：没网就别去要资料了（电台卡会退回通用标题）。
         if (!NetworkAvailability.isOnline(context)) return@LaunchedEffect
         val started = CookieManager.snapshot()
@@ -224,8 +226,8 @@ fun HomeScreen(
     // 4.0.1：榜单到手就补首曲封面 —— 用 LaunchedEffect(toplists) 而不是只在网络回调里调，
     // 因为首屏经常是**缓存命中**（ContentCache.toplistItems），那条路径不走网络回调，
     // 只在回调里调用就会导致"榜单出来了但封面还是旧的拼贴图"。
-    LaunchedEffect(toplists) {
-        if (toplists.isNotEmpty()) loadChartCovers(toplists)
+    LaunchedEffect(active, toplists) {
+        if (active && toplists.isNotEmpty()) loadChartCovers(toplists)
     }
 
     /** v1.5.1 · C：把当前首页状态落盘（异步、失败无害），供下次无网冷启动使用。 */
@@ -347,7 +349,8 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
         // AppWarmup 刚预取过同样三个接口时直接复用缓存，避免冷启动重复网络/耗电。
         // S14：新鲜度必须属于当前账号，否则换账号后会拿旧推荐跳过加载。
         val owner = CookieManager.accountOwner()
@@ -410,8 +413,8 @@ fun HomeScreen(
     // v1.5.1 · C：半死网络（连上了但实际不通）下请求最长会挂到 connectTimeout。
     // 转圈最多陪跑 [HOME_LOAD_TIMEOUT_MS]：到点撤掉转圈、给空态 + 重试，
     // 至少让用户知道发生了什么，而不是对着一个永远转的圈。
-    LaunchedEffect(isLoading) {
-        if (!isLoading) return@LaunchedEffect
+    LaunchedEffect(active, isLoading) {
+        if (!active || !isLoading) return@LaunchedEffect
         delay(HOME_LOAD_TIMEOUT_MS)
         if (isLoading) {
             timedOut = true

@@ -123,7 +123,8 @@ fun LibraryScreen(
      */
     currentSongId: Long = -1L,
     // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
-    onRelogin: () -> Unit = {}
+    onRelogin: () -> Unit = {},
+    active: Boolean = true,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -218,7 +219,8 @@ fun LibraryScreen(
         localPlaylists = LocalPlaylistStore.readPlaylists(context)
     }
 
-    LaunchedEffect(selectedCategory) {
+    LaunchedEffect(active, selectedCategory) {
+        if (!active) return@LaunchedEffect
         reloadLocal()
         // 歌单 tab 现在是下标 1（v2.3.0 · A 的顺序调整）。
         if (selectedCategory == 1 && playlists.isEmpty() && !isLoadingPlaylists) {
@@ -226,19 +228,11 @@ fun LibraryScreen(
         }
     }
 
-    // 进入收藏页时后台拉取云端收藏（收藏单曲 + 收藏专辑），刷新后平滑 diff 更新。
-    // 失败/未登录不影响展示——本地缓存先渲染，绝不出现空白+加载动画。
-    LaunchedEffect(Unit) {
+    // 翻页预览只读本地内容。选中库页或在库页完成登录后，再刷新云端。
+    LaunchedEffect(active, refreshTrigger) {
+        if (!active) return@LaunchedEffect
         LibraryManager.refreshFromCloud(context)
         reloadLocal()
-    }
-
-    // 登录完成后（cookieRefreshTrigger 变化）再拉一次云端，保证重新安装/刚登录后库非空。
-    LaunchedEffect(refreshTrigger) {
-        if (refreshTrigger > 0) {
-            LibraryManager.refreshFromCloud(context)
-            reloadLocal()
-        }
     }
 
     // v2.3.0 · B：本地歌单不是可观察数据源（SharedPreferences），所以由上层用一个
@@ -250,8 +244,8 @@ fun LibraryScreen(
 
     // 收藏单曲分页懒加载：滚动到列表末尾时拉取下一批详情。
     val songListState = rememberLazyListState()
-    LaunchedEffect(selectedCategory) {
-        if (selectedCategory != 0) return@LaunchedEffect
+    LaunchedEffect(active, selectedCategory) {
+        if (!active || selectedCategory != 0) return@LaunchedEffect
         snapshotFlow { songListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
             .collect { lastIndex ->

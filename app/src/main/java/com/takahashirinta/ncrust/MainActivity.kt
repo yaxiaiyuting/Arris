@@ -38,6 +38,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
@@ -1045,7 +1048,22 @@ fun MainScreen(
     // v2.0.0 · T2：把"是否应该禁止熄屏"的最终判定结果交给 Activity 去改窗口 flag。
     onKeepScreenOnChange: (Boolean) -> Unit = {}
 ) {
-    var selectedTab by remember { mutableIntStateOf(1) }
+    val navStrings = LocalStrings.current
+    // 导航项在底部导航(窄屏)与左侧 sidebar(宽屏)之间共用。
+    //
+    // v3.3.0 · 用户需求第 10 条：**「统计」是第 5 项，追加在末尾**。
+    // 为什么不插在中间：SEARCH_TAB_INDEX = 2 被「跳搜索兜底」与导航栏本身两处消费
+    // （见该常量的 KDoc）—— 插队会让它静默指到错的页；追加则一个既有下标都不用改。
+    val navTabs = listOf(
+        Icons.Default.Home to navStrings.tabHome,
+        Icons.Default.LibraryMusic to navStrings.tabLibrary,
+        Icons.Default.Search to navStrings.tabSearch,
+        Icons.Default.Person to navStrings.tabUser,
+        Icons.Default.BarChart to navStrings.stats.title,
+    )
+
+    val tabPager = rememberPagerState(initialPage = 1) { navTabs.size }
+    val selectedTab = tabPager.settledPage
 
     /**
      * v2.6.1 · P0：待投递给搜索页的关键词（null = 没有待办）。
@@ -2758,7 +2776,7 @@ fun MainScreen(
                 if (progress.value > 0.01f) collapseCard()
                 // 先切 tab 再投递关键词：SearchScreen 只在可见时才消费它
                 // （见那里的 LaunchedEffect），顺序反了会丢掉这次预填。
-                selectedTab = SEARCH_TAB_INDEX
+                tabPager.requestScrollToPage(SEARCH_TAB_INDEX)
                 pendingSearchQuery = nav.keyword
                 snackbar.show(mainStrings.source.artistNavSearchFallback)
                 Log.i(
@@ -2815,7 +2833,7 @@ fun MainScreen(
                 if (progress.value > 0.01f) collapseCard()
                 // 先切 tab 再投递关键词：SearchScreen 只在可见时才消费它
                 // （见那里的 LaunchedEffect），顺序反了会丢掉这次预填。
-                selectedTab = SEARCH_TAB_INDEX
+                tabPager.requestScrollToPage(SEARCH_TAB_INDEX)
                 pendingSearchQuery = nav.keyword
                 snackbar.show(mainStrings.source.albumNavSearchFallback)
                 Log.i(
@@ -3324,20 +3342,6 @@ fun MainScreen(
         return
     }
 
-    val navStrings = LocalStrings.current
-    // 导航项在底部导航(窄屏)与左侧 sidebar(宽屏)之间共用。
-    //
-    // v3.3.0 · 用户需求第 10 条：**「统计」是第 5 项，追加在末尾**。
-    // 为什么不插在中间：SEARCH_TAB_INDEX = 2 被「跳搜索兜底」与导航栏本身两处消费
-    // （见该常量的 KDoc）—— 插队会让它静默指到错的页；追加则一个既有下标都不用改。
-    val navTabs = listOf(
-        Icons.Default.Home to navStrings.tabHome,
-        Icons.Default.LibraryMusic to navStrings.tabLibrary,
-        Icons.Default.Search to navStrings.tabSearch,
-        Icons.Default.Person to navStrings.tabUser,
-        Icons.Default.BarChart to navStrings.stats.title,
-    )
-
     // v3.3.0：播放统计的**采集**必须全程在跑，不能等用户点开统计页才开始 ——
     // 否则「打开这一页之前听的全部不算」，而那恰恰是用户最想看的部分。
     // StatsRecorder 是只读观察者（订阅 PlayerViewModel 的 StateFlow），
@@ -3353,7 +3357,7 @@ fun MainScreen(
     }
 
     val onNavSelected: (Int) -> Unit = { tab ->
-        selectedTab = tab
+        tabPager.requestScrollToPage(tab)
         if (!isInMain) navController.popBackStack(NavRoutes.HOME, false)
     }
     // v3.4.12：高度档覆盖整棵主内容树（NavHost / 播放器 / 覆盖页），
@@ -3500,9 +3504,10 @@ fun MainScreen(
                 // → 主线程 gg，返回感觉卡。现在 tab 屏永远存在，nav 详情页通过 opaque bg
                 // 从上层覆盖它，返回时 nav 只需 slide 详情页出去，tab 屏本来就在下面可见。
                 // 副作用：NavGraph 空 HOME destination 内容为空且不占布局，pointer 天然穿透。
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when (selectedTab) {
+                MainTabPager(tabPager, isInMain && !bigScreen, progress) { page ->
+                    when (page) {
                         0 -> HomeScreen(
+                            active = selectedTab == page,
                             onSongClick = { playSongItem(it) },
                             // 会话失效横幅点击 → 现有登录流程。
                             onRelogin = onRelogin,
@@ -3534,6 +3539,7 @@ fun MainScreen(
                         )
 
                         1 -> LibraryScreen(
+                            active = selectedTab == page,
                             onOpenRecognize = { showRecognize = true },
                             onOpenTogether = { showTogether = true },
                             onSongClick = { playSongItem(it) },
@@ -3998,6 +4004,25 @@ fun MainScreen(
             playerProgress = { progress.value },
         )
     }
+    }
+}
+
+@Composable
+private fun MainTabPager(
+    state: PagerState,
+    canSwipe: Boolean,
+    playerProgress: Animatable<Float, AnimationVector1D>,
+    content: @Composable (Int) -> Unit,
+) {
+    // 播放器折叠时只占托盘区域。展开或收起途中锁住下层翻页，避免两个手势抢事件。
+    val playerCollapsed by remember(playerProgress) { derivedStateOf { playerProgress.value <= 0.01f } }
+    HorizontalPager(
+        state = state,
+        modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = canSwipe && playerCollapsed,
+        beyondViewportPageCount = 0,
+    ) { page ->
+        content(page)
     }
 }
 
