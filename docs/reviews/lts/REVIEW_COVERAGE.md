@@ -33,3 +33,9 @@
 | LTS05 | `c533cb0` 的 `ui/player/PlayerCardExpanded.kt:254` 接通切换，`9a997b4` 的 `ui/player/PlayerCardOverlays.kt:335` 防止收起按钮挡住切换 | 原文与译文双向切换、无译文回落原文 |
 
 上述五项按正式版验收标记为已修。动态证据来自已有[发布验收](../../../../../dist/v3.7.34-lts-release/RELEASE_VERIFICATION.md)，本轮新增通读、问题和复现均为零。下一轮从前述断点第 2 项继续，先看播放意图与切网恢复，再查离线缓存及分段续传。
+
+## 2026-11-07 01:03 额度核对
+
+本地 HEAD `0ce2bb29b470b9fcf05293ab205eec4f4e921080`，应用树与正式标签 `v3.7.34-gpl` 的 `9a997b4d0c12f5b9dade621c6ff4a2fac9888c34` 一致。通过 Git 提交对象定位既有断点，未运行设备或发起网络请求。五小时／周剩余额度由 100%／11% 到 99%／11%，收尾仍为 99%／11%。周额度已接近阈值，本轮只核对基线并定位入口，新增通读、问题与复现均为零。
+
+下一轮仍从第 2 项开始，先对照 `ui/viewmodel/PlayerViewModel.kt:303,724` 的恢复与前台回调，以及 `player/SongUrlFetcher.kt:238` 的路由变化处理，再进入 `cache/OfflineUrlStore.kt:75,198` 与 `update/UpdateService.kt:311`。额度恢复后续审。
