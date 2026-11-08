@@ -2,7 +2,14 @@ package com.takahashirinta.ncrust.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -18,15 +25,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 
-/**
- * 主题色选择器 —— Groove 风：一行 6 个方形色块 + 下方选中色名。
- *
- * 设计取舍：
- *  - 6 种预设正好一行装下，视觉上就是一条 Metro"色墙"；
- *  - 选中态用 √ 图标叠加，根据色块亮度自动切黑白对比色，不管选到哪个色都能看清；
- *  - 素白（#FFFFFF）单独加一圈灰色描边，否则在黑色背景上和相邻的色块之间没有边界。
- *  - 选中色名用 primary 色，随选择变化——即时视觉反馈。
- */
+/** Named, accessible swatches with a fixed 48dp touch target and quiet selection frame. */
 @Composable
 fun ThemeColorSelector(
     selectedIndex: Int,
@@ -35,36 +34,24 @@ fun ThemeColorSelector(
 ) {
     val colorNames = LocalStrings.current.themeColorNames
     Column(modifier = Modifier.fillMaxWidth()) {
-        // 限宽：色块按 weight 等分，若跟随平板整宽(最多 720dp)会变成巨大的方块。
-        // 上限 336dp 让每块约 51dp，手机上仍是整宽自适应。
         Row(
-            modifier = Modifier.widthIn(max = 336.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.horizontalScroll(rememberScrollState()).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             presets.forEachIndexed { index, preset ->
                 val isSelected = index == selectedIndex
-                val checkColor = if (isLightColor(preset.color)) Color.Black else Color.White
+                val name = colorNames.getOrElse(index) { preset.label }
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .aspectRatio(1f)
-                        .background(preset.color)
-                        .then(
-                            // 素白在黑背景上必须描边，否则看不出色块边界。
-                            if (isLightColor(preset.color))
-                                Modifier.border(1.dp, Color.Gray.copy(alpha = 0.5f))
-                            else Modifier
-                        )
-                        .clickable { onSelect(index) },
-                    contentAlignment = Alignment.Center
+                    Modifier.size(48.dp).clip(AppShapes.medium)
+                        .background(if (isSelected) LocalMetroColors.current.onBackground.copy(alpha = .065f) else Color.Transparent)
+                        .selectable(isSelected, role = Role.RadioButton, onClick = { onSelect(index) })
+                        .semantics { contentDescription = name },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (isSelected) {
-                        MetroIcon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = checkColor,
-                            sizeDp = 26.dp
-                        )
+                    Box(Modifier.size(30.dp).clip(AppShapes.full).background(preset.color)
+                        .border(.7.dp, LocalMetroColors.current.onBackground.copy(alpha = .18f), AppShapes.full),
+                        contentAlignment = Alignment.Center) {
+                        if (isSelected) MetroIcon(Icons.Default.Check, null, tint = onAccentColor(preset.color), sizeDp = 18.dp)
                     }
                 }
             }
@@ -74,14 +61,8 @@ fun ThemeColorSelector(
             text = colorNames.getOrElse(selectedIndex) {
                 presets.getOrElse(selectedIndex) { presets[0] }.label
             },
-            color = LocalMetroColors.current.primary,
+            color = LocalMetroColors.current.onBackground,
             style = TextStyle(fontSize = 14.sp)
         )
     }
-}
-
-/** 感知亮度判断：> 0.7 视为浅色，用黑色图标；否则白色图标。 */
-private fun isLightColor(color: Color): Boolean {
-    val luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
-    return luminance > 0.7
 }

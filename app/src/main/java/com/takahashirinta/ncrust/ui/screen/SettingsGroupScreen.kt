@@ -1231,7 +1231,7 @@ private fun isFlacTierIndex(index: Int): Boolean {
 /**
  * 主题模式三选一：跟随系统 / 深色 / 浅色。
  *
- * 用共用的 [ArrisSegmentedTabs]（圆角胶囊 + 选中位移动画），不再手搓三个方框：
+ * 用共用的 [ArrisSegmentedTabs]（圆角分段 + 选中淡入淡出），不再手搓三个方框：
  * 同一个"短选项集"概念在应用里只该有一种形态 —— 库页的分类切换也是这个控件。
  */
 @Composable

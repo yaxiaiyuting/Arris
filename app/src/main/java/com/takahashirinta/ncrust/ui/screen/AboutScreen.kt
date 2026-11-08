@@ -12,6 +12,8 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import com.takahashirinta.ncrust.ui.components.arrisAccentInk
+
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -71,7 +73,7 @@ fun AboutScreen(
 ) {
     val s = LocalStrings.current
     val updateStrings = LocalStrings.current.update
-    val accent = LocalMetroColors.current.primary
+    val accent = arrisAccentInk()
     // 关于页的手动检查与用户页横幅共用同一份逻辑；检查中禁止重复点。
     val updateState by UpdateService.state.collectAsState()
     val manualUpdateCheck = rememberManualUpdateCheck(onFound = onOpenUpdate)
@@ -318,7 +320,7 @@ private fun AboutActionRow(
     ) {
         MetroText(
             label,
-            color = LocalMetroColors.current.primary,
+            color = arrisAccentInk(),
             style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
             modifier = Modifier.weight(1f)
         )

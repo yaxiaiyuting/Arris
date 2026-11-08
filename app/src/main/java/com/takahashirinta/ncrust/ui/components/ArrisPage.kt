@@ -25,10 +25,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -38,8 +37,19 @@ import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.theme.AppMotion
+import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
+import com.takahashirinta.ncrust.ui.theme.contrastRatio
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.core.theme.*
+
+/** Accent used as small foreground ink must remain readable on every surface role. */
+@Composable
+internal fun arrisAccentInk(): Color {
+    val c = LocalNcrustColors.current
+    return if (listOf(c.background, c.surface, c.surfaceContainerHighest).all {
+        contrastRatio(c.primary.toArgb(), it.toArgb()) >= 4.5
+    }) c.primary else c.onBackground
+}
 
 /** A thin, translucent matte surface. No backdrop blur, shadow or continuous redraw. */
 @Composable
@@ -99,7 +109,7 @@ internal fun ArrisSegmentedTabs(
             Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(AppShapes.medium)
                 .selectable(active, enabled = usable, role = Role.Tab, onClick = { onSelect(index) }),
                 contentAlignment = Alignment.Center) {
-                if (active) ArrisSelection(true, Modifier.matchParentSize())
+                ArrisSelection(active, Modifier.matchParentSize())
                 MetroText(label,
                     color = when {
                         !usable -> c.onSurfaceVariant.copy(alpha = .45f)
@@ -211,7 +221,7 @@ internal fun ArrisShortcut(title: String, detail: String, icon: ImageVector, mod
             Modifier.size(34.dp).background(colors.primary.copy(alpha = 0.11f), AppShapes.medium),
             contentAlignment = Alignment.Center,
         ) {
-            MetroIcon(icon, null, tint = colors.primary, sizeDp = 20.dp)
+            MetroIcon(icon, null, tint = arrisAccentInk(), sizeDp = 20.dp)
         }
         Spacer(Modifier.height(14.dp))
         MetroText(title, color = colors.onBackground, style = LocalMetroTypography.current.titleMedium)
@@ -224,30 +234,8 @@ internal fun ArrisShortcut(title: String, detail: String, icon: ImageVector, mod
 internal fun ArrisHomeIdentity(title: String, modifier: Modifier = Modifier) {
     val colors = LocalMetroColors.current
     val chinese = com.takahashirinta.ncrust.ui.i18n.currentLanguageCode().startsWith("zh")
-    val light = colors.background.luminance() > 0.5f
-    Box(
-        modifier.fillMaxWidth()
-            .clip(AppShapes.extraLarge)
-            .border(.7.dp, colors.onBackground.copy(alpha = .08f), AppShapes.extraLarge)
-            .drawWithCache {
-                val end = if (layoutDirection == LayoutDirection.Ltr) 0.84f else 0.16f
-                val center = Offset(size.width * end, size.height * 0.44f)
-                val wash = Brush.radialGradient(
-                    listOf(
-                        lerp(colors.surface, colors.primary, if (light) 0.10f else 0.12f),
-                        lerp(colors.surface, colors.background, 0.12f),
-                    ),
-                    center = center,
-                    radius = size.width * 0.74f,
-                )
-                onDrawBehind {
-                    drawRect(wash)
-                    drawArrisGrooves(center, size.height * 0.83f, colors.primary)
-                }
-            },
-    ) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp, top = 18.dp, bottom = 18.dp),
+            modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -272,8 +260,7 @@ internal fun ArrisHomeIdentity(title: String, modifier: Modifier = Modifier) {
             Image(
                 painter = painterResource(R.drawable.tux_listener),
                 contentDescription = null,
-                modifier = Modifier.size(70.dp),
+                modifier = Modifier.size(64.dp),
             )
         }
-    }
 }

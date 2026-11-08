@@ -71,7 +71,7 @@ internal fun SettingsGroupCard(
                 .background(LocalMetroColors.current.primary.copy(alpha = 0.07f), AppShapes.medium),
             contentAlignment = Alignment.Center,
         ) {
-            MetroIcon(icon, contentDescription = null, tint = LocalMetroColors.current.primary, sizeDp = 22.dp)
+            MetroIcon(icon, contentDescription = null, tint = arrisAccentInk(), sizeDp = 22.dp)
         }
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -141,7 +141,7 @@ internal fun SettingsRow(
                 Modifier.size(36.dp).background(c.primary.copy(alpha = 0.07f), AppShapes.small),
                 contentAlignment = Alignment.Center,
             ) {
-                MetroIcon(icon, contentDescription = null, tint = c.primary, sizeDp = 20.dp)
+                MetroIcon(icon, contentDescription = null, tint = arrisAccentInk(), sizeDp = 20.dp)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {

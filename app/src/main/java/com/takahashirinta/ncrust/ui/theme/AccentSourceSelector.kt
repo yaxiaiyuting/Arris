@@ -43,7 +43,7 @@ fun AccentSourceSelector(
             Spacer(Modifier.height(6.dp))
             MetroText(
                 systemHint,
-                color = LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.7f),
+            color = LocalMetroColors.current.onSurfaceVariant,
                 style = TextStyle(fontSize = 11.sp)
             )
         }
