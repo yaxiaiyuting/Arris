@@ -234,33 +234,33 @@ internal fun ArrisShortcut(title: String, detail: String, icon: ImageVector, mod
 internal fun ArrisHomeIdentity(title: String, modifier: Modifier = Modifier) {
     val colors = LocalMetroColors.current
     val chinese = com.takahashirinta.ncrust.ui.i18n.currentLanguageCode().startsWith("zh")
-        Row(
-            modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                MetroText(
-                    title,
-                    color = colors.onBackground,
-                    style = LocalMetroTypography.current.pageHeading.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.8).sp,
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                MetroText(
-                    if (chinese) "喜欢的音乐，都在这里。" else "Your music, all in one place.",
-                    color = colors.onSurfaceVariant,
-                    style = LocalMetroTypography.current.bodySmall,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Image(
-                painter = painterResource(R.drawable.tux_listener),
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
+    Row(
+        modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            MetroText(
+                title,
+                color = colors.onBackground,
+                style = LocalMetroTypography.current.pageHeading.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.8).sp,
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            MetroText(
+                if (chinese) "喜欢的音乐，都在这里。" else "Your music, all in one place.",
+                color = colors.onSurfaceVariant,
+                style = LocalMetroTypography.current.bodySmall,
             )
         }
+        Spacer(Modifier.width(12.dp))
+        Image(
+            painter = painterResource(R.drawable.tux_listener),
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+        )
+    }
 }
