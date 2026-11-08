@@ -6,19 +6,9 @@ import androidx.compose.ui.graphics.Color
 import io.github.takahashirinta.kanesumi.core.theme.MetroColors
 
 /**
- * Ncrust 自有配色板。替代 MD3 的 ColorScheme。
- *
- * 设计：深色为 OLED 纯黑背景；浅色为米色偏白底。两套共享同一组强调色。
- * 所有颜色硬编码，不依赖 MD3 的 tonalElevation 调色逻辑 —— 层级做进颜色，不加阴影。
- *
- * P2 · 容器层级：`surfaceContainer*` 沿用 M3 的语义命名（只作取值参照系，不引入
- * material3 依赖），取值是本设计系统自己的低亮度阶梯。方向 = 「与该模式的页面底色
- * 对比逐级增强」：
- *  - 深色 OLED 底 #000000 逐级更亮：#0E0E0E → #1A1A1A → #242424 → #2E2E2E；
- *  - 浅色纸底 #F6F2E9 逐级更暖更深：#FBF7EE → #FFFDF8 → #F2EBDE → #EDE6D8。
- * 两套都只有颜色差，不产生任何阴影 —— 无 elevation 的视觉识别不变。
- * （v2.5.0 · B 起圆角由 `AppShapes` 统一施加；旧正典是「直角、无圆角」，
- * 颜色板本身仍然只描述颜色、不携带任何形状。）
+ * App-owned palette, shared with Kanesumi through [toMetroColors].
+ * Neutral matte surfaces keep text and artwork distinct; pine/sage remains the accent.
+ * Container roles describe depth with tone, without requiring shadows or backdrop blur.
  */
 @Immutable
 data class NcrustColors(
@@ -46,52 +36,30 @@ data class NcrustColors(
     val outlineVariant: Color = Color(0xFF2A2A2A),
 )
 
-/**
- * 默认配色：云杉绿主题 + OLED 纯黑。
- * onSurfaceVariant 用中性灰 #B3B3B3（Spotify 风），与 MD3 紫调 onSurfaceVariant 区分。
- *
- * 层级：页面 #000000 → 过渡 #0E0E0E → 基准容器 #1A1A1A → 弹窗 #242424 → 浮层 #2E2E2E。
- * 全部相对 #000000 单调变亮，OLED 黑底不变灰。
- * WCAG 对比度（最亮的一档 #2E2E2E 上）：onSurface #FFFFFF 13.6:1、onSurfaceVariant
- * #B3B3B3 6.5:1 —— 每档都 ≥4.5:1，抬升不回退可读性。
- */
-/** Website palette: pine, warm paper and sage. Dark surfaces retain readable separation. */
+/** Matte charcoal. Preset and cover-based accents remain configurable. */
 val DefaultNcrustColors = NcrustColors(
     primary = Color(0xFFB4CEA0), onPrimary = Color(0xFF173C2E),
-    background = Color(0xFF101A15), surface = Color(0xFF19271F),
-    surfaceVariant = Color(0xFF26372B), onBackground = Color(0xFFF4F6EF),
-    onSurface = Color(0xFFF4F6EF), onSurfaceVariant = Color(0xFFB2BFB1),
-    surfaceContainerLowest = Color(0xFF101A15), surfaceContainerLow = Color(0xFF15221A),
-    surfaceContainerHigh = Color(0xFF223229), surfaceContainerHighest = Color(0xFF2C4032),
-    outline = Color(0xFF6B806E), outlineVariant = Color(0xFF344A3B),
+    background = Color(0xFF141715), surface = Color(0xFF1D221F),
+    surfaceVariant = Color(0xFF29312B), onBackground = Color(0xFFF1F3ED),
+    onSurface = Color(0xFFF1F3ED), onSurfaceVariant = Color(0xFFB9C1B7),
+    surfaceContainerLowest = Color(0xFF141715), surfaceContainerLow = Color(0xFF191D1A),
+    surfaceContainerHigh = Color(0xFF252C27), surfaceContainerHighest = Color(0xFF303932),
+    outline = Color(0xFF778275), outlineVariant = Color(0xFF374139),
 )
 
 val LightNcrustColors = NcrustColors(
     primary = Color(0xFF274B36), onPrimary = Color(0xFFFFFFFF),
-    background = Color(0xFFF6F7F2), surface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFFE8EDDF), onBackground = Color(0xFF173C2E),
-    onSurface = Color(0xFF173C2E), onSurfaceVariant = Color(0xFF5B6958),
-    surfaceContainerLowest = Color(0xFFF6F7F2), surfaceContainerLow = Color(0xFFF0F3E9),
-    surfaceContainerHigh = Color(0xFFEEF1E7), surfaceContainerHighest = Color(0xFFE3EAD9),
-    outline = Color(0xFF85957A), outlineVariant = Color(0xFFD5DECC),
+    background = Color(0xFFF5F5F0), surface = Color(0xFFFFFEFA),
+    surfaceVariant = Color(0xFFECEFE5), onBackground = Color(0xFF202A23),
+    onSurface = Color(0xFF202A23), onSurfaceVariant = Color(0xFF606A5D),
+    surfaceContainerLowest = Color(0xFFF5F5F0), surfaceContainerLow = Color(0xFFF0F1EA),
+    surfaceContainerHigh = Color(0xFFEEF0E7), surfaceContainerHighest = Color(0xFFE5E9DD),
+    outline = Color(0xFF87917F), outlineVariant = Color(0xFFD9DED2),
 )
 
 val LocalNcrustColors = compositionLocalOf { DefaultNcrustColors }
 
-/**
- * 由 Ncrust 调色板派生 Kanesumi MetroColors，补齐 MetroColors 独有字段
- * （divider / onPrimary / pressTint），保证两套主题源视觉一致。
- *
- * P2：MetroColors 只有 3 个色槽，容器层级按用途映射 ——
- *  - `surface`        ← 基准容器（卡片 / 列表 / 弹窗默认底），深色仍是 #1A1A1A：既有调用点零变化。
- *  - `surfaceVariant` ← surfaceContainerHighest（菜单 / 下拉 / 输入框 / 图片占位块这类
- *                       「浮在基准容器之上」的面）。**这是「深色下 surface == surfaceVariant
- *                       == #1A1A1A，层级差为 0」的修复点**：深色 #1A1A1A → #2E2E2E；
- *                       浅色沿用原值 #EDE6D8（浅色既有层级本来就是可见的，不动）。
- *  - `divider`        ← outlineVariant（深色 #2A2A2A / 浅色 #E2DACB，与改动前逐字节一致）。
- * 需要比基准容器更高一档的弹窗调用点，读 `LocalNcrustColors.current.surfaceContainerHigh`
- * （见 UserScreen 的 ClearCacheConfirmDialog / AccountDialog、BackgroundActivityDialog）。
- */
+/** Input/menu surfaces use the highest container role; separators use the quiet outline. */
 fun NcrustColors.toMetroColors(isDark: Boolean): MetroColors = MetroColors(
     background = background,
     surface = surface,

@@ -10,6 +10,10 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import com.takahashirinta.ncrust.ui.components.arrisSurface
+import com.takahashirinta.ncrust.ui.theme.AppShapes
+import androidx.compose.ui.draw.clip
+
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -441,7 +445,7 @@ private fun SectionHeader(title: String, topPadding: Dp = 20.dp) {
     )
 }
 
-/** 总览格子：直角、无阴影，信息优先（Kanesumi Design）。 */
+/** 总览使用同一层薄表面，让统计数值成为阅读焦点。 */
 @Composable
 private fun StatTile(
     label: String,
@@ -453,8 +457,8 @@ private fun StatTile(
     val typo = LocalMetroTypography.current
     Column(
         modifier = modifier
-            .background(metro.surfaceVariant)
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .arrisSurface()
+            .padding(horizontal = 16.dp, vertical = 18.dp)
     ) {
         MetroText(
             text = label,
@@ -462,13 +466,11 @@ private fun StatTile(
             style = typo.label,
             maxLines = 2,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         MetroText(
             text = value,
             color = metro.onSurface,
-            style = typo.title,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            style = typo.title.copy(fontWeight = FontWeight.SemiBold),
         )
         if (hint != null) {
             Spacer(Modifier.height(4.dp))
@@ -583,6 +585,7 @@ private fun ShareRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
+                .clip(AppShapes.full)
                 .background(metro.divider)
         ) {
             val clamped = fraction.coerceIn(0f, 1f)

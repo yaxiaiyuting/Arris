@@ -50,10 +50,10 @@ import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.ui.ResponsiveContent
 import io.github.takahashirinta.kanesumi.anim.sokuou.MetroDefault
-import io.github.takahashirinta.kanesumi.controls.MetroDivider
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import com.takahashirinta.ncrust.ui.components.TopScrimIconButton
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.components.rememberManualUpdateCheck
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.update.UpdateService
@@ -96,7 +96,7 @@ fun AboutScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     // 顶部预留 status bar + 80dp 让首元素落在 scrim 之下、返回箭头不会盖住 logo。
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 20.dp)
                     .statusBarsPadding()
                     .padding(top = 72.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -108,22 +108,21 @@ fun AboutScreen(
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher),
                             contentDescription = "Arris",
-                            modifier = Modifier.size(80.dp),
+                            modifier = Modifier.size(88.dp),
                             contentScale = ContentScale.Fit
                         )
                         Spacer(Modifier.height(16.dp))
-                        MetroText("Arris", color = accent, style = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.Bold))
-                        MetroText(VERSION, color = accent.copy(alpha = 0.72f), style = TextStyle(fontSize = 14.sp))
+                        MetroText("Arris", color = LocalMetroColors.current.onBackground, style = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.8).sp))
+                        Spacer(Modifier.height(4.dp))
+                        MetroText(VERSION, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 12.sp, letterSpacing = 0.8.sp))
                         Spacer(Modifier.height(6.dp))
-                        MetroText(s.aboutAppSubtitle, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
+                        MetroText(s.aboutAppSubtitle, color = LocalMetroColors.current.onSurfaceVariant, style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp))
                         Spacer(Modifier.height(28.dp))
-                        MetroDivider(color = LocalMetroColors.current.divider)
-                        Spacer(Modifier.height(20.dp))
                     }
                 }
 
                 CascadeBlock(delayMillis = 40) {
-                    Column {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).arrisSurface().padding(16.dp)) {
                         AboutSection(s.aboutSectionProject.uppercase(), accent)
                         com.takahashirinta.ncrust.celebration.VersionEggRow(s.aboutVersion, VERSION, onPlaySong = onPlaySong)
                         // v3.4.13：手动检查更新（不受自动检查 24 小时窗口限制）。
@@ -151,15 +150,14 @@ fun AboutScreen(
                         )
                         AboutRow(s.aboutDeveloperOriginal, "Takahashi_Rinta")
                         AboutRow(s.aboutDeveloperFork, "yaxiaiyuting")
-                        AboutRow(s.aboutLicense, s.aboutLicenseGplWithMit)
-                        AboutRow(s.aboutRepositoryFork, "github.com/yaxiaiyuting/Arris")
-                        AboutRow(s.aboutRepositoryOriginal, "github.com/GuitaristRin/Ncrust")
-                        Spacer(Modifier.height(20.dp))
+                        AboutRow(s.aboutLicense, s.aboutLicenseGplWithMit, stacked = true)
+                        AboutRow(s.aboutRepositoryFork, "github.com/yaxiaiyuting/Arris", stacked = true)
+                        AboutRow(s.aboutRepositoryOriginal, "github.com/GuitaristRin/Ncrust", stacked = true)
                     }
                 }
 
                 CascadeBlock(delayMillis = 80) {
-                    Column {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).arrisSurface().padding(16.dp)) {
                         AboutSection(s.aboutSectionTechStack.uppercase(), accent)
                         AboutRow(s.aboutLangLabel, "Kotlin")
                         AboutRow(s.aboutUIFrameworkLabel, "Jetpack Compose")
@@ -167,31 +165,29 @@ fun AboutScreen(
                         AboutRow(s.aboutAudioEngineLabel, "Media3 ExoPlayer")
                         AboutRow(s.aboutNetworkLabel, "Retrofit + OkHttp")
                         AboutRow(s.aboutImageLabel, "Coil")
-                        Spacer(Modifier.height(20.dp))
                     }
                 }
 
                 CascadeBlock(delayMillis = 120) {
-                    Column {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).arrisSurface().padding(16.dp)) {
                         AboutSection(s.aboutSectionTeam.uppercase(), accent)
                         AboutRow(s.aboutRoleDev, "Takahashi_Rinta")
                         AboutRow(s.aboutRoleTester, "白给小子")
                         AboutRow(s.aboutRoleForkMaintainer, "yaxiaiyuting")
-                        Spacer(Modifier.height(20.dp))
                     }
                 }
 
                 CascadeBlock(delayMillis = 160) {
-                    Column {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).arrisSurface().padding(16.dp)) {
                         AboutSection(s.aboutSectionCredits.uppercase(), accent)
                         // 4.0.2：名单重写 —— 去掉那些"列了但其实没发挥作用的"，
                         // 换成真参考过/借鉴过/在上游继续往前走了的东西。
                         // 角色名用字面量，不占 8 套语言的键位。
-                        AboutRow("歌词与播放器参考", "NeriPlayer 音理 (GPL-3.0)")
-                        AboutRow("播放引擎", "AndroidX Media3 / ExoPlayer")
-                        AboutRow("接口逻辑参考", "Suxiaoqinx/Netease_url (MIT)")
-                        AboutRow("设计参考", "Apple Music for Android")
-                        AboutRow("Tux", "Larry Ewing / The GIMP · Arris")
+                        AboutRow("歌词与播放器参考", "NeriPlayer 音理 (GPL-3.0)", stacked = true)
+                        AboutRow("播放引擎", "AndroidX Media3 / ExoPlayer", stacked = true)
+                        AboutRow("接口逻辑参考", "Suxiaoqinx/Netease_url (MIT)", stacked = true)
+                        AboutRow("设计参考", "Apple Music for Android", stacked = true)
+                        AboutRow("Tux", "Larry Ewing / The GIMP · Arris", stacked = true)
                         // 4.0.2：致谢不是只写给项目名的 —— 也写给真正在用它的每一个人。
                         AboutRow("致谢", "quit")
                         AboutRow("还有", "每一位屏幕前的使用者")
@@ -262,29 +258,39 @@ private fun AboutSection(title: String, accent: Color) {
         style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp)
+            .padding(bottom = 14.dp)
     )
 }
 
 @Composable
-private fun AboutRow(label: String, value: String) {
+private fun AboutRow(label: String, value: String, stacked: Boolean = false) {
+    if (stacked) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+            MetroText(label, color = LocalMetroColors.current.onSurfaceVariant,
+                style = TextStyle(fontSize = 12.sp, lineHeight = 18.sp))
+            Spacer(Modifier.height(4.dp))
+            MetroText(value, color = LocalMetroColors.current.onBackground,
+                style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp))
+        }
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .padding(vertical = 9.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         MetroText(
             label,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 13.sp),
+            style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
             modifier = Modifier.weight(1f)
         )
         MetroText(
             value,
             color = LocalMetroColors.current.onBackground,
-            style = TextStyle(fontSize = 13.sp, textAlign = TextAlign.End),
+            style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.End),
             modifier = Modifier.weight(1.5f)
         )
     }
@@ -305,20 +311,21 @@ private fun AboutActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 5.dp),
+            .heightIn(min = 48.dp)
+            .padding(vertical = 9.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         MetroText(
             label,
             color = LocalMetroColors.current.primary,
-            style = TextStyle(fontSize = 13.sp),
+            style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
             modifier = Modifier.weight(1f)
         )
         MetroText(
             value,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 13.sp, textAlign = TextAlign.End),
+            style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.End),
             modifier = Modifier.weight(1.5f)
         )
     }

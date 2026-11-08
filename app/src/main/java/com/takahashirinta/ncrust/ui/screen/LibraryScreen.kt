@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,12 +62,11 @@ import com.takahashirinta.ncrust.ui.ResponsiveContent
 import io.github.takahashirinta.kanesumi.anim.sokuou.MetroDefault
 import io.github.takahashirinta.kanesumi.anim.sokuou.rememberMetroFlingBehavior
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
-import io.github.takahashirinta.kanesumi.controls.MetroTabItem
-import io.github.takahashirinta.kanesumi.controls.MetroTabRow
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs
 import com.takahashirinta.ncrust.ui.components.AlbumSourceFilterRow
 import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.CreatePlaylistDialog
@@ -313,7 +313,7 @@ fun LibraryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
+                    .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
             ) {
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -322,7 +322,7 @@ fun LibraryScreen(
                     MetroText(
                         strings.tabLibrary,
                         color = LocalMetroColors.current.onBackground,
-                        style = LocalMetroTypography.current.pageHeading,
+                        style = LocalMetroTypography.current.pageHeading.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -346,10 +346,11 @@ fun LibraryScreen(
                 SessionExpiredBanner(onRelogin = onRelogin)
                 Spacer(Modifier.height(4.dp))
             }
-            MetroTabRow(
-                selectedTabIndex = selectedCategory,
-                items = categories.map { MetroTabItem(it) },
-                onTabSelected = { index -> selectedCategory = index }
+            ArrisSegmentedTabs(
+                selected = selectedCategory,
+                items = categories,
+                onSelect = { index -> selectedCategory = index },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
             // Tab 切换用 AnimatedContent 做方向感知的横向滑入。

@@ -32,44 +32,13 @@ fun AccentSourceSelector(
         AccentSource.SYSTEM to labels.third,
     )
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { (source, label) ->
-                val enabled = source != AccentSource.SYSTEM || systemEnabled
-                val active = source == selected && enabled
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(
-                            1.dp,
-                            when {
-                                !enabled -> LocalMetroColors.current.divider.copy(alpha = 0.4f)
-                                active -> LocalMetroColors.current.primary
-                                else -> LocalNcrustColors.current.outline
-                            }
-                        )
-                        .background(
-                            if (active) LocalMetroColors.current.primary.copy(alpha = 0.14f)
-                            else Color.Transparent
-                        )
-                        .clickable(enabled = enabled) { onSelect(source) }
-                        // P2：10→16dp 垂直 padding，触控高度 ≈36dp → 48dp。
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    MetroText(
-                        label,
-                        color = when {
-                            !enabled -> LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.45f)
-                            active -> LocalMetroColors.current.primary
-                            else -> LocalMetroColors.current.onSurfaceVariant
-                        },
-                        // P2：显式 16sp 行框，触控高度可算（16+16+16 = 48dp）。
-                        style = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
-                        maxLines = 1
-                    )
-                }
-            }
-        }
+        // 与"主题模式""库页分类"共用同一个分段控件：短选项集在应用里只该有一种形态。
+        com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs(
+            items = options.map { it.second },
+            selected = options.indexOfFirst { it.first == selected }.coerceAtLeast(0),
+            onSelect = { onSelect(options[it].first) },
+            enabled = options.map { it.first != AccentSource.SYSTEM || systemEnabled },
+        )
         if (!systemEnabled) {
             Spacer(Modifier.height(6.dp))
             MetroText(

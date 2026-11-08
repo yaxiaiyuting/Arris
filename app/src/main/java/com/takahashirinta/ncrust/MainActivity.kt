@@ -12,6 +12,8 @@
  */
 
 package com.takahashirinta.ncrust
+
+import com.takahashirinta.ncrust.ui.components.arrisNavigationSurface
 import com.takahashirinta.ncrust.listen.PlaybackSnapshot
 import com.takahashirinta.ncrust.ui.player.QueueMoveCommit
 import com.takahashirinta.ncrust.ui.player.TrayLayout
@@ -3742,7 +3744,7 @@ fun MainScreen(
                         translationY = navBarHideOffset * progress.value
                     }
                     .fillMaxWidth()
-                    .background(LocalMetroColors.current.surface)
+                    .arrisNavigationSurface()
                     .navigationBarsPadding()
                     .height(56.dp)
             ) {

@@ -150,6 +150,12 @@ object AppMotion {
     /** 按压放大倍数（任务书 §3.3「按钮点击：scale 1.05x 回弹」）。 */
     const val PRESS_SCALE: Float = 1.05f
 
+    /** 内页卡片轻压下沉，保持文字边界和布局稳定。 */
+    const val BROWSE_PRESS_SCALE: Float = 0.985f
+
+    /** 48dp 小按钮的触觉反馈，不改变命中尺寸。 */
+    const val ICON_PRESS_SCALE: Float = 0.97f
+
     // ─────────────────────────────────────────────────────────────────────
     // 效果类弹簧 ——**官方 M3 Expressive effects 三档**
     //

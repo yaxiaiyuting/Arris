@@ -74,6 +74,7 @@ import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity
 import com.takahashirinta.ncrust.ui.components.drawArrisGrooves
+import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -489,7 +490,7 @@ fun HomeScreen(
                         }
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
@@ -505,7 +506,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
                     }
 
                     // 每日推荐：横滑大 tile；点击整块进入播放。
@@ -538,7 +539,7 @@ fun HomeScreen(
                         }
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
@@ -552,7 +553,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
                     }
 
                     // v1.4.0 · 音乐人推荐：与「推荐歌单」同一套分节样式，融进推荐流不突兀。
@@ -577,7 +578,7 @@ fun HomeScreen(
                         }
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
@@ -601,7 +602,7 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
                     }
 
                     // 新歌：宽屏自适应栅格（多列方封面），手机保持整行列表。
@@ -639,7 +640,7 @@ fun HomeScreen(
     }
 }
 
-/** 分区标题：中字号 Regular，左对齐 16dp；右侧可选"播放全部"按钮 + 自定义动作。 */
+/** Section titles align to the cover grid; a little space separates actions from the heading. */
 @Composable
 private fun SectionHeader(
     title: String,
@@ -647,7 +648,7 @@ private fun SectionHeader(
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp).heightIn(min = 44.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         MetroText(
@@ -682,7 +683,7 @@ private fun DailySongTile(song: SongItem, onClick: () -> Unit, onLongClick: () -
         modifier = Modifier
             .width(160.dp)
             // v2.5.0 · A：卡片按压回弹（不消费事件，combinedClickable 行为不变）。
-            .appPressScale()
+            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
             .combinedClickableFallback(onClick, onLongClick)
     ) {
         AsyncImage(
@@ -696,22 +697,22 @@ private fun DailySongTile(song: SongItem, onClick: () -> Unit, onLongClick: () -
                 .appCoverFrame(shape = AppShapes.large),
             contentScale = ContentScale.Crop
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         MetroText(
             song.name,
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         MetroText(
             song.artists?.joinToString("/") { it.name } ?: strings.unknownArtist,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.label,
+            style = LocalMetroTypography.current.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }
@@ -727,7 +728,7 @@ private fun SongGridTile(song: SongItem, modifier: Modifier = Modifier, onClick:
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .appPressScale()
+            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
             .combinedClickableFallback(onClick, onLongClick)
     ) {
         AsyncImage(
@@ -741,22 +742,22 @@ private fun SongGridTile(song: SongItem, modifier: Modifier = Modifier, onClick:
                 .appCoverFrame(shape = AppShapes.small),
             contentScale = ContentScale.Crop
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         MetroText(
             song.name,
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         MetroText(
             song.artists?.joinToString("/") { it.name } ?: strings.unknownArtist,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.label,
+            style = LocalMetroTypography.current.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }
@@ -764,7 +765,7 @@ private fun SongGridTile(song: SongItem, modifier: Modifier = Modifier, onClick:
 /** 推荐歌单大 tile：160dp 方封面 + 圆播放按钮。 */
 @Composable
 private fun PlaylistTile(playlist: PlaylistApi.PlaylistCard, onClick: () -> Unit, onPlayAll: () -> Unit) {    val strings = LocalStrings.current
-    Column(modifier = Modifier.width(160.dp).appPressScale().clickable { onClick() }) {
+    Column(modifier = Modifier.width(160.dp).appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE).clickable { onClick() }) {
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
             AsyncImage(
                 model = CoverUrls.small(playlist.coverUrl),
@@ -782,20 +783,20 @@ private fun PlaylistTile(playlist: PlaylistApi.PlaylistCard, onClick: () -> Unit
                 onClick = onPlayAll
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         MetroText(
             playlist.name,
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         MetroText(
             strings.trackCountSongs(playlist.trackCount),
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.label,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            style = LocalMetroTypography.current.bodySmall,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }
@@ -817,7 +818,7 @@ private fun FmRadioTile(
     onClick: () -> Unit
 ) {
     val onAccent = if (accent.luminance() > 0.18f) Color(0xFF0F221A) else Color(0xFFF6F7EF)
-    Column(modifier = Modifier.width(160.dp).appPressScale().clickable { onClick() }) {
+    Column(modifier = Modifier.width(160.dp).appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE).clickable { onClick() }) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -865,20 +866,20 @@ private fun FmRadioTile(
                 onClick = onClick
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         MetroText(
             title,
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         MetroText(
             subtitle,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.label,
-            modifier = Modifier.padding(horizontal = 6.dp)
+            style = LocalMetroTypography.current.bodySmall,
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }

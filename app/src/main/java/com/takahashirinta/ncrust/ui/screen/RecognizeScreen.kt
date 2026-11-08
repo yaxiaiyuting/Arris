@@ -8,7 +8,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,7 +18,9 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -27,6 +28,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -38,8 +40,8 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.recognize.*
 import com.takahashirinta.ncrust.ui.components.ArrisButton
 import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.theme.AppShapes
-import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import io.github.takahashirinta.kanesumi.core.theme.*
 import kotlinx.coroutines.*
 
@@ -130,15 +132,18 @@ private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, re
     val c = LocalMetroColors.current
     Box(Modifier.fillMaxSize().background(c.background), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxHeight().statusBarsPadding()
-            .verticalScroll(rememberScrollState()).navigationBarsPadding().padding(24.dp),
+            .verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            ArrisPageHeader("听歌识曲", "ARRIS / DISCOVER", "留住偶然听见的喜欢。", onBack = onBack)
+            ArrisPageHeader("听歌识曲", "留住偶然听见的喜欢。", onBack = onBack)
             RecognitionCard(busy, countdown, status, result is RecogOutcome.Matched, result != null, onAction)
             val match = (result as? RecogOutcome.Matched)?.match
             if (match != null) {
-                Row(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface).padding(20.dp),
+                Row(Modifier.fillMaxWidth().arrisSurface().padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    MetroIcon(Icons.Default.MusicNote, null, tint = c.primary, sizeDp = 32.dp)
+                    Box(Modifier.size(40.dp).background(c.primary.copy(alpha = .07f), AppShapes.medium),
+                        contentAlignment = Alignment.Center) {
+                        MetroIcon(Icons.Default.MusicNote, null, tint = c.primary, sizeDp = 22.dp)
+                    }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         MetroText(match.title, color = c.onBackground, style = LocalMetroTypography.current.titleMedium)
@@ -158,16 +163,15 @@ private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, re
 private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, matched: Boolean,
                             hasResult: Boolean, onAction: () -> Unit) {
     val c = LocalMetroColors.current
-    Column(Modifier.fillMaxWidth().clip(AppShapes.extraLarge).background(c.surface)
-        .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.extraLarge).padding(24.dp),
+    Column(Modifier.fillMaxWidth().arrisSurface(shape = AppShapes.extraLarge).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        RecognitionGraphic(countdown, matched)
+        RecognitionGraphic(countdown, matched, processing = busy && countdown == 0)
         Spacer(Modifier.height(16.dp))
         MetroText(if (countdown > 0) "正在聆听 · ${countdown}s" else if (busy) "正在识别" else "让旋律留下名字",
-            color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold))
+            color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center))
         Spacer(Modifier.height(10.dp))
-        MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp),
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, textAlign = TextAlign.Center),
+            modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite })
         Spacer(Modifier.height(24.dp))
         ArrisButton(if (busy) "停止识别" else if (hasResult) "再听一次" else "开始识别", Modifier.fillMaxWidth(), onClick = onAction)
 
@@ -175,20 +179,43 @@ private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, match
 }
 
 @Composable
-private fun RecognitionGraphic(countdown: Int, matched: Boolean) {
+private fun RecognitionGraphic(countdown: Int, matched: Boolean, processing: Boolean) {
     val c = LocalMetroColors.current
-    Box(Modifier.size(204.dp), contentAlignment = Alignment.Center) {
+    // The side marks are a static sound motif, not a fabricated live microphone meter.
+    val marks = remember { floatArrayOf(7f, 15f, 25f, 13f, 31f, 18f) }
+    Box(Modifier.size(180.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            drawCircle(c.primary.copy(alpha = 0.06f), radius = size.minDimension / 2)
-            drawCircle(c.primary.copy(alpha = 0.12f), radius = size.minDimension * .4f, style = Stroke(1.dp.toPx()))
-            drawCircle(c.primary.copy(alpha = 0.15f), radius = size.minDimension * .32f, style = Stroke(1.dp.toPx()))
-            if (countdown > 0) drawArc(c.primary, -90f, (10-countdown)/10f*360f, false,
-                topLeft = androidx.compose.ui.geometry.Offset(8.dp.toPx(),8.dp.toPx()),
-                size = androidx.compose.ui.geometry.Size((size.width-16.dp.toPx()).coerceAtLeast(0f),(size.height-16.dp.toPx()).coerceAtLeast(0f)), style = Stroke(3.dp.toPx()))
+            val ringRadius = size.minDimension / 2f - 9.dp.toPx()
+            drawCircle(c.onBackground.copy(alpha = 0.08f), radius = ringRadius, style = Stroke(1.dp.toPx()))
+            // Ten quiet marks express the actual ten-second recording budget.
+            repeat(10) { index ->
+                val angle = Math.toRadians(index * 36.0 - 90.0)
+                val vector = Offset(kotlin.math.cos(angle).toFloat(), kotlin.math.sin(angle).toFloat())
+                drawLine(c.onBackground.copy(alpha = 0.16f),
+                    start = center + vector * (ringRadius - 4.dp.toPx()),
+                    end = center + vector * (ringRadius - 7.dp.toPx()),
+                    strokeWidth = 1.dp.toPx(), cap = StrokeCap.Round)
+            }
+            marks.forEachIndexed { index, height ->
+                val x = (40 + index * 5).dp.toPx()
+                val half = height.dp.toPx() / 2f
+                for (side in listOf(-1f, 1f)) {
+                    drawLine(c.primary.copy(alpha = .16f + index * .025f),
+                        Offset(center.x + x * side, center.y - half),
+                        Offset(center.x + x * side, center.y + half),
+                        strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+            if (countdown > 0 || matched || processing) drawArc(c.primary, -90f,
+                if (matched || processing) 360f else (10 - countdown).coerceIn(0, 10) / 10f * 360f, false,
+                topLeft = center - Offset(ringRadius, ringRadius),
+                size = Size(ringRadius * 2f, ringRadius * 2f),
+                style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
         }
-        Box(Modifier.size(104.dp).clip(AppShapes.full).background(c.primary), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(64.dp).arrisSurface(shape = AppShapes.full, emphasized = countdown > 0 || matched),
+            contentAlignment = Alignment.Center) {
             MetroIcon(if (matched) Icons.Default.Check else Icons.Default.Mic,
-                contentDescription = null, tint = c.onPrimary, sizeDp = 38.dp)
+                contentDescription = null, tint = c.primary, sizeDp = 27.dp)
         }
     }
 }

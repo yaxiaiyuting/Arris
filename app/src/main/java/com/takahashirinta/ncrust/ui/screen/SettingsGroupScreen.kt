@@ -56,6 +56,9 @@ import com.takahashirinta.ncrust.ui.components.SettingActionRow
 import com.takahashirinta.ncrust.ui.components.SettingSwitchRow
 import com.takahashirinta.ncrust.ui.components.settingsGroupSubtitle
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
+import com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs
+import com.takahashirinta.ncrust.ui.components.arrisSurface
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.i18n.LanguagePreset
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.i18n.UpdateStrings
@@ -1090,20 +1093,20 @@ internal fun SettingsGroupHeader(group: SettingsGroup) {
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 64.dp, bottom = 24.dp)
     ) {
         MetroText(
             settingsGroupTitle(strings, group),
             color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.pageHeading,
+            style = LocalMetroTypography.current.pageHeading.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         MetroText(
             settingsGroupSubtitle(strings, group),
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.bodySmall.copy(lineHeight = 21.sp),
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1225,7 +1228,12 @@ private fun isFlacTierIndex(index: Int): Boolean {
     return SongUrlFetcher.isFlacTier(level)
 }
 
-/** 主题模式三选一：跟随系统 / 深色 / 浅色。 */
+/**
+ * 主题模式三选一：跟随系统 / 深色 / 浅色。
+ *
+ * 用共用的 [ArrisSegmentedTabs]（圆角胶囊 + 选中位移动画），不再手搓三个方框：
+ * 同一个"短选项集"概念在应用里只该有一种形态 —— 库页的分类切换也是这个控件。
+ */
 @Composable
 private fun ThemeModeSelector(
     selected: ThemeMode,
@@ -1237,45 +1245,13 @@ private fun ThemeModeSelector(
         ThemeMode.DARK to labels.second,
         ThemeMode.LIGHT to labels.third
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        options.forEach { (mode, label) ->
-            val active = mode == selected
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .border(
-                        1.dp,
-                        if (active) LocalMetroColors.current.primary
-                        // P2：未选中态用 outline（组件边界）而不是 divider（分隔线）——
-                        // 浅色下 #E2DACB 在 #F6F2E9 页面上几乎看不见，边界该更强一档。
-                        else LocalNcrustColors.current.outline
-                    )
-                    .background(
-                        if (active) LocalMetroColors.current.primary.copy(alpha = 0.14f)
-                        else Color.Transparent
-                    )
-                    .clickable { onSelect(mode) }
-                    // P2：10→14dp 垂直 padding，触控高度 ≈40dp → 48dp。
-                    .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                MetroText(
-                    label,
-                    color = if (active) LocalMetroColors.current.primary
-                    else LocalMetroColors.current.onSurfaceVariant,
-                    // P2：显式 20sp 行框，触控高度可算（14+20+14 = 48dp），不再跟字体度量走。
-                    style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
+    val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    ArrisSegmentedTabs(
+        items = options.map { it.second },
+        selected = index,
+        onSelect = { onSelect(options[it].first) },
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
 }
 
 /** 清除缓存确认弹窗。 */
@@ -1289,9 +1265,7 @@ private fun ClearCacheConfirmDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // P2：弹窗走 surfaceContainerHigh，比基准容器 surface 高一档 ——
-                // 深色 #1A1A1A → #242424、浅色 #FFFDF8 → #F2EBDE，弹窗与卡背不再同色。
-                .background(LocalNcrustColors.current.surfaceContainerHigh)
+                .arrisSurface(shape = AppShapes.extraLarge, emphasized = true)
                 .padding(24.dp)
         ) {
             MetroText(
@@ -1337,8 +1311,9 @@ internal fun MetroLanguageDropdown(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.4f))
+                .arrisSurface(shape = AppShapes.medium)
                 .clickable { expanded = true }
+                .heightIn(min = 52.dp)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

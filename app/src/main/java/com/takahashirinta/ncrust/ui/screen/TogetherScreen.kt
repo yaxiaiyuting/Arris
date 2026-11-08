@@ -6,8 +6,6 @@
 package com.takahashirinta.ncrust.ui.screen
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -16,11 +14,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
 import com.takahashirinta.ncrust.ui.theme.AppShapes
-import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
 import com.takahashirinta.ncrust.ui.components.ArrisButton
+import com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -45,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -208,9 +208,9 @@ private fun TogetherContent(state: TogetherUi, actions: TogetherActions) {
     val c = LocalMetroColors.current
     Box(Modifier.fillMaxSize().background(c.background), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 680.dp).fillMaxSize().statusBarsPadding()
-            .verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding().padding(24.dp),
+            .verticalScroll(rememberScrollState()).navigationBarsPadding().imePadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            ArrisPageHeader("一起听", "ARRIS / TOGETHER", "相隔很远，也能听同一首。", actions.back)
+            ArrisPageHeader("一起听", "相隔很远，也能听同一首。", actions.back)
             MetroText("分享此刻的旋律，账号留在自己的设备。", color = c.onSurfaceVariant,
                 style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp))
             RoomStatusCard(state, actions)
@@ -235,8 +235,14 @@ private fun TogetherContent(state: TogetherUi, actions: TogetherActions) {
 private fun RoomStatusCard(s: TogetherUi, a: TogetherActions) {
     val c = LocalMetroColors.current
     Card(bold = s.room.isNotBlank()) {
-        MetroText(if (s.room.isBlank()) "尚未连接" else if (s.host) "房主 · 在线 ${s.members} 人" else "已连接 · 在线 ${s.members} 人",
-            color = c.primary, style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).background(
+                if (s.room.isBlank()) c.onSurfaceVariant.copy(alpha = .45f) else c.primary, AppShapes.full))
+            Spacer(Modifier.width(8.dp))
+            MetroText(if (s.room.isBlank()) "尚未连接" else if (s.host) "房主 · 在线 ${s.members} 人" else "已连接 · 在线 ${s.members} 人",
+                color = if (s.room.isBlank()) c.onSurfaceVariant else c.primary,
+                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium))
+        }
         Spacer(Modifier.height(12.dp))
         MetroText(s.room.ifBlank { "为朋友留一个位置。" }, color = c.onBackground,
             style = TextStyle(fontSize = if (s.room.isBlank()) 22.sp else 26.sp,
@@ -263,10 +269,10 @@ private fun RoomInviteField(s: TogetherUi, change: (String) -> Unit) {
     SectionLabel("房间邀请")
     BasicTextField(s.code, onValueChange = change, singleLine = true,
         textStyle = TextStyle(fontSize = 18.sp, color = c.onBackground, fontFamily = FontFamily.Monospace),
+        cursorBrush = SolidColor(c.primary),
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "房间邀请或地址" },
         decorationBox = { inner ->
-            Box(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface)
-                .border(1.dp, LocalNcrustColors.current.outlineVariant, AppShapes.large)
+            Box(Modifier.fillMaxWidth().arrisSurface()
                 .heightIn(min = 56.dp).padding(16.dp), contentAlignment = Alignment.CenterStart) {
                 if (s.code.isEmpty()) MetroText(when (s.mode) {
                     TransportMode.Relay -> "输入房间码"
@@ -299,7 +305,7 @@ private fun AvailableRooms(rooms: List<RoomSummary>, join: (RoomSummary) -> Unit
     val c = LocalMetroColors.current
     SectionLabel("活跃房间")
     rooms.forEach { room ->
-        Column(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface)
+        Column(Modifier.fillMaxWidth().arrisSurface()
             .clickable(role = Role.Button) { join(room) }.padding(16.dp)) {
             MetroText(room.roomId, color = c.onBackground, style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
             MetroText("房主 ${room.host.ifBlank { "?" }} · ${room.members} 人", color = c.onSurfaceVariant,
@@ -311,7 +317,7 @@ private fun AvailableRooms(rooms: List<RoomSummary>, join: (RoomSummary) -> Unit
 @Composable
 private fun RelaySettingsPanel(s: TogetherUi, a: TogetherActions) {
     val c = LocalMetroColors.current
-    Column(Modifier.fillMaxWidth().clip(AppShapes.large).background(c.surface).padding(16.dp)) {
+    Column(Modifier.fillMaxWidth().arrisSurface().padding(16.dp)) {
         MetroText(if (s.editingBase) "中继地址 · 点击收起" else "中继地址 · 点击修改\n${s.base}",
             color = c.onSurfaceVariant, style = TextStyle(fontSize = 13.sp, lineHeight = 22.sp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = a.toggleEdit))
@@ -328,13 +334,17 @@ private fun RelayFields(s: TogetherUi, a: TogetherActions) {
     val c = LocalMetroColors.current
     BasicTextField(s.baseDraft, onValueChange = a.base, singleLine = true,
         textStyle = TextStyle(fontSize = 14.sp, color = c.onBackground),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 12.dp)
+        cursorBrush = SolidColor(c.primary),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .background(c.background.copy(alpha = .55f), AppShapes.small).padding(12.dp)
             .semantics { contentDescription = "中继地址" })
     Spacer(Modifier.height(8.dp))
     Hint("固定 IP（可空；仅在域名解析异常时使用）")
     BasicTextField(s.ipsDraft, onValueChange = a.ips, singleLine = true,
         textStyle = TextStyle(fontSize = 14.sp, color = c.onBackground),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 12.dp)
+        cursorBrush = SolidColor(c.primary),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .background(c.background.copy(alpha = .55f), AppShapes.small).padding(12.dp)
             .semantics { contentDescription = "中继固定 IP" })
 }
 
@@ -347,21 +357,11 @@ private enum class TransportMode(val label: String) {
 
 @Composable
 private fun TransportTabs(current: TransportMode, onSelect: (TransportMode) -> Unit) {
-    val colors = LocalMetroColors.current
-    Row(Modifier.fillMaxWidth().clip(AppShapes.full).background(colors.surface).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        TransportMode.entries.forEach { mode ->
-            val active = mode == current
-            Box(Modifier.weight(1f).clip(AppShapes.full)
-                .background(if (active) colors.primary else colors.surface)
-                .selectable(selected = active, role = Role.Tab, onClick = { onSelect(mode) })
-                .heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center) {
-                MetroText(mode.label, color = if (active) colors.onPrimary else colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
-            }
-        }
-    }
+    ArrisSegmentedTabs(
+        items = TransportMode.entries.map { it.label },
+        selected = current.ordinal,
+        onSelect = { onSelect(TransportMode.entries[it]) },
+    )
 }
 
 @Composable
@@ -382,15 +382,10 @@ private fun Hint(text: String) {
 
 @Composable
 private fun Card(bold: Boolean = false, content: @Composable () -> Unit) {
-    val colors = LocalMetroColors.current
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(AppShapes.large)
-                        .background(colors.surface)
-            .then(
-                if (bold) Modifier.border(1.dp, colors.primary, AppShapes.large) else Modifier,
-            )
+            .arrisSurface(emphasized = bold)
             .padding(20.dp),
     ) { Column { content() } }
 }
@@ -400,13 +395,15 @@ private fun TextAction(label: String, accent: Boolean = true, onClick: () -> Uni
     val colors = LocalMetroColors.current
     Box(
         Modifier
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 4.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
         MetroText(
             label,
             color = if (accent) colors.primary else colors.onSurfaceVariant,
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
         )
     }
 }

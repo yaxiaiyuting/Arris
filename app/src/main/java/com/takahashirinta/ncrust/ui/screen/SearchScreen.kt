@@ -3,6 +3,8 @@ package com.takahashirinta.ncrust.ui.screen
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.filled.LibraryAdd
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -59,6 +62,9 @@ import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.SearchEmptyKind
 import com.takahashirinta.ncrust.ui.components.SourceCounts
 import com.takahashirinta.ncrust.ui.components.SourceFilter
+import com.takahashirinta.ncrust.ui.components.ArrisChip
+import com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.components.pullToRefresh
 import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.warmup.ListPrefetch
@@ -79,8 +85,6 @@ import io.github.takahashirinta.kanesumi.controls.MetroDropdownMenu
 import io.github.takahashirinta.kanesumi.controls.MetroDropdownMenuItem
 import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
-import io.github.takahashirinta.kanesumi.controls.MetroTabItem
-import io.github.takahashirinta.kanesumi.controls.MetroTabRow
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
@@ -298,10 +302,11 @@ fun SearchScreen(
             // 细条，看着像被压扁的 Chip。
             Box(
                 modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .widthIn(max = 760.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(AppShapes.full)
-                    .background(LocalMetroColors.current.surface)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .arrisSurface(shape = AppShapes.large)
             ) {
                 BasicTextField(
                     value = query,
@@ -310,27 +315,38 @@ fun SearchScreen(
                     singleLine = true,
                     keyboardActions = KeyboardActions(onDone = { dismissKeyboard() }),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    textStyle = TextStyle(color = LocalMetroColors.current.onBackground, fontSize = 18.sp),
-                    cursorBrush = SolidColor(LocalMetroColors.current.onBackground),
+                    textStyle = TextStyle(color = LocalMetroColors.current.onBackground, fontSize = 16.sp),
+                    cursorBrush = SolidColor(LocalMetroColors.current.primary),
                     decorationBox = { innerTextField ->
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 56.dp)
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.CenterStart
+                                .padding(start = 16.dp, end = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (query.isEmpty()) {
-                                MetroText(
-                                    text = strings.searchPlaceholder,
-                                    color = LocalMetroColors.current.onBackground.copy(alpha = 0.5f),
-                                    style = TextStyle(fontSize = 18.sp),
-                                )
+                            MetroIcon(
+                                Icons.Outlined.Search,
+                                contentDescription = null,
+                                tint = LocalMetroColors.current.onSurfaceVariant,
+                                sizeDp = 21.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            // Reserve real space for actions so long queries never sit under them.
+                            Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
+                                if (query.isEmpty()) {
+                                    MetroText(
+                                        text = strings.searchPlaceholder,
+                                        color = LocalMetroColors.current.onSurfaceVariant,
+                                        style = TextStyle(fontSize = 16.sp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                innerTextField()
                             }
-                            innerTextField()
                             Row(
-                                modifier = Modifier.align(Alignment.CenterEnd),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 if (isLoading) MetroProgressIndicator(
                                     sizeDp = 24.dp,
@@ -539,16 +555,17 @@ fun SearchScreen(
                     }
                     SearchContentState.Results -> {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            MetroTabRow(
-                                items = categories.map { MetroTabItem(it) },
-                                selectedTabIndex = when (currentType) {
+                            ArrisSegmentedTabs(
+                                items = categories,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                selected = when (currentType) {
                                     1 -> 0
                                     1006 -> 1
                                     10 -> 2
                                     100 -> 3
                                     else -> 0
                                 },
-                                onTabSelected = { index ->
+                                onSelect = { index ->
                                     viewModel.onTypeChanged(
                                         when (index) {
                                             0 -> 1
@@ -887,7 +904,7 @@ fun SearchScreen(
                                         MetroText(
                                             strings.toplistSectionTitle,
                                             color = LocalMetroColors.current.onBackground,
-                                            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            style = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
                                         )
                                     }
                                 }
@@ -923,20 +940,15 @@ private fun SearchSourceFilterRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            .horizontalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         filters.forEach { filter ->
-            val isSelected = filter == selected
-            MetroText(
+            ArrisChip(
                 text = filter.label(strings),
-                color = if (isSelected) {
-                    LocalMetroColors.current.primary
-                } else {
-                    LocalMetroColors.current.onSurfaceVariant
-                },
-                style = TextStyle(fontSize = 12.sp),
-                modifier = Modifier.clickable { onSelect(filter) },
+                selected = filter == selected,
+                onClick = { onSelect(filter) },
             )
         }
     }
@@ -958,12 +970,14 @@ private fun SearchSourceSummaryRow(counts: SourceCounts, onRetry: () -> Unit) {
     val summaryModifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
     val summaryText = counts.summary(strings)
     if (counts.anyUnavailable) {
-        MetroText(
+        Box(Modifier.fillMaxWidth().clickable(onClick = onRetry).heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+            MetroText(
             text = summaryText + "  ·  " + strings.retry,
-            color = LocalMetroColors.current.primary,
+            color = LocalMetroColors.current.onBackground,
             style = TextStyle(fontSize = 12.sp),
-            modifier = summaryModifier.clickable(onClick = onRetry),
-        )
+            )
+        }
     } else {
         MetroText(
             text = summaryText,
@@ -999,7 +1013,7 @@ private fun ToplistRow(playlist: PlaylistApi.PlaylistCard, onClick: () -> Unit) 
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         coil.compose.AsyncImage(
@@ -1037,13 +1051,13 @@ private fun SearchHistorySectionHeader(title: String, clearLabel: String, onClea
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 8.dp, top = 16.dp, bottom = 4.dp),
+            .padding(start = 16.dp, end = 8.dp, top = 20.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         MetroText(
             text = title,
             color = LocalMetroColors.current.onBackground,
-            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
             modifier = Modifier.weight(1f),
         )
         // TextButton 替换:直角矩形 tap target,无背景 -- 与 Metro 的 "borderless"
@@ -1051,7 +1065,10 @@ private fun SearchHistorySectionHeader(title: String, clearLabel: String, onClea
         Box(
             modifier = Modifier
                 .clickable(onClick = onClear)
+                .heightIn(min = 48.dp)
+                .widthIn(min = 48.dp)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
         ) {
             MetroText(
                 text = clearLabel,

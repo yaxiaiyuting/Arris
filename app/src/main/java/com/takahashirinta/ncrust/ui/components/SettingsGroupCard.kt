@@ -10,16 +10,18 @@
 
 package com.takahashirinta.ncrust.ui.components
 
-import androidx.compose.ui.draw.clip
 import com.takahashirinta.ncrust.ui.theme.AppShapes
+import com.takahashirinta.ncrust.ui.theme.AppMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -34,6 +36,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.ui.i18n.Strings
@@ -43,25 +47,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 
-/**
- * 一级页的一张分组卡片：图标 + 标题 + 副标题 + 箭头。
- *
- * ## 形状与动效
- *
- *  - **不施加任何 shape**：Kanesumi 正典是「直角、无圆角」，而 `AppShapes` 是圆角 token 的
- *    唯一落点（`AppShapesSingleSourceTest` 强制）—— 它刻意**没有**「方角」这一档，
- *    因为直角就是「不 clip」。这里沿用 `UserScreen.kt` 里既有三种入口行（关于 / 离线缓存管理 /
- *    后台运行）的写法：`background` + `clickable` + `padding`，零 shape。
- *  - 动效走 [appPressScale]（`AppMotion.PRESS_SCALE` + `AppMotion.pressScale`）：
- *    按下回弹在 `PointerEventPass.Initial` 观察、**不消费**事件，所以它不会抢走
- *    `clickable` 的 tap，也不引入任何重组（缩放写在 `graphicsLayer` 里）。
- *  - 颜色一律取自 [LocalMetroColors]（跟随主题 / 封面取色），没有硬编码色值。
- *
- * ## 触控
- *
- * 整卡可点（`fillMaxWidth` + `vertical = 12.dp` + 两行文字 ⇒ 远高于 48dp），
- * 符合 AGENTS.md「Compose 触摸陷阱」第 7 条的命中区要求。
- */
+/** 设置入口共用薄表面与低对比图标底座；按压只在绘制层轻收，不改变整卡命中区。 */
 @Composable
 internal fun SettingsGroupCard(
     icon: ImageVector,
@@ -74,29 +60,29 @@ internal fun SettingsGroupCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .clip(AppShapes.large)
-            .background(LocalMetroColors.current.surface)
-            .clickable(onClick = onClick)
-            .appPressScale()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
+            .arrisSurface()
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MetroIcon(
-            icon,
-            contentDescription = null,
-            tint = LocalMetroColors.current.primary,
-            sizeDp = 24.dp,
-        )
-        Spacer(Modifier.width(16.dp))
+        Box(
+            Modifier.size(40.dp)
+                .background(LocalMetroColors.current.primary.copy(alpha = 0.07f), AppShapes.medium),
+            contentAlignment = Alignment.Center,
+        ) {
+            MetroIcon(icon, contentDescription = null, tint = LocalMetroColors.current.primary, sizeDp = 22.dp)
+        }
+        Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             MetroText(
                 title,
                 color = LocalMetroColors.current.onBackground,
-                style = LocalMetroTypography.current.bodyLarge,
+                style = LocalMetroTypography.current.bodyLarge.copy(fontWeight = FontWeight.Medium),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             MetroText(
                 subtitle,
                 color = LocalMetroColors.current.onSurfaceVariant,
@@ -109,17 +95,13 @@ internal fun SettingsGroupCard(
         MetroIcon(
             Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = LocalMetroColors.current.onSurfaceVariant,
-            sizeDp = 20.dp,
+            tint = LocalMetroColors.current.onSurfaceVariant.copy(alpha = 0.65f),
+            sizeDp = 18.dp,
         )
     }
 }
 
-/**
- * 一级页卡片之间的细分隔线（`divider` 色，左 16dp 缩进 —— 与卡片文字对齐）。
- *
- * 直角风格下没有「卡片间距 + 卡片底色」的层次，靠 1px 分隔线表达「这是 7 张卡片」。
- */
+/** 卡片之间保留短而均匀的留白。 */
 @Composable
 internal fun SettingsCardDivider() {
     Spacer(
@@ -127,6 +109,72 @@ internal fun SettingsCardDivider() {
             .fillMaxWidth()
             .height(8.dp)
     )
+}
+
+
+/**
+ * 设置分组里的一行（**不自带表面**）。
+ *
+ * 与 [SettingsGroupCard] 的区别只有一处：它不画卡片，由调用方把所有行放进**同一张**表面里，
+ * 行间用 hairline 分隔。参考的是 Linear / Notion 这类"分组列表"的做法 ——
+ * 一行一张卡片会让 130% 字号下首屏只剩 5 行，而且"卡片即页面结构"是最容易显得偷懒的排版。
+ */
+@Composable
+internal fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showDivider: Boolean = true,
+) {
+    val c = LocalMetroColors.current
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(36.dp).background(c.primary.copy(alpha = 0.07f), AppShapes.small),
+                contentAlignment = Alignment.Center,
+            ) {
+                MetroIcon(icon, contentDescription = null, tint = c.primary, sizeDp = 20.dp)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                MetroText(
+                    title,
+                    color = c.onBackground,
+                    style = LocalMetroTypography.current.titleMedium.copy(fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    MetroText(
+                        subtitle,
+                        color = c.onSurfaceVariant,
+                        style = LocalMetroTypography.current.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            MetroIcon(
+                Icons.Default.ChevronRight, contentDescription = null,
+                tint = c.onSurfaceVariant.copy(alpha = .7f), sizeDp = 18.dp,
+            )
+        }
+        if (showDivider) {
+            Box(
+                Modifier.fillMaxWidth().padding(start = 66.dp, end = 16.dp).height(.7.dp)
+                    .background(c.onBackground.copy(alpha = .07f)),
+            )
+        }
+    }
 }
 
 /**

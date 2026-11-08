@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -60,14 +61,14 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 
-/** Groove 风分区标题：16sp semi-bold、上留白 4dp、左 16dp。 */
+/** 分区标题用较小的强调字重，给设置条目留下视觉重心。 */
 @Composable
 internal fun SectionTitle(text: String) {
     MetroText(
         text,
         color = LocalMetroColors.current.onBackground,
-        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
+        style = TextStyle(fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 8.dp)
     )
 }
 
@@ -105,6 +106,7 @@ internal fun SettingSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .toggleable(
                 value = checked,
                 enabled = enabled,
@@ -118,7 +120,7 @@ internal fun SettingSwitchRow(
             title,
             color = if (enabled) LocalMetroColors.current.onBackground
             else LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.bodyMedium,
+            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.width(16.dp))
@@ -131,10 +133,10 @@ internal fun SettingSwitchRow(
         MetroText(
             description,
             color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.caption,
+            style = LocalMetroTypography.current.caption.copy(lineHeight = 19.sp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
         )
     }
 }
@@ -168,6 +170,7 @@ internal fun MetroDropdownRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 56.dp)
                     .clickable(enabled = enabled) { expanded = true }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -176,15 +179,15 @@ internal fun MetroDropdownRow(
                     label,
                     color = if (enabled) LocalMetroColors.current.onBackground
                     else LocalMetroColors.current.onSurfaceVariant,
-                    style = TextStyle(fontSize = 15.sp),
+                    style = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(12.dp))
                 MetroText(
                     options.getOrElse(selectedIndex) { "" },
-                    color = if (enabled) LocalMetroColors.current.primary
+                    color = if (enabled) LocalMetroColors.current.onBackground.copy(alpha = 0.82f)
                     else LocalMetroColors.current.onSurfaceVariant,
-                    style = TextStyle(fontSize = 15.sp),
+                    style = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 160.dp)
@@ -209,7 +212,7 @@ internal fun MetroDropdownRow(
             MetroText(
                 hint,
                 color = LocalMetroColors.current.onSurfaceVariant,
-                style = TextStyle(fontSize = 12.sp),
+                style = TextStyle(fontSize = 12.sp, lineHeight = 19.sp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
@@ -262,6 +265,7 @@ internal fun SettingActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -269,7 +273,7 @@ internal fun SettingActionRow(
             label,
             color = if (accent) LocalMetroColors.current.primary
             else LocalMetroColors.current.onBackground,
-            style = TextStyle(fontSize = 15.sp),
+            style = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
             modifier = Modifier.weight(1f)
         )
         if (trailing != null) {

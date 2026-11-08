@@ -38,7 +38,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
@@ -46,6 +49,8 @@ import com.takahashirinta.ncrust.ui.components.SessionExpiredBanner
 import com.takahashirinta.ncrust.ui.components.SettingsCardDivider
 import com.takahashirinta.ncrust.ui.components.UpdateAvailableBanner
 import com.takahashirinta.ncrust.ui.components.SettingsGroupCard
+import com.takahashirinta.ncrust.ui.components.SettingsRow
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.components.settingsGroupIcon
 import com.takahashirinta.ncrust.ui.components.settingsGroupSubtitle
 import com.takahashirinta.ncrust.ui.components.settingsGroupTitle
@@ -98,12 +103,12 @@ fun UserScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(start = 16.dp, top = 20.dp, bottom = 8.dp)
+                        .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)
                 ) {
                     MetroText(
                         strings.tabUser,
                         color = LocalMetroColors.current.onBackground,
-                        style = LocalMetroTypography.current.pageHeading,
+                        style = LocalMetroTypography.current.pageHeading.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -140,16 +145,24 @@ fun UserScreen(
 
             // 分组顺序 = registry 的枚举声明顺序（一级页卡片列表 == SettingsRenderPlan.cardGroups()，
             // 由 SettingsRenderPlanTest 断言）。
-            SettingsRenderPlan.cardGroups().forEachIndexed { index, group ->
-                item(key = "settings.group.${group.id}") {
-                    if (index > 0) SettingsCardDivider()
-                    SettingsGroupCard(
-                        icon = settingsGroupIcon(group.iconName),
-                        title = settingsGroupTitle(strings, group),
-                        subtitle = settingsGroupSubtitle(strings, group),
-                        onClick = { onOpenSettingsGroup(group) },
-                    )
+            // 所有分组放进**同一张**表面，行间用 hairline 分隔（Linear / Notion 的分组列表做法）。
+            // 一行一张卡在 130% 字号下首屏只剩 5 行，而且"卡片即页面结构"是最容易显偷懒的排版。
+            item(key = "settings.groups") {
+                val groups = SettingsRenderPlan.cardGroups()
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    Column(Modifier.fillMaxWidth().arrisSurface()) {
+                        groups.forEachIndexed { index, group ->
+                            SettingsRow(
+                                icon = settingsGroupIcon(group.iconName),
+                                title = settingsGroupTitle(strings, group),
+                                subtitle = settingsGroupSubtitle(strings, group),
+                                onClick = { onOpenSettingsGroup(group) },
+                                showDivider = index != groups.lastIndex,
+                            )
+                        }
+                    }
                 }
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
