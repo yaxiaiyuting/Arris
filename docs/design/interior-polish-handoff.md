@@ -1,29 +1,28 @@
 # 内页质感打磨与签名 Release 续办
 
-更新于 2026-11-08，用户已授权完成内页打磨并交付可用签名 Release。工作区为 `Arris-ui-refresh`、分支 `feat/4.0.0`，起点 `8432f22`（已发布 4.0.15 / 218）。不覆盖已发布产物，不在本轮擅自新增远端发布。
+更新于 2026-11-08，工作区 Arris-ui-refresh / feat/4.0.0。
 
-## 方向与范围
+## 当前基线
 
-- 延续已获用户真机认可的哑光风格，炭灰/暖白底色、松绿强调色、安静层次和精细间距。通透感来自轻表面与边缘，避免发光塑料、重复装饰和昂贵背景模糊。
-- 本轮覆盖首页、库、搜索、用户设置/二级设置、关于、识曲、一起听、统计及共用导航/分类控件。
-- 保持播放与歌词时序、网络与登录、录音权限、队列、缓存业务和原生返回/触摸语义。
-- 参考本机 `/home/duanjb666/下载/impeccable-cli-v4.8.1/.agents/skills/impeccable/SKILL.md` 及 polish、craft-floor、android 参考。它是审查与打磨工作流，不是需要编入 APK 的运行时；原项目的 Kanesumi/Compose 约束与用户既定风格优先。
+- dsh 的 ea292ac 已整合此前全部内页改动，产出 4.0.16/219；37d3cf5 增加 QQ 扫码会话生命周期修复。两项完整保留。
+- 本轮 eed6bd2 补完分段控件真实淡入淡出、主题小字/图标可读性、具备48dp触控和名称语义的主题色板；首页标题去掉装饰卡片，保留Tux。DESIGN.md记录设计方向。
+- 9826b7f 升级至4.0.17-gpl / 220，next-version带fetch核号max219。0ff5549修正首页缩进并通过下一次Lint验证。
+- 没有更改QQ业务、播放器、歌词、网络、缓存代码。已有4.0.15正式包与4.0.16本地包不覆盖。没有新推送或发布。
 
-## 已完成与证据
+## 正在进行
 
-- 15 个业务 UI/主题源文件已有未提交修改，共用 `arrisSurface`、`ArrisSegmentedTabs`、`ArrisChip` 与短促选中/按压反馈。
-- 初轮 `assembleRelease`、全量 `testReleaseUnitTest`、`lintRelease` 通过。日志在 `/home/duanjb666/deepseek/arris/dist/interior-polish-preview/verification.log`。这仍是内部 QA 构建、版本 218，不能冒充最终发布产物。
-- 旧版截图、编译日志、Impeccable context 输出均在同一预览目录。
-- 后台模拟器使用 `emulator-5586`、Android 14、只读 AVD、无窗口/音频，飞行模式。只操作该串号，不操作连入的用户真机。
+最终全量构建在 /home/duanjb666/deepseek/arris/dist/interior-final-qa/final-build.log，命令包含 assembleRelease、testReleaseUnitTest、lintRelease。前一次3536 tests（4 skipped）没有失败，但Lint因首页缩进报错；已修正，必须以最终日志为准。
 
-## 当前下一步
+## 完成前必做
 
-1. 对实际应用截图做审查，清除不必要眉题、统一主题色对比与窄屏/130% 字号表现。
-2. 深浅色、手机/平板、空态、页面切换、设置下拉、键盘避让与底部区域均需检查；记录实际验证范围，不把模拟器截图当作真机性能证据。
-3. 复核 diff，补跑受新改动影响的检查，保留全量 JVM 与 Lint 结果。
-4. 用项目 `next-version.sh` 带 fetch 重新核号，选择未占用版本与大于既有包的 versionCode，提交源码后构建签名 Release，记录 APK/mapping/SHA256/源码提交一致性。
-5. 交付本地签名包与验证文档，删除 `arris-lts` 续办任务并核对状态。
+1. 最终构建成功后检查APK版本220/4.0.17、minSdk29及签名；只安装后台 emulator-5586，不操作真机、不播放媒体、不连账号。
+2. 执行 /home/duanjb666/deepseek/arris/dist/interior-final-qa/qa_phone.py（依赖同目录ui_capture.py）。捕获暗色各主页面、识曲和一起听、浅色素白主题、320dp/130%字号、关于长文滚动。脚本若因重建后当前页变化失败，读取UI再从断点继续。截图必须实际查看，不能只根据脚本结束判定。
+3. 补平板横屏与底部让位，所有改变仅限模拟器。没有在线账号/加载内容/真机性能验证时明确披露。
+4. 最终APK/mapping/SHA256/验证报告保存到新的 v4.0.17-interior 目录，源码SHA与产物保持一致，本地提交文档，交付包与截图。
+5. 交付完成后删除 arris-lts 续办任务并核验状态。
 
-## 自动续办
+## 参考与续办纪律
 
-`arris-lts` 已按用户要求从 LTS 审阅改为「Arris 内页重构与 Release 续办」，每 5 小时在本聊天续接。开始、阶段性和收尾读取实际五小时/周额度，任一剩余约 5% 时停止扩展，先保存源码、证据和此断点。若额度尚未恢复，仅状态核对。不要消耗重置卡或制造并行修改。
+用户提供Impeccable 4.8.1、stylekit-dev.zip、awesome-design-md-main.zip，已阅读相关说明及StyleKit作者指南/Linear设计分析。仅取原生内页适用的语义令牌、层次、状态反馈、内容优先方法，不复制网页运行时或品牌样式。
+
+五小时/周额度任一剩约5%时停止扩展并保存断点。每5小时续办直至本地Release交付，未恢复只读留档。不要消耗重置卡、不新增远端发布、不回到LTS审阅。
