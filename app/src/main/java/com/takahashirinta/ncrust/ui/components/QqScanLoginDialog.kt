@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,11 +38,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.qq.QqApi
+import com.takahashirinta.ncrust.qq.QqScanSession
 import com.takahashirinta.ncrust.qq.QqPhoneLogin
 import com.takahashirinta.ncrust.qq.QqQrMqttSession
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.controls.MetroButton
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
+import io.github.takahashirinta.kanesumi.controls.MetroDialog
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -78,8 +81,6 @@ import kotlinx.coroutines.isActive
  */
 @Composable
 fun QqScanLoginDialog(
-    /** 登录成功：cookie 已落盘（含续期凭证），调用方只需刷新界面状态。 */
-    onLoggedIn: () -> Unit,
     /** 用户选择「改用网页登录」。 */
     onUseWebLogin: () -> Unit,
     onDismiss: () -> Unit,
@@ -87,99 +88,19 @@ fun QqScanLoginDialog(
     val strings = LocalStrings.current
     val colors = LocalMetroColors.current
 
-    var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var status by remember { mutableStateOf(Status.LOADING) }
-    var loadFailed by remember { mutableStateOf(false) }
-    // 换一张二维码（或重试）时 +1，用来重启下面整条协程。
-    var generation by remember { mutableIntStateOf(0) }
+    // 状态**不放在 composition 里**：扫码那一刻 Arris 必须在后台（QQ 音乐要占前台/开小窗），
+    // 原来的 LaunchedEffect + remember 会在切后台/Activity 重建时被销毁，
+    // 连带把还在等确认的 MQTT 连接一起关掉 —— 表现就是「扫了、确认了，回来没登录」。
+    // 现在整条会话活在 QqScanSession（进程级），这里只负责渲染它的 StateFlow。
+    val state by QqScanSession.state.collectAsState()
+    val bitmap = state.bitmap
+    val status = remember(state.status) { state.status.toUiStatus() }
+    val loadFailed = state.loadFailed
 
-    LaunchedEffect(generation) {
-        bitmap = null
-        loadFailed = false
-        status = Status.WAITING
+    // 打开浮层就确保会话在跑；已经在跑就复用（切后台再回来不换二维码）。
+    LaunchedEffect(Unit) { QqScanSession.ensureStarted() }
 
-        val code = QqApi.requestScanQrCode()
-        if (code == null) {
-            loadFailed = true
-            return@LaunchedEffect
-        }
-        val bmp = android.graphics.BitmapFactory.decodeByteArray(code.png, 0, code.png.size)
-        if (bmp == null) {
-            loadFailed = true
-            return@LaunchedEffect
-        }
-        bitmap = bmp
-
-        // MQTT 会话的生命周期**严格包在这个 try/finally 里**：
-        // 协程被取消（用户关掉浮层、换一张码）时连接必须一起断，
-        // 否则会留下一条没人消费推送、还在按 keep-alive 发心跳的连接。
-        val session = QqQrMqttSession(
-            qrCodeId = code.qrCodeId,
-            clientId = clientId(),
-        )
-        try {
-            if (!session.open()) {
-                status = Status.FAILED
-                return@LaunchedEffect
-            }
-            val deadline = System.currentTimeMillis() + QR_TTL_MS
-            var lastPingAt = System.currentTimeMillis()
-            val pingEveryMs = (session.keepAliveSeconds() * 1000L / 2L).coerceAtLeast(5_000L)
-
-            while (isActive && System.currentTimeMillis() < deadline) {
-                // PINGREQ 与「等推送」共用同一个循环：MQTT 的 keep-alive 是**应用层**的，
-                // 不发 PINGREQ 服务端会按自己的时间判我们掉线（见 MqttWebSocketTransport 的 KDoc）。
-                if (System.currentTimeMillis() - lastPingAt >= pingEveryMs) {
-                    session.ping()
-                    lastPingAt = System.currentTimeMillis()
-                }
-                val event = session.awaitEvent(EVENT_WAIT_MS)
-                when (event) {
-                    null -> Unit // 这段时间没有推送：回到循环顶部，可能该发心跳了
-                    QqQrMqttSession.Event.Scanned -> status = Status.SCANNED
-                    QqQrMqttSession.Event.Canceled -> {
-                        status = Status.FAILED
-                        return@LaunchedEffect
-                    }
-                    QqQrMqttSession.Event.Expired -> {
-                        status = Status.EXPIRED
-                        return@LaunchedEffect
-                    }
-                    is QqQrMqttSession.Event.Failed -> {
-                        status = Status.FAILED
-                        return@LaunchedEffect
-                    }
-                    is QqQrMqttSession.Event.Credentials -> {
-                        // 换凭证 + 落盘（cookie 与续期凭证都由这一步负责）。
-                        val attempt = QqApi.loginWithScanCode(
-                            qrCodeId = code.qrCodeId,
-                            uin = event.uin,
-                            token = event.token,
-                        )
-                        if (attempt.outcome == QqPhoneLogin.LoginOutcome.OK && attempt.cookie != null) {
-                            status = Status.DONE
-                            onLoggedIn()
-                        } else {
-                            // 服务端明确回绝（受限/设备数超限/参数错）——重试同一张码没有意义。
-                            status = Status.FAILED
-                        }
-                        return@LaunchedEffect
-                    }
-                }
-            }
-            // 循环退出 = 超过二维码寿命
-            status = Status.EXPIRED
-        } finally {
-            session.close()
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f)),
-        contentAlignment = Alignment.Center,
-    ) {
+    MetroDialog(onDismissRequest = { QqScanSession.stop(); onDismiss() }) {
         Column(
             modifier = Modifier
                 .background(colors.surface)
@@ -240,18 +161,28 @@ fun QqScanLoginDialog(
             )
             Spacer(Modifier.height(16.dp))
 
-            MetroButton(text = strings.sourceQrRefresh, onClick = { generation++ })
+            MetroButton(text = strings.sourceQrRefresh, onClick = { QqScanSession.restart() })
             Spacer(Modifier.height(8.dp))
             // 常驻降级入口：任何一步失败都还有路可走（与 QqQrLoginDialog 一致）。
-            MetroButton(text = strings.sourceWebLogin, onClick = onUseWebLogin)
+            MetroButton(text = strings.sourceWebLogin, onClick = { QqScanSession.stop(); onUseWebLogin() })
             Spacer(Modifier.height(8.dp))
-            MetroButton(text = strings.close, onClick = onDismiss)
+            MetroButton(text = strings.close, onClick = { QqScanSession.stop(); onDismiss() })
         }
     }
 }
 
 /** 浮层内部的六态。与 `QqQrLogin.QrStatus` 分开：这一条有「已换到凭证」这个终态。 */
 private enum class Status { LOADING, WAITING, SCANNED, EXPIRED, FAILED, DONE }
+
+/** 会话状态 → 界面状态。两边分开是为了让 UI 不依赖会话内部的枚举顺序。 */
+private fun QqScanSession.Status.toUiStatus(): Status = when (this) {
+    QqScanSession.Status.LOADING -> Status.LOADING
+    QqScanSession.Status.WAITING -> Status.WAITING
+    QqScanSession.Status.SCANNED -> Status.SCANNED
+    QqScanSession.Status.EXPIRED -> Status.EXPIRED
+    QqScanSession.Status.FAILED -> Status.FAILED
+    QqScanSession.Status.DONE -> Status.DONE
+}
 
 /**
  * MQTT 客户端 id：**毫秒时间戳 + 4 位随机数**（与参考实现同一个形状）。

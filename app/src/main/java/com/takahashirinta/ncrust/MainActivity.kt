@@ -3022,10 +3022,22 @@ fun MainScreen(
     // 与上面的 showQqQr（QQ 互联扫码）并存且互不影响：那条只能拿到 cookie，
     // 这条能换到完整凭证 JSON（含 refreshKey），所以只有这条到期不用重登。
     var showQqScan by remember { mutableStateOf(false) }
+
     // 扫码确认后交给 WebView 的起始地址与 cookie（见 QqLoginOverlay 的参数说明）。
     var qqLoginStartUrl by remember { mutableStateOf<String?>(null) }
     var qqLoginCookies by remember { mutableStateOf<String?>(null) }
     var qqLoginTrigger by remember { mutableIntStateOf(0) }
+    // 「QQ 音乐 App 扫码」的会话活在进程里（QqScanSession），登录可能在**用户还在别的
+    // App 里**的那一刻完成 —— 所以刷新不能吊在浮层的回调上。这里在 MainScreen 层观察，
+    // 无论浮层还在不在、Activity 有没有被重建，凭证落盘后都会走到这条分支。
+    val qqScanState by com.takahashirinta.ncrust.qq.QqScanSession.state.collectAsState()
+    LaunchedEffect(qqScanState.loggedIn) {
+        if (qqScanState.loggedIn) {
+            com.takahashirinta.ncrust.qq.QqScanSession.acknowledgeLogin()
+            showQqScan = false
+            qqLoginTrigger++
+        }
+    }
     var cookieRefreshTrigger by remember { mutableIntStateOf(0) }
 
     // 登录成功后后台拉取一次云端收藏，供收藏页使用。
@@ -3142,14 +3154,10 @@ fun MainScreen(
         return
     }
     if (showQqScan) {
+        // 登录成功的回调不在这里：cookie 与续期凭证都由 QqApi.loginWithScanCode 落盘，
+        // 刷新由 MainScreen 层观察 QqScanSession.state.loggedIn 完成 —— 这样即使用户
+        // 在别的 App 里确认、或者在浮层已关闭/Activity 重建之后才落盘，也不会漏刷新。
         com.takahashirinta.ncrust.ui.components.QqScanLoginDialog(
-            onLoggedIn = {
-                // cookie **与续期凭证都已经由 QqApi.loginWithScanCode 落盘** ——
-                // 这里不再 saveCookie：那条路用的是 Login 的完整响应，
-                // 在别处再拼一次 cookie 就等于把同一份契约写两遍（必然分叉）。
-                showQqScan = false
-                qqLoginTrigger++
-            },
             onUseWebLogin = {
                 qqLoginStartUrl = null
                 qqLoginCookies = null
