@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-07T06:45:53.763Z",
+ "generatedAt": "2026-11-09T19:08:09.164Z",
  "releases": [
+  {
+   "tag_name": "v4.0.19-gpl",
+   "name": "Arris 4.0.19-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-09T19:05:57Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.19-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "## 功能更新\n\n- 首页每日推荐主卡可打开完整歌单。点曲目从该曲开始整批播放，主卡也有独立的播放全部。\n- 听歌识曲新增系统声音来源。先保持音乐播放，选择系统声音并确认 Android 授权，采集约十秒声音送网易云匹配。源应用的捕获限制由 Android 执行。\n\n## 界面和修复\n\n- 底栏高亮跟着主界面拖动，松手回弹时一起返回。首页用紧凑榜单、单曲预览和独立私人 FM 入口建立层次。\n- 内页统一哑光表面和分组，浅色设置、窄屏文字及按压和选择反馈更清楚。\n- 修正识曲在同一账号下误判换号。保留 QQ 扫码会话的后台与重建修复。\n\nAndroid 10 及以上。versionCode 222。使用与 4.0.15 相同的签名。\n\n后台模拟器验证了日推列表、队列索引、授权拒绝、停录、后台取消、允许/禁止录制的合成声源以及 M4A 编码。全量 JVM 和 Lint 通过。在线曲库命中和厂商系统差异未做真机验证。\n",
+   "assets": [
+    {
+     "id": 728622288,
+     "name": "Arris-v4.0.19-gpl.apk",
+     "size": 10621996,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v4.0.19-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.15-gpl",
    "name": "Arris 4.0.15-gpl · 哑光播放器与滑动切换",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-05T18:19:47Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v4.0.13-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## 歌词从这一句滑到下一句\n\n- 旧句缩小、淡出时，新句同步放大、变清晰。列表滚动、字色和侧边光轨共用 360 毫秒缓动。\n- 短句连续切换时，从画面已经到达的位置继续。拖进度跨越多句时，用淡入淡出衔接。\n- 保留卡拉 OK 逐字高亮、双语歌词和三点入唱提示。切换原文或译文主行、调整字号后，当前句重新对齐。\n- 景深改在字形绘制时完成，减少整行滤镜的开销。\n\n## 安装与验证\n\n主线 · Android 10 及以上 · versionCode 213\n\n本 Release 的签名 APK 已在 PLC110 上覆盖安装并试听。JVM 测试 3,532 项，0 失败、4 跳过。Debug Lint 0 错误。\n\n[官网下载 APK](https://arris.de5.net/get/Arris-v4.0.13-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n\nSHA-256 `3d4045ae2edd1b50bdec49397fa49b0deb8425e91170ebc3618267dcd50381d1`\n",
+   "body": "",
    "assets": [
     {
      "id": 714339890,
