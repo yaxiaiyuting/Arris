@@ -2,9 +2,15 @@
 package com.takahashirinta.ncrust.ui.screen
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.media.projection.MediaProjectionConfig
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -13,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.runtime.*
@@ -40,102 +47,259 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.recognize.*
 import com.takahashirinta.ncrust.ui.components.ArrisButton
 import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
+import com.takahashirinta.ncrust.ui.components.ArrisSegmentedTabs
 import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import io.github.takahashirinta.kanesumi.core.theme.*
 import kotlinx.coroutines.*
 
-/** A bounded, explicit recording flow. Leaving/backgrounding cancels recording and submission. */
+private enum class RecognitionSource(val label: String, val prompt: String, val disclosure: String) {
+    MICROPHONE(
+        "麦克风", "让手机靠近音源，留住偶然听见的喜欢。",
+        "点击开始后使用麦克风，音频片段将提交给网易云识曲。离开页面或退到后台会停止。",
+    ),
+    PLAYBACK(
+        "系统声音", "让音乐继续播放，然后开始识别。",
+        "Android 会请求录音与系统共享授权。Arris 只采集允许录制的媒体声音，片段将提交给网易云识曲。离开页面或退到后台会停止。",
+    ),
+}
+
+private enum class RecognitionPhase { IDLE, AUTHORIZATION, RECORDING, MATCHING }
+
+/** Only a user-started attempt can capture or submit, and it ends when the screen leaves. */
 @Composable
 fun RecognizeScreen(onBack: () -> Unit) {
-    val c = LocalMetroColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var source by remember { mutableStateOf(RecognitionSource.MICROPHONE) }
+    var phase by remember { mutableStateOf(RecognitionPhase.IDLE) }
     var job by remember { mutableStateOf<Job?>(null) }
     var generation by remember { mutableIntStateOf(0) }
-    var busy by remember { mutableStateOf(false) }
-    var countdown by remember { mutableStateOf(0) }
-    var status by remember { mutableStateOf("让手机靠近音源，留住偶然听见的喜欢。") }
+    var countdown by remember { mutableIntStateOf(0) }
+    var status by remember { mutableStateOf(RecognitionSource.MICROPHONE.prompt) }
     var result by remember { mutableStateOf<RecogOutcome?>(null) }
+    var audioPermissionResult by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+    var projectionResult by remember { mutableStateOf<CompletableDeferred<ActivityResult>?>(null) }
+
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        audioPermissionResult?.complete(granted)
+        audioPermissionResult = null
+    }
+    val projection = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { grant ->
+        projectionResult?.complete(grant)
+        projectionResult = null
+    }
+
+    suspend fun requestAudioPermission(): Boolean {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            return true
+        }
+        val reply = CompletableDeferred<Boolean>()
+        audioPermissionResult = reply
+        try {
+            permission.launch(Manifest.permission.RECORD_AUDIO)
+        } catch (e: RuntimeException) {
+            audioPermissionResult = null
+            throw e
+        }
+        return reply.await()
+    }
+
+    suspend fun requestPlaybackConsent(): Intent? {
+        val manager = checkNotNull(context.getSystemService(MediaProjectionManager::class.java))
+        val intent = if (Build.VERSION.SDK_INT >= 34) {
+            manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+        } else {
+            manager.createScreenCaptureIntent()
+        }
+        val reply = CompletableDeferred<ActivityResult>()
+        projectionResult = reply
+        try {
+            projection.launch(intent)
+        } catch (e: RuntimeException) {
+            projectionResult = null
+            throw e
+        }
+        val grant = reply.await()
+        return grant.data.takeIf { grant.resultCode == Activity.RESULT_OK }
+    }
 
     fun cancel() {
         generation++
-        job?.cancel(); job = null
-        busy = false; countdown = 0
+        job?.cancel()
+        job = null
+        phase = RecognitionPhase.IDLE
+        countdown = 0
         status = "已停止识别，准备好后可以再试一次。"
     }
+
     fun start() {
-        if (busy || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (phase != RecognitionPhase.IDLE || audioPermissionResult != null || projectionResult != null ||
+            !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) return
         val snapshot = CookieManager.snapshot()
         val cookie = snapshot.cookie.orEmpty()
-        if (cookie.isBlank()) { status = "请先登录网易云音乐，再开始识别。"; return }
-        busy = true; result = null; countdown = 10; status = "正在聆听，请保持音源清晰。"
+        if (cookie.isBlank()) {
+            status = "请先登录网易云音乐，再开始识别。"
+            return
+        }
+        val captureSource = source
         val attempt = ++generation
+        phase = RecognitionPhase.AUTHORIZATION
+        result = null
+        status = "正在确认录音权限…"
         job = scope.launch {
             try {
-                val ticker = launch {
-                    for (left in 10 downTo 1) { if (generation == attempt) countdown = left; delay(1_000) }
+                if (!requestAudioPermission()) {
+                    status = "需要录音权限才能识曲，你可以在系统设置中开启。"
+                    return@launch
                 }
-                val audio = try {
-                    runInterruptible(Dispatchers.IO) { AacRecorder.record(context, 10_000) }
-                } finally { ticker.cancel(); if (generation == attempt) countdown = 0 }
+                lifecycle.withResumed { }
+                val consent = if (captureSource == RecognitionSource.PLAYBACK) {
+                    status = "请确认 Android 的系统声音采集授权。"
+                    requestPlaybackConsent() ?: run {
+                        status = "未授权采集系统声音，可以重新开始。"
+                        return@launch
+                    }
+                } else null
+                lifecycle.withResumed { }
                 ensureActive()
-                if (audio == null) { status = "录音失败，请确认麦克风可用后重试。"; return@launch }
                 if (CookieManager.snapshot() != snapshot) {
-                    status = "账号状态已变化，请重新开始识别。"; return@launch
+                    status = "账号状态已变化，请重新开始识别。"
+                    return@launch
                 }
+
+                phase = RecognitionPhase.RECORDING
+                status = if (captureSource == RecognitionSource.PLAYBACK) "正在采集系统声音，请保持音乐播放。"
+                    else "正在聆听，请保持音源清晰。"
+                val ticker = launch {
+                    for (left in 10 downTo 1) {
+                        if (generation == attempt) countdown = left
+                        delay(1_000)
+                    }
+                    if (generation == attempt) countdown = 0
+                }
+                val clip = try {
+                    if (consent == null) {
+                        val bytes = runInterruptible(Dispatchers.IO) { AacRecorder.record(context) }
+                        bytes?.let { RecogInput.Encoded(it, "audio/mp4", AacRecorder.DEFAULT_DURATION_MS.toLong()) }
+                    } else {
+                        when (val captured = PlaybackRecognitionService.capture(context, consent)) {
+                            is PlaybackCaptureResult.Recorded -> captured.clip
+                            is PlaybackCaptureResult.Failed -> {
+                                status = when (captured.reason) {
+                                    RecogFailure.SILENT_INPUT -> "没有采到播放声。请保持音乐播放，或换一个允许录制的音源。"
+                                    RecogFailure.PERMISSION_DENIED -> "系统采集未获授权或已停止，请重新开始。"
+                                    RecogFailure.TIMEOUT -> "系统声音采集超时，请重新开始。"
+                                    else -> "系统声音采集暂不可用，请重试或选用麦克风。"
+                                }
+                                return@launch
+                            }
+                        }
+                    }
+                } finally {
+                    ticker.cancel()
+                    if (generation == attempt) countdown = 0
+                }
+                ensureActive()
+                if (clip == null) {
+                    status = "录音失败，请确认麦克风可用后重试。"
+                    return@launch
+                }
+                if (CookieManager.snapshot() != snapshot) {
+                    status = "账号状态已变化，请重新开始识别。"
+                    return@launch
+                }
+                phase = RecognitionPhase.MATCHING
                 status = "正在寻找这段旋律…"
                 val outcome = withContext(Dispatchers.IO) {
-                    NeteaseRecognizeProvider(cookieProvider = { cookie })
-                        .recognize(RecogInput.Encoded(audio, "audio/mp4", durationMs = 10_000))
+                    NeteaseRecognizeProvider(cookieProvider = { cookie }).recognize(clip)
                 }
                 ensureActive()
                 if (CookieManager.snapshot() != snapshot) {
-                    status = "账号状态已变化，请重新开始识别。"; return@launch
+                    status = "账号状态已变化，请重新开始识别。"
+                    return@launch
                 }
                 result = outcome
                 status = when (outcome) {
                     is RecogOutcome.Matched -> "找到这首歌了。"
-                    is RecogOutcome.Failed -> when (outcome.failure.name) {
-                        "NO_MATCH" -> "暂时没听出来，试试靠近音源，或换一段更清晰的旋律。"
-                        "NO_NETWORK" -> "网络暂时不可用，连接恢复后再试。"
-                        "PERMISSION_DENIED", "QUOTA_EXCEEDED" -> "请检查网易云登录状态后重试。"
+                    is RecogOutcome.Failed -> when (outcome.failure) {
+                        RecogFailure.NO_MATCH -> "暂时没听出来，试试换一段更清晰的旋律。"
+                        RecogFailure.NO_NETWORK -> "网络暂时不可用，连接恢复后再试。"
+                        RecogFailure.PERMISSION_DENIED, RecogFailure.QUOTA_EXCEEDED -> "请检查网易云登录状态后重试。"
                         else -> "识别暂未成功，请稍后重试。"
                     }
                 }
-            } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { status = "识别暂未成功，请稍后重试。" }
-            finally { if (generation == attempt) { busy = false; countdown = 0 } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (generation == attempt) status = "识别暂未成功，请稍后重试。"
+            } finally {
+                if (generation == attempt) {
+                    phase = RecognitionPhase.IDLE
+                    countdown = 0
+                    job = null
+                }
+            }
         }
     }
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        if (it) scope.launch { lifecycle.withResumed { start() } } else status = "需要麦克风权限才能识曲，你可以在系统设置中开启。"
-    }
+
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP && busy) cancel() }
+        val observer = LifecycleEventObserver { _, event ->
+            // The permission activity can hide this Activity. Only actual capture or submission is interrupted.
+            if (event == Lifecycle.Event.ON_STOP && (phase == RecognitionPhase.RECORDING || phase == RecognitionPhase.MATCHING)) {
+                cancel()
+            }
+        }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); job?.cancel() }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            job?.cancel()
+        }
     }
     BackHandler { cancel(); onBack() }
-    RecognitionContent(busy, countdown, status, result, onBack = { cancel(); onBack() }) {
-        if (busy) cancel()
-        else if (CookieManager.snapshot().cookie.isNullOrBlank()) status = "请先登录网易云音乐，再开始识别。"
-        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) start()
-        else permission.launch(Manifest.permission.RECORD_AUDIO)
-    }
+    RecognitionContent(
+        source = source,
+        phase = phase,
+        countdown = countdown,
+        status = status,
+        result = result,
+        onBack = { cancel(); onBack() },
+        onSelectSource = {
+            source = it
+            status = it.prompt
+            result = null
+        },
+        onAction = { if (phase == RecognitionPhase.IDLE) start() else cancel() },
+    )
 }
 
 @Composable
-private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, result: RecogOutcome?,
-                               onBack: () -> Unit, onAction: () -> Unit) {
+private fun RecognitionContent(
+    source: RecognitionSource,
+    phase: RecognitionPhase,
+    countdown: Int,
+    status: String,
+    result: RecogOutcome?,
+    onBack: () -> Unit,
+    onSelectSource: (RecognitionSource) -> Unit,
+    onAction: () -> Unit,
+) {
     val c = LocalMetroColors.current
+    val busy = phase != RecognitionPhase.IDLE
     Box(Modifier.fillMaxSize().background(c.background), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxHeight().statusBarsPadding()
             .verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             ArrisPageHeader("听歌识曲", "留住偶然听见的喜欢。", onBack = onBack)
-            RecognitionCard(busy, countdown, status, result is RecogOutcome.Matched, result != null, onAction)
+            ArrisSegmentedTabs(
+                items = RecognitionSource.entries.map { it.label },
+                selected = source.ordinal,
+                enabled = if (busy) listOf(false, false) else null,
+                onSelect = { onSelectSource(RecognitionSource.entries[it]) },
+            )
+            RecognitionCard(source, phase, countdown, status, result is RecogOutcome.Matched, result != null, onAction)
             val match = (result as? RecogOutcome.Matched)?.match
             if (match != null) {
                 Row(Modifier.fillMaxWidth().arrisSurface().padding(20.dp),
@@ -153,21 +317,35 @@ private fun RecognitionContent(busy: Boolean, countdown: Int, status: String, re
                 }
             }
             MetroText("10 秒聆听 · 网易云账号识别", color = c.primary, style = LocalMetroTypography.current.caption)
-            MetroText("仅在你点击开始后使用麦克风，录音将提交给网易云识曲服务。离开页面或退到后台会停止本次识别。",
+            MetroText(source.disclosure,
                 color = c.onSurfaceVariant, style = TextStyle(fontSize = 12.sp, lineHeight = 20.sp))
         }
     }
 }
 
 @Composable
-private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, matched: Boolean,
-                            hasResult: Boolean, onAction: () -> Unit) {
+private fun RecognitionCard(
+    source: RecognitionSource,
+    phase: RecognitionPhase,
+    countdown: Int,
+    status: String,
+    matched: Boolean,
+    hasResult: Boolean,
+    onAction: () -> Unit,
+) {
     val c = LocalMetroColors.current
+    val busy = phase != RecognitionPhase.IDLE
     Column(Modifier.fillMaxWidth().arrisSurface(shape = AppShapes.extraLarge).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
-        RecognitionGraphic(countdown, matched, processing = busy && countdown == 0)
+        RecognitionGraphic(source, countdown, matched, processing = phase == RecognitionPhase.MATCHING)
         Spacer(Modifier.height(16.dp))
-        MetroText(if (countdown > 0) "正在聆听 · ${countdown}s" else if (busy) "正在识别" else "让旋律留下名字",
+        val headline = when {
+            countdown > 0 -> "正在聆听 · ${countdown}s"
+            phase == RecognitionPhase.AUTHORIZATION -> "等待授权"
+            busy -> "正在识别"
+            else -> "让旋律留下名字"
+        }
+        MetroText(headline,
             color = c.onBackground, style = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center))
         Spacer(Modifier.height(10.dp))
         MetroText(status, color = c.onSurfaceVariant, style = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, textAlign = TextAlign.Center),
@@ -179,11 +357,11 @@ private fun RecognitionCard(busy: Boolean, countdown: Int, status: String, match
 }
 
 @Composable
-private fun RecognitionGraphic(countdown: Int, matched: Boolean, processing: Boolean) {
+private fun RecognitionGraphic(source: RecognitionSource, countdown: Int, matched: Boolean, processing: Boolean) {
     val c = LocalMetroColors.current
     // The side marks are a static sound motif, not a fabricated live microphone meter.
     val marks = remember { floatArrayOf(7f, 15f, 25f, 13f, 31f, 18f) }
-    Box(Modifier.size(180.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(156.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val ringRadius = size.minDimension / 2f - 9.dp.toPx()
             drawCircle(c.onBackground.copy(alpha = 0.08f), radius = ringRadius, style = Stroke(1.dp.toPx()))
@@ -214,7 +392,12 @@ private fun RecognitionGraphic(countdown: Int, matched: Boolean, processing: Boo
         }
         Box(Modifier.size(64.dp).arrisSurface(shape = AppShapes.full, emphasized = countdown > 0 || matched),
             contentAlignment = Alignment.Center) {
-            MetroIcon(if (matched) Icons.Default.Check else Icons.Default.Mic,
+            val icon = when {
+                matched -> Icons.Default.Check
+                source == RecognitionSource.PLAYBACK -> Icons.Default.GraphicEq
+                else -> Icons.Default.Mic
+            }
+            MetroIcon(icon,
                 contentDescription = null, tint = c.primary, sizeDp = 27.dp)
         }
     }

@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -63,6 +64,11 @@
         </activity>
 
         <receiver android:name=".player.PlaybackActionReceiver" android:exported="false" />
+
+        <service
+            android:name=".recognize.PlaybackRecognitionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- exported=true: 车机 Media Center / 系统媒体控制需要跨进程绑定本服务。 -->
         <service
