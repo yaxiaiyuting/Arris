@@ -2503,8 +2503,8 @@ fun MainScreen(
      *   ② 加载成功后 replaceQueueAndPlay 里 4.0.2 的"退出无限模式"逻辑又把它顶回列表循环
      *   ⇒ FM 根本进不去。模式必须跟着**队列真正换掉**这件事一起提交。
      */
-    fun replaceQueueAndPlay(songs: List<SongItem>, enterFm: Boolean = false) {
-        if (songs.isEmpty()) return
+    fun replaceQueueAndPlay(songs: List<SongItem>, enterFm: Boolean = false, startIndex: Int = 0) {
+        if (startIndex !in songs.indices) return
         fmMode = enterFm
         // 4.0.2：**电台播完顺手播别的，要真的退出无限模式**。
         // 旧实现只把 fmMode 置 false，playMode 仍是 INFINITY —— 队列照旧无限续播、
@@ -2516,14 +2516,14 @@ fun MainScreen(
         }
         playerViewModel.invalidatePreload()
         playbackQueue = songs
-        currentQueueIndex = 0
-        // 4.0.2：**全新队列从 0 开始**。此前每首歌都按「上次退出点」续播，
+        currentQueueIndex = startIndex
+        // 4.0.2：全新队列的曲目从头播放。此前每首歌都按「上次退出点」续播，
         // 于是"点了播放全部，第一首却从中间开始"——整张新歌单不该继承旧进度。
         com.takahashirinta.ncrust.player.PlaybackStateManager.clearSongPositions(
             context, songs.map { it.id }
         )
         if (playMode == QueueModes.SHUFFLE) generateShuffledIndices()
-        playFromQueue(0)
+        playFromQueue(startIndex)
         expandCard()
     }
 
@@ -2751,6 +2751,8 @@ fun MainScreen(
 
     // ============ 导航控制器 ============
     val navController = rememberNavController()
+    // Keep the opened batch in memory. Restored routes can read the account-scoped home cache.
+    var openedDailyRecommendations by remember { mutableStateOf<Pair<Long, List<SongItem>>?>(null) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val isInMain = navBackStackEntry?.destination?.route == NavRoutes.HOME
 
@@ -3527,6 +3529,10 @@ fun MainScreen(
                             },
                             // ▶ 立即播放（缓存优先，未命中先提示再拉取）——不再弹二次确认。
                             onPlayPlaylist = { playlistId -> playPlaylistNow(playlistId) },
+                            onOpenDaily = { songs ->
+                                openedDailyRecommendations = CookieManager.snapshot().loginGeneration to songs.toList()
+                                navController.navigate(NavRoutes.DAILY_RECOMMENDATIONS) { launchSingleTop = true }
+                            },
                             onPlayDailyAll = { songs ->
                                 // 直接替换队列并从头播放。
                                 // 旧实现循环 addToQueue → 每次都把 currentQueueIndex 推到队尾，
@@ -3687,6 +3693,24 @@ fun MainScreen(
                     onShowSongMenu = { song, actions -> showSongMenu(song, actions) },
                     // v2.5.1 · F：页面转场开关（用户可配，默认启用）。
                     pageTransitionEnabled = pageTransitionEnabled,
+                    dailyRecommendationsContent = { onBack ->
+                        val generation = CookieManager.snapshot().loginGeneration
+                        val opened = openedDailyRecommendations
+                        val songs = if (opened == null) ContentCache.homeDailySongs.orEmpty()
+                            else opened.second.takeIf { opened.first == generation }.orEmpty()
+                        DailyRecommendationsScreen(
+                            songs = songs,
+                            onBack = onBack,
+                            onPlay = { index ->
+                                if (CookieManager.snapshot().loginGeneration == generation) {
+                                    replaceQueueAndPlay(songs, startIndex = index)
+                                }
+                            },
+                            onInsertNext = { insertNext(it) },
+                            onAppend = { appendToQueue(it) },
+                            onShowSongMenu = { song, actions -> showSongMenu(song, actions) },
+                        )
+                    },
                     // v2.8.0：设置二级页（路由 `settings/{group}`）的内容。
                     // 状态全部提升在 MainScreen（主题 / 语言 / 页面转场 / cookie 刷新计数 /
                     // PlayerViewModel），所以二级页由这里构造 —— 见 MainNavGraph 的参数 KDoc。

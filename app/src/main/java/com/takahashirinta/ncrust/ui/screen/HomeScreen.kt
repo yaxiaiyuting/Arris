@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,8 +73,10 @@ import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity
 import com.takahashirinta.ncrust.ui.components.ArrisButton
+import com.takahashirinta.ncrust.ui.components.DetailScaffold
 import com.takahashirinta.ncrust.ui.components.MetroIconButtonSurface
 import com.takahashirinta.ncrust.ui.components.arrisAccentInk
 import com.takahashirinta.ncrust.ui.components.arrisSurface
@@ -98,6 +102,7 @@ fun HomeScreen(
     onSongClick: (SongItem) -> Unit,
     onPlaylistClick: (Long) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
+    onOpenDaily: ((List<SongItem>) -> Unit)? = null,
     onPlayDailyAll: ((List<SongItem>) -> Unit)? = null,
     onSongInsertNext: (SongItem) -> Unit = {},
     onSongAppendToQueue: (SongItem) -> Unit = {},
@@ -421,16 +426,7 @@ fun HomeScreen(
         isLoading = false
     }
 
-    fun songMenu(song: SongItem): List<SongMenuAction> = listOf(
-        SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
-            // v2.6.0 · P0：成败由返回值决定，不再无条件弹成功。
-            if (LibraryManager.saveSong(context, song).isSuccess) {
-                Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
-            }
-        },
-        SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) { onSongInsertNext(song) },
-        SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) { onSongAppendToQueue(song) }
-    )
+    fun songMenu(song: SongItem) = homeSongActions(context, strings, song, onSongInsertNext, onSongAppendToQueue)
 
     val hasContent = dailySongs.isNotEmpty() || playlists.isNotEmpty() ||
         newSongs.isNotEmpty() || toplists.isNotEmpty()
@@ -505,8 +501,9 @@ fun HomeScreen(
                                     modifier = Modifier.weight(2f)
                                         .then(if (pairRadio) Modifier.fillMaxHeight() else Modifier),
                                     onPlayAll = onPlayDailyAll?.let { play -> { play(dailySongs) } },
+                                    onOpen = onOpenDaily?.let { open -> { open(dailySongs) } },
                                 )
-                                if (pairRadio && onPlayFm != null) {
+                                if (pairRadio) {
                                     FmRadioStrip(
                                         title = fmTitle,
                                         accent = fmAccent ?: LocalMetroColors.current.primary,
@@ -651,6 +648,7 @@ private fun DailyMixFeature(
     coverSize: Dp,
     modifier: Modifier,
     onPlayAll: (() -> Unit)?,
+    onOpen: (() -> Unit)? = null,
 ) {
     val colors = LocalMetroColors.current
     val type = LocalMetroTypography.current
@@ -658,6 +656,7 @@ private fun DailyMixFeature(
     Row(
         modifier = modifier
             .arrisSurface(emphasized = true)
+            .then(if (onOpen == null) Modifier else Modifier.clickable(role = Role.Button, onClick = onOpen))
             .drawWithCache {
                 val inset = 16.dp.toPx() + coverSize.toPx() / 2f
                 val center = Offset(if (rtl) inset else size.width - inset, size.height / 2f)
@@ -678,7 +677,15 @@ private fun DailyMixFeature(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetroText(title, color = colors.onBackground, style = type.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MetroText(title, color = colors.onBackground, style = type.titleLarge,
+                    modifier = Modifier.weight(1f, fill = false))
+                if (onOpen != null) {
+                    Spacer(Modifier.width(6.dp))
+                    MetroIcon(Icons.AutoMirrored.Filled.ArrowForward, null,
+                        tint = colors.onSurfaceVariant, sizeDp = 16.dp)
+                }
+            }
             MetroText(detail, color = colors.onSurfaceVariant, style = type.bodySmall)
             if (onPlayAll != null) {
                 Spacer(Modifier.height(2.dp))
@@ -688,6 +695,59 @@ private fun DailyMixFeature(
         HomeArtwork(coverUrl, coverSize)
     }
 }
+
+/** The current recommendation batch is presented as a playlist in its original order. */
+@Composable
+internal fun DailyRecommendationsScreen(
+    songs: List<SongItem>,
+    onBack: () -> Unit,
+    onPlay: (Int) -> Unit,
+    onInsertNext: (SongItem) -> Unit,
+    onAppend: (SongItem) -> Unit,
+    onShowSongMenu: (SongItem, List<SongMenuAction>) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coverSize = if (LocalConfiguration.current.screenWidthDp >= 600) 120.dp else 94.dp
+    DetailScaffold(
+        title = strings.dailySongsTitle,
+        onBack = onBack,
+        navigationOverArtwork = false,
+        header = {
+            DailyMixFeature(
+                title = strings.dailySongsTitle,
+                detail = if (songs.isEmpty()) strings.playlistEmptyTracks else strings.trackCountSongs(songs.size),
+                coverUrl = songs.firstNotNullOfOrNull { it.album?.picUrl?.takeIf(String::isNotBlank) },
+                coverSize = coverSize,
+                modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 64.dp, bottom = 16.dp),
+                onPlayAll = if (songs.isNotEmpty()) ({ onPlay(0) }) else null,
+            )
+        },
+    ) {
+        listItemsIndexed(songs) { index, song ->
+            SongCard(song = song, style = SongCardStyle.COMPACT,
+                onClick = { onPlay(index) },
+                onShowMenu = { onShowSongMenu(song, homeSongActions(context, strings, song, onInsertNext, onAppend)) })
+        }
+    }
+}
+
+private fun homeSongActions(
+    context: Context,
+    strings: Strings,
+    song: SongItem,
+    onInsertNext: (SongItem) -> Unit,
+    onAppend: (SongItem) -> Unit,
+): List<SongMenuAction> = listOf(
+    SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
+        if (LibraryManager.saveSong(context, song).isSuccess) {
+            Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+        }
+    },
+    SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) { onInsertNext(song) },
+    SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) { onAppend(song) },
+)
 
 /** Compact individual tracks retain their tap and long-press actions. */
 @Composable

@@ -57,6 +57,7 @@ internal object NavRouteCodec {
 
 object NavRoutes {
     const val HOME = "home"
+    const val DAILY_RECOMMENDATIONS = "daily-recommendations"
     const val ALBUM = "album/{albumId}"
     const val ARTIST = "artist/{artistId}"
     const val PLAYLIST = "playlist/{playlistId}/{playlistName}/{playlistCoverUrl}"
@@ -260,6 +261,7 @@ fun MainNavGraph(
      * 默认值渲染空内容：这样 [MainNavGraph] 的既有调用点（含测试/预览）一个都不用改。
      */
     settingsGroupContent: @Composable (SettingsGroup, onBack: () -> Unit) -> Unit = { _, _ -> },
+    dailyRecommendationsContent: @Composable (onBack: () -> Unit) -> Unit = {},
     startDestination: String = NavRoutes.HOME
 ) {
     // v2.5.1 · F：页面切换动效**用户可配，默认启用**。
@@ -283,6 +285,10 @@ fun MainNavGraph(
     ) {
         composable(NavRoutes.HOME) {
             // 不渲染任何内容，由 MainScreen 的 Scaffold 内容填充
+        }
+
+        composable(NavRoutes.DAILY_RECOMMENDATIONS) {
+            dailyRecommendationsContent { navController.popBackStack() }
         }
 
         /**
