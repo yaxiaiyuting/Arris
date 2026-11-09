@@ -1,12 +1,11 @@
 package com.takahashirinta.ncrust.ui.screen
 
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import android.graphics.drawable.BitmapDrawable
 import android.content.Context
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -14,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -26,15 +24,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.palette.graphics.Palette
 import coil.Coil
 import coil.compose.AsyncImage
@@ -54,8 +55,6 @@ import com.takahashirinta.ncrust.ui.ResponsiveContent
 import com.takahashirinta.ncrust.library.LibraryManager
 import io.github.takahashirinta.kanesumi.anim.sokuou.SokuouTweens
 import io.github.takahashirinta.kanesumi.anim.sokuou.rememberMetroFlingBehavior
-import io.github.takahashirinta.kanesumi.controls.MetroButton
-import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
@@ -73,6 +72,10 @@ import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.components.ArrisHomeIdentity
+import com.takahashirinta.ncrust.ui.components.ArrisButton
+import com.takahashirinta.ncrust.ui.components.MetroIconButtonSurface
+import com.takahashirinta.ncrust.ui.components.arrisAccentInk
+import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.components.drawArrisGrooves
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.AppShapes
@@ -127,9 +130,7 @@ fun HomeScreen(
     var error by remember { mutableStateOf<String?>(null) }
     // v1.5.1 · C：无网 / 超时的降级状态。
     //  - offline：启动时系统就告诉我们没有可用网络 —— 一个请求都不发；
-    //  - timedOut：有网但请求迟迟不回（半死网络），到点主动撤掉转圈，给空态 + 重试。
     var offline by remember { mutableStateOf(false) }
-    var timedOut by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // E（方案 2 瘦身版）：榜单入口。走 ContentCache 的 15s freshness 窗口 —— warmup/上次
     // 访问刚拉过就不再请求；卡片放在首屏，但请求不阻塞其它分节渲染（拿不到就整块不显示）。
@@ -321,7 +322,6 @@ fun HomeScreen(
     /** v1.5.1 · C：空态上的「重试」——先重新问一次网络，再重发三块请求。 */
     fun retryLoad() {
         error = null
-        timedOut = false
         if (!NetworkAvailability.isOnline(context)) {
             offline = true
             isLoading = false
@@ -417,10 +417,7 @@ fun HomeScreen(
     LaunchedEffect(active, isLoading) {
         if (!active || !isLoading) return@LaunchedEffect
         delay(HOME_LOAD_TIMEOUT_MS)
-        if (isLoading) {
-            timedOut = true
-            isLoading = false
-        }
+        isLoading = false
     }
 
     fun songMenu(song: SongItem): List<SongMenuAction> = listOf(
@@ -434,8 +431,10 @@ fun HomeScreen(
         SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) { onSongAppendToQueue(song) }
     )
 
+    val hasContent = dailySongs.isNotEmpty() || playlists.isNotEmpty() ||
+        newSongs.isNotEmpty() || toplists.isNotEmpty()
     Crossfade(
-        targetState = isLoading,
+        targetState = isLoading && !hasContent,
         animationSpec = SokuouTweens.CoverFade,
         modifier = Modifier.fillMaxSize(),
         label = "HomeContentCrossfade"
@@ -444,17 +443,6 @@ fun HomeScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 MetroProgressIndicator(color = LocalMetroColors.current.primary)
             }
-        } else if (dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty()) {
-            // v1.5.1 · C：三块数据全空（无网 / 失败 / 超时）时不再给一片空白。
-            // 此前 error 只写进 state、界面上没有任何呈现，用户看到的就是一个空网格。
-            HomeDegradedState(
-                offline = offline,
-                message = if (!offline && (timedOut || error != null)) strings.loadFailed(error) else null,
-                hint = if (offline) strings.networkOfflineHint else null,
-                title = if (offline) strings.networkOfflineTitle else strings.loadFailed(error),
-                retryLabel = strings.retry,
-                onRetry = { retryLoad() },
-            )
         } else {
             ResponsiveContent {
                 LazyVerticalGrid(
@@ -467,11 +455,11 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     flingBehavior = rememberMetroFlingBehavior()
                 ) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = "home-header", span = { GridItemSpan(maxLineSpan) }) {
                         ArrisHomeIdentity(
                             title = strings.tabHome,
                             modifier = Modifier.statusBarsPadding()
-                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
 
@@ -482,64 +470,35 @@ fun HomeScreen(
                         }
                     }
 
-                    // E：榜单入口（全宽横滑），排在所有既有分节之前 —— 首屏可见，
-                    // 且复用既有 PlaylistTile，不引入新组件。
-                    if (toplists.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            SectionHeader(title = strings.toplistSectionTitle)
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp),
-                                flingBehavior = rememberMetroFlingBehavior()
-                            ) {
-                                items(toplists, key = { it.id }) { tl ->
-                                    PlaylistTile(
-                                        playlist = tl.copy(
-                                            coverUrl = firstSongCovers[tl.id] ?: tl.coverUrl,
-                                        ),
-                                        onClick = { onPlaylistClick(tl.id) },
-                                        onPlayAll = { onPlayPlaylist(tl.id) }
-                                    )
-                                }
-                            }
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
-                    }
-
-                    // 每日推荐：横滑大 tile；点击整块进入播放。
-                    if (dailySongs.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            SectionHeader(
-                                title = strings.dailySongsTitle,
-                                onPlayAll = { onPlayDailyAll?.invoke(dailySongs) },
-                                actions = {
-                                    // 4.0.1：**删掉刷新键**。服务端按天生成（每天 6:00 换一批），
-                                    // 点多少次都是同一份；换批交给 DailyRecommendation 自动触发。
-                                    MetroText(
-                                        "每日 6:00 更新",
-                                        color = LocalMetroColors.current.onSurfaceVariant,
-                                        style = TextStyle(fontSize = 11.sp)
-                                    )
-                                }
+                    if (!hasContent) {
+                        item(key = "home-empty", span = { GridItemSpan(maxLineSpan) }) {
+                            HomeDegradedState(
+                                offline = offline,
+                                title = if (offline) strings.networkOfflineTitle else strings.loadFailed(error),
+                                hint = strings.networkOfflineHint.takeIf { offline },
+                                retryLabel = strings.retry,
+                                onRetry = { retryLoad() },
                             )
                         }
-                        // 非 Valid（含未登录/已失效）时说明这不是个性化推荐。
-                        if (!sessionValid) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                MetroText(
-                                    strings.dailySongsLoginHint,
-                                    color = LocalMetroColors.current.onSurfaceVariant,
-                                    style = LocalMetroTypography.current.bodySmall,
-                                    modifier = Modifier.padding(start = 16.dp)
-                                )
-                            }
+                        return@LazyVerticalGrid
+                    }
+
+                    if (dailySongs.isNotEmpty()) {
+                        item(key = "home-daily-feature", span = { GridItemSpan(maxLineSpan) }) {
+                            DailyMixFeature(
+                                title = strings.dailySongsTitle,
+                                detail = if (sessionValid) strings.trackCountSongs(dailySongs.size)
+                                    else strings.dailySongsLoginHint,
+                                coverUrl = dailySongs.firstNotNullOfOrNull { song ->
+                                    song.album?.picUrl?.takeIf { it.isNotBlank() }
+                                },
+                                coverSize = if (isWide) 120.dp else 94.dp,
+                                onPlayAll = onPlayDailyAll?.let { play -> { play(dailySongs) } },
+                            )
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(key = "home-daily-songs", span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
@@ -553,7 +512,15 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
+                    }
+
+                    if (toplists.isNotEmpty()) {
+                        item(key = "home-chart-heading", span = { GridItemSpan(maxLineSpan) }) {
+                            SectionHeader(title = strings.toplistSectionTitle)
+                        }
+                        item(key = "home-charts", span = { GridItemSpan(maxLineSpan) }) {
+                            ChartShelf(toplists, firstSongCovers, onPlaylistClick, onPlayPlaylist)
+                        }
                     }
 
                     // v1.4.0 · 音乐人推荐：与「推荐歌单」同一套分节样式，融进推荐流不突兀。
@@ -570,29 +537,29 @@ fun HomeScreen(
                         }
                     }
 
-                    // 推荐歌单：横滑大 tile。私人 FM 电台卡**常驻首位**——
-                    // 不再依赖推荐歌单是否拉到、也不依赖用户资料是否拿到。
                     if (onPlayFm != null) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(key = "home-radio", span = { GridItemSpan(maxLineSpan) }) {
+                            FmRadioStrip(
+                                title = fmProfile?.nickname?.takeIf { it.isNotEmpty() }
+                                    ?.let { strings.fmRadioTitle(it) } ?: strings.fmRadioTitleGeneric,
+                                accent = fmAccent ?: LocalMetroColors.current.primary,
+                                subtitle = strings.fmRadioSubtitle,
+                                onClick = onPlayFm,
+                            )
+                        }
+                    }
+
+                    if (playlists.isNotEmpty()) {
+                        item(key = "home-playlists-heading", span = { GridItemSpan(maxLineSpan) }) {
                             SectionHeader(title = strings.recommendPlaylistTitle)
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
+                        item(key = "home-playlists", span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
-                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 flingBehavior = rememberMetroFlingBehavior()
                             ) {
-                                item(key = "fm") {
-                                    FmRadioTile(
-                                        title = fmProfile?.nickname?.takeIf { it.isNotEmpty() }
-                                            ?.let { strings.fmRadioTitle(it) }
-                                            ?: strings.fmRadioTitleGeneric,
-                                        accent = fmAccent ?: LocalMetroColors.current.surfaceVariant,
-                                        subtitle = strings.fmRadioSubtitle,
-                                        onClick = { onPlayFm() }
-                                    )
-                                }
                                 items(playlists, key = { it.id }) { pl ->
                                     PlaylistTile(
                                         playlist = pl,
@@ -602,14 +569,14 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
                     }
 
                     // 新歌：宽屏自适应栅格（多列方封面），手机保持整行列表。
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SectionHeader(title = strings.newSongsTitle)
+                    if (newSongs.isNotEmpty()) {
+                        item(key = "home-new-heading", span = { GridItemSpan(maxLineSpan) }) {
+                            SectionHeader(title = strings.newSongsTitle)
+                        }
                     }
-                    item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(6.dp)) }
                     itemsIndexed(
                         items = newSongs,
                         // items → itemsIndexed 只为拿下标（入场动效用）；key 显式传同一条
@@ -640,17 +607,10 @@ fun HomeScreen(
     }
 }
 
-/** Section titles align to the cover grid; a little space separates actions from the heading. */
 @Composable
-private fun SectionHeader(
-    title: String,
-    onPlayAll: (() -> Unit)? = null,
-    actions: @Composable RowScope.() -> Unit = {}
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp).heightIn(min = 44.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun SectionHeader(title: String) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 40.dp),
+        contentAlignment = Alignment.BottomStart) {
         MetroText(
             title,
             color = LocalMetroColors.current.onBackground,
@@ -658,68 +618,148 @@ private fun SectionHeader(
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.3).sp,
             ),
-            modifier = Modifier.weight(1f)
         )
-        actions()
-        if (onPlayAll != null) {
-            MetroIconButton(onClick = onPlayAll) {
-                MetroIcon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = LocalStrings.current.playAllButton,
-                    tint = LocalMetroColors.current.primary,
-                    sizeDp = 28.dp,
+    }
+}
+
+@Composable
+private fun DailyMixFeature(
+    title: String,
+    detail: String,
+    coverUrl: String?,
+    coverSize: Dp,
+    onPlayAll: (() -> Unit)?,
+) {
+    val colors = LocalMetroColors.current
+    val type = LocalMetroTypography.current
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            .arrisSurface(emphasized = true)
+            .drawWithCache {
+                val inset = 16.dp.toPx() + coverSize.toPx() / 2f
+                val center = Offset(if (rtl) inset else size.width - inset, size.height / 2f)
+                val radius = coverSize.toPx() * 1.45f
+                val wash = Brush.radialGradient(
+                    colors = listOf(colors.primary.copy(alpha = .16f), Color.Transparent),
+                    center = center,
+                    radius = radius,
                 )
+                val ink = lerp(colors.surface, colors.onBackground, .44f)
+                onDrawBehind {
+                    drawRect(wash)
+                    drawArrisGrooves(center, radius * .83f, ink)
+                }
+            }
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            MetroText(title, color = colors.onBackground, style = type.titleLarge)
+            MetroText(detail, color = colors.onSurfaceVariant, style = type.bodySmall)
+            if (onPlayAll != null) {
+                Spacer(Modifier.height(2.dp))
+                ArrisButton(text = LocalStrings.current.playAllButton, onClick = onPlayAll)
+            }
+        }
+        HomeArtwork(coverUrl, coverSize)
+    }
+}
+
+/** Compact individual tracks retain their tap and long-press actions. */
+@Composable
+private fun DailySongTile(song: SongItem, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val colors = LocalMetroColors.current
+    val type = LocalMetroTypography.current
+    Row(
+        modifier = Modifier
+            .width(224.dp)
+            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
+            .arrisSurface()
+            .combinedClickableFallback(onClick, onLongClick)
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HomeArtwork(song.album?.picUrl, 44.dp)
+        Column(Modifier.weight(1f)) {
+            MetroText(song.name, color = colors.onBackground,
+                style = type.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            MetroText(song.artists?.joinToString("/") { it.name } ?: LocalStrings.current.unknownArtist,
+                color = colors.onSurfaceVariant, style = type.bodySmall,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Two rows per shelf card, with the next card peeking in on a phone. */
+@Composable
+private fun ChartShelf(
+    charts: List<PlaylistApi.PlaylistCard>,
+    firstSongCovers: Map<Long, String>,
+    onOpen: (Long) -> Unit,
+    onPlay: (Long) -> Unit,
+) {
+    val colors = LocalMetroColors.current
+    val groups = remember(charts) { charts.chunked(2) }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val cardWidth = (maxWidth - 48.dp).coerceIn(1.dp, 272.dp)
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            flingBehavior = rememberMetroFlingBehavior(),
+        ) {
+            items(groups, key = { it.first().id }) { group ->
+                Column(Modifier.width(cardWidth).arrisSurface().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    group.forEachIndexed { index, chart ->
+                        if (index > 0) {
+                            Spacer(Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                .height(1.dp).background(colors.onBackground.copy(alpha = .06f)))
+                        }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier.weight(1f).heightIn(min = 64.dp).clip(AppShapes.small)
+                                    .clickable(role = Role.Button) { onOpen(chart.id) }
+                                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                HomeArtwork(firstSongCovers[chart.id] ?: chart.coverUrl, 44.dp)
+                                Column(Modifier.weight(1f)) {
+                                    MetroText(chart.name, color = colors.onBackground,
+                                        style = LocalMetroTypography.current.bodyMedium,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    MetroText(LocalStrings.current.trackCountSongs(chart.trackCount),
+                                        color = colors.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall)
+                                }
+                            }
+                            MetroIconButtonSurface(Icons.Default.PlayArrow, LocalStrings.current.playAllButton) {
+                                onPlay(chart.id)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-/** 每日推荐大 tile：160dp 方封面，下方歌名 + 歌手。 */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun DailySongTile(song: SongItem, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val strings = LocalStrings.current
-    Column(
-        modifier = Modifier
-            .width(160.dp)
-            // v2.5.0 · A：卡片按压回弹（不消费事件，combinedClickable 行为不变）。
-            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
-            .combinedClickableFallback(onClick, onLongClick)
-    ) {
-        AsyncImage(
-            model = CoverUrls.small(song.album?.picUrl),
-            contentDescription = strings.coverDesc,
-            // v2.5.0 · B：封面圆角 + 1dp 描边。形状按**渲染边长**选（≥160dp → large，
-            // <160dp → small）；本 tile 固定 160dp 宽且 1:1 ⇒ 160dp ⇒ large。
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .appCoverFrame(shape = AppShapes.large),
-            contentScale = ContentScale.Crop
-        )
-        Spacer(Modifier.height(10.dp))
-        MetroText(
-            song.name,
-            color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-        MetroText(
-            song.artists?.joinToString("/") { it.name } ?: strings.unknownArtist,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
+private fun HomeArtwork(coverUrl: String?, size: Dp) {
+    val colors = LocalMetroColors.current
+    Box(Modifier.size(size).appCoverFrame(shape = AppShapes.small).background(colors.surfaceVariant),
+        contentAlignment = Alignment.Center) {
+        MetroIcon(Icons.Default.MusicNote, null, tint = colors.onSurfaceVariant, sizeDp = 22.dp)
+        AsyncImage(model = CoverUrls.small(coverUrl), contentDescription = null,
+            modifier = Modifier.matchParentSize(), contentScale = ContentScale.Crop)
     }
 }
 
 /**
  * 自适应栅格里的歌曲 tile：方封面 + 歌名 + 歌手，宽度随单元格（fillMaxWidth），
- * 区别于固定 160dp 的横滑 [DailySongTile]。宽屏新歌用它铺多列。
+ * 宽屏新歌用它铺多列。
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -801,86 +841,39 @@ private fun PlaylistTile(playlist: PlaylistApi.PlaylistCard, onClick: () -> Unit
     }
 }
 
-/**
- * 私人 FM 电台大 tile：形制同 PlaylistTile，封面为 Metro 风格图形——
- * 整块用**用户头像提取的强调色**铺底，中央是一枚**对称音频波形**记号
- * (以中线为轴上下等幅的方端竖条，包络中间高两侧收，记号本身仍是方端、无圆角)；
- * 记号颜色按底色明度取黑/白以保证对比。
- *
- * v2.5.0 · B：这块强调色底板占的是**封面位**，所以与同排 PlaylistTile 的 160dp 封面
- * 取同一档圆角（[AppShapes.large]）——旧正典是「直角、无圆角」，整块不裁切。
- */
+/** Keep the radio shortcut distinct from the cover shelves. */
 @Composable
-private fun FmRadioTile(
+private fun FmRadioStrip(
     title: String,
     accent: Color,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
-    val onAccent = if (accent.luminance() > 0.18f) Color(0xFF0F221A) else Color(0xFFF6F7EF)
-    Column(modifier = Modifier.width(160.dp).appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE).clickable { onClick() }) {
+    val colors = LocalMetroColors.current
+    val type = LocalMetroTypography.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
+            .arrisSurface()
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(AppShapes.large)
-                .drawWithCache {
-                    val center = Offset(size.width * 0.5f, size.height * 0.45f)
-                    val light = Brush.radialGradient(
-                        listOf(lerp(accent, Color.White, 0.10f), accent, lerp(accent, Color.Black, 0.24f)),
-                        center = Offset(size.width * 0.37f, size.height * 0.24f),
-                        radius = size.width,
-                    )
-                    onDrawBehind {
-                        drawRect(light)
-                        drawArrisGrooves(center, size.width * 0.63f, onAccent)
-                    }
-                }
+            Modifier.size(44.dp)
+                .background(lerp(colors.surfaceVariant, accent, .14f), AppShapes.medium),
+            contentAlignment = Alignment.Center,
         ) {
-            // 对称音频波形：5 根方端竖条，包络 0.5→1→0.5，中线上下等幅。
-            // 方端(非圆角)贴合 Kanesumi；包络收口让记号有"声音起伏"而不呆板。
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                val cx = w / 2f
-                val cy = h * 0.45f
-                val envelope = floatArrayOf(0.30f, 0.66f, 1f, 0.66f, 0.30f)
-                val barW = w * 0.056f
-                val gap = w * 0.043f
-                val maxHalf = h * 0.16f
-                val totalW = envelope.size * barW + (envelope.size - 1) * gap
-                var x = cx - totalW / 2f
-                envelope.forEach { f ->
-                    val half = maxHalf * f
-                    drawRect(
-                        color = onAccent,
-                        topLeft = Offset(x, cy - half),
-                        size = Size(barW, half * 2f)
-                    )
-                    x += barW + gap
-                }
-            }
-            PlayAllButton(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
-                size = 34.dp,
-                onClick = onClick
-            )
+            MetroIcon(Icons.Default.GraphicEq, null, tint = colors.onBackground, sizeDp = 22.dp)
         }
-        Spacer(Modifier.height(10.dp))
-        MetroText(
-            title,
-            color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-        MetroText(
-            subtitle,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = LocalMetroTypography.current.bodySmall,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            MetroText(title, color = colors.onBackground, style = type.titleMedium,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            MetroText(subtitle, color = colors.onSurfaceVariant, style = type.bodySmall,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        MetroIcon(Icons.Default.PlayArrow, null, tint = arrisAccentInk(), sizeDp = 24.dp)
     }
 }
 
@@ -920,50 +913,32 @@ private suspend fun extractAvatarAccent(context: Context, avatarUrl: String): Co
 private fun HomeDegradedState(
     offline: Boolean,
     title: String,
-    message: String?,
     hint: String?,
     retryLabel: String,
     onRetry: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.Center,
+    val colors = LocalMetroColors.current
+    val type = LocalMetroTypography.current
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            .arrisSurface().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            MetroIcon(
-                imageVector = if (offline) Icons.Default.CloudOff else Icons.Default.Refresh,
-                contentDescription = null,
-                tint = LocalMetroColors.current.onSurfaceVariant,
-                sizeDp = 40.dp,
-            )
-            Spacer(Modifier.height(16.dp))
-            MetroText(
-                title,
-                color = LocalMetroColors.current.onBackground,
-                style = LocalMetroTypography.current.titleLarge,
-            )
-            if (message != null) {
-                Spacer(Modifier.height(8.dp))
-                MetroText(
-                    message,
-                    color = LocalMetroColors.current.onSurfaceVariant,
-                    style = LocalMetroTypography.current.bodyMedium,
-                )
-            }
-            if (hint != null) {
-                Spacer(Modifier.height(8.dp))
-                MetroText(
-                    hint,
-                    color = LocalMetroColors.current.onSurfaceVariant,
-                    style = LocalMetroTypography.current.bodyMedium,
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-            MetroButton(text = retryLabel, onClick = onRetry)
+        MetroIcon(
+            imageVector = if (offline) Icons.Default.CloudOff else Icons.Default.Refresh,
+            contentDescription = null,
+            tint = colors.onSurfaceVariant,
+            sizeDp = 36.dp,
+        )
+        Spacer(Modifier.height(12.dp))
+        MetroText(title, color = colors.onBackground, style = type.titleLarge.copy(textAlign = TextAlign.Center))
+        if (hint != null) {
+            Spacer(Modifier.height(8.dp))
+            MetroText(hint, color = colors.onSurfaceVariant,
+                style = type.bodySmall.copy(textAlign = TextAlign.Center))
         }
+        Spacer(Modifier.height(16.dp))
+        ArrisButton(text = retryLabel, onClick = onRetry)
     }
 }
 
