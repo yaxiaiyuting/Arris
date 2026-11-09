@@ -1,0 +1,12 @@
+{
+  "tests": 3536,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 4,
+  "classes": 339,
+  "lint": {
+    "Information": 11,
+    "Warning": 100
+  },
+  "source": "bf099b2525e22639629e2da495b5892938471a10"
+}
