@@ -138,9 +138,8 @@ fun RecognizeScreen(onBack: () -> Unit) {
         if (phase != RecognitionPhase.IDLE || audioPermissionResult != null || projectionResult != null ||
             !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
         ) return
-        val snapshot = CookieManager.snapshot()
-        val cookie = snapshot.cookie.orEmpty()
-        if (cookie.isBlank()) {
+        val startingSession = CookieManager.snapshot()
+        if (startingSession.cookie.isNullOrBlank()) {
             status = "请先登录网易云音乐，再开始识别。"
             return
         }
@@ -165,7 +164,10 @@ fun RecognizeScreen(onBack: () -> Unit) {
                 } else null
                 lifecycle.withResumed { }
                 ensureActive()
-                if (CookieManager.snapshot() != snapshot) {
+                val snapshot = CookieManager.snapshot()
+                val cookie = snapshot.cookie.orEmpty()
+                // A refresh during the system dialog can replace the token without changing accounts.
+                if (snapshot.loginGeneration != startingSession.loginGeneration || cookie.isBlank()) {
                     status = "账号状态已变化，请重新开始识别。"
                     return@launch
                 }
@@ -207,7 +209,7 @@ fun RecognizeScreen(onBack: () -> Unit) {
                     status = "录音失败，请确认麦克风可用后重试。"
                     return@launch
                 }
-                if (CookieManager.snapshot() != snapshot) {
+                if (!CookieManager.isCurrent(snapshot)) {
                     status = "账号状态已变化，请重新开始识别。"
                     return@launch
                 }
@@ -217,7 +219,7 @@ fun RecognizeScreen(onBack: () -> Unit) {
                     NeteaseRecognizeProvider(cookieProvider = { cookie }).recognize(clip)
                 }
                 ensureActive()
-                if (CookieManager.snapshot() != snapshot) {
+                if (!CookieManager.isCurrent(snapshot)) {
                     status = "账号状态已变化，请重新开始识别。"
                     return@launch
                 }
