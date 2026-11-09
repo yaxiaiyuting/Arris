@@ -202,7 +202,8 @@ fun AboutScreen(
         TopScrimIconButton(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = s.back,
-            onClick = onBack
+            onClick = onBack,
+            overArtwork = false
         )
         if (showFeedback) {
         com.takahashirinta.ncrust.ui.components.FeedbackDialog(
@@ -324,11 +325,13 @@ private fun AboutActionRow(
             style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
             modifier = Modifier.weight(1f)
         )
-        MetroText(
-            value,
-            color = LocalMetroColors.current.onSurfaceVariant,
-            style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.End),
-            modifier = Modifier.weight(1.5f)
-        )
+        if (value.isNotEmpty()) {
+            MetroText(
+                value,
+                color = LocalMetroColors.current.onSurfaceVariant,
+                style = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, textAlign = TextAlign.End),
+                modifier = Modifier.weight(1.5f)
+            )
+        }
     }
 }

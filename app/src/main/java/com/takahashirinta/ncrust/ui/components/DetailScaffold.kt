@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -49,7 +50,7 @@ import com.takahashirinta.ncrust.ui.i18n.LocalStrings
  * 与旧版差异：
  *  - 没有 M3 TopAppBar 的实体 Surface。顶部使用向下渐隐的深色 scrim 提供图标可读性，
  *    避免以往"半透明黑色方块"堆在角落的突兀感——scrim 与内容边缘自然融合，仍无任何 border。
- *  - 返回箭头是裸图标，无背板，Ripple 以图标中心为原点，触控区扩大到 44dp。
+ *  - 返回箭头是裸图标，无背板，触控区为 48dp。
  *  - 内容 LazyColumn 从屏幕顶部开始（延伸到 status bar 下），第一项 header() 会填满整个可视区宽度。
  *  - title 参数已弃用（Groove 风：页面标题由 header 本身承担），保留以兼容签名。
  */
@@ -86,6 +87,8 @@ fun DetailScaffold(
     listState: LazyListState = rememberLazyListState(),
     /** v2.3.0 · B：挂在内容 `LazyColumn` 上的修饰符（下拉刷新手势从这儿进去）。 */
     contentModifier: Modifier = Modifier,
+    /** 设置等纯色页面使用主题表面渐隐；封面详情仍需深色遮罩保护白色图标。 */
+    navigationOverArtwork: Boolean = true,
     content: LazyListScope.() -> Unit
 ) {
     val strings = LocalStrings.current
@@ -169,7 +172,8 @@ fun DetailScaffold(
         TopScrimIconButton(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = strings.back,
-            onClick = onBack
+            onClick = onBack,
+            overArtwork = navigationOverArtwork
         )
         // 右上角动作与返回箭头同处顶部 scrim：这一带（y≈208–400）实测不在播放器死带内。
         if (onTopEndAction != null) {
@@ -177,15 +181,16 @@ fun DetailScaffold(
                 icon = topEndIcon,
                 contentDescription = topEndContentDescription,
                 onClick = onTopEndAction,
-                alignment = Alignment.TopEnd
+                alignment = Alignment.TopEnd,
+                overArtwork = navigationOverArtwork
             )
         }
     }
 }
 
 /**
- * 顶部渐隐 scrim + 裸图标。scrim 承担"让白色图标在任意封面上可读"的职责，
- * 图标本身无背板。所有二级页面（详情、关于、WebView 登录）共用此组件以保证一致性。
+ * 顶部渐隐 scrim + 裸图标。封面上使用深色遮罩和白色图标；设置、关于等纯色页
+ * 使用主题背景渐隐和对应前景色，避免浅色页面出现灰黑色阴影。
  *
  * 实现委托给库的 MetroTopScrim（同语义：渐隐 scrim + 48dp 触控区 + 直角闪切），
  * 保留本签名以便现有调用方不改。
@@ -195,13 +200,24 @@ fun TopScrimIconButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    alignment: Alignment = Alignment.TopStart
+    alignment: Alignment = Alignment.TopStart,
+    overArtwork: Boolean = true
 ) {
+    val colors = LocalMetroColors.current
     MetroTopScrim(
         icon = icon,
         contentDescription = contentDescription,
         onClick = onClick,
-        alignment = alignment
+        alignment = alignment,
+        modifier = if (overArtwork) Modifier else Modifier.background(
+            Brush.verticalGradient(
+                0f to colors.background,
+                0.5f to colors.background,
+                1f to colors.background.copy(alpha = 0f)
+            )
+        ),
+        scrimAlphaTop = if (overArtwork) 0.55f else 0f,
+        iconColor = if (overArtwork) Color.White else colors.onBackground
     )
 }
 

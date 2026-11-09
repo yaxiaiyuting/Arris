@@ -583,6 +583,7 @@ private fun SettingsPreferenceGroupPage(
         DetailScaffold(
             title = settingsGroupTitle(strings, group),
             onBack = onBack,
+            navigationOverArtwork = false,
             header = { SettingsGroupHeader(group) },
         ) {
             rows.forEach { entry ->

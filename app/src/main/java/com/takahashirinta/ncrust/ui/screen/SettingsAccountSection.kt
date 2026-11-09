@@ -177,6 +177,7 @@ internal fun SettingsAccountPage(
         DetailScaffold(
             title = settingsGroupTitle(strings, SettingsGroup.ACCOUNT),
             onBack = onBack,
+            navigationOverArtwork = false,
             header = { SettingsGroupHeader(SettingsGroup.ACCOUNT) },
         ) {
             // 行列表由渲染计划产出（与单测断言的是同一个函数）。
