@@ -150,7 +150,8 @@ fun HomeScreen(
 
     val gridState = rememberLazyGridState()
     // 宽屏：新歌从"整行列表"切到"自适应栅格单元"（Apple Music 式）；手机保持整行列表。
-    val isWide = LocalConfiguration.current.screenWidthDp >= 600
+    val windowWidthDp = LocalConfiguration.current.screenWidthDp
+    val isWide = windowWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
     /**
      * 榜单：与首屏另外三块**同批发出**（v3.7.11）。
@@ -433,6 +434,10 @@ fun HomeScreen(
 
     val hasContent = dailySongs.isNotEmpty() || playlists.isNotEmpty() ||
         newSongs.isNotEmpty() || toplists.isNotEmpty()
+    // 200dp 侧栏及内容边距之后，1000dp 窗口还有足够空间容纳两个入口。
+    val pairRadio = windowWidthDp >= 1000 && dailySongs.isNotEmpty() && onPlayFm != null
+    val fmTitle = fmProfile?.nickname?.takeIf { it.isNotEmpty() }
+        ?.let(strings.fmRadioTitle) ?: strings.fmRadioTitleGeneric
     Crossfade(
         targetState = isLoading && !hasContent,
         animationSpec = SokuouTweens.CoverFade,
@@ -475,7 +480,6 @@ fun HomeScreen(
                             HomeDegradedState(
                                 offline = offline,
                                 title = if (offline) strings.networkOfflineTitle else strings.loadFailed(error),
-                                hint = strings.networkOfflineHint.takeIf { offline },
                                 retryLabel = strings.retry,
                                 onRetry = { retryLoad() },
                             )
@@ -485,16 +489,33 @@ fun HomeScreen(
 
                     if (dailySongs.isNotEmpty()) {
                         item(key = "home-daily-feature", span = { GridItemSpan(maxLineSpan) }) {
-                            DailyMixFeature(
-                                title = strings.dailySongsTitle,
-                                detail = if (sessionValid) strings.trackCountSongs(dailySongs.size)
-                                    else strings.dailySongsLoginHint,
-                                coverUrl = dailySongs.firstNotNullOfOrNull { song ->
-                                    song.album?.picUrl?.takeIf { it.isNotBlank() }
-                                },
-                                coverSize = if (isWide) 120.dp else 94.dp,
-                                onPlayAll = onPlayDailyAll?.let { play -> { play(dailySongs) } },
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                    .then(if (pairRadio) Modifier.height(IntrinsicSize.Min) else Modifier),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                DailyMixFeature(
+                                    title = strings.dailySongsTitle,
+                                    detail = if (sessionValid) strings.trackCountSongs(dailySongs.size)
+                                        else strings.dailySongsLoginHint,
+                                    coverUrl = dailySongs.firstNotNullOfOrNull { song ->
+                                        song.album?.picUrl?.takeIf { it.isNotBlank() }
+                                    },
+                                    coverSize = if (isWide) 120.dp else 94.dp,
+                                    modifier = Modifier.weight(2f)
+                                        .then(if (pairRadio) Modifier.fillMaxHeight() else Modifier),
+                                    onPlayAll = onPlayDailyAll?.let { play -> { play(dailySongs) } },
+                                )
+                                if (pairRadio && onPlayFm != null) {
+                                    FmRadioStrip(
+                                        title = fmTitle,
+                                        accent = fmAccent ?: LocalMetroColors.current.primary,
+                                        subtitle = strings.fmRadioSubtitle,
+                                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                                        onClick = onPlayFm,
+                                    )
+                                }
+                            }
                         }
                         item(key = "home-daily-songs", span = { GridItemSpan(maxLineSpan) }) {
                             LazyRow(
@@ -537,13 +558,13 @@ fun HomeScreen(
                         }
                     }
 
-                    if (onPlayFm != null) {
+                    if (onPlayFm != null && !pairRadio) {
                         item(key = "home-radio", span = { GridItemSpan(maxLineSpan) }) {
                             FmRadioStrip(
-                                title = fmProfile?.nickname?.takeIf { it.isNotEmpty() }
-                                    ?.let { strings.fmRadioTitle(it) } ?: strings.fmRadioTitleGeneric,
+                                title = fmTitle,
                                 accent = fmAccent ?: LocalMetroColors.current.primary,
                                 subtitle = strings.fmRadioSubtitle,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                                 onClick = onPlayFm,
                             )
                         }
@@ -628,13 +649,14 @@ private fun DailyMixFeature(
     detail: String,
     coverUrl: String?,
     coverSize: Dp,
+    modifier: Modifier,
     onPlayAll: (() -> Unit)?,
 ) {
     val colors = LocalMetroColors.current
     val type = LocalMetroTypography.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        modifier = modifier
             .arrisSurface(emphasized = true)
             .drawWithCache {
                 val inset = 16.dp.toPx() + coverSize.toPx() / 2f
@@ -847,12 +869,13 @@ private fun FmRadioStrip(
     title: String,
     accent: Color,
     subtitle: String,
+    modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val colors = LocalMetroColors.current
     val type = LocalMetroTypography.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        modifier = modifier
             .appPressScale(pressedScale = AppMotion.BROWSE_PRESS_SCALE)
             .arrisSurface()
             .clickable(role = Role.Button, onClick = onClick)
@@ -913,7 +936,6 @@ private suspend fun extractAvatarAccent(context: Context, avatarUrl: String): Co
 private fun HomeDegradedState(
     offline: Boolean,
     title: String,
-    hint: String?,
     retryLabel: String,
     onRetry: () -> Unit,
 ) {
@@ -932,11 +954,6 @@ private fun HomeDegradedState(
         )
         Spacer(Modifier.height(12.dp))
         MetroText(title, color = colors.onBackground, style = type.titleLarge.copy(textAlign = TextAlign.Center))
-        if (hint != null) {
-            Spacer(Modifier.height(8.dp))
-            MetroText(hint, color = colors.onSurfaceVariant,
-                style = type.bodySmall.copy(textAlign = TextAlign.Center))
-        }
         Spacer(Modifier.height(16.dp))
         ArrisButton(text = retryLabel, onClick = onRetry)
     }
