@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
 import coil.Coil
@@ -69,6 +72,9 @@ import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.components.listItemAppear
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.i18n.Strings
+import com.takahashirinta.ncrust.ui.components.DetailScaffold
+import com.takahashirinta.ncrust.ui.components.DetailHeader
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -87,6 +93,7 @@ fun HomeScreen(
     onSongClick: (SongItem) -> Unit,
     onPlaylistClick: (Long) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
+    onOpenDaily: ((List<SongItem>) -> Unit)? = null,
     onPlayDailyAll: ((List<SongItem>) -> Unit)? = null,
     onSongInsertNext: (SongItem) -> Unit = {},
     onSongAppendToQueue: (SongItem) -> Unit = {},
@@ -372,16 +379,7 @@ fun HomeScreen(
         }
     }
 
-    fun songMenu(song: SongItem): List<SongMenuAction> = listOf(
-        SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
-            // v2.6.0 · P0：成败由返回值决定，不再无条件弹成功。
-            if (LibraryManager.saveSong(context, song).isSuccess) {
-                Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
-            }
-        },
-        SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) { onSongInsertNext(song) },
-        SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) { onSongAppendToQueue(song) }
-    )
+    fun songMenu(song: SongItem) = homeSongActions(context, strings, song, onSongInsertNext, onSongAppendToQueue)
 
     Crossfade(
         targetState = isLoading,
@@ -470,6 +468,7 @@ fun HomeScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             SectionHeader(
                                 title = strings.dailySongsTitle,
+                                onOpen = onOpenDaily?.let { open -> { open(dailySongs) } },
                                 onPlayAll = { onPlayDailyAll?.invoke(dailySongs) },
                                 actions = {
                                     // 4.0.0：服务端按天生成（每天 6:00 换一批），刷新键没有意义
@@ -598,6 +597,7 @@ fun HomeScreen(
 @Composable
 private fun SectionHeader(
     title: String,
+    onOpen: (() -> Unit)? = null,
     onPlayAll: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -605,12 +605,25 @@ private fun SectionHeader(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MetroText(
-            title,
-            color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.title,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.weight(1f).then(
+                if (onOpen == null) Modifier else Modifier.heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onOpen)
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MetroText(
+                title,
+                color = LocalMetroColors.current.onBackground,
+                style = LocalMetroTypography.current.title,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (onOpen != null) {
+                Spacer(Modifier.width(6.dp))
+                MetroIcon(Icons.AutoMirrored.Filled.ArrowForward, null,
+                    tint = LocalMetroColors.current.onSurfaceVariant, sizeDp = 16.dp)
+            }
+        }
         actions()
         if (onPlayAll != null) {
             MetroIconButton(onClick = onPlayAll) {
@@ -624,6 +637,54 @@ private fun SectionHeader(
         }
     }
 }
+
+@Composable
+internal fun DailyRecommendationsScreen(
+    songs: List<SongItem>,
+    onBack: () -> Unit,
+    onPlay: (Int) -> Unit,
+    onInsertNext: (SongItem) -> Unit,
+    onAppend: (SongItem) -> Unit,
+    onShowSongMenu: (SongItem, List<SongMenuAction>) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    DetailScaffold(
+        title = strings.dailySongsTitle,
+        onBack = onBack,
+        header = {
+            DetailHeader(
+                coverUrl = songs.firstNotNullOfOrNull { it.album?.picUrl?.takeIf(String::isNotBlank) }.orEmpty(),
+                title = strings.dailySongsTitle,
+                subtitle = null,
+                infoLines = listOf(if (songs.isEmpty()) strings.playlistEmptyTracks else strings.trackCountSongs(songs.size)),
+                onPlayAll = if (songs.isNotEmpty()) ({ onPlay(0) }) else null,
+            )
+        },
+    ) {
+        listItemsIndexed(songs) { index, song ->
+            SongCard(song = song, style = SongCardStyle.COMPACT,
+                onClick = { onPlay(index) },
+                onShowMenu = { onShowSongMenu(song, homeSongActions(context, strings, song, onInsertNext, onAppend)) })
+        }
+    }
+}
+
+private fun homeSongActions(
+    context: Context,
+    strings: Strings,
+    song: SongItem,
+    onInsertNext: (SongItem) -> Unit,
+    onAppend: (SongItem) -> Unit,
+): List<SongMenuAction> = listOf(
+    SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
+        if (LibraryManager.saveSong(context, song).isSuccess) {
+            Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+        }
+    },
+    SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) { onInsertNext(song) },
+    SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) { onAppend(song) },
+)
 
 /** 每日推荐大 tile：160dp 方封面，下方歌名 + 歌手。 */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
