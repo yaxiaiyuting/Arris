@@ -1,0 +1,11 @@
+{
+  "tests": 3539,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 4,
+  "classes": 340,
+  "lint": {
+    "Information": 10,
+    "Warning": 101
+  }
+}

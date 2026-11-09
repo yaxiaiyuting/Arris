@@ -10,7 +10,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.15--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.0.19--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-10.08%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -36,6 +36,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.0.19** | 2026-11-09 | 每日推荐可打开完整歌单，听歌识曲可选系统声音，底栏随主界面滑动 |
 | **4.0.15** | 2026-11-07 | 播放器换用哑光光影，封面到达后再淡入，主界面支持左右滑动切换五个标签 |
 | 4.0.14 | 2026-11-06 | 修复部分逐字歌词切句偏晚。切句对齐首字时间，播放位置更新时立即检查跨行 |
 | **LTS 3.7.34** | 2026-11-06 | 恢复旧版应用内更新和 Android 7 收藏确认，修复回拖歌词与跟唱主行切换 |
@@ -138,6 +139,8 @@ https://arris.de5.net/get/latest.apk        同一份包的静态直出（最简
 - **打洞失败会说实话**：连不上会直接告诉你改用局域网还是 P2P，不静默重试。
 
 ### 听歌识曲
+
+在主线 4.0.19 的识曲页可选麦克风或系统声音。先让音乐保持播放，回到 Arris 选择「系统声音」，再确认 Android 的共享授权。Arris 读取约十秒允许采集的媒体声音，用网易云账号匹配。退出识曲页或退到后台会停止。
 
 录 10 秒 → 识别 → 直接进播放器。
 
@@ -390,6 +393,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.0.19-gpl | 2026-11-09 | 日推歌单、系统声音识曲、识曲会话校验、首页层次和底栏跟手 |
 | v4.0.15-gpl | 2026-11-07 | 哑光播放界面、切歌封面交接、五个主界面标签可左右滑动，致谢新增 quit |
 | v4.0.14-gpl | 2026-11-06 | **修复歌词慢半拍**。逐字歌词按首字切句，播放位置更新后立即重新计算歌词边界 |
 | v4.0.13-gpl | 2026-11-05 | **歌词换行连续交接**：滚动、缩放、亮度和光轨同步，快速换句从当前画面接续；原译文主行或字号改变后重新定位 |
