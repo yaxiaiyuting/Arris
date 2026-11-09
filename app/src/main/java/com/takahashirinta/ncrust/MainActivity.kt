@@ -1065,7 +1065,8 @@ fun MainScreen(
     )
 
     val tabPager = rememberPagerState(initialPage = 1) { navTabs.size }
-    val selectedTab = tabPager.settledPage
+    // 页面副作用等手势停稳；导航的视觉位置直接从 PagerState 取。
+    val settledTab = tabPager.settledPage
 
     /**
      * v2.6.1 · P0：待投递给搜索页的关键词（null = 没有待办）。
@@ -1480,7 +1481,7 @@ fun MainScreen(
     // v1.4.0 · 音乐人推荐：每次回到首页 / 切换设置后重算一次口味命中（纯本地，无请求）。
     // 自动锚点（目标艺人热门曲 → simiSong 推导）只在需要时后台刷新，带 7 天 TTL。
     var artistRecoArtistId by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(selectedTab) {
+    LaunchedEffect(settledTab) {
         artistRecoArtistId = if (ArtistReco.shouldShow(context)) ArtistReco.targetId(context) else null
         if (ArtistReco.isEnabled(context) && ArtistReco.targetId(context) != 0L &&
             ArtistReco.manualAnchors(context).isEmpty()
@@ -3484,7 +3485,7 @@ fun MainScreen(
             ) {
                 MetroSidebar(
                     items = navTabs.map { MetroSidebarItem(it.first, it.second) },
-                    selectedIndex = selectedTab,
+                    selectedIndex = tabPager.currentPage,
                     onSelected = onNavSelected,
                     width = sidebarWidthDp,
                     backgroundColor = Color.Transparent,
@@ -3517,7 +3518,7 @@ fun MainScreen(
                 MainTabPager(tabPager, isInMain && !bigScreen, progress) { page ->
                     when (page) {
                         0 -> HomeScreen(
-                            active = selectedTab == page,
+                            active = settledTab == page,
                             onSongClick = { playSongItem(it) },
                             // 会话失效横幅点击 → 现有登录流程。
                             onRelogin = onRelogin,
@@ -3549,7 +3550,7 @@ fun MainScreen(
                         )
 
                         1 -> LibraryScreen(
-                            active = selectedTab == page,
+                            active = settledTab == page,
                             onOpenRecognize = { showRecognize = true },
                             onOpenTogether = { showTogether = true },
                             onSongClick = { playSongItem(it) },
@@ -3761,7 +3762,7 @@ fun MainScreen(
                 // 会因缺 CompositionLocal 而 crash。
                 com.takahashirinta.ncrust.ui.components.ArrisBottomNav(
                     items = navTabs,
-                    selected = selectedTab,
+                    pagerState = tabPager,
                     onSelect = onNavSelected,
                 )
                 // v3.4.13：「用户」图标右上角的小圆点。Arris 的底部导航有 5 格，

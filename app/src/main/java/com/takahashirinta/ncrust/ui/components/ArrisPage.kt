@@ -11,6 +11,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.ui.theme.AppShapes
@@ -81,13 +84,17 @@ internal fun Modifier.arrisNavigationSurface(): Modifier {
 /** Selection is a bounded alpha transition, read only in the drawing layer. */
 @Composable
 private fun ArrisSelection(selected: Boolean, modifier: Modifier = Modifier) {
-    val c = LocalMetroColors.current
     val alpha = remember { Animatable(if (selected) 1f else 0f) }
     LaunchedEffect(selected) { alpha.animateTo(if (selected) 1f else 0f, AppMotion.effects) }
-    Box(modifier.graphicsLayer { this.alpha = alpha.value }
-        .background(c.onBackground.copy(alpha = .065f), AppShapes.medium)) {
+    ArrisSelectionMark(modifier.graphicsLayer { this.alpha = alpha.value })
+}
+
+@Composable
+private fun ArrisSelectionMark(modifier: Modifier) {
+    val ink = LocalMetroColors.current.onBackground
+    Box(modifier.background(ink.copy(alpha = .065f), AppShapes.medium)) {
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp)
-            .size(12.dp, 2.dp).background(c.onBackground.copy(alpha = .65f), AppShapes.full))
+            .size(12.dp, 2.dp).background(ink.copy(alpha = .65f), AppShapes.full))
     }
 }
 
@@ -188,21 +195,46 @@ internal fun ArrisButton(text: String, modifier: Modifier = Modifier, primary: B
 }
 
 @Composable
-internal fun ArrisBottomNav(items: List<Pair<ImageVector, String>>, selected: Int, onSelect: (Int) -> Unit) {
+internal fun ArrisBottomNav(
+    items: List<Pair<ImageVector, String>>,
+    pagerState: PagerState,
+    onSelect: (Int) -> Unit,
+) {
+    if (items.isEmpty()) return
     val c = LocalMetroColors.current
-    Row(Modifier.fillMaxSize().selectableGroup().padding(horizontal = 8.dp, vertical = 4.dp)) {
-        items.forEachIndexed { index, (icon, label) ->
-            val active = selected == index
-            Box(Modifier.weight(1f).fillMaxHeight().clip(AppShapes.large)
-                .selectable(selected = active, role = Role.Tab, onClick = { onSelect(index) }),
-                contentAlignment = Alignment.Center) {
-                ArrisSelection(active, Modifier.matchParentSize().padding(horizontal = 5.dp, vertical = 2.dp))
-                Column(
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                MetroIcon(icon, null, tint = if (active) c.onBackground else c.onSurfaceVariant, sizeDp = 20.dp)
-                MetroText(label, color = if (active) c.onBackground else c.onSurfaceVariant,
-                    style = TextStyle(fontSize = 10.sp, lineHeight = 16.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
+    val selected = pagerState.currentPage
+    val direction = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 4.dp)) {
+        ArrisSelectionMark(
+            Modifier.align(Alignment.TopStart)
+                .width(maxWidth / items.size)
+                .fillMaxHeight()
+                .graphicsLayer {
+                    // At the midpoint currentPage increments and the offset changes sign.
+                    // Their sum stays continuous during dragging, settling and a cancelled swipe.
+                    val position = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                    translationX = size.width * position.coerceIn(0f, items.lastIndex.toFloat()) * direction
+                }
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+        )
+        Row(Modifier.fillMaxSize().selectableGroup()) {
+            items.forEachIndexed { index, (icon, label) ->
+                val active = selected == index
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clip(AppShapes.large)
+                        .selectable(selected = active, role = Role.Tab, onClick = { onSelect(index) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        val ink = if (active) c.onBackground else c.onSurfaceVariant
+                        MetroIcon(icon, null, tint = ink, sizeDp = 20.dp)
+                        MetroText(label, color = ink,
+                            style = TextStyle(fontSize = 10.sp, lineHeight = 16.sp,
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal), maxLines = 1)
+                    }
                 }
             }
         }
