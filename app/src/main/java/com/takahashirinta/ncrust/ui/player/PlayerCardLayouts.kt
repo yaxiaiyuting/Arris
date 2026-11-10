@@ -83,6 +83,39 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.flow.StateFlow
 
+@Composable
+private fun PlayerHeaderEqualizer(ui: PlayerCardUiState, modifier: Modifier) {
+    ThresholdScope({ ui.cardExpandedForInput }) { expanded ->
+        if (expanded) {
+            PlayerEqualizerButton(
+                onClick = { ui.showEqualizer = true },
+                modifier = modifier.padding(start = TrayLayout.TOP_BAR_ACTION_START_DP.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.PlayerSideCoverSlot(
+    ui: PlayerCardUiState,
+    onCoverRegionMeasured: (center: Offset, sizePx: Float) -> Unit,
+) {
+    val cardRootOrigin = ui.cardRootOrigin
+    Box(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.displayCutout)) {
+        // Measure the cover in the area beside the button so the cover overlay cannot obscure it.
+        Box(Modifier.matchParentSize().padding(start = TrayLayout.TOP_BAR_COVER_START_DP.dp)) {
+            Box(Modifier.fillMaxSize().onGloballyPositioned { coords ->
+                val bounds = coords.boundsInRoot()
+                onCoverRegionMeasured(
+                    bounds.center - cardRootOrigin,
+                    PlayerLayout.squareCoverSizePx(bounds.width, bounds.height),
+                )
+            })
+        }
+        PlayerHeaderEqualizer(ui, Modifier.align(Alignment.TopStart))
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 分支 1：大屏幕模式（横屏桌面播放器布局）
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,7 +147,6 @@ internal fun PlayerCardBigScreenLayout(
     val qualityPickerMaxHeightDp = geo.qualityPickerMaxHeightDp
     val visualizerSlot = geo.visualizerSlot
     val visualizerHeightDp = geo.visualizerHeightDp
-    val cardRootOrigin = ui.cardRootOrigin
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -135,21 +167,7 @@ internal fun PlayerCardBigScreenLayout(
                 .weight(PlayerLayout.BIG_SCREEN_LEFT_FRACTION)
                 .fillMaxHeight()
         ) {
-            // 封面区：只作为「唯一封面 overlay」的落点参考（与宽屏两栏同一机制，
-            // 绝不在这里放第二个封面）。正方形边长 = min(区宽, 区高)
-            // ⇒ 封面总是"尽量占满左栏可用高度"。
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .onGloballyPositioned { coords ->
-                        val b = coords.boundsInRoot()
-                        onCoverRegionMeasured(
-                            b.center - cardRootOrigin,
-                            PlayerLayout.squareCoverSizePx(b.width, b.height),
-                        )
-                    }
-            )
+            PlayerSideCoverSlot(ui, onCoverRegionMeasured)
             // v1.8.0 · T3：音频可视化条（**封面下、歌名/作者上**）。
             // 高度按窗口高动态算：PCL110 横屏只有 363dp 可用高，固定 48dp 会把封面
             // 压掉一整圈；S6（480dp）则给足 53dp。封面区是 weight(1f)，自己吸收这段高度。
@@ -278,7 +296,6 @@ internal fun PlayerCardWideLayout(
     val wideLeftFraction = geo.wideLeftFraction
     val visualizerSlot = geo.visualizerSlot
     val visualizerHeightDp = geo.visualizerHeightDp
-    val cardRootOrigin = ui.cardRootOrigin
     Row(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -289,19 +306,7 @@ internal fun PlayerCardWideLayout(
                 .weight(wideLeftFraction.coerceAtLeast(PlayerLayout.MIN_SPLIT_FRACTION))
                 .fillMaxHeight()
         ) {
-            // 封面区：只作为"唯一封面 overlay"在宽屏的落点参考——实测其中心与
-            // 尺寸，交给 overlay 封面定位。这里不再放第二个封面，保证全屏 ↔
-            // miniBar 始终是同一个 cover。
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .onGloballyPositioned { coords ->
-                        val b = coords.boundsInRoot()
-                        // 封面在左栏封面区内居中（不贴边，视觉更和谐）。
-                        onCoverRegionMeasured(b.center - cardRootOrigin, PlayerLayout.squareCoverSizePx(b.width, b.height))
-                    }
-            )
+            PlayerSideCoverSlot(ui, onCoverRegionMeasured)
             // v2.5.4 · D：**平板横屏**的音频可视化条就挂在这里。
             //
             // 位置与横屏大屏左栏**逐像素同款**（封面下、歌名/作者上），
@@ -470,6 +475,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 badgeStyle = LocalMetroTypography.current.bodySmall
             )
         }
+        PlayerHeaderEqualizer(ui, Modifier.align(Alignment.CenterStart))
         if (tiny) {
             Row(
                 modifier = Modifier
@@ -556,7 +562,6 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 isPlaying = isPlaying,
                 previousEnabled = previousEnabled,
                 transport = transport,
-                onOpenEqualizer = { ui.showEqualizer = true },
                 modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
                     val reveal = AppMotion.playerReveal(controlsCollapse.value, 0.40f)
                     alpha = reveal

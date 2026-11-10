@@ -194,6 +194,7 @@ internal class PlayerCardGeometry(
     val miniScale: Float,
     val miniCoverCenterX: Float,
     val miniCoverCenterY: Float,
+    val topBarCoverCenterX: Float,
     val topBarCoverCenterY: Float,
     val largeCoverCenterX: Float,
     val largeCoverCenterY: Float,
@@ -316,6 +317,7 @@ internal fun playerCardGeometry(
     //    ⇒ 中心 statusBar + 28dp。
     // v3.1.0 两种状态都用 40dp，于是歌词全屏下封面比顶栏低 12dp（真机实测差 45px）。
     val miniCoverCenterY = statusBarPx + with(density) { TrayLayout.coverCenterOffsetDp().dp.toPx() }
+    val topBarCoverCenterX = with(density) { TrayLayout.topBarCoverCenterXDp().dp.toPx() }
     val topBarCoverCenterY =
         statusBarPx + with(density) { TrayLayout.topBarCoverCenterOffsetDp().dp.toPx() }
     val largeCoverCenterX = if (usesSideCover) wideCoverCenter.x else screenWidthPx / 2f
@@ -348,6 +350,7 @@ internal fun playerCardGeometry(
         miniScale = miniScale,
         miniCoverCenterX = miniCoverCenterX,
         miniCoverCenterY = miniCoverCenterY,
+        topBarCoverCenterX = topBarCoverCenterX,
         topBarCoverCenterY = topBarCoverCenterY,
         largeCoverCenterX = largeCoverCenterX,
         largeCoverCenterY = largeCoverCenterY,

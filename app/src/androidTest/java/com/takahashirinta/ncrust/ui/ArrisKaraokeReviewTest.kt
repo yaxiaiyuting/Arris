@@ -153,6 +153,7 @@ class ArrisKaraokeReviewTest {
             exit = {},
             translatedPrimary = false,
             toggleLanguage = {},
+            onOpenEqualizer = {},
         )
         show(dark) {
             KaraokeScreen(

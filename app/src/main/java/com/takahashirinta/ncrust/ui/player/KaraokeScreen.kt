@@ -331,6 +331,7 @@ private fun KaraokeHeader(controls: KaraokeControls, compact: Boolean, hasTransl
     val cover = remember(controls.cover) { controls.cover?.asImageBitmap() }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         KaraokeButton(PlayerGlyphs.Back, copy.exit, controls.exit)
+        PlayerEqualizerButton(onClick = controls.onOpenEqualizer)
         Box(
             Modifier.size(if (compact) 35.dp else 42.dp)
                 .clip(AppShapes.small)
@@ -600,7 +601,6 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
         isPlaying = playing,
         previousEnabled = controls.previousEnabled,
         transport = controls.transport,
-        onOpenEqualizer = controls.onOpenEqualizer,
         modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
     )
 }

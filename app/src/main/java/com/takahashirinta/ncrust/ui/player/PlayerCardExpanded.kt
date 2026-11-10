@@ -340,7 +340,6 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onPlayPause = callbacks.onPlayPause,
                     onPlayPrevious = callbacks.onPlayPrevious,
                     onPlayNext = callbacks.onPlayNext,
-                    onOpenEqualizer = { ui.showEqualizer = true },
                     onToggleLyrics = onToggleLyricsAction,
                     onToggleQueue = onToggleQueueAction,
                     onAddToLibrary = onAddToLibraryAction,

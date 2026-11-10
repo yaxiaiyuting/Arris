@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -54,6 +56,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.i18n.Strings
 import com.takahashirinta.ncrust.ui.player.motion.MotionClock
 import com.takahashirinta.ncrust.ui.player.motion.MotionEffects
@@ -67,7 +70,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
  * 唯一封面叠加层（原 `PlayerCard.kt` 1786–1876）：全屏 ↔ miniBar 共用这一个 cover，
  * 随 `progress` 平滑位移/缩放。窄屏大图 = 整屏宽居中；宽屏/大屏大图 = 左栏封面区实测中心与尺寸。
  *
- * 所有落点（`largeCoverCenterX/Y`、`miniCoverCenterX/Y`、`topBarCoverCenterY`、
+ * 所有落点（`largeCoverCenterX/Y`、`miniCoverCenterX/Y`、`topBarCoverCenterX/Y`、
  * `miniScale`、`boundsCenter`）都由调用点算好传进来 —— 它们来自 `TrayLayout` 与实测，
  * 在这个文件里再算一遍就是第二份事实来源。
  */
@@ -82,6 +85,7 @@ internal fun PlayerCardCoverOverlay(
     miniScale: Float,
     miniCoverCenterX: Float,
     miniCoverCenterY: Float,
+    topBarCoverCenterX: Float,
     topBarCoverCenterY: Float,
     largeCoverCenterX: Float,
     largeCoverCenterY: Float,
@@ -92,6 +96,7 @@ internal fun PlayerCardCoverOverlay(
     hideForKaraoke: () -> Boolean,
 ) {
     val density = LocalDensity.current
+    val topBarCoverSizePx = with(density) { TrayLayout.TOP_BAR_COVER_SIZE_DP.dp.toPx() }
     StableCover(
         model = CoverUrls.large(song.album?.picUrl),
         contentDescription = null,
@@ -148,13 +153,10 @@ internal fun PlayerCardCoverOverlay(
                 // "大封面↔歌词"切换的语义）；它随分栏进度在左栏与居中之间平滑移动。
                 val lyricAnimValue = if (usesSideCover) 0f else lyricAnimProgress.value
 
-                val targetCenterX = actualLargeCenterX + lyricAnimValue * (miniCoverCenterX - actualLargeCenterX)
-                // v3.2.0 · P0-A：歌词全屏时封面缩到的是**顶栏**的中心（56dp 容器），
-                // 不是托盘的中心（80dp 容器）。两者在展开态相差 12dp ——
-                // 用错的那一个会让封面挂在顶栏下沿之外（真机截图可见）。
-                val shrinkCenterY = topBarCoverCenterY
-                val targetCenterY = actualLargeCenterY + lyricAnimValue * (shrinkCenterY - actualLargeCenterY)
-                val targetScale = actualMiniScale + (1f - lyricAnimValue) * (1f - actualMiniScale)
+                val targetCenterX = actualLargeCenterX + lyricAnimValue * (topBarCoverCenterX - actualLargeCenterX)
+                val targetCenterY = actualLargeCenterY + lyricAnimValue * (topBarCoverCenterY - actualLargeCenterY)
+                val topBarScale = topBarCoverSizePx / actualCoverSizePx
+                val targetScale = 1f + lyricAnimValue * (topBarScale - 1f)
 
                 val currentCenterX = miniCoverCenterX + normalizedP * (targetCenterX - miniCoverCenterX)
                 val currentCenterY = miniCoverCenterY + normalizedP * (targetCenterY - miniCoverCenterY)
@@ -182,6 +184,22 @@ internal fun PlayerCardCoverOverlay(
         shape = AppShapes.small,
         frame = SolidColor(Color.White.copy(alpha = 0.12f)),
     )
+}
+
+@Composable
+internal fun PlayerEqualizerButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(TrayLayout.TOP_BAR_ACTION_SIZE_DP.dp).clip(AppShapes.full)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            PlayerGlyphs.Equalizer,
+            contentDescription = LocalStrings.current.settings.equalizerEntryLabel,
+            tint = LocalMetroColors.current.primary,
+            sizeDp = 23.dp,
+        )
+    }
 }
 
 /**
@@ -311,6 +329,7 @@ internal fun BoxScope.PlayerCardOverlayLayers(
             miniScale = geo.miniScale,
             miniCoverCenterX = geo.miniCoverCenterX,
             miniCoverCenterY = geo.miniCoverCenterY,
+            topBarCoverCenterX = geo.topBarCoverCenterX,
             topBarCoverCenterY = geo.topBarCoverCenterY,
             largeCoverCenterX = geo.largeCoverCenterX,
             largeCoverCenterY = geo.largeCoverCenterY,

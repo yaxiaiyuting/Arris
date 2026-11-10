@@ -115,7 +115,6 @@ internal fun CompactTransportControls(
     previousEnabled: Boolean,
     transport: PlayerCardCallbacks,
     modifier: Modifier = Modifier,
-    onOpenEqualizer: (() -> Unit)? = null,
 ) {
     val strings = LocalStrings.current
     val haptic = LocalHapticFeedback.current
@@ -143,7 +142,6 @@ internal fun CompactTransportControls(
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             transport.onPlayNext()
         }
-        if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
     }
 }
 
@@ -157,22 +155,6 @@ private fun CompactSkipButton(icon: ImageVector, label: String, enabled: Boolean
         MetroIcon(
             icon, contentDescription = label, sizeDp = 23.dp,
             tint = if (enabled) colors.onBackground else colors.onSurfaceVariant.copy(alpha = 0.5f),
-        )
-    }
-}
-
-@Composable
-private fun PlayerEqualizerButton(onClick: () -> Unit) {
-    val colors = LocalMetroColors.current
-    Box(
-        Modifier.size(44.dp).clip(AppShapes.full).clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        MetroIcon(
-            PlayerGlyphs.Equalizer,
-            contentDescription = LocalStrings.current.settings.equalizerEntryLabel,
-            tint = colors.primary,
-            sizeDp = 23.dp,
         )
     }
 }
@@ -213,7 +195,6 @@ fun FullPlayerControls(
     onPlayPause: () -> Unit,
     onPlayPrevious: () -> Unit = {},
     onPlayNext: () -> Unit = {},
-    onOpenEqualizer: (() -> Unit)? = null,
     onToggleLyrics: () -> Unit,
     onToggleQueue: () -> Unit,
     onAddToLibrary: () -> Unit = {},
@@ -334,7 +315,6 @@ fun FullPlayerControls(
                 )
                 Spacer(Modifier.width(8.dp))
                 DurationText(durationFlow = durationFlow, modifier = Modifier)
-                if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
             }
             Spacer(Modifier.height(6.dp))
             // v2.5.6 · P1：三段式控制条。
@@ -536,11 +516,7 @@ fun FullPlayerControls(
             .padding(top = if (tiny) 3.dp else 8.dp, bottom = if (tiny) 3.dp else 6.dp)
     ) {
         if (sharedLyricProgress) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 PlayerQualityChip(
                     qualityIndexFlow = qualityIndexFlow,
                     qualityStatusFlow = qualityStatusFlow,
@@ -553,7 +529,6 @@ fun FullPlayerControls(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     minHitHeightDp = if (tiny) 32.dp else 36.dp,
                 )
-                if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
             }
         } else if (tiny) {
             // Tiny：位置 · 进度 · 时长 · 音质压成一行，把纵向空间全让给封面与传输键。
@@ -590,54 +565,47 @@ fun FullPlayerControls(
                     // 用户看不出"现在只有 45 秒试听"。这里补上（与展开态同一条数据源）。
                     trialFlow = trialFlow,
                 )
-                if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
             }
         } else {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = hPad),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 位置文本抽出为叶子 Composable：仅它随 250ms 位置更新重组，
-                // 不牵连按钮/进度条区域
-                PositionText(
-                    positionFlow = positionFlow,
-                    modifier = Modifier.widthIn(max = 52.dp)
-                )
-                // v1.8.0 · T2：竖屏也做成**就地选择器**（此前这个 chip 点了是"跳设置页"，
-                // 用户得离开播放器才能换档）。菜单形态与横屏大屏共用同一个组件，
-                // 档位表、降级角标语义、"档位真变了才重取播放链"的行为天然一致。
-                Row(
-                    Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PlayerQualityChip(
-                        qualityIndexFlow = qualityIndexFlow,
-                        qualityStatusFlow = qualityStatusFlow,
-                        qualityBitrateFlow = qualityBitrateFlow,
-                        options = qualityOptions,
-                        trialFlow = trialFlow,
-                        preferredIndexProvider = preferredQualityIndexProvider,
-                        onSelect = onQualitySelect,
-                        modifier = Modifier.widthIn(max = 128.dp),
-                        maxHeightDp = qualityPickerMaxHeightDp,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    )
-                    if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
-                }
-                DurationText(
-                    durationFlow = durationFlow,
-                    modifier = Modifier.widthIn(max = 52.dp)
-                )
-            }
-            Spacer(Modifier.height(gapTight))
-            SlimProgressBar(
-                progressFlow = progressFlow,
-                durationFlow = durationFlow,
-                isBufferingFlow = isBufferingFlow,
-                onSeek = onSeek,
-                horizontalPadding = hPad,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = hPad)
+        ) {
+            // 位置文本抽出为叶子 Composable：仅它随 250ms 位置更新重组，
+            // 不牵连按钮/进度条区域
+            PositionText(
+                positionFlow = positionFlow,
+                modifier = Modifier.align(Alignment.CenterStart)
             )
+            // v1.8.0 · T2：竖屏也做成**就地选择器**（此前这个 chip 点了是"跳设置页"，
+            // 用户得离开播放器才能换档）。菜单形态与横屏大屏共用同一个组件，
+            // 档位表、降级角标语义、"档位真变了才重取播放链"的行为天然一致。
+            PlayerQualityChip(
+                qualityIndexFlow = qualityIndexFlow,
+                qualityStatusFlow = qualityStatusFlow,
+                qualityBitrateFlow = qualityBitrateFlow,
+                options = qualityOptions,
+                trialFlow = trialFlow,
+                preferredIndexProvider = preferredQualityIndexProvider,
+                onSelect = onQualitySelect,
+                modifier = Modifier.align(Alignment.Center),
+                maxHeightDp = qualityPickerMaxHeightDp,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            )
+            DurationText(
+                durationFlow = durationFlow,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+        }
+        Spacer(Modifier.height(gapTight))
+        SlimProgressBar(
+            progressFlow = progressFlow,
+            durationFlow = durationFlow,
+            isBufferingFlow = isBufferingFlow,
+            onSeek = onSeek,
+            horizontalPadding = hPad,
+        )
         }
         Spacer(Modifier.height(gapLoose))
         Row(
