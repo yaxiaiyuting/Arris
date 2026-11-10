@@ -24,6 +24,7 @@ import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import android.Manifest
 import android.widget.Toast
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -32,8 +33,10 @@ import android.view.OrientationEventListener
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.CubicBezierEasing
@@ -64,6 +67,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.*
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -267,9 +271,6 @@ class MainActivity : ComponentActivity() {
         // 播放器读到的还是默认值 true，开关等于失效。真机（S6）实测确认过这个 bug：
         // prefs 里 keep_screen_on=false，但播放时 flag 照样被挂上。
         KeepScreenOnSetting.read(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
-        }
         RetrofitClient.init(this)
         // 会话判定：启动时一次。必须在 RetrofitClient.init 之后（要读已加载的 cookie），
         // 且在 AppWarmup 之前（预热里的收藏/推荐请求会带上 cookie）。
@@ -416,10 +417,34 @@ class MainActivity : ComponentActivity() {
                     val metroColors = remember(ncrust, isDark) { ncrust.toMetroColors(isDark) }
                     MetroTheme(colors = metroColors, typography = com.takahashirinta.ncrust.ui.theme.ArrisMetroTypography) {
                     var showSplash by remember { mutableStateOf(true) }
+                    var guidePending by remember { mutableStateOf(firstRunGuidePending(this@MainActivity)) }
                     var showBatteryPrompt by remember { mutableStateOf(false) }
+                    var notificationsResolved by rememberSaveable {
+                        mutableStateOf(
+                            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+                        )
+                    }
+                    var notificationRequested by rememberSaveable { mutableStateOf(false) }
+                    val notificationPermission = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission(),
+                    ) { notificationsResolved = true }
+                    LaunchedEffect(showSplash, guidePending) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            !showSplash && !guidePending && !notificationsResolved && !notificationRequested
+                        ) {
+                            notificationRequested = true
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
                     Box(modifier = Modifier.fillMaxSize()) {
                         MainScreen(
-                            celebrationsReady = !showSplash && !showBatteryPrompt,
+                            celebrationsReady = !showSplash && !guidePending && notificationsResolved && !showBatteryPrompt,
+                            showFirstRunGuide = !showSplash && guidePending,
+                            onFinishFirstRunGuide = {
+                                completeFirstRunGuide(this@MainActivity)
+                                guidePending = false
+                            },
                             themeIndex = themeIndex,
                             onThemeChange = { newIndex ->
                                 themeIndex = newIndex
@@ -464,8 +489,8 @@ class MainActivity : ComponentActivity() {
                     val batteryPrefs = remember {
                         getSharedPreferences("ncrust_settings", 0)
                     }
-                    LaunchedEffect(showSplash) {
-                        if (!showSplash &&
+                    LaunchedEffect(showSplash, guidePending, notificationsResolved) {
+                        if (!showSplash && !guidePending && notificationsResolved &&
                             !batteryPrefs.getBoolean("battery_prompt_done", false) &&
                             !BackgroundActivity.isUnrestricted(this@MainActivity)
                         ) {
@@ -495,8 +520,8 @@ class MainActivity : ComponentActivity() {
                     // v3.4.13：更新检查在首页渲染后再等约 10 秒，避开冷启动预热与首帧。
                     // 24 小时窗口、自动检查开关与「失败静默」都在 UpdateService.autoCheck 里；
                     // 语言切换会重走 splash，但窗口没过就不会再发请求。
-                    LaunchedEffect(showSplash) {
-                        if (showSplash) return@LaunchedEffect
+                    LaunchedEffect(showSplash, guidePending) {
+                        if (showSplash || guidePending) return@LaunchedEffect
                         delay(10_000L)
                         UpdateService.autoCheck(this@MainActivity)
                     }
@@ -544,6 +569,11 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onStart() {
+        super.onStart()
+        WaveformStore.visualizationVisible = true
+    }
+
     /**
      * v2.5.4 · C：把 QQ 兜底统计落盘一次。
      *
@@ -565,11 +595,6 @@ class MainActivity : ComponentActivity() {
         // 「用户离开界面」与「诊断入口」两处，两处都不在播放关键路径上。
         runCatching { com.takahashirinta.ncrust.player.ReportGateStore.snapshotAndFlush(this) }
         super.onStop()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        WaveformStore.visualizationVisible = true
     }
 
     /**
@@ -1025,6 +1050,8 @@ private enum class LikedBulkAction { PLAY, INSERT, APPEND }
 @Composable
 fun MainScreen(
     celebrationsReady: Boolean = true,
+    showFirstRunGuide: Boolean = false,
+    onFinishFirstRunGuide: () -> Unit = {},
     themeIndex: Int = 0,
     onThemeChange: (Int) -> Unit = {},
     themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -4039,6 +4066,14 @@ fun MainScreen(
         // (实测展开时 Compose:recompose 119 次/65ms)。derivedStateOf 只在布尔值
         // 真正翻转(阈值穿越)时才通知, 动画期间零重组。
         PlayerBackHandler(progress, bigScreen, onToggleBigScreen) { collapseCard() }
+        if (showFirstRunGuide && isInMain) {
+            FirstRunGuide(
+                onOpen = { group ->
+                    navController.navigate(NavRoutes.settingsGroup(group.id)) { launchSingleTop = true }
+                },
+                onFinish = onFinishFirstRunGuide,
+            )
+        }
         com.takahashirinta.ncrust.celebration.CelebrationHost(
             allowed = celebrationsReady && isInMain && menuSong == null &&
                 !showWebLogin && !showQrRelogin && !showQqLogin && !showQqQr && !showQqPhone && !showQqScan && !showBiliLogin &&
