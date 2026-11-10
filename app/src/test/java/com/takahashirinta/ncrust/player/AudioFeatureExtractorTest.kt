@@ -14,6 +14,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -312,6 +313,38 @@ class AudioFeatureExtractorTest {
         )
         // 顺带把「整缓冲确实被稀释了」这件事也钉住 —— 否则上一条断言可能因为别的原因通过。
         assertTrue("整个缓冲的 RMS 必须低于门槛（${e.low}）", e.low < AudioFeatureExtractor.ONSET_MIN_LOW)
+    }
+
+    @Test
+    fun `持续伴奏中的拍手保留高频峰值且不受缓冲区边界影响`() {
+        val sampleRate = 44_100
+        val hit = ByteBuffer.allocate(4410 * 2).order(ByteOrder.nativeOrder())
+        repeat(4410) { i ->
+            val time = i.toDouble() / sampleRate
+            val age = time - 0.035
+            val bed = 0.55 * sin(2 * PI * 100 * time)
+            val clap = if (age in 0.0..0.013) {
+                (0.27 * sin(2 * PI * 6000 * age) + 0.16 * sin(2 * PI * 3900 * age)) * exp(-age / 0.008)
+            } else {
+                0.0
+            }
+            hit.putShort(((bed + clap) * 32767).toInt().toShort())
+        }
+        hit.flip()
+
+        fun warmedExtractor(): AudioFeatureExtractor = extractor().apply {
+            repeat(8) {
+                assertTrue(process(sine(100.0, sampleRate, 4410, amplitude = 0.55), C.ENCODING_PCM_16BIT))
+                if (it > 0) assertEquals("持续伴奏没有新起音", 0, transientCount)
+            }
+        }
+        val whole = warmedExtractor()
+        assertTrue(whole.process(hit, C.ENCODING_PCM_16BIT))
+        assertEquals(1, whole.transientCount)
+        assertTrue("短峰值应在波形中可见", whole.barHigh > whole.high * 1.3f)
+        assertTrue("全频 RMS 变化低于原判据门槛",
+            whole.rms < 0.55f / kotlin.math.sqrt(2f) + AudioFeatureExtractor.ONSET_ABS_MIN)
+        assertEquals(1, countTransients(warmedExtractor(), hit, framesPerBuffer = 147))
     }
 
     @Test

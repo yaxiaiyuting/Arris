@@ -82,6 +82,14 @@ internal class PlayerCardUiState(
      * 不在本次回移范围）。进入方式：歌词页工具条右侧的「跟唱」按钮。
      */
     var showKaraoke by mutableStateOf(false)
+    /**
+     * 4.0.8：均衡器面板是否打开（从主线 61ec1ce 回移）。
+     *
+     * 面板本体是**独立窗口**（`ArrisFullScreenDialog`），所以它既不会被播放器托盘盖住，
+     * 也不占卡片布局；这个字段只决定挂不挂载。卡片收起 ⇒ 展开态子树整棵卸载 ⇒
+     * 面板随之关闭（等同于主线在折叠时把 `showEqualizer` 置回 false）。
+     */
+    var showEqualizer by mutableStateOf(false)
     var showQueue by mutableStateOf(false)
     // K05 根治后此字段已无读写方（红心改订阅 LibraryManager.savedRevision）。
     // 保留注释说明来处，不再暴露字段 —— 旧写法依赖"本组件自己 ++"推进刷新，

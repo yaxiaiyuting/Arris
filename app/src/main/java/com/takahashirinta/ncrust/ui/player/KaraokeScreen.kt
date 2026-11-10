@@ -103,6 +103,8 @@ internal class KaraokeControls(
     val exit: () -> Unit,
     val translatedPrimary: Boolean,
     val toggleLanguage: () -> Unit,
+    /** 4.0.8：跟唱页的均衡器入口（打开的是独立窗口面板，不会盖住跟唱歌词）。 */
+    val onOpenEqualizer: () -> Unit,
 )
 
 @Composable
@@ -624,6 +626,7 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
         isPlaying = playing,
         previousEnabled = controls.previousEnabled,
         transport = controls.transport,
+        onOpenEqualizer = controls.onOpenEqualizer,
         modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
     )
 }
@@ -653,38 +656,47 @@ private fun KaraokeTransportRow(
     isPlaying: Boolean,
     previousEnabled: Boolean,
     transport: PlayerCardCallbacks,
+    onOpenEqualizer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
     val colors = LocalMetroColors.current
     val haptic = LocalHapticFeedback.current
-    Row(
-        modifier,
-        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        KaraokeSkipButton(PlayerGlyphs.Previous, strings.prevButton, previousEnabled) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            transport.onPlayPrevious()
-        }
-        Box(
-            Modifier.size(56.dp).clip(AppShapes.full).background(colors.primary)
-                .clickable(role = Role.Button) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    transport.onPlayPause()
-                },
-            contentAlignment = Alignment.Center,
+    // 4.0.8：传输三键仍**严格居中**（跟唱页的手感来自这三颗键的对称），
+    // 均衡器入口贴右端 —— 不参与那三颗键的间距，因此不会把播放键挤偏。
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            MetroIcon(
-                imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
-                contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
-                tint = colors.onPrimary,
-                sizeDp = 26.dp,
-            )
+            KaraokeSkipButton(PlayerGlyphs.Previous, strings.prevButton, previousEnabled) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                transport.onPlayPrevious()
+            }
+            Box(
+                Modifier.size(56.dp).clip(AppShapes.full).background(colors.primary)
+                    .clickable(role = Role.Button) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        transport.onPlayPause()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                MetroIcon(
+                    imageVector = if (isPlaying) PlayerGlyphs.Pause else PlayerGlyphs.Play,
+                    contentDescription = if (isPlaying) strings.pauseButton else strings.playButton,
+                    tint = colors.onPrimary,
+                    sizeDp = 26.dp,
+                )
+            }
+            KaraokeSkipButton(PlayerGlyphs.Next, strings.nextButton, enabled = true) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                transport.onPlayNext()
+            }
         }
-        KaraokeSkipButton(PlayerGlyphs.Next, strings.nextButton, enabled = true) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            transport.onPlayNext()
+        // 3.7.37（对齐主线 3ffdf8e）：跟唱页把入口放在左上角的返回键旁，
+        // 不再挂在传输行末端 —— 传输键继续严格居中，均衡器也不占进度区。
+        Box(Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 4.dp)) {
+            PlayerEqualizerButton(onOpenEqualizer)
         }
     }
 }

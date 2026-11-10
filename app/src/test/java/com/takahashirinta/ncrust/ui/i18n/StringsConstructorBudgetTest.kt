@@ -359,7 +359,7 @@ class StringsConstructorBudgetTest {
             // AboutStrings / PlayerUiStrings 本版一条都没加。
             // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 88,
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 90,   // 3.7.37：+2（均衡器标题/副标题）
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 26,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 31,
         )
@@ -588,7 +588,7 @@ class StringsConstructorBudgetTest {
         assertEquals(
             "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言" +
                 "（v3.4.8：86 → 87，+lyricsTranslationHint）",
-            88,
+            90,   // 3.7.37：+2（equalizerTitle / equalizerSubtitle）
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。

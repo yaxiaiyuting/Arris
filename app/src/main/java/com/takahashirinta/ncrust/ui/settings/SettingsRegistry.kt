@@ -726,6 +726,17 @@ object SettingsRegistry {
         )
         add(
             pref(
+                key = "motion_rhythm_enabled",
+                type = SettingsEntryType.SWITCH,
+                default = MotionPrefs.DEFAULT_SWITCH,
+                group = SettingsGroup.APPEARANCE,
+                titleKey = "waveform.motionRhythmLabel",
+                subtitleKey = "waveform.motionRhythmDescription",
+                newInV320 = true,
+            )
+        )
+        add(
+            pref(
                 key = "motion_breathing",
                 type = SettingsEntryType.SWITCH,
                 default = MotionPrefs.DEFAULT_SWITCH,
@@ -759,23 +770,12 @@ object SettingsRegistry {
         // 歌词律动 / 控制条脉冲 / 封面 3D）。总闸粒度太粗：用户只想让画面别跟着鼓点抖，
         // 但想留着冲击波与粒子时，此前没有任何办法（关总闸会把它们一起关掉）。
         //
-        // 语义：**有效 = 档位允许 AND 总闸 AND (律动类 ? 律动闸 : true) AND 逐项开关**。
+        // 持续律动由总闸、律动闸和细项共同决定，装饰效果仍由档位控制。
         // 归类判据是「渲染路径里是否读 `MotionClock.pulse()` / `MotionClock.level()`」，
         // 逐项表见 `docs/verification/v3.2.0/probe-ui-jitter.md` §5。
         //
         // 文案走 `WaveformStrings` 的 8 条新字段（v3.2.0 已补齐 8 种语言）——
         // 与 `motion_shockwave` / `motion_breathing` 等既有动效开关同一组，不新开文案组。
-        add(
-            pref(
-                key = "motion_rhythm_enabled",
-                type = SettingsEntryType.SWITCH,
-                default = MotionPrefs.DEFAULT_SWITCH,
-                group = SettingsGroup.APPEARANCE,
-                titleKey = "waveform.motionRhythmLabel",
-                subtitleKey = "waveform.motionRhythmDescription",
-                newInV320 = true,
-            )
-        )
         add(
             pref(
                 key = "motion_cover_float",
@@ -810,6 +810,9 @@ object SettingsRegistry {
             )
         )
 
+        // 3.7.37：均衡器（独立面板）。放在外观组第一行之前的位置不重要 —— 它与主题
+        // 一起属于「看起来/听起来是什么样」的那一类，且播放页横竖屏都能直接打开。
+        add(action("action.equalizer", SettingsGroup.APPEARANCE, "equalizerTitle", "equalizerSubtitle"))
         // Birthday month/day are local only. All persisted keys and action rows are registered.
         add(action("action.birthday_date", SettingsGroup.APPEARANCE, "about.celebration.dateTitle"))
         add(SettingsEntry("birthday_celebration_enabled", "birthday_celebration_enabled", SettingsEntryType.SWITCH, false, SettingsGroup.APPEARANCE,

@@ -57,7 +57,7 @@ class MotionTierPrecedenceTest {
     @Test
     fun `已迁移过且用户改过档位 —— 水位升级不许搬回旧值`() {
         val prefs = alreadyMigratedDisk(MotionIntensity.SIMPLE)
-        assertTrue("水位 4 → 5 会写一次盘", MotionPrefs.migrate(prefs, modernDefault))
+        assertTrue("升级到当前水位会写一次盘", MotionPrefs.migrate(prefs, modernDefault))
         assertEquals(
             "新键是用户后来显式选的档位，绝不能被动效迁移覆盖",
             MotionIntensity.SIMPLE,

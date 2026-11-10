@@ -283,8 +283,7 @@ object SettingsVisibility {
                     SettingsAvailability.disabled(GatingReason.UI_MOTION_DISABLED)
                 }
 
-            // v3.2.0：其余八个动效开关：总闸 → 律动闸（只有律动类看它）→ 档位。
-            // 简洁档自 v3.2.0 起是静态档（P0-B）⇒ 这一档下它们全是死开关，必须置灰。
+            // 律动细项跟随律动开关，装饰效果仍按动效强度分档。
             in MOTION_SWITCH_IDS -> when {
                 !boolValue("ui_motion_enabled", read) ->
                     SettingsAvailability.disabled(GatingReason.UI_MOTION_DISABLED)
@@ -292,7 +291,7 @@ object SettingsVisibility {
                 entry.id in RHYTHM_DETAIL_IDS && !boolValue("motion_rhythm_enabled", read) ->
                     SettingsAvailability.disabled(GatingReason.RHYTHM_DISABLED)
 
-                motionTier(read) < TIER_REFINED ->
+                entry.id !in RHYTHM_DETAIL_IDS && motionTier(read) < TIER_REFINED ->
                     SettingsAvailability.disabled(GatingReason.TIER_BASIC_ONLY)
 
                 else -> SettingsAvailability.FREE

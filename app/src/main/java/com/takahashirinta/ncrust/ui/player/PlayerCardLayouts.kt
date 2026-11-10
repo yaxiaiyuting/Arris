@@ -111,6 +111,7 @@ internal fun PlayerCardBigScreenLayout(
     onCoverRegionMeasured: (center: Offset, sizePx: Float) -> Unit,
     playerPanels: @Composable (Modifier) -> Unit,
     playerControls: @Composable () -> Unit,
+    onOpenEqualizer: (() -> Unit)? = null,
 ) {
     val qualityPickerMaxHeightDp = geo.qualityPickerMaxHeightDp
     val visualizerSlot = geo.visualizerSlot
@@ -188,6 +189,8 @@ internal fun PlayerCardBigScreenLayout(
                         badgeStyle = LocalMetroTypography.current.bodySmall
                     )
                 }
+                // 3.7.37：大屏（横屏桌面布局）同样在标题行右侧给一个入口。
+                if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
                 Spacer(Modifier.width(10.dp))
                 // 音质：就地切换。走设置页那条现成通道
                 // （PlayerViewModel.setQualityPreference → 按当前网络写 prefs，
@@ -273,6 +276,7 @@ internal fun PlayerCardWideLayout(
     onSongInfoClick: () -> Unit,
     playerPanels: @Composable (Modifier) -> Unit,
     playerControls: @Composable () -> Unit,
+    onOpenEqualizer: (() -> Unit)? = null,
 ) {
     // v3.2.1 · P0：几何/状态改成**整包传参**（`geo` / `ui`）—— 每个标量形参在调用点
     // 都要付一次 `$changed` 位运算与实参装载，包成对象后只有两个参数。
@@ -320,11 +324,16 @@ internal fun PlayerCardWideLayout(
             }
             // 歌名 / 歌手 + 控件：限宽居中，与封面成组（单栏时不再铺满整宽显得散）。
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                // 3.7.37：宽屏也要能在播放页直接开均衡器。这里挂在标题行右端 ——
+                // 与窄屏顶栏同一语义（不占进度/音质行），且右下角面板切换不受影响。
+                Row(
+                    modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                 Column(
                     modifier = Modifier
-                        .widthIn(max = 560.dp)
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)
                         .graphicsLayer { alpha = ((progress.value - 0.7f) / 0.3f).coerceIn(0f, 1f) }
                         .clickable { onSongInfoClick() }
                 ) {
@@ -342,6 +351,8 @@ internal fun PlayerCardWideLayout(
                         style = LocalMetroTypography.current.bodyLarge,
                         badgeStyle = LocalMetroTypography.current.bodySmall
                     )
+                }
+                if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -406,6 +417,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
     onControlsMeasured: (heightPx: Float, topInCardPx: Float) -> Unit,
     playerPanels: @Composable (Modifier) -> Unit,
     playerControls: @Composable () -> Unit,
+    onOpenEqualizer: (() -> Unit)? = null,
 ) {
     val lyricAnimProgress = ui.lyricAnimProgress
     val controlsCollapse = ui.controlsCollapse
@@ -461,15 +473,19 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 badgeStyle = LocalMetroTypography.current.bodySmall
             )
         }
-        if (tiny) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 56.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                panelToggles(36.dp, 20.dp)
-            }
+        // 3.7.37（对应主线 3ffdf8e 的意图）：均衡器入口**不再挤进度行** ——
+        // 进度区要还给「音质 + 时间」。这里放在顶栏右侧、面板切换键的左边：
+        // 顶栏在横竖屏两种布局里都在，而且收起底栏后依然可见可点。
+        // LTS 的左上角被「收起的封面」占着（主线改成了 cover+title 一起右移，LTS 没有那套落点），
+        // 所以具体位置是右上而不是左上 —— 行为一致，位置按 LTS 的实际布局定。
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = if (tiny) 56.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onOpenEqualizer != null) PlayerEqualizerButton(onOpenEqualizer)
+            if (tiny) panelToggles(36.dp, 20.dp)
         }
     }
     // 面板区（吃掉剩余高度）

@@ -153,32 +153,9 @@ object MotionDegrade {
  * —— 都只在设置变化时读一次盘、都只在 `MotionEffects.of` 里被消费 ——
  * 所以它们天然是一个值对象。
  *
- * ## 默认全 `true`：**默认值不得改**这条纪律在这里的表达
- *
- * 这些键在上一版不存在，所以「缺 key」必须解析成「与上一版观感一致」的那一侧。
- * 而「一致」是靠**档位**保证的，不是靠开关：开关只做 AND，档位（[MotionIntensity]）
- * 才是「这一档有没有这类动效」的判据。于是默认全开 = 升级后观感只随档位表变化，
- * 不会因为「新键没写」而少画东西。
- *
- * ⚠️ v3.2.0 的唯一例外是**简洁档**：那个档位本身收窄了（[MotionEffects] 的类 KDoc
- * 里写了理由），与「缺 key 解析成开」不冲突 —— 开关是开着的，是档位不给。
- *
- * ## `rhythm`（界面律动总开关）与 `ui_motion_enabled`（界面动效总开关）的区别
- *
- * | 闸 | 键 | 关掉之后 |
- * |---|---|---|
- * | 界面动效总闸 | `ui_motion_enabled` | **A/B/C 三层全部不挂载**：背景回纯色、零帧时钟、波形档位完全不受影响 |
- * | 界面律动闸 | `motion_rhythm_enabled` | **只**掐掉「驱动量来自 `MotionEnvelope` 的节拍 / 强拍 / 响度」那一类（背景呼吸 / 封面浮动 / 歌词律动 / 控制条脉冲 / 封面 3D 旋转）；冲击波、光晕、粒子、视差、背景级波形、背景模糊、封面阴影一概不受影响 |
- *
- * 两者的关系是**包含**而不是并列：律动闸是总闸**之内**的进一步收窄。
- * 落到公式上（`MotionEffects.of` 里逐项可见）：
- *
- * ```
- * 有效 = 档位允许 AND ui_motion_enabled AND (律动类 ? motion_rhythm_enabled : true) AND 逐项开关
- * ```
- *
- * 「关掉就是关掉」由结构保证：`of(...)` 里每一个律动类能力位都显式 `&& rhythm`
- * （不是先算一个中间变量再复用），任何档位都绕不过它。
+ * 持续律动由 [rhythm] 和细项开关控制，各档位都可以单独启用或关闭。
+ * [MotionIntensity] 仍控制波形的渲染层次、交互视差及冲击波、光晕和粒子等装饰。
+ * 关闭界面动效总开关时，界面律动与界面装饰同时停用。
  *
  * @param shockwave `motion_shockwave`：瞬态触发的冲击波。
  * @param halo `motion_halo`：瞬态触发的光晕。
@@ -219,20 +196,9 @@ class MotionSwitches(
  * 帧路径里**只读**这个对象，不读任何 Compose state —— 与 v2.8.0 的 [VisualizerEffects]
  * 同一套写法。每个字段后面的注释写清「落在哪、成本量级、为什么这么定」。
  *
- * ## v3.2.0 的档位表（任务书 §4.4 的 0 档收窄）
- *
- * | 档 | 界面动效 |
- * |---|---|
- * | 简洁 | 波形基础 + **静态**背景（封面模糊、封面浮起阴影、切歌淡入）—— **零逐帧量** |
- * | 精致（默认） | 简洁 + **背景呼吸 / 封面随节拍浮动 / 歌词律动 / 控制条脉冲** + 冲击波 / 光晕 / 粒子（低密度） / 多频段波形调制 + B 档（全屏波形 / 视差） |
- * | 炫技 | 精致 + **粒子高密度 / 光晕多圈** + C 档（封面 3D） |
- *
- * ⚠️ **v3.2.0 有意改了简洁档**（P0-B 的用户报告：「选了简洁，界面还在抖」）：
- * 上一版把「背景呼吸」与「封面随节拍浮动」算作简洁档的基础项，于是那一档每一帧都在推
- * 帧时钟、画面跟着鼓点上下浮（证据：`docs/verification/v3.2.0/probe-ui-jitter.md` §6）。
- * 本期把简洁档定义成**静态档**：`MotionEffects.of(0, ...)` 的律动类能力位一个都不为真。
- * 与任务书表格的另一处刻意偏差（**保留背景模糊**）理由不变：S6 这类低端设备静态判据就是
- * 简洁档，模糊背景是那台设备上唯一看得见的美化。
+ * 简洁保留基础波形、背景模糊、封面阴影与切歌过渡。精致增加全屏波形、视差、
+ * 冲击波、光晕与粒子。炫技增加粒子密度和光晕圈数，并允许封面随拍旋转。
+ * 背景呼吸、封面浮动、歌词律动和控制条脉冲独立于强度，由界面律动开关控制。
  *
  * ## 这里**没有** `degradeLevel`
  *
@@ -247,7 +213,7 @@ class MotionSwitches(
  * @param switches 独立开关（见 [MotionSwitches]）。
  * @param backgroundBlur A：封面背景模糊（降采样 + 预模糊 + 缓存，**每首歌只算一次**）。
  * @param backgroundBreathing A：背景随 RMS 的明暗/缩放呼吸（读的是每帧一次的包络，不读盘）。
- *   v3.2.0：**精致档起**（律动类，受 `motion_rhythm_enabled` 与 `motion_breathing` 双重约束）。
+ *   受 `motion_rhythm_enabled` 和 `motion_breathing` 共同控制。
  * @param coverElevation A：封面浮起阴影（**静态**：只在组合期决定要不要给阴影）。
  * @param coverFloat A：封面随节拍微浮动（幅度 ±2dp）。v3.2.0 从 [coverElevation] 里拆出来
  *   —— 一个能力位表示两件事时，「静态阴影」会替「逐帧浮动」把档位门控绕过去（P0-B 的根因）。
@@ -366,13 +332,7 @@ class MotionEffects(
          * **能力位映射的唯一落点**（v2.8.0 起就是这条纪律：档位 → 能力位是一次纯函数，
          * 单测可以逐格断言「这一档到底开了哪些效果」，不需要设备、不需要截图）。
          *
-         * 判据的层数与顺序（不能反）：**总开关 → 用户选的档位 → 律动总闸（只对律动类）
-         * → 逐项开关**。
-         * （v2.9.0 在档位之后还有一层「降级水位」，v3.0.0 已删除 —— 见 [MotionDegrade]。）
-         *
-         * v3.2.0：律动类（驱动量来自 `MotionEnvelope` 的节拍 / 强拍 / 响度）多一道独立总闸。
-         * 每一项都**显式**写 `&& switches.rhythm`（不先算中间变量再复用）——
-         * 「关掉就是关掉，任何档位都不许绕过」必须能在每一行上直接读出来。
+         * 持续律动看总开关、律动开关和各细项。波形样式及装饰仍按强度分档。
          *
          * @param waveformShowcaseEnabled 只留给单测做 A/B（证明渲染结果确实由档位驱动，
          *   而不是由遗留的 `visualizer_showcase` 等键驱动）。
@@ -388,8 +348,7 @@ class MotionEffects(
             val uiOn = uiMotionEnabled
             val refinedPlus = uiOn && t >= MotionIntensity.REFINED
             val showcase = refinedPlus && t >= MotionIntensity.SHOWCASE
-            // 律动类的共同前置条件：档位允许（精致起）**且**总开关**且**律动闸。
-            val rhythm = refinedPlus && switches.rhythm
+            val rhythm = uiOn && switches.rhythm
 
             return MotionEffects(
                 tier = t,
@@ -435,9 +394,6 @@ class MotionEffects(
                 backgroundBlur = uiOn,
                 coverElevation = uiOn,
                 coverTransition = uiOn,
-                // A 档的**逐帧**项（v3.2.0 起收窄到精致档）：它们都是律动类，
-                // 简洁档因此是**静态档**（needsFrameClock == false）。
-                // 实测根因见 docs/verification/v3.2.0/probe-ui-jitter.md §6。
                 backgroundBreathing = rhythm && switches.breathing,
                 coverFloat = rhythm && switches.coverFloat,
                 // B 档：精致档起。
@@ -452,7 +408,7 @@ class MotionEffects(
                 particleDensity = if (showcase) DENSITY_HIGH else DENSITY_LOW,
                 haloRings = if (showcase) 2 else 1,
                 // C 档：炫技专属。它是律动类（唯一驱动量是 pulse）⇒ 也过律动闸。
-                cover3d = showcase && switches.rhythm,
+                cover3d = showcase && rhythm && switches.coverFloat,
             )
         }
 

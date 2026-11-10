@@ -319,6 +319,8 @@ private fun SettingsPreferenceGroupPage(
     // v2.0.0 · T3：离线缓存管理（全屏 Dialog，见 OfflineCacheOverlay.kt 的 KDoc
     // 说明为什么它不是导航页）。
     var showOfflineCacheManager by remember { mutableStateOf(false) }
+    // 3.7.37：均衡器独立面板（Dialog）。开/关只影响这一层，不改变本页的导航栈。
+    var showEqualizer by remember { mutableStateOf(false) }
     val playingSongId by playerViewModel.currentSongId.collectAsState()
 
     // 缓存占用要递归遍历 cacheDir，放 IO 线程算；只在存储页需要，其他页面不付这份开销。
@@ -871,6 +873,15 @@ private fun SettingsPreferenceGroupPage(
                         }
                     }
 
+                    // 3.7.37：均衡器 = 独立全屏面板（Dialog），不是跳页。
+                    // 注意它**不 return** —— 关掉面板后本页仍要在，这是与主线 4.0.x 的差异点。
+                    SettingsRowKind.EQUALIZER_OPEN -> item(key = entry.id) {
+                        SettingActionRow(
+                            label = rowTitle(strings, entry, updateStrings),
+                            onClick = { showEqualizer = true },
+                        )
+                    }
+
                     SettingsRowKind.ACTION_JUMP -> item(key = entry.id) {
                         // ── v3.3.0 · 用户反馈第 5 条「后台播放明明有一个可以打开的图标但是点不动」──
                         //
@@ -997,6 +1008,12 @@ private fun SettingsPreferenceGroupPage(
             }
         }
 
+        // 3.7.37：均衡器独立面板。它是自带窗口的 Dialog（见 ArrisFullScreenDialog），
+        // 所以关掉面板后本页的滚动位置与状态都不变 —— 这也是它不做成独立导航页的原因。
+        if (showEqualizer) {
+            com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { showEqualizer = false })
+        }
+
         if (showClearCacheConfirm) ClearCacheConfirmDialog(
             onConfirm = {
                 showClearCacheConfirm = false
@@ -1080,6 +1097,7 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: Upda
     "gapless_playback" -> strings.gaplessSectionTitle          // titleKey = gaplessSectionTitle
     "keep_screen_on" -> strings.keepScreenOnLabel              // titleKey = keepScreenOnLabel
     "audio_visualizer" -> strings.audioVisualizerLabel         // titleKey = audioVisualizerLabel
+    "action.equalizer" -> strings.equalizerTitle               // titleKey = equalizerTitle
     "auto_rotate" -> strings.autoRotateLabel                   // titleKey = autoRotateLabel
     // v3.4.13：文案暂住在 UpdateStrings（主 agent 并入 Strings.update 后改成 strings.update.autoCheckTitle）
     "update_auto_check" -> updateStrings.autoCheckTitle

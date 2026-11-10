@@ -20,6 +20,8 @@ package com.takahashirinta.ncrust.ui.settings
  * 「这个条目到底渲不渲染、在哪渲染」只有一个问题、一处答案。
  */
 enum class SettingsRowKind {
+    /** 3.7.37：打开均衡器面板（独立全屏 Dialog，不跳页）。 */
+    EQUALIZER_OPEN,
     CELEBRATION,
     /** ncm 账号块（头像 / 昵称 / UID + 登录、登出、扫码授权）。 */
     ACCOUNT_PROFILE,
@@ -160,6 +162,9 @@ object SettingsRenderPlan {
             // 通用
             "language_code" -> SettingsRowKind.LANGUAGE_DROPDOWN
             "action.background_activity" -> SettingsRowKind.ACTION_JUMP
+            // 3.7.37：均衡器是独立面板（Dialog），不是跳页 —— 单独一种行类型，
+            // 免得落进 ACTION_JUMP 那条「电池白名单」专属分支里。
+            "action.equalizer" -> SettingsRowKind.EQUALIZER_OPEN
 
             // 外观与动效
             "theme_mode" -> SettingsRowKind.THEME_MODE_SEGMENT

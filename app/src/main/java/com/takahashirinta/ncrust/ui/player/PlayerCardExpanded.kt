@@ -210,6 +210,15 @@ internal fun ColumnScope.PlayerCardExpanded(
 ) {
             // `context` 与拆分前同源（同一个 CompositionLocal，值相同）：用于收藏 Toast。
             val context = LocalContext.current
+            // 4.0.8：均衡器面板。挂在这里（而不是 PlayerCard 根节点）有两个好处：
+            //  1. 它是 `Dialog`，自己持有一个窗口 ⇒ 不会被播放器托盘/迷你条盖住，
+            //     16kHz 那根滑杆永远可拖（这是本次回移要解决的问题本身）；
+            //  2. 展开态子树卸载（卡片收起）时它随之消失，等价于主线折叠时把状态置回 false。
+            // 位置必须在 `if (ui.showKaraoke)` 的 early-return **之前** —— 跟唱页与均衡器
+            // 是两个互不遮挡的窗口，跟唱时也要能打开均衡器。
+            if (ui.showEqualizer) {
+                com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { ui.showEqualizer = false })
+            }
             if (ui.showKaraoke) {
                 var translatedPrimary by remember { mutableStateOf(showLyricsTranslation) }
                 val exitKaraoke: () -> Unit = {
@@ -252,6 +261,8 @@ internal fun ColumnScope.PlayerCardExpanded(
                         exit = exitKaraoke,
                         translatedPrimary = translatedPrimary,
                         toggleLanguage = { translatedPrimary = !translatedPrimary },
+                        // 4.0.8：跟唱页的传输行里也有均衡器入口（主线同款）。
+                        onOpenEqualizer = { ui.showEqualizer = true },
                     ),
                 )
                 return
@@ -336,6 +347,9 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onPlayPause = callbacks.onPlayPause,
                     onPlayPrevious = callbacks.onPlayPrevious,
                     onPlayNext = callbacks.onPlayNext,
+                    // 4.0.8：均衡器入口。竖屏/宽屏/大屏三棵布局共用这同一个调用点
+                    // （`playerControls` 槽位），所以一处接线三处生效。
+                    onOpenEqualizer = { ui.showEqualizer = true },
                     onToggleLyrics = onToggleLyricsAction,
                     onToggleQueue = onToggleQueueAction,
                     onAddToLibrary = onAddToLibraryAction,
@@ -566,6 +580,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onCoverRegionMeasured = onCoverRegionMeasured,
                     playerPanels = playerPanels,
                     playerControls = playerControls,
+                    onOpenEqualizer = { ui.showEqualizer = true },
                 )
 
                 geo.isWidePlayer -> PlayerCardWideLayout(
@@ -577,6 +592,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     onSongInfoClick = callbacks.onSongInfoClick,
                     playerPanels = playerPanels,
                     playerControls = playerControls,
+                    onOpenEqualizer = { ui.showEqualizer = true },
                 )
 
                 else -> PlayerCardNarrowLayout(

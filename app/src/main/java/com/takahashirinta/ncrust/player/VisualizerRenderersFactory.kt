@@ -50,7 +50,10 @@ import androidx.media3.exoplayer.audio.TeeAudioProcessor
  * base 的三个参数（float 输出 / playback params），否则会静默改掉音频输出行为。
  */
 @UnstableApi
-class VisualizerRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
+class VisualizerRenderersFactory(
+    context: Context,
+    private val onAudioTrack: (android.media.AudioTrack) -> Unit = {},
+) : DefaultRenderersFactory(context) {
 
     override fun buildAudioSink(
         context: Context,
@@ -69,8 +72,19 @@ class VisualizerRenderersFactory(context: Context) : DefaultRenderersFactory(con
         // 换来的是可视化柱高语义完全不变（同样是 RMS，只是对所有声道一起算）。
         val waveformSink = TransparentWaveformSink()
         val processors = arrayOf<AudioProcessor>(TeeAudioProcessor(waveformSink))
+        val defaultProvider = DefaultAudioSink.AudioTrackProvider.DEFAULT
         return DefaultAudioSink.Builder(context)
             .setAudioProcessors(processors)
+            .setAudioTrackProvider(object : DefaultAudioSink.AudioTrackProvider by defaultProvider {
+                override fun getAudioTrack(
+                    config: AudioSink.AudioTrackConfig,
+                    audioAttributes: androidx.media3.common.AudioAttributes,
+                    audioSessionId: Int,
+                    context: Context?,
+                ): android.media.AudioTrack = defaultProvider
+                    .getAudioTrack(config, audioAttributes, audioSessionId, context)
+                    .also(onAudioTrack)
+            })
             .setEnableFloatOutput(enableFloatOutput)
             .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
             .build()

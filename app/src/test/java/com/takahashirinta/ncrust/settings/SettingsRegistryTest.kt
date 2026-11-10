@@ -776,6 +776,8 @@ class SettingsRegistryTest {
         /** 无 prefs key 的行为行（结构探针 §1「非 prefs 行」全表，一条都不能丢）。 */
         val ACTION_IDS: Set<String> = setOf(
             "action.birthday_date", "action.birthday_preview",
+            // 3.7.37：均衡器（独立面板）的行为行。
+            "action.equalizer",
             "action.account_netease", "action.account_qq", "action.account_bili",
             "action.background_activity",
             "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",

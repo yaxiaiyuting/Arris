@@ -92,6 +92,7 @@ import com.takahashirinta.ncrust.ui.player.VisualizerSetting
 import com.takahashirinta.ncrust.ui.player.WaveformStore
 import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 import com.takahashirinta.ncrust.ui.theme.CoverThemeExtractor
@@ -127,6 +128,9 @@ class PlaybackService : MediaLibraryService() {
     private var progressJob: Job? = null
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
+    /** 4.0.0：可视化音量跟随 —— 在前台按当前输出设备采样媒体音量与播放器增益。 */
+    private val visualizationVolume by lazy { PlaybackVisualVolume(this) }
+    private var visualizationVolumeJob: Job? = null
     private var isServiceStarted = false
     private var currentArtworkUrl: String? = null
     /** v2.1.0 · C：当前媒体项的音源身份（车机/通知路径按它路由取链）。 */
@@ -402,7 +406,37 @@ class PlaybackService : MediaLibraryService() {
         pcmDemandJob = scope.launch(Dispatchers.Main.immediate) {
             snapshotFlow { currentPcmDemand() }
                 .distinctUntilChanged()
-                .collect { demand -> applyOffloadPolicy(demand) }
+                .collect { demand ->
+                    applyOffloadPolicy(demand)
+                    observeVisualizationVolume(player.isPlaying && demand.requiresPcm)
+                }
+        }
+    }
+
+    /**
+     * 4.0.0：PCM 链路在跑的时候，按 180ms 的节奏把「当前媒体音量 × 播放器增益」写进
+     * [WaveformStore.displayGain]（音频线程与 draw 阶段只读这一个 float，不触发重组）。
+     *
+     * 采样放在 `Dispatchers.IO`：`AudioManager` 的这几个查询会走 audio flinger 的 binder，
+     * 留在主线程上就是每 180ms 一次的卡顿源。
+     */
+    private fun observeVisualizationVolume(enabled: Boolean) {
+        if (!enabled) {
+            visualizationVolumeJob?.cancel()
+            visualizationVolumeJob = null
+            return
+        }
+        if (visualizationVolumeJob?.isActive == true) return
+        visualizationVolumeJob = scope.launch {
+            snapshotFlow { WaveformStore.visualizationVisible }.collectLatest { visible ->
+                if (!visible) return@collectLatest
+                while (true) {
+                    val playerGain = player.volume
+                    WaveformStore.displayGain =
+                        withContext(Dispatchers.IO) { visualizationVolume.sample(playerGain) }
+                    delay(180)
+                }
+            }
         }
     }
 
@@ -520,7 +554,7 @@ class PlaybackService : MediaLibraryService() {
         // 两者都是幂等的（只读盘 + 写 volatile），与 MainActivity 里的调用重复执行无害。
         BiliPrefs.init(this)
         BiliAuthStore.init(this)
-        val renderersFactory = VisualizerRenderersFactory(this)
+        val renderersFactory = VisualizerRenderersFactory(this, visualizationVolume::observeTrack)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
         // 流内嵌的 ID3 元数据（尤其封面图，单张可达数百 KB）在本 App 里毫无用处：
@@ -591,10 +625,14 @@ class PlaybackService : MediaLibraryService() {
             libraryCallback()).build()
 
         player.addListener(object : Player.Listener {
-            /** 4.0.0：音频 session 变化时挂均衡器（关着时一个 effect 都不创建）。 */
+            /**
+             * 4.0.0：音频 session 变化（首次出声、切歌换音轨、切换输出设备）时挂均衡器。
+             *
+             * 4.0.8：`attach` 不再收 Context —— 关闭时它只释放 effect、保留 session，
+             * 播放中重新打开均衡器不需要等下一次 session 变化就能即时接上。
+             */
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 com.takahashirinta.ncrust.audio.EqualizerController.attach(
-                    this@PlaybackService,
                     audioSessionId,
                     com.takahashirinta.ncrust.audio.EqualizerPrefs.isEnabled(this@PlaybackService),
                     com.takahashirinta.ncrust.audio.EqualizerPrefs.gains(this@PlaybackService),
@@ -620,6 +658,8 @@ class PlaybackService : MediaLibraryService() {
                 updatePlaybackState()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // 4.0.0：只在「真的在出声且需要 PCM」时采样媒体音量，暂停后立刻停表。
+                observeVisualizationVolume(isPlaying && currentPcmDemand().requiresPcm)
                 // B：暂停即预约释放封面位图，恢复播放则取消释放并补回封面。
                 if (isPlaying) onPlaybackActive() else scheduleArtworkIdleRelease()
                 onIsPlayingChanged?.invoke(isPlaying)
@@ -2237,6 +2277,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        observeVisualizationVolume(false)
         com.takahashirinta.ncrust.audio.EqualizerController.release()
         Log.d("PlaybackService", "onDestroy")
         LiveUpdateNotifier.cancel(this)

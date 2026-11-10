@@ -62,7 +62,7 @@ class MotionRhythmGatingTest {
     // ── 1. 无门控时全部可用 ──────────────────────────────────────────────────────────
 
     @Test
-    fun `默认盘下九个动效开关全部可用`() {
+    fun `默认盘下动效开关全部可用`() {
         SettingsVisibility.MOTION_SWITCH_IDS.forEach { id ->
             val a = SettingsVisibility.availabilityOf(id, read(defaults()))
             assertTrue("$id 应可见", a.visible)
@@ -72,7 +72,7 @@ class MotionRhythmGatingTest {
     }
 
     @Test
-    fun `四个开关确实落在律动类名单里`() {
+    fun `跟随音频的细分开关归入律动类`() {
         // 归类判据：渲染路径里是否读 MotionClock.pulse()/level()（probe-ui-jitter.md §5）。
         assertEquals(
             setOf("motion_breathing", "motion_cover_float", "motion_lyric_pulse", "motion_bar_pulse"),
@@ -116,7 +116,7 @@ class MotionRhythmGatingTest {
     // ── 3. 第二层：界面律动总闸 ─────────────────────────────────────────────────────
 
     @Test
-    fun `律动闸关掉时只有四个律动类细开关置灰`() {
+    fun `律动闸关掉时律动类细开关置灰`() {
         val map = defaults().apply { put("motion_rhythm_enabled", false) }
         SettingsVisibility.RHYTHM_DETAIL_IDS.forEach { id ->
             val a = SettingsVisibility.availabilityOf(id, read(map))
@@ -140,25 +140,19 @@ class MotionRhythmGatingTest {
         assertTrue("关掉自己之后仍然可用（能再打开）", a.enabled)
     }
 
-    // ── 4. 第三层：档位（简洁档是静态档 ⇒ 逐帧开关都是死开关）──────────────────────
 
     @Test
-    fun `简洁档下九个开关里除了律动闸之外全部置灰`() {
-        // P0-B 的连带后果：简洁档现在没有任何节拍驱动动效，那八个开关在那一档点了也没用。
-        // 判据必须是"置灰 + 原因"，否则用户会以为"我关了冲击波怎么还抖"
-        // （真实症状：抖的是封面浮动，而它当时根本没有开关 —— 探针 §3/§6）。
+    fun `简洁档可调律动 装饰效果依旧按强度门控`() {
         val map = defaults().apply { put("motion_tier", 0) }
-        (SettingsVisibility.MOTION_SWITCH_IDS - "motion_rhythm_enabled").forEach { id ->
-            val a = SettingsVisibility.availabilityOf(id, read(map))
-            assertTrue("$id 仍可见", a.visible)
-            assertFalse("$id 在简洁档必须置灰", a.enabled)
-            assertEquals("$id 的原因", GatingReason.TIER_BASIC_ONLY, a.reason)
+        (SettingsVisibility.RHYTHM_DETAIL_IDS + "motion_rhythm_enabled").forEach { id ->
+            assertTrue("$id 在简洁档可用", SettingsVisibility.isEnabled(id, read(map)))
         }
-        // 律动闸是策略开关：简洁档下仍然可操作（用户可以先关掉它再调到精致档）。
-        assertTrue(
-            "律动闸不随档位置灰",
-            SettingsVisibility.availabilityOf("motion_rhythm_enabled", read(map)).enabled,
-        )
+        (SettingsVisibility.MOTION_SWITCH_IDS - SettingsVisibility.RHYTHM_DETAIL_IDS - "motion_rhythm_enabled").forEach { id ->
+            val availability = SettingsVisibility.availabilityOf(id, read(map))
+            assertTrue(availability.visible)
+            assertFalse(availability.enabled)
+            assertEquals(GatingReason.TIER_BASIC_ONLY, availability.reason)
+        }
     }
 
     @Test
@@ -172,7 +166,7 @@ class MotionRhythmGatingTest {
     }
 
     @Test
-    fun `门控的优先级是总闸然后律动闸然后档位`() {
+    fun `律动细项在总闸和律动开启后可用`() {
         // 三层同时不满足时，报出来的原因必须是最外层那一个（用户先看到"总闸关着"才有意义）。
         val map = defaults().apply {
             put("ui_motion_enabled", false)
@@ -189,10 +183,7 @@ class MotionRhythmGatingTest {
             reasonOf("motion_cover_float", map),
         )
         map["motion_rhythm_enabled"] = true
-        assertEquals(
-            GatingReason.TIER_BASIC_ONLY,
-            reasonOf("motion_cover_float", map),
-        )
+        assertTrue(SettingsVisibility.isEnabled("motion_cover_float", read(map)))
     }
 
     // ── 5. 读路径与默认值的口径一致 ─────────────────────────────────────────────────

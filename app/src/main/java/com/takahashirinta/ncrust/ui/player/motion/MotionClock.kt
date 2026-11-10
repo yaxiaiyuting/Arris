@@ -78,7 +78,7 @@ object MotionClock {
     fun level(): Float = envelope.level()
 
     /** 重拍脉冲（0..1）。draw 阶段直接读。 */
-    fun pulse(): Float = envelope.pulse()
+    fun pulse(): Float = envelope.pulse() * WaveformStore.displayGain
 
     /** v3.0.0：本帧的音频特征（逐柱着色 / 三频带能量条 / 呼吸都用它）。draw 阶段直接读。 */
     fun bindings(): MotionBindings = featureBindings
@@ -105,35 +105,39 @@ object MotionClock {
         holdWaveform: Boolean = false,
     ): Boolean {
         WaveformStore.pump(active, dtMs, waveform, nowMs, holdHistory = holdWaveform)
+        // 4.0.0：媒体音量为 0 时整条界面律动必须**真的静止**（不是"幅度很小"）。
+        // `displayGain` 是音频线程写的普通 float，在帧循环里读一次即可，不进 Compose state。
+        val gain = WaveformStore.displayGain
+        val audible = active && gain > 0f
         // 特征快照：优先用音频线程发布的真值；链路不可用时它对消费方呈现 available=false。
         featureBindings.update(
-            rms = WaveformStore.featureRms(),
-            low = WaveformStore.featureLow(),
-            mid = WaveformStore.featureMid(),
-            high = WaveformStore.featureHigh(),
+            rms = WaveformStore.featureRms() * gain,
+            low = WaveformStore.featureLow() * gain,
+            mid = WaveformStore.featureMid() * gain,
+            high = WaveformStore.featureHigh() * gain,
             centroid = WaveformStore.featureCentroid(),
             available = WaveformStore.featuresAvailable(),
             transientCount = WaveformStore.transientCount(),
-            transientStrength = WaveformStore.transientStrength(),
+            transientStrength = WaveformStore.transientStrength() * gain,
         )
         // 响度包络的来源：特征链路可用时直接用它的 RMS（这样「关掉可视化但开着界面动效」
         // 也仍然有呼吸）；不可用时回落波形环形缓冲（v2.9.0 的行为）。
         val levelSource = if (featureBindings.available) {
             featureBindings.rms
         } else {
-            WaveformStore.newestBar()
+            WaveformStore.newestBar() * gain
         }
         var changed = envelope.update(
             newestBar = levelSource,
-            newestBass = WaveformStore.newestBass(),
+            newestBass = WaveformStore.newestBass() * gain,
             dtMs = dtMs,
-            active = active,
+            active = audible,
             transients = featureBindings.transients,
             strength = featureBindings.strength,
             externalAvailable = featureBindings.available,
         )
         if (motion.haloBloom || motion.particles || motion.shockwave) {
-            if (backdrop.update(featureBindings, motion, dtMs, active)) changed = true
+            if (backdrop.update(featureBindings, motion, dtMs, audible)) changed = true
         }
         if (changed) generationState.intValue++
         return changed

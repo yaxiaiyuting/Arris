@@ -10,11 +10,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,129 +26,165 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.takahashirinta.ncrust.ui.components.ArrisFullScreenDialog
+import com.takahashirinta.ncrust.ui.i18n.LocalStrings
+import com.takahashirinta.ncrust.ui.theme.AppShapes
+import io.github.takahashirinta.kanesumi.controls.MetroIconButton
+import io.github.takahashirinta.kanesumi.controls.MetroSwitch
+import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
+import kotlin.math.roundToInt
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 
 /**
- * 均衡器页面（4.0.0）。
- *
- * 视觉上只有三样东西：一条**可读的曲线**、五个预设、一排频段推子。
- * 曲线用我们自己的直角/细线语言画（不用 material 的 Slider 外观），
- * 推子本身是 `MetroSlider` 那样的一整条可点区域。
+ * LTS 适配：主线把标题与无障碍标签放在 i18n 的 `Strings.settings` 里，而 LTS 的
+ * `ui/i18n` 目录不在本次回移范围（另一个子代理负责），所以这里用一个本地常量 ——
+ * 与 LTS 既有的中文界面文案同源。**若后续 i18n 补齐，把这个常量换成 `LocalStrings` 即可。**
  */
+// 标题已并入 i18n（`strings.equalizerTitle`，8 种语言齐）；这里保留常量只为兼容
+// 尚未接 i18n 的调用点，新代码请直接用 `LocalStrings.current.equalizerTitle`。
+internal object EqualizerCopy {
+    const val title = "均衡器"
+}
+
+/** A separate window keeps the editor above both the tray and the expanded player. */
 @Composable
 fun EqualizerScreen(onBack: () -> Unit) {
+    ArrisFullScreenDialog(onDismiss = onBack, contentAlignment = Alignment.TopCenter) {
+        EqualizerEditor(onBack)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EqualizerEditor(onBack: () -> Unit) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     val colors = LocalMetroColors.current
     var enabled by remember { mutableStateOf(EqualizerPrefs.isEnabled(context)) }
     var gains by remember { mutableStateOf(EqualizerPrefs.gains(context)) }
     var preset by remember { mutableStateOf(EqualizerPrefs.presetName(context)) }
-    val attached = EqualizerController.isAttached
+    val activeBands by EqualizerController.activeBandCount.collectAsState()
 
-    fun pushToAudio() {
-        EqualizerController.setEnabled(context, enabled, gains)
+    fun pushToAudio() = EqualizerController.setEnabled(enabled, gains)
+
+    fun updateEnabled(value: Boolean) {
+        if (value == enabled) return
+        enabled = value
+        EqualizerPrefs.setEnabled(context, value)
+        pushToAudio()
     }
 
-    Column(
-        Modifier.fillMaxSize().background(colors.background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            MetroText("均衡器", color = colors.onBackground, style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.SemiBold))
+    Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().fillMaxHeight()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MetroIconButton(onClick = onBack) {
+                MetroIcon(Icons.AutoMirrored.Filled.ArrowBack, strings.back, tint = colors.onBackground)
+            }
             MetroText(
-                if (enabled) "开" else "关",
-                color = if (enabled) colors.primary else colors.onSurfaceVariant,
-                style = TextStyle(fontSize = 14.sp)
+                strings.equalizerTitle,
+                color = colors.onBackground,
+                style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
             )
             Box(
-                Modifier.size(width = 56.dp, height = 30.dp)
-                    .background(if (enabled) colors.primary else colors.surfaceVariant)
-                    .clickable {
-                        enabled = !enabled
-                        EqualizerPrefs.setEnabled(context, enabled)
-                        pushToAudio()
-                    }
+                modifier = Modifier.heightIn(min = 48.dp)
+                    .toggleable(enabled, role = Role.Switch, onValueChange = ::updateEnabled)
+                    .semantics { contentDescription = strings.equalizerTitle },
+                contentAlignment = Alignment.Center,
+            ) {
+                MetroSwitch(checked = enabled, onCheckedChange = ::updateEnabled)
+            }
+        }
+        Column(
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MetroText(
+                when {
+                    activeBands > 0 -> "已接到当前播放 · 设备 $activeBands 段"
+                    !enabled -> "开启后应用于当前播放"
+                    else -> "等待设备的音频会话"
+                },
+                color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp)
+            )
+            EqualizerCurve(gains = gains, active = enabled, accent = colors.primary, grid = colors.surfaceVariant)
+            MetroText("预设", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                EqualizerPrefs.PRESETS.forEach { (name, _) ->
+                    val active = preset == name
+                    MetroText(
+                        name,
+                        color = if (active) colors.onPrimary else colors.onSurfaceVariant,
+                        style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                        modifier = Modifier
+                            .background(if (active) colors.primary else colors.surfaceVariant, AppShapes.full)
+                            .selectable(active, role = Role.RadioButton) {
+                                preset = name
+                                EqualizerPrefs.applyPreset(context, name)
+                                gains = EqualizerPrefs.gains(context)
+                                pushToAudio()
+                            }
+                            .padding(horizontal = 14.dp, vertical = 11.dp)
+                    )
+                }
+            }
+
+            MetroText("频段（dB）", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
+            gains.forEachIndexed { index, gain ->
+                val frequencyHz = EqualizerPrefs.frequenciesHz[index]
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    MetroText(
+                        if (frequencyHz < 1000) "$frequencyHz" else "${frequencyHz / 1000}k",
+                        color = colors.onSurfaceVariant,
+                        style = TextStyle(fontSize = 12.sp),
+                        modifier = Modifier.width(48.dp)
+                    )
+                    EqualizerBandBar(
+                        gainMb = gain,
+                        label = "$frequencyHz Hz",
+                        color = if (enabled) colors.primary else colors.onSurfaceVariant,
+                        track = colors.surfaceVariant,
+                        modifier = Modifier.weight(1f),
+                        onGainChanged = { newGain ->
+                            if (newGain != gains[index]) {
+                                preset = null
+                                gains = gains.copyOf().also { it[index] = newGain }
+                                EqualizerPrefs.setGain(context, index, newGain)
+                                pushToAudio()
+                            }
+                        },
+                    )
+                    MetroText(
+                        "%+.1f".format(gain / 100f),
+                        color = colors.onBackground,
+                        style = TextStyle(fontSize = 12.sp),
+                        modifier = Modifier.width(58.dp).padding(start = 8.dp)
+                    )
+                }
+            }
+            MetroText(
+                "调整只作用于本机播放。下载文件保留原样。",
+                color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp)
             )
         }
-        MetroText(
-            if (attached) "已接到当前播放（10 段）" else "等待播放开始后生效",
-            color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp)
-        )
-
-        EqualizerCurve(gains = gains, active = enabled, accent = colors.primary, grid = colors.surfaceVariant)
-
-        MetroText("预设", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EqualizerPrefs.PRESETS.forEach { (name, _) ->
-                val active = preset == name
-                MetroText(
-                    name,
-                    color = if (active) colors.onPrimary else colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 12.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal),
-                    modifier = Modifier
-                        .background(if (active) colors.primary else colors.surfaceVariant)
-                        .clickable {
-                            preset = name
-                            EqualizerPrefs.applyPreset(context, name)
-                            gains = EqualizerPrefs.gains(context)
-                            pushToAudio()
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                )
-            }
-        }
-
-        MetroText("频段（dB）", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 12.sp))
-        gains.forEachIndexed { index, gain ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                MetroText(
-                    bandLabel(index),
-                    color = colors.onSurfaceVariant,
-                    style = TextStyle(fontSize = 11.sp),
-                    modifier = Modifier.width(52.dp)
-                )
-                EqualizerBandBar(
-                    gainMb = gain,
-                    color = if (enabled) colors.primary else colors.onSurfaceVariant,
-                    track = colors.surfaceVariant,
-                    modifier = Modifier.weight(1f),
-                    onGainChanged = { newGain ->
-                        gains = gains.copyOf().also { it[index] = newGain }
-                        EqualizerPrefs.setGain(context, index, newGain)
-                        pushToAudio()
-                    },
-                )
-                MetroText(
-                    "%+.1f".format(gain / 100f),
-                    color = colors.onBackground,
-                    style = TextStyle(fontSize = 11.sp),
-                    modifier = Modifier.width(46.dp).padding(start = 8.dp)
-                )
-            }
-        }
-
-        MetroText(
-            "调整只作用于本机播放链路，不写入音源，也不改变下载的文件。",
-            color = colors.onSurfaceVariant, style = TextStyle(fontSize = 11.sp)
-        )
-        MetroText(
-            "返回",
-            color = colors.primary,
-            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-            modifier = Modifier.clickable { onBack() }.padding(vertical = 8.dp)
-        )
     }
-}
-
-private fun bandLabel(index: Int): String = when (index) {
-    0 -> "31"; 1 -> "62"; 2 -> "125"; 3 -> "250"; 4 -> "500"
-    5 -> "1k"; 6 -> "2k"; 7 -> "4k"; 8 -> "8k"; else -> "16k"
 }
 
 /** 曲线：把 10 段增益连成折线，±12dB 满量程。 */
@@ -198,29 +237,39 @@ private fun EqualizerCurve(gains: IntArray, active: Boolean, accent: Color, grid
 @Composable
 private fun EqualizerBandBar(
     gainMb: Int,
+    label: String,
     color: Color,
     track: Color,
     modifier: Modifier = Modifier,
     onGainChanged: (Int) -> Unit,
 ) {
+    val updateGain by rememberUpdatedState(onGainChanged)
     var widthPx by remember { mutableStateOf(1f) }
     fun gainAt(x: Float): Int {
         val ratio = (x / widthPx).coerceIn(0f, 1f)
         val raw = EqualizerController.GAIN_MIN_MB +
             ratio * (EqualizerController.GAIN_MAX_MB - EqualizerController.GAIN_MIN_MB)
         // 50mB = 0.5dB 一档：手指精度足够，也不会把预置变成一串奇怪的小数。
-        return (raw / 50f).toInt() * 50
+        return (raw / 50f).roundToInt() * 50
     }
     Box(
         modifier
-            .height(28.dp)
+            .height(36.dp)
+            .semantics {
+                contentDescription = label
+                progressBarRangeInfo = ProgressBarRangeInfo(gainMb / 100f, -12f..12f, 47)
+                setProgress { db ->
+                    updateGain((db.coerceIn(-12f, 12f) * 2).roundToInt() * 50)
+                    true
+                }
+            }
             .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
             .pointerInput(Unit) {
-                detectTapGestures { offset -> onGainChanged(gainAt(offset.x)) }
+                detectTapGestures { offset -> updateGain(gainAt(offset.x)) }
             }
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, _ ->
-                    onGainChanged(gainAt(change.position.x))
+                    updateGain(gainAt(change.position.x))
                 }
             }
     ) {

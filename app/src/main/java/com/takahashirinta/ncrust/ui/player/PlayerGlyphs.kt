@@ -25,6 +25,7 @@ internal object PlayerGlyphs {
     val Expand = glyph("Expand", "M5 9V5H9 M15 5H19V9 M19 15V19H15 M9 19H5V15")
     val Shrink = glyph("Shrink", "M5 9H9V5 M19 9H15V5 M15 19V15H19 M9 19V15H5")
     val Dismiss = glyph("Dismiss", "M6.5 9.5L12 15L17.5 9.5")
+    val Equalizer = glyph("Equalizer", "M5 4V10 M5 14V20 M12 4V6 M12 10V20 M19 4V14 M19 18V20 M2.8 10H7.2 M9.8 10H14.2 M16.8 14H21.2")
     val Rotate = glyph("Rotate", "M8 4.8L15.7 2.8L18.7 14.1L11 16.1Z M5.1 9.1A8 8 0 0 0 16 20.1 M12.5 20.1H16V16.6")
     val RotationLocked = glyph("RotationLocked", "M7 13V5Q7 3 9 3H15Q17 3 17 5V9 M7 16V19Q7 21 9 21H12 M14 14H20Q21 14 21 15V19Q21 20 20 20H14Q13 20 13 19V15Q13 14 14 14Z M15 14V12A2 2 0 0 1 19 12V14")
     val Repeat = glyph("Repeat", "M17 3L20 6L17 9 M20 6H8A4 4 0 0 0 4 10 M7 21L4 18L7 15 M4 18H16A4 4 0 0 0 20 14")

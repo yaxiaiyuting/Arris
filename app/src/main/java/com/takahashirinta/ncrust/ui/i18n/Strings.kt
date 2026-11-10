@@ -746,6 +746,9 @@ data class Strings(
     val storageSectionTitle: String get() = settings.storageSectionTitle
     val clearCache: String get() = settings.clearCache
     val clearCacheConfirm: String get() = settings.clearCacheConfirm
+    /** 3.7.37：均衡器设置入口（独立面板）。 */
+    val equalizerTitle: String get() = settings.equalizerTitle
+    val equalizerSubtitle: String get() = settings.equalizerSubtitle
     // v3.3.0：清除缓存的两种后果要写清 —— 旧确认框只写「确定清除全部缓存？」，
     // 而它会永久删掉离线音频（用户点一下几百 MB 就没了，事后无从得知）。
     val clearCacheAudioNote: String get() = settings.clearCacheAudioNote
@@ -1745,6 +1748,11 @@ data class SettingsStrings(
     val storageSectionTitle: String,
     val clearCache: String,
     val clearCacheConfirm: String,
+    /** 3.7.37：均衡器设置入口。 */
+    // 3.7.37：均衡器入口。**不给默认值** —— SettingsStrings 的构造参数一旦带默认值就会
+    // 生成合成构造器，StringsMigrationTest 会直接判红（它保证八种语言都真的填过每一条）。
+    val equalizerTitle: String,
+    val equalizerSubtitle: String,
     /**
      * v3.3.0 · 用户反馈第 1 条的第四个缺陷：**「清除缓存」会把离线音频一起删掉，而确认框不说**。
      *

@@ -46,6 +46,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -119,6 +120,13 @@ fun FullPlayerControls(
     onPlayPause: () -> Unit,
     onPlayPrevious: () -> Unit = {},
     onPlayNext: () -> Unit = {},
+    /**
+     * 4.0.8：打开均衡器（一个**独立窗口**的全屏面板，见 `ArrisFullScreenDialog`）。
+     *
+     * 传 `null` = 该调用点不挂入口（例如没有播放会话的宿主）。非空时按钮出现在三处
+     * 进度区（横屏进度行 / 竖屏 tiny 行 / 竖屏常规行的音质片旁），与主线逐格对应。
+     */
+    onOpenEqualizer: (() -> Unit)? = null,
     onToggleLyrics: () -> Unit,
     onToggleQueue: () -> Unit,
     onAddToLibrary: () -> Unit = {},
@@ -471,35 +479,45 @@ fun FullPlayerControls(
                 )
             }
         } else {
-        Box(
+        // 4.0.8：包在 `Row` 里而不是三个 `Box` 子节点各自 `align` —— 均衡器入口要挤进
+        // 音质片旁边，`Box` 的独立定位在窄屏上会与时长文本重叠（主线 4.0.0 的同类修复）。
+        // 顺序 `Row` + 两端 `widthIn(max = 52.dp)`：位置/时长先占位，中组吃剩余空间。
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = hPad)
+                .padding(horizontal = hPad),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             // 位置文本抽出为叶子 Composable：仅它随 250ms 位置更新重组，
             // 不牵连按钮/进度条区域
             PositionText(
                 positionFlow = positionFlow,
-                modifier = Modifier.align(Alignment.CenterStart)
+                modifier = Modifier.widthIn(max = 52.dp)
             )
             // v1.8.0 · T2：竖屏也做成**就地选择器**（此前这个 chip 点了是"跳设置页"，
             // 用户得离开播放器才能换档）。菜单形态与横屏大屏共用同一个组件，
             // 档位表、降级角标语义、"档位真变了才重取播放链"的行为天然一致。
-            PlayerQualityChip(
-                qualityIndexFlow = qualityIndexFlow,
-                qualityStatusFlow = qualityStatusFlow,
-                qualityBitrateFlow = qualityBitrateFlow,
-                options = qualityOptions,
-                trialFlow = trialFlow,
-                preferredIndexProvider = preferredQualityIndexProvider,
-                onSelect = onQualitySelect,
-                modifier = Modifier.align(Alignment.Center),
-                maxHeightDp = qualityPickerMaxHeightDp,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PlayerQualityChip(
+                    qualityIndexFlow = qualityIndexFlow,
+                    qualityStatusFlow = qualityStatusFlow,
+                    qualityBitrateFlow = qualityBitrateFlow,
+                    options = qualityOptions,
+                    trialFlow = trialFlow,
+                    preferredIndexProvider = preferredQualityIndexProvider,
+                    onSelect = onQualitySelect,
+                    modifier = Modifier.widthIn(max = 128.dp),
+                    maxHeightDp = qualityPickerMaxHeightDp,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                )
+            }
             DurationText(
                 durationFlow = durationFlow,
-                modifier = Modifier.align(Alignment.CenterEnd)
+                modifier = Modifier.widthIn(max = 52.dp)
             )
         }
         Spacer(Modifier.height(gapTight))
@@ -615,6 +633,29 @@ fun FullPlayerControls(
                 },
             )
         }
+    }
+}
+
+/**
+ * 4.0.8：均衡器入口按钮。
+ *
+ * 图标是自绘的 `PlayerGlyphs.Equalizer`（与播放器其他字形同一套细线语言），
+ * 触摸目标 44dp 与旁边的面板开关一致。**语义标签是常量** —— 主线取 i18n 的
+ * `settings.equalizerEntryLabel`，LTS 的 i18n 不在本次回移范围，见 `EqualizerCopy`。
+ */
+@Composable
+internal fun PlayerEqualizerButton(onClick: () -> Unit) {
+    val colors = LocalMetroColors.current
+    Box(
+        Modifier.size(44.dp).clip(AppShapes.full).clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            PlayerGlyphs.Equalizer,
+            contentDescription = com.takahashirinta.ncrust.audio.EqualizerCopy.title,
+            tint = colors.primary,
+            sizeDp = 23.dp,
+        )
     }
 }
 
