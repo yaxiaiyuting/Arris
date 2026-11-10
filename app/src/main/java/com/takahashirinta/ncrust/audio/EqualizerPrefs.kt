@@ -21,6 +21,8 @@ object EqualizerPrefs {
     private const val KEY_GAINS_PREFIX = "eq_gain_"
     private const val KEY_PRESET = "eq_preset"
 
+    internal val frequenciesHz = intArrayOf(31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
+
     /** 预设：名称 → 增益（mB）。曲线按"低频 +、中频平、高频微升"的常见听感给。 */
     val PRESETS: List<Pair<String, IntArray>> = listOf(
         "平直" to intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
@@ -56,6 +58,7 @@ object EqualizerPrefs {
     fun setGain(context: Context, band: Int, gainMb: Int) {
         prefs(context).edit()
             .putInt(KEY_GAINS_PREFIX + band, gainMb.coerceIn(EqualizerController.GAIN_MIN_MB, EqualizerController.GAIN_MAX_MB))
+            .remove(KEY_PRESET)
             .apply()
     }
 

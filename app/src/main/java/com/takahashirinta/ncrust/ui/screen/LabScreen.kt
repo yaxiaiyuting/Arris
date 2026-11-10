@@ -111,7 +111,6 @@ fun LabScreen(onClose: () -> Unit) {
             var showEq by remember { mutableStateOf(false) }
             if (showEq) {
                 com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { showEq = false })
-                return@Column
             }
             LabButton("④ 均衡器（10 段 / 5 预设）", enabled = !busy) { showEq = true }
 

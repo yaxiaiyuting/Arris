@@ -378,7 +378,10 @@ internal fun PlayerCard(
     LaunchedEffect(hasSong) {
         if (!hasSong) ui.showKaraoke = false
         snapshotFlow { ui.expandedMounted }.collect { expanded ->
-            if (!expanded) ui.showKaraoke = false
+            if (!expanded) {
+                ui.showKaraoke = false
+                ui.showEqualizer = false
+            }
         }
     }
 
@@ -653,6 +656,9 @@ internal fun PlayerCard(
             narrowCover = narrowCover,
             coroutineScope = coroutineScope,
         )
+        if (hasSong && ui.showEqualizer) {
+            com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { ui.showEqualizer = false })
+        }
     }
 }
 

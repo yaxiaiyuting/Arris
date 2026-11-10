@@ -597,7 +597,6 @@ class PlaybackService : MediaLibraryService() {
              */
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 com.takahashirinta.ncrust.audio.EqualizerController.attach(
-                    this@PlaybackService,
                     audioSessionId,
                     com.takahashirinta.ncrust.audio.EqualizerPrefs.isEnabled(this@PlaybackService),
                     com.takahashirinta.ncrust.audio.EqualizerPrefs.gains(this@PlaybackService),

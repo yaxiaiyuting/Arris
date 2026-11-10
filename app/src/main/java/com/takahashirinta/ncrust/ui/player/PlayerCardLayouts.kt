@@ -556,6 +556,7 @@ internal fun ColumnScope.PlayerCardNarrowLayout(
                 isPlaying = isPlaying,
                 previousEnabled = previousEnabled,
                 transport = transport,
+                onOpenEqualizer = { ui.showEqualizer = true },
                 modifier = Modifier.fillMaxWidth().then(controlsCollapseDrag()).graphicsLayer {
                     val reveal = AppMotion.playerReveal(controlsCollapse.value, 0.40f)
                     alpha = reveal

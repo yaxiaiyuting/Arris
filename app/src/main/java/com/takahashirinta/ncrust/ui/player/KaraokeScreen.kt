@@ -87,6 +87,7 @@ internal class KaraokeControls(
     val exit: () -> Unit,
     val translatedPrimary: Boolean,
     val toggleLanguage: () -> Unit,
+    val onOpenEqualizer: () -> Unit,
 )
 
 @Composable
@@ -599,6 +600,7 @@ private fun KaraokeTransport(controls: KaraokeControls, playing: Boolean, onSeek
         isPlaying = playing,
         previousEnabled = controls.previousEnabled,
         transport = controls.transport,
+        onOpenEqualizer = controls.onOpenEqualizer,
         modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
     )
 }

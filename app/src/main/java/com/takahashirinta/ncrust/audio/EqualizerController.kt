@@ -5,9 +5,13 @@
 
 package com.takahashirinta.ncrust.audio
 
-import android.content.Context
+import android.media.audiofx.AudioEffect
 import android.media.audiofx.Equalizer
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.ln
+import kotlin.math.roundToInt
 
 /**
  * 均衡器（4.0.0）。
@@ -39,45 +43,49 @@ object EqualizerController {
     const val GAIN_MIN_MB = -1200
     const val GAIN_MAX_MB = 1200
 
-    @Volatile
     private var equalizer: Equalizer? = null
-
-    @Volatile
     private var sessionId: Int = 0
-
-    /** 当前是否已连上（供设置页显示"等待播放"）。 */
-    val isAttached: Boolean get() = equalizer != null
-
-    /** 已连上的频段数（未连上时 0）。 */
-    val bandCount: Int get() = equalizer?.numberOfBands?.toInt() ?: 0
+    private var deviceCentersHz = DoubleArray(0)
+    private val _activeBandCount = MutableStateFlow(0)
+    val activeBandCount = _activeBandCount.asStateFlow()
 
     /**
      * 挂到某个 audio session 上。
      *
-     * [enabled] = false 或 [gainsMb] 为空时**直接释放**，一个 effect 都不留 —— 这样
-     * "关掉均衡器"不残留任何 DSP 开销。
+     * 关闭时释放 effect，保留会话标识，方便播放过程中重新开启。
      */
     @Synchronized
-    fun attach(context: Context, session: Int, enabled: Boolean, gainsMb: IntArray) {
-        if (!enabled || session == 0) {
-            release()
-            return
-        }
-        if (sessionId == session && equalizer != null) {
-            applyGains(gainsMb)
-            return
-        }
-        release()
-        runCatching {
-            val eq = Equalizer(0, session)
-            equalizer = eq
+    fun attach(session: Int, enabled: Boolean, gainsMb: IntArray) {
+        if (sessionId != session) {
+            releaseEffect()
             sessionId = session
-            eq.enabled = true
-            Log.i(TAG, "attached session=$session bands=${eq.numberOfBands}")
+        }
+        setEnabled(enabled, gainsMb)
+    }
+
+    @Synchronized
+    fun setEnabled(enabled: Boolean, gainsMb: IntArray) {
+        if (!enabled || sessionId == 0) {
+            releaseEffect()
+            return
+        }
+        if (equalizer != null) {
             applyGains(gainsMb)
+            return
+        }
+        runCatching {
+            val eq = Equalizer(0, sessionId)
+            equalizer = eq
+            deviceCentersHz = DoubleArray(eq.numberOfBands.toInt()) { band ->
+                runCatching { eq.getCenterFreq(band.toShort()) / 1000.0 }.getOrDefault(0.0)
+            }
+            check(eq.setEnabled(true) == AudioEffect.SUCCESS) { "Device refused to enable equalizer" }
+            applyGains(gainsMb)
+            _activeBandCount.value = deviceCentersHz.size
+            Log.i(TAG, "attached session=$sessionId bands=${deviceCentersHz.size}")
         }.onFailure {
-            Log.w(TAG, "attach failed session=$session: ${it.javaClass.simpleName} ${it.message}")
-            release()
+            Log.w(TAG, "attach failed session=$sessionId: ${it.javaClass.simpleName} ${it.message}")
+            releaseEffect()
         }
     }
 
@@ -85,30 +93,42 @@ object EqualizerController {
     @Synchronized
     fun applyGains(gainsMb: IntArray) {
         val eq = equalizer ?: return
-        val bands = eq.numberOfBands.toInt()
-        if (bands <= 0) return
         val range = runCatching { eq.bandLevelRange }.getOrNull()
         val min = range?.get(0)?.toInt() ?: GAIN_MIN_MB
         val max = range?.get(1)?.toInt() ?: GAIN_MAX_MB
-        for (band in 0 until bands) {
-            val raw = gainsMb.getOrElse(band) { 0 }
+        for (band in deviceCentersHz.indices) {
+            val centerHz = deviceCentersHz[band]
+            val raw = if (centerHz > 0.0) gainAtFrequency(gainsMb, centerHz) else gainsMb.getOrElse(band) { 0 }
             val value = raw.coerceIn(min, max).toShort()
             runCatching { eq.setBandLevel(band.toShort(), value) }
                 .onFailure { Log.w(TAG, "setBandLevel($band) failed: ${it.message}") }
         }
     }
 
-    /** 开关切换：关掉立刻释放（不残留 effect）。 */
-    @Synchronized
-    fun setEnabled(context: Context, enabled: Boolean, gainsMb: IntArray) {
-        if (!enabled) release() else attach(context, sessionId, true, gainsMb)
-    }
-
     @Synchronized
     fun release() {
-        runCatching { equalizer?.enabled = false }
-        runCatching { equalizer?.release() }
-        equalizer = null
+        releaseEffect()
         sessionId = 0
+    }
+
+    private fun releaseEffect() {
+        val eq = equalizer ?: return
+        runCatching { eq.enabled = false }
+        runCatching { eq.release() }
+        equalizer = null
+        deviceCentersHz = DoubleArray(0)
+        _activeBandCount.value = 0
+    }
+
+    /** Match the saved ten-band curve to the device's native band centers. */
+    internal fun gainAtFrequency(gainsMb: IntArray, centerHz: Double): Int {
+        val centers = EqualizerPrefs.frequenciesHz
+        val upper = centers.indexOfFirst { it >= centerHz }
+        if (upper <= 0) return gainsMb.getOrElse(if (upper == 0) 0 else centers.lastIndex) { 0 }
+        val lowerHz = centers[upper - 1].toDouble()
+        val fraction = ln(centerHz / lowerHz) / ln(centers[upper] / lowerHz)
+        val a = gainsMb.getOrElse(upper - 1) { 0 }
+        val b = gainsMb.getOrElse(upper) { 0 }
+        return (a + (b - a) * fraction).roundToInt()
     }
 }

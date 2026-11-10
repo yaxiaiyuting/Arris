@@ -76,6 +76,7 @@ internal class PlayerCardUiState(
     // ---- 可变状态（原来是一个个 remember { mutableStateOf }）----
     var showLyrics by mutableStateOf(false)
     var showKaraoke by mutableStateOf(false)
+    var showEqualizer by mutableStateOf(false)
     val lyricsPanelSelected: Boolean get() = showLyrics && !showQueue
     val focusLyricsActive: Boolean get() = showKaraoke && lyricsPanelSelected
     var karaokeTranslationPrimary by mutableStateOf(false)
