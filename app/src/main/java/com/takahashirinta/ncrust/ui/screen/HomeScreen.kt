@@ -118,10 +118,11 @@ fun HomeScreen(
     val newSongs = remember {
         mutableStateListOf<SongItem>().apply { ContentCache.homeNewSongs?.let { addAll(it) } }
     }
-    // 冷启动（三块数据都空）才显示全屏 loader；有任一缓存则跳过。
-    var isLoading by remember {
-        mutableStateOf(dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty())
-    }
+    var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
+    val hasHomeContent = dailySongs.isNotEmpty() || playlists.isNotEmpty() ||
+        newSongs.isNotEmpty() || toplists.isNotEmpty()
+    // 只在四个分节都没有可展示内容时显示全屏加载态。
+    var isLoading by remember { mutableStateOf(!hasHomeContent) }
     var error by remember { mutableStateOf<String?>(null) }
     // v1.5.1 · C：无网 / 超时的降级状态。
     //  - offline：启动时系统就告诉我们没有可用网络 —— 一个请求都不发；
@@ -129,9 +130,6 @@ fun HomeScreen(
     var offline by remember { mutableStateOf(false) }
     var timedOut by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    // E（方案 2 瘦身版）：榜单入口。走 ContentCache 的 15s freshness 窗口 —— warmup/上次
-    // 访问刚拉过就不再请求；卡片放在首屏，但请求不阻塞其它分节渲染（拿不到就整块不显示）。
-    var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
     /**
      * H15：一次首页请求**发出时**的会话归属，用来挡住"换号之后才到达"的旧响应。
      *
@@ -382,7 +380,7 @@ fun HomeScreen(
     fun songMenu(song: SongItem) = homeSongActions(context, strings, song, onSongInsertNext, onSongAppendToQueue)
 
     Crossfade(
-        targetState = isLoading,
+        targetState = isLoading && !hasHomeContent,
         animationSpec = SokuouTweens.CoverFade,
         modifier = Modifier.fillMaxSize(),
         label = "HomeContentCrossfade"
@@ -391,8 +389,8 @@ fun HomeScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 MetroProgressIndicator(color = LocalMetroColors.current.primary)
             }
-        } else if (dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty()) {
-            // v1.5.1 · C：三块数据全空（无网 / 失败 / 超时）时不再给一片空白。
+        } else if (!hasHomeContent) {
+            // 无网、失败或超时时，只有首页全空才显示重试。
             // 此前 error 只写进 state、界面上没有任何呈现，用户看到的就是一个空网格。
             HomeDegradedState(
                 offline = offline,
