@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
 
-[**官网直链下载**](https://arris.de5.net/get/latest.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Gitee 镜像**](https://gitee.com/yaxiaiyuting/arris) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
+[**主线下载**](https://arris.de5.net/get/latest.apk) · [**LTS 3.7.36 下载**](https://arris.de5.net/get/Arris-v3.7.36-gpl.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Gitee 镜像**](https://gitee.com/yaxiaiyuting/arris) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
 
 </div>
 
@@ -36,6 +36,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **LTS 3.7.36** | 2026-11-10 | Android 7 起可打开日推歌单，修复 QQ 音乐扫码会话和离线榜单显示 |
 | **4.0.19** | 2026-11-09 | 每日推荐可打开完整歌单，听歌识曲可选系统声音，底栏随主界面滑动 |
 | **4.0.15** | 2026-11-07 | 播放器换用哑光光影，封面到达后再淡入，主界面支持左右滑动切换五个标签 |
 | 4.0.14 | 2026-11-06 | 修复部分逐字歌词切句偏晚。切句对齐首字时间，播放位置更新时立即检查跨行 |
@@ -93,23 +94,19 @@
 | 通道 | 版本线 | 最低系统 | 在哪看 | 更新策略 |
 |---|---|---|---|---|
 | **主线 mainline** | `3.8.x` 起 | **Android 10（minSdk 29）** | Releases 里按版本号排列，最新一条带 `Latest` 徽章 | 每个版本一个 Release；功能与修复都进这条 |
-| **LTS 长期维护** | `3.7.x` | **Android 7.0（minSdk 24）** | 固定一条滚动 Release，tag 为 `lts-3.7`，**不占 Latest** | 只回移兼容性与正确性修复，不带新功能 |
+| **LTS 长期维护** | `3.7.x` | **Android 7.0（minSdk 24）** | 按版本发布 `v3.7.x-gpl`，**不占 Latest** | 以设备兼容和正确性修复为主 |
 
 规则：
 
-- **LTS 线只回移「设备兼容 / 正确性」修复**（封面遮挡、地址族回退、主线程崩溃、视觉统一），
-  新功能（听歌识曲、一起听）不进 LTS —— 它们在 3.8 才验证过，且依赖新协议。
-- **两条线不会互相推送**：应用内检查更新按 `tag` 判断通道，3.7.x 只看到 3.7.x 与 `lts-3.7`，
-  3.8.x 只看到普通版本条目。否则 Android 7 用户会被推一个装不上的包。
-- **滚动 LTS 条目**的附件每次出包原地替换，版本号看文件名（`Arris-v3.7.14-gpl.apk`）；
-  想要固定版本就按版本号去 Releases 里翻历史 LTS 包。
+- LTS 以兼容性和正确性修复为主。3.7.36 同时回移了 Android 7 可用的每日推荐歌单。系统声音识曲依赖 Android 10 的采集接口，随主线发布。
+- 应用内检查更新按通道筛选。主线选择主线 APK，LTS 选择 3.7.x APK。
+- 各正式版有固定的 GitHub Release 和官网版本直链。官网的 LTS 滚动链接提供最新的 3.7.x APK。
 
 直链（永远指向各自通道的最新）：
 
 ```
 https://arris.de5.net/get/latest.apk        主线最新（支持 Range：断点续传 / 多线程）
 https://arris.de5.net/get/lts-latest.apk   LTS 最新（同上）
-https://arris.de5.net/get/latest.apk        同一份包的静态直出（最简单，但不支持 Range）
 ```
 
 > 国内线路慢的时候用 `/get/` + 下载器多线程（aria2 `-x8 -s8`、IDM、FDM），
@@ -444,6 +441,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v3.7.36-gpl | 2026-11-10 | **LTS**。日推完整歌单、QQ 音乐扫码跨界面重建、仅有缓存榜单时可浏览 |
 | v3.7.34-gpl | 2026-11-06 | **LTS 稳定性修复**。旧版可直接更新，Android 7 收藏回退可读回结果，小幅回拖对齐歌词，跟唱可切换主行 |
 | v3.7.33-gpl | 2026-11-06 | **歌词切句同步**。普通歌词和独立跟唱共用校正后的首字时间，播放位置更新后及时切句 |
 | v3.7.27-gpl | 2026-11-05 | 回移续播保存、音质拒绝、更新源回退与断点续传修复 |

@@ -6,8 +6,8 @@ export const ALIAS_TAGS = {
     "lts": false
   },
   "lts-latest.apk": {
-    "f": "Arris-v3.7.34-gpl.apk",
-    "tag": "v3.7.34-gpl",
+    "f": "Arris-v3.7.36-gpl.apk",
+    "tag": "v3.7.36-gpl",
     "lts": true
   }
 };

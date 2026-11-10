@@ -1,6 +1,24 @@
 {
- "generatedAt": "2026-11-09T19:08:09.164Z",
+ "generatedAt": "2026-11-10T00:59:55.836Z",
  "releases": [
+  {
+   "tag_name": "v3.7.36-gpl",
+   "name": "Arris LTS 3.7.36-gpl",
+   "draft": false,
+   "prerelease": false,
+   "published_at": "2026-11-10T00:59:13Z",
+   "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.36-gpl",
+   "site_url": "https://arris.de5.net/#download",
+   "body": "Android 7.0 及以上 · versionCode 224 · LTS 正式版\n\n## 功能更新\n\n- 首页的「每日推荐」可以打开完整歌单。点哪一首就从哪一首开始播放整批推荐，也可插播、追加或收藏到库。首页保留独立的「播放全部」。\n\n## 问题修复\n\n- QQ 音乐 App 扫码在同一进程内重建页面后会沿用原二维码。后台确认后可保存登录态，返回后刷新账号显示。\n- 断网时，首页只要有榜单缓存就能继续浏览。完全没有缓存时显示离线提示和重试入口。\n\n已在 Android 7.0 模拟器用正式签名包从 3.7.34 覆盖安装，验证日推入队及离线榜单。QQ 扫码用本地虚构凭证验证。JVM 与 Release Lint 通过。\n\n[官网 APK 直链](https://arris.de5.net/get/Arris-v3.7.36-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "assets": [
+    {
+     "id": 729592653,
+     "name": "Arris-v3.7.36-gpl.apk",
+     "size": 12303093,
+     "browser_download_url": "https://arris.de5.net/get/Arris-v3.7.36-gpl.apk"
+    }
+   ]
+  },
   {
    "tag_name": "v4.0.19-gpl",
    "name": "Arris 4.0.19-gpl",
@@ -81,7 +99,7 @@
    "published_at": "2026-11-06T07:33:35Z",
    "html_url": "https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.33-gpl",
    "site_url": "https://arris.de5.net/#download",
-   "body": "## LTS 回移歌词切句同步修复\n\n- 普通歌词和独立跟唱共用校正后的行起点与播放时钟。逐字轨先开始时，切句、高亮和点歌词跳播都对齐首字。\n- 播放位置变化后立即重新检查已跨过的歌词边界。译文继续按原行的源时间戳配对。\n- Android 7 的跟唱页可以从系统设置读取动画开关，修复进入跟唱时的崩溃。\n\n## 安装与验证\n\nLTS · Android 7.0 及以上 · versionCode 215\n\n在 Android 7.0（API 24）模拟器上，用此签名包从 3.7.32 覆盖安装并验证离线播放、普通歌词切句、点歌词跳播以及独立跟唱的播放和返回。全量 JVM 测试 3,424 项，0 失败、4 跳过。Release Lint 0 错误。\n\n从 3.7.33 LTS 切回主线时，Android 覆盖安装要求主线 APK 的 versionCode 至少为 215。\n\n[官网下载 LTS APK](https://arris.de5.net/get/Arris-v3.7.33-lts-gpl.apk) · [完整更新日志](https://github.com/yaxiaiyuting/Arris/blob/master/CHANGELOG.md)\n",
+   "body": "",
    "assets": [
     {
      "id": 716320767,
