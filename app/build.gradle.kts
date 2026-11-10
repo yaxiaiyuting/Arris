@@ -531,8 +531,8 @@ android {
         // versionCode 出处：上一版（v3.7.30 / build.gradle 117）⇒ 本版 **118**（取 max+1）。
         // 3.7.33：LTS 的 119 已用完，120 已由 3.8.0 使用。三源核对最大值 214，取 215。
         // 3.7.34：版本三源核对最大值 215，取 216。
-        versionCode = 216
-        versionName = "3.7.34-gpl"
+        versionCode = 224
+        versionName = "3.7.36-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
