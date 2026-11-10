@@ -179,7 +179,7 @@ export default {
       //   · `?geo=CN` 用于本地验证（CF 的 cf-ipcountry 外部无法伪造）
       // 这些版本由官网与 GitHub 提供，官网直链不转去尚无对应资产的镜像。
       // 只在官网/GitHub 有、Gitee 没有对应资产的版本 —— 这些不做 302（否则跳到 404）。
-      // 4.1.0 与 LTS 常驻页（v3.7.36-gpl 下挂 Arris-v3.7.37-gpl.apk）现在 Gitee 都有了，
+      // 4.1.0 与 LTS 常驻页（tag 跟着当前 LTS 版本）现在 Gitee 都有了，
       // 所以从名单里移出，国内用户重新走 Gitee 快路。
       const websiteOnly = ["Arris-v3.7.34-gpl.apk", "Arris-v4.0.15-gpl.apk", "Arris-v4.0.19-gpl.apk"]
         .includes(ALIAS_TAGS[name]?.f ?? name);
