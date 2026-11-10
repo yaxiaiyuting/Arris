@@ -1,0 +1,5 @@
+# Droidloom 窗口标题映射（包名=显示名）。改完重启 droidloom.service 生效。
+# 没在这里列的包回落显示包名。
+com.takahashirinta.ncrust=Arris
+com.android.settings=设置
+com.android.documentsui=文件
