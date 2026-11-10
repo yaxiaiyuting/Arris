@@ -101,7 +101,7 @@ object TrayLayout {
      * v3.1.0 及以前，唯一封面 overlay 的落点中心是
      * `miniCoverCenterX = coverHalfDp()`，即**左边缘正好压在屏幕 x=0 上**。
      * 收起态（托盘）里那只是一个贴边的封面，看不出问题；但**歌词全屏模式**下，
-     * 顶栏的文字块从 [topBarTextStartDp] 开始（右侧 68dp 起），
+     * 顶栏的文字块在封面右边，
      * 于是「一个紧贴左边缘、且比文字块低 12dp 的封面」在左上角孤零零地吊着 ——
      * 真机截图证据见 `docs/verification/v3.2.0/probe-mini-cover.md`。
      *
@@ -144,6 +144,12 @@ object TrayLayout {
      */
     const val TOP_BAR_HEIGHT_DP = 56
 
+    const val TOP_BAR_ACTION_START_DP = 8
+    const val TOP_BAR_ACTION_SIZE_DP = 48
+    // Leave a gap after the equalizer before the cover. The tray keeps its own cover size.
+    const val TOP_BAR_COVER_START_DP = TOP_BAR_ACTION_START_DP + TOP_BAR_ACTION_SIZE_DP + 4
+    const val TOP_BAR_COVER_SIZE_DP = 36
+
     /** 全屏顶栏内封面的中心偏移（相对状态栏下沿，dp）。 */
     fun topBarCoverCenterOffsetDp(): Float = TOP_BAR_HEIGHT_DP / 2f
 
@@ -155,13 +161,10 @@ object TrayLayout {
      */
     fun coverCenterXDp(): Float = COVER_START_DP + COVER_SIZE_DP / 2f
 
-    /**
-     * 顶栏/托盘里**文字块的起始 x**（dp）= 左边距 + 封面宽 + 间隙。
-     *
-     * 托盘的行首占位（`Spacer(COVER_SIZE_DP)`）与窄屏顶栏的 `padding(start = …)`
-     * 都必须用它，否则「封面移动了、文字没动」会表现为两者错位。
-     */
-    fun topBarTextStartDp(): Int = COVER_START_DP + COVER_SIZE_DP + COVER_TEXT_GAP_DP
+    fun topBarCoverCenterXDp(): Float = TOP_BAR_COVER_START_DP + TOP_BAR_COVER_SIZE_DP / 2f
+
+    /** 歌词顶栏文字与封面一起为均衡器按钮让位。 */
+    fun topBarTextStartDp(): Int = TOP_BAR_COVER_START_DP + TOP_BAR_COVER_SIZE_DP + COVER_TEXT_GAP_DP
 
     /**
      * 收起态唯一封面 overlay 的**落点中心**（相对托盘上沿，dp；托盘上沿已含状态栏 padding）。

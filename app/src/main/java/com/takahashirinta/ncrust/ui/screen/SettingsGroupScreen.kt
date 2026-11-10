@@ -240,7 +240,6 @@ private fun SettingsPreferenceGroupPage(
     var showEqualizer by remember { mutableStateOf(false) }
     if (showEqualizer) {
         com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { showEqualizer = false })
-        return
     }
 
     val context = LocalContext.current

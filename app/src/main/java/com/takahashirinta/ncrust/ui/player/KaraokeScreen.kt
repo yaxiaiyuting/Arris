@@ -87,6 +87,7 @@ internal class KaraokeControls(
     val exit: () -> Unit,
     val translatedPrimary: Boolean,
     val toggleLanguage: () -> Unit,
+    val onOpenEqualizer: () -> Unit,
 )
 
 @Composable
@@ -330,6 +331,7 @@ private fun KaraokeHeader(controls: KaraokeControls, compact: Boolean, hasTransl
     val cover = remember(controls.cover) { controls.cover?.asImageBitmap() }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         KaraokeButton(PlayerGlyphs.Back, copy.exit, controls.exit)
+        PlayerEqualizerButton(onClick = controls.onOpenEqualizer)
         Box(
             Modifier.size(if (compact) 35.dp else 42.dp)
                 .clip(AppShapes.small)

@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)](LICENSE)
 [![Original](https://img.shields.io/badge/original%20code-MIT-yellow?style=flat-square)](LICENSE-MIT)
 
-[**主线下载**](https://arris.de5.net/get/latest.apk) · [**LTS 3.7.36 下载**](https://arris.de5.net/get/Arris-v3.7.36-gpl.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Gitee 镜像**](https://gitee.com/yaxiaiyuting/arris) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
+[**主线下载**](https://arris.de5.net/get/latest.apk) · [**LTS 3.7.37 下载**](https://arris.de5.net/get/Arris-v3.7.37-gpl.apk) · [**GitHub Releases**](https://github.com/yaxiaiyuting/Arris/releases) · [**完整更新日志**](CHANGELOG.md) · [**问题反馈**](https://github.com/yaxiaiyuting/Arris/issues) · [**官网**](https://arris.de5.net/) · [**Gitee 镜像**](https://gitee.com/yaxiaiyuting/arris) · [**Kanesumi 设计库**](https://github.com/GuitaristRin/Kanesumi-sec-a)
 
 </div>
 
@@ -36,6 +36,8 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.1.0** | 2026-11-10 | 均衡器独立面板随播放器打开，波形跟随系统音量，界面律动可单独开关，新装走三步引导 |
+| **LTS 3.7.37** | 2026-11-10 | 主线这一轮的均衡器、波形音量、律动开关与首次引导同步回移，入口在播放器顶栏 |
 | **LTS 3.7.36** | 2026-11-10 | Android 7 起可打开日推歌单，修复 QQ 音乐扫码会话和离线榜单显示 |
 | **4.0.19** | 2026-11-09 | 每日推荐可打开完整歌单，听歌识曲可选系统声音，底栏随主界面滑动 |
 | **4.0.15** | 2026-11-07 | 播放器换用哑光光影，封面到达后再淡入，主界面支持左右滑动切换五个标签 |
@@ -390,6 +392,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.1.0-gpl | 2026-11-10 | **均衡器改为独立面板**（播放器顶栏入口，横竖屏与跟唱页可达，不再遮 16 kHz 滑杆）；波形跟随媒体音量；界面律动与动效强度解耦；首次启动引导 |
 | v4.0.19-gpl | 2026-11-09 | 日推歌单、系统声音识曲、识曲会话校验、首页层次和底栏跟手 |
 | v4.0.15-gpl | 2026-11-07 | 哑光播放界面、切歌封面交接、五个主界面标签可左右滑动，致谢新增 quit |
 | v4.0.14-gpl | 2026-11-06 | **修复歌词慢半拍**。逐字歌词按首字切句，播放位置更新后立即重新计算歌词边界 |

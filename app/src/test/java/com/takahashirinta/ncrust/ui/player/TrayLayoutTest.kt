@@ -85,14 +85,12 @@ class TrayLayoutTest {
      * 所以两者必须来自同一组常量。
      */
     @Test
-    fun `v3_2_0 顶栏文字起始位与封面几何自洽`() {
-        assertEquals(
-            TrayLayout.COVER_START_DP + TrayLayout.COVER_SIZE_DP + TrayLayout.COVER_TEXT_GAP_DP,
-            TrayLayout.topBarTextStartDp(),
-        )
-        assertEquals(84, TrayLayout.topBarTextStartDp())
-        // 文字必须排在封面右边（否则会压在封面上）。
-        assertTrue(TrayLayout.topBarTextStartDp() > TrayLayout.COVER_START_DP + TrayLayout.COVER_SIZE_DP)
+    fun `顶栏为均衡器留位后封面与文字仍对齐`() {
+        val coverStart = TrayLayout.TOP_BAR_COVER_START_DP
+        val coverSize = TrayLayout.TOP_BAR_COVER_SIZE_DP
+        assertTrue(coverStart > TrayLayout.TOP_BAR_ACTION_START_DP + TrayLayout.TOP_BAR_ACTION_SIZE_DP)
+        assertEquals(coverStart + coverSize / 2f, TrayLayout.topBarCoverCenterXDp(), 0.001f)
+        assertEquals(coverStart + coverSize + TrayLayout.COVER_TEXT_GAP_DP, TrayLayout.topBarTextStartDp())
     }
 
     /**
