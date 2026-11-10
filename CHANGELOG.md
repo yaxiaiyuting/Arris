@@ -3,6 +3,16 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v3.7.36-gpl（LTS）— 每日推荐歌单与登录、离线修复（2026-11-10）
+
+LTS 正式版 · Android 7.0 及以上 · versionCode 224
+
+- 首页的「每日推荐」可打开完整歌单，选中哪首就从哪首开始播放。详情支持插播、追加和收藏到库，首页保留播放全部。
+- QQ 音乐 App 扫码等待由进程持有。同一进程内页面重建后沿用原二维码，后台确认后可保存登录态。
+- 首页断网且仅有榜单缓存时，仍能浏览已有榜单。无缓存时显示离线提示和重试入口。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.36-gpl) · [官网直链](https://arris.de5.net/get/Arris-v3.7.36-gpl.apk)
+
 ## v3.7.27-gpl — LTS 续播与更新稳定性（2026-11-05）
 
 LTS 长期维护版 · Android 7.0 及以上 · versionCode 114

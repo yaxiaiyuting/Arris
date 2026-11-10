@@ -10,9 +10,9 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-3.7.27--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-3.7.36--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 
-**LTS 3.7.27** 修复续播快照覆盖、网易云音质回退与应用内更新。Android 7.0 起可用。 [官网直链](https://arris.de5.net/get/Arris-v3.7.27-gpl.apk) · [更新记录](CHANGELOG.md)
+**LTS 3.7.36** 增加完整日推歌单，修复 QQ 音乐扫码会话与离线榜单显示。Android 7.0 起可用。 [官网直链](https://arris.de5.net/get/Arris-v3.7.36-gpl.apk) · [GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.36-gpl) · [更新记录](CHANGELOG.md)
 [![APK](https://img.shields.io/badge/APK-12.07%20MB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-24%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
