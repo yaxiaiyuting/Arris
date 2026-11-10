@@ -112,16 +112,7 @@ object MotionPrefs {
     /** 「界面动效」总开关默认**开**（任务书铁律 22：A 档默认开，但保留总开关）。 */
     const val DEFAULT_UI_MOTION = true
 
-    /**
-     * 全部独立开关的默认值：**全开**。
-     *
-     * 为什么默认开而不是默认关：它们的存在是为了让用户**能关掉**某一样，
-     * 而不是让用户去发现某一样。默认关会让「升级之后动效没变化」成为默认体验，
-     * 而档位表里明明写着精致档包含冲击波/光晕/粒子 —— 那是撒谎。
-     *
-     * v3.2.0 的四个新键沿用同一条理由：缺 key = 与上一版观感一致（律动在精致/炫技档
-     * 本来就开着）；至于**简洁档**本来就不该有它们，那是**档位**的职责，不是开关的。
-     */
+    /** 细项默认开。律动总开关缺失时由迁移保留原档位的行为。 */
     const val DEFAULT_SWITCH = true
 
     /** 降级水位的默认值（历史键，不再参与渲染）。 */
@@ -145,8 +136,10 @@ object MotionPrefs {
     /** v3.0.0 落下的水位（= 自动降级被删除、五个独立开关落地的那一版）。 */
     const val VERSION_V300 = 4
 
-    /** 当前水位。加语义 ⇒ +1 并在 [migrate] 里补一段搬运逻辑。 */
-    const val CURRENT_VERSION = 5
+    private const val VERSION_V320 = 5
+
+    /** 首次将律动的隐含档位默认值写成独立设置。 */
+    const val CURRENT_VERSION = 6
 
     // ------------------------------------------------------------------
     // 纯读（键缺失 / 类型不符都不抛异常 —— 坏数据最坏只是回落默认值）
@@ -320,7 +313,7 @@ object MotionPrefs {
         val simpleDisk = explicitTier == MotionIntensity.SIMPLE
 
         var log = readDegradeLog(prefs)
-        if (wasDegraded) {
+        if (version < VERSION_V320 && wasDegraded) {
             log = appendDegradeLog(
                 log,
                 degradeLogEntry(
@@ -332,7 +325,7 @@ object MotionPrefs {
             )
         }
         // 幂等由水位保证（这里每个盘只会走到一次）⇒ 不需要再判「是不是 v3.0.0 的盘」。
-        if (simpleDisk) {
+        if (version < VERSION_V320 && simpleDisk) {
             log = appendDegradeLog(
                 log,
                 degradeLogEntry(
@@ -352,6 +345,10 @@ object MotionPrefs {
                 it.putInt(KEY_DEGRADE_LEVEL, level)
             }
             if (log.isNotEmpty()) it.putString(KEY_DEGRADE_LOG, log)
+            if (!prefs.contains(KEY_RHYTHM)) {
+                val previousTier = explicitTier ?: readTier(prefs, deviceDefault)
+                it.putBoolean(KEY_RHYTHM, previousTier >= MotionIntensity.REFINED)
+            }
             it.putInt(KEY_VERSION, CURRENT_VERSION)
         }
         return true

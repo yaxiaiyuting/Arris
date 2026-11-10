@@ -22,7 +22,7 @@ import org.junit.Test
  *
  * 覆盖：
  *  - 三档 → 波形能力位与界面动效能力位的**逐格**断言（table-driven，不靠肉眼）；
- *  - **简洁档的律动类能力位逐个为 false**，且 `needsFrameClock` / `needsAudioFeatures`
+ *  - 关闭律动时简洁档没有逐帧界面效果，且 `needsFrameClock` / `needsAudioFeatures`
  *    都为 false（= 那一档零逐帧，P0-B 的可执行判据）；
  *  - A 档默认开、但总开关关掉后**全关**且**波形不受影响**；
  *  - 九个独立开关各自能单独关掉一项，且**只**关掉那一项；
@@ -47,14 +47,14 @@ class MotionEffectsTest {
     // ── 1. 三档能力位矩阵（v3.2.0 的档位表）────────────────────────────────────────
 
     /**
-     * **P0-B 的可执行判据**：`MotionEffects.of(0, ...)` 的律动类能力位**一个都不为真**。
+     * 简洁档关闭律动时，所有律动项都停用。
      *
      * 判据写法是表驱动的：把「律动类」逐项列出来断言 —— 少列一项就是漏测，
      * 而"漏测"正是这个 bug 上一版溜过去的方式（封面浮动藏在 `coverElevation` 里）。
      */
     @Test
-    fun `简洁档是静态档：律动类能力位逐个为假`() {
-        val e = effects(MotionIntensity.SIMPLE)
+    fun `简洁档关闭律动时只保留静态界面效果`() {
+        val e = effects(MotionIntensity.SIMPLE, switches = rhythmOff())
         // 律动类 = 驱动量来自 MotionEnvelope 的节拍 / 强拍 / 响度（见 probe-ui-jitter.md §5）
         assertFalse("背景呼吸（随响度包络）", e.backgroundBreathing)
         assertFalse("封面浮动（随鼓点脉冲）", e.coverFloat)
@@ -238,12 +238,13 @@ class MotionEffectsTest {
     }
 
     @Test
-    fun `关掉封面浮动只影响封面浮动`() {
+    fun `关掉封面浮动也停止封面随拍旋转`() {
         val e = effects(MotionIntensity.SHOWCASE, switches = MotionSwitches(coverFloat = false))
         assertFalse("封面浮动关掉", e.coverFloat)
         assertTrue("静态浮起阴影是另一件事，不受影响", e.coverElevation)
         assertTrue("其它律动类不受影响", e.backgroundBreathing && e.lyricPulse && e.beatPulse)
-        assertTrue("非律动类不受影响", e.shockwave && e.particles && e.cover3d)
+        assertFalse(e.cover3d)
+        assertTrue("非律动类不受影响", e.shockwave && e.particles)
     }
 
     @Test
@@ -273,8 +274,8 @@ class MotionEffectsTest {
                 barPulse = false,
             ),
         )
-        assertTrue("封面 3D 是律动类里唯一没有独立开关的一项，只受律动闸约束 ⇒ 仍在", e.cover3d)
-        assertTrue("所以 anyRhythm 仍为真（律动闸没关）", e.anyRhythm)
+        assertFalse(e.cover3d)
+        assertFalse(e.anyRhythm)
         assertFalse("但四个细粒度开关对应的四项确实都关了",
             e.backgroundBreathing || e.coverFloat || e.lyricPulse || e.beatPulse)
         assertTrue("非律动类照旧", e.shockwave && e.haloBloom && e.particles && e.parallax)
@@ -323,8 +324,9 @@ class MotionEffectsTest {
      */
     @Test
     fun `关掉律动总闸只掐律动类其余一概不受影响`() {
-        for (tier in listOf(MotionIntensity.REFINED, MotionIntensity.SHOWCASE)) {
+        for (tier in MotionIntensity.RANGE) {
             val on = effects(tier)
+            assertTrue(on.backgroundBreathing && on.coverFloat && on.lyricPulse && on.beatPulse)
             val off = effects(tier, switches = rhythmOff())
             // 律动类：全关
             assertFalse("档位 $tier：背景呼吸", off.backgroundBreathing)
@@ -346,7 +348,7 @@ class MotionEffectsTest {
             assertEquals("档位 $tier：光晕圈数", on.haloRings, off.haloRings)
             assertEquals("档位 $tier：多频段调制", on.waveform.waveBandMode, off.waveform.waveBandMode)
             // 剩下的逐帧量只有非律动的那几项。
-            assertTrue("档位 $tier：冲击波/光晕/粒子仍是逐帧的", off.needsFrameClock)
+            assertEquals("档位 $tier：剩余的装饰效果决定帧时钟", tier >= MotionIntensity.REFINED, off.needsFrameClock)
         }
     }
 
@@ -364,7 +366,7 @@ class MotionEffectsTest {
 
     @Test
     fun `律动闸不影响简洁档的静态项`() {
-        // 简洁档本来就没有律动类；律动闸关掉不该让它再少画东西。
+        // 关掉律动保留背景模糊、封面阴影和切歌过渡。
         val on = effects(MotionIntensity.SIMPLE)
         val off = effects(MotionIntensity.SIMPLE, switches = rhythmOff())
         assertTrue(off.backgroundBlur && off.coverElevation && off.coverTransition)
@@ -420,8 +422,7 @@ class MotionEffectsTest {
         val e = effects(MotionIntensity.SHOWCASE)
         assertTrue(e.needsFrameClock)
 
-        // 简洁档：静态档，**零逐帧**（v3.2.0 的 P0-B）。
-        val basicOnly = effects(MotionIntensity.SIMPLE)
+        val basicOnly = effects(MotionIntensity.SIMPLE, switches = rhythmOff())
         assertFalse("简洁档不得有任何逐帧项", basicOnly.needsFrameClock)
         assertFalse("B/C 档的逐帧项一个都不能开", basicOnly.anyAdvanced || basicOnly.anyShowcase)
         assertFalse("简洁档一个律动类都没有", basicOnly.anyRhythm)
@@ -437,6 +438,8 @@ class MotionEffectsTest {
             switches = MotionSwitches(
                 breathing = false,
                 coverFloat = false,
+                lyricPulse = false,
+                barPulse = false,
             ),
         )
         assertFalse("简洁档 + 关掉律动 ⇒ 没有任何逐帧动效", staticOnly.needsFrameClock)
@@ -463,12 +466,12 @@ class MotionEffectsTest {
         // 关掉**它**才是"真的不需要特征"的那条路。
         val onlyBlur = effects(
             MotionIntensity.SIMPLE,
-            switches = MotionSwitches(breathing = false),
+            switches = rhythmOff(),
         )
         assertTrue("简洁档只剩背景模糊，但波形仍要着色 ⇒ 仍需要特征", onlyBlur.needsAudioFeatures)
         val noWaveformBands = effects(
             MotionIntensity.SIMPLE,
-            switches = MotionSwitches(breathing = false, waveBands = false),
+            switches = MotionSwitches(rhythm = false, waveBands = false),
         )
         assertFalse("连波形频带着色都关掉之后，才不需要音频特征", noWaveformBands.needsAudioFeatures)
 
