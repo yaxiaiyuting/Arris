@@ -178,7 +178,10 @@ export default {
       //   · 别名（latest.apk / lts-latest.apk）不跳转 —— 它们指向"当前版本"，跳过去容易拿到旧包
       //   · `?geo=CN` 用于本地验证（CF 的 cf-ipcountry 外部无法伪造）
       // 这些版本由官网与 GitHub 提供，官网直链不转去尚无对应资产的镜像。
-      const websiteOnly = ["Arris-v3.7.34-gpl.apk", "Arris-v3.7.36-gpl.apk", "Arris-v3.7.37-gpl.apk", "Arris-v4.0.15-gpl.apk", "Arris-v4.0.19-gpl.apk", "Arris-v4.1.0-gpl.apk"]
+      // 只在官网/GitHub 有、Gitee 没有对应资产的版本 —— 这些不做 302（否则跳到 404）。
+      // 4.1.0 与 LTS 常驻页（v3.7.36-gpl 下挂 Arris-v3.7.37-gpl.apk）现在 Gitee 都有了，
+      // 所以从名单里移出，国内用户重新走 Gitee 快路。
+      const websiteOnly = ["Arris-v3.7.34-gpl.apk", "Arris-v4.0.15-gpl.apk", "Arris-v4.0.19-gpl.apk"]
         .includes(ALIAS_TAGS[name]?.f ?? name);
       if (url.pathname.startsWith("/get/") && env.GITEE_REDIRECT !== "0" && !websiteOnly) {
         const country = (url.searchParams.get("geo") || request.headers.get("cf-ipcountry") || "").toUpperCase();

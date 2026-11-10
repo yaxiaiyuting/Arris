@@ -29,6 +29,9 @@ fs.writeFileSync(path.join(dlDir, 'manifest.json'), JSON.stringify({ files }, nu
 // 别名 → (tag, 资产名)：给 Worker 的「国内 302 到 Gitee」用。
 // 之前那版在请求里现场打 GitHub/i自调 /api/releases，撞限流就**静默不跳转**（表现为"别名还是慢"）。
 // 部署时算好、运行时零 subrequest，行为才是确定的。
+// LTS 用**一个常驻 release** 承载后续所有版本（tag 固定在 v3.7.36-gpl 那一页，
+// 资产随版本替换）。所以 lts-latest.apk 的跳转目标 tag 是固定的，只有资产名会变。
+const LTS_ROLLING_TAG = 'v3.7.36-gpl';
 const aliases = {};
 const pick = (file) => files.find((f) => f === file);
 const versioned = files.filter((f) => /^Arris-v\d/.test(f));
@@ -41,7 +44,10 @@ const mainline = versioned.map((f) => ({ f, ...parse(f) })).filter((x) => x.tag 
 const lts = versioned.map((f) => ({ f, ...parse(f) })).filter((x) => x.tag && x.lts)
   .sort((a, b) => a.tag.localeCompare(b.tag, undefined, { numeric: true }));
 if (mainline.length && pick('latest.apk')) aliases['latest.apk'] = mainline[mainline.length - 1];
-if (lts.length && pick('lts-latest.apk')) aliases['lts-latest.apk'] = lts[lts.length - 1];
+if (lts.length && pick('lts-latest.apk')) {
+  const newest = lts[lts.length - 1];
+  aliases['lts-latest.apk'] = { ...newest, tag: LTS_ROLLING_TAG };
+}
 fs.writeFileSync(
   path.join(root, 'src/alias-tags.mjs'),
   '// 由 tools/sync-dl-manifest.mjs 生成：别名 → (tag, 资产名)，供 Worker 做国内 302。\n' +
