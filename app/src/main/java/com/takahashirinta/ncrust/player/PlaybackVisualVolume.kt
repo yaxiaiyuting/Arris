@@ -39,15 +39,31 @@ internal class PlaybackVisualVolume(context: Context) {
     }
 
     companion object {
-        /** Compress the visual scale so quiet media still has readable detail. */
+        /**
+         * 把系统音量换算成波形的显示增益。
+         *
+         * **不再用线性振幅**（4.1.0 首次发布的写法是 `sqrt(playerGain × streamGain)`）：
+         * 手机音量步进是**按 dB 均匀**的，50% 音量大约只有 −15 dB ≈ 0.18 的线性振幅，
+         * 开方后只剩 0.42 —— 用户看到的就是"音量 50、波形高度也才 50%"，偏矮。
+         *
+         * 现在按**感知响度**折算：以 −[VISUAL_DB_FLOOR] dB 为归零点线性映射，
+         * 于是 50% 音量 ≈ 0.75、30% ≈ 0.62、10% ≈ 0.35，静音仍是 0。
+         * 拿不到路由 dB（少数 OEM）时退回 `(index/max)^0.35` —— 同样是"中间偏上"的形状。
+         */
         internal fun visualGain(playerGain: Float, index: Int, max: Int, routeDb: Float?): Float {
             if (index <= 0 || !playerGain.isFinite()) return 0f
             val streamGain = when {
                 routeDb == Float.NEGATIVE_INFINITY -> 0.0
-                routeDb != null && routeDb.isFinite() -> 10.0.pow(routeDb.coerceAtMost(0f) / 20.0)
-                else -> (index.toDouble() / max.coerceAtLeast(1)).coerceIn(0.0, 1.0)
-            }
-            return sqrt(playerGain.coerceIn(0f, 1f) * streamGain).toFloat()
+                routeDb != null && routeDb.isFinite() ->
+                    // 1 + db/60：0 dB → 1.00、−15 dB（约 50% 音量）→ 0.75、−30 dB → 0.50、−60 dB → 0。
+                    (1.0 + routeDb.coerceAtMost(0f) / -VISUAL_DB_FLOOR).toDouble()
+                else -> (index.toDouble() / max.coerceAtLeast(1)).pow(0.35)
+            }.coerceIn(0.0, 1.0)
+            // 播放增益仍开方压缩：安静段落也要有可见细节，但它不该再把中高音量压低。
+            return (sqrt(playerGain.coerceIn(0f, 1f)) * streamGain).toFloat().coerceIn(0f, 1f)
         }
+
+        /** 显示增益的 dB 量程：音量衰减到 −60 dB 时波形归零。 */
+        private const val VISUAL_DB_FLOOR = -60f
     }
 }
