@@ -15,7 +15,7 @@
  *
  * 本类**两条都不越**：
  *
- *  - **没有分帧、没有窗函数、没有频域变换、没有 PCM 环形缓冲**；
+ *  - 瞬态判定每 10ms 结算一次能量，不复制 PCM，不做窗函数或频域变换；
  *  - 只有 **两个一阶（单极点）低通**（截止 150 Hz 与 2 kHz），每样本各一次乘加；
  *    它们与 v2.9.0 已有的那条低频通道**共用同一次逐样本遍历**（不是第二遍扫描）；
  *  - 三频段由「低通之差」得到（[`LP(2k) − LP(150)`] = 中频带，[`x − LP(2k)`] = 高频带），
@@ -137,8 +137,7 @@ open class AudioFeatureExtractor {
      * （表现是「快鼓点只跳一半」）。
      *
      * 所以时间基准不是"一个缓冲"，而是缓冲内部的**子帧**（[SUB_FRAME_MS] = 10ms）：
-     * 逐样本累加不变，只是每 10ms 结算一次瞬态判据 ⇒ 时间分辨率从 11 Hz 提到 ~100 Hz，
-     * **每样本只多两次加法**。
+     * 逐样本累加，每 10ms 结算一次判据。窗口跨缓冲连续，同一份 PCM 不随回调边界改变判定。
      */
     var transientCount: Int = 0
         private set
@@ -149,6 +148,15 @@ open class AudioFeatureExtractor {
 
     /** 本次 [process] 是否判定出至少一个瞬态（[transientCount] > 0 的便捷读法）。 */
     val transient: Boolean get() = transientCount > 0
+
+    // Retain the short attack for the display while keeping RMS and centroid as buffer averages.
+    val barRms: Float get() = withAttack(rms, attackFull)
+    val barLow: Float get() = withAttack(low, attackLow)
+    val barMid: Float get() = withAttack(mid, attackMid)
+    val barHigh: Float get() = withAttack(high, attackHigh)
+
+    private fun withAttack(average: Float, attack: Float): Float =
+        average + (attack - average).coerceAtLeast(0f) * 0.72f
 
     /**
      * 本次缓冲覆盖的**时长**（毫秒）。
@@ -178,8 +186,10 @@ open class AudioFeatureExtractor {
      */
     private val filterState = Array(MAX_CHANNELS) { DoubleArray(2) }
 
-    /** `[0]` = 低频带慢速基线，`[1]` = 全带慢速基线。**与声道无关**（它们是每缓冲的包络）。 */
-    private val baselineState = DoubleArray(2)
+    /** 低频、全频和中高频包络的慢速基线。 */
+    private val baselineState = DoubleArray(3)
+    private var previousPresence = 0.0
+    private var peakPresence = 0.0
 
     /** 冷却剩余（毫秒）。 */
     private var cooldownMs: Double = 0.0
@@ -208,21 +218,21 @@ open class AudioFeatureExtractor {
     /** 全带响度的峰值记忆（与 [peakLow] 同构）—— 全带判据同样需要它，见 [updateTransient]。 */
     private var peakFull: Double = 0.0
 
-    /**
-     * 子帧累加器（低频带 / 全带的平方和，以及已累计的**帧数**）。
-     *
-     * 见 [transientCount] 的 KDoc：真机实测的缓冲粒度是 **100ms**
-     * （`docs/verification/v3.0.0/probe/EVIDENCE.md` 的 `PROBE-AUDIO-TAP`），
-     * 而瞬态判据需要比它细得多的时间分辨率。逐样本累加不变，
-     * 只是每 [SUB_FRAME_MS] 结算一次判据 ⇒ 分辨率从 11 Hz 提到约 100 Hz，
-     * 每样本只多两次加法。
-     */
+    // Energy for one continuous analysis window, including samples from preceding buffers.
     private var sumLowSub = 0.0
+    private var sumMidSub = 0.0
+    private var sumHighSub = 0.0
     private var sumFullSub = 0.0
-    private var subFrames = 0
-
-    /** 一个子帧含多少个**交错样本**（= 每声道样本数 × 声道数）。configure 时算一次。 */
+    private var subSamples = 0
     private var subFrameSamples = 0
+    private var subFrameMs = 0.0
+    private var baselineK = 0.0
+    private var subPeakDecay = 0.0
+
+    private var attackLow = 0f
+    private var attackMid = 0f
+    private var attackHigh = 0f
+    private var attackFull = 0f
 
     private var sampleRateHz: Int = 0
     private var channelCount: Int = 0
@@ -230,16 +240,6 @@ open class AudioFeatureExtractor {
     /** 低通系数（configure 时算一次，之后每样本只用一次乘加）。 */
     private var aLow: Double = 1.0
     private var aMid: Double = 1.0
-
-    /**
-     * 慢速基线的每缓冲系数。**每缓冲按 dt 算一次**（`k = 1 − exp(−dt/τ)`）。
-     *
-     * v3.0.0 修正：早先写的是一个固定步长（0.026），而缓冲粒度是运行时行为 ——
-     * 固定步长会让时间常数随缓冲时长漂移（21ms 缓冲 → τ≈0.8s，93ms 缓冲 → τ≈3.5s），
-     * 于是「慢速基线」在慢设备上变成「几乎不动的基线」，瞬态判据在整个缓冲期间
-     * 只会触发一次。一次 `exp`／缓冲的代价可以忽略，换来的是与缓冲粒度无关的判据。
-     */
-    private var baselineK: Double = 0.0
 
     /**
      * 格式变化时调用（media3 的 `AudioBufferSink.flush`）。**不做任何可能抛异常的推导。**
@@ -251,42 +251,16 @@ open class AudioFeatureExtractor {
     fun configure(sampleRateHz: Int, channelCount: Int) {
         this.sampleRateHz = if (sampleRateHz > 0) sampleRateHz else 0
         this.channelCount = if (channelCount > 0) channelCount else 0
-        for (channel in filterState.indices) {
-            filterState[channel][0] = 0.0
-            filterState[channel][1] = 0.0
-        }
-        baselineState[0] = 0.0
-        baselineState[1] = 0.0
-        cooldownMs = 0.0
-        peakLow = 0.0
-        frameMs = 0f
-        rms = 0f
-        low = 0f
-        mid = 0f
-        high = 0f
-        spectralCentroid = 0f
-        transientCount = 0
-        transientStrength = 0f
-        if (this.sampleRateHz == 0 || this.channelCount == 0) {
-            available = false
-            return
-        }
+        reset()
+        available = this.sampleRateHz > 0 && this.channelCount > 0
+        if (!available) return
         aLow = lowPassCoefficient(LOW_CUTOFF_HZ, this.sampleRateHz)
         aMid = lowPassCoefficient(MID_HIGH_CUTOFF_HZ, this.sampleRateHz)
-        // 基线系数按 dt 现算（见 [baselineK] 的 KDoc）。这里先给一个「典型缓冲」的初值，
-        // 真正的值在每次 process 里按实际 dt 更新 —— 万一 process 从没被调用过也不会留下 0。
-        baselineK = baselineCoefficient(TYPICAL_FRAME_MS)
-        // 子帧长度（**交错样本数**）。至少 1，避免采样率极低时除零。
-        subFrameSamples = ((this.sampleRateHz * SUB_FRAME_MS / 1000.0).toInt() * this.channelCount)
-            .coerceAtLeast(1)
-        sumLowSub = 0.0
-        sumFullSub = 0.0
-        subFrames = 0
-        // 采样率与声道数都拿到了 ⇒ 可以工作。**这一行曾经漏写过**（`available` 永远停在
-        // 初始的 false，于是整条特征链路静默失效、界面动效全部退回内置判据）——
-        // 单测 `AudioFeatureExtractorTest` 的每一条用例都以 `process` 返回 true 为前提，
-        // 所以这个漏写不可能再发生第二次。
-        available = true
+        val frames = (this.sampleRateHz * SUB_FRAME_MS / 1000.0).toInt().coerceAtLeast(1)
+        subFrameSamples = frames * this.channelCount
+        subFrameMs = frames * 1000.0 / this.sampleRateHz
+        baselineK = baselineCoefficient(subFrameMs)
+        subPeakDecay = peakMemoryDecay(subFrameMs)
     }
 
     /**
@@ -300,8 +274,9 @@ open class AudioFeatureExtractor {
             filterState[channel][0] = 0.0
             filterState[channel][1] = 0.0
         }
-        baselineState[0] = 0.0
-        baselineState[1] = 0.0
+        baselineState.fill(0.0)
+        previousPresence = 0.0
+        peakPresence = 0.0
         cooldownMs = 0.0
         rms = 0f
         low = 0f
@@ -313,9 +288,23 @@ open class AudioFeatureExtractor {
         frameMs = 0f
         peakLow = 0.0
         peakFull = 0.0
+        clearSubFrame()
+        clearAttacks()
+    }
+
+    private fun clearAttacks() {
+        attackLow = 0f
+        attackMid = 0f
+        attackHigh = 0f
+        attackFull = 0f
+    }
+
+    private fun clearSubFrame() {
         sumLowSub = 0.0
+        sumMidSub = 0.0
+        sumHighSub = 0.0
         sumFullSub = 0.0
-        subFrames = 0
+        subSamples = 0
     }
 
     /**
@@ -330,9 +319,7 @@ open class AudioFeatureExtractor {
     open fun process(view: ByteBuffer, encoding: Int): Boolean {
         transientCount = 0
         transientStrength = 0f
-        sumLowSub = 0.0
-        sumFullSub = 0.0
-        subFrames = 0
+        clearAttacks()
         if (!available) return false
         val bps = bytesPerSample(encoding)
         if (bps == 0) return false
@@ -350,8 +337,6 @@ open class AudioFeatureExtractor {
         var sumMid = 0.0
         var sumHigh = 0.0
         var index = base
-        // 子帧边界计数器（见 [transientCount] 的 KDoc）。
-        var subCount = 0
         when (encoding) {
             C.ENCODING_PCM_16BIT -> {
                 var i = 0
@@ -364,31 +349,30 @@ open class AudioFeatureExtractor {
                     val state = filterState[channel]
                     var sLow = state[0]
                     var sMid = state[1]
-                    sumFull += v * v
                     sLow += kl * (v - sLow)
                     sMid += km * (v - sMid)
                     val m = sMid - sLow
                     val h = v - sMid
-                    sumLow += sLow * sLow
-                    sumMid += m * m
-                    sumHigh += h * h
-                    // 子帧累加（只多两次加法）：低频带与全带。
-                    sumLowSub += sLow * sLow
-                    sumFullSub += v * v
+                    val fullPower = v * v
+                    val lowPower = sLow * sLow
+                    val midPower = m * m
+                    val highPower = h * h
+                    sumFull += fullPower
+                    sumLow += lowPower
+                    sumMid += midPower
+                    sumHigh += highPower
+                    sumFullSub += fullPower
+                    sumLowSub += lowPower
+                    sumMidSub += midPower
+                    sumHighSub += highPower
                     state[0] = if (sLow.isFinite()) sLow else 0.0
                     state[1] = if (sMid.isFinite()) sMid else 0.0
                     index += 2
                     i++
                     channel++
                     if (channel >= channels) channel = 0
-                    subCount++
-                    subFrames++
-                    if (subCount >= subFrameSamples) {
-                        finalizeSubFrame()
-                        subCount = 0
-                        sumLowSub = 0.0
-                        sumFullSub = 0.0
-                    }
+                    subSamples++
+                    if (subSamples >= subFrameSamples) finalizeSubFrame()
                 }
             }
             C.ENCODING_PCM_FLOAT -> {
@@ -404,34 +388,35 @@ open class AudioFeatureExtractor {
                     } else {
                         (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
                     }
-                    val v = Float.fromBits(bits).toDouble()
+                    val sample = Float.fromBits(bits)
+                    val v = if (sample.isFinite()) sample.toDouble() else 0.0
                     val state = filterState[channel]
                     var sLow = state[0]
                     var sMid = state[1]
-                    sumFull += v * v
                     sLow += kl * (v - sLow)
                     sMid += km * (v - sMid)
                     val m = sMid - sLow
                     val h = v - sMid
-                    sumLow += sLow * sLow
-                    sumMid += m * m
-                    sumHigh += h * h
-                    sumLowSub += sLow * sLow
-                    sumFullSub += v * v
+                    val fullPower = v * v
+                    val lowPower = sLow * sLow
+                    val midPower = m * m
+                    val highPower = h * h
+                    sumFull += fullPower
+                    sumLow += lowPower
+                    sumMid += midPower
+                    sumHigh += highPower
+                    sumFullSub += fullPower
+                    sumLowSub += lowPower
+                    sumMidSub += midPower
+                    sumHighSub += highPower
                     state[0] = if (sLow.isFinite()) sLow else 0.0
                     state[1] = if (sMid.isFinite()) sMid else 0.0
                     index += 4
                     i++
                     channel++
                     if (channel >= channels) channel = 0
-                    subCount++
-                    subFrames++
-                    if (subCount >= subFrameSamples) {
-                        finalizeSubFrame()
-                        subCount = 0
-                        sumLowSub = 0.0
-                        sumFullSub = 0.0
-                    }
+                    subSamples++
+                    if (subSamples >= subFrameSamples) finalizeSubFrame()
                 }
             }
             else -> return false
@@ -452,112 +437,81 @@ open class AudioFeatureExtractor {
         val frames = samples / channelCount
         frameMs = if (sampleRateHz > 0) (frames * 1000.0 / sampleRateHz).toFloat() else 0f
 
-        // 缓冲末尾那个**不完整**的子帧同样要结算 —— 否则一个 100ms 缓冲只剩 90ms 的内容
-        // 被判据看到（漏掉最后 10ms，而最后 10ms 往往正是击打落下的地方）。
-        // 它的 dt 比标称子帧短，`baselineCoefficient` / `peakMemoryDecay` 都按真实 dt 现算，
-        // 所以不会把基线/峰值记忆的推进速度算错。
-        if (subFrames > 0) finalizeSubFrame()
         return true
     }
 
-    /**
-     * 结算一个子帧：把累加的平方和变成低频带 / 全带的 RMS，交给瞬态判据。
-     *
-     * **不分配、不做除法以外的重活**；每缓冲调用 `帧数 ÷ 10ms` 次（典型 10 次）。
-     */
     private fun finalizeSubFrame() {
-        if (subFrames <= 0) return
-        val n = subFrames.toDouble()
-        val lowSub = sqrt(sumLowSub / n)
-        val fullSub = sqrt(sumFullSub / n)
-        // J05：`subFrames` 统计的是**交错样本数**（每个声道各算一个），
-        // 换算成时长必须先除以声道数：立体声下旧写法把 dtMs 放大 4 倍
-        // （n×ch 而不是 n/ch），瞬态时间常数整条跟着错。
-        val channels = channelCount.coerceAtLeast(1)
-        val dtMs = if (sampleRateHz > 0) n / channels * 1000.0 / sampleRateHz else 0.0
-        subFrames = 0
-        updateTransient(
-            low = if (lowSub.isFinite()) lowSub.toFloat().coerceIn(0f, 1f) else 0f,
-            full = if (fullSub.isFinite()) fullSub.toFloat().coerceIn(0f, 1f) else 0f,
-            dtMs = dtMs,
-        )
+        val n = subSamples.toDouble()
+        val low = finite01(sqrt(sumLowSub / n))
+        val mid = finite01(sqrt(sumMidSub / n))
+        val high = finite01(sqrt(sumHighSub / n))
+        val full = finite01(sqrt(sumFullSub / n))
+        clearSubFrame()
+        if (updateTransient(low, full, high + 0.35 * mid)) {
+            attackLow = maxOf(attackLow, low)
+            attackMid = maxOf(attackMid, mid)
+            attackHigh = maxOf(attackHigh, high)
+            attackFull = maxOf(attackFull, full)
+        }
     }
 
     /**
-     * 瞬态判据（**每缓冲一次**，不是每样本）。
-     *
-     * ## 为什么放在音频线程而不是留在 UI 帧循环里
-     *
-     * v2.9.0 的 onset 判据跑在 UI 帧时钟上，读的是**最新一根柱**。而一根柱 = 一次
-     * `handleBuffer`：缓冲率高于帧率时，一帧里到达的多根柱只有最后一根被看到，
-     * 前面那些柱里的击打**永远不被判定** —— 快鼓点会漏。放到音频线程上，
-     * **每一次回调都被判定**，漏检只可能来自冷却窗口（那是有意的）。
-     *
-     * ## 判据（两条并列，共用一条慢速基线与一个冷却窗口）
-     *
-     * - **低频带头部突变**：底鼓 / 贝斯鼓点。这是 v2.9.0 的低频通道，判据参数沿用。
-     * - **全带响度突变**：军鼓 / 拍手 / 高频击打 —— 它们的低频能量很小，
-     *   只有全带判据能抓到（任务书 §4.1 的「低频/全频段」就是这两条）。
-     *
-     * 两条都要求「相对慢速基线的**增量**」而不是绝对响度：绝对门槛在母带压缩强的曲目上
-     * 永远不达标、在安静曲目上永远达标，跨曲目不可用。
-     *
-     * 冷却是**时间**（毫秒）而不是「几个缓冲」：缓冲粒度是运行时行为，
-     * 用缓冲计数写冷却会让同一份代码在不同设备上有不同的节拍分辨率。
+     * Low/full energy retains the kick path. The presence envelope catches short claps and snare
+     * attacks that cut through a sustained accompaniment with very little change in full RMS.
      */
-    private fun updateTransient(low: Float, full: Float, dtMs: Double) {
-        if (!dtMs.isFinite() || dtMs <= 0.0) return
-        // 基线系数按**本次缓冲的真实 dt** 现算：缓冲粒度是运行时行为，
-        // 固定步长会让时间常数随缓冲时长漂移（见 [baselineK] 的 KDoc）。
-        baselineK = baselineCoefficient(dtMs)
+    private fun updateTransient(low: Float, full: Float, presence: Double): Boolean {
         val lowValue = low.toDouble()
         val fullValue = full.toDouble()
         val lowBase = baselineState[0]
         val fullBase = baselineState[1]
+        val presenceBase = baselineState[2]
         val lowJump = lowValue - lowBase
         val fullJump = fullValue - fullBase
+        val presenceJump = presence - presenceBase
+        val presenceStep = presence - previousPresence
+        val presenceOnset = presence >= 0.025 && presenceJump >= maxOf(0.012, presenceBase * 0.22) &&
+            presenceStep >= maxOf(0.012, previousPresence * 0.3) &&
+            presence >= peakPresence * subPeakDecay * 1.2
+        previousPresence = presence
+        peakPresence = maxOf(presence, peakPresence * subPeakDecay)
 
         // 判定必须用**上一步的**峰值记忆（含本次就把它抬起来 = 自己把自己判掉）。
-        val peakDecay = peakMemoryDecay(dtMs)
-        val memory = peakLow * peakDecay
-        val memoryFull = peakFull * peakDecay
+        val memory = peakLow * subPeakDecay
+        val memoryFull = peakFull * subPeakDecay
         val lowNovel = lowValue >= memory * ONSET_PEAK_RATIO
         val fullNovel = fullValue >= memoryFull * ONSET_PEAK_RATIO
 
         // 先算 jump 再更新基线：否则一次强瞬态会立刻把基线抬起来、把自己判掉。
         baselineState[0] = lowBase + (lowValue - lowBase) * baselineK
         baselineState[1] = fullBase + (fullValue - fullBase) * baselineK
-        if (!baselineState[0].isFinite()) baselineState[0] = 0.0
-        if (!baselineState[1].isFinite()) baselineState[1] = 0.0
+        baselineState[2] = presenceBase + presenceJump * baselineK
         peakLow = if (memory > lowValue) memory else lowValue
         peakFull = if (memoryFull > fullValue) memoryFull else fullValue
 
-        if (cooldownMs > 0.0) cooldownMs = (cooldownMs - dtMs).coerceAtLeast(0.0)
-        if (cooldownMs > 0.0) return
+        if (cooldownMs > 0.0) cooldownMs = (cooldownMs - subFrameMs).coerceAtLeast(0.0)
+        if (cooldownMs > 0.0) return false
 
-        // 两条并列的判据（任务书 §4.1 的「低频 / 全频段」）：
-        //  - **低频带头部突变**：底鼓 / 贝斯鼓点；
-        //  - **全带响度突变**：军鼓 / 拍手 / 高频击打 —— 它们的低频能量很小。
-        // 两条都要求"相对慢速基线的增量"（绝对门槛跨曲目不可用）**且**"超过峰值记忆"
-        // （否则衰减尾巴会被重复判定）。
+        // The peak memory stops the tail of a single hit from re-triggering after cooldown.
         val lowOnset = lowNovel && low >= ONSET_MIN_LOW &&
             lowJump >= ONSET_ABS_MIN &&
             lowJump >= lowBase * ONSET_REL_FACTOR
         val fullOnset = fullNovel && fullValue >= ONSET_MIN_RMS &&
             fullJump >= ONSET_ABS_MIN &&
             fullJump >= fullBase * ONSET_REL_FACTOR
-        if (!lowOnset && !fullOnset) return
+        if (!lowOnset && !fullOnset && !presenceOnset) return false
 
         cooldownMs = ONSET_COOLDOWN_MS.toDouble()
         transientCount++
         val strength = maxOf(
             lowJump / ONSET_STRENGTH_FULL,
             fullJump / ONSET_STRENGTH_FULL,
+            if (presenceOnset) presenceJump / 0.10 else 0.0,
         )
         val clamped = if (strength.isFinite()) strength.toFloat().coerceIn(0f, 1f) else 0f
         // 一次缓冲里可能有多次击打：**取最强的那一次**驱动视觉幅度
         // （逐个播完是不可能的 —— 视觉上"最响的那一下决定这一帧有多大"才是对的）。
         if (clamped > transientStrength) transientStrength = clamped
+        return true
     }
 
     /** 单测 / 诊断：低频带慢速基线。 */

@@ -191,13 +191,11 @@ class TransparentWaveformSink(
             // 多出来的只有每样本两次乘加 —— 与"每加一个特征再走一遍全部样本"差一个数量级。
             if (extractor.process(buffer, encoding)) {
                 if (wantBars) {
-                    // v3.2.2：**三个频带各自的历史**（三条泳道）—— 传的是提取器已经算好的
-                    // 三个字段，音频线程没有新增任何逐样本计算（铁律 29）。
                     onBar(
-                        extractor.rms.toDouble(),
-                        extractor.low.toDouble(),
-                        extractor.mid.toDouble(),
-                        extractor.high.toDouble(),
+                        extractor.barRms.toDouble(),
+                        extractor.barLow.toDouble(),
+                        extractor.barMid.toDouble(),
+                        extractor.barHigh.toDouble(),
                     )
                 }
                 if (wantFeatures) {

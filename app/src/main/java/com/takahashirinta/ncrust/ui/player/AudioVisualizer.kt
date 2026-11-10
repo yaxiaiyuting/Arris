@@ -15,6 +15,9 @@ import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -239,6 +242,10 @@ object WaveformStore {
     /** 只应在 draw 阶段读（在组合阶段读会变成每帧重组）。 */
     val generation: Int get() = generationState.intValue
 
+    // Read in draw, so hardware volume rescales the entire window without a recomposition.
+    internal var displayGain by mutableFloatStateOf(1f)
+    internal var visualizationVisible by mutableStateOf(false)
+
     /**
      * **音频线程**调用：零分配、零锁。
      *
@@ -381,7 +388,7 @@ object WaveformStore {
                     ring.newestTarget(),
                     ring.newestBass(),
                     dtMs,
-                    active,
+                    active && displayGain > 0f,
                     effects,
                     transientCount,
                 )
@@ -800,7 +807,8 @@ fun AudioVisualizerBars(
         val n = bars.size
         // v3.2.2：曲线至少要有两个点才谈得上"相邻两点连接"。
         if (n < 2 || size.width <= 0f || size.height <= 0f) return@Canvas
-        val minBar = 1.dp.toPx()
+        val displayGain = WaveformStore.displayGain
+        val minBar = 1.dp.toPx() * displayGain
         // 呼吸：只在 B 档读；不是 Compose state ⇒ 不触发重组，只是一次字段读。
         val breath = if (effects.breathe) WaveformStore.breatheScale() else 1f
         // 点按交互翻转着色模式：普通字段读 + 点按时手动失效一次（见 WaveformStore.toggleColoringMode）。
@@ -816,9 +824,9 @@ fun AudioVisualizerBars(
         // `heightPx`。两者必须分开：`drawWaveformCurve` 拿 heightPx 去算 `centerY`，
         // 那个值一改，整条曲线会离开垂直居中位。取值推导见 [WAVE_AMPLITUDE_FACTOR]。
         val ampPx = (heightPx - 2f * (dotRadiusPx * 3f + peakCapPx * 2f))
-            .coerceAtLeast(0f).coerceAtMost(heightPx * WAVE_AMPLITUDE_FACTOR)
+            .coerceAtLeast(0f).coerceAtMost(heightPx * WAVE_AMPLITUDE_FACTOR) * displayGain
         // C 档：涟漪画在曲线**下面**（背景层），粒子画在曲线**上面**（前景层）。
-        if (effects.shockwave) {
+        if (effects.shockwave && displayGain > 0f) {
             drawShockwaveRipples(WaveformStore.showcase, barColor, rippleStroke, breath)
         }
         drawLine(
@@ -827,6 +835,7 @@ fun AudioVisualizerBars(
             end = Offset(size.width, heightPx * 0.5f),
             strokeWidth = crestStroke.width,
         )
+        if (displayGain == 0f) return@Canvas
         // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
         if (threeLane) {
             // 三条泳道共享同一个亚格位移（相位是全局的），在 lane 0 处记下。

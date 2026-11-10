@@ -18,6 +18,7 @@ import com.takahashirinta.ncrust.listen.PlaybackSnapshot
 import com.takahashirinta.ncrust.ui.player.QueueMoveCommit
 import com.takahashirinta.ncrust.ui.player.TrayLayout
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
+import com.takahashirinta.ncrust.ui.player.WaveformStore
 import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 
 import android.Manifest
@@ -557,12 +558,18 @@ class MainActivity : ComponentActivity() {
      * 而旋转在本应用里是高频动作；`onStop` 只覆盖「真的到后台了」。
      */
     override fun onStop() {
+        WaveformStore.visualizationVisible = false
         runCatching { com.takahashirinta.ncrust.qq.QqProbeStore.snapshotAndFlush(this) }
         // v2.5.5 · B：跨源上报闸门的拦截计数（本地私有目录，绝不上报）。
         // 与 QQ 兜底统计同一时机、同一条纪律：埋点点位只做内存自增，落盘只在
         // 「用户离开界面」与「诊断入口」两处，两处都不在播放关键路径上。
         runCatching { com.takahashirinta.ncrust.player.ReportGateStore.snapshotAndFlush(this) }
         super.onStop()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        WaveformStore.visualizationVisible = true
     }
 
     /**

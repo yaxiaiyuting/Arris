@@ -92,6 +92,7 @@ import com.takahashirinta.ncrust.ui.player.VisualizerSetting
 import com.takahashirinta.ncrust.ui.player.WaveformStore
 import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 import com.takahashirinta.ncrust.ui.theme.CoverThemeExtractor
@@ -124,6 +125,8 @@ class PlaybackService : MediaLibraryService() {
      */
     private var mediaSession: MediaLibrarySession? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val visualizationVolume by lazy { PlaybackVisualVolume(this) }
+    private var visualizationVolumeJob: Job? = null
     private var progressJob: Job? = null
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
@@ -402,7 +405,29 @@ class PlaybackService : MediaLibraryService() {
         pcmDemandJob = scope.launch(Dispatchers.Main.immediate) {
             snapshotFlow { currentPcmDemand() }
                 .distinctUntilChanged()
-                .collect { demand -> applyOffloadPolicy(demand) }
+                .collect { demand ->
+                    applyOffloadPolicy(demand)
+                    observeVisualizationVolume(player.isPlaying && demand.requiresPcm)
+                }
+        }
+    }
+
+    private fun observeVisualizationVolume(enabled: Boolean) {
+        if (!enabled) {
+            visualizationVolumeJob?.cancel()
+            visualizationVolumeJob = null
+            return
+        }
+        if (visualizationVolumeJob?.isActive == true) return
+        visualizationVolumeJob = scope.launch {
+            snapshotFlow { WaveformStore.visualizationVisible }.collectLatest { visible ->
+                if (!visible) return@collectLatest
+                while (true) {
+                    val playerGain = player.volume
+                    WaveformStore.displayGain = withContext(Dispatchers.IO) { visualizationVolume.sample(playerGain) }
+                    delay(180)
+                }
+            }
         }
     }
 
@@ -520,7 +545,7 @@ class PlaybackService : MediaLibraryService() {
         // 两者都是幂等的（只读盘 + 写 volatile），与 MainActivity 里的调用重复执行无害。
         BiliPrefs.init(this)
         BiliAuthStore.init(this)
-        val renderersFactory = VisualizerRenderersFactory(this)
+        val renderersFactory = VisualizerRenderersFactory(this, visualizationVolume::observeTrack)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
         // 流内嵌的 ID3 元数据（尤其封面图，单张可达数百 KB）在本 App 里毫无用处：
@@ -622,6 +647,7 @@ class PlaybackService : MediaLibraryService() {
                 updatePlaybackState()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                observeVisualizationVolume(isPlaying && currentPcmDemand().requiresPcm)
                 // B：暂停即预约释放封面位图，恢复播放则取消释放并补回封面。
                 if (isPlaying) onPlaybackActive() else scheduleArtworkIdleRelease()
                 onIsPlayingChanged?.invoke(isPlaying)
@@ -2282,6 +2308,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        observeVisualizationVolume(false)
         com.takahashirinta.ncrust.audio.EqualizerController.release()
         Log.d("PlaybackService", "onDestroy")
         LiveUpdateNotifier.cancel(this)
