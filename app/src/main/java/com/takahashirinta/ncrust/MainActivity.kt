@@ -106,6 +106,7 @@ import com.takahashirinta.ncrust.player.PlaybackStateManager
 import com.takahashirinta.ncrust.player.QueueKeys
 import com.takahashirinta.ncrust.player.ShuffleRound
 import com.takahashirinta.ncrust.player.ShuffleNav
+import com.takahashirinta.ncrust.qq.QqScanSession
 import com.takahashirinta.ncrust.power.BackgroundActivity
 import com.takahashirinta.ncrust.ui.components.BackgroundActivityDialog
 import io.github.takahashirinta.kanesumi.structure.bottomnav.MetroBottomNav
@@ -2724,12 +2725,17 @@ fun MainScreen(
     // v3.4.9：「QQ 音乐 App 扫码」——**可续期的那条扫码路**。
     // 与上面的 showQqQr（QQ 互联扫码）并存且互不影响：那条只能拿到 cookie，
     // 这条能换到完整凭证 JSON（含 refreshKey），所以只有这条到期不用重登。
-    var showQqScan by remember { mutableStateOf(false) }
+    val scanDialogState = QqScanSession.state.collectAsState().value
+    val showQqScan = scanDialogState != null
     // 扫码确认后交给 WebView 的起始地址与 cookie（见 QqLoginOverlay 的参数说明）。
     var qqLoginStartUrl by remember { mutableStateOf<String?>(null) }
     var qqLoginCookies by remember { mutableStateOf<String?>(null) }
     var qqLoginTrigger by remember { mutableIntStateOf(0) }
     var cookieRefreshTrigger by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(scanDialogState?.status) {
+        if (QqScanSession.consumeLogin()) qqLoginTrigger++
+    }
 
     // 登录成功后后台拉取一次云端收藏，供收藏页使用。
     LaunchedEffect(cookieRefreshTrigger) {
@@ -2844,22 +2850,17 @@ fun MainScreen(
         )
         return
     }
-    if (showQqScan) {
+    if (scanDialogState != null) {
         com.takahashirinta.ncrust.ui.components.QqScanLoginDialog(
-            onLoggedIn = {
-                // cookie **与续期凭证都已经由 QqApi.loginWithScanCode 落盘** ——
-                // 这里不再 saveCookie：那条路用的是 Login 的完整响应，
-                // 在别处再拼一次 cookie 就等于把同一份契约写两遍（必然分叉）。
-                showQqScan = false
-                qqLoginTrigger++
-            },
+            state = scanDialogState,
+            onRefresh = QqScanSession::restart,
             onUseWebLogin = {
+                QqScanSession.dismiss()
                 qqLoginStartUrl = null
                 qqLoginCookies = null
-                showQqScan = false
                 showQqLogin = true
             },
-            onDismiss = { showQqScan = false },
+            onDismiss = QqScanSession::dismiss,
         )
         return
     }
@@ -3444,7 +3445,7 @@ fun MainScreen(
                             onShowBiliLogin = { showBiliLogin = true },
                             // v2.1.1：手机号验证码登录（微信用户的可用路径）。
                             onShowQqPhoneLogin = { showQqPhone = true },
-                            onShowQqScanLogin = { showQqScan = true },
+                            onShowQqScanLogin = QqScanSession::restart,
                             onOpenAbout = { showAbout = true },
                             // v3.3.0 · 用户建议：离线缓存列表的行可直接点播。
                             // 复用 `playSongItem`（从任意列表点歌的同一条链路）：
