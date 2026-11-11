@@ -37,7 +37,7 @@ object PlaybackQueueLogic {
     /** 按 [TrackKey] 回查队列下标；找不到返回 -1。 */
     fun indexOfKey(queue: List<SongItem>, key: TrackKey?): Int {
         if (key == null) return -1
-        return queue.indexOfFirst { QueueKeys.keyOf(it) == key }
+        return queue.indexOfFirst { it.id == key.id && QueueKeys.keyOf(it) == key }
     }
 
     /**

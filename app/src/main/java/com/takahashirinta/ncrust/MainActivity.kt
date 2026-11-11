@@ -890,9 +890,22 @@ internal fun reorderByIdentity(
     fromKey: TrackKey,
     toKey: TrackKey,
 ): PlaybackQueueLogic.QueueState? {
-    if (queue.count { QueueKeys.keyOf(it) == fromKey } != 1 || queue.count { QueueKeys.keyOf(it) == toKey } != 1) return null
-    val from = PlaybackQueueLogic.indexOfKey(queue, fromKey)
-    val to = PlaybackQueueLogic.indexOfKey(queue, toKey)
+    if (fromKey == toKey) return null
+    var from = -1
+    var to = -1
+    for ((index, song) in queue.withIndex()) {
+        if (song.id != fromKey.id && song.id != toKey.id) continue
+        when (QueueKeys.keyOf(song)) {
+            fromKey -> {
+                if (from >= 0) return null
+                from = index
+            }
+            toKey -> {
+                if (to >= 0) return null
+                to = index
+            }
+        }
+    }
     return reorderByIndices(queue, currentIndex, from, to)
 }
 
@@ -1714,7 +1727,7 @@ fun MainScreen(
             PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
         }
         if (currentSong?.let { QueueKeys.keyOf(it) == vmKey } == true) return@LaunchedEffect
-        val found = playbackQueue.firstOrNull { QueueKeys.keyOf(it) == vmKey }
+        val found = playbackQueue.getOrNull(mapped)
         if (found != null) {
             currentSong = found
         } else {
