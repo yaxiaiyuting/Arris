@@ -9,6 +9,7 @@
 package com.takahashirinta.ncrust.lyric
 
 import androidx.compose.runtime.Immutable
+import java.util.regex.Pattern
 
 /**
  * 逐字歌词里的一个词（v1.5.0 · B）。
@@ -44,95 +45,40 @@ data class LrcLine(
 
 object LrcParser {
 
-    /**
-     * 时间戳本体（不含行首锚点）：`[01:06.45]` 或 `[00:33.260]`。
-     *
-     * ⚠️ **分钟位数不设上限**（`\d{2,}`，v3.8.0 · H18）。
-     *
-     * 旧写法是 `\d{2}`，把「分钟恰好两位」当成了格式要求。可是 LRC 的分钟字段本来
-     * 就只是「秒数的进位」，超过 99 分钟时有几个数字就有几位：
-     * `BiliSubtitle.formatStamp` 的 `"%02d:%02d.%02d".format(m, s, cs)` 对 `m` 只规定
-     * **最小宽度**，100 分钟生成 `[100:00.00]`。旧正则认不出这种行，
-     * `parse` 直接 `continue` ⇒ **100 分钟之后的所有字幕静默消失**
-     * （B 站长视频/长音频在该边界之后没有歌词，且不报错）。
-     *
-     * 秒仍是恰好两位、小数仍是 2~3 位（这两条是 LRC 的既有约定，没有观测到反例），
-     * 所以这里只放宽分钟——放宽不是宽容，是把「格式要求」缩小到它真正成立的部分。
-     *
-     * ⚠️ [LEADING_TIME_STAMPS] 里的同一段必须一起改：它负责先认出「这行以时间戳开头」，
-     * 只改一处会出现「行被认出来了、但时间戳一个都没匹配到」⇒ 该行仍然丢失。
-     */
-    private val TIME_STAMP = Regex("""\[(\d{2,}):(\d{2})\.(\d{2,3})\]""")
-
-    /**
-     * 行首**连续的若干个**时间戳 + 其后的正文。
-     *
-     * 用 `find`（不是 `matchEntire`）以保持旧实现的宽容度：只要行首是时间戳就算数，
-     * `(.*)` 允许正文里再出现方括号（旧实现同样接受 `[00:01.00]文本[by:x]`）。
-     *
-     * 两个刻意的宽容点：
-     * - 时间戳之间允许**水平空白**（`[01:06.45] [02:44.32] 文本`）—— 人工整理过的 LRC
-     *   会这么写，而旧实现对此的产出是「正文里带一个方括号字面量」，同样属于本版要修的形态。
-     * - 锚点 `^`：**正文**里的 `[` 不是时间戳语法，绝不能被剥掉，所以不做全局替换。
-     */
+    private val TIME_STAMP = Pattern.compile("""\[(\d{2,}):(\d{2})\.(\d{2,3})\]""")
     private val LEADING_TIME_STAMPS =
-        Regex("""^((?:\[\d{2,}:\d{2}\.\d{2,3}\][ \t]*)+)(.*)""")
+        Pattern.compile("""^((?:\[\d{2,}:\d{2}\.\d{2,3}\][ \t]*)+)(.*)""")
 
     /**
-     * 解析 LRC 正文。
-     *
-     * ## 一行多时间戳（v3.3.0 修复的 P0）
-     *
-     * LRC 允许同一句歌词在多个时间点重复出现（副歌），写法是**一行挂多个时间戳**：
-     * ```
-     * [01:37.57][03:15.56][03:50.79][04:06.51][04:47.01]和我在成都的街头走一走
-     * ```
-     * 旧实现用 `regex.find(line)` **只取行首第一个**时间戳，并把其后的 `[03:15.56]`
-     * 原样留在歌词正文里 ⇒ 两个用户可见的症状：
-     * ① 屏上出现 `[03:15.56]` 这样的方括号字面量；
-     * ② 副歌在 03:15 / 03:50 / 04:06 / 04:47 **整段消失**（那几秒屏幕上没有任何歌词）。
-     *
-     * 真实样本（B 站音频区 au39《成都》，见
-     * `docs/verification/v3.1.0/bili-research/evidence/21-lyric-au39.txt`）：22 行里
-     * **13 行是多戳、共 44 个时间点**，旧实现只产出 22 条 ⇒ 丢 21 个时间点。
-     *
-     * 这不是 B 站独有的问题：ncm 与 QQ 的 LRC 走的是同一个函数
-     * （`QqApi.kt` 的译文解析、`PlayerViewModel` 的译文/音译解析），所以**所有音源**都受影响。
-     *
-     * 修法：先收集行首的**全部**时间戳，逐个展开成 [LrcLine]，正文只取最后一个时间戳之后。
-     *
-     * ## 向后兼容（硬约束，不是礼貌）
-     *
-     * 单时间戳行的产出与旧实现**逐字节一致** —— 不能顺手 normalize 文本，
-     * 因为 [YrcAligner] 是按「行序 + `line.text` 内容」把逐字数据挂到 LRC 行上的，
-     * 文本一变就会整首放弃逐字（v1.5.0 为空格差异踩过一次）。多戳行展开出的多条
-     * 文本彼此相同，也不影响那条对齐。
-     *
-     * ## 既有语义（保持不变）
-     *
-     * - 文本 trim 后为空 ⇒ **不产出**条目（`[00:10.00]` 与 `[00:10.00]   ` 都跳过）；
-     * - 元信息行（`[ti:]`/`[ar:]`/`[by:]`/`[offset:]`）不含合法时间戳 ⇒ 不产出；
-     * - 结果按时间升序：多戳行展开后时间天然不单调，必须重排。
+     * 展开行首时间戳，保留正文中的方括号。分钟可以超过 99。
+     * 多时间戳的行按时间归并，相同时间继续按原文件顺序排列。
      */
     fun parse(lrcText: String): List<LrcLine> {
-        val out = mutableListOf<LrcLine>()
+        val out = ArrayList<LrcLine>()
+        val lineMatcher = LEADING_TIME_STAMPS.matcher("")
+        val stampMatcher = TIME_STAMP.matcher("")
+        var inOrder = true
+        var lastTime = Long.MIN_VALUE
 
-        for (raw in lrcText.lines()) {
-            val lead = LEADING_TIME_STAMPS.find(raw.trim()) ?: continue
-            val text = lead.groupValues[2].trim()
-            // 整行只有时间戳、没有可显示内容 ⇒ 跳过（与旧实现一致）。
+        for (raw in lrcText.lineSequence()) {
+            val line = raw.trim()
+            if (!lineMatcher.reset(line).find()) continue
+            val text = lineMatcher.group(2).orEmpty().trim()
             if (text.isEmpty()) continue
-            // 逐个时间戳展开：同一句歌词在每一个时间点都要出现。
-            for (ts in TIME_STAMP.findAll(lead.groupValues[1])) {
-                val min = ts.groupValues[1].toLong()
-                val sec = ts.groupValues[2].toLong()
-                var ms = ts.groupValues[3].toLong()
-                // 2 位是厘秒（`[00:33.26]` = 33.260s），3 位是毫秒。
-                if (ts.groupValues[3].length == 2) ms *= 10
-                out.add(LrcLine(min * 60_000 + sec * 1_000 + ms, text))
+            stampMatcher.reset(line).region(lineMatcher.start(1), lineMatcher.end(1))
+            while (stampMatcher.find()) {
+                val minutes = stampMatcher.group(1)!!.toLong()
+                val seconds = stampMatcher.group(2)!!.toLong()
+                val fraction = stampMatcher.group(3)!!
+                val millis = fraction.toLong() * if (fraction.length == 2) 10 else 1
+                val timeMs = minutes * 60_000 + seconds * 1_000 + millis
+                if (timeMs < lastTime) inOrder = false
+                lastTime = timeMs
+                out.add(LrcLine(timeMs, text))
             }
         }
 
-        return out.sortedBy { it.timeMs }
+        if (!inOrder) out.sortBy { it.timeMs }
+        return out
     }
 }

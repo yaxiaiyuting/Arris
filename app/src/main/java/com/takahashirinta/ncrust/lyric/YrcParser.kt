@@ -9,6 +9,7 @@
 package com.takahashirinta.ncrust.lyric
 
 import android.util.Log
+import java.util.regex.Pattern
 import kotlin.math.abs
 
 /**
@@ -68,10 +69,8 @@ import kotlin.math.abs
 object YrcParser {
     private const val TAG = "YrcParser"
 
-    private val LINE = Regex("""^\[(\d+),(\d+)](.*)$""")
-    // 注意不能带 ^：词不是行首，而 matchAt(body, i) 的语义是「从 i 处开始匹配」，
-    // 加上 ^ 会让第 2 个词开始全部匹配失败（只解析出第一个词的经典坑）。
-    private val WORD = Regex("""\((\d+),(\d+),(\d+)\)""")
+    private val LINE = Pattern.compile("""^\[(\d+),(\d+)](.*)$""")
+    private val WORD = Pattern.compile("""\((\d+),(\d+),(\d+)\)""")
 
     /** 行对齐时允许的最大时间偏差；超过就不认这一对，或（index 路径下）整首放弃逐字。 */
     private const val MAX_LINE_DRIFT_MS = 2_000L
@@ -96,28 +95,26 @@ object YrcParser {
     /** 把 yrc 原文解析成行列表（保持原始顺序；一行都解析不出时返回空表）。 */
     internal fun parse(yrcText: String): List<YrcLine> {
         val out = ArrayList<YrcLine>()
+        val lineMatcher = LINE.matcher("")
+        val wordMatcher = WORD.matcher("")
         for (raw in yrcText.lineSequence()) {
             val line = raw.trim()
-            if (line.isEmpty()) continue
-            val m = LINE.find(line) ?: continue
-            val startMs = m.groupValues[1].toLongOrNull() ?: continue
-            val durationMs = m.groupValues[2].toLongOrNull() ?: 0L
-            val body = m.groupValues[3]
+            if (!lineMatcher.reset(line).find()) continue
+            val startMs = lineMatcher.group(1)?.toLongOrNull() ?: continue
+            val durationMs = lineMatcher.group(2)?.toLongOrNull() ?: 0L
+            val body = lineMatcher.group(3).orEmpty()
             val words = ArrayList<YrcWord>()
             val sb = StringBuilder()
-            var i = 0
-            while (i < body.length) {
-                if (body[i] != '(') { i++; continue }
-                // matchAt 而不是 find(substring(i))：后者每轮都复制一遍剩余字符串，
-                // 长行（有些 yrc 行几十个词）会退化成 O(n^2)。
-                val wm = WORD.matchAt(body, i)
-                if (wm == null) { i++; continue }
-                val ws = wm.groupValues[1].toLongOrNull() ?: 0L
-                val wd = wm.groupValues[2].toLongOrNull() ?: 0L
-                i += wm.value.length
-                val charStart = sb.length
-                while (i < body.length && body[i] != '(') { sb.append(body[i]); i++ }
-                words += YrcWord(ws, wd, sb.substring(charStart))
+            wordMatcher.reset(body)
+            while (wordMatcher.find()) {
+                val ws = wordMatcher.group(1)?.toLongOrNull() ?: 0L
+                val wd = wordMatcher.group(2)?.toLongOrNull() ?: 0L
+                val from = wordMatcher.end()
+                // 原格式以第一个左括号截断词文本，包括不构成下一段时间戳的左括号。
+                val next = body.indexOf('(', from)
+                val text = body.substring(from, if (next >= 0) next else body.length)
+                sb.append(text)
+                words.add(YrcWord(ws, wd, text))
             }
             val text = sb.toString().trim()
             if (text.isEmpty()) continue

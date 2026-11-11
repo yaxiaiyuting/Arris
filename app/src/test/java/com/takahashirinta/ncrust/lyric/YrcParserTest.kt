@@ -66,6 +66,14 @@ class YrcParserTest {
     }
 
     @Test
+    fun `解析——无效左括号截断词文本后仍可继续读取下一段`() {
+        val line = YrcParser.parse("[1000,900](1000,400,0)起(备选(1400,500,0)落").single()
+        assertEquals("起落", line.text)
+        assertEquals(listOf("起", "落"), line.words.map { it.text })
+        assertEquals(listOf(1000L, 1400L), line.words.map { it.startMs })
+    }
+
+    @Test
     fun `对齐——行数不等时不再整首放弃（v1_6_0）：文本相同的行照挂，其余行原样`() {
         // v1.5.x 在这里整首放弃（行数 1 vs 2）。实测这种「yrc 多/少几行」的歌占多数，
         // 是覆盖率真正的瓶颈 —— 现在按文本 LCS 匹配：两行都是同一句，lrc 的那一行挂上，

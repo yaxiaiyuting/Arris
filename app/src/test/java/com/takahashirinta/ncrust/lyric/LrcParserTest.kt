@@ -202,9 +202,10 @@ class LrcParserTest {
     @Test
     fun `同一时间戳重复出现时各产出一条`() {
         // 多戳行展开后可能与别的行撞同一时刻，不去重（时间轴允许同刻多条）
-        val lines = LrcParser.parse("[00:10.00][00:20.00]甲\n[00:20.00]乙")
+        val lines = LrcParser.parse("[00:20.00][00:10.00]甲\n[00:10.00]乙")
 
         assertEquals(3, lines.size)
-        assertEquals(listOf(10_000L, 20_000L, 20_000L), lines.map { it.timeMs })
+        assertEquals(listOf(10_000L, 10_000L, 20_000L), lines.map { it.timeMs })
+        assertEquals(listOf("甲", "乙", "甲"), lines.map { it.text })
     }
 }
