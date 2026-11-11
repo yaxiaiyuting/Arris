@@ -19,7 +19,6 @@ import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.Playlist
 import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.source.PlaylistTrack
-import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.musicSource
 
 /**
@@ -101,15 +100,6 @@ object PlaylistCacheCodec {
         val dirId: Long = 0L,
     )
 
-    internal data class TrackDto(
-        val id: Long = 0L,
-        val source: String? = null,
-        val sourceId: String? = null,
-        val mediaId: String? = null,
-        val order: Int = 0,
-        val addedAt: Long? = null,
-    )
-
     /**
      * 曲目里一个艺人的落盘形状（v2.6.1：新增 [mid]）。
      *
@@ -144,9 +134,6 @@ object PlaylistCacheCodec {
      * （`LibraryManager.saved_songs`、`PlaybackStateManager.queue` 都这么存），
      * 且它同时携带 `source`/`sourceId`/`mediaId`，因此**能无损反推出 [PlaylistTrack]**
      * （见 [decodeDetail]）。一份数据、两个视图，不存两遍。
-     *
-     * 与 [TrackDto] 的关系：[TrackDto] 保留给「只有身份、没有元数据」的场景
-     * （以及 v1 迁移测试），详情缓存走 [SongDto]。
      */
     internal data class SongDto(
         val id: Long = 0L,
@@ -474,34 +461,6 @@ object PlaylistCacheCodec {
             sourceId = sourceId?.takeIf { it.isNotBlank() },
             mediaId = mediaId?.takeIf { it.isNotBlank() },
             memberOnly = memberOnly,
-        )
-    }
-
-    /** 旧的「只有身份」形状仍保留：v1 迁移测试与将来的轻量清单会用。 */
-    private fun PlaylistTrack.toDto() = TrackDto(
-        id = trackKey.id,
-        source = trackKey.source.key,
-        sourceId = trackKey.sourceId,
-        mediaId = trackKey.mediaId,
-        order = order,
-        addedAt = addedAt,
-    )
-
-    /** `id <= 0` 的条目没有可用身份 ⇒ 丢弃（与 [PlaylistTrack.of] 同一条判据）。 */
-    @Suppress("unused")
-    private fun TrackDto.toDomain(): PlaylistTrack? {
-        if (id <= 0L) return null
-        val srcKey = source?.takeIf { it.isNotBlank() } ?: return null
-        return PlaylistTrack(
-            source = MusicSource.fromKey(srcKey),
-            trackKey = TrackKey(
-                source = MusicSource.fromKey(srcKey),
-                id = id,
-                sourceId = sourceId?.takeIf { it.isNotBlank() },
-                mediaId = mediaId?.takeIf { it.isNotBlank() },
-            ),
-            order = order,
-            addedAt = addedAt,
         )
     }
 }
