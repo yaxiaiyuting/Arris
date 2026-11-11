@@ -51,7 +51,7 @@ import kotlin.math.abs
  * 的逐字能真正挂上去**（行级挂载率 77.9%）。覆盖率真正的瓶颈在这里，不在接口
  * （同一批歌换 eapi/iPhone/Android 身份、换 `/api/song/lyric/v1` 都不多给一个 yrc 字段）。
  *
- * 现在改为**两条路各算一遍、取挂得多的那条**（保证对 v1.5.x 只增不减）：
+ * 取实际挂上逐字行数较多的候选，相同时保留行序结果：
  *
  *  1. `index`：行数相等 + 时间漂移抽样达标时，按行序 i↔i 挂（v1.5.x 的原行为，逐字节保留）；
  *  2. `lcs`：按**归一化文本**做最长公共子序列匹配（[YrcAligner]），再按时间漂移逐对过滤。
@@ -86,13 +86,11 @@ object YrcParser {
         val words: List<YrcWord>
     )
 
-    /** yrc 里的一个词：时间轴 + 在**本 yrc 行文本**里的字符区间。 */
+    /** 词在原轨中的时间和文本，显示区间由 [mapRanges] 按 LRC 文本计算。 */
     internal data class YrcWord(
         val startMs: Long,
         val durationMs: Long,
-        val text: String,
-        val charStart: Int,
-        val charEndExclusive: Int
+        val text: String
     )
 
     /** 把 yrc 原文解析成行列表（保持原始顺序；一行都解析不出时返回空表）。 */
@@ -119,7 +117,7 @@ object YrcParser {
                 i += wm.value.length
                 val charStart = sb.length
                 while (i < body.length && body[i] != '(') { sb.append(body[i]); i++ }
-                words += YrcWord(ws, wd, sb.substring(charStart), charStart, sb.length)
+                words += YrcWord(ws, wd, sb.substring(charStart))
             }
             val text = sb.toString().trim()
             if (text.isEmpty()) continue
@@ -140,46 +138,44 @@ object YrcParser {
         val yrcLines = parse(yrcText)
         if (yrcLines.isEmpty()) return lines
 
-        val candidates = ArrayList<Pair<String, List<YrcAligner.LinePair>>>(2)
-        // 候选 1（index）：v1.5.x 的原行为 —— 行数相等 + 时间漂移抽样达标才按行序挂。
+        var best = lines
+        var bestCount = -1
+        var bestKind = "index"
+        // 行数相等且整体时间接近时，先按行序定位逐词区间。
         if (yrcLines.size == lines.size) {
             val close = lines.indices.count { i ->
                 abs(yrcLines[i].startMs - lines[i].timeMs) <= MAX_LINE_DRIFT_MS
             }
             if (close >= (lines.size * MIN_ALIGN_RATIO).toInt()) {
-                candidates += "index" to YrcAligner.indexPairs(lines.size)
+                val (merged, count) = applyPairs(lines, yrcLines, YrcAligner.indexPairs(lines.size))
+                best = merged
+                bestCount = count
             }
         }
-        // 候选 2（lcs）：按归一化文本做 LCS，再逐对过滤时间漂移。
-        val lcs = YrcAligner.filterByDrift(
-            YrcAligner.lcsPairs(lines.map { it.text }, yrcLines.map { it.text }),
-            lines.map { it.timeMs },
-            yrcLines.map { it.startMs },
-            MAX_LINE_DRIFT_MS
-        )
-        if (lcs.isNotEmpty()) candidates += "lcs" to lcs
 
-        if (candidates.isEmpty()) {
+        if (bestCount < lines.size) {
+            val lcs = YrcAligner.filterByDrift(
+                YrcAligner.lcsPairs(lines.map { it.text }, yrcLines.map { it.text }),
+                lines.map { it.timeMs },
+                yrcLines.map { it.startMs },
+                MAX_LINE_DRIFT_MS
+            )
+            // 一个配对最多挂上一行，只有可能胜过行序结果时才重新定位逐词区间。
+            if (lcs.isNotEmpty() && lcs.size > bestCount) {
+                val (merged, count) = applyPairs(lines, yrcLines, lcs)
+                if (count > bestCount) {
+                    best = merged
+                    bestCount = count
+                    bestKind = "lcs"
+                }
+            }
+        }
+        if (bestCount < 0) {
             Log.i(TAG, "attachWords: no alignable pairs lrc=${lines.size} yrc=${yrcLines.size}, skip")
             return lines
         }
-
-        // 两条路都算出来，取「实际挂上逐字的行数」多的那条 —— 这保证对 v1.5.x 的结果**只增不减**：
-        // 行数相等且能逐行定位时两条路等价，LCS 更差时自动回落到旧路径（实测《You Never Can Tell》
-        // index=22 行 / lcs=17 行，就是靠这条规则保住不回归的）。
-        var best: List<LrcLine> = lines
-        var bestCount = -1
-        var bestKind = ""
-        for ((kind, pairs) in candidates) {
-            val (merged, count) = applyPairs(lines, yrcLines, pairs)
-            if (count > bestCount) {
-                best = merged
-                bestCount = count
-                bestKind = kind
-            }
-        }
         Log.i(TAG, "attachWords: $bestCount/${lines.size} lines got word timing (yrc=${yrcLines.size}, $bestKind)")
-        return if (bestCount <= 0) lines else best
+        return best
     }
 
     /** 按 [pairs] 把逐词时间轴挂上去，返回 (新行表, 真正挂上的行数)。 */
@@ -188,24 +184,21 @@ object YrcParser {
         yrcLines: List<YrcLine>,
         pairs: List<YrcAligner.LinePair>
     ): Pair<List<LrcLine>, Int> {
-        if (pairs.isEmpty()) return lines to 0
-        val byLrcIndex = HashMap<Int, YrcLine>(pairs.size)
-        for (p in pairs) {
-            val y = yrcLines.getOrNull(p.yrcIndex) ?: continue
-            if (p.lrcIndex in lines.indices) byLrcIndex[p.lrcIndex] = y
-        }
+        // 两种对齐都只产生有效、互不重复的行下标。
+        var merged: MutableList<LrcLine>? = null
         var attached = 0
-        val merged = lines.mapIndexed { i, line ->
-            val y = byLrcIndex[i] ?: return@mapIndexed line
-            val ranges = mapRanges(line.text, y.words) ?: return@mapIndexed line
-            if (ranges.isEmpty()) return@mapIndexed line
-            attached++
-            line.copy(
+        for ((lrcIndex, yrcIndex) in pairs) {
+            val line = lines[lrcIndex]
+            val y = yrcLines[yrcIndex]
+            val ranges = mapRanges(line.text, y.words) ?: continue
+            val out = merged ?: lines.toMutableList().also { merged = it }
+            out[lrcIndex] = line.copy(
                 words = ranges,
                 endMs = (y.startMs + y.durationMs).takeIf { y.durationMs > 0L },
             )
+            attached++
         }
-        return merged to attached
+        return (merged ?: lines) to attached
     }
 
     /**

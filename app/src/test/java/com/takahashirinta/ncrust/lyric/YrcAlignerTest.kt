@@ -70,6 +70,20 @@ class YrcAlignerTest {
     }
 
     @Test
+    fun `LCS——短轨能完整匹配时保留长轨中第一次出现的副歌`() {
+        val shorter = listOf("副歌", "尾奏")
+        val longer = listOf("作词", "副歌", "副歌", "尾奏")
+        assertEquals(
+            listOf(YrcAligner.LinePair(0, 1), YrcAligner.LinePair(1, 3)),
+            YrcAligner.lcsPairs(shorter, longer)
+        )
+        assertEquals(
+            listOf(YrcAligner.LinePair(1, 0), YrcAligner.LinePair(3, 1)),
+            YrcAligner.lcsPairs(longer, shorter)
+        )
+    }
+
+    @Test
     fun `LCS——空格差异不影响配对`() {
         val lrc = listOf("听见 冬天的离开", "半夜 睡不着觉")
         val yrc = listOf("听见冬天的离开", "半夜睡不着觉")

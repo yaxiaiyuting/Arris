@@ -64,18 +64,18 @@ internal object YrcAligner {
     /** 行数相等时的「行序对齐」：i 配 i。v1.5.x 的既有行为，保留为候选之一。 */
     fun indexPairs(size: Int): List<LinePair> = List(size) { LinePair(it, it) }
 
-    /**
-     * 最长公共子序列匹配（保序）。返回的下标对个数 = LCS 长度。
-     *
-     * 复杂度 O(n·m)；n、m 是行数（实测最长 100 行上下），一次对齐 ≤ 10⁴ 次整数比较，
-     * 在 IO 线程上可以忽略。
-     */
+    /** 短轨能完整匹配时只扫描一次，其余情况用动态规划保留原有的重复行取舍。 */
     fun lcsPairs(lrcTexts: List<String>, yrcTexts: List<String>): List<LinePair> {
         val n = lrcTexts.size
         val m = yrcTexts.size
         if (n == 0 || m == 0) return emptyList()
         val a = lrcTexts.map { normalize(it) }
         val b = yrcTexts.map { normalize(it) }
+        if (n == m) {
+            if (a == b) return indexPairs(n)
+        } else {
+            completeSubsequence(a, b)?.let { return it }
+        }
         // dp[i][j] = a[i..] 与 b[j..] 的 LCS 长度
         val dp = Array(n + 1) { IntArray(m + 1) }
         for (i in n - 1 downTo 0) {
@@ -89,12 +89,35 @@ internal object YrcAligner {
         var j = 0
         while (i < n && j < m) {
             when {
-                a[i] == b[j] -> { out += LinePair(i, j); i++; j++ }
+                a[i] == b[j] -> {
+                    out += LinePair(i, j)
+                    i++
+                    j++
+                }
                 dp[i + 1][j] >= dp[i][j + 1] -> i++
                 else -> j++
             }
         }
         return out
+    }
+
+    private fun completeSubsequence(lrc: List<String>, yrc: List<String>): List<LinePair>? {
+        val lrcIsShorter = lrc.size < yrc.size
+        val shorter = if (lrcIsShorter) lrc else yrc
+        val longer = if (lrcIsShorter) yrc else lrc
+        val positions = IntArray(shorter.size)
+        var matched = 0
+        for (index in longer.indices) {
+            if (longer[index] != shorter[matched]) continue
+            positions[matched++] = index
+            if (matched == shorter.size) {
+                // 整条短轨都能匹配时，LCS 也会沿长轨取第一个可匹配的位置。
+                return List(matched) { i ->
+                    if (lrcIsShorter) LinePair(i, positions[i]) else LinePair(positions[i], i)
+                }
+            }
+        }
+        return null
     }
 
     /**
