@@ -39,7 +39,6 @@ import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsSweepPerf
 import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
-import com.takahashirinta.ncrust.lyric.SweepTrack
 import com.takahashirinta.ncrust.share.LyricShareLine
 import com.takahashirinta.ncrust.share.LyricShareTrack
 import com.takahashirinta.ncrust.ui.components.LyricShareSheet
@@ -259,51 +258,30 @@ internal fun LyricsView(
         }
     }
 
-    // 唤醒时刻表（升序去重）：行时间戳 + 每个词的起始时间。
-    // v1.5.0 · B：逐字高亮要求唤醒精度到"词"，但绝不能改成逐帧轮询 —— 这里只是把原来
-    // 的"行边界"细化成"行边界 ∪ 词边界"，仍然是**按需唤醒**：静态时零状态写入、零帧调度，
-    // 只在真正跨行/跨词的那一刻动一次。词密度约每秒 3~8 个，远低于 60fps。
-    // 2Hz 采样到达时锚点会被重置回真实值，所以细粒度外推不会累积误差。
     val karaokeActive = karaoke != null
     val karaokeTranslations = remember(karaokeActive, showTranslation, lyrics, translatedLyrics) {
-        if (!karaokeActive || !showTranslation) emptyMap()
+        if (!karaokeActive || !showTranslation || translatedLyrics.isEmpty()) emptyMap()
         else {
             val originals = lyrics.associateBy { it.timeMs }
-            translatedLyrics.filter { line ->
-                originals[line.timeMs]?.let { line.text.isNotBlank() && it.text != line.text } == true
-            }.associateBy { it.timeMs }
+            buildMap {
+                for (line in translatedLyrics) {
+                    val original = originals[line.timeMs] ?: continue
+                    if (line.text.isNotBlank() && line.text != original.text) put(line.timeMs, line)
+                }
+            }
         }
     }
     val karaokeTimeline = remember(karaokeActive, lyrics, karaokeTranslations, lineStarts) {
         if (karaokeActive) KaraokeTimeline(lyrics, karaokeTranslations, lineStarts) else null
     }
-
-    // v1.5.2：逐字扫过的「活动窗口」——每行从**第一个词开始**到**最后一个词唱完（含行尾收束）**。
-    // 只有落在这个窗口里才逐帧推进位置；前奏 / 间奏 / 行尾留白一律回到按需唤醒，
-    // 静态期仍然是零状态写入、零帧调度（v1.4.1 的性质一行未丢）。
-    // 一个窗口 ≈ 这一行真正在唱的 2~5 秒，所以整首歌的帧调度时间与「一直在唱」的直觉一致。
-    val sweepWindows = remember(lyrics, wordByWordEnabled, wordAnimationMode) {
-        buildSweepWindows(lyrics, wordByWordEnabled, wordAnimationMode)
-    }
-
-    val translationSweep = remember(lyrics, karaokeTranslations, wordByWordEnabled, wordAnimationMode) {
-        if (karaokeTranslations.isEmpty()) null
-        else buildSweepWindows(lyrics.map { karaokeTranslations[it.timeMs] ?: it.copy(words = emptyList()) },
-            wordByWordEnabled, wordAnimationMode)
-    }
-
-    val boundaries = remember(lineStarts, karaokeTimeline, karaokeTranslations, sweepWindows, translationSweep) {
-        val set = java.util.TreeSet<Long>()
-        lineStarts.forEach(set::add)
-        if (useWordTiming) {
-            for (line in lyrics) for (word in line.words) set.add(word.startMs)
-            for (line in karaokeTranslations.values) for (word in line.words) set.add(word.startMs)
-            // Publish the end even when the first frame past it leaves the sweep window.
-            for (end in sweepWindows.ends) if (end != NO_SWEEP_WINDOW) set.add(end)
-            translationSweep?.ends?.forEach { end -> if (end != NO_SWEEP_WINDOW) set.add(end) }
-        }
-        karaokeTimeline?.boundaries?.let(set::addAll)
-        set.toLongArray()
+    val wakeSchedule = remember(lyrics, lineStarts, karaokeTranslations, karaokeTimeline, useWordTiming) {
+        LyricWakeSchedule(
+            lines = lyrics,
+            lineStarts = lineStarts,
+            translations = karaokeTranslations,
+            useWordTiming = useWordTiming,
+            extraBoundaries = karaokeTimeline?.boundaries.orEmpty(),
+        )
     }
 
     // v1.5.2：扫过参数（渐变带宽度 / 未唱透明度 / 缓动 / 软边），由设备能力 + 设置解析。
@@ -382,9 +360,10 @@ internal fun LyricsView(
         anchor.anchorTrackKey = trackKey
         displayPosition.longValue = positionState.value
     }
-    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, boundaries, sweepWindows, translationSweep, trackKey) {
+    LaunchedEffect(isPlaying, isBuffering, isVisible, enabled, wakeSchedule, trackKey) {
         anchor.speed = currentPlaybackSpeed()
         if (!isPlaying || isBuffering || !isVisible || !enabled) return@LaunchedEffect
+        val boundaries = wakeSchedule.boundaries
         while (true) {
             // Wait for the first real sample and do not advance another track's clock.
             if (positionState.value <= 0L || anchor.anchorTrackKey != trackKey) {
@@ -393,8 +372,7 @@ internal fun LyricsView(
             }
 
             val nowMs = anchor.positionAt(System.nanoTime())
-            val sweeping = inSweepWindow(nowMs, sweepWindows, lineStarts) ||
-                (translationSweep != null && inSweepWindow(nowMs, translationSweep, lineStarts))
+            val sweeping = wakeSchedule.sweepingAt(nowMs)
             val previous = displayPosition.longValue
             val current = LyricClock.displayPosition(previous, nowMs, boundaries, sweeping)
             if (current != previous) displayPosition.longValue = current
@@ -688,66 +666,4 @@ private class PositionAnchor {
      * 「换歌作废锚点」那段注释）。
      */
     var anchorTrackKey: Any? = null
-}
-
-/** 该行没有逐字扫过窗口。 */
-private const val NO_SWEEP_WINDOW = Long.MIN_VALUE
-
-/**
- * 每行的扫过活动窗口，与歌词行下标一一对应。
- *
- * 存在的意义是把「逐帧」严格限制在**真正在唱**的那几秒里：窗口外一律回到 v1.4.1 的按需唤醒，
- * 于是前奏 / 间奏 / 行尾留白期间既不写状态也不请求帧。这不是可选的优化 ——
- * 不加窗口就等于整首歌 60fps 空转，S6 这种 2015 年的机器上会白掉电。
- */
-private class SweepWindows(val starts: LongArray, val ends: LongArray) {
-    val size: Int get() = starts.size
-}
-
-private fun buildSweepWindows(
-    lyrics: List<LrcLine>,
-    wordByWordEnabled: Boolean,
-    wordAnimationMode: Int,
-): SweepWindows {
-    val starts = LongArray(lyrics.size) { NO_SWEEP_WINDOW }
-    val ends = LongArray(lyrics.size) { NO_SWEEP_WINDOW }
-    if (!wordByWordEnabled || wordAnimationMode == LyricsWordAnimationMode.OFF) {
-        return SweepWindows(starts, ends)
-    }
-    lyrics.forEachIndexed { index, line ->
-        val words = line.words
-        if (words.isEmpty()) return@forEachIndexed
-        var first = Long.MAX_VALUE
-        var lastEnd = Long.MIN_VALUE
-        for (w in words) {
-            if (w.startMs < first) first = w.startMs
-            val e = w.startMs + w.durationMs
-            if (e > lastEnd) lastEnd = e
-        }
-        if (first == Long.MAX_VALUE || lastEnd < first) return@forEachIndexed
-        // 行尾：yrc 的「行首 + 行时长」与「末段 start + dur」实测只有 92.7% 相等，取较大者兜住
-        // 行尾留白；再按 SweepTrack 的行尾收束封顶，让窗口结束时刻与轨道最后一个节点**完全对齐**
-        // （早一帧退回按需唤醒没关系，晚一帧就白烧帧）。
-        val lineEnd = maxOf(line.endMs ?: lastEnd, lastEnd)
-        starts[index] = first
-        ends[index] = minOf(lineEnd, lastEnd + SweepTrack.TERMINAL_MAX_MS)
-    }
-    return SweepWindows(starts, ends)
-}
-
-/**
- * 当前位置是否落在「正在唱的那一行」的扫过窗口里。
- *
- * 与面板用同一个 [currentLineIndex]，所以「哪一行是高亮行」与「哪一行在逐帧推进」永远一致。
- */
-private fun inSweepWindow(
-    positionMs: Long,
-    windows: SweepWindows,
-    timestamps: LongArray,
-): Boolean {
-    val index = currentLineIndex(positionMs, timestamps)
-    if (index < 0 || index >= windows.size) return false
-    val start = windows.starts[index]
-    if (start == NO_SWEEP_WINDOW) return false
-    return positionMs >= start && positionMs < windows.ends[index]
 }
