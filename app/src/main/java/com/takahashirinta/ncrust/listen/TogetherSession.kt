@@ -536,8 +536,6 @@ object TogetherSession {
         _status.value = text
     }
 
-    /** 生成一个 6 位房间码。 */
-    @Suppress("unused") private val sessionUuid = UUID.randomUUID()
     private fun log(msg: String) = Log.i(TAG, msg)
 }
 
