@@ -10,49 +10,10 @@ package com.takahashirinta.ncrust.player
 
 import kotlin.random.Random
 
-/**
- * v2.0.0 · T1-C：乱序播放的**轮次生成**（纯逻辑，JVM 可单测）。
- *
- * ## 为什么需要这个文件
- *
- * 用户报告「随机的逻辑有问题，容易同一语种扎堆，刚刚随机到十首日语歌」。真机调研结论：
- *
- *  1. **洗牌算法本身没有缺陷** —— Kotlin `shuffled()` 落到 `java.util.Collections.shuffle`，
- *     是标准无偏 Durstenfeld Fisher-Yates（`swap(i-1, rnd.nextInt(i))`），
- *     不存在 `swap(i, random(0,n))` 那种有偏写法，也没有固定/秒级种子；
- *  2. 但**乱序模式没有被记住**（`playMode` 只存在 `remember` 里）：任何 Activity 重建
- *     （低内存回收、"不保留活动"、主题/语言切换）都会让它静默回到"顺序循环"，
- *     于是队列按**原始顺序**播 —— 网易歌单/每日推荐的原始顺序本来就常按语种/地区/专辑成块，
- *     这才是"十首日语连播"最可能的来源（见 MainActivity 里 `playMode` 的持久化修复）；
- *  3. **轮末语义**：旧实现在一轮播完后要么重洗整池（新序列可能立刻重播刚播完的那首），
- *     要么把"当前曲钉在下标 0"当成下一首（无缝路径直接重播当前曲）。
- *
- * 本文件负责 3 与「防扎堆」的确定性部分，全部是纯函数；乱序模式的持久化在
- * `PlaybackStateManager` / `MainActivity`。
- *
- * ## 防扎堆的口径（**不是**语种均衡）
- *
- * 用**主艺人 id**（`SongItem.artists.first().id`）作为分散键：相邻两首不来自同一主艺人。
- * 语言是伪概念（ncm 没有语言字段），按语种均衡需要猜语言，本 fork 明确不做；
- * 而"同一艺人连播"是真实存在的观感问题（歌单里同艺人常成块出现），且零网络成本。
- *
- * **必须能优雅退化**：池子太小、整张专辑都是同一艺人时约束不可满足 ——
- * [disperse] 在找不到可交换位置时**放弃这一处**，绝不死循环、绝不为了满足约束而丢歌。
- */
+/** 生成固定当前曲为首项的乱序轮次，按主艺人分散相邻歌曲。 */
 object ShuffleRound {
 
-    /**
-     * 生成一轮乱序序列。
-     *
-     * `currentIndex` **钉在下标 0**：这是本应用既有的事实契约（`shuffledIndices[0]` 恒等于
-     * 正在播的那首），预载/手动下一首/无缝过渡都依赖它。调用方播放下标 1..n-1，
-     * 一轮播完后再生成新的一轮。
-     *
-     * @param size 队列长度
-     * @param currentIndex 当前正在播放的下标（会被夹到合法范围）
-     * @param keyOf 分散键：返回 null 表示"这首不参与约束"（缺艺人信息时）
-     * @param random 可注入，便于单测复现
-     */
+    /** `currentIndex` 固定在第一位，供切歌和无缝预载共用同一轮次。 */
     fun newRound(
         size: Int,
         currentIndex: Int,
@@ -61,24 +22,19 @@ object ShuffleRound {
     ): List<Int> {
         if (size <= 0) return emptyList()
         val current = currentIndex.coerceIn(0, size - 1)
-        val rest = (0 until size).filter { it != current }.shuffled(random)
-        return disperse(listOf(current) + rest, keyOf, random)
+        val order = ArrayList<Int>(size)
+        for (index in 0 until size) {
+            if (index != current) order.add(index)
+        }
+        order.shuffle(random)
+        order.add(0, current)
+        return disperse(order, keyOf, random)
     }
 
     /**
-     * 防扎堆排列：把「相邻两首同主艺人」的相邻对拆开。
-     *
-     * 算法在与上一首不同艺人的歌曲中按歌曲数加权抽取。仅当某艺人占剩余池
-     * 一半以上、延后就必然造成扎堆时优先取它；桶内歌曲继续随机。
-     *
-     * **下标 0 保持不动**：本应用的契约是 `shuffledIndices[0]` 恒等于正在播的那一首，
-     * 预载/无缝过渡都依赖它，所以只重排 1..n-1。
-     *
-     * **优雅退化**：若某一步只剩"与上一首同艺人"的桶（池子太小 / 整张专辑同一艺人），
-     * 就照取不误 —— 绝不死循环、绝不丢歌、绝不为了满足约束而无限尝试。
-     * `keyOf` 返回 null 表示"这首不参与约束"（缺艺人信息），它永远不会与任何东西相撞。
-     *
-     * `order.size < 3` 直接原样返回（两首歌之间没有可操作空间）。
+     * 其余曲目按艺人分桶，从上一首艺人之外的歌曲中等权抽取。
+     * 剩余超过半数的可选艺人优先，以免后半程只能连播同一艺人。
+     * 缺艺人信息的歌曲可连续播放。只剩同一艺人时从剩余歌曲中抽取。
      */
     fun disperse(
         order: List<Int>,
@@ -87,49 +43,89 @@ object ShuffleRound {
     ): List<Int> {
         if (order.size < 3) return order
         val head = order[0]
-        val buckets = LinkedHashMap<Long?, MutableList<Int>>()
+        val songsByArtist = LinkedHashMap<Long?, MutableList<Int>>()
         for (i in 1 until order.size) {
             val idx = order[i]
-            buckets.getOrPut(keyOf(idx)) { mutableListOf() }.add(idx)
+            songsByArtist.getOrPut(keyOf(idx)) { mutableListOf() }.add(idx)
         }
+
+        val buckets = songsByArtist.entries.toList()
+        val weights = BucketWeights(buckets)
         val out = ArrayList<Int>(order.size)
         out.add(head)
-        var prev: Long? = keyOf(head)
-        var remaining = order.size - 1
-        while (remaining > 0) {
-            var best: MutableList<Int>? = null
-            var bestKey: Long? = null
-            var candidates = 0
-            // 只有某艺人占剩余池一半以上时才强制先取，以免末尾无法分散。
-            // 其他时候按可选歌曲数加权抽取，避免“最多剩余优先”把每轮开头锁在同一批艺人。
-            val forced = buckets.entries.firstOrNull {
-                it.key != null && it.key != prev && it.value.size > remaining / 2
-            }
-            if (forced != null) {
-                best = forced.value
-                bestKey = forced.key
-            } else for ((key, list) in buckets) {
-                if (list.isEmpty() || (prev != null && key == prev)) continue
-                candidates += list.size
-                if (random.nextInt(candidates) < list.size) {
-                    best = list
-                    bestKey = key
+        var previous = keyOf(head)?.let { artist -> buckets.indexOfFirst { it.key == artist } } ?: -1
+        for (remaining in (order.size - 1) downTo 1) {
+            val half = remaining / 2
+            // 超过一半的桶必定覆盖剩余歌曲按桶排列后的中间位置。
+            val middle = weights.bucketAt(half)
+            val majority = buckets[middle]
+            val excluded = buckets.getOrNull(previous)?.value?.size ?: 0
+            val chosen = when {
+                middle != previous && majority.key != null && majority.value.size > half -> middle
+                excluded == remaining -> previous
+                else -> {
+                    val rank = random.nextInt(remaining - excluded)
+                    val excludedStart = if (excluded > 0) weights.countBefore(previous) else remaining
+                    weights.bucketAt(if (rank < excludedStart) rank else rank + excluded)
                 }
             }
-            if (best == null) {
-                // 约束不可满足：只剩上一首的同艺人。退化取任意非空桶，保证仍然输出 n 首。
-                val entry = buckets.entries.firstOrNull { it.value.isNotEmpty() } ?: break
-                best = entry.value
-                bestKey = entry.key
-            }
-            val list = best
-            val pick = random.nextInt(list.size)
-            out.add(list[pick])
-            list[pick] = list[list.size - 1]
-            list.removeAt(list.size - 1)
-            prev = bestKey
-            remaining--
+
+            val bucket = buckets[chosen]
+            val songs = bucket.value
+            val pick = random.nextInt(songs.size)
+            out.add(songs[pick])
+            songs[pick] = songs.last()
+            songs.removeAt(songs.lastIndex)
+            weights.removeOne(chosen)
+            previous = if (bucket.key == null) -1 else chosen
         }
         return out
+    }
+
+    /** 用树状数组查询前缀曲目数，并从曲目排名定位所属艺人桶。 */
+    private class BucketWeights(buckets: List<Map.Entry<Long?, MutableList<Int>>>) {
+        private val counts = IntArray(buckets.size + 1)
+        private val highestStep = Integer.highestOneBit(buckets.size)
+
+        init {
+            for (slot in 1..buckets.size) {
+                counts[slot] += buckets[slot - 1].value.size
+                val parent = slot + Integer.lowestOneBit(slot)
+                if (parent < counts.size) counts[parent] += counts[slot]
+            }
+        }
+
+        fun countBefore(bucket: Int): Int {
+            var slot = bucket
+            var total = 0
+            while (slot > 0) {
+                total += counts[slot]
+                slot -= Integer.lowestOneBit(slot)
+            }
+            return total
+        }
+
+        fun bucketAt(rank: Int): Int {
+            var prefix = 0
+            var remainingRank = rank
+            var step = highestStep
+            while (step > 0) {
+                val next = prefix + step
+                if (next < counts.size && counts[next] <= remainingRank) {
+                    prefix = next
+                    remainingRank -= counts[next]
+                }
+                step = step ushr 1
+            }
+            return prefix
+        }
+
+        fun removeOne(bucket: Int) {
+            var slot = bucket + 1
+            while (slot < counts.size) {
+                counts[slot]--
+                slot += Integer.lowestOneBit(slot)
+            }
+        }
     }
 }
