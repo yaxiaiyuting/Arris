@@ -11,11 +11,12 @@
 
 package com.takahashirinta.ncrust.player
 
-import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
+import com.google.gson.stream.JsonWriter
+import java.io.StringWriter
 
 /**
  * `ncrust_playback_state` / `song_positions` 的**编解码契约**（v2.5.5 · A）。
@@ -64,9 +65,9 @@ internal object PlaybackPositionCodec {
     /** v1 的落盘 key（`mapping.txt` 取证：`posMs→a`、`savedAtMs→b`）。 */
     private val LEGACY_KEYS = listOf("a", "b")
 
-    private val STABLE_KEYS = listOf("posMs", "savedAtMs")
-
-    private val gson = Gson()
+    private const val POSITION = "posMs"
+    private const val SAVED_AT = "savedAtMs"
+    private val STABLE_KEYS = listOf(POSITION, SAVED_AT)
 
     /**
      * 落盘形状。`PositionEntry` 本体也带同名 `@SerializedName`（写路径直接用它），
@@ -74,8 +75,8 @@ internal object PlaybackPositionCodec {
      * 也为了让将来给 `PositionEntry` 加字段时必须在两处同时做决定。
      */
     internal data class PositionDto(
-        @SerializedName("posMs") val posMs: Long? = null,
-        @SerializedName("savedAtMs") val savedAtMs: Long? = null,
+        @SerializedName(POSITION) val posMs: Long? = null,
+        @SerializedName(SAVED_AT) val savedAtMs: Long? = null,
     )
 
     // ---------------------------------------------------------------- 编码 ----
@@ -87,14 +88,18 @@ internal object PlaybackPositionCodec {
      * 与 v1 逐字节同构 —— 这本版**没有改 key 的形状**，只改了内层字段名。
      */
     fun encode(map: Map<Long, PlaybackStateManager.PositionEntry>): String {
-        val out = JsonObject()
-        for ((songId, entry) in map) {
-            val obj = JsonObject()
-            obj.addProperty("posMs", entry.posMs)
-            obj.addProperty("savedAtMs", entry.savedAtMs)
-            out.add(songId.toString(), obj)
+        val out = StringWriter()
+        JsonWriter(out).use { writer ->
+            writer.beginObject()
+            for ((songId, entry) in map) {
+                writer.name(songId.toString()).beginObject()
+                writer.name(POSITION).value(entry.posMs)
+                writer.name(SAVED_AT).value(entry.savedAtMs)
+                writer.endObject()
+            }
+            writer.endObject()
         }
-        return gson.toJson(out)
+        return out.toString()
     }
 
     // ---------------------------------------------------------------- 解码 ----
@@ -123,9 +128,9 @@ internal object PlaybackPositionCodec {
 
     /** 单条解码：稳定名字 → 已知旧单字母 → 声明顺序。 */
     internal fun decodeEntry(obj: JsonObject): PlaybackStateManager.PositionEntry? {
-        if (obj.has("posMs") || obj.has("savedAtMs")) {
-            val pos = obj.longOf("posMs") ?: return null
-            return PlaybackStateManager.PositionEntry(pos, obj.longOf("savedAtMs") ?: 0L)
+        if (obj.has(POSITION) || obj.has(SAVED_AT)) {
+            val pos = obj.longOf(POSITION) ?: return null
+            return PlaybackStateManager.PositionEntry(pos, obj.longOf(SAVED_AT) ?: 0L)
         }
         if (obj.keySet().isNotEmpty() && obj.keySet().all { it in LEGACY_KEYS }) {
             val pos = obj.longOf("a") ?: return null
@@ -142,12 +147,14 @@ internal object PlaybackPositionCodec {
      * 一个荒谬的值会被 `getSongPosition` 拒掉。
      */
     private fun fromDeclarationOrder(obj: JsonObject): PlaybackStateManager.PositionEntry? {
-        val nums = obj.entrySet()
-            .map { it.value }
-            .filter { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
-            .mapNotNull { runCatching { it.asLong }.getOrNull() }
-        if (nums.isEmpty()) return null
-        return PlaybackStateManager.PositionEntry(nums[0], nums.getOrElse(1) { 0L })
+        var position: Long? = null
+        for ((_, value) in obj.entrySet()) {
+            if (!value.isJsonPrimitive || !value.asJsonPrimitive.isNumber) continue
+            val number = runCatching { value.asLong }.getOrNull() ?: continue
+            if (position != null) return PlaybackStateManager.PositionEntry(position, number)
+            position = number
+        }
+        return position?.let { PlaybackStateManager.PositionEntry(it, 0L) }
     }
 
     private fun JsonObject.longOf(key: String): Long? =
