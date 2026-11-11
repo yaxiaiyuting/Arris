@@ -173,30 +173,24 @@ class OfflineUrlIndexTest {
     }
 }
 
-/**
- * v3.3.0：[OfflineKeys.coversStart] 的行为契约 —— 「缓存能不能**从头播**」。
- *
- * 这条纯函数是为用户反馈第 1 条「离线播放不太行」的第二个缺陷写的：
- * 旧判据是「缓存里有没有这个 key 的片段」，而播放器**从 position 0 读**。
- * 缓存只有中段时旧判据会放行 ⇒ 起播正常、播到洞的位置突然卡死再弹降级。
- *
- * 形状全部来自 `SimpleCache.getCachedSpans` 的真实语义：
- * 一个 key 下可以有**多个** span，`position` 是它们在文件里的字节偏移，
- * `length` 是该 span 的长度，`isCached=false` 表示它是「已锁定但尚未下载」的占位。
- */
+/** 同键片段按偏移检查离线起播的连续性。 */
 class OfflineKeysCoversStartTest {
 
-    private fun span(position: Long, length: Long, isCached: Boolean = true) =
-        OfflineKeys.CachedSpan(position, length, isCached)
+    private data class Span(val position: Long, val length: Long, val isCached: Boolean)
+
+    private fun span(position: Long, length: Long, isCached: Boolean = true) = Span(position, length, isCached)
+
+    private fun coversStart(spans: List<Span>): Boolean =
+        OfflineKeys.coversOrderedStart(spans, Span::position, Span::length, Span::isCached)
 
     @Test
     fun `没有任何片段时不能从头播`() {
-        assertFalse(OfflineKeys.coversStart(emptyList()))
+        assertFalse(coversStart(emptyList()))
     }
 
     @Test
     fun `从 0 起的完整片段可以播`() {
-        assertTrue(OfflineKeys.coversStart(listOf(span(0, 1_000_000))))
+        assertTrue(coversStart(listOf(span(0, 1_000_000))))
     }
 
     @Test
@@ -204,7 +198,7 @@ class OfflineKeysCoversStartTest {
         // 用户 seek 到中段听了一段：缓存里只有 [500000, 1000000)，段落起点不是 0。
         assertFalse(
             "从 0 起没有覆盖 ⇒ 起播那一刻就会回源",
-            OfflineKeys.coversStart(listOf(span(500_000, 500_000))),
+            coversStart(listOf(span(500_000, 500_000))),
         )
     }
 
@@ -216,7 +210,7 @@ class OfflineKeysCoversStartTest {
             span(200_000, 200_000),
             span(400_000, 600_000),
         )
-        assertTrue(OfflineKeys.coversStart(spans))
+        assertTrue(coversStart(spans))
     }
 
     @Test
@@ -235,7 +229,7 @@ class OfflineKeysCoversStartTest {
         )
         assertFalse(
             "洞之后的部分读不到，播到那里就会回源",
-            OfflineKeys.coversStart(spans),
+            coversStart(spans),
         )
     }
 
@@ -245,7 +239,7 @@ class OfflineKeysCoversStartTest {
         // 离线范围就是「本机真播过的片段」，要求整曲会把绝大多数真实缓存判死。
         // 但要求的是**从 0 起连续**，不要求到文件末尾。
         val spans = listOf(span(0, 200_000))
-        assertTrue(OfflineKeys.coversStart(spans))
+        assertTrue(coversStart(spans))
     }
 
     @Test
@@ -253,11 +247,11 @@ class OfflineKeysCoversStartTest {
         // isCached=false 是「已锁定但还没下载」的占位：它在 keys 里，但磁盘上没有字节。
         assertFalse(
             "占位不是数据",
-            OfflineKeys.coversStart(listOf(span(0, 200_000, isCached = false))),
+            coversStart(listOf(span(0, 200_000, isCached = false))),
         )
         // 真实片段 + 占位混在一起时，以真实片段为准
         assertTrue(
-            OfflineKeys.coversStart(
+            coversStart(
                 listOf(span(0, 200_000), span(200_000, 200_000, isCached = false)),
             ),
         )
@@ -265,21 +259,29 @@ class OfflineKeysCoversStartTest {
 
     @Test
     fun `长度为 0 的片段不构成覆盖`() {
-        assertFalse(OfflineKeys.coversStart(listOf(span(0, 0))))
+        assertFalse(coversStart(listOf(span(0, 0))))
     }
 
     @Test
-    fun `片段顺序无关 —— 内部会排序`() {
-        val a = OfflineKeys.coversStart(listOf(span(0, 100), span(100, 100)))
-        val b = OfflineKeys.coversStart(listOf(span(100, 100), span(0, 100)))
-        assertEquals("排序不应影响结论", a, b)
-        assertTrue(a)
+    fun `发现空洞后不再访问后续片段`() {
+        val visited = mutableListOf<Long>()
+        val covered = OfflineKeys.coversOrderedStart(
+            listOf(span(0, 100), span(200, 100), span(300, 100)),
+            position = {
+                visited += it.position
+                it.position
+            },
+            length = Span::length,
+            isCached = Span::isCached,
+        )
+        assertFalse(covered)
+        assertEquals(listOf(0L, 200L), visited)
     }
 
     @Test
     fun `第一段不从 0 起时后面接得再满也没用`() {
         assertFalse(
-            OfflineKeys.coversStart(listOf(span(100, 100), span(200, 100), span(300, 100))),
+            coversStart(listOf(span(100, 100), span(200, 100), span(300, 100))),
         )
     }
 
@@ -287,11 +289,11 @@ class OfflineKeysCoversStartTest {
     fun `相邻片段起点等于已覆盖位置时算连续`() {
         // 边界：`position == coveredUpTo` 必须算连续，否则下载器按片段切出来的缓存
         // 会被整体判成不可播（每个 fragment 的起点都恰好等于上一段的终点）。
-        assertTrue(OfflineKeys.coversStart(listOf(span(0, 100), span(100, 100))))
+        assertTrue(coversStart(listOf(span(0, 100), span(100, 100))))
     }
 
     @Test
     fun `重叠片段不会让判据出错`() {
-        assertTrue(OfflineKeys.coversStart(listOf(span(0, 300), span(100, 100), span(200, 100))))
+        assertTrue(coversStart(listOf(span(0, 300), span(100, 100), span(200, 100))))
     }
 }

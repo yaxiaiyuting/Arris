@@ -120,42 +120,8 @@ object OfflineAudioCache {
     }
 
     /**
-     * 给 ExoPlayer 用的数据源工厂：命中本地的片段不再走网络。
-     *
-     * ## v3.1.0 · B：按 host 限定的两处改动（铁律 27：不得破坏现有音源）
-     *
-     * 1. **只对 B 站媒体补 `Referer: https://www.bilibili.com/`**。实测：B 站媒体 CDN
-     *    不带 Referer 一律 **403**（连带 ExoPlayer 指纹的 UA 也 403），而带上就是 206。
-     *    反过来，给 ncm/QQ 的请求加 B 站 Referer 也会把它们打死 ——
-     *    所以判据是白名单（[BiliCdn.needsReferer]），不是全局默认头。
-     *    ncm 与 QQ 的请求在这里**一个字节都不变**。
-     * 2. **B 站 CDN 用内容寻址的稳定缓存键**：它的直链两小时后会换一条（query 全变），
-     *    但路径里的内容哈希不变，所以键取文件名（[BiliCdn.cacheKeyFor]）。
-     *    非 B 站 CDN 的键**逐字不变**。
-     *
-     * ## v3.2.4 · P0：Referer 只是**第一道闸**，UA 是第二道
-     *
-     * v3.1.0 的 `ResolvingDataSource` 只补了 Referer，而 CDN **同时**校验 UA：
-     * UA 缺失、或含 `android` / `dalvik` / `curl` / `python` / `vlc` 之类的子串 → **403**。
-     *
-     * 而 media3 那条默认路径发出去的恰恰是 `Dalvik/2.1.0 (Linux; U; Android …)`：
-     * `DefaultDataSource.Factory(Context)` 造的是裸 `DefaultHttpDataSource.Factory()`
-     * （`userAgent == null`），于是 UA 交给 `HttpURLConnection` 的默认值。
-     * 实测（`docs/verification/v3.2.4/probe-bili-playback.md` §2）：
-     * 生产链 `as_is` → **403**；**只加一个 UA**、其余逐字不变 → **206 + 字节**。
-     *
-     * ⚠️ 所以 UA **不能**塞进 `DataSpec.withRequestHeaders`：`DefaultHttpDataSource` 的
-     * `userAgent` 字段是 `final`，而且在 `makeConnection` 里**最后**才写，会把
-     * `DataSpec` 里的同名字段覆盖掉。只能由**工厂**给（[DefaultHttpDataSource.Factory.setUserAgent]）。
-     *
-     * 于是本版把上游拆成**两个数据源**，按 URI 逐次选（[SourceRoutingDataSource]）：
-     *
-     * | URI | 走哪个 | 与 v3.2.3 的差别 |
-     * |---|---|---|
-     * | B 站媒体（[BiliCdn.isBiliMedia]） | `DefaultDataSource` + **B 站 UA** | 多一个 UA + 多一批被判定的 host |
-     * | 其余（ncm / QQ / 本地 / 未知） | `DefaultDataSource` + **media3 默认** | **零差别**（同一个裸工厂） |
-     *
-     * 判据只有一处（[BiliCdn.isBiliMedia]），选源与加头都问它 —— 铁律 26：对称位置的保护必须对称。
+     * 缓存读写与回源使用同一套键。回源共享 MediaHttp 的 DNS 和连接池，
+     * B 站媒体由单独的上游工厂提供对应 User-Agent。
      */
     fun dataSourceFactory(context: Context): DataSource.Factory {
         val app = context.applicationContext
@@ -182,22 +148,17 @@ object OfflineAudioCache {
             .setCacheWriteDataSinkFactory(
                 CacheDataSink.Factory().setCache(c).setFragmentSize(CacheDataSink.DEFAULT_FRAGMENT_SIZE)
             )
-            .setCacheKeyFactory { spec ->
-                // v3.1.0 · B：B 站 CDN 用**稳定键**（路径里的内容哈希 + 档位后缀），
-                // 因为它的 query（签名与 deadline）每次取链都不同 —— 按完整 URL 做 key
-                // 只会堆一批永远命中不了的片段。非 B 站 CDN 走既有规则，逐字不变。
-                // v3.2.4：判据换成 isBiliMedia（PCDN 第三方域名同样内容寻址）。
-                BiliCdn.cacheKeyFor(spec.uri.toString(), spec.uri.host)
-                    ?: OfflineKeys.keyOf(spec.uri.toString())
-                    ?: spec.uri.toString()
-            }
+            .setCacheKeyFactory { spec -> cacheKeyFor(spec.uri.toString(), spec.uri.host) }
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
+
+    private fun cacheKeyFor(url: String, host: String?): String =
+        BiliCdn.cacheKeyFor(url, host) ?: OfflineKeys.keyOf(url) ?: url
 
     /** 只读当前缓存的完整文件长度元数据；不是已缓存片段的长度，不触发网络。 */
     fun contentLengthForUrl(url: String): Long = runCatching {
         val uri = android.net.Uri.parse(url)
-        val key = BiliCdn.cacheKeyFor(url, uri.host) ?: OfflineKeys.keyOf(url) ?: url
+        val key = cacheKeyFor(url, uri.host)
         val current = cache ?: return@runCatching 0L
         androidx.media3.datasource.cache.ContentMetadata.getContentLength(current.getContentMetadata(key))
             .coerceAtLeast(0L)
@@ -207,22 +168,14 @@ object OfflineAudioCache {
     fun contains(context: Context, key: String): Boolean =
         runCatching { get(context).keys.contains(key) }.getOrDefault(false)
 
-    /**
-     * v3.3.0：这个 key 的缓存**能不能从头播**。
-     *
-     * 与 [contains] 的区别是本版修的一个 P1 缺陷：`contains` 只问「有没有任何片段」，
-     * 而播放器是从 position 0 读的。缓存里只有中段时（seek 过去听过、或上次缓冲到一半
-     * 就切歌），`contains` 会放行 ⇒ 起播正常、播到洞的位置**突然卡死**再弹降级 ——
-     * 用户读到的就是「播一半就断」，而且它先给了「能放」的承诺，比直接说放不了更糟。
-     *
-     * 判据本身是纯函数 [OfflineKeys.coversStart]，这里只负责把 media3 的
-     * `CacheSpan` 翻译成它要的三元组 —— 那层翻译没有逻辑，逻辑全在纯函数那边。
-     */
+    /** 离线起播前检查从字节 0 开始的连续缓存。SimpleCache 的同键片段已按偏移排序。 */
     fun coversStart(context: Context, key: String): Boolean = runCatching {
-        val spans = get(context).getCachedSpans(key).map {
-            OfflineKeys.CachedSpan(position = it.position, length = it.length, isCached = it.isCached)
-        }
-        OfflineKeys.coversStart(spans)
+        OfflineKeys.coversOrderedStart(
+            get(context).getCachedSpans(key),
+            position = { it.position },
+            length = { it.length },
+            isCached = { it.isCached },
+        )
     }.getOrDefault(false)
 
     /** 已用字节数。 */
@@ -302,7 +255,7 @@ object OfflineAudioCache {
         val app = context.applicationContext
         // 拿不到缓存真相就不裁剪：宁可留下几条过期索引，也不能把用户的离线库清空。
         val live = keysOrNull(app) ?: return 0
-        val liveSongIds = live.mapNotNull { OfflineKeys.songIdOf(it) }.toSet()
+        val liveSongIds = live.mapNotNullTo(HashSet()) { OfflineKeys.songIdOf(it) }
         return OfflineLibrary.retain(app, liveSongIds)
     }
 
