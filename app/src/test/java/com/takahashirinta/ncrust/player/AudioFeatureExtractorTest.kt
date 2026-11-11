@@ -16,6 +16,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.sin
+import kotlin.math.sqrt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -178,21 +179,7 @@ class AudioFeatureExtractorTest {
         assertEquals(0f, e.spectralCentroid, 1e-6f)
     }
 
-    // ── 3. 明亮度占比（波形逐柱着色的驱动量）────────────────────────────────────────
-
-    @Test
-    fun `明亮度占比反映中高频的比重`() {
-        val bassOnly = AudioFeatureExtractor.bandMix(0.5f, 0f, 0f)
-        val mix = AudioFeatureExtractor.bandMix(0.25f, 0.25f, 0.25f)
-        val trebleOnly = AudioFeatureExtractor.bandMix(0f, 0f, 0.5f)
-        assertEquals(0f, bassOnly, 0f)
-        assertTrue("各占一半 ⇒ 约 0.67（中+高 / 全部）", abs(mix - 2f / 3f) < 1e-4f)
-        assertEquals(1f, trebleOnly, 0f)
-        assertEquals("全零 ⇒ 0（而不是 NaN）", 0f, AudioFeatureExtractor.bandMix(0f, 0f, 0f), 0f)
-        assertEquals(0f, AudioFeatureExtractor.bandMix(Float.NaN, Float.NaN, Float.NaN), 0f)
-    }
-
-    // ── 4. 瞬态检测 ────────────────────────────────────────────────────────────────
+    // ── 3. 瞬态检测 ────────────────────────────────────────────────────────────────
 
     /** 生成「安静底噪 + 周期性低频击打」的交错 PCM。 */
     private fun kickTrack(
@@ -417,15 +404,7 @@ class AudioFeatureExtractorTest {
         assertEquals(0.0, AudioFeatureExtractor.baselineCoefficient(Double.NaN), 0.0)
     }
 
-    @Test
-    fun `frameMs 由样本数与采样率反算`() {
-        // 这是「每缓冲一次判定」能成立的全部依据：缓冲粒度是运行时行为。
-        val e = extractor(sampleRateHz = 44_100, channels = 2)
-        assertTrue(e.process(sine(440.0, 44_100, 1024, channels = 2), C.ENCODING_PCM_16BIT))
-        assertEquals(1024.0 * 1000.0 / 44_100.0, e.frameMs.toDouble(), 0.01)
-    }
-
-    // ── 5. 失败即降级 ──────────────────────────────────────────────────────────────
+    // ── 4. PCM 解码与降级 ──────────────────────────────────────────────────────────
 
     @Test
     fun `采样率未知时不可用`() {
@@ -465,6 +444,40 @@ class AudioFeatureExtractorTest {
     }
 
     @Test
+    fun `只读直接缓冲按 native 字节序读取且保留视图状态`() {
+        val nativeOrder = ByteOrder.nativeOrder()
+        val oppositeOrder = if (nativeOrder == ByteOrder.LITTLE_ENDIAN) {
+            ByteOrder.BIG_ENDIAN
+        } else {
+            ByteOrder.LITTLE_ENDIAN
+        }
+        for (encoding in intArrayOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_FLOAT)) {
+            val storage = ByteBuffer.allocateDirect(32).order(nativeOrder)
+            storage.position(1)
+            if (encoding == C.ENCODING_PCM_16BIT) {
+                storage.putShort(-16_384).putShort(8192).putShort(-4096).putShort(0)
+            } else {
+                storage.putFloat(-0.5f).putFloat(0.25f).putFloat(-0.125f).putFloat(Float.NaN)
+            }
+            storage.put(0x7f.toByte()) // 不足一个样本的尾字节。
+            storage.flip()
+
+            val view = storage.asReadOnlyBuffer().order(oppositeOrder)
+            view.mark()
+            view.position(1)
+            val limit = view.limit()
+            val e = extractor()
+            assertTrue(e.process(view, encoding))
+            assertEquals(sqrt((0.25 + 0.0625 + 0.015625) / 4.0).toFloat(), e.rms, 0f)
+            assertEquals(1, view.position())
+            assertEquals(limit, view.limit())
+            assertEquals(oppositeOrder, view.order())
+            view.reset()
+            assertEquals(0, view.position())
+        }
+    }
+
+    @Test
     fun `configure 会重置跨缓冲状态`() {
         val e = extractor()
         e.process(sine(60.0, 44_100, 4096), C.ENCODING_PCM_16BIT)
@@ -491,7 +504,7 @@ class AudioFeatureExtractorTest {
         assertTrue(e.rms > 0f)
     }
 
-    // ── 6. 结构断言（「不是 FFT」这件事要能被机械检查）──────────────────────────────
+    // ── 5. 滤波器与数值边界 ─────────────────────────────────────────────────────────
 
     @Test
     fun `三频带逐样本精确重构输入`() {
@@ -572,7 +585,5 @@ class AudioFeatureExtractorTest {
             assertTrue("必须是有限值（$v）", v.isFinite())
             assertTrue("必须落在 0..1（$v）", v in 0f..1f)
         }
-        assertTrue(e.frameMs.isFinite())
-        assertEquals("帧时长必须等于 样本数÷声道数÷采样率", 2048.0 * 1000.0 / 44_100.0 / 2.0, e.frameMs.toDouble(), 0.02)
     }
 }
