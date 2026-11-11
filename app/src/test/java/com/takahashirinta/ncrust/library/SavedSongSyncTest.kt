@@ -223,6 +223,21 @@ class SavedSongSyncTest {
         assertEquals(SavedSongOrigin.REMOTE, out.single().origin)
     }
 
+    @Test
+    fun `批量收藏保持逐首插入的顺序和墓碑语义`() {
+        val preserved = remote(3L)
+        val before = listOf(remote(7L, tombstoned = true), remote(7L), preserved)
+        val songs = listOf(song(7L, "恢复"), song(3L), song(7L, "重复"), song(8L), song(9L))
+        val sequential = songs.fold(before) { entries, song -> SavedSongSync.addManual(entries, song, now) }
+        val batch = SavedSongSync.addManualAll(before, songs, now)
+
+        assertEquals(sequential, batch)
+        assertEquals(listOf(9L, 8L, 7L, 3L), batch.map { it.trackKey.id })
+        assertEquals("恢复", batch[2].song.name)
+        assertSame(preserved, batch.last())
+        assertSame(batch, SavedSongSync.addManualAll(batch, songs, now + 100))
+    }
+
     // -------------------------------------------------------------- 规则 6 ----
 
     @Test

@@ -487,25 +487,27 @@ object LibraryManager {
         val added = mutableListOf<SongItem>()
         synchronized(songsLock) {
             val before = ensureSongsLoaded(context)
-            // 判断「这次到底哪些真的进了可见表」的判据：**可见**条目的 trackKey 集合。
-            // 用「可见」而不是「全部」是为了让「重新添加一首被 tombstone 过的歌」
-            // 也算一次新增（它需要推一次 like(true) 给云端）。
-            val visibleBefore = before.asSequence()
-                .filter { it.isVisible }
-                .mapTo(HashSet(before.size * 2)) { it.trackKey }
             val after = SavedSongSync.addManualAll(before, newSongs, System.currentTimeMillis())
             if (after !== before) {
+                // 恢复此前已取消的收藏也要同步给云端。
+                val visibleBefore = before.asSequence()
+                    .filter { it.isVisible }
+                    .mapTo(HashSet(before.size)) { it.trackKey }
                 cachedEntries = after.toMutableList()
                 added += newSongs.filter { TrackKey.ofSong(it) !in visibleBefore }
             }
         }
         if (added.isNotEmpty()) {
             // 4.0.11：批量收藏同样要动底表（同上）。
-            val ncmIds = added.map { TrackKey.ofSong(it) }.filter { it.source == MusicSource.NETEASE }.map { it.id }
+            val ncmIds = added.mapNotNull {
+                val key = TrackKey.ofSong(it)
+                if (key.source == MusicSource.NETEASE) key.id else null
+            }
             if (ncmIds.isNotEmpty()) {
                 synchronized(idsLock) {
                     val ids = cachedLikedIds.orEmpty()
-                    val fresh = ncmIds.filterNot { ids.contains(it) }
+                    val known: Collection<Long> = if (ncmIds.size == 1) ids else ids.toHashSet()
+                    val fresh = ncmIds.filterNot(known::contains)
                     if (fresh.isNotEmpty()) cachedLikedIds = fresh + ids
                 }
             }

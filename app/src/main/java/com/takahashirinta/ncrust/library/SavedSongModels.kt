@@ -265,11 +265,29 @@ object SavedSongSync {
         return out
     }
 
-    /** 批量版 [addManual]：**逐首**走同一条判据，顺序按入参顺序叠在最前（后加的在上）。 */
+    /** 批量应用 [addManual] 的规则，只在有新增或恢复时构建一次新列表。 */
     fun addManualAll(local: List<SavedSongEntry>, songs: List<SongItem>, now: Long): List<SavedSongEntry> {
-        var acc = local
-        for (s in songs) acc = addManual(acc, s, now)
-        return acc
+        if (songs.isEmpty()) return local
+        if (songs.size == 1) return addManual(local, songs[0], now)
+
+        val firstByKey = HashMap<TrackKey, SavedSongEntry>(local.size)
+        for (entry in local) firstByKey.putIfAbsent(entry.trackKey, entry)
+        val additions = LinkedHashMap<TrackKey, SavedSongEntry>()
+        for (song in songs) {
+            val key = TrackKey.ofSong(song)
+            if (firstByKey[key]?.isVisible == true || additions.containsKey(key)) continue
+            additions[key] = SavedSongEntry(key, SavedSongOrigin.LOCAL, now, false, song)
+        }
+        if (additions.isEmpty()) return local
+
+        val result = ArrayList<SavedSongEntry>(local.size + additions.size)
+        for (entry in additions.values) result.add(entry)
+        // 与逐首插到头部一致，最后接受的曲目在最前。
+        result.reverse()
+        for (entry in local) {
+            if (!additions.containsKey(entry.trackKey)) result.add(entry)
+        }
+        return result
     }
 
     // ------------------------------------------------------------------ 规则 6 ----
