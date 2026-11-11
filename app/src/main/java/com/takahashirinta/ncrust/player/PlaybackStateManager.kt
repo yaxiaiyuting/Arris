@@ -433,24 +433,23 @@ object PlaybackStateManager {
      * 「这次读盘有没有搬家」。
      */
     internal fun migrateQueueSongs(songs: List<SongItem>): List<SongItem> {
-        if (songs.isEmpty()) return songs
-        var changed = false
-        val out = ArrayList<SongItem>(songs.size)
-        for (song in songs) {
+        var updated: MutableList<SongItem>? = null
+        songs.forEachIndexed { index, song ->
             val migrated = migrateQueueSong(song)
-            if (migrated !== song) changed = true
-            out.add(migrated)
+            if (migrated !== song) {
+                val copy = updated ?: songs.toMutableList().also { updated = it }
+                copy[index] = migrated
+            }
         }
-        return if (changed) out else songs
+        return updated ?: songs
     }
 
     /** 单条队列条目的迁移；不需要迁移时**返回同一个实例**。 */
     internal fun migrateQueueSong(song: SongItem): SongItem {
         // J10：旧散列合成 id → 规范 id（幂等；没有 qqSongId 的原样保留）。
         val qqMigrated = SourceIds.migrateSynthesizedQqId(song.id, song.sourceId, song.qqSongId)
-        val withQq = if (qqMigrated == song.id) song else song.copy(id = qqMigrated)
-        val migrated = SourceIds.migrateBiliAvPartition(withQq.id, withQq.sourceId)
-        return if (migrated == withQq.id) withQq else withQq.copy(id = migrated)
+        val migrated = SourceIds.migrateBiliAvPartition(qqMigrated, song.sourceId)
+        return if (migrated == song.id) song else song.copy(id = migrated)
     }
 
     /**

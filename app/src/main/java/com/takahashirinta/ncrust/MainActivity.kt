@@ -1641,7 +1641,7 @@ fun MainScreen(
             playbackQueue.isEmpty() && currentQueueIndex < 0
         if (savedQueue != null && savedQueue.first.isNotEmpty() && untouched) {
             playerViewModel.invalidatePreload()
-            playbackQueue = savedQueue.first.toMutableList()
+            playbackQueue = savedQueue.first
             currentQueueIndex = savedQueue.second.coerceIn(0, playbackQueue.size - 1)
             if (playMode == QueueModes.SHUFFLE) {
                 val savedRound = PlaybackStateManager.restoreShuffle(
