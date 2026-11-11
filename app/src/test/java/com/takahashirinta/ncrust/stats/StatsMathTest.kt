@@ -245,6 +245,19 @@ class StatsMathTest {
         assertEquals(end - start, slices.sumOf { it.ms })
     }
 
+    @Test
+    fun `复用分桶器时本地零点和时区变化仍重新分桶`() {
+        val slicer = StatsMath.DaySlicer()
+        val midnight = at(shanghai, 2026, 2, 15, 0, 0, 0)
+        assertEquals(listOf(DaySlice("2026-02-14", 500L)), slicer.split(midnight - 750, midnight - 250, shanghai))
+        assertEquals(
+            listOf(DaySlice("2026-02-14", 250L), DaySlice("2026-02-15", 250L)),
+            slicer.split(midnight - 250, midnight + 250, shanghai),
+        )
+        assertEquals(listOf(DaySlice("2026-02-14", 500L)), slicer.split(midnight + 250, midnight + 750, newYork))
+        assertEquals(listOf(DaySlice("2026-02-15", 500L)), slicer.split(midnight + 750, midnight + 1250, shanghai))
+    }
+
     /** 夏令时切换日：跨过它仍然按「本地日」切，总和不丢（那一天只有 23 小时）。 */
     @Test
     fun `夏令时切换日跨天仍然正确`() {

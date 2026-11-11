@@ -102,6 +102,7 @@ object StatsRecorder {
 
     private var lastPosMs: Long = 0L
     private var lastNowMs: Long = 0L
+    private val daySlicer = StatsMath.DaySlicer()
 
     /**
      * 起播/恢复后的第一个采样点只用来**定位锚点**，不产生增量。
@@ -258,7 +259,7 @@ object StatsRecorder {
         val zone = TimeZone.getDefault()
         StatsStore.addListen(
             context = context,
-            slices = StatsMath.splitAcrossDays(now - delta, now, zone),
+            slices = daySlicer.split(now - delta, now, zone),
             songKey = key,
             sourceKey = sessionSourceKey,
             name = sessionName,
