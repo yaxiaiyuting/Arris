@@ -11,6 +11,7 @@ package com.takahashirinta.ncrust.lyric
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.cache.trimOldest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -99,16 +100,6 @@ object LyricsCache {
         return map
     }
 
-    /** 超出上限时按 timestamp 淘汰最旧。LRC 条目与 TTML 暂存条目共用这一个名额池。 */
-    private fun trimLocked(map: MutableMap<String, CachedLyrics>) {
-        if (map.size > MAX_ENTRIES) {
-            map.entries
-                .sortedBy { it.value.timestamp }
-                .take(map.size - MAX_ENTRIES)
-                .forEach { map.remove(it.key) }
-        }
-    }
-
     private fun persistLocked(context: Context, map: Map<String, CachedLyrics>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_ENTRIES, gson.toJson(map))
@@ -152,7 +143,7 @@ object LyricsCache {
                     romalrc,
                     old?.translationSource, old?.romanSource
                 )
-                trimLocked(map)
+                map.trimOldest(MAX_ENTRIES) { it.timestamp }
                 persistLocked(context, map)
             }
         }
@@ -241,7 +232,7 @@ object LyricsCache {
                     // 还没有正式条目：暂存，绝不建 lrc="" 的正式条目（见 TTML_KEY_PREFIX）。
                     map[ttmlKey(songId)] = CachedLyrics("", "", now, null, ttml, now)
                 }
-                trimLocked(map)
+                map.trimOldest(MAX_ENTRIES) { it.timestamp }
                 persistLocked(context, map)
             }
         }

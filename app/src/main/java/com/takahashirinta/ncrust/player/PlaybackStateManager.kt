@@ -17,6 +17,7 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.cache.trimOldest
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.SourceIds
 import kotlinx.coroutines.CoroutineScope
@@ -283,12 +284,7 @@ object PlaybackStateManager {
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
             positionGeneration++
-            if (map.size > MAX_SONG_POSITIONS) {
-                map.entries
-                    .sortedBy { it.value.savedAtMs }
-                    .take(map.size - MAX_SONG_POSITIONS)
-                    .forEach { map.remove(it.key) }
-            }
+            map.trimOldest(MAX_SONG_POSITIONS) { it.savedAtMs }
         }
         scheduleFlushPositions(context)
     }
