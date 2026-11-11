@@ -112,12 +112,13 @@ class MotionEnvelope {
             if (level != 0f) {
                 val next = level * exp(-dt / RELEASE_TAU_MS)
                 level = if (next < LEVEL_EPSILON) 0f else next
+                changed = true
             }
             baseline = 0f
             cooldownMs = 0f
             strongBeat = false
             strongHold = false
-            return changed || level != 0f
+            return changed
         }
 
         // 响度包络跟全带 RMS（背景呼吸要的是"整体多响"，不是"有没有鼓"）。

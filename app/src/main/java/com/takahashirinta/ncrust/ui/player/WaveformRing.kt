@@ -280,6 +280,19 @@ class WaveformRing(
                 dash[last] = 0f
             }
         }
+
+        fun hasUnsettledColumns(peaks: Boolean): Boolean {
+            for (index in targets.indices) {
+                val height = heights[index]
+                if (height != targets[index] || heightVelocity[index] != 0f) return true
+                if (peaks && (
+                    !ballResting[index] || balls[index] != height ||
+                        ballVelocity[index] != 0f || dash[index] != balls[index]
+                    )
+                ) return true
+            }
+            return false
+        }
     }
 
     /** B 档：渐变流动相位（0..1 循环）。 */
@@ -373,6 +386,10 @@ class WaveformRing(
 
     /** UI 线程按帧率调用（效果全关的基线路径，老调用点与单测沿用这个重载）。 */
     fun pump(active: Boolean, dtMs: Float): Boolean = pump(active, dtMs, VisualizerEffects.BASELINE)
+
+    /** 小球在某帧可能只改变静止标记，画面不变但仍要继续推进。 */
+    internal fun hasUnsettledColumns(peaks: Boolean): Boolean =
+        fullWindow.hasUnsettledColumns(peaks) || bandWindows.any { it.hasUnsettledColumns(peaks) }
 
     /**
      * UI 线程按帧率调用。

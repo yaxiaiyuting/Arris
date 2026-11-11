@@ -83,6 +83,10 @@ class WaveformEffectsState(
      */
     private var lastTransientCount = NO_EXTERNAL_TRANSIENT
 
+    internal fun alignTransientCount(count: Long) {
+        lastTransientCount = count
+    }
+
     /**
      * 每帧推进一步。
      *
@@ -145,7 +149,7 @@ class WaveformEffectsState(
             baseline = 0f
             cooldownMs = 0f
             // 外部计数也要对齐：暂停期间攒下的瞬态不该在恢复播放时一次性炸出来。
-            if (transientCount != NO_EXTERNAL_TRANSIENT) lastTransientCount = transientCount
+            if (transientCount != NO_EXTERNAL_TRANSIENT) alignTransientCount(transientCount)
             return changed
         }
 

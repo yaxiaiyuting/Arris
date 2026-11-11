@@ -361,7 +361,7 @@ object WaveformStore {
      *   所以这条链上**不允许**任何一方自己攒时钟（见 [WaveformRing.pump] 的 `nowMs`）。
      *   传 0 = 没有帧时钟（老调用点 / 单测），ring 会回落到旧的累加口径。
      */
-    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false) {
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false): Boolean {
         var changed = ring.pump(active, dtMs, effects, nowMs, holdHistory)
         // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
         // 关掉（用户关了多频段开关）时音频线程根本不发布特征值，
@@ -397,6 +397,7 @@ object WaveformStore {
             }
         }
         if (changed) generationState.intValue++
+        return changed || (!active && !holdHistory && ring.hasUnsettledColumns(effects.peaks))
     }
 
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
