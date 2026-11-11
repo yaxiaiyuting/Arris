@@ -475,9 +475,8 @@ object QqApi {
             ?: return VkeyBatch(null, QqRejection.UNKNOWN, "response has no data object")
 
         // CDN 前缀每次响应都可能不同（host 轮换），所以每次都更新。
-        data.optJSONArray("sip")
-            ?.let { arr -> (0 until arr.length()).map { arr.optString(it) }.firstOrNull { it.isNotEmpty() } }
-            ?.let { lastSip = it }
+        val sipHost = data.optJSONArray("sip")?.let(::firstSipHost)
+        if (sipHost != null) lastSip = sipHost
 
         val list = data.optJSONArray("midurlinfo")
             ?: return VkeyBatch(null, QqRejection.UNKNOWN, "response has no midurlinfo array")
@@ -495,13 +494,22 @@ object QqApi {
                 mediaMid = mediaMid,
                 types = types,
                 data = data,
-                selected = out.entries.firstOrNull { (t, e) ->
-                    e.optInt("result", -1) == 0 && e.optString("purl").isNotEmpty()
+                sipHost = sipHost,
+                selected = out.entries.firstOrNull {
+                    it.value.optInt("result", -1) == 0 && it.value.optString("purl").isNotEmpty()
                 }?.key,
                 cookie = QqClient.cookieForDiagnostics(),
             )
         }
         return VkeyBatch(out)
+    }
+
+    private fun firstSipHost(sip: JSONArray): String? {
+        for (index in 0 until sip.length()) {
+            val host = sip.optString(index)
+            if (host.isNotEmpty()) return host
+        }
+        return null
     }
 
     /**
@@ -638,26 +646,28 @@ object QqApi {
         mediaMid: String,
         types: List<QqFileType>,
         data: JSONObject,
+        sipHost: String?,
         selected: QqFileType?,
         cookie: String?,
     ) {
-        val sipHost = data.optJSONArray("sip")
-            ?.let { a -> (0 until a.length()).map { a.optString(it) }.firstOrNull { it.isNotEmpty() } }
-            .orEmpty()
         Log.d(
             TAG,
             "vkey.diag requested=$requested songMid=$songMid mediaMid=$mediaMid" +
                 " cookieFields=" + QqCookie.fieldNamesOf(cookie) +
                 " uin=" + (QqCookie.uinOf(cookie)?.toString() ?: "null") +
-                " sip=" + sipHost +
+                " sip=" + sipHost.orEmpty() +
                 " retcode=" + data.optInt("retcode", -1) +
                 " chosen=" + (selected?.prefix ?: "none"),
         )
         val list = data.optJSONArray("midurlinfo")
         for (t in types) {
-            val entry = (0 until (list?.length() ?: 0))
-                .mapNotNull { list!!.optJSONObject(it) }
-                .firstOrNull { QqQuality.fileTypeOfFileName(it.optString("filename")) == t }
+            val entry = list?.let { entries ->
+                (0 until entries.length()).firstNotNullOfOrNull { index ->
+                    entries.optJSONObject(index)?.takeIf {
+                        QqQuality.fileTypeOfFileName(it.optString("filename")) == t
+                    }
+                }
+            }
             if (entry == null) {
                 Log.d(TAG, "vkey.diag   ${t.prefix}(${t.label}) 条目缺失")
                 continue
