@@ -365,6 +365,20 @@ class StatsMathTest {
     }
 
     @Test
+    fun `TopN 只读取每项权重一次且截断并列时保留靠前项`() {
+        val items = List(500) { index -> index to (Long.MAX_VALUE - index % 8) }
+        val expected = items.sortedByDescending { it.second }.take(20)
+        var visits = 0
+        val actual = StatsMath.topN(items, 20) {
+            visits++
+            it.second
+        }
+
+        assertEquals(expected, actual)
+        assertEquals(items.size, visits)
+    }
+
+    @Test
     fun `日均分母为零时返回零`() {
         assertEquals(0L, StatsMath.averagePerActiveDay(0L, 0))
         assertEquals(0L, StatsMath.averagePerActiveDay(10_000L, 0))

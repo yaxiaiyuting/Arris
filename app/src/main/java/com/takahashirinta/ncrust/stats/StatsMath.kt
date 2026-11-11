@@ -13,6 +13,7 @@ package com.takahashirinta.ncrust.stats
 
 import java.util.Calendar
 import java.util.Locale
+import java.util.PriorityQueue
 import java.util.TimeZone
 
 /**
@@ -296,12 +297,31 @@ object StatsMath {
         return pct.toInt().coerceIn(0, 100)
     }
 
-    /**
-     * 按权重取前 [n] 项。`sortedByDescending` 是**稳定**排序 ⇒ 并列时保持输入顺序，
-     * 于是「同一份数据每次渲染出来的 Top 10 完全一样」，不会在重组之间跳来跳去。
-     */
-    fun <T> topN(items: List<T>, n: Int, weight: (T) -> Long): List<T> =
-        if (n <= 0) emptyList() else items.sortedByDescending(weight).take(n)
+    /** 按权重取前 [n] 项，并列时保留输入顺序。堆顶是当前排名最低的保留项。 */
+    fun <T> topN(items: Collection<T>, n: Int, weight: (T) -> Long): List<T> {
+        if (n <= 0) return emptyList()
+        if (n >= items.size) return items.sortedByDescending(weight)
+
+        val kept = PriorityQueue<Ranked<T>>(n) { a, b ->
+            val byWeight = a.weight.compareTo(b.weight)
+            if (byWeight != 0) byWeight else b.index.compareTo(a.index)
+        }
+        items.forEachIndexed { index, item ->
+            val score = weight(item)
+            if (kept.size == n) {
+                if (score <= kept.peek().weight) return@forEachIndexed
+                kept.remove()
+            }
+            kept.add(Ranked(item, score, index))
+        }
+
+        val ordered = ArrayList<T>(kept.size)
+        while (kept.isNotEmpty()) ordered.add(kept.remove().item)
+        ordered.reverse()
+        return ordered
+    }
+
+    private class Ranked<T>(val item: T, val weight: Long, val index: Int)
 
     /**
      * 日均时长 = 总时长 / **有收听的天数**。
