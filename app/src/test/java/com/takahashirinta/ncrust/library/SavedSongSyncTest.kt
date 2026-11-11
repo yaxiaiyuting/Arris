@@ -238,6 +238,18 @@ class SavedSongSyncTest {
         assertSame(batch, SavedSongSync.addManualAll(batch, songs, now + 100))
     }
 
+    @Test
+    fun `合并重复身份保留首个位置与时间相同时的首个载荷`() {
+        val first = remote(7L).copy(song = song(7L, "第一份"))
+        val untouched = remote(3L)
+        val duplicate = first.copy(song = song(7L, "第二份"))
+
+        val merged = SavedSongSync.consolidate(listOf(first, untouched, duplicate))
+        assertEquals(listOf(7L, 3L), merged.map { it.trackKey.id })
+        assertEquals("第一份", merged[0].song.name)
+        assertSame(untouched, merged[1])
+    }
+
     // -------------------------------------------------------------- 规则 6 ----
 
     @Test

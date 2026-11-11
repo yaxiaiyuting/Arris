@@ -313,29 +313,57 @@ object SavedSongSync {
         return boundTombstones(local.map { if (it.trackKey == key) it.copy(tombstoned = true) else it })
     }
 
-    /** 读时身份归一后合并；删除意图压过远端，只有更新的手动收藏可撤销旧墓碑。 */
-    internal fun consolidate(local: List<SavedSongEntry>): List<SavedSongEntry> =
-        local.groupBy { it.trackKey }.values.map { group ->
-            if (group.size == 1) return@map group.single()
-            val deletedAt = group.filter { it.tombstoned }.maxOfOrNull { it.addedAt }
-            val manual = group.filter { it.origin == SavedSongOrigin.LOCAL && !it.tombstoned }
-                .maxByOrNull { it.addedAt }
-            val winner = manual ?: group.maxBy { it.addedAt }
-            val payload = group.fold(winner.song) { song, e ->
-                preferFreshPayload(e.song, song).copy(
-                    name = song.name.ifBlank { e.song.name },
-                    artists = song.artists ?: e.song.artists,
-                    album = song.album ?: e.song.album,
-                    duration = song.duration ?: e.song.duration,
-                )
+    /** 解码后合并相同曲目。远端条目无法撤销墓碑，较新的手动收藏可以。 */
+    internal fun consolidate(local: List<SavedSongEntry>): List<SavedSongEntry> {
+        if (local.size <= 1) return local
+        val firstByKey = LinkedHashMap<TrackKey, SavedSongEntry>(local.size)
+        val duplicates = HashMap<TrackKey, MutableList<SavedSongEntry>>()
+        for (entry in local) {
+            val key = entry.trackKey
+            val first = firstByKey.putIfAbsent(key, entry)
+            if (first != null) {
+                duplicates.getOrPut(key) { arrayListOf(first) }.add(entry)
             }
-            winner.copy(
-                trackKey = TrackKey.ofSong(payload), song = payload,
-                origin = if (group.any { it.origin == SavedSongOrigin.LOCAL }) SavedSongOrigin.LOCAL else winner.origin,
-                tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
-                addedAt = group.maxOf { it.addedAt },
+        }
+        if (duplicates.isEmpty()) return local
+
+        return firstByKey.values.map { entry ->
+            val group = duplicates[entry.trackKey]
+            if (group == null) entry else consolidateGroup(group)
+        }
+    }
+
+    private fun consolidateGroup(group: List<SavedSongEntry>): SavedSongEntry {
+        var latest = group.first()
+        var manual: SavedSongEntry? = null
+        var deletedAt: Long? = null
+        var hasLocal = false
+        for (entry in group) {
+            val time = entry.addedAt
+            if (time > latest.addedAt) latest = entry
+            if (entry.tombstoned && (deletedAt == null || time > deletedAt)) deletedAt = time
+            if (entry.origin == SavedSongOrigin.LOCAL) {
+                hasLocal = true
+                if (entry.isVisible && (manual == null || time > manual.addedAt)) manual = entry
+            }
+        }
+        val winner = manual ?: latest
+        val payload = group.fold(winner.song) { song, entry ->
+            preferFreshPayload(entry.song, song).copy(
+                name = song.name.ifBlank { entry.song.name },
+                artists = song.artists ?: entry.song.artists,
+                album = song.album ?: entry.song.album,
+                duration = song.duration ?: entry.song.duration,
             )
         }
+        return winner.copy(
+            trackKey = TrackKey.ofSong(payload),
+            song = payload,
+            origin = if (hasLocal) SavedSongOrigin.LOCAL else winner.origin,
+            tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
+            addedAt = latest.addedAt,
+        )
+    }
 
     /**
      * tombstone 尾巴的有界化：可见条目**顺序与实例都不动**，tombstone 只保留
