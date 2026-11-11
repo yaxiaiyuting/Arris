@@ -197,19 +197,43 @@ object LocalPlaylistCodec {
         )
     }
 
-    private fun consolidate(tracks: List<LocalPlaylistTrack>): List<LocalPlaylistTrack> =
-        tracks.groupBy { it.trackKey }.values.map { group ->
-            if (group.size == 1) return@map group.single()
-            val deletedAt = group.filter { it.tombstoned }.maxOfOrNull { it.addedAt }
-            val manual = group.filter { it.origin == LocalTrackOrigin.LOCAL && !it.tombstoned }.maxByOrNull { it.addedAt }
-            val winner = manual ?: group.maxBy { it.addedAt }
-            winner.copy(
-                origin = if (group.any { it.origin == LocalTrackOrigin.LOCAL }) LocalTrackOrigin.LOCAL else winner.origin,
-                addedAt = group.maxOf { it.addedAt },
-                tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
-                song = winner.song ?: group.firstNotNullOfOrNull { it.song },
-            )
+    private fun consolidate(tracks: List<LocalPlaylistTrack>): List<LocalPlaylistTrack> {
+        if (tracks.size < 2) return tracks
+        val firstByKey = LinkedHashMap<TrackKey, LocalPlaylistTrack>()
+        val duplicates = HashMap<TrackKey, MutableList<LocalPlaylistTrack>>()
+        for (track in tracks) {
+            val key = track.trackKey
+            val first = firstByKey.putIfAbsent(key, track) ?: continue
+            duplicates.getOrPut(key) { arrayListOf(first) }.add(track)
         }
+        if (duplicates.isEmpty()) return tracks
+        for ((key, group) in duplicates) firstByKey[key] = mergeDuplicates(group)
+        return firstByKey.values.toList()
+    }
+
+    private fun mergeDuplicates(group: List<LocalPlaylistTrack>): LocalPlaylistTrack {
+        var latest = group.first()
+        var deletedAt: Long? = null
+        var manual: LocalPlaylistTrack? = null
+        var hasLocal = false
+        var firstSong: SongItem? = null
+        for (track in group) {
+            if (track.addedAt > latest.addedAt) latest = track
+            if (track.tombstoned && (deletedAt == null || track.addedAt > deletedAt)) deletedAt = track.addedAt
+            if (track.origin == LocalTrackOrigin.LOCAL) {
+                hasLocal = true
+                if (!track.tombstoned && (manual == null || track.addedAt > manual.addedAt)) manual = track
+            }
+            if (firstSong == null) firstSong = track.song
+        }
+        val winner = manual ?: latest
+        return winner.copy(
+            origin = if (hasLocal) LocalTrackOrigin.LOCAL else winner.origin,
+            addedAt = latest.addedAt,
+            tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
+            song = winner.song ?: firstSong,
+        )
+    }
 
     private fun LocalPlaylistTrack.toDto(): LocalTrackDto = LocalTrackDto(
         source = trackKey.source.key,
