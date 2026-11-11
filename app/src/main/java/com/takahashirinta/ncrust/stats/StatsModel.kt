@@ -185,14 +185,27 @@ class StatsAggregate {
         maxSongs: Int = StatsLimits.MAX_SONGS,
         maxDayBuckets: Int = StatsLimits.MAX_DAY_BUCKETS,
     ) {
-        if (songs.size > maxSongs) {
+        if (maxSongs >= 0 && songs.size - maxSongs == 1) {
+            var oldestKey: String? = null
+            var oldestAt = Long.MAX_VALUE
+            for ((key, song) in songs) {
+                // 并列时保留先加入的曲目，与降序稳定排序后截断一致。
+                if (song.lastAtMs <= oldestAt) {
+                    oldestKey = key
+                    oldestAt = song.lastAtMs
+                }
+            }
+            oldestKey?.let { songs.remove(it) }
+        } else if (songs.size > maxSongs) {
             songs.entries
                 .sortedByDescending { it.value.lastAtMs }
                 .drop(maxSongs)
                 .forEach { songs.remove(it.key) }
         }
-        if (byDay.size > maxDayBuckets) {
-            // ISO 键的字典序 == 时间序 ⇒ 直接排序后丢掉最旧的那些。
+        if (maxDayBuckets >= 0 && byDay.size - maxDayBuckets == 1) {
+            byDay.keys.minOrNull()?.let { byDay.remove(it) }
+        } else if (byDay.size > maxDayBuckets) {
+            // ISO 日期键按字典序排列后淘汰最早的日期。
             byDay.keys.sorted().dropLast(maxDayBuckets).forEach { byDay.remove(it) }
         }
     }
