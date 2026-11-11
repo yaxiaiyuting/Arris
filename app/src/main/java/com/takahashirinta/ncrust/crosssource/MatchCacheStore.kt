@@ -234,6 +234,6 @@ object MatchCacheStore {
     /** 让 IDE / 调用方一眼看到「哪些音源进过这个缓存」，诊断用。 */
     internal fun sourcesPresent(context: Context): List<MusicSource> =
         saved(context).keys.mapNotNull { MatchCacheKeys.parse(it)?.second }
-            .mapNotNull { key -> MusicSource.values().firstOrNull { it.key == key } }
+            .mapNotNull { key -> MusicSource.parseKey(key) }
             .distinct()
 }
