@@ -207,7 +207,8 @@ fun ArtistDetailScreen(
     // v3.1.0 · P0-C：进入艺人页预取前 N 首封面（只封面，不预取 URL）。
     val prefetchContext = LocalContext.current
     LaunchedEffect(songs) {
-        ListPrefetch.prefetchList(prefetchContext, "artist:$artistId", songs.map { it.song })
+        val firstSongs = songs.take(ListPrefetch.WIFI_LIMIT).map { it.song }
+        ListPrefetch.prefetchList(prefetchContext, "artist:$artistId", firstSongs)
     }
     val playAllPlan = remember(songs, preferredSource) {
         PlayAllDedup.plan(songs, preferredSource)

@@ -19,7 +19,6 @@ import coil.request.ImageRequest
 import com.takahashirinta.ncrust.network.BoundedParallel
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
-import com.takahashirinta.ncrust.source.MusicSourceProvider
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.isResolvable
 import com.takahashirinta.ncrust.source.musicSource
@@ -27,29 +26,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
- * 列表预加载（v3.1.0 · P0-C）。**只预取封面与元数据，绝不预取 URL。**
- *
- * ## 为什么不预取 URL（这不是保守，是必需）
- *
- * URL 有时效：ncm 实测会轮换、B 站的直链自带 `deadline`（实测 `now + 7200s`）。
- * 用户「进入歌单」之后可能几分钟才点第一首，也可能直接划走 ——
- * 预取一批 URL 等于制造一批**必然过期**的条目，它们要么被 TTL 判据丢掉（白花流量），
- * 要么在临界点上被用掉（播到一半 403）。铁律 22 与探针结论都指向同一条：
- * **URL 只在「下一首」这一个确定的位置上预取**（见 `PlayerViewModel.preloadNextSong`）。
- *
- * ## N 为什么按网络类型分档（WiFi 5 / 移动 2 / 离线 0）
- *
- * 一张列表首屏大约可见 4~5 行，所以 WiFi 下取 5 刚好覆盖首屏；
- * 移动数据下取 2 是「既让第一屏不空，又不为一次滚动花掉几百 KB」的折中
- * （用户点进列表往往只是看一眼）。离线时**一个请求都不发**。
- *
- * ## 与 `AppWarmup` 的关系
- *
- * `AppWarmup` 预取的是**首页**那 18 张封面（冷启动专用）。本对象是它的一般化：
- * 任何列表都能调，且带**按列表身份的去重**（同一张列表滚动时不重复预取）。
+ * 按网络类型预取列表首屏封面和缺失的元数据。同一列表短时间内只预取一次。
+ * 有时效的播放地址留给确定的下一首，避免取回后还没播放就已过期。
  */
 object ListPrefetch {
 
@@ -59,7 +39,7 @@ object ListPrefetch {
     const val WIFI_LIMIT = 5
 
     /** 移动数据下的预取条数。2 = 「第一屏不空」与「别花流量」的折中。 */
-    const val MOBILE_LIMIT = 2
+    private const val MOBILE_LIMIT = 2
 
     /** 封面解码尺寸，与 `AppWarmup.COVER_PX` 同口径（列表 tile 约 160dp）。 */
     private const val COVER_PX = 320
@@ -72,18 +52,11 @@ object ListPrefetch {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** listKey → 上次预取时刻。只在 IO 线程访问。 */
-    private val recent = LinkedHashMap<String, Long>()
+    /** 访问时持有 recent 的锁。 */
+    private val recent = HashMap<String, Long>()
 
-    /**
-     * 本次该预取多少首。
-     *
-     * 判据与 `PlayerViewModel.isOnWifi()` 同源（读 `NetworkCapabilities`），
-     * 但**判不出网络时返回 0**：宁可什么都不预取，也不要在计费网络上按 WiFi 的量去拉。
-     */
-    fun limitFor(context: Context): Int {
-        val cm = context.applicationContext
-            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    private fun limitFor(app: Context): Int {
+        val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return 0
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return 0
         return when {
@@ -102,14 +75,15 @@ object ListPrefetch {
      */
     fun prefetchList(context: Context, listKey: String, songs: List<SongItem>) {
         if (listKey.isBlank() || songs.isEmpty()) return
+        if (synchronized(recent) { wasPrefetchedRecently(listKey, System.currentTimeMillis()) }) return
         val app = context.applicationContext
-        val limit = limitFor(app)
-        if (limit <= 0) return
         scope.launch {
+            val limit = limitFor(app)
+            if (limit <= 0) return@launch
             val now = System.currentTimeMillis()
             synchronized(recent) {
-                val last = recent[listKey]
-                if (last != null && now - last < DEDUPE_WINDOW_MS) return@launch
+                // 并发进入同一列表时只让先登记的一次发请求。
+                if (wasPrefetchedRecently(listKey, now)) return@launch
                 if (recent.size >= DEDUPE_MAX) recent.clear()
                 recent[listKey] = now
             }
@@ -117,13 +91,16 @@ object ListPrefetch {
         }
     }
 
+    private fun wasPrefetchedRecently(listKey: String, now: Long): Boolean =
+        recent[listKey]?.let { now - it < DEDUPE_WINDOW_MS } ?: false
+
     /**
      * 预取一组歌曲的封面（+ 缺元数据的那些补一次 `songDetail`）。
      *
      * 并发上限走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]（4）—— 铁律 23。
      * **一个封面失败不影响别的**（[BoundedParallel] 的失败隔离），整体也绝不抛。
      */
-    suspend fun prefetchBlocking(context: Context, songs: List<SongItem>) {
+    private suspend fun prefetchBlocking(context: Context, songs: List<SongItem>) {
         if (songs.isEmpty()) return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
         val tasks = ArrayList<Pair<String, suspend () -> Boolean?>>(songs.size)
@@ -166,18 +143,6 @@ object ListPrefetch {
         }
     }
 
-    private suspend fun detailOf(song: SongItem): SongItem? {
-        val provider: MusicSourceProvider = SourceRouter.provider(song.musicSource) ?: return null
-        return provider.songDetail(song)
-    }
-
-    /** 只给单测/诊断：清掉去重表。 */
-    internal fun clearDedupeForTest() {
-        synchronized(recent) { recent.clear() }
-    }
-
-    /** 只给诊断（探针）用的阻塞入口 —— 生产代码**不要**走它。 */
-    internal fun prefetchBlockingForProbe(context: Context, songs: List<SongItem>) {
-        runBlocking { prefetchBlocking(context, songs) }
-    }
+    private suspend fun detailOf(song: SongItem): SongItem? =
+        SourceRouter.provider(song.musicSource)?.songDetail(song)
 }
