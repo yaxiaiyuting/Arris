@@ -11,20 +11,22 @@ import com.takahashirinta.ncrust.qq.QqApi
 import com.takahashirinta.ncrust.qq.QqClient
 import com.takahashirinta.ncrust.search.RankedSong
 import com.takahashirinta.ncrust.search.SearchLatencyTrace
+import com.takahashirinta.ncrust.search.SearchPaging
 import com.takahashirinta.ncrust.search.SearchRanking
 import com.takahashirinta.ncrust.search.TrackAccess
 import com.takahashirinta.ncrust.search.TrackAvailability
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.trackKey
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import com.takahashirinta.ncrust.ui.components.SourceCounts
 import com.takahashirinta.ncrust.ui.components.SourceSearchStatus
+import java.util.SortedMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -266,6 +268,7 @@ class SearchViewModel : ViewModel() {
         // + 把「服务端显式声明无版权」的行沉底。两者作用在不同的层，见其 KDoc。
         // v3.1.0 · B：三源重载把 B 站**追加**在最后（B 站没有会员信号，
         // 不参与交错；`bili` 为空时与两源版本逐字相同）。
+        val seen = HashSet<String>()
         val ranked = SearchRanking.order(
             netease = neteaseList.map {
                 RankedSong(
@@ -292,49 +295,28 @@ class SearchViewModel : ViewModel() {
             },
             neteaseVip = neteaseVip,
             qqVip = qqVip,
-        ).map { it.value }.distinctBy { it.trackKey }
+        ).mapNotNull { result ->
+            val song = result.value
+            if (seen.add(song.trackKey)) song else null
+        }
         _songs.value = ranked
         return ranked
     }
 
     // ---------------- v3.4.11：分页（「加载更多」）----------------
 
-    /**
-     * 翻页时要靠它把「新一页的排名结果」并进「已发布的排名结果」。
-     *
-     * 两边都过同一个 [SearchRanking.order]，所以追加后的相对顺序是稳定的 ——
-     * 直接 `+` 会得到一个「第一页按会员排好、第二页按请求顺序接在后面」的列表，
-     * 那是**两个排序口径拼在一起**，用户能看出来。
-     */
-    private var accumulatedSongs: List<SongItem> = emptyList()
-
     /** 新一轮搜索（关键词变了 / 换 tab / 下拉刷新）时清空累计。**与 append 成对使用**。 */
     private fun resetSongs() {
         lastTotals.clear()
-        accumulatedSongs = emptyList()
         lastSongs = emptyList()
         lastQqSongs = emptyList()
         lastBiliSongs = emptyList()
     }
 
-    /**
-     * 把这一页的逐源结果并进累计，并返回**排名后的完整列表**（已发布到 [_songs]）。
-     *
-     * @param append `false` = 新的一轮（丢弃累计，只留这一页）；
-     *   `true` = 加载更多（追加到累计，逐源各自拼接再**整体重排**）。
-     *   注意「拼接后整体重排」而不是「把新结果接在旧列表后面」——
-     *   后者会让第二页的会员专享曲排在第一页的非会员曲之后，而按会员排序是本应用的既有契约。
-     */
-    // ── S9：每源各自维护"已确认页"与"待重试页" ─────────────────────────────────
-    //
-    // 旧实现只有一个共享页码：任一来源成功就推进它，于是「netease 第 2 页失败、QQ 成功」
-    // 会让下一次加载直接请求双方的**第 3 页**，netease 的第 2 页永远补不回来。
-    //
-    // 现在：每源记 `confirmedPages`（已拿到的页）与 `pendingPage`（失败待补的页）。
-    // 下一次 append 时，有 pending 的源重取那一页，其它源取下一页。
+    // 各来源独立确认和重试页号。一源失败时，已成功的来源仍能继续翻页。
     private val confirmedPages = mutableMapOf<String, MutableSet<Int>>()
     private val pendingPage = mutableMapOf<String, Int>()
-    private val pageItems = mutableMapOf<String, MutableMap<Int, List<SongItem>>>()
+    private val pageItems = mutableMapOf<String, SortedMap<Int, List<SongItem>>>()
 
     /** 这一轮该向 [source] 请求哪一页。 */
     private fun pageFor(source: String, sharedPage: Int): Int =
@@ -347,7 +329,7 @@ class SearchViewModel : ViewModel() {
     }
 
     private fun flatten(source: String): List<SongItem> =
-        pageItems[source]?.toSortedMap()?.values?.flatten().orEmpty()
+        SearchPaging.distinctPages(pageItems[source]?.values.orEmpty()) { it.trackKey }
 
     private fun accumulateAndPublish(
         netease: List<SongItem>,
@@ -363,7 +345,7 @@ class SearchViewModel : ViewModel() {
         biliConfirmed: Boolean = bili.isNotEmpty(),
     ): List<SongItem> {
         fun put(source: String, page: Int, items: List<SongItem>) {
-            pageItems.getOrPut(source) { mutableMapOf() }[page] = items
+            pageItems.getOrPut(source) { sortedMapOf() }[page] = items
             confirmedPages.getOrPut(source) { mutableSetOf() }.add(page)
             pendingPage.remove(source)
         }
@@ -371,20 +353,12 @@ class SearchViewModel : ViewModel() {
         if (qqConfirmed) put("qqmusic", qqPage, qq)
         if (biliConfirmed && !append) put("bilibili", 1, bili)
 
-        // 逐源按页展平 → 跨页去重 → 再整体重排。
-        // 来源计数从"展平后的唯一列表"算：分批发布不会把同一页数两遍（S9 的第二个表现）。
-        lastSongs = dedupeSongs(flatten("netease"))
-        lastQqSongs = dedupeSongs(flatten("qqmusic"))
-        lastBiliSongs = dedupeSongs(flatten("bilibili"))
-        val fresh = publish(lastSongs, lastQqSongs, lastBiliSongs)
-        accumulatedSongs = fresh
-        _songs.value = accumulatedSongs
-        return accumulatedSongs
+        // 按来源和页号展平，第一条同身份结果保留。
+        lastSongs = flatten("netease")
+        lastQqSongs = flatten("qqmusic")
+        lastBiliSongs = flatten("bilibili")
+        return publish(lastSongs, lastQqSongs, lastBiliSongs)
     }
-
-    /** 按身份去重（跨页重复：服务端分页边界可能重发同一条）。工具方法，纯函数语义。 */
-    private fun dedupeSongs(list: List<SongItem>): List<SongItem> =
-        com.takahashirinta.ncrust.search.SearchPaging.distinct(list)
 
     /**
      * 「加载更多」：请求候选下一页，以**追加**方式发布成功后才推进页码。
@@ -850,7 +824,7 @@ class SearchViewModel : ViewModel() {
                     val page = response.result?.albums ?: emptyList()
                     // 跨页去重：服务端分页边界可能重发同一条（`id` 是它的身份）。
                     _albums.value = if (append) {
-                        (_albums.value + page).distinctBy { it.id }
+                        SearchPaging.distinctPages(listOf(_albums.value, page)) { it.id }
                     } else {
                         page
                     }
@@ -888,7 +862,7 @@ class SearchViewModel : ViewModel() {
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     val page = response.result?.artists ?: emptyList()
                     _artists.value = if (append) {
-                        (_artists.value + page).distinctBy { it.id }
+                        SearchPaging.distinctPages(listOf(_artists.value, page)) { it.id }
                     } else {
                         page
                     }

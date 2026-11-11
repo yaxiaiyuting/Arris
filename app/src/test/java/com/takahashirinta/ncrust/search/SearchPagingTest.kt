@@ -11,6 +11,7 @@
 package com.takahashirinta.ncrust.search
 
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.source.trackKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -101,7 +102,7 @@ class SearchPagingTest {
     fun `追加保留先出现的那一条`() {
         val first = listOf(song(1), song(2))
         val second = listOf(song(2), song(3)) // 2 是分页边界重发的
-        val merged = SearchPaging.appendDistinct(first, second)
+        val merged = SearchPaging.distinctPages(listOf(first, second)) { it.trackKey }
         assertEquals(listOf(1L, 2L, 3L), merged.map { it.id })
     }
 
@@ -116,24 +117,24 @@ class SearchPagingTest {
     fun `跨源同号不会被误去重`() {
         val ne = listOf(song(1, "netease"))
         val qq = listOf(song(1, "qqmusic"))
-        val merged = SearchPaging.appendDistinct(ne, qq)
+        val merged = SearchPaging.distinctPages(listOf(ne, qq)) { it.trackKey }
         assertEquals("两个音源的 id=1 是两首歌", 2, merged.size)
     }
 
     @Test
     fun `重复取同一页不会让列表变长`() {
         val page = listOf(song(1), song(2), song(3))
-        var acc = SearchPaging.appendDistinct(emptyList(), page)
+        var acc = SearchPaging.distinctPages(listOf(emptyList(), page)) { it.trackKey }
         assertEquals(3, acc.size)
         // 再取一次同一页（服务端重发）⇒ 长度不变
-        acc = SearchPaging.appendDistinct(acc, page)
+        acc = SearchPaging.distinctPages(listOf(acc, page)) { it.trackKey }
         assertEquals(3, acc.size)
     }
 
     @Test
     fun `按身份去重不追加`() {
         val list = listOf(song(1), song(1), song(2, "qqmusic"), song(2, "qqmusic"))
-        assertEquals(2, SearchPaging.distinct(list).size)
+        assertEquals(2, SearchPaging.distinctPages(listOf(list)) { it.trackKey }.size)
     }
 
     /** 每页条数是 30 —— 它是两个音源**共用**的口径（QQ 的页码与页宽耦合）。 */

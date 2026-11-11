@@ -10,8 +10,6 @@
 
 package com.takahashirinta.ncrust.search
 
-import com.takahashirinta.ncrust.network.SongItem
-import com.takahashirinta.ncrust.source.trackKey
 
 /**
  * 搜索结果分页的纯逻辑（v3.4.11）。**无 IO、无 Android 依赖、JVM 可单测。**
@@ -83,22 +81,14 @@ object SearchPaging {
     fun hasMoreAny(vararg pageItemCounts: Int, pageSize: Int = PAGE_SIZE): Boolean =
         pageItemCounts.any { hasMore(it, pageSize) }
 
-    /**
-     * 跨页追加 + 按身份去重。
-     *
-     * 去重是**必需**的：服务端的 `offset` 分页在数据变动时会重发边界上的条目
-     * （用户在两次点击之间新增/删除了一条，分页窗口就错位一格）。
-     * 不去重的表现是列表里同一条歌出现两次，而且 Compose 的 `items(key = { it.id })`
-     * 会因 key 重复抛异常。
-     *
-     * 顺序：**保留先出现的那一条**（`distinctBy` 的既有语义），
-     * 与「上一页在前」的直觉一致。
-     */
-    fun appendDistinct(existing: List<SongItem>, page: List<SongItem>): List<SongItem> =
-        (existing + page).distinctBy { it.trackKey }
-
-    /**
-     * 按**身份**去重（不追加）。给「重新取这一页并替换」那条路径用。
-     */
-    fun distinct(list: List<SongItem>): List<SongItem> = list.distinctBy { it.trackKey }
+    /** 按传入页序遍历。同一身份保留最早出现的条目。 */
+    internal inline fun <T, K> distinctPages(pages: Collection<List<T>>, key: (T) -> K): List<T> {
+        val size = pages.sumOf { it.size }
+        val seen = HashSet<K>(size)
+        val result = ArrayList<T>(size)
+        for (page in pages) {
+            for (item in page) if (seen.add(key(item))) result.add(item)
+        }
+        return result
+    }
 }
