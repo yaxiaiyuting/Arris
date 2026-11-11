@@ -362,16 +362,7 @@ fun HomeScreen(
         // S14：新鲜度必须属于当前账号，否则换账号后会拿旧推荐跳过加载。
         val owner = CookieManager.accountOwner()
         if (ContentCache.isHomeFreshFor(owner)) return@LaunchedEffect
-        // v1.5.1 · C 冷启动竞态：AppWarmup 把磁盘快照灌回 ContentCache 是异步的
-        // （IO 线程 + JSON 解析），这里最多等 800ms 再接后面的判断，免得首帧先闪一个
-        // v3.7.11：这里曾经有两段**白等**：先轮询 800ms 等 ContentCache 被填，
-        // 再 `withTimeoutOrNull(1200ms)` 等 AppWarmup 收尾。冷启动时用户看到的是
-        // 「转圈近两秒，然后只有推荐歌单和新歌速递，每日推荐与榜单过一会才冒出来」。
-        //
-        // 现在改成「能拿到就用、拿不到立刻自己发」，且**四块并发**：
-        //  ① 有缓存（磁盘快照 / 预热已写入）⇒ 直接显示；
-        //  ② 预热还在飞 ⇒ await 它的在途请求（同一批网络请求，不重复）；
-        //  ③ 预热没跑 / 已收尾 ⇒ 自己发。
+        // 先显示缓存，再尝试复用当前会话的在途预热，缺失的数据由首页加载。
         ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
         ContentCache.homeRecommendPlaylists?.let { if (playlists.isEmpty()) playlists = it }
         ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
@@ -1021,15 +1012,6 @@ private fun HomeDegradedState(
 
 /** v1.5.1 · C：首页转圈的最长陪跑时间（半死网络下不再一路等到 OkHttp 的 30s）。 */
 private const val HOME_LOAD_TIMEOUT_MS = 8_000L
-
-/**
- * v1.5.2：冷启动时等 AppWarmup 后台预取收尾的上限。
- *
- * splash 已经不再等网络（见 AppWarmup.start），但预热仍在后台取同一批接口。
- * 这里等它一下可以避免同一批请求打两遍；等不到就自己发，不留空白。
- * 取 1.2s：正常网络下预热早就回来了，这个等待一次都不会真的走满。
- */
-private const val HOME_WARMUP_JOIN_MS = 1_200L
 
 /**
  * await 预热的在途请求最多等多久（v3.7.11）。
