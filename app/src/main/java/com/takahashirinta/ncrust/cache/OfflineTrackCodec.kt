@@ -128,7 +128,7 @@ internal object OfflineTrackCodec {
     // ---------------------------------------------------------------- 编码 ----
 
     /** 条目列表 → JSON 数组串。null 字段整条 key 不写（与 v1 形状保持同构）。 */
-    fun encode(tracks: List<OfflineTrack>): String = gson.toJson(tracks.map { it.toDto() })
+    fun encode(tracks: Collection<OfflineTrack>): String = gson.toJson(tracks.map { it.toDto() })
 
     private fun OfflineTrack.toDto() = TrackDto(
         songId = songId,

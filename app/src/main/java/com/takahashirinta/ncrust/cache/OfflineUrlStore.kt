@@ -10,7 +10,7 @@ package com.takahashirinta.ncrust.cache
 
 import android.content.Context
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonParser
 
 /**
  * 播放 URL 的有界索引（v1.6.0 · D1）。**纯逻辑**，JVM 可单测。
@@ -84,21 +84,23 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
 
     fun size(): Int = map.size
 
-    fun toJson(): String = Gson().toJson(map)
+    fun toJson(): String = gson.toJson(map)
 
     companion object {
         const val MAX_ENTRIES = 300
+
+        private val gson = Gson()
 
         fun fromJson(json: String?): OfflineUrlIndex {
             val idx = OfflineUrlIndex()
             if (json.isNullOrEmpty()) return idx
             runCatching {
-                val root = com.google.gson.JsonParser.parseString(json).asJsonObject
+                val root = JsonParser.parseString(json).asJsonObject
                 root.entrySet().forEach { (k, v) ->
                     runCatching {
                         if (v.isJsonPrimitive && v.asJsonPrimitive.isString) idx.put(k, v.asString)
                         else {
-                            val record = Gson().fromJson(v, OfflineUrlRecord::class.java)
+                            val record = gson.fromJson(v, OfflineUrlRecord::class.java)
                             val content = record.content ?: OfflineContent()
                             val epochPresent = v.asJsonObject.getAsJsonObject("content")?.has("file_epoch") == true
                             idx.put(k, record.url, if (epochPresent) content else content.copy(fileEpoch = 0))

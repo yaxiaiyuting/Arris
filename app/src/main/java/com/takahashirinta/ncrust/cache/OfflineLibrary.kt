@@ -189,7 +189,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
      * v2.5.5 · A：写路径只经 [OfflineTrackCodec] 的 DTO，每个字段显式
      * `@SerializedName("<稳定名字>")` —— 落盘 key 不再由 R8 的字段名决定。
      */
-    fun toJson(): String = OfflineTrackCodec.encode(map.values.toList())
+    fun toJson(): String = OfflineTrackCodec.encode(map.values)
 
     companion object {
         /** 与 [OfflineUrlIndex.MAX_ENTRIES] 同值：两张表覆盖同一批歌，条数上限就该一致。 */
