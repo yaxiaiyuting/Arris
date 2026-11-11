@@ -22,8 +22,7 @@ package com.takahashirinta.ncrust.stats
  * 「新字段一律可空 + 有默认值」（AGENTS.md v2.5.4 规则 1 / 歌词缓存那条迁移纪律）
  * 针对的是**会被 Gson 直接反序列化的类** —— Gson 走 Unsafe、不调用构造函数，
  * 老数据缺 key 时那个字段就是 null。本类**不是**那种类：
- * 落盘路径只经 `StatsCodec.SongDto`（那才是全字段可空 + 有默认值的形状），
- * `SongStat` 一律由 `StatsCodec.decodeSong` 逐字段补默认值后**显式构造**。
+ * StatsCodec 逐字段读取并补齐默认值后构造 `SongStat`。
  *
  * 这样做的好处是「缺字段」这件事只在**一个地方**处理（DTO 的默认值），
  * 而不是散落到每个消费点上写 `?: 0L` —— 那种散落写法迟早会漏一处，
