@@ -229,22 +229,7 @@ object OfflineAudioCache {
     fun sizeBytes(context: Context): Long =
         runCatching { get(context).cacheSpace }.getOrDefault(0L)
 
-    /**
-     * 缓存里现有的全部 cacheKey（v2.0.0 · T3）。统计与对账用。
-     *
-     * 取不到一律回落空集 —— 这个方法只被 UI / 对账路径调用，绝不能因为缓存目录异常
-     * 把设置页搞崩。
-     */
-    fun keys(context: Context): Set<String> =
-        runCatching { get(context).keys.toSet() }.getOrDefault(emptySet())
-
-    /**
-     * 枚举缓存 key，**失败返回 null**（区分「确实空」与「读不出来」）。
-     *
-     * S8：`keys()` 把异常降级成 `emptySet()`，而 `reconcileLibrary` 又把它当成
-     * 「已确认的空缓存」去裁剪持久化离线索引 ⇒ 目录读取一抖，管理页的离线条目就被抹掉
-     * （音频字节还在，元数据却没了）。凡是会影响**持久化删除**的调用，都必须用这个版本。
-     */
+    /** 对账只有成功枚举后才清理离线索引。失败返回 null。 */
     fun keysOrNull(context: Context): Set<String>? =
         runCatching { get(context).keys.toSet() }.getOrNull()
 
@@ -253,28 +238,26 @@ object OfflineAudioCache {
         runCatching { get(context).keys.filter { OfflineKeys.songIdOf(it) == songId } }
             .getOrDefault(emptyList())
 
-    /**
-     * 这首歌的缓存占用（字节）。**量不到返回 null** —— 调用方据此显示「已缓存片段」，
-     * 而不是编一个数字出来。
-     *
-     * 不用 `Cache.getCachedBytes(key, 0, MAX)`：那个 API 要求「从 position 起连续缓存」，
-     * 而我们缓存的只是**播过的那几段**（seek 之后会留洞），从 0 起经常不连续、会量成 0。
-     * 按 span 求和才是真实占用。
-     */
-    fun bytesForSong(context: Context, songId: Long): Long? = runCatching {
-        val c = get(context)
-        var total = 0L
-        var measuredAny = false
-        songKeys(context, songId).forEach { key ->
-            runCatching { c.getCachedSpans(key) }.getOrNull()?.forEach { span ->
-                if (span.isCached) {
-                    total += span.length
-                    measuredAny = true
-                }
+    /** 用同一份缓存键快照测量列表中的歌曲占用。缺少可测片段时由界面显示未知大小。 */
+    internal fun bytesBySong(context: Context, songIds: Set<Long>): Map<Long, Long> {
+        if (songIds.isEmpty()) return emptyMap()
+        return runCatching {
+            val current = get(context)
+            OfflineKeys.sumBytesBySong(current.keys, songIds) { key ->
+                runCatching {
+                    var total = 0L
+                    var measured = false
+                    for (span in current.getCachedSpans(key)) {
+                        if (span.isCached) {
+                            total += span.length
+                            measured = true
+                        }
+                    }
+                    if (measured) total else null
+                }.getOrNull()
             }
-        }
-        if (measuredAny) total else null
-    }.getOrNull()
+        }.getOrDefault(emptyMap())
+    }
 
     /**
      * 删掉这首歌**所有档位**的缓存片段，并同步删离线 URL 清单与离线曲目索引条目
@@ -284,7 +267,7 @@ object OfflineAudioCache {
      * 请求上游 —— 断网时就是一次播放错误。因此 UI 对当前播放曲目禁用删除（见设置页的
      * 离线缓存管理）；这里不做拦截，是因为调用方才知道「哪首在播」。
      *
-     * @return true = 至少删掉了一个缓存片段（清单同步删除与它无关，永远都做）。
+     * @return 是否完成删除。没有残留片段时也可完成索引清理。
      */
     fun removeSong(context: Context, songId: Long): Boolean {
         if (songId <= 0L) return false
@@ -294,12 +277,7 @@ object OfflineAudioCache {
         // 磁盘上字节还在、管理页里的条目却先消失（用户以为删干净了）。
         try {
             val c = get(app)
-            var removed = false
-            songKeys(app, songId).forEach { key ->
-                c.removeResource(key)
-                removed = true
-            }
-            removed
+            songKeys(app, songId).forEach(c::removeResource)
         } catch (e: Exception) {
             Log.w(TAG, "removeSong failed, keep offline index: songId=$songId", e)
             return false

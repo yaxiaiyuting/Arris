@@ -29,16 +29,18 @@ object OfflineKeys {
 
     /** 挂在播放 URL 上的 query 参数名。小写无下划线，避免被某些 CDN 规则改写。 */
     const val QUERY_KEY = "ncrustkey"
+    private const val QUERY_PARAMETER = "$QUERY_KEY="
+    private const val SONG_PREFIX = "song:"
 
     /** \`song:123:lossless\`。 */
-    fun key(songId: Long, level: String): String = "song:" + songId + ":" + level
+    fun key(songId: Long, level: String): String = SONG_PREFIX + songId + ":" + level
 
     /** 把 key 挂到 URL 上（已有 query 用 & 连接）。 */
     fun withKey(url: String, songId: Long, level: String): String {
         if (url.isEmpty() || songId <= 0L || level.isEmpty()) return url
-        if (url.contains(QUERY_KEY + "=")) return url
+        if (url.contains(QUERY_PARAMETER)) return url
         val sep = if (url.contains("?")) "&" else "?"
-        return url + sep + QUERY_KEY + "=" + key(songId, level)
+        return url + sep + QUERY_PARAMETER + key(songId, level)
     }
 
     /** Separate full/trial bytes from legacy unknown files, retaining the song/quality grammar. */
@@ -57,10 +59,8 @@ object OfflineKeys {
         while (i < url.length) {
             var end = url.indexOf('&', i)
             if (end < 0) end = url.length
-            val eq = url.indexOf('=', i)
-            if (eq in i until end && url.substring(i, eq) == QUERY_KEY) {
-                val v = url.substring(eq + 1, end)
-                return v.ifEmpty { null }
+            if (end - i >= QUERY_PARAMETER.length && url.startsWith(QUERY_PARAMETER, i)) {
+                return url.substring(i + QUERY_PARAMETER.length, end).ifEmpty { null }
             }
             i = end + 1
         }
@@ -69,15 +69,41 @@ object OfflineKeys {
 
     /** 从 key 里解出档位；解不出返回 null。 */
     fun levelOf(key: String): String? {
-        val parts = key.split(':')
-        return if (parts.size == 3 && parts[0] == "song") parts[2].substringBefore("~").ifEmpty { null } else null
+        val separator = qualitySeparator(key)
+        if (separator < 0) return null
+        val start = separator + 1
+        val suffix = key.indexOf('~', start)
+        val end = if (suffix >= 0) suffix else key.length
+        return key.substring(start, end).ifEmpty { null }
     }
 
     /** 从 key 里解出歌曲 id；解不出返回 null。 */
     fun songIdOf(key: String): Long? {
-        val parts = key.split(':')
-        if (parts.size != 3 || parts[0] != "song") return null
-        return parts[1].toLongOrNull()?.takeIf { it > 0L }
+        val separator = qualitySeparator(key)
+        if (separator < 0) return null
+        return key.substring(SONG_PREFIX.length, separator).toLongOrNull()?.takeIf { it > 0L }
+    }
+
+    private fun qualitySeparator(key: String): Int {
+        if (!key.startsWith(SONG_PREFIX)) return -1
+        val separator = key.indexOf(':', SONG_PREFIX.length)
+        return if (separator >= 0 && key.indexOf(':', separator + 1) < 0) separator else -1
+    }
+
+    /** 按歌曲累加实际量到的字节。没有可测片段的歌曲不写入结果。 */
+    internal inline fun sumBytesBySong(
+        keys: Iterable<String>,
+        songIds: Set<Long>,
+        bytesForKey: (String) -> Long?,
+    ): Map<Long, Long> {
+        val totals = HashMap<Long, Long>()
+        for (key in keys) {
+            val songId = songIdOf(key) ?: continue
+            if (songId !in songIds) continue
+            val bytes = bytesForKey(key) ?: continue
+            totals[songId] = (totals[songId] ?: 0L) + bytes
+        }
+        return totals
     }
 
     /**

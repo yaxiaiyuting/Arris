@@ -8,6 +8,7 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,6 +77,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private data class OfflineTrackSnapshot(val tracks: List<OfflineTrack>, val bytesBySong: Map<Long, Long>)
+
+private fun loadOfflineTrackSnapshot(context: Context): OfflineTrackSnapshot {
+    runCatching { OfflineAudioCache.reconcileLibrary(context) }
+    val tracks = OfflineLibrary.list(context)
+    val songIds = tracks.mapTo(HashSet(tracks.size)) { it.songId }
+    return OfflineTrackSnapshot(tracks, OfflineAudioCache.bytesBySong(context, songIds))
+}
+
 /**
  * 离线缓存管理（v2.0.0 · T3 · 离线缓存 Phase 2）。
  *
@@ -130,7 +140,7 @@ internal fun OfflineCacheManagerDialog(
     var reload by remember { mutableStateOf(0) }
     var loaded by remember { mutableStateOf(false) }
     var tracks by remember { mutableStateOf<List<OfflineTrack>>(emptyList()) }
-    var bytesOf by remember { mutableStateOf<Map<Long, Long?>>(emptyMap()) }
+    var bytesOf by remember { mutableStateOf<Map<Long, Long>>(emptyMap()) }
     var usedBytes by remember { mutableStateOf(0L) }
     var limitMb by remember { mutableStateOf(OfflineAudioCache.maxMb(context)) }
     var limitExpanded by remember { mutableStateOf(false) }
@@ -138,18 +148,12 @@ internal fun OfflineCacheManagerDialog(
 
     // 读取与对账都要走 SimpleCache / 文件系统，放 IO 线程；组合期不阻塞。
     LaunchedEffect(reload) {
-        val snapshot = withContext(Dispatchers.IO) {
-            runCatching { OfflineAudioCache.reconcileLibrary(context) }
-            val list = OfflineLibrary.list(context)
-            Triple(
-                list,
-                list.associate { it.songId to OfflineAudioCache.bytesForSong(context, it.songId) },
-                OfflineAudioCache.sizeBytes(context),
-            )
+        val (snapshot, total) = withContext(Dispatchers.IO) {
+            loadOfflineTrackSnapshot(context) to OfflineAudioCache.sizeBytes(context)
         }
-        tracks = snapshot.first
-        bytesOf = snapshot.second
-        usedBytes = snapshot.third
+        tracks = snapshot.tracks
+        bytesOf = snapshot.bytesBySong
+        usedBytes = total
         loaded = true
     }
 
@@ -516,7 +520,7 @@ private val OFFLINE_CACHE_LIMIT_MB = com.takahashirinta.ncrust.ui.settings.Setti
  * ## 与设置页弹窗的口径一致性（这是本函数存在的风险点）
  *
  * 抄一份列表最容易漂移的地方是「对账」与「占用量的量法」。所以这里**复用同一组
- * 纯逻辑**：`OfflineLibrary.list` + `OfflineAudioCache.bytesForSong`，
+ * 纯逻辑**：`OfflineLibrary.list` + `OfflineAudioCache.bytesBySong`，
  * 并在进入时跑一次 `reconcileLibrary`（把「索引里有、缓存里没有」的谎报条目清掉）。
  * 不复制任何一段判断。
  */
@@ -532,19 +536,15 @@ internal fun OfflineLibraryTab(
     var reload by remember { mutableStateOf(0) }
     var loaded by remember { mutableStateOf(false) }
     var tracks by remember { mutableStateOf<List<OfflineTrack>>(emptyList()) }
-    var bytesOf by remember { mutableStateOf<Map<Long, Long?>>(emptyMap()) }
+    var bytesOf by remember { mutableStateOf<Map<Long, Long>>(emptyMap()) }
     var deleteTarget by remember { mutableStateOf<OfflineTrack?>(null) }
     val scope = rememberCoroutineScope()
 
     // 读盘 + 对账都要动 SimpleCache 与文件系统 ⇒ 放 IO；组合期不阻塞。
     LaunchedEffect(reload) {
-        val snapshot = withContext(Dispatchers.IO) {
-            runCatching { OfflineAudioCache.reconcileLibrary(context) }
-            val list = OfflineLibrary.list(context)
-            list to list.associate { it.songId to OfflineAudioCache.bytesForSong(context, it.songId) }
-        }
-        tracks = snapshot.first
-        bytesOf = snapshot.second
+        val snapshot = withContext(Dispatchers.IO) { loadOfflineTrackSnapshot(context) }
+        tracks = snapshot.tracks
+        bytesOf = snapshot.bytesBySong
         loaded = true
     }
 

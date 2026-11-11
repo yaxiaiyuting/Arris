@@ -65,6 +65,35 @@ class OfflineKeysTest {
         assertNull(OfflineKeys.songIdOf("song:0:lossless"))
         assertNull(OfflineKeys.songIdOf("ncrust:123:lossless"))
         assertNull(OfflineKeys.levelOf("song:123"))
+        assertEquals(123L, OfflineKeys.songIdOf("song:123:"))
+        assertNull(OfflineKeys.levelOf("song:123:"))
+        assertEquals("lossless", OfflineKeys.levelOf("song:123:lossless~trial"))
+        assertNull(OfflineKeys.songIdOf("song:123:lossless:extra"))
+    }
+
+    @Test
+    fun `按歌曲批量汇总多档位大小并保留无法测量的语义`() {
+        val full = OfflineKeys.key(1L, "standard")
+        val lossless = OfflineKeys.key(1L, "lossless")
+        val zero = OfflineKeys.key(2L, "standard")
+        val unavailable = OfflineKeys.key(3L, "standard")
+        val irrelevant = OfflineKeys.key(4L, "standard")
+        val measured = mutableListOf<String>()
+        val bytes = OfflineKeys.sumBytesBySong(
+            listOf(full, lossless, zero, unavailable, irrelevant, "invalid"),
+            setOf(1L, 2L, 3L, 5L),
+        ) { key ->
+            measured += key
+            when (key) {
+                full -> 12L
+                lossless -> 24L
+                zero -> 0L
+                else -> null
+            }
+        }
+
+        assertEquals(mapOf(1L to 36L, 2L to 0L), bytes)
+        assertEquals(listOf(full, lossless, zero, unavailable), measured)
     }
 
     @Test

@@ -52,7 +52,7 @@ internal data class OfflineTrack(
     val cacheKey: String? = null,
     /**
      * 该曲缓存占用的近似字节数。**当前实现不写它**（默认 null）：
-     * UI 每次打开都从 SimpleCache 现场量（[OfflineAudioCache.bytesForSong]），
+     * UI 打开时用 [OfflineAudioCache.bytesBySong] 从 SimpleCache 批量测量，
      * 存一份快照只会在用户删片段 / LRU 淘汰后变成一个说谎的数字。
      */
     val approxBytes: Long? = null,
