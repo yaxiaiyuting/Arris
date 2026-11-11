@@ -327,8 +327,8 @@ object PlaylistApi {
         val trackArray = playlistObj.optJSONArray("tracks")
         if (trackArray != null) {
             for (i in 0 until trackArray.length()) {
-                val song = parseSongTrack(trackArray.getJSONObject(i))
-                tracksMap[song.id] = privileges[song.id]?.let { song.copy(privilege = it) } ?: song
+                val song = parseSongTrack(trackArray.getJSONObject(i), privileges)
+                tracksMap[song.id] = song
             }
         }
 
@@ -378,7 +378,8 @@ object PlaylistApi {
         )
     }
 
-    private fun parseSongTrack(track: JSONObject): SongItem {
+    private fun parseSongTrack(track: JSONObject, privileges: Map<Long, SongPrivilege>): SongItem {
+        val id = track.optLong("id")
         val artistArray = track.optJSONArray("ar")
         val artists: List<ArtistItem>? = artistArray?.let {
             (0 until it.length()).map { j ->
@@ -412,13 +413,14 @@ object PlaylistApi {
             )
         }
         return SongItem(
-            id = track.optLong("id"),
+            id = id,
             name = track.optString("name"),
             artists = artists,
             album = album,
             duration = track.optLong("dt"),
             originCoverType = originCoverType,
             originSong = originSong,
+            privilege = privileges[id],
         )
     }
 
@@ -443,9 +445,17 @@ object PlaylistApi {
         return map
     }
 
-    private suspend fun fetchSongDetails(ids: List<Long>): List<SongItem> = withContext(Dispatchers.IO) {        val cArray = JSONArray()
-        ids.forEach { id -> cArray.put(JSONObject().put("id", id)) }
-        val payload = mapOf("c" to cArray.toString())
+    private fun detailIdsJson(ids: List<Long>): String = buildString {
+        append('[')
+        ids.forEachIndexed { index, id ->
+            if (index > 0) append(',')
+            append("{\"id\":").append(id).append('}')
+        }
+        append(']')
+    }
+
+    private suspend fun fetchSongDetails(ids: List<Long>): List<SongItem> = withContext(Dispatchers.IO) {
+        val payload = mapOf("c" to detailIdsJson(ids))
         // Single retry with 500ms delay to survive transient network blips on large playlists.
         var lastError: Exception? = null
         repeat(2) { attempt ->
@@ -457,8 +467,7 @@ object PlaylistApi {
                 val songArray = json.optJSONArray("songs") ?: return@repeat
                 val privileges = parsePrivileges(json.optJSONArray("privileges"))
                 return@withContext (0 until songArray.length()).map { i ->
-                    val song = parseSongTrack(songArray.getJSONObject(i))
-                    privileges[song.id]?.let { song.copy(privilege = it) } ?: song
+                    parseSongTrack(songArray.getJSONObject(i), privileges)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // 取消/超时**原样抛出**：吞掉它会让上层以为"这批就是没歌"，
