@@ -11,37 +11,7 @@ package com.takahashirinta.ncrust.lyric
 import kotlin.math.abs
 import kotlin.math.min
 
-/**
- * v1.5.2 · 逐字扫过的「扫过轨道」——把 yrc 的词时间轴翻译成一条**连续的时间 → 光标位置**折线。
- *
- * ## 为什么需要它
- *
- * v1.5.1 的渐变横扫是**按词量化**的：\`LyricsView\` 的按需唤醒循环只在「行时间戳 ∪ 词起始时间」
- * 这些时刻写一次 \`displayPosition\`，而绘制阶段读到的永远是「刚跨过某个词边界那一刻」的位置，
- * 于是 \`playedCutCharCount\` 里那段「词内按时间线性插值」在真机上**从来没有被喂到中间值** ——
- * 光标每唱完一个词才跳一格，软边只是把每次跳变磨圆，看上去仍然是「一顿一顿」的。
- *
- * 轨道把「时间 → 位置」这件事从帧调度里剥离出来：只要有人按帧把当前位置喂进来，
- * [sample] 就能给出**任意时刻**的连续光标位置，词内线性、词间连续、跨行自动折返。
- *
- * ## 与 AMLL（Apple Music-like Lyrics，SPlayer 的逐字歌词实现）的关系
- *
- * SPlayer 的逐字渐变来自 AMLL，其遮罩位置正是「单词内按 \`宽度 / 时长\` 匀速推进、
- * 停顿区间不动」的分段线性轨道（见 AMLL \`packages/core/src/lyric-player/dom/animation/mask/animator-web.ts\`
- * 的 \`advancePlainWordTimeline\` / \`advancePauseTimeline\`）。本文件采用同一模型，并做两点收敛：
- *
- *  1. **停顿区间不「停住再跳」而是继续匀速走完**。AMLL 在停顿里把遮罩位置冻住、到下一个词起始
- *     时刻瞬时平移一个词间距；本实现让折线直接连过去，速度虽然慢但**位置处处连续**，
- *     不会出现「顿一下再弹一格」。观感差异只在词间距（约 0.25 em）上，肉眼不可辨。
- *  2. **首尾各外扩半个渐变带**。AMLL 给首词额外 1.5 倍、末词 0.5 倍渐变带位移，本质是让渐变带
- *     完整地「滑入 / 滑出」整行。这里用对称的半个渐变带达到同一效果，且首尾对称。
- *
- * ## 坐标与方向
- *
- * 全部是**该文本块局部像素坐标**（与 \`TextLayoutResult\` 同一坐标系）。方向语义一律按**阅读顺序**
- * 交给 [SweepGeometry]：LTR 下「前缘」是字符左沿，RTL 下是右沿。轨道本身因此与书写方向无关，
- * 只有渲染层需要按 [SweepSample.rtl] 决定渐变带哪一侧是「已唱」。
- */
+/** 排版后的局部像素坐标。前缘和后缘按阅读方向定义。 */
 interface SweepGeometry {
 
     /** 该段文字是否从右往左排版。 */
@@ -214,6 +184,21 @@ class SweepTrack private constructor(
     }
 
     companion object {
+        private val wordOrder = Comparator<LrcWord> { first, second ->
+            val byTime = first.startMs.compareTo(second.startMs)
+            if (byTime == 0) first.charStart.compareTo(second.charStart) else byTime
+        }
+
+        private fun orderedWords(words: List<LrcWord>): List<LrcWord> {
+            val iterator = words.iterator()
+            var previous = iterator.next()
+            while (iterator.hasNext()) {
+                val word = iterator.next()
+                if (wordOrder.compare(previous, word) > 0) return words.sortedWith(wordOrder)
+                previous = word
+            }
+            return words
+        }
 
         /** 末词唱完后，光标最多再走这么久就贴到行尾（兜住行尾标点 / 尾音留白）。 */
         const val TERMINAL_MAX_MS = 700L
@@ -240,48 +225,43 @@ class SweepTrack private constructor(
             val half = (if (fadePx.isFinite()) abs(fadePx) else 0f) * 0.5f
             val dir = if (geo.rtl) -1f else 1f
 
-            // yrc 实测段起始单调不减，但坏数据不该让整行错位：排一次序（时间，再字符序号）。
-            val ordered = words.sortedWith(compareBy({ it.startMs }, { it.charStart }))
+            val ordered = orderedWords(words)
+            // 两端只按有效词计算渐变外扩。
+            val firstWordIndex = ordered.indexOfFirst { it.hasVisibleChars(textLength) }
+            if (firstWordIndex < 0) return null
+            val lastWordIndex = ordered.indexOfLast { it.hasVisibleChars(textLength) }
 
-            // ① 先筛出**有效词**（字符区间非空且落在文本内）。
-            //    首/末外扩必须知道谁是有效的首词与末词，所以这一步不能和推节点混在一起做。
-            val valid = ArrayList<LrcWord>(ordered.size)
-            for (w in ordered) {
-                val s = w.charStart.coerceIn(0, textLength)
-                val e = w.charEndExclusive.coerceIn(s, textLength)
-                if (e > s) valid.add(w)
-            }
-            if (valid.isEmpty()) return null
-            val lastWordIndex = valid.size - 1
-
-            val times = ArrayList<Long>(valid.size * 2 + 2)
-            val xs = ArrayList<Float>(valid.size * 2 + 2)
-            val lines = ArrayList<Int>(valid.size * 2 + 2)
-            val holds = ArrayList<Float>(valid.size * 2 + 2)
+            val capacity = (lastWordIndex - firstWordIndex + 1) * 2 + 1
+            var times = LongArray(capacity)
+            var xs = FloatArray(capacity)
+            var lines = IntArray(capacity)
+            var holds = FloatArray(capacity)
+            var count = 0
 
             fun push(t: Long, x: Float, line: Int) {
-                val n = times.size
-                if (n > 0) {
-                    val prev = times[n - 1]
-                    // 时间倒退：丢弃（保持折线在时间轴上严格单调，二分查找才有意义）。
-                    if (t < prev) return
-                    // 同一时刻：后者覆盖前者。x 沿阅读顺序单调不减，取后者等于「瞬时跳到更靠后的位置」。
-                    if (t == prev) {
-                        xs[n - 1] = x
-                        lines[n - 1] = line
-                        holds[n - 1] = geo.lineEnd(line) + dir * half
-                        return
-                    }
+                val previous = count - 1
+                if (previous >= 0 && t < times[previous]) return
+                // 同一时刻以后写入的节点为准。
+                val index = if (previous >= 0 && t == times[previous]) previous else count++
+                if (index == times.size) {
+                    // 一个词跨多行时可能占用超过两个节点。
+                    val nextCapacity = times.size + times.size / 2
+                    times = times.copyOf(nextCapacity)
+                    xs = xs.copyOf(nextCapacity)
+                    lines = lines.copyOf(nextCapacity)
+                    holds = holds.copyOf(nextCapacity)
                 }
-                times.add(t)
-                xs.add(x)
-                lines.add(line)
-                holds.add(geo.lineEnd(line) + dir * half)
+                times[index] = t
+                xs[index] = x
+                lines[index] = line
+                holds[index] = geo.lineEnd(line) + dir * half
             }
 
-            valid.forEachIndexed { index, w ->
+            ordered.forEachIndexed { index, w ->
+                if (index !in firstWordIndex..lastWordIndex) return@forEachIndexed
                 val s = w.charStart.coerceIn(0, textLength)
                 val e = w.charEndExclusive.coerceIn(s, textLength)
+                if (e == s) return@forEachIndexed
                 val firstChar = s
                 val lastChar = e - 1
                 val l0 = geo.lineForChar(firstChar)
@@ -295,7 +275,7 @@ class SweepTrack private constructor(
                 //    charStart_{i+1} - 半带，相邻词之间会凭空多出一段「后退一个渐变带宽度」的倒扫，
                 //    表现为每唱完一个词高亮就倒着缩回去一点。折行处词间隙更长，倒扫更明显，
                 //    看上去就像「这句话的特效又从头播了一遍」。
-                val x0 = geo.charStart(firstChar) - (if (index == 0) dir * half else 0f)
+                val x0 = geo.charStart(firstChar) - (if (index == firstWordIndex) dir * half else 0f)
                 val x1 = geo.charEnd(lastChar) +
                     (if (index == lastWordIndex) dir * half else 0f)
 
@@ -326,27 +306,29 @@ class SweepTrack private constructor(
                 }
             }
 
-            if (times.isEmpty()) return null
+            if (count == 0) return null
 
             // 行尾收束：yrc 的词不一定铺满展示文本（LRC 那份可能多出结尾标点 / 尾音留白）。
             // 用一个封顶的终止节点把光标匀速送到行尾，避免「最后一个词唱完就永远停在半路」。
-            val tailTime = times[times.size - 1]
-            val tailLine = lines[lines.size - 1]
+            val tailTime = times[count - 1]
+            val tailLine = lines[count - 1]
             if (endMs != null && endMs > tailTime) {
                 val terminal = min(endMs, tailTime + TERMINAL_MAX_MS)
                 push(terminal, geo.lineEnd(tailLine) + dir * half, tailLine)
             }
 
-            if (times.isEmpty()) return null
             return SweepTrack(
-                times = times.toLongArray(),
-                xs = FloatArray(xs.size) { xs[it] },
-                lines = lines.toIntArray(),
-                holds = FloatArray(holds.size) { holds[it] },
+                times = if (count == times.size) times else times.copyOf(count),
+                xs = if (count == xs.size) xs else xs.copyOf(count),
+                lines = if (count == lines.size) lines else lines.copyOf(count),
+                holds = if (count == holds.size) holds else holds.copyOf(count),
                 rtl = geo.rtl,
                 endMs = endMs,
                 easing = easing,
             )
         }
+
+        private fun LrcWord.hasVisibleChars(textLength: Int): Boolean =
+            charEndExclusive.coerceIn(0, textLength) > charStart.coerceIn(0, textLength)
     }
 }
