@@ -1571,6 +1571,24 @@ fun MainScreen(
         pendingRound = null
     }
 
+    fun alignShuffleAfterTransition() {
+        val pending = pendingRound
+        pendingRound = null
+        // 轮末已经为下一首预排了新轮次，切换时优先接续它。
+        val pendingPosition = pending?.indexOf(currentQueueIndex) ?: -1
+        if (pending != null && pendingPosition >= 0) {
+            shuffledIndices = pending
+            shuffledPosition = pendingPosition
+            return
+        }
+        val position = shuffledIndices.indexOf(currentQueueIndex)
+        if (position >= 0) {
+            shuffledPosition = position
+        } else {
+            generateShuffledIndices()
+        }
+    }
+
     val queueForShuffle = playbackQueue
     val shuffleKeys = remember(queueForShuffle) {
         lazy { queueForShuffle.map { QueueKeys.keyOf(it).tag } }
@@ -1703,26 +1721,7 @@ fun MainScreen(
                 "queue index realigned to playing identity: $currentQueueIndex -> $mapped key=${vmKey.tag}",
             )
             currentQueueIndex = mapped
-            if (playMode == QueueModes.SHUFFLE) {
-                // 轮末预载的那一首属于 [pendingRound]，还不在当前 shuffledIndices 里。
-                // 先认它；认不出才回到当前轮次，最后才重洗（绝不让游标停在错位位置）。
-                val pending = pendingRound
-                val pendingPos = pending?.indexOf(mapped) ?: -1
-                if (pending != null && pendingPos >= 0) {
-                    shuffledIndices = pending
-                    shuffledPosition = pendingPos
-                    pendingRound = null
-                } else {
-                    pendingRound = null
-                    val pos = shuffledIndices.indexOf(mapped)
-                    if (pos >= 0) {
-                        shuffledPosition = pos
-                    } else {
-                        generateShuffledIndices()
-                        shuffledPosition = shuffledIndices.indexOf(mapped).coerceAtLeast(0)
-                    }
-                }
-            }
+            if (playMode == QueueModes.SHUFFLE) alignShuffleAfterTransition()
             PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
         }
         if (currentSong?.let { QueueKeys.keyOf(it) == vmKey } == true) return@LaunchedEffect
@@ -2189,26 +2188,7 @@ fun MainScreen(
         if (mapped >= 0) {
             nextIndex = mapped
             currentQueueIndex = mapped
-            if (playMode == QueueModes.SHUFFLE) {
-                // 轮末预载项属于 pendingRound，还不在当前 shuffledIndices 里：先认它。
-                val pending = pendingRound
-                val pendingPos = pending?.indexOf(mapped) ?: -1
-                if (pending != null && pendingPos >= 0) {
-                    shuffledIndices = pending
-                    shuffledPosition = pendingPos
-                    pendingRound = null
-                } else {
-                    pendingRound = null
-                    val pos = shuffledIndices.indexOf(mapped)
-                    if (pos >= 0) {
-                        shuffledPosition = pos
-                    } else {
-                        // 追加进队列的新歌 / 旧轮次不认识它：以实际在播曲为 0 重新开一轮。
-                        generateShuffledIndices()
-                        shuffledPosition = shuffledIndices.indexOf(mapped).coerceAtLeast(0)
-                    }
-                }
-            }
+            if (playMode == QueueModes.SHUFFLE) alignShuffleAfterTransition()
         } else if (actualKey != null) {
             // AUTO 但身份解析成功、却不在应用队列里（车机/外部插进来的歌）：
             // 不能拿模式推断顶一格，那会让后续预载/续播从错位处开始。
