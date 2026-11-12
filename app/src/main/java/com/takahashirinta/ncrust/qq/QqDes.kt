@@ -122,11 +122,11 @@ internal object QqDes {
 
 
     /** 初始置换 IP：8 字节 → (s0, s1)。 */
-    private fun initialPermutation(input: ByteArray): IntArray {
-        val v0 = (((input[0].toInt() and 0xFF)) or (((input[1].toInt() and 0xFF)) shl 8)) or
-            ((((input[2].toInt() and 0xFF)) shl 16) or (((input[3].toInt() and 0xFF)) shl 24))
-        val v1 = (((input[4].toInt() and 0xFF)) or (((input[5].toInt() and 0xFF)) shl 8)) or
-            ((((input[6].toInt() and 0xFF)) shl 16) or (((input[7].toInt() and 0xFF)) shl 24))
+    private fun initialPermutation(input: ByteArray, offset: Int): Long {
+        val v0 = (((input[offset].toInt() and 0xFF)) or (((input[offset + 1].toInt() and 0xFF)) shl 8)) or
+            ((((input[offset + 2].toInt() and 0xFF)) shl 16) or (((input[offset + 3].toInt() and 0xFF)) shl 24))
+        val v1 = (((input[offset + 4].toInt() and 0xFF)) or (((input[offset + 5].toInt() and 0xFF)) shl 8)) or
+            ((((input[offset + 6].toInt() and 0xFF)) shl 16) or (((input[offset + 7].toInt() and 0xFF)) shl 24))
 
         val s0 = (
             (((v1 ushr 6) and 1) shl 0x1F) or
@@ -196,14 +196,15 @@ internal object QqDes {
                 (((v0 ushr 0x11) and 1) shl 1) or
                 ((v0 ushr 0x19) and 1)
         )
-        return intArrayOf(s0, s1)
+        return packHalves(s0, s1)
     }
 
 
     /** 逆初始置换 IP^-1。 */
-    private fun inversePermutation(s0: Int, s1: Int): ByteArray {
-        val data = ByteArray(8)
-        data[7] = (
+    private fun inversePermutation(block: Long, data: ByteArray, offset: Int) {
+        val s0 = (block ushr 32).toInt()
+        val s1 = block.toInt()
+        data[offset + 7] = (
             (((s1 ushr 0x1C) and 1) shl 7) or
                 (((s0 ushr 0x1C) and 1) shl 6) or
                 (((s1 ushr 0x14) and 1) shl 5) or
@@ -213,7 +214,7 @@ internal object QqDes {
                 (((s1 ushr 4) and 1) shl 1) or
                 ((s0 ushr 4) and 1)
         ).toByte()
-        data[6] = (
+        data[offset + 6] = (
             (((s1 ushr 0x1D) and 1) shl 7) or
                 (((s0 ushr 0x1D) and 1) shl 6) or
                 (((s1 ushr 0x15) and 1) shl 5) or
@@ -223,7 +224,7 @@ internal object QqDes {
                 (((s1 ushr 5) and 1) shl 1) or
                 ((s0 ushr 5) and 1)
         ).toByte()
-        data[5] = (
+        data[offset + 5] = (
             (((s1 ushr 0x1E) and 1) shl 7) or
                 (((s0 ushr 0x1E) and 1) shl 6) or
                 (((s1 ushr 0x16) and 1) shl 5) or
@@ -233,7 +234,7 @@ internal object QqDes {
                 (((s1 ushr 6) and 1) shl 1) or
                 ((s0 ushr 6) and 1)
         ).toByte()
-        data[4] = (
+        data[offset + 4] = (
             (((s1 ushr 0x1F) and 1) shl 7) or
                 (((s0 ushr 0x1F) and 1) shl 6) or
                 (((s1 ushr 0x17) and 1) shl 5) or
@@ -243,7 +244,7 @@ internal object QqDes {
                 (((s1 ushr 7) and 1) shl 1) or
                 ((s0 ushr 7) and 1)
         ).toByte()
-        data[3] = (
+        data[offset + 3] = (
             (((s1 ushr 0x18) and 1) shl 7) or
                 (((s0 ushr 0x18) and 1) shl 6) or
                 (((s1 ushr 0x10) and 1) shl 5) or
@@ -253,7 +254,7 @@ internal object QqDes {
                 (((s1 ushr 0) and 1) shl 1) or
                 ((s0 ushr 0) and 1)
         ).toByte()
-        data[2] = (
+        data[offset + 2] = (
             (((s1 ushr 0x19) and 1) shl 7) or
                 (((s0 ushr 0x19) and 1) shl 6) or
                 (((s1 ushr 0x11) and 1) shl 5) or
@@ -263,7 +264,7 @@ internal object QqDes {
                 (((s1 ushr 1) and 1) shl 1) or
                 ((s0 ushr 1) and 1)
         ).toByte()
-        data[1] = (
+        data[offset + 1] = (
             (((s1 ushr 0x1A) and 1) shl 7) or
                 (((s0 ushr 0x1A) and 1) shl 6) or
                 (((s1 ushr 0x12) and 1) shl 5) or
@@ -273,7 +274,7 @@ internal object QqDes {
                 (((s1 ushr 2) and 1) shl 1) or
                 ((s0 ushr 2) and 1)
         ).toByte()
-        data[0] = (
+        data[offset] = (
             (((s1 ushr 0x1B) and 1) shl 7) or
                 (((s0 ushr 0x1B) and 1) shl 6) or
                 (((s1 ushr 0x13) and 1) shl 5) or
@@ -283,7 +284,6 @@ internal object QqDes {
                 (((s1 ushr 3) and 1) shl 1) or
                 ((s0 ushr 3) and 1)
         ).toByte()
-        return data
     }
 
 
@@ -363,13 +363,13 @@ internal object QqDes {
      * 密钥扩展。**`decrypt = true` 时轮密钥顺序取反**（`togen = 15 - i`），
      * 与参考实现一致：3DES 的「解密」= 用同一套子密钥逆序跑数据通路。
      */
-    private fun keySchedule(key: ByteArray, decrypt: Boolean): Array<IntArray> {
+    private fun keySchedule(key: ByteArray, offset: Int, decrypt: Boolean): Array<IntArray> {
         val schedule = Array(16) { IntArray(6) }
 
-        val v0 = (key[0].toInt() and 0xFF) or ((key[1].toInt() and 0xFF) shl 8) or
-            ((key[2].toInt() and 0xFF) shl 16) or ((key[3].toInt() and 0xFF) shl 24)
-        val v1 = (key[4].toInt() and 0xFF) or ((key[5].toInt() and 0xFF) shl 8) or
-            ((key[6].toInt() and 0xFF) shl 16) or ((key[7].toInt() and 0xFF) shl 24)
+        val v0 = (key[offset].toInt() and 0xFF) or ((key[offset + 1].toInt() and 0xFF) shl 8) or
+            ((key[offset + 2].toInt() and 0xFF) shl 16) or ((key[offset + 3].toInt() and 0xFF) shl 24)
+        val v1 = (key[offset + 4].toInt() and 0xFF) or ((key[offset + 5].toInt() and 0xFF) shl 8) or
+            ((key[offset + 6].toInt() and 0xFF) shl 16) or ((key[offset + 7].toInt() and 0xFF) shl 24)
 
         var c = 0
         var d = 0
@@ -390,7 +390,6 @@ internal object QqDes {
             d = ((d shl s) or (d ushr (28 - s))) and MASK_HIGH28
 
             val round = if (decrypt) 15 - i else i
-            for (j in 0 until 6) schedule[round][j] = 0
 
             for (j in 0 until 24) {
                 // C 半部：标准取法（31 - pc2[j]）
@@ -407,18 +406,19 @@ internal object QqDes {
         return schedule
     }
 
-    /** 单个 8 字节块的 DES 数据通路（IP → 16 轮 → IP^-1）。与标准 DES 相同。 */
-    private fun cryptBlock(input: ByteArray, key: Array<IntArray>): ByteArray {
-        val ip = initialPermutation(input)
-        var s0 = ip[0]
-        var s1 = ip[1]
+    private fun packHalves(first: Int, second: Int): Long =
+        (first.toLong() shl 32) or (second.toLong() and 0xffff_ffffL)
+
+    private fun cryptRounds(block: Long, key: Array<IntArray>): Long {
+        var s0 = (block ushr 32).toInt()
+        var s1 = block.toInt()
         for (idx in 0 until 15) {
             val previousS1 = s1
             s1 = f(s1, key[idx]) xor s0
             s0 = previousS1
         }
         s0 = f(s1, key[15]) xor s0
-        return inversePermutation(s0, s1)
+        return packHalves(s0, s1)
     }
 
     /** 与参考实现同源的位重排。 */
@@ -427,33 +427,42 @@ internal object QqDes {
     /** QRC 的固定 24 字节密钥（三个 8 字节 DES 密钥）。与 songmid 无关，实测如此。 */
     private val QRC_KEY = "!@#)(*$%123ZXC!@!@#)(NHL".toByteArray(Charsets.UTF_8)
 
+    private class TripleSchedule(
+        val first: Array<IntArray>,
+        val second: Array<IntArray>,
+        val third: Array<IntArray>,
+    )
+
+    private fun tripleSchedule(key: ByteArray, decrypt: Boolean): TripleSchedule {
+        require(key.size == 24) { "3DES key must be 24 bytes, got ${key.size}" }
+        val k1 = keySchedule(key, 0, decrypt)
+        val k2 = keySchedule(key, 8, !decrypt)
+        val k3 = keySchedule(key, 16, decrypt)
+        return if (decrypt) TripleSchedule(k3, k2, k1) else TripleSchedule(k1, k2, k3)
+    }
+
+    private val qrcSchedule by lazy { tripleSchedule(QRC_KEY, decrypt = true) }
+
     /**
      * 解密一段 QRC 密文（长度必须是 8 的倍数；不足一块的尾字节原样带出）。
      *
      * 三次数据通路按参考实现的顺序：**D(K3) → E(K2) → D(K1)**。
      * 没有「去填充」这一步 —— QRC 的填充在 zlib 流之后，由解压器读到流结束自然忽略。
      */
-    fun decrypt(data: ByteArray, key: ByteArray = QRC_KEY): ByteArray {
-        require(key.size == 24) { "3DES key must be 24 bytes, got ${key.size}" }
-        val k3 = keySchedule(key.copyOfRange(16, 24), decrypt = true)
-        val k2 = keySchedule(key.copyOfRange(8, 16), decrypt = false)
-        val k1 = keySchedule(key.copyOfRange(0, 8), decrypt = true)
+    fun decrypt(data: ByteArray, key: ByteArray = QRC_KEY): ByteArray =
+        cryptBlocks(data, if (key === QRC_KEY) qrcSchedule else tripleSchedule(key, decrypt = true))
 
-        val out = ByteArray(data.size)
+    private fun cryptBlocks(data: ByteArray, schedule: TripleSchedule): ByteArray {
+        val out = data.copyOf()
         var offset = 0
-        while (offset + 8 <= data.size) {
-            var block = ByteArray(8)
-            System.arraycopy(data, offset, block, 0, 8)
-            block = cryptBlock(block, k3)
-            block = cryptBlock(block, k2)
-            block = cryptBlock(block, k1)
-            System.arraycopy(block, 0, out, offset, 8)
+        while (offset <= out.size - 8) {
+            // 相邻轮组之间的逆置换和初始置换互相抵消。
+            val initial = initialPermutation(out, offset)
+            val first = cryptRounds(initial, schedule.first)
+            val second = cryptRounds(first, schedule.second)
+            val third = cryptRounds(second, schedule.third)
+            inversePermutation(third, out, offset)
             offset += 8
-        }
-        // 不足一块的尾巴（正常数据不会出现）原样带出，交给上层判为解密失败。
-        while (offset < data.size) {
-            out[offset] = data[offset]
-            offset++
         }
         return out
     }
@@ -469,21 +478,13 @@ internal object QqDes {
     internal fun singleDesBlockForTest(block: ByteArray, key8: ByteArray, encrypt: Boolean): ByteArray {
         require(block.size == 8) { "block must be 8 bytes" }
         require(key8.size == 8) { "key must be 8 bytes" }
-        return cryptBlock(block, keySchedule(key8, decrypt = !encrypt))
+        val out = block.copyOf()
+        val transformed = cryptRounds(initialPermutation(out, 0), keySchedule(key8, 0, decrypt = !encrypt))
+        inversePermutation(transformed, out, 0)
+        return out
     }
 
     /** **仅供单测**：3DES 端到端（与 [decrypt] 同一路径，但允许自定义密钥）。 */
-    internal fun tripleDesForTest(block: ByteArray, key: ByteArray, decrypt: Boolean): ByteArray {
-        require(key.size == 24) { "3DES key must be 24 bytes, got ${key.size}" }
-        val k1 = keySchedule(key.copyOfRange(0, 8), decrypt = decrypt)
-        val k2 = keySchedule(key.copyOfRange(8, 16), decrypt = !decrypt)
-        val k3 = keySchedule(key.copyOfRange(16, 24), decrypt = decrypt)
-        var b = block
-        if (decrypt) {
-            b = cryptBlock(b, k3); b = cryptBlock(b, k2); b = cryptBlock(b, k1)
-        } else {
-            b = cryptBlock(b, k1); b = cryptBlock(b, k2); b = cryptBlock(b, k3)
-        }
-        return b
-    }
+    internal fun tripleDesForTest(block: ByteArray, key: ByteArray, decrypt: Boolean): ByteArray =
+        cryptBlocks(block.copyOfRange(0, 8), tripleSchedule(key, decrypt))
 }
