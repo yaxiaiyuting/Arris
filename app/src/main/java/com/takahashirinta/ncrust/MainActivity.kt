@@ -1644,37 +1644,36 @@ fun MainScreen(
             playbackQueue.isEmpty() && currentQueueIndex < 0
         if (untouched) {
             playerViewModel.invalidatePreload()
+            val activeKey = playerViewModel.currentTrackKey
+            // 读盘期间服务可能已自然切歌，按当前曲目对齐保存的队列。
             playbackQueue = savedSongs
-            currentQueueIndex = restoredIndex
+            currentQueueIndex = PlaybackQueueLogic.resolveCurrentIndex(savedSongs, activeKey, restoredIndex)
             if (playMode == QueueModes.SHUFFLE) {
                 if (savedRound != null) {
                     shuffledIndices = savedRound.order.orEmpty()
-                    shuffledPosition = savedRound.position
+                    shuffledPosition = PlaybackQueueLogic.realignShuffledPosition(
+                        shuffledIndices, currentQueueIndex, savedRound.position,
+                    )
                 } else generateShuffledIndices()
             }
-            // v2.2.1 · P0：把**队列里那一份**身份补给正在播的这首。
-            //
-            // 落盘的单曲状态只有 id + 音源（`getState()` 的既定契约），而 QQ 取链
-            // 必须要 songmid / media_mid —— 它们只存在于队列的 SongItem 里。
-            // 少这一步的实测表现：冷启动后 `SourceRouter: unresolvable song
-            // source=qqmusic id=… (missing sourceId)`，QQ 曲目只能吃离线缓存里
-            // **另一个档位**的旧 URL（选了母带播出来是无损），并可能引发循环重试。
-            playbackQueue.getOrNull(currentQueueIndex)?.let { current ->
-                if (current.id == playerViewModel.currentSongId.value) {
-                    playerViewModel.adoptTrackIdentity(
-                        current.source, current.id, current.sourceId, current.mediaId,
-                    )
-                }
+            if (currentQueueIndex != restoredIndex) {
+                PlaybackStateManager.saveQueueCursor(context, savedSongs, currentQueueIndex)
+            }
+            val current = savedSongs[currentQueueIndex]
+            // 旧单曲快照可能缺 QQ 取链所需的 songmid / media_mid。
+            if (QueueKeys.keyOf(current) == activeKey) {
+                playerViewModel.adoptTrackIdentity(
+                    current.source, current.id, current.sourceId, current.mediaId,
+                )
+                currentSong = current
             }
             val activity = context as? android.app.Activity
             if (activity?.intent?.action == com.takahashirinta.ncrust.player.PlaybackActionReceiver.ACTION_RESUME) {
                 activity.intent.action = android.content.Intent.ACTION_MAIN
-                playbackQueue.getOrNull(currentQueueIndex)?.let { song ->
-                    val (title, artist, artwork) = songParams(song)
-                    playerViewModel.playSong(song.id, title, artist, artwork,
-                        sourceKey = song.source, sourceId = song.sourceId, mediaId = song.mediaId,
-                        privilege = song.privilege)
-                }
+                val (title, artist, artwork) = songParams(current)
+                playerViewModel.playSong(current.id, title, artist, artwork,
+                    sourceKey = current.source, sourceId = current.sourceId, mediaId = current.mediaId,
+                    privilege = current.privilege)
             }
         }
     }
