@@ -12,6 +12,7 @@ package com.takahashirinta.ncrust.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.util.Collections
 
 /**
  * 本地歌单的持久化（v2.3.0 · B）。
@@ -70,8 +71,20 @@ object LocalPlaylistStore {
 
     // -------------------------------------------------------------- 歌单列表 ----
 
-    fun readPlaylists(context: Context): List<LocalPlaylist> =
-        LocalPlaylistCodec.decodePlaylists(prefs(context).getString(KEY_PLAYLISTS, null))
+    private class PlaylistSnapshot(val json: String, val playlists: List<LocalPlaylist>)
+
+    @Volatile private var playlistSnapshot: PlaylistSnapshot? = null
+
+    fun readPlaylists(context: Context): List<LocalPlaylist> = readPlaylists(prefs(context))
+
+    private fun readPlaylists(storage: SharedPreferences): List<LocalPlaylist> {
+        val json = storage.getString(KEY_PLAYLISTS, null) ?: return emptyList()
+        val previous = playlistSnapshot
+        if (previous?.json == json) return previous.playlists
+        val playlists = Collections.unmodifiableList(LocalPlaylistCodec.decodePlaylists(json))
+        playlistSnapshot = PlaylistSnapshot(json, playlists)
+        return playlists
+    }
 
     /**
      * 覆盖写歌单列表。超过 [LocalPlaylistSync.MAX_PLAYLISTS] 时**保留最近更新的那些**
@@ -199,7 +212,7 @@ object LocalPlaylistStore {
     ): LocalPlaylist? {
         if (expectedRevision != null && expectedRevision != revision) return null
         val updated = playlist.copy(updatedAt = now)
-        val list = LocalPlaylistCodec.decodePlaylists(storage.getString(KEY_PLAYLISTS, null))
+        val list = readPlaylists(storage)
         val idx = list.indexOfFirst { it.key == updated.key }
         // 同步路径禁止"借更新接口隐式重建"：期间被删掉的歌单不允许复活。
         if (requireExisting && idx < 0) return null

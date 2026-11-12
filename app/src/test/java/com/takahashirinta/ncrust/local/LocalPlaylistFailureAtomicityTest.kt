@@ -49,4 +49,22 @@ class LocalPlaylistFailureAtomicityTest {
         assertNull(result)
         assertTrue(LocalPlaylistStore.readPlaylists(ctx).isEmpty())
     }
+
+    @Test fun repeatReadsReuseMetadataUntilTheStoredSnapshotChanges() = fixture { context, storage ->
+        val key = LocalPlaylistSync.localOnlyKey("snapshot-fixture")
+        val first = LocalPlaylistStore.createPlaylist(context, key, "Before", 1L)!!
+        val original = LocalPlaylistStore.readPlaylists(context)
+        assertEquals(listOf(first), original)
+        repeat(10) { assertSame(original, LocalPlaylistStore.readPlaylists(context)) }
+
+        val renamed = first.copy(name = "After", updatedAt = 2L)
+        storage.failNext = true
+        assertFalse(LocalPlaylistStore.writePlaylists(context, listOf(renamed)))
+        assertEquals(original, LocalPlaylistStore.readPlaylists(context))
+        assertTrue(LocalPlaylistStore.writePlaylists(context, listOf(renamed)))
+        val updated = LocalPlaylistStore.readPlaylists(context)
+        assertEquals(listOf(renamed), updated)
+        assertEquals("Before", original.single().name)
+        assertSame(updated, LocalPlaylistStore.readPlaylists(context))
+    }
 }
