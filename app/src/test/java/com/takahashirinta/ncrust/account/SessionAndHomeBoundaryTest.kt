@@ -47,7 +47,7 @@ class SessionAndHomeBoundaryTest {
         val guard = field(CookieManager, "guard").get(CookieManager)
         val originals = listOf(CookieManager to "app", NeteaseTokenRefresher to "app", SessionMonitor to "appContext",
             SessionMonitor to "lastCheckAt", SessionMonitor to "lastRevision", SessionMonitor to "retryAfterAt",
-            guard to "revision", guard to "cookie", guard to "loginGeneration")
+            guard to "current")
             .map { (o,n) -> Triple(o,field(o,n),field(o,n).get(o)) }
         @Suppress("UNCHECKED_CAST")
         val state = field(SessionMonitor,"_state").get(SessionMonitor) as MutableStateFlow<SessionState>
