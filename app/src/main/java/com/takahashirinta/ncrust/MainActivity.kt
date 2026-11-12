@@ -532,6 +532,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        com.takahashirinta.ncrust.player.PlaybackService.instance?.onUiBackgrounding()
         super.onPause()
         com.takahashirinta.ncrust.network.AppForegroundTracker.onBackground()
     }
@@ -571,7 +572,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        WaveformStore.visualizationVisible = true
+        WaveformStore.setVisualizationVisible(true)
     }
 
     /**
@@ -588,7 +589,7 @@ class MainActivity : ComponentActivity() {
      * 而旋转在本应用里是高频动作；`onStop` 只覆盖「真的到后台了」。
      */
     override fun onStop() {
-        WaveformStore.visualizationVisible = false
+        WaveformStore.setVisualizationVisible(false)
         runCatching { com.takahashirinta.ncrust.qq.QqProbeStore.snapshotAndFlush(this) }
         // v2.5.5 · B：跨源上报闸门的拦截计数（本地私有目录，绝不上报）。
         // 与 QQ 兜底统计同一时机、同一条纪律：埋点点位只做内存自增，落盘只在
@@ -1514,7 +1515,6 @@ fun MainScreen(
         playlistSnapshot
     }
     var currentQueueIndex by remember { mutableIntStateOf(-1) }
-    var songEnded by remember { mutableStateOf(false) }
     var songTransitioned by remember { mutableStateOf(false) }
     // 本次过渡是不是 ExoPlayer 自然衔接（AUTO）。手动 setMediaItem / 系统媒体控件与车机
     // 经 media3 会话 seek 过来的过渡不是 AUTO，那时应用队列本身并没有推进，索引只能按
@@ -1870,7 +1870,7 @@ fun MainScreen(
     /**
      * @param origin v2.2.1 · P0：这次开播是不是**用户手点**的。
      *
-     * 自动接续（`playNext()` / `onUnplayableCallback` / `songEnded`）必须传
+     * 自动接续（`playNext()` / `onUnplayableCallback` / 曲终回调）必须传
      * [PlayOrigin.AUTO_NEXT]，否则播放器侧的「连续自动跳歌」计数会被每条路径上的
      * `playSong(origin=USER)` 冲掉，熔断永远不生效 —— 而这正是用户报的
      * 「不关应用就一直切」。默认 USER 保证既有调用点零改动。
@@ -2129,11 +2129,12 @@ fun MainScreen(
         }
     }
 
-    // 设置播放器回调。
-    LaunchedEffect(Unit) {
+    // Natural completion also advances the queue when the window is stopped.
+    val onNaturalEnd by rememberUpdatedState<() -> Unit>({ playNext(PlayOrigin.AUTO_NEXT) })
+    LaunchedEffect(playerViewModel) {
         playerViewModel.setOnSongNextCallback { playNext(PlayOrigin.USER) }
         playerViewModel.setOnSongPreviousCallback { playPrevious() }
-        playerViewModel.setOnSongEndedCallback { songEnded = true }
+        playerViewModel.setOnSongEndedCallback { onNaturalEnd() }
         playerViewModel.setOnSongTransitionedCallback { auto ->
             transitionIsAuto = auto
             songTransitioned = true
@@ -2319,22 +2320,6 @@ fun MainScreen(
         progress.snapTo(0.06f)
         delay(32L)
         progress.snapTo(0f)
-    }
-
-    // 歌曲结束后自动播放下一首。
-    LaunchedEffect(songEnded) {
-        if (songEnded) {
-            songEnded = false
-            Log.d(
-                "MainScreen",
-                "songEnded -> playNext queue=${playbackQueue.size} " +
-                    "index=$currentQueueIndex mode=$playMode",
-            )
-            if (playbackQueue.isNotEmpty()) {
-                // v2.2.1 · P0：曲终接续属于**自动**跳歌，必须计入熔断。
-                playNext(PlayOrigin.AUTO_NEXT)
-            }
-        }
     }
 
     fun expandCard() {

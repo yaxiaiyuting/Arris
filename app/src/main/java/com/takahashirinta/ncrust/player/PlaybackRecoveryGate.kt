@@ -9,7 +9,11 @@ internal class PlaybackRecoveryGate(initialRoute: PlaybackNetworkRoute) {
     var wanted = false; private set
     var resolving = false; private set
     var waiting = false; private set
-    fun begin() { wanted = true; resolving = true; waiting = false }
+    fun begin(wanted: Boolean = true) {
+        this.wanted = wanted
+        resolving = true
+        waiting = false
+    }
     fun resolved() { resolving = false; waiting = false }
     fun failed(network: Boolean) { resolving = false; waiting = network; if (!network) wanted = false }
     fun cancel() { wanted = false; resolving = false; waiting = false }

@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
+import com.takahashirinta.ncrust.ui.player.WaveformStore
 
 /**
  * v1.8.0 · T3：把音频链路"旁路"出一份 PCM 给可视化用。
@@ -70,7 +71,7 @@ class VisualizerRenderersFactory(
         // [TransparentWaveformSink] 的档头与 docs/verification/v2.2.1/p0-quality-loop/PROBE.md。
         //
         // 换来的是可视化柱高语义完全不变（同样是 RMS，只是对所有声道一起算）。
-        val waveformSink = TransparentWaveformSink()
+        val waveformSink = TransparentWaveformSink(isVisible = { WaveformStore.analyzeWhileVisible })
         val processors = arrayOf<AudioProcessor>(TeeAudioProcessor(waveformSink))
         val defaultProvider = DefaultAudioSink.AudioTrackProvider.DEFAULT
         return DefaultAudioSink.Builder(context)

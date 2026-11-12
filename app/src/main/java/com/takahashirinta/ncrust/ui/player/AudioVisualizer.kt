@@ -245,6 +245,16 @@ object WaveformStore {
     // Read in draw, so hardware volume rescales the entire window without a recomposition.
     internal var displayGain by mutableFloatStateOf(1f)
     internal var visualizationVisible by mutableStateOf(false)
+        private set
+
+    @Volatile
+    internal var analyzeWhileVisible = false
+        private set
+
+    internal fun setVisualizationVisible(visible: Boolean) {
+        analyzeWhileVisible = visible
+        visualizationVisible = visible
+    }
 
     /**
      * **音频线程**调用：零分配、零锁。

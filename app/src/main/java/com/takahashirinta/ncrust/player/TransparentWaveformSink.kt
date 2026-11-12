@@ -33,12 +33,14 @@ class TransparentWaveformSink(
     private val onTransient: (Int, Float) -> Unit = WaveformStore::onTransient,
     private val extractor: AudioFeatureExtractor = AudioFeatureExtractor(),
     private val fallbackAnalyze: (ByteBuffer, Int, Int, Int, Array<DoubleArray>) -> Long = PcmRms::analyze,
+    private val isVisible: () -> Boolean = { true },
 ) : TeeAudioProcessor.AudioBufferSink {
 
     private var channelCount = 0
     private var encoding = C.ENCODING_INVALID
     private var supportedEncoding = false
     private var sampleRateHz = 0
+    private var analysisSuspended = false
 
     // 回退路径的低通历史按声道保存，音频线程复用预分配的状态。
     private val bassFilterState = Array(PcmRms.MAX_CHANNELS) { DoubleArray(2) }
@@ -59,6 +61,7 @@ class TransparentWaveformSink(
             bassFilterState[channel][1] = 0.0
         }
         extractor.configure(this.sampleRateHz, this.channelCount)
+        analysisSuspended = false
     }
 
     /**
@@ -67,10 +70,15 @@ class TransparentWaveformSink(
      */
     override fun handleBuffer(buffer: ByteBuffer) {
         if (!supportedEncoding || channelCount == 0) return
+        if (!isVisible()) {
+            analysisSuspended = true
+            return
+        }
         val wantBars = enabled()
         val wantFeatures = featuresEnabled()
         if (!wantBars && !wantFeatures) return
         try {
+            if (analysisSuspended) flush(sampleRateHz, channelCount, encoding)
             if (extractor.process(buffer, encoding)) {
                 if (wantBars) {
                     onBar(

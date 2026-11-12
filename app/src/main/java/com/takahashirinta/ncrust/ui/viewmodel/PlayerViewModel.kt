@@ -270,10 +270,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private data class RetryRequest(
         val track: TrackKey, val revision: Int, val title: String, val artist: String,
         val artwork: String, val positionMs: Long, val privilege: SongPrivilege?,
+        val roomGeneration: Long? = null, val startPlaying: Boolean = true,
     )
     private var latestRetryRequest: RetryRequest? = null
+
+    private fun RetryRequest.stillOwnsRoom(): Boolean = roomGeneration == null ||
+        com.takahashirinta.ncrust.listen.TogetherSession.isCurrentFollow(roomGeneration)
+
     private val playbackRetries = com.takahashirinta.ncrust.player.PlaybackRetryScheduler<RetryRequest>(
-        viewModelScope, { it.track == currentTrack && playGate.isCurrent(it.revision) },
+        viewModelScope, { it.track == currentTrack && playGate.isCurrent(it.revision) && it.stillOwnsRoom() },
     )
 
     private fun schedulePlaybackRetry(songId: Long, level: String, delayMs: Long, qualityRetry: Boolean = false) {
@@ -287,19 +292,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (qualityRetry) qualityRetryGuard.onRetryStarted(System.currentTimeMillis())
             playSong(saved.track.id, saved.title, saved.artist, saved.artwork, level,
                 saved.track.source.key, saved.track.sourceId, saved.track.mediaId,
-                saved.positionMs, PlayOrigin.QUALITY_RETRY, saved.privilege)
+                saved.positionMs, PlayOrigin.QUALITY_RETRY, saved.privilege,
+                roomGeneration = saved.roomGeneration, startPlaying = saved.startPlaying)
         }
     }
 
     private val networkObserver = com.takahashirinta.ncrust.network.DefaultNetworkObserver(application)
     private val recovery = com.takahashirinta.ncrust.player.PlaybackRecoveryGate(networkObserver.snapshot())
-    private var bufferingWatch: Job? = null
 
     /** No retry can survive a pause or a newer selection, including a default-route change. */
-    private fun recoverCurrentRequest(resetBudget: Boolean) {
+    private fun recoverCurrentRequest(resetBudget: Boolean, stalledPositionMs: Long? = null) {
         val saved = latestRetryRequest?.takeIf {
-            recovery.needsRecovery(isBuffering.value) && it.track == currentTrack && playGate.isCurrent(it.revision)
+            recovery.needsRecovery(isBuffering.value || stalledPositionMs != null) &&
+                it.track == currentTrack && playGate.isCurrent(it.revision) && it.stillOwnsRoom()
         } ?: return
+        if (stalledPositionMs == null && !recovery.resolving && !recovery.waiting &&
+            PlaybackService.instance?.isActivelyBuffering() != true
+        ) return
+        if (stalledPositionMs != null &&
+            PlaybackService.instance?.reprepareStalledItem(saved.track, stalledPositionMs) == true
+        ) return
         if (!NetworkAvailability.isOnline(getApplication())) return
         if (resetBudget) urlRetryGate.onUserAction()
         if (!urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
@@ -308,28 +320,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             stopForQualityFailure(saved.track.id, "缓冲恢复次数已用尽")
             return
         }
-        val position = if (recovery.resolving || recovery.waiting) saved.positionMs else currentPosition.value
+        val position = stalledPositionMs ?: if (recovery.resolving || recovery.waiting) {
+            saved.positionMs
+        } else {
+            currentPosition.value
+        }
         preloadCache.remove(saved.track.id)
         SongUrlFetcher.onNetworkRouteChanged()
         RetrofitClient.evictConnections()
         playSong(saved.track.id, saved.title, saved.artist, saved.artwork, lastRequestedLevel,
             saved.track.source.key, saved.track.sourceId, saved.track.mediaId,
-            position, PlayOrigin.QUALITY_RETRY, saved.privilege)
+            position, PlayOrigin.QUALITY_RETRY, saved.privilege,
+            roomGeneration = saved.roomGeneration, startPlaying = saved.startPlaying)
     }
 
-    private fun watchBuffering(buffering: Boolean) {
-        bufferingWatch?.cancel()
-        if (!buffering || !recovery.wanted || recovery.resolving) return
-        val epoch = playGate.current
-        bufferingWatch = viewModelScope.launch {
-            delay(12_000L)
-            if (playGate.isCurrent(epoch) && isBuffering.value) recoverCurrentRequest(resetBudget = false)
+    private fun submitResolvedPlayback(intent: Intent) {
+        if (PlaybackService.instance?.submitResolvedPlayback(intent) != true) {
+            getApplication<Application>().startForegroundService(intent)
         }
     }
 
     private fun invalidatePlaybackIntent() {
         recovery.cancel()
-        bufferingWatch?.cancel()
         isBuffering.value = false
         playbackRetries.cancel()
         playGate.next()
@@ -907,7 +919,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         PlaybackService.onBufferingChanged = { buffering ->
             isBuffering.value = buffering || recovery.resolving
-            watchBuffering(buffering)
+        }
+        PlaybackService.onPlaybackStalled = { track, positionMs ->
+            if (track == currentTrack) recoverCurrentRequest(resetBudget = false, stalledPositionMs = positionMs)
         }
         PlaybackService.onBitrateChanged = { source, id, bitrate ->
             if (currentTrack?.source == source && currentTrack?.id == id && bitrate > 0L) {
@@ -1085,7 +1099,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         }
                         recovery.begin()
                         recovery.resolved()
-                        watchBuffering(isBuffering.value)
                     }
                 }
             } else {
@@ -1695,12 +1708,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // v2.1.5：只此一处写 [currentTrack]，三个音源字段都是它的只读派生值。
         val track = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         currentTrack = track
-        recovery.begin()
-        bufferingWatch?.cancel()
+        recovery.begin(wanted = startPlaying)
         // Tell the UI which song was requested before any IO. Never leave old audio playing
         // beneath a new request, or reuse the old duration/position when that request fails.
         if (origin != PlayOrigin.QUALITY_SWITCH && origin != PlayOrigin.QUALITY_RETRY) {
-            if (PlaybackService.instance != null) {
+            PlaybackService.instance?.let { service ->
                 val wait = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
                     putExtra("action", "wait_for_url")
                     putExtra("playRevision", fetchVersion)
@@ -1709,7 +1721,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         putExtra("startPlaying", startPlaying)
                     }
                 }
-                getApplication<Application>().startService(wait)
+                service.waitForPlaybackSelection(wait)
             }
             playingIdentity.clear()
             currentPosition.value = 0L
@@ -1774,7 +1786,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 「每首歌自动从 0 分 0 秒播放对齐」；有记录则从上次退出点续播。
         val resumeMs = if (startPositionMs >= 0) startPositionMs
         else PlaybackStateManager.getSongPosition(getApplication(), songId)
-        latestRetryRequest = RetryRequest(track, fetchVersion, title, artist, artworkUrl, resumeMs, effectivePrivilege)
+        latestRetryRequest = RetryRequest(
+            track, fetchVersion, title, artist, artworkUrl, resumeMs, effectivePrivilege, roomGeneration, startPlaying,
+        )
         lastSavedPositionMs = resumeMs
         currentPosition.value = resumeMs
         resumedFromMs.value = resumeMs
@@ -1854,7 +1868,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 putExtra("sourceId", sourceId)
                 putExtra("mediaId", mediaId)
             }
-            getApplication<Application>().startForegroundService(intent)
+            submitResolvedPlayback(intent)
             isPlaying.value = startPlaying
             if (roomGeneration == null) PlaybackStateManager.saveState(
                 getApplication(), songId, title, artist, artworkUrl, true,
@@ -1973,7 +1987,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         putExtra("sourceId", sourceId)
                         putExtra("mediaId", mediaId)
                     }
-                    getApplication<Application>().startForegroundService(intent)
+                    submitResolvedPlayback(intent)
                     isPlaying.value = startPlaying
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -2288,7 +2302,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             "PlayerViewModel",
             "quality pipeline gave up for songId=$songId: $reason — pausing for user action",
         )
-        bufferingWatch?.cancel()
         isBuffering.value = false
         if (!recovery.waiting) recovery.failed(false)
         isPlaying.value = false
@@ -2418,7 +2431,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // Dedup: skip only if the SAME song is already being fetched/in queue.
         // 不能因 URL 已缓存而整体跳过——缓存意味着"省的再取链", 但下一首仍需
         // addMediaItem 入 ExoPlayer 队列才能无缝切换; 否则缓存命中时直接 return,
-        // ExoPlayer 队列永远只有当前一首, 播完必然走 songEnded→playNext 硬切(= 无缝失效)。
+        // ExoPlayer 队列永远只有当前一首, 播完必然走 曲终回调→playNext 硬切(= 无缝失效)。
         //
         // v2.1.5：判重的键从裸 songId 换成 [TrackKey]。裸 id 会把「ncm 123」与
         // 「QQ 123」当成同一首歌 —— 在跨源队列里那会让真正该预载的那一首被静默跳过，
@@ -2504,7 +2517,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 if (!com.takahashirinta.ncrust.player.preloadGeneration.accepts(queueRevision)) return@launch
                 if (result == null) {
-                    // 预加载失败：可能无版权/无订阅，忽略即可，等当前歌结束时由 songEnded 跳歌。
+                    // 预加载失败：可能无版权/无订阅，忽略即可，等当前歌结束时由曲终回调跳歌。
                     // ⚠️ 这里是**预加载**，不是用户点了播放 —— 不提示、不跳歌、不改任何状态。
                     currentlyPreloadingSongId = -1L
                     return@launch
@@ -2598,7 +2611,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 putExtra("sourceId", sourceId)
                                 putExtra("mediaId", mediaId)
                             }
-                            getApplication<Application>().startForegroundService(intent)
+                            submitResolvedPlayback(intent)
                             isPlaying.value = true
                             Log.i(TAG_TRACK, "preload takeover -> currentTrack=$nextTrack")
                             viewModelScope.launch { fetchLyrics(nextTrack) }
@@ -2653,7 +2666,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         putExtra("sourceId", sourceId)
                         putExtra("mediaId", mediaId)
                     }
-                    getApplication<Application>().startForegroundService(intent)
+                    PlaybackService.instance?.enqueuePreload(intent)
                     Log.i(TAG_TRACK, "preload enqueued: slotTrack=$nextTrack")
                 }
             } catch (e: CancellationException) {
@@ -3264,7 +3277,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             recovery.begin()
             recovery.resolved()
-            watchBuffering(isBuffering.value)
             return false
         }
         playSong(songId, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
@@ -3358,6 +3370,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         PlaybackService.onTrackStarted = null
         PlaybackService.onTrialResolved = null
         PlaybackService.onBufferingChanged = null
+        PlaybackService.onPlaybackStalled = null
         PlaybackService.onBitrateChanged = null
         PlaybackService.onCoverAccent = null
         PlaybackService.onPlaybackError = null

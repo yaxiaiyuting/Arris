@@ -39,6 +39,31 @@ class TransparentWaveformSinkTest {
             b.flip()
         }
 
+    @Test
+    fun `hidden visualization skips PCM analysis until the UI is visible`() {
+        var visible = false
+        var analyzed = 0
+        var published = 0
+        val sink = TransparentWaveformSink(
+            enabled = { true },
+            featuresEnabled = { false },
+            onBar = { _, _, _, _ -> published++ },
+            fallbackAnalyze = { _, _, _, _ -> analyzed++; 0L },
+            isVisible = { visible },
+        )
+        sink.flush(0, 2, C.ENCODING_PCM_16BIT)
+        val buffer = pcm16(1_000, 2_000)
+        sink.handleBuffer(buffer)
+        assertEquals(0, analyzed)
+        assertEquals(0, published)
+        assertEquals(0, buffer.position())
+
+        visible = true
+        sink.handleBuffer(buffer)
+        assertEquals(1, analyzed)
+        assertEquals(1, published)
+    }
+
     /**
      * 核心回归：**旧配置在 6 声道输入上必然抛异常**。
      * 这条用例把「为什么必须换掉 WaveformAudioBufferSink(…, 1, …)」固定成证据，
