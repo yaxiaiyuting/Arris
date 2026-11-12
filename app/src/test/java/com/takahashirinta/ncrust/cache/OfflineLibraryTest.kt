@@ -235,7 +235,7 @@ class OfflineLibraryIndexTest {
      * 因为写 URL 的路径（`PlaybackService` 的 `playUrl`）并不覆盖所有起播路径。
      * 于是「没有 urls 条目 ⇒ 是脏数据 ⇒ 删掉」这条看似合理的启发式会**误删 6 首真实离线歌**。
      *
-     * 唯一正确的判据是**音频缓存里还有没有片段**（`OfflineAudioCache.reconcileLibrary`
+     * 唯一正确的判据是**音频缓存里还有没有片段**（`OfflineAudioCache.librarySnapshot`
      * 正是这么算的：`keepSongIds = keys(app).mapNotNull { OfflineKeys.songIdOf(it) }`）。
      * 注入的那条 `503616` 是**双孤儿** —— 没有 `urls`、也没有缓存片段 ——
      * 所以它被丢掉的**唯一**理由是「缓存里没有」，而不是「urls 里没有」。

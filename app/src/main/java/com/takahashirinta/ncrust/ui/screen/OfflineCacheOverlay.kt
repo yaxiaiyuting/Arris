@@ -58,7 +58,6 @@ import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
-import com.takahashirinta.ncrust.cache.OfflineLibrary
 import com.takahashirinta.ncrust.cache.OfflineTrack
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -77,44 +76,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class OfflineTrackSnapshot(val tracks: List<OfflineTrack>, val bytesBySong: Map<Long, Long>)
-
-private fun loadOfflineTrackSnapshot(context: Context): OfflineTrackSnapshot {
-    runCatching { OfflineAudioCache.reconcileLibrary(context) }
-    val tracks = OfflineLibrary.list(context)
-    val songIds = tracks.mapTo(HashSet(tracks.size)) { it.songId }
-    return OfflineTrackSnapshot(tracks, OfflineAudioCache.bytesBySong(context, songIds))
-}
-
 /**
- * 离线缓存管理（v2.0.0 · T3 · 离线缓存 Phase 2）。
- *
- * ## 这是什么 / 不是什么
- *
- * 列的**只有「这台设备真的播过」的歌**（[OfflineLibrary] 的写入点在 PlaybackService 的
- * 播放心跳里），删的是**本地缓存片段**。全程没有「下载按钮 / 下载队列 / 进度百分比」，
- * 文案也一律用「已缓存 / 缓存」—— 本 fork 的定位是「已播放音频流的本地缓存」，
- * 不是官方下载（见 AGENTS.md 的合规契约）。列表底部常驻一句
- * [LocalStrings] 的 offlineCacheFragmentNotice：只保证有片段，不保证整曲完整。
- *
- * ## 为什么用全屏 Dialog 而不是接一个导航目的地
- *
- * 1. 设置页在三个图层里的最下层，播放器卡片是盖在所有页面之上的独立图层。Dialog 是**独立窗口**，
- *    天然在卡片之上，不存在「管理页底部按钮被播放器死带吃掉」那类命中测试问题（触摸陷阱第 2 条）；
- * 2. 返回键 / 返回手势由 Dialog 自己的 dismissOnBackPress 处理，行为与系统一致，
- *    比在 NavGraph 上接一页再自己兜返回键更不容易漏（也不用动 MainActivity / 导航图）。
- *
- * ## 打开即对账
- *
- * [OfflineAudioCache.reconcileLibrary] 会丢掉「缓存里已经没有任何片段」的索引条目
- * （例如音频 LRU 淘汰了 span）。列表里的每一行都必须真的能离线播，宁可少列也不谎报。
- *
- * ## 上限为什么提示「下次启动生效」
- *
- * SimpleCache 的淘汰器（[androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor]）
- * 在**构造时固化**，改上限只能重建 SimpleCache 实例；而播放中的 ExoPlayer 正握着它，
- * 重建会中断播放。所以这里只写 prefs，并如实提示下次启动生效 —— 不为了「看起来即时」
- * 去动正在播的缓存。
+ * 设置里的音频缓存管理覆盖层。打开时核对曲目索引并测量已有片段，列表不保证每首曲目完整。
+ * 容量上限在下次启动时生效，当前播放器继续使用正在打开的缓存。
  */
 @Composable
 internal fun OfflineCacheManagerDialog(
@@ -149,7 +113,7 @@ internal fun OfflineCacheManagerDialog(
     // 读取与对账都要走 SimpleCache / 文件系统，放 IO 线程；组合期不阻塞。
     LaunchedEffect(reload) {
         val (snapshot, total) = withContext(Dispatchers.IO) {
-            loadOfflineTrackSnapshot(context) to OfflineAudioCache.sizeBytes(context)
+            OfflineAudioCache.librarySnapshot(context) to OfflineAudioCache.sizeBytes(context)
         }
         tracks = snapshot.tracks
         bytesOf = snapshot.bytesBySong
@@ -504,26 +468,7 @@ private fun coverPlaceholder(songId: Long): Color {
 /** 上限候选（MB）。合法区间 64..8192，与 [OfflineAudioCache.maxBytes] 的夹取范围一致。 */
 private val OFFLINE_CACHE_LIMIT_MB = com.takahashirinta.ncrust.ui.settings.SettingsRegistry.OFFLINE_CACHE_MB_CHOICES
 
-/**
- * v3.3.0 · 用户建议：**库页的「离线」tab**。
- *
- * ## 为什么与 [OfflineCacheManagerDialog] 并存而不是替换它
- *
- * 两个宿主服务两个意图，缺一不可：
- * - **库页 tab**（本函数）：日常入口 —— 「我缓存了哪些歌，点一首听」；
- * - **设置页弹窗**：管理入口 —— 「占了多少、上限多少、删掉某几首」。
- *
- * 它们读的是**同一张表**（[OfflineLibrary]）、走**同一个对账**
- * （[OfflineAudioCache.reconcileLibrary]）、点播走**同一个** `toSongItem()`。
- * 唯一的差别是本函数不做上限调整那一块（那是管理动作，属于设置页）。
- *
- * ## 与设置页弹窗的口径一致性（这是本函数存在的风险点）
- *
- * 抄一份列表最容易漂移的地方是「对账」与「占用量的量法」。所以这里**复用同一组
- * 纯逻辑**：`OfflineLibrary.list` + `OfflineAudioCache.bytesBySong`，
- * 并在进入时跑一次 `reconcileLibrary`（把「索引里有、缓存里没有」的谎报条目清掉）。
- * 不复制任何一段判断。
- */
+/** 库页的离线列表，与设置页共用对账、片段大小和点播转换。 */
 @Composable
 internal fun OfflineLibraryTab(
     currentSongId: Long,
@@ -542,7 +487,7 @@ internal fun OfflineLibraryTab(
 
     // 读盘 + 对账都要动 SimpleCache 与文件系统 ⇒ 放 IO；组合期不阻塞。
     LaunchedEffect(reload) {
-        val snapshot = withContext(Dispatchers.IO) { loadOfflineTrackSnapshot(context) }
+        val snapshot = withContext(Dispatchers.IO) { OfflineAudioCache.librarySnapshot(context) }
         tracks = snapshot.tracks
         bytesOf = snapshot.bytesBySong
         loaded = true

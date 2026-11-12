@@ -181,29 +181,29 @@ object OfflineAudioCache {
     fun sizeBytes(context: Context): Long =
         runCatching { get(context).cacheSpace }.getOrDefault(0L)
 
-    /** 对账只有成功枚举后才清理离线索引。失败返回 null。 */
-    fun keysOrNull(context: Context): Set<String>? =
-        runCatching { get(context).keys }.getOrNull()
+    internal fun librarySnapshot(context: Context): OfflineCacheSnapshot {
+        val app = context.applicationContext
+        val current = runCatching { get(app) }.getOrNull()
+        val keys = current?.let { runCatching { it.keys }.getOrNull() }
+        // A cache read failure gives no basis for removing tracks from the local index.
+        val tracks = OfflineLibrary.reconcileAndList(app, keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf))
+        if (current == null || keys == null || tracks.isEmpty()) return OfflineCacheSnapshot(tracks, emptyMap())
 
-    /** 用同一份缓存键快照测量列表中的歌曲占用。缺少可测片段时由界面显示未知大小。 */
-    internal fun bytesBySong(context: Context, songIds: Set<Long>): Map<Long, Long> {
-        if (songIds.isEmpty()) return emptyMap()
-        return runCatching {
-            val current = get(context)
-            OfflineKeys.sumBytesBySong(current.keys, songIds) { key ->
-                runCatching {
-                    var total = 0L
-                    var measured = false
-                    for (span in current.getCachedSpans(key)) {
-                        if (span.isCached) {
-                            total += span.length
-                            measured = true
-                        }
+        val songIds = tracks.mapTo(HashSet(tracks.size), OfflineTrack::songId)
+        val bytesBySong = OfflineKeys.sumBytesBySong(keys, songIds) { key ->
+            runCatching {
+                var total = 0L
+                var measured = false
+                for (span in current.getCachedSpans(key)) {
+                    if (span.isCached) {
+                        total += span.length
+                        measured = true
                     }
-                    if (measured) total else null
-                }.getOrNull()
-            }
-        }.getOrDefault(emptyMap())
+                }
+                if (measured) total else null
+            }.getOrNull()
+        }
+        return OfflineCacheSnapshot(tracks, bytesBySong)
     }
 
     /**
@@ -236,24 +236,6 @@ object OfflineAudioCache {
     }
 
     /**
-     * 对账（v2.0.0 · T3）：离线曲目索引里那些「缓存已经没有任何片段」的歌是**谎报**
-     * （典型成因是 LRU 淘汰了音频 span，而索引还留着条目），打开管理页时清掉。
-     *
-     * 只做单向对账（索引 → 缓存真相），不动 URL 清单：URL 清单的条目是否还有用，
-     * 由 [OfflineAudioCache.contains] 在离线兜底时判定，多清一份反而会误伤
-     * 「同曲另一档位还有缓存」的情况。
-     *
-     * @return 被丢掉的条目数。
-     */
-    fun reconcileLibrary(context: Context): Int {
-        val app = context.applicationContext
-        // 拿不到缓存真相就不裁剪：宁可留下几条过期索引，也不能把用户的离线库清空。
-        val live = keysOrNull(app) ?: return 0
-        val liveSongIds = live.mapNotNullTo(HashSet()) { OfflineKeys.songIdOf(it) }
-        return OfflineLibrary.retain(app, liveSongIds)
-    }
-
-    /**
      * 清空音频缓存。播放中的歌曲正在读的片段被删掉不会崩 —— CacheDataSource 会回源网络。
      * 同时清掉离线 URL 清单与离线曲目索引，否则会留下指向已删缓存的死条目、
      * 并且「缓存占用」与「可清理范围」的口径就对不上了（v1.6.0 起的不变量）。
@@ -276,3 +258,8 @@ object OfflineAudioCache {
         return true
     }
 }
+
+internal data class OfflineCacheSnapshot(
+    val tracks: List<OfflineTrack>,
+    val bytesBySong: Map<Long, Long>,
+)

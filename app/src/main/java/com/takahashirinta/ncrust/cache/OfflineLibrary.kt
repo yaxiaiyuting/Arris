@@ -52,7 +52,7 @@ internal data class OfflineTrack(
     val cacheKey: String? = null,
     /**
      * 该曲缓存占用的近似字节数。**当前实现不写它**（默认 null）：
-     * UI 打开时用 [OfflineAudioCache.bytesBySong] 从 SimpleCache 批量测量，
+     * UI 打开时用 [OfflineAudioCache.librarySnapshot] 从 SimpleCache 批量测量，
      * 存一份快照只会在用户删片段 / LRU 淘汰后变成一个说谎的数字。
      */
     val approxBytes: Long? = null,
@@ -283,9 +283,6 @@ object OfflineLibrary {
         }
     }
 
-    /** 列表（按首次缓存时间倒序）。返回类型是 internal 的 [OfflineTrack]，所以本函数也是 internal。 */
-    internal fun list(context: Context): List<OfflineTrack> = synchronized(this) { index(context).list() }
-
     fun size(context: Context): Int = synchronized(this) { index(context).size() }
 
     /**
@@ -306,15 +303,11 @@ object OfflineLibrary {
         return removed != null
     }
 
-    /**
-     * 对账：丢掉 [keepSongIds] 之外的条目（v2.0.0 · T3，由
-     * [OfflineAudioCache.reconcileLibrary] 调用）。返回丢掉的条数；没变化就不写盘。
-     */
-    internal fun retain(context: Context, keepSongIds: Set<Long>): Int = synchronized(this) {
+    /** Apply the cache key snapshot and return the resulting list under the same index lock. */
+    internal fun reconcileAndList(context: Context, keepSongIds: Set<Long>?): List<OfflineTrack> = synchronized(this) {
         val idx = index(context)
-        val dropped = idx.retainSongIds(keepSongIds)
-        if (dropped > 0) persist(context, idx)
-        dropped
+        if (keepSongIds != null && idx.retainSongIds(keepSongIds) > 0) persist(context, idx)
+        idx.list()
     }
 
     fun clear(context: Context) {
