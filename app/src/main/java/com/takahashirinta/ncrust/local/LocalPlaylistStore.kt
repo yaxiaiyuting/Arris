@@ -65,7 +65,7 @@ object LocalPlaylistStore {
     internal const val PREFIX_TRACKS = "tracks:"
 
     /** 曲目表的 key：`tracks:<source>:<ownerId>:<playlistId>`。 */
-    internal fun tracksKey(key: com.takahashirinta.ncrust.source.PlaylistKey): String =
+    internal fun tracksKey(key: PlaylistKey): String =
         PREFIX_TRACKS + key.tag
 
     private fun prefs(context: Context): SharedPreferences =
@@ -126,17 +126,35 @@ object LocalPlaylistStore {
 
     // ---------------------------------------------------------------- 曲目 ----
 
-    fun readTracks(context: Context, key: PlaylistKey): List<LocalPlaylistTrack> =
-        LocalPlaylistCodec.decodeTracks(prefs(context).getString(tracksKey(key), null))
+    private class TrackSnapshot(val json: String, val tracks: List<LocalPlaylistTrack>)
 
-    internal fun findTrack(context: Context, playlist: PlaylistKey, track: TrackKey): LocalPlaylistTrack? =
-        LocalPlaylistCodec.findTrack(prefs(context).getString(tracksKey(playlist), null), track)
+    @Volatile private var trackSnapshot: TrackSnapshot? = null
+
+    fun readTracks(context: Context, key: PlaylistKey): List<LocalPlaylistTrack> {
+        val json = prefs(context).getString(tracksKey(key), null) ?: return emptyList()
+        val previous = trackSnapshot
+        if (previous?.json == json) return previous.tracks
+
+        val tracks = Collections.unmodifiableList(LocalPlaylistCodec.decodeTracks(json))
+        // 只保留最近解码的一张正常大小的歌单，读取超限的旧数据时仍返回完整曲目。
+        if (tracks.size <= LocalPlaylistSync.MAX_TRACKS_PER_PLAYLIST) {
+            trackSnapshot = TrackSnapshot(json, tracks)
+        }
+        return tracks
+    }
+
+    internal fun findTrack(context: Context, playlist: PlaylistKey, track: TrackKey): LocalPlaylistTrack? {
+        val json = prefs(context).getString(tracksKey(playlist), null) ?: return null
+        val previous = trackSnapshot
+        if (previous?.json == json) return previous.tracks.firstOrNull { it.trackKey == track }
+        return LocalPlaylistCodec.findTrack(json, track)
+    }
 
     /** 覆盖写一张歌单的曲目表（写入前先过容量闸）。 */
     @Synchronized
     fun writeTracks(
         context: Context,
-        key: com.takahashirinta.ncrust.source.PlaylistKey,
+        key: PlaylistKey,
         tracks: List<LocalPlaylistTrack>,
     ) {
         val bounded = LocalPlaylistSync.trimToLimit(tracks)
@@ -147,7 +165,7 @@ object LocalPlaylistStore {
 
     /** 删掉一张歌单的曲目表（删除歌单 / 列表裁剪时用）。 */
     @Synchronized
-    fun removeTracks(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
+    fun removeTracks(context: Context, key: PlaylistKey) {
         prefs(context).edit().remove(tracksKey(key)).commit()
     }
 
@@ -258,11 +276,10 @@ object LocalPlaylistStore {
      * 与「清空歌单」不同：删除会连 tombstone 一起丢掉（[LocalPlaylistSync.clearAll] 之后再删），
      * 也就是**放弃这个歌单的同步来源关联**。
      *
-     * @return true = 歌单列表的提交成功。曲目表的删除是独立的一条 key，它的 commit 结果
-     *   不单独上报（删歌单失败时列表仍在，用户可以重试；`tracks:` 残留是惰性的，读不到）。
+     * @return 歌单和曲目是否一同提交成功。失败时恢复原值。
      */
     @Synchronized
-    fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): Boolean {
+    fun deletePlaylist(context: Context, key: PlaylistKey): Boolean {
         revision++
         val list = readPlaylists(context)
         return commitValues(prefs(context), linkedMapOf(
@@ -282,7 +299,7 @@ object LocalPlaylistStore {
     @Synchronized
     fun createPlaylist(
         context: Context,
-        key: com.takahashirinta.ncrust.source.PlaylistKey,
+        key: PlaylistKey,
         name: String,
         now: Long,
     ): LocalPlaylist? {
