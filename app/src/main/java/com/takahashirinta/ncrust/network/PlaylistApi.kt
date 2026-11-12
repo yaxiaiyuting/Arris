@@ -332,14 +332,10 @@ object PlaylistApi {
             }
         }
 
-        // Collect every ID in playlist order from the always-complete `trackIds` array.
-        val allIds = mutableListOf<Long>()
-        val trackIdsArray = playlistObj.optJSONArray("trackIds")
-        if (trackIdsArray != null) {
-            for (i in 0 until trackIdsArray.length()) {
-                allIds.add(trackIdsArray.getJSONObject(i).optLong("id"))
-            }
-        }
+        // trackIds 保留服务端给出的顺序和重复曲目。
+        val allIds = playlistObj.optJSONArray("trackIds")?.let { rows ->
+            LongArray(rows.length()) { index -> rows.getJSONObject(index).optLong("id") }
+        } ?: LongArray(0)
 
         // If trackIds is absent (e.g. very short playlists already fully in tracks), use tracks order.
         // 没有 trackIds 时 `tracks` 就是全部 —— 完整性只能拿声明总数比（H10）。
@@ -369,7 +365,11 @@ object PlaylistApi {
         }
 
         // Return songs in the original playlist order defined by trackIds.
-        val songs = allIds.mapNotNull { tracksMap[it] }
+        val songs = ArrayList<SongItem>(minOf(allIds.size, tracksMap.size))
+        for (id in allIds) {
+            val song = tracksMap[id] ?: continue
+            songs.add(song)
+        }
         PlaylistDetailResult(
             songs = songs,
             declaredCount = declaredCount,
