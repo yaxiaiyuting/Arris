@@ -39,6 +39,7 @@ object NameNormalizer {
      * （`probe-album-mapping.md`：48 对里有 15 对靠归一化才配上）。
      */
     private val BRACKET = Regex("[（(\\[【〈<][^）)\\]】〉>]*[）)\\]】〉>]")
+    private val bracketOpeners = charArrayOf('（', '(', '[', '【', '〈', '<')
 
     /**
      * 版本词。**归一化时一律剥掉**，但 [hasEditionMarker] 会把「剥掉过」这个事实
@@ -82,7 +83,8 @@ object NameNormalizer {
         java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC)
 
     /** 去掉所有括注（含内容）。 */
-    fun stripBrackets(text: String): String = BRACKET.replace(text, "")
+    fun stripBrackets(text: String): String =
+        if (text.indexOfAny(bracketOpeners) < 0) text else BRACKET.replace(text, "")
 
     /**
      * **强归一化** —— 用于「名称完全一致」这类判据。
@@ -97,7 +99,7 @@ object NameNormalizer {
         var s = toHalfWidth(text)
         s = stripBrackets(s).lowercase()
         for (word in VERSION_WORDS) s = s.replace(word, " ")
-        return PUNCT.replace(s, "")
+        return stripPunctuation(s)
     }
 
     /**
@@ -108,7 +110,10 @@ object NameNormalizer {
      * 在看到「桶里有多个候选」时知道要**逐个用结构判据校验**，而不是随便挑一个。
      */
     fun normalizeLoose(text: String): String =
-        PUNCT.replace(toHalfWidth(text).lowercase(), "")
+        stripPunctuation(toHalfWidth(text).lowercase())
+
+    private fun stripPunctuation(text: String): String =
+        if (text.all(Char::isLetterOrDigit)) text else PUNCT.replace(text, "")
 
     /** 名字里是否带版本 / 介质标记（`Live`、`伴奏`、`Remix`、`豪华版`…）。 */
     fun hasEditionMarker(text: String): Boolean = EDITION_MARKERS.containsMatchIn(toHalfWidth(text))
@@ -123,9 +128,14 @@ object NameNormalizer {
      */
     fun editionKinds(text: String): Set<String> {
         val lowered = toHalfWidth(text).lowercase()
-        val kinds = mutableSetOf<String>()
-        EDITION_KIND_PATTERNS.forEach { (kind, regex) -> if (regex.containsMatchIn(lowered)) kinds += kind }
-        return kinds
+        var kinds: MutableSet<String>? = null
+        for ((kind, regex) in EDITION_KIND_PATTERNS) {
+            if (regex.containsMatchIn(lowered)) {
+                val found = kinds ?: linkedSetOf<String>().also { kinds = it }
+                found.add(kind)
+            }
+        }
+        return kinds ?: emptySet()
     }
 
     /** 版本种类 → 识别用的正则。新增版本词时**必须**同时加到这里是硬要求。 */
@@ -149,8 +159,7 @@ object NameNormalizer {
     fun sameName(a: String?, b: String?): Boolean {
         if (a.isNullOrBlank() || b.isNullOrBlank()) return false
         val na = normalizeName(a)
-        val nb = normalizeName(b)
-        return na.isNotEmpty() && na == nb
+        return na.isNotEmpty() && (a == b || na == normalizeName(b))
     }
 
     /**
@@ -182,10 +191,16 @@ object NameNormalizer {
      * 但**不做繁简转换**（铁律 17 的降级原则：`周杰伦` 与 `周杰倫` 在本版视为两个艺人）。
      */
     fun artistsOverlap(a: List<String>?, b: List<String>?): Boolean {
-        val na = a.orEmpty().mapNotNull { it.takeIf { s -> s.isNotBlank() }?.let(::normalizeName) }
-            .filter { it.isNotEmpty() }.toSet()
-        val nb = b.orEmpty().mapNotNull { it.takeIf { s -> s.isNotBlank() }?.let(::normalizeName) }
-            .filter { it.isNotEmpty() }.toSet()
-        return na.isNotEmpty() && nb.isNotEmpty() && na.any { it in nb }
+        if (a.isNullOrEmpty() || b.isNullOrEmpty()) return false
+        if (a.size == 1 && b.size == 1) return sameName(a[0], b[0])
+        val (smaller, larger) = if (a.size <= b.size) a to b else b to a
+        val names = HashSet<String>()
+        for (artist in smaller) {
+            if (artist.isNotBlank()) {
+                val name = normalizeName(artist)
+                if (name.isNotEmpty()) names.add(name)
+            }
+        }
+        return names.isNotEmpty() && larger.any { it.isNotBlank() && normalizeName(it) in names }
     }
 }
