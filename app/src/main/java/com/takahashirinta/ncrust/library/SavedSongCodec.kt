@@ -21,6 +21,7 @@ import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.TrackKey
+import java.io.StringWriter
 
 /**
  * `ncrust_library` / `saved_songs` 的**编解码契约**（v2.6.0 · P0）。
@@ -98,6 +99,7 @@ internal object SavedSongCodec {
         STABLE_KEYS.any { obj.has(it) }
 
     private val gson = Gson()
+    private val adapter by lazy { gson.getAdapter(SavedSongDto::class.java) }
 
     /**
      * 落盘形状。**每个字段一个显式名字**（铁律 18）。
@@ -127,8 +129,18 @@ internal object SavedSongCodec {
 
     // ---------------------------------------------------------------- 编码 ----
 
-    /** 条目列表 → JSON 数组串。 */
-    fun encode(entries: List<SavedSongEntry>): String = gson.toJson(entries.map { it.toDto() })
+    /** 用相同的信封格式逐条写入，避免整表 DTO 同时驻留。 */
+    fun encode(entries: List<SavedSongEntry>): String {
+        val output = StringWriter(entries.size.coerceAtMost(4_096) * 192)
+        val entryAdapter = adapter
+        gson.newJsonWriter(output).use { writer ->
+            writer.isLenient = true
+            writer.beginArray()
+            for (entry in entries) entryAdapter.write(writer, entry.toDto())
+            writer.endArray()
+        }
+        return output.toString()
+    }
 
     private fun SavedSongEntry.toDto() = SavedSongDto(
         trackKey = trackKey.tag,
