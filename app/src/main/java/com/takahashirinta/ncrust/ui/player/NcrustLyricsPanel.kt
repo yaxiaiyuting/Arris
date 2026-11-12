@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -582,6 +583,14 @@ internal fun LyricLineBody(
         }
     }
     val sampleCursor = remember { SweepTrack.SampleCursor() }
+    val sweepMask = remember(track?.rtl, sweepConfig.softEdge, fadePx) {
+        val rtl = track?.rtl
+        val halfWidth = sweepHalfWidth(fadePx)
+        if (rtl == null || !sweepConfig.softEdge || halfWidth <= 0f) null else {
+            val colors = if (rtl) listOf(Color.Transparent, Color.Black) else listOf(Color.Black, Color.Transparent)
+            SweepMask(Brush.horizontalGradient(colors, startX = -halfWidth, endX = halfWidth))
+        }
+    }
     BasicText(
         text = text,
         style = style.copy(color = unsungColor),
@@ -604,7 +613,7 @@ internal fun LyricLineBody(
                 drawText(lr, color = highlight)
             } else {
                 track.withSample(position, sampleCursor) { line, x ->
-                    drawSweep(lr, line, x, track.rtl, fadePx, sweepConfig.softEdge, highlight)
+                    drawSweep(lr, line, x, track.rtl, fadePx, sweepConfig.softEdge, sweepMask, highlight)
                 }
             }
         },
@@ -675,15 +684,11 @@ private fun DrawScope.drawHardCut(
     clipRect(top = lineTop, right = anchor.x, bottom = lineBottom) { drawText(lr, color = color) }
 }
 
-/**
- * v1.5.2 的扫过绘制：**只有中间那条窄渐变带需要离屏层**。
- *
- *  ① 光标所在排版行**之上**的行：整行保留（不透明裁剪，零离屏）；
- *  ② 当前行的实心高亮按阅读方向裁剪（零离屏）；
- *  ③ 渐变带本身：把高亮文字画进一个**只有渐变带那么大**的离屏层，再用 DstIn + 横向渐变擦出软边。
- *
- * [softEdge] = false 时跳过 ③，②的边界直接取光标 —— 硬边但仍然是连续运动。
- */
+private class SweepMask(val brush: Brush) {
+    val paint = Paint()
+}
+
+/** 已唱文字用裁剪绘制，仅软边渐变带使用离屏层。 */
 private fun DrawScope.drawSweep(
     lr: TextLayoutResult,
     sampledLine: Int,
@@ -691,6 +696,7 @@ private fun DrawScope.drawSweep(
     rtl: Boolean,
     fadePx: Float,
     softEdge: Boolean,
+    mask: SweepMask?,
     color: Color,
 ) {
     val halfWidth = sweepHalfWidth(fadePx)
@@ -701,13 +707,12 @@ private fun DrawScope.drawSweep(
     val lineTop = lr.getLineTop(lineIndex)
     val lineBottom = lr.getLineBottom(lineIndex)
 
-    // ① 已经整行唱完的行。用「当前行上沿」而不是「上一行下沿」：两行之间的行距也归上一行，
-    //    避免行距里的抗锯齿残影被切掉。
+    // 行间距归已唱行，裁剪保留靠近边缘的抗锯齿像素。
     if (lineIndex > 0) {
         clipRect(bottom = lineTop) { drawText(lr, color = color) }
     }
 
-    // ② 当前行的实心部分。软边时边界在渐变带的外端，硬边时边界就是光标本身。
+    // 实心区到渐变带边缘，硬边模式下直接到光标。
     val solidEdge = if (softEdge) {
         if (rtl) fadeEnd else fadeStart
     } else {
@@ -719,36 +724,27 @@ private fun DrawScope.drawSweep(
         clipRect(top = lineTop, left = solidEdge, bottom = lineBottom) { drawText(lr, color = color) }
     }
 
-    if (!softEdge) return
+    if (mask == null) return
 
-    // ③ 渐变带：离屏层只覆盖这一段。夹到版面内，避免光标远离文字时开一块巨大的离屏缓冲。
     val left = fadeStart.coerceIn(0f, size.width)
     val right = fadeEnd.coerceIn(0f, size.width)
     if (right <= left) return
     val canvas = drawContext.canvas
-    canvas.saveLayer(Rect(left, lineTop, right, lineBottom), Paint())
-    clipRect(left = left, top = lineTop, right = right, bottom = lineBottom) { drawText(lr, color = color) }
-    // 渐变用**未夹取**的原始带宽，这样夹取只影响离屏层大小、不影响渐变斜率。
-    // 越界部分靠 TileMode.Clamp 自动钳到两端（实心侧全保留、未唱侧全擦除）。
-    drawRect(
-        brush = if (!rtl) {
-            Brush.horizontalGradient(
-                colorStops = arrayOf(0f to Color.Black, 1f to Color.Transparent),
-                startX = fadeStart,
-                endX = fadeEnd,
+    canvas.saveLayer(Rect(left, lineTop, right, lineBottom), mask.paint)
+    try {
+        clipRect(left = left, top = lineTop, right = right, bottom = lineBottom) { drawText(lr, color = color) }
+        // 固定渐变宽度，把画布原点移到光标。版面边缘只裁离屏区域。
+        translate(left = x) {
+            drawRect(
+                brush = mask.brush,
+                topLeft = Offset(left - x, lineTop),
+                size = Size(right - left, lineBottom - lineTop),
+                blendMode = BlendMode.DstIn,
             )
-        } else {
-            Brush.horizontalGradient(
-                colorStops = arrayOf(0f to Color.Transparent, 1f to Color.Black),
-                startX = fadeStart,
-                endX = fadeEnd,
-            )
-        },
-        topLeft = Offset(left, lineTop),
-        size = Size(right - left, lineBottom - lineTop),
-        blendMode = BlendMode.DstIn,
-    )
-    canvas.restore()
+        }
+    } finally {
+        canvas.restore()
+    }
 }
 
 /**
