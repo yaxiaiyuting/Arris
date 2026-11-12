@@ -963,6 +963,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val changed = settlePlayingIdentity(nextTrack)
                 if (changed) {
                     playbackRetries.cancel()
+                    urlRetryGate.onNewSong(nextTrack.tag)
+                    lastGoodLevel = ""
+                    if (auto) lastPlayOrigin = PlayOrigin.AUTO_NEXT
                     // B4：无缝切换说明上一首已自然播完，清除其进度记录（重播从 0:00 对齐）。
                     // 只有「真的换了一首」才清 —— 手动重播当前歌时 previousId 已经是新 id，
                     // 无条件清会把这首歌自己的续播位置也抹掉。
@@ -979,10 +982,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     currentSongArtist.value = nextArtist.ifBlank { currentSongArtist.value.orEmpty() }
                     currentSongArtwork.value = nextArtwork
                     currentBitrate.value = 0L
+                    lastSongPrivilege = if (wasPreloaded) preloadedPrivilege else privilegeBySongId[nextTrack.id]
                     if (wasPreloaded) {
-                        preloadedResult?.let { applyQualityVerdict(preloadedRequestedLevel, it) }
-                        // 降档重试 / 换档重播要用**当前歌**的 privilege，不能留在上一首上。
-                        lastSongPrivilege = preloadedPrivilege
+                        lastRequestedLevel = preloadedRequestedLevel
+                        preloadedResult?.let { applyQualityVerdict(lastRequestedLevel, it) }
                     }
                     // 每次真正换歌都按 tracker 还原试听标记：手动起播 / 车机 / 预载
                     // 三条路径共用同一份记录，完整歌曲会把上一首的 true 清掉。
@@ -1008,9 +1011,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (nextArtwork.isNotBlank()) currentSongArtwork.value = nextArtwork
                 }
                 if (auto || changed) {
-                    latestRetryRequest = RetryRequest(nextTrack, playGate.current, nextTitle, nextArtist,
-                        nextArtwork, 0L, privilegeBySongId[nextTrack.id])
-                    recovery.begin()
+                    val livePlayer = PlaybackService.instance?.player
+                    val start = livePlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+                    latestRetryRequest = RetryRequest(
+                        nextTrack, playGate.current, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
+                        currentSongArtwork.value.orEmpty(), start, lastSongPrivilege,
+                    )
+                    recovery.begin(wanted = livePlayer?.playWhenReady == true)
                     recovery.resolved()
                 }
                 clearPreloadedState()
@@ -1482,7 +1489,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val reqIdx = qualityApiLevels.indexOf(requested)
         val gotIdx = qualityApiLevels.indexOf(result.actualLevel)
         if (reqIdx >= 0 && gotIdx >= 0 && gotIdx < reqIdx) {
-            qualityCeiling.remember(currentTrack?.toString() ?: "", result.actualLevel, System.currentTimeMillis())
+            currentTrack?.let { qualityCeiling.remember(it.tag, result.actualLevel, System.currentTimeMillis()) }
         }
         currentQualityIndex.value = verdict.displayIndex
         qualityStatus.value = verdict.status
@@ -1715,12 +1722,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             else -> Unit
         }
-        if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(TrackKey.of(sourceKey, songId, sourceId, mediaId).toString())
+        val track = TrackKey.of(sourceKey, songId, sourceId, mediaId)
+        if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(track.tag)
         // 换歌（含用户手点）时忘掉上一首的「最后成功档位」。
         if (origin != PlayOrigin.QUALITY_RETRY) lastGoodLevel = ""
         // v2.1.0 · C：记住当前歌的音源身份 —— 取链、歌词、媒体通知都要用它路由。
         // v2.1.5：只此一处写 [currentTrack]，三个音源字段都是它的只读派生值。
-        val track = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         currentTrack = track
         recovery.begin(wanted = startPlaying)
         // Tell the UI which song was requested before any IO. Never leave old audio playing
@@ -1782,7 +1789,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             PlayOrigin.USER, PlayOrigin.QUALITY_SWITCH -> requestedQuality
             else -> qualityCeiling.effectiveRequest(
                 preferred = requestedQuality,
-                key = track.toString(),
+                key = track.tag,
                 ladderLowToHigh = qualityApiLevels,
                 nowMs = System.currentTimeMillis(),
             )
@@ -2451,7 +2458,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val app = getApplication<Application>()
         val quality = qualityCeiling.effectiveRequest(
             preferred = effectivePreferredLevel(app.getSharedPreferences("ncrust_settings", 0)),
-            key = nextTrack.toString(),
+            key = nextTrack.tag,
             ladderLowToHigh = qualityApiLevels,
             nowMs = System.currentTimeMillis(),
         )
