@@ -3920,7 +3920,7 @@ fun MainScreen(
                             if (progress.value > 0.01f) collapseCard()
                             // v3.8.1 · H13：**必须**把载荷一起带进路由。
                             // 单曲页原先只拿得到 `(source, id)`，而 QQ 的取链硬依赖 songmid
-                            // （`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null`）、
+                            // （`QqApi.resolveOutcome` 拒绝缺少 songmid 的请求）、
                             // 跨源召回硬依赖曲名（关键词为空 ⇒ 静默零结果）——
                             // 于是 QQ 单曲页的播放按钮必然失败。这里手上正好有完整的 `SongItem`。
                             navController.navigate(

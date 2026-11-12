@@ -97,14 +97,7 @@ object QqMusicSourceProvider : MusicSourceProvider {
     }
 
     override suspend fun resolveUrl(song: SongItem, level: String): SongUrlResult? =
-        try {
-            QqApi.fetchPlayUrl(song, level)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "resolveUrl failed for id=${song.id}", e)
-            null
-        }
+        resolveUrlOutcome(song, level).result
 
     /**
      * v3.2.0 · P0：**带失败分类**的取链。播放链走这一条。

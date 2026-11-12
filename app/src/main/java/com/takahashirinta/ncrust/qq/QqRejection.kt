@@ -11,6 +11,7 @@
 package com.takahashirinta.ncrust.qq
 
 import com.takahashirinta.ncrust.player.QualityStatus
+import org.json.JSONObject
 
 import com.takahashirinta.ncrust.player.ResolveFailureKind
 
@@ -208,6 +209,23 @@ fun QqRejection.toResolveFailureKind(): ResolveFailureKind = when (this) {
     QqRejection.NETWORK -> ResolveFailureKind.NETWORK
     QqRejection.UNKNOWN -> ResolveFailureKind.UNKNOWN
 }
+
+internal fun qqPlaybackPath(entry: JSONObject): String? =
+    if (entry.isNull("purl")) null else entry.optString("purl").trim().takeIf { it.isNotEmpty() }
+
+internal fun qqVkeyRejectionInput(entry: JSONObject, loggedIn: Boolean): QqRejectionInput =
+    QqRejectionInput(
+        hasPurl = qqPlaybackPath(entry) != null,
+        resultCode = entry.optionalInt("result"),
+        tips = if (entry.isNull("tips")) null else entry.optString("tips").takeIf { it.isNotBlank() },
+        pneedbuy = entry.optionalInt("pneedbuy"),
+        isbuy = entry.optionalInt("isbuy"),
+        trialType = entry.optionalInt("type"),
+        loggedIn = loggedIn,
+    )
+
+private fun JSONObject.optionalInt(key: String): Int? =
+    optInt(key, Int.MIN_VALUE).takeUnless { it == Int.MIN_VALUE }
 
 private val qqQualityVariants = QqFileType.entries.groupBy(QqQuality::ncrustLevelOf)
 
