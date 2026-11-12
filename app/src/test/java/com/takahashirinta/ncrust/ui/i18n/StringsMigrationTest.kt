@@ -229,10 +229,10 @@ class StringsMigrationTest {
         //    改这两个数之前，请以**各自那条链路的实测值**为准，不要照抄另一个。）
         // v3.4.8：新增 `bili` 组 17 条（音质上限 6 + 优先无损 2 + 字幕语言 9）；
         // settings 86 → 87（+`lyricsTranslationHint`）。两个数各自按**自己那条链路**实测。
-        // v3.4.12：settings 87 → 90（+`gaplessBetaNote`：无缝播放的「测试中」提示）。
+        // v4.1.1：均衡器文件菜单增加 1 个分组节点和 10 条文案。
         val expectedSizes = mapOf(
             // about now contains CelebrationStrings, preserving the 148-slot root constructor.
-            "settings" to 90, "about" to 61, "playerUi" to 39, "waveform" to 42, "bili" to 17,
+            "settings" to 101, "about" to 61, "playerUi" to 39, "waveform" to 42, "bili" to 17,
         )
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)

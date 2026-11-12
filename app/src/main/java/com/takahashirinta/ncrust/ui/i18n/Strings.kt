@@ -1709,7 +1709,7 @@ data class SettingsStrings(
     // LyricsWordAnimationMode 的常量一一对应。
     val equalizerEntryLabel: String,
     val equalizerEntryHint: String,
-    val equalizerFiles: EqualizerFileStrings = EqualizerFileStrings(),
+    val equalizerFiles: EqualizerFileStrings,
     val lyricsWordAnimationLabel: String,
     val lyricsWordAnimationOptions: List<String>,
     // v1.5.1 · D：媒体面板歌词开关（默认关）。开启后 ARTIST 变成「艺人 · 当前歌词行」。
