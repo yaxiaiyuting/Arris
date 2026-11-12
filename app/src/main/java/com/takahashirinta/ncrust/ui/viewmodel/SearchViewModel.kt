@@ -305,14 +305,6 @@ class SearchViewModel : ViewModel() {
 
     // ---------------- v3.4.11：分页（「加载更多」）----------------
 
-    /** 新一轮搜索（关键词变了 / 换 tab / 下拉刷新）时清空累计。**与 append 成对使用**。 */
-    private fun resetSongs() {
-        lastTotals.clear()
-        lastSongs = emptyList()
-        lastQqSongs = emptyList()
-        lastBiliSongs = emptyList()
-    }
-
     // 各来源独立确认和重试页号。一源失败时，已成功的来源仍能继续翻页。
     private val confirmedPages = mutableMapOf<String, MutableSet<Int>>()
     private val pendingPage = mutableMapOf<String, Int>()
@@ -326,10 +318,11 @@ class SearchViewModel : ViewModel() {
         confirmedPages.clear()
         pendingPage.clear()
         pageItems.clear()
+        lastTotals.clear()
+        lastSongs = emptyList()
+        lastQqSongs = emptyList()
+        lastBiliSongs = emptyList()
     }
-
-    private fun flatten(source: String): List<SongItem> =
-        SearchPaging.distinctPages(pageItems[source]?.values.orEmpty()) { it.trackKey }
 
     private fun accumulateAndPublish(
         netease: List<SongItem>,
@@ -339,24 +332,22 @@ class SearchViewModel : ViewModel() {
         /** 本轮各源实际请求的页号；同一页重复发布是**替换**而不是叠加。 */
         neteasePage: Int = 1,
         qqPage: Int = 1,
-        biliPage: Int = 1,
         neteaseConfirmed: Boolean = true,
         qqConfirmed: Boolean = qq.isNotEmpty(),
         biliConfirmed: Boolean = bili.isNotEmpty(),
     ): List<SongItem> {
-        fun put(source: String, page: Int, items: List<SongItem>) {
-            pageItems.getOrPut(source) { sortedMapOf() }[page] = items
+        fun put(source: String, page: Int, items: List<SongItem>, previous: List<SongItem>): List<SongItem> {
+            val pages = pageItems.getOrPut(source) { sortedMapOf() }
+            val replaced = pages.put(page, items)
             confirmedPages.getOrPut(source) { mutableSetOf() }.add(page)
             pendingPage.remove(source)
+            return if (replaced === items) previous else SearchPaging.distinctPages(pages.values) { it.trackKey }
         }
-        if (neteaseConfirmed) put("netease", neteasePage, netease)
-        if (qqConfirmed) put("qqmusic", qqPage, qq)
-        if (biliConfirmed && !append) put("bilibili", 1, bili)
-
-        // 按来源和页号展平，第一条同身份结果保留。
-        lastSongs = flatten("netease")
-        lastQqSongs = flatten("qqmusic")
-        lastBiliSongs = flatten("bilibili")
+        if (neteaseConfirmed) lastSongs = put("netease", neteasePage, netease, lastSongs)
+        if (qqConfirmed) lastQqSongs = put("qqmusic", qqPage, qq, lastQqSongs)
+        if (biliConfirmed && !append) {
+            lastBiliSongs = put("bilibili", 1, bili, lastBiliSongs)
+        }
         return publish(lastSongs, lastQqSongs, lastBiliSongs)
     }
 
@@ -397,7 +388,6 @@ class SearchViewModel : ViewModel() {
             // ⚠️ 这两行必须在**取数之前** —— 否则第一页会带着上一轮的 offset 发出去。
             pages.reset()
             resetPagingState()
-            resetSongs()
         }
         _error.value = null
         var pageSucceeded = true
