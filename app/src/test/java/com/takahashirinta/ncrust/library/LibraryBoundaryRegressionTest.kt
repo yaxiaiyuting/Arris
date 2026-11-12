@@ -74,7 +74,6 @@ class LibraryBoundaryRegressionTest {
         resetLibrary()
         field(CookieManager, "app").set(CookieManager, null)
         (field(SongUrlFetcher, "transportCooldownUntil").get(SongUrlFetcher) as AtomicLong).set(0)
-        (field(SongUrlFetcher, "transportFailures").get(SongUrlFetcher) as MutableSet<*>).clear()
     }
     private fun intercept(owner: Any, lazyName: String, answer: (Request) -> String) {
         val delegate = field(owner, lazyName + "$" + "delegate").get(owner) as Lazy<*>

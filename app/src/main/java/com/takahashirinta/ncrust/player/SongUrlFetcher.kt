@@ -13,6 +13,7 @@
 
 package com.takahashirinta.ncrust.player
 
+import com.takahashirinta.ncrust.source.MusicSource
 import android.media.MediaCodecList
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
@@ -110,18 +111,6 @@ object SongUrlFetcher {
         "standard" to listOf("standard"),
     )
 
-    /**
-     * 每个 songId 的**最后一次**取链响应项。所有档位都失败时 `fetch` 仍按 Arris 既有契约
-     * 返回 null（SourceRouter / ResolveFailure 都依赖这个契约），但上层需要原因，
-     * 所以把最后一项留在这里供 [lastPlaybackItem] 读取。
-     *
-     * 只保留最近 128 首：这是诊断/判定辅助，不是播放状态，不参与持久化。
-     */
-    private val lastItems = java.util.concurrent.ConcurrentHashMap<Long, PlaybackItem>()
-
-    /** 最近一次取链的响应项；没有（纯网络失败）返回 null。 */
-    fun lastPlaybackItem(songId: Long): PlaybackItem? = lastItems[songId]
-
     /** 设置和取链共用一次平台 FLAC 解码能力探测。 */
     val deviceSupportsFlac: Boolean = runCatching {
         MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
@@ -136,13 +125,6 @@ object SongUrlFetcher {
     /** [level] 是否属于必须依赖 FLAC 解码器的档位。 */
     fun isFlacTier(level: String): Boolean = level in FLAC_TIERS
 
-    /**
-     * 这首歌最近一次取链是否**死在传输层**（连接被拒流 / 超时 / 断网），而不是"档位不可用"。
-     *
-     * 两者都会让 [fetch] 返回 null，但上层必须分开处理：传输失败要按网络问题**有界重试**，
-     * 绝不能当成「这首结构性不可播」去跳歌 —— 实测把两者混为一谈时，一次断流会让客户端
-     * 在一分钟内自动跳掉两百多首。
-     */
     private data class LevelDenial(
         val session: Long,
         val firstSong: Long,
@@ -178,11 +160,6 @@ object SongUrlFetcher {
         deniedLevels.computeIfPresent(level) { _, entry -> entry.takeUnless { it.session == session } }
     }
 
-    private val transportFailures = java.util.Collections.newSetFromMap(
-        java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
-    )
-    fun lastAttemptFailedOnTransport(songId: Long): Boolean = transportFailures.contains(songId)
-
     /**
      * 传输层失败后的**全局限速**：断流类故障通常持续几秒到几十秒，这段时间里继续按次重试
      * 只会把服务端的拒流窗口拖长。冷却期内直接返回"网络失败"，不再发请求。
@@ -199,7 +176,6 @@ object SongUrlFetcher {
     /** Reset transport backoff and DNS after a route or proxy change. */
     fun onNetworkRouteChanged() {
         transportCooldownUntil.set(0L)
-        transportFailures.clear()
         com.takahashirinta.ncrust.network.DnsCache.clear()
     }
 
@@ -207,9 +183,11 @@ object SongUrlFetcher {
         transportCooldownUntil.set(System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS)
     }
 
-    // Returns null when no level yields a playable URL (e.g. VIP-only song without a
-    // subscription, or no valid session). Callers must skip the song instead of playing.
-    suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? = withContext(Dispatchers.IO) {
+    suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? =
+        fetchOutcome(songId, level).result
+
+    /** Transport failures stay with the call that observed them, including concurrent same-track reads. */
+    internal suspend fun fetchOutcome(songId: Long, level: String): ResolveOutcome = withContext(Dispatchers.IO) {
         val startedAt = android.os.SystemClock.elapsedRealtime()
         // fetch timing：回来第一次取链如果卡，日志里能直接看到是哪一段耗的（毫秒）。
         Log.i(TAG, "fetch start songId=$songId level=$level sinceForeground=${com.takahashirinta.ncrust.network.AppForegroundTracker.sinceForegroundMs()}ms")
@@ -220,14 +198,12 @@ object SongUrlFetcher {
         }
     }
 
-    private suspend fun fetchInner(songId: Long, level: String): SongUrlResult? {
+    private suspend fun fetchInner(songId: Long, level: String): ResolveOutcome {
         com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
-        transportFailures.remove(songId)
         if (coolingDown()) {
             // 刚被服务端拒过流：直接按网络失败处理，别再去敲同一扇门。
             Log.w(TAG, "transport cooldown active songId=$songId — failing fast")
-            transportFailures.add(songId)
-            return null
+            return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
         }
         val fallbackLevels = fallbackByLevel[level] ?: listOf(level, "lossless", "exhigh", "higher", "standard")
         // 门控之后真正会发出去的第一档（判定 capped 用它，不用用户偏好档位）。
@@ -258,9 +234,6 @@ object SongUrlFetcher {
             if (data.length() <= 0) return null
             val obj = data.getJSONObject(0)
             val item = parseItem(obj)
-            // 最后一次响应项：全档位失败时上层靠它区分版权/会员/登录。
-            if (lastItems.size > 128) lastItems.clear()
-            lastItems[songId] = item
             val code = item.code ?: 200
             val url = item.url
             val actualLevel = item.level ?: tryLevel
@@ -329,7 +302,7 @@ object SongUrlFetcher {
                         Log.i(TAG, "level=$tryLevel ok in ${attemptMs}ms songId=$songId")
                         runCatching { java.net.URI(hit.url).host }.getOrNull()?.let { lastAudioHost = it }
                         noteLevelAccepted(tryLevel, session)
-                        return hit
+                        return ResolveOutcome.ok(hit)
                     }
                     Log.i(TAG, "level=$tryLevel rejected in ${attemptMs}ms songId=$songId — next tier")
                     break // A business rejection may still permit a lower tier.
@@ -340,9 +313,8 @@ object SongUrlFetcher {
                 } catch (e: java.io.IOException) {
                     if (retriedTransport) {
                         Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
-                        transportFailures.add(songId)
                         startCooldown()
-                        return null
+                        return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
                     }
                     retriedTransport = true
                     Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
@@ -359,7 +331,7 @@ object SongUrlFetcher {
         }
 
         Log.e(TAG, "no playable url for songId=$songId at any level")
-        return null
+        return ResolveOutcome.failed(ResolveFailureKind.UNKNOWN, MusicSource.NETEASE)
     }
 
     private data class QualityCapability(

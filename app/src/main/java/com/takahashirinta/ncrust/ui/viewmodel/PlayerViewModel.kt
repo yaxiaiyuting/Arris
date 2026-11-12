@@ -1925,23 +1925,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // 绝不回退 outer/url 兜底。v2.2.1/3.2.0 的 ResolveFailure 分流原样保留：
                     // 只有结构性缺失才允许自动跳歌。
                     //
-                    // 权益判定在这里只用于**日志与原因确认**：用户可见文案仍走既有
-                    // `resolveFailureText`（它已经能区分版权 / 会员 / 登录 / 网络）。
-                    val entitlement = if (track.source == MusicSource.NETEASE) {
-                        val item = SongUrlFetcher.lastPlaybackItem(songId)
-                        if (item != null) {
-                            classifyPlayback(
-                                requestedLevel = selectedQuality,
-                                sessionValid = sessionValid(),
-                                item = item,
-                                privilege = effectivePrivilege,
-                            )
-                        } else null
-                    } else null
                     Log.w(
                         "PlayerViewModel",
-                        "takeout failed songId=$songId level=$selectedQuality " +
-                            "entitlement=$entitlement failure=${outcome.failure?.kind}",
+                        "takeout failed songId=$songId level=$selectedQuality failure=${outcome.failure?.kind}",
                     )
                     withContext(Dispatchers.Main) {
                         if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) return@withContext

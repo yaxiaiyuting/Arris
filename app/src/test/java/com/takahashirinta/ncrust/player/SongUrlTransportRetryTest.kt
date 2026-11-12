@@ -21,17 +21,16 @@ class SongUrlTransportRetryTest {
         val original = delegate.value
         val value = delegate.javaClass.getDeclaredField("_value").apply { isAccessible = true }
         val cooldown = field(SongUrlFetcher, "transportCooldownUntil").get(SongUrlFetcher) as AtomicLong
-        val failures = field(SongUrlFetcher, "transportFailures").get(SongUrlFetcher) as MutableSet<*>
         val count = AtomicInteger()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
                 .body(answer(count.incrementAndGet()).toResponseBody()).build()
         }.build()
-        cooldown.set(0); failures.clear(); value.set(delegate, client)
+        cooldown.set(0); value.set(delegate, client)
         SourceRouter.register(NeteaseSourceProvider)
         try { block(count, cooldown) }
         finally {
-            value.set(delegate, original); cooldown.set(0); failures.clear()
+            value.set(delegate, original); cooldown.set(0)
             client.dispatcher.executorService.shutdown()
         }
     }
@@ -39,10 +38,12 @@ class SongUrlTransportRetryTest {
         intercept({ throw IOException("fixture offline") }) { count, cooldown ->
             val result = SourceRouter.resolveUrlOutcome(song, "standard")
             assertEquals(ResolveFailureKind.NETWORK, result.failure?.kind)
-            assertTrue(SongUrlFetcher.lastAttemptFailedOnTransport(song.id))
             assertTrue(cooldown.get() > System.nanoTime() / 1_000_000)
             assertEquals(2, count.get())
-            assertNull(SongUrlFetcher.fetch(song.id, "standard"))
+            assertEquals(
+                ResolveFailureKind.NETWORK,
+                SongUrlFetcher.fetchOutcome(song.id, "standard").failure?.kind,
+            )
             assertEquals(2, count.get())
         }
 
@@ -61,7 +62,6 @@ class SongUrlTransportRetryTest {
         }) { count, cooldown ->
             val result = SourceRouter.resolveUrlOutcome(song, "standard")
             assertEquals(ResolveFailureKind.UNKNOWN, result.failure?.kind)
-            assertFalse(SongUrlFetcher.lastAttemptFailedOnTransport(song.id))
             assertEquals(0L, cooldown.get())
             assertEquals(2, count.get())
         }
