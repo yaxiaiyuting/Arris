@@ -84,7 +84,11 @@ import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.SourceIds
+import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.source.musicSource
+import com.takahashirinta.ncrust.source.recoverPayload
+import com.takahashirinta.ncrust.source.songRefOf
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.stringsForCode
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
@@ -1107,8 +1111,10 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
             scope.launch {
-                val children = runCatching { loadChildren(parentId, page, pageSize) }.getOrDefault(emptyList())
-                future.set(LibraryResult.ofItemList(ImmutableList.copyOf(children), params))
+                val children = runCatching {
+                    withContext(Dispatchers.IO) { ImmutableList.copyOf(loadChildren(parentId, page, pageSize)) }
+                }.getOrElse { ImmutableList.of() }
+                future.set(LibraryResult.ofItemList(children, params))
             }
             return future
         }
@@ -1146,7 +1152,7 @@ class PlaybackService : MediaLibraryService() {
     private fun songItem(song: SongItem): MediaItem = MediaItem.Builder()
         // ncm 仍是 `song:123`（与 v2.0.2 逐字节相同，老媒体项继续能解析）；
         // qm 是 `song:qqmusic:456`。同号不同源在媒体层也必须分得开。
-        .setMediaId(com.takahashirinta.ncrust.source.SourceIds.mediaId(song.musicSource, song.id) ?: "song:${song.id}")
+        .setMediaId(SourceIds.mediaId(song.musicSource, song.id) ?: "song:${song.id}")
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(song.name)
@@ -1179,16 +1185,12 @@ class PlaybackService : MediaLibraryService() {
     /** 车机点播：把 song:<id> 解析成当前音质档的可播放 URL。 */
     private suspend fun resolveMediaItem(item: MediaItem): MediaItem {
         if (item.localConfiguration != null) return item
-        // v2.1.0 · C：车机路径同样按音源路由。解析不出音源的 mediaId 直接放弃
-        // （返回原 item 让上层跳歌），**不要**猜成 ncm —— 猜错就是放到别人的歌。
-        val parsed = com.takahashirinta.ncrust.source.SourceIds.parseMediaId(item.mediaId) ?: return item
+        val parsed = SourceIds.parseMediaId(item.mediaId) ?: return item
         val (source, songId) = parsed
-        // S20：浏览项只带 id，QQ 的 songmid/media_mid 会丢。先按 TrackKey 回查本地记录补全载荷；
-        // 补不到就保持原样（Router 会判 UNRESOLVABLE 让上层跳歌，绝不换源猜成 ncm）。
-        val ref = com.takahashirinta.ncrust.source.recoverPayload(applicationContext, source, songId)
-            ?: com.takahashirinta.ncrust.source.songRefOf(source, songId)
-        val resolved = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
-            ?: return item
+        // 浏览项只有身份，补全 QQ 取链需要的 songmid 和 media_mid。
+        val ref = withContext(Dispatchers.IO) { recoverPayload(applicationContext, source, songId) }
+            ?: songRefOf(source, songId)
+        val resolved = SourceRouter.resolveUrl(ref, currentQualityLevel()) ?: return item
         val result = OfflineUrlStore.rememberResult(this, resolved)
         // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
         // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
