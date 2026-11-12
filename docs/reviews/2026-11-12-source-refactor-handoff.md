@@ -15,6 +15,12 @@
 - [校验文件](/home/duanjb666/deepseek/arris/dist/v4.1.2-gpl-test/SHA256SUMS) · [R8 mapping](/home/duanjb666/deepseek/arris/dist/v4.1.2-gpl-test/mapping.txt) · [构建记录](/home/duanjb666/deepseek/arris/dist/v4.1.2-gpl-test/VERIFICATION.md)
 - [4.1.1 首轮测试包](/home/duanjb666/deepseek/arris/dist/v4.1.1-gpl-test/Arris-v4.1.1-gpl-release.apk)
 
+## 发布状态
+
+- 2026-11-12 已把 4.1.2 转正：tag `v4.1.2-gpl` 打在 `50460a5`，该提交的 `app/` 与 `e837ea8` 逐字节一致，只多 CHANGELOG、README、官网与校验归档。GitHub 与 Gitee 的资产同名 `Arris-v4.1.2-gpl.apk`，10,704,508 字节，SHA-256 `4fee33d82fd50daa0c17f2dc25096c0bd5f081b0bc54da836a45868749497f15`，与测试包一致。
+- 官网主推已切到 4.1.2，`latest.apk` 指向它；国内 `/get/*` 302 到 Gitee 的同一资产。
+- 为了让 tag 指向「源码 = APK」的提交，`57a9479`、`0221a0e`、`ebbc717` 已变基到发布提交之后，新哈希为 `cc4a647`、`5f3c7e8`、`65a94cb`。这两处播放修复未进本包，等真机复测后随下一版发布。
+
 ## 完成范围
 
 原始三项均已进入 4.1.1 和 4.1.2。实机反馈追加的两项，即下一首音频预热和后台封面加载，已进入 4.1.2。源码查验从 `068d042` 起共有 16 个实现、测试及构建提交，涉及 65 个文件。统计以本轮实际提交为准。
