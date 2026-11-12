@@ -2741,7 +2741,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             Log.w(TAG_TRACK, "qq lyric skipped: track=$track missing songmid")
             return
         }
-        val pack = runCatching { QqApi.fetchLyric(ref) }.getOrNull()
+        val pack = try {
+            QqApi.fetchLyric(ref)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         if (pack == null) {
             lyricCoordinator.fail(load, "qq lyric request failed")
             return

@@ -19,6 +19,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.player.SongUrlResult
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -712,21 +714,20 @@ object QqApi {
             return null
         }
         val data = response.optJSONObject("data") ?: return LyricPack(emptyList(), emptyList(), emptyList(), true)
-        val crypt = data.optInt("crypt", 1) == 1
-
-        // ⚠️ 实测：`qrc=0` 的歌**照样**加密，但解密出来是**行级 LRC**（不是 QRC 的 XML）。
-        // 只按 QRC 解析的话这些歌会得到 0 行 —— 表现是「有歌词的歌显示暂无歌词」。
-        val lyricText = decodeField(data.optString("lyric"), crypt)
-        val qrc = QrcParser.parseXml(lyricText).ifEmpty { LrcParser.parse(lyricText.orEmpty()) }
-        val roma = QrcParser.parseXml(decodeField(data.optString("roma"), crypt))
-        val trans = LrcParser.parse(decodeField(data.optString("trans"), crypt).orEmpty())
-            // 翻译轨里没有翻译的行会被服务端写成 `//`（实测），
-            // 它不是歌词文本，留着只会在界面上多出一行斜杠。
-            .filter { it.text.any { c -> c != '/' && !c.isWhitespace() } }
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "lyric mid=$songMid qrc=${qrc.size} trans=${trans.size} roma=${roma.size}")
+        return withContext(Dispatchers.Default) {
+            val crypt = data.optInt("crypt", 1) == 1
+            // 加密字段解码后可能是 QRC XML 或行级 LRC。
+            val lyricText = decodeField(data.optString("lyric"), crypt)
+            val qrc = QrcParser.parseXml(lyricText).ifEmpty { LrcParser.parse(lyricText.orEmpty()) }
+            val roma = QrcParser.parseXml(decodeField(data.optString("roma"), crypt))
+            val trans = LrcParser.parse(decodeField(data.optString("trans"), crypt).orEmpty())
+                // 服务端用 // 表示该行没有译文。
+                .filter { it.text.any { c -> c != '/' && !c.isWhitespace() } }
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "lyric mid=$songMid qrc=${qrc.size} trans=${trans.size} roma=${roma.size}")
+            }
+            LyricPack(qrc, trans, roma, authoritative = true)
         }
-        return LyricPack(qrc, trans, roma, authoritative = true)
     }
 
     /**
