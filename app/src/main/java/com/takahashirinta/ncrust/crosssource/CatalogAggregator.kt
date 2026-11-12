@@ -44,7 +44,8 @@ data class AggregatedAlbum(
     val reason: String = "",
 ) {
     val isDual: Boolean get() = aliases.isNotEmpty()
-    fun keyOf(source: MusicSource): AlbumKey? = (listOf(key) + aliases).firstOrNull { it.source == source }
+    fun keyOf(source: MusicSource): AlbumKey? =
+        if (key.source == source) key else aliases.firstOrNull { it.source == source }
 }
 
 /**
@@ -304,20 +305,33 @@ object CatalogAggregator {
         secondary: List<QqAlbum>,
         secondarySource: MusicSource,
     ): List<AggregatedAlbum> {
+        val secondaryByName = HashMap<String, MutableList<QqAlbum>>()
+        if (primary.isNotEmpty()) {
+            for (album in secondary) {
+                val name = NameNormalizer.normalizeName(album.name)
+                if (name.isNotEmpty()) secondaryByName.getOrPut(name) { ArrayList() }.add(album)
+            }
+        }
         val used = HashSet<String>()
         val out = ArrayList<AggregatedAlbum>(primary.size)
         for (a in primary) {
             var best: Pair<QqAlbum, MatchVerdict>? = null
-            for (b in secondary) {
-                if (b.mid in used) continue
-                val verdict = CrossSourceMatcher.gradeAlbum(
-                    albumCandidateOf(a, primarySource),
-                    albumCandidateOf(b, secondarySource),
-                    trackOverlapRatio = trackRatioOf(a, b),
-                )
-                if (verdict.confidence == MatchConfidence.NONE) continue
-                if (best == null || rank(verdict.confidence) > rank(best.second.confidence)) {
-                    best = b to verdict
+            val name = if (secondaryByName.isEmpty()) "" else NameNormalizer.normalizeName(a.name)
+            val candidates = secondaryByName[name]
+            if (candidates != null) {
+                val anchor = albumCandidateOf(a, primarySource)
+                for (b in candidates) {
+                    if (b.mid in used) continue
+                    val verdict = CrossSourceMatcher.gradeAlbum(
+                        anchor,
+                        albumCandidateOf(b, secondarySource),
+                        // 延续艺人页按专辑名召回时的打分规则。
+                        trackOverlapRatio = 1.0,
+                    )
+                    if (verdict.confidence == MatchConfidence.NONE) continue
+                    if (best == null || rank(verdict.confidence) > rank(best.second.confidence)) {
+                        best = b to verdict
+                    }
                 }
             }
             // 只有 `mergeable`（≥MEDIUM）才真的合并成一行；LOW 只记录判据，不合并。
@@ -806,8 +820,7 @@ object CatalogAggregator {
     /**
      * 专辑候选的**唯一构造点**（H05）。
      *
-     * @param trackNames 候选的曲目名。艺人页拿不到曲目名（见 [trackRatioOf]）时传空列表；
-     *   专辑页会真的去取一遍对端曲目，所以那里传实际曲目名。
+     * @param trackNames 专辑页取到的候选曲目名。艺人页只有专辑列表，传空列表。
      *
      * ⚠️ **歌手证据只能来自候选自己**：这里的 `artistNames` 只放 `album.singerName`。
      * 曾经这里被写成 `listOfNotNull(album.singerName, anchorArtist)` —— 把锚点的歌手塞进
@@ -826,18 +839,6 @@ object CatalogAggregator {
         rawName = album.name,
         artistNames = listOfNotNull(album.singerName),
     )
-
-    /**
-     * 专辑曲目名集合的重合率。
-     *
-     * 艺人页的专辑列表**没有曲目名**（`/api/artist/albums/{id}` 只给 `size`），
-     * 所以这里返回 0 —— 那不是「不重合」，而是「不知道」。
-     * 调用方（[assembleAlbums]）因此只能靠「名 + 艺人」判到 `MEDIUM`/`LOW`，
-     * **这正是有意的**：艺人页的 44 张专辑里逐张去拉曲目表是 44 次请求，
-     * 而专辑页自己会做一次精确的曲目级校验。
-     */
-    private fun trackRatioOf(a: QqAlbum, b: QqAlbum): Double =
-        if (a.name.isNotEmpty() && NameNormalizer.sameName(a.name, b.name)) 1.0 else 0.0
 
     /**
      * 毫秒时间戳 → 年份。

@@ -89,6 +89,23 @@ class CatalogAggregatorTest {
         assertEquals(1, rows.count { it.isDual })
     }
 
+    @Test
+    fun `专辑装配 按归一化名称匹配且同档取列表中的首个候选`() {
+        val primary = listOf(qqAlbum("a1", "范特西（纪念版）", 10), qqAlbum("a2", " ", 1))
+        val secondary = listOf(
+            qqAlbum("b-first", "范特西", 10),
+            qqAlbum("b-second", "范特西", 10),
+            qqAlbum("b-empty", "", 1),
+        )
+
+        val rows = CatalogAggregator.assembleAlbums(primary, ne, secondary, qq)
+
+        assertEquals(listOf("a1", "a2", "b-second", "b-empty"), rows.map { it.key.id })
+        assertEquals("b-first", rows[0].keyOf(qq)?.id)
+        assertEquals(MatchConfidence.HIGH, rows[0].confidence)
+        assertFalse(rows[1].isDual)
+    }
+
     // ============================================================== 曲目装配 ==============================================================
 
     @Test
