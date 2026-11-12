@@ -63,6 +63,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 
+internal enum class PlayerEqualizerPanel { PRESETS, EDITOR }
+
 /**
  * `PlayerCard` 的**全部跨重组状态**（见文件 KDoc 的等价表）。
  *
@@ -76,7 +78,7 @@ internal class PlayerCardUiState(
     // ---- 可变状态（原来是一个个 remember { mutableStateOf }）----
     var showLyrics by mutableStateOf(false)
     var showKaraoke by mutableStateOf(false)
-    var showEqualizer by mutableStateOf(false)
+    var equalizerPanel by mutableStateOf<PlayerEqualizerPanel?>(null)
     val lyricsPanelSelected: Boolean get() = showLyrics && !showQueue
     val focusLyricsActive: Boolean get() = showKaraoke && lyricsPanelSelected
     var karaokeTranslationPrimary by mutableStateOf(false)

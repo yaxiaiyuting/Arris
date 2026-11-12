@@ -88,7 +88,7 @@ private fun PlayerHeaderEqualizer(ui: PlayerCardUiState, modifier: Modifier) {
     ThresholdScope({ ui.cardExpandedForInput }) { expanded ->
         if (expanded) {
             PlayerEqualizerButton(
-                onClick = { ui.showEqualizer = true },
+                onClick = { ui.equalizerPanel = PlayerEqualizerPanel.PRESETS },
                 modifier = modifier.padding(start = TrayLayout.TOP_BAR_ACTION_START_DP.dp),
             )
         }

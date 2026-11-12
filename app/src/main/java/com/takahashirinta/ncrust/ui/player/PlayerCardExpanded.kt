@@ -225,7 +225,7 @@ internal fun ColumnScope.PlayerCardExpanded(
         exit = exitFocus,
         translatedPrimary = ui.karaokeTranslationPrimary,
         toggleLanguage = { ui.karaokeTranslationPrimary = !ui.karaokeTranslationPrimary },
-        onOpenEqualizer = { ui.showEqualizer = true },
+        onOpenEqualizer = { ui.equalizerPanel = PlayerEqualizerPanel.PRESETS },
     ) else null
     val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
         LyricsView(

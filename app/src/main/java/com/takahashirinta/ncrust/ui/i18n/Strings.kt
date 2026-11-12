@@ -1709,6 +1709,7 @@ data class SettingsStrings(
     // LyricsWordAnimationMode 的常量一一对应。
     val equalizerEntryLabel: String,
     val equalizerEntryHint: String,
+    val equalizerFiles: EqualizerFileStrings = EqualizerFileStrings(),
     val lyricsWordAnimationLabel: String,
     val lyricsWordAnimationOptions: List<String>,
     // v1.5.1 · D：媒体面板歌词开关（默认关）。开启后 ARTIST 变成「艺人 · 当前歌词行」。
@@ -2368,4 +2369,18 @@ data class UpdateStrings(
     val signatureMismatch: String,
     val installBlockedHint: String,
     val installLaunchFailed: String,
+)
+
+/** Equalizer file actions and the shortcut in the expanded player. */
+data class EqualizerFileStrings(
+    val off: String = "Off",
+    val edit: String = "Adjust equalizer",
+    val importPreset: String = "Import preset",
+    val exportCurrent: String = "Export current",
+    val custom: String = "Custom",
+    val imported: String = "Preset imported",
+    val exported: String = "Preset exported",
+    val importFailed: String = "Could not read this Arris equalizer preset",
+    val exportFailed: String = "Could not save the preset",
+    val limitReached: String = "The imported preset list is full",
 )

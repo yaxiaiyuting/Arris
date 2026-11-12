@@ -380,7 +380,7 @@ internal fun PlayerCard(
         snapshotFlow { ui.expandedMounted }.collect { expanded ->
             if (!expanded) {
                 ui.showKaraoke = false
-                ui.showEqualizer = false
+                ui.equalizerPanel = null
             }
         }
     }
@@ -656,8 +656,15 @@ internal fun PlayerCard(
             narrowCover = narrowCover,
             coroutineScope = coroutineScope,
         )
-        if (hasSong && ui.showEqualizer) {
-            com.takahashirinta.ncrust.audio.EqualizerScreen(onBack = { ui.showEqualizer = false })
+        if (hasSong) when (ui.equalizerPanel) {
+            PlayerEqualizerPanel.PRESETS -> com.takahashirinta.ncrust.audio.EqualizerPresetMenu(
+                onDismiss = { ui.equalizerPanel = null },
+                onEdit = { ui.equalizerPanel = PlayerEqualizerPanel.EDITOR },
+            )
+            PlayerEqualizerPanel.EDITOR -> com.takahashirinta.ncrust.audio.EqualizerScreen(
+                onBack = { ui.equalizerPanel = null },
+            )
+            null -> Unit
         }
     }
 }
