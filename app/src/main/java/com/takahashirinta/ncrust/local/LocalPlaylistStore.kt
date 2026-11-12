@@ -80,19 +80,33 @@ object LocalPlaylistStore {
      */
     @Synchronized
     fun writePlaylists(context: Context, playlists: List<LocalPlaylist>): Boolean {
-        val kept = if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) {
-            playlists
-        } else {
-            playlists.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
-        }
-        val dropped = playlists.filterNot { p -> kept.any { it.key == p.key } }
+        val kept = boundedPlaylists(playlists)
+        val changes = playlistChanges(playlists, kept)
+        return commitValues(prefs(context), changes)
+    }
+
+    private fun boundedPlaylists(playlists: List<LocalPlaylist>): List<LocalPlaylist> =
+        if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) playlists
+        else playlists.sortedWith(newestFirst).take(LocalPlaylistSync.MAX_PLAYLISTS)
+
+    private val newestFirst = Comparator<LocalPlaylist> { first, second ->
+        second.updatedAt.compareTo(first.updatedAt)
+    }
+
+    private fun playlistChanges(
+        playlists: List<LocalPlaylist>,
+        kept: List<LocalPlaylist>,
+    ): MutableMap<String, String?> {
         val changes = linkedMapOf<String, String?>(
             KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept),
         )
-        dropped.forEach { changes[tracksKey(it.key)] = null }
-        // 返回值是「**真的落盘了**」的唯一凭据。旧实现丢掉 commit 结果，于是新建歌单在
-        // 磁盘写失败时照样被当成创建成功（H09）：本进程能读到、冷启动就没了。
-        return commitValues(prefs(context), changes)
+        if (kept !== playlists) {
+            val keptKeys = kept.mapTo(HashSet(kept.size * 2)) { it.key }
+            for (playlist in playlists) {
+                if (playlist.key !in keptKeys) changes[tracksKey(playlist.key)] = null
+            }
+        }
+        return changes
     }
 
     // ---------------------------------------------------------------- 曲目 ----
@@ -190,15 +204,10 @@ object LocalPlaylistStore {
         // 同步路径禁止"借更新接口隐式重建"：期间被删掉的歌单不允许复活。
         if (requireExisting && idx < 0) return null
         val next = if (idx < 0) list + updated else list.toMutableList().also { it[idx] = updated }
-        val kept = if (next.size <= LocalPlaylistSync.MAX_PLAYLISTS) next
-            else next.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
-        if (kept.none { it.key == updated.key }) return null
-        val dropped = next.filterNot { item -> kept.any { it.key == item.key } }
-        val changes = linkedMapOf<String, String?>(KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept))
-        dropped.forEach { changes[tracksKey(it.key)] = null }
-        if (kept.any { it.key == updated.key }) {
-            changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
-        }
+        val kept = boundedPlaylists(next)
+        if (kept !== next && kept.none { it.key == updated.key }) return null
+        val changes = playlistChanges(next, kept)
+        changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
         if (!commitValues(storage, changes)) return null
         revision++
         return updated
