@@ -445,7 +445,7 @@ internal fun LyricsView(
         }
         androidx.compose.runtime.key(trackKey) {
             if (karaoke.embedded) {
-                PortraitFocusLyrics(karaoke, panelLines, karaokeTranslations, cue, { displayPosition.longValue },
+                PortraitFocusLyrics(karaoke, panelLines, lineStarts, karaokeTranslations, cue, { displayPosition.longValue },
                     seek, isLoading, wordByWordEnabled, wordAnimationMode, sweepConfig, fontScale,
                     interactive = enabled && isVisible, visible = isVisible,
                     forcedScrollTrigger = forcedLocateTrigger, onUserScrolled = onUserScrolled, tools = lyricTools)
@@ -468,6 +468,7 @@ internal fun LyricsView(
     ) {
         NcrustLyricsPanel(
             lines = panelLines,
+            playbackStarts = lineStarts,
             currentPositionMillis = { displayPosition.longValue },
             isVisible = isVisible,
             forcedScrollTrigger = forcedLocateTrigger,

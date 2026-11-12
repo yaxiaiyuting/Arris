@@ -161,6 +161,7 @@ private data class LyricFocusFrame(
 @Composable
 internal fun NcrustLyricsPanel(
     lines: List<NcrustLyricLine>,
+    playbackStarts: LongArray,
     currentPositionMillis: () -> Long,
     modifier: Modifier = Modifier,
     isVisible: Boolean = true,
@@ -211,9 +212,8 @@ internal fun NcrustLyricsPanel(
     currentMarker: Boolean = false,
 ) {
     val currentPosition by rememberUpdatedState(currentPositionMillis)
-    val timestamps = remember(lines) { LongArray(lines.size) { lines[it].playbackStartMillis } }
-    val timedIndex by remember(timestamps) {
-        derivedStateOf { currentLineIndex(currentPosition(), timestamps) }
+    val timedIndex by remember(playbackStarts) {
+        derivedStateOf { currentLineIndex(currentPosition(), playbackStarts) }
     }
     val currentIndex = focusIndex ?: timedIndex
     val target by rememberUpdatedState(

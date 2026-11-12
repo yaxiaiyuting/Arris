@@ -242,6 +242,7 @@ internal fun KaraokeScreen(
 internal fun PortraitFocusLyrics(
     controls: KaraokeControls,
     lines: List<NcrustLyricLine>,
+    playbackStarts: LongArray,
     translations: Map<Long, LrcLine>,
     cue: KaraokeCue,
     position: () -> Long,
@@ -287,6 +288,7 @@ internal fun PortraitFocusLyrics(
             } else {
                 NcrustLyricsPanel(
                     lines = lines,
+                    playbackStarts = playbackStarts,
                     currentPositionMillis = position,
                     modifier = Modifier.weight(1f),
                     isVisible = visible,
