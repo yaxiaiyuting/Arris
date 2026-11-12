@@ -8,6 +8,11 @@
 
 package com.takahashirinta.ncrust.cache
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
+import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -83,6 +88,61 @@ class OfflineLibraryIndexTest {
         assertEquals(listOf(1L), OfflineTrackCodec.decode(idx.toJson()).map { it.songId })
         idx.removeWithUrls(1L, OfflineUrlIndex())
         assertEquals("[]", idx.toJson())
+    }
+
+    @Test
+    fun identicalOfflineIndexesSkipApplyButRetryAfterAnEditorFailure() {
+        val backing = MemoryPrefs()
+        var attempts = 0
+        var failNextWrite = true
+        val preferences = object : SharedPreferences by backing {
+            override fun edit(): SharedPreferences.Editor {
+                val editor = backing.edit()
+                return object : SharedPreferences.Editor by editor {
+                    override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                        editor.putString(key, value)
+                        return this
+                    }
+
+                    override fun apply() {
+                        attempts++
+                        if (failNextWrite) {
+                            failNextWrite = false
+                            throw IOException("fixture write failure")
+                        }
+                        editor.apply()
+                    }
+                }
+            }
+        }
+        val context = object : ContextWrapper(null) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = preferences
+        }
+        val indexes = listOf(OfflineUrlStore, OfflineLibrary).map { owner ->
+            val field = owner.javaClass.getDeclaredField("index").apply { isAccessible = true }
+            Triple(owner, field, field.get(owner)).also { field.set(owner, null) }
+        }
+        try {
+            val url = OfflineKeys.withKey("https://fixture.invalid/audio", 42L, "lossless")
+            OfflineUrlStore.rememberFromUrl(context, url)
+            assertFalse(preferences.contains("urls"))
+            repeat(5) { OfflineUrlStore.rememberFromUrl(context, url) }
+            assertEquals(2, attempts)
+            assertNotNull(preferences.getString("urls", null))
+
+            repeat(5) { offset ->
+                assertTrue(OfflineLibrary.record(
+                    context, 42L, "fixture", null, null,
+                    cacheKey = OfflineKeys.keyOf(url), level = "lossless", now = 1_000L + offset,
+                ))
+            }
+            assertEquals(3, attempts)
+            val track = OfflineTrackCodec.decode(preferences.getString("tracks", null)).single()
+            assertEquals(1_000L, track.completedAt)
+        } finally {
+            indexes.forEach { (owner, field, previous) -> field.set(owner, previous) }
+        }
     }
 
     @Test

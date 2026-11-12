@@ -223,6 +223,7 @@ object OfflineLibrary {
 
     @Volatile
     private var index: OfflineLibraryIndex? = null
+    private var appliedJson: String? = null
 
     private fun index(context: Context): OfflineLibraryIndex {
         index?.let { return it }
@@ -230,6 +231,7 @@ object OfflineLibrary {
             index?.let { return it }
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val loaded = OfflineLibraryIndex.fromJson(prefs.getString(KEY_TRACKS, null))
+            appliedJson = null
             index = loaded
             return loaded
         }
@@ -237,8 +239,11 @@ object OfflineLibrary {
 
     private fun persist(context: Context, idx: OfflineLibraryIndex) {
         runCatching {
+            val json = idx.toJson()
+            if (json === appliedJson) return@runCatching
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(KEY_TRACKS, idx.toJson()).apply()
+                .edit().putString(KEY_TRACKS, json).apply()
+            appliedJson = json
         }
     }
 

@@ -24,16 +24,17 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
     private val map = LinkedHashMap<String, OfflineUrlRecord>()
     private val keysBySong = HashMap<Long, LinkedHashSet<String>>()
     private var encoded: String? = null
+    private var lastKey: String? = null
 
-    fun put(key: String, url: String, content: OfflineContent = OfflineContent()) {
+    fun put(key: String, url: String, content: OfflineContent = unknownContent) {
         if (key.isEmpty() || url.isEmpty()) return
         val old = map[key]
-        val updated = OfflineUrlRecord(url, if (!content.known && old?.url == url) old.content else content)
+        val resolvedContent = if (!content.known && old?.url == url) old.content else content
         // 取链和实际起播可能先后记录同一份 URL，末条的顺序也相同。
-        if (updated == old && map.keys.lastOrNull() == key) return
+        if (key == lastKey && old?.url == url && old.content == resolvedContent) return
         encoded = null
         map.remove(key)
-        map[key] = updated
+        map[key] = OfflineUrlRecord(url, resolvedContent)
         OfflineKeys.songIdOf(key)?.let { songId ->
             val keys = keysBySong.getOrPut(songId) { LinkedHashSet() }
             keys.remove(key)
@@ -47,6 +48,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
             keys.remove(oldest)
             if (keys.isEmpty()) keysBySong.remove(songId)
         }
+        lastKey = if (map.isEmpty()) null else key
     }
 
     fun get(key: String): String? = map[key]?.url
@@ -62,6 +64,8 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         if (songId <= 0L) return 0
         val keys = keysBySong.remove(songId) ?: return 0
         keys.forEach { map.remove(it) }
+        val tail = lastKey
+        if (tail != null && tail in keys) lastKey = map.keys.lastOrNull()
         encoded = null
         return keys.size
     }
@@ -73,6 +77,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         if (map.isEmpty()) return
         map.clear()
         keysBySong.clear()
+        lastKey = null
         encoded = null
     }
 
@@ -118,6 +123,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         const val MAX_ENTRIES = 300
 
         private val gson = Gson()
+        private val unknownContent = OfflineContent()
         private val recallOrder = Comparator<RecallCandidate> { first, second ->
             val byLevel = first.levelRank.compareTo(second.levelRank)
             if (byLevel == 0) first.contentRank.compareTo(second.contentRank) else byLevel
@@ -158,6 +164,7 @@ object OfflineUrlStore {
 
     @Volatile
     private var index: OfflineUrlIndex? = null
+    private var appliedJson: String? = null
 
     private fun index(context: Context): OfflineUrlIndex {
         index?.let { return it }
@@ -165,6 +172,7 @@ object OfflineUrlStore {
             index?.let { return it }
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
+            appliedJson = null
             index = loaded
             return loaded
         }
@@ -172,8 +180,11 @@ object OfflineUrlStore {
 
     private fun persist(context: Context, idx: OfflineUrlIndex) {
         runCatching {
+            val json = idx.toJson()
+            if (json === appliedJson) return@runCatching
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(KEY_URLS, idx.toJson()).apply()
+                .edit().putString(KEY_URLS, json).apply()
+            appliedJson = json
         }
     }
 
