@@ -1,5 +1,20 @@
 # Arris 主线源码查验与交接
 
+## 11 月 12 日 20:10 UTC 续查
+
+本轮从 `a4aadf1` 接续，源码验收到 `b540200`。四组改动已分别提交到本地 `refactor/arris-source`。
+
+| 提交 | 已查验的范围与改动 |
+| --- | --- |
+| `559d54f` | `PlaybackStateManager.kt` 的续播位置读、撤销、写入、批量清理及写盘调度。越界撤销与读取共用位置锁，避免旧读删掉并发保存的新断点。写盘调度与修改按同一顺序执行 |
+| `ee140b5` | `MainActivity.kt` 的异步队列恢复与 QQ 身份补全、`PlaybackQueueLogic.kt` 的曲目回查。读盘后按当前播放身份对齐保存游标和随机轮次。`PlaybackQueueLogicTest.kt` 覆盖保留同一曲目的重复项位置 |
+| `1706c09` | `MainActivity.kt` 的曲目变化与 Media3 过渡回调共用随机轮次更新，重新洗牌后直接使用生成函数固定在首位的当前项 |
+| `b540200` | `PlaybackService.kt` 的过渡回调、码率采样和当前曲目读取复用实际媒体项身份。按 500 ms 心跳计算，连续播放同一项时每分钟减少约 120 次重复身份解析，另省去断点采样中的重复解析 |
+
+离线全量 JVM 3,603 通过、13 跳过。Debug Lint 0 错误、90 警告，与前次相同。Release Kotlin 编译通过。本轮对 Activity 重建和后台队列的验证来自源码调用链及 JVM 索引逻辑。 [离线构建日志](/home/duanjb666/.cache/arris-media-identity.VwWHI8/gradle.log)
+
+下轮从 `PlaybackService.onTaskRemoved`、`PlayerViewModel.onCleared` 和 `MainActivity` 的预载入口接续。移除最近任务后，服务可续播已加入 Media3 的下一项。ViewModel 清理回调后，待播项播完仍缺少继续选曲的入口。先核对任务移除前后预载槽位与队列所有权，再归并队列变更、主动选曲、曲终和进度窗口重复的预载参数传递。保留账号、预载代次、播放模式与当前曲目的校验。
+
 ## 当前交付与构建
 
 | 项目 | 版本或提交 | 查验结果 |
