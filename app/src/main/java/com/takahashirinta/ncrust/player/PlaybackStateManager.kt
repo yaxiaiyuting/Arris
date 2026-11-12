@@ -228,7 +228,7 @@ object PlaybackStateManager {
      * 读取某首歌的续播位置（毫秒）。
      *
      * 返回 0 表示「没有可用记录」——包括从未播过、已播完被清除、
-     * 以及记录位置过于接近开头（< [MIN_RESUMABLE_MS]，续播没有意义）或结尾（> 95%，等于已听完）。
+     * 以及位置小于 [MIN_RESUMABLE_MS] 或已达到当前曲目的已知时长。
      *
      * @param durationMs 本曲**当前解析出来的真实时长**；0 / 负数 = 未知。
      *   已知时长时必须核对：记录可能来自「上一次解析出的更长的源」（完整曲 vs 试听片段，
@@ -238,14 +238,16 @@ object PlaybackStateManager {
     fun getSongPosition(context: Context, songId: Long, durationMs: Long = 0L): Long {
         if (songId <= 0) return 0
         val map = ensurePositionsLoaded(context)
-        val entry = synchronized(positionLock) { map[songId] } ?: return 0L
-        if (durationMs > 0L && entry.posMs >= durationMs) {
-            // 越界记录即作废：留着只会在下次续播时再被读一次（H16）。
-            clearSongPosition(context, songId)
-            return 0L
+        return synchronized(positionLock) {
+            val entry = map[songId] ?: return 0L
+            if (durationMs > 0L && entry.posMs >= durationMs) {
+                // 校验和撤销在同一把锁内，避免删掉并发保存的新进度。
+                map.remove(songId)
+                schedulePositionFlushLocked(context)
+                return 0L
+            }
+            if (entry.posMs < MIN_RESUMABLE_MS) 0L else entry.posMs
         }
-        if (entry.posMs < MIN_RESUMABLE_MS) return 0L
-        return entry.posMs
     }
 
     /**
@@ -257,13 +259,11 @@ object PlaybackStateManager {
     fun clearSongPositions(context: Context, songIds: Collection<Long>) {
         if (songIds.isEmpty()) return
         val map = ensurePositionsLoaded(context)
-        val changed = synchronized(positionLock) {
+        synchronized(positionLock) {
             var removed = false
             songIds.forEach { if (map.remove(it) != null) removed = true }
-            if (removed) positionGeneration++
-            removed
+            if (removed) schedulePositionFlushLocked(context, immediate = true)
         }
-        if (changed) scheduleFlushPositions(context, immediate = true)
     }
 
     /**
@@ -290,33 +290,28 @@ object PlaybackStateManager {
         val map = ensurePositionsLoaded(context)
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
-            positionGeneration++
             map.trimOldest(MAX_SONG_POSITIONS) { it.savedAtMs }
+            schedulePositionFlushLocked(context)
         }
-        scheduleFlushPositions(context)
     }
 
     /** 歌曲正常播完时清除记录，使下次重播从 0:00 开始。 */
     fun clearSongPosition(context: Context, songId: Long) {
         if (songId <= 0) return
         val map = ensurePositionsLoaded(context)
-        val removed = synchronized(positionLock) {
-            if (map.remove(songId) == null) false else {
-                positionGeneration++
-                true
-            }
+        synchronized(positionLock) {
+            if (map.remove(songId) != null) schedulePositionFlushLocked(context)
         }
-        if (removed) scheduleFlushPositions(context)
     }
 
-    private fun scheduleFlushPositions(context: Context, immediate: Boolean = false) {
+    /** 持有 positionLock 调用，使写盘任务按内存变更的顺序排队。 */
+    private fun schedulePositionFlushLocked(context: Context, immediate: Boolean = false) {
         val appContext = context.applicationContext
-        synchronized(flushLock) {
-            posFlushJob?.cancel()
-            posFlushJob = ioScope.launch {
-                if (!immediate) delay(1_000L)
-                flushPositions(appContext)
-            }
+        positionGeneration++
+        posFlushJob?.cancel()
+        posFlushJob = ioScope.launch {
+            if (!immediate) delay(1_000L)
+            flushPositions(appContext)
         }
     }
 
