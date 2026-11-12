@@ -2004,8 +2004,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * 两个条件缺一不可：只满足前者会拿一个指向空缓存的过期 URL 去起播，退化成网络
      * 403/404 的无限缓冲（正是 v1.3.0 明确禁止的那类坏链接）。
      *
-     * 档位不严格要求一致（[OfflineUrlStore.recall] 会退化成「这首歌的任意档位」）：
-     * 离线时能把这歌放出来，比死守用户选的档位重要得多。
+     * [OfflineUrlStore.recallRecord] 会退化成同一首歌的其他可用档位。
      */
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
@@ -2013,20 +2012,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             key !in failedUrlKeys && OfflineKeys.key(songId, OfflineKeys.levelOf(key) ?: level) !in failedUrlKeys &&
                 OfflineAudioCache.coversStart(app, key)
         } ?: return null
+        val storedLevel = OfflineKeys.levelOf(hit.first)
+        val actualLevel = storedLevel ?: level
         Log.i("PlayerViewModel", "offline cache hit songId=$songId key=" + hit.first)
         // v2.2.1 · P0：离线兜底拿到的档位**不一定等于请求档位**（recall 会退化成任意档位）。
         // 把这个事实如实带出去：levelFromFile=true 表示这个档位是从离线 key 反推的、
         // 不是服务端标签，QualityAssessment 据此可以给出诚实的「已降级」而不是沉默。
         return SongUrlResult(
             url = hit.second.url,
-            actualLevel = OfflineKeys.levelOf(hit.first) ?: level,
+            actualLevel = actualLevel,
             br = 0L,
             type = "",
             songMaxLevel = null,
             levelFromFile = true,
-            fallbackFromLevel = level.takeIf { OfflineKeys.levelOf(hit.first) != level },
+            fallbackFromLevel = level.takeIf { storedLevel != level },
             cachedContent = hit.second.content,
-            playbackItem = hit.second.content.playbackItem(hit.second.url, OfflineKeys.levelOf(hit.first) ?: level),
+            playbackItem = hit.second.content.playbackItem(hit.second.url, actualLevel),
         )
     }
 

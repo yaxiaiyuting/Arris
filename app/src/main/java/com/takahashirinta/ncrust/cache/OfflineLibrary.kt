@@ -146,7 +146,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
      * 删曲目 **+ 同步删 URL 清单**（纯逻辑，供 [OfflineLibrary.remove] 与单测共用）。
      *
      * 两条清单必须一起删：只删曲目会留下指向「已删缓存」的 URL 死条目，
-     * 而离线兜底 [OfflineUrlStore.recall] 只认 URL 清单 —— 留着它就会拿一个
+     * 而离线兜底 [OfflineUrlStore.recallRecord] 只认 URL 清单 —— 留着它就会拿一个
      * 空缓存去起播（v1.3.0 明令禁止的坏链接形态）。
      * 反过来也删：URL 清单里有、曲目表里没有的孤儿条目同样要清掉，
      * 所以即使 [songId] 不在曲目表里，这里也照样清 URL。
