@@ -98,6 +98,16 @@ object SongUrlFetcher {
     private const val SONG_DETAIL_PATH = "/eapi/v3/song/detail"
 
     private val FLAC_TIERS = setOf("lossless", "hires", "jyeffect", "jymaster")
+    private val fallbackByLevel = mapOf(
+        "dolby" to listOf("dolby", "hires", "lossless", "exhigh", "higher", "standard"),
+        "jymaster" to listOf("jymaster", "hires", "lossless", "exhigh", "higher", "standard"),
+        "jyeffect" to listOf("jyeffect", "lossless", "exhigh", "higher", "standard"),
+        "hires" to listOf("hires", "lossless", "exhigh", "higher", "standard"),
+        "lossless" to listOf("lossless", "exhigh", "higher", "standard"),
+        "exhigh" to listOf("exhigh", "higher", "standard"),
+        "higher" to listOf("higher", "standard"),
+        "standard" to listOf("standard"),
+    )
 
     /**
      * 每个 songId 的**最后一次**取链响应项。所有档位都失败时 `fetch` 仍按 Arris 既有契约
@@ -209,33 +219,22 @@ object SongUrlFetcher {
         // fetch timing：回来第一次取链如果卡，日志里能直接看到是哪一段耗的（毫秒）。
         Log.i(TAG, "fetch start songId=$songId level=$level sinceForeground=${com.takahashirinta.ncrust.network.AppForegroundTracker.sinceForegroundMs()}ms")
         try {
-            return@withContext fetchInner(songId, level)
+            fetchInner(songId, level)
         } finally {
             Log.i(TAG, "fetch end songId=$songId elapsed=${android.os.SystemClock.elapsedRealtime() - startedAt}ms")
         }
     }
 
-    private suspend fun fetchInner(songId: Long, level: String): SongUrlResult? = withContext(Dispatchers.IO) {
+    private suspend fun fetchInner(songId: Long, level: String): SongUrlResult? {
         com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
         transportFailures.remove(songId)
         if (coolingDown()) {
             // 刚被服务端拒过流：直接按网络失败处理，别再去敲同一扇门。
             Log.w(TAG, "transport cooldown active songId=$songId — failing fast")
             transportFailures.add(songId)
-            return@withContext null
+            return null
         }
-        // Try the requested level first, then fall back down the quality ladder.
-        val fallbackLevels = when (level) {
-            "dolby"    -> listOf("dolby", "hires", "lossless", "exhigh", "higher", "standard")
-            "jymaster" -> listOf("jymaster", "hires", "lossless", "exhigh", "higher", "standard")
-            "jyeffect" -> listOf("jyeffect", "lossless", "exhigh", "higher", "standard")
-            "hires"    -> listOf("hires", "lossless", "exhigh", "higher", "standard")
-            "lossless" -> listOf("lossless", "exhigh", "higher", "standard")
-            "exhigh"   -> listOf("exhigh", "higher", "standard")
-            "higher"   -> listOf("higher", "standard")
-            "standard" -> listOf("standard")
-            else       -> listOf(level, "lossless", "exhigh", "higher", "standard")
-        }
+        val fallbackLevels = fallbackByLevel[level] ?: listOf(level, "lossless", "exhigh", "higher", "standard")
         // 门控之后真正会发出去的第一档（判定 capped 用它，不用用户偏好档位）。
         val requestedLevel = fallbackLevels.firstOrNull { it !in FLAC_TIERS || deviceSupportsFlac }
             ?: level
@@ -300,7 +299,16 @@ object SongUrlFetcher {
         }
 
         var retriedTransport = false
-        val effectiveLevels = fallbackLevels.filterNot { levelDenied(it, session) }.ifEmpty { fallbackLevels }
+        val firstDenied = fallbackLevels.indexOfFirst { levelDenied(it, session) }
+        val effectiveLevels = if (firstDenied < 0) fallbackLevels else {
+            val allowed = ArrayList<String>(fallbackLevels.size - 1)
+            for (index in 0 until firstDenied) allowed.add(fallbackLevels[index])
+            for (index in firstDenied + 1 until fallbackLevels.size) {
+                val tier = fallbackLevels[index]
+                if (!levelDenied(tier, session)) allowed.add(tier)
+            }
+            allowed.ifEmpty { fallbackLevels }
+        }
         if (effectiveLevels.size != fallbackLevels.size) {
             Log.i(TAG, "level ladder skip denied: ${fallbackLevels} -> $effectiveLevels (songId=$songId)")
         }
@@ -309,7 +317,7 @@ object SongUrlFetcher {
             if (tryLevel in FLAC_TIERS && !deviceSupportsFlac) continue
             // 用户已经切到别的歌：上一首的降级阶梯必须立刻停下，否则每次点"下一首"
             // 都会把这一整条阶梯跑完（实测 6 次点击 = 36 个并发请求，直接把服务端打成拒流）。
-            coroutineContext.ensureActive()
+            currentCoroutineContext().ensureActive()
             while (true) {
                 try {
                     val attemptStarted = android.os.SystemClock.elapsedRealtime()
@@ -319,7 +327,7 @@ object SongUrlFetcher {
                         Log.i(TAG, "level=$tryLevel ok in ${attemptMs}ms songId=$songId")
                         runCatching { java.net.URI(hit.url).host }.getOrNull()?.let { lastAudioHost = it }
                         noteLevelAccepted(tryLevel, session)
-                        return@withContext hit
+                        return hit
                     }
                     Log.i(TAG, "level=$tryLevel rejected in ${attemptMs}ms songId=$songId — next tier")
                     break // A business rejection may still permit a lower tier.
@@ -332,7 +340,7 @@ object SongUrlFetcher {
                         Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
                         transportFailures.add(songId)
                         startCooldown()
-                        return@withContext null
+                        return null
                     }
                     retriedTransport = true
                     Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
@@ -340,7 +348,7 @@ object SongUrlFetcher {
                     // fake-ip 与真实 IP 之间切换，只清连接池仍会连到旧地址。
                     RetrofitClient.evictConnections()
                     com.takahashirinta.ncrust.network.DnsCache.clear()
-                    coroutineContext.ensureActive()
+                    currentCoroutineContext().ensureActive()
                 } catch (e: Exception) {
                     Log.w(TAG, "fetch failed for level=$tryLevel", e)
                     break
@@ -349,7 +357,7 @@ object SongUrlFetcher {
         }
 
         Log.e(TAG, "no playable url for songId=$songId at any level")
-        null
+        return null
     }
 
     /**
