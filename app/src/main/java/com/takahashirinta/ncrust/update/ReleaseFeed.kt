@@ -63,7 +63,7 @@ internal fun evaluateReleases(
             merged.add(release)
         }
     }
-    return UpdateChecker.find(merged.toString(), current, variant)
+    return UpdateChecker.findIn(merged, current, variant)
         ?.let { CheckOutcome.Found(it) }
         ?: CheckOutcome.UpToDate
 }
