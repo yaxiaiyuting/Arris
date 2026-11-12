@@ -159,14 +159,14 @@ object SearchHistoryCodec {
      * `catch (_: Exception) { mutableListOf() }`，一个字节的损坏 = 用户整段历史消失）。
      * 顶层不是数组、或根本不是 JSON时才返回空列表。
      */
-    fun decode(json: String?): List<SearchHistoryManager.HistoryItem> {
-        if (json.isNullOrEmpty()) return emptyList()
+    fun decode(json: String?): MutableList<SearchHistoryManager.HistoryItem> {
+        if (json.isNullOrEmpty()) return mutableListOf()
         val root: JsonElement = try {
             JsonParser.parseString(json)
         } catch (_: Exception) {
-            return emptyList()
+            return mutableListOf()
         }
-        if (!root.isJsonArray) return emptyList()
+        if (!root.isJsonArray) return mutableListOf()
         val out = ArrayList<SearchHistoryManager.HistoryItem>(root.asJsonArray.size())
         for (element in root.asJsonArray) {
             val obj = element as? JsonObject ?: continue
