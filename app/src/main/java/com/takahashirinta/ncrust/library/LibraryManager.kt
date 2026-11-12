@@ -27,6 +27,7 @@ import androidx.compose.runtime.Immutable
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
@@ -146,6 +147,10 @@ object LibraryManager {
      */
     private var likedIdCursor = 0
     private val likedPageLock = Mutex()
+    private var likedEditRevision = 0L
+    private var appliedLikedRefresh = 0L
+    private var appliedAlbumRefresh = 0L
+    private val cloudRefreshSequence = AtomicLong()
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var flushJob: Job? = null
@@ -489,6 +494,7 @@ object LibraryManager {
             if (key.source == MusicSource.NETEASE) {
                 val ids = ensureLikedIdsLoaded(context)
                 if (key.id !in ids) prependLikedIds(ids, listOf(key.id))
+                likedEditRevision++
             }
             true
         }
@@ -526,6 +532,7 @@ object LibraryManager {
                     val ids = ensureLikedIdsLoaded(context)
                     val fresh = ncmIds.filterNot { it in ids }
                     if (fresh.isNotEmpty()) prependLikedIds(ids, fresh)
+                    likedEditRevision++
                 }
             }
         }
@@ -558,20 +565,28 @@ object LibraryManager {
         val key = TrackKey.of(null, songId)
         val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
-            val after = SavedSongSync.remove(before, key)
-            val changedInSongs = after !== before
-            if (changedInSongs) savedSongs = SavedSongTable(after)
-            // 未加载详情的网易云收藏也能直接取消。
-            val changedInIds = if (key.source == MusicSource.NETEASE) {
-                val ids = ensureLikedIdsLoaded(context)
-                val present = key.id in ids
-                if (present) {
-                    likedIdCursor -= ids.ordered.subList(0, likedIdCursor).count { it == key.id }
-                    cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
+            val ids = if (key.source == MusicSource.NETEASE) ensureLikedIdsLoaded(context) else null
+            val changedInIds = ids != null && key.id in ids
+            var after = SavedSongSync.remove(before, key)
+            if (ids != null && changedInIds) {
+                likedIdCursor -= ids.ordered.subList(0, likedIdCursor).count { it == key.id }
+                cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
+                if (after === before && before.none { it.trackKey == key }) {
+                    // 底表有编号但详情未加载时，仍保留一条只用于判重的取消记录。
+                    val removed = SavedSongEntry(
+                        trackKey = key,
+                        origin = SavedSongOrigin.REMOTE,
+                        addedAt = System.currentTimeMillis(),
+                        tombstoned = true,
+                        song = SongItem(key.id, "", null, null, null),
+                    )
+                    after = SavedSongSync.boundTombstones(before + removed)
                 }
-                present
-            } else false
-            changedInSongs || changedInIds
+            }
+            if (after !== before) savedSongs = SavedSongTable(after)
+            val changed = after !== before || changedInIds
+            if (changed && ids != null) likedEditRevision++
+            changed
         }
         if (changed) {
             // K05：取消收藏同样是一次真表变更（tombstone），红心必须跟着灭。
@@ -674,124 +689,122 @@ object LibraryManager {
 
     // ==================== 云端同步 ====================
 
-    /**
-     * 从云端拉取收藏单曲 + 收藏专辑刷新本地缓存。
-     * 未登录返回 false。返回是否成功拉取（供调用方判断是否需要提示）。
-     *
-     * ## v2.6.0 · P0：这里不再「以云端为真源重建整张表」
-     *
-     * 旧实现把 `cachedSongs` 换成「按 likedIds 顺序、只用云端能提供的详情」重建的列表，
-     * 于是**任何不在云端 likedIds 里的本地条目都被丢掉**，紧接着 `scheduleFlush`
-     * 把丢掉的结果写回磁盘 —— 不可恢复。QQ 曲目的合成 id（bit62）永远不会出现在
-     * ncm 的 likedIds 里，所以**每一次进库页都会丢一次**。
-     *
-     * 新实现走 [SavedSongSync.merge] 的七条规则：云端只负责**追加**，
-     * 删除只能由用户动作（规则 6）产生。
-     */
+    /** 单曲和专辑分别提交。读取失败时保留该栏目的本地数据。 */
     suspend fun refreshFromCloud(context: Context): Boolean = withContext(Dispatchers.IO) {
-        if (!CookieManager.hasCookie(context)) {
-            Log.w(TAG, "refreshFromCloud: no cookie, skip")
-            return@withContext false
-        }
-        val uid: Long = try {
+        CookieManager.init(context)
+        val session = CookieManager.snapshot()
+        if (session.cookie.isNullOrBlank()) return@withContext false
+        val sequence = cloudRefreshSequence.incrementAndGet()
+        val uid = try {
             PlaylistApi.getCurrentUserId()
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: getCurrentUserId failed: ${e.message}")
             return@withContext false
         }
 
-        // 单曲与专辑各自独立尝试、独立提交：任一步失败不致整体放弃。
-        var anySuccess = false
-
-        // 单曲：先拉全量有序 trackIds 作底表，只需首屏分批详情即可渲染(懒加载)。
-        //
-        // v3.4.5 · P0（移植自上游 `6b5b470`）：读失败**一律保留现有缓存**。
-        // 旧写法把 `Failure`（业务码非 200 / 结构异常）与「服务端确认收藏为空」
-        // 折叠成同一个 `emptyList()`，于是 `cachedLikedIds` 被清空**并落盘**
-        // （见下方 `scheduleFlush` → `KEY_LIKED_IDS`）—— 表头显示「0 首」、
-        // 分页底表变空，且重启后仍是空。收藏单曲本体不受影响（merge 只加不减）。
-        try {
-            when (val likedResult = PlaylistApi.getLikedTrackIds(uid)) {
-                is PlaylistApi.LikedIdsResult.Failure -> {
-                    // 关键：不写 cachedLikedIds、也不置 anySuccess
-                    // （后者会触发一次落盘，把「没变」写成「变空」的时机提前）。
-                    Log.w(
-                        TAG,
-                        "refreshFromCloud: liked songs 读取失败，保留本地 ids=" +
-                            "${cachedLikedIds?.ordered?.size ?: 0}：${likedResult.reason}"
-                    )
-                }
-
-                is PlaylistApi.LikedIdsResult.Success -> {
-                    val likedIds = likedResult.ids
-                    Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
-                    val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
-                    val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
-                    val freshById = firstSongs.associateBy { it.id }
-                    synchronized(songsLock) {
-                        val table = ensureSongsLoaded(context)
-                        val after = SavedSongSync.merge(table.entries, likedIds, freshById, System.currentTimeMillis())
-                        if (after !== table.entries) savedSongs = SavedSongTable(after)
-                        // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
-                        // 「已覆盖」= **表里有这个 trackKey 的条目**（tombstone 也算），
-                        // 见 likedIdCursor 的 KDoc。
-                        val coveredIds = after.asSequence()
-                            .filter { it.trackKey.source == MusicSource.NETEASE }
-                            .map { it.trackKey.id }
-                            .toHashSet()
-                        val firstMissing = likedIds.indexOfFirst { it !in coveredIds }
-                        likedIdCursor = if (firstMissing < 0) likedIds.size else firstMissing
-                        cachedLikedIds = LikedIds(likedIds)
-                    }
-                    // K05：云端合并（只加不减）也可能真的往表里加了条目 —— 推进修订。
-                    // 放在锁外：订阅方是 Compose，不需要在持锁期间唤醒。
-                    bumpSavedRevision()
-                    anySuccess = true
-                }
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        if (CookieManager.snapshot().loginGeneration != session.loginGeneration) return@withContext false
+        val songs = try {
+            refreshCloudSongs(context, uid, session, sequence)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: liked songs failed: ${e.message}")
+            false
         }
+        if (songs) scheduleFlush(context)
 
-        try {
-            // R2：这份快照只对「它出发时的那份本地专辑表」有效。读取（网络）期间用户可能
-            // 刚收藏/取消过专辑，而修订号只在真正改表时推进 —— 所以落库前必须复核。
-            val revisionAtRead = albumEditRevision.get()
-            val cloudAlbums = PlaylistApi.getSubscribedAlbums()
-            Log.i(TAG, "refreshFromCloud: albums=${cloudAlbums.size}")
-            synchronized(albumsLock) {
-                val edited = albumEditRevision.get()
-                if (edited != revisionAtRead) {
-                    // 读取期间有本地编辑：旧快照无权撤销新编辑（也不能把它"复活"）。
-                    // 保留本地真相，等下一次刷新（那时修订号重新对齐）。
-                    Log.w(
-                        TAG,
-                        "refreshFromCloud: albums snapshot discarded, local edits=${edited - revisionAtRead} " +
-                            "local=${cachedAlbums?.entries?.size ?: 0} cloud=${cloudAlbums.size}"
-                    )
-                } else {
-                    val albums = cloudAlbums.map {
-                        AlbumInfo(
-                            albumId = it.albumId,
-                            name = it.name,
-                            picUrl = it.picUrl,
-                            artist = it.artist,
-                            songCount = it.songCount
-                        )
-                    }
-                    cachedAlbums = SavedAlbumTable(albums)
-                    anySuccess = true
-                }
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) { throw e
+        if (CookieManager.snapshot().loginGeneration != session.loginGeneration) return@withContext songs
+        val albums = try {
+            refreshCloudAlbums(session, sequence)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "refreshFromCloud: albums failed: ${e.message}")
+            false
+        }
+        if (albums) scheduleFlush(context)
+        songs || albums
+    }
+
+    private suspend fun refreshCloudSongs(
+        context: Context,
+        uid: Long,
+        session: NeteaseSessionSnapshot,
+        sequence: Long,
+    ): Boolean {
+        val revision = synchronized(songsLock) { likedEditRevision }
+        val remoteIds = when (val result = PlaylistApi.getLikedTrackIds(uid)) {
+            is PlaylistApi.LikedIdsResult.Success -> result.ids
+            is PlaylistApi.LikedIdsResult.Failure -> {
+                Log.w(TAG, "refreshFromCloud: liked songs 读取失败：${result.reason}")
+                return false
+            }
         }
 
-        if (anySuccess) scheduleFlush(context)
-        anySuccess
+        val canFetchDetails = synchronized(songsLock) {
+            revision == likedEditRevision && sequence > appliedLikedRefresh
+        }
+        if (!canFetchDetails || CookieManager.snapshot().loginGeneration != session.loginGeneration) return false
+
+        val tombstoned = ensureSongsLoaded(context).entries.asSequence()
+            .filter { it.tombstoned && it.trackKey.source == MusicSource.NETEASE }
+            .map { it.trackKey.id }
+            .toHashSet()
+        val ids = if (tombstoned.isEmpty()) remoteIds else remoteIds.filterNot { it in tombstoned }
+        val firstBatch = if (ids.size > LIKED_BATCH_SIZE) ids.take(LIKED_BATCH_SIZE) else ids
+        val firstSongs = if (firstBatch.isEmpty()) emptyList() else PlaylistApi.getSongsByIds(firstBatch)
+        val freshById = firstSongs.associateBy { it.id }
+        val caller = currentCoroutineContext()
+
+        val changed = CookieManager.ifSameLogin(session) {
+            synchronized(songsLock) {
+                caller.ensureActive()
+                if (revision != likedEditRevision || sequence <= appliedLikedRefresh) return@synchronized null
+
+                val table = ensureSongsLoaded(context)
+                val after = SavedSongSync.merge(table.entries, ids, freshById, System.currentTimeMillis())
+                if (after !== table.entries) savedSongs = SavedSongTable(after)
+                val covered = after.asSequence()
+                    .filter { it.trackKey.source == MusicSource.NETEASE }
+                    .map { it.trackKey.id }
+                    .toHashSet()
+                val firstMissing = ids.indexOfFirst { it !in covered }
+                val cursor = if (firstMissing < 0) ids.size else firstMissing
+                val idsChanged = cachedLikedIds?.ordered != ids
+                if (idsChanged || cursor != likedIdCursor) cachedLikedIds = LikedIds(ids)
+                likedIdCursor = cursor
+                appliedLikedRefresh = sequence
+                after !== table.entries || idsChanged
+            }
+        } ?: return false
+
+        if (changed) bumpSavedRevision()
+        return true
+    }
+
+    private suspend fun refreshCloudAlbums(session: NeteaseSessionSnapshot, sequence: Long): Boolean {
+        val revision = albumEditRevision.get()
+        val albums = PlaylistApi.getSubscribedAlbums().map {
+            AlbumInfo(
+                albumId = it.albumId,
+                name = it.name,
+                picUrl = it.picUrl,
+                artist = it.artist,
+                songCount = it.songCount,
+            )
+        }
+        val caller = currentCoroutineContext()
+        return CookieManager.ifSameLogin(session) {
+            synchronized(albumsLock) {
+                caller.ensureActive()
+                if (revision != albumEditRevision.get() || sequence <= appliedAlbumRefresh) return@synchronized false
+                if (cachedAlbums?.entries != albums) cachedAlbums = SavedAlbumTable(albums)
+                appliedAlbumRefresh = sequence
+                true
+            }
+        } ?: false
     }
 
     /** 红心歌单全部单曲 id（有序），供收藏页做分页懒加载的底表。 */

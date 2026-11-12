@@ -20,10 +20,12 @@ import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SongPrivilege
 import com.takahashirinta.ncrust.account.VipInfoResponse
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
 import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
 import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -473,10 +475,10 @@ object PlaylistApi {
                 return@withContext (0 until songArray.length()).map { i ->
                     parseSongTrack(songArray.getJSONObject(i), privileges)
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // 取消/超时**原样抛出**：吞掉它会让上层以为"这批就是没歌"，
-                // 于是取消被伪装成数据缺失（H10 之后这里会直接变成 failedBatches）。
+            } catch (e: CancellationException) {
                 throw e
+            } catch (_: NeteaseSessionChangedException) {
+                return@withContext null
             } catch (e: Exception) {
                 lastError = e
                 Log.w("PlaylistApi", "fetchSongDetails attempt ${attempt + 1} failed: ${e.message}")
@@ -916,6 +918,8 @@ object PlaylistApi {
     suspend fun getLikedTrackIds(uid: Long): LikedIdsResult = withContext(Dispatchers.IO) {
         val playlistId = try {
             getLikedPlaylistId(uid)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext LikedIdsResult.Failure("getLikedPlaylistId threw: ${e.message}")
         } ?: return@withContext LikedIdsResult.Failure("liked playlist not found")
@@ -946,6 +950,8 @@ object PlaylistApi {
                 ?: return@withContext LikedIdsResult.Failure("missing trackIds")
             head = (0 until trackIds.length()).map { trackIds.getJSONObject(it).optLong("id") }
             declaredCount = playlistObj.optInt("trackCount", head.size)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext LikedIdsResult.Failure("request threw: ${e.message}")
         }
@@ -959,8 +965,15 @@ object PlaylistApi {
         var pages = 0
         while (all.size < declaredCount && pages < MAX_LIKED_FILL_PAGES) {
             pages++
-            val page = runCatching { fetchTrackIdsPage(playlistId, offset, LIKED_FILL_PAGE_SIZE) }
-                .getOrDefault(emptyList())
+            val page = try {
+                fetchTrackIdsPage(playlistId, offset, LIKED_FILL_PAGE_SIZE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: NeteaseSessionChangedException) {
+                throw e
+            } catch (_: Exception) {
+                break
+            }
             if (page.isEmpty()) break
             val added = page.count { all.add(it) }
             offset += page.size
