@@ -117,7 +117,7 @@ class SweepSample(val lineIndex: Int, val x: Float, val rtl: Boolean) {
      * 这正是 AMLL 的遮罩语义（ramp 中点即光标），也是「与播放进度精确同步」的判据。
      */
     fun band(fadePx: Float): SweepBand {
-        val half = (if (fadePx.isFinite()) fadePx else 0f) * 0.5f
+        val half = sweepHalfWidth(fadePx)
         return SweepBand(fadeStart = x - half, fadeEnd = x + half, litOnLeft = !rtl)
     }
 }
@@ -126,6 +126,8 @@ class SweepSample(val lineIndex: Int, val x: Float, val rtl: Boolean) {
 class SweepBand(val fadeStart: Float, val fadeEnd: Float, val litOnLeft: Boolean) {
     val width: Float get() = fadeEnd - fadeStart
 }
+
+internal fun sweepHalfWidth(fadePx: Float): Float = if (fadePx.isFinite()) fadePx * 0.5f else 0f
 
 /**
  * 一条不可变的扫过轨道。构造用 [build]，采样用 [sample]。
@@ -157,30 +159,53 @@ class SweepTrack private constructor(
      * - 晚于最后一个节点 → 停在末位置（唱完了就停在行尾，不再移动）。
      */
     fun sample(positionMillis: Long): SweepSample? {
+        withSample(positionMillis) { line, x -> return SweepSample(line, x, rtl) }
+        return null
+    }
+
+    internal class SampleCursor {
+        var segment: Int = -1
+    }
+
+    /** 绘制连续帧时复用上一段。拖动进度或进入新段时重新定位。 */
+    internal inline fun withSample(
+        positionMillis: Long,
+        cursor: SampleCursor? = null,
+        draw: (lineIndex: Int, x: Float) -> Unit,
+    ) {
         val n = times.size
-        if (n == 0) return null
-        if (positionMillis < times[0]) return null
+        if (n == 0 || positionMillis < times[0]) return
         val last = n - 1
-        if (positionMillis >= times[last]) return SweepSample(lines[last], xs[last], rtl)
-        var lo = 0
-        var hi = last
-        while (lo < hi) {
-            val mid = (lo + hi + 1) ushr 1
-            if (times[mid] <= positionMillis) lo = mid else hi = mid - 1
+        if (positionMillis >= times[last]) {
+            draw(lines[last], xs[last])
+            return
         }
-        if (lo >= last) return SweepSample(lines[last], xs[last], rtl)
-        // 跨视觉行（软换行）的区间：**保持**在上一行的行尾，不做插值。
-        // 折行处两个节点分属不同视觉行，x 分别接近「上一行行尾」与「下一行行首」，
-        // 一旦插值就等于整行高亮从行尾倒着扫回行首 —— 用户看到的是「这句话的特效又从头播了一遍」。
-        if (lines[lo] != lines[lo + 1]) {
-            return SweepSample(lines[lo], holds[lo], rtl)
+        val previous = cursor?.segment ?: -1
+        val index = if (previous in 0 until last &&
+            positionMillis >= times[previous] && positionMillis < times[previous + 1]
+        ) {
+            previous
+        } else {
+            var lo = 0
+            var hi = last - 1
+            while (lo < hi) {
+                val mid = (lo + hi + 1) ushr 1
+                if (times[mid] <= positionMillis) lo = mid else hi = mid - 1
+            }
+            if (cursor != null) cursor.segment = lo
+            lo
         }
-        val t0 = times[lo]
-        val t1 = times[lo + 1]
+        // 软换行前保持在原行行尾，直到下一行的首个节点。
+        if (lines[index] != lines[index + 1]) {
+            draw(lines[index], holds[index])
+            return
+        }
+        val t0 = times[index]
+        val t1 = times[index + 1]
         val span = t1 - t0
         val u = if (span <= 0L) 1f else ((positionMillis - t0).toFloat() / span.toFloat())
         val e = easing.apply(u)
-        return SweepSample(lines[lo], xs[lo] + (xs[lo + 1] - xs[lo]) * e, rtl)
+        draw(lines[index], xs[index] + (xs[index + 1] - xs[index]) * e)
     }
 
     companion object {

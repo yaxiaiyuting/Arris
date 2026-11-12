@@ -97,8 +97,8 @@ import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsSweepConfig
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.SweepGeometry
-import com.takahashirinta.ncrust.lyric.SweepSample
 import com.takahashirinta.ncrust.lyric.SweepTrack
+import com.takahashirinta.ncrust.lyric.sweepHalfWidth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
@@ -581,6 +581,7 @@ internal fun LyricLineBody(
             SweepTrack.build(words, text.length, endMs, TextLayoutSweepGeometry(lr), fadePx, sweepConfig.easing)
         }
     }
+    val sampleCursor = remember { SweepTrack.SampleCursor() }
     BasicText(
         text = text,
         style = style.copy(color = unsungColor),
@@ -602,7 +603,9 @@ internal fun LyricLineBody(
             } else if (track == null) {
                 drawText(lr, color = highlight)
             } else {
-                track.sample(position)?.let { drawSweep(lr, it, fadePx, sweepConfig.softEdge, highlight) }
+                track.withSample(position, sampleCursor) { line, x ->
+                    drawSweep(lr, line, x, track.rtl, fadePx, sweepConfig.softEdge, highlight)
+                }
             }
         },
     )
@@ -676,21 +679,25 @@ private fun DrawScope.drawHardCut(
  * v1.5.2 的扫过绘制：**只有中间那条窄渐变带需要离屏层**。
  *
  *  ① 光标所在排版行**之上**的行：整行保留（不透明裁剪，零离屏）；
- *  ② 当前行里「已唱实心」的一段：由 [SweepBand.litOnLeft] 决定它在渐变带的左侧还是右侧（零离屏）；
+ *  ② 当前行的实心高亮按阅读方向裁剪（零离屏）；
  *  ③ 渐变带本身：把高亮文字画进一个**只有渐变带那么大**的离屏层，再用 DstIn + 横向渐变擦出软边。
  *
  * [softEdge] = false 时跳过 ③，②的边界直接取光标 —— 硬边但仍然是连续运动。
  */
 private fun DrawScope.drawSweep(
     lr: TextLayoutResult,
-    sample: SweepSample,
+    sampledLine: Int,
+    x: Float,
+    rtl: Boolean,
     fadePx: Float,
     softEdge: Boolean,
     color: Color,
 ) {
-    val band = sample.band(fadePx)
+    val halfWidth = sweepHalfWidth(fadePx)
+    val fadeStart = x - halfWidth
+    val fadeEnd = x + halfWidth
     // 轨道保证 lineIndex 落在版面内，这里再夹一次纯粹是防御（版面在极端情况下可能先变）。
-    val lineIndex = sample.lineIndex.coerceIn(0, (lr.lineCount - 1).coerceAtLeast(0))
+    val lineIndex = sampledLine.coerceIn(0, (lr.lineCount - 1).coerceAtLeast(0))
     val lineTop = lr.getLineTop(lineIndex)
     val lineBottom = lr.getLineBottom(lineIndex)
 
@@ -702,11 +709,11 @@ private fun DrawScope.drawSweep(
 
     // ② 当前行的实心部分。软边时边界在渐变带的外端，硬边时边界就是光标本身。
     val solidEdge = if (softEdge) {
-        if (band.litOnLeft) band.fadeStart else band.fadeEnd
+        if (rtl) fadeEnd else fadeStart
     } else {
-        sample.x
+        x
     }
-    if (band.litOnLeft) {
+    if (!rtl) {
         clipRect(top = lineTop, right = solidEdge, bottom = lineBottom) { drawText(lr, color = color) }
     } else {
         clipRect(top = lineTop, left = solidEdge, bottom = lineBottom) { drawText(lr, color = color) }
@@ -715,8 +722,8 @@ private fun DrawScope.drawSweep(
     if (!softEdge) return
 
     // ③ 渐变带：离屏层只覆盖这一段。夹到版面内，避免光标远离文字时开一块巨大的离屏缓冲。
-    val left = band.fadeStart.coerceIn(0f, size.width)
-    val right = band.fadeEnd.coerceIn(0f, size.width)
+    val left = fadeStart.coerceIn(0f, size.width)
+    val right = fadeEnd.coerceIn(0f, size.width)
     if (right <= left) return
     val canvas = drawContext.canvas
     canvas.saveLayer(Rect(left, lineTop, right, lineBottom), Paint())
@@ -724,17 +731,17 @@ private fun DrawScope.drawSweep(
     // 渐变用**未夹取**的原始带宽，这样夹取只影响离屏层大小、不影响渐变斜率。
     // 越界部分靠 TileMode.Clamp 自动钳到两端（实心侧全保留、未唱侧全擦除）。
     drawRect(
-        brush = if (band.litOnLeft) {
+        brush = if (!rtl) {
             Brush.horizontalGradient(
                 colorStops = arrayOf(0f to Color.Black, 1f to Color.Transparent),
-                startX = band.fadeStart,
-                endX = band.fadeEnd,
+                startX = fadeStart,
+                endX = fadeEnd,
             )
         } else {
             Brush.horizontalGradient(
                 colorStops = arrayOf(0f to Color.Transparent, 1f to Color.Black),
-                startX = band.fadeStart,
-                endX = band.fadeEnd,
+                startX = fadeStart,
+                endX = fadeEnd,
             )
         },
         topLeft = Offset(left, lineTop),
