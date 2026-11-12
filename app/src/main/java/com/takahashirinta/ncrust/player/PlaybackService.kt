@@ -31,7 +31,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -346,10 +345,6 @@ class PlaybackService : MediaLibraryService() {
      * 这里只做设备能力探测并打日志，便于真机上区分「设备不支持」与「被门控关掉」。
      */
     private fun logAudioOffloadCapability() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            Log.i("PlaybackService", "AudioOffload: unsupported (API < 29)")
-            return
-        }
         val supported = runCatching {
             // 注意：isOffloadedPlaybackSupported 是 AudioManager 的**静态**方法。
             AudioManager.isOffloadedPlaybackSupported(
@@ -1987,19 +1982,17 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "ncrust_playback",
-                "Arris 音乐播放",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "正在播放的音乐"
-                setShowBadge(false)
-                setSound(null, null)
-                enableVibration(false)
-            }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            "ncrust_playback",
+            "Arris 音乐播放",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "正在播放的音乐"
+            setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
         }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     /**

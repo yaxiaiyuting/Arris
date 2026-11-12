@@ -14,7 +14,6 @@
 package com.takahashirinta.ncrust.player
 
 import android.media.MediaCodecList
-import android.os.Build
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.account.FreeTrialInfo
@@ -112,49 +111,16 @@ object SongUrlFetcher {
     /** 最近一次取链的响应项；没有（纯网络失败）返回 null。 */
     fun lastPlaybackItem(songId: Long): PlaybackItem? = lastItems[songId]
 
-    /**
-     * 平台自带的 FLAC **解码**器（API 27+ 才有）。
-     *
-     * 注意 API 24–26（Android 7.0/7.1）的系统里 audio/flac 只有
-     * OMX.google.flac.encoder —— 只有编码器，没有解码器，因此这些系统上
-     * 拿到 flac URL 也播不出声（表现为「有进度没声音」）。
-     */
-    private val platformFlacDecoder: Boolean by lazy {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
-            false
-        } else {
-            runCatching {
-                MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
-                    !info.isEncoder && info.supportedTypes.any { it.equals("audio/flac", ignoreCase = true) }
-                }
-            }.getOrDefault(false)
+    /** 设置和取链共用一次平台 FLAC 解码能力探测。 */
+    val deviceSupportsFlac: Boolean = runCatching {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            !info.isEncoder && info.supportedTypes.any { it.equals("audio/flac", ignoreCase = true) }
         }
-    }
-
-    /**
-     * 本机能否真正解码 FLAC。
-     *
-     * 4.0.1：主线（minSdk 29）**只认平台解码器** —— 随包 FFmpeg 扩展已移除。
-     * 依据：Android 10 起平台自带 FLAC 解码，而音源给的也是 flac/mp3/m4a；
-     * 那 5.58 MB 原生库（占 APK 34%）在主线换不到任何实际能力（LTS 仍保留）。
-     */
-    private val deviceCanDecodeFlac: Boolean by lazy { platformFlacDecoder }
+    }.getOrDefault(false)
 
     init {
-        // 实测无损是否真的可解时，这一行是唯一权威依据（尤其 API 24–26 与各种 ROM）。
-        Log.i(
-            TAG,
-            "FLAC capability: platformDecoder=$platformFlacDecoder " +
-                "ffmpegExtension=removed(4.0.1, minSdk29) " +
-                "=> canDecodeFlac=$deviceCanDecodeFlac"
-        )
+        Log.i(TAG, "FLAC capability: platformDecoder=$deviceSupportsFlac")
     }
-
-    /**
-     * 本机是否具备系统 FLAC 解码器（API < 27 没有）。
-     * 设置页据此在用户选中 FLAC 档位时提示「本机不支持该档位，将自动降级」（Bug1-C）。
-     */
-    val deviceSupportsFlac: Boolean get() = deviceCanDecodeFlac
 
     /** [level] 是否属于必须依赖 FLAC 解码器的档位。 */
     fun isFlacTier(level: String): Boolean = level in FLAC_TIERS
@@ -271,7 +237,7 @@ object SongUrlFetcher {
             else       -> listOf(level, "lossless", "exhigh", "higher", "standard")
         }
         // 门控之后真正会发出去的第一档（判定 capped 用它，不用用户偏好档位）。
-        val requestedLevel = fallbackLevels.firstOrNull { it !in FLAC_TIERS || deviceCanDecodeFlac }
+        val requestedLevel = fallbackLevels.firstOrNull { it !in FLAC_TIERS || deviceSupportsFlac }
             ?: level
 
         // 一次"档位尝试"：成功返回结果，档位不可用返回 null，连接层失败抛 IOException。
@@ -340,7 +306,7 @@ object SongUrlFetcher {
         }
         for (tryLevel in effectiveLevels) {
             // 设备解不了 FLAC 时,flac 档位取来也是无声,直接跳到 mp3 档。
-            if (tryLevel in FLAC_TIERS && !deviceCanDecodeFlac) continue
+            if (tryLevel in FLAC_TIERS && !deviceSupportsFlac) continue
             // 用户已经切到别的歌：上一首的降级阶梯必须立刻停下，否则每次点"下一首"
             // 都会把这一整条阶梯跑完（实测 6 次点击 = 36 个并发请求，直接把服务端打成拒流）。
             coroutineContext.ensureActive()

@@ -20,7 +20,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -1848,10 +1847,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 putExtra("sourceId", sourceId)
                 putExtra("mediaId", mediaId)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                getApplication<Application>().startForegroundService(intent)
-            else
-                getApplication<Application>().startService(intent)
+            getApplication<Application>().startForegroundService(intent)
             isPlaying.value = startPlaying
             if (roomGeneration == null) PlaybackStateManager.saveState(
                 getApplication(), songId, title, artist, artworkUrl, true,
@@ -1970,10 +1966,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         putExtra("sourceId", sourceId)
                         putExtra("mediaId", mediaId)
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        getApplication<Application>().startForegroundService(intent)
-                    else
-                        getApplication<Application>().startService(intent)
+                    getApplication<Application>().startForegroundService(intent)
                     isPlaying.value = startPlaying
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -2598,10 +2591,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 putExtra("sourceId", sourceId)
                                 putExtra("mediaId", mediaId)
                             }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                                getApplication<Application>().startForegroundService(intent)
-                            else
-                                getApplication<Application>().startService(intent)
+                            getApplication<Application>().startForegroundService(intent)
                             isPlaying.value = true
                             Log.i(TAG_TRACK, "preload takeover -> currentTrack=$nextTrack")
                             viewModelScope.launch { fetchLyrics(nextTrack) }
@@ -2656,10 +2646,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         putExtra("sourceId", sourceId)
                         putExtra("mediaId", mediaId)
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        getApplication<Application>().startForegroundService(intent)
-                    else
-                        getApplication<Application>().startService(intent)
+                    getApplication<Application>().startForegroundService(intent)
                     Log.i(TAG_TRACK, "preload enqueued: slotTrack=$nextTrack")
                 }
             } catch (e: CancellationException) {
