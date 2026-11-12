@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.auth
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import java.net.URL
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -79,7 +80,7 @@ object QrPair {
         val mac = javax.crypto.Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
         val digest = mac.doFinal("$unikey|$challenge|$tcpPort".toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
+        return digest.lowerHex()
     }
 
     /** 常量时间比较，避免用响应时间猜 proof。 */
@@ -92,12 +93,12 @@ object QrPair {
 
     fun newChallenge(): String {
         val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        return bytes.joinToString("") { "%02x".format(it) }
+        return bytes.lowerHex()
     }
 
     fun newSecret(): String {
         val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
-        return bytes.joinToString("") { "%02x".format(it) }
+        return bytes.lowerHex()
     }
 
     private fun key(secret: String, unikey: String): SecretKeySpec {

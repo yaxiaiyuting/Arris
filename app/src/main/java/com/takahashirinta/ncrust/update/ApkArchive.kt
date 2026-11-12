@@ -7,6 +7,7 @@
 
 package com.takahashirinta.ncrust.update
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -77,7 +78,7 @@ object ApkArchive {
         val digest = MessageDigest.getInstance("SHA-256")
         return signatures.map { signature ->
             digest.reset()
-            digest.digest(signature.toByteArray()).joinToString("") { "%02x".format(it) }
+            digest.digest(signature.toByteArray()).lowerHex()
         }
     }
 }

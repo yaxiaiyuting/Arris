@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.auth
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import android.content.Context
 import android.content.SharedPreferences
 
@@ -36,7 +37,7 @@ object CookieManager {
             ?: return@run null
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(musicU.toByteArray(Charsets.UTF_8))
-        digest.take(8).joinToString("") { "%02x".format(it) }
+        digest.lowerHex(endIndex = 8)
     }
     fun isCurrent(s: NeteaseSessionSnapshot): Boolean = synchronized(guard) { guard.isCurrent(s) }
     fun <T> ifCurrent(s: NeteaseSessionSnapshot, block: () -> T): T? = synchronized(guard) {
