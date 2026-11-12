@@ -1576,12 +1576,15 @@ fun MainScreen(
         pendingRound = null
     }
 
-    LaunchedEffect(playbackQueue, shuffledIndices, shuffledPosition, currentQueueIndex, playMode) {
-        if (playMode == QueueModes.SHUFFLE && playbackQueue.isNotEmpty()) {
+    val queueForShuffle = playbackQueue
+    val shuffleKeys = remember(queueForShuffle) {
+        lazy { queueForShuffle.map { QueueKeys.keyOf(it).tag } }
+    }
+    LaunchedEffect(queueForShuffle, shuffledIndices, shuffledPosition, currentQueueIndex, playMode) {
+        if (playMode == QueueModes.SHUFFLE && queueForShuffle.isNotEmpty() && playbackQueue === queueForShuffle) {
             PlaybackStateManager.saveShuffle(
-                context, playbackQueue.map { QueueKeys.keyOf(it).tag },
-                shuffledIndices, shuffledPosition, currentQueueIndex,
-            )
+                context, shuffledIndices, shuffledPosition, currentQueueIndex,
+            ) { shuffleKeys.value }
         }
     }
 
@@ -1636,17 +1639,19 @@ fun MainScreen(
         // K02：读盘是挂起操作，期间用户可能已经点歌建了新队列。
         // 记下开始时的队列身份，回来的旧快照只有在"没人动过"时才有资格覆盖。
         val restoreStartedWith = playbackQueue
-        val savedQueue = PlaybackStateManager.getQueue(context)
+        val (savedSongs, savedIndex) = PlaybackStateManager.getQueue(context) ?: return@LaunchedEffect
+        if (savedSongs.isEmpty()) return@LaunchedEffect
+        val restoredIndex = savedIndex.coerceIn(savedSongs.indices)
+        val savedRound = if (playMode == QueueModes.SHUFFLE) {
+            PlaybackStateManager.restoreShuffle(context, savedSongs, restoredIndex)
+        } else null
         val untouched = playbackQueue === restoreStartedWith &&
             playbackQueue.isEmpty() && currentQueueIndex < 0
-        if (savedQueue != null && savedQueue.first.isNotEmpty() && untouched) {
+        if (untouched) {
             playerViewModel.invalidatePreload()
-            playbackQueue = savedQueue.first
-            currentQueueIndex = savedQueue.second.coerceIn(0, playbackQueue.size - 1)
+            playbackQueue = savedSongs
+            currentQueueIndex = restoredIndex
             if (playMode == QueueModes.SHUFFLE) {
-                val savedRound = PlaybackStateManager.restoreShuffle(
-                    context, playbackQueue.map { QueueKeys.keyOf(it).tag }, currentQueueIndex,
-                )
                 if (savedRound != null) {
                     shuffledIndices = savedRound.order.orEmpty()
                     shuffledPosition = savedRound.position

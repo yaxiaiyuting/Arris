@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -71,6 +72,7 @@ object PlaybackStateManager {
     private var queueFlushJob: Job? = null
     private var queueGeneration = 0L
     private var queueEncoding: QueueEncoding? = null
+    private var shuffleGeneration = 0L
 
     private class QueueEncoding(
         val context: WeakReference<Context>,
@@ -399,17 +401,21 @@ object PlaybackStateManager {
     }
 
     suspend fun getQueue(context: Context): Pair<List<SongItem>, Int>? {
-        val prefs = getPrefs(context)
-        val json = prefs.getString(KEY_QUEUE, null) ?: return null
-        if (json.isEmpty() || json == "[]") return null
         return try {
+            val (json, index) = withContext(Dispatchers.IO) {
+                val prefs = getPrefs(context)
+                synchronized(flushLock) {
+                    val json = prefs.getString(KEY_QUEUE, null)
+                    if (json.isNullOrEmpty() || json == "[]") null
+                    else json to prefs.getInt(KEY_QUEUE_INDEX, 0)
+                }
+            } ?: return null
             // Gson 反射反序列化是 CPU 密集，切 Default 避免主线程卡顿（队列几百首时 50ms+）。
             val queue: List<SongItem> = withContext(Dispatchers.Default) {
                 val restored: List<SongItem> = gson.fromJson(json, songListType)
                 // H14 残余：读盘后过一次「旧 B 站视频腿补分区位」（纯函数 + 幂等）。
                 migrateQueueSongs(restored)
             }
-            val index = prefs.getInt(KEY_QUEUE_INDEX, 0)
             Pair(queue, index)
         } catch (e: CancellationException) {
             // 取消不是「队列损坏」：原样抛出，绝不顺手删除已落盘的队列。
@@ -478,16 +484,47 @@ object PlaybackStateManager {
         getPrefs(context).edit().putInt(KEY_PLAY_MODE, mode).apply()
     }
 
-    fun saveShuffle(context: Context, keys: List<String>, order: List<Int>, position: Int, current: Int) {
-        val snapshot = ShuffleSnapshot(keys, order, position)
-        if (!snapshot.matches(keys, current)) return
-        getPrefs(context).edit().putString(KEY_SHUFFLE, gson.toJson(snapshot)).apply()
+    internal suspend fun saveShuffle(
+        context: Context,
+        order: List<Int>,
+        position: Int,
+        current: Int,
+        queueKeys: () -> List<String>,
+    ) {
+        val generation = synchronized(flushLock) { ++shuffleGeneration }
+        val json = withContext(Dispatchers.Default) {
+            val keys = queueKeys()
+            val snapshot = ShuffleSnapshot(keys, order, position)
+            if (snapshot.matches(keys, current)) gson.toJson(snapshot) else null
+        } ?: return
+        withContext(Dispatchers.IO) {
+            val prefs = getPrefs(context)
+            synchronized(flushLock) {
+                coroutineContext.ensureActive()
+                if (shuffleGeneration == generation) {
+                    prefs.edit().putString(KEY_SHUFFLE, json).apply()
+                }
+            }
+        }
     }
 
-    fun restoreShuffle(context: Context, keys: List<String>, current: Int): ShuffleSnapshot? = runCatching {
-        gson.fromJson(getPrefs(context).getString(KEY_SHUFFLE, null), ShuffleSnapshot::class.java)
-            ?.takeIf { it.matches(keys, current) }
-    }.getOrNull()
+    internal suspend fun restoreShuffle(
+        context: Context,
+        queue: List<SongItem>,
+        current: Int,
+    ): ShuffleSnapshot? = try {
+        val json = withContext(Dispatchers.IO) {
+            getPrefs(context).getString(KEY_SHUFFLE, null)
+        }
+        withContext(Dispatchers.Default) {
+            gson.fromJson(json, ShuffleSnapshot::class.java)
+                ?.takeIf { it.matches(queue.map { song -> QueueKeys.keyOf(song).tag }, current) }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
 
     fun clearQueue(context: Context) {
         val prefs = getPrefs(context)
@@ -495,6 +532,7 @@ object PlaybackStateManager {
             queueFlushJob?.cancel()
             queueFlushJob = null
             queueGeneration++
+            shuffleGeneration++
             queueEncoding = null
             prefs.edit().remove(KEY_QUEUE).remove(KEY_QUEUE_INDEX).remove(KEY_SHUFFLE).apply()
         }
