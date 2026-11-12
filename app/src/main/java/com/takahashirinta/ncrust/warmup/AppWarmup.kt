@@ -158,17 +158,17 @@ object AppWarmup {
 
     private suspend fun warmHomeCovers(app: Context) = coroutineScope {
         val loader = Coil.imageLoader(app)
-        val urls = buildList {
+        val urls = buildSet {
             ContentCache.homeDailySongs?.take(PREFETCH_PER_SECTION)?.forEach {
-                it.album?.picUrl?.takeIf(String::isNotBlank)?.let(::add)
+                CoverUrls.small(it.album?.picUrl?.takeIf(String::isNotBlank))?.let(::add)
             }
             ContentCache.homeRecommendPlaylists?.take(PREFETCH_PER_SECTION)?.forEach {
-                it.coverUrl.takeIf(String::isNotBlank)?.let(::add)
+                CoverUrls.small(it.coverUrl.takeIf(String::isNotBlank))?.let(::add)
             }
             ContentCache.homeNewSongs?.take(PREFETCH_PER_SECTION)?.forEach {
-                it.album?.picUrl?.takeIf(String::isNotBlank)?.let(::add)
+                CoverUrls.small(it.album?.picUrl?.takeIf(String::isNotBlank))?.let(::add)
             }
-        }.distinct().mapNotNull { CoverUrls.small(it) }
+        }
         for (chunk in urls.chunked(4)) {
             chunk.map { url ->
                 async {
