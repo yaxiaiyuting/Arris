@@ -2268,24 +2268,8 @@ fun MainScreen(
             playNext(PlayOrigin.AUTO_NEXT)
         }
     })
-    LaunchedEffect(playerViewModel) {
-        playerViewModel.setOnSongNextCallback {
-            reconcilePendingSongTransition()
-            playNext(PlayOrigin.USER)
-        }
-        playerViewModel.setOnSongPreviousCallback {
-            reconcilePendingSongTransition()
-            playPrevious()
-        }
-        playerViewModel.setOnSongEndedCallback { onNaturalEnd() }
-        playerViewModel.setOnSongTransitionedCallback { auto -> pendingSongTransition = auto }
-        // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
-        // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
-        playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
-    }
-
-    LaunchedEffect(pendingSongTransition) {
-        if (!reconcilePendingSongTransition()) return@LaunchedEffect
+    fun prepareAfterTransition() {
+        if (!reconcilePendingSongTransition()) return
         currentSong?.id?.let { playerViewModel.fetchLyricsForSong(it) }
 
         // Immediately start preloading the song after this one.
@@ -2309,6 +2293,27 @@ fun MainScreen(
                 privilege = songToPreload.privilege,
             )
         }
+    }
+
+    val onQueueTransition by rememberUpdatedState<(Boolean) -> Unit>({ auto ->
+        pendingSongTransition = auto
+        // Leave Media3's listener first. This job does not need a rendered frame.
+        coroutineScope.launch(Dispatchers.Main) { prepareAfterTransition() }
+    })
+    LaunchedEffect(playerViewModel) {
+        playerViewModel.setOnSongNextCallback {
+            reconcilePendingSongTransition()
+            playNext(PlayOrigin.USER)
+        }
+        playerViewModel.setOnSongPreviousCallback {
+            reconcilePendingSongTransition()
+            playPrevious()
+        }
+        playerViewModel.setOnSongEndedCallback { onNaturalEnd() }
+        playerViewModel.setOnSongTransitionedCallback { auto -> onQueueTransition(auto) }
+        // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
+        // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
+        playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
     }
 
     // 在 Splash 遮挡期间渲染一帧全展开状态，提前编译 PlayerCard 所有 graphicsLayer 的 GPU Shader。

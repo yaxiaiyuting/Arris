@@ -134,6 +134,7 @@ class PlaybackService : MediaLibraryService() {
     private var progressJob: Job? = null
     private var bufferProgressJob: Job? = null
     private val stallWatch = PlaybackStallWatch(timeoutMs = 12_000L)
+    private val queuePreload = ExoPlayer.PreloadConfiguration(12_000_000L)
     private var lastLocalStallRepair: TrackKey? = null
     private var lastLocalStallRepairRevision = -1
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
@@ -144,15 +145,20 @@ class PlaybackService : MediaLibraryService() {
     private var mediaSourceKey: String? = null
     private var mediaSourceId: String? = null
     private var mediaMediaId: String? = null
-    private var currentArtworkBitmap: Bitmap? = null
+    private data class MediaArtwork(val url: String, val bitmap: Bitmap, val jpeg: ByteArray?)
+    private data class ArtworkTask(val url: String, val result: Deferred<MediaArtwork?>)
+
+    private var currentArtwork: MediaArtwork? = null
+    private val currentArtworkBitmap: Bitmap? get() = currentArtwork?.bitmap
+    private var artworkLoadUrl: String? = null
+    private var artworkLoadJob: Job? = null
     private var currentDominantColor: Int = 0xFF1DB954.toInt()
     // 封面加载代数: 每次 loadArtwork 自增, 完成时若代数已过期(期间又切了歌)
     // 则丢弃结果 —— 否则慢加载的上一首封面会覆盖新歌封面, 任务栏/锁屏
     // 显示上一首的图(切歌封面错位)。
     private var artworkGeneration = 0
 
-    // v1.2.0 · B：暂停空闲后释放封面位图。3GB 机型上 currentArtworkBitmap +
-    // pendingNextArtworkBitmap 两张全尺寸位图（各 1–4MB）叠加 B3 背景图后内存吃紧。
+    // 暂停空闲后释放当前和下一首封面。
     // 系统已持有"已 post 出去的那条通知"里位图的独立副本，因此这里丢弃引用不会让
     // 已显示的通知变空；恢复播放时按 currentArtworkUrl 重新加载即可。
     private val artworkIdleHandler = Handler(Looper.getMainLooper())
@@ -321,8 +327,7 @@ class PlaybackService : MediaLibraryService() {
     private var pendingNextMediaId: String? = null
     // 无缝预载的下一首封面位图: preload_next 时提前加载, 切换瞬间直接应用,
     // 任务栏不会出现"新歌标题 + 上一首封面"的过渡窗口
-    private var pendingNextArtworkBitmap: Bitmap? = null
-    private var artworkPreloadGeneration = 0
+    private var nextArtworkTask: ArtworkTask? = null
 
     /** 低内存档阈值：≤3.5GB 视为低配（覆盖 2GB / 3GB 机型，4GB 及以上不降级）。 */
     private val LOW_RAM_TOTAL_BYTES = 3_500L * 1024 * 1024 * 1024
@@ -570,6 +575,9 @@ class PlaybackService : MediaLibraryService() {
             // 熄屏耗电的大头；本 fork 的 PCM 可视化 tee 不依赖这个循环频率。
             .experimentalSetDynamicSchedulingEnabled(true)
             .build()
+        setGaplessPreloadEnabled(
+            getSharedPreferences("ncrust_settings", MODE_PRIVATE).getBoolean("gapless_playback", false),
+        )
 
         // 音频 offload：把 MP3/AAC 解码交给硬件 DSP，熄屏长听时 CPU 可以真正睡下去。
         // 要求设备支持 offload 下的无缝衔接，不支持就自动退回软件解码——无缝播放不能
@@ -652,6 +660,7 @@ class PlaybackService : MediaLibraryService() {
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 Log.d("PlaybackService", "playWhenReady=$playWhenReady reason=$reason foreground=$isServiceStarted")
+                if (playWhenReady) cancelArtworkIdleRelease() else scheduleArtworkIdleRelease()
             }
             override fun onEvents(player: Player, events: Player.Events) {
                 if (events.containsAny(
@@ -668,7 +677,8 @@ class PlaybackService : MediaLibraryService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 observeVisualizationVolume(isPlaying && currentPcmDemand().requiresPcm)
                 // B：暂停即预约释放封面位图，恢复播放则取消释放并补回封面。
-                if (isPlaying) onPlaybackActive() else scheduleArtworkIdleRelease()
+                if (isPlaying) onPlaybackActive()
+                else if (!hasActivePlaybackIntent()) scheduleArtworkIdleRelease()
                 onIsPlayingChanged?.invoke(isPlaying)
                 PlaybackStateManager.updatePlayingState(this@PlaybackService, isPlaying)
                 updatePlaybackState()
@@ -810,9 +820,8 @@ class PlaybackService : MediaLibraryService() {
                     // CoverUrls.large 后的 URI 再加载一遍（重复网络 + 改变缓存口径）。
                     if (!sameAsConfigured) {
                         if (itemArtwork.isNullOrBlank()) clearCurrentArtwork()
-                        else if (itemArtwork != currentArtworkUrl || currentArtworkBitmap == null) {
+                        else {
                             currentArtworkUrl = itemArtwork
-                            artworkPreloadGeneration++
                             loadArtwork(itemArtwork)
                         }
                     }
@@ -840,10 +849,9 @@ class PlaybackService : MediaLibraryService() {
                 val nextSource = itemSource ?: pendingNextSource
                 val nextSourceId = pendingNextSourceId
                 val nextMediaId = pendingNextMediaId
-                // 预载位图就绪则在切换瞬间直接应用(任务栏立即是新图), 未就绪回退异步加载。
-                val preloaded = pendingNextArtworkBitmap
+                val artwork = slotArtwork?.takeIf { it.isNotBlank() } ?: itemArtwork
+                val preparedArtwork = artwork?.let(::takePreparedArtwork)
                 clearPendingNext()
-                pendingNextArtworkBitmap = null
                 mediaSourceKey = nextSource.key
                 mediaSourceId = nextSourceId
                 mediaMediaId = nextMediaId
@@ -855,27 +863,11 @@ class PlaybackService : MediaLibraryService() {
                     "transition(auto=$auto) -> songId=" + mediaSongId + " source=" + nextSource.key +
                         " title=" + mediaTitle + " count=" + player.mediaItemCount
                 )
-                // 槽位里那份是原始 URL，item 上的是 CoverUrls.large 后的 URI：优先用槽位，
-                // 才能命中 pendingNextArtworkBitmap 的「切换瞬间直接换图」优化。
-                val artwork = slotArtwork ?: itemArtwork
-                if (!artwork.isNullOrEmpty()) {
+                if (artwork == null) {
+                    clearCurrentArtwork()
+                } else {
                     currentArtworkUrl = artwork
-                    // 使任何在途预载作废: 迟到的预载结果不能回填 pending,
-                    // 否则会污染下一次切换
-                    artworkPreloadGeneration++
-                    if (preloaded != null && slotArtwork != null) {
-                        val gen = ++artworkGeneration
-                        currentArtworkBitmap = preloaded
-                        applyCoverAccent(preloaded, artwork, gen)
-                        scope.launch(Dispatchers.Main) {
-                            updatePlaybackState()
-                            updateNotify()
-                        }
-                    } else {
-                        // 回退异步加载; 旧位图保留到新封面加载完(用户决策),
-                        // 加载完成由 metadata 位图引用比较触发换图
-                        loadArtwork(artwork)
-                    }
+                    loadArtwork(artwork, preparedArtwork)
                 }
                 // 播完的项统一清掉：列表收敛回「当前 + 至多一首待播」。
                 val finishedItems = player.currentMediaItemIndex
@@ -971,8 +963,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaArtist = ""
                 mediaSongId = null
                 clearPendingNext()
-                currentArtworkBitmap = null
-                currentArtworkUrl = null
+                clearCurrentArtwork()
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -1010,6 +1001,12 @@ class PlaybackService : MediaLibraryService() {
         player.clearMediaItems()
     }
 
+    /** Media3 prepares the following item when the current stream is not loading. */
+    internal fun setGaplessPreloadEnabled(enabled: Boolean) {
+        val config = if (enabled) queuePreload else ExoPlayer.PreloadConfiguration.DEFAULT
+        if (player.preloadConfiguration != config) player.preloadConfiguration = config
+    }
+
     internal fun enqueuePreload(intent: Intent) {
         val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
         if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return
@@ -1036,8 +1033,6 @@ class PlaybackService : MediaLibraryService() {
             }
             PreloadSlot.Decision.APPEND -> Unit
         }
-        artworkPreloadGeneration++
-        pendingNextArtworkBitmap = null
         pendingNextTitle = intent.getStringExtra("title")
         pendingNextArtist = intent.getStringExtra("artist")
         pendingNextArtwork = intent.getStringExtra("artwork")
@@ -1050,9 +1045,8 @@ class PlaybackService : MediaLibraryService() {
         pendingNextMediaId = intent.getStringExtra("mediaId")
         // 提前加载下一首封面: 无缝切换瞬间任务栏直接是新图,
         // 不再出现"新歌标题 + 上一首封面"的过渡窗口
-        if (!pendingNextArtwork.isNullOrEmpty()) {
-            preloadArtwork(pendingNextArtwork!!)
-        }
+        pendingNextArtwork?.takeIf { it.isNotBlank() }?.let(::prepareNextArtwork)
+            ?: discardPreparedArtwork()
         player.addMediaItem(buildPreloadMediaItem(nextUrl, nextSongId))
         Log.d(
             "PlaybackService",
@@ -1088,9 +1082,9 @@ class PlaybackService : MediaLibraryService() {
 
         val artwork = intent.getStringExtra("artwork")
         if (artwork.isNullOrBlank()) clearCurrentArtwork()
-        else if (artwork != currentArtworkUrl || currentArtworkBitmap == null) {
+        else {
             currentArtworkUrl = artwork
-            loadArtwork(artwork)
+            loadArtwork(artwork, takePreparedArtwork(artwork))
         }
 
         val startPlaying = intent.getBooleanExtra("startPlaying", true)
@@ -1313,9 +1307,6 @@ class PlaybackService : MediaLibraryService() {
         runCatching { OfflineUrlStore.rememberFromUrl(this, url) }
         // Clear any stale preload metadata; setMediaItem replaces the entire playlist.
         clearPendingNext()
-        // 手动切歌会顶掉无缝队列, 预载的下一首封面作废, 一并清掉
-        pendingNextArtworkBitmap = null
-        artworkPreloadGeneration++
         val mediaItem = buildCurrentMediaItem(url)
         player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
         player.playWhenReady = startPlaying
@@ -1389,6 +1380,7 @@ class PlaybackService : MediaLibraryService() {
      * 那正是「UI 显示下一首、耳朵还是上一首」的串台。
      */
     private fun clearPendingNext() {
+        discardPreparedArtwork()
         pendingNextTitle = null
         pendingNextArtist = null
         pendingNextArtwork = null
@@ -1440,8 +1432,6 @@ class PlaybackService : MediaLibraryService() {
     fun discardPreload() {
         removePendingItems()
         clearPendingNext()
-        pendingNextArtworkBitmap = null
-        artworkPreloadGeneration++
     }
 
     private fun removePendingItems() {
@@ -1450,11 +1440,6 @@ class PlaybackService : MediaLibraryService() {
         if (count > from) player.removeMediaItems(from, count)
     }
 
-    /**
-     * 提前加载下一首封面到 pendingNextArtworkBitmap(不入当前位图)。
-     * 无缝 preload_next 时调用, 切换瞬间直接应用, 消除任务栏封面过渡窗口。
-     * 用独立的 preload 代数做过期校验(不影响当前歌的 loadArtwork 代数)。
-     */
     /** 把封面缩到通知栏够用的边长；原图不超过上限则原样返回（Palette 也吃这张）。 */
     private fun downscaleArtwork(source: Bitmap): Bitmap {
         val maxSide = maxOf(source.width, source.height)
@@ -1470,11 +1455,12 @@ class PlaybackService : MediaLibraryService() {
      * 刻意**不**重发通知 —— 系统那份副本还在，已显示的通知不会变空。
      */
     private fun scheduleArtworkIdleRelease() {
-        cancelArtworkIdleRelease()
+        if (artworkReleaseRunnable != null) return
         val runnable = Runnable {
             artworkReleaseRunnable = null
-            pendingNextArtworkBitmap = null
-            currentArtworkBitmap = null
+            discardPreparedArtwork()
+            artworkLoadJob?.cancel()
+            currentArtwork = null
             // 位图引用比较用的快照一并清掉，否则重载回来的新实例会被当成"同一张图"而不重发。
             lastMetadataBitmap = null
             Log.i("PlaybackService", "idle release: dropped artwork bitmaps")
@@ -1491,7 +1477,7 @@ class PlaybackService : MediaLibraryService() {
     /** 播放恢复：取消释放，并按 URL 补回已被释放的封面。 */
     private fun onPlaybackActive() {
         cancelArtworkIdleRelease()
-        if (currentArtworkBitmap == null) currentArtworkUrl?.let { loadArtwork(it) }
+        currentArtworkUrl?.let { loadArtwork(it) }
     }
 
     /**
@@ -1566,32 +1552,26 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun preloadArtwork(url: String) {
-        val gen = ++artworkPreloadGeneration
-        scope.launch(Dispatchers.IO) {
-            try {
-                val result = Coil.imageLoader(this@PlaybackService).execute(
-                    ImageRequest.Builder(this@PlaybackService)
-                        .data(CoverUrls.large(url))
-                        .size(1024, 1024)
-                        .build()
-                )
-                if (result is SuccessResult) {
-                    val bitmap = downscaleArtwork((result.drawable as BitmapDrawable).bitmap.copy(Bitmap.Config.ARGB_8888, false))
-                    withContext(Dispatchers.Main) {
-                        if (gen == artworkPreloadGeneration && pendingNextArtwork == url) pendingNextArtworkBitmap = bitmap
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("PlaybackService", "Preload artwork failed", e)
-            }
-        }
+    /** Keep one image request for the predicted next item, independent of the audio URL fetch. */
+    internal fun prepareNextArtwork(url: String) {
+        if (nextArtworkTask?.url == url) return
+        discardPreparedArtwork()
+        if (currentArtwork?.url != url) nextArtworkTask = ArtworkTask(url, scope.async { decodeArtwork(url) })
+    }
+
+    private fun takePreparedArtwork(url: String): ArtworkTask? =
+        nextArtworkTask?.takeIf { it.url == url }?.also { nextArtworkTask = null }
+
+    private fun discardPreparedArtwork() {
+        nextArtworkTask?.result?.cancel()
+        nextArtworkTask = null
     }
 
     private fun clearCurrentArtwork() {
+        artworkLoadJob?.cancel()
         artworkGeneration++
         currentArtworkUrl = null
-        currentArtworkBitmap = null
+        currentArtwork = null
         paletteUrl = null
         paletteTheme = null
         paletteRgb = null
@@ -1600,38 +1580,55 @@ class PlaybackService : MediaLibraryService() {
         onCoverTheme?.invoke(null)
     }
 
-    private fun loadArtwork(url: String) {
-        // 旧位图**保留**到新封面加载完成再整体换掉(用户决策: 等它加载完再
-        // 更换过去)——切歌瞬间不清图, 任务栏不会出现空图/系统保留旧图的
-        // 不确定窗口; 加载完成后由 metadata 去重的位图引用比较触发重发。
-        val gen = ++artworkGeneration
-        scope.launch(Dispatchers.IO) {
+    private fun loadArtwork(url: String, prepared: ArtworkTask? = null) {
+        if (currentArtwork?.url == url || (artworkLoadUrl == url && artworkLoadJob?.isActive == true)) {
+            if (artworkLoadUrl != url) artworkLoadJob?.cancel()
+            prepared?.result?.cancel()
+            return
+        }
+        artworkLoadJob?.cancel()
+        val generation = ++artworkGeneration
+        artworkLoadUrl = url
+        artworkLoadJob = scope.launch {
             try {
-                val imageLoader = Coil.imageLoader(this@PlaybackService)
-                val request = ImageRequest.Builder(this@PlaybackService)
-                    .data(CoverUrls.large(url))
-                    // 锁屏/任务栏的媒体卡片是大尺寸位图(通常 1000px+), 512px 源会被
-                    // 放大糊掉; 走图床 1080 缩略 + 1024 目标一起
-                    .size(1024, 1024)
-                    .build()
-                val result = imageLoader.execute(request)
-                // 加载期间又切了歌: 丢弃过期结果, 防止慢网下上一首封面覆盖新歌
-                if (gen != artworkGeneration) return@launch
-                if (result is SuccessResult) {
-                    val srcBitmap = (result.drawable as BitmapDrawable).bitmap
-                    // B：先拷成 ARGB_8888（Palette 读不了硬件位图）再降到通知栏够用的尺寸。
-                    val bitmap = downscaleArtwork(srcBitmap.copy(Bitmap.Config.ARGB_8888, false))
-                    withContext(Dispatchers.Main) {
-                        if (gen != artworkGeneration || currentArtworkUrl != url) return@withContext
-                        currentArtworkBitmap = bitmap
-                        applyCoverAccent(bitmap, url, gen)
-                        updatePlaybackState()
-                        updateNotify()
-                    }
+                var artwork = prepared?.result?.await() ?: decodeArtwork(url)
+                if (artwork == null && hasActivePlaybackIntent()) {
+                    delay(1_000L)
+                    artwork = decodeArtwork(url)
                 }
-            } catch (e: Exception) {
-                Log.e("PlaybackService", "Load artwork failed", e)
+                if (artwork == null || generation != artworkGeneration || currentArtworkUrl != url) return@launch
+                currentArtwork = artwork
+                applyCoverAccent(artwork.bitmap, url, generation)
+                updatePlaybackState()
+                updateNotify()
+            } finally {
+                prepared?.result?.cancel()
             }
+        }
+    }
+
+    private suspend fun decodeArtwork(url: String): MediaArtwork? = withContext(Dispatchers.IO) {
+        try {
+            val request = ImageRequest.Builder(this@PlaybackService)
+                .data(CoverUrls.large(url))
+                .size(ARTWORK_MAX_PX, ARTWORK_MAX_PX)
+                .allowHardware(false)
+                .build()
+            val result = Coil.imageLoader(this@PlaybackService).execute(request) as? SuccessResult
+                ?: return@withContext null
+            val source = (result.drawable as? BitmapDrawable)?.bitmap ?: return@withContext null
+            val bitmap = downscaleArtwork(source)
+            val jpeg = runCatching {
+                java.io.ByteArrayOutputStream().use { out ->
+                    if (bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) out.toByteArray() else null
+                }
+            }.getOrNull()
+            MediaArtwork(url, bitmap, jpeg)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            Log.w("PlaybackService", "Artwork load failed", e)
+            null
         }
     }
 
@@ -1645,12 +1642,6 @@ class PlaybackService : MediaLibraryService() {
     // URL 换新但位图还是旧的、或位图换新但 URL 已同步 —— 用引用比较,
     // 只要位图实例变了就重发, 保证任务栏封面最终切到新歌
     private var lastMetadataBitmap: Bitmap? = null
-
-    // v2.1.6 · 会话合并：封面位图的 JPEG 编码缓存。
-    // 歌词每推进一行就要重发一次会话 metadata，而 media3 的 artworkData 是 byte[]；
-    // 不按位图实例缓存的话，每秒都要重压一张 512px 图（主线程，纯浪费）。
-    private var cachedArtworkBytes: ByteArray? = null
-    private var cachedArtworkBytesFor: Bitmap? = null
 
     /**
      * v1.8.0 · T5 / v2.0.2：上一次成功 post 通知的时刻（elapsedRealtime）。
@@ -1860,33 +1851,10 @@ class PlaybackService : MediaLibraryService() {
         // 拿不到才退化成自己去拉 artworkUri（很多 ROM 干脆不拉，封面就是空的）。
         // 所以位图必须随 metadata 一起过去。合并后用 media3 的 artworkData 承载：
         // 一次压缩、按位图实例缓存，歌词推进时不会重复编码。
-        currentArtworkBitmap?.let { bmp ->
-            artworkBytesFor(bmp)?.let { bytes ->
-                meta.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-            }
+        currentArtwork?.jpeg?.let { bytes ->
+            meta.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
         }
         player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(meta.build()).build())
-    }
-
-    /**
-     * 把封面位图编码成 `artworkData` 用的字节。**按位图实例缓存** ——
-     * 歌词行每次推进都会重发 metadata，不缓存就会每秒重压一张 512px 图。
-     *
-     * 用 JPEG 而不是 PNG：512px 的 PNG 动辄 300–500 KB，而会话 metadata 走 Binder
-     * （单次事务 1 MB 上限，还要跟其余字段共用）；JPEG(q=85) 通常 40–80 KB，
-     * 且封面不需要 alpha 通道。
-     */
-    private fun artworkBytesFor(bitmap: Bitmap): ByteArray? {
-        if (cachedArtworkBytesFor === bitmap) return cachedArtworkBytes
-        val bytes = runCatching {
-            java.io.ByteArrayOutputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                out.toByteArray()
-            }
-        }.getOrNull()
-        cachedArtworkBytesFor = bitmap
-        cachedArtworkBytes = bytes
-        return bytes
     }
 
     /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
@@ -2372,7 +2340,7 @@ class PlaybackService : MediaLibraryService() {
         // Do NOT null the companion callbacks here — the ViewModel registers them once and
         // they must survive a service stop/restart cycle (e.g. stopSelf then play again).
         // ViewModel.onCleared() is responsible for clearing them when the ViewModel dies.
-        currentArtworkBitmap = null
+        currentArtwork = null
         mediaSession?.release()
         player.release()
         // R2：显式停掉 PCM 需求监听，避免已销毁的服务继续持有 snapshot observer。
@@ -2406,8 +2374,7 @@ class PlaybackService : MediaLibraryService() {
         mediaArtist = ""
         mediaSongId = null
         clearPendingNext()
-        currentArtworkBitmap = null
-        currentArtworkUrl = null
+        clearCurrentArtwork()
         stopSelf()
         super.onTaskRemoved(rootIntent)
     }
