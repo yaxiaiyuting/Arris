@@ -6,8 +6,12 @@ import android.content.SharedPreferences
 import com.takahashirinta.ncrust.account.*
 import com.takahashirinta.ncrust.auth.*
 import com.takahashirinta.ncrust.cache.*
+import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
+import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.*
@@ -19,27 +23,25 @@ import org.junit.Test
 class SessionAndHomeBoundaryTest {
     private class MemoryContext : ContextWrapper(null) {
         val stores = mutableMapOf<String, MemoryPrefs>()
-        var afterDailyRead: (() -> Unit)? = null
+        var afterSnapshotRead: (() -> Unit)? = null
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             val base = synchronized(stores) { stores.getOrPut(name) { MemoryPrefs() } }
             if (name != "ncrust_home_cache") return base
             return object : SharedPreferences by base {
-                override fun getString(key: String, defValue: String?): String? {
-                    val result = base.getString(key, defValue)
-                    if (key == "daily_songs") {
-                        val action = afterDailyRead
-                        afterDailyRead = null
-                        action?.invoke()
-                    }
+                override fun getAll(): MutableMap<String, *> {
+                    val result = base.snapshot().toMutableMap()
+                    val action = afterSnapshotRead
+                    afterSnapshotRead = null
+                    action?.invoke()
                     return result
                 }
             }
         }
     }
     private fun field(o: Any, name: String) = o.javaClass.getDeclaredField(name).apply { isAccessible = true }
-    private suspend fun settle(o: Any) {
-        val scope = field(o, "scope").get(o) as CoroutineScope
+    private suspend fun settle(o: Any, scopeName: String = "scope") {
+        val scope = field(o, scopeName).get(o) as CoroutineScope
         withTimeout(6000) { scope.coroutineContext[Job]!!.children.toList().joinAll() }
     }
     private suspend fun fixture(body: suspend (MemoryContext) -> Unit) {
@@ -107,7 +109,7 @@ class SessionAndHomeBoundaryTest {
             context.getSharedPreferences("ncrust_home_cache",0).edit()
                 .putString("owner",ownerA)
                 .putString("daily_songs","""[{"id":424242,"name":"account A private recommendation"}]""").commit()
-            context.afterDailyRead={ CookieManager.saveCookie(context,"MUSIC_U=fixture-account-B; __csrf=fixture-csrf-B") }
+            context.afterSnapshotRead={ CookieManager.saveCookie(context,"MUSIC_U=fixture-account-B; __csrf=fixture-csrf-B") }
             assertFalse(HomeSnapshot.restoreIntoCache(context))
             val ownerB=CookieManager.accountOwner()
             assertNotEquals(ownerA,ownerB)
@@ -127,4 +129,56 @@ class SessionAndHomeBoundaryTest {
             assertEquals(707L,ContentCache.homeDailySongs!!.single().id)
         }
     }
+
+    @Test fun partialSnapshotWriteDoesNotRelabelPreviousOwnerSections() = runBlocking {
+        fixture { context ->
+            val prefs = context.getSharedPreferences("ncrust_home_cache", 0)
+            prefs.edit().putString("owner", "older-owner")
+                .putString("daily_songs", """[{"id":101,"name":"older account"}]""").commit()
+
+            HomeSnapshot.save(context, newSongs = listOf(homeSong(202)))
+            settle(HomeSnapshot, "ioScope")
+
+            assertEquals(CookieManager.accountOwner(), prefs.getString("owner", null))
+            assertFalse(prefs.contains("daily_songs"))
+            assertTrue(HomeSnapshot.restoreIntoCache(context))
+            assertNull(ContentCache.homeDailySongs)
+            assertEquals(202L, ContentCache.homeNewSongs!!.single().id)
+        }
+    }
+
+    @Test fun slowSnapshotWriteKeepsNewerSectionsAndFillsUntouchedOnes() = runBlocking {
+        fixture { context ->
+            val entered = CompletableDeferred<Unit>()
+            val release = CountDownLatch(1)
+            val olderDaily = object : AbstractList<SongItem>() {
+                override val size: Int = 1
+                override fun get(index: Int): SongItem {
+                    entered.complete(Unit)
+                    check(release.await(5, TimeUnit.SECONDS))
+                    return homeSong(101)
+                }
+            }
+            val playlist = PlaylistApi.PlaylistCard(303, "other section", "", 0)
+            val scope = field(HomeSnapshot, "ioScope").get(HomeSnapshot) as CoroutineScope
+            HomeSnapshot.save(context, daily = olderDaily, playlists = listOf(playlist))
+            try {
+                withTimeout(5_000) { entered.await() }
+                val older = scope.coroutineContext[Job]!!.children.single()
+                HomeSnapshot.save(context, daily = listOf(homeSong(202)))
+                withTimeout(5_000) {
+                    scope.coroutineContext[Job]!!.children.filter { it !== older }.toList().joinAll()
+                }
+            } finally {
+                release.countDown()
+                settle(HomeSnapshot, "ioScope")
+            }
+
+            assertTrue(HomeSnapshot.restoreIntoCache(context))
+            assertEquals(202L, ContentCache.homeDailySongs!!.single().id)
+            assertEquals(listOf(playlist), ContentCache.homeRecommendPlaylists)
+        }
+    }
+
+    private fun homeSong(id: Long) = SongItem(id, "fixture-$id", null, null, 200_000)
 }
