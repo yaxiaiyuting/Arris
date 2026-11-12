@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -64,6 +65,24 @@ class OfflineLibraryIndexTest {
         assertEquals(1, idx.size())
         assertEquals(1_000L, idx.get(7L)?.completedAt)
         assertEquals("新名", idx.get(7L)?.name)
+    }
+
+    @Test
+    fun `末条重复写复用编码，重排和删除后刷新编码`() {
+        val idx = OfflineLibraryIndex()
+        idx.upsert(track(1L))
+        idx.upsert(track(2L))
+        val before = idx.toJson()
+        idx.upsert(track(2L, at = 2_000L))
+        assertSame(before, idx.toJson())
+
+        idx.upsert(track(1L, at = 2_000L))
+        assertEquals(listOf(2L, 1L), OfflineTrackCodec.decode(idx.toJson()).map { it.songId })
+
+        idx.retainSongIds(setOf(1L))
+        assertEquals(listOf(1L), OfflineTrackCodec.decode(idx.toJson()).map { it.songId })
+        idx.removeWithUrls(1L, OfflineUrlIndex())
+        assertEquals("[]", idx.toJson())
     }
 
     @Test

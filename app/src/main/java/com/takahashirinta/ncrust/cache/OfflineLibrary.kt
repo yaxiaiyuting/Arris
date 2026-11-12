@@ -114,33 +114,36 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
 
     // LinkedHashMap 的迭代顺序 = 插入顺序，put 前先 remove 即得到 LRU。
     private val map = LinkedHashMap<Long, OfflineTrack>()
+    private var lastUpsertedSongId = 0L
+    private var encoded: String? = null
 
     /** 写入 / 更新一条记录。返回 false 表示主键非法、被忽略。 */
     fun upsert(track: OfflineTrack): Boolean {
         if (track.songId <= 0L) return false
-        val prev = map.remove(track.songId)
-        // completedAt 是「首次可离线播放的时刻」：重播只更新元数据，不刷新时间戳。
-        // 否则「按时间倒序」会退化成「按最近播放排序」，与字段语义不符。
-        val merged = if (prev != null) {
-            track.copy(completedAt = prev.completedAt ?: track.completedAt)
-        } else {
-            track
-        }
+        val prev = map[track.songId]
+        val completedAt = prev?.completedAt ?: track.completedAt
+        val merged = if (completedAt == track.completedAt) track else track.copy(completedAt = completedAt)
+        if (lastUpsertedSongId == track.songId && prev == merged) return true
+
+        map.remove(track.songId)
         map[track.songId] = merged
+        lastUpsertedSongId = track.songId
+        encoded = null
         while (map.size > maxEntries) {
             val it = map.keys.iterator()
-            if (it.hasNext()) {
-                it.next()
-                it.remove()
-            } else {
-                break
-            }
+            if (!it.hasNext()) break
+            it.next()
+            it.remove()
         }
         return true
     }
 
     /** 删一条。返回被删掉的记录（本来就没有则 null）。 */
-    fun remove(songId: Long): OfflineTrack? = map.remove(songId)
+    fun remove(songId: Long): OfflineTrack? {
+        val removed = map.remove(songId)
+        if (removed != null) encoded = null
+        return removed
+    }
 
     /**
      * 删曲目 **+ 同步删 URL 清单**（纯逻辑，供 [OfflineLibrary.remove] 与单测共用）。
@@ -152,7 +155,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
      * 所以即使 [songId] 不在曲目表里，这里也照样清 URL。
      */
     fun removeWithUrls(songId: Long, urls: OfflineUrlIndex): OfflineTrack? {
-        val removed = map.remove(songId)
+        val removed = remove(songId)
         urls.removeSong(songId)
         return removed
     }
@@ -167,6 +170,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
                 dropped++
             }
         }
+        if (dropped > 0) encoded = null
         return dropped
     }
 
@@ -183,13 +187,11 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
     /** [OfflineTrack.approxBytes] 之和（拿不到就是 0）。 */
     fun totalBytes(): Long = map.values.sumOf { it.approxBytes ?: 0L }
 
-    fun clear() = map.clear()
-
     /**
      * v2.5.5 · A：写路径只经 [OfflineTrackCodec] 的 DTO，每个字段显式
      * `@SerializedName("<稳定名字>")` —— 落盘 key 不再由 R8 的字段名决定。
      */
-    fun toJson(): String = OfflineTrackCodec.encode(map.values)
+    fun toJson(): String = encoded ?: OfflineTrackCodec.encode(map.values).also { encoded = it }
 
     companion object {
         /** 与 [OfflineUrlIndex.MAX_ENTRIES] 同值：两张表覆盖同一批歌，条数上限就该一致。 */
@@ -279,12 +281,7 @@ object OfflineLibrary {
     /** 列表（按首次缓存时间倒序）。返回类型是 internal 的 [OfflineTrack]，所以本函数也是 internal。 */
     internal fun list(context: Context): List<OfflineTrack> = synchronized(this) { index(context).list() }
 
-    internal fun get(context: Context, songId: Long): OfflineTrack? =
-        synchronized(this) { index(context).get(songId) }
-
     fun size(context: Context): Int = synchronized(this) { index(context).size() }
-
-    fun totalBytes(context: Context): Long = synchronized(this) { index(context).totalBytes() }
 
     /**
      * 删一首歌：曲目表与 URL 清单**一起删**（见 [OfflineLibraryIndex.removeWithUrls]）。
