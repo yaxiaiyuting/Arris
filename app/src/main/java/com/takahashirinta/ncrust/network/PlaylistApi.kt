@@ -356,7 +356,7 @@ object PlaylistApi {
         var failedBatches = 0
         for (start in missingIds.indices step batchSize) {
             val batch = missingIds.subList(start, minOf(start + batchSize, missingIds.size))
-            val fetched = fetchSongDetails(batch)
+            val fetched = getSongsByIds(batch)
             if (fetched.size < batch.size) {
                 failedBatches++
                 Log.w("PlaylistApi", "batch returned ${fetched.size}/${batch.size} songs from server")
@@ -454,16 +454,20 @@ object PlaylistApi {
         append(']')
     }
 
-    private suspend fun fetchSongDetails(ids: List<Long>): List<SongItem> = withContext(Dispatchers.IO) {
+    /** null 表示整批请求失败，空列表表示服务端确认本批无可用详情。 */
+    internal suspend fun getSongsByIdsOrNull(ids: List<Long>): List<SongItem>? = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
         val payload = mapOf("c" to detailIdsJson(ids))
         // Single retry with 500ms delay to survive transient network blips on large playlists.
         var lastError: Exception? = null
         repeat(2) { attempt ->
             try {
                 val response = readEapi("/eapi/v3/song/detail", payload)
-                val body = response.body?.string() ?: return@repeat
+                val body = response.use { it.body?.string() } ?: return@repeat
                 val json = JSONObject(body)
-                reportBusinessCode(json.optInt("code", -1), response)
+                val code = json.optInt("code", -1)
+                reportBusinessCode(code, response)
+                if (!response.isSuccessful || code != 200) return@repeat
                 val songArray = json.optJSONArray("songs") ?: return@repeat
                 val privileges = parsePrivileges(json.optJSONArray("privileges"))
                 return@withContext (0 until songArray.length()).map { i ->
@@ -480,7 +484,7 @@ object PlaylistApi {
             }
         }
         lastError?.let { Log.e("PlaylistApi", "fetchSongDetails gave up after retry", it) }
-        emptyList()
+        null
     }
 
     @Immutable
@@ -987,7 +991,7 @@ object PlaylistApi {
     }
 
     /** 按 ID 批量拉取单曲详情（eapi/v3/song/detail），供收藏单曲分页 lazy 加载用。 */
-    suspend fun getSongsByIds(ids: List<Long>): List<SongItem> = fetchSongDetails(ids)
+    suspend fun getSongsByIds(ids: List<Long>): List<SongItem> = getSongsByIdsOrNull(ids).orEmpty()
 
     /**
      * 收藏(like=true) / 取消收藏(false) 单曲（写入「我喜欢的音乐」）。

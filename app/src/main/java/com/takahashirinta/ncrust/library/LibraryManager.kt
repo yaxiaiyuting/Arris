@@ -142,9 +142,10 @@ object LibraryManager {
      * 而**不是**「它可见」—— tombstone 的条目也算已消费，否则删除过的歌
      * 会在每一轮刷新时被重新请求一次详情（恒定浪费一次网络往返）。
      *
-     * 只在 songsLock 或 IO 协程内写；@Volatile 保证可见性即可，无需嵌套加锁。
+     * 和编号快照一起在 [songsLock] 内读写。
      */
-    @Volatile private var likedIdCursor = 0
+    private var likedIdCursor = 0
+    private val likedPageLock = Mutex()
 
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var flushJob: Job? = null
@@ -487,7 +488,7 @@ object LibraryManager {
             savedSongs = SavedSongTable(after)
             if (key.source == MusicSource.NETEASE) {
                 val ids = ensureLikedIdsLoaded(context)
-                if (key.id !in ids) cachedLikedIds = LikedIds(listOf(key.id) + ids.ordered)
+                if (key.id !in ids) prependLikedIds(ids, listOf(key.id))
             }
             true
         }
@@ -524,7 +525,7 @@ object LibraryManager {
                 if (ncmIds.isNotEmpty()) {
                     val ids = ensureLikedIdsLoaded(context)
                     val fresh = ncmIds.filterNot { it in ids }
-                    if (fresh.isNotEmpty()) cachedLikedIds = LikedIds(fresh + ids.ordered)
+                    if (fresh.isNotEmpty()) prependLikedIds(ids, fresh)
                 }
             }
         }
@@ -534,6 +535,12 @@ object LibraryManager {
             flushNow(context)
             if (isLoggedIn(context)) added.forEach { pushLike(TrackKey.ofSong(it).id, true) }
         }
+    }
+
+    // 调用方持有 songsLock。手动加入的编号已有详情，未读部分随前缀一起后移。
+    private fun prependLikedIds(ids: LikedIds, fresh: List<Long>) {
+        cachedLikedIds = LikedIds(fresh + ids.ordered)
+        likedIdCursor += fresh.size
     }
 
     /**
@@ -558,7 +565,10 @@ object LibraryManager {
             val changedInIds = if (key.source == MusicSource.NETEASE) {
                 val ids = ensureLikedIdsLoaded(context)
                 val present = key.id in ids
-                if (present) cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
+                if (present) {
+                    likedIdCursor -= ids.ordered.subList(0, likedIdCursor).count { it == key.id }
+                    cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
+                }
                 present
             } else false
             changedInSongs || changedInIds
@@ -716,7 +726,6 @@ object LibraryManager {
                 is PlaylistApi.LikedIdsResult.Success -> {
                     val likedIds = likedResult.ids
                     Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
-                    synchronized(songsLock) { cachedLikedIds = LikedIds(likedIds) }
                     val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
@@ -733,6 +742,7 @@ object LibraryManager {
                             .toHashSet()
                         val firstMissing = likedIds.indexOfFirst { it !in coveredIds }
                         likedIdCursor = if (firstMissing < 0) likedIds.size else firstMissing
+                        cachedLikedIds = LikedIds(likedIds)
                     }
                     // K05：云端合并（只加不减）也可能真的往表里加了条目 —— 推进修订。
                     // 放在锁外：订阅方是 Compose，不需要在持锁期间唤醒。
@@ -791,34 +801,30 @@ object LibraryManager {
      * 分页拉取下一批收藏单曲详情（滚动到底时调用）。会追加进本地缓存并返回新渲染项。
      */
     suspend fun loadMoreLikedSongs(context: Context): List<SongItem> = withContext(Dispatchers.IO) {
-        val allIds = getLikedSongIds(context)
-        // Bug2-①：游标是「已消费的 id 数」，与「已解析歌曲数」解耦；
-        // 因此个别 id 取不到详情也不会让加载停滞。
-        val start = likedIdCursor
-        if (allIds.isEmpty() || start >= allIds.size) return@withContext emptyList()
-        val sliceEnd = minOf(start + LIKED_BATCH_SIZE, allIds.size)
-        val slice = allIds.subList(start, sliceEnd)
-        // 先推进游标再发请求：即使本批部分 id 取不到详情，游标也必须前进，
-        // 否则下一轮会重复请求同一段，终止条件也永远不成立（死循环）。
-        likedIdCursor = sliceEnd
-        val fetched = try {
-            PlaylistApi.getSongsByIds(slice)
-        } catch (e: Exception) {
-            // 只有整批失败（网络/风控）才回滚游标，允许用户再次滚动时重试这一段。
-            Log.e(TAG, "loadMoreLikedSongs failed: ${e.message}")
-            likedIdCursor = start
-            return@withContext emptyList()
-        }
-        synchronized(songsLock) {
-            val table = ensureSongsLoaded(context)
-            // 纯追加（不是 merge）：分页只拿到一段 slice，用 merge 会把不在这一批里的
-            // 条目重排到后面 —— 每翻一页列表顺序就抖一次。
-            val after = SavedSongSync.appendRemote(table.entries, fetched, System.currentTimeMillis())
-            if (after === table.entries) table else SavedSongTable(after).also { savedSongs = it }
-        }.visibleSongs.also {
-            // K05：分页追加也是一次真表变更（哪怕只补进一首），红心必须能感知。
-            if (fetched.isNotEmpty()) bumpSavedRevision()
-            scheduleFlush(context)
+        likedPageLock.withLock {
+            val (ids, start) = synchronized(songsLock) { ensureLikedIdsLoaded(context) to likedIdCursor }
+            if (start >= ids.ordered.size) return@withLock emptyList()
+            val end = minOf(start + LIKED_BATCH_SIZE, ids.ordered.size)
+            val slice = ids.ordered.subList(start, end).filterNotNull()
+            val fetched = PlaylistApi.getSongsByIdsOrNull(slice) ?: return@withLock emptyList()
+
+            val caller = currentCoroutineContext()
+            val (table, changed) = synchronized(songsLock) {
+                caller.ensureActive()
+                if (cachedLikedIds !== ids) return@withLock emptyList()
+                val before = ensureSongsLoaded(context)
+                // 只追加详情，已展示的曲目保持原顺序。
+                val after = SavedSongSync.appendRemote(before.entries, fetched, System.currentTimeMillis())
+                likedIdCursor = end
+                if (after === before.entries) before to false else {
+                    SavedSongTable(after).also { savedSongs = it } to true
+                }
+            }
+            if (changed) {
+                bumpSavedRevision()
+                scheduleFlush(context)
+            }
+            table.visibleSongs
         }
     }
 

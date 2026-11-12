@@ -15,10 +15,15 @@ import com.takahashirinta.ncrust.qq.*
 import com.takahashirinta.ncrust.source.*
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -26,11 +31,6 @@ import okhttp3.Protocol
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.json.JSONObject
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -203,6 +203,55 @@ class LibraryBoundaryRegressionTest {
         assertTrue(result.missingCloudIds.isEmpty())
         assertEquals(listOf(303L), LibraryManager.getSavedSongs(ctx).map { it.id })
         assertFalse(LibraryManager.isSongSaved(ctx, 202))
+    }
+
+    @Test fun likedPaginationRetriesFailedDetailsAndConsumesConfirmedEmptyPage() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", "[101,202]").commit()
+        val attempts = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            if (attempts.incrementAndGet() <= 2) throw IOException("fixture offline")
+            """{"code":200,"songs":[]}"""
+        }
+
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(2, attempts.get())
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(3, attempts.get())
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(3, attempts.get())
+    }
+
+    @Test fun likedPaginationDiscardsPageAfterRemovalAndRetriesAtUnreadPosition() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", (101L..151L).joinToString(",", "[", "]")).commit()
+        val requested = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val attempts = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            if (attempts.incrementAndGet() == 1) {
+                requested.complete(Unit)
+                check(release.await(5, TimeUnit.SECONDS))
+                """{"code":200,"songs":[{"id":101,"name":"fixture-101","dt":200000}]}"""
+            } else {
+                """{"code":200,"songs":[{"id":102,"name":"fixture-102","dt":200000},{"id":151,"name":"fixture-151","dt":200000}]}"""
+            }
+        }
+
+        val loading = async { LibraryManager.loadMoreLikedSongs(ctx) }
+        try {
+            withTimeout(5_000) { requested.await() }
+            assertTrue(LibraryManager.removeSong(ctx, 101))
+        } finally {
+            release.countDown()
+        }
+
+        assertTrue(loading.await().isEmpty())
+        assertFalse(LibraryManager.isSongSaved(ctx, 101))
+        assertEquals(listOf(102L, 151L), LibraryManager.loadMoreLikedSongs(ctx).map { it.id })
+        assertEquals(2, attempts.get())
     }
 
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {
