@@ -1582,7 +1582,7 @@ data class ShareStrings(
     val shareText: String,
     /** 动作：生成图片并调起分享。 */
     val shareImage: String,
-    /** 动作：保存图片到相册（**仅 API 29+ 显示**，理由见 LyricShareActions.canSaveToGallery）。 */
+    /** 动作：保存图片到相册。 */
     val saveImage: String,
     /** 出图进行中（按钮置灰时显示）。 */
     val generating: String,
