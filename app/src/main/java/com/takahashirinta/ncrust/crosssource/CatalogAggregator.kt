@@ -114,6 +114,13 @@ object CatalogAggregator {
     /** 一页最多探测多少首。超过的部分留在 `UNKNOWN`（宁可少标，不拖住页面）。 */
     private const val PROBE_LIMIT = 60
 
+    private data class Counterpart<Key, Item>(
+        val key: Key,
+        val verdict: MatchVerdict,
+        val overlap: Int,
+        val items: List<Item> = emptyList(),
+    )
+
     // ================================================================== 艺人页 ==================================================================
 
     /**
@@ -124,16 +131,17 @@ object CatalogAggregator {
     suspend fun loadArtist(context: Context, anchor: ArtistKey): ArtistPage {
         val anchorAlbums = albumsOfSide(anchor)
         val candidate = findCounterpartArtist(context, anchor, anchorAlbums)
+        val alias = candidate?.takeIf { it.verdict.mergeable }
 
         val merged = MergedArtist(
             primary = anchor,
-            aliases = candidate?.takeIf { it.second.mergeable }?.let { listOf(it.first.key) }.orEmpty(),
+            aliases = listOfNotNull(alias?.key),
             name = anchor.name,
-            confidence = candidate?.second?.confidence ?: MatchConfidence.NONE,
-            reason = candidate?.second?.reason.orEmpty(),
-            albumOverlap = candidate?.third ?: 0,
+            confidence = candidate?.verdict?.confidence ?: MatchConfidence.NONE,
+            reason = candidate?.verdict?.reason.orEmpty(),
+            albumOverlap = candidate?.overlap ?: 0,
         )
-        if (candidate != null && candidate.second.mergeable) {
+        if (alias != null) {
             runCatching { MatchCacheStore.putArtist(context, merged) }
         }
 
@@ -143,10 +151,10 @@ object CatalogAggregator {
         // 而 alias 明明已经记下了那个 ncm 艺人。现在两侧先列成 [artistSides]，
         // 再**按各自 source 分派取数**：谁都不会漏，也不会拿 ncm 的数字 id
         // 去当 QQ 的 singerMID（那是「查到别人的专辑」的形状）。
-        val sides = artistSides(anchor, candidate?.takeIf { it.second.mergeable }?.first?.key)
-        // 锚点那一侧的专辑已经在上面取过一次（候选校验要用），不再重复请求。
+        val sides = artistSides(anchor, alias?.key)
         val albumsBySide = sides.associateWith { key ->
-            if (key == anchor) anchorAlbums else albumsOfSide(key)
+            if (key == anchor) anchorAlbums
+            else alias?.items?.takeIf { it.isNotEmpty() } ?: albumsOfSide(key)
         }
         val neAlbums = sides.filter { it.source == MusicSource.NETEASE }.flatMap { albumsBySide[it].orEmpty() }
         val qqAlbums = sides.filter { it.source == MusicSource.QQMUSIC }.flatMap { albumsBySide[it].orEmpty() }
@@ -187,17 +195,18 @@ object CatalogAggregator {
         // 旧实现为此各取一次（匹配判据一次、装配再一次），弱网下两次响应
         // 还可能不一致 —— 那会让「匹配说重合 95%、列表却少两首」这种形态出现。
         val anchorSongs = albumSongsOf(anchor.source, anchor.id)
-        val counterpart = findCounterpartAlbum(context, anchor, anchorSongs.map { trackCandidateOf(it) })
+        val counterpart = findCounterpartAlbum(context, anchor, anchorSongs)
+        val alias = counterpart?.takeIf { it.verdict.mergeable }
 
         val merged = MergedAlbum(
             primary = anchor,
-            aliases = counterpart?.takeIf { it.second.mergeable }?.let { listOf(it.first.key) }.orEmpty(),
+            aliases = listOfNotNull(alias?.key),
             name = anchor.name,
-            confidence = counterpart?.second?.confidence ?: MatchConfidence.NONE,
-            reason = counterpart?.second?.reason.orEmpty(),
-            trackOverlap = counterpart?.third ?: 0,
+            confidence = counterpart?.verdict?.confidence ?: MatchConfidence.NONE,
+            reason = counterpart?.verdict?.reason.orEmpty(),
+            trackOverlap = counterpart?.overlap ?: 0,
         )
-        if (counterpart != null && counterpart.second.mergeable) {
+        if (alias != null) {
             runCatching { MatchCacheStore.putAlbum(context, merged) }
         }
 
@@ -205,9 +214,10 @@ object CatalogAggregator {
         // 旧写法是 `neSongs = if (锚点是 ncm) … else emptyList()` —— 以 QQ 为主源进专辑页时，
         // 网易侧的曲目整块缺失（有对面 alias，列表里却只有 QQ），
         // 而「对面那几个版本」正是用户进双源专辑页要看的东西。
-        val sides = albumSides(anchor, counterpart?.takeIf { it.second.mergeable }?.first?.key)
+        val sides = albumSides(anchor, alias?.key)
         val songsBySide = sides.associateWith { key ->
-            if (key == anchor) anchorSongs else albumSongsOf(key.source, key.id)
+            if (key == anchor) anchorSongs
+            else alias?.items?.takeIf { it.isNotEmpty() } ?: albumSongsOf(key.source, key.id)
         }
         val allSongs = sides.flatMap { songsBySide[it].orEmpty() }
         val neSongs = allSongs.filter { it.musicSource == MusicSource.NETEASE }
@@ -614,13 +624,13 @@ object CatalogAggregator {
         context: Context,
         anchor: ArtistKey,
         anchorAlbums: List<QqAlbum>,
-    ): Triple<CrossSourceMatcher.ArtistCandidate, MatchVerdict, Int>? {
+    ): Counterpart<ArtistKey, QqAlbum>? {
         val other = MusicSource.otherThan(anchor.source) ?: return null
         // 缓存优先：命中就不再发请求。
         runCatching { MatchCacheStore.artist(context, anchor) }.getOrNull()?.let { cached ->
             val alias = cached.aliases.firstOrNull() ?: return@let
-            return Triple(
-                CrossSourceMatcher.ArtistCandidate(alias, emptyList()),
+            return Counterpart(
+                alias,
                 MatchVerdict(cached.confidence, cached.reason),
                 cached.albumOverlap,
             )
@@ -646,21 +656,15 @@ object CatalogAggregator {
         val unique = recalled.count { it.albumCountHint == topHint } == 1
         val anchorNames = anchorAlbums.map { it.name }
 
-        var best: Triple<CrossSourceMatcher.ArtistCandidate, MatchVerdict, Int>? = null
+        var best: Counterpart<ArtistKey, QqAlbum>? = null
         for (candidate in recalled.take(CrossSourceMatcher.MAX_ARTIST_CANDIDATES)) {
-            val albums = when (other) {
-                MusicSource.QQMUSIC -> qqAlbumsOf(candidate.key.id)
-                MusicSource.NETEASE -> neArtistAlbums(candidate.key.id)
-                // 结构上不可达：`other` 来自 MusicSource.otherThan（只遍历 loginSources）。
-                // 仍然显式写出来，理由同 [albumsOfSide]。
-                MusicSource.BILIBILI -> emptyList()
-            }
+            val albums = albumsOfSide(candidate.key)
             val withAlbums = candidate.copy(albumNames = albums.map { it.name })
             val verdict = CrossSourceMatcher.gradeArtist(anchor.name, anchorNames, withAlbums, unique)
             val overlap = withAlbums.albumNames.mapNotNull { NameNormalizer.normalizeName(it).takeIf { n -> n.isNotEmpty() } }
                 .toSet().let { set -> anchorNames.count { NameNormalizer.normalizeName(it) in set } }
-            if (best == null || rank(verdict.confidence) > rank(best.second.confidence)) {
-                best = Triple(withAlbums, verdict, overlap)
+            if (best == null || rank(verdict.confidence) > rank(best.verdict.confidence)) {
+                best = Counterpart(candidate.key, verdict, overlap, albums)
             }
             if (verdict.confidence == MatchConfidence.EXACT) break
         }
@@ -686,20 +690,23 @@ object CatalogAggregator {
     private suspend fun findCounterpartAlbum(
         context: Context,
         anchor: AlbumKey,
-        anchorTracks: List<CrossSourceMatcher.TrackCandidate>,
-    ): Triple<CrossSourceMatcher.AlbumCandidate, MatchVerdict, Int>? {
+        anchorSongs: List<SongItem>,
+    ): Counterpart<AlbumKey, SongItem>? {
         val other = MusicSource.otherThan(anchor.source) ?: return null
         runCatching { MatchCacheStore.album(context, anchor) }.getOrNull()?.let { cached ->
             val alias = cached.aliases.firstOrNull() ?: return@let
-            return Triple(
-                CrossSourceMatcher.AlbumCandidate(alias, emptyList()),
+            return Counterpart(
+                alias,
                 MatchVerdict(cached.confidence, cached.reason),
                 cached.trackOverlap,
             )
         }
 
-        val anchorNames = anchorTracks.map { it.name }
-        val anchorArtist = anchor.artistKey?.name.orEmpty()
+        val anchorNames = anchorSongs.map { it.name }
+        val anchorArtist = anchor.artistKey?.name?.takeIf { it.isNotEmpty() }
+        val anchorCandidate = CrossSourceMatcher.AlbumCandidate(
+            anchor, anchorNames, null, anchor.name, listOfNotNull(anchorArtist),
+        )
         val candidates: List<QqAlbum> = when (other) {
             // 结构上不可达（同 findCounterpartAlbum）；显式分支见 [albumsOfSide] 的说明。
             MusicSource.BILIBILI -> emptyList()
@@ -727,38 +734,21 @@ object CatalogAggregator {
             }
         }
 
-        var best: Triple<CrossSourceMatcher.AlbumCandidate, MatchVerdict, Int>? = null
+        var best: Counterpart<AlbumKey, SongItem>? = null
         for (c in candidates.take(3)) {
-            val tracks = when (other) {
-                MusicSource.QQMUSIC -> qqAlbumSongs(c.mid)
-                MusicSource.NETEASE -> neAlbumSongs(c.mid)
-                MusicSource.BILIBILI -> emptyList()
-            }
+            // 两侧都提供歌手且明确冲突时，曲目列表无法改变候选结论。
+            if (AlbumLookup.artistVerdict(anchorArtist, c.singerName) == AlbumLookup.ArtistVerdict.CONFLICT) continue
+            val tracks = albumSongsOf(other, c.mid)
             // H05：候选的证据**只能来自候选自己**（见 [albumCandidateOf]）。
             // 信息缺失（QQ 搜索偶尔不给 singerName）会如实落到 LOW（不合并），
             // 那正是铁律 17 要的「拿不准就分开展示」。
             val candidate = albumCandidateOf(c, other, tracks.map { it.name })
             val ratio = CrossSourceMatcher.trackOverlapRatio(anchorNames, candidate.trackNames)
-            val verdict = CrossSourceMatcher.gradeAlbum(
-                // 锚点的证据仍然来自锚点自己（这里没有反向注入）。
-                CrossSourceMatcher.AlbumCandidate(anchor, anchorNames, null, anchor.name, listOfNotNull(anchorArtist)),
-                candidate,
-                ratio,
-            )
-            // v3.4.11 的「歌手必须先对上才允许进入同名匹配」，H05 起真正生效：
-            //
-            // 旧闸门写的是 `AlbumLookup.score(...) == null`，而 `score` 在**专辑名相同**时
-            // 永远返回非 null（歌手不一致只不过加 0 分）⇒ 这道闸门从未拦下过任何候选。
-            // 现在用三值的 [AlbumLookup.ArtistVerdict]：只有「两侧都给了歌手且对不上」
-            // 才算冲突；信息缺失是 UNKNOWN，**保持旧行为**（宁可少排除，也不凭猜测丢候选）。
-            val artistConflict =
-                AlbumLookup.artistVerdict(anchorArtist.takeIf { it.isNotEmpty() }, c.singerName) ==
-                    AlbumLookup.ArtistVerdict.CONFLICT
-            if (artistConflict) continue
+            val verdict = CrossSourceMatcher.gradeAlbum(anchorCandidate, candidate, ratio)
             val overlap = candidate.trackNames.mapNotNull { NameNormalizer.normalizeName(it).takeIf { n -> n.isNotEmpty() } }
                 .toSet().let { set -> anchorNames.count { NameNormalizer.normalizeName(it) in set } }
-            if (best == null || rank(verdict.confidence) > rank(best.second.confidence)) {
-                best = Triple(candidate, verdict, overlap)
+            if (best == null || rank(verdict.confidence) > rank(best.verdict.confidence)) {
+                best = Counterpart(candidate.key, verdict, overlap, tracks)
             }
             if (verdict.confidence == MatchConfidence.EXACT) break
         }
