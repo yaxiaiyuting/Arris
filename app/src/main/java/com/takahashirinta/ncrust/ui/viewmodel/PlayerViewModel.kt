@@ -64,6 +64,7 @@ import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.SongPrivilege
 import com.takahashirinta.ncrust.qq.QqApi
+import com.takahashirinta.ncrust.qq.QqLyricAlignment
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.SourceRouter
@@ -2711,9 +2712,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val romalrc: List<LrcLine> = emptyList(),
     )
 
-    /** TTML 胜出时算好的两条副文本轨，连同它们的来源标记一起交给落地函数。 */
-
-
     /**
      * v2.1.0 · C：qm 歌词（QRC 逐字 + 翻译 + 音译）。
      *
@@ -2760,10 +2758,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         val lines = pack.qrcLines
+        val (translations, romans) = if (lines.isEmpty() || (pack.transLines.isEmpty() && pack.romaLines.isEmpty())) {
+            emptyList<LrcLine>() to emptyList<LrcLine>()
+        } else withContext(Dispatchers.Default) {
+            val alignment = QqLyricAlignment(lines)
+            alignment.align(pack.transLines) to alignment.align(pack.romaLines)
+        }
         if (!lyricCoordinator.accept(load, lines.size)) return
         lyrics.value = lines
-        translatedLyrics.value = QqApi.alignToMainLines(lines, pack.transLines)
-        romanizedLyrics.value = QqApi.alignToMainLines(lines, pack.romaLines)
+        translatedLyrics.value = translations
+        romanizedLyrics.value = romans
         lyricsSongId.value = track.id
         lyricsNoContentSongId.value = -1L
         Log.i(TAG_TRACK, "qq lyric APPLIED track=$track lines=" + lines.size)

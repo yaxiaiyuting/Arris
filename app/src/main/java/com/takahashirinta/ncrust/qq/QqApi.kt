@@ -777,88 +777,14 @@ object QqApi {
         )
     }
 
-    /**
-     * 把副文本轨（翻译 / 音译）**按时间就近**贴到主轨的每一行上（v2.1.0 · D）。
-     *
-     * 为什么必须重写时间戳而不是原样交出：渲染层是按 `timeMs` **精确配对**副文本的
-     * （`translatedLyrics.associateBy { timeMs }`）。QRC 主轨的时间戳与 `trans`（行级 LRC）
-     * 的时间戳来自服务端的两份资产，实测并不逐行相同，原样交出会让译文一行都配不上。
-     * 所以这里把选中的副文本行的 `timeMs` 改成**主轨那一行的时间戳**。
-     *
-     * 容差之外的副文本整行丢弃：宁可少一行译文，也不要把上一句的翻译贴到这一句上。
-     *
-     * ## E02：窗口内取**最近**的候选，且每条副文本**只能用一次**
-     *
-     * 旧实现是「单调游标 + 命中就收」：
-     * ```
-     * while (cursor < sorted.size && sorted[cursor].timeMs < line - tol) cursor++
-     * val candidate = sorted[cursor]              // ← 只看游标指到的那一条
-     * if (abs(candidate - line) <= tol) out += candidate.copy(timeMs = line)
-     * ```
-     * 两处错，且都**不会崩**、只会让译文错位：
-     *
-     * 1. **命中之后游标不推进** ⇒ 同一条副文本会被后面每一行反复选中。
-     *    主副两轨都是 `0/1000/2000/3000ms` 时，副文本被贴成 `0/0/1/2`（整体向前错一行）；
-     * 2. **候选窗口里只看得见游标那一条** ⇒ 「优先完全匹配」根本做不到：
-     *    主轨只有一条 2000ms，副轨有 1000ms 与 2000ms 时，游标停在 1000ms
-     *    （差值 1000 ≤ 容差就算命中），那条**时间戳完全相同**的 2000ms 永远轮不到。
-     *
-     * 现在改成**副文本找主轨**（谁近谁上），再按"时间差升序"占用主轨行：
-     *
-     * 1. 每条副文本先在自己周围 `toleranceMs` 的窗口里找到**最近**的那一条主轨行；
-     * 2. 所有（副文本 → 主轨行）配对准入后按 `(时间差, 主轨行号)` 升序贪心占用，
-     *    一条主轨行只收一条副文本。
-     *
-     * 这个方向是刻意的：主轨是"真实存在的一句话"，副文本只是它的附属。
-     * 从副文本出发，"最近"是一个稳定的量；从主轨出发则会先到先得 ——
-     * 主轨 `0/1000/2000` 遇上副文本 `0/2000` 时，中间那一行会抢走 2000ms 的译文，
-     * 而**时间戳完全相同的**那一行反而没有译文（报告里"放弃完全匹配"的同一种错）。
-     * 按时间差升序占用之后，"完全匹配"永远赢过"容差内相近"。
-     */
+    /** 将副轨贴到最近的主轨位置，供单轨调用与回归探针使用。 */
     internal fun alignToMainLines(
         main: List<LrcLine>,
         sub: List<LrcLine>,
         toleranceMs: Long = 1500L,
     ): List<LrcLine> {
         if (main.isEmpty() || sub.isEmpty()) return emptyList()
-        // 主轨按时间排序后的下标（输出顺序仍按输入的 pair 归属决定，与渲染层无关：
-        // 下游是 `associateBy { timeMs }`）。
-        val mainOrder = main.indices.sortedBy { main[it].timeMs }
-        data class Fit(val mainIndex: Int, val sub: LrcLine, val delta: Long)
-
-        val fits = ArrayList<Fit>(main.size)
-        for (subLine in sub) {
-            var low = 0
-            var high = mainOrder.size
-            while (low < high) {
-                val mid = (low + high) ushr 1
-                if (main[mainOrder[mid]].timeMs < subLine.timeMs) low = mid + 1 else high = mid
-            }
-            // 候选：插入点及其前一个（各自最接近）。容差内才收，取更近的那个；
-            // 等距时取**更早**的那一行（确定性优先）。
-            var bestMain = -1
-            var bestDelta = Long.MAX_VALUE
-            for (idx in intArrayOf(low - 1, low)) {
-                if (idx !in mainOrder.indices) continue
-                val mainIndex = mainOrder[idx]
-                val delta = kotlin.math.abs(main[mainIndex].timeMs - subLine.timeMs)
-                if (delta > toleranceMs) continue
-                if (delta < bestDelta) {
-                    bestDelta = delta
-                    bestMain = mainIndex
-                }
-            }
-            if (bestMain >= 0) fits += Fit(bestMain, subLine, bestDelta)
-        }
-
-        val used = HashSet<Int>(fits.size)
-        val out = ArrayList<LrcLine>(fits.size)
-        for (fit in fits.sortedWith(compareBy({ it.delta }, { it.mainIndex }))) {
-            if (!used.add(fit.mainIndex)) continue
-            out += fit.sub.copy(timeMs = main[fit.mainIndex].timeMs)
-        }
-        // 输出按时间升序（与旧实现的返回顺序一致，便于调用方与单测直接比较）。
-        return out.sortedBy { it.timeMs }
+        return QqLyricAlignment(main).align(sub, toleranceMs)
     }
 
     // ---------------- 手机号验证码登录（v2.1.1） ----------------
