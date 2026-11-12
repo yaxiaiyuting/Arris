@@ -102,8 +102,23 @@ object LibraryManager {
     private val songsLock = Any()
     @Volatile private var cachedAlbums: MutableList<AlbumInfo>? = null
     private val albumsLock = Any()
-    // 红心歌单全部单曲 id（有序），作为分页加载的底表。
-    @Volatile private var cachedLikedIds: List<Long>? = null
+    // 分页读原顺序，播放器红心查询用同一快照的二分索引。
+    private class LikedIds(ids: List<Long>) {
+        val ordered: List<Long> = Collections.unmodifiableList(ids)
+        private val sorted by lazy {
+            val values = LongArray(ordered.size)
+            var count = 0
+            // Gson 的旧列表中可能含 null。
+            for (id: Long? in ordered) if (id != null) values[count++] = id
+            val present = if (count == values.size) values else values.copyOf(count)
+            present.apply { sort() }
+        }
+
+        operator fun contains(id: Long): Boolean =
+            if (ordered.size < LIKED_BATCH_SIZE) id in ordered else sorted.binarySearch(id) >= 0
+    }
+
+    @Volatile private var cachedLikedIds: LikedIds? = null
     private val idsLock = Any()
 
     /**
@@ -171,7 +186,7 @@ object LibraryManager {
         }
     }
 
-    private fun ensureLikedIdsLoaded(context: Context): List<Long> {
+    private fun ensureLikedIdsLoaded(context: Context): LikedIds {
         val current = cachedLikedIds
         if (current != null) return current
         return synchronized(idsLock) {
@@ -181,8 +196,7 @@ object LibraryManager {
                     if (json.isNullOrEmpty()) emptyList<Long>()
                     else (gson.fromJson<List<Long>>(json, idListType) ?: emptyList())
                 }.getOrDefault(emptyList())
-                cachedLikedIds = parsed
-                parsed
+                LikedIds(parsed).also { cachedLikedIds = it }
             }
         }
     }
@@ -236,7 +250,7 @@ object LibraryManager {
             pendingAppContext = null
             val songsSnapshot = synchronized(songsLock) { savedSongs?.entries }
             val albumsSnapshot = synchronized(albumsLock) { cachedAlbums?.toList() }
-            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds?.toList() }
+            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds?.ordered?.toList() }
             runCatching {
                 val editor = prefs(ctx).edit()
                 songsSnapshot?.let { editor.putString(KEY_SONGS, SavedSongCodec.encode(it)) }
@@ -469,8 +483,10 @@ object LibraryManager {
             // 否则刷新前判定读到的还是旧底表（issue #33）。新收藏插头部，与云端「最新在前」一致。
             if (key.source == MusicSource.NETEASE) {
                 synchronized(idsLock) {
-                    val ids = cachedLikedIds.orEmpty()
-                    if (!ids.contains(key.id)) cachedLikedIds = listOf(key.id) + ids
+                    val ids = cachedLikedIds
+                    if (ids == null || key.id !in ids) {
+                        cachedLikedIds = LikedIds(listOf(key.id) + ids?.ordered.orEmpty())
+                    }
                 }
             }
             // K05：表真的换了 ⇒ 先推进修订（**在锁外**），再排队落盘。订阅方（播放器红心）
@@ -508,10 +524,10 @@ object LibraryManager {
             }
             if (ncmIds.isNotEmpty()) {
                 synchronized(idsLock) {
-                    val ids = cachedLikedIds.orEmpty()
+                    val ids = cachedLikedIds?.ordered.orEmpty()
                     val known: Collection<Long> = if (ncmIds.size == 1) ids else ids.toHashSet()
                     val fresh = ncmIds.filterNot(known::contains)
-                    if (fresh.isNotEmpty()) cachedLikedIds = fresh + ids
+                    if (fresh.isNotEmpty()) cachedLikedIds = LikedIds(fresh + ids)
                 }
             }
             // K05：只有**可见表真的多了条目**才推进修订。
@@ -548,7 +564,7 @@ object LibraryManager {
             synchronized(idsLock) {
                 val ids = ensureLikedIdsLoaded(context)
                 changedInIds = ids.contains(key.id)
-                if (changedInIds) cachedLikedIds = ids.filterNot { it == key.id }
+                if (changedInIds) cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
             }
         } else {
             changedInIds = false
@@ -696,14 +712,14 @@ object LibraryManager {
                     Log.w(
                         TAG,
                         "refreshFromCloud: liked songs 读取失败，保留本地 ids=" +
-                            "${cachedLikedIds?.size ?: 0}：${likedResult.reason}"
+                            "${cachedLikedIds?.ordered?.size ?: 0}：${likedResult.reason}"
                     )
                 }
 
                 is PlaylistApi.LikedIdsResult.Success -> {
                     val likedIds = likedResult.ids
                     Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
-                    synchronized(idsLock) { cachedLikedIds = likedIds }
+                    synchronized(idsLock) { cachedLikedIds = LikedIds(likedIds) }
                     val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
@@ -770,13 +786,13 @@ object LibraryManager {
     }
 
     /** 红心歌单全部单曲 id（有序），供收藏页做分页懒加载的底表。 */
-    fun getLikedSongIds(context: Context): List<Long> = ensureLikedIdsLoaded(context)
+    fun getLikedSongIds(context: Context): List<Long> = ensureLikedIdsLoaded(context).ordered
 
     /**
      * 分页拉取下一批收藏单曲详情（滚动到底时调用）。会追加进本地缓存并返回新渲染项。
      */
     suspend fun loadMoreLikedSongs(context: Context): List<SongItem> = withContext(Dispatchers.IO) {
-        val allIds = ensureLikedIdsLoaded(context)
+        val allIds = getLikedSongIds(context)
         // Bug2-①：游标是「已消费的 id 数」，与「已解析歌曲数」解耦；
         // 因此个别 id 取不到详情也不会让加载停滞。
         val start = likedIdCursor
@@ -831,7 +847,7 @@ object LibraryManager {
     /** 同 [loadAllLikedSongs]，但额外返回「云端取不到详情」的 id，供 UI 做部分反馈。 */
     suspend fun loadAllLikedSongsResult(context: Context): LikedPlayAllSelection =
         withContext(Dispatchers.IO) {
-            val allIds = ensureLikedIdsLoaded(context).distinct()
+            val allIds = getLikedSongIds(context).distinct()
             var localVisible: List<SavedSongEntry>
             var tombstoned: Set<Long>
             val byId = LinkedHashMap<Long, SongItem>()
