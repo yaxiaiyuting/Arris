@@ -14,8 +14,11 @@
 
 package com.takahashirinta.ncrust.local
 
+import com.google.gson.JsonParser
+import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.PlaylistKey
+import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.TrackKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -92,6 +95,31 @@ class LocalPlaylistCodecTest {
         assertEquals(tracks[1].trackKey, back[1].trackKey)
         assertEquals(LocalTrackOrigin.LOCAL, back[1].origin)
         assertTrue(back[1].tombstoned)
+    }
+
+    @Test
+    fun targetedLookupPreservesLegacyVideoMigrationAndDuplicateDeletion() {
+        val legacyId = SourceIds.biliId(42)
+        val currentId = legacyId or SourceIds.BILI_AV_PARTITION_FLAG
+        val current = TrackKey(MusicSource.BILIBILI, currentId)
+        val payload = SongItem(
+            legacyId, "fixture", null, null, 5_000L,
+            source = MusicSource.BILIBILI.key, sourceId = "bv:fixture:1",
+        )
+        val legacy = LocalPlaylistTrack(
+            TrackKey(MusicSource.BILIBILI, legacyId), LocalTrackOrigin.REMOTE, now, song = payload,
+        )
+        val deleted = LocalPlaylistTrack(current, LocalTrackOrigin.LOCAL, now + 1, tombstoned = true)
+        val json = LocalPlaylistCodec.encodeTracks(listOf(legacy, deleted))
+        val bareArray = JsonParser.parseString(json).asJsonObject.getAsJsonArray("tracks").toString()
+        for (input in listOf(json, bareArray)) {
+            val expected = LocalPlaylistCodec.decodeTracks(input).single()
+            val actual = LocalPlaylistCodec.findTrack(input, current)
+            assertEquals(expected, actual)
+            assertTrue(actual!!.tombstoned)
+            assertEquals(currentId, actual.song?.id)
+            assertNull(LocalPlaylistCodec.findTrack(input, TrackKey(MusicSource.QQMUSIC, currentId)))
+        }
     }
 
     // -------------------------------------------------- ★ 迁移：tombstoned ----

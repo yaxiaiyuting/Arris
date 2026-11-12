@@ -15,6 +15,7 @@ import com.google.gson.reflect.TypeToken
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.PlaylistKey
+import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.TrackKey
 
 /**
@@ -150,22 +151,38 @@ object LocalPlaylistCodec {
      * 那是「降级安装」的场景，猜一个未来格式比什么都不显示更危险
      * （v2.2.0 的 `PlaylistCacheCodec` 对未知版本也是这个策略）。
      */
-    fun decodeTracks(json: String?): List<LocalPlaylistTrack> {
-        if (json.isNullOrBlank()) return emptyList()
-        val trimmed = json.trim()
-        if (trimmed.startsWith("[")) {
-            // v0：裸数组
-            val rows = runCatching {
+    fun decodeTracks(json: String?): List<LocalPlaylistTrack> =
+        consolidate(decodeTrackRows(json).mapNotNull { it.toModel() })
+
+    /** 定位一首歌时只解码可能属于该身份的曲目载荷。 */
+    internal fun findTrack(json: String?, wanted: TrackKey): LocalPlaylistTrack? {
+        val legacyId = if (wanted.source == MusicSource.BILIBILI) {
+            wanted.id and SourceIds.BILI_AV_PARTITION_FLAG.inv()
+        } else wanted.id
+        val matches = ArrayList<LocalPlaylistTrack>(1)
+        for (row in decodeTrackRows(json)) {
+            val id = row.trackId ?: continue
+            if (id != wanted.id && id != legacyId) continue
+            val track = row.toModel() ?: continue
+            if (track.trackKey == wanted) matches.add(track)
+        }
+        return if (matches.size > 1) mergeDuplicates(matches) else matches.firstOrNull()
+    }
+
+    private fun decodeTrackRows(json: String?): List<LocalTrackDto> {
+        val trimmed = json?.trim().orEmpty()
+        if (trimmed.isEmpty()) return emptyList()
+        if (trimmed.startsWith('[')) {
+            return runCatching {
                 gson.fromJson<List<LocalTrackDto>>(trimmed, trackListType)
-            }.getOrNull() ?: return emptyList()
-            return consolidate(rows.mapNotNull { it.toModel() })
+            }.getOrNull().orEmpty()
         }
         val env = runCatching {
             gson.fromJson(trimmed, PlaylistEnvelopeDto::class.java)
         }.getOrNull() ?: return emptyList()
         val version = env.schemaVersion
         if (version != null && version > SCHEMA_VERSION) return emptyList()
-        return consolidate(env.tracks.orEmpty().mapNotNull { it.toModel() })
+        return env.tracks.orEmpty()
     }
 
     // ------------------------------------------------------------- 映射 ----
@@ -255,7 +272,7 @@ object LocalPlaylistCodec {
             runCatching { gson.fromJson<SongItem>(it, songListType) }.getOrNull()
         }
         val canonicalId = if (MusicSource.fromKey(source) == MusicSource.BILIBILI)
-            com.takahashirinta.ncrust.source.SourceIds.migrateBiliAvPartition(tid, sourceId ?: payload?.sourceId) else tid
+            SourceIds.migrateBiliAvPartition(tid, sourceId ?: payload?.sourceId) else tid
         val key = TrackKey.of(source, canonicalId, sourceId ?: payload?.sourceId, mediaId ?: payload?.mediaId)
         return LocalPlaylistTrack(
             trackKey = key,

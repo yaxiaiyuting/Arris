@@ -10,6 +10,9 @@
 
 package com.takahashirinta.ncrust.source
 
+import android.content.Context
+import com.takahashirinta.ncrust.library.LibraryManager
+import com.takahashirinta.ncrust.local.LocalPlaylistStore
 import com.takahashirinta.ncrust.network.SongItem
 
 /**
@@ -108,27 +111,23 @@ fun songRefOf(
  * 找同一条记录，用它的载荷把身份补全 —— 找不到就保持原样（不猜音源、不换源）。
  */
 fun recoverPayload(
-    context: android.content.Context,
+    context: Context,
     source: MusicSource,
     id: Long,
 ): SongItem? {
     val wanted = TrackKey(source, id)
     // 本地歌单优先（车机浏览大多来自这里）。
     runCatching {
-        com.takahashirinta.ncrust.local.LocalPlaylistStore.readPlaylists(context).forEach { pl ->
-            val hit = com.takahashirinta.ncrust.local.LocalPlaylistStore
-                .readTracks(context, pl.key)
-                // H11：只接受**能解析**的记录。取回一条缺 songmid 的 QQ 条目等于没取，
-                // 反而会把"本来能回查到的完整载荷"挡住。
-                .firstOrNull { it.trackKey == wanted && !it.tombstoned && it.song?.isResolvable == true }
-                ?.song
-            if (hit != null) return hit
+        for (playlist in LocalPlaylistStore.readPlaylists(context)) {
+            val track = LocalPlaylistStore.findTrack(context, playlist.key, wanted) ?: continue
+            val song = track.song
+            if (!track.tombstoned && song?.isResolvable == true) return song
         }
     }
     // 再看收藏库。
     runCatching {
-        com.takahashirinta.ncrust.library.LibraryManager.getSavedSongs(context)
-            .firstOrNull { TrackKey.ofSong(it) == wanted && it.isResolvable }
+        LibraryManager.getSavedSongs(context)
+            .firstOrNull { it.id == id && TrackKey.ofSong(it) == wanted && it.isResolvable }
             ?.let { return it }
     }
     return null

@@ -12,6 +12,8 @@ package com.takahashirinta.ncrust.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.takahashirinta.ncrust.source.PlaylistKey
+import com.takahashirinta.ncrust.source.TrackKey
 import java.util.Collections
 
 /**
@@ -124,8 +126,11 @@ object LocalPlaylistStore {
 
     // ---------------------------------------------------------------- 曲目 ----
 
-    fun readTracks(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): List<LocalPlaylistTrack> =
+    fun readTracks(context: Context, key: PlaylistKey): List<LocalPlaylistTrack> =
         LocalPlaylistCodec.decodeTracks(prefs(context).getString(tracksKey(key), null))
+
+    internal fun findTrack(context: Context, playlist: PlaylistKey, track: TrackKey): LocalPlaylistTrack? =
+        LocalPlaylistCodec.findTrack(prefs(context).getString(tracksKey(playlist), null), track)
 
     /** 覆盖写一张歌单的曲目表（写入前先过容量闸）。 */
     @Synchronized
