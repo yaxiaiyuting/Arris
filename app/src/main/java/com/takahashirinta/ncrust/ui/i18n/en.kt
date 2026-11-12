@@ -115,6 +115,7 @@ val en = Strings(
         lyricsWordByWordLabel = "Word-by-Word Lyrics",
         equalizerEntryLabel = "Equalizer",
         equalizerEntryHint = "10 bands with 5 presets",
+        equalizerFiles = EqualizerFileStrings(),
         lyricsWordAnimationLabel = "Word Animation",
         lyricsWordAnimationOptions = listOf("Gradient sweep", "Word-by-word", "Off"),
         lyricsInMediaSessionLabel = "Lyrics in media panel",

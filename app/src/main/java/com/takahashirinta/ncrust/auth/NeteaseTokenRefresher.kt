@@ -28,7 +28,7 @@ object NeteaseTokenRefresher {
     /** Proactive upkeep never holds a playable request behind a slow refresh server. */
     @Synchronized fun scheduleIfNeeded() {
         val context = app ?: return
-        if (proactiveJob?.isActive == true || !NeteaseCookie.isUsable(CookieManager.snapshot().cookie)) return
+        if (proactiveJob?.isActive == true || !CookieManager.snapshot().usable) return
         val at = CookieManager.lastRefreshedAt(context)
         if (at > 0 && System.currentTimeMillis() - at in 0 until REFRESH_INTERVAL_MS) return
         proactiveJob = scope.launch { refreshIfNeeded() }
@@ -42,7 +42,7 @@ object NeteaseTokenRefresher {
     suspend fun refreshIfNeeded(): Result {
         val started = CookieManager.snapshot()
         val context = app ?: return Result.NOT_NEEDED
-        if (!NeteaseCookie.isUsable(started.cookie)) return Result.NOT_NEEDED
+        if (!started.usable) return Result.NOT_NEEDED
         val refreshedAt = CookieManager.lastRefreshedAt(context)
         val age = System.currentTimeMillis() - refreshedAt
         if (refreshedAt > 0 && age in 0 until REFRESH_INTERVAL_MS) return Result.NOT_NEEDED
@@ -52,7 +52,7 @@ object NeteaseTokenRefresher {
 
     private suspend fun refresh(started: NeteaseSessionSnapshot, force: Boolean): Result = withContext(Dispatchers.IO) {
         val context = app ?: return@withContext Result.NOT_NEEDED
-        if (!NeteaseCookie.isUsable(started.cookie)) return@withContext Result.NOT_NEEDED
+        if (!started.usable) return@withContext Result.NOT_NEEDED
         mutex.withLock {
             if (!CookieManager.isCurrent(started)) return@withLock Result.STALE
             val now = SystemClock.elapsedRealtime()

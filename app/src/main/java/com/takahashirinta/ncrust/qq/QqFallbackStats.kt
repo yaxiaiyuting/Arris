@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * 任务书写的是「QQ 无 songid 兜底**路径**」（容易读成「取链时兜底」）。
  * 实测（`docs/verification/v2.5.4/probe-qq-fallback.md` §0/§1）**取链根本不读 songid** ——
- * `QqApi.fetchPlayUrl` 第一行就是 `val songMid = song.sourceId ?: return null`，
+ * `QqApi.resolveOutcome` 会拒绝缺少 songmid 的曲目，
  * songmid 缺失是**硬失败**，没有兜底、没有重试。
  *
  * 真正的「无 songid 兜底」在**解析期**，而且只影响**身份**：
@@ -62,7 +62,7 @@ data class QqFallbackCounters(
     @SerializedName("parsedNoSongId") val parsedNoSongId: Long? = null,
     /** ☆ `file.media_mid` 缺失 ⇒ `SongItem.mediaId` 回落 songmid。 */
     @SerializedName("parsedNoMediaMid") val parsedNoMediaMid: Long? = null,
-    // —— 取链期（QqApi.fetchPlayUrl）——
+    // —— 取链期（QqApi.resolveOutcome）——
     /** `fetchPlayUrl` 被调用次数。 */
     @SerializedName("resolveTotal") val resolveTotal: Long? = null,
     /** ✖ `sourceId` 为 null/空 ⇒ 立即返回 null（无兜底、无重试）。 */

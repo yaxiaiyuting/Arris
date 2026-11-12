@@ -20,16 +20,17 @@ object EqualizerPrefs {
     private const val KEY_ENABLED = "eq_enabled"
     private const val KEY_GAINS_PREFIX = "eq_gain_"
     private const val KEY_PRESET = "eq_preset"
+    private const val KEY_IMPORTED_PRESETS = "eq_imported_presets"
 
     internal val frequenciesHz = intArrayOf(31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 
     /** 预设：名称 → 增益（mB）。曲线按"低频 +、中频平、高频微升"的常见听感给。 */
-    val PRESETS: List<Pair<String, IntArray>> = listOf(
-        "平直" to intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        "流行" to intArrayOf(300, 200, 0, -100, -100, 0, 200, 400, 500, 500),
-        "摇滚" to intArrayOf(500, 350, 200, 0, -150, -100, 200, 400, 500, 550),
-        "人声" to intArrayOf(-150, -100, 0, 200, 400, 450, 300, 0, -100, -150),
-        "低音" to intArrayOf(700, 600, 450, 250, 0, -100, -150, -150, -100, 0),
+    private val builtInPresets = listOf(
+        EqualizerPreset("平直", listOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+        EqualizerPreset("流行", listOf(300, 200, 0, -100, -100, 0, 200, 400, 500, 500)),
+        EqualizerPreset("摇滚", listOf(500, 350, 200, 0, -150, -100, 200, 400, 500, 550)),
+        EqualizerPreset("人声", listOf(-150, -100, 0, 200, 400, 450, 300, 0, -100, -150)),
+        EqualizerPreset("低音", listOf(700, 600, 450, 250, 0, -100, -150, -150, -100, 0)),
     )
 
     private fun prefs(context: Context): SharedPreferences =
@@ -42,10 +43,6 @@ object EqualizerPrefs {
     }
 
     fun presetName(context: Context): String? = prefs(context).getString(KEY_PRESET, null)
-
-    fun setPresetName(context: Context, name: String) {
-        prefs(context).edit().putString(KEY_PRESET, name).apply()
-    }
 
     /** 读每段增益（mB）。没有存过就返回预设第一条（平直）。 */
     fun gains(context: Context): IntArray {
@@ -62,10 +59,35 @@ object EqualizerPrefs {
             .apply()
     }
 
-    fun applyPreset(context: Context, name: String) {
-        val curve = PRESETS.firstOrNull { it.first == name }?.second ?: return
-        val p = prefs(context).edit()
-        curve.forEachIndexed { index, gain -> p.putInt(KEY_GAINS_PREFIX + index, gain) }
-        p.putString(KEY_PRESET, name).apply()
+    internal fun presets(context: Context): List<EqualizerPreset> = builtInPresets + importedPresets(prefs(context))
+
+    private fun importedPresets(prefs: SharedPreferences): List<EqualizerPreset> =
+        prefs.getString(KEY_IMPORTED_PRESETS, null)?.let(EqualizerPresetFile::decodeStored).orEmpty()
+
+    internal fun applyPreset(context: Context, preset: EqualizerPreset, enable: Boolean = false) {
+        val editor = prefs(context).edit().putPreset(preset)
+        if (enable) editor.putBoolean(KEY_ENABLED, true)
+        editor.apply()
+    }
+
+    internal fun importPreset(context: Context, incoming: EqualizerPreset): EqualizerPreset? {
+        val p = prefs(context)
+        val imported = importedPresets(p)
+        val existing = builtInPresets + imported
+        val name = EqualizerPresetFile.nameForImport(incoming, existing)
+        val preset = incoming.copy(name = name)
+        val alreadyStored = existing.any { it.name == name }
+        if (!alreadyStored && imported.size >= EqualizerPresetFile.MAX_PRESETS) return null
+        val editor = p.edit().putPreset(preset)
+        if (!alreadyStored) {
+            editor.putString(KEY_IMPORTED_PRESETS, EqualizerPresetFile.encodeStored(imported + preset))
+        }
+        editor.apply()
+        return preset
+    }
+
+    private fun SharedPreferences.Editor.putPreset(preset: EqualizerPreset): SharedPreferences.Editor {
+        preset.gainsMb.forEachIndexed { index, gain -> putInt(KEY_GAINS_PREFIX + index, gain) }
+        return putString(KEY_PRESET, preset.name)
     }
 }

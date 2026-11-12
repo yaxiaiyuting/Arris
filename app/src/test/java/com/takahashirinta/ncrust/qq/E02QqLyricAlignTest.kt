@@ -82,6 +82,15 @@ class E02QqLyricAlignTest {
         assertEquals("先", out.single().text)
     }
 
+    @Test
+    fun `主轨同刻多行按原有差值顺序发布`() {
+        val main = lines(2000L to "m0", 4000L to "m3", 2000L to "m1", 2000L to "m2")
+        val sub = lines(1990L to "之前", 2001L to "之后", 2002L to "同位置更远")
+        val out = QqApi.alignToMainLines(main, sub)
+        assertEquals(listOf("之后", "之前"), out.map { it.text })
+        assertEquals(listOf(2000L, 2000L), out.map { it.timeMs })
+    }
+
     /** 缺行（副轨比主轨少）时，多出来的主轨行没有译文 —— 不许借用别人的。 */
     @Test
     fun `副轨缺行时宁可没有译文 也不许借用相邻行`() {

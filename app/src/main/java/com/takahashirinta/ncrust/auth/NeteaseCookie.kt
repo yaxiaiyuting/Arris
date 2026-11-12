@@ -10,41 +10,7 @@
 
 package com.takahashirinta.ncrust.auth
 
-/**
- * ncm cookie 的纯逻辑部分。
- *
- * ## 为什么要有这个对象（用户反馈第 6 条：「需要很多次退出登录再登录才能播放 VIP 资源或者音质」）
- *
- * 那条反馈的症状是**概率性**的，而概率性通常意味着「多次掷骰子里有一次成功」。
- * 实测勘察确认了三条独立的机制，本对象负责其中的第一条与第二条：
- *
- * 1. **登录态靠 `onPageFinished` 一次性快照抓取**（真正的掷骰子）。
- *    ncm 登录页是 `https://music.163.com/#/login` 的 **hash 路由 SPA** ——
- *    登录成功后的跳转**不产生新的文档级导航**，因此常常**不触发** `onPageFinished`。
- *    抓取时机是否落在「cookie 已写入且页面回调恰好到来」这个窗口里，
- *    每次重登都是一次独立的伯努利试验 ⇒ 命中次数服从几何分布 ⇒
- *    「要试很多次才偶尔成功」。
- *    ⚠️ 同仓库的 **QQ 侧早已因为同一个坑改成轮询 cookie**
- *    （`QqLoginOverlay` 的 KDoc：「登录成功的唯一权威事实是 cookie，
- *    所以这里按固定间隔直接读 cookie，不依赖任何页面回调」）—— ncm 这条当年没跟着改。
- *    本版把轮询搬到 ncm 侧。
- *
- * 2. **写入是覆盖而不是合并，且完不完整的判据只有一条 `MUSIC_U`**。
- *    三条登录路径写入的形状不同（WebView 整串 / 扫码只取 803 响应的
- *    `Set-Cookie` 增量 / 局域网回传），覆盖写会让**先到的那一批键丢掉**。
- *    而 ncm 的会话**不止 `MUSIC_U`**：实测真机 cookie 有 20 个键，其中
- *    `MUSIC_U` 是会话票据、`__csrf` 是写操作的必需项（缺它写操作恒 403
- *    `illegal request!`，见 AGENTS.md 的 Playlist 写操作一节）。
- *    只判 `MUSIC_U` 会把「缺 `__csrf` 的半截会话」也当成登录成功。
- *
- * 3. **取链身份被用户 cookie 的同名键压制**（第三条机制，落点在 `ClientIdentity`，不在本文件）。
- *
- * ## 本对象的边界
- *
- * 只做**字符串层面的合并与判据**，不碰网络、不碰 SharedPreferences ——
- * 那两件事分别由调用方做。这样「合并会不会丢键」「半截会话算不算登录」
- * 都能在 JVM 里被逐条断言，而不用上真机重登十次去碰运气。
- */
+/** 网易云会话字段的解析、合并和有效性判定。 */
 object NeteaseCookie {
 
     /** 会话票据。**它是登录的必要条件，但不是充分条件**（见 [REQUIRED_KEYS]）。 */
@@ -95,21 +61,10 @@ object NeteaseCookie {
         return out
     }
 
-    /**
-     * 合并两份 cookie：**同名取新值，不同名全部保留**。
-     *
-     * 这是本版修「反复重登」的关键一步：登录过程中可能先拿到一批（如导航响应里的
-     * `NMTID`），再拿到一批（登录接口的 `Set-Cookie`），覆盖写会丢掉先到的那批。
-     *
-     * ⚠️ **空值不覆盖已有值**。`parse` 会把 `appver=` 这种解析成空串，
-     * 而「键存在但值为空」在服务端是**有效输入**（它会覆盖默认身份），
-     * 所以这里必须原样保留空串（见 `ClientIdentity` 那条同源缺陷）。
-     * 但要区分「值为空」与「键不存在」：前者保留键，后者不引入键。
-     */
+    /** 保留既有键的顺序。同名字段采用新值，空值也参与覆盖。 */
     fun merge(old: String?, new: String?): String {
-        val map = LinkedHashMap<String, String>()
-        map.putAll(parse(old))
-        for ((k, v) in parse(new)) map[k] = v
+        val map = parse(old)
+        map.putAll(parse(new))
         return map.entries.joinToString("; ") { "${it.key}=${it.value}" }
     }
 
@@ -120,9 +75,11 @@ object NeteaseCookie {
      * 服务端拿到空 csrf 照样 403）。
      */
     fun isUsable(raw: String?): Boolean {
-        val map = parse(raw)
-        return REQUIRED_KEYS.all { !map[it].isNullOrEmpty() }
+        return hasRequiredKeys(parse(raw))
     }
+
+    private fun hasRequiredKeys(values: Map<String, String>): Boolean =
+        REQUIRED_KEYS.all { !values[it].isNullOrEmpty() }
 
     /** 会话票据是否存在（**不足以**判定可用，见 [isUsable]）。 */
     fun hasSession(raw: String?): Boolean = !parse(raw)[KEY_MUSIC_U].isNullOrEmpty()
@@ -141,9 +98,9 @@ object NeteaseCookie {
      *   这个状态可见，而不是完全空白）。
      */
     fun shouldReplace(old: String?, new: String?): Boolean {
-        if (isUsable(new)) return true
-        if (isUsable(old)) return false
-        return hasSession(new)
+        val incoming = parse(new)
+        if (hasRequiredKeys(incoming)) return true
+        return !incoming[KEY_MUSIC_U].isNullOrEmpty() && !isUsable(old)
     }
 
     /** 只打键名与长度，**绝不打值**（凭据泄漏面：这些值能直接冒充用户）。 */

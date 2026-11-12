@@ -20,6 +20,22 @@ class NeteaseSessionRenewalTest {
         val g=NeteaseSessionGuard();g.replace("A");val a=g.snapshot();g.replace("B",renewal=true)
         assertFalse(g.isCurrent(a));assertEquals(a.loginGeneration,g.snapshot().loginGeneration)
     }
+    @Test fun snapshotAndOwnerAreReusedOnlyWithinOneCredentialRevision() {
+        val guard = NeteaseSessionGuard()
+        guard.replace("fixture=one; MUSIC_U=fixture-a; __csrf=fixture-csrf")
+        val old = guard.snapshot()
+        val oldOwner = old.accountOwner
+        assertNotNull(oldOwner)
+        repeat(10) {
+            assertSame(old, guard.snapshot())
+            assertSame(oldOwner, guard.snapshot().accountOwner)
+        }
+        guard.replace("MUSIC_U=fixture-b; __csrf=fixture-csrf", renewal = true)
+        val renewed = guard.snapshot()
+        assertNotEquals(oldOwner, renewed.accountOwner)
+        assertEquals(old.loginGeneration, renewed.loginGeneration)
+        assertFalse(guard.isCurrent(old))
+    }
     @Test fun credentialNeverAppearsInSnapshotDescription() {
         val g=NeteaseSessionGuard();g.replace("MUSIC_U=SECRET")
         assertFalse(g.snapshot().toString().contains("SECRET"))

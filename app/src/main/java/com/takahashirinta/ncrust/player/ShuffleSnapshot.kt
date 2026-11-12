@@ -18,8 +18,14 @@ data class ShuffleSnapshot(
 ) {
     fun matches(keys: List<String>, currentIndex: Int): Boolean {
         val indices = order ?: return false
-        return keys.isNotEmpty() && queueKeys == keys && indices.size == keys.size &&
-            indices.toSet() == keys.indices.toSet() && position in indices.indices &&
-            indices[position] == currentIndex
+        if (keys.isEmpty() || queueKeys != keys || indices.size != keys.size ||
+            indices.getOrNull(position) != currentIndex) return false
+        val seen = BooleanArray(keys.size)
+        // Gson 可把 JSON 数组里的 null 读进 List<Int>。
+        for (index: Int? in indices) {
+            if (index == null || index !in indices.indices || seen[index]) return false
+            seen[index] = true
+        }
+        return true
     }
 }

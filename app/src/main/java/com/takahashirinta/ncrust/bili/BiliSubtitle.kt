@@ -12,6 +12,8 @@ package com.takahashirinta.ncrust.bili
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 /**
  * 一条视频字幕。
@@ -286,29 +288,18 @@ object BiliSubtitle {
         return if (kept.size > LYRIC_CUE_MAX) kept.subList(0, LYRIC_CUE_MAX).toList() else kept
     }
 
-    /**
-     * 把字幕转成 **LRC 正文**，交给既有的 `LrcParser`（不新写解析器）。
-     *
-     * 两件事：把 `♪` 标记剥掉（那是 B 站的唱歌标记，不是歌词内容），
-     * 以及把毫秒写成 `[mm:ss.xx]`。**不做**下面这些，且每条都有理由：
-     *
-     * - **不**合并相邻行：AI 字幕的断句已经是「一句一行」，
-     *   合并会把「让我依依不舍的不止你的温柔」这种长句再拼长，反而更难读；
-     * - **不**生成 `endMs`：LRC 语法里没有行尾时间，硬塞会污染 `LrcLine` 的字段语义
-     *   （`endMs` 目前只有 TTML 会填，见 `TtmlScanner` 的说明）；
-     * - **不**去重：副歌重复出现是**正确**的歌词形态，合并会把第二遍副歌删掉
-     *   （时间轴还在，歌词没了）。
-     *
-     * 正文里若出现换行，**按行拆成多条**同时间戳的 LRC 行 —— 这正好用上 v3.3.0
-     * 在 `LrcParser` 修掉的「一行多时间戳」能力的逆形态。
-     */
+    /** 去掉演唱标记，将一条字幕的每个非空行写成同一开始时间的 LRC 行。 */
     fun lyricLrc(cues: List<BiliSubtitleCue>): String {
+        if (cues.isEmpty()) return ""
         val sb = StringBuilder()
+        val stamp = StringBuilder(16)
+        val locale = localizedStampLocale()
         for (cue in cues) {
             val text = stripNoteMark(cue.text)
             if (text.isEmpty()) continue
-            val stamp = formatStamp(cue.fromMs)
-            for (line in text.split('\n')) {
+            stamp.setLength(0)
+            stamp.appendStamp(cue.fromMs, locale)
+            for (line in text.splitToSequence('\n')) {
                 val t = line.trim()
                 if (t.isEmpty()) continue
                 sb.append(stamp).append(t).append('\n')
@@ -521,29 +512,37 @@ object BiliSubtitle {
     internal fun stripNoteMark(raw: String): String =
         raw.replace(NOTE_MARK, "").replace("♫", "").trim()
 
-    /**
-     * 毫秒 → `[mmmm:ss.xx]`（分钟宽度至少 2 位，超过 99 分钟时**如实给 3 位**）。
-     *
-     * 用**两位**厘秒与既有 LRC 源（ncm/QQ）一致 —— `LrcParser` 对 2 位与 3 位厘秒都认，
-     * 但保持同一形状能让「同一首歌两个来源的 LRC 做 diff」这类排查少一个变量。
-     *
-     * ## ⚠️ H18：这里**故意不截断**分钟，而消费端目前做不到
-     *
-     * `[100:00.00]` 是合法的 LRC（`[mm:ss.xx]` 的 mm 没有上限），但 `LrcParser` 的两个
-     * 正则（`TIME_STAMP` / `LEADING_TIME_STAMPS`）写死了 `\d{2}`，于是 100 分钟以后的
-     * 字幕行会被**整行丢弃** —— 长视频/长音频在这一刻之后没有歌词，且不报错。
-     *
-     * 修法只有一处，在 `lyric/LrcParser.kt`（把 `(\d{2})` 改成 `(\d{2,})`，两处），
-     * 不在本文件职责内；这里**保持正确输出**而不是把 100 分钟折成 `40:00`（那会把时间轴
-     * 悄悄改错，比丢行更难查）。边界值由 `BiliSubtitleStampTest` 钉住。
-     */
-    internal fun formatStamp(ms: Long): String {
-        val safe = if (ms < 0L) 0L else ms
-        val totalCs = safe / 10L
+    /** 毫秒转为 LRC 时间戳，分钟至少两位，厘秒固定两位。 */
+    internal fun formatStamp(ms: Long): String = buildString {
+        appendStamp(ms, localizedStampLocale())
+    }
+
+    private fun localizedStampLocale(): Locale? {
+        val locale = Locale.getDefault(Locale.Category.FORMAT)
+        return locale.takeIf { DecimalFormatSymbols.getInstance(it).zeroDigit != '0' }
+    }
+
+    private fun StringBuilder.appendStamp(ms: Long, locale: Locale?) {
+        val totalCs = ms.coerceAtLeast(0L) / 10L
         val cs = totalCs % 100L
         val totalSec = totalCs / 100L
         val s = totalSec % 60L
         val m = totalSec / 60L
-        return "[%02d:%02d.%02d]".format(m, s, cs)
+        if (locale != null) {
+            append(String.format(locale, "[%02d:%02d.%02d]", m, s, cs))
+            return
+        }
+        append('[')
+        appendPadded(m)
+        append(':')
+        appendPadded(s)
+        append('.')
+        appendPadded(cs)
+        append(']')
+    }
+
+    private fun StringBuilder.appendPadded(value: Long) {
+        if (value < 10L) append('0')
+        append(value)
     }
 }

@@ -13,6 +13,8 @@ import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,7 +66,7 @@ class LibrarySessionOwnershipTest {
         }
         // 真源缓存必须置 null（= 没加载过）才会重新读盘；只清空集合会留下上一个用例的表。
         listOf(
-            "cachedEntries", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
+            "savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
         ).forEach { field(LibraryManager, it).set(LibraryManager, null) }
         listOf("latestLikeIntent", "latestAlbumIntent", "likeMutexes", "albumMutexes").forEach {
             (field(LibraryManager, it).get(LibraryManager) as MutableMap<*, *>).clear()
@@ -292,6 +294,128 @@ class LibrarySessionOwnershipTest {
             request.url.encodedPath.endsWith("/album/sublist") -> albumsJson
             else -> """{"code":200}"""
         }
+    }
+
+    @Test
+    fun `refresh cannot resurrect an unread favorite removed during a detail request`() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", "[101,202]").commit()
+        val entered = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val details = AtomicInteger()
+        intercept(RetrofitClient, "antiCheatClient") { antiCheatToken }
+        intercept(RetrofitClient, "plainClient") { request ->
+            when {
+                request.url.encodedPath.endsWith("/user/playlist") ->
+                    """{"code":200,"playlist":[{"id":100,"specialType":5}]}"""
+                request.url.encodedPath.endsWith("/v6/playlist/detail") ->
+                    """{"code":200,"playlist":{"trackIds":[{"id":101},{"id":202}],"trackCount":2}}"""
+                request.url.encodedPath.endsWith("/v3/song/detail") -> {
+                    if (details.incrementAndGet() == 1) {
+                        entered.complete(Unit)
+                        check(release.await(5, TimeUnit.SECONDS))
+                        """{"code":200,"songs":[{"id":101,"name":"old favorite"},{"id":202,"name":"other favorite"}]}"""
+                    } else {
+                        """{"code":200,"songs":[{"id":202,"name":"other favorite"}]}"""
+                    }
+                }
+                else -> answerAlbumRead("""{"code":200,"data":[]}""")(request)
+            }
+        }
+
+        val refreshing = async { LibraryManager.refreshFromCloud(ctx) }
+        try {
+            withTimeout(5_000) { entered.await() }
+            assertTrue(LibraryManager.removeSong(ctx, 101))
+        } finally {
+            release.countDown()
+        }
+        refreshing.await()
+        assertFalse(LibraryManager.isSongSaved(ctx, 101))
+
+        assertTrue(LibraryManager.refreshFromCloud(ctx))
+        settleWrites()
+        resetLibrary()
+        assertEquals(listOf(202L), LibraryManager.getLikedSongIds(ctx))
+        assertEquals(listOf(202L), LibraryManager.getSavedSongs(ctx).map { it.id })
+        assertFalse(LibraryManager.isSongSaved(ctx, 101))
+    }
+
+    @Test
+    fun `older refresh cannot overwrite favorites installed by a newer refresh`() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val requests = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            when {
+                request.url.encodedPath.endsWith("/user/playlist") ->
+                    """{"code":200,"playlist":[{"id":100,"specialType":5}]}"""
+                request.url.encodedPath.endsWith("/v6/playlist/detail") -> {
+                    val id = if (requests.incrementAndGet() == 1) {
+                        entered.complete(Unit)
+                        check(release.await(5, TimeUnit.SECONDS))
+                        101L
+                    } else 202L
+                    """{"code":200,"playlist":{"trackIds":[{"id":$id}],"trackCount":1}}"""
+                }
+                request.url.encodedPath.endsWith("/v3/song/detail") -> """{"code":200,"songs":[]}"""
+                else -> answerAlbumRead("""{"code":200,"data":[]}""")(request)
+            }
+        }
+
+        val older = async { LibraryManager.refreshFromCloud(ctx) }
+        try {
+            withTimeout(5_000) { entered.await() }
+            assertTrue(LibraryManager.refreshFromCloud(ctx))
+            assertEquals(listOf(202L), LibraryManager.getLikedSongIds(ctx))
+        } finally {
+            release.countDown()
+        }
+        older.await()
+        assertEquals(listOf(202L), LibraryManager.getLikedSongIds(ctx))
+    }
+
+    @Test
+    fun `switching accounts during favorite details stops the previous refresh`() = runBlocking {
+        ctx.getSharedPreferences("ncrust_library", 0).edit().putString("liked_ids", "[202]").commit()
+        val entered = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val details = AtomicInteger()
+        val albums = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            when {
+                request.url.encodedPath.endsWith("/user/playlist") ->
+                    """{"code":200,"playlist":[{"id":100,"specialType":5}]}"""
+                request.url.encodedPath.endsWith("/v6/playlist/detail") ->
+                    """{"code":200,"playlist":{"trackIds":[{"id":101}],"trackCount":1}}"""
+                request.url.encodedPath.endsWith("/v3/song/detail") -> {
+                    details.incrementAndGet()
+                    entered.complete(Unit)
+                    check(release.await(5, TimeUnit.SECONDS))
+                    """{"code":200,"songs":[{"id":101,"name":"previous account"}]}"""
+                }
+                request.url.encodedPath.endsWith("/album/sublist") -> {
+                    albums.incrementAndGet()
+                    """{"code":200,"data":[]}"""
+                }
+                else -> answerAlbumRead("""{"code":200,"data":[]}""")(request)
+            }
+        }
+
+        val refreshing = async { LibraryManager.refreshFromCloud(ctx) }
+        try {
+            withTimeout(5_000) { entered.await() }
+            CookieManager.clearCookie(ctx)
+            CookieManager.saveCookie(ctx, "MUSIC_U=fixture-B; __csrf=fixture-csrf-B")
+        } finally {
+            release.countDown()
+        }
+
+        assertFalse(refreshing.await())
+        assertEquals(1, details.get())
+        assertEquals(0, albums.get())
+        assertEquals(listOf(202L), LibraryManager.getLikedSongIds(ctx))
+        assertTrue(LibraryManager.getSavedSongs(ctx).isEmpty())
     }
 
     @Test

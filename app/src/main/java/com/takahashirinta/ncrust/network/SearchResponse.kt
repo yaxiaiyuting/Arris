@@ -145,8 +145,7 @@ data class SongItem(
  * ncm 逐曲 `privilege` 里**本应用用到的两个整数**（v2.3.0）。
  *
  * 只解析两个字段是有意的：整个 `privilege` 对象有 30+ 个 key（`chargeInfoList` /
- * `freeTrialPrivilege` / 各种 `*Level`），本版一个都不用 —— 探针只确证了这两个的语义。
- * 多解析一个没有实测支撑的字段，就是多一处「猜」。
+ * `freeTrialPrivilege` / 各种 `*Level`）。曲库只保存曲目能力，账号音质权限随取链结果判定。
  *
  * | 字段 | 实测语义 | 依据 |
  * |---|---|---|
@@ -165,6 +164,7 @@ data class SongPrivilege(
      * （见 `account.classifyPlayback`）。
      */
     @SerializedName("fee") val fee: Int? = null,
+    @SerializedName("maxBrLevel") val maxBrLevel: String? = null,
 )
 
 /**

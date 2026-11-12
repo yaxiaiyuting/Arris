@@ -159,7 +159,7 @@ object QqQuality {
 
     /** 从文件名前缀反查档位（诊断与降级判定用）。找不到返回 null，不猜。 */
     fun fileTypeOfFileName(fileName: String): QqFileType? =
-        QqFileType.values().firstOrNull { fileName.startsWith(it.prefix) }
+        QqFileType.entries.firstOrNull { fileName.startsWith(it.prefix) }
 
     /**
      * 该档位的**确定码率**（bps）；FLAC 档位按前缀推不出码率，返回 0 = 未知。

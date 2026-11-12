@@ -43,6 +43,15 @@ class MediaBilingualLyricsTest {
         assertEquals("精确", track.at(2500, true, MediaLyricOptions()).translation)
     }
 
+    @Test fun exactTranslationAtADuplicateTimestampAppearsWithTheLastOriginal() {
+        val main = listOf(line(1000, "First"), line(1000, "Second"), line(2000, "Third"))
+        val track = MediaLyricTrack.from(main, listOf(line(1500, "近似"), line(1000, "精确")))
+        val frame = track.at(1000, true, MediaLyricOptions())
+        assertEquals("Second", frame.original)
+        assertEquals("精确", frame.translation)
+        assertNull(track.at(2000, true, MediaLyricOptions()).translation)
+    }
+
     @Test fun seekBothDirectionsSelectsOneCoherentSentencePair() {
         val track = MediaLyricTrack.from(original.reversed(), translated.reversed())
         for ((pos, expected) in listOf(3500L to ("Three" to "三"), 1500L to ("One" to "一"), 2500L to ("Two" to "二"))) {

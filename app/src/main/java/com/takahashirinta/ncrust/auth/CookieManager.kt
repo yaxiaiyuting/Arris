@@ -18,30 +18,18 @@ object CookieManager {
     }
     fun snapshot(): NeteaseSessionSnapshot = synchronized(guard) { guard.snapshot() }
 
-    /**
-     * 当前登录账号的**稳定指纹**（S14）。
-     *
-     * 用 `MUSIC_U` 的 SHA-256 前 8 字节做 key：同一账号在任何设备/任何时刻都相同，
-     * 不含明文凭据，可用于给首页个性化缓存做归属标记。未登录返回 `null`。
-     */
-    fun accountOwner(): String? = synchronized(guard) { accountOwnerLocked() }
-
-    private fun accountOwnerLocked(): String? = run {
-        val cookie = guard.snapshot().cookie ?: return@run null
-        val musicU = cookie.split(';')
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("MUSIC_U=") }
-            ?.substringAfter('=')
-            ?.takeIf { it.isNotBlank() }
-            ?: return@run null
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(musicU.toByteArray(Charsets.UTF_8))
-        digest.take(8).joinToString("") { "%02x".format(it) }
-    }
+    /** 首页缓存归属，取当前 MUSIC_U 的摘要。未登录返回 null。 */
+    fun accountOwner(): String? = synchronized(guard) { guard.snapshot().accountOwner }
     fun isCurrent(s: NeteaseSessionSnapshot): Boolean = synchronized(guard) { guard.isCurrent(s) }
     fun <T> ifCurrent(s: NeteaseSessionSnapshot, block: () -> T): T? = synchronized(guard) {
         guard.ifCurrent(s, block)
     }
+    internal fun <T> ifSameLogin(started: NeteaseSessionSnapshot, block: (NeteaseSessionSnapshot) -> T): T? =
+        synchronized(guard) {
+            val current = guard.snapshot()
+            if (current.loginGeneration == started.loginGeneration) block(current) else null
+        }
+
     fun advanceGeneration(context: Context) = synchronized(guard) {
         init(context)
         guard.replace(guard.snapshot().cookie)
@@ -51,8 +39,11 @@ object CookieManager {
         synchronized(guard) {
             if (!guard.isCurrent(started) || !NeteaseCookie.isUsable(cookie)) return@synchronized false
             // Publish the persistent credential and generation under the same lock as login/logout.
-            val ok = getPrefs(context).edit().putString(KEY_COOKIE, cookie).putLong(KEY_REFRESHED_AT, now).commit()
-            if (!ok) { getPrefs(context).edit().putString(KEY_COOKIE, started.cookie).remove(KEY_REFRESHED_AT).commit(); return@synchronized false }
+            val prefs = getPrefs(context)
+            if (!prefs.edit().putString(KEY_COOKIE, cookie).putLong(KEY_REFRESHED_AT, now).commit()) {
+                prefs.edit().putString(KEY_COOKIE, started.cookie).remove(KEY_REFRESHED_AT).commit()
+                return@synchronized false
+            }
             guard.replace(cookie, renewal = true)
             com.takahashirinta.ncrust.network.XeapiState.clearSession()
             true
@@ -83,7 +74,7 @@ object CookieManager {
             guard.replace(cookie)
             NeteaseVipStore.clear(context)
             // S14：账号归属变了 ⇒ 首页个性化缓存与磁盘快照立即作废。
-            val owner = accountOwnerLocked()
+            val owner = guard.snapshot().accountOwner
             if (!com.takahashirinta.ncrust.cache.ContentCache.ownerMatches(owner)) {
                 com.takahashirinta.ncrust.cache.ContentCache.bindOwner(owner)
                 com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
@@ -108,9 +99,12 @@ object CookieManager {
         true
     }
 
-    fun getCookie(context: Context): String? {
-        return synchronized(guard) { init(context); guard.snapshot().cookie }
+    private fun initializedSnapshot(context: Context): NeteaseSessionSnapshot = synchronized(guard) {
+        init(context)
+        guard.snapshot()
     }
+
+    fun getCookie(context: Context): String? = initializedSnapshot(context).cookie
 
     fun hasCookie(context: Context): Boolean {
         return !getCookie(context).isNullOrBlank()
@@ -126,7 +120,7 @@ object CookieManager {
      * ⚠️ 现有调用点继续用 [hasCookie] 的不必改：那是一个**更宽松**的口径，
      * 放宽不会把已登录的用户踢出去。新写的判断请用这个。
      */
-    fun isLoggedIn(context: Context): Boolean = NeteaseCookie.isUsable(getCookie(context))
+    fun isLoggedIn(context: Context): Boolean = initializedSnapshot(context).usable
 
     fun clearCookie(context: Context) {
         synchronized(guard) {

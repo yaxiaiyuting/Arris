@@ -113,10 +113,11 @@ class ProtocolProbeActivity : ComponentActivity() {
             val started = System.currentTimeMillis()
             val row = JSONObject().put("case", "S fetch $id").put("songId", id)
             try {
-                val r = com.takahashirinta.ncrust.player.SongUrlFetcher.fetch(id, "jymaster")
-                row.put("granted", r?.actualLevel ?: "(null)")
-                    .put("br", r?.br ?: 0L).put("transportFail",
-                        com.takahashirinta.ncrust.player.SongUrlFetcher.lastAttemptFailedOnTransport(id))
+                val outcome = com.takahashirinta.ncrust.player.SongUrlFetcher.fetchOutcome(id, "jymaster")
+                val result = outcome.result
+                row.put("granted", result?.actualLevel ?: "(null)")
+                    .put("br", result?.br ?: 0L).put("transportFail",
+                        outcome.failure?.kind == com.takahashirinta.ncrust.player.ResolveFailureKind.NETWORK)
             } catch (e: Exception) {
                 row.put("error", e.javaClass.simpleName + ": " + (e.message ?: "").take(60))
             }

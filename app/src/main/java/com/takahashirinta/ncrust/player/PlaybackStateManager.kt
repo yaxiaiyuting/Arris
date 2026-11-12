@@ -17,8 +17,11 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.cache.trimOldest
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.SourceIds
+import java.lang.ref.WeakReference
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,13 +67,18 @@ object PlaybackStateManager {
     // 队列写盘 debounce：连续 addToQueue / insertNext / removeFromQueue 会累计触发。
     // 200 ms 合并一次能把连续 20 首歌的加入压成 1 次 IO，避免主线程 Gson.toJson 抖动。
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var pendingQueue: List<SongItem>? = null
-    private var pendingIndex: Int = 0
-    private var pendingAppContext: Context? = null
-    private var flushJob: Job? = null
     private val flushLock = Any()
-    /** 队列写盘代次：每次 saveQueue / clearQueue 推进，用于让过期快照的提交作废。 */
-    private var pendingGeneration = 0L
+    private var queueFlushJob: Job? = null
+    private var queueGeneration = 0L
+    private var queueEncoding: QueueEncoding? = null
+    private var shuffleFlushJob: Job? = null
+    private var shuffleGeneration = 0L
+
+    private class QueueEncoding(
+        val context: WeakReference<Context>,
+        val songs: WeakReference<List<SongItem>>,
+        val json: String,
+    )
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -283,12 +291,7 @@ object PlaybackStateManager {
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
             positionGeneration++
-            if (map.size > MAX_SONG_POSITIONS) {
-                map.entries
-                    .sortedBy { it.value.savedAtMs }
-                    .take(map.size - MAX_SONG_POSITIONS)
-                    .forEach { map.remove(it.key) }
-            }
+            map.trimOldest(MAX_SONG_POSITIONS) { it.savedAtMs }
         }
         scheduleFlushPositions(context)
     }
@@ -345,48 +348,52 @@ object PlaybackStateManager {
     internal const val MIN_RESUMABLE_MS = 3_000L
 
     // ---------- 队列持久化 ----------
-    fun saveQueue(context: Context, queue: List<SongItem>, currentIndex: Int) {
+    fun saveQueue(context: Context, queue: List<SongItem>, currentIndex: Int) =
+        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = false)
+
+    /** 游标变化时复用同一份只读队列快照。首次保存或换队列时会完整编码。 */
+    internal fun saveQueueCursor(context: Context, queue: List<SongItem>, currentIndex: Int) =
+        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = true)
+
+    private fun scheduleQueueWrite(
+        context: Context,
+        queue: List<SongItem>,
+        index: Int,
+        reuseEncoding: Boolean,
+    ) {
+        val app = context.applicationContext
         synchronized(flushLock) {
-            pendingQueue = queue
-            pendingIndex = currentIndex
-            pendingAppContext = context.applicationContext
-            pendingGeneration++
-            flushJob?.cancel()
-            flushJob = ioScope.launch {
+            if (!reuseEncoding) queueEncoding = null
+            val generation = ++queueGeneration
+            queueFlushJob?.cancel()
+            queueFlushJob = ioScope.launch {
                 delay(200L)
-                flushPendingQueue()
+                flushQueue(app, queue, index, generation)
             }
         }
     }
 
-    private suspend fun flushPendingQueue() {
-        val queue: List<SongItem>
-        val index: Int
-        val ctx: Context
-        val generation: Long
-        synchronized(flushLock) {
-            queue = pendingQueue ?: return
-            index = pendingIndex
-            ctx = pendingAppContext ?: return
-            generation = pendingGeneration
-            pendingQueue = null
-            pendingAppContext = null
+    private suspend fun flushQueue(
+        context: Context,
+        queue: List<SongItem>,
+        index: Int,
+        generation: Long,
+    ) {
+        val encoded = synchronized(flushLock) {
+            if (queueGeneration != generation) return
+            queueEncoding?.takeIf { it.context.get() === context && it.songs.get() === queue }
         }
         try {
-            // Gson 反射序列化是 CPU 密集，切 Default 避免 IO 线程池被占。
-            val json = withContext(Dispatchers.Default) { gson.toJson(queue) }
-            withContext(Dispatchers.IO) {
-                // 提交前复核代次：期间若有更新的 saveQueue / clearQueue，本次写盘作废。
-                // 否则「A 的旧快照」会覆盖「B 的新队列」，或把刚清掉的队列写回来。
-                val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                synchronized(flushLock) {
-                    if (pendingGeneration != generation) return@synchronized
-                    prefs.edit().putString(KEY_QUEUE, json).putInt(KEY_QUEUE_INDEX, index).apply()
+            val json = encoded?.json ?: withContext(Dispatchers.Default) { gson.toJson(queue) }
+            val prefs = getPrefs(context)
+            synchronized(flushLock) {
+                if (queueGeneration != generation) return
+                prefs.edit().putString(KEY_QUEUE, json).putInt(KEY_QUEUE_INDEX, index).apply()
+                if (queueGeneration == generation && encoded == null) {
+                    queueEncoding = QueueEncoding(WeakReference(context), WeakReference(queue), json)
                 }
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            // 取消是正常路径（下一次 saveQueue / clearQueue 会取消上一次去抖）。
-            // 旧实现把它当异常并 clearQueue ⇒ 正常队列被删除，还会顺手撤销新写入。
+        } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             // 序列化/写盘失败：保留已落盘的旧队列，不清空。等下一次变更再写。
@@ -394,19 +401,23 @@ object PlaybackStateManager {
     }
 
     suspend fun getQueue(context: Context): Pair<List<SongItem>, Int>? {
-        val prefs = getPrefs(context)
-        val json = prefs.getString(KEY_QUEUE, null) ?: return null
-        if (json.isEmpty() || json == "[]") return null
         return try {
+            val (json, index) = withContext(Dispatchers.IO) {
+                val prefs = getPrefs(context)
+                synchronized(flushLock) {
+                    val json = prefs.getString(KEY_QUEUE, null)
+                    if (json.isNullOrEmpty() || json == "[]") null
+                    else json to prefs.getInt(KEY_QUEUE_INDEX, 0)
+                }
+            } ?: return null
             // Gson 反射反序列化是 CPU 密集，切 Default 避免主线程卡顿（队列几百首时 50ms+）。
             val queue: List<SongItem> = withContext(Dispatchers.Default) {
                 val restored: List<SongItem> = gson.fromJson(json, songListType)
                 // H14 残余：读盘后过一次「旧 B 站视频腿补分区位」（纯函数 + 幂等）。
                 migrateQueueSongs(restored)
             }
-            val index = prefs.getInt(KEY_QUEUE_INDEX, 0)
             Pair(queue, index)
-        } catch (e: kotlinx.coroutines.CancellationException) {
+        } catch (e: CancellationException) {
             // 取消不是「队列损坏」：原样抛出，绝不顺手删除已落盘的队列。
             throw e
         } catch (_: Exception) {
@@ -437,24 +448,23 @@ object PlaybackStateManager {
      * 「这次读盘有没有搬家」。
      */
     internal fun migrateQueueSongs(songs: List<SongItem>): List<SongItem> {
-        if (songs.isEmpty()) return songs
-        var changed = false
-        val out = ArrayList<SongItem>(songs.size)
-        for (song in songs) {
+        var updated: MutableList<SongItem>? = null
+        songs.forEachIndexed { index, song ->
             val migrated = migrateQueueSong(song)
-            if (migrated !== song) changed = true
-            out.add(migrated)
+            if (migrated !== song) {
+                val copy = updated ?: songs.toMutableList().also { updated = it }
+                copy[index] = migrated
+            }
         }
-        return if (changed) out else songs
+        return updated ?: songs
     }
 
     /** 单条队列条目的迁移；不需要迁移时**返回同一个实例**。 */
     internal fun migrateQueueSong(song: SongItem): SongItem {
         // J10：旧散列合成 id → 规范 id（幂等；没有 qqSongId 的原样保留）。
         val qqMigrated = SourceIds.migrateSynthesizedQqId(song.id, song.sourceId, song.qqSongId)
-        val withQq = if (qqMigrated == song.id) song else song.copy(id = qqMigrated)
-        val migrated = SourceIds.migrateBiliAvPartition(withQq.id, withQq.sourceId)
-        return if (migrated == withQq.id) withQq else withQq.copy(id = migrated)
+        val migrated = SourceIds.migrateBiliAvPartition(qqMigrated, song.sourceId)
+        return if (migrated == song.id) song else song.copy(id = migrated)
     }
 
     /**
@@ -474,25 +484,79 @@ object PlaybackStateManager {
         getPrefs(context).edit().putInt(KEY_PLAY_MODE, mode).apply()
     }
 
-    fun saveShuffle(context: Context, keys: List<String>, order: List<Int>, position: Int, current: Int) {
-        val snapshot = ShuffleSnapshot(keys, order, position)
-        if (!snapshot.matches(keys, current)) return
-        getPrefs(context).edit().putString(KEY_SHUFFLE, gson.toJson(snapshot)).apply()
+    /** 已接受的轮次写入由应用持有，播放器页面销毁后仍可保存。 */
+    internal fun saveShuffle(
+        context: Context,
+        order: List<Int>,
+        position: Int,
+        current: Int,
+        queueKeys: () -> List<String>,
+    ) {
+        val app = context.applicationContext
+        synchronized(flushLock) {
+            val generation = ++shuffleGeneration
+            shuffleFlushJob?.cancel()
+            shuffleFlushJob = ioScope.launch {
+                flushShuffle(app, generation, order, position, current, queueKeys)
+            }
+        }
     }
 
-    fun restoreShuffle(context: Context, keys: List<String>, current: Int): ShuffleSnapshot? = runCatching {
-        gson.fromJson(getPrefs(context).getString(KEY_SHUFFLE, null), ShuffleSnapshot::class.java)
-            ?.takeIf { it.matches(keys, current) }
-    }.getOrNull()
+    private suspend fun flushShuffle(
+        context: Context,
+        generation: Long,
+        order: List<Int>,
+        position: Int,
+        current: Int,
+        queueKeys: () -> List<String>,
+    ) {
+        try {
+            val json = withContext(Dispatchers.Default) {
+                val keys = queueKeys()
+                val snapshot = ShuffleSnapshot(keys, order, position)
+                if (snapshot.matches(keys, current)) gson.toJson(snapshot) else null
+            } ?: return
+            val prefs = getPrefs(context)
+            synchronized(flushLock) {
+                if (shuffleGeneration == generation) {
+                    prefs.edit().putString(KEY_SHUFFLE, json).apply()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 保留上一次已保存的轮次。
+        }
+    }
+
+    internal suspend fun restoreShuffle(
+        context: Context,
+        queue: List<SongItem>,
+        current: Int,
+    ): ShuffleSnapshot? = try {
+        val json = withContext(Dispatchers.IO) {
+            getPrefs(context).getString(KEY_SHUFFLE, null)
+        }
+        withContext(Dispatchers.Default) {
+            gson.fromJson(json, ShuffleSnapshot::class.java)
+                ?.takeIf { it.matches(queue.map { song -> QueueKeys.keyOf(song).tag }, current) }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
 
     fun clearQueue(context: Context) {
-        // 也取消任何飞行中的 debounce 写，避免 clearQueue 之后又被延迟写覆盖回去
         val prefs = getPrefs(context)
         synchronized(flushLock) {
-            flushJob?.cancel()
-            pendingQueue = null
-            pendingAppContext = null
-            pendingGeneration++
+            queueFlushJob?.cancel()
+            queueFlushJob = null
+            shuffleFlushJob?.cancel()
+            shuffleFlushJob = null
+            queueGeneration++
+            shuffleGeneration++
+            queueEncoding = null
             prefs.edit().remove(KEY_QUEUE).remove(KEY_QUEUE_INDEX).remove(KEY_SHUFFLE).apply()
         }
     }

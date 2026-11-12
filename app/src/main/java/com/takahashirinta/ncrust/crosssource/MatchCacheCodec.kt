@@ -232,19 +232,19 @@ object MatchCacheCodec {
     )
 
     internal fun artistAlias(dto: AliasDto): ArtistKey? {
-        val source = MusicSource.values().firstOrNull { it.key == dto.source } ?: return null
+        val source = MusicSource.parseKey(dto.source) ?: return null
         val id = dto.id?.takeIf { it.isNotBlank() } ?: return null
         return ArtistKey(source, id, dto.name.orEmpty())
     }
 
     internal fun albumAlias(dto: AliasDto): AlbumKey? {
-        val source = MusicSource.values().firstOrNull { it.key == dto.source } ?: return null
+        val source = MusicSource.parseKey(dto.source) ?: return null
         val id = dto.id?.takeIf { it.isNotBlank() } ?: return null
         return AlbumKey(source, id, dto.name.orEmpty())
     }
 
     internal fun trackAlias(dto: AliasDto): TrackKey? {
-        val source = MusicSource.values().firstOrNull { it.key == dto.source } ?: return null
+        val source = MusicSource.parseKey(dto.source) ?: return null
         val id = dto.id?.toLongOrNull() ?: return null
         if (id <= 0L) return null
         return TrackKey(source, id, dto.sourceId, dto.mediaId)

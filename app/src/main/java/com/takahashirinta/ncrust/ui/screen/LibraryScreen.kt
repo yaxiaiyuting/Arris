@@ -98,7 +98,7 @@ fun LibraryScreen(
     onPlayAlbum: (Long) -> Unit,
     onPlaylistClick: (PlaylistApi.PlaylistInfo) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
-    // Bug2-④：收藏单曲「播放全部」。由上层 loadAllLikedSongs 覆盖整个红心歌单。
+    // Bug2-④：收藏单曲「播放全部」。由上层 loadAllLikedSongsResult 覆盖整个红心歌单。
     onPlayAllLiked: () -> Unit = {},
     // v3.4.12：整列收藏的「插播 / 追加」入口与后台补齐的 loading 反馈。
     // 播放全部仍是**先播后补**（点击即出声），不弹二次确认。
@@ -140,7 +140,7 @@ fun LibraryScreen(
     // 云端红心总数与本地可见条目取大者：本地手动收藏的 QQ / B 站不在红心 id 表里，
     // 只显示云端数会让「整列播放」的规模看起来漏了它们。
     var likedTotal by remember { mutableIntStateOf(
-        maxOf(LibraryManager.getLikedSongIds(context).size, LibraryManager.getSavedSongs(context).size)
+        maxOf(LibraryManager.getLikedSongIds(context).size, savedSongs.size)
     ) }
     var selectedCategory by remember { mutableIntStateOf(0) }
     // v3.4.0：专辑 tab 的**音源筛选档**（全部 / 只看 ncm / 只看 qm）。
@@ -210,11 +210,12 @@ fun LibraryScreen(
     }
 
     fun reloadLocal() {
-        savedSongs = LibraryManager.getSavedSongs(context)
+        val songs = LibraryManager.getSavedSongs(context)
+        savedSongs = songs
         savedAlbums = LibraryManager.getSavedAlbums(context)
         likedTotal = maxOf(
             LibraryManager.getLikedSongIds(context).size,
-            LibraryManager.getSavedSongs(context).size,
+            songs.size,
         )
         localPlaylists = LocalPlaylistStore.readPlaylists(context)
     }
@@ -801,28 +802,5 @@ fun LibraryAlbumGridItem(
         MetroText(album.name, color = LocalMetroColors.current.onBackground, style = LocalMetroTypography.current.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         MetroText(infoLine, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         Spacer(Modifier.height(6.dp))
-    }
-}
-
-/**
- * 库页页头的图标按钮（v3.8.0）。
- *
- * 视觉 40dp，**命中区 48dp** —— AGENTS.md 触摸陷阱 §7 的同一条纪律。
- */
-@androidx.compose.runtime.Composable
-private fun TileAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    val colors = io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors.current
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = androidx.compose.ui.Alignment.Center,
-    ) {
-        io.github.takahashirinta.kanesumi.core.theme.MetroIcon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = colors.onBackground,
-            sizeDp = 22.dp,
-        )
     }
 }

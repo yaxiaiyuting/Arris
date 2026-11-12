@@ -38,10 +38,12 @@ import org.junit.Test
  * `qqmusic:12345`（身份的唯一格式），序号保证「队列里真的有两首一模一样的歌」也不撞。
  * 拖拽身份（`draggedIdentity` / 隐藏态 `hiddenRowKey`）与提交重定位都换成同一个身份。
  *
- * 本文件直接调用**生产**的 `buildQueueRows`（它为此从 `private` 放宽到 `internal`），
- * 不复制行模型。
+ * 行模型测试共用生产的歌曲行和分段构建入口。
  */
 class QueueRowIdentityTest {
+
+    private fun rowsForQueue(queue: List<SongItem>, currentIndex: Int, infinityActive: Boolean): List<RowInfo> =
+        buildQueueRows(buildQueueSongRows(queue), currentIndex, infinityActive)
 
     private fun song(
         source: MusicSource,
@@ -62,7 +64,7 @@ class QueueRowIdentityTest {
     fun `跨源同号的两首歌必须拿到不同的行 key`() {
         val ne = song(MusicSource.NETEASE, 12345L, "网易云的那首")
         val qq = song(MusicSource.QQMUSIC, 12345L, "QQ 的那首", mid = "0039MnYb0qxYhV")
-        val rows = buildQueueRows(listOf(ne, qq), currentIndex = 0, infinityActive = false)
+        val rows = rowsForQueue(listOf(ne, qq), currentIndex = 0, infinityActive = false)
 
         val songRows = rows.filter { it.kind == RowKind.SONG }
         assertEquals("两首都要在行模型里", 2, songRows.size)
@@ -84,7 +86,7 @@ class QueueRowIdentityTest {
             song(MusicSource.NETEASE, 3L, "将来"),
             song(MusicSource.QQMUSIC, 3L, "同号的另一源 2"),
         )
-        val rows = buildQueueRows(queue, currentIndex = 1, infinityActive = true)
+        val rows = rowsForQueue(queue, currentIndex = 1, infinityActive = true)
         val keys = rows.map { it.key }
         assertEquals("行 key 不许重复：$keys", keys.size, keys.toSet().size)
     }
@@ -93,14 +95,14 @@ class QueueRowIdentityTest {
     fun `同一首歌重复出现时靠序号区分`() {
         val a = song(MusicSource.NETEASE, 7L, "重复的歌")
         val b = song(MusicSource.NETEASE, 7L, "重复的歌")
-        val rows = buildQueueRows(listOf(a, b), currentIndex = 0, infinityActive = false)
+        val rows = rowsForQueue(listOf(a, b), currentIndex = 0, infinityActive = false)
         val songRows = rows.filter { it.kind == RowKind.SONG }
         assertEquals(listOf("s-netease:7#0", "s-netease:7#1"), songRows.map { it.key })
     }
 
     @Test
     fun `段标题与占位符的 key 不与歌曲行相撞`() {
-        val rows = buildQueueRows(
+        val rows = rowsForQueue(
             listOf(song(MusicSource.NETEASE, 1L, "a"), song(MusicSource.NETEASE, 2L, "b")),
             currentIndex = 0,
             infinityActive = true,
@@ -115,13 +117,13 @@ class QueueRowIdentityTest {
 
     @Test
     fun `空队列没有任何行`() {
-        assertTrue(buildQueueRows(emptyList(), 0, false).isEmpty())
+        assertTrue(rowsForQueue(emptyList(), 0, false).isEmpty())
     }
 
     @Test
     fun `越界的 currentIndex 仍然收敛到合法行`() {
         val queue = listOf(song(MusicSource.NETEASE, 1L, "a"), song(MusicSource.NETEASE, 2L, "b"))
-        val rows = buildQueueRows(queue, currentIndex = 99, infinityActive = false)
+        val rows = rowsForQueue(queue, currentIndex = 99, infinityActive = false)
         assertTrue("越界索引必须被夹回合法范围", rows.any { it.kind == RowKind.NOW_HEAD && it.queueIndex == 1 })
     }
 }

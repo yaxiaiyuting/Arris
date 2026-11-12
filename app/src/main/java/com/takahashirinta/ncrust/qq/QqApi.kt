@@ -17,8 +17,13 @@ import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.lyric.LrcParser
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.player.SongUrlResult
+import com.takahashirinta.ncrust.player.QualityAccessEvidence
+import com.takahashirinta.ncrust.player.ResolveFailureKind
+import com.takahashirinta.ncrust.player.ResolveOutcome
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -50,31 +55,6 @@ object QqApi {
 
     /** 取链失败时服务端给的业务码（实测匿名态）。 */
     const val RESULT_NEED_LOGIN_OR_VIP = 104003
-
-    /**
-     * 取链失败的原因。
-     *
-     * ⚠️ v3.2.0 **改变了它的角色**：v2.1.4 引入时它「只用于日志与 UI 提示，不参与播放决策」，
-     * 而全仓库唯一的读取处就是本文件自己的赋值 —— 也就是说它连日志都没进过。
-     * 现在 [rejection] 是播放链**唯一的**分流判据（见 [QqRejection] 与
-     * `player/ResolveFailure.kt`），因为「要会员」与「网络挂了」在 v3.1.0 眼里完全一样。
-     */
-    data class UrlFailure(
-        val resultCode: Int,
-        val tips: String,
-        val fileType: QqFileType?,
-        /** v3.2.0 · P0：分类结论。 */
-        val rejection: QqRejection = QqRejection.UNKNOWN,
-    )
-
-    @Volatile
-    var lastUrlFailure: UrlFailure? = null
-        private set
-
-    /** v3.2.0：最近一次取链的分类结论。**每次 [fetchPlayUrl] 都会写**（成功写 [QqRejection.NONE]）。 */
-    @Volatile
-    var lastRejection: QqRejection = QqRejection.NONE
-        private set
 
     // ---------------- 搜索 ----------------
 
@@ -175,8 +155,6 @@ object QqApi {
         return QqSongMapper.songsFromSearchResponse(JSONObject().put("req", response))
     }
 
-    private const val SEARCH_MODULE = "music.search.SearchCgiService"
-
     private val searchCounter: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong(0)
 
     /**
@@ -211,16 +189,13 @@ object QqApi {
      *    那个「兜底」拿到的 purl 是坏的，它只会把一次干净的失败换成一个诡异的播放错误。
      *    只有连 `media_id` 都没有（老数据、手工构造的条目）时才退回 `sourceId`。
      */
-    suspend fun fetchPlayUrl(song: SongItem, level: String): SongUrlResult? {
+    suspend fun resolveOutcome(song: SongItem, level: String): ResolveOutcome {
         // v2.5.4 · C：取链期埋点（唯一落点）。全部是 AtomicLong 自增，无 IO、无网络。
         QqProbeCounters.onResolveAttempt()
         val songMid = song.sourceId
-        if (songMid == null) {
-            // songmid 缺失是**硬失败**：不兜底、不重试（见上面 KDoc 的第 2 条）。
+        if (songMid.isNullOrBlank()) {
             QqProbeCounters.onResolveMissingSongMid()
-            // v3.2.0：这是「结构性取不到」，与权限/版权无关 —— 分类为 UNRESOLVABLE。
-            recordRejection(QqRejection.UNKNOWN, null, null, null)
-            return null
+            return ResolveOutcome.failed(ResolveFailureKind.UNRESOLVABLE, MusicSource.QQMUSIC)
         }
         // 没有 media_id（v2.1.0 之前落盘的队列条目）时才退回 songmid
         val mediaIdOfSong = song.mediaId?.takeIf { it.isNotEmpty() }
@@ -232,44 +207,27 @@ object QqApi {
         // v3.2.0 · P0：**请求本身失败**与「请求成功但被拒」必须分开。
         // v3.1.0 把两者都写成 `null`，于是「网络抖了一下」在播放链眼里与「这首歌要会员」
         // 完全一样 —— 前者该重试，后者该提示，处置相反。
-        val info = batch.entries
-        if (info == null) {
-            recordRejection(
-                rejection = batch.transportRejection,
-                resultCode = null,
-                tips = batch.transportMessage,
-                fileType = null,
-            )
-            return null
-        }
+        val info = batch.entries ?: return ResolveOutcome.failed(
+            batch.transportRejection.toResolveFailureKind(), MusicSource.QQMUSIC, rawMessage = batch.transportMessage,
+        )
 
         // 按**请求时的优先级**挑，而不是按响应顺序 —— 响应顺序是服务端的实现细节，
         // 依赖它等于把「用户选无损却拿到 128k」变成一个随机事件。
         val rejections = ArrayList<QqRejectionInput>(types.size)
         for (fileType in types) {
             val entry = info[fileType] ?: continue
-            val purl = entry.optString("purl").takeIf { it.isNotEmpty() }
+            val purl = qqPlaybackPath(entry)
             if (purl == null) {
-                // v3.2.0：逐档位分类。**记录而不是丢弃** —— 被拒的原因就是界面上要对用户说的话。
-                val input = rejectionInputOf(entry)
-                rejections += input
-                lastUrlFailure = UrlFailure(
-                    resultCode = entry.optInt("result", 0),
-                    tips = entry.optString("tips"),
-                    fileType = fileType,
-                    rejection = classifyQqRejection(input),
-                )
+                rejections += qqVkeyRejectionInput(entry, batch.loggedIn)
                 continue
             }
-            val url = buildUrl(purl)
+            val url = composeUrl(purl, batch.cdnBase)
             val actualLevel = QqQuality.ncrustLevelOf(fileType)
             QqProbeCounters.onResolveOk()
             Log.i(TAG, "vkey ok: requested=$level actual=$actualLevel prefix=${fileType.prefix} mid=$mediaMid")
-            lastUrlFailure = null
-            lastRejection = QqRejection.NONE
             // 与 ncm 侧同一个离线缓存 key 机制：挂上它，media3 的 SimpleCache
             // 才能把「同一首歌 + 同一档位」的轮换 URL 认成同一份缓存。
-            return SongUrlResult(
+            val result = SongUrlResult(
                 url = OfflineKeys.withKey(url, song.id, actualLevel),
                 actualLevel = actualLevel,
                 // v2.2.1 · P0：这个档位是**从真正取回的文件名前缀反推的**（`RS01…flac` → hires），
@@ -285,26 +243,32 @@ object QqApi {
                 // 那种情况下界面会按服务端标签显示，而标签在这些档位上就是权威的。
                 br = QqQuality.knownBitrateOf(fileType),
                 type = fileType.ext,
-                songMaxLevel = null,
+                qualityAccess = batch.accountRevision?.let { revision ->
+                    val observed = qqTierStatuses(types) { type ->
+                        info[type]?.let { classifyQqRejection(qqVkeyRejectionInput(it, batch.loggedIn)) }
+                    }
+                    if (observed.isEmpty()) null else QualityAccessEvidence(revision, observed = observed)
+                },
             )
+            return ResolveOutcome.ok(result)
         }
         QqProbeCounters.onResolveFail()
-        // v3.2.0 · P0：把**逐档位**的结论收敛成一条，并且**写进 lastRejection** 让
-        // QqMusicSourceProvider 能把它翻译成跨音源的失败分类（铁律 20/21 的落点）。
-        val batchRejection = classifyQqBatch(rejections)
-        lastRejection = batchRejection
+        val rejection = classifyQqBatch(rejections)
+        val evidence = rejections.firstOrNull { classifyQqRejection(it) == rejection }
         Log.w(
             TAG,
             "no playable url for ${SourceIds.trackKey(MusicSource.QQMUSIC, song.id)} at level=$level " +
-                "rejection=$batchRejection levels=${types.size}",
+                "rejection=$rejection levels=${types.size}",
         )
-        return null
+        return ResolveOutcome.failed(
+            rejection.toResolveFailureKind(), MusicSource.QQMUSIC, evidence?.resultCode, evidence?.tips,
+        )
     }
 
     /**
      * v2.1.4：**一次问全档位的诊断探针**（只有 DEBUG 包会调它）。
      *
-     * 与 [fetchPlayUrl] 的区别是它不挑、不降级、不返回任何东西 —— 它只把
+     * 与 [resolveOutcome] 的区别是它不挑、不降级、不返回任何东西 —— 它只把
      * 「服务端对**每一个**档位分别怎么答」打全。用户报「超清母带只能出极高」时，
      * 这一条日志就能把三种可能切开：
      *
@@ -312,7 +276,7 @@ object QqApi {
      * - 免费与无损档 `0`、只有 `AI00`/`Q000`/`Q001` `104003` ⇒ 档位前缀或会员档没放行；
      * - `101404` ⇒ `comm.cv` 不对（客户端版本被判非法）。
      *
-     * 为什么不能靠 [fetchPlayUrl] 的日志代替：那条路一旦在低档位拿到 purl 就返回了，
+     * 为什么不能靠 [resolveOutcome] 的日志代替：那条路一旦在低档位拿到 purl 就返回了，
      * 高档位的结果不会被记录 —— 而「为什么没拿到高档位」恰恰是要看的东西。
      */
     suspend fun diagnoseQuality(song: SongItem): Boolean {
@@ -330,7 +294,7 @@ object QqApi {
             Log.w(TAG, "vkey.diag ===== 探针结束：请求本身失败（登录态/网络/模块错误）")
             return false
         }
-        val best = probe.firstOrNull { info.entries[it]?.optString("purl")?.isNotEmpty() == true }
+        val best = probe.firstOrNull { info.entries[it]?.let(::qqPlaybackPath) != null }
         Log.i(
             TAG,
             "vkey.diag ===== 探针结束 最高可用档位=" + (best?.let { it.prefix + "(" + it.label + ")" } ?: "无"),
@@ -357,15 +321,18 @@ object QqApi {
         val transportRejection: QqRejection = QqRejection.NETWORK,
         /** 传输层的一句话原因（只进日志）。 */
         val transportMessage: String? = null,
+        val accountRevision: Long? = null,
+        val loggedIn: Boolean = false,
+        val cdnBase: String? = null,
     )
 
     /**
      * 取链请求 + v3.4.9 的**一次性续期重试**。
      *
-     * ## 为什么重试放在这一层而不是 `fetchPlayUrl`
+     * ## 为什么重试放在这一层而不是 `resolveOutcome`
      *
      * 「服务端拒绝了这张票」这个事实只有本函数知道（逐档位的服务端 `result` 码与
-     * 传输层状态码都在它手里）。放在 `fetchPlayUrl` 里判，就要么把整批 `midurlinfo`
+     * 传输层状态码都在它手里）。放在 `resolveOutcome` 里判，就要么把整批 `midurlinfo`
      * 再传出去一层，要么在外面重复判一遍 —— 后者正是本仓库修过的
      * 「同一个判据写两遍、然后分叉」的形状。
      *
@@ -424,8 +391,8 @@ object QqApi {
     private fun isAuthRejection(batch: VkeyBatch): Boolean {
         val entries = batch.entries
         if (entries == null) return batch.transportRejection == QqRejection.AUTH_EXPIRED
-        if (!QqClient.isLoggedIn()) return false
-        val inputs = entries.values.map { rejectionInputOf(it) }
+        if (!batch.loggedIn) return false
+        val inputs = entries.values.map { qqVkeyRejectionInput(it, batch.loggedIn) }
         if (inputs.isEmpty()) return false
         return classifyQqBatch(inputs) == QqRejection.NEED_LOGIN
     }
@@ -438,6 +405,8 @@ object QqApi {
         requestedLevel: String = "",
     ): VkeyBatch {
         if (types.isEmpty()) return VkeyBatch(null, QqRejection.UNKNOWN, "no file types")
+        val accountRevision = QqAuthStore.currentAuthRevision()
+        val loggedIn = QqClient.isLoggedIn()
         val request = QqRequests.vkey(
             songMid = songMid,
             mediaMid = mediaMid,
@@ -467,7 +436,7 @@ object QqApi {
                 entries = null,
                 transportRejection = classifyMusicuTransportFailure(
                     outcome = outcome,
-                    loggedIn = QqClient.isLoggedIn(),
+                    loggedIn = loggedIn,
                 ),
                 transportMessage = outcome.transportError,
             )
@@ -475,9 +444,8 @@ object QqApi {
             ?: return VkeyBatch(null, QqRejection.UNKNOWN, "response has no data object")
 
         // CDN 前缀每次响应都可能不同（host 轮换），所以每次都更新。
-        data.optJSONArray("sip")
-            ?.let { arr -> (0 until arr.length()).map { arr.optString(it) }.firstOrNull { it.isNotEmpty() } }
-            ?.let { lastSip = it }
+        val sipHost = data.optJSONArray("sip")?.let(::firstSipHost)
+        if (sipHost != null) lastSip = sipHost
 
         val list = data.optJSONArray("midurlinfo")
             ?: return VkeyBatch(null, QqRejection.UNKNOWN, "response has no midurlinfo array")
@@ -495,13 +463,27 @@ object QqApi {
                 mediaMid = mediaMid,
                 types = types,
                 data = data,
-                selected = out.entries.firstOrNull { (t, e) ->
-                    e.optInt("result", -1) == 0 && e.optString("purl").isNotEmpty()
+                sipHost = sipHost,
+                selected = out.entries.firstOrNull {
+                    it.value.optInt("result", -1) == 0 && qqPlaybackPath(it.value) != null
                 }?.key,
                 cookie = QqClient.cookieForDiagnostics(),
             )
         }
-        return VkeyBatch(out)
+        return VkeyBatch(
+            out,
+            accountRevision = accountRevision.takeIf { it == QqAuthStore.currentAuthRevision() },
+            loggedIn = loggedIn,
+            cdnBase = sipHost ?: lastSip,
+        )
+    }
+
+    private fun firstSipHost(sip: JSONArray): String? {
+        for (index in 0 until sip.length()) {
+            val host = sip.optString(index)
+            if (host.isNotEmpty()) return host
+        }
+        return null
     }
 
     /**
@@ -522,96 +504,6 @@ object QqApi {
         val host = sip?.takeIf { it.isNotEmpty() } ?: FALLBACK_CDN
         val prefix = if (host.endsWith("/")) host else "$host/"
         return prefix + purl.removePrefix("/")
-    }
-
-    private fun buildUrl(purl: String): String = composeUrl(purl, lastSip)
-
-    // ---------------------------------------------------------------- v3.2.0 · P0 分类辅助
-
-    /**
-     * v3.2.0 · P0：[fetchPlayUrl] 的**带分类**版本。播放链应当只调这一个。
-     *
-     * 为什么不把分类直接塞进 `fetchPlayUrl` 的返回值：那个函数有 4 个调用点
-     * （播放链、离线预热、探针、单测），改签名会把「分类」这件事的半径扩大到
-     * 与它无关的地方。这里包一层，语义是：
-     *
-     * ```
-     * resolveOutcome == Ok    <=> fetchPlayUrl != null
-     * resolveOutcome == Failed <=> fetchPlayUrl == null，且带上 lastRejection
-     * ```
-     *
-     * **结构性失败优先**：`songmid` 缺失时连请求都不发，直接判
-     * [com.takahashirinta.ncrust.player.ResolveFailureKind.UNRESOLVABLE] ——
-     * 这一档是唯一允许自动跳歌的（见 `player/ResolveFailure.kt` 的表），
-     * 而它必须**在** [fetchPlayUrl] 之前判，否则会被 `104003` 之类的响应码盖住。
-     */
-    suspend fun resolveOutcome(
-        song: SongItem,
-        level: String,
-    ): com.takahashirinta.ncrust.player.ResolveOutcome {
-        val source = MusicSource.QQMUSIC
-        if (song.sourceId.isNullOrBlank()) {
-            // 与 QqProbeCounters 的硬失败埋点保持一致（fetchPlayUrl 里也会记一次，
-            // 但那条路现在走不到了 —— 这里提前返回，所以在这里记）。
-            QqProbeCounters.onResolveAttempt()
-            QqProbeCounters.onResolveMissingSongMid()
-            return com.takahashirinta.ncrust.player.ResolveOutcome.failed(
-                com.takahashirinta.ncrust.player.ResolveFailureKind.UNRESOLVABLE,
-                source,
-            )
-        }
-        val result = fetchPlayUrl(song, level)
-        if (result != null) {
-            return com.takahashirinta.ncrust.player.ResolveOutcome.ok(result)
-        }
-        val failure = lastUrlFailure
-        return com.takahashirinta.ncrust.player.ResolveOutcome.failed(
-            kind = lastRejection.toResolveFailureKind(),
-            source = source,
-            rawCode = failure?.resultCode,
-            rawMessage = failure?.tips?.takeIf { it.isNotEmpty() },
-        )
-    }
-
-    /**
-     * 一个 `midurlinfo` 条目 → 分类输入。
-     *
-     * `loggedIn` 取的是**发起这次请求时**的本地登录态（`QqCookie.isLoggedIn`），
-     * 它是「`104003` 该读成『去登录』还是『权益不足』」的唯一判据：
-     * 同一个码在两种状态下含义完全不同，而客户端只有本地这一个信号能区分它们。
-     */
-    private fun rejectionInputOf(entry: JSONObject): QqRejectionInput = QqRejectionInput(
-        // 走到这里的前提就是「这一档没有 purl」（有 purl 的那一档在循环里直接返回了）。
-        hasPurl = false,
-        resultCode = entry.optInt("result", 0),
-        tips = entry.optString("tips").takeIf { it.isNotEmpty() },
-        pneedbuy = entry.optInt("pneedbuy", 0),
-        isbuy = entry.optInt("isbuy", 0),
-        // `type == -1` = 30 秒试听（v3.1.0 记为未复现，保留防御分支）。
-        trialType = entry.optInt("type", 0).takeIf { entry.has("type") },
-        transportFailed = false,
-        httpStatus = null,
-        loggedIn = QqClient.isLoggedIn(),
-    )
-
-    /**
-     * 写下一次失败的分类。**每一处 `return null` 之前都必须调用它** ——
-     * 漏掉一处的表现是「那一种失败退回 v3.1.0 的行为（弹无版权 + 跳歌）」，
-     * 而那正是本版要根除的形状。
-     */
-    private fun recordRejection(
-        rejection: QqRejection,
-        resultCode: Int?,
-        tips: String?,
-        fileType: QqFileType?,
-    ) {
-        lastRejection = rejection
-        lastUrlFailure = UrlFailure(
-            resultCode = resultCode ?: 0,
-            tips = tips.orEmpty(),
-            fileType = fileType,
-            rejection = rejection,
-        )
     }
 
     /** `sip` 缺失时的兜底 CDN。实测 `http`/`https`、`ws`/`ws6`/`aqqmusic.tc` 四个域名都可用。 */
@@ -638,26 +530,28 @@ object QqApi {
         mediaMid: String,
         types: List<QqFileType>,
         data: JSONObject,
+        sipHost: String?,
         selected: QqFileType?,
         cookie: String?,
     ) {
-        val sipHost = data.optJSONArray("sip")
-            ?.let { a -> (0 until a.length()).map { a.optString(it) }.firstOrNull { it.isNotEmpty() } }
-            .orEmpty()
         Log.d(
             TAG,
             "vkey.diag requested=$requested songMid=$songMid mediaMid=$mediaMid" +
                 " cookieFields=" + QqCookie.fieldNamesOf(cookie) +
                 " uin=" + (QqCookie.uinOf(cookie)?.toString() ?: "null") +
-                " sip=" + sipHost +
+                " sip=" + sipHost.orEmpty() +
                 " retcode=" + data.optInt("retcode", -1) +
                 " chosen=" + (selected?.prefix ?: "none"),
         )
         val list = data.optJSONArray("midurlinfo")
         for (t in types) {
-            val entry = (0 until (list?.length() ?: 0))
-                .mapNotNull { list!!.optJSONObject(it) }
-                .firstOrNull { QqQuality.fileTypeOfFileName(it.optString("filename")) == t }
+            val entry = list?.let { entries ->
+                (0 until entries.length()).firstNotNullOfOrNull { index ->
+                    entries.optJSONObject(index)?.takeIf {
+                        QqQuality.fileTypeOfFileName(it.optString("filename")) == t
+                    }
+                }
+            }
             if (entry == null) {
                 Log.d(TAG, "vkey.diag   ${t.prefix}(${t.label}) 条目缺失")
                 continue
@@ -704,21 +598,20 @@ object QqApi {
             return null
         }
         val data = response.optJSONObject("data") ?: return LyricPack(emptyList(), emptyList(), emptyList(), true)
-        val crypt = data.optInt("crypt", 1) == 1
-
-        // ⚠️ 实测：`qrc=0` 的歌**照样**加密，但解密出来是**行级 LRC**（不是 QRC 的 XML）。
-        // 只按 QRC 解析的话这些歌会得到 0 行 —— 表现是「有歌词的歌显示暂无歌词」。
-        val lyricText = decodeField(data.optString("lyric"), crypt)
-        val qrc = QrcParser.parseXml(lyricText).ifEmpty { LrcParser.parse(lyricText.orEmpty()) }
-        val roma = QrcParser.parseXml(decodeField(data.optString("roma"), crypt))
-        val trans = LrcParser.parse(decodeField(data.optString("trans"), crypt).orEmpty())
-            // 翻译轨里没有翻译的行会被服务端写成 `//`（实测），
-            // 它不是歌词文本，留着只会在界面上多出一行斜杠。
-            .filter { it.text.any { c -> c != '/' && !c.isWhitespace() } }
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "lyric mid=$songMid qrc=${qrc.size} trans=${trans.size} roma=${roma.size}")
+        return withContext(Dispatchers.Default) {
+            val crypt = data.optInt("crypt", 1) == 1
+            // 加密字段解码后可能是 QRC XML 或行级 LRC。
+            val lyricText = decodeField(data.optString("lyric"), crypt)
+            val qrc = QrcParser.parseXml(lyricText).ifEmpty { LrcParser.parse(lyricText.orEmpty()) }
+            val roma = QrcParser.parseXml(decodeField(data.optString("roma"), crypt))
+            val trans = LrcParser.parse(decodeField(data.optString("trans"), crypt).orEmpty())
+                // 服务端用 // 表示该行没有译文。
+                .filter { it.text.any { c -> c != '/' && !c.isWhitespace() } }
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "lyric mid=$songMid qrc=${qrc.size} trans=${trans.size} roma=${roma.size}")
+            }
+            LyricPack(qrc, trans, roma, authoritative = true)
         }
-        return LyricPack(qrc, trans, roma, authoritative = true)
     }
 
     /**
@@ -746,7 +639,7 @@ object QqApi {
      * 匿名态的**结构**已实测；**登录态下 vip=1 的具体取值没有验证过**（本仓库没有
      * qm 账号）。因此本方法的结果**只用于界面显示与降级提示**，
      * 绝不参与「这首歌能不能放」的判断 —— 那个判断永远由服务端返回的 purl 决定
-     * （见 [fetchPlayUrl]）。判断错了最坏是界面上的一个角标不对，不会凭空给或夺走播放权限。
+     * （见 [resolveOutcome]）。判断错了最坏是界面上的一个角标不对，不会凭空给或夺走播放权限。
      */
     suspend fun fetchProfile(): QqProfile? {
         val request = QqRequests.vip()
@@ -769,92 +662,15 @@ object QqApi {
         )
     }
 
-    /**
-     * 把副文本轨（翻译 / 音译）**按时间就近**贴到主轨的每一行上（v2.1.0 · D）。
-     *
-     * 为什么必须重写时间戳而不是原样交出：渲染层是按 `timeMs` **精确配对**副文本的
-     * （`translatedLyrics.associateBy { timeMs }`）。QRC 主轨的时间戳与 `trans`（行级 LRC）
-     * 的时间戳来自服务端的两份资产，实测并不逐行相同，原样交出会让译文一行都配不上。
-     * 所以这里把选中的副文本行的 `timeMs` 改成**主轨那一行的时间戳**。
-     *
-     * 容差之外的副文本整行丢弃：宁可少一行译文，也不要把上一句的翻译贴到这一句上。
-     *
-     * ## E02：窗口内取**最近**的候选，且每条副文本**只能用一次**
-     *
-     * 旧实现是「单调游标 + 命中就收」：
-     * ```
-     * while (cursor < sorted.size && sorted[cursor].timeMs < line - tol) cursor++
-     * val candidate = sorted[cursor]              // ← 只看游标指到的那一条
-     * if (abs(candidate - line) <= tol) out += candidate.copy(timeMs = line)
-     * ```
-     * 两处错，且都**不会崩**、只会让译文错位：
-     *
-     * 1. **命中之后游标不推进** ⇒ 同一条副文本会被后面每一行反复选中。
-     *    主副两轨都是 `0/1000/2000/3000ms` 时，副文本被贴成 `0/0/1/2`（整体向前错一行）；
-     * 2. **候选窗口里只看得见游标那一条** ⇒ 「优先完全匹配」根本做不到：
-     *    主轨只有一条 2000ms，副轨有 1000ms 与 2000ms 时，游标停在 1000ms
-     *    （差值 1000 ≤ 容差就算命中），那条**时间戳完全相同**的 2000ms 永远轮不到。
-     *
-     * 现在改成**副文本找主轨**（谁近谁上），再按"时间差升序"占用主轨行：
-     *
-     * 1. 每条副文本先在自己周围 `toleranceMs` 的窗口里找到**最近**的那一条主轨行；
-     * 2. 所有（副文本 → 主轨行）配对准入后按 `(时间差, 主轨行号)` 升序贪心占用，
-     *    一条主轨行只收一条副文本。
-     *
-     * 这个方向是刻意的：主轨是"真实存在的一句话"，副文本只是它的附属。
-     * 从副文本出发，"最近"是一个稳定的量；从主轨出发则会先到先得 ——
-     * 主轨 `0/1000/2000` 遇上副文本 `0/2000` 时，中间那一行会抢走 2000ms 的译文，
-     * 而**时间戳完全相同的**那一行反而没有译文（报告里"放弃完全匹配"的同一种错）。
-     * 按时间差升序占用之后，"完全匹配"永远赢过"容差内相近"。
-     */
+    /** 将副轨贴到最近的主轨位置，供单轨调用与回归探针使用。 */
     internal fun alignToMainLines(
         main: List<LrcLine>,
         sub: List<LrcLine>,
         toleranceMs: Long = 1500L,
     ): List<LrcLine> {
         if (main.isEmpty() || sub.isEmpty()) return emptyList()
-        // 主轨按时间排序后的下标（输出顺序仍按输入的 pair 归属决定，与渲染层无关：
-        // 下游是 `associateBy { timeMs }`）。
-        val mainOrder = main.indices.sortedBy { main[it].timeMs }
-        data class Fit(val mainIndex: Int, val sub: LrcLine, val delta: Long)
-
-        val fits = ArrayList<Fit>(main.size)
-        for (subLine in sub) {
-            var low = 0
-            var high = mainOrder.size
-            while (low < high) {
-                val mid = (low + high) ushr 1
-                if (main[mainOrder[mid]].timeMs < subLine.timeMs) low = mid + 1 else high = mid
-            }
-            // 候选：插入点及其前一个（各自最接近）。容差内才收，取更近的那个；
-            // 等距时取**更早**的那一行（确定性优先）。
-            var bestMain = -1
-            var bestDelta = Long.MAX_VALUE
-            for (idx in intArrayOf(low - 1, low)) {
-                if (idx !in mainOrder.indices) continue
-                val mainIndex = mainOrder[idx]
-                val delta = kotlin.math.abs(main[mainIndex].timeMs - subLine.timeMs)
-                if (delta > toleranceMs) continue
-                if (delta < bestDelta) {
-                    bestDelta = delta
-                    bestMain = mainIndex
-                }
-            }
-            if (bestMain >= 0) fits += Fit(bestMain, subLine, bestDelta)
-        }
-
-        val used = HashSet<Int>(fits.size)
-        val out = ArrayList<LrcLine>(fits.size)
-        for (fit in fits.sortedWith(compareBy({ it.delta }, { it.mainIndex }))) {
-            if (!used.add(fit.mainIndex)) continue
-            out += fit.sub.copy(timeMs = main[fit.mainIndex].timeMs)
-        }
-        // 输出按时间升序（与旧实现的返回顺序一致，便于调用方与单测直接比较）。
-        return out.sortedBy { it.timeMs }
+        return QqLyricAlignment(main).align(sub, toleranceMs)
     }
-
-    private fun SongItem.trackKeyOrEmpty(): String =
-        SourceIds.trackKey(MusicSource.QQMUSIC, id)
 
     // ---------------- 手机号验证码登录（v2.1.1） ----------------
 

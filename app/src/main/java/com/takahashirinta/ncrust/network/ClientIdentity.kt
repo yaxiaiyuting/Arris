@@ -14,6 +14,7 @@
 
 package com.takahashirinta.ncrust.network
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import android.content.Context
 import android.util.Log
 import java.security.SecureRandom
@@ -71,7 +72,7 @@ object ClientIdentity {
     private fun generateDeviceId(): String {
         val bytes = ByteArray(16)
         SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
+        return bytes.lowerHex()
     }
 
     /** 未初始化时退回进程内临时值并告警：宁可指纹不稳定，也绝不抛异常打断播放。 */

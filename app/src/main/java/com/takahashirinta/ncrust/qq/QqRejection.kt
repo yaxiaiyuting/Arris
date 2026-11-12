@@ -10,6 +10,9 @@
 
 package com.takahashirinta.ncrust.qq
 
+import com.takahashirinta.ncrust.player.QualityStatus
+import org.json.JSONObject
+
 import com.takahashirinta.ncrust.player.ResolveFailureKind
 
 /**
@@ -205,4 +208,40 @@ fun QqRejection.toResolveFailureKind(): ResolveFailureKind = when (this) {
     QqRejection.NO_FILE -> ResolveFailureKind.UNKNOWN
     QqRejection.NETWORK -> ResolveFailureKind.NETWORK
     QqRejection.UNKNOWN -> ResolveFailureKind.UNKNOWN
+}
+
+internal fun qqPlaybackPath(entry: JSONObject): String? =
+    if (entry.isNull("purl")) null else entry.optString("purl").trim().takeIf { it.isNotEmpty() }
+
+internal fun qqVkeyRejectionInput(entry: JSONObject, loggedIn: Boolean): QqRejectionInput =
+    QqRejectionInput(
+        hasPurl = qqPlaybackPath(entry) != null,
+        resultCode = entry.optionalInt("result"),
+        tips = if (entry.isNull("tips")) null else entry.optString("tips").takeIf { it.isNotBlank() },
+        pneedbuy = entry.optionalInt("pneedbuy"),
+        isbuy = entry.optionalInt("isbuy"),
+        trialType = entry.optionalInt("type"),
+        loggedIn = loggedIn,
+    )
+
+private fun JSONObject.optionalInt(key: String): Int? =
+    optInt(key, Int.MIN_VALUE).takeUnless { it == Int.MIN_VALUE }
+
+private val qqQualityVariants = QqFileType.entries.groupBy(QqQuality::ncrustLevelOf)
+
+/** A tier is missing only if every known file variant explicitly has no file. */
+internal fun qqTierStatuses(
+    requestedTypes: List<QqFileType>,
+    rejectionOf: (QqFileType) -> QqRejection?,
+): Map<String, QualityStatus> = buildMap {
+    for ((level, variants) in qqQualityVariants) {
+        if (!requestedTypes.containsAll(variants)) continue
+        val reasons = variants.map(rejectionOf)
+        if (reasons.any { it == null || it == QqRejection.NONE || it == QqRejection.UNKNOWN || it == QqRejection.NETWORK }) continue
+        put(
+            level,
+            if (reasons.all { it == QqRejection.NO_FILE }) QualityStatus.SONG_LACKS_TIER
+            else QualityStatus.NO_ENTITLEMENT,
+        )
+    }
 }

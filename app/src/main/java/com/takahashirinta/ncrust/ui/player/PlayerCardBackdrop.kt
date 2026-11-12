@@ -175,9 +175,8 @@ internal fun BoxScope.PlayerCardBackdrop(
         // 界面动效，而波形柱是**每一档**都随 RMS 推进的（v2.8.0 的帧循环本来就长在它里面）
         // —— 不把「波形挂载」单独告诉帧时钟，简洁档的波形会冻住（探针 §2 的连带发现）。
         MotionFrameClock(
-            activeProvider = { isPlaying && !isBufferingFlow.value },
-            // ExoPlayer reports isPlaying=false during rebuffering too.
-            bufferingProvider = { isBufferingFlow.value },
+            isPlaying = isPlaying,
+            isBufferingFlow = isBufferingFlow,
             enabled = visible,
             waveformMounted = !karaoke && (visualizerSlot || motion.fullScreenWaveform),
             animateBreathing = animateBreathing,

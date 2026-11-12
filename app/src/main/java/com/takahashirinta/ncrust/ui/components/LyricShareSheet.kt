@@ -390,27 +390,23 @@ fun LyricShareSheet(
                 }
             }
 
-            // 「保存到相册」只在 API 29+ 出现：旧系统要 WRITE_EXTERNAL_STORAGE，
-            // 而本版按边界没有新增任何权限声明（见 LyricShareActions.canSaveToGallery）。
-            if (LyricShareActions.canSaveToGallery()) {
-                ActionRow(
-                    icon = Icons.Default.Save,
-                    label = if (busy) share.generating else share.saveImage,
-                    enabled = !busy,
-                ) {
-                    busy = true
-                    coroutineScope.launch {
-                        val appContext = context.applicationContext
-                        val ok = withContext(Dispatchers.IO) {
-                            LyricSharePoster.renderToGallery(appContext, posterRequest(), posterFileName())
-                        }
-                        busy = false
-                        if (ok) {
-                            toast(share.savedToGallery)
-                            onDismiss()
-                        } else {
-                            toast(share.saveFailed)
-                        }
+            ActionRow(
+                icon = Icons.Default.Save,
+                label = if (busy) share.generating else share.saveImage,
+                enabled = !busy,
+            ) {
+                busy = true
+                coroutineScope.launch {
+                    val appContext = context.applicationContext
+                    val ok = withContext(Dispatchers.IO) {
+                        LyricSharePoster.renderToGallery(appContext, posterRequest(), posterFileName())
+                    }
+                    busy = false
+                    if (ok) {
+                        toast(share.savedToGallery)
+                        onDismiss()
+                    } else {
+                        toast(share.saveFailed)
                     }
                 }
             }

@@ -21,17 +21,11 @@
 //   https://github.com/material-foundation/material-color-utilities/blob/main/java/quantize/QuantizerWsmeans.java
 //   https://github.com/material-foundation/material-color-utilities/blob/main/java/quantize/QuantizerMap.java
 //   https://github.com/material-foundation/material-color-utilities/blob/main/java/quantize/PointProviderLab.java
-// 上游用 QuantizerResult 包一层 Map，这里直接返回 Map<ARGB, 人口>，其余逐行一致
-// （5bit 直方图、moments/directions、Wu 的方差切分、Wsmeans 的三角不等式剪枝与 k-means 精修）。
-// **唯一有意偏离上游的地方**：Wsmeans 的三角不等式剪枝改读「未排序」的距离矩阵 ——
-// 官方端口在 `Arrays.sort` 之后按位置 j 剪枝，读到的其实是「第 j 近的中心」而不是「中心 j」，
-// 该处偏离的理由、证据与对照用例见 `QuantizerWsmeans.quantize` 里的剪枝注释。
-// 确定性：Wsmeans 用 `java.util.Random(0x42688)`（与上游同一个种子、同一个 JDK 算法），
-// 所有 Map 都是 LinkedHashMap ⇒ 同样的输入必然得到同样的输出。不得引入 android.* / androidx.*。
+// 保留 Wu 的方差切分和 Wsmeans 的聚类。剪枝距离按中心编号索引。
+// 固定随机种子、首次出现的像素顺序和聚类遍历顺序，保证取色可复现。
 
 package com.takahashirinta.ncrust.ui.theme.color
 
-import java.util.Arrays
 import java.util.LinkedHashMap
 import java.util.Random
 
@@ -152,13 +146,18 @@ class QuantizerWu : Quantizer {
     }
 
     fun createMoments() {
-        for (r in 1 until INDEX_COUNT) {
-            val area = IntArray(INDEX_COUNT)
-            val areaR = IntArray(INDEX_COUNT)
-            val areaG = IntArray(INDEX_COUNT)
-            val areaB = IntArray(INDEX_COUNT)
-            val area2 = DoubleArray(INDEX_COUNT)
+        val area = IntArray(INDEX_COUNT)
+        val areaR = IntArray(INDEX_COUNT)
+        val areaG = IntArray(INDEX_COUNT)
+        val areaB = IntArray(INDEX_COUNT)
+        val area2 = DoubleArray(INDEX_COUNT)
 
+        for (r in 1 until INDEX_COUNT) {
+            area.fill(0)
+            areaR.fill(0)
+            areaG.fill(0)
+            areaB.fill(0)
+            area2.fill(0.0)
             for (g in 1 until INDEX_COUNT) {
                 var line = 0
                 var lineR = 0
@@ -469,17 +468,6 @@ object QuantizerWsmeans {
     private const val MIN_MOVEMENT_DISTANCE = 3.0
 
     /**
-     * 可排序的距离项。排序（`Arrays.sort`，稳定排序）只用来生成 `indexMatrix` 的中心顺序，
-     * **不参与剪枝** —— 剪枝读的是未排序的 [quantize] 局部矩阵 `clusterDistances`。
-     */
-    private class Distance : Comparable<Distance> {
-        var index = -1
-        var distance = -1.0
-
-        override fun compareTo(other: Distance): Int = this.distance.compareTo(other.distance)
-    }
-
-    /**
      * @param inputPixels ARGB 像素
      * @param startingClusters 初始聚类中心（传 Wu 的结果质量更好）；传空数组时上游实现不可用（见下方注释）
      * @param maxColors 目标颜色数
@@ -510,30 +498,22 @@ object QuantizerWsmeans {
         // 必须用 java.util.Random（Kotlin 的 kotlin.random.Random 是不同的算法，会改变聚类结果）。
         val random = Random(0x42688)
 
-        val pixelToCount = LinkedHashMap<Int, Int>()
+        val pointIndex = HashMap<Int, Int>()
         val points = arrayOfNulls<DoubleArray>(inputPixels.size)
-        val pixels = IntArray(inputPixels.size)
+        val counts = IntArray(inputPixels.size)
         val pointProvider: PointProvider = PointProviderLab
 
         var pointCount = 0
         for (inputPixel in inputPixels) {
-            val pixelCount = pixelToCount[inputPixel]
-            if (pixelCount == null) {
+            val existing = pointIndex[inputPixel]
+            if (existing == null) {
                 points[pointCount] = pointProvider.fromInt(inputPixel)
-                pixels[pointCount] = inputPixel
+                counts[pointCount] = 1
+                pointIndex[inputPixel] = pointCount
                 pointCount++
-
-                pixelToCount[inputPixel] = 1
             } else {
-                pixelToCount[inputPixel] = pixelCount + 1
+                counts[existing]++
             }
-        }
-
-        val counts = IntArray(pointCount)
-        for (i in 0 until pointCount) {
-            val pixel = pixels[i]
-            val count = pixelToCount[pixel]
-            counts[i] = count ?: 0
         }
 
         var clusterCount = minOf(maxColors, pointCount)
@@ -541,23 +521,9 @@ object QuantizerWsmeans {
             clusterCount = minOf(clusterCount, startingClusters.size)
         }
 
-        val clusters = Array(clusterCount) { doubleArrayOf(0.0, 0.0, 0.0) }
-        var clustersCreated = 0
-        for (i in 0 until minOf(startingClusters.size, clusterCount)) {
-            clusters[i] = pointProvider.fromInt(startingClusters[i])
-            clustersCreated++
-        }
-
-        val additionalClustersNeeded = clusterCount - clustersCreated
-        if (additionalClustersNeeded > 0) {
-            // 上游这里是一个空循环，clusters[i] 保持 null，后续 `clusters[previousClusterIndex]`
-            // 必然 NPE —— 也就是说上游在 startingClusters 为空时本身不可用。
-            // 本移植做最小修复：用前若干个去重后的像素点补位，仍然由输入唯一决定，不引入随机性。
-            // 本 App 的调用链（QuantizerCelebi）永远传入非空的 Wu 结果，此分支不会被执行。
-            for (i in 0 until additionalClustersNeeded) {
-                clusters[clustersCreated + i] =
-                    if (i < pointCount) points[i]!! else doubleArrayOf(0.0, 0.0, 0.0)
-            }
+        val clusters = Array(clusterCount) { i ->
+            // 缺初始中心时按像素首次出现的顺序选种子。
+            if (i < startingClusters.size) pointProvider.fromInt(startingClusters[i]) else points[i]!!
         }
 
         val clusterIndices = IntArray(pointCount)
@@ -565,30 +531,19 @@ object QuantizerWsmeans {
             clusterIndices[i] = random.nextInt(clusterCount)
         }
 
-        val indexMatrix = Array(clusterCount) { IntArray(clusterCount) }
-
-        val distanceToIndexMatrix = Array(clusterCount) { Array(clusterCount) { Distance() } }
-
-        // 剪枝要的是「中心 previousClusterIndex 到中心 j 的距离」，下标必须是簇号。
-        // `distanceToIndexMatrix[i]` 每轮都会被 `Arrays.sort` 按距离升序重排，位置 ≠ 簇号，
-        // 所以另存一份**未排序**的矩阵专门给剪枝用；对角线恒为 0（中心到自身）。
+        // 矩阵按簇编号索引，对角线是同一中心的距离 0。
         val clusterDistances = Array(clusterCount) { DoubleArray(clusterCount) }
-
         val pixelCountSums = IntArray(clusterCount)
+        val componentASums = DoubleArray(clusterCount)
+        val componentBSums = DoubleArray(clusterCount)
+        val componentCSums = DoubleArray(clusterCount)
+
         for (iteration in 0 until MAX_ITERATIONS) {
             for (i in 0 until clusterCount) {
                 for (j in i + 1 until clusterCount) {
                     val distance = pointProvider.distance(clusters[i], clusters[j])
                     clusterDistances[j][i] = distance
                     clusterDistances[i][j] = distance
-                    distanceToIndexMatrix[j][i].distance = distance
-                    distanceToIndexMatrix[j][i].index = i
-                    distanceToIndexMatrix[i][j].distance = distance
-                    distanceToIndexMatrix[i][j].index = j
-                }
-                Arrays.sort(distanceToIndexMatrix[i])
-                for (j in 0 until clusterCount) {
-                    indexMatrix[i][j] = distanceToIndexMatrix[i][j].index
                 }
             }
 
@@ -598,25 +553,14 @@ object QuantizerWsmeans {
                 val previousClusterIndex = clusterIndices[i]
                 val previousCluster = clusters[previousClusterIndex]
                 val previousDistance = pointProvider.distance(point, previousCluster)
+                val distances = clusterDistances[previousClusterIndex]
+                val pruneAt = 4 * previousDistance
 
                 var minimumDistance = previousDistance
                 var newClusterIndex = -1
                 for (j in 0 until clusterCount) {
-                    // 三角不等式剪枝（Celebi 2011 的 annihilation 规则）：
-                    // 中心 c 与候选 j 的**平方**距离 >= 4 ×「点到 c 的平方距离」
-                    //   ⇒ d(p,j) >= d(c,j) - d(p,c) >= d(p,c)，即 j 不可能比 c 更近，可以跳过。
-                    //
-                    // J15（后半）——官方 MCU Kotlin 端口（以及 Java 参考实现）在这里写的是
-                    //   distanceToIndexMatrix[previousClusterIndex][j].distance
-                    // 但这个矩阵在这一轮里刚被 `Arrays.sort` 按距离**升序重排**：位置 j 存的是
-                    // 「第 j 近的中心」，不是「中心 j」（j = 0 甚至是对角线占位项，距离为 -1.0）。
-                    // 照抄它 ⇒ 拿 B 簇的距离去剪 A 簇：该剪的不剪、不该剪的剪掉，聚类结果变成
-                    // 排序副作用的函数（J15 的实测症状：7 种互异颜色 + 7 个精确初始中心仍只出 6 色）。
-                    // 所以我们**有意不跟官方端口**：改读未排序的 `clusterDistances`，
-                    // `Arrays.sort` 只负责 `indexMatrix` 的生成顺序。
-                    // 硬对照见 QuantizerTest 的 `pruningMatchesFullScan`：关掉剪枝做全量扫描，
-                    // 8 色图与「7 个精确初始中心」两种输入的输出都必须与开剪枝逐项一致。
-                    if (prune && clusterDistances[previousClusterIndex][j] >= 4 * previousDistance) {
+                    // 中心间的平方距离达到四倍阈值时，三角不等式排除候选簇。
+                    if (prune && distances[j] >= pruneAt) {
                         continue
                     }
                     val distance = pointProvider.distance(point, clusters[j])
@@ -639,9 +583,9 @@ object QuantizerWsmeans {
                 break
             }
 
-            val componentASums = DoubleArray(clusterCount)
-            val componentBSums = DoubleArray(clusterCount)
-            val componentCSums = DoubleArray(clusterCount)
+            componentASums.fill(0.0)
+            componentBSums.fill(0.0)
+            componentCSums.fill(0.0)
             pixelCountSums.fill(0)
             for (i in 0 until pointCount) {
                 val clusterIndex = clusterIndices[i]

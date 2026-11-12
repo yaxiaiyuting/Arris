@@ -183,24 +183,3 @@ private fun QqScanSession.Status.toUiStatus(): Status = when (this) {
     QqScanSession.Status.FAILED -> Status.FAILED
     QqScanSession.Status.DONE -> Status.DONE
 }
-
-/**
- * MQTT 客户端 id：**毫秒时间戳 + 4 位随机数**（与参考实现同一个形状）。
- *
- * 服务端把它当成这条连接的标识，重复的 id 会让它踢掉前一条连接 ——
- * 所以不能是常量，也不该复用。
- */
-private fun clientId(): String =
-    System.currentTimeMillis().toString() + (1000..9999).random().toString()
-
-/** 二维码寿命。与既有扫码路径同一个量级（服务端 `expiresIn` 实测 900 秒，这里留出刷新余量）。 */
-private const val QR_TTL_MS = 840_000L
-
-/**
- * 单次「等推送」的窗口。
- *
- * 取 5 秒而不是「等到超时」：`awaitEvent` 会一直占着这条协程，
- * 而 keep-alive 的心跳要在这个协程里发（见循环注释）。
- * 5 秒的粒度对心跳（协商值的一半，约 22 秒）足够细。
- */
-private const val EVENT_WAIT_MS = 5_000L

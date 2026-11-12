@@ -46,8 +46,7 @@ import kotlin.math.sqrt
  *
  * ## 零分配
  *
- * [computeTangents] 把切线写进调用方**复用**的数组（渲染层 `remember` 一个），
- * 自己不做任何分配。[controlY1] / [controlY2] 是 inline 的标量运算，供 `Path.cubicTo` 直接用。
+ * 渲染层复用切线与斜率数组。[controlY1] 和 [controlY2] 只做标量运算。
  */
 object WaveformCurve {
 
@@ -85,39 +84,44 @@ object WaveformCurve {
      * @param dx 相邻点的 x 间距（必须 > 0，否则原样返回全 0 切线 —— 退化成折线，
      *   而不是除以 0 得到 NaN 让整条路径消失）。
      */
-    fun computeTangents(y: FloatArray, count: Int, dx: Float, out: FloatArray) {
+    fun computeTangents(
+        y: FloatArray,
+        count: Int,
+        dx: Float,
+        out: FloatArray,
+        slopeScratch: FloatArray? = null,
+    ) {
         val n = minOf(count, y.size, out.size, MAX_POINTS)
         if (n <= 0) return
-        // v3.8.0 · J13：清零范围必须覆盖**调用方这一帧会读到的全部格**，
-        // 只清 `0 until n` 会让 `n` 之后的位置留着上一帧的切线（那正是 85 > 64 时
-        // 最后 21 段画出来的东西）。夹断本身已经在上面做了，这里只保证不留脏值。
-        for (i in 0 until minOf(count, out.size)) out[i] = 0f
+        // 调用方可能读取夹断点之后的格子，也要清掉上一帧的值。
+        out.fill(0f, toIndex = minOf(count, out.size))
         if (n < 2 || !dx.isFinite() || dx <= 0f) return
 
-        // Δ_i = (y_{i+1} − y_i) / dx。原地复用 out 的前 n-1 格存斜率会与后面的切线写入打架，
-        // 所以斜率单独算一遍（不分配：只读 y 的相邻两格）。
-        // 内部点：加权调和平均（PCHIP 原式，h 全相等 ⇒ 2·Δl·Δr/(Δl+Δr)）。
+        val slopes = slopeScratch?.takeIf { it.size >= n - 1 && it !== y && it !== out } ?: FloatArray(n - 1)
+        for (i in 0 until n - 1) slopes[i] = (y[i + 1] - y[i]) / dx
+
+        // PCHIP 内部点用左右斜率的加权调和平均。
+        val weight = 3f * dx
         for (i in 1 until n - 1) {
-            val dl = (y[i] - y[i - 1]) / dx
-            val dr = (y[i + 1] - y[i]) / dx
+            val dl = slopes[i - 1]
+            val dr = slopes[i]
             out[i] = if (dl * dr <= 0f) {
                 0f
             } else {
-                val w = 3f * dx
-                (w + w) / (w / dl + w / dr)
+                (weight + weight) / (weight / dl + weight / dr)
             }
         }
         // 端点：单侧差分，且不得与相邻段斜率反号（否则端段会冲出区间）。
-        val d0 = (y[1] - y[0]) / dx
-        val d1 = if (n > 2) (y[2] - y[1]) / dx else d0
+        val d0 = slopes[0]
+        val d1 = if (n > 2) slopes[1] else d0
         out[0] = endpointTangent(d0, d1)
-        val dLast = (y[n - 1] - y[n - 2]) / dx
-        val dPrev = if (n > 2) (y[n - 2] - y[n - 3]) / dx else dLast
+        val dLast = slopes[n - 2]
+        val dPrev = if (n > 2) slopes[n - 3] else dLast
         out[n - 1] = endpointTangent(dLast, dPrev)
 
         // 条件 1：保号（内部点已由调和平均保证；端点的单侧差分可能反向，这里兜底）。
         for (i in 0 until n - 1) {
-            val d = (y[i + 1] - y[i]) / dx
+            val d = slopes[i]
             if (d == 0f) {
                 out[i] = 0f
                 out[i + 1] = 0f
@@ -128,7 +132,7 @@ object WaveformCurve {
         }
         // 条件 2：圆条件（把两个控制点同时缩回盒子里）。
         for (i in 0 until n - 1) {
-            val d = (y[i + 1] - y[i]) / dx
+            val d = slopes[i]
             if (d == 0f) continue
             val a = out[i] / d
             val b = out[i + 1] / d

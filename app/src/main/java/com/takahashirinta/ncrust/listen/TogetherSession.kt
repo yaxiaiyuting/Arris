@@ -6,6 +6,7 @@
 package com.takahashirinta.ncrust.listen
 
 import android.util.Log
+
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +75,6 @@ data class PlaybackSnapshot(
  */
 object TogetherSession {
 
-    private const val TAG = "Together"
     private const val HOST_TICK_MS = 1_000L
 
     /** 房主侧轮询间隔：只读 StateFlow，120ms 足够细，切歌能立刻上送。 */
@@ -535,10 +535,6 @@ object TogetherSession {
     internal fun noteExternal(text: String) {
         _status.value = text
     }
-
-    /** 生成一个 6 位房间码。 */
-    @Suppress("unused") private val sessionUuid = UUID.randomUUID()
-    private fun log(msg: String) = Log.i(TAG, msg)
 }
 
 /** 让播放适配层能把"本地没有这首歌"之类的提示回写到会话状态。 */

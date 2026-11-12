@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.bili
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import java.net.URLEncoder
 import java.security.MessageDigest
 
@@ -169,16 +170,8 @@ object BiliWbi {
     /** MD5 → 小写十六进制。用平台的 `MessageDigest`，不引第三方依赖。 */
     fun md5Hex(text: String): String {
         val digest = MessageDigest.getInstance("MD5").digest(text.toByteArray(Charsets.UTF_8))
-        val sb = StringBuilder(digest.size * 2)
-        for (b in digest) {
-            val v = b.toInt() and 0xff
-            sb.append(HEX[v ushr 4])
-            sb.append(HEX[v and 0x0f])
-        }
-        return sb.toString()
+        return digest.lowerHex()
     }
-
-    private val HEX = "0123456789abcdef".toCharArray()
 
     /**
      * 业务 query 的构造入口：解析 mixin_key 并签名。

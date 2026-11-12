@@ -159,12 +159,6 @@ object BiliApi {
     private const val PLAYER_V2_URL = "https://api.bilibili.com/x/player/wbi/v2"
 
     /**
-     * 字幕 CDN 基址。只在服务端给**裸路径**时用于补全 ——
-     * 补全逻辑在 [BiliSubtitle.normalizeSubtitleUrl]（纯函数、有单测）。
-     */
-    private const val SUBTITLE_CDN_BASE = "https://aisubtitle.hdslb.com"
-
-    /**
      * DASH 的 `fnval`。**4048 = DASH + 一堆特性位**，是社区与实测都拿到完整
      * `dash.audio[]` 的取值；`fnval=16`（纯 DASH）在旧路径上同样可用，
      * 但 4048 是实测过的那个，不留"看起来等价"的第二个选择。
@@ -252,19 +246,6 @@ object BiliApi {
     internal var clientForTest: OkHttpClient? = null
 
     private val client: OkHttpClient get() = clientForTest ?: realClient
-
-    /**
-     * 丢掉 B 站客户端池里的连接（网络切换 / 代理开关 / 回到前台时调用）。
-     *
-     * `internal`：真正的 `evictAll()` 跑在专用线程上，这个函数自己只启动线程、
-     * 不发网络，所以不违反 `BiliApiIoContractTest` 对「对外函数必须是 suspend」的约定；
-     * 但为了不把这个口子暴露给模块外，仍然收成模块内可见。
-     */
-    internal fun evictConnections() {
-        runCatching {
-            Thread({ runCatching { client.connectionPool.evictAll() } }, "ncrust-evict-bili").start()
-        }
-    }
 
     // ---------------------------------------------------------------- wbi 密钥缓存 ----
 

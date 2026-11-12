@@ -11,6 +11,8 @@ package com.takahashirinta.ncrust.lyric
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.cache.trimOldest
+import java.io.StringWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -63,6 +65,7 @@ object LyricsCache {
     private const val PREFS = "ncrust_lyrics_cache"
     private const val KEY_ENTRIES = "entries"
     private const val MAX_ENTRIES = 200
+    private const val MAX_JSON_BUFFER_HINT = 8 * 1024 * 1024
 
     /**
      * 「只有 TTML、还没有 LRC 条目」时的暂存 key 前缀（v1.9.0）。
@@ -82,8 +85,8 @@ object LyricsCache {
     private val type = object : TypeToken<MutableMap<String, CachedLyrics>>() {}.type
     private val lock = Any()
 
-    @Volatile
     private var memory: MutableMap<String, CachedLyrics>? = null
+    private var previousJsonLength = 0
 
     private fun loadLocked(context: Context): MutableMap<String, CachedLyrics> {
         memory?.let { return it }
@@ -96,23 +99,20 @@ object LyricsCache {
                 .getOrNull() ?: mutableMapOf()
         }
         memory = map
+        previousJsonLength = if (map.isEmpty()) 0 else raw?.length ?: 0
         return map
     }
 
-    /** 超出上限时按 timestamp 淘汰最旧。LRC 条目与 TTML 暂存条目共用这一个名额池。 */
-    private fun trimLocked(map: MutableMap<String, CachedLyrics>) {
-        if (map.size > MAX_ENTRIES) {
-            map.entries
-                .sortedBy { it.value.timestamp }
-                .take(map.size - MAX_ENTRIES)
-                .forEach { map.remove(it.key) }
-        }
-    }
-
     private fun persistLocked(context: Context, map: Map<String, CachedLyrics>) {
+        // 相邻快照通常只改一首，按上次编码长度预留缓冲以减少扩容。
+        val hint = previousJsonLength.takeIf { it in 256..MAX_JSON_BUFFER_HINT }
+        val writer = if (hint == null) StringWriter() else StringWriter(hint + hint / 8)
+        gson.toJson(map, writer)
+        val json = writer.toString()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_ENTRIES, gson.toJson(map))
+            .putString(KEY_ENTRIES, json)
             .apply()
+        previousJsonLength = json.length
     }
 
     suspend fun get(context: Context, songId: Long): CachedLyrics? = withContext(Dispatchers.IO) {
@@ -152,7 +152,7 @@ object LyricsCache {
                     romalrc,
                     old?.translationSource, old?.romanSource
                 )
-                trimLocked(map)
+                map.trimOldest(MAX_ENTRIES) { it.timestamp }
                 persistLocked(context, map)
             }
         }
@@ -241,7 +241,7 @@ object LyricsCache {
                     // 还没有正式条目：暂存，绝不建 lrc="" 的正式条目（见 TTML_KEY_PREFIX）。
                     map[ttmlKey(songId)] = CachedLyrics("", "", now, null, ttml, now)
                 }
-                trimLocked(map)
+                map.trimOldest(MAX_ENTRIES) { it.timestamp }
                 persistLocked(context, map)
             }
         }

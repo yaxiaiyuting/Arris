@@ -11,11 +11,12 @@
 
 package com.takahashirinta.ncrust.stats
 
-import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
+import com.google.gson.stream.JsonWriter
+import java.io.StringWriter
 
 /**
  * 播放统计的**落盘契约**。
@@ -53,8 +54,7 @@ internal object StatsCodec {
     /**
      * 落盘 key 的**唯一事实来源**（顺序 = 单测断言顺序）。
      *
-     * 写路径只经 [SnapshotDto] / [SongDto]；这份清单是给守卫单测用的，
-     * 它让「有人把 `@SerializedName` 删了、靠字段名落盘」这件事必然被测出来。
+     * 字段清单与 [SnapshotDto] / [SongDto] 供兼容性测试核对。
      */
     private val SNAPSHOT_KEYS = listOf(
         "totalMs", "totalPlays", "firstDayKey",
@@ -64,8 +64,6 @@ internal object StatsCodec {
     private val SONG_KEYS = listOf(
         "key", "name", "artist", "ms", "plays", "lastAtMs", "durationMs",
     )
-
-    private val gson = Gson()
 
     /** 根对象形状。全部可空 + 有默认值：Gson 走 Unsafe，字段缺失时是 null 而不是 0。 */
     internal data class SnapshotDto(
@@ -91,27 +89,41 @@ internal object StatsCodec {
 
     // ---------------------------------------------------------------- 编码 ----
 
-    fun encode(snapshot: StatsSnapshot): String = gson.toJson(
-        SnapshotDto(
-            totalMs = snapshot.totalMs,
-            totalPlays = snapshot.totalPlays,
-            firstDayKey = snapshot.firstDayKey,
-            byDay = snapshot.byDay,
-            bySource = snapshot.bySource,
-            playsBySource = snapshot.playsBySource,
-            songs = snapshot.songs.values.map { it.toDto() },
-        )
-    )
+    fun encode(snapshot: StatsSnapshot): String {
+        val output = StringWriter()
+        JsonWriter(output).use { writer ->
+            writer.isHtmlSafe = true
+            writer.serializeNulls = false
+            writer.beginObject()
+            writer.name("totalMs").value(snapshot.totalMs)
+            writer.name("totalPlays").value(snapshot.totalPlays)
+            writer.name("firstDayKey").value(snapshot.firstDayKey)
+            writer.writeCounts("byDay", snapshot.byDay)
+            writer.writeCounts("bySource", snapshot.bySource)
+            writer.writeCounts("playsBySource", snapshot.playsBySource)
+            writer.name("songs").beginArray()
+            for (song in snapshot.songs.values) {
+                writer.beginObject()
+                writer.name("key").value(song.key)
+                writer.name("name").value(song.name)
+                writer.name("artist").value(song.artist)
+                writer.name("ms").value(song.ms)
+                writer.name("plays").value(song.plays)
+                writer.name("lastAtMs").value(song.lastAtMs)
+                writer.name("durationMs").value(song.durationMs)
+                writer.endObject()
+            }
+            writer.endArray()
+            writer.endObject()
+        }
+        return output.toString()
+    }
 
-    private fun SongStat.toDto() = SongDto(
-        key = key,
-        name = name,
-        artist = artist,
-        ms = ms,
-        plays = plays,
-        lastAtMs = lastAtMs,
-        durationMs = durationMs,
-    )
+    private fun JsonWriter.writeCounts(field: String, counts: Map<String, Long>) {
+        name(field).beginObject()
+        for ((key, count: Long?) in counts) name(key).value(count)
+        endObject()
+    }
 
     // ---------------------------------------------------------------- 解码 ----
 

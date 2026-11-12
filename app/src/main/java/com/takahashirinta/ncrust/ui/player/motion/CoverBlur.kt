@@ -9,7 +9,6 @@
 package com.takahashirinta.ncrust.ui.player.motion
 
 import android.graphics.Bitmap
-import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -149,61 +148,51 @@ object CoverBlur {
     ): IntArray {
         require(size > 0) { "size must be > 0" }
         require(pixels.size >= size * size) { "pixel array is smaller than size*size" }
-        if (radius <= 0 || passes <= 0) return pixels.copyOf(size * size)
-
         val current = pixels.copyOf(size * size)
-        // 分离成 4 个通道分别做：整数运算、无浮点、循环内零分配（三个缓冲循环外建一次）。
-        val channel = IntArray(size * size)
-        val blurred = IntArray(size * size)
-        val scratch = IntArray(size * size)
-        val shifts = intArrayOf(A_SHIFT, R_SHIFT, G_SHIFT, B_SHIFT)
+        if (radius <= 0 || passes <= 0 || size == 1) return current
+
+        val scratch = IntArray(current.size)
+        val r = radius.coerceAtMost(size - 1)
         repeat(passes) {
-            for (shift in shifts) {
-                for (i in 0 until size * size) {
-                    channel[i] = (current[i] ushr shift) and CHANNEL_MASK
-                }
-                blurChannel(channel, blurred, scratch, size, radius)
-                for (i in 0 until size * size) {
-                    // 先清掉该通道的旧值，再或上新值。
-                    current[i] = (current[i] and (CHANNEL_MASK shl shift).inv()) or (blurred[i] shl shift)
-                }
-            }
+            blurAxis(current, scratch, size, r, step = 1, lineStep = size)
+            blurAxis(scratch, current, size, r, step = size, lineStep = 1)
         }
         return current
     }
 
-    /**
-     * 单通道二维盒式模糊 = 横向一遍 + 纵向一遍（可分离）。
-     * 两遍都用滑动窗口和，**每遍 O(size²)**，与 [radius] 无关。
-     *
-     * [scratch] 由调用方提供并复用 —— 本函数在模糊一张背景时会被调用 12 次
-     * （4 通道 × 3 遍），每次新分配 4 KB 是没必要的。
-     */
-    private fun blurChannel(src: IntArray, dst: IntArray, scratch: IntArray, size: Int, radius: Int) {
-        val r = radius.coerceAtMost(size - 1)
-        val tmp = scratch
-        val window = 2 * r + 1
-        // 横向
-        for (y in 0 until size) {
-            val row = y * size
-            var sum = 0
-            for (k in -r..r) sum += src[row + k.coerceIn(0, size - 1)]
-            for (x in 0 until size) {
-                tmp[row + x] = sum / window
-                val outIndex = (x - r).coerceIn(0, size - 1)
-                val inIndex = (x + r + 1).coerceIn(0, size - 1)
-                sum += src[row + inIndex] - src[row + outIndex]
+    /** 四个通道共用像素访问。每次轴向处理仍独立整除各通道。 */
+    private fun blurAxis(
+        src: IntArray,
+        dst: IntArray,
+        size: Int,
+        radius: Int,
+        step: Int,
+        lineStep: Int,
+    ) {
+        val last = size - 1
+        val window = radius * 2 + 1
+        for (line in 0 until size) {
+            val start = line * lineStep
+            var alpha = 0
+            var red = 0
+            var green = 0
+            var blue = 0
+            for (index in -radius..radius) {
+                val pixel = src[start + index.coerceIn(0, last) * step]
+                alpha += pixel ushr A_SHIFT
+                red += (pixel ushr R_SHIFT) and CHANNEL_MASK
+                green += (pixel ushr G_SHIFT) and CHANNEL_MASK
+                blue += pixel and CHANNEL_MASK
             }
-        }
-        // 纵向
-        for (x in 0 until size) {
-            var sum = 0
-            for (k in -r..r) sum += tmp[k.coerceIn(0, size - 1) * size + x]
-            for (y in 0 until size) {
-                dst[y * size + x] = sum / window
-                val outIndex = (y - r).coerceIn(0, size - 1)
-                val inIndex = (y + r + 1).coerceIn(0, size - 1)
-                sum += tmp[inIndex * size + x] - tmp[outIndex * size + x]
+            for (index in 0 until size) {
+                dst[start + index * step] = ((alpha / window) shl A_SHIFT) or
+                    ((red / window) shl R_SHIFT) or ((green / window) shl G_SHIFT) or (blue / window)
+                val leaving = src[start + (index - radius).coerceIn(0, last) * step]
+                val entering = src[start + (index + radius + 1).coerceIn(0, last) * step]
+                alpha += (entering ushr A_SHIFT) - (leaving ushr A_SHIFT)
+                red += ((entering ushr R_SHIFT) and CHANNEL_MASK) - ((leaving ushr R_SHIFT) and CHANNEL_MASK)
+                green += ((entering ushr G_SHIFT) and CHANNEL_MASK) - ((leaving ushr G_SHIFT) and CHANNEL_MASK)
+                blue += (entering and CHANNEL_MASK) - (leaving and CHANNEL_MASK)
             }
         }
     }
@@ -330,18 +319,8 @@ object CoverBlurCache {
     /** 诊断 tag：模糊失败时打一条 WARN（现场唯一能区分"没开"与"算失败"的信号）。 */
     private const val TAG = "CoverBlur"
 
-    /**
-     * 这张位图是不是硬件位图。
-     *
-     * ⚠️ `Bitmap.Config.HARDWARE` **本身是 API 26 才有的枚举常量**，而本模块的 minSdk 是 24 ——
-     * 直接写 `bitmap.config == Bitmap.Config.HARDWARE` 会被 lint 判成
-     * `NewApi: Field requires API level 26 (current min is 24)`（本文件真被它挡下过一次构建）。
-     * 这个版本判断不是形式主义：API 24/25 上 `Bitmap.Config` 类里**根本没有** HARDWARE 这个字段，
-     * 常量引用必须留在 `SDK_INT >= O` 的分支里，靠 ART 的惰性字段解析才安全。
-     */
     private fun isHardwareConfig(bitmap: Bitmap): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            runCatching { bitmap.config == Bitmap.Config.HARDWARE }.getOrDefault(false)
+        runCatching { bitmap.config == Bitmap.Config.HARDWARE }.getOrDefault(false)
 
     private val cache = LruCache<String, ImageBitmap>(CACHE_ENTRIES)
 

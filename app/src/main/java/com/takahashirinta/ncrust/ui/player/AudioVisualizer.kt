@@ -245,6 +245,16 @@ object WaveformStore {
     // Read in draw, so hardware volume rescales the entire window without a recomposition.
     internal var displayGain by mutableFloatStateOf(1f)
     internal var visualizationVisible by mutableStateOf(false)
+        private set
+
+    @Volatile
+    internal var analyzeWhileVisible = false
+        private set
+
+    internal fun setVisualizationVisible(visible: Boolean) {
+        analyzeWhileVisible = visible
+        visualizationVisible = visible
+    }
 
     /**
      * **音频线程**调用：零分配、零锁。
@@ -361,7 +371,7 @@ object WaveformStore {
      *   所以这条链上**不允许**任何一方自己攒时钟（见 [WaveformRing.pump] 的 `nowMs`）。
      *   传 0 = 没有帧时钟（老调用点 / 单测），ring 会回落到旧的累加口径。
      */
-    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false) {
+    fun pump(active: Boolean, dtMs: Float, effects: VisualizerEffects, nowMs: Long = 0L, holdHistory: Boolean = false): Boolean {
         var changed = ring.pump(active, dtMs, effects, nowMs, holdHistory)
         // v3.2.2：主导频段推进。**门槛是 `effects.waveBandOn`**：
         // 关掉（用户关了多频段开关）时音频线程根本不发布特征值，
@@ -397,10 +407,13 @@ object WaveformStore {
             }
         }
         if (changed) generationState.intValue++
+        return changed || (!active && !holdHistory && ring.hasUnsettledColumns(effects.peaks))
     }
 
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
     fun snapshot(bars: FloatArray, peaks: FloatArray, dash: FloatArray) = ring.copyInto(bars, peaks, dash)
+
+    fun snapshotBars(bars: FloatArray) = ring.copyInto(bars)
 
     /**
      * v3.2.2：把**三条频带**的历史窗口拷进调用方复用的三个数组（三条泳道用；零分配）。
@@ -675,25 +688,7 @@ fun AudioVisualizerBars(
     val barColor = LocalMetroColors.current.primary
     val bars = remember(barCount) { FloatArray(barCount) }
 
-    // v3.2.2：三条频带的历史窗口（低 / 中 / 高）。**降级路径下不读它们** ——
-    // 中/高频没有数据时画出来是两条贴着中线的直线，那是编造而不是"没测到"。
-    val lowWindow = remember(barCount) { FloatArray(barCount) }
-    val midWindow = remember(barCount) { FloatArray(barCount) }
-    val highWindow = remember(barCount) { FloatArray(barCount) }
-    /**
-     * v3.4.5：三条泳道**各自的小球**位置（0..1）。
-     *
-     * 改前 `peaks` 只有一份，而且是**单条曲线**的峰值，却画在三泳道的几何上 ——
-     * 「地面」（柱顶）与小球所在的柱子根本不是同一个量。现在逐泳道各一份，
-     * 小球弹的就是它自己那条泳道的柱顶。
-     */
-    val lowPeakWindow = remember(barCount) { FloatArray(barCount) }
-    val midPeakWindow = remember(barCount) { FloatArray(barCount) }
-    val highPeakWindow = remember(barCount) { FloatArray(barCount) }
-    /** v3.4.6：三条泳道各自的**峰值短横保持值**（与上面三个小球窗口逐格对齐）。 */
-    val lowDashWindow = remember(barCount) { FloatArray(barCount) }
-    val midDashWindow = remember(barCount) { FloatArray(barCount) }
-    val highDashWindow = remember(barCount) { FloatArray(barCount) }
+    val lanes = remember(barCount) { Array(BandLanes.LANE_COUNT) { LaneSnapshot(barCount) } }
     // v3.2.2：曲线几何的复用缓冲（**跨帧复用 = 帧路径零分配**，见 WaveformCurve 的 KDoc）。
     //  三频带模式下点序列是三条泳道**拼起来**的，所以缓冲要 3 倍长。
     val pointCount = barCount * BandLanes.LANE_COUNT
@@ -736,6 +731,7 @@ fun AudioVisualizerBars(
     val dash = remember(geomCount) { FloatArray(geomCount) }
     val heights = remember(geomCount) { FloatArray(geomCount) }
     val tangents = remember(geomCount) { FloatArray(geomCount) }
+    val curveSlopes = remember(geomCount) { FloatArray(geomCount - 1) }
     val path = remember { Path() }
     val crest = remember { Path() }
     val bandWeights = remember { FloatArray(3) }
@@ -792,18 +788,7 @@ fun AudioVisualizerBars(
     ) {
         // 在 **draw 阶段**读状态：只让这块画布失效重绘，不触发任何重组。
         WaveformStore.generation
-        WaveformStore.snapshot(bars, peaks, dash)
-        // v3.2.2：三频带泳道模式 = 用户开着多频段着色 **且** 特征链路真的可用 **且**
-        // 三角色算出来了。任一不满足 ⇒ 退回 v3.2.1 的单条曲线（如实降级，见铁律 28）。
         val threeLane = effects.waveBandOn && WaveformStore.featuresAvailable() && paletteReady
-        if (threeLane) {
-            WaveformStore.snapshotBands(lowWindow, midWindow, highWindow)
-            // v3.4.5：小球也要逐泳道取（与柱高同一套下标，见 BandScroll.fillLane 的映射）。
-            if (effects.peaks) {
-                WaveformStore.snapshotBandPeaks(lowPeakWindow, midPeakWindow, highPeakWindow)
-                WaveformStore.snapshotBandDash(lowDashWindow, midDashWindow, highDashWindow)
-            }
-        }
         val n = bars.size
         // v3.2.2：曲线至少要有两个点才谈得上"相邻两点连接"。
         if (n < 2 || size.width <= 0f || size.height <= 0f) return@Canvas
@@ -838,92 +823,47 @@ fun AudioVisualizerBars(
         if (displayGain == 0f) return@Canvas
         // ── 三频带泳道（用户要的形态：左低 / 中中 / 右高，各自滚动、无缝拼接）──
         if (threeLane) {
-            // 三条泳道共享同一个亚格位移（相位是全局的），在 lane 0 处记下。
-            var xShiftPx = 0f
-            // v3.2.3：**亚格插值**（连续滚动）。音频缓冲 ~10 Hz ⇒ 历史窗口每 100ms 整条跳一格；
-            // 帧循环再快，看到的也是 10 Hz 的阶跃。这里用 `scrollPhase01()` 在**相邻两格之间**
-            // 线性取值，形状因此按帧率连续左移。插的是"两格之间"，不是"未来" —— 没有假数据。
-            val phase = WaveformStore.scrollPhase01()
-            // step 必须在取值之前算出来：`BandScroll.fillLane` 用它把亚格相位换算成像素位移。
+            val low = lanes[BandLanes.LANE_LOW]
+            val mid = lanes[BandLanes.LANE_MID]
+            val high = lanes[BandLanes.LANE_HIGH]
+            WaveformStore.snapshotBands(low.bars, mid.bars, high.bars)
+            if (effects.peaks) {
+                WaveformStore.snapshotBandPeaks(low.peaks, mid.peaks, high.peaks)
+                WaveformStore.snapshotBandDash(low.dash, mid.dash, high.dash)
+            }
+
             val total = n * BandLanes.LANE_COUNT
             val step = size.width / (total - 1)
-            for (lane in 0 until BandLanes.LANE_COUNT) {
-                val window = when (lane) {
-                    BandLanes.LANE_LOW -> lowWindow
-                    BandLanes.LANE_MID -> midWindow
-                    else -> highWindow
-                }
-                val lanePeak = when (lane) {
-                    BandLanes.LANE_LOW -> lowPeakWindow
-                    BandLanes.LANE_MID -> midPeakWindow
-                    else -> highPeakWindow
-                }
-                // v3.4.6：本泳道的**短横保持值**（"这一格曾经到过的最高点"），
-                // 与 lanePeak（此刻的质点）走同一套增益映射，两者才能在同一坐标系里比较。
-                val laneDash = when (lane) {
-                    BandLanes.LANE_LOW -> lowDashWindow
-                    BandLanes.LANE_MID -> midDashWindow
-                    else -> highDashWindow
-                }
+            val xShiftPx = BandScroll.leftShiftPx(WaveformStore.scrollPhase01(), step)
+            for (lane in lanes.indices) {
+                val snapshot = lanes[lane]
                 val base = lane * n
-                // 取值与位移的唯一来源（纯逻辑 + 单测）：值保真、相位走几何。
-                val laneShift = BandScroll.fillLane(
-                    window = window, out = heights, base = base, count = n,
-                    phase = phase, lane = lane, heightPx = ampPx,
-                    minBar = minBar, step = step, mode = BandScroll.PRODUCTION,
-                )
-                if (lane == 0) xShiftPx = laneShift
-                // v3.4.5：小球（峰值标记）逐泳道映射成**像素半高**，与柱高走同一套增益，
-                // 并且夹到"不小于该格柱高" —— 画面上也不许穿进柱子里。
-                // 容量守卫：`peaks` 与 `heights` 同为 geomCount，容不下就少画一格，
-                // 绝不越界（v3.4.1 在 `peaks` 上踩过一次 P0 闪退）。
-                for (i in 0 until n) {
-                    val j = base + i
-                    if (j >= peaks.size) break
-                    var half = BandLanes.amplitude(lanePeak[i].coerceIn(0f, 1f), lane) * ampPx * 0.5f
-                    if (half < heights[j]) half = heights[j]
-                    peaks[j] = half
-                    // 短横：保持值 → 像素，并**不低于小球**（值域里的不变量在像素域同样成立）。
-                    var dashHalf = BandLanes.amplitude(laneDash[i].coerceIn(0f, 1f), lane) * ampPx * 0.5f
-                    if (dashHalf < half) dashHalf = half
-                    dash[j] = dashHalf
+                BandScroll.fillLane(snapshot.bars, heights, base, n, lane, ampPx, minBar)
+                if (effects.peaks) {
+                    // 小球与短横使用与柱高相同的频带增益。
+                    for (i in 0 until n) {
+                        val j = base + i
+                        if (j >= peaks.size) break
+                        var half = BandLanes.amplitude(snapshot.peaks[i].coerceIn(0f, 1f), lane) * ampPx * 0.5f
+                        if (half < heights[j]) half = heights[j]
+                        peaks[j] = half
+                        var dashHalf = BandLanes.amplitude(snapshot.dash[i].coerceIn(0f, 1f), lane) * ampPx * 0.5f
+                        if (dashHalf < half) dashHalf = half
+                        dash[j] = dashHalf
+                    }
                 }
             }
-            // **点距在整条拼接序列上恒定** —— 这是"无缝"的几何含义：
-            // 接缝两侧的点距与段内完全一样，曲线在接缝处不会"折一下"。
-            // 三段各自的高度只由**自己那个频带**决定，不做跨频带的插值平均，
-            // 所以"低音 / 中音 / 高音"的差距不会被抹平（用户明确要求）。
-            // ── v3.4.1 · P0：亚格相位从「插值」改成「几何平移」────────────────────
-            //
-            // 用户实测「波形条会尖端变平滑再变回去」，并给了截图。这条与横向「顿-冲」
-            // （v3.3.2 修的分母量化）是**两个独立缺陷** —— 这一条是形状问题。
-            //
-            // 旧写法 `a + (b-a)*phase` 看着像"相邻两格之间平滑滚动"，实际是**把两个相邻
-            // 时刻的信号线性混合**（时域模糊），不是平移。实测：峰尖度随相位在
-            // 0.0034~0.0339 之间摆动 = **90%**，周期正好是柱间隔（约 100ms）。
-            //
-            // 现在：取值**直接取整格**（形状保真），亚格相位交给 x 平移 —— 同口径实测
-            // 尖度波动 **0%**。判据与取舍见 [BandScroll] 的 KDoc 与 `BandScrollTest`。
-            //
-            // 为什么 `total + 1` 个点：左移一个亚格后最右侧会露出至多一格的缺口，
-            // x 范围多延伸一格即可补上 —— **不需要多采历史**，最右那格本来就被画到可见区外。
-            //
-            // ⚠️ 三个数组（heights / peaks / tangents）都必须容得下 `total + 1`。
-            // v3.4.1 我漏了 `peaks`（它当时是 `barCount`）⇒ 越界写 ⇒ 一播放就闪退。
-            // 这里留一道显式守卫：容量不够就**不延伸**（少画最右一格，画面几乎无差别），
-            // 而不是让越界把整个播放崩掉 —— 渲染层的失误绝不该升级成崩溃。
-            val extend = total < heights.size && total < peaks.size && total < tangents.size
-            // 绘制点数必须与上面「延伸了没有」一致：没延伸却多画一个点，会把一个
-            // 未初始化的高度画进去（形状上多一个尖刺）。
+            // 三条泳道等距拼接。延伸点只在所有几何数组都容得下时写入。
+            val extend = total < heights.size && total < peaks.size && total < dash.size && total < tangents.size
             val drawCount = if (extend) total + BandScroll.EXTRA_POINTS else total
             if (extend) {
                 heights[total] = heights[total - 1]
-                peaks[total] = peaks[total - 1]
-                dash[total] = dash[total - 1]
+                if (effects.peaks) {
+                    peaks[total] = peaks[total - 1]
+                    dash[total] = dash[total - 1]
+                }
             }
-            WaveformCurve.computeTangents(
-                heights, if (extend) total + 1 else total, step, tangents,
-            )
+            WaveformCurve.computeTangents(heights, drawCount, step, tangents, curveSlopes)
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 laneEmphasis[lane] = if (bandReliable) {
                     LANE_DIM + (1f - LANE_DIM) * bandWeights[BandLanes.LANE_ROLE[lane]]
@@ -951,7 +891,7 @@ fun AudioVisualizerBars(
                     val sheen = brushCache.flow(size.width, palette[BandColorRoles.MID])
                     translate(left = -phasePx) {
                         drawCurveSheen(
-                            heights, total, tangents, path, sheen, effects,
+                            heights, total, tangents, path, sheen,
                             xShift = phasePx, step = step, heightPx = heightPx,
                             breath = breath,
                         )
@@ -959,7 +899,8 @@ fun AudioVisualizerBars(
                 }
             }
         } else {
-            // ── 降级 / 单条曲线（v3.2.1 的形态）：特征不可用、或用户关掉了多频段着色 ──
+            if (effects.peaks) WaveformStore.snapshot(bars, peaks, dash)
+            else WaveformStore.snapshotBars(bars)
             val ribbonColor = Color(
                 BandColorRoles.resolve(palette, bandWeights, bandReliable, barColor.toArgb())
             )
@@ -968,41 +909,31 @@ fun AudioVisualizerBars(
                 if (heights[i] < minBar) heights[i] = minBar
                 heights[i] *= 0.5f
             }
-            // v3.4.5：小球用**同一条 sqrt 映射**（否则小球会看起来比柱子还矮），
-            // 并且不小于该格柱高 —— 这两个条件合起来保证"小球绝不低于柱顶"。
-            for (i in 0 until n) {
-                var half = sqrt(peaks[i].coerceIn(0f, 1f)) * ampPx * 0.5f
-                if (half < heights[i]) half = heights[i]
-                peaks[i] = half
-                // 短横：与小球同一条 sqrt 映射，且不低于小球。注意 `dash[i]` 此刻仍是
-                // **值域**的保持值（上面这个循环之前没人动过它），所以顺序不能反。
-                var dashHalf = sqrt(dash[i].coerceIn(0f, 1f)) * ampPx * 0.5f
-                if (dashHalf < half) dashHalf = half
-                dash[i] = dashHalf
+            if (effects.peaks) {
+                // 小球、短横与柱高共用开方映射，短横的高度至少与小球一致。
+                for (i in 0 until n) {
+                    var half = sqrt(peaks[i].coerceIn(0f, 1f)) * ampPx * 0.5f
+                    if (half < heights[i]) half = heights[i]
+                    peaks[i] = half
+                    var dashHalf = sqrt(dash[i].coerceIn(0f, 1f)) * ampPx * 0.5f
+                    if (dashHalf < half) dashHalf = half
+                    dash[i] = dashHalf
+                }
             }
             val step = size.width / (n - 1)
-            // ── v3.8.0 · K06：单泳道也要**连续滚动** ────────────────────────────────
-            //
-            // 旧实现这一支的 xShift 是常数 0（flow 分支则是「画布左移 phasePx、内层再补
-            // 回 phasePx」—— 两者精确相消，动的只有刷色）。于是历史窗口每 100ms 整条
-            // 跳一格，看不出「波形在横向流动」，只剩下逐格的形状变形。
-            //
-            // 现在与三泳道走**同一条时间轴**（同为 [WaveformStore.scrollPhase01]）与
-            // **同一套画法**（[BandScroll.POSITION_SHIFT]：取值保真、亚格相位交给几何平移）：
-            // 高度数组一个值都不插值，只把 x 整体左移 `phase × step`，并把 x 范围多延伸
-            // 一格补右侧缺口（[BandScroll.EXTRA_POINTS]，与三泳道同一契约）。
+            // 相位平移几何，保留采样高度。最右延伸一格补齐滚动留白。
             val phase = WaveformStore.scrollPhase01()
             val scrollShift = -phase * step
-            // 容量守卫与三泳道一致：容不下就不延伸（少画最右一格，画面几乎无差别），
-            // 绝不让越界把播放崩掉。
             val extend = n < heights.size && n < peaks.size && n < tangents.size
             val drawCount = if (extend) n + BandScroll.EXTRA_POINTS else n
             if (extend) {
                 heights[n] = heights[n - 1]
-                peaks[n] = peaks[n - 1]
-                if (n < dash.size) dash[n] = dash[n - 1]
+                if (effects.peaks) {
+                    peaks[n] = peaks[n - 1]
+                    if (n < dash.size) dash[n] = dash[n - 1]
+                }
             }
-            WaveformCurve.computeTangents(heights, if (extend) n + 1 else n, step, tangents)
+            WaveformCurve.computeTangents(heights, drawCount, step, tangents, curveSlopes)
             val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
             val ageBrush = if (!flow && effects.timeOrderedTint) {
                 brushCache.age(size.width, ribbonColor.toArgb())
@@ -1051,6 +982,12 @@ fun AudioVisualizerBars(
             )
         }
     }
+}
+
+private class LaneSnapshot(size: Int) {
+    val bars = FloatArray(size)
+    val peaks = FloatArray(size)
+    val dash = FloatArray(size)
 }
 
 // ---- v3.0.0：多频段调制（逐柱着色 + 三频带能量条）的三组数字 ----
@@ -1191,7 +1128,7 @@ private fun DrawScope.drawWaveformCurve(
      * 它比 [peaks] 短时按 `minOf` 兜底（取不到就退回"只跟小球"的旧行为），
      * 所以调用方传一个空数组也不会崩。
      */
-    dashHeights: FloatArray = FloatArray(0),
+    dashHeights: FloatArray,
     /** v3.2.2：光点 / 峰值标记的采样步长（三频带模式用 2，单带模式用 1）。 */
     markerStride: Int = 1,
     /** v3.6.9：采样起点（`shiftedCells % stride`）—— 让同一格数据的标记不被重新采样。 */
@@ -1230,12 +1167,13 @@ private fun DrawScope.drawWaveformCurve(
         drawPath(path = path, color = color, alpha = 0.29f * breath)
         drawPath(path = crest, color = color, alpha = 0.88f * breath, style = crestStroke)
     }
-    // 峰值保持：与 v2.8.0 **逐值同构**的短横条（同一个 sqrt 映射，否则峰值会看起来比曲线还矮），
-    // 只在明显高于曲线时才画。位置跟着曲线走（峰值的半厚 → y）。
+    if (!effects.peaks && !effects.dots) return
     val dotThreshold = minBar * DOT_MIN_BAR_MULTIPLE
     val peakVisibleDelta = peakCapPx / 2f
     val stride = if (markerStride < 1) 1 else markerStride
     val markerWidth = (step * 0.6f * stride).coerceAtLeast(1f)
+    val dashSize = Size(markerWidth * 0.68f, peakCapPx)
+    val dashCorners = CornerRadius(peakCapPx * 0.5f)
     var i = if (markerStart in 0 until stride) markerStart else 0
     while (i < n) {
         val x = firstX + i * step + xShift
@@ -1260,15 +1198,13 @@ private fun DrawScope.drawWaveformCurve(
             )
             if (ballHalf * 2f > dotThreshold && peakHalf > heights[i] + peakVisibleDelta) {
                 val topLeft = Offset(x - markerWidth * 0.34f, centerY - peakHalf - peakCapPx)
-                val size = Size(markerWidth * 0.68f, peakCapPx)
-                val corners = CornerRadius(peakCapPx * 0.5f)
                 // v3.2.2：三频带模式下峰值标记**跟着它所在泳道的颜色**（同一个渐变笔刷在
                 // 那个 x 处采样出来的就是那一段的颜色）—— 否则会变成一条横穿三条泳道的
                 // 主题色虚线，看起来像渲染错误。
                 if (brush != null) {
-                    drawRoundRect(brush = brush, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
+                    drawRoundRect(brush = brush, topLeft = topLeft, size = dashSize, cornerRadius = dashCorners, alpha = 0.62f * breath)
                 } else {
-                    drawRoundRect(color = color, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
+                    drawRoundRect(color = color, topLeft = topLeft, size = dashSize, cornerRadius = dashCorners, alpha = 0.62f * breath)
                 }
             }
         }
@@ -1303,7 +1239,6 @@ private fun DrawScope.drawCurveSheen(
     tangents: FloatArray,
     path: Path,
     brush: Brush,
-    effects: VisualizerEffects,
     xShift: Float,
     step: Float,
     heightPx: Float,

@@ -11,22 +11,7 @@
 package com.takahashirinta.ncrust.source
 
 /**
- * 音乐音源（v2.1.0 · A）。
- *
- * 现在的取值只有 ncm 与 qm 两个，但架构上这里是**唯一**「音源」概念的定义处：
- * 队列里的每一首歌、每一个播放 URL 缓存条目、每一次歌词请求都必须能回答「你属于哪个音源」。
- *
- * ## 为什么 key 是字符串而不是 ordinal
- *
- * [key] 会被写进 SharedPreferences（队列持久化）、离线缓存的 URL query 参数、
- * 以及 MediaItem 的 mediaId。用 ordinal 的话，「以后在中间插一个音源」会让所有历史数据
- * 静默指错音源；字符串 key 是稳定且可读的，也让 JSON 里能直接看出来源。
- *
- * ## 未知 key 一律回落 [NETEASE]（不是抛异常）
- *
- * 这是**向后兼容的硬要求**：v2.1.0 之前持久化的队列 JSON 里没有 `source` 字段，
- * 离线缓存的 key 形状是 `song:<id>:<level>`（没有音源段）。读到一个不认识的 key 时
- * 唯一正确的解释就是「这是旧数据、来自 ncm」，抛异常等于让老用户开不了机。
+ * [key] 用于持久化、离线缓存和媒体会话。保留现有字符串值，旧队列由 [fromKey] 回落到网易云。
  */
 enum class MusicSource(val key: String) {
     NETEASE("netease"),
@@ -75,9 +60,13 @@ enum class MusicSource(val key: String) {
          */
         val loginSources: List<MusicSource> = listOf(NETEASE, QQMUSIC)
 
+        private val sourcesByKey = entries.associateBy { it.key }
+
+        /** 只识别显式音源，供媒体 ID 和跨源缓存使用。 */
+        internal fun parseKey(key: String?): MusicSource? = key?.let { sourcesByKey[it] }
+
         /** 解析字符串 key；null / 空串 / 不认识的值一律回落 [DEFAULT]。 */
-        fun fromKey(key: String?): MusicSource =
-            values().firstOrNull { it.key == key } ?: DEFAULT
+        fun fromKey(key: String?): MusicSource = parseKey(key) ?: DEFAULT
 
         /**
          * v2.3.0 · C：**另一个**可登录音源（用于「此源无版权，可切另一源」的提示）。
@@ -128,7 +117,7 @@ object SourceIds {
         if (text.isNullOrEmpty()) return null
         val sep = text.indexOf(':')
         if (sep <= 0) return null
-        val source = MusicSource.values().firstOrNull { it.key == text.substring(0, sep) } ?: return null
+        val source = MusicSource.parseKey(text.substring(0, sep)) ?: return null
         val id = text.substring(sep + 1).toLongOrNull() ?: return null
         if (id <= 0L) return null
         return source to id
@@ -156,15 +145,14 @@ object SourceIds {
      */
     fun parseMediaId(mediaId: String?): Pair<MusicSource, Long>? {
         if (mediaId.isNullOrEmpty() || !mediaId.startsWith(MEDIA_ID_PREFIX)) return null
-        val rest = mediaId.removePrefix(MEDIA_ID_PREFIX)
-        val sep = rest.indexOf(':')
+        val start = MEDIA_ID_PREFIX.length
+        val sep = mediaId.indexOf(':', start)
         if (sep < 0) {
-            val id = rest.toLongOrNull() ?: return null
+            val id = mediaId.substring(start).toLongOrNull() ?: return null
             return if (id > 0L) MusicSource.NETEASE to id else null
         }
-        val sourceKey = rest.substring(0, sep)
-        val source = MusicSource.values().firstOrNull { it.key == sourceKey } ?: return null
-        val id = rest.substring(sep + 1).toLongOrNull() ?: return null
+        val source = MusicSource.parseKey(mediaId.substring(start, sep)) ?: return null
+        val id = mediaId.substring(sep + 1).toLongOrNull() ?: return null
         return if (id > 0L) source to id else null
     }
 

@@ -10,7 +10,7 @@ package com.takahashirinta.ncrust.cache
 
 import android.content.Context
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.google.gson.JsonParser
 
 /**
  * 播放 URL 的有界索引（v1.6.0 · D1）。**纯逻辑**，JVM 可单测。
@@ -22,20 +22,33 @@ import com.google.gson.reflect.TypeToken
 internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
     // LinkedHashMap 的迭代顺序 = 插入顺序，put 前先 remove 即得到 LRU。
     private val map = LinkedHashMap<String, OfflineUrlRecord>()
+    private val keysBySong = HashMap<Long, LinkedHashSet<String>>()
+    private var encoded: String? = null
+    private var lastKey: String? = null
 
-    fun put(key: String, url: String, content: OfflineContent = OfflineContent()) {
+    fun put(key: String, url: String, content: OfflineContent = unknownContent) {
         if (key.isEmpty() || url.isEmpty()) return
-        val old = map.remove(key)
-        map[key] = OfflineUrlRecord(url, if (!content.known && old?.url == url) old.content else content)
-        while (map.size > maxEntries) {
-            val it = map.keys.iterator()
-            if (it.hasNext()) {
-                it.next()
-                it.remove()
-            } else {
-                break
-            }
+        val old = map[key]
+        val resolvedContent = if (!content.known && old?.url == url) old.content else content
+        // 取链和实际起播可能先后记录同一份 URL，末条的顺序也相同。
+        if (key == lastKey && old?.url == url && old.content == resolvedContent) return
+        encoded = null
+        map.remove(key)
+        map[key] = OfflineUrlRecord(url, resolvedContent)
+        OfflineKeys.songIdOf(key)?.let { songId ->
+            val keys = keysBySong.getOrPut(songId) { LinkedHashSet() }
+            keys.remove(key)
+            keys.add(key)
         }
+        while (map.size > maxEntries) {
+            val oldest = map.keys.firstOrNull() ?: break
+            map.remove(oldest)
+            val songId = OfflineKeys.songIdOf(oldest) ?: continue
+            val keys = keysBySong[songId] ?: continue
+            keys.remove(oldest)
+            if (keys.isEmpty()) keysBySong.remove(songId)
+        }
+        lastKey = if (map.isEmpty()) null else key
     }
 
     fun get(key: String): String? = map[key]?.url
@@ -49,21 +62,24 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
      */
     fun removeSong(songId: Long): Int {
         if (songId <= 0L) return 0
-        var removed = 0
-        val it = map.keys.iterator()
-        while (it.hasNext()) {
-            if (OfflineKeys.songIdOf(it.next()) == songId) {
-                it.remove()
-                removed++
-            }
-        }
-        return removed
+        val keys = keysBySong.remove(songId) ?: return 0
+        keys.forEach { map.remove(it) }
+        val tail = lastKey
+        if (tail != null && tail in keys) lastKey = map.keys.lastOrNull()
+        encoded = null
+        return keys.size
     }
 
     /** 排序后的 key 快照（对账用，不暴露内部 map）。 */
     fun keys(): List<String> = map.keys.toList()
 
-    fun clear() = map.clear()
+    fun clear() {
+        if (map.isEmpty()) return
+        map.clear()
+        keysBySong.clear()
+        lastKey = null
+        encoded = null
+    }
 
     /**
      * 离线兜底用：先按 [preferredKeys] 的顺序找，再退化成「这首歌的**任意**档位」。
@@ -73,32 +89,56 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         recallRecord(preferredKeys, songId) { true }?.let { it.first to it.second.url }
 
     fun recallRecord(preferredKeys: List<String>, songId: Long, usable: (String) -> Boolean): Pair<String, OfflineUrlRecord>? {
+        val songKeys = keysBySong[songId] ?: return null
+        if (songKeys.size == 1) {
+            val key = songKeys.first()
+            val record = map.getValue(key)
+            return if (usable(key)) key to record else null
+        }
         val levels = preferredKeys.mapNotNull(OfflineKeys::levelOf)
-        val candidates = map.entries.filter { OfflineKeys.songIdOf(it.key) == songId }
-            .sortedWith(compareBy<Map.Entry<String, OfflineUrlRecord>> { e ->
-                levels.indexOf(OfflineKeys.levelOf(e.key)).let { if (it < 0) levels.size else it }
-            }.thenBy { if (!it.value.content.known) 2 else when(it.value.content.kind) { OfflineContent.FULL -> 0; OfflineContent.TRIAL -> 1; else -> 2 } })
-        for ((k, v) in candidates) if (usable(k)) return k to v
-        return null
+        val candidates = ArrayList<RecallCandidate>(songKeys.size)
+        for (key in songKeys) {
+            val preferred = levels.indexOf(OfflineKeys.levelOf(key))
+            candidates.add(RecallCandidate(key, map.getValue(key), if (preferred < 0) levels.size else preferred))
+        }
+        candidates.sortWith(recallOrder)
+        val hit = candidates.firstOrNull { usable(it.key) } ?: return null
+        return hit.key to hit.record
+    }
+
+    private class RecallCandidate(val key: String, val record: OfflineUrlRecord, val levelRank: Int) {
+        val contentRank: Int = when {
+            !record.content.known -> 2
+            record.content.kind == OfflineContent.FULL -> 0
+            record.content.kind == OfflineContent.TRIAL -> 1
+            else -> 2
+        }
     }
 
     fun size(): Int = map.size
 
-    fun toJson(): String = Gson().toJson(map)
+    fun toJson(): String = encoded ?: gson.toJson(map).also { encoded = it }
 
     companion object {
         const val MAX_ENTRIES = 300
+
+        private val gson = Gson()
+        private val unknownContent = OfflineContent()
+        private val recallOrder = Comparator<RecallCandidate> { first, second ->
+            val byLevel = first.levelRank.compareTo(second.levelRank)
+            if (byLevel == 0) first.contentRank.compareTo(second.contentRank) else byLevel
+        }
 
         fun fromJson(json: String?): OfflineUrlIndex {
             val idx = OfflineUrlIndex()
             if (json.isNullOrEmpty()) return idx
             runCatching {
-                val root = com.google.gson.JsonParser.parseString(json).asJsonObject
+                val root = JsonParser.parseString(json).asJsonObject
                 root.entrySet().forEach { (k, v) ->
                     runCatching {
                         if (v.isJsonPrimitive && v.asJsonPrimitive.isString) idx.put(k, v.asString)
                         else {
-                            val record = Gson().fromJson(v, OfflineUrlRecord::class.java)
+                            val record = gson.fromJson(v, OfflineUrlRecord::class.java)
                             val content = record.content ?: OfflineContent()
                             val epochPresent = v.asJsonObject.getAsJsonObject("content")?.has("file_epoch") == true
                             idx.put(k, record.url, if (epochPresent) content else content.copy(fileEpoch = 0))
@@ -124,6 +164,7 @@ object OfflineUrlStore {
 
     @Volatile
     private var index: OfflineUrlIndex? = null
+    private var appliedJson: String? = null
 
     private fun index(context: Context): OfflineUrlIndex {
         index?.let { return it }
@@ -131,6 +172,7 @@ object OfflineUrlStore {
             index?.let { return it }
             val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
+            appliedJson = null
             index = loaded
             return loaded
         }
@@ -138,8 +180,11 @@ object OfflineUrlStore {
 
     private fun persist(context: Context, idx: OfflineUrlIndex) {
         runCatching {
+            val json = idx.toJson()
+            if (json === appliedJson) return@runCatching
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putString(KEY_URLS, idx.toJson()).apply()
+                .edit().putString(KEY_URLS, json).apply()
+            appliedJson = json
         }
     }
 
@@ -155,34 +200,19 @@ object OfflineUrlStore {
         result
     }
 
-    /** 记下「这个 key 最后一次成功播放的 URL」。 */
-    fun remember(context: Context, key: String, url: String) {
-        mutate(context) { it.put(key, url) }
-    }
-
     /** 从播放 URL 上取下 key 并记录（服务端收到 URL 时调用，URL 上已带 key）。 */
     fun rememberFromUrl(context: Context, url: String) {
-        OfflineKeys.keyOf(url)?.let { remember(context, it, url) }
+        val key = OfflineKeys.keyOf(url) ?: return
+        mutate(context) { it.put(key, url) }
     }
-
-    /**
-     * 联动删除（v2.0.0 · T3）：删掉这首歌在 URL 清单里的所有档位条目。返回删掉的条数。
-     * 只有 [OfflineLibrary.remove] 会用 —— 曲目表与 URL 清单必须一起删。
-     */
-    internal fun forgetSong(context: Context, songId: Long): Int =
-        mutate(context) { it.removeSong(songId) }
-
-    /** 离线兜底：找回这首歌可用的 (key, url)。 */
-    fun recall(context: Context, songId: Long, preferredLevels: List<String>): Pair<String, String>? =
-        synchronized(this) {
-            index(context).recall(preferredLevels.map { OfflineKeys.key(songId, it) }, songId)
-        }
 
     fun rememberResult(context: Context, result: com.takahashirinta.ncrust.player.SongUrlResult): com.takahashirinta.ncrust.player.SongUrlResult {
         val key = OfflineKeys.keyOf(result.url) ?: return result
         return mutate(context) { idx ->
             val content = result.cachedContent ?: OfflineContent.from(result.playbackItem)
-            val chosen = verifiedCacheKey(key, content, idx.record(key)?.content, OfflineAudioCache.contains(context, key))
+            val chosen = verifiedCacheKey(key, content, idx.record(key)?.content) {
+                OfflineAudioCache.contains(context, key)
+            }
             val url = if (chosen == key) result.url else
                 result.url.replaceFirst(OfflineKeys.QUERY_KEY + "=" + key, OfflineKeys.QUERY_KEY + "=" + chosen)
             idx.put(chosen, url, content)

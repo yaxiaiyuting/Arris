@@ -5,6 +5,9 @@
 
 package com.takahashirinta.ncrust.audio
 
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -14,13 +17,19 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -29,19 +38,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.takahashirinta.ncrust.ui.components.ArrisFullScreenDialog
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import com.takahashirinta.ncrust.ui.theme.AppShapes
+import io.github.takahashirinta.kanesumi.controls.MetroButton
+import io.github.takahashirinta.kanesumi.controls.MetroDialog
 import io.github.takahashirinta.kanesumi.controls.MetroIconButton
 import io.github.takahashirinta.kanesumi.controls.MetroSwitch
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
@@ -54,6 +71,69 @@ fun EqualizerScreen(onBack: () -> Unit) {
     }
 }
 
+/** Player shortcut for built-in and imported curves. The editor owns file operations. */
+@Composable
+internal fun EqualizerPresetMenu(onDismiss: () -> Unit, onEdit: () -> Unit) {
+    val context = LocalContext.current
+    val strings = LocalStrings.current.settings
+    val colors = LocalMetroColors.current
+    val presets = remember { EqualizerPrefs.presets(context) }
+    val enabled = remember { EqualizerPrefs.isEnabled(context) }
+    val selected = remember { EqualizerPrefs.presetName(context) }
+    MetroDialog(onDismissRequest = onDismiss, widthDp = 320.dp, modifier = Modifier.heightIn(max = 460.dp)) {
+        MetroText(
+            strings.equalizerEntryLabel,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            color = colors.onBackground,
+            style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+        )
+        LazyColumn(Modifier.weight(1f, fill = false).selectableGroup()) {
+            item {
+                EqualizerPresetRow(strings.equalizerFiles.off, selected = !enabled) {
+                    EqualizerPrefs.setEnabled(context, false)
+                    EqualizerController.setEnabled(false, EqualizerPrefs.gains(context))
+                    onDismiss()
+                }
+            }
+            items(presets, key = EqualizerPreset::name) { preset ->
+                EqualizerPresetRow(preset.name, selected = enabled && preset.name == selected) {
+                    EqualizerPrefs.applyPreset(context, preset, enable = true)
+                    EqualizerController.setEnabled(true, preset.gainsMb.toIntArray())
+                    onDismiss()
+                }
+            }
+        }
+        MetroButton(
+            strings.equalizerFiles.edit, onClick = onEdit,
+            modifier = Modifier.fillMaxWidth().padding(8.dp).heightIn(min = 48.dp),
+            containerColor = colors.surfaceVariant,
+            contentColor = colors.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun EqualizerPresetRow(name: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalMetroColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .selectable(selected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MetroText(
+            name,
+            modifier = Modifier.weight(1f),
+            style = TextStyle(fontSize = 15.sp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = if (selected) colors.primary else colors.onBackground,
+        )
+        if (selected) MetroIcon(Icons.Default.Check, contentDescription = null, tint = colors.primary)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EqualizerEditor(onBack: () -> Unit) {
@@ -63,6 +143,12 @@ private fun EqualizerEditor(onBack: () -> Unit) {
     var enabled by remember { mutableStateOf(EqualizerPrefs.isEnabled(context)) }
     var gains by remember { mutableStateOf(EqualizerPrefs.gains(context)) }
     var preset by remember { mutableStateOf(EqualizerPrefs.presetName(context)) }
+    var presets by remember { mutableStateOf(EqualizerPrefs.presets(context)) }
+    val files = strings.settings.equalizerFiles
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var fileStatus by remember { mutableStateOf<String?>(null) }
+    var pendingExport by rememberSaveable { mutableStateOf<String?>(null) }
     val activeBands by EqualizerController.activeBandCount.collectAsState()
 
     fun pushToAudio() = EqualizerController.setEnabled(enabled, gains)
@@ -72,6 +158,55 @@ private fun EqualizerEditor(onBack: () -> Unit) {
         enabled = value
         EqualizerPrefs.setEnabled(context, value)
         pushToAudio()
+    }
+
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            try {
+                val incoming = withContext(Dispatchers.IO) {
+                    runCatching {
+                        checkNotNull(context.contentResolver.openInputStream(uri)).use(EqualizerPresetFile::read)
+                    }.getOrNull()
+                }
+                if (incoming == null) {
+                    fileStatus = files.importFailed
+                } else {
+                    val imported = EqualizerPrefs.importPreset(context, incoming)
+                    if (imported == null) {
+                        fileStatus = files.limitReached
+                    } else {
+                        presets = EqualizerPrefs.presets(context)
+                        gains = imported.gainsMb.toIntArray()
+                        preset = imported.name
+                        pushToAudio()
+                        fileStatus = files.imported
+                    }
+                }
+            } finally {
+                busy = false
+            }
+        }
+    }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val payload = pendingExport
+        pendingExport = null
+        if (uri == null || payload == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = true
+            try {
+                val saved = withContext(Dispatchers.IO) {
+                    runCatching {
+                        checkNotNull(context.contentResolver.openOutputStream(uri, "wt"))
+                            .bufferedWriter(Charsets.UTF_8).use { it.write(payload) }
+                    }.isSuccess
+                }
+                fileStatus = if (saved) files.exported else files.exportFailed
+            } finally {
+                busy = false
+            }
+        }
     }
 
     Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().fillMaxHeight()) {
@@ -111,23 +246,68 @@ private fun EqualizerEditor(onBack: () -> Unit) {
                 color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp)
             )
             EqualizerCurve(gains = gains, active = enabled, accent = colors.primary, grid = colors.surfaceVariant)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MetroButton(
+                    files.importPreset,
+                    enabled = !busy,
+                    containerColor = colors.surfaceVariant,
+                    contentColor = colors.onSurfaceVariant,
+                    onClick = {
+                        fileStatus = null
+                        try {
+                            importPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+                        } catch (_: ActivityNotFoundException) {
+                            fileStatus = files.importFailed
+                        }
+                    },
+                )
+                MetroButton(
+                    files.exportCurrent,
+                    enabled = !busy,
+                    containerColor = colors.surfaceVariant,
+                    contentColor = colors.onSurfaceVariant,
+                    onClick = {
+                        fileStatus = null
+                        pendingExport = EqualizerPresetFile.encode(EqualizerPreset(preset ?: files.custom, gains.toList()))
+                        try {
+                            exportPicker.launch("arris-equalizer.json")
+                        } catch (_: ActivityNotFoundException) {
+                            pendingExport = null
+                            fileStatus = files.exportFailed
+                        }
+                    },
+                )
+            }
+            fileStatus?.let {
+                MetroText(
+                    it,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    color = colors.onSurfaceVariant,
+                    style = TextStyle(fontSize = 13.sp),
+                )
+            }
             MetroText("预设", color = colors.onSurfaceVariant, style = TextStyle(fontSize = 13.sp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                EqualizerPrefs.PRESETS.forEach { (name, _) ->
+                presets.forEach { choice ->
+                    val name = choice.name
                     val active = preset == name
                     MetroText(
                         name,
                         color = if (active) colors.onPrimary else colors.onSurfaceVariant,
                         style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                         modifier = Modifier
-                            .background(if (active) colors.primary else colors.surfaceVariant, AppShapes.full)
+                            .clip(AppShapes.full)
+                            .background(if (active) colors.primary else colors.surfaceVariant)
                             .selectable(active, role = Role.RadioButton) {
                                 preset = name
-                                EqualizerPrefs.applyPreset(context, name)
-                                gains = EqualizerPrefs.gains(context)
+                                EqualizerPrefs.applyPreset(context, choice)
+                                gains = choice.gainsMb.toIntArray()
                                 pushToAudio()
                             }
                             .padding(horizontal = 14.dp, vertical = 11.dp)

@@ -35,7 +35,7 @@ import org.json.JSONObject
  *
  * `mid` 与 `media_mid` 实测经常不同（《晴天》`mid=0039MnYb0qxYhV` / `media_mid=003Qui1q2u1Zho`），
  * 而文件名按 media_mid 拼。两个都留着（[SongItem.sourceId] / [SongItem.mediaId]），
- * 取链时优先后者、失败再试前者（见 `QqApi.fetchPlayUrl`）。
+ * 取链时优先后者、失败再试前者（见 `QqApi.resolveOutcome`）。
  */
 object QqSongMapper {
 
@@ -272,7 +272,7 @@ object QqSongMapper {
 
     /**
      * 该曲是否**需要付费/会员才能完整播放**。只用于 UI 提示，**不用来阻止播放** ——
-     * 真正的判据是服务端返回的 purl（见 `QqApi.fetchPlayUrl`）。
+     * 真正的判据是服务端返回的 purl（见 `QqApi.resolveOutcome`）。
      * `pay.pay_play == 1` 表示「播放需要付费」。
      */
     fun isPaywalled(item: JSONObject?): Boolean =

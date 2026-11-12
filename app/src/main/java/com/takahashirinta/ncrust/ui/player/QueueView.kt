@@ -168,9 +168,10 @@ fun QueueView(
     // 因为 awaitEachGesture 是受限作用域, 不能直接 delay/animateTo
     val dragSettleScope = rememberCoroutineScope()
 
-    // ---- 行模型 ----
-    // RowInfo(kind=PAST_HEAD/NOW_HEAD/UPCOMING_HEAD/INFINITY/SONG, queueIndex)
-    val rows = remember(queue, currentIndex, infinityActive) { buildQueueRows(queue, currentIndex, infinityActive) }
+    val songRows = remember(queue) { buildQueueSongRows(queue) }
+    val rows = remember(songRows, currentIndex, infinityActive) {
+        buildQueueRows(songRows, currentIndex, infinityActive)
+    }
 
     if (rows.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -185,7 +186,7 @@ fun QueueView(
     //   进视口(懒布局) → 补居中偏移。用 snapshotFlow 等条件成立, 比数帧稳。
     // - 队列已打开时切歌: 用 animateScrollToItem 平滑滑动到中心; 目标行在视口
     //   外时先滑过去, 等它 compose 后再补居中(不能只 scrollToItem 到顶部)。
-    val nowVisualRow = rows.indexOfFirst { it.kind == RowKind.NOW_HEAD }
+    val nowVisualRow = remember(rows) { rows.indexOfFirst { it.kind == RowKind.NOW_HEAD } }
     // 目标 = 「现在播放」标题下面那首歌, 而不是标题本身 —— 定位的是正在播的行
     val nowSongVisualRow = (nowVisualRow + 1).takeIf { it < rows.size } ?: nowVisualRow
     // 让目标行垂直居中(相对整个队列面板)的滚动偏移。
@@ -599,59 +600,39 @@ fun QueueView(
     }
 }
 
-/**
- * 视觉行的种类。
- *
- * v3.8.0 · E11：`private` → `internal`，只为了让 [buildQueueRows] 的**行 key 契约**
- * 能被 JVM 单测直接钉住（重复 key / 跨源同号是纯行模型的性质，不需要跑 Compose）。
- */
 internal enum class RowKind { PAST_HEAD, NOW_HEAD, UPCOMING_HEAD, SONG, INFINITY }
 
 internal data class RowInfo(val kind: RowKind, val queueIndex: Int, val key: String)
 
-/**
- * 视觉行模型。
- *
- * v3.8.0 · E11：歌曲行的 [RowInfo.key] **必须含音源**。
- *
- * 旧写法是 `"s-${song.id}"` —— 默认「id 全局唯一」。可是队列是按 `TrackKey`
- * （`source + id`）去重的（`MainActivity` 的 `replaceQueueAndPlay` / 追加路径都如此），
- * 网易云与 QQ 的同数字 id **允许同时在场**：
- *  - 两个同为 `12345` 的曲目会得到同一个 LazyColumn key ⇒ 重复 key；
- *  - 拖其中一首会让**同 id 的多行一起透明**（隐藏态按 `song.id` 比较）；
- *  - 悬浮卡用 `queue.firstOrNull { it.id == id }` 取图文，可能取到**另一源**的那首。
- *
- * 现在 key 的形状是 `s-<source>:<id>#<同曲序号>`：音源让跨源同号分开，
- * 序号让「队列里真的有两首一模一样的歌」也不会撞（去重逻辑在，但不该由 UI 兜底）。
- * [TrackKey.tag] 就是 `"netease:12345"` / `"qqmusic:12345"`，是身份的唯一格式。
- */
+/** 行键含音源和同曲出现序号，在播放游标移动时可复用。 */
+internal fun buildQueueSongRows(queue: List<SongItem>): List<RowInfo> {
+    val seen = HashMap<String, Int>()
+    return queue.mapIndexed { index, song ->
+        val tag = song.trackKeyOf().tag
+        val occurrence = seen[tag] ?: 0
+        seen[tag] = occurrence + 1
+        RowInfo(RowKind.SONG, index, "s-$tag#$occurrence")
+    }
+}
+
 internal fun buildQueueRows(
-    queue: List<SongItem>,
+    songs: List<RowInfo>,
     currentIndex: Int,
     infinityActive: Boolean
 ): List<RowInfo> {
-    if (queue.isEmpty()) return emptyList()
-    val rows = mutableListOf<RowInfo>()
-    val cur = currentIndex.coerceIn(0, queue.size - 1)
-    // 同一个身份的曲目在队列里出现第几次（0 起）。按队列顺序递增分配 ——
-    // 下面三段循环的下标是严格递增的（0..cur-1 → cur → cur+1..last），所以序号稳定。
-    val seen = HashMap<String, Int>()
-    fun keyOf(i: Int): String {
-        val tag = queue[i].trackKeyOf().tag
-        val n = seen[tag] ?: 0
-        seen[tag] = n + 1
-        return "s-$tag#$n"
-    }
+    if (songs.isEmpty()) return emptyList()
+    val rows = ArrayList<RowInfo>(songs.size + 4)
+    val cur = currentIndex.coerceIn(0, songs.lastIndex)
 
     if (cur > 0) {
         rows += RowInfo(RowKind.PAST_HEAD, -1, "h-past")
-        for (i in 0 until cur) rows += RowInfo(RowKind.SONG, i, keyOf(i))
+        for (i in 0 until cur) rows += songs[i]
     }
     rows += RowInfo(RowKind.NOW_HEAD, cur, "h-now")
-    rows += RowInfo(RowKind.SONG, cur, keyOf(cur))
-    if (cur < queue.size - 1 || infinityActive) {
+    rows += songs[cur]
+    if (cur < songs.lastIndex || infinityActive) {
         rows += RowInfo(RowKind.UPCOMING_HEAD, -1, "h-upcoming")
-        for (i in (cur + 1) until queue.size) rows += RowInfo(RowKind.SONG, i, keyOf(i))
+        for (i in (cur + 1)..songs.lastIndex) rows += songs[i]
         if (infinityActive) rows += RowInfo(RowKind.INFINITY, -1, "infinity")
     }
     return rows

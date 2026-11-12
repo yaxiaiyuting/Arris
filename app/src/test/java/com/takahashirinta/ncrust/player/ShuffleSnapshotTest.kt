@@ -27,4 +27,12 @@ class ShuffleSnapshotTest {
         val loaded = Gson().fromJson("""{"queue_keys":["netease:1","qqmusic:1","bilibili:1"],"order":[2,0,1],"position":1}""", ShuffleSnapshot::class.java)
         assertTrue(loaded.matches(keys, 0))
     }
+
+    @Test fun `null in a saved order invalidates the snapshot`() {
+        val loaded = Gson().fromJson(
+            """{"queue_keys":["netease:1","qqmusic:1","bilibili:1"],"order":[2,0,null],"position":1}""",
+            ShuffleSnapshot::class.java,
+        )
+        assertFalse(loaded.matches(keys, 0))
+    }
 }

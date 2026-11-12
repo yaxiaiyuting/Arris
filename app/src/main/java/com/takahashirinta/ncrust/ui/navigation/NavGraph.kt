@@ -116,7 +116,7 @@ object NavRoutes {
      *
      * `song/{source}/{songId}` 是 QQ 单曲页唯一的信息来源，而 QQ 的取链与跨源召回都需要
      * 路由里**没有**的东西：
-     *  - 取链：`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null` —— songmid 是硬依赖；
+     *  - 取链：`QqApi.resolveOutcome` 拒绝缺少 songmid 的请求 —— songmid 是硬依赖；
      *  - 召回：`CrossSourceMatcher` 没有共享 id 空间，关键词只能由「曲名 + 艺人」构成。
      *
      * 旧路由把这些全部丢掉，于是页面拿到的锚点既取不了链也搜不了（H13 的本体）。
@@ -190,7 +190,7 @@ object NavRoutes {
      * v3.8.1 · H13：多了四个**可选载荷**（songmid / media_mid / 曲名 / 艺人）。
      *
      * 为什么不带它们页面就是坏的：单曲页的锚点原先只由 `(source, id)` 构造，而
-     *  - QQ 取链硬依赖 songmid（`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null`）；
+     *  - QQ 取链硬依赖 songmid（`QqApi.resolveOutcome` 拒绝缺少 songmid 的请求）；
      *  - 跨源召回硬依赖「曲名 + 艺人」（[com.takahashirinta.ncrust.crosssource.CrossSourceMatcher]
      *    没有共享 id 空间）—— 名字为空时搜索关键词为空，静默零结果。
      *

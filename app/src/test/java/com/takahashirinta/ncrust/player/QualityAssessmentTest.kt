@@ -35,6 +35,7 @@ class QualityAssessmentTest {
         val v = QualityAssessment.assess(
             requested = "lossless", granted = "exhigh",
             br = 320_000, type = "mp3", songMaxLevel = "lossless",
+            access = QualityAccessEvidence(accountRevision = 1L, playableLevel = "exhigh"),
         )
         assertEquals(QualityStatus.NO_ENTITLEMENT, v.status)
     }
@@ -151,17 +152,13 @@ class QualityAssessmentTest {
         assertNotEquals(QualityStatus.DOWNGRADED, v.status)
     }
 
-    /**
-     * 对照组：与 sky 场景同样是「请求高于实际文件、上限低于请求」，但上限本身
-     * **高于已拿到的文件**（cap=hires，实测只有 exhigh）—— 服务端明明能给更高却没给，
-     * 必须是「无权限」而不是「该曲无此档位」。sky 场景（cap=exhigh=实测）则为后者。
-     * 这保证上限归一化没有把两种语义混成同一种。
-     */
+    /** 曲库有无损，当前账号只能播到极高。 */
     @Test
     fun `hires capped song granted only exhigh is still no entitlement`() {
         val v = QualityAssessment.assess(
             requested = "lossless", granted = "exhigh",
             br = 320_000, type = "mp3", songMaxLevel = "hires",
+            access = QualityAccessEvidence(accountRevision = 1L, playableLevel = "exhigh"),
         )
         assertEquals(QualityStatus.NO_ENTITLEMENT, v.status)
         assertEquals(idx("exhigh"), v.displayIndex)
@@ -220,6 +217,7 @@ class QualityAssessmentTest {
         val v = QualityAssessment.assess(
             requested = "jymaster", granted = "exhigh",
             br = 320_000, type = "mp3", songMaxLevel = "jymaster",
+            access = QualityAccessEvidence(accountRevision = 1L, playableLevel = "exhigh"),
         )
         assertEquals(QualityStatus.NO_ENTITLEMENT, v.status)
     }
@@ -235,6 +233,7 @@ class QualityAssessmentTest {
         val v = QualityAssessment.assess(
             requested = "jymaster", granted = "jymaster",
             br = 320_000, type = "mp3", songMaxLevel = "jymaster",
+            access = QualityAccessEvidence(accountRevision = 1L, playableLevel = "exhigh"),
         )
         assertEquals(idx("exhigh"), v.displayIndex)
         assertEquals(QualityStatus.NO_ENTITLEMENT, v.status)
@@ -312,4 +311,27 @@ class QualityAssessmentTest {
         )
         assertEquals(idx("jymaster"), v.displayIndex)
     }
+    @Test
+    fun `one song can have a forbidden tier and lack a different tier`() {
+        val account = QualityAccessEvidence(accountRevision = 1L, playableLevel = "exhigh")
+        assertEquals(QualityStatus.NO_ENTITLEMENT, QualityAssessment.choiceStatus("lossless", "hires", account))
+        assertEquals(QualityStatus.SONG_LACKS_TIER, QualityAssessment.choiceStatus("jymaster", "hires", account))
+        assertEquals(QualityStatus.NORMAL, QualityAssessment.choiceStatus("exhigh", "hires", account))
+    }
+
+    @Test
+    fun `a downgrade without account evidence stays a downgrade`() {
+        val verdict = QualityAssessment.assess("lossless", "exhigh", 320_000L, "mp3", "hires")
+        assertEquals(QualityStatus.DOWNGRADED, verdict.status)
+        assertEquals(QualityStatus.NORMAL, QualityAssessment.choiceStatus("lossless", "hires", null))
+    }
+
+    @Test
+    fun `observed rights rejection does not override known missing tier or a verified file`() {
+        val account = QualityAccessEvidence(1L, observed = mapOf("hires" to QualityStatus.NO_ENTITLEMENT))
+        assertEquals(QualityStatus.NO_ENTITLEMENT, QualityAssessment.choiceStatus("hires", null, account))
+        assertEquals(QualityStatus.SONG_LACKS_TIER, QualityAssessment.choiceStatus("hires", "lossless", account))
+        assertEquals(QualityStatus.NORMAL, QualityAssessment.choiceStatus("hires", "lossless", account, "hires"))
+    }
+
 }

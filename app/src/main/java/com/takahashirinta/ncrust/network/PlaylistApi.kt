@@ -20,10 +20,12 @@ import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SongPrivilege
 import com.takahashirinta.ncrust.account.VipInfoResponse
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
 import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
 import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -327,19 +329,15 @@ object PlaylistApi {
         val trackArray = playlistObj.optJSONArray("tracks")
         if (trackArray != null) {
             for (i in 0 until trackArray.length()) {
-                val song = parseSongTrack(trackArray.getJSONObject(i))
-                tracksMap[song.id] = privileges[song.id]?.let { song.copy(privilege = it) } ?: song
+                val song = parseSongTrack(trackArray.getJSONObject(i), privileges)
+                tracksMap[song.id] = song
             }
         }
 
-        // Collect every ID in playlist order from the always-complete `trackIds` array.
-        val allIds = mutableListOf<Long>()
-        val trackIdsArray = playlistObj.optJSONArray("trackIds")
-        if (trackIdsArray != null) {
-            for (i in 0 until trackIdsArray.length()) {
-                allIds.add(trackIdsArray.getJSONObject(i).optLong("id"))
-            }
-        }
+        // trackIds 保留服务端给出的顺序和重复曲目。
+        val allIds = playlistObj.optJSONArray("trackIds")?.let { rows ->
+            LongArray(rows.length()) { index -> rows.getJSONObject(index).optLong("id") }
+        } ?: LongArray(0)
 
         // If trackIds is absent (e.g. very short playlists already fully in tracks), use tracks order.
         // 没有 trackIds 时 `tracks` 就是全部 —— 完整性只能拿声明总数比（H10）。
@@ -360,7 +358,7 @@ object PlaylistApi {
         var failedBatches = 0
         for (start in missingIds.indices step batchSize) {
             val batch = missingIds.subList(start, minOf(start + batchSize, missingIds.size))
-            val fetched = fetchSongDetails(batch)
+            val fetched = getSongsByIds(batch)
             if (fetched.size < batch.size) {
                 failedBatches++
                 Log.w("PlaylistApi", "batch returned ${fetched.size}/${batch.size} songs from server")
@@ -369,7 +367,11 @@ object PlaylistApi {
         }
 
         // Return songs in the original playlist order defined by trackIds.
-        val songs = allIds.mapNotNull { tracksMap[it] }
+        val songs = ArrayList<SongItem>(minOf(allIds.size, tracksMap.size))
+        for (id in allIds) {
+            val song = tracksMap[id] ?: continue
+            songs.add(song)
+        }
         PlaylistDetailResult(
             songs = songs,
             declaredCount = declaredCount,
@@ -378,7 +380,8 @@ object PlaylistApi {
         )
     }
 
-    private fun parseSongTrack(track: JSONObject): SongItem {
+    private fun parseSongTrack(track: JSONObject, privileges: Map<Long, SongPrivilege>): SongItem {
+        val id = track.optLong("id")
         val artistArray = track.optJSONArray("ar")
         val artists: List<ArtistItem>? = artistArray?.let {
             (0 until it.length()).map { j ->
@@ -412,13 +415,14 @@ object PlaylistApi {
             )
         }
         return SongItem(
-            id = track.optLong("id"),
+            id = id,
             name = track.optString("name"),
             artists = artists,
             album = album,
             duration = track.optLong("dt"),
             originCoverType = originCoverType,
             originSong = originSong,
+            privilege = privileges[id],
         )
     }
 
@@ -438,32 +442,44 @@ object PlaylistApi {
                 pl = p.optInt("pl", 0),
                 // 缺 fee 与 fee=0 是两件事：缺字段时让判定回落到取链响应项的 fee。
                 fee = if (p.isNull("fee")) null else p.optInt("fee", 0),
+                maxBrLevel = p.optString("maxBrLevel", "").takeIf { it.isNotBlank() },
             )
         }
         return map
     }
 
-    private suspend fun fetchSongDetails(ids: List<Long>): List<SongItem> = withContext(Dispatchers.IO) {        val cArray = JSONArray()
-        ids.forEach { id -> cArray.put(JSONObject().put("id", id)) }
-        val payload = mapOf("c" to cArray.toString())
+    private fun detailIdsJson(ids: List<Long>): String = buildString {
+        append('[')
+        ids.forEachIndexed { index, id ->
+            if (index > 0) append(',')
+            append("{\"id\":").append(id).append('}')
+        }
+        append(']')
+    }
+
+    /** null 表示整批请求失败，空列表表示服务端确认本批无可用详情。 */
+    internal suspend fun getSongsByIdsOrNull(ids: List<Long>): List<SongItem>? = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
+        val payload = mapOf("c" to detailIdsJson(ids))
         // Single retry with 500ms delay to survive transient network blips on large playlists.
         var lastError: Exception? = null
         repeat(2) { attempt ->
             try {
                 val response = readEapi("/eapi/v3/song/detail", payload)
-                val body = response.body?.string() ?: return@repeat
+                val body = response.use { it.body?.string() } ?: return@repeat
                 val json = JSONObject(body)
-                reportBusinessCode(json.optInt("code", -1), response)
+                val code = json.optInt("code", -1)
+                reportBusinessCode(code, response)
+                if (!response.isSuccessful || code != 200) return@repeat
                 val songArray = json.optJSONArray("songs") ?: return@repeat
                 val privileges = parsePrivileges(json.optJSONArray("privileges"))
                 return@withContext (0 until songArray.length()).map { i ->
-                    val song = parseSongTrack(songArray.getJSONObject(i))
-                    privileges[song.id]?.let { song.copy(privilege = it) } ?: song
+                    parseSongTrack(songArray.getJSONObject(i), privileges)
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // 取消/超时**原样抛出**：吞掉它会让上层以为"这批就是没歌"，
-                // 于是取消被伪装成数据缺失（H10 之后这里会直接变成 failedBatches）。
+            } catch (e: CancellationException) {
                 throw e
+            } catch (_: NeteaseSessionChangedException) {
+                return@withContext null
             } catch (e: Exception) {
                 lastError = e
                 Log.w("PlaylistApi", "fetchSongDetails attempt ${attempt + 1} failed: ${e.message}")
@@ -471,7 +487,7 @@ object PlaylistApi {
             }
         }
         lastError?.let { Log.e("PlaylistApi", "fetchSongDetails gave up after retry", it) }
-        emptyList()
+        null
     }
 
     @Immutable
@@ -869,7 +885,7 @@ object PlaylistApi {
      *
      * 调用方（`LibraryManager.refreshFromCloud`）无法区分它们，于是 2、3 会被当成 1
      * 覆盖掉 `cachedLikedIds` 并**落盘** —— 一次抖动就让收藏页表头显示「0 首」、
-     * 分页底表变空（`getLikedSongIds` / `loadAllLikedSongs` 都拿不到 id），
+     * 分页底表变空（`getLikedSongIds` / `loadAllLikedSongsResult` 都拿不到 id），
      * 且**重启后仍然是空**，直到下一次成功刷新。
      *
      * 收藏单曲**本体**不会因此丢失：本仓库的收藏库是只加不减的
@@ -903,6 +919,8 @@ object PlaylistApi {
     suspend fun getLikedTrackIds(uid: Long): LikedIdsResult = withContext(Dispatchers.IO) {
         val playlistId = try {
             getLikedPlaylistId(uid)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext LikedIdsResult.Failure("getLikedPlaylistId threw: ${e.message}")
         } ?: return@withContext LikedIdsResult.Failure("liked playlist not found")
@@ -933,6 +951,8 @@ object PlaylistApi {
                 ?: return@withContext LikedIdsResult.Failure("missing trackIds")
             head = (0 until trackIds.length()).map { trackIds.getJSONObject(it).optLong("id") }
             declaredCount = playlistObj.optInt("trackCount", head.size)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext LikedIdsResult.Failure("request threw: ${e.message}")
         }
@@ -946,8 +966,15 @@ object PlaylistApi {
         var pages = 0
         while (all.size < declaredCount && pages < MAX_LIKED_FILL_PAGES) {
             pages++
-            val page = runCatching { fetchTrackIdsPage(playlistId, offset, LIKED_FILL_PAGE_SIZE) }
-                .getOrDefault(emptyList())
+            val page = try {
+                fetchTrackIdsPage(playlistId, offset, LIKED_FILL_PAGE_SIZE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: NeteaseSessionChangedException) {
+                throw e
+            } catch (_: Exception) {
+                break
+            }
             if (page.isEmpty()) break
             val added = page.count { all.add(it) }
             offset += page.size
@@ -978,7 +1005,7 @@ object PlaylistApi {
     }
 
     /** 按 ID 批量拉取单曲详情（eapi/v3/song/detail），供收藏单曲分页 lazy 加载用。 */
-    suspend fun getSongsByIds(ids: List<Long>): List<SongItem> = fetchSongDetails(ids)
+    suspend fun getSongsByIds(ids: List<Long>): List<SongItem> = getSongsByIdsOrNull(ids).orEmpty()
 
     /**
      * 收藏(like=true) / 取消收藏(false) 单曲（写入「我喜欢的音乐」）。

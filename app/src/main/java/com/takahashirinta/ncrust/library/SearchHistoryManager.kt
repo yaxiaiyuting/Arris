@@ -126,16 +126,15 @@ object SearchHistoryManager {
     }
 
     fun clearSection(context: Context, type: Int) {
-        save(context, keyFor(type), mutableListOf())
+        save(context, keyFor(type), emptyList())
     }
 
     private fun add(context: Context, type: Int, item: HistoryItem) {
         val key = keyFor(type)
         val now = System.currentTimeMillis()
         val items = load(context, key)
-        items.removeAll { now - it.timestamp > TTL_MS }
         val target = SearchHistoryMigration.dedupeKey(item)
-        items.removeAll { SearchHistoryMigration.dedupeKey(it) == target }
+        items.removeAll { now - it.timestamp > TTL_MS || SearchHistoryMigration.dedupeKey(it) == target }
         items.add(0, item.copy(timestamp = now))
         if (items.size > MAX_ITEMS) items.subList(MAX_ITEMS, items.size).clear()
         save(context, key, items)
@@ -145,9 +144,8 @@ object SearchHistoryManager {
         val key = keyFor(type)
         val now = System.currentTimeMillis()
         val items = load(context, key)
-        val filtered = items.filter { now - it.timestamp <= TTL_MS }
-        if (filtered.size != items.size) save(context, key, filtered.toMutableList())
-        return filtered
+        if (items.removeAll { now - it.timestamp > TTL_MS }) save(context, key, items)
+        return items
     }
 
     /**
@@ -167,7 +165,7 @@ object SearchHistoryManager {
     private fun load(context: Context, key: String): MutableList<HistoryItem> {
         val json = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(key, null)
-        return SearchHistoryCodec.decode(json).toMutableList()
+        return SearchHistoryCodec.decode(json)
     }
 
     private fun save(context: Context, key: String, items: List<HistoryItem>) {

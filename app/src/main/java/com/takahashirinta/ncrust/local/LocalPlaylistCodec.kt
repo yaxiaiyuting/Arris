@@ -15,6 +15,7 @@ import com.google.gson.reflect.TypeToken
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.PlaylistKey
+import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.TrackKey
 
 /**
@@ -150,22 +151,38 @@ object LocalPlaylistCodec {
      * 那是「降级安装」的场景，猜一个未来格式比什么都不显示更危险
      * （v2.2.0 的 `PlaylistCacheCodec` 对未知版本也是这个策略）。
      */
-    fun decodeTracks(json: String?): List<LocalPlaylistTrack> {
-        if (json.isNullOrBlank()) return emptyList()
-        val trimmed = json.trim()
-        if (trimmed.startsWith("[")) {
-            // v0：裸数组
-            val rows = runCatching {
+    fun decodeTracks(json: String?): List<LocalPlaylistTrack> =
+        consolidate(decodeTrackRows(json).mapNotNull { it.toModel() })
+
+    /** 定位一首歌时只解码可能属于该身份的曲目载荷。 */
+    internal fun findTrack(json: String?, wanted: TrackKey): LocalPlaylistTrack? {
+        val legacyId = if (wanted.source == MusicSource.BILIBILI) {
+            wanted.id and SourceIds.BILI_AV_PARTITION_FLAG.inv()
+        } else wanted.id
+        val matches = ArrayList<LocalPlaylistTrack>(1)
+        for (row in decodeTrackRows(json)) {
+            val id = row.trackId ?: continue
+            if (id != wanted.id && id != legacyId) continue
+            val track = row.toModel() ?: continue
+            if (track.trackKey == wanted) matches.add(track)
+        }
+        return if (matches.size > 1) mergeDuplicates(matches) else matches.firstOrNull()
+    }
+
+    private fun decodeTrackRows(json: String?): List<LocalTrackDto> {
+        val trimmed = json?.trim().orEmpty()
+        if (trimmed.isEmpty()) return emptyList()
+        if (trimmed.startsWith('[')) {
+            return runCatching {
                 gson.fromJson<List<LocalTrackDto>>(trimmed, trackListType)
-            }.getOrNull() ?: return emptyList()
-            return consolidate(rows.mapNotNull { it.toModel() })
+            }.getOrNull().orEmpty()
         }
         val env = runCatching {
             gson.fromJson(trimmed, PlaylistEnvelopeDto::class.java)
         }.getOrNull() ?: return emptyList()
         val version = env.schemaVersion
         if (version != null && version > SCHEMA_VERSION) return emptyList()
-        return consolidate(env.tracks.orEmpty().mapNotNull { it.toModel() })
+        return env.tracks.orEmpty()
     }
 
     // ------------------------------------------------------------- 映射 ----
@@ -197,19 +214,43 @@ object LocalPlaylistCodec {
         )
     }
 
-    private fun consolidate(tracks: List<LocalPlaylistTrack>): List<LocalPlaylistTrack> =
-        tracks.groupBy { it.trackKey }.values.map { group ->
-            if (group.size == 1) return@map group.single()
-            val deletedAt = group.filter { it.tombstoned }.maxOfOrNull { it.addedAt }
-            val manual = group.filter { it.origin == LocalTrackOrigin.LOCAL && !it.tombstoned }.maxByOrNull { it.addedAt }
-            val winner = manual ?: group.maxBy { it.addedAt }
-            winner.copy(
-                origin = if (group.any { it.origin == LocalTrackOrigin.LOCAL }) LocalTrackOrigin.LOCAL else winner.origin,
-                addedAt = group.maxOf { it.addedAt },
-                tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
-                song = winner.song ?: group.firstNotNullOfOrNull { it.song },
-            )
+    private fun consolidate(tracks: List<LocalPlaylistTrack>): List<LocalPlaylistTrack> {
+        if (tracks.size < 2) return tracks
+        val firstByKey = LinkedHashMap<TrackKey, LocalPlaylistTrack>()
+        val duplicates = HashMap<TrackKey, MutableList<LocalPlaylistTrack>>()
+        for (track in tracks) {
+            val key = track.trackKey
+            val first = firstByKey.putIfAbsent(key, track) ?: continue
+            duplicates.getOrPut(key) { arrayListOf(first) }.add(track)
         }
+        if (duplicates.isEmpty()) return tracks
+        for ((key, group) in duplicates) firstByKey[key] = mergeDuplicates(group)
+        return firstByKey.values.toList()
+    }
+
+    private fun mergeDuplicates(group: List<LocalPlaylistTrack>): LocalPlaylistTrack {
+        var latest = group.first()
+        var deletedAt: Long? = null
+        var manual: LocalPlaylistTrack? = null
+        var hasLocal = false
+        var firstSong: SongItem? = null
+        for (track in group) {
+            if (track.addedAt > latest.addedAt) latest = track
+            if (track.tombstoned && (deletedAt == null || track.addedAt > deletedAt)) deletedAt = track.addedAt
+            if (track.origin == LocalTrackOrigin.LOCAL) {
+                hasLocal = true
+                if (!track.tombstoned && (manual == null || track.addedAt > manual.addedAt)) manual = track
+            }
+            if (firstSong == null) firstSong = track.song
+        }
+        val winner = manual ?: latest
+        return winner.copy(
+            origin = if (hasLocal) LocalTrackOrigin.LOCAL else winner.origin,
+            addedAt = latest.addedAt,
+            tombstoned = deletedAt != null && (manual == null || manual.addedAt <= deletedAt),
+            song = winner.song ?: firstSong,
+        )
+    }
 
     private fun LocalPlaylistTrack.toDto(): LocalTrackDto = LocalTrackDto(
         source = trackKey.source.key,
@@ -231,7 +272,7 @@ object LocalPlaylistCodec {
             runCatching { gson.fromJson<SongItem>(it, songListType) }.getOrNull()
         }
         val canonicalId = if (MusicSource.fromKey(source) == MusicSource.BILIBILI)
-            com.takahashirinta.ncrust.source.SourceIds.migrateBiliAvPartition(tid, sourceId ?: payload?.sourceId) else tid
+            SourceIds.migrateBiliAvPartition(tid, sourceId ?: payload?.sourceId) else tid
         val key = TrackKey.of(source, canonicalId, sourceId ?: payload?.sourceId, mediaId ?: payload?.mediaId)
         return LocalPlaylistTrack(
             trackKey = key,

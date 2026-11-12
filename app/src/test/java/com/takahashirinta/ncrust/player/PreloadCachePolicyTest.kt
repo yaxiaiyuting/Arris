@@ -120,4 +120,27 @@ class PreloadCachePolicyTest {
         val fixed = entry(level = "standard", timestamp = now, expiresAtMs = null)
         assertFalse(PreloadCachePolicy.isFresh(fixed, "exhigh", now))
     }
+    @Test
+    fun `a prepared entry preserves the stream deadline and its requested tier`() {
+        val access = QualityAccessEvidence(accountRevision = 9L, playableLevel = "standard")
+        val prepared = PreloadCacheEntry(
+            url = "https://fixture.invalid/next.mp3",
+            actualLevel = "standard",
+            requestedLevel = "hires",
+            timestamp = 1_000L,
+            expiresAtMs = 62_000L,
+            levelFromFile = true,
+            qualityAccess = access,
+            resolvedRequestedLevel = "lossless",
+            accountRevision = 9L,
+        )
+        val resolved = prepared.asResult()
+        assertEquals(62_000L, resolved.expiresAtMs)
+        assertEquals("lossless", resolved.requestedLevel)
+        assertEquals(access, resolved.qualityAccess)
+        assertTrue(resolved.levelFromFile)
+        assertTrue(PreloadCachePolicy.isFresh(prepared, "hires", nowMs = 61_999L))
+        assertFalse(PreloadCachePolicy.isFresh(prepared, "hires", nowMs = 62_000L))
+    }
+
 }

@@ -15,10 +15,15 @@ import com.takahashirinta.ncrust.qq.*
 import com.takahashirinta.ncrust.source.*
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -48,7 +53,7 @@ class LibraryBoundaryRegressionTest {
     }
     private fun resetLibrary() {
         stopFlush()
-        listOf("cachedEntries", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob").forEach {
+        listOf("savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob").forEach {
             field(LibraryManager, it).set(LibraryManager, null)
         }
         field(LibraryManager, "likedIdCursor").setInt(LibraryManager, 0)
@@ -69,7 +74,6 @@ class LibraryBoundaryRegressionTest {
         resetLibrary()
         field(CookieManager, "app").set(CookieManager, null)
         (field(SongUrlFetcher, "transportCooldownUntil").get(SongUrlFetcher) as AtomicLong).set(0)
-        (field(SongUrlFetcher, "transportFailures").get(SongUrlFetcher) as MutableSet<*>).clear()
     }
     private fun intercept(owner: Any, lazyName: String, answer: (Request) -> String) {
         val delegate = field(owner, lazyName + "$" + "delegate").get(owner) as Lazy<*>
@@ -97,6 +101,22 @@ class LibraryBoundaryRegressionTest {
         assertEquals(setOf(101L, 202L), remaining.toSet())
     }
 
+    @Test fun coldSingleAndBatchWritesPreserveUnreadLikedIds() {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", "[101,null,202]").commit()
+
+        assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(303)))
+        stopFlush()
+        writeSnapshot()
+        assertEquals("[303,101,null,202]", prefs.getString("liked_ids", null))
+
+        resetLibrary()
+        LibraryManager.saveSongs(ctx, listOf(song(404), song(505)))
+        stopFlush()
+        writeSnapshot()
+        assertEquals("[404,505,303,101,null,202]", prefs.getString("liked_ids", null))
+    }
+
     @Test fun firstAlbumMutationUpdatesTrueSource() {
         val p = ctx.getSharedPreferences("ncrust_library", 0)
         p.edit().putString("saved_albums", SavedAlbumCodec.encode(listOf(album(101)))).commit()
@@ -104,6 +124,133 @@ class LibraryBoundaryRegressionTest {
         writeSnapshot()
         assertEquals(listOf(202L, 101L), LibraryManager.getSavedAlbums(ctx).map { it.albumId })
         assertEquals(listOf(202L, 101L), SavedAlbumCodec.decode(p.getString("saved_albums", null)).map { it.albumId })
+    }
+
+    @Test fun albumEditsReuseSongAndIdEncodingUntilThoseTablesChange() {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        val ids = "[101,null,202]"
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", ids).commit()
+        LibraryManager.getSavedSongs(ctx)
+        LibraryManager.getLikedSongIds(ctx)
+
+        LibraryManager.subscribeAlbum(ctx, album(303))
+        stopFlush()
+        writeSnapshot()
+        val firstSongWrite = prefs.getString("saved_songs", null)
+        val firstIdsWrite = prefs.getString("liked_ids", null)
+        val firstAlbums = LibraryManager.getSavedAlbums(ctx)
+        assertEquals(saved, firstSongWrite)
+        assertEquals(ids, firstIdsWrite)
+
+        LibraryManager.subscribeAlbum(ctx, album(404))
+        stopFlush()
+        writeSnapshot()
+        assertSame(firstSongWrite, prefs.getString("saved_songs", null))
+        assertSame(firstIdsWrite, prefs.getString("liked_ids", null))
+        val albumWrite = prefs.getString("saved_albums", null)
+        val albums = LibraryManager.getSavedAlbums(ctx)
+        assertEquals(listOf(303L), firstAlbums.map { it.albumId })
+        assertEquals(listOf(404L, 303L), albums.map { it.albumId })
+
+        assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(505)))
+        runBlocking { (field(LibraryManager, "flushJob").get(LibraryManager) as Job).join() }
+        val updated = SavedSongCodec.decode(prefs.getString("saved_songs", null))
+        assertEquals(listOf(505L, 101L), updated.map { it.trackKey.id })
+        assertEquals("[505,101,null,202]", prefs.getString("liked_ids", null))
+        assertSame(albumWrite, prefs.getString("saved_albums", null))
+        assertSame(albums, LibraryManager.getSavedAlbums(ctx))
+    }
+
+    @Test fun playAllSkipsNullSlotsInLegacyLikedIds() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", "[101,null,101]").commit()
+
+        val result = LibraryManager.loadAllLikedSongsResult(ctx)
+
+        assertEquals(listOf(101L), result.songs.map { it.id })
+        assertEquals(1, result.cloudCount)
+        assertTrue(result.missingCloudIds.isEmpty())
+    }
+
+    @Test fun playAllHonorsRemovalsWhileSongDetailsAreInFlight() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", "[101,202,303]").commit()
+        val requested = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            requested.complete(Unit)
+            check(release.await(5, TimeUnit.SECONDS))
+            """{"code":200,"songs":[{"id":202,"name":"fixture-202","dt":200000},{"id":303,"name":"fixture-303","dt":200000}]}"""
+        }
+
+        val loading = async { LibraryManager.loadAllLikedSongsResult(ctx) }
+        try {
+            withTimeout(5_000) { requested.await() }
+            assertTrue(LibraryManager.removeSong(ctx, 101))
+            assertTrue(LibraryManager.removeSong(ctx, 202))
+        } finally {
+            release.countDown()
+        }
+
+        val result = loading.await()
+        assertEquals(listOf(303L), result.songs.map { it.id })
+        assertEquals(1, result.cloudCount)
+        assertTrue(result.missingCloudIds.isEmpty())
+        assertEquals(listOf(303L), LibraryManager.getSavedSongs(ctx).map { it.id })
+        assertFalse(LibraryManager.isSongSaved(ctx, 202))
+    }
+
+    @Test fun likedPaginationRetriesFailedDetailsAndConsumesConfirmedEmptyPage() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", "[101,202]").commit()
+        val attempts = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            if (attempts.incrementAndGet() <= 2) throw IOException("fixture offline")
+            """{"code":200,"songs":[]}"""
+        }
+
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(2, attempts.get())
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(3, attempts.get())
+        assertTrue(LibraryManager.loadMoreLikedSongs(ctx).isEmpty())
+        assertEquals(3, attempts.get())
+    }
+
+    @Test fun likedPaginationDiscardsPageAfterRemovalAndRetriesAtUnreadPosition() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", (101L..151L).joinToString(",", "[", "]")).commit()
+        val requested = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val attempts = AtomicInteger()
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            if (attempts.incrementAndGet() == 1) {
+                requested.complete(Unit)
+                check(release.await(5, TimeUnit.SECONDS))
+                """{"code":200,"songs":[{"id":101,"name":"fixture-101","dt":200000}]}"""
+            } else {
+                """{"code":200,"songs":[{"id":102,"name":"fixture-102","dt":200000},{"id":151,"name":"fixture-151","dt":200000}]}"""
+            }
+        }
+
+        val loading = async { LibraryManager.loadMoreLikedSongs(ctx) }
+        try {
+            withTimeout(5_000) { requested.await() }
+            assertTrue(LibraryManager.removeSong(ctx, 101))
+        } finally {
+            release.countDown()
+        }
+
+        assertTrue(loading.await().isEmpty())
+        assertFalse(LibraryManager.isSongSaved(ctx, 101))
+        assertEquals(listOf(102L, 151L), LibraryManager.loadMoreLikedSongs(ctx).map { it.id })
+        assertEquals(2, attempts.get())
     }
 
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {

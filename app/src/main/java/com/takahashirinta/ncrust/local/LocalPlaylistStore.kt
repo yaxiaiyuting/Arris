@@ -12,6 +12,9 @@ package com.takahashirinta.ncrust.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.takahashirinta.ncrust.source.PlaylistKey
+import com.takahashirinta.ncrust.source.TrackKey
+import java.util.Collections
 
 /**
  * 本地歌单的持久化（v2.3.0 · B）。
@@ -62,7 +65,7 @@ object LocalPlaylistStore {
     internal const val PREFIX_TRACKS = "tracks:"
 
     /** 曲目表的 key：`tracks:<source>:<ownerId>:<playlistId>`。 */
-    internal fun tracksKey(key: com.takahashirinta.ncrust.source.PlaylistKey): String =
+    internal fun tracksKey(key: PlaylistKey): String =
         PREFIX_TRACKS + key.tag
 
     private fun prefs(context: Context): SharedPreferences =
@@ -70,8 +73,20 @@ object LocalPlaylistStore {
 
     // -------------------------------------------------------------- 歌单列表 ----
 
-    fun readPlaylists(context: Context): List<LocalPlaylist> =
-        LocalPlaylistCodec.decodePlaylists(prefs(context).getString(KEY_PLAYLISTS, null))
+    private class PlaylistSnapshot(val json: String, val playlists: List<LocalPlaylist>)
+
+    @Volatile private var playlistSnapshot: PlaylistSnapshot? = null
+
+    fun readPlaylists(context: Context): List<LocalPlaylist> = readPlaylists(prefs(context))
+
+    private fun readPlaylists(storage: SharedPreferences): List<LocalPlaylist> {
+        val json = storage.getString(KEY_PLAYLISTS, null) ?: return emptyList()
+        val previous = playlistSnapshot
+        if (previous?.json == json) return previous.playlists
+        val playlists = Collections.unmodifiableList(LocalPlaylistCodec.decodePlaylists(json))
+        playlistSnapshot = PlaylistSnapshot(json, playlists)
+        return playlists
+    }
 
     /**
      * 覆盖写歌单列表。超过 [LocalPlaylistSync.MAX_PLAYLISTS] 时**保留最近更新的那些**
@@ -80,31 +95,66 @@ object LocalPlaylistStore {
      */
     @Synchronized
     fun writePlaylists(context: Context, playlists: List<LocalPlaylist>): Boolean {
-        val kept = if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) {
-            playlists
-        } else {
-            playlists.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
-        }
-        val dropped = playlists.filterNot { p -> kept.any { it.key == p.key } }
+        val kept = boundedPlaylists(playlists)
+        val changes = playlistChanges(playlists, kept)
+        return commitValues(prefs(context), changes)
+    }
+
+    private fun boundedPlaylists(playlists: List<LocalPlaylist>): List<LocalPlaylist> =
+        if (playlists.size <= LocalPlaylistSync.MAX_PLAYLISTS) playlists
+        else playlists.sortedWith(newestFirst).take(LocalPlaylistSync.MAX_PLAYLISTS)
+
+    private val newestFirst = Comparator<LocalPlaylist> { first, second ->
+        second.updatedAt.compareTo(first.updatedAt)
+    }
+
+    private fun playlistChanges(
+        playlists: List<LocalPlaylist>,
+        kept: List<LocalPlaylist>,
+    ): MutableMap<String, String?> {
         val changes = linkedMapOf<String, String?>(
             KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept),
         )
-        dropped.forEach { changes[tracksKey(it.key)] = null }
-        // 返回值是「**真的落盘了**」的唯一凭据。旧实现丢掉 commit 结果，于是新建歌单在
-        // 磁盘写失败时照样被当成创建成功（H09）：本进程能读到、冷启动就没了。
-        return commitValues(prefs(context), changes)
+        if (kept !== playlists) {
+            val keptKeys = kept.mapTo(HashSet(kept.size * 2)) { it.key }
+            for (playlist in playlists) {
+                if (playlist.key !in keptKeys) changes[tracksKey(playlist.key)] = null
+            }
+        }
+        return changes
     }
 
     // ---------------------------------------------------------------- 曲目 ----
 
-    fun readTracks(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): List<LocalPlaylistTrack> =
-        LocalPlaylistCodec.decodeTracks(prefs(context).getString(tracksKey(key), null))
+    private class TrackSnapshot(val json: String, val tracks: List<LocalPlaylistTrack>)
+
+    @Volatile private var trackSnapshot: TrackSnapshot? = null
+
+    fun readTracks(context: Context, key: PlaylistKey): List<LocalPlaylistTrack> {
+        val json = prefs(context).getString(tracksKey(key), null) ?: return emptyList()
+        val previous = trackSnapshot
+        if (previous?.json == json) return previous.tracks
+
+        val tracks = Collections.unmodifiableList(LocalPlaylistCodec.decodeTracks(json))
+        // 只保留最近解码的一张正常大小的歌单，读取超限的旧数据时仍返回完整曲目。
+        if (tracks.size <= LocalPlaylistSync.MAX_TRACKS_PER_PLAYLIST) {
+            trackSnapshot = TrackSnapshot(json, tracks)
+        }
+        return tracks
+    }
+
+    internal fun findTrack(context: Context, playlist: PlaylistKey, track: TrackKey): LocalPlaylistTrack? {
+        val json = prefs(context).getString(tracksKey(playlist), null) ?: return null
+        val previous = trackSnapshot
+        if (previous?.json == json) return previous.tracks.firstOrNull { it.trackKey == track }
+        return LocalPlaylistCodec.findTrack(json, track)
+    }
 
     /** 覆盖写一张歌单的曲目表（写入前先过容量闸）。 */
     @Synchronized
     fun writeTracks(
         context: Context,
-        key: com.takahashirinta.ncrust.source.PlaylistKey,
+        key: PlaylistKey,
         tracks: List<LocalPlaylistTrack>,
     ) {
         val bounded = LocalPlaylistSync.trimToLimit(tracks)
@@ -115,7 +165,7 @@ object LocalPlaylistStore {
 
     /** 删掉一张歌单的曲目表（删除歌单 / 列表裁剪时用）。 */
     @Synchronized
-    fun removeTracks(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey) {
+    fun removeTracks(context: Context, key: PlaylistKey) {
         prefs(context).edit().remove(tracksKey(key)).commit()
     }
 
@@ -185,20 +235,15 @@ object LocalPlaylistStore {
     ): LocalPlaylist? {
         if (expectedRevision != null && expectedRevision != revision) return null
         val updated = playlist.copy(updatedAt = now)
-        val list = LocalPlaylistCodec.decodePlaylists(storage.getString(KEY_PLAYLISTS, null))
+        val list = readPlaylists(storage)
         val idx = list.indexOfFirst { it.key == updated.key }
         // 同步路径禁止"借更新接口隐式重建"：期间被删掉的歌单不允许复活。
         if (requireExisting && idx < 0) return null
         val next = if (idx < 0) list + updated else list.toMutableList().also { it[idx] = updated }
-        val kept = if (next.size <= LocalPlaylistSync.MAX_PLAYLISTS) next
-            else next.sortedByDescending { it.updatedAt }.take(LocalPlaylistSync.MAX_PLAYLISTS)
-        if (kept.none { it.key == updated.key }) return null
-        val dropped = next.filterNot { item -> kept.any { it.key == item.key } }
-        val changes = linkedMapOf<String, String?>(KEY_PLAYLISTS to LocalPlaylistCodec.encodePlaylists(kept))
-        dropped.forEach { changes[tracksKey(it.key)] = null }
-        if (kept.any { it.key == updated.key }) {
-            changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
-        }
+        val kept = boundedPlaylists(next)
+        if (kept !== next && kept.none { it.key == updated.key }) return null
+        val changes = playlistChanges(next, kept)
+        changes[tracksKey(updated.key)] = LocalPlaylistCodec.encodeTracks(LocalPlaylistSync.trimToLimit(tracks))
         if (!commitValues(storage, changes)) return null
         revision++
         return updated
@@ -231,11 +276,10 @@ object LocalPlaylistStore {
      * 与「清空歌单」不同：删除会连 tombstone 一起丢掉（[LocalPlaylistSync.clearAll] 之后再删），
      * 也就是**放弃这个歌单的同步来源关联**。
      *
-     * @return true = 歌单列表的提交成功。曲目表的删除是独立的一条 key，它的 commit 结果
-     *   不单独上报（删歌单失败时列表仍在，用户可以重试；`tracks:` 残留是惰性的，读不到）。
+     * @return 歌单和曲目是否一同提交成功。失败时恢复原值。
      */
     @Synchronized
-    fun deletePlaylist(context: Context, key: com.takahashirinta.ncrust.source.PlaylistKey): Boolean {
+    fun deletePlaylist(context: Context, key: PlaylistKey): Boolean {
         revision++
         val list = readPlaylists(context)
         return commitValues(prefs(context), linkedMapOf(
@@ -255,7 +299,7 @@ object LocalPlaylistStore {
     @Synchronized
     fun createPlaylist(
         context: Context,
-        key: com.takahashirinta.ncrust.source.PlaylistKey,
+        key: PlaylistKey,
         name: String,
         now: Long,
     ): LocalPlaylist? {

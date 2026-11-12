@@ -95,125 +95,69 @@ data class RankedSong<T>(
     val availability: TrackAvailability = TrackAvailability.UNKNOWN,
 )
 
-/**
- * 聚合搜索的排序（v2.1.4）。
- *
- * ## 规则（按用户给的语义直接落地）
- *
- * | 用户有会员的音源 | 结果顺序 |
- * |---|---|
- * | 只有 QQ | QQ 的会员专享 → QQ 的其余 → ncm 的会员专享 → ncm 的其余 |
- * | 只有 ncm | ncm 的会员专享 → ncm 的其余 → QQ 的会员专享 → QQ 的其余 |
- * | 两家都有 | **交错（拉链式）**：两家的会员专享轮流在前，然后是两家的其余 |
- * | 都没有 / 都未登录 | **保持既有顺序不变**（ncm 在前）—— 这个功能不该改变免费用户看到的顺序 |
- *
- * ## 为什么「两家都有」是交错而不是「都堆在前面」
- *
- * 用户原话是「如果两个都有，就同时给出来」。堆成「ncm 会员曲 → QQ 会员曲 → 其余」
- * 会让排在最前的那一家永远占满首屏；交错才能让两家的会员曲**同时**出现在前面，
- * 而且交错是稳定、可预测的（同一次搜索的两次发布不会出现不同顺序）。
- *
- * ## 两个刻意的不变量
- *
- * 1. **只在「同一档」内部重排**（会员专享一组、其余一组），组内顺序原样保留 ——
- *    服务端算出来的相关性排序不会被我们重新洗一遍。
- * 2. **两家都没会员时一个字节都不改**。本功能是给会员的便利，不是给所有人的改动；
- *    免费用户的搜索结果顺序必须与 v2.1.3 完全一致。
- */
+/** 聚合搜索保持各来源内的相关性顺序，按会员状态排列，再把明确无版权的结果移到组尾。 */
 object SearchRanking {
-
     fun <T> rank(
         netease: List<RankedSong<T>>,
         qq: List<RankedSong<T>>,
         neteaseVip: Boolean,
         qqVip: Boolean,
     ): List<RankedSong<T>> {
-        if (!neteaseVip && !qqVip) return netease + qq
-
-        // 只有「有会员的那一家」的会员专享会被挑出来；另一家即使有会员专享也不动它
-        // （用户没有那家的会员，推它的会员曲等于推一首点不开的歌）。
-        val nGated = if (neteaseVip) netease.filter { it.access.isGated } else emptyList()
-        val qGated = if (qqVip) qq.filter { it.access.isGated } else emptyList()
-        val nRest = netease - nGated.toSet()
-        val qRest = qq - qGated.toSet()
-
-        if (neteaseVip && !qqVip) return nGated + nRest + qq
-        if (qqVip && !neteaseVip) return qGated + qRest + netease
-        return interleave(nGated, qGated) + interleave(nRest, qRest)
-    }
-
-    /**
-     * 拉链式交错：`[a1, b1, a2, b2, …]`，多出来的一截原样接在尾部。
-     *
-     * 长度不等时不做特殊处理 —— 谁长谁把尾巴接上，顺序仍然稳定可预测。
-     */
-    private fun <T> interleave(a: List<T>, b: List<T>): List<T> {
-        if (a.isEmpty()) return b
-        if (b.isEmpty()) return a
-        val out = ArrayList<T>(a.size + b.size)
-        val n = maxOf(a.size, b.size)
-        for (i in 0 until n) {
-            if (i < a.size) out.add(a[i])
-            if (i < b.size) out.add(b[i])
+        if (!neteaseVip && !qqVip) {
+            if (netease.isEmpty()) return qq
+            if (qq.isEmpty()) return netease
+            return netease + qq
         }
-        return out
+
+        val result = ArrayList<RankedSong<T>>(netease.size + qq.size)
+        if (neteaseVip && qqVip) {
+            appendInterleaved(result, netease, qq, gated = true)
+            appendInterleaved(result, netease, qq, gated = false)
+        } else {
+            val preferred = if (neteaseVip) netease else qq
+            val other = if (neteaseVip) qq else netease
+            for (song in preferred) if (song.access.isGated) result.add(song)
+            for (song in preferred) if (!song.access.isGated) result.add(song)
+            result.addAll(other)
+        }
+        return result
     }
 
-    /**
-     * v2.3.0 · C：把**服务端显式声明无版权**的行降到本组末尾，其余顺序**一个字节不改**。
-     *
-     * ## 为什么只降 [TrackAvailability.NO_COPYRIGHT] 这一档
-     *
-     * 任务书 5.3 的原话是「同一首歌两源都有时，优先展示有版权的音源」。探针结论是
-     * **这句话的前提不成立**：两个平台各自独立编号，接口里没有任何跨源标识
-     * （无 ISRC、无指纹，见 `probe-source-attribution.md` §1），所以程序上**无法**知道
-     * 「这两行是同一首歌」。既然配不成对，「优先展示有版权的那个源」就没有可执行的落点。
-     *
-     * 退而求其次时**不能**粗暴地按 `isPlayable` 全量重排：搜索「周杰伦」时 ncm 前排
-     * 几乎全是 `fee=1`（无版权/VIP），全量重排会把一堆**翻唱与 Live** 顶到最前面，
-     * 相关性排序被我们洗掉，用户更难找到他要的那首。那是**负收益**。
-     *
-     * 所以只做一件收益为正、风险为零的事：**服务端自己说「这条没版权、我给你换个版本」的行**
-     * （实测整池 591 条里只有 2 条，0.3%）沉到本组末尾。它有三个好性质：
-     *
-     * 1. **稳定分区**（[List.partition] 保序）⇒ 同档内服务端相关性顺序原样保留；
-     * 2. **只降不升** ⇒ 绝不会把冷门结果顶到精确匹配前面；
-     * 3. 只作用于**同一音源组内部** ⇒ 不引入任何跨源行为（铁律：不做跨源合并）。
-     *
-     * [TrackAvailability.PLAYABLE] 与 [TrackAvailability.MEMBER_ONLY] / [UNKNOWN]
-     * **一律不参与重排**：前者是「确证能播」，但把它提前同样会洗掉相关性排序；
-     * 后两者本来就不可靠（`st == -1` 那一档 15/30 是能播的）。
-     */
+    private fun <T> appendInterleaved(
+        out: MutableList<RankedSong<T>>,
+        left: List<RankedSong<T>>,
+        right: List<RankedSong<T>>,
+        gated: Boolean,
+    ) {
+        val leftRows = left.iterator()
+        val rightRows = right.iterator()
+        while (true) {
+            val first = leftRows.nextWithAccess(gated)
+            val second = rightRows.nextWithAccess(gated)
+            if (first == null && second == null) return
+            if (first != null) out.add(first)
+            if (second != null) out.add(second)
+        }
+    }
+
+    private fun <T> Iterator<RankedSong<T>>.nextWithAccess(gated: Boolean): RankedSong<T>? {
+        while (hasNext()) {
+            val song = next()
+            if (song.access.isGated == gated) return song
+        }
+        return null
+    }
+
+    /** 只移动服务端明确标为无版权的行。各部分的原相对顺序保留。 */
     fun <T> demoteNoCopyright(group: List<RankedSong<T>>): List<RankedSong<T>> {
         if (group.none { it.availability == TrackAvailability.NO_COPYRIGHT }) return group
-        val (bad, good) = group.partition { it.availability == TrackAvailability.NO_COPYRIGHT }
-        return good + bad
+        val result = ArrayList<RankedSong<T>>(group.size)
+        for (song in group) if (song.availability != TrackAvailability.NO_COPYRIGHT) result.add(song)
+        for (song in group) if (song.availability == TrackAvailability.NO_COPYRIGHT) result.add(song)
+        return result
     }
 
-    /**
-     * v2.3.0 · C：在 [rank] 之上叠加重排。
-     *
-     * 两件事**分别作用于不同的层**，互不干扰：
-     * - [rank] 决定**两个音源之间**的顺序（会员买在哪家，哪家先出）；
-     * - [demoteNoCopyright] 只决定**同一音源组内部**无版权行的位置。
-     */
-    /**
-     * v3.1.0 · B：**三源**版本。B 站的结果**追加在最后**，前两源的顺序一个字节不改。
-     *
-     * ## 为什么 B 站不参与 [rank] 的会员交错
-     *
-     * [rank] 的全部依据是「用户买在哪一家的会员」——B 站音源在本版**没有登录态**
-     * （匿名可用，见 `bili-research/bili-auth.md`），既没有会员信号，也没有
-     * `TrackAccess` 的判据（音频区/视频搜索都不返回版权字段）。把它塞进交错里
-     * 只会让「有会员的那一家先出」这条规则变得不再可预测。
-     *
-     * ## 为什么是「追加」而不是「另起一屏」
-     *
-     * 用户报告的原始诉求是「能搜到 B 站的东西」并且「按音源归属标注、可筛选」。
-     * 追加 + 行上的音源角标 + 统计行的第三段（`B站 5 首`）三件事一起，
-     * 既让 B 站可见，又让**关掉 B 站开关时整张表与 v3.0.0 逐字相同**
-     * （`bili` 为空时直接返回两源结果，连一次 `demoteNoCopyright` 都不多做）。
-     */
+    /** B 站在网易云和 QQ 的结果之后单独排列。 */
     fun <T> order(
         netease: List<RankedSong<T>>,
         qq: List<RankedSong<T>>,
@@ -221,11 +165,8 @@ object SearchRanking {
         neteaseVip: Boolean,
         qqVip: Boolean,
     ): List<RankedSong<T>> {
-        val two = order(netease, qq, neteaseVip, qqVip)
-        if (bili.isEmpty()) return two
-        // B 站内部仍然按无版权沉底（虽然目前恒为 UNKNOWN ⇒ 这是个恒等变换，
-        // 写出来是为了「将来 B 站有版权字段时不需要再想一遍」）。
-        return two + demoteNoCopyright(bili)
+        val main = order(netease, qq, neteaseVip, qqVip)
+        return if (bili.isEmpty()) main else main + demoteNoCopyright(bili)
     }
 
     fun <T> order(
@@ -233,13 +174,5 @@ object SearchRanking {
         qq: List<RankedSong<T>>,
         neteaseVip: Boolean,
         qqVip: Boolean,
-    ): List<RankedSong<T>> {
-        val ranked = rank(netease, qq, neteaseVip, qqVip)
-        if (ranked.none { it.availability == TrackAvailability.NO_COPYRIGHT }) return ranked
-        // 交错之后两个源的行是混着的，所以按 source 分组降级会改变跨源顺序 ——
-        // 这里改用「整体稳定分区」：无版权的行沉到**整张表**末尾。
-        // 之所以敢这么做：无版权的行本来就该在最后，而它是 0.3% 的少数，
-        // 沉底不会改变其余任何两行的相对顺序。
-        return demoteNoCopyright(ranked)
-    }
+    ): List<RankedSong<T>> = demoteNoCopyright(rank(netease, qq, neteaseVip, qqVip))
 }

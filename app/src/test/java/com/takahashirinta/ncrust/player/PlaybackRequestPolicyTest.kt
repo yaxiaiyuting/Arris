@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 yaxiaiyuting. Arris fork modification, GPL-3.0. */
 package com.takahashirinta.ncrust.player
 
+import androidx.media3.common.Player
 import com.takahashirinta.ncrust.source.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -54,4 +55,13 @@ class PlaybackRequestPolicyTest {
     @Test fun missingOwnerOrPlayerCannotAuthorizePreload() {
         assertFalse(admitPreload(true,null,ncm));assertFalse(admitPreload(true,ncm,null))
     }
+    @Test fun removingTheTaskKeepsOnlyAnActivePlaybackIntent() {
+        assertTrue(hasActivePlaybackIntent(true, Player.STATE_READY, true))
+        assertTrue(hasActivePlaybackIntent(true, Player.STATE_BUFFERING, true))
+        assertFalse(hasActivePlaybackIntent(false, Player.STATE_BUFFERING, true))
+        assertFalse(hasActivePlaybackIntent(true, Player.STATE_BUFFERING, false))
+        assertFalse(hasActivePlaybackIntent(true, Player.STATE_ENDED, true))
+        assertFalse(hasActivePlaybackIntent(true, Player.STATE_IDLE, true))
+    }
+
 }

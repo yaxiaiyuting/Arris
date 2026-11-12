@@ -11,73 +11,13 @@ package com.takahashirinta.ncrust.lyric
 import kotlin.math.roundToLong
 
 /**
- * AMLL TTML → [TtmlDoc] 的**纯 Kotlin 扫描器**（v1.9.0）。
+ * 纯 Kotlin 的 AMLL TTML 扫描器，线上和 JVM 测试共用同一套容错行为。
  *
- * ## 为什么手写，而不是 android.util.Xml / XmlPullParser / kxml2
+ * 行内空白按文档顺序保留，只裁整行首尾。叶子元素提供逐字区间，译文和注音按父行时间
+ * 进入独立轨道。背景人声留在正文里，时间倒退的词只参与整行显示。
  *
- * 要求是「零依赖 + 无 Android 框架依赖 + JVM 可单测」三条同时成立，而这三条把现成的 XML 解析器
- * 全部排除了：
- *
- * - `android.util.Xml` / `XmlPullParser` 是 **Android 框架 API**。JVM 单测里它们只是抛异常的桩，
- *   `app/build.gradle.kts` 的 `unitTests.isReturnDefaultValues = true` 也只是让桩返回默认值，
- *   并不会真的解析 —— 用它就等于「线上能跑、单测跑不了」。
- * - kxml2 一类的纯 JVM 解析器能进单测，但那是**另一份实现**：单测验的是 kxml2 的行为，线上跑的是
- *   Android 框架的 XmlPullParser，两者对本任务书专门要求的容错输入（截断、多余结束标签、裸 `&`）
- *   处理并不一致，保真度反而更差。
- *
- * 所以这里手写：**同一份代码既被测又上线**。TTML 用到的 XML 子集很小（元素、属性、文本、CDATA、
- * 注释、实体），不需要通用 XML 的全部能力。
- *
- * ## 契约
- * - 输入是 AMLL TTML DB 的 `.ttml` 原文（UTF-8 字符串），输出 [TtmlDoc]；
- * - **绝不抛异常**：空串 / 非 XML / 结构被截断 / 超长（> [MAX_INPUT_CHARS]）→ `null`；
- *   一份文档里一行歌词都没有 → `null`（调用方据此回退到下一级歌词源）；
- * - 单个 `<p>` 的内容坏掉（`begin` 解析不出、整行只有空白）→ **只跳过这一行**，其余照常解析。
- *
- * ## 与渲染层的约定（[LrcLine] / [LrcWord] 的语义）
- * - `<p>` → 一行 [LrcLine]，叶子 `<span>` → 一个 [LrcWord]，两者复用既有模型，渲染层零改动。
- * - **行文本 = `<p>` 内所有文本节点的拼接，含 span 之间的裸空白**，只裁整行首尾。
- *   实测依据：ncm 自己的 LRC 就是 `[00:22.290]都 是勇敢的`（中间有空格），与 TTML 拼接结果逐字
- *   相同；吞掉这个空白会让 [LrcWord.charStart] 与行文本错位，逐字高亮直接错帧。
- *   （Kotlin 的 `isWhitespace` 认全角空格 U+3000 与 NBSP，行内空白一律原样保留。）
- * - **字符区间**以「行内已累积字符数」为游标：词的 `charStart` = 进入该 span 时的游标，
- *   `charEndExclusive` = `charStart` + 该 span 的直接文本长度。因此**容器型 span 不建词**
- *   （内部还有子元素的，实测只有 `ttm:role="x-bg"`）：它自己的「直接文本长度」对它并不成立 ——
- *   《孤勇者》L51 的 x-bg 容器直接文本只是两个子 span 之间那一个空格，照长度圈区间会圈到子 span
- *   的字符上。容器只递归子节点，子 span 照常成词。行内**字符区间单调不重叠**（与 yrc 对齐后的
- *   词同一不变量）。
- * - **`ttm:role="x-bg"`（背景人声）本版不单独建模**（规则 4 的取舍）：它的文本按普通词处理，
- *   于是背景人声与主唱混在同一行 —— 这是有意的，收益是背景人声也能逐字高亮。
- *   代价是**背景人声的时间经常与文本顺序相反**（实测《孤勇者》L51：主唱 去/吗/去/啊/以/最卑微/的/梦
- *   唱到 03:44.938，而文本序排在末尾的背景词 `(去吗` 是 03:42.019）。这种**时间倒退**的词会被
- *   [buildLine] 的单调过滤丢弃（行文本仍完整保留），所以 [LrcLine.words] 同时满足两条不变量：
- *   **字符区间沿文本顺序单调不重叠**，且 **`startMs` 沿文本顺序单调不减**。
- *   这两条都是给冻结的渲染层（`SweepTrack.build` 按 startMs 排序）兜底的 —— 少了任何一条，
- *   逐字扫过都会倒着扫。
- * - **`ttm:role="x-translation"` / `"x-roman"`** 是 `<p>` 的子元素（也可能嵌在 x-bg 里），
- *   整棵子树既不进入该行文本也不建词，而是各自升成独立的**行级**轨道
- *   （[TtmlDoc.translations] / [TtmlDoc.romans]）。行级轨道的时间戳取**父 `<p>` 的 begin**，
- *   这样调用方能直接按时间与 [TtmlDoc.lines] 配对（语义同 ncm 的 tlyric）。
- *   轨道**不带逐字词**：实测《海阔天空》347230 的 x-roman 连 begin/end 都没有（`<span
- *   ttm:role="x-roman">gam tin ngo  ...</span>`），给逐字只会是假信息。
- * - **`end` 缺失时**：行 [LrcLine.endMs] = `null`；词时长依次用「下一个词 begin − 本词 begin」、
- *   「行 end − 本词 begin」兜底，都没有则 0。
- * - 词 `begin` 缺失时接在上一词的 end 之后、再退回行首；词 `begin` 存在但解析不出，则该词
- *   不建（它的文本仍留在行里，不影响其余词）。
- *
- * ## 时间表达式
- * `MM:SS.fff`（分钟允许 1 位，实测《我记得》1974443814 用 `1:01.110`）、`HH:MM:SS.fff`、
- * offset-time（`12.3s` / `1500ms` / `10f` / `2m` / `1.5h`），另外**额外**接受裸数字（按秒）：
- * 同一个真实文件 1974443814 前 7 行用 `begin="28.571"`，与 ncm LRC 的 `[00:28.15]我带着比身体重的行李`
- * 逐句对齐 ⇒ 裸数字就是秒。帧数按 TTML1 默认 30 fps 换算（根元素带 `ttp:frameRate` 时以它为准）。
- * 小数秒用 roundToLong 而不是截断 —— `22.402 * 1000` 在 double 下是 22401.999…，截断会差 1 ms。
- *
- * ## 容错（规则 6/7）
- * 命名实体（`&amp; &lt; &gt; &quot; &apos;`）、十进制/十六进制数字实体、CDATA、注释、自闭合标签、
- * 单/双引号属性、任意属性顺序、`<p>` 直接挂在 `<body>` 下（或没有 `<div>`）、命名空间前缀任意
- * （**一律按 localName 匹配**）都能处理；未定义实体与非法码点原样保留。
- * 结构不完整（读到结尾还有未闭合元素 ⇒ 被截断）整份返回 `null`；多余的结束标签、未知元素、
- * 未知属性一律忽略。元素总数与嵌套深度都有上限，恶意输入不会吃光内存或爆栈。
+ * 帧时间按文档帧率或 30 fps 解释，裸数字按秒解释。坏行单独跳过。空、超长或截断的文档
+ * 返回 null，调用方可继续尝试其他歌词源。未知实体保留原文。
  */
 internal object TtmlScanner {
 
@@ -98,6 +38,7 @@ internal object TtmlScanner {
 
     private const val ROLE_TRANSLATION = "x-translation"
     private const val ROLE_ROMAN = "x-roman"
+    private val byTime = Comparator<LrcLine> { first, second -> first.timeMs.compareTo(second.timeMs) }
 
     /**
      * 解析 TTML 原文，失败返回 `null`。
@@ -124,7 +65,7 @@ internal object TtmlScanner {
         val meta = readMeta(root)
 
         // <p> 只可能出现在 <body> 下（含没有 <div> 包裹的形态）；没有 <body> 时退回全树扫描。
-        val scope = collectElements(root, "body").firstOrNull() ?: root
+        val scope = collectElements(root, "body", limit = 1).firstOrNull() ?: root
         val paragraphs = collectElements(scope, "p")
 
         val lines = ArrayList<LrcLine>(paragraphs.size)
@@ -142,11 +83,14 @@ internal object TtmlScanner {
         }
         if (lines.isEmpty()) return null
 
-        // 文档顺序通常就是时间顺序；排序是稳定排序，同刻行保持文档顺序。
+        // 原地稳定排序，同刻行保持文档顺序。
+        lines.sortWith(byTime)
+        translations.sortWith(byTime)
+        romans.sortWith(byTime)
         return TtmlDoc(
-            lines = lines.sortedBy { it.timeMs },
-            translations = translations.sortedBy { it.timeMs },
-            romans = romans.sortedBy { it.timeMs },
+            lines = lines,
+            translations = translations,
+            romans = romans,
             meta = meta,
         )
     }
@@ -171,43 +115,31 @@ internal object TtmlScanner {
         val to = raw.indexOfLast { !it.isWhitespace() } + 1
         val text = raw.substring(from, to)
 
-        // 行首尾裁掉多少，词的区间就整体左移多少；被裁掉的词直接丢弃。
-        val kept = ArrayList<WordDraft>(drafts.size)
-        for (d in drafts) {
-            val cs = (d.charStart - from).coerceAtLeast(0)
-            val ce = (d.charEndExclusive - from).coerceAtMost(text.length)
-            if (ce > cs) kept.add(WordDraft(d.startMs, d.endMs, cs, ce))
-        }
-        // **词表必须满足「文本顺序 == 时间顺序」**，这是与渲染层之间的硬不变量：
-        // 渲染路径里的 `SweepTrack.build` 会做
-        // `words.sortedWith(compareBy({ it.startMs }, { it.charStart }))`（SweepTrack.kt:244），
-        // 而那条路径**本版冻结、一行不许改**。只要有一个词的开始时间早于文本序在它前面的词，
-        // 排序就会把它的字符区间搬到前面 —— 扫过光标表现为**倒着扫**。
-        //
-        // 现实里唯一的来源是 `ttm:role="x-bg"`（背景人声）：它的子 span 按文本顺序进本行，
-        // 但背景人声的时间经常落在主唱之后、却排在文本末尾。实测《孤勇者》L51 —— 主唱词唱到
-        // 03:44.938，而文本序排在最后的背景词是 03:42.019。这类**时间倒退**的词一律丢弃
-        // （**行文本仍完整保留**，只是那半句不给逐字高亮）：宁可少高亮几个字，也不给一次倒扫。
-        val ordered = ArrayList<WordDraft>(kept.size)
-        var lastStart = Long.MIN_VALUE
-        for (d in kept) {
-            if (d.startMs < lastStart) continue
-            ordered.add(d)
-            lastStart = d.startMs
-        }
-        val words = ArrayList<LrcWord>(ordered.size)
-        for ((index, d) in ordered.withIndex()) {
+        val words = ArrayList<LrcWord>(drafts.size)
+        fun appendWord(draft: WordDraft, next: WordDraft?) {
+            val start = draft.charStart.coerceAtLeast(from) - from
+            val end = draft.charEndExclusive.coerceAtMost(to) - from
             words.add(
                 LrcWord(
-                    startMs = d.startMs,
-                    durationMs = durationOf(d, ordered.getOrNull(index + 1), lineEnd),
-                    // 词文本取行文本的切片，保证 text.substring(charStart, charEndExclusive) 恒等于词文本
-                    text = text.substring(d.charStart, d.charEndExclusive),
-                    charStart = d.charStart,
-                    charEndExclusive = d.charEndExclusive,
+                    startMs = draft.startMs,
+                    durationMs = durationOf(draft, next, lineEnd),
+                    text = text.substring(start, end),
+                    charStart = start,
+                    charEndExclusive = end,
                 )
             )
         }
+        // 背景人声的时间可能早于前面的正文。保留正文，跳过会导致高亮倒退的词。
+        var previous: WordDraft? = null
+        for (draft in drafts) {
+            if (draft.charEndExclusive.coerceAtMost(to) <= draft.charStart.coerceAtLeast(from)) continue
+            if (previous != null) {
+                if (draft.startMs < previous.startMs) continue
+                appendWord(previous, draft)
+            }
+            previous = draft
+        }
+        if (previous != null) appendWord(previous, null)
 
         return ParsedLine(
             line = LrcLine(timeMs = lineBegin, text = text, words = words, endMs = lineEnd),
@@ -263,24 +195,27 @@ internal object TtmlScanner {
 
             if (depth >= MAX_DEPTH) continue
 
-            // 只有叶子 span 才建词：容器型 span 的直接文本长度圈不出正确区间（见 KDoc）。
-            if (el.children.none { it is Node }) {
-                val direct = directText(el)
-                if (direct.isNotBlank()) {
-                    val beginRaw = el.attr("begin")
-                    val startMs = if (beginRaw == null) {
-                        words.lastOrNull()?.endMs ?: lineBegin
-                    } else {
-                        parseTime(beginRaw, frameRate)
-                    }
-                    if (startMs != null) {
-                        val endMs = el.attr("end")?.let { parseTime(it, frameRate) }
-                        val entry = textBuilder.length
-                        words.add(WordDraft(startMs, endMs, entry, entry + direct.length))
-                    }
-                }
+            // 只有叶子元素的文本连续，可以用同一个词区间表示。
+            if (el.children.any { it is Node }) {
+                walk(el.children, depth + 1, lineBegin, frameRate, textBuilder, words, roleTexts)
+                continue
             }
-            walk(el.children, depth + 1, lineBegin, frameRate, textBuilder, words, roleTexts)
+            val entry = textBuilder.length
+            var hasText = false
+            for (child in el.children) {
+                val text = child as String
+                textBuilder.append(text)
+                if (!hasText && text.isNotBlank()) hasText = true
+            }
+            if (!hasText) continue
+            val beginRaw = el.attr("begin")
+            val startMs = if (beginRaw == null) {
+                words.lastOrNull()?.endMs ?: lineBegin
+            } else {
+                parseTime(beginRaw, frameRate) ?: continue
+            }
+            val endMs = el.attr("end")?.let { parseTime(it, frameRate) }
+            words.add(WordDraft(startMs, endMs, entry, textBuilder.length))
         }
     }
 
@@ -448,13 +383,6 @@ internal object TtmlScanner {
         return if (colon >= 0) name.substring(colon + 1) else name
     }
 
-    /** 元素的直接文本（只拼字符串子节点，不含嵌套元素）。 */
-    private fun directText(el: Node): String {
-        val sb = StringBuilder()
-        for (c in el.children) if (c is String) sb.append(c)
-        return sb.toString()
-    }
-
     /** 子树全部文本按文档顺序拼接（角色轨道用）。 */
     private fun collectText(el: Node, depth: Int): String {
         val sb = StringBuilder()
@@ -473,13 +401,16 @@ internal object TtmlScanner {
     }
 
     /** 按文档顺序（前序）收集某 localName 的全部元素。 */
-    private fun collectElements(root: Node, name: String): List<Node> {
+    private fun collectElements(root: Node, name: String, limit: Int = Int.MAX_VALUE): List<Node> {
         val out = ArrayList<Node>()
         val stack = ArrayList<Node>()
         stack.add(root)
         while (stack.isNotEmpty()) {
             val node = stack.removeAt(stack.lastIndex)
-            if (node.name == name) out.add(node)
+            if (node.name == name) {
+                out.add(node)
+                if (out.size == limit) break
+            }
             // 倒序入栈，弹出时才是文档顺序
             for (i in node.children.indices.reversed()) {
                 val child = node.children[i]
@@ -491,8 +422,7 @@ internal object TtmlScanner {
 
     private fun textNode(src: String, from: Int, to: Int): String {
         if (to <= from) return ""
-        val raw = src.substring(from, to)
-        return if (raw.indexOf('&') >= 0) decodeEntities(raw) else raw
+        return decodeEntities(src.substring(from, to))
     }
 
     /**
@@ -500,8 +430,11 @@ internal object TtmlScanner {
      * 一律原样保留，不抛异常、不产生非法字符。
      */
     private fun decodeEntities(raw: String): String {
+        val firstEntity = raw.indexOf('&')
+        if (firstEntity < 0) return raw
         val sb = StringBuilder(raw.length)
-        var i = 0
+        sb.append(raw, 0, firstEntity)
+        var i = firstEntity
         while (i < raw.length) {
             val c = raw[i]
             if (c != '&') {
@@ -509,8 +442,10 @@ internal object TtmlScanner {
                 i++
                 continue
             }
-            val semi = raw.indexOf(';', i + 1)
-            if (semi < 0 || semi - i > 32) {   // 实体名最长 32 字符，超了就是裸 '&'
+            val end = minOf(raw.length, i + 33)
+            var semi = i + 1
+            while (semi < end && raw[semi] != ';') semi++
+            if (semi == end) {
                 sb.append(c)
                 i++
                 continue

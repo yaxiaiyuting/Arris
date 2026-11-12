@@ -29,16 +29,18 @@ object OfflineKeys {
 
     /** 挂在播放 URL 上的 query 参数名。小写无下划线，避免被某些 CDN 规则改写。 */
     const val QUERY_KEY = "ncrustkey"
+    private const val QUERY_PARAMETER = "$QUERY_KEY="
+    private const val SONG_PREFIX = "song:"
 
     /** \`song:123:lossless\`。 */
-    fun key(songId: Long, level: String): String = "song:" + songId + ":" + level
+    fun key(songId: Long, level: String): String = SONG_PREFIX + songId + ":" + level
 
     /** 把 key 挂到 URL 上（已有 query 用 & 连接）。 */
     fun withKey(url: String, songId: Long, level: String): String {
         if (url.isEmpty() || songId <= 0L || level.isEmpty()) return url
-        if (url.contains(QUERY_KEY + "=")) return url
+        if (url.contains(QUERY_PARAMETER)) return url
         val sep = if (url.contains("?")) "&" else "?"
-        return url + sep + QUERY_KEY + "=" + key(songId, level)
+        return url + sep + QUERY_PARAMETER + key(songId, level)
     }
 
     /** Separate full/trial bytes from legacy unknown files, retaining the song/quality grammar. */
@@ -57,10 +59,8 @@ object OfflineKeys {
         while (i < url.length) {
             var end = url.indexOf('&', i)
             if (end < 0) end = url.length
-            val eq = url.indexOf('=', i)
-            if (eq in i until end && url.substring(i, eq) == QUERY_KEY) {
-                val v = url.substring(eq + 1, end)
-                return v.ifEmpty { null }
+            if (end - i >= QUERY_PARAMETER.length && url.startsWith(QUERY_PARAMETER, i)) {
+                return url.substring(i + QUERY_PARAMETER.length, end).ifEmpty { null }
             }
             i = end + 1
         }
@@ -69,66 +69,73 @@ object OfflineKeys {
 
     /** 从 key 里解出档位；解不出返回 null。 */
     fun levelOf(key: String): String? {
-        val parts = key.split(':')
-        return if (parts.size == 3 && parts[0] == "song") parts[2].substringBefore("~").ifEmpty { null } else null
+        val separator = qualitySeparator(key)
+        if (separator < 0) return null
+        val start = separator + 1
+        val suffix = key.indexOf('~', start)
+        val end = if (suffix >= 0) suffix else key.length
+        return key.substring(start, end).ifEmpty { null }
     }
 
     /** 从 key 里解出歌曲 id；解不出返回 null。 */
     fun songIdOf(key: String): Long? {
-        val parts = key.split(':')
-        if (parts.size != 3 || parts[0] != "song") return null
-        return parts[1].toLongOrNull()?.takeIf { it > 0L }
+        val separator = qualitySeparator(key)
+        if (separator <= SONG_PREFIX.length) return null
+        val first = SONG_PREFIX.length
+        val start = if (key[first] == '+') first + 1 else first
+        var id = 0L
+        for (index in start until separator) {
+            val ch = key[index]
+            val digit = if (ch in '0'..'9') ch - '0' else Character.digit(ch, 10)
+            if (digit < 0 || id > Long.MAX_VALUE / 10 ||
+                (id == Long.MAX_VALUE / 10 && digit > Long.MAX_VALUE % 10)
+            ) return null
+            id = id * 10 + digit
+        }
+        return if (id > 0L) id else null
     }
 
-    /**
-     * v3.3.0：判定「缓存里这一段能不能**从头播**」—— 即 position 0 是否被一段
-     * **磁盘上真实存在**的片段覆盖。
-     *
-     * ## 为什么原来的判据不够（用户反馈第 1 条「离线播放不太行」的第二个缺陷）
-     *
-     * 原判据是 `SimpleCache.keys.contains(key)` —— 「这首歌**有任何片段**」。
-     * 但播放器是**从 position 0 开始读**的，而缓存里可能只有中段：
-     * seek 过去听了一段、或者上次只缓冲到一半就切歌了。此时：
-     *
-     * - 离线兜底放行 ⇒ 起播正常（0 那一段在缓存里）⇒ 播到洞的位置**突然卡死**，
-     *   然后弹音质降级；用户读到的就是「播一半就断」；
-     * - 观感比「直接说放不了」更糟：它给了用户一个「能放」的承诺。
-     *
-     * ## 为什么是「覆盖 0」而不是「覆盖整曲」
-     *
-     * 要求整曲会**过度收紧**：本应用没有下载功能，离线范围就是「本机真播过的片段」，
-     * 而「播过的片段」通常是「从头到某个位置」。要求整曲会让绝大多数真实缓存被判不可用，
-     * 把上一版的功能整体关掉。而「能从头开始播」正是缓存唯一能承诺的事 ——
-     * 后面的洞由网络补，断网时才会露出边界（这一条如实写在这里，不假装已经解决）。
-     *
-     * ## 纯函数
-     *
-     * 输入是 `(position, length, isCached)` 三元组，因此可以在 JVM 里覆盖
-     * 「空、只覆盖 0 那一点、覆盖 0 到中段、从中段开始、多个片段接上 0」等形状，
-     * 不需要真的建一个 SimpleCache。
-     *
-     * @param spans 该 key 的全部 span（顺序无关，内部会排序）。
-     * @return true = 存在一段从 0 起的连续**已缓存**覆盖。
-     */
-    fun coversStart(spans: List<CachedSpan>): Boolean {
-        val cached = spans.filter { it.isCached && it.length > 0L }.sortedBy { it.position }
-        if (cached.isEmpty()) return false
-        // 第一段必须从 0 起（position <= 0 都算，SimpleCache 的 position 不会是负数，
-        // 但写 <= 是为了让判据对「实现细节变了」保持健壮）。
-        if (cached.first().position > 0L) return false
-        var coveredUpTo = cached.first().let { it.position + it.length }
-        for (span in cached.drop(1)) {
-            // 允许相邻片段之间**不留缝**（后一段的起点 <= 已覆盖到的位置）。
-            if (span.position > coveredUpTo) return false
-            coveredUpTo = maxOf(coveredUpTo, span.position + span.length)
+    private fun qualitySeparator(key: String): Int {
+        if (!key.startsWith(SONG_PREFIX)) return -1
+        val separator = key.indexOf(':', SONG_PREFIX.length)
+        return if (separator >= 0 && key.indexOf(':', separator + 1) < 0) separator else -1
+    }
+
+    /** 按歌曲累加实际量到的字节。没有可测片段的歌曲不写入结果。 */
+    internal inline fun sumBytesBySong(
+        keys: Iterable<String>,
+        songIds: Set<Long>,
+        bytesForKey: (String) -> Long?,
+    ): Map<Long, Long> {
+        val totals = HashMap<Long, Long>()
+        for (key in keys) {
+            val songId = songIdOf(key) ?: continue
+            if (songId !in songIds) continue
+            val bytes = bytesForKey(key) ?: continue
+            totals[songId] = (totals[songId] ?: 0L) + bytes
+        }
+        return totals
+    }
+
+    /** 按偏移升序检查有效片段。须从 0 开始且片段之间无空洞。 */
+    internal inline fun <Span> coversOrderedStart(
+        spans: Iterable<Span>,
+        position: (Span) -> Long,
+        length: (Span) -> Long,
+        isCached: (Span) -> Boolean,
+    ): Boolean {
+        var coveredUpTo = 0L
+        var found = false
+        for (span in spans) {
+            if (!isCached(span)) continue
+            val size = length(span)
+            if (size <= 0L) continue
+            val start = position(span)
+            if (start > coveredUpTo) return false
+            val end = start + size
+            coveredUpTo = if (found) maxOf(coveredUpTo, end) else end
+            found = true
         }
         return coveredUpTo > 0L
     }
-
-    /**
-     * 一个缓存片段的最小形状。**只保留判据需要的两个字段** ——
-     * 这样 [coversStart] 不必依赖 media3 的 `CacheSpan`（那是 Android 类型，
-     * 会把这条纯逻辑拖进 instrumented test 才能跑的地界）。
-     */
-    data class CachedSpan(val position: Long, val length: Long, val isCached: Boolean)
 }

@@ -8,10 +8,16 @@
 
 package com.takahashirinta.ncrust.cache
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
+import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -64,6 +70,79 @@ class OfflineLibraryIndexTest {
         assertEquals(1, idx.size())
         assertEquals(1_000L, idx.get(7L)?.completedAt)
         assertEquals("新名", idx.get(7L)?.name)
+    }
+
+    @Test
+    fun `末条重复写复用编码，重排和删除后刷新编码`() {
+        val idx = OfflineLibraryIndex()
+        idx.upsert(track(1L))
+        idx.upsert(track(2L))
+        val before = idx.toJson()
+        idx.upsert(track(2L, at = 2_000L))
+        assertSame(before, idx.toJson())
+
+        idx.upsert(track(1L, at = 2_000L))
+        assertEquals(listOf(2L, 1L), OfflineTrackCodec.decode(idx.toJson()).map { it.songId })
+
+        idx.retainSongIds(setOf(1L))
+        assertEquals(listOf(1L), OfflineTrackCodec.decode(idx.toJson()).map { it.songId })
+        idx.removeWithUrls(1L, OfflineUrlIndex())
+        assertEquals("[]", idx.toJson())
+    }
+
+    @Test
+    fun identicalOfflineIndexesSkipApplyButRetryAfterAnEditorFailure() {
+        val backing = MemoryPrefs()
+        var attempts = 0
+        var failNextWrite = true
+        val preferences = object : SharedPreferences by backing {
+            override fun edit(): SharedPreferences.Editor {
+                val editor = backing.edit()
+                return object : SharedPreferences.Editor by editor {
+                    override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                        editor.putString(key, value)
+                        return this
+                    }
+
+                    override fun apply() {
+                        attempts++
+                        if (failNextWrite) {
+                            failNextWrite = false
+                            throw IOException("fixture write failure")
+                        }
+                        editor.apply()
+                    }
+                }
+            }
+        }
+        val context = object : ContextWrapper(null) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = preferences
+        }
+        val indexes = listOf(OfflineUrlStore, OfflineLibrary).map { owner ->
+            val field = owner.javaClass.getDeclaredField("index").apply { isAccessible = true }
+            Triple(owner, field, field.get(owner)).also { field.set(owner, null) }
+        }
+        try {
+            val url = OfflineKeys.withKey("https://fixture.invalid/audio", 42L, "lossless")
+            OfflineUrlStore.rememberFromUrl(context, url)
+            assertFalse(preferences.contains("urls"))
+            repeat(5) { OfflineUrlStore.rememberFromUrl(context, url) }
+            assertEquals(2, attempts)
+            assertNotNull(preferences.getString("urls", null))
+
+            repeat(5) { offset ->
+                assertTrue(OfflineLibrary.record(
+                    context, 42L, "fixture", null, null,
+                    cacheKey = OfflineKeys.keyOf(url), level = "lossless", now = 1_000L + offset,
+                ))
+            }
+            assertEquals(3, attempts)
+            val track = OfflineTrackCodec.decode(preferences.getString("tracks", null)).single()
+            assertEquals(1_000L, track.completedAt)
+        } finally {
+            indexes.forEach { (owner, field, previous) -> field.set(owner, previous) }
+        }
     }
 
     @Test
@@ -156,7 +235,7 @@ class OfflineLibraryIndexTest {
      * 因为写 URL 的路径（`PlaybackService` 的 `playUrl`）并不覆盖所有起播路径。
      * 于是「没有 urls 条目 ⇒ 是脏数据 ⇒ 删掉」这条看似合理的启发式会**误删 6 首真实离线歌**。
      *
-     * 唯一正确的判据是**音频缓存里还有没有片段**（`OfflineAudioCache.reconcileLibrary`
+     * 唯一正确的判据是**音频缓存里还有没有片段**（`OfflineAudioCache.librarySnapshot`
      * 正是这么算的：`keepSongIds = keys(app).mapNotNull { OfflineKeys.songIdOf(it) }`）。
      * 注入的那条 `503616` 是**双孤儿** —— 没有 `urls`、也没有缓存片段 ——
      * 所以它被丢掉的**唯一**理由是「缓存里没有」，而不是「urls 里没有」。

@@ -45,6 +45,22 @@ class OfflineContentRecoveryTest {
         i.put(key("standard"),"different")
         assertFalse(i.record(key("standard"))!!.content.known)
     }
+    @Test fun identicalLastUrlReusesEncodingAndOtherChangesInvalidateIt() {
+        val index = OfflineUrlIndex()
+        val standard = key("standard")
+        val lossless = key("lossless")
+        index.put(standard, "fixture")
+        index.put(lossless, "fixture", OfflineContent(OfflineContent.FULL))
+        val original = index.toJson()
+
+        index.put(lossless, "fixture")
+        assertSame(original, index.toJson())
+        index.put(standard, "fixture")
+        assertEquals(listOf(lossless, standard), index.keys())
+        assertNotEquals(original, index.toJson())
+        assertEquals(2, index.removeSong(42))
+        assertEquals("{}", index.toJson())
+    }
     @Test fun verifiedFullPreferredOverLegacyAndTrialAtSameQuality() {
         val i=OfflineUrlIndex();i.put(key("standard"),"legacy")
         i.put(key("standard"),"full",OfflineContent(OfflineContent.FULL))
@@ -67,10 +83,25 @@ class OfflineContentRecoveryTest {
     }
     @Test fun freshFullCannotReadLegacyUnverifiedTrialBytes() {
         val full=OfflineContent(OfflineContent.FULL)
-        val isolated=verifiedCacheKey(key("standard"),full,OfflineContent(),true)
+        val isolated=verifiedCacheKey(key("standard"),full,OfflineContent()) { true }
         assertNotEquals(key("standard"),isolated)
         assertEquals("standard",OfflineKeys.levelOf(isolated));assertEquals(42L,OfflineKeys.songIdOf(isolated))
-        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,full,true))
-        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,null,false))
+        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,full) { true })
+        assertEquals(key("standard"),verifiedCacheKey(key("standard"),full,null) { false })
+    }
+
+    @Test fun cacheKeysAreEnumeratedOnlyForAPossibleFullFileCollision() {
+        val base = key("standard")
+        val full = OfflineContent(OfflineContent.FULL)
+        assertEquals(base, verifiedCacheKey(base, full, full) { error("已确认完整文件") })
+        assertEquals(base, verifiedCacheKey(base, OfflineContent(), null) { error("内容未知") })
+
+        var probes = 0
+        val isolated = verifiedCacheKey(base, full, null) {
+            probes++
+            true
+        }
+        assertEquals("$base~full-v1", isolated)
+        assertEquals(1, probes)
     }
 }

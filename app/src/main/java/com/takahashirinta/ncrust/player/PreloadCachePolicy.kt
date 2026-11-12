@@ -103,4 +103,19 @@ data class PreloadCacheEntry(
      */
     val expiresAtMs: Long? = null,
     val cachedContent: com.takahashirinta.ncrust.cache.OfflineContent? = null,
-)
+    val levelFromFile: Boolean = false,
+    val qualityAccess: QualityAccessEvidence? = null,
+    val playbackItem: com.takahashirinta.ncrust.account.PlaybackItem? = null,
+    val resolvedRequestedLevel: String? = null,
+    val accountRevision: Long? = null,
+) {
+    internal fun asResult() = SongUrlResult(
+        url, actualLevel, br, type, songMaxLevel,
+        levelFromFile = levelFromFile,
+        expiresAtMs = expiresAtMs,
+        playbackItem = playbackItem,
+        requestedLevel = resolvedRequestedLevel,
+        cachedContent = cachedContent,
+        qualityAccess = qualityAccess,
+    )
+}

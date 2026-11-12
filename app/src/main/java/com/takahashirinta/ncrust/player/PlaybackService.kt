@@ -31,7 +31,6 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -85,7 +84,12 @@ import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.SourceIds
+import com.takahashirinta.ncrust.source.SourceRouter
+import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.musicSource
+import com.takahashirinta.ncrust.source.recoverPayload
+import com.takahashirinta.ncrust.source.songRefOf
 import com.takahashirinta.ncrust.ui.i18n.getSavedLanguageCode
 import com.takahashirinta.ncrust.ui.i18n.stringsForCode
 import com.takahashirinta.ncrust.ui.player.VisualizerSetting
@@ -128,6 +132,12 @@ class PlaybackService : MediaLibraryService() {
     private val visualizationVolume by lazy { PlaybackVisualVolume(this) }
     private var visualizationVolumeJob: Job? = null
     private var progressJob: Job? = null
+    private var bufferProgressJob: Job? = null
+    private val stallWatch = PlaybackStallWatch(timeoutMs = 12_000L)
+    private val checkpoint = PlaybackCheckpoint()
+    private val queuePreload = ExoPlayer.PreloadConfiguration(12_000_000L)
+    private var lastLocalStallRepair: TrackKey? = null
+    private var lastLocalStallRepairRevision = -1
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
     private var isServiceStarted = false
@@ -136,15 +146,20 @@ class PlaybackService : MediaLibraryService() {
     private var mediaSourceKey: String? = null
     private var mediaSourceId: String? = null
     private var mediaMediaId: String? = null
-    private var currentArtworkBitmap: Bitmap? = null
+    private data class MediaArtwork(val url: String, val bitmap: Bitmap, val jpeg: ByteArray?)
+    private data class ArtworkTask(val url: String, val result: Deferred<MediaArtwork?>)
+
+    private var currentArtwork: MediaArtwork? = null
+    private val currentArtworkBitmap: Bitmap? get() = currentArtwork?.bitmap
+    private var artworkLoadUrl: String? = null
+    private var artworkLoadJob: Job? = null
     private var currentDominantColor: Int = 0xFF1DB954.toInt()
     // 封面加载代数: 每次 loadArtwork 自增, 完成时若代数已过期(期间又切了歌)
     // 则丢弃结果 —— 否则慢加载的上一首封面会覆盖新歌封面, 任务栏/锁屏
     // 显示上一首的图(切歌封面错位)。
     private var artworkGeneration = 0
 
-    // v1.2.0 · B：暂停空闲后释放封面位图。3GB 机型上 currentArtworkBitmap +
-    // pendingNextArtworkBitmap 两张全尺寸位图（各 1–4MB）叠加 B3 背景图后内存吃紧。
+    // 暂停空闲后释放当前和下一首封面。
     // 系统已持有"已 post 出去的那条通知"里位图的独立副本，因此这里丢弃引用不会让
     // 已显示的通知变空；恢复播放时按 currentArtworkUrl 重新加载即可。
     private val artworkIdleHandler = Handler(Looper.getMainLooper())
@@ -174,26 +189,13 @@ class PlaybackService : MediaLibraryService() {
 
         var onProgressUpdate: ((Long, Long) -> Unit)? = null
 
-        /**
-         * v1.5.1 · D：当前**正在唱的那一行歌词**，由 PlayerViewModel 在「跨行」时写入
-         * （null = 这首歌没歌词，或者用户没打开「媒体面板显示歌词」）。
-         *
-         * 为什么走 ARTIST：Android 13+ 的 SystemUI 媒体面板第二行**只读
-         * METADATA_KEY_ARTIST**，`DISPLAY_SUBTITLE` 被完全忽略（AOSP 源码级结论，见 TASK.md
-         * 的调研报告）；把歌词塞进 SUBTITLE 在现代系统上等于没写。所以开启后 ARTIST 变成
-         * 「艺人 · 当前歌词行」，并**同时**写 SUBTITLE/DISPLAY_SUBTITLE 兜住老车机与蓝牙路径；
-         * 关闭或没有歌词时这里保持 null，ARTIST 一字不变。
-         */
+        /** PlayerViewModel 将当前原文、译文和媒体歌词选项一同发布。 */
         @Volatile var mediaLyricFrame = MediaLyricFrame()
             set(value) {
                 if (field == value) return
                 field = value
                 instance?.onMediaLyricLineChanged(value.notificationKey)
             }
-        /** Compatibility for callers publishing original-only lyrics. */
-        var mediaLyricLine: String?
-            get() = mediaLyricFrame.original
-            set(value) { mediaLyricFrame = MediaLyricFrame(original = value) }
         var onPlaybackEnded: (() -> Unit)? = null
         var onPlaybackPrevious: (() -> Unit)? = null
         var onPlaybackNext: (() -> Unit)? = null
@@ -246,6 +248,7 @@ class PlaybackService : MediaLibraryService() {
          */
         var onTrackTransitioned: ((MusicSource, Long, String?, String?, String, String, String) -> Unit)? = null
         var onBufferingChanged: ((Boolean) -> Unit)? = null
+        internal var onPlaybackStalled: ((TrackKey, Long) -> Unit)? = null
         var onBitrateChanged: ((MusicSource, Long, Long) -> Unit)? = null
         // B2-C：封面 Palette 提取出的主题色（ARGB）。null = 当前歌无封面，UI 回落预设色。
         // 由 PlaybackService 静态回调推给 PlayerViewModel.coverAccentRgb。
@@ -325,8 +328,7 @@ class PlaybackService : MediaLibraryService() {
     private var pendingNextMediaId: String? = null
     // 无缝预载的下一首封面位图: preload_next 时提前加载, 切换瞬间直接应用,
     // 任务栏不会出现"新歌标题 + 上一首封面"的过渡窗口
-    private var pendingNextArtworkBitmap: Bitmap? = null
-    private var artworkPreloadGeneration = 0
+    private var nextArtworkTask: ArtworkTask? = null
 
     /** 低内存档阈值：≤3.5GB 视为低配（覆盖 2GB / 3GB 机型，4GB 及以上不降级）。 */
     private val LOW_RAM_TOTAL_BYTES = 3_500L * 1024 * 1024 * 1024
@@ -346,10 +348,6 @@ class PlaybackService : MediaLibraryService() {
      * 这里只做设备能力探测并打日志，便于真机上区分「设备不支持」与「被门控关掉」。
      */
     private fun logAudioOffloadCapability() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            Log.i("PlaybackService", "AudioOffload: unsupported (API < 29)")
-            return
-        }
         val supported = runCatching {
             // 注意：isOffloadedPlaybackSupported 是 AudioManager 的**静态**方法。
             AudioManager.isOffloadedPlaybackSupported(
@@ -578,6 +576,9 @@ class PlaybackService : MediaLibraryService() {
             // 熄屏耗电的大头；本 fork 的 PCM 可视化 tee 不依赖这个循环频率。
             .experimentalSetDynamicSchedulingEnabled(true)
             .build()
+        setGaplessPreloadEnabled(
+            getSharedPreferences("ncrust_settings", MODE_PRIVATE).getBoolean("gapless_playback", false),
+        )
 
         // 音频 offload：把 MP3/AAC 解码交给硬件 DSP，熄屏长听时 CPU 可以真正睡下去。
         // 要求设备支持 offload 下的无缝衔接，不支持就自动退回软件解码——无缝播放不能
@@ -634,6 +635,7 @@ class PlaybackService : MediaLibraryService() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) publishStreamBitrate()
                 if (state == Player.STATE_ENDED) {
+                    playingTrackKey()?.id?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
                     // 观测点：走到末尾时播放器里还剩几项、当前是哪一首。count==1 说明
                     // 「没有下一首预载项」，与「回调没到 UI 层」是两种不同的故障，日志可区分。
                     Log.d(
@@ -641,15 +643,49 @@ class PlaybackService : MediaLibraryService() {
                         "STATE_ENDED count=${player.mediaItemCount} " +
                             "index=${player.currentMediaItemIndex} songId=$mediaSongId",
                     )
-                    onPlaybackEnded?.invoke()
+                    val endedItem = player.currentMediaItem
+                    val revision = playRequestGeneration.current
+                    // Dispatch outside the player listener; the next track may mutate the playlist.
+                    scope.launch {
+                        val current = player.currentMediaItem
+                        if (isServiceStarted && endedItem != null && current?.mediaId == endedItem.mediaId &&
+                            current.localConfiguration?.uri == endedItem.localConfiguration?.uri &&
+                            playRequestGeneration.isCurrent(revision) && player.playbackState == Player.STATE_ENDED &&
+                            player.playWhenReady
+                        ) {
+                            onPlaybackEnded?.invoke()
+                        }
+                    }
                 }
                 onBufferingChanged?.invoke(state == Player.STATE_BUFFERING)
                 updatePlaybackState()
             }
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                Log.d("PlaybackService", "playWhenReady=$playWhenReady reason=$reason foreground=$isServiceStarted")
+                if (playWhenReady) {
+                    cancelArtworkIdleRelease()
+                } else {
+                    savePlaybackCheckpoint(player.currentPosition, player.duration, explicit = true)
+                    scheduleArtworkIdleRelease()
+                }
+            }
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.containsAny(
+                        Player.EVENT_PLAYBACK_STATE_CHANGED,
+                        Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                        Player.EVENT_PLAYBACK_SUPPRESSION_REASON_CHANGED,
+                        Player.EVENT_MEDIA_ITEM_TRANSITION,
+                        Player.EVENT_POSITION_DISCONTINUITY,
+                    )
+                ) {
+                    restartStallObservation()
+                }
+            }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 observeVisualizationVolume(isPlaying && currentPcmDemand().requiresPcm)
                 // B：暂停即预约释放封面位图，恢复播放则取消释放并补回封面。
-                if (isPlaying) onPlaybackActive() else scheduleArtworkIdleRelease()
+                if (isPlaying) onPlaybackActive()
+                else if (!hasActivePlaybackIntent()) scheduleArtworkIdleRelease()
                 onIsPlayingChanged?.invoke(isPlaying)
                 PlaybackStateManager.updatePlayingState(this@PlaybackService, isPlaying)
                 updatePlaybackState()
@@ -669,19 +705,11 @@ class PlaybackService : MediaLibraryService() {
                 newPosition: Player.PositionInfo,
                 reason: Int,
             ) {
-                // 暂停时没有 ticker：拖动进度 / 系统媒体控件 seek 后要立刻把新位置推给
-                // 界面与媒体会话，否则暂停态拖完进度条仍停在旧值。
-                // 只看 SEEK 类原因：暂停态的曲目切换也可能走 discontinuity，但那种位置
-                // 更新会由 transition 回调把 currentSongId 一起换掉，不能拿旧歌 id 去上报。
-                if (!player.isPlaying &&
-                    (reason == Player.DISCONTINUITY_REASON_SEEK ||
-                        reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT)
-                ) {
+                if (reason != Player.DISCONTINUITY_REASON_SEEK && reason != Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) return
+                savePlaybackCheckpoint(newPosition.positionMs, player.duration, explicit = true)
+                if (!player.isPlaying) {
                     publishProgressNow()
                     updatePlaybackState()
-                    // v3.7.9 · R4：桌面卡片也要跟着跳。暂停态没有 ticker，这里是
-                    // 「暂停中拖动进度条」唯一的推送时机；闸门只放行位置真的变了的那一次，
-                    // 所以不会把暂停态的节流目标破掉。
                     pushWidgetUpdate()
                 }
             }
@@ -731,6 +759,10 @@ class PlaybackService : MediaLibraryService() {
                 val itemIdentity = PreloadSlot.identityFromMediaId(mediaItem?.mediaId)
                 val itemSource = itemIdentity?.first
                 val itemSongId = itemIdentity?.second
+                checkpoint.reset(player.currentPosition.coerceAtLeast(0L))
+                if (auto && itemSongId != null && itemSongId > 0L) {
+                    mediaSongId?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
+                }
                 val itemUrl = mediaItem?.localConfiguration?.uri?.toString()
                 val itemMetadata = mediaItem?.mediaMetadata
                 val itemTitle = itemMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
@@ -791,11 +823,13 @@ class PlaybackService : MediaLibraryService() {
                     // CoverUrls.large 后的 URI 再加载一遍（重复网络 + 改变缓存口径）。
                     if (!sameAsConfigured) {
                         if (itemArtwork.isNullOrBlank()) clearCurrentArtwork()
-                        else if (itemArtwork != currentArtworkUrl || currentArtworkBitmap == null) {
+                        else {
                             currentArtworkUrl = itemArtwork
-                            artworkPreloadGeneration++
                             loadArtwork(itemArtwork)
                         }
+                    }
+                    if (!sameAsConfigured && itemSource != null && itemSongId != null && itemSongId > 0L) {
+                        persistPlaybackState(player.playWhenReady)
                     }
                     updatePlaybackState()
                     updateNotify()
@@ -821,10 +855,9 @@ class PlaybackService : MediaLibraryService() {
                 val nextSource = itemSource ?: pendingNextSource
                 val nextSourceId = pendingNextSourceId
                 val nextMediaId = pendingNextMediaId
-                // 预载位图就绪则在切换瞬间直接应用(任务栏立即是新图), 未就绪回退异步加载。
-                val preloaded = pendingNextArtworkBitmap
+                val artwork = slotArtwork?.takeIf { it.isNotBlank() } ?: itemArtwork
+                val preparedArtwork = artwork?.let(::takePreparedArtwork)
                 clearPendingNext()
-                pendingNextArtworkBitmap = null
                 mediaSourceKey = nextSource.key
                 mediaSourceId = nextSourceId
                 mediaMediaId = nextMediaId
@@ -836,31 +869,16 @@ class PlaybackService : MediaLibraryService() {
                     "transition(auto=$auto) -> songId=" + mediaSongId + " source=" + nextSource.key +
                         " title=" + mediaTitle + " count=" + player.mediaItemCount
                 )
-                // 槽位里那份是原始 URL，item 上的是 CoverUrls.large 后的 URI：优先用槽位，
-                // 才能命中 pendingNextArtworkBitmap 的「切换瞬间直接换图」优化。
-                val artwork = slotArtwork ?: itemArtwork
-                if (!artwork.isNullOrEmpty()) {
+                if (artwork == null) {
+                    clearCurrentArtwork()
+                } else {
                     currentArtworkUrl = artwork
-                    // 使任何在途预载作废: 迟到的预载结果不能回填 pending,
-                    // 否则会污染下一次切换
-                    artworkPreloadGeneration++
-                    if (preloaded != null && slotArtwork != null) {
-                        val gen = ++artworkGeneration
-                        currentArtworkBitmap = preloaded
-                        applyCoverAccent(preloaded, artwork, gen)
-                        scope.launch(Dispatchers.Main) {
-                            updatePlaybackState()
-                            updateNotify()
-                        }
-                    } else {
-                        // 回退异步加载; 旧位图保留到新封面加载完(用户决策),
-                        // 加载完成由 metadata 位图引用比较触发换图
-                        loadArtwork(artwork)
-                    }
+                    loadArtwork(artwork, preparedArtwork)
                 }
                 // 播完的项统一清掉：列表收敛回「当前 + 至多一首待播」。
                 val finishedItems = player.currentMediaItemIndex
                 if (finishedItems > 0) player.removeMediaItems(0, finishedItems)
+                persistPlaybackState(player.playWhenReady)
                 updatePlaybackState()
                 updateNotify()
                 // v2.1.5：把**这次真正起播的曲目身份**交给 ViewModel。
@@ -927,61 +945,11 @@ class PlaybackService : MediaLibraryService() {
 
         when (intent?.getStringExtra("action")) {
             "preload_next" -> {
-                val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
-                if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return START_NOT_STICKY
-                val nextUrl = intent.getStringExtra("url") ?: return START_NOT_STICKY
-                val nextSongId = intent.getLongExtra("songId", -1L)
-                // v1.5.2 串台修复：同一首下一曲会被预载两次（切歌瞬间 + 进入最后 60s 窗口），
-                // 旧实现无条件 addMediaItem，播放列表累积成 [当前, 下一首, 下一首']；
-                // 播完当前项先播「下一首」, 再播那个重复项时 pendingNext* 已指向下下首 ⇒
-                // 耳朵里是上一首、通知栏/歌词显示下一首。槽位至多一首是不变量本身。
-                when (PreloadSlot.decide(pendingNextSongId, pendingNextUrl, nextSongId, nextUrl)) {
-                    PreloadSlot.Decision.IGNORE -> {
-                        Log.d(
-                            "PlaybackService",
-                            "preload_next ignored, slot already holds songId=$nextSongId"
-                        )
-                        return START_NOT_STICKY
-                    }
-                    PreloadSlot.Decision.REPLACE -> {
-                        Log.d(
-                            "PlaybackService",
-                            "preload_next replaces stale slot songId=$pendingNextSongId -> $nextSongId"
-                        )
-                        removePendingItems()
-                    }
-                    PreloadSlot.Decision.APPEND -> Unit
-                }
-                artworkPreloadGeneration++
-                pendingNextArtworkBitmap = null
-                pendingNextTitle = intent.getStringExtra("title")
-                pendingNextArtist = intent.getStringExtra("artist")
-                pendingNextArtwork = intent.getStringExtra("artwork")
-                pendingNextSongId = nextSongId
-                pendingNextUrl = nextUrl
-                // v2.1.5：槽位必须连音源身份一起记。少了它，自动接续时这一项
-                // 在 ViewModel 眼里仍然是「上一首的音源」，取词就会问错平台。
-                pendingNextSource = MusicSource.fromKey(intent.getStringExtra("sourceKey"))
-                pendingNextSourceId = intent.getStringExtra("sourceId")
-                pendingNextMediaId = intent.getStringExtra("mediaId")
-                // 提前加载下一首封面: 无缝切换瞬间任务栏直接是新图,
-                // 不再出现"新歌标题 + 上一首封面"的过渡窗口
-                if (!pendingNextArtwork.isNullOrEmpty()) {
-                    preloadArtwork(pendingNextArtwork!!)
-                }
-                player.addMediaItem(buildPreloadMediaItem(nextUrl, nextSongId))
-                Log.d(
-                    "PlaybackService",
-                    "Queued next: $pendingNextTitle songId=$nextSongId count=" + player.mediaItemCount
-                )
+                enqueuePreload(intent)
                 return START_NOT_STICKY
             }
             "wait_for_url" -> {
-                if (!roomOwnsPlayback(intent)) return START_NOT_STICKY
-                if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
-                clearPendingNext()
-                player.stop()
-                player.clearMediaItems()
+                waitForPlaybackSelection(intent)
                 return START_NOT_STICKY
             }
             "pause_failed" -> {
@@ -994,6 +962,7 @@ class PlaybackService : MediaLibraryService() {
             "stop" -> {
                 onPlaybackInterrupted?.invoke()
                 PlaybackStateManager.clearState(this)
+                isServiceStarted = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 // v1.6.0 · D3：撤掉实时更新通知，别在状态栏留一条不动的进度条。
                 LiveUpdateNotifier.cancel(this)
@@ -1001,8 +970,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaArtist = ""
                 mediaSongId = null
                 clearPendingNext()
-                currentArtworkBitmap = null
-                currentArtworkUrl = null
+                clearCurrentArtwork()
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -1019,71 +987,128 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val url = intent?.getStringExtra("url")
-        if (url != null && !roomOwnsPlayback(intent)) {
-            // The request may have started a new foreground service before the member left.
-            // Satisfy Android's foreground-start contract before stopping this unused instance.
-            if (!isServiceStarted) {
+        if (url != null) {
+            if (!applyResolvedPlayback(intent, url) && !isServiceStarted) {
+                // A queued startForegroundService can arrive after its selection was revoked.
                 updateNotify()
                 if (isServiceStarted) stopSelfResult(startId)
             }
-            return START_NOT_STICKY
-        }
-        if (url != null && intent.hasExtra("playRevision") &&
-            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
-        val title = intent?.getStringExtra("title")
-        val artist = intent?.getStringExtra("artist")
-        val artwork = intent?.getStringExtra("artwork")
-        val songId = intent?.getLongExtra("songId", -1L) ?: -1L
-        // v2.1.0 · C：音源身份。媒体通知与车机路径都要靠它把媒体项指回**正确的**音源 ——
-        // 少了它，qm 的曲目在通知栏/车机上会被当成 ncm 的同号歌曲。
-        val sourceKey = intent?.getStringExtra("sourceKey")
-        val sourceId = intent?.getStringExtra("sourceId")
-        val mediaId = intent?.getStringExtra("mediaId")
-        // B4：起播位置。0 = 从 0 分 0 秒开始；> 0 = 从上次退出的时间点续播。
-        val startPositionMs = intent?.getLongExtra("startPositionMs", 0L) ?: 0L
-
-        val identity = if (url != null) playbackRequestIdentity(null, true, songId, sourceKey, sourceId, mediaId)
-            ?: return START_NOT_STICKY else null
-        if (title != null) mediaTitle = title
-        if (artist != null) mediaArtist = artist
-        if (identity != null) {
-            mediaSongId = identity.id
-            mediaSourceKey = identity.source.key
-            mediaSourceId = identity.sourceId
-            mediaMediaId = identity.mediaId
-        }
-
-        if (url != null) {
-            if (artwork.isNullOrBlank()) clearCurrentArtwork()
-            else if (artwork != currentArtworkUrl || currentArtworkBitmap == null) {
-                currentArtworkUrl = artwork
-                loadArtwork(artwork)
-            }
-        }
-
-        if (url != null) {
-            // v2.2.1 · P0：**必须把音源身份一起落盘**。
-            //
-            // 旧代码只传前五个参数，而 `PlaybackStateManager.saveState` 对 sourceKey/sourceId/
-            // mediaId 用的是 `putString(key, null)` —— SharedPreferences 的语义是**删除该键**，
-            // 于是「每次开始播放」都会把上一处（PlayerViewModel 好好写进去的）QQ songmid /
-            // media_mid 抹掉。冷启动后 `MainActivity` 再读 `getSourceId()` 拿到 null，
-            // QQ 曲目就再也取不到链，只能吃离线缓存里那条**别的档位**的旧 URL ——
-            // 用户看到的就是「选了母带，播出来是无损」以及随后的循环重试。
-            // 与 `mediaSourceKey/mediaSourceId/mediaMediaId` 同源，直接用这三个字段。
-            val startPlaying = intent?.getBooleanExtra("startPlaying", true) ?: true
-            PlaybackStateManager.saveState(
-                this, songId, mediaTitle, mediaArtist, currentArtworkUrl ?: "", startPlaying,
-                sourceKey = mediaSourceKey,
-                sourceId = mediaSourceId,
-                mediaId = mediaMediaId,
-            )
-            playUrl(url, startPositionMs, startPlaying)
         } else if (!isServiceStarted && mediaTitle != "Arris") {
             updateNotify()
         }
-
         return START_NOT_STICKY
+    }
+
+    internal fun waitForPlaybackSelection(intent: Intent) {
+        if (!roomOwnsPlayback(intent) ||
+            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))
+        ) return
+        clearPendingNext()
+        player.stop()
+        player.clearMediaItems()
+    }
+
+    /** Media3 prepares the following item when the current stream is not loading. */
+    internal fun setGaplessPreloadEnabled(enabled: Boolean) {
+        val config = if (enabled) queuePreload else ExoPlayer.PreloadConfiguration.DEFAULT
+        if (player.preloadConfiguration != config) player.preloadConfiguration = config
+    }
+
+    internal fun enqueuePreload(intent: Intent) {
+        val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
+        if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return
+        val nextUrl = intent.getStringExtra("url") ?: return
+        val nextSongId = intent.getLongExtra("songId", -1L)
+        // v1.5.2 串台修复：同一首下一曲会被预载两次（切歌瞬间 + 进入最后 60s 窗口），
+        // 旧实现无条件 addMediaItem，播放列表累积成 [当前, 下一首, 下一首']；
+        // 播完当前项先播「下一首」, 再播那个重复项时 pendingNext* 已指向下下首 ⇒
+        // 耳朵里是上一首、通知栏/歌词显示下一首。槽位至多一首是不变量本身。
+        when (PreloadSlot.decide(pendingNextSongId, pendingNextUrl, nextSongId, nextUrl)) {
+            PreloadSlot.Decision.IGNORE -> {
+                Log.d(
+                    "PlaybackService",
+                    "preload_next ignored, slot already holds songId=$nextSongId"
+                )
+                return
+            }
+            PreloadSlot.Decision.REPLACE -> {
+                Log.d(
+                    "PlaybackService",
+                    "preload_next replaces stale slot songId=$pendingNextSongId -> $nextSongId"
+                )
+                removePendingItems()
+            }
+            PreloadSlot.Decision.APPEND -> Unit
+        }
+        pendingNextTitle = intent.getStringExtra("title")
+        pendingNextArtist = intent.getStringExtra("artist")
+        pendingNextArtwork = intent.getStringExtra("artwork")
+        pendingNextSongId = nextSongId
+        pendingNextUrl = nextUrl
+        // v2.1.5：槽位必须连音源身份一起记。少了它，自动接续时这一项
+        // 在 ViewModel 眼里仍然是「上一首的音源」，取词就会问错平台。
+        pendingNextSource = MusicSource.fromKey(intent.getStringExtra("sourceKey"))
+        pendingNextSourceId = intent.getStringExtra("sourceId")
+        pendingNextMediaId = intent.getStringExtra("mediaId")
+        // 提前加载下一首封面: 无缝切换瞬间任务栏直接是新图,
+        // 不再出现"新歌标题 + 上一首封面"的过渡窗口
+        pendingNextArtwork?.takeIf { it.isNotBlank() }?.let(::prepareNextArtwork)
+            ?: discardPreparedArtwork()
+        player.addMediaItem(buildPreloadMediaItem(nextUrl, nextSongId))
+        Log.d(
+            "PlaybackService",
+            "Queued next: $pendingNextTitle songId=$nextSongId count=" + player.mediaItemCount
+        )
+    }
+
+    /** The running foreground service can accept the next track on the player thread. */
+    internal fun submitResolvedPlayback(intent: Intent): Boolean {
+        if (!isServiceStarted) return false
+        val url = intent.getStringExtra("url") ?: return false
+        applyResolvedPlayback(intent, url)
+        return true
+    }
+
+    private fun applyResolvedPlayback(intent: Intent, url: String): Boolean {
+        if (!roomOwnsPlayback(intent) || (intent.hasExtra("playRevision") &&
+                !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1)))
+        ) return false
+        val songId = intent.getLongExtra("songId", -1L)
+        val identity = playbackRequestIdentity(
+            null, true, songId,
+            intent.getStringExtra("sourceKey"),
+            intent.getStringExtra("sourceId"),
+            intent.getStringExtra("mediaId"),
+        ) ?: return false
+        intent.getStringExtra("title")?.let { mediaTitle = it }
+        intent.getStringExtra("artist")?.let { mediaArtist = it }
+        mediaSongId = identity.id
+        mediaSourceKey = identity.source.key
+        mediaSourceId = identity.sourceId
+        mediaMediaId = identity.mediaId
+
+        val artwork = intent.getStringExtra("artwork")
+        if (artwork.isNullOrBlank()) clearCurrentArtwork()
+        else {
+            currentArtworkUrl = artwork
+            loadArtwork(artwork, takePreparedArtwork(artwork))
+        }
+
+        val startPlaying = intent.getBooleanExtra("startPlaying", true)
+        persistPlaybackState(startPlaying)
+        playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
+        if (!isServiceStarted) updateNotify()
+        return true
+    }
+
+    private fun persistPlaybackState(playing: Boolean) {
+        val songId = mediaSongId?.takeIf { it > 0L } ?: return
+        PlaybackStateManager.saveState(
+            this, songId, mediaTitle, mediaArtist, currentArtworkUrl.orEmpty(), playing,
+            sourceKey = mediaSourceKey,
+            sourceId = mediaSourceId,
+            mediaId = mediaMediaId,
+        )
     }
 
     override fun onGetSession(controllerInfo: androidx.media3.session.MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -1095,25 +1120,6 @@ class PlaybackService : MediaLibraryService() {
      * 车机点播时经 [onAddMediaItems] 把 song:<id> 解析成可播放 URL。
      */
     private fun libraryCallback() = object : MediaLibrarySession.Callback {
-        /**
-         * v2.1.6 · 会话合并的**承重点**：上一首 / 下一首的语义必须由应用回答。
-         *
-         * ## 为什么不能交给 media3 的默认实现
-         *
-         * 上一首/下一首由 QueueSessionPlayer 在执行层转交应用队列。
-         * 此处只做授权；RESULT_SUCCESS 不会吞掉 Media3 后续的默认动作。
-         */
-        override fun onPlayerCommandRequest(
-            session: M3MediaSession,
-            controller: M3MediaSession.ControllerInfo,
-            playerCommand: Int
-        ): Int {
-            // Execution belongs to QueueSessionPlayer, including recovery of an unresolved URL.
-            // RESULT_SUCCESS only authorises a command. QueueSessionPlayer consumes navigation,
-            // preventing Media3 from also seeking the small internal preload playlist.
-            return super.onPlayerCommandRequest(session, controller, playerCommand)
-        }
-
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: M3MediaSession.ControllerInfo,
@@ -1131,8 +1137,10 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
             scope.launch {
-                val children = runCatching { loadChildren(parentId) }.getOrDefault(emptyList())
-                future.set(LibraryResult.ofItemList(ImmutableList.copyOf(children), params))
+                val children = runCatching {
+                    withContext(Dispatchers.IO) { ImmutableList.copyOf(loadChildren(parentId, page, pageSize)) }
+                }.getOrElse { ImmutableList.of() }
+                future.set(LibraryResult.ofItemList(children, params))
             }
             return future
         }
@@ -1144,7 +1152,10 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MutableList<MediaItem>> {
             val future = SettableFuture.create<MutableList<MediaItem>>()
             scope.launch {
-                future.set(mediaItems.map { runCatching { resolveMediaItem(it) }.getOrDefault(it) }.toMutableList())
+                val resolved = mediaItems.mapTo(ArrayList(mediaItems.size)) {
+                    runCatching { resolveMediaItem(it) }.getOrDefault(it)
+                }
+                future.set(resolved)
             }
             return future
         }
@@ -1167,7 +1178,7 @@ class PlaybackService : MediaLibraryService() {
     private fun songItem(song: SongItem): MediaItem = MediaItem.Builder()
         // ncm 仍是 `song:123`（与 v2.0.2 逐字节相同，老媒体项继续能解析）；
         // qm 是 `song:qqmusic:456`。同号不同源在媒体层也必须分得开。
-        .setMediaId(com.takahashirinta.ncrust.source.SourceIds.mediaId(song.musicSource, song.id) ?: "song:${song.id}")
+        .setMediaId(SourceIds.mediaId(song.musicSource, song.id) ?: "song:${song.id}")
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(song.name)
@@ -1179,34 +1190,33 @@ class PlaybackService : MediaLibraryService() {
         )
         .build()
 
-    private suspend fun loadChildren(parentId: String): List<MediaItem> {
-        val s = stringsForCode(getSavedLanguageCode(this))
-        return when (parentId) {
-            ROOT_ID -> listOf(
+    private suspend fun loadChildren(parentId: String, page: Int, pageSize: Int): List<MediaItem> {
+        if (parentId == ROOT_ID) {
+            val s = stringsForCode(getSavedLanguageCode(this))
+            return listOf(
                 folderItem(DAILY_ID, s.dailySongsTitle),
                 folderItem(FM_ID, s.fmRadioTitleGeneric),
-                folderItem(LIKED_ID, s.tabLibrary)
-            )
-            DAILY_ID -> PlaylistApi.getDailyRecommendSongs().map { songItem(it) }
-            FM_ID -> PlaylistApi.getPersonalFm().map { songItem(it) }
-            LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }
+                folderItem(LIKED_ID, s.tabLibrary),
+            ).mediaBrowsePage(page, pageSize)
+        }
+        val songs = when (parentId) {
+            DAILY_ID -> PlaylistApi.getDailyRecommendSongs()
+            FM_ID -> PlaylistApi.getPersonalFm()
+            LIKED_ID -> LibraryManager.getSavedSongs(this)
             else -> emptyList()
         }
+        return songs.mediaBrowsePage(page, pageSize).map(::songItem)
     }
 
     /** 车机点播：把 song:<id> 解析成当前音质档的可播放 URL。 */
     private suspend fun resolveMediaItem(item: MediaItem): MediaItem {
         if (item.localConfiguration != null) return item
-        // v2.1.0 · C：车机路径同样按音源路由。解析不出音源的 mediaId 直接放弃
-        // （返回原 item 让上层跳歌），**不要**猜成 ncm —— 猜错就是放到别人的歌。
-        val parsed = com.takahashirinta.ncrust.source.SourceIds.parseMediaId(item.mediaId) ?: return item
+        val parsed = SourceIds.parseMediaId(item.mediaId) ?: return item
         val (source, songId) = parsed
-        // S20：浏览项只带 id，QQ 的 songmid/media_mid 会丢。先按 TrackKey 回查本地记录补全载荷；
-        // 补不到就保持原样（Router 会判 UNRESOLVABLE 让上层跳歌，绝不换源猜成 ncm）。
-        val ref = com.takahashirinta.ncrust.source.recoverPayload(applicationContext, source, songId)
-            ?: com.takahashirinta.ncrust.source.songRefOf(source, songId)
-        val resolved = com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(ref, currentQualityLevel())
-            ?: return item
+        // 浏览项只有身份，补全 QQ 取链需要的 songmid 和 media_mid。
+        val ref = withContext(Dispatchers.IO) { recoverPayload(applicationContext, source, songId) }
+            ?: songRefOf(source, songId)
+        val resolved = SourceRouter.resolveUrl(ref, currentQualityLevel()) ?: return item
         val result = OfflineUrlStore.rememberResult(this, resolved)
         // 试听片段：通知 ViewModel 落「当前是试听」标记，避免车机路径把 45 秒片段
         // 当完整播放上报（startplay / 80% / 自然结束三道门共用 currentIsTrial）。
@@ -1309,9 +1319,6 @@ class PlaybackService : MediaLibraryService() {
         runCatching { OfflineUrlStore.rememberFromUrl(this, url) }
         // Clear any stale preload metadata; setMediaItem replaces the entire playlist.
         clearPendingNext()
-        // 手动切歌会顶掉无缝队列, 预载的下一首封面作废, 一并清掉
-        pendingNextArtworkBitmap = null
-        artworkPreloadGeneration++
         val mediaItem = buildCurrentMediaItem(url)
         player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
         player.playWhenReady = startPlaying
@@ -1385,6 +1392,7 @@ class PlaybackService : MediaLibraryService() {
      * 那正是「UI 显示下一首、耳朵还是上一首」的串台。
      */
     private fun clearPendingNext() {
+        discardPreparedArtwork()
         pendingNextTitle = null
         pendingNextArtist = null
         pendingNextArtwork = null
@@ -1436,8 +1444,6 @@ class PlaybackService : MediaLibraryService() {
     fun discardPreload() {
         removePendingItems()
         clearPendingNext()
-        pendingNextArtworkBitmap = null
-        artworkPreloadGeneration++
     }
 
     private fun removePendingItems() {
@@ -1446,11 +1452,6 @@ class PlaybackService : MediaLibraryService() {
         if (count > from) player.removeMediaItems(from, count)
     }
 
-    /**
-     * 提前加载下一首封面到 pendingNextArtworkBitmap(不入当前位图)。
-     * 无缝 preload_next 时调用, 切换瞬间直接应用, 消除任务栏封面过渡窗口。
-     * 用独立的 preload 代数做过期校验(不影响当前歌的 loadArtwork 代数)。
-     */
     /** 把封面缩到通知栏够用的边长；原图不超过上限则原样返回（Palette 也吃这张）。 */
     private fun downscaleArtwork(source: Bitmap): Bitmap {
         val maxSide = maxOf(source.width, source.height)
@@ -1466,11 +1467,12 @@ class PlaybackService : MediaLibraryService() {
      * 刻意**不**重发通知 —— 系统那份副本还在，已显示的通知不会变空。
      */
     private fun scheduleArtworkIdleRelease() {
-        cancelArtworkIdleRelease()
+        if (artworkReleaseRunnable != null) return
         val runnable = Runnable {
             artworkReleaseRunnable = null
-            pendingNextArtworkBitmap = null
-            currentArtworkBitmap = null
+            discardPreparedArtwork()
+            artworkLoadJob?.cancel()
+            currentArtwork = null
             // 位图引用比较用的快照一并清掉，否则重载回来的新实例会被当成"同一张图"而不重发。
             lastMetadataBitmap = null
             Log.i("PlaybackService", "idle release: dropped artwork bitmaps")
@@ -1487,7 +1489,7 @@ class PlaybackService : MediaLibraryService() {
     /** 播放恢复：取消释放，并按 URL 补回已被释放的封面。 */
     private fun onPlaybackActive() {
         cancelArtworkIdleRelease()
-        if (currentArtworkBitmap == null) currentArtworkUrl?.let { loadArtwork(it) }
+        currentArtworkUrl?.let { loadArtwork(it) }
     }
 
     /**
@@ -1562,32 +1564,26 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun preloadArtwork(url: String) {
-        val gen = ++artworkPreloadGeneration
-        scope.launch(Dispatchers.IO) {
-            try {
-                val result = Coil.imageLoader(this@PlaybackService).execute(
-                    ImageRequest.Builder(this@PlaybackService)
-                        .data(CoverUrls.large(url))
-                        .size(1024, 1024)
-                        .build()
-                )
-                if (result is SuccessResult) {
-                    val bitmap = downscaleArtwork((result.drawable as BitmapDrawable).bitmap.copy(Bitmap.Config.ARGB_8888, false))
-                    withContext(Dispatchers.Main) {
-                        if (gen == artworkPreloadGeneration && pendingNextArtwork == url) pendingNextArtworkBitmap = bitmap
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("PlaybackService", "Preload artwork failed", e)
-            }
-        }
+    /** Keep one image request for the predicted next item, independent of the audio URL fetch. */
+    internal fun prepareNextArtwork(url: String) {
+        if (nextArtworkTask?.url == url) return
+        discardPreparedArtwork()
+        if (currentArtwork?.url != url) nextArtworkTask = ArtworkTask(url, scope.async { decodeArtwork(url) })
+    }
+
+    private fun takePreparedArtwork(url: String): ArtworkTask? =
+        nextArtworkTask?.takeIf { it.url == url }?.also { nextArtworkTask = null }
+
+    private fun discardPreparedArtwork() {
+        nextArtworkTask?.result?.cancel()
+        nextArtworkTask = null
     }
 
     private fun clearCurrentArtwork() {
+        artworkLoadJob?.cancel()
         artworkGeneration++
         currentArtworkUrl = null
-        currentArtworkBitmap = null
+        currentArtwork = null
         paletteUrl = null
         paletteTheme = null
         paletteRgb = null
@@ -1596,38 +1592,55 @@ class PlaybackService : MediaLibraryService() {
         onCoverTheme?.invoke(null)
     }
 
-    private fun loadArtwork(url: String) {
-        // 旧位图**保留**到新封面加载完成再整体换掉(用户决策: 等它加载完再
-        // 更换过去)——切歌瞬间不清图, 任务栏不会出现空图/系统保留旧图的
-        // 不确定窗口; 加载完成后由 metadata 去重的位图引用比较触发重发。
-        val gen = ++artworkGeneration
-        scope.launch(Dispatchers.IO) {
+    private fun loadArtwork(url: String, prepared: ArtworkTask? = null) {
+        if (currentArtwork?.url == url || (artworkLoadUrl == url && artworkLoadJob?.isActive == true)) {
+            if (artworkLoadUrl != url) artworkLoadJob?.cancel()
+            prepared?.result?.cancel()
+            return
+        }
+        artworkLoadJob?.cancel()
+        val generation = ++artworkGeneration
+        artworkLoadUrl = url
+        artworkLoadJob = scope.launch {
             try {
-                val imageLoader = Coil.imageLoader(this@PlaybackService)
-                val request = ImageRequest.Builder(this@PlaybackService)
-                    .data(CoverUrls.large(url))
-                    // 锁屏/任务栏的媒体卡片是大尺寸位图(通常 1000px+), 512px 源会被
-                    // 放大糊掉; 走图床 1080 缩略 + 1024 目标一起
-                    .size(1024, 1024)
-                    .build()
-                val result = imageLoader.execute(request)
-                // 加载期间又切了歌: 丢弃过期结果, 防止慢网下上一首封面覆盖新歌
-                if (gen != artworkGeneration) return@launch
-                if (result is SuccessResult) {
-                    val srcBitmap = (result.drawable as BitmapDrawable).bitmap
-                    // B：先拷成 ARGB_8888（Palette 读不了硬件位图）再降到通知栏够用的尺寸。
-                    val bitmap = downscaleArtwork(srcBitmap.copy(Bitmap.Config.ARGB_8888, false))
-                    withContext(Dispatchers.Main) {
-                        if (gen != artworkGeneration || currentArtworkUrl != url) return@withContext
-                        currentArtworkBitmap = bitmap
-                        applyCoverAccent(bitmap, url, gen)
-                        updatePlaybackState()
-                        updateNotify()
-                    }
+                var artwork = prepared?.result?.await() ?: decodeArtwork(url)
+                if (artwork == null && hasActivePlaybackIntent()) {
+                    delay(1_000L)
+                    artwork = decodeArtwork(url)
                 }
-            } catch (e: Exception) {
-                Log.e("PlaybackService", "Load artwork failed", e)
+                if (artwork == null || generation != artworkGeneration || currentArtworkUrl != url) return@launch
+                currentArtwork = artwork
+                applyCoverAccent(artwork.bitmap, url, generation)
+                updatePlaybackState()
+                updateNotify()
+            } finally {
+                prepared?.result?.cancel()
             }
+        }
+    }
+
+    private suspend fun decodeArtwork(url: String): MediaArtwork? = withContext(Dispatchers.IO) {
+        try {
+            val request = ImageRequest.Builder(this@PlaybackService)
+                .data(CoverUrls.large(url))
+                .size(ARTWORK_MAX_PX, ARTWORK_MAX_PX)
+                .allowHardware(false)
+                .build()
+            val result = Coil.imageLoader(this@PlaybackService).execute(request) as? SuccessResult
+                ?: return@withContext null
+            val source = (result.drawable as? BitmapDrawable)?.bitmap ?: return@withContext null
+            val bitmap = downscaleArtwork(source)
+            val jpeg = runCatching {
+                java.io.ByteArrayOutputStream().use { out ->
+                    if (bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) out.toByteArray() else null
+                }
+            }.getOrNull()
+            MediaArtwork(url, bitmap, jpeg)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            Log.w("PlaybackService", "Artwork load failed", e)
+            null
         }
     }
 
@@ -1641,12 +1654,6 @@ class PlaybackService : MediaLibraryService() {
     // URL 换新但位图还是旧的、或位图换新但 URL 已同步 —— 用引用比较,
     // 只要位图实例变了就重发, 保证任务栏封面最终切到新歌
     private var lastMetadataBitmap: Bitmap? = null
-
-    // v2.1.6 · 会话合并：封面位图的 JPEG 编码缓存。
-    // 歌词每推进一行就要重发一次会话 metadata，而 media3 的 artworkData 是 byte[]；
-    // 不按位图实例缓存的话，每秒都要重压一张 512px 图（主线程，纯浪费）。
-    private var cachedArtworkBytes: ByteArray? = null
-    private var cachedArtworkBytesFor: Bitmap? = null
 
     /**
      * v1.8.0 · T5 / v2.0.2：上一次成功 post 通知的时刻（elapsedRealtime）。
@@ -1691,6 +1698,8 @@ class PlaybackService : MediaLibraryService() {
     private var offlineRecordedSongId = -1L
     private var offlineRecordedKey: String? = null
     private var offlineRecordedDurationMs = -1L
+    private var offlineCacheUri: Uri? = null
+    private var offlineCacheKey: String? = null
 
     /**
      * v2.0.0 · T3：把「真的播起来了」的歌写进 [OfflineLibrary]（离线缓存管理页的清单来源）。
@@ -1709,8 +1718,12 @@ class PlaybackService : MediaLibraryService() {
         if (!player.isPlaying) return
         val songId = mediaSongId ?: return
         if (songId <= 0L) return
-        val uri = player.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
-        val key = OfflineKeys.keyOf(uri) ?: return
+        val uri = player.currentMediaItem?.localConfiguration?.uri ?: return
+        if (offlineCacheUri !== uri) {
+            offlineCacheKey = OfflineKeys.keyOf(uri.toString())
+            offlineCacheUri = uri
+        }
+        val key = offlineCacheKey ?: return
         if (songId == offlineRecordedSongId && key == offlineRecordedKey &&
             (durationMs <= 0L || durationMs == offlineRecordedDurationMs)
         ) {
@@ -1733,46 +1746,27 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun currentMediaDisplay(): MediaDisplayLines.Lines {
-        val frame = mediaLyricFrame
-        return MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
-    }
+    private val mediaDisplay = MediaDisplayLines.Cache()
+
+    private fun currentMediaDisplay(): MediaDisplayLines.Lines =
+        mediaDisplay.get(mediaTitle, mediaArtist, mediaLyricFrame)
 
     private fun updatePlaybackState() {
-        val dur = if (player.duration > 0) player.duration else 0L
-        // v2.0.0 · T3：起播后 500ms 内的第一次心跳就把这首歌写进离线曲目索引（幂等，见该函数）。
+        val dur = player.duration.coerceAtLeast(0L)
         runCatching { maybeRecordOfflineLibrary(dur) }
 
-        // v2.1.6 · 会话合并：**playback state 不再由应用手工 setPlaybackState**。
-        // 合并前这里每 ≥900ms 往 legacy MediaSessionCompat 灌一次
-        // `PlaybackStateCompat.Builder().setState(state, position, 1f)`；现在只剩 media3
-        // 一条会话，而 media3 的 MediaSession 会**自己**把 player 的状态（state/position/
-        // bufferedPosition/可用命令）转发给平台，比手写的那份更准 ——
-        // 旧实现把 speed 硬写成 `1f`，暂停时系统仍以为速度是 1.0（`dumpsys media_session`
-        // 里 legacy 那条 `state=2, speed=1.0`、media3 那条 `state=2, speed=0.0` 就是这个 bug）。
-        //
-        // Metadata 仍然要应用自己写：会话的 metadata 来自当前 MediaItem 的 MediaMetadata，
-        // 而歌词行不在 MediaItem 里。去重规则与 v2.1.5 逐字节一致 —— 只在
-        // title/artist/duration/封面变化时才重发，绝不每 250ms 走一遍跨进程 IPC。
-        // v1.5.1 · D：媒体面板歌词。有歌词行时第一行 = 当前歌词、第二行 = 「歌名 · 艺人」；
-        // 没有就走「歌名 / 艺人」。排布规则抽在 MediaDisplayLines（JVM 单测覆盖）。
-        val frame = mediaLyricFrame
-        val display = MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
+        // Media3 发布位置和播放状态。应用仅在文案、时长或封面变化时更新媒体元数据。
+        val display = currentMediaDisplay()
         if (display.title != lastMetadataTitle || display.subtitle != lastMetadataArtist ||
             display.trackInfo != lastMetadataTrackInfo ||
             dur != lastMetadataDuration || currentArtworkUrl != lastMetadataArtwork ||
             currentArtworkBitmap !== lastMetadataBitmap
         ) {
-            // 通知正文那一份**永远**跟着歌词走（上面那个 display）。
-            // 会话 metadata 那一份受回退开关控制，见 [sessionMetadataFollowsLyrics]。
-            // 分支逻辑抽在 MediaSessionMerge.sessionLines（JVM 单测覆盖）。
-            val sessionLines = MediaSessionMerge.sessionLines(
+            val sessionLines = if (sessionMetadataFollowsLyrics) display else MediaSessionMerge.sessionLines(
                 songTitle = mediaTitle,
                 songArtist = mediaArtist,
-                lyricLine = frame.original,
-                followLyrics = sessionMetadataFollowsLyrics,
-                translatedLine = frame.translation,
-                options = frame.options,
+                lyricLine = null,
+                followLyrics = false,
             )
             publishSessionMetadata(sessionLines, dur)
             // v2.1.5 · P1：记下**这一份发布了什么**，供探针与 dumpsys 对照。
@@ -1869,38 +1863,16 @@ class PlaybackService : MediaLibraryService() {
         // 拿不到才退化成自己去拉 artworkUri（很多 ROM 干脆不拉，封面就是空的）。
         // 所以位图必须随 metadata 一起过去。合并后用 media3 的 artworkData 承载：
         // 一次压缩、按位图实例缓存，歌词推进时不会重复编码。
-        currentArtworkBitmap?.let { bmp ->
-            artworkBytesFor(bmp)?.let { bytes ->
-                meta.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-            }
+        currentArtwork?.jpeg?.let { bytes ->
+            meta.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
         }
         player.replaceMediaItem(index, current.buildUpon().setMediaMetadata(meta.build()).build())
-    }
-
-    /**
-     * 把封面位图编码成 `artworkData` 用的字节。**按位图实例缓存** ——
-     * 歌词行每次推进都会重发 metadata，不缓存就会每秒重压一张 512px 图。
-     *
-     * 用 JPEG 而不是 PNG：512px 的 PNG 动辄 300–500 KB，而会话 metadata 走 Binder
-     * （单次事务 1 MB 上限，还要跟其余字段共用）；JPEG(q=85) 通常 40–80 KB，
-     * 且封面不需要 alpha 通道。
-     */
-    private fun artworkBytesFor(bitmap: Bitmap): ByteArray? {
-        if (cachedArtworkBytesFor === bitmap) return cachedArtworkBytes
-        val bytes = runCatching {
-            java.io.ByteArrayOutputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                out.toByteArray()
-            }
-        }.getOrNull()
-        cachedArtworkBytesFor = bitmap
-        cachedArtworkBytes = bytes
-        return bytes
     }
 
     /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
     fun publishStreamBitrate() {
         if (!::player.isInitialized) return
+        val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
         val identity = PreloadSlot.identityFromMediaId(item.mediaId) ?: return
         val selected = player.currentTracks.groups.firstOrNull {
@@ -1909,12 +1881,10 @@ class PlaybackService : MediaLibraryService() {
         val format = selected?.let { group ->
             (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
         }
-        val bitrate = StreamBitrate.resolve(
-            format?.averageBitrate ?: -1,
-            item.localConfiguration?.uri?.toString()?.let { OfflineAudioCache.contentLengthForUrl(it) } ?: 0L,
-            player.duration,
-        )
-        if (bitrate > 0L) onBitrateChanged?.invoke(identity.first, identity.second, bitrate)
+        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, player.duration) {
+            item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
+        }
+        if (bitrate > 0L) publish(identity.first, identity.second, bitrate)
     }
 
     /**
@@ -1964,6 +1934,75 @@ class PlaybackService : MediaLibraryService() {
             .onFailure { Log.w("PlaybackService", "play() rejected: ${it.message}") }
     }
 
+    private fun hasActivePlaybackIntent(): Boolean = hasActivePlaybackIntent(
+        player.playWhenReady, player.playbackState, player.currentMediaItem != null,
+    )
+
+    internal fun onUiBackgrounding() {
+        if (!hasActivePlaybackIntent()) return
+        if (!isServiceStarted) updateNotify()
+        Log.d(
+            "PlaybackService",
+            "UI leaving playback state=${player.playbackState} foreground=$isServiceStarted " +
+                "suppression=${player.playbackSuppressionReason}",
+        )
+    }
+
+    internal fun isActivelyBuffering(): Boolean =
+        player.playbackState == Player.STATE_BUFFERING && hasActivePlaybackIntent() &&
+            player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+
+    /** One same-item restart when buffered audio or a READY clock has stopped reaching the sink. */
+    internal fun reprepareStalledItem(track: TrackKey, positionMs: Long): Boolean {
+        val revision = playRequestGeneration.current
+        if (!hasActivePlaybackIntent() ||
+            player.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE ||
+            playingTrackKey() != track ||
+            (lastLocalStallRepair == track && lastLocalStallRepairRevision == revision)
+        ) return false
+        if (!player.isPlaying && player.totalBufferedDuration < 2_000L) return false
+
+        lastLocalStallRepair = track
+        lastLocalStallRepairRevision = revision
+        Log.i("PlaybackService", "Repreparing stalled media item at ${positionMs}ms")
+        player.stop()
+        player.seekTo(positionMs.coerceAtLeast(0L))
+        player.prepare()
+        return true
+    }
+
+    private fun restartStallObservation() {
+        stallWatch.reset()
+        bufferProgressJob?.cancel()
+        bufferProgressJob = null
+        if (!isActivelyBuffering()) return
+        bufferProgressJob = scope.launch {
+            while (isActive && isActivelyBuffering()) {
+                observePlaybackProgress(buffering = true)
+                delay(1_000L)
+            }
+        }
+    }
+
+    private fun observePlaybackProgress(buffering: Boolean) {
+        val positionMs = player.currentPosition
+        val stalled = stallWatch.observe(
+            SystemClock.elapsedRealtime(), positionMs,
+            if (buffering) player.bufferedPosition else null,
+        )
+        if (stalled) playingTrackKey()?.let { track ->
+            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=$buffering")
+            onPlaybackStalled?.invoke(track, positionMs)
+        }
+    }
+
+    private fun savePlaybackCheckpoint(positionMs: Long, durationMs: Long, explicit: Boolean = false) {
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return
+        if (!checkpoint.record(positionMs, explicit)) return
+        val songId = playingTrackKey()?.id ?: return
+        PlaybackStateManager.saveSongPosition(this, songId, positionMs, durationMs)
+    }
+
     private fun startProgressUpdates() {
         progressJob?.cancel()
         // 未在播放时不起循环：由 onIsPlayingChanged(true) 再启动。暂停态的位置更新
@@ -1972,12 +2011,16 @@ class PlaybackService : MediaLibraryService() {
         progressJob = scope.launch {
             while (isActive && player.isPlaying) {
                 publishStreamBitrate()
-                onProgressUpdate?.invoke(player.currentPosition, player.duration)
+                val positionMs = player.currentPosition
+                val durationMs = player.duration
+                savePlaybackCheckpoint(positionMs, durationMs)
+                onProgressUpdate?.invoke(positionMs, durationMs)
                 updatePlaybackState()
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
                 pushWidgetUpdate()
+                observePlaybackProgress(buffering = false)
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
                 // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降。
@@ -1987,19 +2030,17 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "ncrust_playback",
-                "Arris 音乐播放",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "正在播放的音乐"
-                setShowBadge(false)
-                setSound(null, null)
-                enableVibration(false)
-            }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            "ncrust_playback",
+            "Arris 音乐播放",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "正在播放的音乐"
+            setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
         }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     /**
@@ -2016,7 +2057,7 @@ class PlaybackService : MediaLibraryService() {
      * 「只有暂停再播放才刷新」。
      *
      * 歌词行本身一直是通的：`PlayerViewModel` 用 2Hz 位置流算出当前行，跨行时写
-     * [mediaLyricLine]；`updatePlaybackState()`（2Hz）也一直在更新会话 metadata。
+     * [mediaLyricFrame]；`updatePlaybackState()`（2Hz）也一直在更新会话 metadata。
      * 断的只有「通知正文」这一环。
      *
      * ## v2.0.2 推翻了 v1.8.0 的版本闸门（真机实测，不是推理）
@@ -2087,7 +2128,7 @@ class PlaybackService : MediaLibraryService() {
                 "title=" + lastPublishedPanelTitle +
                 " artist=" + lastPublishedPanelArtist +
                 " displaySubtitle='" + lastPublishedPanelDisplaySubtitle + "'" +
-                " line=" + mediaLyricLine +
+                " line=" + mediaLyricFrame.original +
                 " lastAt=" + lastLyricNotifyAt +
                 " gate[post=" + probeGatePost + " defer=" + probeGateDefer +
                 " same=" + probeGateSame + " notStarted=" + probeGateNotStarted + "] " +
@@ -2191,7 +2232,7 @@ class PlaybackService : MediaLibraryService() {
             .setContentText(display.subtitle)
             .setSubText(display.trackInfo)
             .setSmallIcon(com.takahashirinta.ncrust.R.drawable.ic_tux_notification)
-            .setOngoing(false)
+            .setOngoing(hasActivePlaybackIntent())
             // v1.8.0 · T5：逐行重 post 时不要再次提醒。媒体通知本身在 S6 上
             // defaults/sound/vibrate 全为空，但其它 ROM 未必 —— 显式声明，
             // 保证"刷新歌词"不会被用户感知成"又弹了一条通知"。
@@ -2273,7 +2314,7 @@ class PlaybackService : MediaLibraryService() {
      * 换句话说：媒体通知这一份产物，多出来的那条要么是空的、要么是无歌词的重复项，
      * 没有任何场景是用户想要的。
      *
-     * ## 修法：覆盖成空实现，通知由 [updateNotify] 单点管理
+     * ## 修法：通知由 [updateNotify] 单点管理
      *
      * media3 的判定链是（`media3-session-1.5.0` 字节码核实）：
      * ```
@@ -2299,8 +2340,7 @@ class PlaybackService : MediaLibraryService() {
         session: androidx.media3.session.MediaSession,
         startInForegroundRequired: Boolean,
     ) {
-        // 刻意留空：不调用 super，media3 就不再 post 它自己那条通知。
-        // 需要显式覆盖**双参**版本（单参版只置位 defaultMethodCalled，覆盖它挡不住）。
+        if (startInForegroundRequired && !isServiceStarted) updateNotify()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -2315,13 +2355,14 @@ class PlaybackService : MediaLibraryService() {
         instance = null
         isServiceStarted = false
         progressJob?.cancel()
+        bufferProgressJob?.cancel()
         // v2.0.2：丢掉挂着的歌词重试，别让一个已销毁的服务再收到回调
         lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
         cancelArtworkIdleRelease()
         // Do NOT null the companion callbacks here — the ViewModel registers them once and
         // they must survive a service stop/restart cycle (e.g. stopSelf then play again).
         // ViewModel.onCleared() is responsible for clearing them when the ViewModel dies.
-        currentArtworkBitmap = null
+        currentArtwork = null
         mediaSession?.release()
         player.release()
         // R2：显式停掉 PCM 需求监听，避免已销毁的服务继续持有 snapshot observer。
@@ -2339,15 +2380,23 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        if (hasActivePlaybackIntent()) {
+            if (!isServiceStarted) updateNotify()
+            if (isServiceStarted) {
+                Log.i("PlaybackService", "Activity task removed, retaining active media playback")
+                return
+            }
+        }
         Log.d("PlaybackService", "onTaskRemoved")
+        isServiceStarted = false
+        bufferProgressJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         LiveUpdateNotifier.cancel(this)
         mediaTitle = "Arris"
         mediaArtist = ""
         mediaSongId = null
         clearPendingNext()
-        currentArtworkBitmap = null
-        currentArtworkUrl = null
+        clearCurrentArtwork()
         stopSelf()
         super.onTaskRemoved(rootIntent)
     }

@@ -159,7 +159,9 @@ class SavedSongSyncTest {
         )
         val first = acc.map { it.trackKey.id }
         repeat(5) {
-            acc = merge(acc, listOf(3L, 1L), mapOf(3L to song(3L), 1L to song(1L)))
+            val merged = merge(acc, listOf(3L, 1L), mapOf(3L to song(3L), 1L to song(1L)))
+            assertSame(acc, merged)
+            acc = merged
             assertEquals("第 N 次 merge 改了顺序 —— 列表会每次刷新都抖一下", first, acc.map { it.trackKey.id })
         }
     }
@@ -221,6 +223,33 @@ class SavedSongSyncTest {
         val out = SavedSongSync.addManual(before, song(7L), now + 1)
         assertSame("已可见的条目再加一次是零变化", before, out)
         assertEquals(SavedSongOrigin.REMOTE, out.single().origin)
+    }
+
+    @Test
+    fun `批量收藏保持逐首插入的顺序和墓碑语义`() {
+        val preserved = remote(3L)
+        val before = listOf(remote(7L, tombstoned = true), remote(7L), preserved)
+        val songs = listOf(song(7L, "恢复"), song(3L), song(7L, "重复"), song(8L), song(9L))
+        val sequential = songs.fold(before) { entries, song -> SavedSongSync.addManual(entries, song, now) }
+        val batch = SavedSongSync.addManualAll(before, songs, now)
+
+        assertEquals(sequential, batch)
+        assertEquals(listOf(9L, 8L, 7L, 3L), batch.map { it.trackKey.id })
+        assertEquals("恢复", batch[2].song.name)
+        assertSame(preserved, batch.last())
+        assertSame(batch, SavedSongSync.addManualAll(batch, songs, now + 100))
+    }
+
+    @Test
+    fun `合并重复身份保留首个位置与时间相同时的首个载荷`() {
+        val first = remote(7L).copy(song = song(7L, "第一份"))
+        val untouched = remote(3L)
+        val duplicate = first.copy(song = song(7L, "第二份"))
+
+        val merged = SavedSongSync.consolidate(listOf(first, untouched, duplicate))
+        assertEquals(listOf(7L, 3L), merged.map { it.trackKey.id })
+        assertEquals("第一份", merged[0].song.name)
+        assertSame(untouched, merged[1])
     }
 
     // -------------------------------------------------------------- 规则 6 ----

@@ -16,13 +16,14 @@ internal class BreathingMotion {
         private set
     private var sinceDraw = 0f
     private var slowFrames = 0
+    val hasEnergy: Boolean get() = spread != 0f || shimmer != 0f
 
     fun advance(dtMs: Float, active: Boolean, available: Boolean, low: Float, mid: Float, high: Float): Boolean {
         val live = active && available
         slowFrames = if (!live) 0 else if (dtMs > 54f) slowFrames + 1 else (slowFrames - 1).coerceAtLeast(0)
         val fellBack = slowFrames >= 8 && !fluidTooSlow
         if (fellBack) fluidTooSlow = true
-        if (!live && spread == 0f && shimmer == 0f) {
+        if (!live && !hasEnergy) {
             sinceDraw = 0f
             return false
         }

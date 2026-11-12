@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.network
 
+import com.takahashirinta.ncrust.network.crypto.lowerHex
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -197,7 +198,7 @@ object XeapiState {
 
     private fun generateDeviceId(prefs: SharedPreferences): String {
         val bytes = ByteArray(16).also(random::nextBytes)
-        val id = bytes.joinToString("") { "%02x".format(it) }
+        val id = bytes.lowerHex()
         prefs.edit().putString(KEY_DEVICE_ID, id).apply()
         Log.i(TAG, "xeapi deviceId generated (first run on this device)")
         return id

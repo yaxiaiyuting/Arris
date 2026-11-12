@@ -94,10 +94,13 @@ object UpdateChecker {
 
         val root = runCatching { JsonParser.parseString(releasesJson) }.getOrNull() ?: return null
         if (!root.isJsonArray) return null
+        return findIn(root.asJsonArray, current, variant)
+    }
 
+    internal fun findIn(releases: JsonArray, current: AppVersion, variant: String): UpdateInfo? {
         val wantedVariant = variant.lowercase()
         var best: UpdateInfo? = null
-        for (element in root.asJsonArray) {
+        for (element in releases) {
             if (!element.isJsonObject) continue
             val release = element.asJsonObject
             // 草稿与预发布都不可见：草稿是发布者还没发出来的，预发布是拿来试的。
@@ -120,7 +123,7 @@ object UpdateChecker {
                     assetName = hit.name,
                     assetUrl = hit.url,
                     assetSize = hit.size,
-                    releaseTag = release.stringOrNull("tag_name"),
+                    releaseTag = tagName,
                     // 浏览器入口优先用官网（国内裸连打不开 GitHub）；没有 site_url 的老载荷才回落到 html_url。
                     releasePageUrl = release.stringOrNull("site_url") ?: release.stringOrNull("html_url"),
                     publishedAt = release.stringOrNull("published_at"),

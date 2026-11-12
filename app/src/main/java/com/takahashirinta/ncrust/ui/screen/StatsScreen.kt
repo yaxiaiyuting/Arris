@@ -131,7 +131,7 @@ fun StatsScreen() {
     }
 
     val songRows: List<SongStat> = remember(snapshot) {
-        StatsMath.topN(snapshot.songs.values.toList(), StatsLimits.TOP_SONGS) { it.ms }
+        StatsMath.topN(snapshot.songs.values, StatsLimits.TOP_SONGS) { it.ms }
     }
     val sourceRows: List<Pair<String, Long>> = remember(snapshot) {
         snapshot.bySource.entries

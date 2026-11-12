@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# 从宿主给 Android 里的 Arris 发媒体键。
+# 用法：arris-keys play|next|prev|stop|volup|voldown|mute|seek+
+set -euo pipefail
+SERIAL=10.177.0.2:5555
+key() { adb -s "$SERIAL" shell input keyevent "$1" >/dev/null; }
+case "${1:-}" in
+  play)     key 85 ;;   # MEDIA_PLAY_PAUSE
+  next)     key 87 ;;   # MEDIA_NEXT
+  prev)     key 88 ;;   # MEDIA_PREVIOUS
+  stop)     key 86 ;;   # MEDIA_STOP
+  volup)    key 24 ;;
+  voldown)  key 25 ;;
+  mute)     key 164 ;;  # VOLUME_MUTE
+  seek+)    key 90 ;;   # MEDIA_FAST_FORWARD
+  seek-)    key 89 ;;   # MEDIA_REWIND
+  *) echo "用法：arris-keys play|next|prev|stop|volup|voldown|mute|seek+|seek-" >&2; exit 2 ;;
+esac

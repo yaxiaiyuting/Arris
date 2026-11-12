@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# 把 Arris 当桌面播放器用：确保 Droidloom 运行时在跑，再启动 Arris 窗口。
+#
+#   arris-dl            启动（窗口大小沿用上次）
+#   arris-dl 480x900    指定初始尺寸
+#   arris-dl stop       停掉整个 Android 运行时（省内存）
+set -euo pipefail
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+PKG=com.takahashirinta.ncrust
+COMPONENT=$PKG/$PKG.MainActivity
+
+if [ "${1:-}" = "stop" ]; then exec droidloomctl stop; fi
+
+droidloomctl start --no-wait >/dev/null 2>&1 || true
+# 已经在跑就不等；没跑就等就绪
+droidloomctl status >/dev/null 2>&1 || droidloomctl wait >/dev/null 2>&1 || true
+
+if [ -n "${1:-}" ]; then
+  exec droidloomctl launch --component "$COMPONENT" --resolution "$1" "$PKG"
+else
+  exec droidloomctl launch --component "$COMPONENT" "$PKG"
+fi

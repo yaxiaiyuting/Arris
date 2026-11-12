@@ -36,7 +36,7 @@ data class MediaLyricFrame(
 /** Align once when either track changes, then find the current sentence with a binary search. */
 class MediaLyricTrack private constructor(
     private val main: List<LrcLine>,
-    private val translations: Map<Long, String>,
+    private val translations: Array<String?>,
 ) {
     fun at(positionMs: Long, enabled: Boolean, options: MediaLyricOptions): MediaLyricFrame {
         if (!enabled || positionMs < 0L) return MediaLyricFrame(options = options)
@@ -46,14 +46,23 @@ class MediaLyricTrack private constructor(
             val mid = (lo + hi) ushr 1
             if (main[mid].timeMs <= positionMs) lo = mid + 1 else hi = mid
         }
-        val line = main.getOrNull(lo - 1)
-        return MediaLyricFrame(line?.text, line?.let { translations[it.timeMs] }, options)
+        val index = lo - 1
+        return MediaLyricFrame(main.getOrNull(index)?.text, translations.getOrNull(index), options)
     }
 
     companion object {
         fun from(main: List<LrcLine>, translated: List<LrcLine>, toleranceMs: Long = 1500L): MediaLyricTrack {
             val sorted = main.sortedBy { it.timeMs }
-            val matched = mutableMapOf<Long, Pair<Long, String>>()
+            if (sorted.isEmpty() || translated.isEmpty()) return MediaLyricTrack(sorted, emptyArray())
+            val matched = arrayOfNulls<String>(sorted.size)
+            val bestDelta = LongArray(sorted.size)
+            // 同一时刻的多行共用译文。采样会显示该时刻的最后一行。
+            val lastAtTime = IntArray(sorted.size) { it }
+            for (index in sorted.lastIndex - 1 downTo 0) {
+                if (sorted[index].timeMs == sorted[index + 1].timeMs) {
+                    lastAtTime[index] = lastAtTime[index + 1]
+                }
+            }
             for (sub in translated) {
                 if (sub.text.isBlank()) continue
                 var lo = 0
@@ -62,14 +71,21 @@ class MediaLyricTrack private constructor(
                     val mid = (lo + hi) ushr 1
                     if (sorted[mid].timeMs < sub.timeMs) lo = mid + 1 else hi = mid
                 }
-                val owner = listOfNotNull(sorted.getOrNull(lo - 1), sorted.getOrNull(lo))
-                    .minByOrNull { abs(it.timeMs - sub.timeMs) } ?: continue
-                val delta = abs(owner.timeMs - sub.timeMs)
+                val nearest = when {
+                    lo == 0 -> 0
+                    lo == sorted.size -> sorted.lastIndex
+                    abs(sorted[lo - 1].timeMs - sub.timeMs) <= abs(sorted[lo].timeMs - sub.timeMs) -> lo - 1
+                    else -> lo
+                }
+                val owner = lastAtTime[nearest]
+                val delta = abs(sorted[owner].timeMs - sub.timeMs)
                 if (delta > toleranceMs) continue
-                val old = matched[owner.timeMs]
-                if (old == null || delta < old.first) matched[owner.timeMs] = delta to sub.text
+                if (matched[owner] == null || delta < bestDelta[owner]) {
+                    matched[owner] = sub.text
+                    bestDelta[owner] = delta
+                }
             }
-            return MediaLyricTrack(sorted, matched.mapValues { it.value.second })
+            return MediaLyricTrack(sorted, matched)
         }
     }
 }

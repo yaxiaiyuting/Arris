@@ -12,173 +12,11 @@ import com.takahashirinta.ncrust.ui.player.waveform.BandBallistics
 import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 
 /**
- * v1.8.0 · T3：音频可视化的**无锁单写者环形缓冲 + 柱状滚动窗口 + 时间常数平滑**（纯逻辑，可 JVM 单测）。
+ * 波形的单写者缓冲和滚动画面。音频线程写入四个频带值与到达时间，最后发布写入位置。
+ * UI 线程按帧消费，溢出时跳过最旧的样本，音频线程无需等待。
  *
- * 线程模型是本文件存在的全部理由：
- *
- *  - **写**只有一条线程 —— ExoPlayer 的 playback 线程（`ExoPlayer:Playback`，
- *    THREAD_PRIORITY_AUDIO）。[push] 里只做一次数组写 + 一次 volatile 自增，
- *    **零分配、零锁、零 IO**：音频线程上任何一次 GC 停顿都是爆音。
- *  - **读**是 UI 线程按帧率调用的 [pump]：把"上次之后新到的柱"搬进滚动窗口。
- *  - 两侧唯一的同步是 `writeIndex` 的 volatile 语义（单写者 ⇒ 读到的一定是某个一致前缀）。
- *    溢出时**丢最旧的**而不是等 —— 可视化允许丢帧，绝不允许回压到音频线程。
- *
- * ## v1.8.1：为什么加了平滑
- *
- * 音频数据只有 30 柱/秒，直接把这 30 个值画成柱高，画面就是"每 33ms 硬跳一次"，
- * 观感上明显是一跳一跳的（用户反馈"帧率太低"。**根因不是帧率而是阶跃**）。
- * 现在拆成两层：
- *
- *  - [targets] = 最新数据（阶跃）；
- *  - [bars] = 画面值，由一个**二阶系统（弹簧-阻尼）**推进：起音快（[ATTACK_TAU_MS] 的包络，
- *    跟得上鼓点）、回落慢（[RELEASE_TAU_MS]，像 VU 表一样自然衰减），
- *    并且**有惯性、有轻微过冲**（ζ = 0.75 ⇒ 过冲 2.8%）。
- *
- * **v3.4.5：指数逼近（`k = 1 - exp(-dt/tau)`）已换成弹簧-阻尼的闭式解** ——
- * 指数逼近永远不会越冲、也永远不会回弹，用户读到的就是「小球没有弹起来的感觉」。
- * 闭式解同样是"与刷新率无关"的（而且比时间常数形式更强：对任意 dt **精确**，
- * 不是"误差很小"）。推导与参数依据见 [BandBallistics] 的 KDoc。
- *
- * ## v2.8.0 · P1-A：峰值保持 + 两个动画相位（仍然零分配）
- *
- * A 档的**峰值保持**（[peaks]）与 B 档的**渐变流动相位** / **呼吸相位**都放在这一层，
- * 理由有两个，都是踩过的坑：
- *
- *  1. **可单测**：这些量都是"每帧推进一步"的纯状态，放 draw lambda 里就只能靠肉眼；
- *  2. **必须并进收敛判据**：探针 §1 明确警告过「峰值只活在 draw 里 ⇒ bars 一收敛就
- *     `pump` 返回 false ⇒ 峰值冻在画面上永不落下」（v1.8.1 被单测抓到过同形状的缺陷）。
- *     所以 [pump] 的返回值把「峰值还在落 / 呼吸还在走」也算进去，`WaveformRingTierTest`
- *     有专门用例钉住「峰值最终归零且之后不再要求重绘」。
- *
- * 两个相位的**空转边界**：相位只在 `active`（播放中且未缓冲）**且画面最新一根柱还有内容**
- * （`bars[barCount-1] > [ANIMATION_MIN_SIGNAL]`）时前进，而且只有真的前进了才要求重绘 ——
- * 否则一首歌的静音段会让 60fps 白烧在一条什么都没有的波形上，与 `AudioVisualizer.kt`
- * 的「不空转」契约冲突。渐变流动没有额外的门槛：它和呼吸共用同一个「有信号」条件
- * （静音时既没有色带要流、也不该呼吸）。
- */
-/**
- * ## ⚠️ v3.6.3：**先读这一节** —— 滚动模型是「波形自己的播放队列」
- *
- * 用户 v3.6.2 的反馈是「一阵子动一下一阵子停止」。根因不是刷新率、也不是插值：
- * 真实音频链路会把**多根柱放进同一次回调**（同一个 `uptimeMillis()`），而 v3.4.7 的模型
- * 有两个隐含前提 —— 窗口一帧最多平移一格、相位按「距最后一根柱的到达时刻」算。
- * 成批到达把两个前提都破了：
- *
- * ```
- * 3 根/300ms（60Hz）：8 帧位移 0.0000 → 一帧 2.00 格 → 0.05 … → 再 8 帧 0.0000
- * 2 根/200ms（60Hz）：3 帧位移 0.0000 → 一帧 1.08 格 → 0.08 …
- * ```
- *
- * 现在的模型（见 [sinceBarMs] / [consumeOne] / [recordBatch]）：
- *
- *  1. **每根柱的间隔按批折算**：`(最新批起点 − 最早批起点) ÷ 中间各批柱数之和`。
- *     3 根/300ms 读出 100ms/根（不是 300ms，也不是 50ms），由 [recordBatch] 发布。
- *  2. **画面按时间铺开**：`sinceBarMs` 每帧只加真实帧间隔；跨过一个格周期才消费**一根**。
- *     一批 3 根会在 3 个格周期里被逐根取走 ⇒ 0.16~0.17 格/帧、0 停顿帧。
- *  3. **重绘门槛看整个窗口**，不看最新一格：一个安静缓冲落在最右格时，左边还有内容在滚动，
- *     旧判据会停止重绘 1~3 帧（另一种「顿住」）。
- *
- * ### 不要退回去的四件事
- *
- *  - 不要把「画面时间」与柱的到达时间戳相减：成批到达时两者不是一一对应的。
- *  - 不要在一帧里消费所有 pending：那正是「一帧冲 N 格、然后等 N 格」。
- *  - 不要用「最新一根的间隔」当分母：它是回调间隔，不是每根柱的时间。
- *  - 不要只看 `targets[barCount-1]` 决定要不要重绘（见 [windowHasSignal]）。
- *
- * 下面两节（v3.3.2 / v3.4.7）保留为历史：它们修的是「一根柱一格」稳态下的分母量化与
- * 跨时钟相减，那些结论仍然成立；只是**相位不再锚在到达时刻**上。
- */
-/**
- * ## ⚠️ v3.3.2：滚动抖动的**真实机制**（历史模型；生产代码已改为上面的播放队列）
- *
- * 前六次尝试全部失败，根因是**判据口径**与**归因**都错了。这一节记录的是
- * 用「与渲染层同源的口径」（`位移 = Δ窗口平移格 + ΔscrollPhase01()`）量出来的事实，
- * 不是推理。所有数字都可由 `WaveformScrollJitterDiagTest` 复现。
- *
- * ### 症状与量到的形状
- *
- * 用户：「波形抖动还是老问题」/「新的播放条也还在抖动，这次甚至会抽搐」。
- * 60Hz 面板、柱间隔 100ms 时，逐帧可见位移长这样（单位 = 格，名义步长 0.1667）：
- *
- * ```
- * 0.1667 ×5 帧 → 0.0000 → 0.1391 → 0.0000 → 1.1399 → 0.4903 …
- * ```
- *
- * 也就是**每 ~100ms 一轮**：先停住 1~4 帧（位移 0.0000），再一次性冲出 1.1 格（名义的 660%）。
- * 这就是「顿-冲」，也就是用户说的「抽搐」。
- *
- * ### 机制（两个缺陷叠加，**都不是**「到达时清零」本身）
- *
- * 1. **相位斜坡的分母被 vsync 量化，永远收敛不到真值 —— 这是主因。**
- *    分母（柱间隔）原本在 **UI 消费处**倒推：`sinceBarMs / 消费根数`。而 UI 消费只能发生在
- *    帧上，于是一根真实 100ms 的柱被量成 **100 / 116.7 / 133.3ms** 三者之一，
- *    滑动平均因此**永远收敛不到真值** —— 同口径实测 20 秒里从 100ms 一路爬到 **155ms**
- *    且没有停下来的意思。分母偏大 ⇒ 相位按 0.65 倍速爬 ⇒ **爬满一格之前下一根柱就到了**。
- * 2. **于是相位撞上 `scrollPhase01()` 的 `coerceIn(0, 1)` 顶棚，停在 1.0 上不动**，
- *    连续几帧位移 `0.0000`；下一根柱到达时相位被折回，位移一次性冲出 1.1 格。
- *    旧代码在到达时把 `sinceBarMs` **清零**（而不是减整数）又放大了这一下。
- *
- * `barIntervalMs` 就是那个爬飞的分母 —— 它是本缺陷的**指纹**：
- * 只要它在真机上单调爬升，画面就一定在顿-冲。
- *
- * ### 修法（v3.3.2 的三条 + v3.4.7 修正的第 2 条）
- *
- * | # | 改动 | 为什么必须 |
- * |---|---|---|
- * | 1 | 分母改在 **push（音频线程）处**测：每根柱带一个 `arrivalAtMs` | 那是音频缓冲**自己的节拍**，与 vsync 无关 ⇒ 没有量化，收敛到真值（实测钉在 100.00ms） |
- * | 2 | 消费时把相位**锚到那根柱的到达时刻** | 帧时间轴与到达时间轴之间那一帧的相位误差被一次性算掉，不会逐轮累积。⚠️ **v3.3.2 的实现是错的**（`frameClockMs − clockOffsetMs − pendingArrivalMs`：跨时钟相减），见下一节 |
- * | 3 | 折回**小数余量**而不是清零；且推进**不再受信号门槛控制** | 清零会丢掉「这一帧多出来的位移」；门槛挂在原始柱高上，真实音乐里单根安静缓冲就会让相位冻住 5 帧、再冲出 1 格 |
- *
- * 信号门槛（[ANIMATION_MIN_SIGNAL]）**保留**，但只管「要不要为这一帧排重绘」——
- * v1.8.1 的「不空转」契约与暂停即停帧契约一行没改。
- *
- * ### ⚠️⚠️ v3.4.7：第 2 条**当时是错的**，这才是「改完照抖」的根因
- *
- * 上面那一版的锚点式子是 `frameClockMs − clockOffsetMs − pendingArrivalMs`，其中
- * `frameClockMs` 是**本类自己按 `dt` 累加**的帧时钟，而且逐帧 `+= dtForPhase.toLong()`。
- * 于是它拿**两个不同的时钟**相减：一个自攒的（每帧被截断 0.33~0.67ms ⇒ **4%/秒**的系统性
- * 偏慢），一个是音频线程的 `SystemClock.uptimeMillis()`。差值单调跑负 ⇒ 相位被钉在 0 或
- * 顶棚上跳。真机探针量到的指纹是 `sinceBarMs` 只在 `{0.00, 41.18}` 两个值之间跳、
- * 相位每 5 帧走 `0.206 × 5`、第 6 帧被覆盖回 0 —— **每格丢一帧的位移**。
- *
- * 当时还有一条**反向的**错误归因把它盖住了：把 `.toLong()` 改成四舍五入会让两条判据变红，
- * 于是它被当成「有意的补偿」写进了注释。真相是：**向下取整与「分母偏大」这两处偏差
- * 在互相抵消一部分**，谁单独改都会让另一处的偏差露出来。两处一起改（分母在到达处测、
- * 帧时钟换成真实时间戳）才是同一个模型。
- *
- * 现在：**本类不再攒任何时钟**。[pump] 收的 `nowMs` 就是帧循环那一帧的时间戳
- * （`withFrameNanos` 的 `frameTimeNanos / 1e6`，与 `SystemClock.uptimeMillis()` 同一个
- * 单调时钟基准），相位 = `nowMs − 最后一根被消费的柱的到达时刻`，两个量同源、都不累加。
- *
- * **判据也一起改了**：到达帧上相位本来就是「这一帧比那根柱晚了多少」这个**小正数**，
- * 所以「到达帧位移 = 名义步长」是可判定的（旧模型在这一帧量到 `0.0000`）。
- * 这一条由 `WaveformScrollJitterRegressionTest` 与真机探针 `WaveformVsyncProbeTest` 同时钉住。
- *
- * ### 改前 / 改后（同一台仿真、同一口径、时间相邻）
- *
- * | 场景 | 改前抖动率 | 改后抖动率 | 改前顿帧 | 改后顿帧 |
- * |---|---|---|---|---|
- * | 理想帧 + 理想柱 | 6.09% | 6.09% | 2 | 2 |
- * | 仅柱与 vsync 错开 | 0.00% | 0.00% | 0 | 0 |
- * | 仅帧时间抖动 | 14.34% | 14.34% | 2 | 2 |
- * | 帧抖 + 柱抖 | 22.20% | 22.20% | 22 | 22 |
- * | **真实音乐幅度（每 20 柱一根安静缓冲）** | **50.00%** | **0.00%** | **45** | **0** |
- * | **真实音乐幅度（每 8 柱一根安静缓冲）** | **79.87%** | **0.00%** | **114** | **0** |
- *
- * 读法：**「帧时间抖动」那一列的贡献是零**（改前改后完全相同）——它本身不是缺陷，
- * 位移本来就该正比于 `dt`（匀速运动在帧时间上就是不等步长的）。
- * 抖动全部来自上面那两条被修掉的缺陷。
- *
- * ### 教训（写给下一个改这里的人）
- *
- * - **判据必须直接读渲染层消费的那两个量**（[scrollPhase01] 与窗口平移格数）。
- *   前三次失败都是因为在测试里另建了「可见位置」的定义：只量相位差分 /
- *   把平移硬编码成 +1 / `shiftedCells + frac(phase)`。仿真因此可以一路绿灯而真机照抖。
- * - **`[barIntervalMs]` 是诊断指纹**：它会爬，就说明分母又被量化了。
- * - 帧时间抖动（真机 `dt` 在 15~20ms 跳）**不是**缺陷，不要去平滑它 ——
- *   平滑帧时间等于篡改速度，只会把匀速运动变成忽快忽慢。
- * - **两个时钟相减之前，先问它们是不是同一个时钟。** 「看起来都是 uptime 量级」不够：
- *   只要其中一个是自己攒的，它就和对方不是同一个时钟（v3.4.7 的根因）。
+ * 可见历史按音频柱的间隔移动，亚格位移由渲染层处理。每格的柱高、小球和峰值短横
+ * 各自推进，缺样、缓冲和恢复时沿用同一套窗口。帧间复用所有数组。
  */
 class WaveformRing(
     /** 环形缓冲容量（柱数）。UI 掉帧时最多积压这么多，再多就丢最旧的。 */
@@ -388,109 +226,74 @@ class WaveformRing(
     @Volatile
     private var scrollSpeedFactor: Float = 1f
 
-    /** 最新数据（阶跃）。UI 线程原地更新，绝不重新分配。 */
-    private val targets = FloatArray(barCount)
-
-    /** v2.9.0：与 [targets] 对齐的**低频**最新值（节拍判据用）。 */
+    private val fullWindow = ColumnWindow(barCount, scrollDisplay = false)
+    private val bandWindows = Array(3) { ColumnWindow(barCount, scrollDisplay = true) }
     private var bassTarget = 0f
 
-    /** v3.2.2：与 [targets] 对齐的三条**频带历史窗口**（三条泳道的画面值来源）。 */
-    private val lowTargets = FloatArray(barCount)
-    private val midTargets = FloatArray(barCount)
-    private val highTargets = FloatArray(barCount)
-
-    /**
-     * v3.4.4：三条泳道的**画面值**窗口 —— 就是 [lowTargets] / [midTargets] / [highTargets]
-     * 经过 [ATTACK_TAU_MS] / [RELEASE_TAU_MS] 弹道平滑之后的结果。
-     *
-     * ## 为什么必须有这一层（这是「小球和横线没有弹起来的物理感觉」的唯一根因）
-     *
-     * v3.2.2 引入三泳道时，几何取值直接从**原始**窗口 `*Targets[i]` 算：
-     * `BandScroll.fillLane` 读的是 `lowTargets/midTargets/highTargets`，
-     * 而 `AudioVisualizer` 的三泳道分支画的就是它。于是 [bars] 那一层的
-     * 起音 22ms / 回落 130ms **整条被绕过了** —— 三泳道的画面值与音频缓冲**逐格相等**：
-     *
-     *  - 一根新柱到达 ⇒ 该格高度**瞬间**跳到新值（没有起音，也没有回落尾巴）；
-     *  - 柱间隔 82.6ms（真机 PCM 缓冲实测）⇒ 画面是一条 **12.1Hz 的阶梯**。
-     *
-     * 用户读到的就是「小球（`heights[i]` 画在色带顶边上的圆点）与横线（色带顶边包络）
-     * 没有真实的弹起来的物理感觉」，而且是「一口一口拼上去 / 吃回去」——
-     * 因为每一格都是**瞬时**赋值：涨是硬跳、落也是硬跳。
-     *
-     * 单条曲线那条老路径一直是有弹道的（`heights[i] = sqrt(bars[i]) * …`，`bars` 带 22/130ms），
-     * 所以这是三泳道引入的**回归**，不是新需求。
-     *
-     * ## 为什么是「先同步平移、再平滑」而不是「直接对旧值做平滑」
-     *
-     * 平移与平滑**必须分开**，否则会把 v3.4.1 修掉的时域模糊又请回来：
-     * [shiftBandIn] 把**两个数组一起**平移一格（画面值跟着原始窗口走，形状是刚性平移），
-     * [approach] 只在这个已经平移过的坐标系里做逐格弹道。
-     * 两步都对「格」是平移不变的 ⇒ 整条轨迹 == 未平移轨迹的刚性平移，
-     * 不会跨格混合（v3.4.1 的「峰尖度波动 90%」正是跨格混合造成的）。
-     *
-     * 代价：3 × `barCount` 个 float 与每帧 3 × `barCount` 次乘加，**零分配**。
-     */
-    private val lowBars = FloatArray(barCount)
-    private val midBars = FloatArray(barCount)
-    private val highBars = FloatArray(barCount)
-
-    /** 画面上的柱子高度（0..1）= 平滑后的值。UI 线程原地更新。 */
-    private val bars = FloatArray(barCount)
-
-    /**
-     * v3.4.5：柱高的**速度**（归一化高度/秒）—— 二阶系统（弹簧-阻尼）的第二个状态量。
-     *
-     * 它同时是小球的**地面速度**（柱顶在往上顶的时候会把小球踢起来），
-     * 所以必须与 [bars] 一起推进、一起进重绘判据。
-     */
-    private val barVel = FloatArray(barCount)
-
-    /** A 档：峰值/小球（0..1）。独立数组，每帧原地更新 —— 绝不每帧分配。 */
-    private val peaks = FloatArray(barCount)
-
-    /** v3.4.5：小球的速度（归一化高度/秒，向上为正）。 */
-    private val peakVel = FloatArray(barCount)
-
-    /** v3.4.5：小球是否静止在柱顶上（静止态不施加重力，这是"停得住"的原因）。 */
-    private val peakRest = BooleanArray(barCount)
-
-    /** v3.4.5：柱高二阶系统的精确解步进器（起音 / 回落各一个，构造期建好，帧路径零分配）。 */
     private val springAttack = BandBallistics.SpringStep()
     private val springRelease = BandBallistics.SpringStep()
-
-    /** v3.4.5：小球步进器与两个复用的暂存区（帧路径零分配）。 */
     private val ballStep = BandBallistics.BallStep()
     private val springOut = FloatArray(2)
     private val ballOut = FloatArray(3)
+    private var preparedStepSeconds = Float.NaN
 
-    /** v3.4.5：三条泳道柱高的速度（小球的"地面速度"）。 */
-    private val lowBarVel = FloatArray(barCount)
-    private val midBarVel = FloatArray(barCount)
-    private val highBarVel = FloatArray(barCount)
+    private class ColumnWindow(size: Int, private val scrollDisplay: Boolean) {
+        val targets = FloatArray(size)
+        val heights = FloatArray(size)
+        val heightVelocity = FloatArray(size)
+        val balls = FloatArray(size)
+        val ballVelocity = FloatArray(size)
+        val ballResting = BooleanArray(size)
+        val dash = FloatArray(size)
 
-    /** v3.4.5：三条泳道各自的小球（位置 / 速度 / 静止标志）。 */
-    /**
-     * v3.4.6：**峰值短横的保持值**（归一化高度，`[0,1]`）。
-     *
-     * 与 [peaks] / [lowPeaks] 等（小球位置）是**两份独立状态**：小球是受重力的质点，
-     * 短横是"这一格曾经到过的最高点"（见 [BandBallistics.holdStep]）。
-     * 在它之前短横只是"小球位置 + 常量"，两者永远同步 —— 用户实测两次指出这一点。
-     */
-    private val dash = FloatArray(barCount)
+        fun clear() {
+            targets.fill(0f)
+            heights.fill(0f)
+            heightVelocity.fill(0f)
+            balls.fill(0f)
+            ballVelocity.fill(0f)
+            ballResting.fill(false)
+            dash.fill(0f)
+        }
 
-    private val lowDash = FloatArray(barCount)
-    private val midDash = FloatArray(barCount)
-    private val highDash = FloatArray(barCount)
+        fun append(value: Float, blank: Boolean, hold: Boolean) {
+            targets.copyInto(targets, startIndex = 1)
+            // 泳道的画面状态随历史移动。单条曲线的平滑状态按屏幕坐标保留。
+            if (scrollDisplay) {
+                heights.copyInto(heights, startIndex = 1)
+                heightVelocity.copyInto(heightVelocity, startIndex = 1)
+                balls.copyInto(balls, startIndex = 1)
+                ballVelocity.copyInto(ballVelocity, startIndex = 1)
+                ballResting.copyInto(ballResting, startIndex = 1)
+                dash.copyInto(dash, startIndex = 1)
+            }
+            if (hold) return
 
-    private val lowPeaks = FloatArray(barCount)
-    private val midPeaks = FloatArray(barCount)
-    private val highPeaks = FloatArray(barCount)
-    private val lowPeakVel = FloatArray(barCount)
-    private val midPeakVel = FloatArray(barCount)
-    private val highPeakVel = FloatArray(barCount)
-    private val lowPeakRest = BooleanArray(barCount)
-    private val midPeakRest = BooleanArray(barCount)
-    private val highPeakRest = BooleanArray(barCount)
+            val last = targets.lastIndex
+            targets[last] = value
+            if (blank) heights[last] = 0f
+            if (scrollDisplay || blank) {
+                heightVelocity[last] = 0f
+                balls[last] = 0f
+                ballVelocity[last] = 0f
+                ballResting[last] = true
+                dash[last] = 0f
+            }
+        }
+
+        fun hasUnsettledColumns(peaks: Boolean): Boolean {
+            for (index in targets.indices) {
+                val height = heights[index]
+                if (height != targets[index] || heightVelocity[index] != 0f) return true
+                if (peaks && (
+                    !ballResting[index] || balls[index] != height ||
+                        ballVelocity[index] != 0f || dash[index] != balls[index]
+                    )
+                ) return true
+            }
+            return false
+        }
+    }
 
     /** B 档：渐变流动相位（0..1 循环）。 */
     private var flowPhase = 0f
@@ -574,41 +377,19 @@ class WaveformRing(
         lastPumpNowMs = 0L
         windowPrimed = false
         timestampedInput = false
-        bars.fill(0f)
-        barVel.fill(0f)
-        targets.fill(0f)
+        fullWindow.clear()
+        for (window in bandWindows) window.clear()
         bassTarget = 0f
-        lowTargets.fill(0f)
-        midTargets.fill(0f)
-        highTargets.fill(0f)
-        lowBars.fill(0f)
-        midBars.fill(0f)
-        highBars.fill(0f)
-        lowBarVel.fill(0f)
-        midBarVel.fill(0f)
-        highBarVel.fill(0f)
-        peaks.fill(0f)
-        peakVel.fill(0f)
-        peakRest.fill(false)
-        lowPeaks.fill(0f)
-        midPeaks.fill(0f)
-        highPeaks.fill(0f)
-        dash.fill(0f)
-        lowDash.fill(0f)
-        midDash.fill(0f)
-        highDash.fill(0f)
-        lowPeakVel.fill(0f)
-        midPeakVel.fill(0f)
-        highPeakVel.fill(0f)
-        lowPeakRest.fill(false)
-        midPeakRest.fill(false)
-        highPeakRest.fill(false)
         flowPhase = 0f
         breathePhase = 0f
     }
 
     /** UI 线程按帧率调用（效果全关的基线路径，老调用点与单测沿用这个重载）。 */
     fun pump(active: Boolean, dtMs: Float): Boolean = pump(active, dtMs, VisualizerEffects.BASELINE)
+
+    /** 小球在某帧可能只改变静止标记，画面不变但仍要继续推进。 */
+    internal fun hasUnsettledColumns(peaks: Boolean): Boolean =
+        fullWindow.hasUnsettledColumns(peaks) || bandWindows.any { it.hasUnsettledColumns(peaks) }
 
     /**
      * UI 线程按帧率调用。
@@ -721,8 +502,8 @@ class WaveformRing(
             if (consumed || (sinceBarMs < interval && windowHasSignal())) {
                 changed = true
             }
-        } else if (targets.any { it != 0f }) {
-            targets.fill(0f)
+        } else if (fullWindow.targets.any { it != 0f }) {
+            fullWindow.targets.fill(0f)
             changed = true
         }
         val dt = dtMs.coerceIn(0f, 200f)
@@ -735,7 +516,7 @@ class WaveformRing(
         //  - 画面值带 130ms 回落时间常数 ⇒ 单个安静缓冲块（33ms）不会让流动一顿一顿；
         //  - 它归零就等于"画面上已经什么都没有了"，此时继续排帧纯属白烧（暂停/放完/长期静音）。
         var phaseAdvanced = false
-        if (active && bars[barCount - 1] > ANIMATION_MIN_SIGNAL) {
+        if (active && fullWindow.heights.last() > ANIMATION_MIN_SIGNAL) {
             if (effects.flow) {
                 flowPhase = advancePhase(flowPhase, dt, FLOW_PERIOD_MS)
                 phaseAdvanced = true
@@ -780,26 +561,17 @@ class WaveformRing(
      * 全窗口都静音时返回 false，帧就真的停下来（v1.8.1 的「不空转」契约）。
      */
     private fun windowHasSignal(): Boolean {
-        for (i in 0 until barCount) {
-            if (targets[i] > ANIMATION_MIN_SIGNAL) return true
+        if (fullWindow.targets.any { it > ANIMATION_MIN_SIGNAL }) return true
+        for (window in bandWindows) {
+            if (window.targets.any { it > ANIMATION_MIN_SIGNAL }) return true
         }
-        if (lowTargets.any { it > ANIMATION_MIN_SIGNAL }) return true
-        if (midTargets.any { it > ANIMATION_MIN_SIGNAL }) return true
-        return highTargets.any { it > ANIMATION_MIN_SIGNAL }
+        return false
     }
 
-    /**
-     * v3.6.3：消费**恰好一根**柱 —— 画面每跨过一个格周期调用一次。
-     *
-     * 旧实现 [consumePending] 会把这一帧里所有新到的柱一次搬进窗口：一批 N 根 ⇒ 窗口
-     * 平移 N 格，相位只按最后一根算 ⇒ 画面一次冲 N 格、接着等下一批。现在由调用方按
-     * 时间节拍一根一根取，批与批之间的抖动被**摊平**成匀速滚动。
-     *
-     * @return 是否真的消费了一根（false = 环里没有可消费的柱）。
-     */
+    /** 每个格周期最多消费一根柱，避免同批到达的数据在同一帧跳过多格。 */
     private fun consumeOne(): Boolean {
         val snapshot = writeIndex
-        var pending = snapshot - readIndex
+        val pending = snapshot - readIndex
         if (pending <= 0) return false
         if (pending > capacity) {
             // 溢出：丢掉最旧的，绝不阻塞写者。
@@ -814,7 +586,6 @@ class WaveformRing(
         return true
     }
 
-    /** UI-only history shift. A missing visual sample is blank; the audio ring is untouched. */
     private fun appendColumn(
         value: Float,
         low: Float,
@@ -823,257 +594,76 @@ class WaveformRing(
         blank: Boolean,
         hold: Boolean = false,
     ) {
-        shiftIn(value, blank, hold)
-        // v2.9.0：低频通道额外保留"最新一根"给**节拍判据**用（`newestBass`）：
-        // 它要的是"当下这一刻"的低频能量，不是历史窗口。
-        val lowValue = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
-        // hold 是 UI 层重复历史，不是新的音频样本：newestBass 必须保持上一根真实值，
-        // 否则节拍/粒子会被这列 0 判成静音。
+        fullWindow.append(normalized(value), blank, hold)
+        val lowValue = normalized(low)
         if (!hold) bassTarget = lowValue
-        val midValue = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
-        val highValue = if (high.isFinite()) high.coerceIn(0f, 1f) else 0f
-        // v3.2.2：三条频带**都要**进滚动窗口 —— 三条泳道画的就是它们各自的历史。
-        // 它们的位移**计入重绘判据**（与 v3.0.0 的"占比不进判据"不同）：
-        // 占比只影响颜色，而频带值直接决定**几何**（泳道高度），不重绘就会画出旧的形状。
-        shiftBandIn(lowTargets, lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, lowDash, lowValue, blank, hold)
-        shiftBandIn(midTargets, midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, midDash, midValue, blank, hold)
-        shiftBandIn(highTargets, highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, highDash, highValue, blank, hold)
-        // 平移格数与该柱**同时**记账：渲染层的「窗口下标」因此成为测试可以直接读到的事实，
-        // 而不是测试自己数出来的东西（v3.3.0 三次口径错误的根源）。
-        shiftedCells += 1
+        bandWindows[BAND_LOW].append(lowValue, blank, hold)
+        bandWindows[BAND_MID].append(normalized(mid), blank, hold)
+        bandWindows[BAND_HIGH].append(normalized(high), blank, hold)
+        shiftedCells++
     }
 
-    /**
-     * 把一条频带值搬进它自己的滚动窗口（与 [shiftIn] 同构）。
-     *
-     * v3.4.4：[display]（画面值窗口）**跟着一起平移** —— 见 [lowBars] 的 KDoc。
-     * 两个数组的平移必须逐格同构，否则画面值会与原始窗口错位一格（形状被抹平）。
-     *
-     * @return 这一格是否真的改变了窗口内容（全等值时不必重绘）。
-     */
-    private fun shiftBandIn(
-        window: FloatArray,
-        display: FloatArray,
-        displayVel: FloatArray,
-        ball: FloatArray,
-        ballVel: FloatArray,
-        ballRest: BooleanArray,
-        dash: FloatArray,
-        value: Float,
-        blank: Boolean,
-        hold: Boolean = false,
-    ): Boolean {
-        var changed = false
-        for (i in 0 until barCount - 1) {
-            if (window[i] != window[i + 1]) {
-                window[i] = window[i + 1]
-                changed = true
-            }
-            // 画面值窗口同步平移：不平移就会把「上一格的弹道」留在原地 —— 那是时域模糊。
-            display[i] = display[i + 1]
-            // v3.6.5：画面值的**速度**也必须跟着格子走。旧写法只平移 display、不移
-            // barVel，新格会继承上一格的上升速度 —— 首帧把小球一脚踢起来，正是
-            // 「小球/横条在右边缘闪一下」的第二个来源。
-            displayVel[i] = displayVel[i + 1]
-            // ⚠️ v3.4.5：**小球的状态必须跟着一起平移**。不平移的话，小球会"粘在下标上"，
-            // 每一根新柱到达时它的地面都会被换成邻居的值 —— 而 `coerceIn(ground, 1f)`
-            // 会立刻把小球夹到新地面上 ⇒ 小球永远离不了地、永远弹不起来。
-            // 单条曲线那条路径**不**平移（那里的 `bars` 本身就不平移，是屏幕坐标系的平滑），
-            // 小球与它同坐标系，所以是对的。
-            ball[i] = ball[i + 1]
-            ballVel[i] = ballVel[i + 1]
-            ballRest[i] = ballRest[i + 1]
-            // v3.4.6：短横的保持值同样必须平移 —— 它记的是"这一格"的历史峰值，
-            // 不平移就会变成"记在横轴某个位置上"，柱子滚过去之后短横留在原地。
-            dash[i] = dash[i + 1]
-        }
-        val last = barCount - 1
-        // 倍速缺样：只平移，不写新值、不重置球/短横 —— 最后一格保留上一格的状态，
-        // 形成一列「重复的历史」。这样小球/短横不会像缺样列那样归零再起。
-        if (hold) return changed
-        if (window[last] != value) {
-            window[last] = value
-            changed = true
-        }
-        // v3.6.5：新进入的那一格必须**从空白/地面起步**，不能继承上一格的小球状态。
-        // 旧写法只平移 `[0, last)`，`ball[last]` / `dash[last]` 停留在「上一根柱的峰值」，
-        // 下一帧 `coerceIn(ground, 1)` 把它压到新柱高 —— 画面上就是小球/短横在右边缘
-        // 闪一下。缺样列（blank）更明显：它根本没有柱，却会继承一个旧峰值。
-        if (blank) display[last] = 0f
-        displayVel[last] = 0f
-        ball[last] = 0f
-        ballVel[last] = 0f
-        ballRest[last] = true
-        dash[last] = 0f
-        // 非缺样列保留 display[last] 的起音（由 [approach] 在随后帧上做）；
-        // 缺样列直接把 display 置 0，不留 130ms 的假回落尾巴。
-        return changed
-    }
+    private fun normalized(value: Float): Float =
+        if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
 
-    /** @return 这一根新柱是否真的改变了窗口内容（全等值时不必重绘）。 */
-    private fun shiftIn(value: Float, blank: Boolean, hold: Boolean = false): Boolean {
-        var changed = false
-        for (i in 0 until barCount - 1) {
-            if (targets[i] != targets[i + 1]) {
-                targets[i] = targets[i + 1]
-                changed = true
-            }
-        }
-        if (hold) return changed
-        val last = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
-        if (targets[barCount - 1] != last) {
-            targets[barCount - 1] = last
-            changed = true
-        }
-        if (blank) {
-            val idx = barCount - 1
-            bars[idx] = 0f
-            barVel[idx] = 0f
-            peaks[idx] = 0f
-            peakVel[idx] = 0f
-            peakRest[idx] = true
-            dash[idx] = 0f
-        }
-        return changed
-    }
-
-    /**
-     * 让画面值朝数据值走一步。
-     *
-     * ## v3.4.5：指数逼近 → **二阶系统（弹簧-阻尼）的精确解**
-     *
-     * 旧写法是 `current += (target-current) * (1-exp(-dt/tau))` —— 指数**渐近**，
-     * 永不越冲、永不回弹，而且 `SETTLE_EPSILON` 的收敛截断让它接近目标时**直接吸附**。
-     * 用户读到的就是「小球没有弹起来的感觉」。现在换成
-     * `x'' = ω²(target−x) − 2ζω·x'` 的闭式解（推导、参数依据、上界与静止判据
-     * 全部写在 [BandBallistics] 的 KDoc 里）。
-     *
-     * ## 重绘判据刻意不用"位移是否大于某个 epsilon"
-     *
-     * 回落尾段每帧位移会越来越小，用位移阈值会让 [pump] 在柱子还停在 ~1.5% 的时候
-     * 就报"不用重绘" —— 柱子冻在非零值上（v1.8.1 实现时被单测抓到的真实缺陷）。
-     * 现在的判据是"这一格还没到位"（步进器返回 false == 已经精确吸附到目标且速度归零），
-     * 一旦吸附就精确相等、下一帧自然停。
-     *
-     * v2.8.0 起峰值也并进这个返回值：小球在空中（或还在反弹）期间必须继续重绘，
-     * 落到柱顶静止之后不再要求重绘。
-     *
-     * @return 有柱子还没到位、或小球还在动（需要重绘）时为 true。
-     */
     private fun approach(dt: Float, effects: VisualizerEffects): Boolean {
         val dtSec = dt / 1000f
-        // 三个超越函数每帧只算一次，四条窗口（28 × 4 格）共用。
-        springAttack.prepare(OMEGA_ATTACK, BandBallistics.DAMPING_RATIO, dtSec)
-        springRelease.prepare(OMEGA_RELEASE, BandBallistics.DAMPING_RATIO, dtSec)
-        var changed = false
-        for (i in bars.indices) {
-            if (stepSpring(bars, barVel, i, targets[i])) changed = true
-            if (effects.peaks) {
-                if (stepBall(peaks, peakVel, peakRest, i, bars[i], barVel[i], dtSec)) changed = true
-                // v3.4.6：短横 = 小球位置的历史最大值（带缓慢回落）。
-                // 它必须**每帧都算**（即使小球没动 —— 回落本身也是运动），所以这里
-                // 不能像小球那样只在 changed 时才更新。
-                val next = BandBallistics.holdStep(peaks[i], dash[i], dtSec)
-                if (next != dash[i]) {
-                    dash[i] = next
-                    changed = true
-                }
-            }
+        if (dtSec != preparedStepSeconds) {
+            springAttack.prepare(OMEGA_ATTACK, BandBallistics.DAMPING_RATIO, dtSec)
+            springRelease.prepare(OMEGA_RELEASE, BandBallistics.DAMPING_RATIO, dtSec)
+            preparedStepSeconds = dtSec
         }
-        // v3.4.4：三条泳道的画面值走**同一套弹道**。
-        // 不加这一层的后果见 [lowBars] 的 KDoc：12.1Hz 的瞬时阶梯 = 没有弹起感。
-        // 这三个循环必须也参与返回值：静音段里 `hadSignal` 为 false 时不排帧，
-        // 若弹道不计入 changed，回落尾巴会被冻在画面上（v1.8.1 踩过的同形状缺陷）。
-        if (approachBand(lowTargets, lowBars, lowBarVel)) changed = true
-        if (approachBand(midTargets, midBars, midBarVel)) changed = true
-        if (approachBand(highTargets, highBars, highBarVel)) changed = true
-        // v3.4.5：小球在**它自己那条泳道的柱顶**上弹（柱顶就是地面）。
-        // 改前 peaks 是**单条曲线**的峰值，却画在三泳道的几何上（左中右三段的横轴），
-        // 于是「地面」与「小球所在的柱子」根本不是同一个量。现在逐泳道各一份。
-        if (effects.peaks) {
-            if (stepBallBand(lowBars, lowBarVel, lowPeaks, lowPeakVel, lowPeakRest, lowDash, dtSec)) changed = true
-            if (stepBallBand(midBars, midBarVel, midPeaks, midPeakVel, midPeakRest, midDash, dtSec)) changed = true
-            if (stepBallBand(highBars, highBarVel, highPeaks, highPeakVel, highPeakRest, highDash, dtSec)) changed = true
+
+        val peaksEnabled = effects.peaks
+        var changed = advanceWindow(fullWindow, dtSec, peaksEnabled)
+        for (window in bandWindows) {
+            if (advanceWindow(window, dtSec, peaksEnabled)) changed = true
         }
         return changed
     }
 
-    /**
-     * 一格柱高的弹簧-阻尼推进（升 / 降用各自的 ω，与旧的起音 / 回落时间常数同源）。
-     *
-     * @return 这一格是否还在动
-     */
-    private fun stepSpring(values: FloatArray, vels: FloatArray, index: Int, target: Float): Boolean {
-        val x = values[index]
-        val v = vels[index]
-        val stepper = if (target >= x) springAttack else springRelease
-        val moved = stepper.step(x, v, target, springOut)
-        // 硬契约：柱高绝不越出 [0,1]（过冲 2.8% 只会在目标贴到 1.0 时被这里夹住）。
-        values[index] = springOut[0].coerceIn(0f, 1f)
-        vels[index] = springOut[1]
-        return moved || values[index] != x
-    }
-
-    /** 一条频带画面窗口的弹道推进（与 [bars] 的逐格规则逐字同构）。 */
-    private fun approachBand(
-        window: FloatArray,
-        display: FloatArray,
-        displayVel: FloatArray,
-    ): Boolean {
+    private fun advanceWindow(window: ColumnWindow, dtSec: Float, peaksEnabled: Boolean): Boolean {
         var changed = false
-        for (i in display.indices) {
-            if (stepSpring(display, displayVel, i, window[i])) changed = true
+        for (index in window.heights.indices) {
+            if (advanceHeight(window, index)) changed = true
+            if (peaksEnabled && advancePeak(window, index, dtSec)) changed = true
         }
         return changed
     }
 
-    /** 一格小球的推进（地面 = 同一格柱高的画面值，地面速度 = 该格柱高的速度）。 */
-    private fun stepBall(
-        values: FloatArray,
-        vels: FloatArray,
-        rests: BooleanArray,
-        index: Int,
-        ground: Float,
-        groundV: Float,
-        dtSec: Float,
-    ): Boolean {
-        val moved = ballStep.step(
-            y = values[index],
-            v = vels[index],
-            resting = rests[index],
-            ground = ground,
-            groundV = groundV,
-            dtSec = dtSec,
-            out = ballOut,
-        )
-        // 硬契约：小球绝不低于当前柱高、也绝不越出画幅。
-        values[index] = ballOut[0].coerceIn(ground, 1f)
-        vels[index] = ballOut[1]
-        rests[index] = ballOut[2] != 0f
-        return moved
+    private fun advanceHeight(window: ColumnWindow, index: Int): Boolean {
+        val height = window.heights[index]
+        val velocity = window.heightVelocity[index]
+        val target = window.targets[index]
+        if (height == target && velocity == 0f) return false
+
+        val stepper = if (target >= height) springAttack else springRelease
+        val moved = stepper.step(height, velocity, target, springOut)
+        val next = springOut[0].coerceIn(0f, 1f)
+        window.heights[index] = next
+        window.heightVelocity[index] = springOut[1]
+        return moved || next != height
     }
 
-    /** 一条泳道的小球推进。 */
-    private fun stepBallBand(
-        ground: FloatArray,
-        groundVel: FloatArray,
-        ball: FloatArray,
-        ballVel: FloatArray,
-        ballRest: BooleanArray,
-        dash: FloatArray,
-        dtSec: Float,
-    ): Boolean {
-        var changed = false
-        for (i in ball.indices) {
-            if (stepBall(ball, ballVel, ballRest, i, ground[i], groundVel[i], dtSec)) changed = true
-            // 短横每帧都推进（回落也是运动），见 [BandBallistics.holdStep]。
-            val next = BandBallistics.holdStep(ball[i], dash[i], dtSec)
-            if (next != dash[i]) {
-                dash[i] = next
-                changed = true
-            }
+    private fun advancePeak(window: ColumnWindow, index: Int, dtSec: Float): Boolean {
+        val ground = window.heights[index]
+        val groundVelocity = window.heightVelocity[index]
+        val ball = window.balls[index]
+        val velocity = window.ballVelocity[index]
+        val resting = window.ballResting[index]
+        val dash = window.dash[index]
+        if (resting && ball == ground && velocity == 0f && groundVelocity == 0f && dash == ball) {
+            return false
         }
-        return changed
+
+        val moved = ballStep.step(ball, velocity, resting, ground, groundVelocity, dtSec, ballOut)
+        val nextBall = ballOut[0].coerceIn(ground, 1f)
+        window.balls[index] = nextBall
+        window.ballVelocity[index] = ballOut[1]
+        window.ballResting[index] = ballOut[2] != 0f
+        val nextDash = BandBallistics.holdStep(nextBall, dash, dtSec)
+        window.dash[index] = nextDash
+        return moved || nextDash != dash
     }
 
     /** 相位推进：只在 [periodMs] 内循环，用取模而不是累加 —— 长跑不会丢精度。 */
@@ -1096,84 +686,40 @@ class WaveformRing(
         else -> DEFAULT_BAR_INTERVAL_MS
     }
 
-    /** 把滚动窗口拷进调用方**复用**的数组（避免每帧分配）。 */
-    fun copyInto(destination: FloatArray) {
-        val n = minOf(destination.size, barCount)
-        for (i in 0 until n) destination[i] = bars[i]
-    }
+    /** 把全带画面拷进调用方复用的数组。 */
+    fun copyInto(destination: FloatArray) = copyWindow(fullWindow.heights, destination)
 
-    /** 把滚动窗口与峰值一起拷进调用方复用的两个数组（渲染路径用，零分配）。 */
     fun copyInto(barsDestination: FloatArray, peaksDestination: FloatArray) {
         copyInto(barsDestination)
-        val n = minOf(peaksDestination.size, barCount)
-        for (i in 0 until n) peaksDestination[i] = peaks[i]
+        copyWindow(fullWindow.balls, peaksDestination)
     }
 
-    /**
-     * v3.4.6：滚动窗口 + 小球 + **峰值短横的保持值**一起拷出（渲染路径用，零分配）。
-     *
-     * 短横与小球是两份独立状态：小球是受重力的质点，短横是"这一格曾经到过的最高点"
-     * （见 [BandBallistics.holdStep]）。渲染层必须同时拿到两者，否则又退回
-     * "短横 = 小球 + 常量"那种同步移动。
-     */
-    fun copyInto(
-        barsDestination: FloatArray,
-        peaksDestination: FloatArray,
-        dashDestination: FloatArray,
-    ) {
-        copyInto(barsDestination)
-        val n = minOf(peaksDestination.size, barCount)
-        for (i in 0 until n) peaksDestination[i] = peaks[i]
-        val m = minOf(dashDestination.size, barCount)
-        for (i in 0 until m) dashDestination[i] = dash[i]
+    fun copyInto(barsDestination: FloatArray, peaksDestination: FloatArray, dashDestination: FloatArray) {
+        copyInto(barsDestination, peaksDestination)
+        copyWindow(fullWindow.dash, dashDestination)
     }
 
-    /**
-     * v3.2.2：把**三条频带**的滚动窗口拷进调用方复用的三个数组（零分配）。
-     *
-     * v3.4.4：拷出的是**画面值**（[lowBars] 等，带 22/130ms 弹道），不是原始窗口 ——
-     * 渲染层画的就是它。原始窗口仍由 [bandAt] 读（诊断与回归测试用），
-     * 两者的差就是这一版修掉的「没有弹起感」。
-     *
-     * 三个数组长度都按 `barCount` 截断 —— 调用方传大数组也不会越界。
-     */
+    /** 频带快照使用平滑后的柱高，与小球、短横共享相同的格子下标。 */
     fun copyBandsInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
-        copyBand(lowBars, lowDestination)
-        copyBand(midBars, midDestination)
-        copyBand(highBars, highDestination)
+        copyWindow(bandWindows[BAND_LOW].heights, lowDestination)
+        copyWindow(bandWindows[BAND_MID].heights, midDestination)
+        copyWindow(bandWindows[BAND_HIGH].heights, highDestination)
     }
 
-    /**
-     * v3.4.5：把**三条泳道各自的小球位置**拷进调用方复用的三个数组（零分配）。
-     *
-     * 与 [copyBandsInto] 逐格对齐：`lowPeaks[i]` 就是站在 `lowBars[i]` 这根柱子顶上的那个小球。
-     * 渲染层用它把小球映射成像素高度（与柱高走**同一套** sqrt / 泳道增益），
-     * 所以「小球绝不低于柱顶」在画面上也是逐像素成立的。
-     *
-     * 与 [copyBandsInto] 一样按 `barCount` 截断 —— 调用方传大数组也不会越界。
-     */
     fun copyBandPeaksInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
-        copyBand(lowPeaks, lowDestination)
-        copyBand(midPeaks, midDestination)
-        copyBand(highPeaks, highDestination)
+        copyWindow(bandWindows[BAND_LOW].balls, lowDestination)
+        copyWindow(bandWindows[BAND_MID].balls, midDestination)
+        copyWindow(bandWindows[BAND_HIGH].balls, highDestination)
     }
 
-    /**
-     * v3.4.6：把**三条泳道各自的峰值短横保持值**拷进调用方复用的三个数组（零分配）。
-     *
-     * 与 [copyBandPeaksInto] 逐格对齐，语义不同：那一份是"此刻的质点"（小球），
-     * 这一份是"这一格曾经到过的最高点"（短横）。两者的高低关系由
-     * [BandBallistics.holdStep] 的不变量保证（保持值恒 ≥ 小球）。
-     */
     fun copyBandDashInto(lowDestination: FloatArray, midDestination: FloatArray, highDestination: FloatArray) {
-        copyBand(lowDash, lowDestination)
-        copyBand(midDash, midDestination)
-        copyBand(highDash, highDestination)
+        copyWindow(bandWindows[BAND_LOW].dash, lowDestination)
+        copyWindow(bandWindows[BAND_MID].dash, midDestination)
+        copyWindow(bandWindows[BAND_HIGH].dash, highDestination)
     }
 
-    private fun copyBand(source: FloatArray, destination: FloatArray) {
-        val n = minOf(destination.size, barCount)
-        for (i in 0 until n) destination[i] = source[i]
+    private fun copyWindow(source: FloatArray, destination: FloatArray) {
+        source.copyInto(destination, endIndex = minOf(source.size, destination.size))
     }
 
     /** B 档：呼吸亮度倍率（[1-BREATHE_DEPTH] .. 1）。draw 阶段直接读，不触发重组。 */
@@ -1191,9 +737,9 @@ class WaveformRing(
     /**
      * 最新一根柱的**未平滑**数据值（C 档节拍检测的输入）。
      *
-     * 用未平滑值而不是 [bars]：起音时间常数 22ms 会把 onset 抹圆（探针 §1 明确要求用 targets）。
+     * 用未平滑值而不是 柱高：起音时间常数 22ms 会把 onset 抹圆（探针 §1 明确要求用 targets）。
      */
-    fun newestTarget(): Float = targets[barCount - 1]
+    fun newestTarget(): Float = fullWindow.targets.last()
 
     /**
      * v3.2.3 / v3.6.3：画面时间在一格内的进度（0..1）。渲染层用它把历史窗口**连续左移**
@@ -1211,86 +757,32 @@ class WaveformRing(
     /** v2.9.0：最新的低频能量（与 [newestTarget] 同一时刻）。 */
     fun newestBass(): Float = bassTarget
 
-    /** 单测用：某一条频带窗口里的第 `index` 格。 */
-    fun bandAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowTargets[index]
-            BAND_MID -> midTargets[index]
-            BAND_HIGH -> highTargets[index]
-            else -> 0f
-        }
-    }
+    fun bandAt(band: Int, index: Int): Float =
+        if (hasBandCell(band, index)) bandWindows[band].targets[index] else 0f
 
-    /** 单测用：某一条频带**画面值**窗口里的第 `index` 格（v3.4.4，带 22/130ms 弹道）。 */
-    fun bandBarAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowBars[index]
-            BAND_MID -> midBars[index]
-            BAND_HIGH -> highBars[index]
-            else -> 0f
-        }
-    }
+    fun bandBarAt(band: Int, index: Int): Float =
+        if (hasBandCell(band, index)) bandWindows[band].heights[index] else 0f
 
-    /** 单测用：画面值（平滑后）。 */
-    fun barAt(index: Int): Float = bars[index]
+    fun barAt(index: Int): Float = fullWindow.heights[index]
 
-    /** 单测用：数据值（未平滑）。 */
-    fun targetAt(index: Int): Float = targets[index]
+    fun targetAt(index: Int): Float = fullWindow.targets[index]
 
-    /** 单测用：峰值 / 小球的位置（0..1，**绝不低于同一格的柱高**）。 */
-    fun peakAt(index: Int): Float = peaks[index]
+    fun peakAt(index: Int): Float = fullWindow.balls[index]
 
-    /** 单测用：小球的速度（归一化高度/秒，向上为正）。 */
-    fun peakVelAt(index: Int): Float = if (index in peakVel.indices) peakVel[index] else 0f
+    fun peakVelAt(index: Int): Float =
+        if (index in 0 until barCount) fullWindow.ballVelocity[index] else 0f
 
-    /** 单测用：小球是否静止在柱顶上。 */
-    fun peakRestingAt(index: Int): Boolean = index in peakRest.indices && peakRest[index]
+    fun peakRestingAt(index: Int): Boolean =
+        index in 0 until barCount && fullWindow.ballResting[index]
 
-    /** 单测用：某一条泳道**小球**的位置（0..1）。 */
-    fun bandPeakAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowPeaks[index]
-            BAND_MID -> midPeaks[index]
-            BAND_HIGH -> highPeaks[index]
-            else -> 0f
-        }
-    }
+    fun bandPeakAt(band: Int, index: Int): Float =
+        if (hasBandCell(band, index)) bandWindows[band].balls[index] else 0f
 
-    /** 单测用：某一条泳道**短横**的保持值（0..1）。 */
-    fun bandDashAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowDash[index]
-            BAND_MID -> midDash[index]
-            BAND_HIGH -> highDash[index]
-            else -> 0f
-        }
-    }
+    fun bandDashAt(band: Int, index: Int): Float =
+        if (hasBandCell(band, index)) bandWindows[band].dash[index] else 0f
 
-    /** 单测用：某一条泳道**小球**的速度（归一化高度/秒）。 */
-    fun bandPeakVelAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowPeakVel[index]
-            BAND_MID -> midPeakVel[index]
-            BAND_HIGH -> highPeakVel[index]
-            else -> 0f
-        }
-    }
-
-    /** 单测用：某一条泳道柱高的速度（归一化高度/秒）—— 也就是小球的"地面速度"。 */
-    fun bandBarVelAt(band: Int, index: Int): Float {
-        if (index !in 0 until barCount) return 0f
-        return when (band) {
-            BAND_LOW -> lowBarVel[index]
-            BAND_MID -> midBarVel[index]
-            BAND_HIGH -> highBarVel[index]
-            else -> 0f
-        }
-    }
+    private fun hasBandCell(band: Int, index: Int): Boolean =
+        band in bandWindows.indices && index in 0 until barCount
 
     /** 单测用：还没被 UI 消费的柱数。 */
     val pendingCount: Int get() = writeIndex - readIndex

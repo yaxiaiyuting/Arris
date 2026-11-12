@@ -44,6 +44,13 @@ data class OfflineUrlRecord(
 )
 
 /** Reuse verified full files; isolate only legacy bytes whose content has never been proven. */
-internal fun verifiedCacheKey(key: String, next: OfflineContent, previous: OfflineContent?, hasBytes: Boolean): String =
-    if (next.kind == OfflineContent.FULL && next.known && hasBytes &&
-        !(previous?.kind == OfflineContent.FULL && previous.known)) key + "~full-v1" else key
+internal inline fun verifiedCacheKey(
+    key: String,
+    next: OfflineContent,
+    previous: OfflineContent?,
+    hasBytes: () -> Boolean,
+): String {
+    if (next.kind != OfflineContent.FULL || !next.known) return key
+    if (previous?.kind == OfflineContent.FULL && previous.known) return key
+    return if (hasBytes()) key + "~full-v1" else key
+}

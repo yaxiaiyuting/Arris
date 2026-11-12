@@ -66,7 +66,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
  *
  * 上面那段「ncm 一侧补全」对 QQ **没有对应接口**（`QqMusicSourceProvider.songDetail` 对
  * 缺 songmid 的条目直接返回 null —— 那不是 bug，是「没有 songmid 就不该假装能取链」）。
- * 于是 QQ 锚点永远：取链硬失败（`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null`）、
+ * 于是 QQ 锚点永远：取链硬失败（`QqApi.resolveOutcome` 拒绝缺少 songmid 的请求）、
  * 曲名恒空（召回关键词为空 ⇒ 静默零结果）。**页面能做的只有一件正确的事**：
  * 让调用方把载荷带进路由（见 `NavRoutes.song(source, id, sourceId, mediaId, name, artist)`）。
  *
@@ -278,7 +278,7 @@ fun SongDetailScreen(
  *
  * 旧实现只用 `(source, id)` 构造锚点，`sourceId` / `mediaId` **恒为 null**。对 QQ 这一条
  * 不是"元数据缺失"这么轻：`QqMusicSourceProvider.songDetail` 对缺 songmid 的条目直接返回
- * null，`QqApi.fetchPlayUrl` 首行 `if (songMid == null) return null` —— 页面拿到的就是一个
+ * null，`QqApi.resolveOutcome` 拒绝缺少 songmid 的请求 —— 页面拿到的就是一个
  * 永远取不到链的条目，点播放必然失败（H13 的本体）。所以载荷必须由路由带进来。
  *
  * QQ 的合成 id 带 `1L shl 62` 标志位（[SourceIds.qqId]）：路由里若已经是带标志位的形态

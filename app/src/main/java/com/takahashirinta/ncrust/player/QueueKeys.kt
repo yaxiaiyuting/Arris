@@ -70,20 +70,7 @@ import com.takahashirinta.ncrust.source.trackKeyOf
  */
 object QueueKeys {
 
-    /**
-     * v3.3.2 · P0：**「从列表里点一首歌」的完整判定结果**（纯值，JVM 可单测）。
-     *
-     * @property queue 这次点击之后的队列（与入参同一份实例 = 队列没动）。
-     * @property currentIndex 新的 `currentQueueIndex`。不变量：它一定指着 [queue] 里的
-     *   **被点的那首**（[playIndex]），不存在「游标停在别的歌上」的中间态。
-     * @property playIndex 调用方应当交给 `playFromQueue` 的下标。**恒 `>= 0`** ——
-     *   这是本类型存在的理由之一：旧写法在定位失败时会静默什么都不做（见 [planPlayItem]）。
-     * @property queueChanged 队列是否真的变了。`false` = 点的是当前正在播的那首，
-     *   调用方**不要**再写一次 `saveQueue`（与旧行为逐字一致）。
-     * @property fallbackUsed 是否走了「定位失败」的兜底（追加到队尾并播它）。
-     *   正常路径恒 `false`；为 `true` 说明命中了一条以前会**静默丢弃**这次点击的分支 ——
-     *   调用方应当打日志：它是「点了没反应」类报告的诊断锚点。
-     */
+    /** 点歌后的队列与播放下标，游标始终指向被点的条目。 */
     data class PlayItemPlan(
         val queue: List<SongItem>,
         val currentIndex: Int,
@@ -96,43 +83,8 @@ object QueueKeys {
     fun keyOf(song: SongItem): TrackKey = song.trackKeyOf()
 
     /**
-     * v3.3.2 · P0：**「点某一首歌」的唯一决策函数**（`MainActivity.playSongItem` 消费它）。
-     *
-     * ## 为什么把它抽出来
-     *
-     * 用户报告「播放一首歌的时候点击其他歌曲不会切换，无论怎么点击都会一直播放原来的歌」。
-     * 那条链路里**唯一一处会静默什么都不做**的地方，就是旧写法的最后两行：
-     *
-     * ```kotlin
-     * playbackQueue = QueueKeys.rebuild(...) ?: playbackQueue   // ← 装配失败 ⇒ 队列原样不动
-     * val idx = playbackQueue.indexOfFirst { keyOf(it) == songKey }
-     * if (idx >= 0) playFromQueue(idx)                          // ← idx < 0 ⇒ 静默 return
-     * ```
-     *
-     * 也就是说：只要 [rebuild] 交不出新队列（返回 null），这次点击就**一个字节都不会发生** ——
-     * 没有日志、没有提示、没有 `playSong`，用户耳朵里只有上一首还在响。这条分支原先写在
-     * composable 作用域的 `MainActivity` 里，既不可单测、也没有任何判定守着。
-     *
-     * 抽成本函数之后：① 判定是纯函数（`QueueKeysPlayItemTest` 钉住）；
-     * ② [rebuild] 失败**不再是静默丢弃**，而是「追加到队尾并播它」—— 点哪首就播哪首；
-     * 队列顺序退化成「这首歌排在最后」，远好于「点了没反应」。
-     *
-     * ## 语义（与旧实现逐条对应，除上面那条兜底）
-     *
-     * | 情形 | queue | currentIndex | playIndex |
-     * |---|---|---|---|
-     * | 队列空 / 游标越界 | 只含被点那首 | 0 | 0 |
-     * | 被点那首不在队列里 | 去重后插到当前歌**之后** | 被点那首 | 被点那首 |
-     * | 被点那首已在队列（含就是当前歌） | 去重后插到当前歌**之后** | 被点那首 | 被点那首 |
-     * | 被点那首**就是**当前歌 | **原样不动** | 不变 | 它的下标 |
-     * | [rebuild] 失败（兜底） | 队尾追加被点那首 | 队尾 | 队尾 |
-     *
-     * 「插到当前歌之后」是它与 `appendToQueue`（排到队尾）**不同**的地方，
-     * 也是它取代 insertNext 的语义：点歌 = 立刻打断当前播放。
-     *
-     * 游标越界那一条特别重要：它意味着「UI 认为有当前歌，但队列里找不到」——
-     * 此时**不能**去重、不能插队，否则会拿一个不存在的 currentKey 去定位，
-     * 整条队列都可能被改错。
+     * 点其他歌时把它移到当前曲之后并立即播放。空队列或无效游标从新歌开始。
+     * 旧快照可能有重复身份。插入位置取当前身份的首个位置，载荷取同身份的末条。
      */
     fun planPlayItem(queue: List<SongItem>, currentIndex: Int, song: SongItem): PlayItemPlan {
         val songKey = keyOf(song)
@@ -145,42 +97,45 @@ object QueueKeys {
                 fallbackUsed = false,
             )
         }
-        val currentKey = queue.getOrNull(currentIndex)?.let { keyOf(it) }
-        // 点的是当前正在播的那首：队列**一个字节都不动**（旧行为：不 saveQueue、不重排）。
-        // 这正是「用户在队列面板点当前歌」的场景 —— 它必须能出声音，而不是被当成无操作。
+        val currentKey = queue.getOrNull(currentIndex)?.let(::keyOf)
         if (songKey == currentKey) {
-            // 直接回到 currentIndex：`songKey == currentKey` 已经保证它就是被点的那首。
-            // （不去用 indexOfFirst —— 旧版本的队列快照可能含重复身份，那时它会命中**第一份**，
-            //  把游标从用户真正在听的那一份上悄悄搬走。）
             return PlayItemPlan(queue, currentIndex, currentIndex, queueChanged = false, fallbackUsed = false)
         }
 
-        val filtered = dedupe(keysOf(queue), songKey).toMutableList()
-        val newCurrentIndex = indexOfCurrent(filtered, currentKey).coerceAtLeast(0)
-            .let { if (currentKey == null) -1 else it }
-        val insertPos = (newCurrentIndex + 1).coerceIn(0, filtered.size)
-        filtered.add(insertPos, songKey)
-        val rebuilt = rebuild(songs = queue, keys = filtered, extra = listOf(song))
-        // ── 兜底：装配不出来也**绝不静默丢弃**这次点击 ────────────────────────────────
-        // 正常输入下 rebuild 不可能失败（keys 全部来自 queue ∪ {songKey}）；真失败说明
-        // 队列里出现了装配不出的身份。那种时候「点了没反应」是最坏的表现形式，
-        // 因为它把一次数据异常伪装成「按钮坏了」。
-        val idx = rebuilt?.indexOfFirst { keyOf(it) == songKey } ?: -1
-        if (rebuilt == null || idx < 0) {
-            val appended = queue + song
-            return PlayItemPlan(
-                queue = appended,
-                currentIndex = appended.lastIndex,
-                playIndex = appended.lastIndex,
-                queueChanged = true,
-                fallbackUsed = true,
-            )
+        val songsByKey = HashMap<TrackKey, SongItem>(queue.size * 2)
+        val remaining = ArrayList<SongItem>(queue.size + 1)
+        var selected = song
+        var insertPosition = if (currentKey == null) 0 else -1
+        var hasDuplicates = false
+        for (item in queue) {
+            val key = keyOf(item)
+            if (key == songKey) {
+                selected = item
+                continue
+            }
+            if (insertPosition < 0 && key == currentKey) insertPosition = remaining.size + 1
+            if (songsByKey.put(key, item) != null) hasDuplicates = true
+            remaining.add(item)
         }
-        return PlayItemPlan(rebuilt, idx, idx, queueChanged = true, fallbackUsed = false)
+        if (insertPosition < 0) {
+            val appended = queue + song
+            return PlayItemPlan(appended, appended.lastIndex, appended.lastIndex, queueChanged = true, fallbackUsed = true)
+        }
+        if (hasDuplicates) {
+            for (index in remaining.indices) remaining[index] = songsByKey.getValue(keyOf(remaining[index]))
+        }
+        remaining.add(insertPosition, selected)
+        return PlayItemPlan(remaining, insertPosition, insertPosition, queueChanged = true, fallbackUsed = false)
     }
 
     /** 整条队列的身份序列。 */
     fun keysOf(queue: List<SongItem>): List<TrackKey> = queue.map { keyOf(it) }
+
+    internal fun keySetOf(queue: List<SongItem>): Set<TrackKey> =
+        queue.mapTo(HashSet(queue.size * 2), ::keyOf)
+
+    internal fun songsOutside(songs: List<SongItem>, existing: Set<TrackKey>): List<SongItem> =
+        songs.filterNot { keyOf(it) in existing }
 
     /**
      * 队列里**当前歌**的下标；找不到返回 -1。

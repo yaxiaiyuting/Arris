@@ -161,6 +161,11 @@ class MotionBindings {
     /** 单测 / 诊断。 */
     internal fun lastCount(): Long = lastTransientCount
 
+    internal fun alignTransientCount(count: Long) {
+        lastTransientCount = count
+        transients = 0
+    }
+
     companion object {
 
         /** 还没接上外部瞬态信号的哨兵（与 `WaveformEffectsState.NO_EXTERNAL_TRANSIENT` 同值同义）。 */

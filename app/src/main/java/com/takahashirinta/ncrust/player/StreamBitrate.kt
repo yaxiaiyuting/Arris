@@ -10,9 +10,14 @@ package com.takahashirinta.ncrust.player
 
 /** 实际流的平均码率；绝不以 PCM 采样率×位深或请求音质档位冒充文件码率。 */
 object StreamBitrate {
-    fun resolve(formatBitrate: Int, contentBytes: Long, durationMs: Long): Long {
+    fun resolve(formatBitrate: Int, contentBytes: Long, durationMs: Long): Long =
+        resolve(formatBitrate, durationMs) { contentBytes }
+
+    internal inline fun resolve(formatBitrate: Int, durationMs: Long, contentBytes: () -> Long): Long {
         if (formatBitrate > 0) return formatBitrate.toLong()
-        if (contentBytes <= 0L || durationMs <= 0L) return 0L
-        return (contentBytes.toDouble() * 8000.0 / durationMs).toLong().coerceAtLeast(0L)
+        if (durationMs <= 0L) return 0L
+        val bytes = contentBytes()
+        if (bytes <= 0L) return 0L
+        return (bytes.toDouble() * 8000.0 / durationMs).toLong().coerceAtLeast(0L)
     }
 }

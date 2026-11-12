@@ -43,9 +43,6 @@ internal object SegmentedDownload {
     /** 并发段数：4 段在丢包链路上收益已经明显，再多对 CF 免费线路反而更容易被限。 */
     private const val SEGMENTS = 4
 
-    /** 小于这个体积不值得分段（额外请求开销会吃掉收益）。 */
-    private const val MIN_SIZE = 4L * 1024 * 1024
-
     /** 每段至少这么大，避免出现大量极小的段。 */
     /** 4.0.12：单条镜像的探测预算。取 2.5s —— 国内正常 RTT 500ms 内，死链也就多等这么久。 */
     private const val PROBE_TIMEOUT_MS = 2500L

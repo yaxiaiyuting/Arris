@@ -149,6 +149,16 @@ class StatsAggregateTest {
         assertEquals(5_000L, snap.bySource[netease])
     }
 
+    @Test
+    fun `只淘汰一首时并列保留先加入的曲目`() {
+        val agg = StatsAggregate()
+        val day = listen(listOf("2026-02-14" to 1_000L))
+        agg.addListen(day, "first", netease, "first", "a", 0L, 5L)
+        agg.addListen(day, "second", netease, "second", "a", 0L, 5L)
+        agg.prune(maxSongs = 1)
+        assertEquals(listOf("first"), agg.snapshot().songs.keys.toList())
+    }
+
     /** 日桶只保留最近的 N 天，且**总量不受影响**（总量是标量，这是聚合方案的代价与保证）。 */
     @Test
     fun `日桶超上限时只保留最近若干天`() {

@@ -237,8 +237,8 @@ object CrossSourceMatcher {
 
     /** 曲目名集合的重合率（分母取较小一侧；两侧都空时返回 0，**不返回 1**）。 */
     fun trackOverlapRatio(a: Collection<String>, b: Collection<String>): Double {
-        val sa = a.mapNotNull { normOrNull(it) }.toSet()
-        val sb = b.mapNotNull { normOrNull(it) }.toSet()
+        val sa = a.mapNotNullTo(HashSet()) { normOrNull(it) }
+        val sb = b.mapNotNullTo(HashSet()) { normOrNull(it) }
         if (sa.isEmpty() || sb.isEmpty()) return 0.0
         return sa.count { it in sb }.toDouble() / minOf(sa.size, sb.size)
     }
@@ -250,13 +250,11 @@ object CrossSourceMatcher {
         if (!NameNormalizer.sameName(anchor.name, candidate.name)) {
             return MatchVerdict(MatchConfidence.NONE, "曲名归一化后不相等")
         }
+        return gradeSameNameTrack(anchor, candidate)
+    }
+
+    private fun gradeSameNameTrack(anchor: TrackCandidate, candidate: TrackCandidate): MatchVerdict {
         val artistOk = NameNormalizer.artistsOverlap(anchor.artists, candidate.artists)
-        // C1：比较**版本种类集合**，不是"有没有标记"。
-        // 旧判据把「原版 vs 伴奏」「Live vs Remix」都当成"版本一致"，
-        // 于是时长相近时会被合并（甚至给 EXACT），用户点到的是伴奏/现场版。
-        val anchorEdition = NameNormalizer.editionKinds(anchor.name)
-        val candidateEdition = NameNormalizer.editionKinds(candidate.name)
-        val sameEdition = anchorEdition == candidateEdition
         val delta = durationDelta(anchor, candidate)
         val durationOk = delta != null && delta <= DURATION_TOLERANCE_MS
 
@@ -269,12 +267,13 @@ object CrossSourceMatcher {
                 MatchVerdict(MatchConfidence.LOW, "仅曲名一致")
             }
         }
-        if (durationOk && sameEdition) {
-            return MatchVerdict(MatchConfidence.EXACT, "曲名 + 艺人 + 时长差 ${delta}ms + 版本标记一致")
-        }
         if (durationOk) {
-            // 版本不同 = 不同的录音（伴奏/现场/混音/重制…）。合并会让用户点到另一版，
-            // 按铁律 17「给错单曲比不合并严重得多」只给 LOW。
+            // 只有曲名、艺人和时长都匹配时，版本差异才决定能否合并。
+            val anchorEdition = NameNormalizer.editionKinds(anchor.name)
+            val candidateEdition = NameNormalizer.editionKinds(candidate.name)
+            if (anchorEdition == candidateEdition) {
+                return MatchVerdict(MatchConfidence.EXACT, "曲名 + 艺人 + 时长差 ${delta}ms + 版本标记一致")
+            }
             return MatchVerdict(
                 MatchConfidence.LOW,
                 "曲名 + 艺人 + 时长一致，但版本不同（${anchorEdition.ifEmpty { setOf("原版") }} vs ${candidateEdition.ifEmpty { setOf("原版") }}）",
@@ -298,16 +297,23 @@ object CrossSourceMatcher {
      * 不存在指数或无限循环。
      */
     fun pairTracks(anchor: List<TrackCandidate>, other: List<TrackCandidate>): List<TrackPair> {
-        val buckets = other.groupBy { NameNormalizer.normalizeName(it.name) }
+        if (anchor.isEmpty() || other.isEmpty()) return emptyList()
+        val buckets = HashMap<String, MutableList<TrackCandidate>>()
+        for (candidate in other) {
+            if (candidate.name.isBlank()) continue
+            val name = NameNormalizer.normalizeName(candidate.name)
+            if (name.isEmpty()) continue
+            buckets.getOrPut(name) { ArrayList() }.add(candidate)
+        }
         val used = HashSet<TrackKey>()
         val out = ArrayList<TrackPair>(anchor.size)
         for (a in anchor) {
+            if (a.name.isBlank()) continue
             val bucket = buckets[NameNormalizer.normalizeName(a.name)] ?: continue
             var best: TrackPair? = null
             for (c in bucket) {
                 if (c.key in used) continue
-                val verdict = gradeTrack(a, c)
-                if (verdict.confidence == MatchConfidence.NONE) continue
+                val verdict = gradeSameNameTrack(a, c)
                 if (best == null || verdict.rank > best.verdict.rank ||
                     (verdict.rank == best.verdict.rank && closer(a, c, best.other))
                 ) {
@@ -346,14 +352,31 @@ object CrossSourceMatcher {
         TrackAvailability.NO_COPYRIGHT -> 3
     }
 
-    /**
-     * 稳定地按可用性重排；同档保持原顺序。
-     *
-     * 用 `sortedWith(compareBy { ... })`（稳定）而不是 `sortedByDescending`，
-     * 理由与 `ArtistReco.rankAnchors` 那次一样：**同一份服务端数据每次必须给出同一个顺序**。
-     */
-    fun <T> rankByAvailability(items: List<T>, availabilityOf: (T) -> TrackAvailability): List<T> =
-        items.sortedWith(compareBy { availabilityOrder(availabilityOf(it)) })
+    /** 按可用性分组，每一档保留接口顺序。 */
+    fun <T> rankByAvailability(items: List<T>, availabilityOf: (T) -> TrackAvailability): List<T> {
+        if (items.size < 2) return items.toList()
+        val ranks = ByteArray(items.size)
+        val offsets = IntArray(TrackAvailability.entries.size)
+        items.forEachIndexed { index, item ->
+            val rank = availabilityOrder(availabilityOf(item))
+            ranks[index] = rank.toByte()
+            offsets[rank]++
+        }
+        // 把每档的条数换算成这一档的写入起点。
+        var start = 0
+        for (rank in offsets.indices) {
+            val count = offsets[rank]
+            offsets[rank] = start
+            start += count
+        }
+        val result = ArrayList(items)
+        items.forEachIndexed { index, item ->
+            val rank = ranks[index].toInt()
+            result[offsets[rank]] = item
+            offsets[rank]++
+        }
+        return result
+    }
 
     /**
      * 这一行**是不是真的被确证过能播** —— 决定 UI 允许说哪一句话。

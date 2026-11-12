@@ -74,6 +74,14 @@ class PlaybackNetworkRecoveryTest {
         assertTrue(gate.resolving)
         assertTrue(gate.needsRecovery(false))
     }
+    @Test fun pausedRoomSelectionCanResolveWithoutArmingAutomaticRecovery() {
+        val gate = PlaybackRecoveryGate(wifi)
+        gate.begin(wanted = false)
+        assertTrue(gate.resolving)
+        assertFalse(gate.needsRecovery(true))
+        gate.resolved()
+        assertFalse(gate.needsRecovery(true))
+    }
     @Test fun copyrightOrAuthenticationFailureDoesNotAutoResumeAfterHandover() {
         val gate = PlaybackRecoveryGate(wifi)
         gate.begin(); gate.failed(false)

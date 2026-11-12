@@ -13,6 +13,7 @@ package com.takahashirinta.ncrust.stats
 
 import java.util.Calendar
 import java.util.Locale
+import java.util.PriorityQueue
 import java.util.TimeZone
 
 /**
@@ -174,51 +175,74 @@ object StatsMath {
         return formatDayKey(cal)
     }
 
-    /**
-     * 把 `[startMs, endMs)` 这段收听切成「按天」的片。
-     *
-     * 跨零点的那一分钟必须切开，否则「最近 14 天」的柱子会出现「23:59 听的两小时
-     * 全算在昨天」这种看不懂的形状。正常输入（相邻采样点）最多切出 2 片。
-     *
-     * 三条边界：
-     * - `endMs <= startMs`（时钟回拨 / 空区间）⇒ 返回**一条 0 毫秒**的记录，
-     *   挂在 start 那天。**不抛异常、不返回空列表** —— 调用方拿到空列表会以为
-     *   "这段没发生"，而它其实发生了，只是时长不可知。
-     * - 夏令时：日界用 `Calendar` 把本地时间归零再加一天得到。在有「零点不存在」
-     *   的时区（如 America/Santiago 的春季切换）上，`Calendar` 的宽松模式会给出
-     *   当天的第一个真实时刻，那正是这一天的开始。
-     * - 片数上限 [MAX_DAY_SLICES]：超出后剩余全部并入最后一片（有界，绝不无限展开）。
-     */
-    fun splitAcrossDays(startMs: Long, endMs: Long, zone: TimeZone): List<DaySlice> {
-        if (endMs <= startMs) return listOf(DaySlice(dayKey(startMs, zone), 0L))
-        val out = ArrayList<DaySlice>(2)
-        val cal = Calendar.getInstance(zone)
-        var cursor = startMs
-        while (cursor < endMs) {
-            cal.timeInMillis = cursor
-            val key = formatDayKey(cal)
-            // 归零到当天 00:00 再加一天 = 次日 00:00（DST 由 Calendar 自行处理）。
-            cal.set(Calendar.HOUR_OF_DAY, 0)
-            cal.set(Calendar.MINUTE, 0)
-            cal.set(Calendar.SECOND, 0)
-            cal.set(Calendar.MILLISECOND, 0)
-            cal.add(Calendar.DAY_OF_MONTH, 1)
-            val nextDayStart = cal.timeInMillis
+    /** 按设备本地日期切分收听区间。用于单次计算的入口。 */
+    fun splitAcrossDays(startMs: Long, endMs: Long, zone: TimeZone): List<DaySlice> =
+        DaySlicer().split(startMs, endMs, zone)
 
-            val atLimit = out.size >= MAX_DAY_SLICES - 1
-            val sliceEnd = when {
-                atLimit -> endMs
-                nextDayStart in (cursor + 1) until endMs -> nextDayStart
-                else -> endMs
+    /** 播放采样反复使用同一个分桶器。只有时区或格式地区变化时才重建日历。 */
+    internal class DaySlicer {
+        private var calendar: Calendar? = null
+        private var calendarZone: TimeZone? = null
+        private var calendarLocale: Locale? = null
+        private var year = Int.MIN_VALUE
+        private var month = Int.MIN_VALUE
+        private var day = Int.MIN_VALUE
+        private var key = ""
+
+        fun split(startMs: Long, endMs: Long, zone: TimeZone): List<DaySlice> {
+            val cal = calendarFor(zone)
+            if (endMs <= startMs) {
+                cal.timeInMillis = startMs
+                return listOf(DaySlice(keyFor(cal), 0L))
             }
-            val ms = sliceEnd - cursor
-            if (ms > 0L) out.add(DaySlice(key, ms))
-            // 有界性守卫：`nextDayStart` 若因为时区整日跳过而不大于 cursor，
-            // sliceEnd 已经落到 endMs，这里再兜一次，保证循环必定终止。
-            if (sliceEnd <= cursor) break
-            cursor = sliceEnd
+
+            val slices = ArrayList<DaySlice>(2)
+            var cursor = startMs
+            while (cursor < endMs) {
+                cal.timeInMillis = cursor
+                val dayKey = keyFor(cal)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                cal.add(Calendar.DAY_OF_MONTH, 1)
+                val nextDayStart = cal.timeInMillis
+
+                // 超过切片上限时，把剩余时长计入最后一片。
+                val sliceEnd = if (slices.size < MAX_DAY_SLICES - 1 &&
+                    nextDayStart > cursor && nextDayStart < endMs
+                ) nextDayStart else endMs
+                val elapsed = sliceEnd - cursor
+                if (elapsed > 0L) slices.add(DaySlice(dayKey, elapsed))
+                cursor = sliceEnd
+            }
+            return slices
         }
-        return out
+
+        private fun calendarFor(zone: TimeZone): Calendar {
+            val locale = Locale.getDefault(Locale.Category.FORMAT)
+            val current = calendar
+            if (current != null && calendarZone == zone && calendarLocale == locale) return current
+
+            return Calendar.getInstance(zone, locale).also {
+                calendar = it
+                calendarZone = zone
+                calendarLocale = locale
+            }
+        }
+
+        private fun keyFor(cal: Calendar): String {
+            val y = cal.get(Calendar.YEAR)
+            val m = cal.get(Calendar.MONTH) + 1
+            val d = cal.get(Calendar.DAY_OF_MONTH)
+            if (y != year || m != month || d != day) {
+                year = y
+                month = m
+                day = d
+                key = formatDayKey(y, m, d)
+            }
+            return key
+        }
     }
 
     /**
@@ -273,12 +297,31 @@ object StatsMath {
         return pct.toInt().coerceIn(0, 100)
     }
 
-    /**
-     * 按权重取前 [n] 项。`sortedByDescending` 是**稳定**排序 ⇒ 并列时保持输入顺序，
-     * 于是「同一份数据每次渲染出来的 Top 10 完全一样」，不会在重组之间跳来跳去。
-     */
-    fun <T> topN(items: List<T>, n: Int, weight: (T) -> Long): List<T> =
-        if (n <= 0) emptyList() else items.sortedByDescending(weight).take(n)
+    /** 按权重取前 [n] 项，并列时保留输入顺序。堆顶是当前排名最低的保留项。 */
+    fun <T> topN(items: Collection<T>, n: Int, weight: (T) -> Long): List<T> {
+        if (n <= 0) return emptyList()
+        if (n >= items.size) return items.sortedByDescending(weight)
+
+        val kept = PriorityQueue<Ranked<T>>(n) { a, b ->
+            val byWeight = a.weight.compareTo(b.weight)
+            if (byWeight != 0) byWeight else b.index.compareTo(a.index)
+        }
+        items.forEachIndexed { index, item ->
+            val score = weight(item)
+            if (kept.size == n) {
+                if (score <= kept.peek().weight) return@forEachIndexed
+                kept.remove()
+            }
+            kept.add(Ranked(item, score, index))
+        }
+
+        val ordered = ArrayList<T>(kept.size)
+        while (kept.isNotEmpty()) ordered.add(kept.remove().item)
+        ordered.reverse()
+        return ordered
+    }
+
+    private class Ranked<T>(val item: T, val weight: Long, val index: Int)
 
     /**
      * 日均时长 = 总时长 / **有收听的天数**。
@@ -304,15 +347,12 @@ object StatsMath {
         )
     }
 
-    private fun formatDayKey(cal: Calendar): String = String.format(
-        // Locale.US 是**必须**的：默认 locale 在阿拉伯语等环境下会产出本地数字字形，
-        // 于是 dayKey 不再是 ASCII、字典序也不再等于时间序（跨天比较全错）。
-        Locale.US,
-        "%04d-%02d-%02d",
-        cal.get(Calendar.YEAR),
-        cal.get(Calendar.MONTH) + 1,
-        cal.get(Calendar.DAY_OF_MONTH),
-    )
+    private fun formatDayKey(cal: Calendar): String =
+        formatDayKey(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
+
+    // 日桶作为持久化键使用，统一用 ASCII 数字。
+    private fun formatDayKey(year: Int, month: Int, day: Int): String =
+        String.format(Locale.US, "%04d-%02d-%02d", year, month, day)
 }
 
 /** 一天的收听切片。 */
