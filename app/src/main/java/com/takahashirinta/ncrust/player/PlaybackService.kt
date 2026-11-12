@@ -1728,13 +1728,13 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun currentMediaDisplay(): MediaDisplayLines.Lines {
-        val frame = mediaLyricFrame
-        return MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
-    }
+    private val mediaDisplay = MediaDisplayLines.Cache()
+
+    private fun currentMediaDisplay(frame: MediaLyricFrame = mediaLyricFrame): MediaDisplayLines.Lines =
+        mediaDisplay.get(mediaTitle, mediaArtist, frame)
 
     private fun updatePlaybackState() {
-        val dur = if (player.duration > 0) player.duration else 0L
+        val dur = player.duration.coerceAtLeast(0L)
         // v2.0.0 · T3：起播后 500ms 内的第一次心跳就把这首歌写进离线曲目索引（幂等，见该函数）。
         runCatching { maybeRecordOfflineLibrary(dur) }
 
@@ -1752,7 +1752,7 @@ class PlaybackService : MediaLibraryService() {
         // v1.5.1 · D：媒体面板歌词。有歌词行时第一行 = 当前歌词、第二行 = 「歌名 · 艺人」；
         // 没有就走「歌名 / 艺人」。排布规则抽在 MediaDisplayLines（JVM 单测覆盖）。
         val frame = mediaLyricFrame
-        val display = MediaDisplayLines.of(mediaTitle, mediaArtist, frame.original, frame.translation, frame.options)
+        val display = currentMediaDisplay(frame)
         if (display.title != lastMetadataTitle || display.subtitle != lastMetadataArtist ||
             display.trackInfo != lastMetadataTrackInfo ||
             dur != lastMetadataDuration || currentArtworkUrl != lastMetadataArtwork ||

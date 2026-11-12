@@ -44,6 +44,22 @@ internal object MediaDisplayLines {
     /** 面板/通知的两行文字。 */
     data class Lines(val title: String, val subtitle: String, val trackInfo: String? = null)
 
+    class Cache {
+        private class Display(val title: String, val artist: String, val frame: MediaLyricFrame, val lines: Lines)
+
+        private var latest: Display? = null
+
+        fun get(title: String, artist: String, frame: MediaLyricFrame): Lines {
+            val previous = latest
+            if (previous != null && previous.title == title && previous.artist == artist && previous.frame === frame) {
+                return previous.lines
+            }
+            val lines = of(title, artist, frame.original, frame.translation, frame.options)
+            latest = Display(title, artist, frame, lines)
+            return lines
+        }
+    }
+
     fun of(
         songTitle: String,
         songArtist: String,
