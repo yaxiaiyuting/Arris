@@ -142,60 +142,60 @@ object DynamicLyricFont {
         }
     }
 
-    /**
-     * 夹取倍率，使 `基准字号 × 倍率` 不超过 [maxSp]。
-     *
-     * 用户把 A+ 调到 1.5 倍（原文 48sp）时，放大档会被整体压回 1.0 —— 这是有意的：
-     * 用户已经手动放大过，不需要动态字号再叠一层。
-     */
-    /**
-     * 整首歌的逐行倍率（4.0.0 起的主路径）。
-     *
-     * ## 为什么不再用「绝对三档」
-     *
-     * 旧实现只看这一句自身的折行数：1 行且填充率 ≤0.82 才放大、≥3 行才缩小。
-     * 中文歌词大多数句子正好是「1 行、填充率 0.85~1.0」——两个条件都不满足，
-     * 于是**整首歌一行都没变**，用户看到的就是"动态字号根本没用"。
-     *
-     * 新判据改成**相对这首歌自身的中位数**：每句的填充率与全曲中位数比，
-     * 短句放大、长句缩小，平句不动。这样无论这首歌是"句句都长"还是"句句都短"，
-     * 屏幕上都会出现可感知的字号层次，而不会因为题材不同就整体失效。
-     *
-     * 绝对折行数仍然是硬约束：估算 ≥3 行的句子一律 0.85，避免长句被"相对放大"后溢出面板。
-     */
-    fun scalesFor(lines: List<String>, availWidthPx: Float, fontSizePx: Float): List<Float> {
+    /** 按句子的宽度在全曲中所处的分位选字号倍率。 */
+    fun scalesFor(lines: List<String>, availWidthPx: Float, fontSizePx: Float): List<Float> =
+        scalesFor(lines, availWidthPx, fontSizePx, Float.POSITIVE_INFINITY) { it }
+
+    internal fun scalesForLyrics(
+        lines: List<LrcLine>,
+        availWidthPx: Float,
+        fontSizePx: Float,
+        baseFontSizeSp: Float,
+    ): List<Float> = scalesFor(
+        lines, availWidthPx, fontSizePx, clampScale(Float.POSITIVE_INFINITY, baseFontSizeSp),
+    ) { it.text }
+
+    private inline fun <T> scalesFor(
+        lines: List<T>,
+        availWidthPx: Float,
+        fontSizePx: Float,
+        maxScale: Float,
+        textOf: (T) -> String,
+    ): List<Float> {
         if (lines.isEmpty()) return emptyList()
-        if (availWidthPx <= 0f || fontSizePx <= 0f) return List(lines.size) { SCALE_BASE }
+        val base = minOf(SCALE_BASE, maxScale)
+        if (availWidthPx <= 0f || fontSizePx <= 0f) return List(lines.size) { base }
         val capacityEm = availWidthPx / fontSizePx
-        if (capacityEm <= 0f) return List(lines.size) { SCALE_BASE }
+        if (capacityEm <= 0f) return List(lines.size) { base }
 
-        val fills = lines.map { estimateWidthEm(it) / capacityEm }
-        val sorted = fills.filter { it > 0.05f }.sorted()
-        if (sorted.size < 2) return List(lines.size) { SCALE_BASE }
+        val fills = FloatArray(lines.size)
+        val ranked = FloatArray(lines.size)
+        var count = 0
+        for ((index, line) in lines.withIndex()) {
+            val fill = estimateWidthEm(textOf(line)) / capacityEm
+            fills[index] = fill
+            if (fill > 0.05f) ranked[count++] = fill
+        }
+        if (count < 2) return List(lines.size) { base }
+        ranked.sort(0, count)
+        val shortCut = ranked[(count * 0.30f).toInt().coerceIn(0, count - 1)]
+        val longCut = ranked[(count * 0.70f).toInt().coerceIn(0, count - 1)]
 
-        // 按**名次**分档，而不是按"与中位数的比值"：比值法对"整体都偏长"的歌不敏感
-        // （16 字对 12 字容量只算 1.23 倍，落进中间档 ⇒ 又变成"没效果"）。
-        // 名次法则只看这句话在这首歌里算长还是短，与绝对长度无关。
-        val shortCut = sorted[(sorted.size * 0.30f).toInt().coerceIn(0, sorted.size - 1)]
-        val longCut = sorted[((sorted.size * 0.70f).toInt()).coerceIn(0, sorted.size - 1)]
-
-        return fills.mapIndexed { index, fill ->
-            val text = lines[index]
-            when {
-                text.isBlank() -> SCALE_BASE
-                // 硬约束：估算 ≥3 行必须缩，否则相对放大后会溢出面板
+        return lines.mapIndexed { index, line ->
+            val fill = fills[index]
+            val scale = when {
+                textOf(line).isBlank() -> SCALE_BASE
                 fill >= 3f -> SCALE_SMALL
-                // 放大后必须仍然是一行：fill × 1.15 ≤ 1。
-                // 否则"短句放大"会把这句挤成两行，行高变了、面板的整块居中就跟着偏 ——
-                // 真机上表现为"多行时整段歌词偏离中心"。
                 fill <= shortCut && fill * SCALE_LARGE <= 1f -> SCALE_LARGE
                 fill <= shortCut -> SCALE_BASE
                 fill >= longCut -> 0.90f
                 else -> SCALE_BASE
             }
+            minOf(scale, maxScale)
         }
     }
 
+    /** 将动态倍率限制在最终字号上限内。 */
     fun clampScale(raw: Float, baseFontSizeSp: Float, maxSp: Float = ABSOLUTE_MAX_ORIGINAL_SP): Float {
         if (baseFontSizeSp <= 0f) return raw
         return minOf(raw, maxSp / baseFontSizeSp)
