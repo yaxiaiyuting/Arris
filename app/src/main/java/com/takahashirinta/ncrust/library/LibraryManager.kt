@@ -4,19 +4,6 @@
  *
  * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
- *
- * 修改说明：
- *   - v1.x（Bug2「我喜欢的歌无法全部加载 / 加入播放列表」）：
- *     ① 分页游标改为独立的 likedIdCursor（已消费 id 前缀长度），不再用 cachedSongs.size；
- *     ② refreshFromCloud 由「整体替换」改为「按 likedIds 顺序合并去重」；
- *     ⑤ 新增 loadAllLikedSongs：为「播放全部」一次性补齐全部详情，分批 + 限流。
- *   - v2.6.0 · P0（QQ 入库丢失）：**内存真源从 `List<SongItem>` 换成
- *     `List<SavedSongEntry>`**（每条带 origin / tombstoned），同步改走
- *     `SavedSongSync` 的七条规则。旧的 refreshFromCloud 是「以云端 likedIds
- *     重建整张表」—— 它**在结构上无法区分**「云端删掉的」与「用户手动加入库的」，
- *     于是把后者一起丢掉，再 flush 回磁盘。QQ 曲目因为 bit62 合成 id 永远不会
- *     出现在 ncm 的 likedIds 里，所以 100% 命中这条路径。
- *     根因链与证据：`docs/verification/v2.6.0/probe-qq-import-loss.md`。
  */
 
 package com.takahashirinta.ncrust.library
@@ -52,35 +39,8 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 云同步收藏库。
- *
- * 语义（与 ncm 官方一致）：
- *  - 「收藏单曲」 = ncm「收藏/我喜欢」（weapi /api/radio/like）；
- *  - 「收藏专辑」 = ncm「我收藏的专辑」（weapi /api/album/sub），与单曲解耦。
- *
- * 本地用 SharedPreferences 缓存云端状态（收藏单曲 + 收藏专辑），保证：
- *   - 进收藏页/登录时后台拉取（refreshFromCloud）刷新，云端为真源；
- *   - 未拉取/未登录/失败时直接显示本地缓存，绝不出现空白+加载动画；
- *   - 收藏/取消动作先落本地缓存即时生效，再异步推到云端。
- *
- * 该对象保持公开 API 不变，所有既有调用点（收藏按钮、各详情页「加入收藏」）无需改动。
- *
- * ## v2.6.0 · P0：同步口径从「云端为真源」改为「只加不减 + tombstone」
- *
- * | # | 规则 | 落点 |
- * |---|---|---|
- * | 1 | 云端有 + 本地无 + 不在 tombstone → 添加，origin = REMOTE | [SavedSongSync.merge] |
- * | 2 | 云端有 + 本地有 → 保留，不动 | 同上 |
- * | 3 | 云端无 + 本地有 → 保留（只加不减） | 同上 |
- * | 4 | 云端有 + 在 tombstone → 跳过 | 同上 |
- * | 5 | 本地手动新增 → origin = LOCAL，同步永远保留 | [saveSong] |
- * | 6 | 用户手动删除 → 设 tombstoned = true | [removeSong] |
- * | 7 | 用户重新添加 → 清除 tombstone | [saveSong] |
- *
- * **为什么不去「修」规则 3**：它看起来像「云端取消收藏后本地还在」的不一致，
- * 但那正是本版要的语义 —— 用户在本机删掉一首歌是**一个明确的动作**（规则 6 记账），
- * 而「云端列表里没有」还可以是网络截断、分页上限、账号切换。用后者去删本地数据
- * 就是本版修的 bug。
+ * 本地收藏和网易云同步。编号表供红心状态与分页使用，详情表保留手动添加和取消记录。
+ * 用户编辑先更新内存，再落盘和同步。云端读取遵守 [SavedSongSync] 的合并规则。
  */
 object LibraryManager {
     private const val PREFS_NAME = "ncrust_library"
@@ -132,19 +92,7 @@ object LibraryManager {
 
     @Volatile private var cachedLikedIds: LikedIds? = null
 
-    /**
-     * 分页游标：cachedLikedIds 中**已被消费（已请求过详情）的前缀长度**（Bug2-①）。
-     *
-     * 绝不能用「已解析歌曲数」当游标 —— 某些 id 取不到详情（下架 / 无版权）时，
-     * 游标会随之错位：同一段 id 被反复请求，且终止条件可能永远不成立，
-     * 尾部歌曲再也加载不出来。
-     *
-     * v2.6.0 起「已覆盖」的判据是「**表里有这个 trackKey 的条目**」，
-     * 而**不是**「它可见」—— tombstone 的条目也算已消费，否则删除过的歌
-     * 会在每一轮刷新时被重新请求一次详情（恒定浪费一次网络往返）。
-     *
-     * 和编号快照一起在 [songsLock] 内读写。
-     */
+    /** 已请求或已有详情的编号前缀，和编号快照一起在 [songsLock] 内读写。 */
     private var likedIdCursor = 0
     private val likedPageLock = Mutex()
     private var likedEditRevision = 0L
@@ -156,19 +104,6 @@ object LibraryManager {
     private var flushJob: Job? = null
     private var pendingAppContext: Context? = null
     private val flushLock = Any()
-
-    /**
-     * 被闸门拦下的**跨源写请求**次数（v2.6.0 · P0）。
-     *
-     * **只在内存**，不落盘：这个数的用途是「本地排查时能一眼看出闸门有没有在拦」，
-     * 而它落在**用户主动动作**的路径上（点一次「加入库」），不像播放上报那样
-     * 需要事后统计。落盘会引入一个新的 prefs 文件 + 迁移 + 单测，
-     * 而收益只是「重启后还能看到历史拦截次数」—— 如实记在这里，不假装有持久化。
-     */
-    private val blockedLikeWrites = AtomicLong()
-
-    /** 诊断入口（debug / 本地排查用）。 */
-    fun blockedCrossSourceLikeCount(): Long = blockedLikeWrites.get()
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -244,21 +179,7 @@ object LibraryManager {
         }
     }
 
-    /**
-     * 把内存快照写回磁盘。
-     *
-     * ## v2.6.0 · P0 修掉的第二个数据丢失路径：**不许用空表覆盖「还没加载过」的键**
-     *
-     * 旧实现是 `cachedSongs?.toList() ?: emptyList()` —— 「内存里还没有」与
-     * 「内存里确实是空的」被压成同一个取值，于是**任何一次在没有加载过收藏单曲的
-     * 情况下触发的 flush 都会把 `saved_songs` 写成 `[]`**。
-     * 这条路真的可达：`subscribeAlbum`（收藏一张专辑）直接 `scheduleFlush`，
-     * 既不读也不写 `cachedSongs`；用户冷启后第一件事是去专辑页点收藏，
-     * 300ms 后整张收藏单曲表就被清空了。
-     *
-     * 现在三个键各自**独立**判断：`null`（没加载过）⇒ 这个键**原样不动**
-     * （`edit()` 里不 put 就是不动），只有非 null 才写。
-     */
+    /** 抓取已加载表的快照，尚未加载的偏好键保留原值。 */
     private fun flushToDisk() {
         // A canceled IO job may already be saving: serialize snapshot + write, not just ctx handoff.
         synchronized(flushLock) {
@@ -291,37 +212,9 @@ object LibraryManager {
 
     private fun isLoggedIn(context: Context) = CookieManager.hasCookie(context)
 
-    /**
-     * 把「收藏」动作推给 ncm。
-     *
-     * ## v2.6.0 · P0：跨源 id 不许发给 ncm 的写接口
-     *
-     * qm 的 id 由 `SourceIds.qqId` 合成（`bit62` 恒置位，是**正数**），
-     * 所以旧代码里没有任何一条卫语句能拦住它 —— 一首 QQ 曲目的合成 id 会被
-     * POST 到 `/api/radio/like`。这与 v2.5.5 修掉的 `PlayReporter` 跨源上报
-     * 是**同一个形状**（`ReportGate` 的 KDoc 记了完整根因链）。
-     *
-     * 闸门挂在这里（like 的**唯一出口**），判据是 [SavedSongSync.isRemoteLikeEligible]
-     * （底层 = `SourceIds.isQqId`，与 `ReportGate` 共用同一个谓词）。
-     * 被拦下时**只记本地计数**，不发请求。
-     */
-    /**
-     * 把「收藏/取消」推到云端。
-     *
-     * 三条不变量（S17 / S18 / R1）：
-     * 1. **同一首歌串行**：连点收藏→取消时，云端最终状态必须等于用户最后一次意图。
-     *    旧实现每次独立 launch，两个请求并发，迟到的那条（可能是最初的 true）最后落地。
-     *    这里按曲目串行，并在轮到时读"最新意图"，被后续点击覆盖的旧意图直接跳过。
-     * 2. **绑定原会话**：排任务时钉住登录代次；切账号后旧操作作废，
-     *    绝不用新账号的凭据把它重发一遍。
-     * 3. **旧 worker 只能删自己领取的那一条**（R1）：意图带 [LikeIntent.ownerGeneration]
-     *    与唯一 [LikeIntent.seq]，删除用 `remove(key, value)` 的条件形式。
-     *    旧实现只按 songId 存 Boolean，A 的 worker 一发现会话过期就 `remove(songId)`，
-     *    把 B 刚写下的意图一起删掉 —— B 的写请求再也不会发出。
-     */
+    /** 网易云收藏按曲目串行，只发送原登录下仍有效的最新意图。 */
     private fun pushLike(songId: Long, like: Boolean) {
         if (!SavedSongSync.isRemoteLikeEligible(songId)) {
-            blockedLikeWrites.incrementAndGet()
             Log.w(TAG, "pushLike blocked: cross-source id=$songId like=$like")
             return
         }
@@ -415,69 +308,19 @@ object LibraryManager {
 
     // ==================== 可观察修订（v3.8.0 · K05 根治） ====================
 
-    /**
-     * 收藏单曲表（`saved_songs`）的**可观察修订号**：每次内存真源真的换了就 +1。
-     *
-     * ## 为什么需要它（K05 的根因）
-     *
-     * 播放器那颗红心原先靠**组件局部**的一个 `libraryTick` 驱动重新查询，
-     * 而只有播放器自己点的收藏会推进它。库页 / 搜索页改的是**同一份数据**
-     * （[savedSongs]），却推不动播放器的 tick —— 播放器缩成 mini bar 时仍然挂载，
-     * 于是「在库页取消收藏当前歌 → 展开播放器」会继续显示旧红心。
-     *
-     * 修法不是「让别的页面也去戳播放器的 tick」（那是 N 个生产者 × N 个消费者的
-     * 手动通知，漏掉一个就重现 bug），而是让**仓库自己**暴露可观察的修订：
-     * 任何写路径（本进程内所有页面，含将来新增的页面）改完表都会推进它；
-     * 消费方订阅它 + 按 [TrackKey] 查一次真相即可。
-     *
-     * ## 为什么在「内存真源被替换」的事务里推进，而不是等落盘之后
-     *
-     * 修订号的语义是「**你现在去查会看到新值**」，而 [isSongSaved] 读的是内存表。
-     * 若把推进挂在 300ms 去抖之后的 [flushToDisk] 上，`refreshFromCloud` /
-     * `loadMoreLikedSongs` 这类走 [scheduleFlush] 的路径会让 UI 晚 300ms 才刷新；
-     * 反过来「先推进修订、后换表」则会出现「UI 收到信号但读到的还是旧值，且不会再有
-     * 第二次信号」的**漏刷新**（比晚刷新更糟）。所以推进点与换表点必须在同一个事务里，
-     * 且**只有真的换了表**（`changed` / `after !== before`）才推进 —— 幂等写入不推进，
-     * 否则「已在库」的重复点击会白白让每个订阅点重算一次。
-     *
-     * ## 线程安全
-     *
-     * [MutableStateFlow.update] 是原子的（CAS 循环），可以从 IO 线程（[flushNow] 的调用方、
-     * [loadMoreLikedSongs] 的 IO 协程）安全推进；订阅方在自己的调度器上被唤醒，
-     * **不要求**调用方在主线程，也不引入新的锁序（推进点在 [songsLock] 之外）。
-     */
     private val savedRevisionState = MutableStateFlow(0)
 
-    /**
-     * 只读句柄：订阅方用 `collect` / `collectAsState`。
-     *
-     * 现状消费点只有一个叶子（`PlayerCardExpanded` 的红心），但它必须**下沉到叶子**：
-     * 订阅点每抬一层，一次收藏变更就会多重组一层 —— 整卡（封面 / 歌词 / 队列）不参与。
-     */
+    /** 收藏状态更新后通知播放器红心等读者。 */
     val savedRevision: StateFlow<Int> = savedRevisionState.asStateFlow()
 
-    /** 推进修订号。**只在内存真源真的换了之后**调用（见 [savedRevisionState] 的 KDoc）。 */
+    /** 在内存更新完成后、锁外调用。 */
     private fun bumpSavedRevision() {
         savedRevisionState.update { it + 1 }
     }
 
     // ==================== 单曲（收藏） ====================
 
-    /**
-     * 收藏（加入库）单曲：先落本地缓存并**立即落盘**，再异步同步到云端。
-     *
-     * 规则 5 / 7（[SavedSongSync.addManual]）：不存在则插到最前、`origin = LOCAL`；
-     * 已存在但被 tombstone 过则**清除 tombstone**（用户重新添加 ⇒ 这条歌回来了）；
-     * 已存在且可见则**幂等**（顺序与 origin 都不动）。
-     *
-     * ## 为什么返回值从 `Unit` 改成 [SavedSongOutcome]
-     *
-     * 旧实现返回 `Unit`，于是 8 个调用点**全部无条件**弹「已加入库」——
-     * 用户看到的成败与真实成败完全脱钩（探针
-     * `docs/verification/v2.6.0/probe-qq-import-loss.md` §7 把它列为「UI 说谎」）。
-     * 改成返回值之后，「什么时候该说成功」就只有调用点一处判断，
-     * 而不再依赖「它反正不会失败」这个（错的）假设。
-     */
+    /** 添加或恢复收藏。重复添加保持条目原有顺序和来源。 */
     fun saveSong(context: Context, song: SongItem): SavedSongOutcome {
         if (song.id <= 0L) {
             // 不是任何真实曲目：它连身份都不成立（`SourceIds.mediaId` 同样会拒绝
@@ -499,15 +342,11 @@ object LibraryManager {
             true
         }
         if (changed) {
-            // K05：表真的换了 ⇒ 先推进修订（**在锁外**），再排队落盘。订阅方（播放器红心）
-            // 此刻去查 [isSongSaved] 一定拿到新值，不需要等 300ms 去抖之后的磁盘写。
             bumpSavedRevision()
             flushNow(context)
             if (isLoggedIn(context)) pushLike(key.id, true)
             return SavedSongOutcome.ADDED
         }
-        // 零变化有两种：本来就在可见表里（幂等成功），或表里没有但它……
-        // 后者不可能（addManual 对「不存在」一定返回新列表）。所以这里就是幂等。
         return SavedSongOutcome.ALREADY_SAVED
     }
 
@@ -550,15 +389,7 @@ object LibraryManager {
         likedIdCursor += fresh.size
     }
 
-    /**
-     * 取消收藏（从库中移除）单曲：**设 tombstone，不物理删除**（规则 6）。
-     *
-     * 物理删除会让下一次 [refreshFromCloud] 把它复活 —— 那正是「无 tombstone 的
-     * 只加不减不成立」（铁律 4）。移除后仍然异步同步云端。
-     *
-     * 返回**是否真的移除了**（原本就不在库里 / 已经被 tombstone 过时为 false）——
-     * 与 [saveSong] 同理：调用点需要一个能判断「要不要提示用户」的返回值。
-     */
+    /** 移除收藏并留下取消记录。返回本次操作是否改变收藏状态。 */
     fun removeSong(context: Context, songId: Long): Boolean {
         // 调用点传的是裸 `song.id`（SongItem 的 id 自带 bit62 标志），
         // 所以音源可以直接从 id 推出来，不需要额外参数。
@@ -603,27 +434,10 @@ object LibraryManager {
     /** 带来源的只读视图（诊断 / 单测 / 将来的 UI 角标用）。 */
     fun getSavedSongEntries(context: Context): List<SavedSongEntry> = ensureSongsLoaded(context).entries
 
-    /**
-     * 按**身份**查询是否已收藏（v3.8.0 · K05 的读取入口）。
-     *
-     * 判据与 [removeSong] 同源：那边也是用 `TrackKey.of(null, songId)` 定位条目，
-     * 所以「红心亮着」与「点下去删得掉」永远是同一个答案 —— 不会出现
-     * 「显示已收藏、点了却删不掉」这种读写不一致。
-     *
-     * 读的是收藏条目表 [savedSongs]，按身份 `(source, id)` 查询。
-     */
+    /** 网易云先查完整编号，再查已加载详情。其他音源按本地详情判断。 */
     fun isSongSaved(context: Context, key: TrackKey): Boolean {
         // `id <= 0` 不是任何真实曲目（[saveSong] 同样拒绝），不必进锁扫表。
         if (key.id <= 0L) return false
-        // 4.0.11（回移上游 c84c0fd）：**红心 id 底表优先**。
-        //
-        // 收藏条目表是分页落下来的「已加载」集合：云端有 id 但还没取过详情的歌
-        // 根本不在这张表里（`SavedSongModels` 会直接跳过）。于是「喜欢了但没滚到」的歌
-        // 会被判成未收藏 —— 播放器显示白心，用户再点一次就走一遍收藏写入，
-        // 叠加 502 被当失败的旧判定，掉进 weapi 老通道可能被风控 524 反手取消（issue #33）。
-        //
-        // 底表 `cachedLikedIds` 是云端**全量**的 id 集合，只有 ncm 有这个真源；
-        // qm / B 站的收藏没有等价物，仍按已加载表判断。
         if (key.source == MusicSource.NETEASE) {
             val ids = ensureLikedIdsLoaded(context)
             if (ids.contains(key.id)) return true
@@ -807,7 +621,7 @@ object LibraryManager {
         } ?: false
     }
 
-    /** 红心歌单全部单曲 id（有序），供收藏页做分页懒加载的底表。 */
+    /** 网易云收藏的有序编号，包含尚未加载详情的曲目。 */
     fun getLikedSongIds(context: Context): List<Long> = ensureLikedIdsLoaded(context).ordered
 
     /**
@@ -842,27 +656,9 @@ object LibraryManager {
     }
 
     /**
-     * 「播放全部」用：返回**整列**收藏单曲（Bug2-⑤）。
-     *
-     * 与 loadMoreLikedSongs 的分页懒加载不同，这里一次性补齐所有缺失详情，
-     * 因此按 PLAY_ALL_BATCH_SIZE 分批、批间 delay(PLAY_ALL_BATCH_DELAY_MS) 限流，
-     * 避免收藏量很大时触发服务端风控。已在缓存中的歌曲直接复用，不重复请求。
-     *
-     * ## v3.4.12 · 多音源：ncm 云端顺序 + 本地手动条目
-     *
-     * 顺序与 tombstone 口径全部收进 [selectLikedPlayAll]（纯函数、有单测）：
-     *  - **本地手动收藏的 QQ / B 站条目**（它们永远不会出现在 ncm likedIds 里）排在最前，不丢；
-     *  - ncm 条目按**云端红心 id 顺序**补全，缺详情的 id 跳过并计入 `missingCloudIds`；
-     *  - tombstone 的 ncm id 即使云端仍返回也**不复活**；
-     *  - 云端没有、但本地手动收藏的 ncm 条目追在最后。
-     *
-     * 批量严格按 `allIds` 全量补齐（不是只处理已加载的前 50 首）；单批失败只丢该批，
-     * 不影响其它批与本地条目。
+     * 分批补齐「播放全部」所需的详情。按 [selectLikedPlayAll] 合并本地条目和网易云顺序，
+     * 并把仍缺详情的编号返回给界面。
      */
-    suspend fun loadAllLikedSongs(context: Context): List<SongItem> =
-        loadAllLikedSongsResult(context).songs
-
-    /** 同 [loadAllLikedSongs]，但额外返回「云端取不到详情」的 id，供 UI 做部分反馈。 */
     suspend fun loadAllLikedSongsResult(context: Context): LikedPlayAllSelection =
         withContext(Dispatchers.IO) {
             val (initialIds, initialEntries) = synchronized(songsLock) {
@@ -924,7 +720,7 @@ object LibraryManager {
             )
         }
 
-    /** 「播放全部」补齐详情时的批大小与批间隔（限流，见 loadAllLikedSongs）。 */
+    /** 补详情的批大小与批间隔。 */
     private const val PLAY_ALL_BATCH_SIZE = 500
     private const val PLAY_ALL_BATCH_DELAY_MS = 250L
 

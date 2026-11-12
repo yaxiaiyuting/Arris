@@ -98,7 +98,7 @@ fun LibraryScreen(
     onPlayAlbum: (Long) -> Unit,
     onPlaylistClick: (PlaylistApi.PlaylistInfo) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
-    // Bug2-④：收藏单曲「播放全部」。由上层 loadAllLikedSongs 覆盖整个红心歌单。
+    // Bug2-④：收藏单曲「播放全部」。由上层 loadAllLikedSongsResult 覆盖整个红心歌单。
     onPlayAllLiked: () -> Unit = {},
     // v3.4.12：整列收藏的「插播 / 追加」入口与后台补齐的 loading 反馈。
     // 播放全部仍是**先播后补**（点击即出声），不弹二次确认。

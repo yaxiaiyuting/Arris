@@ -884,7 +884,7 @@ object PlaylistApi {
      *
      * 调用方（`LibraryManager.refreshFromCloud`）无法区分它们，于是 2、3 会被当成 1
      * 覆盖掉 `cachedLikedIds` 并**落盘** —— 一次抖动就让收藏页表头显示「0 首」、
-     * 分页底表变空（`getLikedSongIds` / `loadAllLikedSongs` 都拿不到 id），
+     * 分页底表变空（`getLikedSongIds` / `loadAllLikedSongsResult` 都拿不到 id），
      * 且**重启后仍然是空**，直到下一次成功刷新。
      *
      * 收藏单曲**本体**不会因此丢失：本仓库的收藏库是只加不减的

@@ -6,7 +6,7 @@
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
  * 修改说明（Bug2「我喜欢的歌无法全部加入播放列表」）：
- *   - ④ 接线 LibraryScreen 的 onPlayAllLiked：v1.3.0 用 loadAllLikedSongs 补齐**整个**红心歌单
+ *   - ④ 接线 LibraryScreen 的 onPlayAllLiked：v1.3.0 用 loadAllLikedSongsResult 补齐**整个**红心歌单
  *        后弹 PlayAllDialog 二次确认；v1.4.0 改为「本地缓存立即开播 + 后台补齐追加队尾」，
  *        点击即出声，不再出现"数秒无反馈 + 冗余二次确认"。
  */
