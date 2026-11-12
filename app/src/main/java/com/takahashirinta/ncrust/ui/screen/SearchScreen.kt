@@ -51,7 +51,9 @@ import com.takahashirinta.ncrust.library.SearchHistoryMigration
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
+import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
+import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
@@ -885,9 +887,11 @@ fun SearchScreen(
                         var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
                         LaunchedEffect(Unit) {
                             if (ContentCache.toplistItems == null || !ContentCache.isToplistFresh()) {
+                                val owner = CookieManager.accountOwner()
                                 runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
                                     ContentCache.putToplist(it)
                                     toplists = it
+                                    HomeSnapshot.save(context, toplists = it, owner = owner)
                                 }
                             }
                         }

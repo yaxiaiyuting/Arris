@@ -63,6 +63,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import com.takahashirinta.ncrust.warmup.AppWarmup
+import com.takahashirinta.ncrust.warmup.HOME_NEW_SONGS_LIMIT
 import com.takahashirinta.ncrust.ui.components.ArtistRecoCard
 import com.takahashirinta.ncrust.ui.components.PlayAllButton
 import com.takahashirinta.ncrust.ui.components.SessionExpiredBanner
@@ -83,6 +84,7 @@ import com.takahashirinta.ncrust.ui.components.arrisSurface
 import com.takahashirinta.ncrust.ui.components.drawArrisGrooves
 import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.AppShapes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -92,10 +94,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import android.widget.Toast
-
-// 新歌速递容量：一次装够，不做分页。首页只是一瞥的展示位，
-// 不是深度浏览入口——用户想探索会去搜索/歌单。
-private const val NEW_SONGS_LIMIT = 20
 
 @Composable
 fun HomeScreen(
@@ -125,9 +123,7 @@ fun HomeScreen(
     // 后台仍会刷新——请求返回后写回缓存 + 更新 state；LazyColumn 通过 key diff 平滑替换。
     var dailySongs by remember { mutableStateOf(ContentCache.homeDailySongs ?: emptyList()) }
     var playlists by remember { mutableStateOf(ContentCache.homeRecommendPlaylists ?: emptyList()) }
-    val newSongs = remember {
-        mutableStateListOf<SongItem>().apply { ContentCache.homeNewSongs?.let { addAll(it) } }
-    }
+    var newSongs by remember { mutableStateOf(ContentCache.homeNewSongs ?: emptyList()) }
     // 冷启动（三块数据都空）才显示全屏 loader；有任一缓存则跳过。
     var isLoading by remember {
         mutableStateOf(dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty())
@@ -143,14 +139,7 @@ fun HomeScreen(
     // 4.0.0：榜单卡用「榜一那首歌」的专辑图当封面（用户认的是歌，不是榜单拼贴图）。
     // 一次 /api/playlist/detail 就够；限制并发 3、只补前 12 个榜单，失败就退回原封面。
     val firstSongCovers = remember { androidx.compose.runtime.mutableStateMapOf<Long, String>() }
-    /**
-     * H15：一次首页请求**发出时**的会话归属，用来挡住"换号之后才到达"的旧响应。
-     *
-     * `ContentCache.bindOwner` 只在**换号那一刻**清理已经存在的值，挡不住之后到达的写：
-     * A 的三块个性化数据如果在切到 B 之后才回来，就会被写进同一个 ContentCache、
-     * 再被 [persistHomeSnapshot] 落盘 —— 用户看到的是 B 的首页上摆着 A 的每日推荐。
-     * 判据与 `HomeSnapshot.save` 的提交闸门**同一条**（都走 `CookieManager.accountOwner()`）。
-     */
+    // 请求归属在发出时确定，换号后的迟到响应不能更新首页。
     fun sessionStillAt(startedOwner: String?): Boolean = CookieManager.accountOwner() == startedOwner
 
     val gridState = rememberLazyGridState()
@@ -158,27 +147,24 @@ fun HomeScreen(
     val windowWidthDp = LocalConfiguration.current.screenWidthDp
     val isWide = windowWidthDp >= 600
     val coroutineScope = rememberCoroutineScope()
-    /**
-     * 榜单：与首屏另外三块**同批发出**（v3.7.11）。
-     *
-     * 旧实现是一个独立的 `LaunchedEffect(Unit)`，它要排在首页首次加载的那个 effect 之后才跑，
-     * 而后者当时还在等 800ms 轮询 + 1.2s 预热 —— 于是榜单永远是最后才出现的一块。
-     */
-    fun loadToplists() {
-        if (ContentCache.toplistItems != null && ContentCache.isToplistFresh()) {
-            if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
+    fun loadToplists(force: Boolean = false) {
+        val cached = ContentCache.toplistItems
+        if (!force && cached != null && ContentCache.isToplistFresh()) {
+            if (toplists.isEmpty()) toplists = cached
             return
         }
         val ownerAtStart = CookieManager.accountOwner()
         if (!NetworkAvailability.isOnline(context)) return
-        coroutineScope.launch(Dispatchers.IO) {
-            val list = runCatching { PlaylistApi.getToplists() }.getOrNull() ?: return@launch
-            withContext(Dispatchers.Main) {
-                if (!sessionStillAt(ownerAtStart)) return@withContext
+        coroutineScope.launch {
+            try {
+                val list = PlaylistApi.getToplists()
+                if (!sessionStillAt(ownerAtStart)) return@launch
                 ContentCache.putToplist(list)
                 toplists = list
-                HomeSnapshot.save(context, toplists = list)
-            }
+                HomeSnapshot.save(context, toplists = list, owner = ownerAtStart)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) { }
         }
     }
 
@@ -238,32 +224,17 @@ fun HomeScreen(
         if (active && toplists.isNotEmpty()) loadChartCovers(toplists)
     }
 
-    /** v1.5.1 · C：把当前首页状态落盘（异步、失败无害），供下次无网冷启动使用。 */
-    fun persistHomeSnapshot() {
-        HomeSnapshot.save(
-            context,
-            daily = ContentCache.homeDailySongs,
-            playlists = ContentCache.homeRecommendPlaylists,
-            newSongs = ContentCache.homeNewSongs,
-            toplists = ContentCache.toplistItems,
-        )
-    }
-
     fun loadDailySongs() {
-        // H15：归属在**请求发出时**捕获（本函数跑在 Main 上），响应回来时再复核。
         val ownerAtStart = CookieManager.accountOwner()
-        coroutineScope.launch(Dispatchers.IO) {
+        coroutineScope.launch {
             try {
                 val list = PlaylistApi.getDailyRecommendSongs()
-                withContext(Dispatchers.Main) {
-                    // 换过账号 ⇒ 这是上一个会话的推荐，不写内存、不落盘。
-                    if (!sessionStillAt(ownerAtStart)) return@withContext
-                    dailySongs = list
-                    ContentCache.homeDailySongs = list
-                    offline = false
-                    persistHomeSnapshot()
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+                if (!sessionStillAt(ownerAtStart)) return@launch
+                dailySongs = list
+                ContentCache.homeDailySongs = list
+                offline = false
+                HomeSnapshot.save(context, daily = list, owner = ownerAtStart)
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 android.util.Log.e("DailySongs", "Error", e)
@@ -282,17 +253,15 @@ fun HomeScreen(
     }
     fun loadPlaylists() {
         val ownerAtStart = CookieManager.accountOwner()
-        coroutineScope.launch(Dispatchers.IO) {
+        coroutineScope.launch {
             try {
                 val list = PlaylistApi.getRecommendPlaylists()
-                withContext(Dispatchers.Main) {
-                    if (!sessionStillAt(ownerAtStart)) return@withContext
-                    playlists = list
-                    ContentCache.homeRecommendPlaylists = list
-                    offline = false
-                    persistHomeSnapshot()
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+                if (!sessionStillAt(ownerAtStart)) return@launch
+                playlists = list
+                ContentCache.homeRecommendPlaylists = list
+                offline = false
+                HomeSnapshot.save(context, playlists = list, owner = ownerAtStart)
+            } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) { }
         }
@@ -300,24 +269,21 @@ fun HomeScreen(
 
     fun loadNewSongs() {
         val ownerAtStart = CookieManager.accountOwner()
-        coroutineScope.launch(Dispatchers.IO) {
+        coroutineScope.launch {
             if (newSongs.isEmpty()) isLoading = true
             error = null
             try {
-                val list = PlaylistApi.getTopSongs(limit = NEW_SONGS_LIMIT, offset = 0)
-                withContext(Dispatchers.Main) {
-                    if (!sessionStillAt(ownerAtStart)) return@withContext
-                    newSongs.clear()
-                    newSongs.addAll(list)
-                    ContentCache.homeNewSongs = list.toList()
-                    isLoading = false
-                    offline = false
-                    persistHomeSnapshot()
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+                val list = PlaylistApi.getTopSongs(limit = HOME_NEW_SONGS_LIMIT, offset = 0)
+                if (!sessionStillAt(ownerAtStart)) return@launch
+                newSongs = list
+                ContentCache.homeNewSongs = list
+                isLoading = false
+                offline = false
+                HomeSnapshot.save(context, newSongs = list, owner = ownerAtStart)
+            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
+                if (sessionStillAt(ownerAtStart)) {
                     error = strings.loadFailed(e.message)
                     isLoading = false
                 }
@@ -345,15 +311,7 @@ fun HomeScreen(
         }
         loadPlaylists()
         loadNewSongs()
-        val ownerAtStart = CookieManager.accountOwner()
-        coroutineScope.launch(Dispatchers.IO) {
-            runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
-                if (!sessionStillAt(ownerAtStart)) return@launch
-                ContentCache.putToplist(it)
-                withContext(Dispatchers.Main) { toplists = it }
-                HomeSnapshot.save(context, toplists = it)
-            }
-        }
+        loadToplists(force = true)
     }
 
     LaunchedEffect(active) {
@@ -365,7 +323,7 @@ fun HomeScreen(
         // 先显示缓存，再尝试复用当前会话的在途预热，缺失的数据由首页加载。
         ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
         ContentCache.homeRecommendPlaylists?.let { if (playlists.isEmpty()) playlists = it }
-        ContentCache.homeNewSongs?.let { cached -> if (newSongs.isEmpty()) newSongs.addAll(cached) }
+        ContentCache.homeNewSongs?.let { if (newSongs.isEmpty()) newSongs = it }
         if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
 
         val inFlight = AppWarmup.homeLoads
@@ -383,7 +341,7 @@ fun HomeScreen(
                 pls?.let { if (it.isNotEmpty() && sessionStillAt(owner)) playlists = it }
                 top?.let { list ->
                     if (list.isNotEmpty() && sessionStillAt(owner) && newSongs.isEmpty()) {
-                        newSongs.addAll(list)
+                        newSongs = list
                     }
                 }
             }

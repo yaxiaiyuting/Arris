@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+internal const val HOME_NEW_SONGS_LIMIT = 20
+
 /** 忽略预热失败，保留取消以执行网络阶段的超时。 */
 private suspend fun <T> runCatchingCancellable(block: suspend () -> T): T? =
     try {
@@ -106,19 +108,8 @@ object AppWarmup {
             scope.launch { runCatchingCancellable { ConnectionWarmup.warmUp() } }
 
             withTimeoutOrNull(NETWORK_BUDGET_MS) {
-                warmHomeData()
+                warmHomeData(app)
                 warmHomeCovers(app)
-            }
-
-            runCatchingCancellable {
-                HomeSnapshot.save(
-                    app,
-                    owner = CookieManager.accountOwner(),
-                    daily = ContentCache.homeDailySongs,
-                    playlists = ContentCache.homeRecommendPlaylists,
-                    newSongs = ContentCache.homeNewSongs,
-                    toplists = ContentCache.toplistItems,
-                )
             }
 
             if (CookieManager.hasCookie(app)) {
@@ -127,14 +118,13 @@ object AppWarmup {
         }
     }
 
-    private suspend fun warmHomeData() = coroutineScope {
+    private suspend fun warmHomeData(app: Context) = coroutineScope {
         val session = CookieManager.snapshot()
         val owner = CookieManager.accountOwner()
         val loads = HomeLoads(
             daily = async { runCatchingCancellable { PlaylistApi.getDailyRecommendSongs() } },
             playlists = async { runCatchingCancellable { PlaylistApi.getRecommendPlaylists() } },
-            // 与 HomeScreen 的首批新歌数量一致。
-            newSongs = async { runCatchingCancellable { PlaylistApi.getTopSongs(limit = 20, offset = 0) } },
+            newSongs = async { runCatchingCancellable { PlaylistApi.getTopSongs(limit = HOME_NEW_SONGS_LIMIT, offset = 0) } },
             session = session,
             owner = owner,
         )
@@ -150,6 +140,7 @@ object AppWarmup {
                 playlists?.let { ContentCache.homeRecommendPlaylists = it }
                 newSongs?.let { ContentCache.homeNewSongs = it }
                 if (daily != null && playlists != null && newSongs != null) ContentCache.markHomeWarmed()
+                HomeSnapshot.save(app, owner = owner, daily = daily, playlists = playlists, newSongs = newSongs)
             }
         } finally {
             if (homeLoads === loads) homeLoads = null
