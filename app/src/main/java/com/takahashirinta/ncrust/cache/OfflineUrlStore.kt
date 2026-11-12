@@ -199,7 +199,9 @@ object OfflineUrlStore {
         val key = OfflineKeys.keyOf(result.url) ?: return result
         return mutate(context) { idx ->
             val content = result.cachedContent ?: OfflineContent.from(result.playbackItem)
-            val chosen = verifiedCacheKey(key, content, idx.record(key)?.content, OfflineAudioCache.contains(context, key))
+            val chosen = verifiedCacheKey(key, content, idx.record(key)?.content) {
+                OfflineAudioCache.contains(context, key)
+            }
             val url = if (chosen == key) result.url else
                 result.url.replaceFirst(OfflineKeys.QUERY_KEY + "=" + key, OfflineKeys.QUERY_KEY + "=" + chosen)
             idx.put(chosen, url, content)
