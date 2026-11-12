@@ -1872,6 +1872,7 @@ class PlaybackService : MediaLibraryService() {
     /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
     fun publishStreamBitrate() {
         if (!::player.isInitialized) return
+        val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
         val identity = PreloadSlot.identityFromMediaId(item.mediaId) ?: return
         val selected = player.currentTracks.groups.firstOrNull {
@@ -1880,12 +1881,10 @@ class PlaybackService : MediaLibraryService() {
         val format = selected?.let { group ->
             (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
         }
-        val bitrate = StreamBitrate.resolve(
-            format?.averageBitrate ?: -1,
-            item.localConfiguration?.uri?.toString()?.let { OfflineAudioCache.contentLengthForUrl(it) } ?: 0L,
-            player.duration,
-        )
-        if (bitrate > 0L) onBitrateChanged?.invoke(identity.first, identity.second, bitrate)
+        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, player.duration) {
+            item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
+        }
+        if (bitrate > 0L) publish(identity.first, identity.second, bitrate)
     }
 
     /**
