@@ -98,22 +98,20 @@ object ArtistReco {
     private fun parseIds(raw: String): Set<Long> =
         raw.split(',', ';', ' ').mapNotNull { it.trim().takeIf(String::isNotEmpty)?.toLongOrNull() }.toSet()
 
-    /** 配置是否完整：开启 + 配了目标艺人 + 至少有一个可用锚点。 */
-    fun isConfigured(ctx: Context): Boolean =
-        isEnabled(ctx) && targetId(ctx) != 0L && (manualAnchors(ctx) + autoAnchors(ctx)).isNotEmpty()
-
     /**
      * 口味命中判定：收藏单曲（本地已加载部分）里的艺人只要有一个落在锚点集合里，
      * 就认为"与目标艺人风格相近"，首页显示卡片。纯本地计算，不发请求。
      */
     fun shouldShow(ctx: Context): Boolean {
-        if (!isConfigured(ctx)) return false
+        if (!isEnabled(ctx) || targetId(ctx) == 0L) return false
         val anchors = manualAnchors(ctx) + autoAnchors(ctx)
-        val mine = LibraryManager.getSavedSongs(ctx)
-            .flatMap { it.artists.orEmpty() }
-            .mapNotNull { it.id }
-            .toHashSet()
-        return mine.any { it in anchors }
+        if (anchors.isEmpty()) return false
+        return LibraryManager.getSavedSongs(ctx).any { song ->
+            song.artists.orEmpty().any { artist ->
+                val id = artist.id
+                id != null && id in anchors
+            }
+        }
     }
 
     /**
