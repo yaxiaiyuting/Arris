@@ -51,32 +51,38 @@ fun selectLikedPlayAll(
     details: Map<Long, SongItem>,
     tombstoned: Set<Long>,
 ): LikedPlayAllSelection {
-    val visible = localVisible.filter { it.isVisible }
     val out = LinkedHashMap<TrackKey, SongItem>()
-
-    // ① 本地手动来源的非 ncm 条目：QQ / B 站 / 以后的新音源。
-    for (entry in visible) {
-        if (entry.trackKey.source != MusicSource.NETEASE) out[entry.trackKey] = entry.song
+    val localById by lazy(LazyThreadSafetyMode.NONE) {
+        val indexed = HashMap<Long, SongItem>()
+        for (entry in localVisible) {
+            if (entry.isVisible && entry.trackKey.source == MusicSource.NETEASE) {
+                indexed.putIfAbsent(entry.trackKey.id, entry.song)
+            }
+        }
+        indexed
     }
 
-    // ② 云端红心顺序。tombstone 与取不到详情的 id 都跳过（后者进 missing）。
-    val distinctCloud = cloudIds.distinct()
-    val cloudSet = distinctCloud.toHashSet()
+    for (entry in localVisible) {
+        if (entry.isVisible && entry.trackKey.source != MusicSource.NETEASE) {
+            out[entry.trackKey] = entry.song
+        }
+    }
+
+    val cloudSet = HashSet<Long>(cloudIds.size)
     val missing = ArrayList<Long>()
-    for (id in distinctCloud) {
-        if (id in tombstoned) continue
-        val key = TrackKey(MusicSource.NETEASE, id)
-        val song = details[id] ?: visible.firstOrNull { it.trackKey == key }?.song
+    for (id: Long? in cloudIds) {
+        if (id == null || !cloudSet.add(id) || id in tombstoned) continue
+        val song = details[id] ?: localById[id]
         if (song == null) {
             missing.add(id)
             continue
         }
-        out[key] = song
+        out[TrackKey(MusicSource.NETEASE, id)] = song
     }
 
-    // ③ 本地手动收藏、但不在云端红心表里的 ncm 条目：只加不减。
-    for (entry in visible) {
-        if (entry.trackKey.source != MusicSource.NETEASE) continue
+    // 云端列表以外的可见网易云曲目继续按本地顺序追加。
+    for (entry in localVisible) {
+        if (!entry.isVisible || entry.trackKey.source != MusicSource.NETEASE) continue
         if (entry.trackKey.id in cloudSet) continue
         out.getOrPut(entry.trackKey) { entry.song }
     }
@@ -84,6 +90,6 @@ fun selectLikedPlayAll(
     return LikedPlayAllSelection(
         songs = out.values.toList(),
         missingCloudIds = missing,
-        cloudCount = distinctCloud.size,
+        cloudCount = cloudSet.size,
     )
 }

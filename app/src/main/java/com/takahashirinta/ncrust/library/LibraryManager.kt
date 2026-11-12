@@ -746,7 +746,8 @@ object LibraryManager {
                             .filter { it.trackKey.source == MusicSource.NETEASE }
                             .map { it.trackKey.id }
                             .toHashSet()
-                        likedIdCursor = likedIds.takeWhile { it in coveredIds }.size
+                        val firstMissing = likedIds.indexOfFirst { it !in coveredIds }
+                        likedIdCursor = if (firstMissing < 0) likedIds.size else firstMissing
                     }
                     // K05：云端合并（只加不减）也可能真的往表里加了条目 —— 推进修订。
                     // 放在锁外：订阅方是 Compose，不需要在持锁期间唤醒。
@@ -860,22 +861,20 @@ object LibraryManager {
     /** 同 [loadAllLikedSongs]，但额外返回「云端取不到详情」的 id，供 UI 做部分反馈。 */
     suspend fun loadAllLikedSongsResult(context: Context): LikedPlayAllSelection =
         withContext(Dispatchers.IO) {
-            val allIds = getLikedSongIds(context).distinct()
-            var localVisible: List<SavedSongEntry>
-            var tombstoned: Set<Long>
-            val byId = LinkedHashMap<Long, SongItem>()
-            synchronized(songsLock) {
+            val allIds = getLikedSongIds(context)
+            val tombstoned = HashSet<Long>()
+            val byId = HashMap<Long, SongItem>()
+            val localEntries = synchronized(songsLock) {
                 val entries = ensureSongsLoaded(context).entries
-                localVisible = entries.filter { it.isVisible }
-                tombstoned = entries.asSequence()
-                    .filter { it.tombstoned && it.trackKey.source == MusicSource.NETEASE }
-                    .mapTo(HashSet()) { it.trackKey.id }
-                entries.asSequence()
-                    .filter { it.isVisible && it.trackKey.source == MusicSource.NETEASE }
-                    .forEach { byId[it.trackKey.id] = it.song }
+                for (entry in entries) {
+                    if (entry.trackKey.source != MusicSource.NETEASE) continue
+                    val id = entry.trackKey.id
+                    if (entry.tombstoned) tombstoned.add(id) else byId[id] = entry.song
+                }
+                entries
             }
-            val wanted = allIds.filter { it !in tombstoned }
-            val missing = wanted.filter { it !in byId }
+            val missing = allIds.asSequence().filterNotNull()
+                .filter { it !in tombstoned && it !in byId }.distinct().toList()
             for (start in missing.indices step PLAY_ALL_BATCH_SIZE) {
                 val batch = missing.subList(start, minOf(start + PLAY_ALL_BATCH_SIZE, missing.size))
                 val fetched = try {
@@ -897,10 +896,9 @@ object LibraryManager {
                 }
                 if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
             }
-            val latest = synchronized(songsLock) { savedSongs?.entries }
-            localVisible = latest?.filter { it.isVisible } ?: localVisible
+            val latest = synchronized(songsLock) { savedSongs?.entries } ?: localEntries
             selectLikedPlayAll(
-                localVisible = localVisible,
+                localVisible = latest,
                 cloudIds = allIds,
                 details = byId,
                 tombstoned = tombstoned,

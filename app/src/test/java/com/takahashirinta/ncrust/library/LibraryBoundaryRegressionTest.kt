@@ -142,6 +142,18 @@ class LibraryBoundaryRegressionTest {
         assertSame(albums, LibraryManager.getSavedAlbums(ctx))
     }
 
+    @Test fun playAllSkipsNullSlotsInLegacyLikedIds() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", "[101,null,101]").commit()
+
+        val result = LibraryManager.loadAllLikedSongsResult(ctx)
+
+        assertEquals(listOf(101L), result.songs.map { it.id })
+        assertEquals(1, result.cloudCount)
+        assertTrue(result.missingCloudIds.isEmpty())
+    }
+
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {
         val p = ctx.getSharedPreferences("ncrust_library", 0)
         p.edit().putString("saved_albums", SavedAlbumCodec.encode(listOf(album(101)))).commit()
