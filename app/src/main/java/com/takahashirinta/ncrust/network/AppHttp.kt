@@ -18,7 +18,7 @@ object AppHttp {
     /** 普通 API 的读超时；长连接（MQTT / 流式下载）自己覆盖。 */
     private const val READ_TIMEOUT_S = 15L
 
-    /** 进程级共享连接池：网络切换时 [evictAll] 一次就能清干净。 */
+    /** 进程级共享连接池：网络切换时 [evictIdleConnections] 一次就能清干净。 */
     private val pool = ConnectionPool(16, 30, TimeUnit.SECONDS)
 
     /**
@@ -36,8 +36,8 @@ object AppHttp {
     /** 直接要一个成品（默认配置）。 */
     fun client(): OkHttpClient = builder().build()
 
-    /** 网络切换时异步清理共享池中的空闲连接。 */
-    fun evictAll() {
-        Thread({ runCatching { pool.evictAll() } }, "ncrust-evict-apphttp").start()
+    /** Call from an IO dispatcher because closing TLS sockets can write to the network. */
+    internal fun evictIdleConnections() {
+        runCatching { pool.evictAll() }
     }
 }

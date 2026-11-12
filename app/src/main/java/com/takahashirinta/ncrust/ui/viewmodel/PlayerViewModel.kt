@@ -60,7 +60,10 @@ import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
 import com.takahashirinta.ncrust.lyric.TtmlDoc
 import com.takahashirinta.ncrust.lyric.TtmlParser
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
+import com.takahashirinta.ncrust.network.AppForegroundTracker
+import com.takahashirinta.ncrust.network.AppHttp
 import com.takahashirinta.ncrust.network.BoundedParallel
+import com.takahashirinta.ncrust.network.ConnectionWarmup
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.SongPrivilege
@@ -305,8 +308,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val networkObserver = com.takahashirinta.ncrust.network.DefaultNetworkObserver(application)
     private val recovery = com.takahashirinta.ncrust.player.PlaybackRecoveryGate(networkObserver.snapshot())
 
+    private suspend fun refreshPlaybackNetwork() = withContext(Dispatchers.IO) {
+        AppHttp.evictIdleConnections()
+        RetrofitClient.evictIdleConnections()
+        com.takahashirinta.ncrust.player.MediaHttp.evictIdleConnections()
+        SongUrlFetcher.onNetworkRouteChanged()
+    }
+
     /** No retry can survive a pause or a newer selection, including a default-route change. */
-    private fun recoverCurrentRequest(resetBudget: Boolean, stalledPositionMs: Long? = null) {
+    private fun recoverCurrentRequest(networkRefreshed: Boolean, stalledPositionMs: Long? = null) {
         val saved = latestRetryRequest?.takeIf {
             recovery.needsRecovery(isBuffering.value || stalledPositionMs != null) &&
                 it.track == currentTrack && playGate.isCurrent(it.revision) && it.stillOwnsRoom()
@@ -318,7 +328,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             PlaybackService.instance?.reprepareStalledItem(saved.track, stalledPositionMs) == true
         ) return
         if (!NetworkAvailability.isOnline(getApplication())) return
-        if (resetBudget) urlRetryGate.onUserAction()
+        if (networkRefreshed) urlRetryGate.onUserAction()
         if (!urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
             recovery.failed(true)
             isBuffering.value = false
@@ -331,8 +341,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentPosition.value
         }
         preloadCache.remove(saved.track.id)
-        SongUrlFetcher.onNetworkRouteChanged()
-        RetrofitClient.evictConnections()
+        if (!networkRefreshed) {
+            SongUrlFetcher.onNetworkRouteChanged()
+            RetrofitClient.evictConnections()
+        }
         playSong(saved.track.id, saved.title, saved.artist, saved.artwork, lastRequestedLevel,
             saved.track.source.key, saved.track.sourceId, saved.track.mediaId,
             position, PlayOrigin.QUALITY_RETRY, saved.privilege,
@@ -733,47 +745,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
 
     init {
-        // 回到前台就刷新（v3.8.5）：离开 ≥10s 后回来，先把「当前这首」的链路热一下，
-        // 用户按播放时不用再等取链；正在缓冲/被卡住的请求顺带恢复一次。
         viewModelScope.launch {
-            com.takahashirinta.ncrust.network.AppForegroundTracker.events.collect { idleMs ->
-                if (idleMs < com.takahashirinta.ncrust.network.AppForegroundTracker.IDLE_CLEANUP_MS) return@collect
-                SongUrlFetcher.onNetworkRouteChanged()
-                com.takahashirinta.ncrust.player.MediaHttp.evict()
-                com.takahashirinta.ncrust.bili.BiliApi.evictConnections()
-                recoverCurrentRequest(resetBudget = true)
-                // 音频 CDN 的 host 不在固定预热清单里，但它才是「按播放后要建连」的那一个。
-                SongUrlFetcher.lastAudioHost?.let { host ->
-                    viewModelScope.launch { com.takahashirinta.ncrust.network.ConnectionWarmup.warmHost(host) }
-                }
-                if (!isBuffering.value && !isPlaying.value) {
-                    // 有曲目但没在放：后台预热一次取链（失败静默，不影响任何状态）。
-                    val key = currentTrack
-                    if (key != null) {
-                        val id = key.id
-                        runCatching { SongUrlFetcher.fetch(id) }
-                            .onSuccess { Log.i("PlayerViewModel", "foreground refresh songId=$id ok") }
-                            .onFailure { Log.i("PlayerViewModel", "foreground refresh songId=$id failed: ${it.javaClass.simpleName}") }
-                    }
+            AppForegroundTracker.events.collectLatest { idleMs ->
+                if (idleMs < AppForegroundTracker.IDLE_CLEANUP_MS) return@collectLatest
+                val revision = playGate.current
+                refreshPlaybackNetwork()
+                if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
+                if (currentTrack?.source == MusicSource.NETEASE) {
+                    SongUrlFetcher.lastAudioHost?.let { ConnectionWarmup.warmHost(it) }
                 }
             }
         }
         viewModelScope.launch {
             networkObserver.changes().collectLatest { route ->
-                val usableChange = recovery.networkChanged(route)
-                if (usableChange) {
-                    delay(500L) // Coalesce Wi-Fi/mobile handover callbacks, never each capabilities update.
-                    SongUrlFetcher.onNetworkRouteChanged()
-                    // 清理共享池以及各专用客户端的连接。
-                    com.takahashirinta.ncrust.network.AppHttp.evictAll()
-                    RetrofitClient.evictConnections()
-                    com.takahashirinta.ncrust.player.MediaHttp.evict()
-                    com.takahashirinta.ncrust.bili.BiliApi.evictConnections()
-                    // 代理开关会切换 fake-ip / 真实 IP 两套解析结果，JVM 缓存不会自动失效。
-                    // 不清掉的话，关掉代理后取链仍会往假地址上连 —— 未缓存的歌直接放不出来。
-                    com.takahashirinta.ncrust.network.DnsCache.clear()
-                    recoverCurrentRequest(resetBudget = true)
-                }
+                if (!recovery.networkChanged(route)) return@collectLatest
+                val revision = playGate.current
+                delay(500L) // Coalesce related default-route callbacks.
+                refreshPlaybackNetwork()
+                if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
             }
         }
 
@@ -927,7 +916,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             isBuffering.value = buffering || recovery.resolving
         }
         PlaybackService.onPlaybackStalled = { track, positionMs ->
-            if (track == currentTrack) recoverCurrentRequest(resetBudget = false, stalledPositionMs = positionMs)
+            if (track == currentTrack) recoverCurrentRequest(networkRefreshed = false, stalledPositionMs = positionMs)
         }
         PlaybackService.onBitrateChanged = { source, id, bitrate ->
             if (currentTrack?.source == source && currentTrack?.id == id && bitrate > 0L) {

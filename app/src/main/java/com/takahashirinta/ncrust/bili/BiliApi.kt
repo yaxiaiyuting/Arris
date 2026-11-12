@@ -247,19 +247,6 @@ object BiliApi {
 
     private val client: OkHttpClient get() = clientForTest ?: realClient
 
-    /**
-     * 丢掉 B 站客户端池里的连接（网络切换 / 代理开关 / 回到前台时调用）。
-     *
-     * `internal`：真正的 `evictAll()` 跑在专用线程上，这个函数自己只启动线程、
-     * 不发网络，所以不违反 `BiliApiIoContractTest` 对「对外函数必须是 suspend」的约定；
-     * 但为了不把这个口子暴露给模块外，仍然收成模块内可见。
-     */
-    internal fun evictConnections() {
-        runCatching {
-            Thread({ runCatching { client.connectionPool.evictAll() } }, "ncrust-evict-bili").start()
-        }
-    }
-
     // ---------------------------------------------------------------- wbi 密钥缓存 ----
 
     @Volatile private var wbiImgUrl: String? = null

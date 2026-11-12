@@ -58,35 +58,19 @@ object RetrofitClient {
         XeapiState.init(context)
     }
 
-    /**
-     * 丢掉连接池里的所有连接。
-     *
-     * 服务端在 HTTP/2 上回 `REFUSED_STREAM`（或半关闭）时，连接本身看起来仍是"可用"的，
-     * OkHttp 会继续把新请求复用到这条已经不可用的连接上 —— 表现是**每一次**请求都立刻失败，
-     * 直到某次恰好换了新连接。POST 不是幂等请求，OkHttp 不会自动重试，所以由调用方在
-     * 识别到传输层失败后主动弃连接、在新连接上重试一次。
-     */
     /** Debug 探针专用：拿一份与 [plainClient] 同配置、但协议可指定的客户端。 */
     internal fun probeClientWithProtocols(protocols: List<okhttp3.Protocol>): OkHttpClient =
         plainClient.newBuilder().protocols(protocols).build()
 
-    /**
-     * 清空连接池（切账号 / 换身份后让旧连接立刻失效）。
-     *
-     * ⚠️ **必须在后台线程执行**：`evictAll()` 会关闭底层的 TLS socket，
-     * 而 Conscrypt 在关闭时要写 close_notify —— 这是网络 I/O。
-     * 真机实测（PCL110 / Android 16）：调用方从主线程的协程恢复时进这里，
-     * 直接 `FATAL EXCEPTION: main android.os.NetworkOnMainThreadException`，
-     * 表现为「房主端用着用着就闪退、房间跟着没了、成员收不到任何快照」。
-     *
-     * 所以这里自己做线程切换，让调用方不必关心自己在哪个线程。
-     */
+    /** Asynchronous entry for player callbacks on the main thread. */
     fun evictConnections() {
-        // 单独开一条线程：不依赖任何 OkHttp 实例的 Dispatcher 是否还在就绪状态，
-        // 也不会因为调用方在主线程而抛 NetworkOnMainThreadException。
-        runCatching {
-            Thread({ runCatching { sharedConnectionPool.evictAll() } }, "ncrust-evict-conns").start()
-        }
+        runCatching { Thread(::evictIdleConnections, "ncrust-evict-conns").start() }
+    }
+
+    /** Evict both ncm transports before a retry. Call from an IO dispatcher. */
+    internal fun evictIdleConnections() {
+        runCatching { sharedConnectionPool.evictAll() }
+        if (playbackHttp1Pool.isInitialized()) runCatching { playbackHttp1Pool.value.evictAll() }
     }
 
     fun updateCookie(cookie: String?) {
@@ -97,7 +81,7 @@ object RetrofitClient {
     fun getCookie(): String? = currentCookie
 
     /**
-     * **全应用唯一的连接池**。
+     * 网易云 API 和预热客户端共用的连接池。
      *
      * OkHttp 的 `ConnectionPool` 是 `OkHttpClient` 实例的私有字段，不是全局的：
      * 不显式共享时每个 `com.takahashirinta.ncrust.network.AppHttp.builder().build()` 都带一个自己的池子，
@@ -196,10 +180,11 @@ object RetrofitClient {
     }
 
     /** Playback read fallback only: do not reuse an h2 route rejected by the remote peer. */
+    private val playbackHttp1Pool = lazy { ConnectionPool(2, 30, TimeUnit.SECONDS) }
     private val playbackHttp1Client: OkHttpClient by lazy {
         plainClient.newBuilder()
             .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
-            .connectionPool(ConnectionPool(2, 30, TimeUnit.SECONDS))
+            .connectionPool(playbackHttp1Pool.value)
             .build()
     }
 

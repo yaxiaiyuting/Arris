@@ -191,18 +191,12 @@ object SongUrlFetcher {
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
     private fun coolingDown(): Boolean =
         System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
-    /**
-     * 网络形态变化（含代理开关）时调用。
-     *
-     * 除了解除传输冷却，还要**清 DNS 缓存**：代理的 fake-ip 与真实 IP 是两套解析结果，
-     * 而 `InetAddress` 的进程内缓存不随网络切换失效 —— 这正是「关掉代理后未缓存的歌
-     * 放不出来」的直接原因。
-     */
     /** 最近一次成功取链的音频 host（供 [com.takahashirinta.ncrust.network.ConnectionWarmup.warmHost] 预热）。 */
     @Volatile
     var lastAudioHost: String? = null
         private set
 
+    /** Reset transport backoff and DNS after a route or proxy change. */
     fun onNetworkRouteChanged() {
         transportCooldownUntil.set(0L)
         transportFailures.clear()
@@ -354,7 +348,7 @@ object SongUrlFetcher {
                     Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
                     // 连接池 + DNS 缓存一起清：代理开关会让同一域名的解析结果在
                     // fake-ip 与真实 IP 之间切换，只清连接池仍会连到旧地址。
-                    RetrofitClient.evictConnections()
+                    RetrofitClient.evictIdleConnections()
                     com.takahashirinta.ncrust.network.DnsCache.clear()
                     currentCoroutineContext().ensureActive()
                 } catch (e: Exception) {

@@ -26,8 +26,6 @@ import java.util.concurrent.TimeUnit
  */
 internal object MediaHttp {
 
-    private const val TAG = "MediaHttp"
-
     /** 连接超时：坏地址要在 ExoPlayer 的重试预算内及时让位。 */
     private const val CONNECT_TIMEOUT_S = 6L
 
@@ -83,9 +81,8 @@ internal object MediaHttp {
         .eventListener(timingListener)
         .build()
 
-    /** 丢掉池里的连接（网络变化 / 回到前台 / 代理开关时调用）。 */
-    fun evict() {
-        android.util.Log.i(TAG, "evicting audio connections")
-        Thread({ runCatching { pool.evictAll() } }, "ncrust-evict-media").start()
+    /** Call from an IO dispatcher before reusing the media stream client on a new route. */
+    fun evictIdleConnections() {
+        runCatching { pool.evictAll() }
     }
 }
