@@ -1662,6 +1662,8 @@ class PlaybackService : MediaLibraryService() {
     private var offlineRecordedSongId = -1L
     private var offlineRecordedKey: String? = null
     private var offlineRecordedDurationMs = -1L
+    private var offlineCacheUri: Uri? = null
+    private var offlineCacheKey: String? = null
 
     /**
      * v2.0.0 · T3：把「真的播起来了」的歌写进 [OfflineLibrary]（离线缓存管理页的清单来源）。
@@ -1680,8 +1682,12 @@ class PlaybackService : MediaLibraryService() {
         if (!player.isPlaying) return
         val songId = mediaSongId ?: return
         if (songId <= 0L) return
-        val uri = player.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
-        val key = OfflineKeys.keyOf(uri) ?: return
+        val uri = player.currentMediaItem?.localConfiguration?.uri ?: return
+        if (offlineCacheUri !== uri) {
+            offlineCacheKey = OfflineKeys.keyOf(uri.toString())
+            offlineCacheUri = uri
+        }
+        val key = offlineCacheKey ?: return
         if (songId == offlineRecordedSongId && key == offlineRecordedKey &&
             (durationMs <= 0L || durationMs == offlineRecordedDurationMs)
         ) {
@@ -1706,44 +1712,25 @@ class PlaybackService : MediaLibraryService() {
 
     private val mediaDisplay = MediaDisplayLines.Cache()
 
-    private fun currentMediaDisplay(frame: MediaLyricFrame = mediaLyricFrame): MediaDisplayLines.Lines =
-        mediaDisplay.get(mediaTitle, mediaArtist, frame)
+    private fun currentMediaDisplay(): MediaDisplayLines.Lines =
+        mediaDisplay.get(mediaTitle, mediaArtist, mediaLyricFrame)
 
     private fun updatePlaybackState() {
         val dur = player.duration.coerceAtLeast(0L)
-        // v2.0.0 · T3：起播后 500ms 内的第一次心跳就把这首歌写进离线曲目索引（幂等，见该函数）。
         runCatching { maybeRecordOfflineLibrary(dur) }
 
-        // v2.1.6 · 会话合并：**playback state 不再由应用手工 setPlaybackState**。
-        // 合并前这里每 ≥900ms 往 legacy MediaSessionCompat 灌一次
-        // `PlaybackStateCompat.Builder().setState(state, position, 1f)`；现在只剩 media3
-        // 一条会话，而 media3 的 MediaSession 会**自己**把 player 的状态（state/position/
-        // bufferedPosition/可用命令）转发给平台，比手写的那份更准 ——
-        // 旧实现把 speed 硬写成 `1f`，暂停时系统仍以为速度是 1.0（`dumpsys media_session`
-        // 里 legacy 那条 `state=2, speed=1.0`、media3 那条 `state=2, speed=0.0` 就是这个 bug）。
-        //
-        // Metadata 仍然要应用自己写：会话的 metadata 来自当前 MediaItem 的 MediaMetadata，
-        // 而歌词行不在 MediaItem 里。去重规则与 v2.1.5 逐字节一致 —— 只在
-        // title/artist/duration/封面变化时才重发，绝不每 250ms 走一遍跨进程 IPC。
-        // v1.5.1 · D：媒体面板歌词。有歌词行时第一行 = 当前歌词、第二行 = 「歌名 · 艺人」；
-        // 没有就走「歌名 / 艺人」。排布规则抽在 MediaDisplayLines（JVM 单测覆盖）。
-        val frame = mediaLyricFrame
-        val display = currentMediaDisplay(frame)
+        // Media3 发布位置和播放状态。应用仅在文案、时长或封面变化时更新媒体元数据。
+        val display = currentMediaDisplay()
         if (display.title != lastMetadataTitle || display.subtitle != lastMetadataArtist ||
             display.trackInfo != lastMetadataTrackInfo ||
             dur != lastMetadataDuration || currentArtworkUrl != lastMetadataArtwork ||
             currentArtworkBitmap !== lastMetadataBitmap
         ) {
-            // 通知正文那一份**永远**跟着歌词走（上面那个 display）。
-            // 会话 metadata 那一份受回退开关控制，见 [sessionMetadataFollowsLyrics]。
-            // 分支逻辑抽在 MediaSessionMerge.sessionLines（JVM 单测覆盖）。
-            val sessionLines = MediaSessionMerge.sessionLines(
+            val sessionLines = if (sessionMetadataFollowsLyrics) display else MediaSessionMerge.sessionLines(
                 songTitle = mediaTitle,
                 songArtist = mediaArtist,
-                lyricLine = frame.original,
-                followLyrics = sessionMetadataFollowsLyrics,
-                translatedLine = frame.translation,
-                options = frame.options,
+                lyricLine = null,
+                followLyrics = false,
             )
             publishSessionMetadata(sessionLines, dur)
             // v2.1.5 · P1：记下**这一份发布了什么**，供探针与 dumpsys 对照。
