@@ -134,6 +134,7 @@ class PlaybackService : MediaLibraryService() {
     private var progressJob: Job? = null
     private var bufferProgressJob: Job? = null
     private val stallWatch = PlaybackStallWatch(timeoutMs = 12_000L)
+    private val checkpoint = PlaybackCheckpoint()
     private val queuePreload = ExoPlayer.PreloadConfiguration(12_000_000L)
     private var lastLocalStallRepair: TrackKey? = null
     private var lastLocalStallRepairRevision = -1
@@ -634,6 +635,7 @@ class PlaybackService : MediaLibraryService() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) publishStreamBitrate()
                 if (state == Player.STATE_ENDED) {
+                    playingTrackKey()?.id?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
                     // 观测点：走到末尾时播放器里还剩几项、当前是哪一首。count==1 说明
                     // 「没有下一首预载项」，与「回调没到 UI 层」是两种不同的故障，日志可区分。
                     Log.d(
@@ -660,7 +662,12 @@ class PlaybackService : MediaLibraryService() {
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 Log.d("PlaybackService", "playWhenReady=$playWhenReady reason=$reason foreground=$isServiceStarted")
-                if (playWhenReady) cancelArtworkIdleRelease() else scheduleArtworkIdleRelease()
+                if (playWhenReady) {
+                    cancelArtworkIdleRelease()
+                } else {
+                    savePlaybackCheckpoint(player.currentPosition, player.duration, explicit = true)
+                    scheduleArtworkIdleRelease()
+                }
             }
             override fun onEvents(player: Player, events: Player.Events) {
                 if (events.containsAny(
@@ -698,19 +705,11 @@ class PlaybackService : MediaLibraryService() {
                 newPosition: Player.PositionInfo,
                 reason: Int,
             ) {
-                // 暂停时没有 ticker：拖动进度 / 系统媒体控件 seek 后要立刻把新位置推给
-                // 界面与媒体会话，否则暂停态拖完进度条仍停在旧值。
-                // 只看 SEEK 类原因：暂停态的曲目切换也可能走 discontinuity，但那种位置
-                // 更新会由 transition 回调把 currentSongId 一起换掉，不能拿旧歌 id 去上报。
-                if (!player.isPlaying &&
-                    (reason == Player.DISCONTINUITY_REASON_SEEK ||
-                        reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT)
-                ) {
+                if (reason != Player.DISCONTINUITY_REASON_SEEK && reason != Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) return
+                savePlaybackCheckpoint(newPosition.positionMs, player.duration, explicit = true)
+                if (!player.isPlaying) {
                     publishProgressNow()
                     updatePlaybackState()
-                    // v3.7.9 · R4：桌面卡片也要跟着跳。暂停态没有 ticker，这里是
-                    // 「暂停中拖动进度条」唯一的推送时机；闸门只放行位置真的变了的那一次，
-                    // 所以不会把暂停态的节流目标破掉。
                     pushWidgetUpdate()
                 }
             }
@@ -760,6 +759,10 @@ class PlaybackService : MediaLibraryService() {
                 val itemIdentity = PreloadSlot.identityFromMediaId(mediaItem?.mediaId)
                 val itemSource = itemIdentity?.first
                 val itemSongId = itemIdentity?.second
+                checkpoint.reset(player.currentPosition.coerceAtLeast(0L))
+                if (auto && itemSongId != null && itemSongId > 0L) {
+                    mediaSongId?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
+                }
                 val itemUrl = mediaItem?.localConfiguration?.uri?.toString()
                 val itemMetadata = mediaItem?.mediaMetadata
                 val itemTitle = itemMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
@@ -825,6 +828,9 @@ class PlaybackService : MediaLibraryService() {
                             loadArtwork(itemArtwork)
                         }
                     }
+                    if (!sameAsConfigured && itemSource != null && itemSongId != null && itemSongId > 0L) {
+                        persistPlaybackState(player.playWhenReady)
+                    }
                     updatePlaybackState()
                     updateNotify()
                     if (itemSource != null && itemSongId != null && itemSongId > 0L) {
@@ -872,6 +878,7 @@ class PlaybackService : MediaLibraryService() {
                 // 播完的项统一清掉：列表收敛回「当前 + 至多一首待播」。
                 val finishedItems = player.currentMediaItemIndex
                 if (finishedItems > 0) player.removeMediaItems(0, finishedItems)
+                persistPlaybackState(player.playWhenReady)
                 updatePlaybackState()
                 updateNotify()
                 // v2.1.5：把**这次真正起播的曲目身份**交给 ViewModel。
@@ -1088,15 +1095,20 @@ class PlaybackService : MediaLibraryService() {
         }
 
         val startPlaying = intent.getBooleanExtra("startPlaying", true)
+        persistPlaybackState(startPlaying)
+        playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
+        if (!isServiceStarted) updateNotify()
+        return true
+    }
+
+    private fun persistPlaybackState(playing: Boolean) {
+        val songId = mediaSongId?.takeIf { it > 0L } ?: return
         PlaybackStateManager.saveState(
-            this, songId, mediaTitle, mediaArtist, currentArtworkUrl.orEmpty(), startPlaying,
+            this, songId, mediaTitle, mediaArtist, currentArtworkUrl.orEmpty(), playing,
             sourceKey = mediaSourceKey,
             sourceId = mediaSourceId,
             mediaId = mediaMediaId,
         )
-        playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
-        if (!isServiceStarted) updateNotify()
-        return true
     }
 
     override fun onGetSession(controllerInfo: androidx.media3.session.MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -1984,6 +1996,13 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private fun savePlaybackCheckpoint(positionMs: Long, durationMs: Long, explicit: Boolean = false) {
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return
+        if (!checkpoint.record(positionMs, explicit)) return
+        val songId = playingTrackKey()?.id ?: return
+        PlaybackStateManager.saveSongPosition(this, songId, positionMs, durationMs)
+    }
+
     private fun startProgressUpdates() {
         progressJob?.cancel()
         // 未在播放时不起循环：由 onIsPlayingChanged(true) 再启动。暂停态的位置更新
@@ -1992,7 +2011,10 @@ class PlaybackService : MediaLibraryService() {
         progressJob = scope.launch {
             while (isActive && player.isPlaying) {
                 publishStreamBitrate()
-                onProgressUpdate?.invoke(player.currentPosition, player.duration)
+                val positionMs = player.currentPosition
+                val durationMs = player.duration
+                savePlaybackCheckpoint(positionMs, durationMs)
+                onProgressUpdate?.invoke(positionMs, durationMs)
                 updatePlaybackState()
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。

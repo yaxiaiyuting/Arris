@@ -260,7 +260,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var lastStartReportedSongId = -1L
 
     /** B4：本歌最近一次已落盘的进度，避免每 500ms 的采样都写一次 SharedPreferences。 */
-    private var lastSavedPositionMs = -1L
 
     /** B4：本次起播的续播位置（0 = 从 0 分 0 秒开始）。 */
     val resumedFromMs = MutableStateFlow(0L)
@@ -380,7 +379,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val QUALITY_LEVELS = QualityLadder.LEVELS
 
         /** B4：进度落盘间隔。2Hz 采样下最多每 5s 写一次，兼顾续播精度与 IO 开销。 */
-        private const val POSITION_SAVE_INTERVAL_MS = 5_000L
     }
 
     /** 服务端**实际**返回的档位索引（可能因设备解码能力 / 会员权限 / 版权低于偏好）。 */
@@ -843,14 +841,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
 
-            // B4：每 5s 落盘一次本歌进度，供断点续播；播完会由 onPlaybackEnded 清除。
-            // v3.7.9 · H16：连**本曲真实时长**一起交下去 —— 越界记录（旧源更长）由
-            // PlaybackStateManager 撤销；位置落回起点区间时同样是撤销而不是忽略。
-            if (sid > 0 && kotlin.math.abs(pos - lastSavedPositionMs) >= POSITION_SAVE_INTERVAL_MS) {
-                lastSavedPositionMs = pos
-                PlaybackStateManager.saveSongPosition(getApplication(), sid, pos, dur)
-            }
-
             // Signal the preload window once per song (guarded by !needsPreload.value).
             if (gaplessEnabled && dur > 0 && pos > 1_000L && !needsPreload.value) {
                 val remaining = dur - pos
@@ -863,8 +853,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (recovery.resolving || recovery.waiting) return@ended
             // 自然播放结束时,若尚未上报则补一条 playend。试听片段的自然结束同样不上报。
             val sid = currentSongId.value ?: -1L
-            // B4：正常播完 = 这首歌已「听完」，清除进度记录，重播时从 0 分 0 秒对齐。
-            if (sid > 0) PlaybackStateManager.clearSongPosition(getApplication(), sid)
             val listenedMs = listeningClock.playedMs(sid)
             if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && currentContentKnown && PlayReporter.reachedCompletion(listenedMs, duration.value)) {
                 lastReportedSongId = sid
@@ -952,7 +940,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val nextArtwork = transitionedArtwork.takeIf { it.isNotBlank() }
                 ?: if (auto) preloadedArtwork else currentSongArtwork.value.orEmpty()
             val wasPreloaded = nextTrack != null && nextTrack == preloadedTrack
-            val previousId = currentSongId.value ?: -1L
 
             if (nextTrack != null && nextTrack.id > 0L) {
                 // v3.7.9 · J07：身份落定与「是否换歌」**解耦**。
@@ -966,12 +953,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     urlRetryGate.onNewSong(nextTrack.tag)
                     lastGoodLevel = ""
                     if (auto) lastPlayOrigin = PlayOrigin.AUTO_NEXT
-                    // B4：无缝切换说明上一首已自然播完，清除其进度记录（重播从 0:00 对齐）。
-                    // 只有「真的换了一首」才清 —— 手动重播当前歌时 previousId 已经是新 id，
-                    // 无条件清会把这首歌自己的续播位置也抹掉。
-                    if (previousId > 0L) {
-                        PlaybackStateManager.clearSongPosition(getApplication(), previousId)
-                    }
                     resetLyricsForNewSong()
                     // ① 身份必须在任何取词动作**之前**落到 currentTrack。
                     currentTrack = nextTrack
@@ -990,12 +971,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // 每次真正换歌都按 tracker 还原试听标记：手动起播 / 车机 / 预载
                     // 三条路径共用同一份记录，完整歌曲会把上一首的 true 清掉。
                     restoreTrialState(nextTrack.id)
-                    PlaybackStateManager.saveState(
-                        getApplication(), nextTrack.id,
-                        currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(), nextArtwork, true,
-                        sourceKey = nextTrack.source.key, sourceId = nextTrack.sourceId,
-                        mediaId = nextTrack.mediaId,
-                    )
                     // ② 作废所有在途请求 + 置 Loading：旧歌词不会残留到新歌词就绪。
                     lyricCoordinator.onTrackChanged(nextTrack)
                     Log.i(
@@ -1810,7 +1785,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         latestRetryRequest = RetryRequest(
             track, fetchVersion, title, artist, artworkUrl, resumeMs, effectivePrivilege, roomGeneration, startPlaying,
         )
-        lastSavedPositionMs = resumeMs
         currentPosition.value = resumeMs
         resumedFromMs.value = resumeMs
         if (resumeMs > 0 && roomGeneration == null) {
@@ -3190,7 +3164,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (position < PlaybackStateManager.MIN_RESUMABLE_MS) {
             currentSongId.value?.takeIf { it > 0L }?.let {
                 PlaybackStateManager.clearSongPosition(getApplication(), it)
-                lastSavedPositionMs = position
             }
         }
 
