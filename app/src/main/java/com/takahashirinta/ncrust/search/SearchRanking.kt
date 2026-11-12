@@ -103,14 +103,16 @@ object SearchRanking {
         neteaseVip: Boolean,
         qqVip: Boolean,
     ): List<RankedSong<T>> {
-        if (!neteaseVip && !qqVip) return netease + qq
+        if (!neteaseVip && !qqVip) {
+            if (netease.isEmpty()) return qq
+            if (qq.isEmpty()) return netease
+            return netease + qq
+        }
 
         val result = ArrayList<RankedSong<T>>(netease.size + qq.size)
         if (neteaseVip && qqVip) {
-            val (nGated, nOther) = netease.partition { it.access.isGated }
-            val (qGated, qOther) = qq.partition { it.access.isGated }
-            appendInterleaved(result, nGated, qGated)
-            appendInterleaved(result, nOther, qOther)
+            appendInterleaved(result, netease, qq, gated = true)
+            appendInterleaved(result, netease, qq, gated = false)
         } else {
             val preferred = if (neteaseVip) netease else qq
             val other = if (neteaseVip) qq else netease
@@ -121,14 +123,29 @@ object SearchRanking {
         return result
     }
 
-    private fun <T> appendInterleaved(out: MutableList<T>, left: List<T>, right: List<T>) {
-        val paired = minOf(left.size, right.size)
-        for (index in 0 until paired) {
-            out.add(left[index])
-            out.add(right[index])
+    private fun <T> appendInterleaved(
+        out: MutableList<RankedSong<T>>,
+        left: List<RankedSong<T>>,
+        right: List<RankedSong<T>>,
+        gated: Boolean,
+    ) {
+        val leftRows = left.iterator()
+        val rightRows = right.iterator()
+        while (true) {
+            val first = leftRows.nextWithAccess(gated)
+            val second = rightRows.nextWithAccess(gated)
+            if (first == null && second == null) return
+            if (first != null) out.add(first)
+            if (second != null) out.add(second)
         }
-        for (index in paired until left.size) out.add(left[index])
-        for (index in paired until right.size) out.add(right[index])
+    }
+
+    private fun <T> Iterator<RankedSong<T>>.nextWithAccess(gated: Boolean): RankedSong<T>? {
+        while (hasNext()) {
+            val song = next()
+            if (song.access.isGated == gated) return song
+        }
+        return null
     }
 
     /** 只移动服务端明确标为无版权的行。各部分的原相对顺序保留。 */
