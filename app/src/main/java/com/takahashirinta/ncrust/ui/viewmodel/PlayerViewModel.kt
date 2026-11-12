@@ -74,6 +74,9 @@ import com.takahashirinta.ncrust.source.songRefOf
 import com.takahashirinta.ncrust.player.AutoSkipGuard
 import com.takahashirinta.ncrust.player.FailureKind
 import com.takahashirinta.ncrust.player.GuardAction
+import com.takahashirinta.ncrust.player.MediaLyricFrame
+import com.takahashirinta.ncrust.player.MediaLyricOptions
+import com.takahashirinta.ncrust.player.MediaLyricTrack
 import com.takahashirinta.ncrust.player.PlayOrigin
 import com.takahashirinta.ncrust.player.PlaybackFailure
 import com.takahashirinta.ncrust.player.PlaybackService
@@ -157,7 +160,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     val showDynamicLyricFont = MutableStateFlow(false)
     // v1.5.1 · D：上一次推给媒体面板的歌词行（去重用，避免 2Hz 采样反复写同一个值）。
-    val mediaLyricOptions = MutableStateFlow(com.takahashirinta.ncrust.player.MediaLyricOptions())
+    val mediaLyricOptions = MutableStateFlow(MediaLyricOptions())
 
     // v1.5.1 · E：字号落盘防抖窗口 —— A-/A+ 连点时只写最后一次。
     private val FONT_SCALE_WRITE_DEBOUNCE_MS = 150L
@@ -790,23 +793,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // v2.0.0 · T4：动态字号（实验性，默认关）。
         showDynamicLyricFont.value = LyricsDisplayPrefs.readDynamicFont(lyricPrefs)
 
-        // v1.5.1 · D：把「当前行」推给 PlaybackService —— 只在**跨行**时写一次
-        // （currentPosition 是 2Hz 采样，这里每次采样只做一次 O(行数) 的二分/线性比较，
-        // 值没变就不写），通知栏因此不会逐帧重绘。关掉开关或无歌词时推 null。
-        mediaLyricOptions.value = com.takahashirinta.ncrust.player.MediaLyricOptions.read(lyricPrefs)
+        mediaLyricOptions.value = MediaLyricOptions.read(lyricPrefs)
         viewModelScope.launch {
-            var cachedMain: List<LrcLine>? = null
-            var cachedTranslation: List<LrcLine>? = null
-            var track = com.takahashirinta.ncrust.player.MediaLyricTrack.from(emptyList(), emptyList())
-            combine(lyrics, translatedLyrics, currentPosition, lyricsInMediaSession, mediaLyricOptions) {
-                    lines, translated, pos, enabled, options ->
-                if (lines !== cachedMain || translated !== cachedTranslation) {
-                    track = com.takahashirinta.ncrust.player.MediaLyricTrack.from(lines, translated)
-                    cachedMain = lines
-                    cachedTranslation = translated
+            lyricsInMediaSession.collectLatest { enabled ->
+                if (!enabled) {
+                    // 关闭时只同步显示选项，释放歌词轨并停止监听进度。
+                    mediaLyricOptions.collect { PlaybackService.mediaLyricFrame = MediaLyricFrame(options = it) }
+                    return@collectLatest
                 }
-                track.at(pos, enabled, options)
-            }.collect { frame -> PlaybackService.mediaLyricFrame = frame }
+
+                var cachedMain: List<LrcLine>? = null
+                var cachedTranslation: List<LrcLine>? = null
+                var track = MediaLyricTrack.from(emptyList(), emptyList())
+                combine(lyrics, translatedLyrics, currentPosition, mediaLyricOptions) { lines, translated, pos, options ->
+                    if (lines !== cachedMain || translated !== cachedTranslation) {
+                        track = MediaLyricTrack.from(lines, translated)
+                        cachedMain = lines
+                        cachedTranslation = translated
+                    }
+                    track.at(pos, enabled = true, options = options)
+                }.collect { PlaybackService.mediaLyricFrame = it }
+            }
         }
 
         PlaybackService.onProgressUpdate = progressUpdate@{ pos, dur ->
@@ -1215,13 +1222,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     fun setMediaBilingualLyrics(enabled: Boolean) {
         getApplication<Application>().getSharedPreferences("ncrust_settings", 0).edit()
-            .putBoolean(com.takahashirinta.ncrust.player.MediaLyricOptions.KEY_BILINGUAL, enabled).apply()
+            .putBoolean(MediaLyricOptions.KEY_BILINGUAL, enabled).apply()
         mediaLyricOptions.value = mediaLyricOptions.value.copy(bilingual = enabled)
     }
 
     fun setMediaLyricTranslationFirst(enabled: Boolean) {
         getApplication<Application>().getSharedPreferences("ncrust_settings", 0).edit()
-            .putInt(com.takahashirinta.ncrust.player.MediaLyricOptions.KEY_PRIMARY, if (enabled) 1 else 0).apply()
+            .putInt(MediaLyricOptions.KEY_PRIMARY, if (enabled) 1 else 0).apply()
         mediaLyricOptions.value = mediaLyricOptions.value.copy(translationFirst = enabled)
     }
 

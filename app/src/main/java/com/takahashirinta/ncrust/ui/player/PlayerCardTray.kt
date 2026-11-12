@@ -202,7 +202,7 @@ private fun RowScope.TrayInfoColumn(
         //
         // 数据源是 `lyrics` + `currentPosition`（2Hz）+ 已存在的纯函数
         // `currentLineIndex`，**不新建歌词引擎、不复用通知那条路**：
-        //  · `PlaybackService.mediaLyricLine` 被 `lyrics_in_media_session`
+        //  · `PlaybackService.mediaLyricFrame` 被 `lyrics_in_media_session`
         //    开关（默认关）挡着，而且它是个不可观察的 `@Volatile var`，
         //    写它还会顺手重发一次通知 —— 为了托盘把它打开等于改用户的通知行为；
         //  · 面板那条「按需唤醒」循环的唤醒表细到**词**边界，托盘只要行级。

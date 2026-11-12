@@ -177,26 +177,13 @@ class PlaybackService : MediaLibraryService() {
 
         var onProgressUpdate: ((Long, Long) -> Unit)? = null
 
-        /**
-         * v1.5.1 · D：当前**正在唱的那一行歌词**，由 PlayerViewModel 在「跨行」时写入
-         * （null = 这首歌没歌词，或者用户没打开「媒体面板显示歌词」）。
-         *
-         * 为什么走 ARTIST：Android 13+ 的 SystemUI 媒体面板第二行**只读
-         * METADATA_KEY_ARTIST**，`DISPLAY_SUBTITLE` 被完全忽略（AOSP 源码级结论，见 TASK.md
-         * 的调研报告）；把歌词塞进 SUBTITLE 在现代系统上等于没写。所以开启后 ARTIST 变成
-         * 「艺人 · 当前歌词行」，并**同时**写 SUBTITLE/DISPLAY_SUBTITLE 兜住老车机与蓝牙路径；
-         * 关闭或没有歌词时这里保持 null，ARTIST 一字不变。
-         */
+        /** PlayerViewModel 将当前原文、译文和媒体歌词选项一同发布。 */
         @Volatile var mediaLyricFrame = MediaLyricFrame()
             set(value) {
                 if (field == value) return
                 field = value
                 instance?.onMediaLyricLineChanged(value.notificationKey)
             }
-        /** Compatibility for callers publishing original-only lyrics. */
-        var mediaLyricLine: String?
-            get() = mediaLyricFrame.original
-            set(value) { mediaLyricFrame = MediaLyricFrame(original = value) }
         var onPlaybackEnded: (() -> Unit)? = null
         var onPlaybackPrevious: (() -> Unit)? = null
         var onPlaybackNext: (() -> Unit)? = null
@@ -1998,7 +1985,7 @@ class PlaybackService : MediaLibraryService() {
      * 「只有暂停再播放才刷新」。
      *
      * 歌词行本身一直是通的：`PlayerViewModel` 用 2Hz 位置流算出当前行，跨行时写
-     * [mediaLyricLine]；`updatePlaybackState()`（2Hz）也一直在更新会话 metadata。
+     * [mediaLyricFrame]；`updatePlaybackState()`（2Hz）也一直在更新会话 metadata。
      * 断的只有「通知正文」这一环。
      *
      * ## v2.0.2 推翻了 v1.8.0 的版本闸门（真机实测，不是推理）
@@ -2069,7 +2056,7 @@ class PlaybackService : MediaLibraryService() {
                 "title=" + lastPublishedPanelTitle +
                 " artist=" + lastPublishedPanelArtist +
                 " displaySubtitle='" + lastPublishedPanelDisplaySubtitle + "'" +
-                " line=" + mediaLyricLine +
+                " line=" + mediaLyricFrame.original +
                 " lastAt=" + lastLyricNotifyAt +
                 " gate[post=" + probeGatePost + " defer=" + probeGateDefer +
                 " same=" + probeGateSame + " notStarted=" + probeGateNotStarted + "] " +
