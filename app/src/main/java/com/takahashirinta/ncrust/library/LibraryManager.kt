@@ -101,7 +101,13 @@ object LibraryManager {
 
     @Volatile private var savedSongs: SavedSongTable? = null
     private val songsLock = Any()
-    @Volatile private var cachedAlbums: MutableList<AlbumInfo>? = null
+
+    private class SavedAlbumTable(entries: List<AlbumInfo>) {
+        val entries: List<AlbumInfo> = Collections.unmodifiableList(entries)
+        val encoded: String by lazy { SavedAlbumCodec.encode(this.entries) }
+    }
+
+    @Volatile private var cachedAlbums: SavedAlbumTable? = null
     private val albumsLock = Any()
     // 分页读原顺序，播放器红心查询用同一快照的二分索引。
     private class LikedIds(ids: List<Long>) {
@@ -174,7 +180,7 @@ object LibraryManager {
         }
     }
 
-    private fun ensureAlbumsLoaded(context: Context): MutableList<AlbumInfo> {
+    private fun ensureAlbumsLoaded(context: Context): SavedAlbumTable {
         val current = cachedAlbums
         if (current != null) return current
         return synchronized(albumsLock) {
@@ -183,7 +189,7 @@ object LibraryManager {
                 // 且**逐条**容错 —— 旧写法 `runCatching { gson.fromJson(...) }` 是
                 // 「一个字节坏了，用户收藏的整张专辑表消失」。
                 val parsed = SavedAlbumCodec.decode(prefs(context).getString(KEY_ALBUMS, null))
-                parsed.toMutableList().also { cachedAlbums = it }
+                SavedAlbumTable(parsed).also { cachedAlbums = it }
             }
         }
     }
@@ -251,12 +257,12 @@ object LibraryManager {
             val ctx = pendingAppContext ?: return
             pendingAppContext = null
             val songsSnapshot = synchronized(songsLock) { savedSongs }
-            val albumsSnapshot = synchronized(albumsLock) { cachedAlbums?.toList() }
+            val albumsSnapshot = synchronized(albumsLock) { cachedAlbums }
             val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds }
             runCatching {
                 val editor = prefs(ctx).edit()
                 songsSnapshot?.let { editor.putString(KEY_SONGS, it.encoded) }
-                albumsSnapshot?.let { editor.putString(KEY_ALBUMS, SavedAlbumCodec.encode(it)) }
+                albumsSnapshot?.let { editor.putString(KEY_ALBUMS, it.encoded) }
                 likedIdsSnapshot?.let { editor.putString(KEY_LIKED_IDS, it.encoded) }
                 editor.apply()
             }
@@ -624,9 +630,7 @@ object LibraryManager {
     // ==================== 专辑（云端收藏） ====================
 
     /** 收藏页「专辑」栏：返回云端「收藏的专辑」（album_sublist 缓存）。纯云端，不派生。 */
-    fun getSavedAlbums(context: Context): List<AlbumInfo> {
-        return synchronized(albumsLock) { ensureAlbumsLoaded(context).toList() }
-    }
+    fun getSavedAlbums(context: Context): List<AlbumInfo> = ensureAlbumsLoaded(context).entries
 
     /**
      * 专辑表的**本地编辑修订号**（R2）。
@@ -646,9 +650,11 @@ object LibraryManager {
         synchronized(albumsLock) {
             // 先推进修订号再改表：refreshFromCloud 的复核读的是同一个计数。
             albumEditRevision.incrementAndGet()
-            val albums = ensureAlbumsLoaded(context)
-            albums.removeAll { it.albumId == album.albumId }
-            albums.add(0, album)
+            val previous = ensureAlbumsLoaded(context).entries
+            val albums = ArrayList<AlbumInfo>(previous.size + 1)
+            albums.add(album)
+            for (saved in previous) if (saved.albumId != album.albumId) albums.add(saved)
+            cachedAlbums = SavedAlbumTable(albums)
         }
         scheduleFlush(context)
         if (isLoggedIn(context)) pushSubAlbum(album.albumId, true)
@@ -658,8 +664,12 @@ object LibraryManager {
     fun removeAlbum(context: Context, albumId: Long) {
         val removed: Boolean
         synchronized(albumsLock) {
-            removed = ensureAlbumsLoaded(context).removeAll { it.albumId == albumId }
-            if (removed) albumEditRevision.incrementAndGet()
+            val albums = ensureAlbumsLoaded(context).entries
+            removed = albums.any { it.albumId == albumId }
+            if (removed) {
+                cachedAlbums = SavedAlbumTable(albums.filterNot { it.albumId == albumId })
+                albumEditRevision.incrementAndGet()
+            }
         }
         if (removed) {
             scheduleFlush(context)
@@ -763,10 +773,10 @@ object LibraryManager {
                     Log.w(
                         TAG,
                         "refreshFromCloud: albums snapshot discarded, local edits=${edited - revisionAtRead} " +
-                            "local=${cachedAlbums?.size ?: 0} cloud=${cloudAlbums.size}"
+                            "local=${cachedAlbums?.entries?.size ?: 0} cloud=${cloudAlbums.size}"
                     )
                 } else {
-                    cachedAlbums = cloudAlbums.map {
+                    val albums = cloudAlbums.map {
                         AlbumInfo(
                             albumId = it.albumId,
                             name = it.name,
@@ -774,7 +784,8 @@ object LibraryManager {
                             artist = it.artist,
                             songCount = it.songCount
                         )
-                    }.toMutableList()
+                    }
+                    cachedAlbums = SavedAlbumTable(albums)
                     anySuccess = true
                 }
             }

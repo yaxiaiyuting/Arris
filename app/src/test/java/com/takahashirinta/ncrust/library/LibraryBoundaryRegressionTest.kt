@@ -119,6 +119,7 @@ class LibraryBoundaryRegressionTest {
         writeSnapshot()
         val firstSongWrite = prefs.getString("saved_songs", null)
         val firstIdsWrite = prefs.getString("liked_ids", null)
+        val firstAlbums = LibraryManager.getSavedAlbums(ctx)
         assertEquals(saved, firstSongWrite)
         assertEquals(ids, firstIdsWrite)
 
@@ -127,12 +128,18 @@ class LibraryBoundaryRegressionTest {
         writeSnapshot()
         assertSame(firstSongWrite, prefs.getString("saved_songs", null))
         assertSame(firstIdsWrite, prefs.getString("liked_ids", null))
+        val albumWrite = prefs.getString("saved_albums", null)
+        val albums = LibraryManager.getSavedAlbums(ctx)
+        assertEquals(listOf(303L), firstAlbums.map { it.albumId })
+        assertEquals(listOf(404L, 303L), albums.map { it.albumId })
 
         assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(505)))
         runBlocking { (field(LibraryManager, "flushJob").get(LibraryManager) as Job).join() }
         val updated = SavedSongCodec.decode(prefs.getString("saved_songs", null))
         assertEquals(listOf(505L, 101L), updated.map { it.trackKey.id })
         assertEquals("[505,101,null,202]", prefs.getString("liked_ids", null))
+        assertSame(albumWrite, prefs.getString("saved_albums", null))
+        assertSame(albums, LibraryManager.getSavedAlbums(ctx))
     }
 
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {
