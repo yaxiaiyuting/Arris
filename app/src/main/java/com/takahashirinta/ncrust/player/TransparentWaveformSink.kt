@@ -126,31 +126,8 @@ internal object PcmRms {
     }
 
     /**
-     * v2.9.0：**低频（鼓 / 贝斯）能量**的一阶（单极点）低通。
-     *
-     * ## 这不是 FFT，也不是频谱（写在最前面，避免下一个人误读）
-     *
-     * 整个计算只有一条递推：`state += a * (x - state)`，每样本**一次乘加**，
-     * 输出是**一个标量**（低频带的 RMS）。没有分帧、没有窗函数、没有频域变换、
-     * 也不画任何"按频段分色"的东西。它唯一的用途是把节拍判据从
-     * 「整段响度」换成「低频能量」—— 底鼓与贝斯落在这一带，人声与旋律重音不在，
-     * 于是「鼓声触发冲击波」成为可能，而「一句高音也炸一圈涟漪」消失。
-     *
-     * 这一点很重要：v2.8.0 明确写了「真 FFT / 多频段分色不做」（数据通路只有单标量 RMS，
-     * 真频段要么在音频线程上倍增计算、要么新增 PCM 环 + UI 侧 FFT）。本函数**两条都不越**：
-     * 它在**已有的那一次**逐样本遍历里多算一次乘加，不新增遍历、不新增缓冲、
-     * 也不产出任何"看起来像频谱"的视觉。
-     *
-     * ## 参数
-     *
-     * @param sampleRateHz 采样率（来自 `AudioBufferSink.flush`）。≤0 时退化成"不做低通"
-     *   （低频值 = 全带值），宁可退化也不要拿一个错的截止频率去滤波。
-     * @param channelCount 声道数（来自 `AudioBufferSink.flush`）。交错 PCM 的相邻样本属于
-     *   不同声道，所以**每个声道各有一个滤波状态** —— 共用一个状态会让有效截止频率
-     *   乘以声道数（立体声下 150Hz 变成 300Hz，6 声道变成 900Hz）。上限 [MAX_CHANNELS]。
-     * @param state **调用方持有**的二维 `Array<DoubleArray>`（滤波状态：`[声道][0]` 低通）。
-     *   用数组而不是返回值，是为了让这个函数在音频线程上**零分配**：状态跨缓冲必须连续，
-     *   而"把状态包进返回值"就得每缓冲建一个对象。
+     * 一次遍历计算全带 RMS 和 150 Hz 低通 RMS。采样率未知时低频读数回退为全带值。
+     * 调用方在 state[声道][0] 保留各声道的低通历史。
      */
     fun analyze(
         view: ByteBuffer,
@@ -159,73 +136,27 @@ internal object PcmRms {
         channelCount: Int,
         state: Array<DoubleArray>,
     ): Long {
-        val bps = bytesPerSample(encoding)
-        if (bps == 0) return pack(0f, 0f)
         if (state.isEmpty()) {
-            // 调用方给了长度为 0 的状态数组：不做滤波，低频退化成全带
-            // （与「采样率未知」同一口径）。**绝不抛异常** —— 音频线程上抛一次就是 v2.2.1。
-            val full = of(view, encoding)
-            return pack(full.toFloat(), full.toFloat())
+            val full = of(view, encoding).toFloat()
+            return pack(full, full)
         }
-        val base = view.position()
-        val count = view.remaining() / bps
-        if (count <= 0) return pack(0f, 0f)
-        val littleEndian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
-        // 一阶低通系数：截止 [BASS_CUTOFF_HZ]，a = 1 - exp(-2π fc / fs)。
-        val a = lowPassCoefficient(sampleRateHz)
+        val coefficient = lowPassCoefficient(sampleRateHz)
         val channels = channelCount.coerceIn(1, minOf(MAX_CHANNELS, state.size))
         var sumFull = 0.0
         var sumBass = 0.0
-        var index = base
-        when (encoding) {
-            C.ENCODING_PCM_16BIT -> {
-                var i = 0
-                var channel = 0
-                while (i < count) {
-                    val lo = view.get(index).toInt() and 0xFF
-                    val hi = view.get(index + 1).toInt()
-                    val raw = if (littleEndian) (hi shl 8) or lo else (lo shl 8) or (hi and 0xFF)
-                    val v = raw.toShort() / 32768.0
-                    val slot = state[channel]
-                    var lp = if (slot.isNotEmpty() && slot[0].isFinite()) slot[0] else 0.0
-                    sumFull += v * v
-                    lp += a * (v - lp)
-                    sumBass += lp * lp
-                    slot[0] = if (lp.isFinite()) lp else 0.0
-                    index += 2
-                    i++
-                    channel++
-                    if (channel >= channels) channel = 0
-                }
-            }
-            C.ENCODING_PCM_FLOAT -> {
-                var i = 0
-                var channel = 0
-                while (i < count) {
-                    val b0 = view.get(index).toInt() and 0xFF
-                    val b1 = view.get(index + 1).toInt() and 0xFF
-                    val b2 = view.get(index + 2).toInt() and 0xFF
-                    val b3 = view.get(index + 3).toInt() and 0xFF
-                    val bits = if (littleEndian) {
-                        (b3 shl 24) or (b2 shl 16) or (b1 shl 8) or b0
-                    } else {
-                        (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
-                    }
-                    val v = Float.fromBits(bits).toDouble()
-                    val slot = state[channel]
-                    var lp = if (slot.isNotEmpty() && slot[0].isFinite()) slot[0] else 0.0
-                    sumFull += v * v
-                    lp += a * (v - lp)
-                    sumBass += lp * lp
-                    slot[0] = if (lp.isFinite()) lp else 0.0
-                    index += 4
-                    i++
-                    channel++
-                    if (channel >= channels) channel = 0
-                }
-            }
-            else -> return pack(0f, 0f)
+        var channel = 0
+        val count = forEachSample(view, encoding) { sample ->
+            val slot = state[channel]
+            var low = if (slot.isNotEmpty() && slot[0].isFinite()) slot[0] else 0.0
+            sumFull += sample * sample
+            low += coefficient * (sample - low)
+            sumBass += low * low
+            slot[0] = if (low.isFinite()) low else 0.0
+            channel++
+            if (channel == channels) channel = 0
         }
+        if (count == 0) return pack(0f, 0f)
+
         val full = sqrt(sumFull / count)
         val bass = sqrt(sumBass / count)
         return pack(
@@ -271,48 +202,36 @@ internal object PcmRms {
     const val BASS_CUTOFF_HZ = 150.0
 
     fun of(view: ByteBuffer, encoding: Int): Double {
-        val bps = bytesPerSample(encoding)
-        if (bps == 0) return 0.0
-        val base = view.position()
-        val count = view.remaining() / bps
-        if (count <= 0) return 0.0
-        val littleEndian = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
         var sum = 0.0
-        var index = base
-        // 用 while 而不是 repeat{}：这里要保证「零分配」，不依赖某个高阶函数的内联行为。
+        val count = forEachSample(view, encoding) { sum += it * it }
+        return if (count == 0) 0.0 else sqrt(sum / count)
+    }
+
+    private inline fun forEachSample(view: ByteBuffer, encoding: Int, consume: (Double) -> Unit): Int {
+        val bytes = bytesPerSample(encoding)
+        if (bytes == 0) return 0
+        var index = view.position()
+        val count = view.remaining() / bytes
+        val end = index + count * bytes
+        val swapBytes = view.order() != ByteOrder.nativeOrder()
         when (encoding) {
             C.ENCODING_PCM_16BIT -> {
-                var i = 0
-                while (i < count) {
-                    val lo = view.get(index).toInt() and 0xFF
-                    val hi = view.get(index + 1).toInt()
-                    val raw = if (littleEndian) (hi shl 8) or lo else (lo shl 8) or (hi and 0xFF)
-                    val v = raw.toShort() / 32768.0
-                    sum += v * v
-                    index += 2
-                    i++
+                while (index < end) {
+                    val raw = view.getShort(index)
+                    val sample = if (swapBytes) java.lang.Short.reverseBytes(raw) else raw
+                    consume(sample / 32768.0)
+                    index += bytes
                 }
             }
             C.ENCODING_PCM_FLOAT -> {
-                var i = 0
-                while (i < count) {
-                    val b0 = view.get(index).toInt() and 0xFF
-                    val b1 = view.get(index + 1).toInt() and 0xFF
-                    val b2 = view.get(index + 2).toInt() and 0xFF
-                    val b3 = view.get(index + 3).toInt() and 0xFF
-                    val bits = if (littleEndian) {
-                        (b3 shl 24) or (b2 shl 16) or (b1 shl 8) or b0
-                    } else {
-                        (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
-                    }
-                    val v = Float.fromBits(bits).toDouble()
-                    sum += v * v
-                    index += 4
-                    i++
+                while (index < end) {
+                    val raw = view.getInt(index)
+                    val bits = if (swapBytes) Integer.reverseBytes(raw) else raw
+                    consume(Float.fromBits(bits).toDouble())
+                    index += bytes
                 }
             }
-            else -> return 0.0
         }
-        return sqrt(sum / count)
+        return count
     }
 }
