@@ -1090,25 +1090,6 @@ class PlaybackService : MediaLibraryService() {
      * 车机点播时经 [onAddMediaItems] 把 song:<id> 解析成可播放 URL。
      */
     private fun libraryCallback() = object : MediaLibrarySession.Callback {
-        /**
-         * v2.1.6 · 会话合并的**承重点**：上一首 / 下一首的语义必须由应用回答。
-         *
-         * ## 为什么不能交给 media3 的默认实现
-         *
-         * 上一首/下一首由 QueueSessionPlayer 在执行层转交应用队列。
-         * 此处只做授权；RESULT_SUCCESS 不会吞掉 Media3 后续的默认动作。
-         */
-        override fun onPlayerCommandRequest(
-            session: M3MediaSession,
-            controller: M3MediaSession.ControllerInfo,
-            playerCommand: Int
-        ): Int {
-            // Execution belongs to QueueSessionPlayer, including recovery of an unresolved URL.
-            // RESULT_SUCCESS only authorises a command. QueueSessionPlayer consumes navigation,
-            // preventing Media3 from also seeking the small internal preload playlist.
-            return super.onPlayerCommandRequest(session, controller, playerCommand)
-        }
-
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: M3MediaSession.ControllerInfo,
@@ -1139,7 +1120,10 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MutableList<MediaItem>> {
             val future = SettableFuture.create<MutableList<MediaItem>>()
             scope.launch {
-                future.set(mediaItems.map { runCatching { resolveMediaItem(it) }.getOrDefault(it) }.toMutableList())
+                val resolved = mediaItems.mapTo(ArrayList(mediaItems.size)) {
+                    runCatching { resolveMediaItem(it) }.getOrDefault(it)
+                }
+                future.set(resolved)
             }
             return future
         }
@@ -1174,19 +1158,19 @@ class PlaybackService : MediaLibraryService() {
         )
         .build()
 
-    private suspend fun loadChildren(parentId: String): List<MediaItem> {
-        val s = stringsForCode(getSavedLanguageCode(this))
-        return when (parentId) {
-            ROOT_ID -> listOf(
+    private suspend fun loadChildren(parentId: String): List<MediaItem> = when (parentId) {
+        ROOT_ID -> {
+            val s = stringsForCode(getSavedLanguageCode(this))
+            listOf(
                 folderItem(DAILY_ID, s.dailySongsTitle),
                 folderItem(FM_ID, s.fmRadioTitleGeneric),
-                folderItem(LIKED_ID, s.tabLibrary)
+                folderItem(LIKED_ID, s.tabLibrary),
             )
-            DAILY_ID -> PlaylistApi.getDailyRecommendSongs().map { songItem(it) }
-            FM_ID -> PlaylistApi.getPersonalFm().map { songItem(it) }
-            LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }
-            else -> emptyList()
         }
+        DAILY_ID -> PlaylistApi.getDailyRecommendSongs().map { songItem(it) }
+        FM_ID -> PlaylistApi.getPersonalFm().map { songItem(it) }
+        LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }
+        else -> emptyList()
     }
 
     /** 车机点播：把 song:<id> 解析成当前音质档的可播放 URL。 */
