@@ -403,6 +403,8 @@ object WaveformStore {
     /** UI 线程：把滚动窗口与峰值拷进复用数组（两个数组都是 `remember` 的，零分配）。 */
     fun snapshot(bars: FloatArray, peaks: FloatArray, dash: FloatArray) = ring.copyInto(bars, peaks, dash)
 
+    fun snapshotBars(bars: FloatArray) = ring.copyInto(bars)
+
     /**
      * v3.2.2：把**三条频带**的历史窗口拷进调用方复用的三个数组（三条泳道用；零分配）。
      *
@@ -878,7 +880,7 @@ fun AudioVisualizerBars(
                     val sheen = brushCache.flow(size.width, palette[BandColorRoles.MID])
                     translate(left = -phasePx) {
                         drawCurveSheen(
-                            heights, total, tangents, path, sheen, effects,
+                            heights, total, tangents, path, sheen,
                             xShift = phasePx, step = step, heightPx = heightPx,
                             breath = breath,
                         )
@@ -886,7 +888,8 @@ fun AudioVisualizerBars(
                 }
             }
         } else {
-            WaveformStore.snapshot(bars, peaks, dash)
+            if (effects.peaks) WaveformStore.snapshot(bars, peaks, dash)
+            else WaveformStore.snapshotBars(bars)
             val ribbonColor = Color(
                 BandColorRoles.resolve(palette, bandWeights, bandReliable, barColor.toArgb())
             )
@@ -895,41 +898,31 @@ fun AudioVisualizerBars(
                 if (heights[i] < minBar) heights[i] = minBar
                 heights[i] *= 0.5f
             }
-            // v3.4.5：小球用**同一条 sqrt 映射**（否则小球会看起来比柱子还矮），
-            // 并且不小于该格柱高 —— 这两个条件合起来保证"小球绝不低于柱顶"。
-            for (i in 0 until n) {
-                var half = sqrt(peaks[i].coerceIn(0f, 1f)) * ampPx * 0.5f
-                if (half < heights[i]) half = heights[i]
-                peaks[i] = half
-                // 短横：与小球同一条 sqrt 映射，且不低于小球。注意 `dash[i]` 此刻仍是
-                // **值域**的保持值（上面这个循环之前没人动过它），所以顺序不能反。
-                var dashHalf = sqrt(dash[i].coerceIn(0f, 1f)) * ampPx * 0.5f
-                if (dashHalf < half) dashHalf = half
-                dash[i] = dashHalf
+            if (effects.peaks) {
+                // 小球、短横与柱高共用开方映射，短横的高度至少与小球一致。
+                for (i in 0 until n) {
+                    var half = sqrt(peaks[i].coerceIn(0f, 1f)) * ampPx * 0.5f
+                    if (half < heights[i]) half = heights[i]
+                    peaks[i] = half
+                    var dashHalf = sqrt(dash[i].coerceIn(0f, 1f)) * ampPx * 0.5f
+                    if (dashHalf < half) dashHalf = half
+                    dash[i] = dashHalf
+                }
             }
             val step = size.width / (n - 1)
-            // ── v3.8.0 · K06：单泳道也要**连续滚动** ────────────────────────────────
-            //
-            // 旧实现这一支的 xShift 是常数 0（flow 分支则是「画布左移 phasePx、内层再补
-            // 回 phasePx」—— 两者精确相消，动的只有刷色）。于是历史窗口每 100ms 整条
-            // 跳一格，看不出「波形在横向流动」，只剩下逐格的形状变形。
-            //
-            // 现在与三泳道走**同一条时间轴**（同为 [WaveformStore.scrollPhase01]）与
-            // **同一套画法**（[BandScroll.POSITION_SHIFT]：取值保真、亚格相位交给几何平移）：
-            // 高度数组一个值都不插值，只把 x 整体左移 `phase × step`，并把 x 范围多延伸
-            // 一格补右侧缺口（[BandScroll.EXTRA_POINTS]，与三泳道同一契约）。
+            // 相位平移几何，保留采样高度。最右延伸一格补齐滚动留白。
             val phase = WaveformStore.scrollPhase01()
             val scrollShift = -phase * step
-            // 容量守卫与三泳道一致：容不下就不延伸（少画最右一格，画面几乎无差别），
-            // 绝不让越界把播放崩掉。
             val extend = n < heights.size && n < peaks.size && n < tangents.size
             val drawCount = if (extend) n + BandScroll.EXTRA_POINTS else n
             if (extend) {
                 heights[n] = heights[n - 1]
-                peaks[n] = peaks[n - 1]
-                if (n < dash.size) dash[n] = dash[n - 1]
+                if (effects.peaks) {
+                    peaks[n] = peaks[n - 1]
+                    if (n < dash.size) dash[n] = dash[n - 1]
+                }
             }
-            WaveformCurve.computeTangents(heights, if (extend) n + 1 else n, step, tangents)
+            WaveformCurve.computeTangents(heights, drawCount, step, tangents)
             val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
             val ageBrush = if (!flow && effects.timeOrderedTint) {
                 brushCache.age(size.width, ribbonColor.toArgb())
@@ -1124,7 +1117,7 @@ private fun DrawScope.drawWaveformCurve(
      * 它比 [peaks] 短时按 `minOf` 兜底（取不到就退回"只跟小球"的旧行为），
      * 所以调用方传一个空数组也不会崩。
      */
-    dashHeights: FloatArray = FloatArray(0),
+    dashHeights: FloatArray,
     /** v3.2.2：光点 / 峰值标记的采样步长（三频带模式用 2，单带模式用 1）。 */
     markerStride: Int = 1,
     /** v3.6.9：采样起点（`shiftedCells % stride`）—— 让同一格数据的标记不被重新采样。 */
@@ -1163,12 +1156,13 @@ private fun DrawScope.drawWaveformCurve(
         drawPath(path = path, color = color, alpha = 0.29f * breath)
         drawPath(path = crest, color = color, alpha = 0.88f * breath, style = crestStroke)
     }
-    // 峰值保持：与 v2.8.0 **逐值同构**的短横条（同一个 sqrt 映射，否则峰值会看起来比曲线还矮），
-    // 只在明显高于曲线时才画。位置跟着曲线走（峰值的半厚 → y）。
+    if (!effects.peaks && !effects.dots) return
     val dotThreshold = minBar * DOT_MIN_BAR_MULTIPLE
     val peakVisibleDelta = peakCapPx / 2f
     val stride = if (markerStride < 1) 1 else markerStride
     val markerWidth = (step * 0.6f * stride).coerceAtLeast(1f)
+    val dashSize = Size(markerWidth * 0.68f, peakCapPx)
+    val dashCorners = CornerRadius(peakCapPx * 0.5f)
     var i = if (markerStart in 0 until stride) markerStart else 0
     while (i < n) {
         val x = firstX + i * step + xShift
@@ -1193,15 +1187,13 @@ private fun DrawScope.drawWaveformCurve(
             )
             if (ballHalf * 2f > dotThreshold && peakHalf > heights[i] + peakVisibleDelta) {
                 val topLeft = Offset(x - markerWidth * 0.34f, centerY - peakHalf - peakCapPx)
-                val size = Size(markerWidth * 0.68f, peakCapPx)
-                val corners = CornerRadius(peakCapPx * 0.5f)
                 // v3.2.2：三频带模式下峰值标记**跟着它所在泳道的颜色**（同一个渐变笔刷在
                 // 那个 x 处采样出来的就是那一段的颜色）—— 否则会变成一条横穿三条泳道的
                 // 主题色虚线，看起来像渲染错误。
                 if (brush != null) {
-                    drawRoundRect(brush = brush, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
+                    drawRoundRect(brush = brush, topLeft = topLeft, size = dashSize, cornerRadius = dashCorners, alpha = 0.62f * breath)
                 } else {
-                    drawRoundRect(color = color, topLeft = topLeft, size = size, cornerRadius = corners, alpha = 0.62f * breath)
+                    drawRoundRect(color = color, topLeft = topLeft, size = dashSize, cornerRadius = dashCorners, alpha = 0.62f * breath)
                 }
             }
         }
@@ -1236,7 +1228,6 @@ private fun DrawScope.drawCurveSheen(
     tangents: FloatArray,
     path: Path,
     brush: Brush,
-    effects: VisualizerEffects,
     xShift: Float,
     step: Float,
     heightPx: Float,
