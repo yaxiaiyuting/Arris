@@ -12,35 +12,14 @@
 package com.takahashirinta.ncrust.recognize
 
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * Shazam 式短片段指纹（v3.8.0 · 听歌识曲）。
- *
- * ## 为什么不用 Chromaprint
- *
- * Chromaprint 的 12 维 chroma 依赖**能量分布**做量化，而 Visualizer 降级路径只有 8 bit
- * （见识曲报告 §4）；量化误差会直接改子指纹位。且 AcoustID 的 `duration` 语义是**整曲**，
- * 拿它匹配 10 秒片段在结构上就不对。Shazam 式峰值哈希对幅度不敏感（只比相对强度），
- * 天生适合"几秒 + 窄带 + 有损"的输入。
- *
- * ## 参数（可在单测里固定）
- *
- * - 采样 16 kHz（与 `BlowRecorder` 一致，麦克风与内录都能直接喂）
- * - 窗 4096 点（256 ms），Hann 窗；hop 1024 点（64 ms）
- * - 频谱分 4 个频带（0–2k / 2k–4k / 4k–6k / 6k–8k），每帧每带取最强峰
- * - 组合哈希：同一帧的峰与其后 1..[DT_MAX] 帧的峰配对，`(f1, f2, dt)` → Int
- *
- * ## 已知局限（写在这里，免得实现者以为是 bug）
- *
- * - 这不是字节级复刻 Shazam 的指纹，**不能**直接与服务端 `signature` 格式互通；
- *   它服务的是"我们自己的指纹库 / 未来的自建匹配"，或作为**本地预筛**。
- * - 服务端识别仍走 `ShazamProvider` 的原始音频提交（见该类 KDoc 的风险说明）。
+ * 实验室的本地音频指纹。用 Hann 窗分析 16 kHz PCM，
+ * 每帧保留六个最强局部峰，再与后续帧的峰组合成哈希。
  */
 object ShazamFingerprint {
 
@@ -48,9 +27,6 @@ object ShazamFingerprint {
     const val WINDOW = 4096
     const val HOP = 1024
     const val DT_MAX = 8
-
-    /** 频带边界（Hz）。 */
-    private val BANDS_HZ = intArrayOf(0, 2_000, 4_000, 6_000, 8_000)
 
     data class Peak(val frame: Int, val freqBin: Int, val magnitude: Float)
 
@@ -72,10 +48,13 @@ object ShazamFingerprint {
         if (samples.size < WINDOW) return Fingerprint(emptyList(), IntArray(0))
 
         val frames = (samples.size - WINDOW) / HOP + 1
-        val window = hann(WINDOW)
+        val window = hannCache
         val peaks = ArrayList<Peak>(frames * 4)
         val re = FloatArray(WINDOW)
         val im = FloatArray(WINDOW)
+        val bins = WINDOW / 2
+        val mags = FloatArray(bins)
+        val strongest = IntArray(MAX_PEAKS_PER_FRAME)
 
         for (f in 0 until frames) {
             val offset = f * HOP
@@ -84,24 +63,17 @@ object ShazamFingerprint {
                 im[i] = 0f
             }
             fft(re, im)
-            val bins = WINDOW / 2
-            val binHz = SAMPLE_RATE.toFloat() / WINDOW
-
-            // 全频段局部极大 + 每帧限量。
-            //
-            // 旧实现"每个频带必取一个最强 bin" ⇒ 每帧固定 4 个峰，静音时也一样（实测 84 帧 ×4=336），
-            // 那些峰全是噪声，重合率自然是碰运气。现在：
-            //  ① 峰必须是 ±NEIGHBOR_BINS 邻域内的极大；
-            //  ② 幅度要高于**本帧全体均值**的 PEAK_RATIO 倍（不再用分带均值，避免低频泄漏主导）；
-            //  ③ 每帧只留最强的 MAX_PEAKS_PER_FRAME 个。
-            val mags = FloatArray(bins) { k ->
-                sqrt(re[k] * re[k] + im[k] * im[k])
-            }
+            // 直流分量参与邻域比较，均值从第一个非直流频点起算。
+            mags[0] = sqrt(re[0] * re[0] + im[0] * im[0])
             var sum = 0f
-            for (k in 1 until bins) sum += mags[k]
+            for (k in 1 until bins) {
+                val magnitude = sqrt(re[k] * re[k] + im[k] * im[k])
+                mags[k] = magnitude
+                sum += magnitude
+            }
             val frameMean = sum / (bins - 1)
             val floorMag = max(MIN_MAGNITUDE, frameMean * PEAK_RATIO)
-            val candidates = ArrayList<Int>(8)
+            var count = 0
             for (k in max(1, NEIGHBOR_BINS) until bins - NEIGHBOR_BINS) {
                 val m = mags[k]
                 if (m <= floorMag) continue
@@ -113,15 +85,21 @@ object ShazamFingerprint {
                         break
                     }
                 }
-                if (isLocalMax) candidates.add(k)
+                if (!isLocalMax) continue
+
+                // 幅度相同的峰按频点升序保留，与原稳定排序一致。
+                var index = count
+                while (index > 0 && mags[strongest[index - 1]] < m) index--
+                if (index == MAX_PEAKS_PER_FRAME) continue
+                for (slot in min(count, strongest.lastIndex) downTo index + 1) {
+                    strongest[slot] = strongest[slot - 1]
+                }
+                strongest[index] = k
+                count = min(count + 1, MAX_PEAKS_PER_FRAME)
             }
-            if (candidates.isEmpty()) continue
-            candidates.sortByDescending { mags[it] }
-            var kept = 0
-            for (k in candidates) {
-                peaks.add(Peak(f, k, mags[k]))
-                kept++
-                if (kept >= MAX_PEAKS_PER_FRAME) break
+            for (index in 0 until count) {
+                val bin = strongest[index]
+                peaks.add(Peak(f, bin, mags[bin]))
             }
         }
 
@@ -254,8 +232,4 @@ object ShazamFingerprint {
         val inter = setA.count { it in setB }
         return inter.toFloat() / min(setA.size, setB.size).toFloat()
     }
-
-    /** 让编译器别抱怨未使用的 import（ln 在调试日志里用过，保留说明）。 */
-    private val lnRef: (Double) -> Double = ::ln
-    private val absRef: (Float) -> Float = ::abs
 }
