@@ -23,11 +23,17 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
     // LinkedHashMap 的迭代顺序 = 插入顺序，put 前先 remove 即得到 LRU。
     private val map = LinkedHashMap<String, OfflineUrlRecord>()
     private val keysBySong = HashMap<Long, LinkedHashSet<String>>()
+    private var encoded: String? = null
 
     fun put(key: String, url: String, content: OfflineContent = OfflineContent()) {
         if (key.isEmpty() || url.isEmpty()) return
-        val old = map.remove(key)
-        map[key] = OfflineUrlRecord(url, if (!content.known && old?.url == url) old.content else content)
+        val old = map[key]
+        val updated = OfflineUrlRecord(url, if (!content.known && old?.url == url) old.content else content)
+        // 取链和实际起播可能先后记录同一份 URL，末条的顺序也相同。
+        if (updated == old && map.keys.lastOrNull() == key) return
+        encoded = null
+        map.remove(key)
+        map[key] = updated
         OfflineKeys.songIdOf(key)?.let { songId ->
             val keys = keysBySong.getOrPut(songId) { LinkedHashSet() }
             keys.remove(key)
@@ -56,6 +62,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         if (songId <= 0L) return 0
         val keys = keysBySong.remove(songId) ?: return 0
         keys.forEach { map.remove(it) }
+        encoded = null
         return keys.size
     }
 
@@ -63,8 +70,10 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
     fun keys(): List<String> = map.keys.toList()
 
     fun clear() {
+        if (map.isEmpty()) return
         map.clear()
         keysBySong.clear()
+        encoded = null
     }
 
     /**
@@ -103,7 +112,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
 
     fun size(): Int = map.size
 
-    fun toJson(): String = gson.toJson(map)
+    fun toJson(): String = encoded ?: gson.toJson(map).also { encoded = it }
 
     companion object {
         const val MAX_ENTRIES = 300

@@ -45,6 +45,22 @@ class OfflineContentRecoveryTest {
         i.put(key("standard"),"different")
         assertFalse(i.record(key("standard"))!!.content.known)
     }
+    @Test fun identicalLastUrlReusesEncodingAndOtherChangesInvalidateIt() {
+        val index = OfflineUrlIndex()
+        val standard = key("standard")
+        val lossless = key("lossless")
+        index.put(standard, "fixture")
+        index.put(lossless, "fixture", OfflineContent(OfflineContent.FULL))
+        val original = index.toJson()
+
+        index.put(lossless, "fixture")
+        assertSame(original, index.toJson())
+        index.put(standard, "fixture")
+        assertEquals(listOf(lossless, standard), index.keys())
+        assertNotEquals(original, index.toJson())
+        assertEquals(2, index.removeSong(42))
+        assertEquals("{}", index.toJson())
+    }
     @Test fun verifiedFullPreferredOverLegacyAndTrialAtSameQuality() {
         val i=OfflineUrlIndex();i.put(key("standard"),"legacy")
         i.put(key("standard"),"full",OfflineContent(OfflineContent.FULL))
