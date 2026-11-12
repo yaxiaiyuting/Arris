@@ -42,9 +42,6 @@ object ForkRelease {
     const val VARIANT_RELEASE = "release"
     const val VARIANT_DEBUG = "debug"
 
-    /** 资产名前缀；`v` 可有可无，兼容历史发布的两种写法。 */
-    private const val ASSET_PREFIX = "Ncrust-v"
-
     private val TAG_PATTERN =
         Regex("""^[vV]?(\d{1,9}(?:\.\d{1,9}){0,3})-gpl$""", RegexOption.IGNORE_CASE)
 
@@ -95,10 +92,4 @@ object ForkRelease {
         val variant = if (trimmed.contains("debug", ignoreCase = true)) VARIANT_DEBUG else VARIANT_RELEASE
         return Asset(version, variant)
     }
-
-    /** 便于诊断：本 Fork 期望的资产名前缀。 */
-    fun assetPrefix(): String = ASSET_PREFIX
-
-    /** 本 Fork 的 release 页（浏览器退路）。 */
-    fun releasePage(): String = "https://github.com/$REPO/releases"
 }

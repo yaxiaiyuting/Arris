@@ -12,7 +12,6 @@ package com.takahashirinta.ncrust.crosssource
 
 import android.content.Context
 import android.util.Log
-import com.takahashirinta.ncrust.source.MusicSource
 
 /**
  * 跨源匹配结果的持久缓存（v2.4.0 · E）。
@@ -230,10 +229,4 @@ object MatchCacheStore {
             .take(overflow)
             .toList()
     }
-
-    /** 让 IDE / 调用方一眼看到「哪些音源进过这个缓存」，诊断用。 */
-    internal fun sourcesPresent(context: Context): List<MusicSource> =
-        saved(context).keys.mapNotNull { MatchCacheKeys.parse(it)?.second }
-            .mapNotNull { key -> MusicSource.parseKey(key) }
-            .distinct()
 }
