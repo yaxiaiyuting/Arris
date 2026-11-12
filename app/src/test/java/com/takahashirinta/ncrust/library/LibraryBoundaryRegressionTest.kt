@@ -106,6 +106,35 @@ class LibraryBoundaryRegressionTest {
         assertEquals(listOf(202L, 101L), SavedAlbumCodec.decode(p.getString("saved_albums", null)).map { it.albumId })
     }
 
+    @Test fun albumEditsReuseSongAndIdEncodingUntilThoseTablesChange() {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        val ids = "[101,null,202]"
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", ids).commit()
+        LibraryManager.getSavedSongs(ctx)
+        LibraryManager.getLikedSongIds(ctx)
+
+        LibraryManager.subscribeAlbum(ctx, album(303))
+        stopFlush()
+        writeSnapshot()
+        val firstSongWrite = prefs.getString("saved_songs", null)
+        val firstIdsWrite = prefs.getString("liked_ids", null)
+        assertEquals(saved, firstSongWrite)
+        assertEquals(ids, firstIdsWrite)
+
+        LibraryManager.subscribeAlbum(ctx, album(404))
+        stopFlush()
+        writeSnapshot()
+        assertSame(firstSongWrite, prefs.getString("saved_songs", null))
+        assertSame(firstIdsWrite, prefs.getString("liked_ids", null))
+
+        assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(505)))
+        runBlocking { (field(LibraryManager, "flushJob").get(LibraryManager) as Job).join() }
+        val updated = SavedSongCodec.decode(prefs.getString("saved_songs", null))
+        assertEquals(listOf(505L, 101L), updated.map { it.trackKey.id })
+        assertEquals("[505,101,null,202]", prefs.getString("liked_ids", null))
+    }
+
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {
         val p = ctx.getSharedPreferences("ncrust_library", 0)
         p.edit().putString("saved_albums", SavedAlbumCodec.encode(listOf(album(101)))).commit()

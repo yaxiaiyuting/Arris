@@ -90,12 +90,13 @@ object LibraryManager {
     private val gson = Gson()
     private val idListType = object : TypeToken<List<Long>>() {}.type
 
-    // 每次更新替换整张表。可见列表由同一个快照生成，随表失效。
+    // 可见列表和落盘 JSON 共享同一份不可变快照。
     private class SavedSongTable(entries: List<SavedSongEntry>) {
         val entries: List<SavedSongEntry> = Collections.unmodifiableList(entries)
         val visibleSongs: List<SongItem> by lazy {
             Collections.unmodifiableList(this.entries.mapNotNull { if (it.isVisible) it.song else null })
         }
+        val encoded: String by lazy { SavedSongCodec.encode(this.entries) }
     }
 
     @Volatile private var savedSongs: SavedSongTable? = null
@@ -105,6 +106,7 @@ object LibraryManager {
     // 分页读原顺序，播放器红心查询用同一快照的二分索引。
     private class LikedIds(ids: List<Long>) {
         val ordered: List<Long> = Collections.unmodifiableList(ids)
+        val encoded: String by lazy { gson.toJson(ordered, idListType) }
         private val sorted by lazy {
             val values = LongArray(ordered.size)
             var count = 0
@@ -248,14 +250,14 @@ object LibraryManager {
         synchronized(flushLock) {
             val ctx = pendingAppContext ?: return
             pendingAppContext = null
-            val songsSnapshot = synchronized(songsLock) { savedSongs?.entries }
+            val songsSnapshot = synchronized(songsLock) { savedSongs }
             val albumsSnapshot = synchronized(albumsLock) { cachedAlbums?.toList() }
-            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds?.ordered?.toList() }
+            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds }
             runCatching {
                 val editor = prefs(ctx).edit()
-                songsSnapshot?.let { editor.putString(KEY_SONGS, SavedSongCodec.encode(it)) }
+                songsSnapshot?.let { editor.putString(KEY_SONGS, it.encoded) }
                 albumsSnapshot?.let { editor.putString(KEY_ALBUMS, SavedAlbumCodec.encode(it)) }
-                likedIdsSnapshot?.let { editor.putString(KEY_LIKED_IDS, gson.toJson(it)) }
+                likedIdsSnapshot?.let { editor.putString(KEY_LIKED_IDS, it.encoded) }
                 editor.apply()
             }
         }
@@ -724,9 +726,9 @@ object LibraryManager {
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
                     synchronized(songsLock) {
-                        val before = ensureSongsLoaded(context).entries
-                        val after = SavedSongSync.merge(before, likedIds, freshById, System.currentTimeMillis())
-                        savedSongs = SavedSongTable(after)
+                        val table = ensureSongsLoaded(context)
+                        val after = SavedSongSync.merge(table.entries, likedIds, freshById, System.currentTimeMillis())
+                        if (after !== table.entries) savedSongs = SavedSongTable(after)
                         // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
                         // 「已覆盖」= **表里有这个 trackKey 的条目**（tombstone 也算），
                         // 见 likedIdCursor 的 KDoc。
