@@ -19,17 +19,13 @@ import coil.request.ImageRequest
 import com.takahashirinta.ncrust.network.BoundedParallel
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
-import com.takahashirinta.ncrust.source.SourceRouter
-import com.takahashirinta.ncrust.source.isResolvable
-import com.takahashirinta.ncrust.source.musicSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * 按网络类型预取列表首屏封面和缺失的元数据。同一列表短时间内只预取一次。
- * 有时效的播放地址留给确定的下一首，避免取回后还没播放就已过期。
+ * 按网络类型预取列表首屏封面，同一列表短时间内只预取一次。
  */
 object ListPrefetch {
 
@@ -87,62 +83,36 @@ object ListPrefetch {
                 if (recent.size >= DEDUPE_MAX) recent.clear()
                 recent[listKey] = now
             }
-            prefetchBlocking(app, songs.take(limit))
+            prefetchCovers(app, songs.take(limit))
         }
     }
 
     private fun wasPrefetchedRecently(listKey: String, now: Long): Boolean =
         recent[listKey]?.let { now - it < DEDUPE_WINDOW_MS } ?: false
 
-    /**
-     * 预取一组歌曲的封面（+ 缺元数据的那些补一次 `songDetail`）。
-     *
-     * 并发上限走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]（4）—— 铁律 23。
-     * **一个封面失败不影响别的**（[BoundedParallel] 的失败隔离），整体也绝不抛。
-     */
-    private suspend fun prefetchBlocking(context: Context, songs: List<SongItem>) {
-        if (songs.isEmpty()) return
+    private suspend fun prefetchCovers(context: Context, songs: List<SongItem>) {
+        val urls = songs.mapNotNullTo(LinkedHashSet(songs.size)) {
+            CoverUrls.small(it.album?.picUrl)?.takeIf(String::isNotBlank)
+        }
+        if (urls.isEmpty()) return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
-        val tasks = ArrayList<Pair<String, suspend () -> Boolean?>>(songs.size)
-        for (song in songs) {
-            val url = CoverUrls.small(song.album?.picUrl.orEmpty())
-            if (!url.isNullOrBlank()) {
-                tasks += "cover:${song.id}" to {
-                    runCatching {
-                        loader.execute(
-                            ImageRequest.Builder(context)
-                                .data(url)
-                                .size(COVER_PX, COVER_PX)
-                                .build(),
-                        )
-                    }
-                    true
-                }
-            }
-            // 元数据缺失的条目（从持久化恢复的队列、离线索引）补一次详情。
-            // 判据是「连名字都没有」—— 有名有姓的条目再问一次纯属浪费。
-            if (song.name.isBlank() && song.isResolvable) {
-                tasks += "detail:${song.id}" to {
-                    runCatching { detailOf(song) }.getOrNull()?.let { true }
-                }
+        val tasks = urls.map { url ->
+            url to suspend {
+                loader.execute(coverRequest(context, url))
+                Unit
             }
         }
-        if (tasks.isEmpty()) return
         runCatching { BoundedParallel.runAll(tasks) }
             .onFailure { Log.w(TAG, "prefetch failed for ${tasks.size} tasks", it) }
     }
 
     /** 预取单张封面（播放路径上的「这首歌的封面」用它）。失败静默。 */
     suspend fun prefetchCover(context: Context, rawUrl: String?) {
-        val url = CoverUrls.small(rawUrl.orEmpty()) ?: return
+        val url = CoverUrls.small(rawUrl)?.takeIf(String::isNotBlank) ?: return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
-        runCatching {
-            loader.execute(
-                ImageRequest.Builder(context).data(url).size(COVER_PX, COVER_PX).build(),
-            )
-        }
+        runCatching { loader.execute(coverRequest(context, url)) }
     }
 
-    private suspend fun detailOf(song: SongItem): SongItem? =
-        SourceRouter.provider(song.musicSource)?.songDetail(song)
+    private fun coverRequest(context: Context, url: String): ImageRequest =
+        ImageRequest.Builder(context).data(url).size(COVER_PX, COVER_PX).build()
 }
