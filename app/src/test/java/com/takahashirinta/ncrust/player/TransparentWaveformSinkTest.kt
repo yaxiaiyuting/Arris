@@ -48,7 +48,7 @@ class TransparentWaveformSinkTest {
             enabled = { true },
             featuresEnabled = { false },
             onBar = { _, _, _, _ -> published++ },
-            fallbackAnalyze = { _, _, _, _ -> analyzed++; 0L },
+            fallbackAnalyze = { _, _, _, _, _ -> analyzed++; 0L },
             isVisible = { visible },
         )
         sink.flush(0, 2, C.ENCODING_PCM_16BIT)
