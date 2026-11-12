@@ -146,6 +146,8 @@ class PlaybackService : MediaLibraryService() {
     private var mediaSourceKey: String? = null
     private var mediaSourceId: String? = null
     private var mediaMediaId: String? = null
+    private var parsedMediaId: String? = null
+    private var parsedMediaTrack: TrackKey? = null
     private data class MediaArtwork(val url: String, val bitmap: Bitmap, val jpeg: ByteArray?)
     private data class ArtworkTask(val url: String, val result: Deferred<MediaArtwork?>)
 
@@ -756,9 +758,9 @@ class PlaybackService : MediaLibraryService() {
                 // v2.1.5：起播项的音源**从 item 自己身上读**。item 是 ExoPlayer 真正播的
                 // 那一份，而 pendingNext* 是旁路（last-write-wins）—— 身份必须跟着 item 走，
                 // 这正是跨源自动接续时会话/歌词留在上一首的接缝。
-                val itemIdentity = PreloadSlot.identityFromMediaId(mediaItem?.mediaId)
-                val itemSource = itemIdentity?.first
-                val itemSongId = itemIdentity?.second
+                val itemIdentity = trackForMediaId(mediaItem.mediaId)
+                val itemSource = itemIdentity?.source
+                val itemSongId = itemIdentity?.id
                 checkpoint.reset(player.currentPosition.coerceAtLeast(0L))
                 if (auto && itemSongId != null && itemSongId > 0L) {
                     mediaSongId?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
@@ -1285,8 +1287,16 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
-    fun playingTrackKey(): com.takahashirinta.ncrust.source.TrackKey? =
-        com.takahashirinta.ncrust.source.TrackKey.fromMediaId(player.currentMediaItem?.mediaId)
+    fun playingTrackKey(): TrackKey? = trackForMediaId(player.currentMediaItem?.mediaId)
+
+    /** 播放器线程复用最近解析的身份，切歌时以 MediaItem 的 mediaId 为准。 */
+    private fun trackForMediaId(mediaId: String?): TrackKey? {
+        if (parsedMediaId != mediaId) {
+            parsedMediaTrack = TrackKey.fromMediaId(mediaId)
+            parsedMediaId = mediaId
+        }
+        return parsedMediaTrack
+    }
 
     /** Called on the player thread; a remote snapshot must not control a different or idle item. */
     internal fun applyTogetherTransport(
@@ -1874,7 +1884,7 @@ class PlaybackService : MediaLibraryService() {
         if (!::player.isInitialized) return
         val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
-        val identity = PreloadSlot.identityFromMediaId(item.mediaId) ?: return
+        val track = trackForMediaId(item.mediaId) ?: return
         val selected = player.currentTracks.groups.firstOrNull {
             it.type == C.TRACK_TYPE_AUDIO && it.isSelected
         }
@@ -1884,7 +1894,7 @@ class PlaybackService : MediaLibraryService() {
         val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, player.duration) {
             item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
         }
-        if (bitrate > 0L) publish(identity.first, identity.second, bitrate)
+        if (bitrate > 0L) publish(track.source, track.id, bitrate)
     }
 
     /**
