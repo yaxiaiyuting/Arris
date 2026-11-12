@@ -49,6 +49,7 @@ import com.takahashirinta.ncrust.lyric.LyricSourceKind
 import com.takahashirinta.ncrust.lyric.LyricSourcePrefs
 import com.takahashirinta.ncrust.lyric.LyricTrack
 import com.takahashirinta.ncrust.lyric.LyricTrackMerge
+import com.takahashirinta.ncrust.lyric.LyricTracks
 import com.takahashirinta.ncrust.lyric.LyricTrackSource
 import com.takahashirinta.ncrust.lyric.cacheTag
 import com.takahashirinta.ncrust.lyric.LyricsCache
@@ -2704,10 +2705,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     )
 
     /** TTML 胜出时算好的两条副文本轨，连同它们的来源标记一起交给落地函数。 */
-    private data class LyricTracks(
-        val translation: LyricTrack = LyricTrack(),
-        val roman: LyricTrack = LyricTrack(),
-    )
+
 
     /**
      * v2.1.0 · C：qm 歌词（QRC 逐字 + 翻译 + 音译）。
@@ -3103,17 +3101,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     // v1.9.2：两条副文本轨在这里一次算完（纯函数，放 Default 上跑 —— 里面有一次
                     // O(n·m) 的 LCS）。withContext 是挂起点，回来必须复查闸门与当前歌。
                     val tracks = withContext(Dispatchers.Default) {
-                        LyricTracks(
-                            translation = LyricTrackMerge.merge(
-                                doc.lines, doc.translations, parsed.lines, parsed.tlyric
-                            ),
-                            roman = LyricTrackMerge.merge(
-                                doc.lines, doc.romans, parsed.lines, parsed.romalrc
-                            ),
-                        )
+                        LyricTrackMerge.mergeTracks(doc, parsed.lines, parsed.tlyric, parsed.romalrc)
                     }
                     if (!lyricCoordinator.isCurrent(load) || currentSongId.value != songId) return
-                    applyTtmlLyrics(track, load, doc, tracks)
+                    applyTtmlLyrics(songId, doc, tracks)
                     ttmlWon = true
                     Log.i(
                         "PlayerViewModel",
@@ -3178,24 +3169,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    /**
-     * 把 TTML 那份落地（v1.9.2：分轨合并）。
-     *
-     * 主轨是 TTML 的行；译文轨与音译轨各自独立决定（[LyricTrackMerge]）：
-     * TTML 那一轨能对上主轨时间戳的行原样用，**缺的行**按文本/行序回退到 ncm 的 tlyric / romalrc，
-     * 对不上的逐行丢弃。v1.9.0 是直接把 `doc.translations.filter { ... }` 覆盖上去 ——
-     * TTML 没有译文时那是个空表，会把刚显示的 ncm 译文**整轨清空**（实测 22704409）。
-     *
-     * 渲染层按 timeMs 精确配对（translatedLyrics.associateBy { timeMs }），而合并产出的每一行
-     * 时间戳都取自 [TtmlDoc.lines]，所以这里不需要动渲染层一行。
-     */
-    private suspend fun applyTtmlLyrics(
-        track: TrackKey,
-        load: LyricLoadCoordinator.Load,
-        doc: TtmlDoc,
-        tracks: LyricTracks,
-    ) {
-        val songId = track.id
+    /** 发布 TTML 主轨和已经对齐到同一时间轴的副轨。 */
+    private suspend fun applyTtmlLyrics(songId: Long, doc: TtmlDoc, tracks: LyricTracks) {
         if (currentSongId.value != songId) return
         lyrics.value = doc.lines
         translatedLyrics.value = tracks.translation.lines
