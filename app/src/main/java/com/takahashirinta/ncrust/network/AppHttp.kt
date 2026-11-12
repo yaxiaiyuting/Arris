@@ -9,29 +9,7 @@ import java.util.concurrent.TimeUnit
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 
-/**
- * **全应用唯一的 `OkHttpClient` 入口**（v3.8.16）。
- *
- * ## 为什么要有这一层
- *
- * 「本机 Wi-Fi 双栈，但 IPv6 到外网完全不通（IPv4 200 / IPv6 15s 超时）」这个事实，
- * 我们已经逐条手动补了六次 `dns(AddressPreference.ipv4First)`：
- * ncm 取链 → 音频流 → B站 → 检查更新 → 应用内下载 → 封面/艺人/专辑图。
- *
- * 每次都是「有人新建了一个 `OkHttpClient.Builder()`，忘了加 dns」。这类错误不报错、
- * 单测也抓不到（每个客户端只测自己的逻辑），只能靠人记 —— 显然记不住。
- *
- * 所以把「默认值」收进来：所有客户端从 [builder] 出发，DNS / 超时 / 连接池 / 重试
- * 都是**已经设好的**，各调用点只覆盖自己需要的差异（比如 MQTT 要 readTimeout=0）。
- *
- * 约定由 `HttpClientDnsAuditTest` 守着：`app/src/main` 里**不允许**再出现裸的
- * `OkHttpClient.Builder()`，只能 `AppHttp.builder()`。
- *
- * ## 为什么不是「全局 Hook」
- *
- * OkHttp 没有全局默认 Builder 这种东西（构造器是死的，`Dns`/`Interceptor` 都是实例级）。
- * 能做到「接管」的最接近形态就是：**唯一工厂 + 源码扫描测试**。
- */
+/** API 客户端共享 DNS 策略、超时和连接池。需要专用池的调用方负责其生命周期。 */
 object AppHttp {
 
     /** 真机实测：坏 IPv6 地址会在连接阶段吃掉整个预算，所以单地址 8 秒必须让位。 */
@@ -53,28 +31,13 @@ object AppHttp {
         .connectTimeout(CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_S, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        .connectionPool(pool.also { pools.add(it) })
+        .connectionPool(pool)
 
     /** 直接要一个成品（默认配置）。 */
     fun client(): OkHttpClient = builder().build()
 
-    /**
-     * I07：**所有由 [AppHttp] 派生出来的连接池**。
-     *
-     * 旧实现只驱逐默认池：QQ、更新、房间目录这些"自己 build 了一个 client"的地方
-     * 在切换网络后仍持有上一路由的空闲连接（真表现是切网后第一次请求莫名超时）。
-     * 现在任何 `builder()` 出来的 client 都把池登记进来，切网时一起驱逐。
-     */
-    private val pools: MutableSet<ConnectionPool> = java.util.concurrent.ConcurrentHashMap.newKeySet()
-
-    /** 丢掉所有池化连接（网络切换 / 代理开关 / 回到前台时调用）。 */
+    /** 网络切换时异步清理共享池中的空闲连接。 */
     fun evictAll() {
-        val snapshot = pools.toList() + pool
-        Thread({
-            snapshot.forEach { p -> runCatching { p.evictAll() } }
-        }, "ncrust-evict-apphttp").start()
+        Thread({ runCatching { pool.evictAll() } }, "ncrust-evict-apphttp").start()
     }
-
-    /** 留给测试断言：当前登记了几个池（默认池 + 派生池）。 */
-    internal fun registeredPoolCount(): Int = pools.size + 1
 }

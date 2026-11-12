@@ -746,7 +746,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (usableChange) {
                     delay(500L) // Coalesce Wi-Fi/mobile handover callbacks, never each capabilities update.
                     SongUrlFetcher.onNetworkRouteChanged()
-                    // I07：公共池 + 所有派生池一次清掉（QQ / 更新 / 房间目录都在里面）
+                    // 清理共享池以及各专用客户端的连接。
                     com.takahashirinta.ncrust.network.AppHttp.evictAll()
                     RetrofitClient.evictConnections()
                     com.takahashirinta.ncrust.player.MediaHttp.evict()
