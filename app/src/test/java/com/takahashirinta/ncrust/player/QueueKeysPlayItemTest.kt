@@ -123,6 +123,19 @@ class QueueKeysPlayItemTest {
     }
 
     @Test
+    fun `旧队列重复身份保留插入位置和末条载荷`() {
+        val queue = listOf(
+            netease(1, "First current"),
+            netease(2, "First selected"),
+            netease(1, "Latest current"),
+            netease(2, "Latest selected"),
+        )
+        val plan = QueueKeys.planPlayItem(queue, 2, netease(2, "Search result"))
+        assertEquals(1, plan.playIndex)
+        assertEquals(listOf("Latest current", "Latest selected", "Latest current"), plan.queue.map { it.name })
+    }
+
+    @Test
     fun `游标越界 - 当成空队列处理, 不能拿不存在的 currentKey 去重排队列`() {
         val a = netease(1L, "A")
         val b = netease(2L, "B")

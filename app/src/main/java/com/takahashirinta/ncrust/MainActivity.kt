@@ -2644,9 +2644,7 @@ fun MainScreen(
             return
         }
         // v2.5.3 · P1：身份走 TrackKey（原先按裸 id 的 existingIds 过滤）。
-        val existingKeys = QueueKeys.keysOf(playbackQueue)
-        val newKeys = QueueKeys.missing(existingKeys, QueueKeys.keysOf(songs)).toHashSet()
-        val newSongs = QueueKeys.selectSongs(songs, newKeys)
+        val newSongs = QueueKeys.songsOutside(songs, QueueKeys.keySetOf(playbackQueue))
         if (newSongs.isEmpty()) return
         // 尾追加不动 currentQueueIndex 前面的项，无需修正索引。
         playerViewModel.invalidatePreload()
@@ -2759,9 +2757,7 @@ fun MainScreen(
             if (selection == null) return@launch
             // 队列引用仍是这次播放的列表才追加（用户换队列 / 清空都不追）。
             if (playbackQueue === cached) {
-                val known = QueueKeys.keysOf(playbackQueue)
-                val restKeys = QueueKeys.missing(known, QueueKeys.keysOf(selection.songs))
-                val rest = QueueKeys.selectSongs(selection.songs, restKeys)
+                val rest = QueueKeys.songsOutside(selection.songs, QueueKeys.keySetOf(playbackQueue))
                 if (rest.isNotEmpty()) appendAllToQueue(rest)
             }
             toastLikedPartial(selection)
@@ -2785,10 +2781,9 @@ fun MainScreen(
             likedBulkLoading = false
             if (selection == null) return@launch
             // 只要缓存里那些歌还在队列里，就继续补剩余；队列被清空 / 换掉则不追。
-            val known = QueueKeys.keysOf(playbackQueue)
-            if (QueueKeys.keysOf(cached).all { it in known }) {
-                val restKeys = QueueKeys.missing(known, QueueKeys.keysOf(selection.songs))
-                val rest = QueueKeys.selectSongs(selection.songs, restKeys)
+            val known = QueueKeys.keySetOf(playbackQueue)
+            if (cached.all { QueueKeys.keyOf(it) in known }) {
+                val rest = QueueKeys.songsOutside(selection.songs, known)
                 if (rest.isNotEmpty()) appendAllToQueue(rest)
             }
             toastLikedPartial(selection)
