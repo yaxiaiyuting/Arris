@@ -175,8 +175,6 @@ object QqApi {
         return QqSongMapper.songsFromSearchResponse(JSONObject().put("req", response))
     }
 
-    private const val SEARCH_MODULE = "music.search.SearchCgiService"
-
     private val searchCounter: java.util.concurrent.atomic.AtomicLong = java.util.concurrent.atomic.AtomicLong(0)
 
     /**

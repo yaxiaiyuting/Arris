@@ -183,12 +183,3 @@ private fun QqScanSession.Status.toUiStatus(): Status = when (this) {
     QqScanSession.Status.FAILED -> Status.FAILED
     QqScanSession.Status.DONE -> Status.DONE
 }
-
-/**
- * 单次「等推送」的窗口。
- *
- * 取 5 秒而不是「等到超时」：`awaitEvent` 会一直占着这条协程，
- * 而 keep-alive 的心跳要在这个协程里发（见循环注释）。
- * 5 秒的粒度对心跳（协商值的一半，约 22 秒）足够细。
- */
-private const val EVENT_WAIT_MS = 5_000L

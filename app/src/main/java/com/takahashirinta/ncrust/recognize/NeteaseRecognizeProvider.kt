@@ -61,7 +61,6 @@ class NeteaseRecognizeProvider(
     private val cookieProvider: () -> String,
     private val client: OkHttpClient = defaultClient(),
     private val endpoint: String = DEFAULT_ENDPOINT,
-    private val clock: () -> Long = { System.currentTimeMillis() },
 ) : RecognitionProvider {
 
     override val name: String = "网易云"

@@ -71,7 +71,6 @@ object QqPlaylistStore {
         "detail$SEP${source.key}$SEP$ownerId$SEP$playlistId"
 
     private const val PREFIX_DETAIL = "detail$SEP"
-    private const val PREFIX_LIST = "list$SEP"
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -185,7 +184,7 @@ object QqPlaylistStore {
         e.commit()
     }
 
-    /** 第一段（SEP 之前）的四种形状；PREFIX_LIST/PREFIX_DETAIL 自带冒号，这里用裸名比较。 */
+    /** 键的第一段（分隔符之前），用于选择清理规则。 */
     private val OWNER_SCOPED_PREFIXES = setOf("list", "detail", "list_at", "detail_at")
 
     /** 缓存里的条目数（诊断/测试用）。 */
