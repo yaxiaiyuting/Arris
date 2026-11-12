@@ -15,7 +15,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
-import com.takahashirinta.ncrust.source.MusicSource
+import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,8 +93,11 @@ object StatsRecorder {
     // ---------------------------------------------------------- 会话状态 ----
     // 只在主线程读写（两个 collector 都跑在 Dispatchers.Main.immediate）。
 
-    private var sessionKey: String? = null
-    private var sessionSourceKey: String = MusicSource.DEFAULT.key
+    private class SessionTrack(val key: TrackKey) {
+        val tag = key.tag
+    }
+
+    private var sessionTrack: SessionTrack? = null
     private var sessionName: String = ""
     private var sessionArtist: String = ""
     private var sessionListenedMs: Long = 0L
@@ -154,7 +157,7 @@ object StatsRecorder {
         appContext = null
         // 会话是「上一段播放」的临时状态，断开时清干净，避免下次 attach 把它接在
         // 另一台播放器（另一个 VM）的进度上。
-        sessionKey = null
+        sessionTrack = null
         sessionListenedMs = 0L
         sessionDurationMs = 0L
         anchorValid = false
@@ -202,7 +205,7 @@ object StatsRecorder {
         val now = System.currentTimeMillis()
         // S7：用「在播身份」记账。`currentTrackKey` 是请求身份，取链没回来时音频仍是上一首。
         val track = vm.playingTrackKey ?: vm.currentTrackKey
-        val key = track?.tag
+        val session = sessionTrack
         val durationMs = vm.duration.value
 
         // 单曲循环 / 自然重播：身份没变，但进度从尾部回到开头。
@@ -211,16 +214,15 @@ object StatsRecorder {
         // 采样点上已经是**新歌**的时长了，先更新再 [closeSession] 会拿新歌的时长去判
         // 上一首「听够了没有」（4 分钟的老歌听了 20 秒本来不算一次播放，
         // 而下一首恰好是 20 秒的间奏 ⇒ 会被误判成听满 80%）。
-        val restarted = key != null &&
-            key == sessionKey &&
+        val sameTrack = track == session?.key
+        val restarted = track != null && sameTrack &&
             pos < lastPosMs - RESTART_BACK_MS &&
             sessionDurationMs > 0L &&
             lastPosMs.toFloat() >= sessionDurationMs.toFloat() * NEAR_END_RATIO
 
-        if (key != sessionKey || restarted) {
+        if (!sameTrack || restarted) {
             closeSession(context)
-            sessionKey = key
-            sessionSourceKey = track?.source?.key ?: MusicSource.DEFAULT.key
+            sessionTrack = track?.let(::SessionTrack)
             sessionName = vm.currentSongName.value ?: ""
             sessionArtist = vm.currentSongArtist.value ?: ""
             sessionDurationMs = if (durationMs > 0L) durationMs else 0L
@@ -251,7 +253,7 @@ object StatsRecorder {
         lastPosMs = pos
         lastNowMs = now
 
-        if (delta <= 0L || key == null) return
+        if (delta <= 0L || session == null) return
 
         sessionListenedMs += delta
         // 时区在**采样那一刻**取：用户跨时区旅行时，只有当时那一段能被正确分桶
@@ -260,8 +262,8 @@ object StatsRecorder {
         StatsStore.addListen(
             context = context,
             slices = daySlicer.split(now - delta, now, zone),
-            songKey = key,
-            sourceKey = sessionSourceKey,
+            songKey = session.tag,
+            sourceKey = session.key.source.key,
             name = sessionName,
             artist = sessionArtist,
             durationMs = sessionDurationMs,
@@ -276,13 +278,13 @@ object StatsRecorder {
      * （切完就锁屏 / 退出），而「这一次播放」正是统计里最不容易重建的一个数。
      */
     private fun closeSession(context: Context) {
-        val key = sessionKey ?: return
+        val session = sessionTrack ?: return
         val counted = StatsMath.countsAsPlay(sessionListenedMs, sessionDurationMs)
-        sessionKey = null
+        sessionTrack = null
         sessionListenedMs = 0L
         sessionDurationMs = 0L
         if (counted) {
-            StatsStore.addPlay(context, key, sessionSourceKey)
+            StatsStore.addPlay(context, session.tag, session.key.source.key)
             StatsStore.flushSoon(context)
         }
     }
