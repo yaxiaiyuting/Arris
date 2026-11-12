@@ -15,7 +15,6 @@ import androidx.annotation.OptIn
 import com.takahashirinta.ncrust.bili.BiliCdn
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
@@ -184,12 +183,7 @@ object OfflineAudioCache {
 
     /** 对账只有成功枚举后才清理离线索引。失败返回 null。 */
     fun keysOrNull(context: Context): Set<String>? =
-        runCatching { get(context).keys.toSet() }.getOrNull()
-
-    /** 这首歌在缓存里的所有档位 key（按 SimpleCache 的枚举顺序）。 */
-    fun songKeys(context: Context, songId: Long): List<String> =
-        runCatching { get(context).keys.filter { OfflineKeys.songIdOf(it) == songId } }
-            .getOrDefault(emptyList())
+        runCatching { get(context).keys }.getOrNull()
 
     /** 用同一份缓存键快照测量列表中的歌曲占用。缺少可测片段时由界面显示未知大小。 */
     internal fun bytesBySong(context: Context, songIds: Set<Long>): Map<Long, Long> {
@@ -225,12 +219,12 @@ object OfflineAudioCache {
     fun removeSong(context: Context, songId: Long): Boolean {
         if (songId <= 0L) return false
         val app = context.applicationContext
-        // E01：缓存操作**失败**与「缓存里确实没有片段」不是一回事。
-        // 旧写法把异常折成 false 之后仍然继续，紧接着就把离线索引删了 ——
-        // 磁盘上字节还在、管理页里的条目却先消失（用户以为删干净了）。
         try {
             val c = get(app)
-            songKeys(app, songId).forEach(c::removeResource)
+            // 枚举和删除使用同一个错误边界，失败时保留离线索引。
+            for (key in c.keys) {
+                if (OfflineKeys.songIdOf(key) == songId) c.removeResource(key)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "removeSong failed, keep offline index: songId=$songId", e)
             return false
@@ -270,7 +264,7 @@ object OfflineAudioCache {
         // 否则两份索引先被清掉、字节却还在，管理页再也列不出这些文件（只能靠重装清）。
         val cleared = runCatching {
             val c = get(app)
-            c.keys.toList().forEach { c.removeResource(it) }
+            c.keys.forEach(c::removeResource)
             true
         }.getOrElse {
             Log.w(TAG, "clear failed, keep offline indexes", it)
