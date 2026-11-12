@@ -10,6 +10,7 @@ import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import com.takahashirinta.ncrust.warmup.AppWarmup
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
@@ -178,6 +179,26 @@ class SessionAndHomeBoundaryTest {
             assertEquals(202L, ContentCache.homeDailySongs!!.single().id)
             assertEquals(listOf(playlist), ContentCache.homeRecommendPlaylists)
         }
+    }
+
+    @Test fun homeWarmupBudgetReturnsCompletedSectionsWithoutCancellingSlowSection() = runBlocking {
+        val session = CookieManager.snapshot()
+        val daily = CompletableDeferred<List<SongItem>?>()
+        val playlist = PlaylistApi.PlaylistCard(303, "already warm", "", 0)
+        val loads = AppWarmup.HomeLoads(
+            daily = daily,
+            playlists = CompletableDeferred(listOf(playlist)),
+            newSongs = CompletableDeferred(listOf(homeSong(202))),
+            session = session,
+        )
+
+        val partial = loads.awaitWithin(30)
+        assertNull(partial.daily)
+        assertEquals(listOf(playlist), partial.playlists)
+        assertEquals(202L, partial.newSongs!!.single().id)
+        assertFalse(daily.isCancelled)
+        daily.complete(listOf(homeSong(101)))
+        assertEquals(101L, loads.awaitCompleted().daily!!.single().id)
     }
 
     private fun homeSong(id: Long) = SongItem(id, "fixture-$id", null, null, 200_000)

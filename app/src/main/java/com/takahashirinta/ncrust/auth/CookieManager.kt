@@ -24,6 +24,12 @@ object CookieManager {
     fun <T> ifCurrent(s: NeteaseSessionSnapshot, block: () -> T): T? = synchronized(guard) {
         guard.ifCurrent(s, block)
     }
+    internal fun <T> ifSameLogin(started: NeteaseSessionSnapshot, block: (NeteaseSessionSnapshot) -> T): T? =
+        synchronized(guard) {
+            val current = guard.snapshot()
+            if (current.loginGeneration == started.loginGeneration) block(current) else null
+        }
+
     fun advanceGeneration(context: Context) = synchronized(guard) {
         init(context)
         guard.replace(guard.snapshot().cookie)

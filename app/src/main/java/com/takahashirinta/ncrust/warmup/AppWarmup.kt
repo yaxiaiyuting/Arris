@@ -22,9 +22,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -49,18 +52,39 @@ object AppWarmup {
 
     /** 首页可短暂等待这一批同会话请求。为 null 时由首页自行加载。 */
     @Volatile
-    var homeLoads: HomeLoads? = null
+    internal var homeLoads: HomeLoads? = null
         private set
 
-    class HomeLoads(
-        val daily: Deferred<List<SongItem>?>,
-        val playlists: Deferred<List<PlaylistApi.PlaylistCard>?>,
-        val newSongs: Deferred<List<SongItem>?>,
+    internal class HomeLoads(
+        private val daily: Deferred<List<SongItem>?>,
+        private val playlists: Deferred<List<PlaylistApi.PlaylistCard>?>,
+        private val newSongs: Deferred<List<SongItem>?>,
         private val session: NeteaseSessionSnapshot,
-        val owner: String?,
     ) {
-        fun isCurrent(): Boolean = CookieManager.isCurrent(session) && CookieManager.accountOwner() == owner
+        fun belongsTo(other: NeteaseSessionSnapshot): Boolean = other.loginGeneration == session.loginGeneration
+
+        suspend fun awaitCompleted(): HomeData {
+            joinAll(daily, playlists, newSongs)
+            return completed()
+        }
+
+        suspend fun awaitWithin(timeoutMillis: Long): HomeData =
+            withTimeoutOrNull(timeoutMillis) { awaitCompleted() } ?: completed()
+
+        private suspend fun completed(): HomeData {
+            currentCoroutineContext().ensureActive()
+            return HomeData(daily.completedValue(), playlists.completedValue(), newSongs.completedValue())
+        }
+
+        private suspend fun <T> Deferred<T>.completedValue(): T? =
+            if (isCompleted && !isCancelled) await() else null
     }
+
+    internal data class HomeData(
+        val daily: List<SongItem>?,
+        val playlists: List<PlaylistApi.PlaylistCard>?,
+        val newSongs: List<SongItem>?,
+    )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var started = false
@@ -120,30 +144,76 @@ object AppWarmup {
 
     private suspend fun warmHomeData(app: Context) = coroutineScope {
         val session = CookieManager.snapshot()
-        val owner = CookieManager.accountOwner()
+        // 这些值随缓存一起在会话锁内发布，预热收尾一次落盘。
+        var warmedDaily: List<SongItem>? = null
+        var warmedPlaylists: List<PlaylistApi.PlaylistCard>? = null
+        var warmedNewSongs: List<SongItem>? = null
         val loads = HomeLoads(
-            daily = async { runCatchingCancellable { PlaylistApi.getDailyRecommendSongs() } },
-            playlists = async { runCatchingCancellable { PlaylistApi.getRecommendPlaylists() } },
-            newSongs = async { runCatchingCancellable { PlaylistApi.getTopSongs(limit = HOME_NEW_SONGS_LIMIT, offset = 0) } },
+            daily = warmSection(session, { ContentCache.homeDailySongs }, { PlaylistApi.getDailyRecommendSongs() }) { list ->
+                ContentCache.homeDailySongs = list
+                warmedDaily = list
+            },
+            playlists = warmSection(session, { ContentCache.homeRecommendPlaylists }, { PlaylistApi.getRecommendPlaylists() }) { list ->
+                ContentCache.homeRecommendPlaylists = list
+                warmedPlaylists = list
+            },
+            newSongs = warmSection(
+                session,
+                { ContentCache.homeNewSongs },
+                { PlaylistApi.getTopSongs(limit = HOME_NEW_SONGS_LIMIT, offset = 0) },
+            ) { list ->
+                ContentCache.homeNewSongs = list
+                warmedNewSongs = list
+            },
             session = session,
-            owner = owner,
         )
         homeLoads = loads
         try {
-            val daily = loads.daily.await()
-            val playlists = loads.playlists.await()
-            val newSongs = loads.newSongs.await()
-            CookieManager.ifCurrent(session) {
-                if (CookieManager.accountOwner() != owner) return@ifCurrent
-                ContentCache.bindOwner(owner)
-                daily?.let { ContentCache.homeDailySongs = it }
-                playlists?.let { ContentCache.homeRecommendPlaylists = it }
-                newSongs?.let { ContentCache.homeNewSongs = it }
-                if (daily != null && playlists != null && newSongs != null) ContentCache.markHomeWarmed()
-                HomeSnapshot.save(app, owner = owner, daily = daily, playlists = playlists, newSongs = newSongs)
+            val (daily, playlists, newSongs) = loads.awaitCompleted()
+            CookieManager.ifSameLogin(session) { live ->
+                if (ContentCache.ownerMatches(live.accountOwner) &&
+                    daily != null && playlists != null && newSongs != null &&
+                    ContentCache.homeDailySongs != null &&
+                    ContentCache.homeRecommendPlaylists != null &&
+                    ContentCache.homeNewSongs != null
+                ) {
+                    ContentCache.markHomeWarmed()
+                }
             }
         } finally {
+            CookieManager.ifSameLogin(session) { live ->
+                val owner = live.accountOwner
+                if (ContentCache.ownerMatches(owner)) {
+                    HomeSnapshot.save(
+                        app,
+                        owner = owner,
+                        daily = warmedDaily.takeIf { it === ContentCache.homeDailySongs },
+                        playlists = warmedPlaylists.takeIf { it === ContentCache.homeRecommendPlaylists },
+                        newSongs = warmedNewSongs.takeIf { it === ContentCache.homeNewSongs },
+                    )
+                }
+            }
             if (homeLoads === loads) homeLoads = null
+        }
+    }
+
+    private fun <T> CoroutineScope.warmSection(
+        session: NeteaseSessionSnapshot,
+        cached: () -> List<T>?,
+        fetch: suspend () -> List<T>,
+        publish: (List<T>) -> Unit,
+    ): Deferred<List<T>?> {
+        val before = cached()
+        return async {
+            val fetched = runCatchingCancellable { fetch() } ?: return@async null
+            val caller = currentCoroutineContext()
+            CookieManager.ifSameLogin(session) { live ->
+                caller.ensureActive()
+                ContentCache.bindOwner(live.accountOwner)
+                val latest = cached()
+                if (latest != null && latest !== before) latest
+                else fetched.also(publish)
+            }
         }
     }
 
