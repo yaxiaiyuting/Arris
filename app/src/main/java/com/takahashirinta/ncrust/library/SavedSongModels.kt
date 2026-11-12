@@ -157,11 +157,12 @@ object SavedSongSync {
         remoteSongs: Map<Long, SongItem>,
         now: Long,
     ): List<SavedSongEntry> {
-        val existing = LinkedHashMap<TrackKey, SavedSongEntry>(local.size * 2)
-        for (e in local) existing[e.trackKey] = e
-        val covered = remoteIds.toHashSet()
-
-        val out = LinkedHashMap<TrackKey, SavedSongEntry>(local.size + remoteIds.size)
+        val existing = HashMap<Long, SavedSongEntry>(local.size)
+        for (entry in local) {
+            if (entry.trackKey.source == MusicSource.NETEASE) existing[entry.trackKey.id] = entry
+        }
+        val covered = HashSet<Long>(minOf(existing.size, remoteIds.size))
+        val out = LinkedHashMap<TrackKey, SavedSongEntry>(local.size + remoteSongs.size)
 
         // ① 本地手动新增（可见）：保持原有相对顺序，永远排在最前。
         for (e in local) {
@@ -171,8 +172,8 @@ object SavedSongSync {
         // ② 云端顺序里可见的条目：已有条目按云端顺序重排（与既有行为逐字一致），
         //    云端有、本地没有且不在 tombstone 的在此追加（规则 1）。
         for (id in remoteIds) {
-            val key = TrackKey(MusicSource.NETEASE, id)
-            val cur = existing[key]
+            val cur = existing[id]
+            if (cur != null) covered.add(id)
             when {
                 // 规则 4：云端有 + 在 tombstone ⇒ 跳过（绝不复活）。
                 cur != null && cur.tombstoned -> Unit
@@ -189,10 +190,11 @@ object SavedSongSync {
                     // **载荷没变就原样返回同一个对象**：Compose 的稳定性（以及老测试里
                     // 「规则 2 不重建对象」的断言）都依赖这一点。只有云端确实带来了新字段
                     // （例如这次补出的 `originCoverType`）才重建 entry。
-                    out[key] = if (merged == cur.song) cur else cur.copy(song = merged)
+                    out[cur.trackKey] = if (merged == cur.song) cur else cur.copy(song = merged)
                 }
                 else -> {
                     val song = remoteSongs[id] ?: continue
+                    val key = TrackKey(MusicSource.NETEASE, id)
                     out[key] = SavedSongEntry(key, SavedSongOrigin.REMOTE, now, false, song)
                 }
             }
@@ -219,6 +221,10 @@ object SavedSongSync {
             .take(MAX_TOMBSTONES)
             .forEach { entry -> out.getOrPut(entry.trackKey) { entry } }
 
+        if (out.size == local.size) {
+            val previous = local.iterator()
+            if (out.values.all { it === previous.next() }) return local
+        }
         return out.values.toList()
     }
 

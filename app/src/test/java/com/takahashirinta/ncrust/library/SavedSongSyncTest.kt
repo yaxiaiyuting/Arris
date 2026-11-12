@@ -159,7 +159,9 @@ class SavedSongSyncTest {
         )
         val first = acc.map { it.trackKey.id }
         repeat(5) {
-            acc = merge(acc, listOf(3L, 1L), mapOf(3L to song(3L), 1L to song(1L)))
+            val merged = merge(acc, listOf(3L, 1L), mapOf(3L to song(3L), 1L to song(1L)))
+            assertSame(acc, merged)
+            acc = merged
             assertEquals("第 N 次 merge 改了顺序 —— 列表会每次刷新都抖一下", first, acc.map { it.trackKey.id })
         }
     }
