@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -72,6 +71,7 @@ object PlaybackStateManager {
     private var queueFlushJob: Job? = null
     private var queueGeneration = 0L
     private var queueEncoding: QueueEncoding? = null
+    private var shuffleFlushJob: Job? = null
     private var shuffleGeneration = 0L
 
     private class QueueEncoding(
@@ -484,27 +484,48 @@ object PlaybackStateManager {
         getPrefs(context).edit().putInt(KEY_PLAY_MODE, mode).apply()
     }
 
-    internal suspend fun saveShuffle(
+    /** 已接受的轮次写入由应用持有，播放器页面销毁后仍可保存。 */
+    internal fun saveShuffle(
         context: Context,
         order: List<Int>,
         position: Int,
         current: Int,
         queueKeys: () -> List<String>,
     ) {
-        val generation = synchronized(flushLock) { ++shuffleGeneration }
-        val json = withContext(Dispatchers.Default) {
-            val keys = queueKeys()
-            val snapshot = ShuffleSnapshot(keys, order, position)
-            if (snapshot.matches(keys, current)) gson.toJson(snapshot) else null
-        } ?: return
-        withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        synchronized(flushLock) {
+            val generation = ++shuffleGeneration
+            shuffleFlushJob?.cancel()
+            shuffleFlushJob = ioScope.launch {
+                flushShuffle(app, generation, order, position, current, queueKeys)
+            }
+        }
+    }
+
+    private suspend fun flushShuffle(
+        context: Context,
+        generation: Long,
+        order: List<Int>,
+        position: Int,
+        current: Int,
+        queueKeys: () -> List<String>,
+    ) {
+        try {
+            val json = withContext(Dispatchers.Default) {
+                val keys = queueKeys()
+                val snapshot = ShuffleSnapshot(keys, order, position)
+                if (snapshot.matches(keys, current)) gson.toJson(snapshot) else null
+            } ?: return
             val prefs = getPrefs(context)
             synchronized(flushLock) {
-                coroutineContext.ensureActive()
                 if (shuffleGeneration == generation) {
                     prefs.edit().putString(KEY_SHUFFLE, json).apply()
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 保留上一次已保存的轮次。
         }
     }
 
@@ -531,6 +552,8 @@ object PlaybackStateManager {
         synchronized(flushLock) {
             queueFlushJob?.cancel()
             queueFlushJob = null
+            shuffleFlushJob?.cancel()
+            shuffleFlushJob = null
             queueGeneration++
             shuffleGeneration++
             queueEncoding = null

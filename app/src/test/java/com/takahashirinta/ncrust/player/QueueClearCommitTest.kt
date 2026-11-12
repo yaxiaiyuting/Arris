@@ -127,24 +127,22 @@ class QueueClearCommitTest {
         val started = CountDownLatch(1)
         val resume = CountDownLatch(1)
         val caller = Thread.currentThread()
-        val older = launch {
-            manager.saveShuffle(context, listOf(2, 0, 1), 0, 2) {
-                assertNotSame(caller, Thread.currentThread())
-                started.countDown()
-                check(resume.await(4, TimeUnit.SECONDS))
-                keys
-            }
+        manager.saveShuffle(context, listOf(2, 0, 1), 0, 2) {
+            assertNotSame(caller, Thread.currentThread())
+            started.countDown()
+            check(resume.await(4, TimeUnit.SECONDS))
+            keys
         }
         try {
             withContext(Dispatchers.IO) { assertTrue(started.await(4, TimeUnit.SECONDS)) }
             manager.saveShuffle(context, listOf(2, 0, 1), 1, 0) { keys }
             resume.countDown()
-            older.join()
+            awaitWrites()
             assertEquals(ShuffleSnapshot(keys, listOf(2, 0, 1), 1), manager.restoreShuffle(context, queue, 0))
         } finally {
             resume.countDown()
-            older.join()
             manager.clearQueue(context)
+            awaitWrites()
         }
     }
 
@@ -155,10 +153,39 @@ class QueueClearCommitTest {
             val cleared = AtomicBoolean()
             context.beforePrefs = { manager.clearQueue(context); cleared.set(true) }
             manager.saveShuffle(context, listOf(0), 0, 0) { queue.map { QueueKeys.keyOf(it).tag } }
+            awaitWrites()
             assertTrue(cleared.get())
             assertNull(manager.restoreShuffle(context, queue, 0))
         } finally {
             manager.clearQueue(context)
+        }
+    }
+
+    @Test fun acceptedShuffleWriteOutlivesItsCaller() = runBlocking {
+        val context = MemoryContext()
+        val queue = listOf(song(1))
+        val keys = queue.map { QueueKeys.keyOf(it).tag }
+        val started = CountDownLatch(1)
+        val resume = CountDownLatch(1)
+        val caller = launch {
+            manager.saveShuffle(context, listOf(0), 0, 0) {
+                started.countDown()
+                check(resume.await(4, TimeUnit.SECONDS))
+                keys
+            }
+            awaitCancellation()
+        }
+        try {
+            withContext(Dispatchers.IO) { assertTrue(started.await(4, TimeUnit.SECONDS)) }
+            caller.cancelAndJoin()
+            resume.countDown()
+            awaitWrites()
+            assertEquals(ShuffleSnapshot(keys, listOf(0), 0), manager.restoreShuffle(context, queue, 0))
+        } finally {
+            resume.countDown()
+            caller.cancelAndJoin()
+            manager.clearQueue(context)
+            awaitWrites()
         }
     }
 }
