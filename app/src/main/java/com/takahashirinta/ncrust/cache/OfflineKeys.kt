@@ -80,8 +80,19 @@ object OfflineKeys {
     /** 从 key 里解出歌曲 id；解不出返回 null。 */
     fun songIdOf(key: String): Long? {
         val separator = qualitySeparator(key)
-        if (separator < 0) return null
-        return key.substring(SONG_PREFIX.length, separator).toLongOrNull()?.takeIf { it > 0L }
+        if (separator <= SONG_PREFIX.length) return null
+        val first = SONG_PREFIX.length
+        val start = if (key[first] == '+') first + 1 else first
+        var id = 0L
+        for (index in start until separator) {
+            val ch = key[index]
+            val digit = if (ch in '0'..'9') ch - '0' else Character.digit(ch, 10)
+            if (digit < 0 || id > Long.MAX_VALUE / 10 ||
+                (id == Long.MAX_VALUE / 10 && digit > Long.MAX_VALUE % 10)
+            ) return null
+            id = id * 10 + digit
+        }
+        return if (id > 0L) id else null
     }
 
     private fun qualitySeparator(key: String): Int {

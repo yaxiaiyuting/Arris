@@ -69,6 +69,10 @@ class OfflineKeysTest {
         assertNull(OfflineKeys.levelOf("song:123:"))
         assertEquals("lossless", OfflineKeys.levelOf("song:123:lossless~trial"))
         assertNull(OfflineKeys.songIdOf("song:123:lossless:extra"))
+        assertEquals(Long.MAX_VALUE, OfflineKeys.songIdOf("song:9223372036854775807:standard"))
+        assertNull(OfflineKeys.songIdOf("song:9223372036854775808:standard"))
+        assertEquals(123L, OfflineKeys.songIdOf("song:+٠١٢٣:standard"))
+        assertNull(OfflineKeys.songIdOf("song:-123:standard"))
     }
 
     @Test
