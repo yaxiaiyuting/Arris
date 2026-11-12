@@ -1163,8 +1163,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         progress.value = 0f
     }
 
-    fun resetPreloadFlag() { needsPreload.value = false }
-
     fun refreshGaplessSetting() {
         val prefs = getApplication<Application>().getSharedPreferences("ncrust_settings", 0)
         // v1.4.0：实验特性默认关闭；显式 true/false 保留，只影响从未设过这个键的设备。

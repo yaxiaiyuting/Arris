@@ -33,7 +33,6 @@ import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
-import com.takahashirinta.ncrust.network.model.ArtistAlbumItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
@@ -442,11 +441,7 @@ private fun confidenceLabel(c: MatchConfidence, s: Strings): String = when (c) {
 }
 
 /**
- * 聚合后的一张专辑（v2.4.0 · A）。
- *
- * 与旧的 `ArtistAlbumGridItem`（单源 `ArtistAlbumItem`）的区别就是本版要展示的东西：
- * **这张专辑在哪几个源上有、另一源有没有、为什么认为两源是同一张**。
- * 点它时必须把 `album.key` 的**音源与 id 一起**给出去 —— 否则 QQ 专辑会被当 ncm 打开。
+ * 展示专辑的可用音源及匹配依据。打开详情时同时传递音源和编号。
  */
 @Composable
 private fun AggregatedAlbumGridItem(
@@ -502,25 +497,6 @@ private fun AggregatedAlbumGridItem(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 6.dp)
             )
-        }
-        Spacer(Modifier.height(6.dp))
-    }
-}
-
-/**
- * v2.3.0 的单源专辑格子。**保留**：它是公开 API，且单源列表（搜索结果等）仍可能需要它。
- * 艺人页自 v2.4.0 起改用 [AggregatedAlbumGridItem]（它多带音源与匹配信息）。
- */
-@Composable
-fun ArtistAlbumGridItem(album: ArtistAlbumItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val strings = LocalStrings.current
-    Column(modifier = modifier.clickable { onClick() }) {
-        AsyncImage(model = CoverUrls.small(album.picUrl), contentDescription = strings.albumCoverDesc, modifier = Modifier.fillMaxWidth().aspectRatio(1f).appCoverFrame(shape = AppShapes.large), contentScale = ContentScale.Crop)
-        Spacer(Modifier.height(6.dp))
-        MetroText(album.name, color = LocalMetroColors.current.onBackground, style = LocalMetroTypography.current.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
-        album.publishTime?.let {
-            val year = java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault()).format(java.util.Date(it))
-            MetroText("$year · ${strings.trackCount(album.size ?: 0)}", color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
         }
         Spacer(Modifier.height(6.dp))
     }

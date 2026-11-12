@@ -43,10 +43,6 @@ object EqualizerPrefs {
 
     fun presetName(context: Context): String? = prefs(context).getString(KEY_PRESET, null)
 
-    fun setPresetName(context: Context, name: String) {
-        prefs(context).edit().putString(KEY_PRESET, name).apply()
-    }
-
     /** 读每段增益（mB）。没有存过就返回预设第一条（平直）。 */
     fun gains(context: Context): IntArray {
         val p = prefs(context)

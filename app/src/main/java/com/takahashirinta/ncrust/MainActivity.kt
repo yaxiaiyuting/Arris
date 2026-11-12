@@ -2157,10 +2157,7 @@ fun MainScreen(
     }
 
     // 无缝播放：当进入当前歌曲的最后 60 秒时，预取下一首的 URL 并加入 ExoPlayer 队列。
-    // NOTE: resetPreloadFlag() is intentionally NOT called here. Calling it resets the StateFlow
-    // to false, which lets the 250ms progress ticker re-set it to true immediately, causing
-    // preloadNextSong to be called every 250ms (each call cancelling the previous). The flag is
-    // cleared naturally by playSong() and onSongTransitioned.
+    // 切歌时重置预载信号。消费时保留信号，避免进度轮询反复取消并重启同一请求。
     LaunchedEffect(Unit) {
         playerViewModel.needsPreload.collect { needs ->
             if (!needs) return@collect

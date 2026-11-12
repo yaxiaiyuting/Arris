@@ -18,8 +18,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.outlined.Search
@@ -1170,46 +1168,6 @@ private fun SearchHistoryItemCard(
 // 留在这里（一个 Composable 文件里的 private 扩展）就只能靠真机点一遍看角标。
 private fun SearchHistoryManager.HistoryItem.toSongItem(): SongItem =
     SearchHistoryMigration.toSongItem(this)
-
-@Composable
-fun SongSearchItem(
-    song: SongItem,
-    onPlay: () -> Unit,
-    onAddToLibrary: () -> Unit,
-    onInsertNext: () -> Unit = {},
-    onAppendToQueue: () -> Unit = {}
-) {
-    val strings = LocalStrings.current
-    SongCard(
-        song = song,
-        style = SongCardStyle.LIST,
-        coverSize = 56.dp,
-        onClick = onPlay,
-        actions = {
-            MetroIconButton(onClick = onAddToLibrary) {
-                MetroIcon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = strings.actionAddToLibrary,
-                    tint = LocalMetroColors.current.onBackground,
-                )
-            }
-            MetroIconButton(onClick = onInsertNext) {
-                MetroIcon(
-                    imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
-                    contentDescription = strings.actionInsertNext,
-                    tint = LocalMetroColors.current.onBackground,
-                )
-            }
-            MetroIconButton(onClick = onAppendToQueue) {
-                MetroIcon(
-                    imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
-                    contentDescription = strings.actionAddToPlaylist,
-                    tint = LocalMetroColors.current.onBackground,
-                )
-            }
-        }
-    )
-}
 
 /**
  * 搜索结果列表底部的**分页状态行**（v3.4.11）。
