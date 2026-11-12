@@ -80,7 +80,6 @@ data class TrackPage(
     val merged: MergedTrack,
     val versions: List<AggregatedSong> = emptyList(),
     val preferredKey: TrackKey? = null,
-    val availabilityNote: String = "",
 )
 
 /**
@@ -271,11 +270,12 @@ object CatalogAggregator {
         }
 
         // ---- 可用性：两首各探一次 ----
-        val probed = runCatching { probe(versions.map { it.song }) }.getOrDefault(emptyMap())
+        val probed = runCatching { probe(versions.asSequence().map { it.song }) }.getOrDefault(emptyMap())
         val withAvail = versions.map { v ->
+            val availability = probed[TrackKey.fromSong(v.song)]
             v.copy(
-                availability = probed[TrackKey.fromSong(v.song)] ?: TrackAvailability.UNKNOWN,
-                availabilityReason = if (probed.containsKey(TrackKey.fromSong(v.song))) "预检" else "未探测",
+                availability = availability ?: TrackAvailability.UNKNOWN,
+                availabilityReason = if (availability != null) "预检" else "未探测",
             )
         }
 
@@ -289,11 +289,6 @@ object CatalogAggregator {
             merged = mergedTrack,
             versions = withAvail,
             preferredKey = preferred?.let { TrackKey.fromSong(it.song) },
-            availabilityNote = availabilityNote(
-                withAvail.groupingBy { it.song.musicSource }.eachCount()
-                    .filterValues { it > 0 }.mapValues { it.value },
-                withAvail.groupingBy { it.song.musicSource }.eachCount(),
-            ),
         )
     }
 
@@ -388,7 +383,7 @@ object CatalogAggregator {
         neSongs: List<SongItem>,
         qqSongs: List<SongItem>,
     ): Triple<List<AggregatedSong>, Map<MusicSource, Int>, Map<MusicSource, Int>> {
-        val probed = runCatching { probe(neSongs + qqSongs) }.getOrDefault(emptyMap())
+        val probed = runCatching { probe(neSongs.asSequence() + qqSongs.asSequence()) }.getOrDefault(emptyMap())
         return assembleSongsWithProbe(neSongs, qqSongs, probed)
     }
 
@@ -406,7 +401,7 @@ object CatalogAggregator {
     ): Triple<List<AggregatedSong>, Map<MusicSource, Int>, Map<MusicSource, Int>> {
         val rows = ArrayList<AggregatedSong>(neSongs.size + qqSongs.size)
 
-        val pairs = CrossSourceMatcher.pairTracks(
+        val pairs = if (neSongs.isEmpty() || qqSongs.isEmpty()) emptyList() else CrossSourceMatcher.pairTracks(
             anchor = neSongs.map { trackCandidateOf(it) },
             other = qqSongs.map { trackCandidateOf(it) },
         )
@@ -414,60 +409,65 @@ object CatalogAggregator {
         //   第一版把「配上了但置信度不够」的也算进去，结果是：一首 LOW 匹配的 QQ 曲目
         //   既没有作为合并结果出现、也没有作为独立行出现 —— **凭空少了一首歌**。
         //   那正是铁律 17 要防的反面：匹配不确定时应该「分开展示」，而不是「消失」。
-        val mergeablePairs = pairs.filter { it.verdict.mergeable }
         val pairByNe = pairs.associateBy { it.anchor.key }
-        val absorbedQq = mergeablePairs.map { it.other.key }.toHashSet()
-        val qqByKey = qqSongs.associateBy { TrackKey.fromSong(it) }
+        val absorbedQq = pairs.mapNotNullTo(HashSet(pairs.size)) { pair ->
+            pair.other.key.takeIf { pair.verdict.mergeable }
+        }
+        val qqByKey = if (absorbedQq.isEmpty()) emptyMap() else qqSongs.associateBy { TrackKey.fromSong(it) }
 
         for (s in neSongs) {
             val key = TrackKey.fromSong(s)
             val pair = pairByNe[key]
             val mergeable = pair?.verdict?.mergeable == true
             val otherKey = pair?.other?.key
-            val otherAvailability = otherKey?.let { probed[it] } ?: TrackAvailability.UNKNOWN
-            val selfAvailability = probed[key] ?: TrackAvailability.UNKNOWN
+            val otherAvailability = otherKey?.let { probed[it] }
+            val selfAvailability = probed[key]
 
             // ★ 合并之后「这一行放哪一源的哪一首」由**可播放性**决定（特性 D 的核心）：
             //   ncm 无版权、QQ 能播时，这一行的 `song` 必须是 QQ 那一首 ——
             //   否则界面上标着「可播放」、点下去播的还是那个播不了的版本。
             //   平级时保持主源（用户是从主源进来的）。
-            val preferOther = mergeable && otherKey != null &&
-                CrossSourceMatcher.availabilityOrder(otherAvailability) <
-                CrossSourceMatcher.availabilityOrder(selfAvailability) &&
-                qqByKey.containsKey(otherKey)
-
-            val displaySong = if (preferOther) qqByKey.getValue(otherKey!!) else s
-            val displayKey = TrackKey.fromSong(displaySong)
-            val displayAvailability = if (preferOther) otherAvailability else selfAvailability
+            val alternative = if (mergeable && otherKey != null &&
+                CrossSourceMatcher.availabilityOrder(otherAvailability ?: TrackAvailability.UNKNOWN) <
+                CrossSourceMatcher.availabilityOrder(selfAvailability ?: TrackAvailability.UNKNOWN)
+            ) qqByKey[otherKey] else null
+            val displayAvailability = if (alternative != null) otherAvailability else selfAvailability
             val otherKeys = when {
                 !mergeable -> emptyList()
-                preferOther -> listOf(key)
+                alternative != null -> listOf(key)
                 else -> listOfNotNull(otherKey)
             }
             rows += AggregatedSong(
-                song = displaySong,
-                availability = displayAvailability,
+                song = alternative ?: s,
+                availability = displayAvailability ?: TrackAvailability.UNKNOWN,
                 confidence = pair?.verdict?.confidence ?: MatchConfidence.NONE,
                 matchReason = pair?.verdict?.reason.orEmpty(),
                 mergedKeys = otherKeys,
-                availabilityReason = if (probed.containsKey(displayKey)) "预检" else "未探测",
+                availabilityReason = if (displayAvailability != null) "预检" else "未探测",
             )
         }
         for (s in qqSongs) {
             val key = TrackKey.fromSong(s)
             if (key in absorbedQq) continue // 已经作为 ncm 那一行的合并结果出现
+            val availability = probed[key]
             rows += AggregatedSong(
                 song = s,
-                availability = probed[key] ?: TrackAvailability.UNKNOWN,
+                availability = availability ?: TrackAvailability.UNKNOWN,
                 mergedKeys = emptyList(),
-                availabilityReason = if (probed.containsKey(key)) "预检" else "未探测",
+                availabilityReason = if (availability != null) "预检" else "未探测",
             )
         }
 
         val ranked = CrossSourceMatcher.rankByAvailability(rows) { it.availability }
-        val playable = ranked.filter { it.availability == TrackAvailability.PLAYABLE }
-            .groupingBy { it.song.musicSource }.eachCount()
-        val totals = ranked.groupingBy { it.song.musicSource }.eachCount()
+        val playable = LinkedHashMap<MusicSource, Int>()
+        val totals = LinkedHashMap<MusicSource, Int>()
+        for (row in ranked) {
+            val source = row.song.musicSource
+            totals[source] = (totals[source] ?: 0) + 1
+            if (row.availability == TrackAvailability.PLAYABLE) {
+                playable[source] = (playable[source] ?: 0) + 1
+            }
+        }
         return Triple(ranked, playable, totals)
     }
 
@@ -513,8 +513,8 @@ object CatalogAggregator {
 
     // ================================================================== IO ==================================================================
 
-    private suspend fun probe(songs: List<SongItem>): Map<TrackKey, TrackAvailability> {
-        val limited = songs.distinctBy { TrackKey.fromSong(it) }.take(PROBE_LIMIT)
+    private suspend fun probe(songs: Sequence<SongItem>): Map<TrackKey, TrackAvailability> {
+        val limited = songs.distinctBy { TrackKey.fromSong(it) }.take(PROBE_LIMIT).toList()
         if (limited.isEmpty()) return emptyMap()
         val ne = runCatching { NeteaseAvailabilityApi.probeAvailability(limited) }
             .onFailure { Log.w(TAG, "netease probe failed", it) }.getOrDefault(emptyMap())
