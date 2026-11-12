@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 yaxiaiyuting. Arris fork modification, GPL-3.0. */
 package com.takahashirinta.ncrust.player
 
+import androidx.media3.common.Player
 import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.MusicSource
 
@@ -24,3 +25,7 @@ internal fun admitPreload(generationCurrent: Boolean, owner: TrackKey?, playing:
 
 /** The VM and Service share the same epoch, including commands waiting in Android's queue. */
 internal val playRequestGeneration = com.takahashirinta.ncrust.ui.viewmodel.PlayRequestGate()
+
+/** Active audio may outlive the activity task, including a track still buffering. */
+internal fun hasActivePlaybackIntent(playWhenReady: Boolean, state: Int, hasItem: Boolean): Boolean =
+    playWhenReady && hasItem && (state == Player.STATE_READY || state == Player.STATE_BUFFERING)

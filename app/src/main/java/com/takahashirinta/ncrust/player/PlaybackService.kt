@@ -1954,9 +1954,9 @@ class PlaybackService : MediaLibraryService() {
             .onFailure { Log.w("PlaybackService", "play() rejected: ${it.message}") }
     }
 
-    private fun hasActivePlaybackIntent(): Boolean =
-        player.playWhenReady && player.currentMediaItem != null &&
-            (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)
+    private fun hasActivePlaybackIntent(): Boolean = hasActivePlaybackIntent(
+        player.playWhenReady, player.playbackState, player.currentMediaItem != null,
+    )
 
     internal fun onUiBackgrounding() {
         if (!hasActivePlaybackIntent()) return
@@ -2390,6 +2390,13 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        if (hasActivePlaybackIntent()) {
+            if (!isServiceStarted) updateNotify()
+            if (isServiceStarted) {
+                Log.i("PlaybackService", "Activity task removed, retaining active media playback")
+                return
+            }
+        }
         Log.d("PlaybackService", "onTaskRemoved")
         isServiceStarted = false
         bufferProgressJob?.cancel()
