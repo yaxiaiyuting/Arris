@@ -1,0 +1,10 @@
+{
+  "tests": 3600,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 13,
+  "lint": {
+    "errors": 0,
+    "warnings": 90
+  }
+}

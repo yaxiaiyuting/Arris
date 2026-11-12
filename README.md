@@ -10,8 +10,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.0.19--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-10.08%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.1.2--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-10.21%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -36,6 +36,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.1.2** | 2026-11-12 | 均衡器预设可导入导出 JSON，音质分开曲库缺档与权限受限，无缝播放提前取链并预缓冲下一首 |
 | **4.1.0** | 2026-11-10 | 均衡器独立面板随播放器打开，波形跟随系统音量，界面律动可单独开关，新装走三步引导 |
 | **LTS 3.7.37** | 2026-11-10 | 主线这一轮的均衡器、波形音量、律动开关与首次引导同步回移，入口在播放器顶栏 |
 | **LTS 3.7.36** | 2026-11-10 | Android 7 起可打开日推歌单，修复 QQ 音乐扫码会话和离线榜单显示 |
@@ -388,10 +389,11 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 ---
 
-### 🟢 主线 4.0.x（`minSdk 29`）
+### 🟢 主线 4.x（`minSdk 29`）
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.1.2-gpl | 2026-11-12 | **均衡器预设导入/导出 JSON**（校验格式版本、十段频率与增益；同名不同曲线保留两份）；音质分开曲库缺档、权限受限与未知；前后台交接保留媒体前台服务并按原曲断点恢复；无缝接续提前取链、下一首开头预缓冲 12 秒、封面与音频并行。4.1.1 为内部测试包，未单独发布 |
 | v4.1.0-gpl | 2026-11-10 | **均衡器改为独立面板**（播放器顶栏入口，横竖屏与跟唱页可达，不再遮 16 kHz 滑杆）；波形跟随媒体音量；界面律动与动效强度解耦；首次启动引导 |
 | v4.0.19-gpl | 2026-11-09 | 日推歌单、系统声音识曲、识曲会话校验、首页层次和底栏跟手 |
 | v4.0.15-gpl | 2026-11-07 | 哑光播放界面、切歌封面交接、五个主界面标签可左右滑动，致谢新增 quit |
