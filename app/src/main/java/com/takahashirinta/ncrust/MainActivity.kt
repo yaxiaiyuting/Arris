@@ -1724,7 +1724,7 @@ fun MainScreen(
                     }
                 }
             }
-            PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+            PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
         }
         if (currentSong?.let { QueueKeys.keyOf(it) == vmKey } == true) return@LaunchedEffect
         val found = playbackQueue.getOrNull(mapped)
@@ -1914,7 +1914,7 @@ fun MainScreen(
                         roomGeneration = roomSnapshot?.followGeneration,
                         startPlaying = roomSnapshot?.playing ?: true,
                     )
-                    PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+                    PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
 
                     // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
                     // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
@@ -2072,7 +2072,7 @@ fun MainScreen(
                 } else {
                     currentQueueIndex = 0
                     currentSong = playbackQueue.firstOrNull()
-                    PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+                    PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
                     playerViewModel.pausePlayback()
                 }
             }
@@ -2282,7 +2282,7 @@ fun MainScreen(
                 "mapped=$mapped resolved=$nextIndex mode=$playMode",
         )
         currentSong = playbackQueue.getOrNull(currentQueueIndex)
-        PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
+        PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
         currentSong?.id?.let { playerViewModel.fetchLyricsForSong(it) }
 
         // Immediately start preloading the song after this one.
