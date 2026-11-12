@@ -1514,11 +1514,7 @@ fun MainScreen(
         playlistSnapshot
     }
     var currentQueueIndex by remember { mutableIntStateOf(-1) }
-    var songTransitioned by remember { mutableStateOf(false) }
-    // 本次过渡是不是 ExoPlayer 自然衔接（AUTO）。手动 setMediaItem / 系统媒体控件与车机
-    // 经 media3 会话 seek 过来的过渡不是 AUTO，那时应用队列本身并没有推进，索引只能按
-    // 实际在播 identity 回查，不能拿「模式推断的下一首」兜底。
-    var transitionIsAuto by remember { mutableStateOf(false) }
+    var pendingSongTransition by remember { mutableStateOf<Boolean?>(null) }
     // 续播（launchInfinity）在途时当前歌刚好播完：起播意图先记下来，由在途任务完成后起播。
     // 声明必须早于 playFromQueue —— 用户在队列里点歌会清掉它（点歌优先于续播）。
     val infinityNeedsPlay = remember { mutableStateOf(false) }
@@ -2128,21 +2124,6 @@ fun MainScreen(
         }
     }
 
-    // Natural completion also advances the queue when the window is stopped.
-    val onNaturalEnd by rememberUpdatedState<() -> Unit>({ playNext(PlayOrigin.AUTO_NEXT) })
-    LaunchedEffect(playerViewModel) {
-        playerViewModel.setOnSongNextCallback { playNext(PlayOrigin.USER) }
-        playerViewModel.setOnSongPreviousCallback { playPrevious() }
-        playerViewModel.setOnSongEndedCallback { onNaturalEnd() }
-        playerViewModel.setOnSongTransitionedCallback { auto ->
-            transitionIsAuto = auto
-            songTransitioned = true
-        }
-        // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
-        // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
-        playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
-    }
-
     // Editing a queue does not re-emit needsPreload=true, and consuming the flag once per song
     // would leave the new "next" track unpreloaded until the following song. Re-plan on every
     // queue/mode change: preloadNextSong already dedupes and honours the gapless setting.
@@ -2189,27 +2170,20 @@ fun MainScreen(
         }
     }
 
-    // 无缝播放 / 系统切歌：ExoPlayer 切换曲目后，同步队列索引和歌词。
-    //
-    // 索引**先按实际在播 identity 回查**（TrackKey），模式推断只在「拿不到身份」时兜底：
-    // 非自然衔接（手动 setMediaItem / 系统媒体控件 / 车机 seek）时应用队列没有推进，
-    // 拿模式推断的下一首兜底等于凭空推进一格。能按身份对上就对齐；对不上
-    // （车机塞进来的队列外歌曲）保持原索引不动。
-    LaunchedEffect(songTransitioned) {
-        if (!songTransitioned) return@LaunchedEffect
-        songTransitioned = false
-        if (queueStartActions.hasPending) return@LaunchedEffect
-        if (playbackQueue.isEmpty()) return@LaunchedEffect
-
+    // Automatic completion and media buttons can arrive before a stopped window recomposes.
+    fun reconcilePendingSongTransition(): Boolean {
+        val auto = pendingSongTransition ?: return false
+        pendingSongTransition = null
+        if (queueStartActions.hasPending || playbackQueue.isEmpty()) return false
         val actualKey = playerViewModel.currentTrackKey
         val mapped = PlaybackQueueLogic.indexOfKey(playbackQueue, actualKey)
-        if (!transitionIsAuto && mapped < 0) {
+        if (!auto && mapped < 0) {
             Log.d(
                 "MainScreen",
                 "non-auto transition key=${actualKey?.tag ?: "none"} not in queue, " +
                     "keep index=$currentQueueIndex (no mode inference)",
             )
-            return@LaunchedEffect
+            return false
         }
 
         val nextIndex: Int
@@ -2243,7 +2217,7 @@ fun MainScreen(
                 "MainScreen",
                 "auto transition key=${actualKey.tag} not in queue, keep index=$currentQueueIndex",
             )
-            return@LaunchedEffect
+            return false
         } else {
             // 拿不到身份（老形状 / 无 id 项）才退回模式推断。保留本轮 random 语义：
             // 轮末必须开新一轮并跳过下标 0，不能回绕重播当前曲。
@@ -2280,11 +2254,38 @@ fun MainScreen(
 
         Log.d(
             "MainScreen",
-            "transition(auto=$transitionIsAuto) key=${actualKey?.tag ?: "none"} " +
+            "transition(auto=$auto) key=${actualKey?.tag ?: "none"} " +
                 "mapped=$mapped resolved=$nextIndex mode=$playMode",
         )
         currentSong = playbackQueue.getOrNull(currentQueueIndex)
         PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
+        return true
+    }
+
+    val onNaturalEnd by rememberUpdatedState<() -> Unit>({
+        if (!queueStartActions.hasPending) {
+            reconcilePendingSongTransition()
+            playNext(PlayOrigin.AUTO_NEXT)
+        }
+    })
+    LaunchedEffect(playerViewModel) {
+        playerViewModel.setOnSongNextCallback {
+            reconcilePendingSongTransition()
+            playNext(PlayOrigin.USER)
+        }
+        playerViewModel.setOnSongPreviousCallback {
+            reconcilePendingSongTransition()
+            playPrevious()
+        }
+        playerViewModel.setOnSongEndedCallback { onNaturalEnd() }
+        playerViewModel.setOnSongTransitionedCallback { auto -> pendingSongTransition = auto }
+        // v2.2.1 · P0：这条回调是「这首歌确实取不到链」的自动跳歌入口，
+        // 必须带 AUTO_NEXT，否则 5 次上限永远数不到（用户报的「一直切」）。
+        playerViewModel.setOnUnplayableCallback { playNext(PlayOrigin.AUTO_NEXT) }
+    }
+
+    LaunchedEffect(pendingSongTransition) {
+        if (!reconcilePendingSongTransition()) return@LaunchedEffect
         currentSong?.id?.let { playerViewModel.fetchLyricsForSong(it) }
 
         // Immediately start preloading the song after this one.
