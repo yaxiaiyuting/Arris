@@ -31,11 +31,14 @@ import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.TrackKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,7 +130,6 @@ object LibraryManager {
     }
 
     @Volatile private var cachedLikedIds: LikedIds? = null
-    private val idsLock = Any()
 
     /**
      * 分页游标：cachedLikedIds 中**已被消费（已请求过详情）的前缀长度**（Bug2-①）。
@@ -197,7 +199,7 @@ object LibraryManager {
     private fun ensureLikedIdsLoaded(context: Context): LikedIds {
         val current = cachedLikedIds
         if (current != null) return current
-        return synchronized(idsLock) {
+        return synchronized(songsLock) {
             cachedLikedIds ?: run {
                 val parsed = runCatching {
                     val json = prefs(context).getString(KEY_LIKED_IDS, null)
@@ -256,9 +258,8 @@ object LibraryManager {
         synchronized(flushLock) {
             val ctx = pendingAppContext ?: return
             pendingAppContext = null
-            val songsSnapshot = synchronized(songsLock) { savedSongs }
+            val (songsSnapshot, likedIdsSnapshot) = synchronized(songsLock) { savedSongs to cachedLikedIds }
             val albumsSnapshot = synchronized(albumsLock) { cachedAlbums }
-            val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds }
             runCatching {
                 val editor = prefs(ctx).edit()
                 songsSnapshot?.let { editor.putString(KEY_SONGS, it.encoded) }
@@ -479,24 +480,18 @@ object LibraryManager {
             return SavedSongOutcome.REJECTED
         }
         val key = TrackKey.ofSong(song)
-        val changed: Boolean
-        synchronized(songsLock) {
+        val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.addManual(before, song, System.currentTimeMillis())
-            changed = after !== before
-            if (changed) savedSongs = SavedSongTable(after)
+            if (after === before) return@synchronized false
+            savedSongs = SavedSongTable(after)
+            if (key.source == MusicSource.NETEASE) {
+                val ids = ensureLikedIdsLoaded(context)
+                if (key.id !in ids) cachedLikedIds = LikedIds(listOf(key.id) + ids.ordered)
+            }
+            true
         }
         if (changed) {
-            // 4.0.11：底表与已加载表是两份缓存，[isSongSaved] 以底表为真源 ⇒ 乐观写必须同时动，
-            // 否则刷新前判定读到的还是旧底表（issue #33）。新收藏插头部，与云端「最新在前」一致。
-            if (key.source == MusicSource.NETEASE) {
-                synchronized(idsLock) {
-                    val ids = cachedLikedIds
-                    if (ids == null || key.id !in ids) {
-                        cachedLikedIds = LikedIds(listOf(key.id) + ids?.ordered.orEmpty())
-                    }
-                }
-            }
             // K05：表真的换了 ⇒ 先推进修订（**在锁外**），再排队落盘。订阅方（播放器红心）
             // 此刻去查 [isSongSaved] 一定拿到新值，不需要等 300ms 去抖之后的磁盘写。
             bumpSavedRevision()
@@ -522,22 +517,18 @@ object LibraryManager {
                     .mapTo(HashSet(before.size)) { it.trackKey }
                 savedSongs = SavedSongTable(after)
                 added += newSongs.filter { TrackKey.ofSong(it) !in visibleBefore }
+                val ncmIds = added.mapNotNull {
+                    val key = TrackKey.ofSong(it)
+                    if (key.source == MusicSource.NETEASE) key.id else null
+                }
+                if (ncmIds.isNotEmpty()) {
+                    val ids = ensureLikedIdsLoaded(context)
+                    val fresh = ncmIds.filterNot { it in ids }
+                    if (fresh.isNotEmpty()) cachedLikedIds = LikedIds(fresh + ids.ordered)
+                }
             }
         }
         if (added.isNotEmpty()) {
-            // 4.0.11：批量收藏同样要动底表（同上）。
-            val ncmIds = added.mapNotNull {
-                val key = TrackKey.ofSong(it)
-                if (key.source == MusicSource.NETEASE) key.id else null
-            }
-            if (ncmIds.isNotEmpty()) {
-                synchronized(idsLock) {
-                    val ids = cachedLikedIds?.ordered.orEmpty()
-                    val known: Collection<Long> = if (ncmIds.size == 1) ids else ids.toHashSet()
-                    val fresh = ncmIds.filterNot(known::contains)
-                    if (fresh.isNotEmpty()) cachedLikedIds = LikedIds(fresh + ids)
-                }
-            }
             // K05：只有**可见表真的多了条目**才推进修订。
             bumpSavedRevision()
             flushNow(context)
@@ -558,26 +549,20 @@ object LibraryManager {
         // 调用点传的是裸 `song.id`（SongItem 的 id 自带 bit62 标志），
         // 所以音源可以直接从 id 推出来，不需要额外参数。
         val key = TrackKey.of(null, songId)
-        val changedInSongs: Boolean
-        synchronized(songsLock) {
+        val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.remove(before, key)
-            changedInSongs = after !== before
+            val changedInSongs = after !== before
             if (changedInSongs) savedSongs = SavedSongTable(after)
-        }
-        // 4.0.11：歌在**底表**但不在已加载页时（issue #33 的典型场景），只清已加载表会：
-        // ① isSongSaved 仍返回 true（白心不灭）；② 连取消收藏的云端写都不发。
-        val changedInIds: Boolean
-        if (key.source == MusicSource.NETEASE) {
-            synchronized(idsLock) {
+            // 未加载详情的网易云收藏也能直接取消。
+            val changedInIds = if (key.source == MusicSource.NETEASE) {
                 val ids = ensureLikedIdsLoaded(context)
-                changedInIds = ids.contains(key.id)
-                if (changedInIds) cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
-            }
-        } else {
-            changedInIds = false
+                val present = key.id in ids
+                if (present) cachedLikedIds = LikedIds(ids.ordered.filterNot { it == key.id })
+                present
+            } else false
+            changedInSongs || changedInIds
         }
-        val changed = changedInSongs || changedInIds
         if (changed) {
             // K05：取消收藏同样是一次真表变更（tombstone），红心必须跟着灭。
             bumpSavedRevision()
@@ -731,7 +716,7 @@ object LibraryManager {
                 is PlaylistApi.LikedIdsResult.Success -> {
                     val likedIds = likedResult.ids
                     Log.i(TAG, "refreshFromCloud: likedIds=${likedIds.size}")
-                    synchronized(idsLock) { cachedLikedIds = LikedIds(likedIds) }
+                    synchronized(songsLock) { cachedLikedIds = LikedIds(likedIds) }
                     val firstBatch = if (likedIds.size > LIKED_BATCH_SIZE) likedIds.take(LIKED_BATCH_SIZE) else likedIds
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
@@ -861,46 +846,61 @@ object LibraryManager {
     /** 同 [loadAllLikedSongs]，但额外返回「云端取不到详情」的 id，供 UI 做部分反馈。 */
     suspend fun loadAllLikedSongsResult(context: Context): LikedPlayAllSelection =
         withContext(Dispatchers.IO) {
-            val allIds = getLikedSongIds(context)
+            val (initialIds, initialEntries) = synchronized(songsLock) {
+                ensureLikedIdsLoaded(context) to ensureSongsLoaded(context).entries
+            }
             val tombstoned = HashSet<Long>()
             val byId = HashMap<Long, SongItem>()
-            val localEntries = synchronized(songsLock) {
-                val entries = ensureSongsLoaded(context).entries
-                for (entry in entries) {
-                    if (entry.trackKey.source != MusicSource.NETEASE) continue
-                    val id = entry.trackKey.id
-                    if (entry.tombstoned) tombstoned.add(id) else byId[id] = entry.song
-                }
-                entries
+            for (entry in initialEntries) {
+                if (entry.trackKey.source != MusicSource.NETEASE) continue
+                val id = entry.trackKey.id
+                if (entry.tombstoned) tombstoned.add(id) else byId[id] = entry.song
             }
-            val missing = allIds.asSequence().filterNotNull()
+            val missing = initialIds.ordered.asSequence().filterNotNull()
                 .filter { it !in tombstoned && it !in byId }.distinct().toList()
             for (start in missing.indices step PLAY_ALL_BATCH_SIZE) {
                 val batch = missing.subList(start, minOf(start + PLAY_ALL_BATCH_SIZE, missing.size))
                 val fetched = try {
                     PlaylistApi.getSongsByIds(batch)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "loadAllLikedSongs batch failed: ${e.message}")
                     emptyList()
                 }
-                // 去重：同 id 覆盖写入，不会产生重复项。
-                for (s in fetched) byId[s.id] = s
                 if (fetched.isNotEmpty()) {
-                    synchronized(songsLock) {
+                    val caller = currentCoroutineContext()
+                    val changed = synchronized(songsLock) {
+                        caller.ensureActive()
+                        val currentIds = ensureLikedIdsLoaded(context)
+                        val accepted = if (currentIds === initialIds) fetched else fetched.filter { it.id in currentIds }
                         val before = ensureSongsLoaded(context).entries
-                        val after = SavedSongSync.appendRemote(before, fetched, System.currentTimeMillis())
+                        val after = SavedSongSync.appendRemote(before, accepted, System.currentTimeMillis())
                         if (after !== before) savedSongs = SavedSongTable(after)
+                        after !== before
                     }
-                    // K05：这一批真的补进了表 —— 推进修订（锁外），红心与新库页同时刷新。
-                    bumpSavedRevision()
+                    if (changed) bumpSavedRevision()
                 }
                 if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
             }
-            val latest = synchronized(songsLock) { savedSongs?.entries } ?: localEntries
+            val (currentIds, currentEntries) = synchronized(songsLock) {
+                ensureLikedIdsLoaded(context) to ensureSongsLoaded(context).entries
+            }
+            val queueIds = if (currentIds === initialIds) initialIds.ordered else {
+                initialIds.ordered.asSequence().filterNotNull().filter { it in currentIds }.toList()
+            }
+            if (currentEntries !== initialEntries) {
+                tombstoned.clear()
+                for (entry in currentEntries) {
+                    if (entry.tombstoned && entry.trackKey.source == MusicSource.NETEASE) {
+                        tombstoned.add(entry.trackKey.id)
+                    }
+                }
+            }
             selectLikedPlayAll(
-                localVisible = latest,
-                cloudIds = allIds,
-                details = byId,
+                localVisible = currentEntries,
+                cloudIds = queueIds,
+                details = if (currentEntries === initialEntries) byId else emptyMap(),
                 tombstoned = tombstoned,
             )
         }

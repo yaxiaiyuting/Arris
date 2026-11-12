@@ -26,6 +26,11 @@ import okhttp3.Protocol
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
 import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -97,6 +102,22 @@ class LibraryBoundaryRegressionTest {
         assertEquals(setOf(101L, 202L), remaining.toSet())
     }
 
+    @Test fun coldSingleAndBatchWritesPreserveUnreadLikedIds() {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        prefs.edit().putString("liked_ids", "[101,null,202]").commit()
+
+        assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(303)))
+        stopFlush()
+        writeSnapshot()
+        assertEquals("[303,101,null,202]", prefs.getString("liked_ids", null))
+
+        resetLibrary()
+        LibraryManager.saveSongs(ctx, listOf(song(404), song(505)))
+        stopFlush()
+        writeSnapshot()
+        assertEquals("[404,505,303,101,null,202]", prefs.getString("liked_ids", null))
+    }
+
     @Test fun firstAlbumMutationUpdatesTrueSource() {
         val p = ctx.getSharedPreferences("ncrust_library", 0)
         p.edit().putString("saved_albums", SavedAlbumCodec.encode(listOf(album(101)))).commit()
@@ -152,6 +173,36 @@ class LibraryBoundaryRegressionTest {
         assertEquals(listOf(101L), result.songs.map { it.id })
         assertEquals(1, result.cloudCount)
         assertTrue(result.missingCloudIds.isEmpty())
+    }
+
+    @Test fun playAllHonorsRemovalsWhileSongDetailsAreInFlight() = runBlocking {
+        val prefs = ctx.getSharedPreferences("ncrust_library", 0)
+        val saved = SavedSongCodec.encode(SavedSongSync.addManual(emptyList(), song(101), 1L))
+        prefs.edit().putString("saved_songs", saved).putString("liked_ids", "[101,202,303]").commit()
+        val requested = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        intercept(RetrofitClient, "plainClient") { request ->
+            check(request.url.encodedPath.endsWith("/v3/song/detail"))
+            requested.complete(Unit)
+            check(release.await(5, TimeUnit.SECONDS))
+            """{"code":200,"songs":[{"id":202,"name":"fixture-202","dt":200000},{"id":303,"name":"fixture-303","dt":200000}]}"""
+        }
+
+        val loading = async { LibraryManager.loadAllLikedSongsResult(ctx) }
+        try {
+            withTimeout(5_000) { requested.await() }
+            assertTrue(LibraryManager.removeSong(ctx, 101))
+            assertTrue(LibraryManager.removeSong(ctx, 202))
+        } finally {
+            release.countDown()
+        }
+
+        val result = loading.await()
+        assertEquals(listOf(303L), result.songs.map { it.id })
+        assertEquals(1, result.cloudCount)
+        assertTrue(result.missingCloudIds.isEmpty())
+        assertEquals(listOf(303L), LibraryManager.getSavedSongs(ctx).map { it.id })
+        assertFalse(LibraryManager.isSongSaved(ctx, 202))
     }
 
     @Test fun albumBusinessFailurePreservesCacheAndReportsFailure() = runBlocking {
