@@ -804,26 +804,3 @@ fun LibraryAlbumGridItem(
         Spacer(Modifier.height(6.dp))
     }
 }
-
-/**
- * 库页页头的图标按钮（v3.8.0）。
- *
- * 视觉 40dp，**命中区 48dp** —— AGENTS.md 触摸陷阱 §7 的同一条纪律。
- */
-@androidx.compose.runtime.Composable
-private fun TileAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    val colors = io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors.current
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = androidx.compose.ui.Alignment.Center,
-    ) {
-        io.github.takahashirinta.kanesumi.core.theme.MetroIcon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = colors.onBackground,
-            sizeDp = 22.dp,
-        )
-    }
-}

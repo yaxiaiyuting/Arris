@@ -861,9 +861,6 @@ object QqApi {
         return out.sortedBy { it.timeMs }
     }
 
-    private fun SongItem.trackKeyOrEmpty(): String =
-        SourceIds.trackKey(MusicSource.QQMUSIC, id)
-
     // ---------------- 手机号验证码登录（v2.1.1） ----------------
 
     /**

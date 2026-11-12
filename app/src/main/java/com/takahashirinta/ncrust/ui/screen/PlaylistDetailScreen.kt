@@ -306,21 +306,3 @@ fun PlaylistDetailScreen(
         }
     )
 }
-
-/** 歌单操作菜单的行（直角、无圆角，与 SongMenuSheet 同款排版）。 */
-@Composable
-private fun PlaylistActionRow(label: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MetroText(
-            label,
-            color = LocalMetroColors.current.onBackground,
-            style = LocalMetroTypography.current.bodyLarge,
-        )
-    }
-}
