@@ -49,6 +49,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.HomeSnapshot
+import com.takahashirinta.ncrust.network.DailyRecommendation
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
@@ -232,14 +233,21 @@ fun HomeScreen(
 
     fun loadDailySongs() {
         val started = CookieManager.snapshot()
+        val dayKey = DailyRecommendation.currentDayKey()
+        val cached = ContentCache.freshHomeDailySongs(started.accountOwner, dayKey)
+        if (cached != null) {
+            CookieManager.ifSameLogin(started) { dailySongs = cached }
+            return
+        }
+        if (!NetworkAvailability.isOnline(context)) return
         coroutineScope.launch {
             try {
                 val list = PlaylistApi.getDailyRecommendSongs()
                 publishPersonalized(started) { owner ->
                     dailySongs = list
-                    ContentCache.homeDailySongs = list
+                    ContentCache.putHomeDailySongs(list, dayKey)
                     offline = false
-                    HomeSnapshot.save(context, daily = list, owner = owner)
+                    HomeSnapshot.save(context, daily = list, owner = owner, dailyDayKey = dayKey)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -249,15 +257,6 @@ fun HomeScreen(
         }
     }
 
-    /**
-     * 4.0.0：该换批时自动换（每天 6:00 之后首次进入首页）。
-     * 只在"缓存里的日推日 ≠ 当前日推日"时发一次请求，其它时候零开销。
-     */
-    fun maybeAutoRefreshDaily() {
-        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context)) return
-        if (!NetworkAvailability.isOnline(context)) return
-        loadDailySongs()
-    }
     fun loadPlaylists() {
         val started = CookieManager.snapshot()
         coroutineScope.launch {
@@ -310,14 +309,7 @@ fun HomeScreen(
         }
         offline = false
         isLoading = true
-        // 4.0.0：日推按天换批 —— 该换才发请求，否则直接用缓存，避免每次进首页白打一次接口。
-        maybeAutoRefreshDaily()
-        if (!com.takahashirinta.ncrust.network.DailyRecommendation.needsRefresh(context) &&
-            dailySongs.isEmpty()
-        ) {
-            // 缓存是今天这一批但内存里还没内容（如刚清过缓存）：正常拉一次，不标记为"换批"。
-            loadDailySongs()
-        }
+        loadDailySongs()
         loadPlaylists()
         loadNewSongs()
         loadToplists(force = true)
@@ -335,6 +327,7 @@ fun HomeScreen(
         if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
         if (ContentCache.isHomeFreshFor(owner)) {
             isLoading = false
+            loadDailySongs()
             loadToplists()
             return@LaunchedEffect
         }
@@ -364,7 +357,7 @@ fun HomeScreen(
             return@LaunchedEffect
         }
         // 预算内已经到达的栏目直接复用，其他栏目各自发起请求。
-        if (reused?.daily.isNullOrEmpty()) loadDailySongs()
+        loadDailySongs()
         if (reused?.playlists.isNullOrEmpty()) loadPlaylists()
         if (reused?.newSongs.isNullOrEmpty()) loadNewSongs()
         loadToplists()

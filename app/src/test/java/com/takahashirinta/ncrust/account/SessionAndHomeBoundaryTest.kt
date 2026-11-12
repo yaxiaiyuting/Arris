@@ -6,11 +6,14 @@ import android.content.SharedPreferences
 import com.takahashirinta.ncrust.account.*
 import com.takahashirinta.ncrust.auth.*
 import com.takahashirinta.ncrust.cache.*
+import com.takahashirinta.ncrust.network.DailyRecommendation
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import com.takahashirinta.ncrust.warmup.AppWarmup
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
@@ -128,6 +131,7 @@ class SessionAndHomeBoundaryTest {
             assertTrue(HomeSnapshot.restoreIntoCache(context))
             assertTrue(ContentCache.ownerMatches(owner))
             assertEquals(707L,ContentCache.homeDailySongs!!.single().id)
+            assertNull(ContentCache.freshHomeDailySongs(owner, DailyRecommendation.currentDayKey()))
         }
     }
 
@@ -199,6 +203,34 @@ class SessionAndHomeBoundaryTest {
         assertFalse(daily.isCancelled)
         daily.complete(listOf(homeSong(101)))
         assertEquals(101L, loads.awaitCompleted().daily!!.single().id)
+    }
+
+    @Test fun dailyBatchDateSurvivesRestoreAndExpiresAtSix() = runBlocking {
+        fixture { context ->
+            val owner = CookieManager.accountOwner()
+            val beforeSix = LocalDateTime.of(2026, 11, 12, 5, 59)
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val previousDay = DailyRecommendation.currentDayKey(beforeSix)
+            val nextDay = DailyRecommendation.currentDayKey(beforeSix + 60_000L)
+            assertEquals("2026-11-11", previousDay)
+            assertEquals("2026-11-12", nextDay)
+
+            HomeSnapshot.save(context, daily = listOf(homeSong(101)), dailyDayKey = previousDay)
+            settle(HomeSnapshot, "ioScope")
+            HomeSnapshot.save(context, newSongs = listOf(homeSong(202)))
+            settle(HomeSnapshot, "ioScope")
+            assertTrue(HomeSnapshot.restoreIntoCache(context))
+
+            assertEquals(101L, ContentCache.freshHomeDailySongs(owner, previousDay)!!.single().id)
+            assertNull(ContentCache.freshHomeDailySongs(owner, nextDay))
+            assertNull(ContentCache.freshHomeDailySongs("different owner", previousDay))
+
+            HomeSnapshot.save(context, daily = emptyList(), dailyDayKey = nextDay)
+            settle(HomeSnapshot, "ioScope")
+            val prefs = context.getSharedPreferences("ncrust_home_cache", 0)
+            assertFalse(prefs.contains("daily_reco_daykey"))
+            assertFalse(prefs.contains("daily_songs"))
+        }
     }
 
     private fun homeSong(id: Long) = SongItem(id, "fixture-$id", null, null, 200_000)

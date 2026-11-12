@@ -10,11 +10,13 @@ import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.network.ConnectionWarmup
 import com.takahashirinta.ncrust.network.CoverUrls
+import com.takahashirinta.ncrust.network.DailyRecommendation
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.qq.QqAuthStore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -144,13 +146,16 @@ object AppWarmup {
 
     private suspend fun warmHomeData(app: Context) = coroutineScope {
         val session = CookieManager.snapshot()
+        val dailyDayKey = DailyRecommendation.currentDayKey()
+        val cachedDaily = ContentCache.freshHomeDailySongs(session.accountOwner, dailyDayKey)
         // 这些值随缓存一起在会话锁内发布，预热收尾一次落盘。
         var warmedDaily: List<SongItem>? = null
         var warmedPlaylists: List<PlaylistApi.PlaylistCard>? = null
         var warmedNewSongs: List<SongItem>? = null
         val loads = HomeLoads(
-            daily = warmSection(session, { ContentCache.homeDailySongs }, { PlaylistApi.getDailyRecommendSongs() }) { list ->
-                ContentCache.homeDailySongs = list
+            daily = if (cachedDaily != null) CompletableDeferred(cachedDaily)
+            else warmSection(session, { ContentCache.homeDailySongs }, { PlaylistApi.getDailyRecommendSongs() }) { list ->
+                ContentCache.putHomeDailySongs(list, dailyDayKey)
                 warmedDaily = list
             },
             playlists = warmSection(session, { ContentCache.homeRecommendPlaylists }, { PlaylistApi.getRecommendPlaylists() }) { list ->
@@ -188,6 +193,7 @@ object AppWarmup {
                         app,
                         owner = owner,
                         daily = warmedDaily.takeIf { it === ContentCache.homeDailySongs },
+                        dailyDayKey = dailyDayKey,
                         playlists = warmedPlaylists.takeIf { it === ContentCache.homeRecommendPlaylists },
                         newSongs = warmedNewSongs.takeIf { it === ContentCache.homeNewSongs },
                     )

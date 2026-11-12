@@ -21,7 +21,23 @@ import com.takahashirinta.ncrust.network.model.ArtistAlbumsResponse
 // 首页三个字段是单值，不会增长，无需 LRU。
 object ContentCache {
     // ── 首页 ─────────────────────────────────────────────────────────
-    @Volatile var homeDailySongs: List<SongItem>? = null
+    private data class DailySongs(val songs: List<SongItem>, val dayKey: String?)
+
+    @Volatile private var dailySnapshot: DailySongs? = null
+    var homeDailySongs: List<SongItem>?
+        get() = dailySnapshot?.songs
+        set(value) { dailySnapshot = value?.let { DailySongs(it, dayKey = null) } }
+
+    internal fun putHomeDailySongs(songs: List<SongItem>, dayKey: String?) {
+        dailySnapshot = DailySongs(songs, dayKey)
+    }
+
+    internal fun freshHomeDailySongs(owner: String?, dayKey: String): List<SongItem>? {
+        val snapshot = dailySnapshot ?: return null
+        if (!ownerMatches(owner)) return null
+        return snapshot.songs.takeIf { snapshot.dayKey == dayKey && it.isNotEmpty() }
+    }
+
     @Volatile var homeRecommendPlaylists: List<PlaylistApi.PlaylistCard>? = null
     @Volatile var homeNewSongs: List<SongItem>? = null
 

@@ -27,6 +27,7 @@ object HomeSnapshot {
 
     private const val PREFS_NAME = "ncrust_home_cache"
     private const val KEY_SAVED_AT = "saved_at"
+    private const val KEY_DAILY_DAY = "daily_reco_daykey"
     /** 快照归属的账号指纹（S14）；老版本没有这个 key ⇒ 读成 null ⇒ 视为"无归属"。 */
     private const val KEY_OWNER = "owner"
 
@@ -71,6 +72,7 @@ object HomeSnapshot {
         newSongs: List<SongItem>? = null,
         toplists: List<PlaylistApi.PlaylistCard>? = null,
         owner: String? = CookieManager.accountOwner(),
+        dailyDayKey: String? = null,
     ) {
         if (daily == null && playlists == null && newSongs == null && toplists == null) return
         val started = CookieManager.snapshot()
@@ -95,6 +97,10 @@ object HomeSnapshot {
                     if (!sameOwner(storage.all[KEY_OWNER], owner)) editor.clear()
                     for ((section, json) in pending) {
                         if (json == null) editor.remove(section.key) else editor.putString(section.key, json)
+                        if (section == Section.DAILY) {
+                            if (json == null || dailyDayKey == null) editor.remove(KEY_DAILY_DAY)
+                            else editor.putString(KEY_DAILY_DAY, dailyDayKey)
+                        }
                     }
                     editor.putLong(KEY_SAVED_AT, System.currentTimeMillis())
                     if (owner == null) editor.remove(KEY_OWNER) else editor.putString(KEY_OWNER, owner)
@@ -116,13 +122,17 @@ object HomeSnapshot {
         val values = runCatching { prefs(context).all }.getOrNull() ?: return false
         if (!sameOwner(values[KEY_OWNER], started.accountOwner)) return false
         val daily = readList<SongItem>(values[Section.DAILY.key], songListType)
+        val dailyDayKey = values[KEY_DAILY_DAY] as? String
         val playlists = readList<PlaylistApi.PlaylistCard>(values[Section.PLAYLISTS.key], cardListType)
         val newSongs = readList<SongItem>(values[Section.NEW_SONGS.key], songListType)
         val toplists = readList<PlaylistApi.PlaylistCard>(values[Section.TOPLISTS.key], cardListType)
         return CookieManager.ifCurrent(started) {
             ContentCache.bindOwner(started.accountOwner)
             var restored = false
-            daily?.let { if (ContentCache.homeDailySongs == null) { ContentCache.homeDailySongs = it; restored = true } }
+            if (daily != null && ContentCache.homeDailySongs == null) {
+                ContentCache.putHomeDailySongs(daily, dailyDayKey)
+                restored = true
+            }
             playlists?.let { if (ContentCache.homeRecommendPlaylists == null) { ContentCache.homeRecommendPlaylists = it; restored = true } }
             newSongs?.let { if (ContentCache.homeNewSongs == null) { ContentCache.homeNewSongs = it; restored = true } }
             toplists?.let { if (ContentCache.toplistItems == null) { ContentCache.putToplist(it); restored = true } }
