@@ -1107,7 +1107,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
             scope.launch {
-                val children = runCatching { loadChildren(parentId) }.getOrDefault(emptyList())
+                val children = runCatching { loadChildren(parentId, page, pageSize) }.getOrDefault(emptyList())
                 future.set(LibraryResult.ofItemList(ImmutableList.copyOf(children), params))
             }
             return future
@@ -1158,19 +1158,22 @@ class PlaybackService : MediaLibraryService() {
         )
         .build()
 
-    private suspend fun loadChildren(parentId: String): List<MediaItem> = when (parentId) {
-        ROOT_ID -> {
+    private suspend fun loadChildren(parentId: String, page: Int, pageSize: Int): List<MediaItem> {
+        if (parentId == ROOT_ID) {
             val s = stringsForCode(getSavedLanguageCode(this))
-            listOf(
+            return listOf(
                 folderItem(DAILY_ID, s.dailySongsTitle),
                 folderItem(FM_ID, s.fmRadioTitleGeneric),
                 folderItem(LIKED_ID, s.tabLibrary),
-            )
+            ).mediaBrowsePage(page, pageSize)
         }
-        DAILY_ID -> PlaylistApi.getDailyRecommendSongs().map { songItem(it) }
-        FM_ID -> PlaylistApi.getPersonalFm().map { songItem(it) }
-        LIKED_ID -> LibraryManager.getSavedSongs(this).map { songItem(it) }
-        else -> emptyList()
+        val songs = when (parentId) {
+            DAILY_ID -> PlaylistApi.getDailyRecommendSongs()
+            FM_ID -> PlaylistApi.getPersonalFm()
+            LIKED_ID -> LibraryManager.getSavedSongs(this)
+            else -> emptyList()
+        }
+        return songs.mediaBrowsePage(page, pageSize).map(::songItem)
     }
 
     /** 车机点播：把 song:<id> 解析成当前音质档的可播放 URL。 */
