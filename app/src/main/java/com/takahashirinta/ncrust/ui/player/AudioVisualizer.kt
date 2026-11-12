@@ -721,6 +721,7 @@ fun AudioVisualizerBars(
     val dash = remember(geomCount) { FloatArray(geomCount) }
     val heights = remember(geomCount) { FloatArray(geomCount) }
     val tangents = remember(geomCount) { FloatArray(geomCount) }
+    val curveSlopes = remember(geomCount) { FloatArray(geomCount - 1) }
     val path = remember { Path() }
     val crest = remember { Path() }
     val bandWeights = remember { FloatArray(3) }
@@ -852,7 +853,7 @@ fun AudioVisualizerBars(
                     dash[total] = dash[total - 1]
                 }
             }
-            WaveformCurve.computeTangents(heights, drawCount, step, tangents)
+            WaveformCurve.computeTangents(heights, drawCount, step, tangents, curveSlopes)
             for (lane in 0 until BandLanes.LANE_COUNT) {
                 laneEmphasis[lane] = if (bandReliable) {
                     LANE_DIM + (1f - LANE_DIM) * bandWeights[BandLanes.LANE_ROLE[lane]]
@@ -922,7 +923,7 @@ fun AudioVisualizerBars(
                     if (n < dash.size) dash[n] = dash[n - 1]
                 }
             }
-            WaveformCurve.computeTangents(heights, drawCount, step, tangents)
+            WaveformCurve.computeTangents(heights, drawCount, step, tangents, curveSlopes)
             val flowBrush = if (flow) brushCache.flow(size.width, ribbonColor.toArgb()) else null
             val ageBrush = if (!flow && effects.timeOrderedTint) {
                 brushCache.age(size.width, ribbonColor.toArgb())
