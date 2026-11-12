@@ -442,6 +442,7 @@ object PlaylistApi {
                 pl = p.optInt("pl", 0),
                 // 缺 fee 与 fee=0 是两件事：缺字段时让判定回落到取链响应项的 fee。
                 fee = if (p.isNull("fee")) null else p.optInt("fee", 0),
+                maxBrLevel = p.optString("maxBrLevel", "").takeIf { it.isNotBlank() },
             )
         }
         return map

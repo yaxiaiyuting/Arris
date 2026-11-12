@@ -103,4 +103,6 @@ data class PreloadCacheEntry(
      */
     val expiresAtMs: Long? = null,
     val cachedContent: com.takahashirinta.ncrust.cache.OfflineContent? = null,
+    val levelFromFile: Boolean = false,
+    val qualityAccess: QualityAccessEvidence? = null,
 )

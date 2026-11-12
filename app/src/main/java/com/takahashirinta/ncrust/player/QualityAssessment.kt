@@ -5,34 +5,6 @@
  * 本文件属于本 Fork（Arris，https://github.com/yaxiaiyuting/Arris）的修改部分，
  * Copyright (c) 2026 yaxiaiyuting，以 GPLv3 许可分发；本 Fork 整体以 GPLv3 分发。
  *
- * 修改说明：
- *   - v1.2.0 · A3：音质状态判定。旧逻辑拿「服务端返回的 level 字符串」比档位序号，
- *     会把两种正常情况误报成「已降级」：
- *       ① level 标签写 lossless、实际文件是 Hi-Res（实测 br=1,685,762，type=flac）；
- *       ② 请求杜比全景声时服务端给了 jyeffect —— 沉浸声是不同容器/格式，不是降级。
- *     现在改为按**实际文件参数**（br/type）推算真实档位，再结合该曲的档位上限
- *     （privilege.maxBrLevel）区分「无权限」与「该曲无此档位」。
- *   - v1.3.0 · B4：能力上限归一化。服务端存在不在档位表里的能力标签（sky／沉浸环绕声），
- *     旧逻辑拿它查 LEVELS 得到 -1，于是选 hires/无损播 sky 上限的曲子会落到兜底的
- *     「已降级」——而服务端给的本来就是该曲最高源（exhigh 320k mp3），属于误报。
- *     现在 sky 归一化成 exhigh 参与比较，并用 capFromAlias 标记"上限来自别名"，
- *     避免归一化后被误判成「无权限」。展示档位同时改为按**请求档位**封顶，
- *     未知标签不会再被推成杜比/母带。
- *
- * 判定依据（v1.3.0 · B4 实测确认，**改判定前必读，顺序反了就会误报**）：
- *   实测档位 measuredIdx 由 br/type 推算；capIdx 是该曲上限（privilege.maxBrLevel，
- *   别名先归一化）。当 measuredIdx < requestedIdx（实际文件低于请求档位）时，看上限：
- *     ① capIdx > measuredIdx → 「无权限」(NO_ENTITLEMENT)
- *        服务端明明给得出比现在更高的一档，却没给 —— 是账号/版权没放行。
- *        例：请求 lossless、只给 exhigh 320k mp3，而 cap=hires。
- *     ② capIdx == measuredIdx → 「该曲无此档位」(SONG_LACKS_TIER)
- *        实测这一档就是该曲的天花板，再往上没有文件可给。
- *        例：cap=sky 的曲子归一化后 = exhigh = 实测（sky 没有独立音频文件）。
- *   注意：**不是**"capIdx 与 requestedIdx 谁高"决定二者 —— cap 介于 measured 与
- *   requested 之间时（如请求 hires、实测 exhigh、cap=lossless），仍是①「无权限」。
- *   capFromAlias 是这条规则的例外保护：上限来自别名（sky）时不能按①断言"服务端没给"，
- *   因为该标记只代表"没有更高档位"，不代表账号拿到了 exhigh 以上的权限。
- *   回归用例见 app/src/test/.../QualityAssessmentTest.kt（cap=hires 对照 cap=sky）。
  */
 
 package com.takahashirinta.ncrust.player
@@ -51,6 +23,13 @@ enum class QualityStatus {
     /** 其余真实降级（服务端临时策略、解码器受限等）。 */
     DOWNGRADED,
 }
+
+/** Account-scoped evidence from the same provider request as the URL. */
+data class QualityAccessEvidence(
+    val accountRevision: Long,
+    val playableLevel: String? = null,
+    val observed: Map<String, QualityStatus> = emptyMap(),
+)
 
 data class QualityVerdict(val displayIndex: Int, val status: QualityStatus)
 
@@ -78,6 +57,23 @@ object QualityAssessment {
         if (idx >= 0) return idx
         val alias = CAPABILITY_ALIASES[level] ?: return null
         return levels.indexOf(alias).takeIf { it >= 0 }
+    }
+
+    /** Missing catalog tiers and account restrictions answer different questions. */
+    fun choiceStatus(
+        level: String,
+        songMaxLevel: String?,
+        access: QualityAccessEvidence?,
+        verifiedLevel: String? = null,
+    ): QualityStatus {
+        if (level == verifiedLevel) return QualityStatus.NORMAL
+        val requested = capabilityIndex(level) ?: return QualityStatus.NORMAL
+        val catalog = capabilityIndex(songMaxLevel)
+        if (catalog != null && catalog < requested) return QualityStatus.SONG_LACKS_TIER
+        access?.observed?.get(level)?.let { return it }
+        val playable = if (access?.playableLevel == "none") -1 else capabilityIndex(access?.playableLevel)
+        if (catalog != null && playable != null && playable < requested) return QualityStatus.NO_ENTITLEMENT
+        return QualityStatus.NORMAL
     }
 
     // 实测锚点（2026-09，登录态）：母带 4.7–5.8 Mbps、jyeffect 2.8–3.1 Mbps、
@@ -165,17 +161,11 @@ object QualityAssessment {
         type: String,
         songMaxLevel: String?,
         levelFromFile: Boolean = false,
+        access: QualityAccessEvidence? = null,
     ): QualityVerdict {
         val levels = QualityLadder.LEVELS
         val requestedIdx = levels.indexOf(requested).takeIf { it >= 0 } ?: 0
         val grantedIdx = levels.indexOf(granted)
-        // 能力上限归一化：sky 这类别名按等价基础档位（exhigh）参与比较，
-        // 否则 capIdx=-1 会落到兜底的「已降级」，把"该曲没有更高档位"误报成服务端降级。
-        val capIdx = capabilityIndex(songMaxLevel)
-        // 上限来自别名时，即使归一化后仍 >= 请求档位，也不能断言"服务端没给"：
-        // sky 只是"没有更高档位"的标记，不代表账号拿到了 exhigh 以上的权限。
-        val capFromAlias = songMaxLevel != null &&
-            levels.indexOf(songMaxLevel) < 0 && capIdx != null
         val measuredIdx = measuredLevel(br, type)?.let { levels.indexOf(it) } ?: -1
 
         // 展示档位：**实测到的实际文件说了算**（v2.1.4）。
@@ -206,32 +196,16 @@ object QualityAssessment {
             floorIdx.coerceIn(0, maxOf(requestedIdx, 0))
         }
 
-        val status = when {
-            // 拿不到实际文件参数：不妄下结论，保持安静 —— **除非**档位本身就是从文件反推的。
-            //
-            // v2.2.1 · P0：QQ 的档位来自**真正取回的文件名前缀**（`RS01…flac` → hires），
-            // 它自己就是证据，不是「服务端说它给了什么」。而 QQ 的 FLAC 档没有 br 字段
-            // （编一个数字会污染 measuredLevel，见 QqQuality.knownBitrateOf），
-            // 于是旧规则下「请求超清母带、实际 Hi-Res」落在这一支：既不是降级、也没有提示。
-            // 实测用户报障原话就是「开了母带只能出极高，和免费用户没区别」—— 沉默同样是在撒谎。
-            measuredIdx < 0 -> {
-                if (levelFromFile && grantedIdx >= 0 && grantedIdx < requestedIdx) {
-                    QualityStatus.DOWNGRADED
-                } else {
-                    QualityStatus.NORMAL
-                }
-            }
-            // 实际文件不低于请求档位（含"标签写低了、文件其实是高解析"）
-            measuredIdx >= requestedIdx -> QualityStatus.NORMAL
-            // 沉浸声换格式：请求杜比/环绕，实际拿到 >= 无损的沉浸声文件，不算降级
-            requested in IMMERSIVE_TIERS && measuredIdx >= levels.indexOf("lossless") -> QualityStatus.NORMAL
-            // 该曲自己就没有这个档位（含 sky 上限归一化后仍低于请求档位的情况）
-            capIdx != null && capIdx < requestedIdx -> QualityStatus.SONG_LACKS_TIER
-            // 该曲有（且该上限不是别名），但服务端没给
-            capIdx != null && capIdx >= requestedIdx && !capFromAlias -> QualityStatus.NO_ENTITLEMENT
-            // 其余才是真降级（服务端临时策略、解码器受限等）
-            else -> QualityStatus.DOWNGRADED
+        val knownDowngrade = if (measuredIdx >= 0) {
+            measuredIdx < requestedIdx &&
+                !(requested in IMMERSIVE_TIERS && measuredIdx >= levels.indexOf("lossless"))
+        } else {
+            levelFromFile && grantedIdx in 0 until requestedIdx
         }
+        val status = if (knownDowngrade) {
+            choiceStatus(requested, songMaxLevel, access).takeUnless { it == QualityStatus.NORMAL }
+                ?: QualityStatus.DOWNGRADED
+        } else QualityStatus.NORMAL
         return QualityVerdict(displayIdx, status)
     }
 }

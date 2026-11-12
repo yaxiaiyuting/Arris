@@ -10,6 +10,8 @@
 
 package com.takahashirinta.ncrust.qq
 
+import com.takahashirinta.ncrust.player.QualityStatus
+
 import com.takahashirinta.ncrust.player.ResolveFailureKind
 
 /**
@@ -205,4 +207,23 @@ fun QqRejection.toResolveFailureKind(): ResolveFailureKind = when (this) {
     QqRejection.NO_FILE -> ResolveFailureKind.UNKNOWN
     QqRejection.NETWORK -> ResolveFailureKind.NETWORK
     QqRejection.UNKNOWN -> ResolveFailureKind.UNKNOWN
+}
+
+private val qqQualityVariants = QqFileType.entries.groupBy(QqQuality::ncrustLevelOf)
+
+/** A tier is missing only if every known file variant explicitly has no file. */
+internal fun qqTierStatuses(
+    requestedTypes: List<QqFileType>,
+    rejectionOf: (QqFileType) -> QqRejection?,
+): Map<String, QualityStatus> = buildMap {
+    for ((level, variants) in qqQualityVariants) {
+        if (!requestedTypes.containsAll(variants)) continue
+        val reasons = variants.map(rejectionOf)
+        if (reasons.any { it == null || it == QqRejection.NONE || it == QqRejection.UNKNOWN || it == QqRejection.NETWORK }) continue
+        put(
+            level,
+            if (reasons.all { it == QqRejection.NO_FILE }) QualityStatus.SONG_LACKS_TIER
+            else QualityStatus.NO_ENTITLEMENT,
+        )
+    }
 }

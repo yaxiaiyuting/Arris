@@ -17,6 +17,7 @@ import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.lyric.LrcParser
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.player.SongUrlResult
+import com.takahashirinta.ncrust.player.QualityAccessEvidence
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
 import kotlinx.coroutines.Dispatchers
@@ -285,7 +286,15 @@ object QqApi {
                 // 那种情况下界面会按服务端标签显示，而标签在这些档位上就是权威的。
                 br = QqQuality.knownBitrateOf(fileType),
                 type = fileType.ext,
-                songMaxLevel = null,
+                qualityAccess = batch.accountRevision?.let { revision ->
+                    val observed = qqTierStatuses(types) { type ->
+                        info[type]?.let { entry ->
+                            if (entry.optString("purl").isNotEmpty()) QqRejection.NONE
+                            else classifyQqRejection(rejectionInputOf(entry))
+                        }
+                    }
+                    if (observed.isEmpty()) null else QualityAccessEvidence(revision, observed = observed)
+                },
             )
         }
         QqProbeCounters.onResolveFail()
@@ -357,6 +366,7 @@ object QqApi {
         val transportRejection: QqRejection = QqRejection.NETWORK,
         /** 传输层的一句话原因（只进日志）。 */
         val transportMessage: String? = null,
+        val accountRevision: Long? = null,
     )
 
     /**
@@ -438,6 +448,7 @@ object QqApi {
         requestedLevel: String = "",
     ): VkeyBatch {
         if (types.isEmpty()) return VkeyBatch(null, QqRejection.UNKNOWN, "no file types")
+        val accountRevision = QqAuthStore.currentAuthRevision()
         val request = QqRequests.vkey(
             songMid = songMid,
             mediaMid = mediaMid,
@@ -501,7 +512,10 @@ object QqApi {
                 cookie = QqClient.cookieForDiagnostics(),
             )
         }
-        return VkeyBatch(out)
+        return VkeyBatch(
+            out,
+            accountRevision = accountRevision.takeIf { it == QqAuthStore.currentAuthRevision() },
+        )
     }
 
     private fun firstSipHost(sip: JSONArray): String? {

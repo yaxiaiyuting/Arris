@@ -90,6 +90,7 @@ data class SongUrlResult(
      */
     val requestedLevel: String? = null,
     val cachedContent: com.takahashirinta.ncrust.cache.OfflineContent? = null,
+    val qualityAccess: QualityAccessEvidence? = null,
 )
 
 object SongUrlFetcher {
@@ -243,6 +244,7 @@ object SongUrlFetcher {
         // 拆成函数是为了让"传输失败"和"档位不可用"走两条不同的路 —— 以前它们被同一个
         // catch 吞掉，于是连接一断就会把整条阶梯跑完，把 1 次故障放大成 6 次请求。
         val session = sessionGeneration()
+        val observed = mutableMapOf<String, QualityStatus>()
         suspend fun attempt(tryLevel: String): SongUrlResult? {
             val payload = buildPayload(songId, tryLevel)
             // A1：服务端按 **Cookie 里的客户端身份** 判定音质上限。只带 MUSIC_U/__csrf 时，
@@ -277,24 +279,30 @@ object SongUrlFetcher {
             if (code != 200 || url.isNullOrEmpty()) {
                 logAttempt(tryLevel, actualLevel, br, type, code, accepted = false)
                 // Ambiguous 404, missing links and malformed responses are per-track failures.
-                if (item.code == 403) noteLevelRejected(tryLevel, songId, session)
+                if (item.code == 403) {
+                    observed[tryLevel] = QualityStatus.NO_ENTITLEMENT
+                    noteLevelRejected(tryLevel, songId, session)
+                }
                 return null
             }
             logAttempt(tryLevel, actualLevel, br, type, code, accepted = true)
             // A3：只有"实际文件可能低于请求档位"时才多问一次该曲的档位上限 ——
             // 用来把「账号无权限」和「该曲根本没这个档位」分开。平时不加这次往返。
-            val songMaxLevel =
-                if (QualityAssessment.needsSongCapability(level, br, type))
-                    kotlinx.coroutines.withTimeoutOrNull(1_200L) { fetchSongMaxLevel(songId) }
-                else null
+            val capability = if (QualityAssessment.needsSongCapability(level, br, type)) {
+                kotlinx.coroutines.withTimeoutOrNull(1_200L) { fetchQualityCapability(songId, session) }
+            } else null
+            val qualityAccess = if (capability?.playableLevel != null || observed.isNotEmpty()) {
+                QualityAccessEvidence(session, capability?.playableLevel, observed.toMap())
+            } else null
             // v1.6.0 · D1：给播放 URL 挂上离线缓存的 key（query 参数是装饰，
             // CDN 只认路径里的签名，实测删改 query 仍 206）。挂上之后 CacheDataSource
             // 才能把「同一首歌 + 同一档位」的所有轮换 URL 认成同一份缓存。
             return SongUrlResult(
                 OfflineKeys.withContentKey(url, songId, actualLevel, com.takahashirinta.ncrust.cache.OfflineContent.from(item)),
-                actualLevel, br, type, songMaxLevel,
+                actualLevel, br, type, capability?.songMaxLevel,
                 playbackItem = item,
                 requestedLevel = requestedLevel,
+                qualityAccess = qualityAccess,
             )
         }
 
@@ -360,12 +368,17 @@ object SongUrlFetcher {
         return null
     }
 
-    /**
-     * 该曲能达到的最高档位（privilege.maxBrLevel）。带内存缓存（每曲一次），失败返回 null，
-     * 绝不抛给调用方 —— 判定降级原因失败不该影响播放。
-     */
-    private suspend fun fetchSongMaxLevel(songId: Long): String? {
-        songMaxLevelCache[songId]?.let { return it }
+    private data class QualityCapability(
+        val session: Long,
+        val songMaxLevel: String?,
+        val playableLevel: String?,
+    )
+
+    private val qualityCapabilityCache = java.util.concurrent.ConcurrentHashMap<Long, QualityCapability>()
+
+    /** maxBrLevel describes the catalog; plLevel describes playback for this login. */
+    private suspend fun fetchQualityCapability(songId: Long, session: Long): QualityCapability? {
+        qualityCapabilityCache[songId]?.takeIf { it.session == session }?.let { return it }
         return try {
             val payload = mapOf("c" to JSONArray().put(JSONObject().put("id", songId)).toString())
             val response = RetrofitClient.eapiPostCancellable(
@@ -373,17 +386,19 @@ object SongUrlFetcher {
                 payload,
                 extraCookie = ClientIdentity.extraCookieFor(RetrofitClient.getCookie())
             )
-            val body = response.body?.string()
-            val privileges = body?.let { JSONObject(it).optJSONArray("privileges") }
-            val level = if (privileges != null && privileges.length() > 0) {
-                privileges.getJSONObject(0).optString("maxBrLevel").takeIf { it.isNotEmpty() }
-            } else null
-            if (level != null) {
-                if (songMaxLevelCache.size > 256) songMaxLevelCache.clear()
-                songMaxLevelCache[songId] = level
+            val detail = response.body?.string()?.let { JSONObject(it).optJSONArray("privileges") }
+                ?.optJSONObject(0) ?: return null
+            if (detail.optLong("id", songId) != songId || sessionGeneration() != session) return null
+            val cap = QualityCapability(
+                session,
+                detail.optString("maxBrLevel", "").takeIf { it.isNotBlank() },
+                detail.optString("plLevel", "").takeIf { it.isNotBlank() },
+            )
+            if (cap.songMaxLevel != null || cap.playableLevel != null) {
+                if (qualityCapabilityCache.size > 256) qualityCapabilityCache.clear()
+                qualityCapabilityCache[songId] = cap
             }
-            Log.i(TAG, "song capability: songId=$songId maxBrLevel=${level ?: "unknown"}")
-            level
+            cap
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -391,8 +406,6 @@ object SongUrlFetcher {
             null
         }
     }
-
-    private val songMaxLevelCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
 
     /**
      * `data[0]` → 判定模型。只取判定用得上的字段。

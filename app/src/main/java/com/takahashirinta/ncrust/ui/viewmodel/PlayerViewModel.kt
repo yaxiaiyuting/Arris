@@ -36,6 +36,7 @@ import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.player.QualityAssessment
+import com.takahashirinta.ncrust.player.QualityAccessEvidence
 import com.takahashirinta.ncrust.player.QualityLadder
 import com.takahashirinta.ncrust.player.QualityStatus
 import com.takahashirinta.ncrust.lyric.AmllTtmlClient
@@ -225,6 +226,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      */
     private var currentTrack: TrackKey? = null
         set(value) {
+            if (field != value) {
+                lastVerdictResult = null
+                lastQualityDenial = null
+            }
             field = value
             currentSource.value = value?.source ?: MusicSource.NETEASE
         }
@@ -539,6 +544,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // A3：最近一次取链的输入，供偏好变化后重算状态（不重新取链）。
     private var lastVerdictRequested = ""
     private var lastVerdictResult: SongUrlResult? = null
+    private var lastQualityDenial: QualityAccessEvidence? = null
     // 已处理过的出错点 (songId@level),配合时间窗防止同一错误反复触发重试。
     private var lastErrorKey = ""
     private var lastErrorHandledAt = 0L
@@ -1417,9 +1423,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 currentIsTrial.value = false
                 noticeTracker.clearTrial(songId)
                 noticeTracker.notePlayableStarted()
-                // 只有 QualityAssessment 也认为「实际文件低于请求档位」时才提示；
-                // 标签写低、实测文件其实是高解析的情况不提示（v2.1.4 的判定仍是唯一真相）。
-                if (entitlement.capped && qualityStatus.value != QualityStatus.NORMAL) {
+                // 会员提示需要权限证据；单纯缺少源文件或普通降档时不提示开通。
+                if (entitlement.capped && qualityStatus.value == QualityStatus.NO_ENTITLEMENT) {
                     noticeTracker.cappedNotice(
                         songId = songId,
                         level = entitlement.cappedTo ?: actualLevel,
@@ -1443,6 +1448,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _notice.value = null
     }
 
+    private fun qualityAccountRevision(source: MusicSource): Long? = when (source) {
+        MusicSource.NETEASE -> com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration
+        MusicSource.QQMUSIC -> com.takahashirinta.ncrust.qq.QqAuthStore.currentAuthRevision()
+        else -> null
+    }
+
+    private fun catalogQuality(track: TrackKey?, result: SongUrlResult?): String? =
+        result?.songMaxLevel ?: track?.let { privilegeBySongId[it.id]?.maxBrLevel }
+
+    /** The flyout reads this snapshot when opened, using evidence for the current track and login. */
+    fun qualityPickerStatuses(): List<QualityStatus> {
+        val track = currentTrack?.takeIf { it.id == currentSongId.value } ?: return emptyList()
+        val revision = qualityAccountRevision(track.source)
+        val result = lastVerdictResult
+        val access = lastQualityDenial?.takeIf { it.accountRevision == revision }
+            ?: result?.qualityAccess?.takeIf { it.accountRevision == revision }
+        val catalog = catalogQuality(track, result)
+        val verified = result?.let {
+            if (it.levelFromFile) it.actualLevel else QualityAssessment.measuredLevel(it.br, it.type)
+        }
+        return qualityApiLevels.map { QualityAssessment.choiceStatus(it, catalog, access, verified) }
+    }
+
     /**
      * A3：记录一次取链结果并刷新音质状态。判定依据是**实际文件参数**（br/type）与该曲
      * 档位上限，而不是服务端返回的 level 字符串 —— 后者只是标签，可能写低（实测
@@ -1452,14 +1480,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         lastPlayedLevel = result.actualLevel
         lastVerdictRequested = requested
         lastVerdictResult = result
+        lastQualityDenial = null
+        val access = currentTrack?.let { track ->
+            result.qualityAccess?.takeIf { it.accountRevision == qualityAccountRevision(track.source) }
+        }
         val verdict = QualityAssessment.assess(
             requested = requested,
             granted = result.actualLevel,
             br = result.br,
             type = result.type,
-            songMaxLevel = result.songMaxLevel,
+            songMaxLevel = catalogQuality(currentTrack, result),
             // v2.2.1 · P0：QQ 前缀 / 离线 key 反推出的档位是**证据**，允许它触发诚实的「已降级」。
             levelFromFile = result.levelFromFile,
+            access = access,
         )
         // v2.2.1 · P0：记下这条链上确实取到过 URL 的档位，供「音质路径取不到链」时回退。
         if (result.levelFromFile) lastGoodLevel = result.actualLevel
@@ -1821,6 +1854,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 playbackItem = preloadPlaybackItems[songId],
                 cachedContent = cachedEntry.cachedContent,
                 requestedLevel = preloadRequestedLevels[songId],
+                levelFromFile = cachedEntry.levelFromFile,
+                qualityAccess = cachedEntry.qualityAccess,
             )
             val entitlement = classifyEntitlement(track.source, cachedResult, selectedQuality, effectivePrivilege)
             when (entitlement?.let(::actionFor)) {
@@ -2093,6 +2128,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             ResolveFailureKind.UNKNOWN,
             SourceIds.sourceOfId(songId),
         )
+        when (effective.kind) {
+            ResolveFailureKind.NEED_LOGIN, ResolveFailureKind.NEED_VIP, ResolveFailureKind.NEED_PURCHASE,
+            ResolveFailureKind.REGION_LOCKED, ResolveFailureKind.COPYRIGHT_GONE, ResolveFailureKind.AUTH_EXPIRED -> {
+                currentTrack?.takeIf { it.id == songId && it.source == effective.source }?.let { track ->
+                    qualityAccountRevision(track.source)?.let { revision ->
+                        lastQualityDenial = QualityAccessEvidence(
+                            revision, observed = mapOf(requested to QualityStatus.NO_ENTITLEMENT),
+                        )
+                    }
+                }
+            }
+            else -> Unit
+        }
         val networkFailure = effective.kind == ResolveFailureKind.NETWORK
         recovery.failed(networkFailure)
         isBuffering.value = false
@@ -2551,6 +2599,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         // v3.1.0：把 Provider 给的绝对过期时刻带上（B 站必需；ncm/QQ 为 null）。
                         expiresAtMs = result.expiresAtMs,
                         cachedContent = result.cachedContent,
+                        levelFromFile = result.levelFromFile,
+                        qualityAccess = result.qualityAccess,
                     )
                     if (!playGate.isCurrent(capturedVersion)) {
                         // playSong was called while this fetch was in flight.
@@ -2578,6 +2628,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                                 return@withContext
                             }
+                            currentTrack = nextTrack
                             applyQualityVerdict(quality, result)
                             takeoverEntitlement?.let {
                                 applyPlayableEntitlement(songId, it, result.actualLevel)
@@ -2585,9 +2636,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             // 接管同样是一次替换播放列表的开播，槽位镜像必须一并作废。
                             clearPreloadedState()
                             resetLyricsForNewSong()
-                            // v2.1.5：接管也是一次开播，身份必须跟着走 ——
-                            // 这里原先只写 currentSongId，音源会留在上一首上。
-                            currentTrack = nextTrack
                             lyricCoordinator.onTrackChanged(nextTrack)
                             currentSongId.value = songId
                             currentSongName.value = title

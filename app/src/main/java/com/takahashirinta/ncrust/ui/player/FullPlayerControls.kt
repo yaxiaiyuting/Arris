@@ -252,6 +252,7 @@ fun FullPlayerControls(
      * 已实测过"高亮错档"（见 PlayerCard 里 qualityPicker 的注释）。
      */
     preferredQualityIndexProvider: () -> Int = { 0 },
+    qualityPickerStatuses: () -> List<QualityStatus> = { emptyList() },
     /** v1.8.0 · T2：选中档位（→ PlayerViewModel.setQualityPreference）。 */
     onQualitySelect: (Int) -> Unit = {},
     /**
@@ -496,6 +497,7 @@ fun FullPlayerControls(
                         options = qualityOptions,
                         trialFlow = trialFlow,
                         preferredIndexProvider = preferredQualityIndexProvider,
+                        pickerStatuses = qualityPickerStatuses,
                         onSelect = onQualitySelect,
                         maxHeightDp = qualityPickerMaxHeightDp,
                         horizontalAlignment = Alignment.End,
@@ -524,6 +526,7 @@ fun FullPlayerControls(
                     options = qualityOptions,
                     trialFlow = trialFlow,
                     preferredIndexProvider = preferredQualityIndexProvider,
+                    pickerStatuses = qualityPickerStatuses,
                     onSelect = onQualitySelect,
                     maxHeightDp = qualityPickerMaxHeightDp,
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -556,6 +559,7 @@ fun FullPlayerControls(
                     qualityBitrateFlow = qualityBitrateFlow,
                     options = qualityOptions,
                     preferredIndexProvider = preferredQualityIndexProvider,
+                    pickerStatuses = qualityPickerStatuses,
                     onSelect = onQualitySelect,
                     modifier = Modifier.widthIn(max = 72.dp),
                     maxHeightDp = qualityPickerMaxHeightDp,
@@ -588,6 +592,7 @@ fun FullPlayerControls(
                 options = qualityOptions,
                 trialFlow = trialFlow,
                 preferredIndexProvider = preferredQualityIndexProvider,
+                pickerStatuses = qualityPickerStatuses,
                 onSelect = onQualitySelect,
                 modifier = Modifier.align(Alignment.Center),
                 maxHeightDp = qualityPickerMaxHeightDp,
@@ -857,11 +862,13 @@ fun PlayerQualityChip(
     minHitHeightDp: Dp = 48.dp,
     // 可空以保持玩家大屏左栏等既有调用点零改动；传了就显示「试听」。
     trialFlow: StateFlow<Boolean>? = null,
+    pickerStatuses: () -> List<QualityStatus> = { emptyList() },
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var preferredIndex by remember { mutableIntStateOf(0) }
+    var statusByTier by remember { mutableStateOf(emptyList<QualityStatus>()) }
 
     Box(
         modifier = modifier.heightIn(min = minHitHeightDp),
@@ -878,6 +885,7 @@ fun PlayerQualityChip(
                     // 每次打开都现读一次：网络在 Wi-Fi/移动之间切换过、或刚冷启动时，
                     // 偏好 StateFlow 里的值可能已过期。
                     preferredIndex = preferredIndexProvider()
+                    statusByTier = pickerStatuses()
                     expanded = true
                 }
                 .padding(horizontal = 8.dp, vertical = 3.dp)
@@ -891,10 +899,20 @@ fun PlayerQualityChip(
                 trialFlow = trialFlow,
             )
         }
+        val menuOptions = if (expanded && statusByTier.isNotEmpty()) {
+            options.mapIndexed { index, title ->
+                when (statusByTier.getOrNull(index)) {
+                    QualityStatus.NO_ENTITLEMENT -> "$title · ${strings.qualityNoEntitlementBadge}"
+                    QualityStatus.SONG_LACKS_TIER -> "$title · ${strings.qualitySongLacksTierBadge}"
+                    else -> title
+                }
+            }
+        } else options
         MetroSelectorFlyout(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            options = options,
+            options = menuOptions,
+            itemHeightDp = if (menuOptions == options) 44.dp else 56.dp,
             selectedIndex = preferredIndex,
             onSelect = { index ->
                 onSelect(index)

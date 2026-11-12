@@ -222,6 +222,7 @@ internal fun PlayerCardBigScreenLayout(
                     preferredIndexProvider = {
                         playerViewModel.currentQualityPreferenceIndex()
                     },
+                    pickerStatuses = playerViewModel::qualityPickerStatuses,
                     onSelect = { playerViewModel.setQualityPreference(it) },
                     maxHeightDp = qualityPickerMaxHeightDp,
                     horizontalAlignment = Alignment.End,

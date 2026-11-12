@@ -383,6 +383,7 @@ internal fun ColumnScope.PlayerCardExpanded(
                     preferredQualityIndexProvider = {
                         playerViewModel.currentQualityPreferenceIndex()
                     },
+                    qualityPickerStatuses = playerViewModel::qualityPickerStatuses,
                     onQualitySelect = { playerViewModel.setQualityPreference(it) },
                     trailing = if (geo.bigScreenActive) {
                         {
