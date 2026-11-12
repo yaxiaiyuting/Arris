@@ -48,7 +48,7 @@ class LibraryBoundaryRegressionTest {
     }
     private fun resetLibrary() {
         stopFlush()
-        listOf("cachedEntries", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob").forEach {
+        listOf("savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob").forEach {
             field(LibraryManager, it).set(LibraryManager, null)
         }
         field(LibraryManager, "likedIdCursor").setInt(LibraryManager, 0)

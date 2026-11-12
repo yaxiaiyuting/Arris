@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -76,7 +77,7 @@ class LibrarySavedRevisionTest {
     private fun resetLibrary() {
         stopFlush()
         listOf(
-            "cachedEntries", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
+            "savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
         ).forEach { field(LibraryManager, it).set(LibraryManager, null) }
         field(LibraryManager, "likedIdCursor").setInt(LibraryManager, 0)
     }
@@ -101,6 +102,23 @@ class LibrarySavedRevisionTest {
 
     private fun song(id: Long) =
         SongItem(id = id, name = "fixture-$id", artists = null, album = null, duration = 200_000)
+
+    @Test
+    fun `visible snapshots are reused until the collection changes`() {
+        LibraryManager.saveSongs(ctx, List(5_000) { song(it + 1L) })
+        val before = LibraryManager.getSavedSongs(ctx)
+        assertEquals(5_000, before.size)
+        assertEquals(5_000L, before.first().id)
+        repeat(10) { assertSame(before, LibraryManager.getSavedSongs(ctx)) }
+
+        assertTrue(LibraryManager.removeSong(ctx, 5_000L))
+        val after = LibraryManager.getSavedSongs(ctx)
+        assertEquals(4_999, after.size)
+        assertEquals(4_999L, after.first().id)
+        assertEquals(5_000L, before.first().id)
+        assertTrue(LibraryManager.getSavedSongEntries(ctx).any { it.trackKey.id == 5_000L && it.tombstoned })
+        assertSame(after, LibraryManager.getSavedSongs(ctx))
+    }
 
     // ==================== 外部修改 ⇒ 修订推进 ====================
 

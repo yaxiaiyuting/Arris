@@ -140,7 +140,7 @@ fun LibraryScreen(
     // 云端红心总数与本地可见条目取大者：本地手动收藏的 QQ / B 站不在红心 id 表里，
     // 只显示云端数会让「整列播放」的规模看起来漏了它们。
     var likedTotal by remember { mutableIntStateOf(
-        maxOf(LibraryManager.getLikedSongIds(context).size, LibraryManager.getSavedSongs(context).size)
+        maxOf(LibraryManager.getLikedSongIds(context).size, savedSongs.size)
     ) }
     var selectedCategory by remember { mutableIntStateOf(0) }
     // v3.4.0：专辑 tab 的**音源筛选档**（全部 / 只看 ncm / 只看 qm）。
@@ -210,11 +210,12 @@ fun LibraryScreen(
     }
 
     fun reloadLocal() {
-        savedSongs = LibraryManager.getSavedSongs(context)
+        val songs = LibraryManager.getSavedSongs(context)
+        savedSongs = songs
         savedAlbums = LibraryManager.getSavedAlbums(context)
         likedTotal = maxOf(
             LibraryManager.getLikedSongIds(context).size,
-            LibraryManager.getSavedSongs(context).size,
+            songs.size,
         )
         localPlaylists = LocalPlaylistStore.readPlaylists(context)
     }

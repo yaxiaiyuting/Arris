@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -89,13 +90,15 @@ object LibraryManager {
     private val gson = Gson()
     private val idListType = object : TypeToken<List<Long>>() {}.type
 
-    /**
-     * **收藏库的唯一内存真源**（v2.6.0 · P0）。每条带 origin / tombstoned。
-     *
-     * 之所以不再同时维护一份 `List<SongItem>` 缓存：两份视图必然漂移
-     * （一处改了另一处忘改），而这里漂移的后果是**用户的收藏被静默删掉**。
-     */
-    @Volatile private var cachedEntries: MutableList<SavedSongEntry>? = null
+    // 每次更新替换整张表。可见列表由同一个快照生成，随表失效。
+    private class SavedSongTable(entries: List<SavedSongEntry>) {
+        val entries: List<SavedSongEntry> = Collections.unmodifiableList(entries)
+        val visibleSongs: List<SongItem> by lazy {
+            Collections.unmodifiableList(this.entries.mapNotNull { if (it.isVisible) it.song else null })
+        }
+    }
+
+    @Volatile private var savedSongs: SavedSongTable? = null
     private val songsLock = Any()
     @Volatile private var cachedAlbums: MutableList<AlbumInfo>? = null
     private val albumsLock = Any()
@@ -143,13 +146,13 @@ object LibraryManager {
      * 读盘 → 内存。**走 [SavedSongCodec]**：它同时认 v1 裸 `SongItem` 数组
      * （v2.6.0 之前的落盘形状）与 v2 信封，并逐条容错。
      */
-    private fun ensureSongsLoaded(context: Context): MutableList<SavedSongEntry> {
-        val current = cachedEntries
+    private fun ensureSongsLoaded(context: Context): SavedSongTable {
+        val current = savedSongs
         if (current != null) return current
         return synchronized(songsLock) {
-            cachedEntries ?: run {
+            savedSongs ?: run {
                 val parsed = SavedSongCodec.decode(prefs(context).getString(KEY_SONGS, null))
-                parsed.toMutableList().also { cachedEntries = it }
+                SavedSongTable(parsed).also { savedSongs = it }
             }
         }
     }
@@ -231,7 +234,7 @@ object LibraryManager {
         synchronized(flushLock) {
             val ctx = pendingAppContext ?: return
             pendingAppContext = null
-            val songsSnapshot = synchronized(songsLock) { cachedEntries?.toList() }
+            val songsSnapshot = synchronized(songsLock) { savedSongs?.entries }
             val albumsSnapshot = synchronized(albumsLock) { cachedAlbums?.toList() }
             val likedIdsSnapshot = synchronized(idsLock) { cachedLikedIds?.toList() }
             runCatching {
@@ -390,7 +393,7 @@ object LibraryManager {
      *
      * 播放器那颗红心原先靠**组件局部**的一个 `libraryTick` 驱动重新查询，
      * 而只有播放器自己点的收藏会推进它。库页 / 搜索页改的是**同一份数据**
-     * （[cachedEntries]），却推不动播放器的 tick —— 播放器缩成 mini bar 时仍然挂载，
+     * （[savedSongs]），却推不动播放器的 tick —— 播放器缩成 mini bar 时仍然挂载，
      * 于是「在库页取消收藏当前歌 → 展开播放器」会继续显示旧红心。
      *
      * 修法不是「让别的页面也去戳播放器的 tick」（那是 N 个生产者 × N 个消费者的
@@ -456,10 +459,10 @@ object LibraryManager {
         val key = TrackKey.ofSong(song)
         val changed: Boolean
         synchronized(songsLock) {
-            val before = ensureSongsLoaded(context)
+            val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.addManual(before, song, System.currentTimeMillis())
             changed = after !== before
-            if (changed) cachedEntries = after.toMutableList()
+            if (changed) savedSongs = SavedSongTable(after)
         }
         if (changed) {
             // 4.0.11：底表与已加载表是两份缓存，[isSongSaved] 以底表为真源 ⇒ 乐观写必须同时动，
@@ -486,14 +489,14 @@ object LibraryManager {
         if (newSongs.isEmpty()) return
         val added = mutableListOf<SongItem>()
         synchronized(songsLock) {
-            val before = ensureSongsLoaded(context)
+            val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.addManualAll(before, newSongs, System.currentTimeMillis())
             if (after !== before) {
                 // 恢复此前已取消的收藏也要同步给云端。
                 val visibleBefore = before.asSequence()
                     .filter { it.isVisible }
                     .mapTo(HashSet(before.size)) { it.trackKey }
-                cachedEntries = after.toMutableList()
+                savedSongs = SavedSongTable(after)
                 added += newSongs.filter { TrackKey.ofSong(it) !in visibleBefore }
             }
         }
@@ -533,10 +536,10 @@ object LibraryManager {
         val key = TrackKey.of(null, songId)
         val changedInSongs: Boolean
         synchronized(songsLock) {
-            val before = ensureSongsLoaded(context)
+            val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.remove(before, key)
             changedInSongs = after !== before
-            if (changedInSongs) cachedEntries = after.toMutableList()
+            if (changedInSongs) savedSongs = SavedSongTable(after)
         }
         // 4.0.11：歌在**底表**但不在已加载页时（issue #33 的典型场景），只清已加载表会：
         // ① isSongSaved 仍返回 true（白心不灭）；② 连取消收藏的云端写都不发。
@@ -561,14 +564,10 @@ object LibraryManager {
     }
 
     /** 可见（未被 tombstone）的收藏单曲，按表内顺序。 */
-    fun getSavedSongs(context: Context): List<SongItem> {
-        return synchronized(songsLock) { ensureSongsLoaded(context).filter { it.isVisible }.map { it.song } }
-    }
+    fun getSavedSongs(context: Context): List<SongItem> = ensureSongsLoaded(context).visibleSongs
 
     /** 带来源的只读视图（诊断 / 单测 / 将来的 UI 角标用）。 */
-    fun getSavedSongEntries(context: Context): List<SavedSongEntry> {
-        return synchronized(songsLock) { ensureSongsLoaded(context).toList() }
-    }
+    fun getSavedSongEntries(context: Context): List<SavedSongEntry> = ensureSongsLoaded(context).entries
 
     /**
      * 按**身份**查询是否已收藏（v3.8.0 · K05 的读取入口）。
@@ -577,15 +576,14 @@ object LibraryManager {
      * 所以「红心亮着」与「点下去删得掉」永远是同一个答案 —— 不会出现
      * 「显示已收藏、点了却删不掉」这种读写不一致。
      *
-     * 这里**不新增数据源**：读的仍是唯一的真源 [cachedEntries]，只把「按什么查」
-     * 从裸 id 换成身份（`(source, id)`）。
+     * 读的是收藏条目表 [savedSongs]，按身份 `(source, id)` 查询。
      */
     fun isSongSaved(context: Context, key: TrackKey): Boolean {
         // `id <= 0` 不是任何真实曲目（[saveSong] 同样拒绝），不必进锁扫表。
         if (key.id <= 0L) return false
         // 4.0.11（回移上游 c84c0fd）：**红心 id 底表优先**。
         //
-        // `cachedEntries` 是分页落下来的「已加载」集合：云端有 id 但还没取过详情的歌
+        // 收藏条目表是分页落下来的「已加载」集合：云端有 id 但还没取过详情的歌
         // 根本不在这张表里（`SavedSongModels` 会直接跳过）。于是「喜欢了但没滚到」的歌
         // 会被判成未收藏 —— 播放器显示白心，用户再点一次就走一遍收藏写入，
         // 叠加 502 被当失败的旧判定，掉进 weapi 老通道可能被风控 524 反手取消（issue #33）。
@@ -596,17 +594,14 @@ object LibraryManager {
             val ids = ensureLikedIdsLoaded(context)
             if (ids.contains(key.id)) return true
         }
-        return synchronized(songsLock) { ensureSongsLoaded(context).any { it.isVisible && it.trackKey == key } }
+        return ensureSongsLoaded(context).entries.any { it.isVisible && it.trackKey == key }
     }
 
     fun isSongSaved(context: Context, songId: Long): Boolean =
         isSongSaved(context, TrackKey.of(null, songId))
 
-    fun getSongsByAlbumId(context: Context, albumId: Long): List<SongItem> {
-        return synchronized(songsLock) {
-            ensureSongsLoaded(context).filter { it.isVisible && it.song.album?.id == albumId }.map { it.song }
-        }
-    }
+    fun getSongsByAlbumId(context: Context, albumId: Long): List<SongItem> =
+        getSavedSongs(context).filter { it.album?.id == albumId }
 
     // ==================== 专辑（云端收藏） ====================
 
@@ -713,9 +708,9 @@ object LibraryManager {
                     val firstSongs = if (firstBatch.isNotEmpty()) PlaylistApi.getSongsByIds(firstBatch) else emptyList()
                     val freshById = firstSongs.associateBy { it.id }
                     synchronized(songsLock) {
-                        val before = ensureSongsLoaded(context)
+                        val before = ensureSongsLoaded(context).entries
                         val after = SavedSongSync.merge(before, likedIds, freshById, System.currentTimeMillis())
-                        cachedEntries = after.toMutableList()
+                        savedSongs = SavedSongTable(after)
                         // 游标 = 已连续覆盖的 id 前缀长度：刷新后既不重复请求也不漏请求（Bug2-①）。
                         // 「已覆盖」= **表里有这个 trackKey 的条目**（tombstone 也算），
                         // 见 likedIdCursor 的 KDoc。
@@ -800,13 +795,12 @@ object LibraryManager {
             return@withContext emptyList()
         }
         synchronized(songsLock) {
-            val before = ensureSongsLoaded(context)
+            val table = ensureSongsLoaded(context)
             // 纯追加（不是 merge）：分页只拿到一段 slice，用 merge 会把不在这一批里的
             // 条目重排到后面 —— 每翻一页列表顺序就抖一次。
-            val after = SavedSongSync.appendRemote(before, fetched, System.currentTimeMillis())
-            cachedEntries = after.toMutableList()
-            after.filter { it.isVisible }.map { it.song }
-        }.also {
+            val after = SavedSongSync.appendRemote(table.entries, fetched, System.currentTimeMillis())
+            if (after === table.entries) table else SavedSongTable(after).also { savedSongs = it }
+        }.visibleSongs.also {
             // K05：分页追加也是一次真表变更（哪怕只补进一首），红心必须能感知。
             if (fetched.isNotEmpty()) bumpSavedRevision()
             scheduleFlush(context)
@@ -842,7 +836,7 @@ object LibraryManager {
             var tombstoned: Set<Long>
             val byId = LinkedHashMap<Long, SongItem>()
             synchronized(songsLock) {
-                val entries = ensureSongsLoaded(context)
+                val entries = ensureSongsLoaded(context).entries
                 localVisible = entries.filter { it.isVisible }
                 tombstoned = entries.asSequence()
                     .filter { it.tombstoned && it.trackKey.source == MusicSource.NETEASE }
@@ -865,19 +859,17 @@ object LibraryManager {
                 for (s in fetched) byId[s.id] = s
                 if (fetched.isNotEmpty()) {
                     synchronized(songsLock) {
-                        val before = ensureSongsLoaded(context)
-                        cachedEntries = SavedSongSync
-                            .appendRemote(before, fetched, System.currentTimeMillis())
-                            .toMutableList()
+                        val before = ensureSongsLoaded(context).entries
+                        val after = SavedSongSync.appendRemote(before, fetched, System.currentTimeMillis())
+                        if (after !== before) savedSongs = SavedSongTable(after)
                     }
                     // K05：这一批真的补进了表 —— 推进修订（锁外），红心与新库页同时刷新。
                     bumpSavedRevision()
                 }
                 if (start + PLAY_ALL_BATCH_SIZE < missing.size) delay(PLAY_ALL_BATCH_DELAY_MS)
             }
-            synchronized(songsLock) {
-                localVisible = cachedEntries?.filter { it.isVisible } ?: localVisible
-            }
+            val latest = synchronized(songsLock) { savedSongs?.entries }
+            localVisible = latest?.filter { it.isVisible } ?: localVisible
             selectLikedPlayAll(
                 localVisible = localVisible,
                 cloudIds = allIds,

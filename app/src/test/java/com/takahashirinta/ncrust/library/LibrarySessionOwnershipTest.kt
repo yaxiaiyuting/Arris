@@ -64,7 +64,7 @@ class LibrarySessionOwnershipTest {
         }
         // 真源缓存必须置 null（= 没加载过）才会重新读盘；只清空集合会留下上一个用例的表。
         listOf(
-            "cachedEntries", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
+            "savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
         ).forEach { field(LibraryManager, it).set(LibraryManager, null) }
         listOf("latestLikeIntent", "latestAlbumIntent", "likeMutexes", "albumMutexes").forEach {
             (field(LibraryManager, it).get(LibraryManager) as MutableMap<*, *>).clear()
