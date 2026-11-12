@@ -13,7 +13,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.takahashirinta.ncrust.BuildConfig
@@ -472,13 +471,9 @@ object UpdateService {
         (_download.value as? DownloadState.Ready)
             ?.takeIf { it.info.targetKey == info.targetKey && it.file.isFile }
 
-    /** Android 8+ 需要用户为本应用打开「安装未知应用」。 */
+    /** 检查系统是否允许本应用发起 APK 安装。 */
     fun canInstallPackages(context: Context): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(false)
-        } else {
-            true
-        }
+        runCatching { context.packageManager.canRequestPackageInstalls() }.getOrDefault(false)
 
     /** 「安装未知应用」授权页；返回后由界面重新尝试安装。 */
     fun unknownSourcesIntent(context: Context): Intent =
