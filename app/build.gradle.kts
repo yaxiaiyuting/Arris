@@ -525,8 +525,11 @@ android {
         //   ② 登录页兜底：部分运营商出口对 `music.163.com/` 返回 404，WebView 命中 404/403 时
         //   自动换到 `/login`（302→`y.music.163.com/m/login`，实测 200）。
         //   ③ `saveCookie` 补上"半截会话不得覆盖完整会话"，避免登录页把 MUSIC_U 顶掉。
-        versionCode = 227
-        versionName = "4.1.2-gpl"
+        // v4.1.3（重构验收测试版）：versionCode 出处 `tools/next-version.sh` 三源交叉
+        //   （tag/已发布 APK 227 + 工作区 227 ⇒ 228）。本版只含源码重构与性能修复，
+        //   未改 applicationId、签名与接口。
+        versionCode = 228
+        versionName = "4.1.3-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
