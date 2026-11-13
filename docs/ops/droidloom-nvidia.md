@@ -77,6 +77,51 @@ UnsetEnvironment=GBM_BACKEND
 > 而且不会出现在任何 `git status` / 配置文件里 —— 这类「幽灵状态」能把后面的判断全部带偏
 > （我一度以为根因是「NVIDIA 不支持」，其实是自己在 AMD 节点上按 NVIDIA 修饰符分配）。
 
+### 3.4 render node 选谁：AMD 还是 NVIDIA（2026-11-13 实测）
+
+先说一个反直觉的事实：**`droidloomctl gpu nvidia` 不等于让 presenter 用 NVIDIA 节点。**
+它只决定 Android 渲染在谁身上（NVIDIA 走 `droidloom-gpu-server` 转发），cell 的 render node
+仍然由 `/etc/droidloom/cell.json` 的 `render_node` 决定，而每次 `start`/`restart` 都会把它重写成
+`/dev/dri/renderD129`（AMD）。手动改 `cell.json` / `runtime.env` 会被下一次受管启动顶掉。
+
+要钉住 NVIDIA 节点，宿主侧补一个**后加载**的 `EnvironmentFile`（systemd 后加载覆盖先加载）：
+
+```ini
+# /etc/systemd/user/droidloom.service.d/95-render-node-nvidia.conf   ← 注意是 user 级
+[Service]
+EnvironmentFile=-/etc/droidloom/render-node.env
+```
+
+```ini
+# /etc/droidloom/render-node.env
+DROIDLOOM_RENDER_NODE=/dev/dri/renderD128
+```
+
+```bash
+systemctl --user daemon-reload && droidloomctl restart   # 受管重启后依然是 renderD128
+```
+
+（放 `/etc/systemd/system/` 是无效的：`droidloom.service` 是 **user** unit，drop-in 必须落在
+`/etc/systemd/user/` 或 `~/.config/systemd/user/`。）
+
+两条路的实测，同一脚本（20 次底部标签切换，`dumpsys gfxinfo` 读数）：
+
+| | AMD 节点 `renderD129` | NVIDIA 节点 `renderD128` |
+|---|---|---|
+| 分配走到的档位 | advertised ✗ → gbm-default ✗ → **linear-fallback ✓** | **advertised ✓**（`0x0300000000606010`，KIND=6） |
+| gfxinfo 帧数 / 掉帧 | 1614 / 1.36% | 1952 / 1.59%（另一轮 2706 / 1.55%） |
+| p99 帧时间 | 17 ms | 19 ms（另一轮 11 ms） |
+| missed vsync | 0 | 0–2 |
+| presenter CPU / RSS | 0.1% / **25.9 MB** | 1.5% / **8.5 MB** |
+
+结论：**UI 流畅度两者在噪声内**（1.3–1.6% 掉帧，p99 11–19ms 波动），差别在宿主侧——
+NVIDIA 节点走零拷贝 dmabuf（RSS 8.5 MB），AMD 节点靠 LINEAR 回退，presenter 要多持有一份
+线性缓冲（25.9 MB），但宿主 CPU 更省。两条都能日常用；**要换回去把 `render-node.env` 里的
+值改成 `renderD129` 再 `droidloomctl restart` 即可**（不想要这个 override 就删 drop-in）。
+
+> 另注：用户此前遇到的「NVIDIA 渲染抽搐」是 **Waydroid** 上的现象，与 Droidloom 无关；
+> Droidloom 这条 NVIDIA 路径在本次实测里没有掉帧或卡顿记录。
+
 ### 3.4 代码层另外两个假设
 
 - `PointerHandler` 只处理 Press / Motion / Release，`Axis`（滚轮）落进 `_ => {}` —— 协议里
