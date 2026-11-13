@@ -11,13 +11,17 @@ import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.model.LyricContent
 import com.takahashirinta.ncrust.network.model.LyricResponse
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -39,9 +43,11 @@ class NeteaseLyricReadsTest {
     private class FixtureContext : ContextWrapper(null) {
         private val stores = mutableMapOf<String, MemoryPrefs>()
         val writes = AtomicInteger()
+        var onVipStoreRead: (() -> Unit)? = null
 
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+            if (name == "ncrust_netease_vip") onVipStoreRead?.invoke()
             val prefs = synchronized(stores) { stores.getOrPut(name) { MemoryPrefs() } }
             if (name != "ncrust_lyrics_cache") return prefs
             return object : SharedPreferences by prefs {
@@ -193,5 +199,43 @@ class NeteaseLyricReadsTest {
         val reply = api.getLyric(92_000_103L, session = CookieManager.snapshot())
         assertEquals("fixture", reply.lrc?.lyric)
         assertEquals(1, transportCalls.get())
+    }
+
+    @Test fun oldResponseCannotWriteBetweenLoginReplacementAndFlowNotification() = runBlocking {
+        CookieManager.saveCookie(context, "MUSIC_U=fixture-a; __csrf=a")
+        val old = CookieManager.snapshot()
+        val changingLogin = CompletableDeferred<Unit>()
+        val finishLogin = CountDownLatch(1)
+        context.onVipStoreRead = {
+            changingLogin.complete(Unit)
+            check(finishLogin.await(5L, TimeUnit.SECONDS))
+        }
+        val login = async(Dispatchers.IO) {
+            CookieManager.saveCookie(context, "MUSIC_U=fixture-b; __csrf=b")
+        }
+        val writing = CompletableDeferred<Unit>()
+        try {
+            withTimeout(5_000L) { changingLogin.await() }
+            assertEquals(old.loginGeneration, CookieManager.loginGenerations.value)
+            val cacheWrite = async(Dispatchers.IO) {
+                writing.complete(Unit)
+                try {
+                    LyricsCache.putNetease(context, 92_000_104L, full, old)
+                    false
+                } catch (_: NeteaseSessionChangedException) {
+                    true
+                }
+            }
+            withTimeout(5_000L) { writing.await() }
+            val prematureWrite = withTimeoutOrNull(300L) { cacheWrite.await() }
+            finishLogin.countDown()
+            assertNull("cache write completed while login was replacing the credentials", prematureWrite)
+            assertTrue(withTimeout(5_000L) { cacheWrite.await() })
+            assertEquals(0, context.writes.get())
+        } finally {
+            finishLogin.countDown()
+            login.join()
+            context.onVipStoreRead = null
+        }
     }
 }

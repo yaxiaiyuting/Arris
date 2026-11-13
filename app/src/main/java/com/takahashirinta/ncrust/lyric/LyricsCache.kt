@@ -68,13 +68,8 @@ object LyricsCache {
     private const val MAX_JSON_BUFFER_HINT = 8 * 1024 * 1024
 
     /**
-     * 「只有 TTML、还没有 LRC 条目」时的暂存 key 前缀（v1.9.0）。
-     *
-     * 为什么不把 TTML 直接写进歌曲自己的条目：条目里 `lrc == ""` 是**「确无歌词」的权威标记**
-     * （[put] 会写、PlayerViewModel 命中它就把歌词按钮置灰且不再打网络），而预取 TTML 的下一首
-     * 往往还没有 LRC 条目。为了存 TTML 就建一条 lrc="" 的正式条目，等于把那首歌判成「确无歌词」，
-     * 一进播放歌词就没了 —— 预取反而把功能弄坏。所以没有正式条目时先落在 `ttml:<songId>` 下，
-     * 等 [put] 写正式条目时再并进去（见 [put]），同一首歌最终只留一条。
+     * 在 [putNetease] 写入正式条目前，TTML 单独暂存。
+     * 正式条目的空 LRC 表示网易云已确认无歌词，不能由 TTML 预取提前写入。
      */
     private const val TTML_KEY_PREFIX = "ttml:"
 
@@ -129,18 +124,19 @@ object LyricsCache {
         synchronized(lock) {
             val map = loadLocked(context)
             val key = songId.toString()
-            if (CookieManager.loginGenerations.value != session.loginGeneration) {
-                throw NeteaseSessionChangedException("Netease login changed before lyric cache write")
-            }
+            val stagedKey = ttmlKey(songId)
             val old = map[key]
-            val staged = map.remove(ttmlKey(songId))
-            val ttmlSource = old?.takeIf { it.ttml != null } ?: staged
+            val ttmlSource = old?.takeIf { it.ttml != null } ?: map[stagedKey]
             val entry = CachedLyrics(
                 reply.lrc?.lyric.orEmpty(), reply.tlyric?.lyric.orEmpty(), System.currentTimeMillis(),
                 reply.yrc?.lyric.orEmpty(), ttmlSource?.ttml, ttmlSource?.ttmlAt ?: 0,
                 reply.romalrc?.lyric.orEmpty(), old?.translationSource, old?.romanSource,
             )
-            map[key] = entry
+            // Check login and accept the entry atomically. Encoding only holds the cache lock.
+            CookieManager.ifSameLogin(session) {
+                map.remove(stagedKey)
+                map[key] = entry
+            } ?: throw NeteaseSessionChangedException("Netease login changed before lyric cache write")
             map.trimOldest(MAX_ENTRIES) { it.timestamp }
             persistLocked(context, map)
             entry

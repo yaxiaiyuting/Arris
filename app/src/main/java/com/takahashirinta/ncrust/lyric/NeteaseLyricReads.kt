@@ -50,7 +50,7 @@ internal object NeteaseLyricReads {
         requests.readerCount(Key(songId, session.loginGeneration))
 
     private fun requireSameLogin(session: NeteaseSessionSnapshot) {
-        if (CookieManager.loginGenerations.value != session.loginGeneration) {
+        if (CookieManager.snapshot().loginGeneration != session.loginGeneration) {
             throw NeteaseSessionChangedException("Netease login changed during lyric read")
         }
     }
