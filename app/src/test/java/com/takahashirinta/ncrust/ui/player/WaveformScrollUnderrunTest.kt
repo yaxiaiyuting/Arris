@@ -47,6 +47,20 @@ class WaveformScrollUnderrunTest {
     }
 
     @Test
+    fun `fast scrolling holds band signal until an explicit reset`() {
+        val ring = WaveformRing(capacity = 64, barCount = 8)
+        ring.setScrollSpeedFactor(2f)
+        ring.push(0f, low = 0f, mid = .5f, high = 0f, arrivalAtMs = 1_000L)
+        ring.pump(true, 10f, VisualizerEffects.BASELINE, 1_000L)
+        for (time in 1_010L..2_500L step 10L) {
+            assertTrue(ring.pump(true, 10f, VisualizerEffects.BASELINE, time))
+        }
+        assertEquals(.5f, ring.bandAt(1, 0), 0f)
+        ring.clear()
+        assertFalse(ring.pump(true, 10f, VisualizerEffects.BASELINE, 2_510L))
+    }
+
+    @Test
     fun `paused playback never advances the scrolling window`() {
         val ring = WaveformRing(capacity = 64, barCount = 16)
         ring.push(.6f, arrivalAtMs = 1_000)

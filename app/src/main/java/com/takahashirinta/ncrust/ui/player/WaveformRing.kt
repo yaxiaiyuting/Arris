@@ -245,9 +245,17 @@ class WaveformRing(
         val ballVelocity = FloatArray(size)
         val ballResting = BooleanArray(size)
         val dash = FloatArray(size)
+        private var signalColumns = 0
+
+        fun hasSignal(): Boolean = signalColumns > 0
+
+        fun clearTargets() {
+            targets.fill(0f)
+            signalColumns = 0
+        }
 
         fun clear() {
-            targets.fill(0f)
+            clearTargets()
             heights.fill(0f)
             heightVelocity.fill(0f)
             balls.fill(0f)
@@ -257,6 +265,9 @@ class WaveformRing(
         }
 
         fun append(value: Float, blank: Boolean, hold: Boolean) {
+            val next = if (hold) targets.last() else value
+            if (targets[0] > ANIMATION_MIN_SIGNAL) signalColumns--
+            if (next > ANIMATION_MIN_SIGNAL) signalColumns++
             targets.copyInto(targets, startIndex = 1)
             // 泳道的画面状态随历史移动。单条曲线的平滑状态按屏幕坐标保留。
             if (scrollDisplay) {
@@ -270,7 +281,7 @@ class WaveformRing(
             if (hold) return
 
             val last = targets.lastIndex
-            targets[last] = value
+            targets[last] = next
             if (blank) heights[last] = 0f
             if (scrollDisplay || blank) {
                 heightVelocity[last] = 0f
@@ -503,7 +514,7 @@ class WaveformRing(
                 changed = true
             }
         } else if (fullWindow.targets.any { it != 0f }) {
-            fullWindow.targets.fill(0f)
+            fullWindow.clearTargets()
             changed = true
         }
         val dt = dtMs.coerceIn(0f, 200f)
@@ -561,11 +572,7 @@ class WaveformRing(
      * 全窗口都静音时返回 false，帧就真的停下来（v1.8.1 的「不空转」契约）。
      */
     private fun windowHasSignal(): Boolean {
-        if (fullWindow.targets.any { it > ANIMATION_MIN_SIGNAL }) return true
-        for (window in bandWindows) {
-            if (window.targets.any { it > ANIMATION_MIN_SIGNAL }) return true
-        }
-        return false
+        return fullWindow.hasSignal() || bandWindows.any { it.hasSignal() }
     }
 
     /** 每个格周期最多消费一根柱，避免同批到达的数据在同一帧跳过多格。 */
