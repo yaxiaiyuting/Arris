@@ -46,10 +46,7 @@ import coil.request.SuccessResult
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.auth.CookieManager
-import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.cache.ContentCache
-import com.takahashirinta.ncrust.cache.HomeSnapshot
-import com.takahashirinta.ncrust.network.DailyRecommendation
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
@@ -65,7 +62,7 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import com.takahashirinta.ncrust.warmup.AppWarmup
-import com.takahashirinta.ncrust.warmup.HOME_NEW_SONGS_LIMIT
+import com.takahashirinta.ncrust.warmup.HomeFeed
 import com.takahashirinta.ncrust.ui.components.ArtistRecoCard
 import com.takahashirinta.ncrust.ui.components.PlayAllButton
 import com.takahashirinta.ncrust.ui.components.SessionExpiredBanner
@@ -88,16 +85,18 @@ import com.takahashirinta.ncrust.ui.theme.AppMotion
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import android.widget.Toast
 
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     onSongClick: (SongItem) -> Unit,
     onPlaylistClick: (Long) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
@@ -113,6 +112,7 @@ fun HomeScreen(
     // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
     onRelogin: () -> Unit = {},
     active: Boolean = true,
+    localContentReady: StateFlow<Boolean> = AppWarmup.ready,
 ) {
     val strings = LocalStrings.current
     // 会话状态：Expired 时顶部一条失效横幅；非 Valid 时每日推荐加一行「登录后为你推荐」
@@ -120,19 +120,17 @@ fun HomeScreen(
     val sessionState by SessionMonitor.state.collectAsState()
     val sessionExpired = sessionState is SessionState.Expired
     val sessionValid = sessionState is SessionState.Valid
-    // 初始 state 从 ContentCache 读取。有缓存则立即渲染，无需 spinner。
-    // 后台仍会刷新——请求返回后写回缓存 + 更新 state；LazyColumn 通过 key diff 平滑替换。
-    var dailySongs by remember { mutableStateOf(ContentCache.homeDailySongs ?: emptyList()) }
-    var playlists by remember { mutableStateOf(ContentCache.homeRecommendPlaylists ?: emptyList()) }
-    var newSongs by remember { mutableStateOf(ContentCache.homeNewSongs ?: emptyList()) }
-    // 冷启动（三块数据都空）才显示全屏 loader；有任一缓存则跳过。
-    var isLoading by remember {
-        mutableStateOf(dailySongs.isEmpty() && playlists.isEmpty() && newSongs.isEmpty())
-    }
-    var error by remember { mutableStateOf<String?>(null) }
-    // v1.5.1 · C：无网 / 超时的降级状态。
-    //  - offline：启动时系统就告诉我们没有可用网络 —— 一个请求都不发；
-    var offline by remember { mutableStateOf(false) }
+    val loginGeneration by CookieManager.loginGenerations.collectAsState()
+    val owner = remember(loginGeneration) { CookieManager.accountOwner() }
+    val hasCurrentCache = ContentCache.ownerMatches(owner)
+    var dailySongs by remember(owner) { mutableStateOf(if (hasCurrentCache) ContentCache.homeDailySongs.orEmpty() else emptyList()) }
+    var playlists by remember(owner) { mutableStateOf(if (hasCurrentCache) ContentCache.homeRecommendPlaylists.orEmpty() else emptyList()) }
+    var newSongs by remember(owner) { mutableStateOf(if (hasCurrentCache) ContentCache.homeNewSongs.orEmpty() else emptyList()) }
+    var isLoading by remember(loginGeneration) { mutableStateOf(true) }
+    var error by remember(loginGeneration) { mutableStateOf<String?>(null) }
+    var offline by remember(loginGeneration) { mutableStateOf(false) }
+    var retryCount by remember { mutableIntStateOf(0) }
+    var handledRetry by remember { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     // E（方案 2 瘦身版）：榜单入口。走 ContentCache 的 15s freshness 窗口 —— warmup/上次
     // 访问刚拉过就不再请求；卡片放在首屏，但请求不阻塞其它分节渲染（拿不到就整块不显示）。
@@ -140,61 +138,43 @@ fun HomeScreen(
     // 4.0.0：榜单卡用「榜一那首歌」的专辑图当封面（用户认的是歌，不是榜单拼贴图）。
     // 一次 /api/playlist/detail 就够；限制并发 3、只补前 12 个榜单，失败就退回原封面。
     val firstSongCovers = remember { androidx.compose.runtime.mutableStateMapOf<Long, String>() }
-    fun publishPersonalized(started: NeteaseSessionSnapshot, publish: (String?) -> Unit) {
-        CookieManager.ifSameLogin(started) { live ->
-            val owner = live.accountOwner
-            ContentCache.bindOwner(owner)
-            publish(owner)
-        }
-    }
-
     val gridState = rememberLazyGridState()
     // 宽屏：新歌从"整行列表"切到"自适应栅格单元"（Apple Music 式）；手机保持整行列表。
     val windowWidthDp = LocalConfiguration.current.screenWidthDp
     val isWide = windowWidthDp >= 600
-    val coroutineScope = rememberCoroutineScope()
-    fun loadToplists(force: Boolean = false) {
-        val cached = ContentCache.toplistItems
-        if (!force && cached != null && ContentCache.isToplistFresh()) {
-            if (toplists.isEmpty()) toplists = cached
-            return
-        }
+    // The FM card uses a generic title until it has the current account's profile.
+    var fmProfile by remember(owner) { mutableStateOf(ContentCache.userProfile.takeIf { hasCurrentCache }) }
+    var fmAccent by remember(owner) { mutableStateOf<Color?>(null) }
+    LaunchedEffect(active, loginGeneration) {
+        if (!active || !NetworkAvailability.isOnline(context)) return@LaunchedEffect
         val started = CookieManager.snapshot()
-        if (!NetworkAvailability.isOnline(context)) return
-        coroutineScope.launch {
-            try {
-                val list = PlaylistApi.getToplists()
-                CookieManager.ifSameLogin(started) { live ->
-                    ContentCache.putToplist(list)
-                    toplists = list
-                    HomeSnapshot.save(context, toplists = list, owner = live.accountOwner)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) { }
+        if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+        val profile = CookieManager.ifSameLogin(started) { live ->
+            ContentCache.userProfile.takeIf { ContentCache.ownerMatches(live.accountOwner) }
+        } ?: try {
+            PlaylistApi.getUserProfile()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
         }
-    }
-
-    // 私人 FM 电台卡需要登录用户资料: 昵称(卡标题"xx的电台") + 头像(取强调色做封面)。
-    // 电台卡**常驻**——资料拿不到也照常显示(标题回退通用文案), 不再因此整卡消失。
-    var fmProfile by remember { mutableStateOf(ContentCache.userProfile) }
-    // 头像主色调(Palette), 取不到就回退中性底色(不借用 Arris 主题色)
-    var fmAccent by remember { mutableStateOf<Color?>(null) }
-    val fmContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(active) {
-        if (!active) return@LaunchedEffect
-        // v1.5.1 · C：没网就别去要资料了（电台卡会退回通用标题）。
-        if (!NetworkAvailability.isOnline(context)) return@LaunchedEffect
-        val started = CookieManager.snapshot()
-        val profile = ContentCache.userProfile
-            ?: runCatching { PlaylistApi.getUserProfile() }.getOrNull()
         if (profile != null && profile.userId > 0) {
-            CookieManager.ifCurrent(started) {
+            coroutineContext.ensureActive()
+            val published = CookieManager.ifSameLogin(started) { live ->
+                ContentCache.bindOwner(live.accountOwner)
                 fmProfile = profile
                 ContentCache.userProfile = profile
             }
-            val accent = runCatching { extractAvatarAccent(fmContext, profile.avatarUrl) }.getOrNull()
-            CookieManager.ifCurrent(started) { if (accent != null) fmAccent = accent }
+            if (published == null) return@LaunchedEffect
+            val accent = try {
+                withContext(Dispatchers.Default) { extractAvatarAccent(context, profile.avatarUrl) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            coroutineContext.ensureActive()
+            CookieManager.ifSameLogin(started) { fmAccent = accent }
         }
     }
 
@@ -204,21 +184,23 @@ fun HomeScreen(
      * 只在内存里缓存（进程级），不落盘：它是纯展示优化，重启后重拉一次的成本很低
      * （每个榜单一次明文 GET）。失败静默 —— 榜单原本的拼贴封面照常显示。
      */
-    fun loadChartCovers(charts: List<PlaylistApi.PlaylistCard>) {
+    suspend fun loadChartCovers(charts: List<PlaylistApi.PlaylistCard>) {
         val pending = charts.take(12).filter { firstSongCovers[it.id] == null }
         if (pending.isEmpty() || !NetworkAvailability.isOnline(context)) return
-        coroutineScope.launch(Dispatchers.IO) {
-            // 分批（每批 3 个）串行推进：首页不要因为补封面把连接池占满（每张一次明文 GET）。
-            pending.chunked(3).forEach { chunk: List<PlaylistApi.PlaylistCard> ->
-                val fetched = kotlinx.coroutines.coroutineScope {
-                    chunk.map { chart ->
-                        async {
-                            chart.id to runCatching { PlaylistApi.getChartFirstSongCover(chart.id) }.getOrNull()
+        // Tie these reads to the visible chart list and publish each available cover.
+        for (chunk in pending.chunked(3)) {
+            coroutineScope {
+                chunk.forEach { chart ->
+                    launch {
+                        val cover = try {
+                            PlaylistApi.getChartFirstSongCover(chart.id)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
                         }
-                    }.awaitAll()
-                }
-                withContext(Dispatchers.Main) {
-                    fetched.forEach { (id, cover) -> if (cover != null) firstSongCovers[id] = cover }
+                        if (cover != null) firstSongCovers[chart.id] = cover
+                    }
                 }
             }
         }
@@ -231,145 +213,57 @@ fun HomeScreen(
         if (active && toplists.isNotEmpty()) loadChartCovers(toplists)
     }
 
-    fun loadDailySongs() {
-        val started = CookieManager.snapshot()
-        val dayKey = DailyRecommendation.currentDayKey()
-        val cached = ContentCache.freshHomeDailySongs(started.accountOwner, dayKey)
-        if (cached != null) {
-            CookieManager.ifSameLogin(started) { dailySongs = cached }
-            return
-        }
-        if (!NetworkAvailability.isOnline(context)) return
-        coroutineScope.launch {
-            try {
-                val list = PlaylistApi.getDailyRecommendSongs()
-                publishPersonalized(started) { owner ->
-                    dailySongs = list
-                    ContentCache.putHomeDailySongs(list, dayKey)
-                    offline = false
-                    HomeSnapshot.save(context, daily = list, owner = owner, dailyDayKey = dayKey)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.e("DailySongs", "Error", e)
-            }
-        }
-    }
-
-    fun loadPlaylists() {
-        val started = CookieManager.snapshot()
-        coroutineScope.launch {
-            try {
-                val list = PlaylistApi.getRecommendPlaylists()
-                publishPersonalized(started) { owner ->
-                    playlists = list
-                    ContentCache.homeRecommendPlaylists = list
-                    offline = false
-                    HomeSnapshot.save(context, playlists = list, owner = owner)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) { }
-        }
-    }
-
-    fun loadNewSongs() {
-        val started = CookieManager.snapshot()
-        coroutineScope.launch {
-            if (newSongs.isEmpty()) isLoading = true
-            error = null
-            try {
-                val list = PlaylistApi.getTopSongs(limit = HOME_NEW_SONGS_LIMIT, offset = 0)
-                publishPersonalized(started) { owner ->
-                    newSongs = list
-                    ContentCache.homeNewSongs = list
-                    isLoading = false
-                    offline = false
-                    HomeSnapshot.save(context, newSongs = list, owner = owner)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                CookieManager.ifSameLogin(started) {
-                    error = strings.loadFailed(e.message)
-                    isLoading = false
-                }
-            }
-        }
-    }
-
-    /** v1.5.1 · C：空态上的「重试」——先重新问一次网络，再重发三块请求。 */
-    fun retryLoad() {
-        error = null
-        if (!NetworkAvailability.isOnline(context)) {
-            offline = true
-            isLoading = false
-            return
-        }
-        offline = false
-        isLoading = true
-        loadDailySongs()
-        loadPlaylists()
-        loadNewSongs()
-        loadToplists(force = true)
-    }
-
-    LaunchedEffect(active) {
+    LaunchedEffect(active, loginGeneration, localContentReady) {
         if (!active) return@LaunchedEffect
         val started = CookieManager.snapshot()
-        val owner = started.accountOwner
-        if (ContentCache.ownerMatches(owner)) {
-            ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
-            ContentCache.homeRecommendPlaylists?.let { if (playlists.isEmpty()) playlists = it }
-            ContentCache.homeNewSongs?.let { if (newSongs.isEmpty()) newSongs = it }
-        }
-        if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
-        if (ContentCache.isHomeFreshFor(owner)) {
-            isLoading = false
-            loadDailySongs()
-            loadToplists()
-            return@LaunchedEffect
-        }
-
-        val arrived = AppWarmup.homeLoads?.takeIf { it.belongsTo(started) }?.awaitWithin(WARMUP_AWAIT_MS)
-        val reused = arrived?.let { (daily, recommended, latest) ->
-            CookieManager.ifSameLogin(started) { live ->
-                val cacheIsCurrent = ContentCache.ownerMatches(live.accountOwner)
-                if (!daily.isNullOrEmpty()) {
-                    dailySongs = ContentCache.homeDailySongs.takeIf { cacheIsCurrent } ?: daily
-                }
-                if (!recommended.isNullOrEmpty()) {
-                    playlists = ContentCache.homeRecommendPlaylists.takeIf { cacheIsCurrent } ?: recommended
-                }
-                if (!latest.isNullOrEmpty()) {
-                    newSongs = ContentCache.homeNewSongs.takeIf { cacheIsCurrent } ?: latest
-                    isLoading = false
-                }
-                arrived
+        if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+        localContentReady.first { it }
+        CookieManager.ifSameLogin(started) { live ->
+            if (ContentCache.ownerMatches(live.accountOwner)) {
+                ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
+                ContentCache.homeRecommendPlaylists?.let { if (playlists.isEmpty()) playlists = it }
+                ContentCache.homeNewSongs?.let { if (newSongs.isEmpty()) newSongs = it }
             }
+            if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
         }
-        // v1.5.1 · C：没网就一个请求都不发 —— 直接进降级态（显示刚灌进来的快照，
-        // 或者空态 + 重试）。原来这里会白等 OkHttp 的 30s connectTimeout。
-        if (!NetworkAvailability.isOnline(context)) {
-            offline = true
-            isLoading = false
-            return@LaunchedEffect
-        }
-        // 预算内已经到达的栏目直接复用，其他栏目各自发起请求。
-        loadDailySongs()
-        if (reused?.playlists.isNullOrEmpty()) loadPlaylists()
-        if (reused?.newSongs.isNullOrEmpty()) loadNewSongs()
-        loadToplists()
     }
 
-
-    // v1.5.1 · C：半死网络（连上了但实际不通）下请求最长会挂到 connectTimeout。
-    // 转圈最多陪跑 [HOME_LOAD_TIMEOUT_MS]：到点撤掉转圈、给空态 + 重试，
-    // 至少让用户知道发生了什么，而不是对着一个永远转的圈。
-    LaunchedEffect(active, isLoading) {
-        if (!active || !isLoading) return@LaunchedEffect
-        delay(HOME_LOAD_TIMEOUT_MS)
+    LaunchedEffect(active, loginGeneration, retryCount, localContentReady) {
+        if (!active) return@LaunchedEffect
+        val started = CookieManager.snapshot()
+        if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+        // Give the disk snapshot a short head start before fetching online.
+        withTimeoutOrNull(LOCAL_HOME_WAIT_MS) { localContentReady.first { it } }
+        val force = handledRetry != retryCount
+        handledRetry = retryCount
+        offline = !NetworkAvailability.isOnline(context)
+        error = null
+        if (offline) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+        isLoading = true
+        suspend fun <T> load(fetch: suspend () -> List<T>, publish: (List<T>) -> Unit) {
+            try {
+                val result = fetch()
+                kotlin.coroutines.coroutineContext.ensureActive()
+                CookieManager.ifSameLogin(started) { publish(result) }
+            } catch (_: CancellationException) {
+                currentCoroutineContext().ensureActive()
+            } catch (e: Exception) {
+                CookieManager.ifSameLogin(started) {
+                    if (error == null) error = e.message
+                }
+            }
+        }
+        withTimeoutOrNull(HOME_LOAD_TIMEOUT_MS) {
+            coroutineScope {
+                launch { load({ HomeFeed.dailySongs(context, started) }) { dailySongs = it } }
+                launch { load({ HomeFeed.recommendedPlaylists(context, started, force) }) { playlists = it } }
+                launch { load({ HomeFeed.newSongs(context, started, force) }) { newSongs = it } }
+                launch { load({ HomeFeed.toplists(context, started, force) }) { toplists = it } }
+            }
+        }
         isLoading = false
     }
 
@@ -424,7 +318,7 @@ fun HomeScreen(
                                 offline = offline,
                                 title = if (offline) strings.networkOfflineTitle else strings.loadFailed(error),
                                 retryLabel = strings.retry,
-                                onRetry = { retryLoad() },
+                                onRetry = { retryCount++ },
                             )
                         }
                         return@LazyVerticalGrid
@@ -922,7 +816,7 @@ private suspend fun extractAvatarAccent(context: Context, avatarUrl: String): Co
             .build()
     )
     val bitmap = (result as? SuccessResult)?.drawable
-        ?.let { (it as BitmapDrawable).bitmap }
+        ?.let { (it as? BitmapDrawable)?.bitmap }
         ?: return null
     val palette = Palette.from(bitmap).generate()
     val argb = palette.getVibrantColor(0).takeIf { it != 0 }
@@ -932,13 +826,7 @@ private suspend fun extractAvatarAccent(context: Context, avatarUrl: String): Co
     return Color(argb)
 }
 
-/**
- * v1.5.1 · C：首页降级空态。
- *
- * 冷启动完全没网、或者请求失败/超时且一条缓存都没有时，首页显示它 —— 说明原因 +
- * 一个「重试」入口。此前这种情况下面是一个三块全空的网格，用户既看不到内容也看不到
- * 为什么（error 写进了 state，却没有任何 UI 消费它）。
- */
+/** 首页无可展示栏目时提供原因和重试入口。 */
 @Composable
 private fun HomeDegradedState(
     offline: Boolean,
@@ -969,13 +857,7 @@ private fun HomeDegradedState(
 /** v1.5.1 · C：首页转圈的最长陪跑时间（半死网络下不再一路等到 OkHttp 的 30s）。 */
 private const val HOME_LOAD_TIMEOUT_MS = 8_000L
 
-/**
- * await 预热的在途请求最多等多久（v3.7.11）。
- *
- * 这三条请求在预热阶段**已经发出**，正常几十~几百毫秒就回；等 700ms 还没回说明网络慢，
- * 与其继续空转，不如照旧自己发（最坏只是慢网下多一次请求，用户看到的却是"立刻有内容"）。
- */
-private const val WARMUP_AWAIT_MS = 700L
+private const val LOCAL_HOME_WAIT_MS = 700L
 
 /** 点击 + 长按合并到一个 modifier，避免每个 tile 内部重复样板。 */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)

@@ -3,6 +3,8 @@ package com.takahashirinta.ncrust.network
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.net.InetAddress
+import java.net.ServerSocket
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,8 +17,44 @@ import okio.buffer
 import org.junit.Assert.*
 import org.junit.Test
 
-/** All requests are answered by an application interceptor; no socket or real account. */
+/** Interceptor and loopback fixtures. */
 class BufferedHttpCallTest {
+    @Test fun audioWarmupReturnsItsSocketToThePlaybackPool() = runBlocking {
+        val playback = com.takahashirinta.ncrust.player.MediaHttp.client
+        val warmup = ConnectionWarmup.audio
+        assertSame(playback.connectionPool, warmup.connectionPool)
+        assertSame(playback.sslSocketFactory, warmup.sslSocketFactory)
+        assertSame(playback.dns, warmup.dns)
+        assertEquals(5_000, warmup.callTimeoutMillis)
+
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 4_000
+            val requests = async(Dispatchers.IO) {
+                server.accept().use { socket ->
+                    socket.soTimeout = 4_000
+                    val input = socket.getInputStream().bufferedReader(Charsets.US_ASCII)
+                    val output = socket.getOutputStream()
+                    List(2) {
+                        val line = requireNotNull(input.readLine())
+                        while (!input.readLine().isNullOrEmpty()) { /* Discard request headers. */ }
+                        output.write("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nlocal".toByteArray(Charsets.US_ASCII))
+                        output.flush()
+                        line
+                    }
+                }
+            }
+            val origin = "http://127.0.0.1:${server.localPort}"
+            try {
+                ConnectionWarmup.warmAudioOrigin("$origin/audio?fixture=discarded")
+                val request = Request.Builder().url("$origin/audio").build()
+                playback.newCall(request).awaitBufferedResponse().use { assertEquals("local", it.body?.string()) }
+                assertEquals(listOf("GET / HTTP/1.1", "GET /audio HTTP/1.1"), requests.await())
+            } finally {
+                playback.connectionPool.evictAll()
+            }
+        }
+    }
+
     @Test fun cancellationRemainsAttachedAfterHeadersWhileBodyIsStalled() = runBlocking {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val closed = AtomicBoolean(false)

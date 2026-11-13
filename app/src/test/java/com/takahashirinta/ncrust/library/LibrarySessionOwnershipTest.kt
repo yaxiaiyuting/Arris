@@ -8,6 +8,7 @@ import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.XeapiState
 import com.takahashirinta.ncrust.source.NeteaseSourceProvider
+import com.takahashirinta.ncrust.source.SourceIds
 import com.takahashirinta.ncrust.source.SourceRouter
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import java.util.Collections
@@ -49,9 +50,22 @@ class LibrarySessionOwnershipTest {
 
     private class MemoryContext : ContextWrapper(null) {
         private val stores = mutableMapOf<String, MemoryPrefs>()
+        var onReadSavedSongs: (() -> Unit)? = null
         override fun getApplicationContext(): Context = this
-        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
-            synchronized(stores) { stores.getOrPut(name) { MemoryPrefs() } }
+        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+            val prefs = synchronized(stores) { stores.getOrPut(name) { MemoryPrefs() } }
+            if (name != "ncrust_library" || onReadSavedSongs == null) return prefs
+            return object : SharedPreferences by prefs {
+                override fun getString(key: String, defValue: String?): String? {
+                    if (key == "saved_songs") {
+                        val action = onReadSavedSongs
+                        onReadSavedSongs = null
+                        action?.invoke()
+                    }
+                    return prefs.getString(key, defValue)
+                }
+            }
+        }
     }
 
     private lateinit var ctx: MemoryContext
@@ -68,9 +82,7 @@ class LibrarySessionOwnershipTest {
         listOf(
             "savedSongs", "cachedAlbums", "cachedLikedIds", "pendingAppContext", "flushJob",
         ).forEach { field(LibraryManager, it).set(LibraryManager, null) }
-        listOf("latestLikeIntent", "latestAlbumIntent", "likeMutexes", "albumMutexes").forEach {
-            (field(LibraryManager, it).get(LibraryManager) as MutableMap<*, *>).clear()
-        }
+        favoriteWrites().clear()
         field(LibraryManager, "likedIdCursor").setInt(LibraryManager, 0)
     }
 
@@ -139,8 +151,42 @@ class LibrarySessionOwnershipTest {
 
     private fun album(id: Long) = AlbumInfo(id, "fixture-$id", "", "fixture", 1)
 
+    private fun favoriteWrites() = field(LibraryManager, "favoriteWrites").get(LibraryManager) as MutableMap<*, *>
+
     /** 易盾 token 的固定响应：让 xeapi 通道能走到「发写入」那一步。 */
     private val antiCheatToken = "null([200,1,\"fixture-token\"])"
+
+    @Test fun switchingLoginDuringTheLocalEditDoesNotSendItWithTheNewLogin() = runBlocking {
+        val writes = AtomicInteger()
+        intercept(RetrofitClient, "antiCheatClient") { antiCheatToken }
+        intercept(RetrofitClient, "plainClient") { writes.incrementAndGet(); """{"code":200}""" }
+        ctx.onReadSavedSongs = {
+            CookieManager.saveCookie(ctx, "MUSIC_U=fixture-B; __csrf=fixture-csrf-B")
+        }
+
+        assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(606)))
+        settleWrites()
+        assertEquals("Old edit must stay on the device", 0, writes.get())
+
+        assertTrue(LibraryManager.removeSong(ctx, 606))
+        settleWrites()
+        assertEquals("A new action is sent under the current login", 1, writes.get())
+    }
+
+    @Test fun batchFavoritesKeepUniqueLikedIdsAndOnlySyncNeteaseTracks() = runBlocking {
+        val writes = AtomicInteger()
+        intercept(RetrofitClient, "antiCheatClient") { antiCheatToken }
+        intercept(RetrofitClient, "plainClient") { writes.incrementAndGet(); """{"code":200}""" }
+        val qq = song(SourceIds.qqId(606, "mid"))
+
+        LibraryManager.saveSongs(ctx, listOf(song(707), qq, song(707), song(808)))
+        settleWrites()
+
+        assertEquals(listOf(707L, 808L), LibraryManager.getLikedSongIds(ctx))
+        assertEquals(3, LibraryManager.getSavedSongs(ctx).size)
+        assertEquals(2, writes.get())
+        assertTrue(favoriteWrites().isEmpty())
+    }
 
     // ==================== R1：意图归属 ====================
 
@@ -174,7 +220,7 @@ class LibrarySessionOwnershipTest {
         assertEquals("B 的最新取消意图被 A 的旧 worker 删掉了", 1, bWrites.size)
         assertTrue(
             "旧 worker 只能删自己领取的那一条，不能清空 pending 表",
-            (field(LibraryManager, "latestLikeIntent").get(LibraryManager) as Map<*, *>).isEmpty()
+            favoriteWrites().isEmpty()
         )
         assertFalse(LibraryManager.isSongSaved(ctx, 101))
     }
@@ -211,7 +257,7 @@ class LibrarySessionOwnershipTest {
 
         assertEquals("同账号续期把排队的收藏意图丢掉了一次", 1, writes.size)
         assertTrue("续期后仍是 A 账号，不能用别人的凭据", writes.single().contains("fixture-A"))
-        assertTrue((field(LibraryManager, "latestLikeIntent").get(LibraryManager) as Map<*, *>).isEmpty())
+        assertTrue(favoriteWrites().isEmpty())
     }
 
     @Test
@@ -236,12 +282,13 @@ class LibrarySessionOwnershipTest {
         // true → false → true：中间的 false 被最后一次点击覆盖，根本不该发出去。
         assertTrue(LibraryManager.removeSong(ctx, 303))
         assertEquals(SavedSongOutcome.ADDED, LibraryManager.saveSong(ctx, song(303)))
+        assertEquals("Only the active key is retained", 1, synchronized(favoriteWrites()) { favoriteWrites().size })
         release.countDown()
         settleWrites()
 
         assertEquals("中间那次 false 不该发；最终状态由最后一次 true 决定", 2, writes.size)
         assertTrue(LibraryManager.isSongSaved(ctx, 303))
-        assertTrue((field(LibraryManager, "latestLikeIntent").get(LibraryManager) as Map<*, *>).isEmpty())
+        assertTrue(favoriteWrites().isEmpty())
     }
 
     // ==================== H01：专辑写入串行 ====================
@@ -282,7 +329,7 @@ class LibrarySessionOwnershipTest {
 
         assertEquals(listOf("sub", "unsub"), actions.toList())
         assertTrue("最终状态等于用户最后一次点击", LibraryManager.getSavedAlbums(ctx).isEmpty())
-        assertTrue((field(LibraryManager, "latestAlbumIntent").get(LibraryManager) as Map<*, *>).isEmpty())
+        assertTrue(favoriteWrites().isEmpty())
     }
 
     // ==================== R2：旧快照无权撤销新编辑 ====================

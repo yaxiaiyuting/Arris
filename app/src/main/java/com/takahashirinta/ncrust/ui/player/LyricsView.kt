@@ -30,7 +30,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.takahashirinta.ncrust.lyric.DynamicLyricFont
 import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.lyric.LyricClock
@@ -72,6 +71,7 @@ private val NeverBuffering = MutableStateFlow(false)
  */
 @Composable
 internal fun LyricsView(
+    playerViewModel: PlayerViewModel,
     lyrics: List<LrcLine>,
     translatedLyrics: List<LrcLine> = emptyList(),
     // v2.9.0 · B 档：歌词律动（当前行随节拍轻微缩放）。默认 **false** ——
@@ -398,11 +398,7 @@ internal fun LyricsView(
     // 2. **点击那一刻把歌词与位置快照下来**（[SharePayload]），不是让弹层实时读播放位置。
     //    出图要几秒，期间用户可能已经听到下一段；选段必须固定在他点下去时看到的那几句上。
     //    快照同时是「弹层打开时不再持有 LyricsView 的 recomposition 依赖」的保证。
-    // 3. **曲目身份从 PlayerViewModel 取**（PlayerCard 里那个 `viewModel()` 的同一个实例，
-    //    作用域是 Activity）：本组件的唯一调用点在 `PlayerCardExpanded`，它的签名不在本次
-    //    改动范围内。这里只在**点击时**读 `.value`（不 collectAsState），
-    //    所以不会新增任何逐帧 / 逐次重组订阅。
-    val shareViewModel: PlayerViewModel = viewModel()
+    // 3. 点击时从共享的播放器模型读取曲目信息，避免额外订阅。
     var sharePayload by remember { mutableStateOf<SharePayload?>(null) }
 
     val lyricTools: @Composable () -> Unit = {
@@ -412,9 +408,9 @@ internal fun LyricsView(
         LyricShareButton(description = strings.share.action) {
             sharePayload = SharePayload(
                 track = LyricShareTrack(
-                    name = shareViewModel.currentSongName.value.orEmpty(),
-                    artist = shareViewModel.currentSongArtist.value.orEmpty(),
-                    coverUrl = shareViewModel.currentSongArtwork.value,
+                    name = playerViewModel.currentSongName.value.orEmpty(),
+                    artist = playerViewModel.currentSongArtist.value.orEmpty(),
+                    coverUrl = playerViewModel.currentSongArtwork.value,
                 ),
                 lines = buildShareLines(lyrics, translatedLyrics, romanizedLyrics),
                 positionMs = displayPosition.longValue,

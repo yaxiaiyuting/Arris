@@ -17,12 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.takahashirinta.ncrust.crosssource.CrossSourceMatcher
 import com.takahashirinta.ncrust.crosssource.AggregatedSong
 import com.takahashirinta.ncrust.crosssource.CatalogAggregator
 import com.takahashirinta.ncrust.crosssource.TrackPage
 import com.takahashirinta.ncrust.network.PlaylistApi
+import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.source.MusicSource
@@ -36,11 +36,11 @@ import com.takahashirinta.ncrust.ui.components.TopScrimIconButton
 // v2.5.0 · A/D：按压回弹（AppMotion.pressScale，零重组）。
 import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
-import com.takahashirinta.ncrust.ui.viewmodel.SongViewModel
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
+import kotlinx.coroutines.CancellationException
 
 /**
  * 单曲信息页（v2.4.0 · E：歌词之上多了**双源版本区**）。
@@ -50,8 +50,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroText
  * 1. **两源版本区**（本版新增）：`CatalogAggregator.loadTrack` 找出同一首歌在另一源上的
  *    版本，每行显示源、探测出来的可用性与「默认该播哪一个」。这是「不再默认 ncm」的
  *    落点 —— 哪一源可播就默认哪一源，两源都不可播时如实说明。
- * 2. **歌词区**（既有）：仍然走单源的 [SongViewModel]（ncm `song/lyric`）。
- *    QQ 的取词链路不在本次改动范围，所以只在 ncm 一侧触发。
+ * 2. 网易云的曲目信息复用版本区的详情结果，歌词独立读取。
  *
  * ## 路由锚点为什么还要补一次元数据
  *
@@ -108,15 +107,18 @@ fun SongDetailScreen(
     val source = remember(sourceKey) { MusicSource.fromKey(sourceKey) }
     val numericId = remember(songId) { songId.toLongOrNull() }
 
-    val viewModel: SongViewModel = viewModel()
-    val songDetail by viewModel.songDetail.collectAsState()
-    val lyric by viewModel.lyric.collectAsState()
-    val translatedLyric by viewModel.translatedLyric.collectAsState()
-
-    // 歌词区仍是既有的**ncm 单源**链路：拿一个带 bit62 标志位的合成 id 去问 ncm 取词
-    // 只会拿回空，所以 QQ 一侧不触发（那条链路不在本次改动范围）。
-    LaunchedEffect(numericId, source) {
-        if (source == MusicSource.NETEASE) numericId?.let { viewModel.loadSongDetail(it) }
+    val neteaseId = numericId.takeIf { source == MusicSource.NETEASE }
+    var lyric by remember(neteaseId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(neteaseId) {
+        if (neteaseId == null) return@LaunchedEffect
+        try {
+            val response = RetrofitClient.api.getLyric(id = neteaseId)
+            if (response.code == 200) lyric = response.lrc?.lyric
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 歌词请求失败沿用空态。
+        }
     }
 
     // 路由锚点：身份 +（可选）载荷。id 解析不出来时（QQ 只给了 songmid、或路由被手改坏）
@@ -129,6 +131,7 @@ fun SongDetailScreen(
     }
 
     var page by remember(anchor) { mutableStateOf<TrackPage?>(null) }
+    var songDetail by remember(anchor) { mutableStateOf<SongItem?>(null) }
     // 实际拿去召回的锚点（可能在 ncm 一侧被补全）。它与 [anchor] 同身份，
     // 「有没有搜过」由它的名字是否为空决定。
     var recallSong by remember(anchor) { mutableStateOf(anchor) }
@@ -141,15 +144,14 @@ fun SongDetailScreen(
         isLoading = true
         error = null
         try {
-            val enriched = if (source == MusicSource.NETEASE && numericId != null) {
-                runCatching { PlaylistApi.getSongsByIds(listOf(numericId)).firstOrNull() }
-                    .getOrNull()
-                    ?: base
-            } else {
-                base
+            if (neteaseId != null) {
+                songDetail = PlaylistApi.getSongsByIds(listOf(neteaseId)).firstOrNull { it.id == neteaseId }
             }
+            val enriched = songDetail ?: base
             recallSong = enriched
             page = CatalogAggregator.loadTrack(enriched)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // 聚合失败只让版本区显示错误态：歌词区照常渲染，不崩、不写坏数据。
             error = strings.loadFailed(e.message)
@@ -239,19 +241,18 @@ fun SongDetailScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // ---------------- 既有歌词区（单源，不动） ----------------
                 songDetail?.let { song ->
                     MetroText(song.name, color = LocalMetroColors.current.onBackground, style = LocalMetroTypography.current.headlineMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     MetroText(
-                        song.artists.joinToString("/") { it.name },
+                        song.artists.orEmpty().joinToString("/") { it.name },
                         color = Color(0xFF1DB954),
                         style = LocalMetroTypography.current.titleMedium
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    MetroText(song.album.name ?: strings.unknownAlbum, color = LocalMetroColors.current.onSurfaceVariant)
-                    if (song.duration > 0) {
-                        MetroText(formatDuration(song.duration), color = LocalMetroColors.current.onSurfaceVariant)
+                    MetroText(song.album?.name ?: strings.unknownAlbum, color = LocalMetroColors.current.onSurfaceVariant)
+                    song.duration?.takeIf { it > 0 }?.let { duration ->
+                        MetroText(formatDuration(duration), color = LocalMetroColors.current.onSurfaceVariant)
                     }
                 }
 

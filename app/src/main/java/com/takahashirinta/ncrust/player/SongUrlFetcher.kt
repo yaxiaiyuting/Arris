@@ -168,11 +168,6 @@ object SongUrlFetcher {
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
     private fun coolingDown(): Boolean =
         System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
-    /** 最近一次成功取链的音频 host（供 [com.takahashirinta.ncrust.network.ConnectionWarmup.warmHost] 预热）。 */
-    @Volatile
-    var lastAudioHost: String? = null
-        private set
-
     /** Reset transport backoff and DNS after a route or proxy change. */
     fun onNetworkRouteChanged() {
         transportCooldownUntil.set(0L)
@@ -300,7 +295,6 @@ object SongUrlFetcher {
                     val attemptMs = android.os.SystemClock.elapsedRealtime() - attemptStarted
                     if (hit != null) {
                         Log.i(TAG, "level=$tryLevel ok in ${attemptMs}ms songId=$songId")
-                        runCatching { java.net.URI(hit.url).host }.getOrNull()?.let { lastAudioHost = it }
                         noteLevelAccepted(tryLevel, session)
                         return ResolveOutcome.ok(hit)
                     }

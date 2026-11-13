@@ -150,7 +150,7 @@ Under `com.takahashirinta.ncrust/`:
 | `auth/` | `CookieManager` (SharedPreferences, **单一凭证来源**), `NeteaseSessionGuard` (revision + login generation), `NeteaseTokenRefresher` (on-demand renewal), `NeteaseSessionRequests` (one-retry read seam), `NeteaseVipStore`, `QrPair` / `QrPairClient` / `QrPairServer` (LAN QR handoff) |
 | `library/` | `LibraryManager` (cloud-synced liked songs + subscribed albums), `SearchHistoryManager` |
 | `cache/` | `ContentCache` — in-memory network snapshot (home + LRU detail caches + user profile)；**v1.6.0 · D1 / v2.0.0 · T3**：`OfflineKeys`（cache key 纯逻辑）、`OfflineUrlStore`（key→最后成功播放的 URL，≤300 LRU）、`OfflineAudioCache`（media3 `SimpleCache`，`filesDir/offline/audio`）、`OfflineLibrary`（离线曲目索引，≤300 LRU）；**v3.7.3**：`OfflineContent`（full / trial 归属随文件持久化，FULL 沿用历史 key，只有试听加 `~trial_<start>_<end>`） |
-| `lyric/` | `LrcParser` (`[MM:SS.mm]` → `LrcLine.timeMs`), `YrcParser` / `YrcAligner` (word-level), `SweepTrack` (sweep cursor), `LyricsDisplayPrefs`; **v1.9.0**: `TtmlParser` / `TtmlScanner` (AMLL TTML), `AmllTtmlClient`, `LyricSourceChain`, `LyricRequestGate`; `LyricsCache` (200-entry persistent cache, LRC + TTML) |
+| `lyric/` | `LrcParser` (`[MM:SS.mm]` → `LrcLine.timeMs`), `YrcParser` / `YrcAligner` (word-level), `SweepTrack` (sweep cursor), `LyricsDisplayPrefs`; **v1.9.0**: `TtmlParser` / `TtmlScanner` (AMLL TTML), `AmllTtmlClient`, `LyricSourceChain`, `LyricLoadCoordinator`; `LyricsCache` (200-entry persistent cache, LRC + TTML) |
 | `warmup/` | `AppWarmup` — cold-start preload singleton |
 | `power/` | `BackgroundActivity` — battery-optimisation whitelist intents |
 | `ui/navigation/` | `NavRoutes` route constants and `MainNavGraph` |
@@ -314,7 +314,7 @@ statusBarsPadding() 下推到 2016，吃事件的是卡片根 Box 自己的两�
 - a **2 Hz** progress ticker (`delay(500)`);
 - error reporting: both `onPlayerError` and `onAudioSinkError` invoke the static `onPlaybackError(songId)`.
 
-`PlayerViewModel` holds all playback state as `MutableStateFlow` (isPlaying, position, duration, progress, buffering, current song metadata, lyrics, `currentQualityIndex`, `needsPreload`). `PlaybackStateManager` persists the last song + queue to SharedPreferences via Gson so playback survives process kill.
+`NcrustApplication` lazily owns one `PlayerViewModel` per process. The model receives service playback events and holds the progress, buffering, lyrics, and quality flows. `PlaybackStateManager` persists the last track, resume positions, queue, and shuffle order for the next launch.
 
 **Song URL resolution** (`SongUrlFetcher`) starts at the selected quality and falls back down the ladder. Exact ladders:
 
@@ -363,7 +363,7 @@ Defaults: Wi-Fi = 3 (lossless), Mobile = 1 (higher). The selected label shows as
 
 ### Queue Management
 
-All queue operations live in `MainScreen` (not `PlayerViewModel`): `replaceQueueAndPlay`, `playSongItem`, `insertNext`, `appendToQueue`, `insertAllNext`, `appendAllToQueue`, `removeFromQueue`, `moveInQueue`, `playFromQueue`, `playNext`, `playPrevious`, `generateShuffledIndices`, `launchInfinity`, `startFm`.
+`PlaybackQueueController` owns the queue, cursor, shuffle rounds, next-track preload, and radio continuation on the main thread. `MainScreen` submits user actions and displays queue state. Media controls and natural transitions use the same controller after the activity task is removed.
 
 **Critical invariant:** `playbackQueue[currentQueueIndex]` must always equal the currently playing song. When deduping a queue mutation, record the current song's id first, filter, then re-locate the index — a naive `.filter` can drop an earlier duplicate and point `currentQueueIndex` at the wrong item. Every mutation calls `PlaybackStateManager.saveQueue(...)`, and any mutation in SHUFFLE mode regenerates the shuffled-index list.
 
@@ -4675,7 +4675,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
 
 | 主题 | 文件 |
 |---|---|
-| 并行请求编排的**唯一**原语（硬上限 4 / 三态 / 取消原样传播） | `network/BoundedParallel.kt` |
+| 预热与预取的并行编排（默认上限 4 / 隔离单项失败 / 传播取消） | `network/BoundedParallel.kt` |
 | URL 预加载缓存的**新鲜度判据**（两模型纯函数） | `player/PreloadCachePolicy.kt` |
 | 列表预加载（只封面 / N 按网络分档 / 绝不预取 URL） | `warmup/ListPrefetch.kt` |
 | 连接预热（DNS + TCP/TLS，失败静默，不给 B站预热） | `network/ConnectionWarmup.kt` |

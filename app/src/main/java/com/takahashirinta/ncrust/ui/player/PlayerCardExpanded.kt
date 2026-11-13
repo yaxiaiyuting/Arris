@@ -229,6 +229,7 @@ internal fun ColumnScope.PlayerCardExpanded(
     ) else null
     val lyricsContent: @Composable (KaraokeControls?) -> Unit = { karaoke ->
         LyricsView(
+            playerViewModel = playerViewModel,
             lyrics = lyrics,
             translatedLyrics = translatedLyrics,
             showTranslation = showLyricsTranslation,

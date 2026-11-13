@@ -126,7 +126,7 @@ fun PlaylistDetailScreen(
     // v3.1.0 · P0-C：进入歌单页预取前 N 首封面（只封面，不预取 URL）。
     val prefetchContext = LocalContext.current
     LaunchedEffect(songs) {
-        ListPrefetch.prefetchList(prefetchContext, "playlist:$playlistId", songs)
+        ListPrefetch.prefetchList(prefetchContext, songs)
     }
     val coverUrl = playlistCoverUrl.ifEmpty { songs.firstOrNull()?.album?.picUrl }
 

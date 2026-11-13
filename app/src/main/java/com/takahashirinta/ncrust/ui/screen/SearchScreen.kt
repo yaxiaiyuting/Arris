@@ -51,7 +51,7 @@ import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
-import com.takahashirinta.ncrust.cache.HomeSnapshot
+import com.takahashirinta.ncrust.warmup.HomeFeed
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
@@ -91,6 +91,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import android.widget.Toast
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.CancellationException
 
 enum class BatchQueueAction { PLAY_NOW, INSERT_NEXT, APPEND }
 
@@ -222,8 +223,8 @@ fun SearchScreen(
         if (!isLoading) pullState.refreshing = false
     }
     // v3.1.0 · P0-C：进入搜索结果就预取前 N 首的封面（N 按网络类型；只封面，不预取 URL）。
-    LaunchedEffect(songs) {
-        ListPrefetch.prefetchList(context, "search:${viewModel.query.value}", songs)
+    LaunchedEffect(visibleSongs, currentType) {
+        if (currentType == 1) ListPrefetch.prefetchList(context, visibleSongs)
     }
     // v2.1.4：聚合搜索的排序要知道「用户有哪些平台的会员」（见 SearchRanking）。
     // 这里**现读、不缓存**：登录/登出后下一次搜索立刻按新的会员状态排，
@@ -263,19 +264,15 @@ fun SearchScreen(
         onDispose { keyboard?.hide() }
     }
 
-    // Search history state — loaded from SharedPreferences, refreshed whenever query clears
-    var songHistory by remember { mutableStateOf(SearchHistoryManager.getSongs(context)) }
-    var albumHistory by remember { mutableStateOf(SearchHistoryManager.getAlbums(context)) }
-    var artistHistory by remember { mutableStateOf(SearchHistoryManager.getArtists(context)) }
-
-    fun refreshHistory() {
-        songHistory = SearchHistoryManager.getSongs(context)
-        albumHistory = SearchHistoryManager.getAlbums(context)
-        artistHistory = SearchHistoryManager.getArtists(context)
+    val queryEmpty = query.isEmpty()
+    var songHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getSongs(context) else emptyList())
     }
-
-    LaunchedEffect(query) {
-        if (query.isEmpty()) refreshHistory()
+    var albumHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getAlbums(context) else emptyList())
+    }
+    var artistHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getArtists(context) else emptyList())
     }
 
     // v2.6.1 · P0：消费外部投递的关键词（「转到歌手」身份不可信时的兜底落点）。
@@ -289,7 +286,7 @@ fun SearchScreen(
         onExternalQueryConsumed()
     }
 
-    val showHistory = query.isEmpty() &&
+    val showHistory = queryEmpty &&
         (songHistory.isNotEmpty() || albumHistory.isNotEmpty() || artistHistory.isNotEmpty())
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -395,7 +392,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryTracks,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_SONG)
-                                    refreshHistory()
+                                    songHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -472,8 +469,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_SONG, item)
-                                            refreshHistory()
+                                            songHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_SONG, item,
+                                            )
                                         },
                                     )
                                 }
@@ -487,7 +485,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryAlbums,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_ALBUM)
-                                    refreshHistory()
+                                    albumHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -507,8 +505,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_ALBUM, item)
-                                            refreshHistory()
+                                            albumHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_ALBUM, item,
+                                            )
                                         },
                                     )
                                 }
@@ -522,7 +521,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryArtists,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_ARTIST)
-                                    refreshHistory()
+                                    artistHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -542,8 +541,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_ARTIST, item)
-                                            refreshHistory()
+                                            artistHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_ARTIST, item,
+                                            )
                                         },
                                     )
                                 }
@@ -883,14 +883,18 @@ fun SearchScreen(
                         // E（方案 3 附加）：空查询时展示榜单，复用首页那份 ContentCache 快照，
                         // 未命中/过期才发一次请求（榜单匿名可读，不需要登录）。
                         var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
-                        LaunchedEffect(Unit) {
-                            if (ContentCache.toplistItems == null || !ContentCache.isToplistFresh()) {
-                                val owner = CookieManager.accountOwner()
-                                runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
-                                    ContentCache.putToplist(it)
-                                    toplists = it
-                                    HomeSnapshot.save(context, toplists = it, owner = owner)
-                                }
+                        val loginGeneration by CookieManager.loginGenerations.collectAsState()
+                        LaunchedEffect(loginGeneration) {
+                            if (!com.takahashirinta.ncrust.network.NetworkAvailability.isOnline(context)) return@LaunchedEffect
+                            val started = CookieManager.snapshot()
+                            if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+                            try {
+                                val items = HomeFeed.toplists(context, started)
+                                CookieManager.ifSameLogin(started) { toplists = items }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // Keep the last available chart list.
                             }
                         }
                         if (toplists.isEmpty()) {

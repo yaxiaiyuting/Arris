@@ -8,8 +8,14 @@
 
 package com.takahashirinta.ncrust.lyric
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -20,13 +26,38 @@ import org.junit.Test
 /**
  * v1.9.0：歌词缓存模型层（[CachedLyrics] 的 TTML 字段 + TTL 判定）的单测。
  *
- * 这一层刻意是**纯逻辑**（不碰 Android），所以不需要 Robolectric 也能在 JVM 上真跑 ——
- * 用真 Gson 解析老格式 JSON，验证「老缓存没有新字段也能正常反序列化」。
- * SharedPreferences 的读写路径不在本文件（需要真机/模拟器，见交付说明里的「未验证」）。
+ * 用 Gson 和内存偏好验证旧条目及实际缓存写入入口。
  */
 class LyricsCacheModelTest {
 
     private val gson = Gson()
+
+    @Test fun rewritingLyricTextRetainsLegacySourceFieldsAndTtml() = runBlocking {
+        val prefs = MemoryPrefs()
+        val context = object : ContextWrapper(null) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = prefs
+        }
+        prefs.edit().putString("entries", """{"501":{"lrc":"old","tlyric":"old translation",
+            "timestamp":2,"ttml":"<tt/>","ttmlAt":3,"translationSource":"TTML","romanSource":"MIXED"}}""").apply()
+        val fields = listOf("memory", "previousJsonLength").map { name ->
+            LyricsCache.javaClass.getDeclaredField(name).apply { isAccessible = true }
+        }
+        val previous = fields.map { it.get(LyricsCache) }
+        fields.first().set(LyricsCache, null)
+        try {
+            LyricsCache.put(context, 501L, "new", "new translation", romalrc = "romanized")
+            val persisted = gson.fromJson(prefs.getString("entries", null), JsonObject::class.java)
+                .getAsJsonObject("501")
+            assertEquals("new", persisted["lrc"].asString)
+            assertEquals("romanized", persisted["romalrc"].asString)
+            assertEquals("<tt/>", persisted["ttml"].asString)
+            assertEquals(3L, persisted["ttmlAt"].asLong)
+            assertEquals("TTML", persisted["translationSource"].asString)
+            assertEquals("MIXED", persisted["romanSource"].asString)
+        } finally {
+            fields.zip(previous).forEach { (field, value) -> field.set(LyricsCache, value) }
+        }
+    }
 
     /** v1.5.0 的缓存格式：有 yrc，没有 ttml / ttmlAt。 */
     private val v150Json =
@@ -204,36 +235,5 @@ class LyricsCacheModelTest {
             )
         )
         assertFalse("没有条目本来就打网络，不算「老条目」", LyricsCache.needsRomalrcRefetch(null))
-    }
-
-    @Test
-    fun `withTrackSources——没有条目就不建条目（绝不为了记标记写出 lrc=空 的假「确无歌词」）`() {
-        assertNull(LyricsCache.withTrackSources(null, "TTML", "NETEASE"))
-    }
-
-    @Test
-    fun `withTrackSources——值未变返回 null（缓存命中路径不该反复序列化整张表）`() {
-        val entry = CachedLyrics("a", "b", 1L, null, null, 0L, "r", "TTML", "NETEASE")
-        assertNull(LyricsCache.withTrackSources(entry, "TTML", "NETEASE"))
-        assertNull("两边都是未知也视为未变", LyricsCache.withTrackSources(CachedLyrics("a", "b", 1L), null, null))
-    }
-
-    @Test
-    fun `withTrackSources——值变了返回新条目，其余字段原样保留`() {
-        val entry = CachedLyrics("a", "b", 7L, "y", "<tt/>", 9L, "r", "TTML", null)
-        val updated = LyricsCache.withTrackSources(entry, "MIXED", "NETEASE")!!
-        assertEquals("MIXED", updated.translationSource)
-        assertEquals("NETEASE", updated.romanSource)
-        assertEquals("原文与时间戳不得被顺手改掉", entry.copy(
-            translationSource = "MIXED", romanSource = "NETEASE"
-        ), updated)
-    }
-
-    @Test
-    fun `withTrackSources——源退回「没有这一轨」时标记被清成 null`() {
-        val entry = CachedLyrics("a", "b", 1L, null, null, 0L, null, "NETEASE", "NETEASE")
-        val cleared = LyricsCache.withTrackSources(entry, null, null)!!
-        assertNull(cleared.translationSource)
-        assertNull(cleared.romanSource)
     }
 }

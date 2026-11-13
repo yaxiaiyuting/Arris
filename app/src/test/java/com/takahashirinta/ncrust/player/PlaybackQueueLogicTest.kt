@@ -124,6 +124,18 @@ class PlaybackQueueLogicTest {
     }
 
     @Test
+    fun `恢复旧队列时保留已指向同一曲目的重复项位置`() {
+        assertEquals(
+            2,
+            PlaybackQueueLogic.resolveCurrentIndex(
+                listOf(a, b, a.copy()),
+                TrackKey(MusicSource.NETEASE, a.id),
+                fallbackIndex = 2,
+            ),
+        )
+    }
+
+    @Test
     fun `索引对齐后乱序游标跟着回到同一首歌`() {
         val shuffled = listOf(2, 0, 1)
         assertEquals(1, PlaybackQueueLogic.realignShuffledPosition(shuffled, 0, 0))

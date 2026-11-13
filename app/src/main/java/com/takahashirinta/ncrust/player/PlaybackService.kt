@@ -61,6 +61,7 @@ import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineLibrary
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
+import com.takahashirinta.ncrust.listen.TogetherSession
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.flac.FlacExtractor
 import androidx.media3.extractor.mp3.Mp3Extractor
@@ -141,11 +142,17 @@ class PlaybackService : MediaLibraryService() {
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
     private var isServiceStarted = false
+    private data class PendingSelection(val revision: Int, val roomGeneration: Long?)
+    private data class PendingCompletion(val revision: Int, val item: MediaItem)
+    private var pendingSelection: PendingSelection? = null
+    private var pendingCompletion: PendingCompletion? = null
     private var currentArtworkUrl: String? = null
     /** v2.1.0 · C：当前媒体项的音源身份（车机/通知路径按它路由取链）。 */
     private var mediaSourceKey: String? = null
     private var mediaSourceId: String? = null
     private var mediaMediaId: String? = null
+    private var parsedMediaId: String? = null
+    private var parsedMediaTrack: TrackKey? = null
     private data class MediaArtwork(val url: String, val bitmap: Bitmap, val jpeg: ByteArray?)
     private data class ArtworkTask(val url: String, val result: Deferred<MediaArtwork?>)
 
@@ -643,19 +650,7 @@ class PlaybackService : MediaLibraryService() {
                         "STATE_ENDED count=${player.mediaItemCount} " +
                             "index=${player.currentMediaItemIndex} songId=$mediaSongId",
                     )
-                    val endedItem = player.currentMediaItem
-                    val revision = playRequestGeneration.current
-                    // Dispatch outside the player listener; the next track may mutate the playlist.
-                    scope.launch {
-                        val current = player.currentMediaItem
-                        if (isServiceStarted && endedItem != null && current?.mediaId == endedItem.mediaId &&
-                            current.localConfiguration?.uri == endedItem.localConfiguration?.uri &&
-                            playRequestGeneration.isCurrent(revision) && player.playbackState == Player.STATE_ENDED &&
-                            player.playWhenReady
-                        ) {
-                            onPlaybackEnded?.invoke()
-                        }
-                    }
+                    dispatchCompletion()
                 }
                 onBufferingChanged?.invoke(state == Player.STATE_BUFFERING)
                 updatePlaybackState()
@@ -743,6 +738,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaItem: androidx.media3.common.MediaItem?,
                 reason: Int
             ) {
+                bitrateFileLength.reset()
                 // 现在**所有**过渡都上报（AUTO / 手动 setMediaItem / 系统媒体控件 / 车机
                 // seek）。只处理 AUTO 会让 UI 的 currentSongId 停在上一首，应用队列索引
                 // 再也无法按音频事实回查（上游 #32）。auto 标志随回调交给 UI，用来区分
@@ -752,13 +748,14 @@ class PlaybackService : MediaLibraryService() {
                 // 停止服务）：这不是一次「起播」，不能上报给 UI —— 否则会拿上一首的
                 // identity 回查并预载下一首，等于在错误清理之后凭空恢复播放意图。
                 if (mediaItem == null) return
+                pendingSelection = null
                 val auto = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
                 // v2.1.5：起播项的音源**从 item 自己身上读**。item 是 ExoPlayer 真正播的
                 // 那一份，而 pendingNext* 是旁路（last-write-wins）—— 身份必须跟着 item 走，
                 // 这正是跨源自动接续时会话/歌词留在上一首的接缝。
-                val itemIdentity = PreloadSlot.identityFromMediaId(mediaItem?.mediaId)
-                val itemSource = itemIdentity?.first
-                val itemSongId = itemIdentity?.second
+                val itemIdentity = trackForMediaId(mediaItem.mediaId)
+                val itemSource = itemIdentity?.source
+                val itemSongId = itemIdentity?.id
                 checkpoint.reset(player.currentPosition.coerceAtLeast(0L))
                 if (auto && itemSongId != null && itemSongId > 0L) {
                     mediaSongId?.let { PlaybackStateManager.clearSongPosition(this@PlaybackService, it) }
@@ -933,9 +930,8 @@ class PlaybackService : MediaLibraryService() {
         }.onFailure { Log.w("PlaybackService", "cancel stale media3 notification failed", it) }
     }
 
-    private fun roomOwnsPlayback(intent: Intent): Boolean =
-        !intent.hasExtra("roomGeneration") || com.takahashirinta.ncrust.listen.TogetherSession
-            .isCurrentFollow(intent.getLongExtra("roomGeneration", -1L))
+    private fun Intent.playbackRoom(): Long? =
+        getLongExtra("roomGeneration", -1L).takeIf { hasExtra("roomGeneration") }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val platformResult = super.onStartCommand(intent, flags, startId)
@@ -948,12 +944,9 @@ class PlaybackService : MediaLibraryService() {
                 enqueuePreload(intent)
                 return START_NOT_STICKY
             }
-            "wait_for_url" -> {
-                waitForPlaybackSelection(intent)
-                return START_NOT_STICKY
-            }
             "pause_failed" -> {
                 if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+                pendingSelection = null
                 player.pause()
                 return START_NOT_STICKY
             }
@@ -999,13 +992,25 @@ class PlaybackService : MediaLibraryService() {
         return START_NOT_STICKY
     }
 
-    internal fun waitForPlaybackSelection(intent: Intent) {
-        if (!roomOwnsPlayback(intent) ||
-            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))
+    internal fun waitForPlaybackSelection(revision: Int, room: Long? = null, startPlaying: Boolean = true) {
+        if (!playRequestGeneration.isCurrent(revision) ||
+            room != null && !TogetherSession.isCurrentFollow(room)
         ) return
         clearPendingNext()
         player.stop()
         player.clearMediaItems()
+        pendingSelection = if (startPlaying) PendingSelection(revision, room) else null
+    }
+
+    internal fun stagePausedSelection(track: TrackKey, title: String, artist: String, artwork: String) {
+        pendingSelection = null
+        player.pause()
+        player.stop()
+        player.clearMediaItems()
+        if (artwork.isNotBlank() && currentArtworkUrl != artwork) clearCurrentArtwork()
+        updateTrackMetadata(track, title, artist, artwork)
+        LiveUpdateNotifier.cancel(this)
+        if (isServiceStarted) updateNotify() else pushWidgetUpdate()
     }
 
     /** Media3 prepares the following item when the current stream is not loading. */
@@ -1015,6 +1020,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     internal fun enqueuePreload(intent: Intent) {
+        if (!TogetherSession.memberPlayback.value.allowsPreload(intent.playbackRoom())) return
         val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
         if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return
         val nextUrl = intent.getStringExtra("url") ?: return
@@ -1070,7 +1076,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun applyResolvedPlayback(intent: Intent, url: String): Boolean {
-        if (!roomOwnsPlayback(intent) || (intent.hasExtra("playRevision") &&
+        val room = intent.playbackRoom()
+        if ((room != null && !TogetherSession.isCurrentFollow(room)) || (intent.hasExtra("playRevision") &&
                 !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1)))
         ) return false
         val songId = intent.getLongExtra("songId", -1L)
@@ -1080,25 +1087,29 @@ class PlaybackService : MediaLibraryService() {
             intent.getStringExtra("sourceId"),
             intent.getStringExtra("mediaId"),
         ) ?: return false
-        intent.getStringExtra("title")?.let { mediaTitle = it }
-        intent.getStringExtra("artist")?.let { mediaArtist = it }
-        mediaSongId = identity.id
-        mediaSourceKey = identity.source.key
-        mediaSourceId = identity.sourceId
-        mediaMediaId = identity.mediaId
-
-        val artwork = intent.getStringExtra("artwork")
-        if (artwork.isNullOrBlank()) clearCurrentArtwork()
-        else {
-            currentArtworkUrl = artwork
-            loadArtwork(artwork, takePreparedArtwork(artwork))
-        }
+        pendingSelection = null
+        updateTrackMetadata(identity, intent.getStringExtra("title"), intent.getStringExtra("artist"),
+            intent.getStringExtra("artwork"))
 
         val startPlaying = intent.getBooleanExtra("startPlaying", true)
         persistPlaybackState(startPlaying)
         playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
         if (!isServiceStarted) updateNotify()
         return true
+    }
+
+    private fun updateTrackMetadata(track: TrackKey, title: String?, artist: String?, artwork: String?) {
+        title?.let { mediaTitle = it }
+        artist?.let { mediaArtist = it }
+        mediaSongId = track.id
+        mediaSourceKey = track.source.key
+        mediaSourceId = track.sourceId
+        mediaMediaId = track.mediaId
+        if (artwork.isNullOrBlank()) clearCurrentArtwork()
+        else {
+            currentArtworkUrl = artwork
+            loadArtwork(artwork, takePreparedArtwork(artwork))
+        }
     }
 
     private fun persistPlaybackState(playing: Boolean) {
@@ -1285,8 +1296,16 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
-    fun playingTrackKey(): com.takahashirinta.ncrust.source.TrackKey? =
-        com.takahashirinta.ncrust.source.TrackKey.fromMediaId(player.currentMediaItem?.mediaId)
+    fun playingTrackKey(): TrackKey? = trackForMediaId(player.currentMediaItem?.mediaId)
+
+    /** 播放器线程复用最近解析的身份，切歌时以 MediaItem 的 mediaId 为准。 */
+    private fun trackForMediaId(mediaId: String?): TrackKey? {
+        if (parsedMediaId != mediaId) {
+            parsedMediaTrack = TrackKey.fromMediaId(mediaId)
+            parsedMediaId = mediaId
+        }
+        return parsedMediaTrack
+    }
 
     /** Called on the player thread; a remote snapshot must not control a different or idle item. */
     internal fun applyTogetherTransport(
@@ -1751,8 +1770,8 @@ class PlaybackService : MediaLibraryService() {
     private fun currentMediaDisplay(): MediaDisplayLines.Lines =
         mediaDisplay.get(mediaTitle, mediaArtist, mediaLyricFrame)
 
-    private fun updatePlaybackState() {
-        val dur = player.duration.coerceAtLeast(0L)
+    private fun updatePlaybackState(durationMs: Long = player.duration) {
+        val dur = durationMs.coerceAtLeast(0L)
         runCatching { maybeRecordOfflineLibrary(dur) }
 
         // Media3 发布位置和播放状态。应用仅在文案、时长或封面变化时更新媒体元数据。
@@ -1872,19 +1891,30 @@ class PlaybackService : MediaLibraryService() {
     /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
     fun publishStreamBitrate() {
         if (!::player.isInitialized) return
+        publishStreamBitrate(player.duration)
+    }
+
+    private val bitrateFileLength = StreamBitrate.FileLength(OfflineAudioCache::contentLengthForUri)
+    private var bitrateTracks: androidx.media3.common.Tracks? = null
+    private var averageFormatBitrate = -1
+
+    private fun publishStreamBitrate(durationMs: Long) {
         val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
-        val identity = PreloadSlot.identityFromMediaId(item.mediaId) ?: return
-        val selected = player.currentTracks.groups.firstOrNull {
-            it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        val track = trackForMediaId(item.mediaId) ?: return
+        val tracks = player.currentTracks
+        if (tracks !== bitrateTracks) {
+            bitrateTracks = tracks
+            val audio = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+            val selectedIndex = audio?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected) }
+            averageFormatBitrate = if (audio != null && selectedIndex != null) {
+                audio.getTrackFormat(selectedIndex).averageBitrate
+            } else -1
         }
-        val format = selected?.let { group ->
-            (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
+        val bitrate = StreamBitrate.resolve(averageFormatBitrate, durationMs) {
+            item.localConfiguration?.uri?.let(bitrateFileLength::read) ?: 0L
         }
-        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, player.duration) {
-            item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
-        }
-        if (bitrate > 0L) publish(identity.first, identity.second, bitrate)
+        if (bitrate > 0L) publish(track.source, track.id, bitrate)
     }
 
     /**
@@ -1909,6 +1939,15 @@ class PlaybackService : MediaLibraryService() {
      * [PlaybackQueueLogic.needsRestartBeforePlay]，已有 JVM 单测。
      */
     internal fun hasPlayableItem(): Boolean = player.currentMediaItem != null
+
+    /** Restart a completed item when single-track repeat has no attached preload. */
+    internal fun replayEndedItem(): TrackKey? {
+        if (player.playbackState != Player.STATE_ENDED || !player.playWhenReady) return null
+        val track = playingTrackKey() ?: return null
+        player.seekTo(0)
+        player.prepare()
+        return track
+    }
 
     private fun resumePlayback() {
         if (onPlaybackResumeRequested?.invoke() == true) return
@@ -1978,20 +2017,19 @@ class PlaybackService : MediaLibraryService() {
         if (!isActivelyBuffering()) return
         bufferProgressJob = scope.launch {
             while (isActive && isActivelyBuffering()) {
-                observePlaybackProgress(buffering = true)
+                observePlaybackProgress(player.currentPosition, bufferedMs = player.bufferedPosition)
                 delay(1_000L)
             }
         }
     }
 
-    private fun observePlaybackProgress(buffering: Boolean) {
-        val positionMs = player.currentPosition
+    private fun observePlaybackProgress(positionMs: Long, bufferedMs: Long? = null) {
         val stalled = stallWatch.observe(
             SystemClock.elapsedRealtime(), positionMs,
-            if (buffering) player.bufferedPosition else null,
+            bufferedMs,
         )
         if (stalled) playingTrackKey()?.let { track ->
-            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=$buffering")
+            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=${bufferedMs != null}")
             onPlaybackStalled?.invoke(track, positionMs)
         }
     }
@@ -2010,17 +2048,17 @@ class PlaybackService : MediaLibraryService() {
         if (!player.isPlaying) return
         progressJob = scope.launch {
             while (isActive && player.isPlaying) {
-                publishStreamBitrate()
                 val positionMs = player.currentPosition
                 val durationMs = player.duration
+                publishStreamBitrate(durationMs)
                 savePlaybackCheckpoint(positionMs, durationMs)
                 onProgressUpdate?.invoke(positionMs, durationMs)
-                updatePlaybackState()
+                updatePlaybackState(durationMs)
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
-                pushWidgetUpdate()
-                observePlaybackProgress(buffering = false)
+                pushWidgetUpdate(positionMs, durationMs)
+                observePlaybackProgress(positionMs)
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
                 // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降。
@@ -2199,7 +2237,7 @@ class PlaybackService : MediaLibraryService() {
      * 会在暂停 N 秒后被 `scheduleArtworkIdleRelease` 主动释放 —— 那份生命周期只有本类知道。
      * 卡片侧只接收一份快照，不持有任何对本服务的引用。
      */
-    private fun pushWidgetUpdate() {
+    private fun pushWidgetUpdate(positionMs: Long = player.currentPosition, durationMs: Long = player.duration) {
         // 包一层 runCatching：桌面卡片是**次要消费者**，它出任何问题都不许影响播放。
         // 这不是洁癖 —— 本方法跑在 2Hz 的 tick 上，读的是 `player`（lateinit）与封面位图
         // 两条可能出状况的路径；通知那条通路本来就有同样的保护（updateNotify 里的
@@ -2211,10 +2249,10 @@ class PlaybackService : MediaLibraryService() {
                 title = mediaTitle,
                 artist = mediaArtist,
                 isPlaying = player.isPlaying,
-                positionMs = player.currentPosition.coerceAtLeast(0L),
+                positionMs = positionMs.coerceAtLeast(0L),
                 // player.duration 在时长未知时是 C.TIME_UNSET（Long.MIN_VALUE）⇒ 一律夹到 0，
                 // 由 WidgetProgressSpec 判成「这一档不画进度条」。
-                durationMs = player.duration.coerceAtLeast(0L),
+                durationMs = durationMs.coerceAtLeast(0L),
                 artwork = currentArtworkBitmap,
                 accent = currentDominantColor,
             )
@@ -2379,6 +2417,35 @@ class PlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
+    private fun dispatchCompletion() {
+        val item = player.currentMediaItem ?: return
+        val completion = PendingCompletion(playRequestGeneration.current, item)
+        pendingCompletion = completion
+        // Queue changes happen after Media3 leaves the listener.
+        scope.launch {
+            if (pendingCompletion !== completion) return@launch
+            pendingCompletion = null
+            if (isServiceStarted && ownsCompletion(completion)) onPlaybackEnded?.invoke()
+        }
+    }
+
+    private fun ownsCompletion(completion: PendingCompletion): Boolean {
+        val current = player.currentMediaItem ?: return false
+        return player.playWhenReady && player.playbackState == Player.STATE_ENDED &&
+            playRequestGeneration.isCurrent(completion.revision) &&
+            current.mediaId == completion.item.mediaId &&
+            current.localConfiguration?.uri == completion.item.localConfiguration?.uri
+    }
+
+    private fun hasPendingPlayback(): Boolean {
+        val selection = pendingSelection
+        if (selection != null && playRequestGeneration.isCurrent(selection.revision) &&
+            (selection.roomGeneration == null ||
+                TogetherSession.isCurrentFollow(selection.roomGeneration))
+        ) return true
+        return onPlaybackEnded != null && pendingCompletion?.let(::ownsCompletion) == true
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (hasActivePlaybackIntent()) {
             if (!isServiceStarted) updateNotify()
@@ -2386,6 +2453,10 @@ class PlaybackService : MediaLibraryService() {
                 Log.i("PlaybackService", "Activity task removed, retaining active media playback")
                 return
             }
+        }
+        if (isServiceStarted && hasPendingPlayback()) {
+            Log.i("PlaybackService", "Activity task removed during a playback transition")
+            return
         }
         Log.d("PlaybackService", "onTaskRemoved")
         isServiceStarted = false
@@ -2395,6 +2466,8 @@ class PlaybackService : MediaLibraryService() {
         mediaTitle = "Arris"
         mediaArtist = ""
         mediaSongId = null
+        pendingSelection = null
+        pendingCompletion = null
         clearPendingNext()
         clearCurrentArtwork()
         stopSelf()

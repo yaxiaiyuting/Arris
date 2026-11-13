@@ -18,6 +18,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * J01：统计落盘的**提交序**。
@@ -47,14 +50,13 @@ class StatsCommitGateTest {
     @Test
     fun `anOlderSnapshotCannotOverwriteANewerCommittedOne()`() {
         val gate = StatsCommitGate()
-        val generation = gate.currentGeneration()
         val olderTicket = gate.newTicket()
         val newerTicket = gate.newTicket()
 
-        assertTrue(gate.commit(prefs, generation, newerTicket, "new-500ms"))
+        assertTrue(gate.commit(prefs, newerTicket, "new-500ms"))
         assertFalse(
             "旧快照晚到必须被票号挡掉（否则磁盘回退成 100ms）",
-            gate.commit(prefs, generation, olderTicket, "old-100ms"),
+            gate.commit(prefs, olderTicket, "old-100ms"),
         )
         assertEquals("new-500ms", stored())
     }
@@ -63,12 +65,11 @@ class StatsCommitGateTest {
     @Test
     fun `aSnapshotTakenBeforeClearCannotBeWrittenAfterIt()`() {
         val gate = StatsCommitGate()
-        val generation = gate.currentGeneration()
         val ticket = gate.newTicket()
 
         gate.beginClear()
 
-        assertFalse(gate.commit(prefs, generation, ticket, "before-clear"))
+        assertFalse(gate.commit(prefs, ticket, "before-clear"))
         assertNull(stored())
     }
 
@@ -84,7 +85,7 @@ class StatsCommitGateTest {
         val clearTicket = gate.beginClear()
         val freshTicket = gate.newTicket()
 
-        assertTrue(gate.commit(prefs, clearTicket.generation, freshTicket, "after-clear"))
+        assertTrue(gate.commit(prefs, freshTicket, "after-clear"))
         assertFalse(
             "清空后已经落盘的新数据不许被迟到的删除抹掉",
             gate.deleteAfterClear(prefs, clearTicket),
@@ -114,6 +115,46 @@ class StatsCommitGateTest {
         assertFalse(gate.deleteAfterClear(prefs, first))
         assertTrue(gate.deleteAfterClear(prefs, second))
         assertNull(stored())
+    }
+
+    @Test fun newFlushCanCaptureItsOrderWhileAnOlderDiskWriteIsBlocked() {
+        val gate = StatsCommitGate()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val stalled = AtomicBoolean(true)
+        val delayedPrefs = object : SharedPreferences by prefs {
+            override fun edit(): SharedPreferences.Editor {
+                val editor = prefs.edit()
+                return object : SharedPreferences.Editor by editor {
+                    override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                        editor.putString(key, value)
+                        return this
+                    }
+                    override fun commit(): Boolean {
+                        if (stalled.getAndSet(false)) {
+                            entered.countDown()
+                            check(release.await(5L, TimeUnit.SECONDS))
+                        }
+                        return editor.commit()
+                    }
+                }
+            }
+        }
+        val workers = Executors.newFixedThreadPool(2)
+        val older = gate.newTicket()
+        try {
+            val first = workers.submit<Boolean> { gate.commit(delayedPrefs, older, "older") }
+            assertTrue(entered.await(2L, TimeUnit.SECONDS))
+            val ordering = workers.submit<Long> { gate.newTicket() }
+            val newer = ordering.get(2L, TimeUnit.SECONDS)
+            release.countDown()
+            assertTrue(first.get(2L, TimeUnit.SECONDS))
+            assertTrue(gate.commit(delayedPrefs, newer, "newer"))
+            assertEquals("newer", stored())
+        } finally {
+            release.countDown()
+            workers.shutdownNow()
+        }
     }
 
     /**

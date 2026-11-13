@@ -15,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
 import java.security.MessageDigest
@@ -104,6 +105,13 @@ object TogetherSession {
     @Volatile private var link: RoomLink? = null
     private val followGeneration = AtomicLong()
     @Volatile private var member: MemberSession? = null
+    internal data class MemberPlayback(val generation: Long?, val bridgeAttached: Boolean) {
+        fun allowsPreload(room: Long?): Boolean =
+            generation == room && (room == null || bridgeAttached)
+    }
+
+    private val _memberPlayback = MutableStateFlow(MemberPlayback(null, false))
+    internal val memberPlayback = _memberPlayback.asStateFlow()
 
     private class MemberSession(val generation: Long, val owner: RoomLink) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -122,10 +130,12 @@ object TogetherSession {
     fun launchFollow(generation: Long, block: suspend CoroutineScope.() -> Unit): Job? =
         member?.takeIf { isCurrentFollow(generation) && it.generation == generation }?.scope?.launch(block = block)
 
+    @Synchronized
     private fun registerMember(owner: RoomLink) {
         val session = MemberSession(followGeneration.incrementAndGet(), owner)
         link = owner
         member = session
+        publishMemberPlayback()
         session.scope.launch(Dispatchers.IO) {
             while (isCurrentFollow(session.generation)) {
                 val ping = nowMs()
@@ -203,8 +213,15 @@ object TogetherSession {
     }
 
     /** MainScreen 在启动时注入播放器能力。 */
+    @Synchronized
     fun bind(playbackSource: PlaybackSource?) {
         source = playbackSource
+        publishMemberPlayback()
+    }
+
+    private fun publishMemberPlayback() {
+        val generation = member?.generation
+        _memberPlayback.value = MemberPlayback(generation, generation != null && source != null)
     }
 
     /** The public invite is derived from a private, per-room host credential. */
@@ -369,6 +386,7 @@ object TogetherSession {
         link = null
         member?.scope?.cancel()
         member = null
+        publishMemberPlayback()
         _members.value = 0
         _nextUp.value = null
         _roomId.value = ""

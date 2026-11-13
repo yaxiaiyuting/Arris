@@ -6,6 +6,7 @@ import com.takahashirinta.ncrust.network.PlaybackNetworkRoute
 /** Main-thread state. A usable new route can recover only the last unpaused request. */
 internal class PlaybackRecoveryGate(initialRoute: PlaybackNetworkRoute) {
     private var route = initialRoute
+    val online: Boolean get() = route.online
     var wanted = false; private set
     var resolving = false; private set
     var waiting = false; private set

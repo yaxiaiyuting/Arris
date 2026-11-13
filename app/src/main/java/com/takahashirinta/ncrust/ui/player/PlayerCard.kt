@@ -60,7 +60,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.Coil
 import coil.compose.AsyncImagePainter
 import com.takahashirinta.ncrust.ui.player.motion.MotionBackdrop
@@ -121,6 +120,7 @@ import com.takahashirinta.ncrust.ui.theme.AppShapes
 @Composable
 internal fun PlayerCard(
     song: SongItem?,
+    playerViewModel: PlayerViewModel,
     isPlaying: Boolean,
     screenHeightPx: Float,
     progress: Animatable<Float, AnimationVector1D>,
@@ -188,7 +188,6 @@ internal fun PlayerCard(
     val motion = MotionPrefs.effects.value
 
     val strings = LocalStrings.current
-    val playerViewModel: PlayerViewModel = viewModel()
     val lyrics by playerViewModel.lyrics.collectAsStateWithLifecycle()
     val translatedLyrics by playerViewModel.translatedLyrics.collectAsStateWithLifecycle()
     val lyricsLoading by playerViewModel.lyricsLoading.collectAsStateWithLifecycle()

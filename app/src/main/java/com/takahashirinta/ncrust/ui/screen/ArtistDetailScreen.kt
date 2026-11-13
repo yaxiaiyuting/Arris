@@ -207,7 +207,7 @@ fun ArtistDetailScreen(
     val prefetchContext = LocalContext.current
     LaunchedEffect(songs) {
         val firstSongs = songs.take(ListPrefetch.WIFI_LIMIT).map { it.song }
-        ListPrefetch.prefetchList(prefetchContext, "artist:$artistId", firstSongs)
+        ListPrefetch.prefetchList(prefetchContext, firstSongs)
     }
     val playAllPlan = remember(songs, preferredSource) {
         PlayAllDedup.plan(songs, preferredSource)

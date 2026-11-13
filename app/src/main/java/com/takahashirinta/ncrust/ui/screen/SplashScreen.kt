@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.ui.screen
 
+import android.os.SystemClock
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,19 +19,17 @@ import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
     val alpha = remember { Animatable(1f) }
 
     LaunchedEffect(Unit) {
-        // 双闸门：既要 warmup 完成（数据+封面就绪），又要满足最短驻留（避免网络太快 splash 一闪而过）。
-        // MainScreen 已经在 splash 覆盖下并行组合 + shader 预热，两条工作线在此汇合。
-        val minDwell = launch { delay(MIN_DWELL_MS) }
-        val warmupDone = launch { AppWarmup.ready.first { it } }
-        minDwell.join()
-        warmupDone.join()
+        // Let the local snapshot fill the first screen, with a bounded wait if storage is slow.
+        val started = SystemClock.elapsedRealtime()
+        withTimeoutOrNull(LOCAL_RESTORE_BUDGET_MS) { AppWarmup.ready.first { it } }
+        delay((MIN_DWELL_MS - (SystemClock.elapsedRealtime() - started)).coerceAtLeast(0L))
         alpha.animateTo(0f, animationSpec = tween(260, easing = FastOutSlowInEasing))
         onFinished()
     }
@@ -71,3 +70,4 @@ fun SplashScreen(onFinished: () -> Unit) {
 
 // splash 最短驻留：warmup 早于此完成时仍要撑到这个时间，避免视觉一闪
 private const val MIN_DWELL_MS = 350L
+private const val LOCAL_RESTORE_BUDGET_MS = 3_000L

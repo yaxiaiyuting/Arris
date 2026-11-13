@@ -74,15 +74,7 @@ object StatsRecorder {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val jobs = mutableListOf<Job>()
 
-    /**
-     * 被观察的 ViewModel。
-     *
-     * 持有它意味着「进程活着期间会攥着一个 Activity 作用域的 ViewModel」。
-     * 这是刻意的，且**有界**：Activity 真正销毁（`onActivityDestroyed` 且非配置变更）时
-     * 会 [detach]；配置变更时 Android 会复用同一个 ViewModel 实例，重新 attach 是幂等的。
-     * 不做弱引用：弱引用会让「GC 恰好在两帧之间回收」变成「统计静默断流」，
-     * 而那种故障在真机上无法复现也无法归因。
-     */
+    /** 进程级播放器提供前后台共用的真实播放进度。 */
     private var model: PlayerViewModel? = null
 
     /** 采集用的 Application 上下文（只用于 prefs 与生命周期注册，不持有任何 Activity）。 */
@@ -120,8 +112,7 @@ object StatsRecorder {
     /**
      * 接上采集。**幂等**：同一个 ViewModel 重复调用是空操作。
      *
-     * 由 `MainScreen` 调用（`LaunchedEffect(Unit)`）—— 采集必须**全程在跑**，
-     * 不能等用户打开统计页才开始，否则「打开统计页之前听的全部不算」。
+     * 播放器初始化时接上采集，离开播放页面后继续记录。
      */
     fun attach(context: Context, viewModel: PlayerViewModel) {
         if (model === viewModel) return
@@ -143,13 +134,13 @@ object StatsRecorder {
     }
 
     /**
-     * 断开采集（Activity 真正销毁时）。**内存聚合与落盘数据都保留**。
+     * 替换播放器时收尾当前会话，保留已记录的时长和播放次数。
      *
      * 断开前先 [closeSession]：会话的「有效收听时长」已经逐段写进统计了，
      * 但「算不算一次播放」是在收尾时判定的 —— 不收尾就等于「听了整首、关掉 App、
      * 这次播放不算」，那是用户一眼能看出来的错。
      */
-    fun detach() {
+    private fun detach() {
         jobs.forEach { it.cancel() }
         jobs.clear()
         appContext?.let { closeSession(it) }
@@ -164,13 +155,7 @@ object StatsRecorder {
     }
 
     /**
-     * 生命周期钩子。
-     *
-     * 两个动作都**必须有**：
-     * - `onActivityStopped` ⇒ 立即落盘。进程被后台杀死是常态（低内存、用户划掉任务卡），
-     *   而 `onStop` 之后系统再给多少时间是不确定的 —— 这是把丢失窗口从 30 秒
-     *   压到「本次停止之后」的唯一时机；
-     * - `onActivityDestroyed` 且**不是配置变更** ⇒ 断开（见 [model] 的 KDoc）。
+     * 界面进入后台时写入已采集的数据。播放持续期间仍从播放器接收样本。
      */
     private fun registerLifecycle(app: Application) {
         if (lifecycleRegistered) return
@@ -180,9 +165,7 @@ object StatsRecorder {
                 StatsStore.flushSoon(activity.applicationContext)
             }
 
-            override fun onActivityDestroyed(activity: Activity) {
-                if (!activity.isChangingConfigurations) detach()
-            }
+            override fun onActivityDestroyed(activity: Activity) = Unit
 
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit

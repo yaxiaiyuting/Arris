@@ -65,12 +65,6 @@ interface NcmApi {
     ): SearchResponse
 
     @FormUrlEncoded
-    @POST("api/v3/song/detail")
-    suspend fun getSongDetail(
-        @Field("c") c: String
-    ): SongDetailResponse
-
-    @FormUrlEncoded
     @POST("api/song/lyric")
     suspend fun getLyric(
         @Field("id") id: Long,

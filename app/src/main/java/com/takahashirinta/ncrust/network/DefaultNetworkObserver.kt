@@ -9,7 +9,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-internal data class PlaybackNetworkRoute(val id: Long?, val online: Boolean, val capabilities: Int = 0)
+internal data class PlaybackNetworkRoute(val id: Long?, val online: Boolean, val capabilities: Int = 0) {
+    val usesWifi: Boolean get() = capabilities and (1 shl NetworkCapabilities.TRANSPORT_WIFI) != 0
+}
 
 /** Observe the default route only. An old Wi-Fi onLost must not erase the new mobile route. */
 internal class DefaultNetworkObserver(context: Context) {

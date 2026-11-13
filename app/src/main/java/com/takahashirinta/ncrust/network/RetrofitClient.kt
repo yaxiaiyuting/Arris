@@ -147,22 +147,8 @@ object RetrofitClient {
             .build()
     }
 
-    /**
-     * 预热专用客户端的工厂：**与业务客户端同源**（Address 兼容 ⇒ 连接真能被复用），
-     * 但保留自己的短超时，且**不挂** [HttpTimingListener]。
-     *
-     * 不挂计时器是有意的：预热打的是 `GET /`，它不是业务请求；
-     * 让它进 `NcrustHttpTiming` 只会给「TTFB 花在哪」这本账添噪声。
-     *
-     * @param connectTimeoutSeconds 预热自己的超时上限（见 `ConnectionWarmup.TIMEOUT_SECONDS`）。
-     */
-    internal fun warmupDerivedClient(
-        connectTimeoutSeconds: Long,
-        readTimeoutSeconds: Long = connectTimeoutSeconds,
-    ): OkHttpClient = baseClient.newBuilder()
-        .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
-        .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
-        .build()
+    /** Derive warmup from the API client so TLS configuration and the pool stay compatible. */
+    internal fun warmupClientBuilder(): OkHttpClient.Builder = baseClient.newBuilder()
 
     private val plainClient: OkHttpClient by lazy {
         baseClient.newBuilder()
@@ -318,6 +304,7 @@ object RetrofitClient {
         payload: Map<String, String>,
         useInterface: Boolean = false,
         extraCookie: String? = null,
+        timeoutSeconds: Long = 8L,
     ): Response {
         val session = CookieManager.snapshot()
         val host = if (useInterface) INTERFACE_URL else API_URL
@@ -337,11 +324,11 @@ object RetrofitClient {
         // 播放取链是用户正在等的请求：单次最多等 8 秒就判失败，让上层走「有界重试」，
         // 而不是把 30 秒的读超时耗完（那 30 秒里所有同主机请求都在排队）。
         val call = plainClient.newCall(request).apply {
-            timeout().timeout(8, TimeUnit.SECONDS)
+            timeout().timeout(timeoutSeconds, TimeUnit.SECONDS)
         }
         return if (request.url.encodedPath == "/eapi/song/enhance/player/url/v1") {
             call.awaitPlaybackRead {
-                playbackHttp1Client.newCall(request).apply { timeout().timeout(8, TimeUnit.SECONDS) }
+                playbackHttp1Client.newCall(request).apply { timeout().timeout(timeoutSeconds, TimeUnit.SECONDS) }
             }
         } else call.awaitBufferedResponse()
     }
@@ -766,9 +753,19 @@ object RetrofitClient {
     }
 
     fun get(path: String, useInterface: Boolean = false, cookieOverride: String? = null): String {
+        return plainClient.newCall(getRequest(path, useInterface, cookieOverride))
+            .execute().use { it.body?.string() ?: throw Exception("empty response") }
+    }
+
+    internal suspend fun getCancellable(path: String, timeoutSeconds: Long): String =
+        plainClient.newCall(getRequest(path, useInterface = false, cookieOverride = null))
+            .apply { timeout().timeout(timeoutSeconds, TimeUnit.SECONDS) }
+            .awaitBufferedResponse().use { it.body?.string() ?: throw Exception("empty response") }
+
+    private fun getRequest(path: String, useInterface: Boolean, cookieOverride: String?): Request {
         val session = CookieManager.snapshot()
         val host = if (useInterface) INTERFACE_URL else BASE_URL
-        val request = Request.Builder().tag(NeteaseSessionSnapshot::class.java, if (cookieOverride == null) session else null)
+        return Request.Builder().tag(NeteaseSessionSnapshot::class.java, if (cookieOverride == null) session else null)
             .url(host + path)
             .get()
             .header("User-Agent", UA)
@@ -776,7 +773,6 @@ object RetrofitClient {
             .header("Cookie", cookieOverride ?: session.cookie.orEmpty())
             .build()
 
-        return plainClient.newCall(request).execute().body?.string() ?: throw Exception("empty response")
     }
 
     /**

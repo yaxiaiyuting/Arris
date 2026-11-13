@@ -21,7 +21,6 @@ import com.takahashirinta.ncrust.source.dedupeKey
 import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.trackKeyOf
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -141,7 +140,7 @@ class QueueKeysTest {
         val queue = listOf(netease(1), netease(2), netease(1), netease(3))
         val after = QueueKeys.dedupe(QueueKeys.keysOf(queue), QueueKeys.keyOf(netease(1)))
         assertEquals(listOf(2L, 3L), after.map { it.id })
-        assertFalse(QueueKeys.hasDuplicates(after))
+        assertEquals(after.size, after.toSet().size)
     }
 
     // ---------------------------------------------------------------- 跨源不误判
@@ -171,10 +170,11 @@ class QueueKeysTest {
     }
 
     @Test
-    fun `missing 不把跨源同号当成已有`() {
-        val existing = listOf(TrackKey(MusicSource.NETEASE, 123L))
-        val candidates = listOf(TrackKey(MusicSource.QQMUSIC, 123L), TrackKey(MusicSource.NETEASE, 123L))
-        assertEquals(listOf(TrackKey(MusicSource.QQMUSIC, 123L)), QueueKeys.missing(existing, candidates))
+    fun `批量追加保留另一音源的同号歌曲`() {
+        val existing = listOf(netease(123))
+        val otherSource = qqWithPlainId(123)
+        val candidates = listOf(otherSource, netease(123))
+        assertEquals(listOf(otherSource), QueueKeys.songsOutside(candidates, QueueKeys.keySetOf(existing)))
     }
 
     @Test
@@ -186,7 +186,7 @@ class QueueKeysTest {
         val keys = QueueKeys.keysOf(songs)
         assertEquals(2, keys.size)
         assertNotEquals(keys[0], keys[1])
-        assertFalse(QueueKeys.hasDuplicates(keys))
+        assertEquals(keys.size, keys.toSet().size)
         assertEquals(songs, QueueKeys.rebuild(songs, keys))
     }
 
@@ -237,20 +237,6 @@ class QueueKeysTest {
         // 放进 extra 就能装出来（这是插入路径的形状）。
         val inserted = QueueKeys.rebuild(songs, reordered + stranger, extra = listOf(netease(999)))
         assertEquals(listOf(3L, 1L, 2L, 999L), inserted!!.map { it.id })
-    }
-
-    @Test
-    fun `duplicates 能报出重复的身份`() {
-        val keys = QueueKeys.keysOf(listOf(netease(1), netease(2), netease(1)))
-        assertTrue(QueueKeys.hasDuplicates(keys))
-        assertEquals(setOf(TrackKey(MusicSource.NETEASE, 1L)), QueueKeys.duplicates(keys))
-        assertFalse(QueueKeys.hasDuplicates(QueueKeys.keysOf(listOf(netease(1), netease(2)))))
-    }
-
-    @Test
-    fun `describe 带音源 - 裸 id 的日志看不出 123 是谁`() {
-        val text = QueueKeys.describe(QueueKeys.keysOf(listOf(netease(123), qqWithPlainId(123))))
-        assertEquals("netease:123, qqmusic:123", text)
     }
 
     // ---------------------------------------------------------------- 历史数据
@@ -311,7 +297,7 @@ class QueueKeysTest {
         val keys = QueueKeys.keysOf(queue)
         assertEquals(MusicSource.NETEASE, keys[0].source)
         assertEquals(MusicSource.QQMUSIC, keys[1].source)
-        assertFalse(QueueKeys.hasDuplicates(keys))
+        assertEquals(keys.size, keys.toSet().size)
         // 两首歌的**原始 songid 都是 123**，但身份不同 —— 这正是 TrackKey 要表达的事。
         assertEquals(123L, SourceIds.qqRawId(keys[1].id))
         assertNotEquals(keys[0], keys[1])
@@ -403,13 +389,13 @@ class QueueKeysTest {
         val songs = listOf(netease(1), qq(1), netease(2), netease(3))
         val oldKeys = QueueKeys.keysOf(songs)
         assertEquals(4, oldKeys.size)
-        assertFalse(QueueKeys.hasDuplicates(oldKeys))
+        assertEquals(oldKeys.size, oldKeys.toSet().size)
 
         val newSong = netease(99)
         val plan = QueueInsert.plan(oldKeys, currentIndex = 0, newKey = QueueKeys.keyOf(newSong))
         assertEquals(QueueInsert.Outcome.INSERTED, plan.outcome)
         assertEquals(5, plan.keys.size)
-        assertFalse(QueueKeys.hasDuplicates(plan.keys))
+        assertEquals(plan.keys.size, plan.keys.toSet().size)
 
         // 编排：下标 0,2,3,1（= ncm1, ncm2, ncm3, QQ1）
         val shuffled = listOf(0, 2, 3, 1)

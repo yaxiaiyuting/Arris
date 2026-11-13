@@ -43,6 +43,7 @@ object PlaybackQueueLogic {
     /**
      * 把播放器回报的**实际起播身份**映射回应用队列索引。
      *
+     * 已保存的游标指向同一身份时保留该位置，兼容旧队列里的重复曲目。
      * 映射不到时退回 [fallbackIndex] 并夹到合法范围。调用方必须先判断「这次过渡是否
      * 允许退回模式推断」：非自然衔接（系统媒体控件 / 车机插入队列外歌曲）时，拿模式
      * 推断的下一首兜底等于凭空推进一格，宁可不推进。
@@ -53,9 +54,10 @@ object PlaybackQueueLogic {
         fallbackIndex: Int,
     ): Int {
         if (queue.isEmpty()) return -1
+        val fallback = fallbackIndex.coerceIn(queue.indices)
+        if (actualKey == null || QueueKeys.keyOf(queue[fallback]) == actualKey) return fallback
         val mapped = indexOfKey(queue, actualKey)
-        if (mapped >= 0) return mapped
-        return fallbackIndex.coerceIn(0, queue.lastIndex)
+        return if (mapped >= 0) mapped else fallback
     }
 
     /**

@@ -224,6 +224,36 @@ class OfflineLibraryIndexTest {
         assertEquals(listOf(1L, 3L), idx.songIds().sorted())
     }
 
+    @Test
+    fun aStaleCacheScanCannotDeleteANewlyRecordedTrack() {
+        val preferences = MemoryPrefs()
+        val context = object : ContextWrapper(null) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = preferences
+        }
+        val fields = listOf("index", "appliedJson", "revision").map { name ->
+            OfflineLibrary.javaClass.getDeclaredField(name).apply { isAccessible = true }
+        }
+        val previous = fields.map { it.get(OfflineLibrary) }
+        fields.first().set(OfflineLibrary, null)
+        try {
+            OfflineLibrary.record(context, 5L, "first", null, null, cacheKey = null, level = null)
+            val staleRevision = OfflineLibrary.currentRevision()
+            val staleKeys = setOf(5L)
+            OfflineLibrary.record(context, 7L, "new", null, null, cacheKey = null, level = null)
+
+            val protected = OfflineLibrary.reconcileAndList(context, staleRevision, staleKeys)
+            assertEquals(setOf(5L, 7L), protected.map { it.songId }.toSet())
+            assertEquals(2, OfflineTrackCodec.decode(preferences.getString("tracks", null)).size)
+
+            val live = OfflineLibrary.reconcileAndList(context, OfflineLibrary.currentRevision(), setOf(7L))
+            assertEquals(7L, live.single().songId)
+            assertEquals(7L, OfflineTrackCodec.decode(preferences.getString("tracks", null)).single().songId)
+        } finally {
+            fields.zip(previous).forEach { (field, value) -> field.set(OfflineLibrary, value) }
+        }
+    }
+
     /**
      * v2.5.6 · P2：**真机形状**的对账用例 —— PLC110 上那条注入记录（songId `503616`）。
      *

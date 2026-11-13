@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.cache
 
+import android.os.SystemClock
 import androidx.collection.LruCache
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.SongItem
@@ -22,6 +23,12 @@ import com.takahashirinta.ncrust.network.model.ArtistAlbumsResponse
 object ContentCache {
     // ── 首页 ─────────────────────────────────────────────────────────
     private data class DailySongs(val songs: List<SongItem>, val dayKey: String?)
+    private data class HomeSection<T>(val items: List<T>, val fetchedAt: Long? = null) {
+        fun fresh(ttlMs: Long): List<T>? =
+            items.takeIf { fetchedAt != null && SystemClock.elapsedRealtime() - fetchedAt in 0 until ttlMs }
+    }
+
+    private const val HOME_FRESH_MS = 15_000L
 
     @Volatile private var dailySnapshot: DailySongs? = null
     var homeDailySongs: List<SongItem>?
@@ -38,18 +45,33 @@ object ContentCache {
         return snapshot.songs.takeIf { snapshot.dayKey == dayKey && it.isNotEmpty() }
     }
 
-    @Volatile var homeRecommendPlaylists: List<PlaylistApi.PlaylistCard>? = null
-    @Volatile var homeNewSongs: List<SongItem>? = null
+    @Volatile private var recommendedSnapshot: HomeSection<PlaylistApi.PlaylistCard>? = null
+    @Volatile private var newSongsSnapshot: HomeSection<SongItem>? = null
+    var homeRecommendPlaylists: List<PlaylistApi.PlaylistCard>?
+        get() = recommendedSnapshot?.items
+        set(value) { recommendedSnapshot = value?.let { HomeSection(it) } }
+    var homeNewSongs: List<SongItem>?
+        get() = newSongsSnapshot?.items
+        set(value) { newSongsSnapshot = value?.let { HomeSection(it) } }
 
-    // 首页数据最近一次被 AppWarmup 预取的时间戳。HomeScreen 据此判断"刚预热过",
-    // 避免冷启动时 warmup 与 Home 各拉一遍同样的三个接口(重复网络/耗电)。
-    @Volatile private var homeWarmedUpAt: Long = 0L
+    internal fun putHomeRecommendPlaylists(items: List<PlaylistApi.PlaylistCard>) {
+        recommendedSnapshot = HomeSection(items, SystemClock.elapsedRealtime())
+    }
+
+    internal fun putHomeNewSongs(items: List<SongItem>) {
+        newSongsSnapshot = HomeSection(items, SystemClock.elapsedRealtime())
+    }
+
+    internal fun freshHomeRecommendPlaylists(owner: String?) =
+        recommendedSnapshot?.takeIf { ownerMatches(owner) }?.fresh(HOME_FRESH_MS)
+
+    internal fun freshHomeNewSongs(owner: String?) =
+        newSongsSnapshot?.takeIf { ownerMatches(owner) }?.fresh(HOME_FRESH_MS)
 
     /**
      * 首页个性化缓存归属的账号指纹（S14）。
      *
-     * 换账号后旧推荐/昵称/头像不能再被读到：`ownerKey` 与当前账号不一致时，
-     * [isHomeFresh] 直接为 false，`homeDailySongs`/`userProfile` 也必须先 [clearPersonalized]。
+     * 换账号时清除个性化栏目和资料，公共榜单可以保留。
      */
     @Volatile private var homeOwner: String? = null
 
@@ -60,24 +82,11 @@ object ContentCache {
             homeRecommendPlaylists = null
             homeNewSongs = null
             userProfile = null
-            homeWarmedUpAt = 0L
         }
         homeOwner = owner
     }
 
     fun ownerMatches(owner: String?): Boolean = homeOwner == owner
-
-    fun markHomeWarmed() {
-        homeWarmedUpAt = System.currentTimeMillis()
-    }
-
-    /** 首页数据是否是 [ttlMs] 内被 warmup 预取过的（有则 Home 不必再拉一遍）。 */
-    fun isHomeFresh(ttlMs: Long = 15_000L): Boolean =
-        homeWarmedUpAt > 0L && System.currentTimeMillis() - homeWarmedUpAt < ttlMs
-
-    /** 首页新鲜度还必须**账号匹配**（S14）：换账号后旧个性化内容不算新鲜。 */
-    fun isHomeFreshFor(owner: String?, ttlMs: Long = 15_000L): Boolean =
-        ownerMatches(owner) && isHomeFresh(ttlMs)
 
     // ── 榜单（E：首页卡片与搜索页共用同一份快照，避免两处各拉一遍） ──
     @Volatile var toplistItems: List<PlaylistApi.PlaylistCard>? = null
@@ -117,9 +126,6 @@ object ContentCache {
 
     // 清空所有缓存（切换账号 / 内存压力 / 进程重启场景）。
     fun clearAll() {
-        // S12：清内容必须**同时**失效新鲜度。旧实现只清数据不清 homeWarmedUpAt，
-        // 于是首页在 15 秒窗口内进入时 isHomeFresh 仍为 true，跳过取数、停在空页面。
-        homeWarmedUpAt = 0L
         homeOwner = null
         homeDailySongs = null
         homeRecommendPlaylists = null

@@ -20,6 +20,7 @@ package com.takahashirinta.ncrust.player
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
+import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
@@ -134,5 +135,38 @@ class ResumePositionRevocationTest {
         awaitFlush()
         assertEquals(60_000L, persistedPositions()[101L]?.posMs)
         assertEquals(60_000L, PlaybackStateManager.getSongPosition(ctx, 101L, durationMs = 200_000L))
+    }
+
+    @Test
+    fun queueReplacementSkipsReadingSongsOnceThereAreNoSavedPositions() {
+        var reads = 0
+        val queue = object : AbstractList<SongItem>() {
+            override val size = 5_000
+
+            override fun get(index: Int): SongItem {
+                reads++
+                return SongItem(index + 1L, "Fixture", null, null, null)
+            }
+        }
+        PlaybackStateManager.clearSongPositions(ctx, queue)
+        assertEquals("An empty position store needs no queue reads", 0, reads)
+
+        PlaybackStateManager.saveSongPosition(ctx, 1L, 10_000L)
+        PlaybackStateManager.saveSongPosition(ctx, 3L, 20_000L)
+        PlaybackStateManager.clearSongPositions(ctx, queue)
+        awaitFlush()
+        assertEquals("Stop after removing the final recorded position", 3, reads)
+        assertEquals(emptyMap<Long, PlaybackStateManager.PositionEntry>(), persistedPositions())
+    }
+
+    @Test
+    fun queueReplacementLeavesPositionsForOtherSongsIntact() {
+        val queue = listOf(SongItem(1L, "Fixture", null, null, null))
+        PlaybackStateManager.saveSongPosition(ctx, 1L, 10_000L)
+        PlaybackStateManager.saveSongPosition(ctx, 2L, 20_000L)
+        PlaybackStateManager.clearSongPositions(ctx, queue)
+        awaitFlush()
+        assertEquals(setOf(2L), persistedPositions().keys)
+        assertEquals(20_000L, PlaybackStateManager.getSongPosition(ctx, 2L))
     }
 }

@@ -10,9 +10,17 @@ package com.takahashirinta.ncrust.lyric
 
 import android.content.Context
 import android.util.Log
+import com.takahashirinta.ncrust.network.awaitResponseRead
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.Locale
@@ -78,6 +86,13 @@ object AmllTtmlClient {
     /** 网络异常的统一 code：没拿到任何 HTTP 响应。 */
     const val NETWORK_ERROR = -1
 
+    private class Download(val result: Deferred<String?>, var readers: Int = 0)
+
+    private val downloads = HashMap<Long, Download>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    internal fun readerCount(songId: Long): Int = synchronized(downloads) { downloads[songId]?.readers ?: 0 }
+
     /**
      * 一个镜像。[template] 里的 `%d` 是 ncm songId。
      *
@@ -134,7 +149,7 @@ object AmllTtmlClient {
             } catch (ce: CancellationException) {
                 // 协程取消必须原样抛出：吞掉它会让「用户已经切歌」的那次预取把剩下三面镜子跑完。
                 throw ce
-            } catch (t: Throwable) {
+            } catch (_: Exception) {
                 // 取数实现抛出的任何异常都等价于「这面镜子网络不可用」，换下一面。
                 TtmlHttpResult(NETWORK_ERROR, null)
             }
@@ -180,9 +195,28 @@ object AmllTtmlClient {
      */
     suspend fun load(context: Context, songId: Long, fetcher: TtmlFetcher = OkHttpTtmlFetcher): String? {
         LyricsCache.getTtml(context, songId)?.let { return it }
-        val body = fetch(songId, fetcher) ?: return null
-        LyricsCache.putTtml(context, songId, body)
-        return body
+        val app = context.applicationContext
+        val download = synchronized(downloads) {
+            downloads.getOrPut(songId) {
+                Download(scope.async(start = CoroutineStart.LAZY) {
+                    // Another reader may have filled the cache before we acquired the slot.
+                    LyricsCache.getTtml(app, songId) ?: fetch(songId, fetcher)?.also {
+                        currentCoroutineContext().ensureActive()
+                        LyricsCache.putTtml(app, songId, it)
+                    }
+                })
+            }.also { it.readers++ }
+        }
+        try {
+            return download.result.await()
+        } finally {
+            synchronized(downloads) {
+                if (--download.readers == 0) {
+                    downloads.remove(songId)
+                    download.result.cancel()
+                }
+            }
+        }
     }
 
     /**
@@ -194,12 +228,10 @@ object AmllTtmlClient {
      */
     suspend fun prefetch(context: Context, songId: Long, fetcher: TtmlFetcher = OkHttpTtmlFetcher) {
         try {
-            if (LyricsCache.getTtml(context, songId) != null) return
-            val body = fetch(songId, fetcher) ?: return
-            LyricsCache.putTtml(context, songId, body)
+            load(context, songId, fetcher)
         } catch (ce: CancellationException) {
             throw ce
-        } catch (t: Throwable) {
+        } catch (t: Exception) {
             Log.d(TAG, "预取失败 songId=$songId ${t.javaClass.simpleName}")
         }
     }
@@ -228,18 +260,13 @@ object OkHttpTtmlFetcher : TtmlFetcher {
             .build()
     }
 
-    override suspend fun get(url: String): TtmlHttpResult = withContext(Dispatchers.IO) {
+    override suspend fun get(url: String): TtmlHttpResult =
         try {
-            client.newCall(
-                Request.Builder().url(url).header("User-Agent", UA).build()
-            ).execute().use { resp ->
-                TtmlHttpResult(resp.code, resp.body?.string())
-            }
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (t: Throwable) {
-            // 网络异常统一映射成负 code：调用方据此换镜像，不需要区分异常类型。
+            client.newCall(Request.Builder().url(url).header("User-Agent", UA).build())
+                .awaitResponseRead { resp ->
+                    TtmlHttpResult(resp.code, resp.body?.string())
+                }
+        } catch (_: IOException) {
             TtmlHttpResult(AmllTtmlClient.NETWORK_ERROR, null)
         }
-    }
 }

@@ -12,6 +12,8 @@ package com.takahashirinta.ncrust.qq
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * qm 账号资料（v2.1.0 · C）。
@@ -87,8 +89,9 @@ object QqAuthStore {
      */
     private val authLock = Any()
 
-    @Volatile
-    private var authRevision: Long = 0L
+    private var authRevision = 0L
+    private val _authRevisions = MutableStateFlow(0L)
+    internal val authRevisions = _authRevisions.asStateFlow()
 
     /** 在登录态锁内执行一段代码（可重入）。 */
     internal fun <T> withAuthLock(block: () -> T): T = synchronized(authLock, block)
@@ -102,6 +105,7 @@ object QqAuthStore {
     /** 已持有 [authLock] 时登记一次登录态写入。 */
     internal fun noteAuthMutationLocked() {
         authRevision++
+        _authRevisions.value = authRevision
     }
 
     private fun prefs(context: Context): SharedPreferences =

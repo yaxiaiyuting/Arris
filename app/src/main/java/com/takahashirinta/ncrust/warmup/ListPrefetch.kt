@@ -13,19 +13,25 @@ package com.takahashirinta.ncrust.warmup
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.SystemClock
 import android.util.Log
 import coil.Coil
 import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.takahashirinta.ncrust.network.BoundedParallel
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 /**
- * 按网络类型预取列表首屏封面，同一列表短时间内只预取一次。
+ * 按网络类型预取列表首屏封面。同一 URL 正在加载或刚成功时复用结果。
  */
 object ListPrefetch {
 
@@ -37,19 +43,11 @@ object ListPrefetch {
     /** 移动数据下的预取条数。2 = 「第一屏不空」与「别花流量」的折中。 */
     private const val MOBILE_LIMIT = 2
 
-    /** 封面解码尺寸，与 `AppWarmup.COVER_PX` 同口径（列表 tile 约 160dp）。 */
+    /** 列表封面预解码尺寸。 */
     private const val COVER_PX = 320
 
-    /** 同一张列表在这个窗口内只预取一次（用户来回切 tab 不该反复打网络）。 */
-    private const val DEDUPE_WINDOW_MS = 60_000L
-
-    /** 去重表的上限。超过就整体清空 —— 它只是一个「最近预取过谁」的备忘，不需要 LRU 精度。 */
-    private const val DEDUPE_MAX = 32
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /** 访问时持有 recent 的锁。 */
-    private val recent = HashMap<String, Long>()
+    private val listSlots = Semaphore(BoundedParallel.DEFAULT_MAX_CONCURRENCY)
+    private val recent = RecentCoverLoads(SystemClock::elapsedRealtime)
 
     private fun limitFor(app: Context): Int {
         val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -63,56 +61,97 @@ object ListPrefetch {
         }
     }
 
-    /**
-     * 进入一张列表时的入口。**立刻返回**（预取在后台跑），失败完全静默。
-     *
-     * @param listKey 列表身份（例如 `search:晴天` / `album:12345`）。用于去重。
-     * @param songs 列表内容。只有前面的若干首会被碰。
-     */
-    fun prefetchList(context: Context, listKey: String, songs: List<SongItem>) {
-        if (listKey.isBlank() || songs.isEmpty()) return
-        if (synchronized(recent) { wasPrefetchedRecently(listKey, System.currentTimeMillis()) }) return
+    suspend fun prefetchList(context: Context, songs: List<SongItem>) {
+        if (songs.isEmpty()) return
         val app = context.applicationContext
-        scope.launch {
+        withContext(Dispatchers.IO) {
             val limit = limitFor(app)
-            if (limit <= 0) return@launch
-            val now = System.currentTimeMillis()
-            synchronized(recent) {
-                // 并发进入同一列表时只让先登记的一次发请求。
-                if (wasPrefetchedRecently(listKey, now)) return@launch
-                if (recent.size >= DEDUPE_MAX) recent.clear()
-                recent[listKey] = now
-            }
-            prefetchCovers(app, songs.take(limit))
+            if (limit <= 0) return@withContext
+            prefetchCovers(app, songs.asSequence().take(limit).map { it.album?.picUrl }.asIterable())
         }
     }
 
-    private fun wasPrefetchedRecently(listKey: String, now: Long): Boolean =
-        recent[listKey]?.let { now - it < DEDUPE_WINDOW_MS } ?: false
-
-    private suspend fun prefetchCovers(context: Context, songs: List<SongItem>) {
-        val urls = songs.mapNotNullTo(LinkedHashSet(songs.size)) {
-            CoverUrls.small(it.album?.picUrl)?.takeIf(String::isNotBlank)
+    /** Cold-start and page batches share the same URL deduplication and concurrency limit. */
+    internal suspend fun prefetchCovers(context: Context, covers: Iterable<String?>) {
+        val urls = covers.mapNotNullTo(LinkedHashSet()) {
+            CoverUrls.small(it)?.takeIf(String::isNotBlank)
         }
         if (urls.isEmpty()) return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
         val tasks = urls.map { url ->
-            url to suspend {
-                loader.execute(coverRequest(context, url))
-                Unit
+            suspend {
+                recent.load(url) {
+                    listSlots.withPermit { loader.execute(coverRequest(context, url)) is SuccessResult }
+                }
             }
         }
-        runCatching { BoundedParallel.runAll(tasks) }
-            .onFailure { Log.w(TAG, "prefetch failed for ${tasks.size} tasks", it) }
+        BoundedParallel.runAll(tasks)
     }
 
-    /** 预取单张封面（播放路径上的「这首歌的封面」用它）。失败静默。 */
+    /** 播放路径预取封面，使用独立于列表的调度。 */
     suspend fun prefetchCover(context: Context, rawUrl: String?) {
         val url = CoverUrls.small(rawUrl)?.takeIf(String::isNotBlank) ?: return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
-        runCatching { loader.execute(coverRequest(context, url)) }
+        try {
+            loader.execute(coverRequest(context, url))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(TAG, "Could not prefetch playback cover", e)
+        }
     }
 
     private fun coverRequest(context: Context, url: String): ImageRequest =
         ImageRequest.Builder(context).data(url).size(COVER_PX, COVER_PX).build()
+}
+
+internal class RecentCoverLoads(private val nowMs: () -> Long) {
+    private val inFlight = HashMap<String, CompletableDeferred<Boolean>>()
+    private val completed = LinkedHashMap<String, Long>()
+
+    suspend fun load(url: String, fetch: suspend () -> Boolean) {
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            var ownsLoad = false
+            val flight = synchronized(this) {
+                if (completed[url]?.let { nowMs() - it in 0 until WINDOW_MS } == true) return
+                inFlight.getOrPut(url) {
+                    ownsLoad = true
+                    CompletableDeferred()
+                }
+            }
+            if (ownsLoad) {
+                fetchOwned(url, flight, fetch)
+                return
+            }
+            // Retry only when the owner left the page. A failed HTTP response ends this batch.
+            if (!flight.await()) return
+        }
+    }
+
+    private suspend fun fetchOwned(url: String, flight: CompletableDeferred<Boolean>, fetch: suspend () -> Boolean) {
+        var succeeded = false
+        var cancelled = false
+        try {
+            succeeded = fetch()
+        } catch (e: CancellationException) {
+            cancelled = true
+            throw e
+        } finally {
+            synchronized(this) {
+                inFlight.remove(url)
+                if (succeeded) {
+                    completed.remove(url)
+                    completed[url] = nowMs()
+                    if (completed.size > MAX_RECENT) completed.remove(completed.keys.first())
+                }
+            }
+            flight.complete(cancelled)
+        }
+    }
+
+    private companion object {
+        const val WINDOW_MS = 60_000L
+        const val MAX_RECENT = 32 * ListPrefetch.WIFI_LIMIT
+    }
 }

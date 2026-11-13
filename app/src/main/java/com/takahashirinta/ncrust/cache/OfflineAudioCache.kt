@@ -9,8 +9,10 @@
 package com.takahashirinta.ncrust.cache
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 
 import com.takahashirinta.ncrust.bili.BiliCdn
 import androidx.media3.datasource.DataSource
@@ -155,26 +157,24 @@ object OfflineAudioCache {
         BiliCdn.cacheKeyFor(url, host) ?: OfflineKeys.keyOf(url) ?: url
 
     /** 只读当前缓存的完整文件长度元数据；不是已缓存片段的长度，不触发网络。 */
-    fun contentLengthForUrl(url: String): Long = runCatching {
-        val uri = android.net.Uri.parse(url)
-        val key = cacheKeyFor(url, uri.host)
+    internal fun contentLengthForUri(uri: Uri): Long = runCatching {
         val current = cache ?: return@runCatching 0L
+        val key = cacheKeyFor(uri.toString(), uri.host)
         androidx.media3.datasource.cache.ContentMetadata.getContentLength(current.getContentMetadata(key))
             .coerceAtLeast(0L)
     }.getOrDefault(0L)
 
-    /** 缓存里是否已有这个 key（离线可播的判据）。 */
-    fun contains(context: Context, key: String): Boolean =
+    /** A legacy key can already have audio bytes or metadata for a different response. */
+    internal fun contains(context: Context, key: String): Boolean =
         runCatching { get(context).keys.contains(key) }.getOrDefault(false)
 
-    /** 离线起播前检查从字节 0 开始的连续缓存。SimpleCache 的同键片段已按偏移排序。 */
+    /** Cached bytes must form a contiguous prefix. An uncached suffix is allowed. */
     fun coversStart(context: Context, key: String): Boolean = runCatching {
-        OfflineKeys.coversOrderedStart(
-            get(context).getCachedSpans(key),
-            position = { it.position },
-            length = { it.length },
-            isCached = { it.isCached },
-        )
+        val current = get(context)
+        // Media3 1.9.0 guards both the span index and getCachedLength with this monitor.
+        synchronized(current) {
+            OfflineKeys.coversStart { offset, length -> current.getCachedLength(key, offset, length) }
+        }
     }.getOrDefault(false)
 
     /** 已用字节数。 */
@@ -183,27 +183,28 @@ object OfflineAudioCache {
 
     internal fun librarySnapshot(context: Context): OfflineCacheSnapshot {
         val app = context.applicationContext
+        val revision = OfflineLibrary.currentRevision()
         val current = runCatching { get(app) }.getOrNull()
         val keys = current?.let { runCatching { it.keys }.getOrNull() }
-        // A cache read failure gives no basis for removing tracks from the local index.
-        val tracks = OfflineLibrary.reconcileAndList(app, keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf))
+        // A reserved range can create a key before its first span is committed. Keep its metadata.
+        val songsInCache = keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf)
+        val tracks = OfflineLibrary.reconcileAndList(app, revision, songsInCache)
         if (current == null || keys == null || tracks.isEmpty()) return OfflineCacheSnapshot(tracks, emptyMap())
 
         val songIds = tracks.mapTo(HashSet(tracks.size), OfflineTrack::songId)
+        var unreadableSongs: MutableSet<Long>? = null
         val bytesBySong = OfflineKeys.sumBytesBySong(keys, songIds) { key ->
-            runCatching {
-                var total = 0L
-                var measured = false
-                for (span in current.getCachedSpans(key)) {
-                    if (span.isCached) {
-                        total += span.length
-                        measured = true
-                    }
+            runCatching { current.getCachedBytes(key, 0L, C.LENGTH_UNSET.toLong()) }
+                .onFailure {
+                    val unreadable = unreadableSongs ?: HashSet<Long>().also { unreadableSongs = it }
+                    OfflineKeys.songIdOf(key)?.let(unreadable::add)
                 }
-                if (measured) total else null
-            }.getOrNull()
+                .getOrNull()?.takeIf { it > 0L }
         }
-        return OfflineCacheSnapshot(tracks, bytesBySong)
+        val visible = if (bytesBySong.size == tracks.size) tracks else tracks.filter {
+            it.songId in bytesBySong || unreadableSongs?.contains(it.songId) == true
+        }
+        return OfflineCacheSnapshot(visible, bytesBySong)
     }
 
     /**

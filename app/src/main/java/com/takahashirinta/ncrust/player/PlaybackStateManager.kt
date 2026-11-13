@@ -70,14 +70,12 @@ object PlaybackStateManager {
     private val flushLock = Any()
     private var queueFlushJob: Job? = null
     private var queueGeneration = 0L
-    private var queueEncoding: QueueEncoding? = null
-    private var shuffleFlushJob: Job? = null
-    private var shuffleGeneration = 0L
+    private var savedQueue: SavedQueue? = null
+    private var playModeGeneration = 0L
 
-    private class QueueEncoding(
+    private class SavedQueue(
         val context: WeakReference<Context>,
         val songs: WeakReference<List<SongItem>>,
-        val json: String,
     )
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -228,7 +226,7 @@ object PlaybackStateManager {
      * 读取某首歌的续播位置（毫秒）。
      *
      * 返回 0 表示「没有可用记录」——包括从未播过、已播完被清除、
-     * 以及记录位置过于接近开头（< [MIN_RESUMABLE_MS]，续播没有意义）或结尾（> 95%，等于已听完）。
+     * 以及位置小于 [MIN_RESUMABLE_MS] 或已达到当前曲目的已知时长。
      *
      * @param durationMs 本曲**当前解析出来的真实时长**；0 / 负数 = 未知。
      *   已知时长时必须核对：记录可能来自「上一次解析出的更长的源」（完整曲 vs 试听片段，
@@ -238,32 +236,31 @@ object PlaybackStateManager {
     fun getSongPosition(context: Context, songId: Long, durationMs: Long = 0L): Long {
         if (songId <= 0) return 0
         val map = ensurePositionsLoaded(context)
-        val entry = synchronized(positionLock) { map[songId] } ?: return 0L
-        if (durationMs > 0L && entry.posMs >= durationMs) {
-            // 越界记录即作废：留着只会在下次续播时再被读一次（H16）。
-            clearSongPosition(context, songId)
-            return 0L
+        return synchronized(positionLock) {
+            val entry = map[songId] ?: return 0L
+            if (durationMs > 0L && entry.posMs >= durationMs) {
+                // 校验和撤销在同一把锁内，避免删掉并发保存的新进度。
+                map.remove(songId)
+                schedulePositionFlushLocked(context)
+                return 0L
+            }
+            if (entry.posMs < MIN_RESUMABLE_MS) 0L else entry.posMs
         }
-        if (entry.posMs < MIN_RESUMABLE_MS) return 0L
-        return entry.posMs
     }
 
-    /**
-     * 4.0.2：**批量撤销续播进度**（一次性写盘）。
-     *
-     * 用于「整张新歌单 / 库页播放全部」这类**全新队列**：这些歌不该继承上次听到哪儿，
-     * 否则点播放全部第一首会从中间开始。只清传入的 id，不动其它歌的记录。
-     */
-    fun clearSongPositions(context: Context, songIds: Collection<Long>) {
-        if (songIds.isEmpty()) return
+    /** 播放整张歌单时撤销这些曲目的断点，一次提交所有删除。 */
+    internal fun clearSongPositions(context: Context, queue: List<SongItem>) {
+        if (queue.isEmpty()) return
         val map = ensurePositionsLoaded(context)
-        val changed = synchronized(positionLock) {
-            var removed = false
-            songIds.forEach { if (map.remove(it) != null) removed = true }
-            if (removed) positionGeneration++
-            removed
+        synchronized(positionLock) {
+            val oldSize = map.size
+            if (oldSize == 0) return
+            for (song in queue) {
+                map.remove(song.id)
+                if (map.isEmpty()) break
+            }
+            if (map.size != oldSize) schedulePositionFlushLocked(context, immediate = true)
         }
-        if (changed) scheduleFlushPositions(context, immediate = true)
     }
 
     /**
@@ -290,33 +287,28 @@ object PlaybackStateManager {
         val map = ensurePositionsLoaded(context)
         synchronized(positionLock) {
             map[songId] = PositionEntry(positionMs, System.currentTimeMillis())
-            positionGeneration++
             map.trimOldest(MAX_SONG_POSITIONS) { it.savedAtMs }
+            schedulePositionFlushLocked(context)
         }
-        scheduleFlushPositions(context)
     }
 
     /** 歌曲正常播完时清除记录，使下次重播从 0:00 开始。 */
     fun clearSongPosition(context: Context, songId: Long) {
         if (songId <= 0) return
         val map = ensurePositionsLoaded(context)
-        val removed = synchronized(positionLock) {
-            if (map.remove(songId) == null) false else {
-                positionGeneration++
-                true
-            }
+        synchronized(positionLock) {
+            if (map.remove(songId) != null) schedulePositionFlushLocked(context)
         }
-        if (removed) scheduleFlushPositions(context)
     }
 
-    private fun scheduleFlushPositions(context: Context, immediate: Boolean = false) {
+    /** 持有 positionLock 调用，使写盘任务按内存变更的顺序排队。 */
+    private fun schedulePositionFlushLocked(context: Context, immediate: Boolean = false) {
         val appContext = context.applicationContext
-        synchronized(flushLock) {
-            posFlushJob?.cancel()
-            posFlushJob = ioScope.launch {
-                if (!immediate) delay(1_000L)
-                flushPositions(appContext)
-            }
+        positionGeneration++
+        posFlushJob?.cancel()
+        posFlushJob = ioScope.launch {
+            if (!immediate) delay(1_000L)
+            flushPositions(appContext)
         }
     }
 
@@ -348,27 +340,37 @@ object PlaybackStateManager {
     internal const val MIN_RESUMABLE_MS = 3_000L
 
     // ---------- 队列持久化 ----------
-    fun saveQueue(context: Context, queue: List<SongItem>, currentIndex: Int) =
-        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = false)
+    internal fun saveQueue(
+        context: Context,
+        queue: List<SongItem>,
+        currentIndex: Int,
+        shuffle: (() -> ShuffleSnapshot)? = null,
+    ) = scheduleQueueWrite(context, queue, currentIndex, shuffle, cursorOnly = false)
 
-    /** 游标变化时复用同一份只读队列快照。首次保存或换队列时会完整编码。 */
-    internal fun saveQueueCursor(context: Context, queue: List<SongItem>, currentIndex: Int) =
-        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = true)
+    /** 已保存的队列只更新游标和随机轮次。首次保存或换队列时会完整编码。 */
+    internal fun saveQueueCursor(
+        context: Context,
+        queue: List<SongItem>,
+        currentIndex: Int,
+        shuffle: (() -> ShuffleSnapshot)? = null,
+    ) = scheduleQueueWrite(context, queue, currentIndex, shuffle, cursorOnly = true)
 
     private fun scheduleQueueWrite(
         context: Context,
         queue: List<SongItem>,
         index: Int,
-        reuseEncoding: Boolean,
+        shuffle: (() -> ShuffleSnapshot)?,
+        cursorOnly: Boolean,
     ) {
         val app = context.applicationContext
         synchronized(flushLock) {
-            if (!reuseEncoding) queueEncoding = null
+            if (!cursorOnly) savedQueue = null
             val generation = ++queueGeneration
+            val modeGeneration = playModeGeneration
             queueFlushJob?.cancel()
             queueFlushJob = ioScope.launch {
                 delay(200L)
-                flushQueue(app, queue, index, generation)
+                flushQueue(app, queue, index, shuffle, generation, modeGeneration)
             }
         }
     }
@@ -377,20 +379,38 @@ object PlaybackStateManager {
         context: Context,
         queue: List<SongItem>,
         index: Int,
+        shuffle: (() -> ShuffleSnapshot)?,
         generation: Long,
+        modeGeneration: Long,
     ) {
-        val encoded = synchronized(flushLock) {
+        val bodySaved = synchronized(flushLock) {
             if (queueGeneration != generation) return
-            queueEncoding?.takeIf { it.context.get() === context && it.songs.get() === queue }
+            savedQueue?.let { it.context.get() === context && it.songs.get() === queue } == true
         }
         try {
-            val json = encoded?.json ?: withContext(Dispatchers.Default) { gson.toJson(queue) }
+            val (body, round) = if (bodySaved && shuffle == null) null to null else {
+                withContext(Dispatchers.Default) {
+                    val queueJson = if (bodySaved) null else gson.toJson(queue)
+                    val snapshot = shuffle?.invoke()
+                    val keys = snapshot?.queueKeys
+                    val shuffleJson = if (keys != null && snapshot.matches(keys, index)) gson.toJson(snapshot)
+                        else null
+                    queueJson to shuffleJson
+                }
+            }
             val prefs = getPrefs(context)
             synchronized(flushLock) {
                 if (queueGeneration != generation) return
-                prefs.edit().putString(KEY_QUEUE, json).putInt(KEY_QUEUE_INDEX, index).apply()
-                if (queueGeneration == generation && encoded == null) {
-                    queueEncoding = QueueEncoding(WeakReference(context), WeakReference(queue), json)
+                val editor = prefs.edit()
+                if (body != null) editor.putString(KEY_QUEUE, body)
+                editor.putInt(KEY_QUEUE_INDEX, index)
+                // 改模式会清除旧轮次。此时旧任务仍可保存队列与游标。
+                if (modeGeneration == playModeGeneration) {
+                    if (round == null) editor.remove(KEY_SHUFFLE) else editor.putString(KEY_SHUFFLE, round)
+                }
+                editor.apply()
+                if (queueGeneration == generation && body != null) {
+                    savedQueue = SavedQueue(WeakReference(context), WeakReference(queue))
                 }
             }
         } catch (e: CancellationException) {
@@ -400,23 +420,35 @@ object PlaybackStateManager {
         }
     }
 
-    suspend fun getQueue(context: Context): Pair<List<SongItem>, Int>? {
+    internal data class RestoredQueue(val songs: List<SongItem>, val index: Int, val shuffle: ShuffleSnapshot?)
+
+    internal suspend fun getQueue(context: Context, readShuffle: Boolean = false): RestoredQueue? {
         return try {
-            val (json, index) = withContext(Dispatchers.IO) {
+            val (json, index, roundJson) = withContext(Dispatchers.IO) {
                 val prefs = getPrefs(context)
                 synchronized(flushLock) {
                     val json = prefs.getString(KEY_QUEUE, null)
-                    if (json.isNullOrEmpty() || json == "[]") null
-                    else json to prefs.getInt(KEY_QUEUE_INDEX, 0)
+                    if (json.isNullOrEmpty() || json == "[]") return@synchronized null
+                    val round = if (readShuffle) runCatching { prefs.getString(KEY_SHUFFLE, null) }.getOrNull()
+                        else null
+                    Triple(json, prefs.getInt(KEY_QUEUE_INDEX, 0), round)
                 }
             } ?: return null
             // Gson 反射反序列化是 CPU 密集，切 Default 避免主线程卡顿（队列几百首时 50ms+）。
-            val queue: List<SongItem> = withContext(Dispatchers.Default) {
+            withContext(Dispatchers.Default) {
                 val restored: List<SongItem> = gson.fromJson(json, songListType)
                 // H14 残余：读盘后过一次「旧 B 站视频腿补分区位」（纯函数 + 幂等）。
-                migrateQueueSongs(restored)
+                val queue = migrateQueueSongs(restored)
+                if (queue.isEmpty()) return@withContext null
+                val cursor = index.coerceIn(queue.indices)
+                val round = roundJson?.let {
+                    runCatching {
+                        gson.fromJson(it, ShuffleSnapshot::class.java)
+                            ?.takeIf { snapshot -> snapshot.matches(queue.map { song -> QueueKeys.keyOf(song).tag }, cursor) }
+                    }.getOrNull()
+                }
+                RestoredQueue(queue, cursor, round)
             }
-            Pair(queue, index)
         } catch (e: CancellationException) {
             // 取消不是「队列损坏」：原样抛出，绝不顺手删除已落盘的队列。
             throw e
@@ -481,70 +513,12 @@ object PlaybackStateManager {
 
     fun savePlayMode(context: Context, mode: Int) {
         if (mode !in 0..4) return
-        getPrefs(context).edit().putInt(KEY_PLAY_MODE, mode).apply()
-    }
-
-    /** 已接受的轮次写入由应用持有，播放器页面销毁后仍可保存。 */
-    internal fun saveShuffle(
-        context: Context,
-        order: List<Int>,
-        position: Int,
-        current: Int,
-        queueKeys: () -> List<String>,
-    ) {
-        val app = context.applicationContext
+        val prefs = getPrefs(context)
         synchronized(flushLock) {
-            val generation = ++shuffleGeneration
-            shuffleFlushJob?.cancel()
-            shuffleFlushJob = ioScope.launch {
-                flushShuffle(app, generation, order, position, current, queueKeys)
-            }
+            if (runCatching { prefs.getInt(KEY_PLAY_MODE, -1) }.getOrDefault(-1) == mode) return
+            playModeGeneration++
+            prefs.edit().putInt(KEY_PLAY_MODE, mode).remove(KEY_SHUFFLE).apply()
         }
-    }
-
-    private suspend fun flushShuffle(
-        context: Context,
-        generation: Long,
-        order: List<Int>,
-        position: Int,
-        current: Int,
-        queueKeys: () -> List<String>,
-    ) {
-        try {
-            val json = withContext(Dispatchers.Default) {
-                val keys = queueKeys()
-                val snapshot = ShuffleSnapshot(keys, order, position)
-                if (snapshot.matches(keys, current)) gson.toJson(snapshot) else null
-            } ?: return
-            val prefs = getPrefs(context)
-            synchronized(flushLock) {
-                if (shuffleGeneration == generation) {
-                    prefs.edit().putString(KEY_SHUFFLE, json).apply()
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // 保留上一次已保存的轮次。
-        }
-    }
-
-    internal suspend fun restoreShuffle(
-        context: Context,
-        queue: List<SongItem>,
-        current: Int,
-    ): ShuffleSnapshot? = try {
-        val json = withContext(Dispatchers.IO) {
-            getPrefs(context).getString(KEY_SHUFFLE, null)
-        }
-        withContext(Dispatchers.Default) {
-            gson.fromJson(json, ShuffleSnapshot::class.java)
-                ?.takeIf { it.matches(queue.map { song -> QueueKeys.keyOf(song).tag }, current) }
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        null
     }
 
     fun clearQueue(context: Context) {
@@ -552,11 +526,8 @@ object PlaybackStateManager {
         synchronized(flushLock) {
             queueFlushJob?.cancel()
             queueFlushJob = null
-            shuffleFlushJob?.cancel()
-            shuffleFlushJob = null
             queueGeneration++
-            shuffleGeneration++
-            queueEncoding = null
+            savedQueue = null
             prefs.edit().remove(KEY_QUEUE).remove(KEY_QUEUE_INDEX).remove(KEY_SHUFFLE).apply()
         }
     }

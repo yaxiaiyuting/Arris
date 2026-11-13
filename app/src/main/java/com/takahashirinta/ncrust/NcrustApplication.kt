@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.app.Application
 import android.content.ComponentCallbacks2
 import android.content.Context
+import androidx.annotation.MainThread
 import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -13,6 +14,7 @@ import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.network.ClientIdentity
 import com.takahashirinta.ncrust.player.QualityLadder
 import com.takahashirinta.ncrust.ui.theme.BackgroundImageManager
+import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 
 /**
  * 全局 Application，提供 Coil ImageLoader 的分级缓存配置 + 内存压力响应。
@@ -30,6 +32,10 @@ import com.takahashirinta.ncrust.ui.theme.BackgroundImageManager
  * 避免低端机后台被杀。
  */
 class NcrustApplication : Application(), ImageLoaderFactory {
+
+    // One playback model per process so removing the task does not end queue ownership.
+    @get:MainThread
+    internal val playback by lazy(LazyThreadSafetyMode.NONE) { PlayerViewModel(this) }
 
     override fun onCreate() {
         super.onCreate()

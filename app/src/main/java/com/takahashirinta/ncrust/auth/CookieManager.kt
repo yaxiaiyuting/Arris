@@ -2,18 +2,23 @@ package com.takahashirinta.ncrust.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object CookieManager {
     private const val PREFS_NAME = "ncrust_prefs"
     private const val KEY_COOKIE = "user_cookie"
     private const val KEY_REFRESHED_AT = "session_refreshed_at"
     private val guard = NeteaseSessionGuard()
+    private val _loginGenerations = MutableStateFlow(0L)
+    internal val loginGenerations = _loginGenerations.asStateFlow()
     private var app: Context? = null
 
     fun init(context: Context) = synchronized(guard) {
         if (app == null) {
             app = context.applicationContext
             guard.replace(getPrefs(context).getString(KEY_COOKIE, null))
+            publishLoginGeneration()
         }
     }
     fun snapshot(): NeteaseSessionSnapshot = synchronized(guard) { guard.snapshot() }
@@ -33,6 +38,11 @@ object CookieManager {
     fun advanceGeneration(context: Context) = synchronized(guard) {
         init(context)
         guard.replace(guard.snapshot().cookie)
+        publishLoginGeneration()
+    }
+
+    private fun publishLoginGeneration() {
+        _loginGenerations.value = guard.snapshot().loginGeneration
     }
     fun lastRefreshedAt(context: Context): Long = getPrefs(context).getLong(KEY_REFRESHED_AT, 0L)
     fun commitRefresh(context: Context, started: NeteaseSessionSnapshot, cookie: String, now: Long): Boolean =
@@ -79,6 +89,7 @@ object CookieManager {
                 com.takahashirinta.ncrust.cache.ContentCache.bindOwner(owner)
                 com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
             }
+            publishLoginGeneration()
         }
     }
 
@@ -99,7 +110,7 @@ object CookieManager {
         true
     }
 
-    private fun initializedSnapshot(context: Context): NeteaseSessionSnapshot = synchronized(guard) {
+    internal fun initializedSnapshot(context: Context): NeteaseSessionSnapshot = synchronized(guard) {
         init(context)
         guard.snapshot()
     }
@@ -131,6 +142,7 @@ object CookieManager {
             // S14：登出后首页个性化内容一个字节都不该留（换账号/未登录都不读旧资料）。
             com.takahashirinta.ncrust.cache.ContentCache.bindOwner(null)
             com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
+            publishLoginGeneration()
         }
     }
 }
