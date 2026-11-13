@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.BuildConfig
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
 import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.auth.QrLoginProtocol
 import com.takahashirinta.ncrust.network.crypto.EapiCrypto
@@ -806,7 +807,10 @@ object RetrofitClient {
     private class CookieInterceptor : Interceptor {
         override fun intercept(chain: Interceptor.Chain): Response {
             val originalRequest = chain.request()
-            val session = CookieManager.snapshot()
+            val pinned = originalRequest.tag(NeteaseSessionSnapshot::class.java)
+            val session = if (pinned == null) CookieManager.snapshot()
+                else CookieManager.ifSameLogin(pinned) { it }
+                    ?: throw NeteaseSessionChangedException("Netease login changed before request")
             val cookie = session.cookie
             val newRequest = if (!cookie.isNullOrBlank()) {
                 originalRequest.newBuilder()

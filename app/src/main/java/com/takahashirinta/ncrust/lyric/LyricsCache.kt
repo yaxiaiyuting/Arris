@@ -9,9 +9,13 @@
 package com.takahashirinta.ncrust.lyric
 
 import android.content.Context
+import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.takahashirinta.ncrust.cache.trimOldest
+import com.takahashirinta.ncrust.network.model.LyricResponse
 import java.io.StringWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,40 +119,31 @@ object LyricsCache {
         synchronized(lock) { loadLocked(context)[songId.toString()] }
     }
 
-    /**
-     * 写入 LRC / 译文 / 逐字 / 音译。
-     *
-     * [yrc] / [romalrc] 保持默认参数，v1.5.0 / v1.9.0 的调用点签名不变（v1.9.2 只是多接一个字段）。
-     * 若这首歌之前只有 TTML 暂存条目，这里把它并进正式条目并删掉暂存，避免同一首歌留两条。
-     *
-     * 旧版写入的来源标记随已有缓存保留。
-     */
-    suspend fun put(
+    /** 保存成功响应的四条歌词轨，保留已有 TTML 与旧版诊断字段。 */
+    internal suspend fun putNetease(
         context: Context,
         songId: Long,
-        lrc: String,
-        tlyric: String,
-        yrc: String = "",
-        romalrc: String = "",
-    ) {
-        withContext(Dispatchers.IO) {
-            synchronized(lock) {
-                val map = loadLocked(context)
-                val key = songId.toString()
-                val now = System.currentTimeMillis()
-                val old = map[key]
-                val staged = map.remove(ttmlKey(songId))
-                // 正式条目已有 TTML 就用它（putTtml 会就地更新它），否则取暂存的那份。
-                val ttmlSource = old?.takeIf { it.ttml != null } ?: staged
-                map[key] = CachedLyrics(
-                    lrc, tlyric, now, yrc,
-                    ttmlSource?.ttml, ttmlSource?.ttmlAt ?: 0,
-                    romalrc,
-                    old?.translationSource, old?.romanSource
-                )
-                map.trimOldest(MAX_ENTRIES) { it.timestamp }
-                persistLocked(context, map)
+        reply: LyricResponse,
+        session: NeteaseSessionSnapshot,
+    ): CachedLyrics = withContext(Dispatchers.IO) {
+        synchronized(lock) {
+            val map = loadLocked(context)
+            val key = songId.toString()
+            if (CookieManager.loginGenerations.value != session.loginGeneration) {
+                throw NeteaseSessionChangedException("Netease login changed before lyric cache write")
             }
+            val old = map[key]
+            val staged = map.remove(ttmlKey(songId))
+            val ttmlSource = old?.takeIf { it.ttml != null } ?: staged
+            val entry = CachedLyrics(
+                reply.lrc?.lyric.orEmpty(), reply.tlyric?.lyric.orEmpty(), System.currentTimeMillis(),
+                reply.yrc?.lyric.orEmpty(), ttmlSource?.ttml, ttmlSource?.ttmlAt ?: 0,
+                reply.romalrc?.lyric.orEmpty(), old?.translationSource, old?.romanSource,
+            )
+            map[key] = entry
+            map.trimOldest(MAX_ENTRIES) { it.timestamp }
+            persistLocked(context, map)
+            entry
         }
     }
 
