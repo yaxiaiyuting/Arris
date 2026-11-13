@@ -9,6 +9,7 @@
 package com.takahashirinta.ncrust.cache
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
 
@@ -155,10 +156,9 @@ object OfflineAudioCache {
         BiliCdn.cacheKeyFor(url, host) ?: OfflineKeys.keyOf(url) ?: url
 
     /** 只读当前缓存的完整文件长度元数据；不是已缓存片段的长度，不触发网络。 */
-    fun contentLengthForUrl(url: String): Long = runCatching {
-        val uri = android.net.Uri.parse(url)
-        val key = cacheKeyFor(url, uri.host)
+    internal fun contentLengthForUri(uri: Uri): Long = runCatching {
         val current = cache ?: return@runCatching 0L
+        val key = cacheKeyFor(uri.toString(), uri.host)
         androidx.media3.datasource.cache.ContentMetadata.getContentLength(current.getContentMetadata(key))
             .coerceAtLeast(0L)
     }.getOrDefault(0L)

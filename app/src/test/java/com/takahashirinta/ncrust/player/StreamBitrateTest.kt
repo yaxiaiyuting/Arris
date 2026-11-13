@@ -27,4 +27,28 @@ class StreamBitrateTest {
         assertEquals(1_000_000L, StreamBitrate.resolve(-1, 240_000L, bytes))
         assertEquals(1, cacheReads)
     }
+
+    @Test fun `a minute of samples reuses known length while duration remains live`() {
+        var reads = 0
+        val length = StreamBitrate.FileLength<String> { reads++; 30_000_000L }
+        repeat(120) {
+            assertEquals(1_000_000L, StreamBitrate.resolve(-1, 240_000L) { length.read("first") })
+        }
+        assertEquals(1, reads)
+        assertEquals(2_000_000L, StreamBitrate.resolve(-1, 120_000L) { length.read("first") })
+        assertEquals(1, reads)
+    }
+
+    @Test fun `unknown length is retried and a new item may reuse the same URI`() {
+        var sourceBytes = 0L
+        val length = StreamBitrate.FileLength<String> { sourceBytes }
+        assertEquals(0L, length.read("first"))
+        sourceBytes = 100L
+        assertEquals(100L, length.read("first"))
+        sourceBytes = 200L
+        assertEquals(200L, length.read("second"))
+        length.reset()
+        sourceBytes = 300L
+        assertEquals(300L, length.read("second"))
+    }
 }

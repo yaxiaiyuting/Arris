@@ -737,6 +737,7 @@ class PlaybackService : MediaLibraryService() {
                 mediaItem: androidx.media3.common.MediaItem?,
                 reason: Int
             ) {
+                bitrateFileLength.reset()
                 // 现在**所有**过渡都上报（AUTO / 手动 setMediaItem / 系统媒体控件 / 车机
                 // seek）。只处理 AUTO 会让 UI 的 currentSongId 停在上一首，应用队列索引
                 // 再也无法按音频事实回查（上游 #32）。auto 标志随回调交给 UI，用来区分
@@ -1897,18 +1898,25 @@ class PlaybackService : MediaLibraryService() {
         publishStreamBitrate(player.duration)
     }
 
+    private val bitrateFileLength = StreamBitrate.FileLength(OfflineAudioCache::contentLengthForUri)
+    private var bitrateTracks: androidx.media3.common.Tracks? = null
+    private var averageFormatBitrate = -1
+
     private fun publishStreamBitrate(durationMs: Long) {
         val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
         val track = trackForMediaId(item.mediaId) ?: return
-        val selected = player.currentTracks.groups.firstOrNull {
-            it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        val tracks = player.currentTracks
+        if (tracks !== bitrateTracks) {
+            bitrateTracks = tracks
+            val audio = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected }
+            val selectedIndex = audio?.let { group -> (0 until group.length).firstOrNull(group::isTrackSelected) }
+            averageFormatBitrate = if (audio != null && selectedIndex != null) {
+                audio.getTrackFormat(selectedIndex).averageBitrate
+            } else -1
         }
-        val format = selected?.let { group ->
-            (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
-        }
-        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, durationMs) {
-            item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
+        val bitrate = StreamBitrate.resolve(averageFormatBitrate, durationMs) {
+            item.localConfiguration?.uri?.let(bitrateFileLength::read) ?: 0L
         }
         if (bitrate > 0L) publish(track.source, track.id, bitrate)
     }

@@ -20,4 +20,23 @@ object StreamBitrate {
         if (bytes <= 0L) return 0L
         return (bytes.toDouble() * 8000.0 / durationMs).toLong().coerceAtLeast(0L)
     }
+
+    /** A completed length is stable for the current media item. Keep checking until it arrives. */
+    internal class FileLength<Key : Any>(private val query: (Key) -> Long) {
+        private var key: Key? = null
+        private var bytes = 0L
+
+        fun read(current: Key): Long {
+            if (current == key && bytes > 0L) return bytes
+            return query(current).also {
+                key = current
+                bytes = it
+            }
+        }
+
+        fun reset() {
+            key = null
+            bytes = 0L
+        }
+    }
 }
