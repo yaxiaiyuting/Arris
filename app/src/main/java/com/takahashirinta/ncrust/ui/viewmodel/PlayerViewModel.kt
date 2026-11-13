@@ -602,16 +602,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     /** An offline miss has no slot, but can be retried when a route becomes available. */
     private var offlinePreloadMiss: PreloadRequest? = null
 
-    /**
-     * v3.1.0 · P0-A：开播时的并行辅助腿（歌词 + 封面）。
-     *
-     * **刻意不在下一次 playSong 时 cancel 它** —— 它自带世代闸门
-     * （`LyricLoadCoordinator`），旧歌的响应会被整包丢弃；而 cancel 会走进
-     * `loadNeteaseLyrics` 那个会吞 `CancellationException` 的 `catch (e: Exception)`。
-     * 保留这个引用只是为了诊断（`isActive`）与将来真的需要停掉它时有把手。
-     */
-    private var auxiliaryJob: Job? = null
-
     // ⚠️ 下面这三个**必须声明在 init 块之前**（v1.9.0 · S1 hotfix）。
     //
     // Kotlin 的属性初始化与 init 块**按声明顺序**执行，而 init 块里的
@@ -849,16 +839,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 QqProbeCounters.onPlaybackTick(currentSongId.value ?: -1L, currentTrack?.sourceId)
             }
 
-            // 实际处于 isPlaying 的累计时长达到 80% 才上报；seek/恢复位置不增加时长。
-            val sid = currentSongId.value ?: -1L
-            val listenedMs = listeningClock.playedMs(sid)
-            // 试听片段（45 秒）不算听完——否则"只听了半首"也会喂给推荐体系。
-            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && currentContentKnown &&
-                PlayReporter.reachedCompletion(listenedMs, dur)
-            ) {
-                lastReportedSongId = sid
-                PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
-            }
+            reportCompletionIfListened(dur)
 
             if (gaplessEnabled && dur > 0 && pos > 1_000L && !needsPreload) {
                 val remaining = dur - pos
@@ -870,13 +851,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         PlaybackService.onPlaybackEnded = ended@{
             if (recovery.resolving || recovery.waiting) return@ended
-            // 自然播放结束时,若尚未上报则补一条 playend。试听片段的自然结束同样不上报。
-            val sid = currentSongId.value ?: -1L
-            val listenedMs = listeningClock.playedMs(sid)
-            if (sid > 0 && sid != lastReportedSongId && !currentIsTrial.value && currentContentKnown && PlayReporter.reachedCompletion(listenedMs, duration.value)) {
-                lastReportedSongId = sid
-                PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
-            }
+            reportCompletionIfListened(duration.value)
             queue.onPlaybackEnded()
         }
         PlaybackService.onPlaybackPrevious = { queue.skip(forward = false) }
@@ -1653,6 +1628,15 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         PlayReporter.reportStart(songId)
     }
 
+    private fun reportCompletionIfListened(durationMs: Long) {
+        val songId = currentSongId.value ?: return
+        if (songId <= 0L || songId == lastReportedSongId || currentIsTrial.value || !currentContentKnown) return
+        val listenedMs = listeningClock.playedMs(songId)
+        if (!PlayReporter.reachedCompletion(listenedMs, durationMs)) return
+        lastReportedSongId = songId
+        PlayReporter.reportPlay(songId, listenedMs, isWifi = isOnWifi())
+    }
+
     private fun isOnWifi(): Boolean {
         val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         return cm.getNetworkCapabilities(cm.activeNetwork)
@@ -2326,23 +2310,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         runCatching { getApplication<Application>().startService(intent) }
     }
 
-    /**
-     * v3.1.0 · P0-A：开播时的**并行辅助腿** —— 歌词 + 封面，与取链同时跑。
-     *
-     * 三件事都在这里定死，不在调用点各写一遍：
-     * 1. **先清空上一首的歌词状态**（`resetLyricsForNewSong`）：它必须在取词**之前**，
-     *    否则本地缓存命中时「新歌词先到、旧的清空后到」会把新歌词抹掉；
-     * 2. **并发上限**走 [BoundedParallel.DEFAULT_MAX_CONCURRENCY]（铁律 23）；
-     * 3. **取消原样传播**：`BoundedParallel` 对 `CancellationException` 直接 rethrow，
-     *    不落进「子任务失败」那一支（铁律：不吞 CancellationException）。
-     *
-     * 封面这一腿用的是列表项**已有的** URL —— 它不产生新的元数据请求，
-     * 只是把「播起来之后封面才开始解码」提前到「点下去就开始解码」。
-     */
+    /** Reset the old lyrics before the parallel lyric and cover requests. */
     private fun startAuxiliaryLoad(track: TrackKey, artworkUrl: String) {
         resetLyricsForNewSong()
         val app = getApplication<Application>()
-        auxiliaryJob = viewModelScope.launch {
+        viewModelScope.launch {
             BoundedParallel.runAll(
                 listOf(
                     "lyrics" to {
@@ -3172,7 +3144,9 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     }
 
     internal fun replayCurrent() {
-        PlaybackService.instance?.replayEndedItem()
+        val track = PlaybackService.instance?.replayEndedItem() ?: return
+        beginListening(track.id, restart = true)
+        if (isPlaying.value) reportStartplay(track.id)
     }
 
     fun seekTo(position: Long) {

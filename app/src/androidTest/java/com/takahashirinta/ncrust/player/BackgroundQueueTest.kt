@@ -126,6 +126,9 @@ class BackgroundQueueTest {
         try {
             awaitPlaying(tracks.first().id)
             removeTask(scenario)
+            await("First playback has accumulated listening time") {
+                listenedMs(tracks.first().id) >= 1_000L
+            }
             finishCurrentTrack()
             await("Single track is playing again from the beginning") {
                 val service = PlaybackService.instance ?: return@await false
@@ -133,6 +136,7 @@ class BackgroundQueueTest {
                 player.isPlaying && player.currentPosition in 100L..2_000L &&
                     service.playingTrackKey()?.id == tracks.first().id && app.playback.queue.index == 0
             }
+            main { assertTrue("Repeat starts its own listening interval", listenedMs(tracks.first().id) < 1_000L) }
         } finally {
             main { app.playback.stopService() }
             scenario.close()
@@ -238,6 +242,11 @@ class BackgroundQueueTest {
         val next = player.currentMediaItemIndex + 1
         if (next >= player.mediaItemCount) return null
         return TrackKey.fromMediaId(player.getMediaItemAt(next).mediaId)?.id
+    }
+
+    private fun listenedMs(songId: Long): Long {
+        val clockField = app.playback.javaClass.getDeclaredField("listeningClock").apply { isAccessible = true }
+        return (clockField.get(app.playback) as ListeningClock).playedMs(songId)
     }
 
     @Test

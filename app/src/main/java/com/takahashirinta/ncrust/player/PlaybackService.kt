@@ -1947,13 +1947,12 @@ class PlaybackService : MediaLibraryService() {
     internal fun hasPlayableItem(): Boolean = player.currentMediaItem != null
 
     /** Restart a completed item when single-track repeat has no attached preload. */
-    internal fun replayEndedItem() {
-        if (player.playbackState == Player.STATE_ENDED && player.playWhenReady &&
-            player.currentMediaItem != null
-        ) {
-            player.seekTo(0)
-            player.prepare()
-        }
+    internal fun replayEndedItem(): TrackKey? {
+        if (player.playbackState != Player.STATE_ENDED || !player.playWhenReady) return null
+        val track = playingTrackKey() ?: return null
+        player.seekTo(0)
+        player.prepare()
+        return track
     }
 
     private fun resumePlayback() {
