@@ -12,17 +12,25 @@ internal class KaraokeTimeline(
     private val times: LongArray = LyricClock.lineStarts(lines, useWordTiming = true),
 ) {
     private val breaks = LongArray(lines.size) { -1L }
+    private val lineCues = Array(lines.size + 1) { index ->
+        KaraokeCue(index - 1, if (index < lines.size) index else -1)
+    }
+    private val breakCues = arrayOfNulls<Array<KaraokeCue>>(lines.size)
 
     // A plain LRC start cannot tell us when a phrase ends. Only show an instrumental cue
     // when a timestamp establishes the end of the previous phrase (or before the first).
     val boundaries: List<Long> = buildList {
-        if (times.isNotEmpty() && times[0] >= INTRO_MS) addCountdown(times[0])
+        if (times.isNotEmpty() && times[0] >= INTRO_MS) {
+            breakCues[0] = countdownCues(next = 0)
+            addCountdown(times[0])
+        }
         for (i in 0 until lines.lastIndex) {
             val end = lines[i].knownEnd(times[i]) ?: continue
             val translatedEnd = translations[lines[i].timeMs]?.knownEnd(times[i]) ?: end
             val latest = maxOf(end, translatedEnd)
             if (times[i + 1] - latest < BREAK_MS) continue
             breaks[i] = latest
+            breakCues[i + 1] = countdownCues(next = i + 1)
             add(latest)
             addCountdown(times[i + 1])
         }
@@ -30,14 +38,16 @@ internal class KaraokeTimeline(
 
     fun cueAt(positionMs: Long): KaraokeCue {
         val current = currentLineIndex(positionMs, times)
-        val next = (current + 1).takeIf { it < times.size } ?: -1
-        if (next == -1) return KaraokeCue(current, next)
-        val inBreak = if (current < 0) times[next] >= INTRO_MS
-            else breaks[current] in 0..positionMs
-        if (!inBreak) return KaraokeCue(current, next)
+        val next = current + 1
+        val cues = breakCues.getOrNull(next) ?: return lineCues[next]
+        if (current >= 0 && positionMs < breaks[current]) return lineCues[next]
         val remaining = times[next] - positionMs
-        val count = ((remaining + 999) / 1000).toInt().takeIf { it in 1..3 }
-        return KaraokeCue(-1, next, count)
+        val count = if (remaining in 1L..3_000L) ((remaining + 999L) / 1_000L).toInt() else 0
+        return cues[count]
+    }
+
+    private fun countdownCues(next: Int) = Array(4) { count ->
+        KaraokeCue(-1, next, count.takeIf { it > 0 })
     }
 
     private fun MutableList<Long>.addCountdown(next: Long) {

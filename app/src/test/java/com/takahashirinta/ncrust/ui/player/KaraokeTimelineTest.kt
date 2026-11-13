@@ -7,10 +7,21 @@ import com.takahashirinta.ncrust.lyric.LrcWord
 import com.takahashirinta.ncrust.lyric.LyricClock
 import com.takahashirinta.ncrust.lyric.YrcParser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KaraokeTimelineTest {
+    @Test fun oneSecondOfFramesSharesTheSameCueAcrossSamplesAndSeeks() {
+        val timeline = KaraokeTimeline(listOf(LrcLine(7000, "First"), LrcLine(9000, "Second")), emptyMap())
+        val singing = timeline.cueAt(7000)
+        val counting = timeline.cueAt(4000)
+        repeat(120) { frame ->
+            assertSame(singing, timeline.cueAt(7000L + frame * 8L))
+            assertSame(counting, timeline.cueAt(4000L + frame * 8L))
+        }
+    }
+
     @Test fun introCountdownEndsOnFirstPhraseAndBackwardSeekRecomputesIt() {
         val timeline = KaraokeTimeline(listOf(LrcLine(7000, "First"), LrcLine(9000, "Second")), emptyMap())
         assertEquals(KaraokeCue(-1, 0), timeline.cueAt(3999))
