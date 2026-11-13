@@ -102,7 +102,9 @@ systemctl --user daemon-reload && droidloomctl restart   # 受管重启后依然
 ```
 
 （放 `/etc/systemd/system/` 是无效的：`droidloom.service` 是 **user** unit，drop-in 必须落在
-`/etc/systemd/user/` 或 `~/.config/systemd/user/`。）
+`/etc/systemd/user/` 或 `~/.config/systemd/user/`。钉住之后 `droidloomctl gpu` 的摘要行仍会按
+`cell.json` 报「cell's render node is /dev/dri/renderD129」，**以 presenter 日志的
+`Droidloom presentation: render_node=` 为准**。）
 
 两条路的实测，同一脚本（20 次底部标签切换，`dumpsys gfxinfo` 读数）：
 
