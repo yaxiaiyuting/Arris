@@ -8,17 +8,17 @@ class OfflineContentRecoveryTest {
     private fun key(level:String)=OfflineKeys.key(42,level)
     @Test fun firstMissingQualityDoesNotHideAnotherPlayableQuality() {
         val i=OfflineUrlIndex();i.put(key("lossless"),"lost");i.put(key("standard"),"cached")
-        val hit=i.recallRecord(listOf(key("lossless")),42) {it==key("standard")}
+        val hit=i.recallRecord(42, "lossless") {it==key("standard")}
         assertEquals("cached",hit?.second?.url)
     }
     @Test fun rejectedQualityDoesNotPreventFallback() {
         val i=OfflineUrlIndex();i.put(key("lossless"),"bad");i.put(key("standard"),"good")
         val failed=setOf(key("lossless"))
-        assertEquals(key("standard"),i.recallRecord(listOf(key("lossless")),42){it !in failed}?.first)
+        assertEquals(key("standard"),i.recallRecord(42, "lossless"){it !in failed}?.first)
     }
     @Test fun noUsableCandidateReturnsNullWithoutOtherSongLeak() {
         val i=OfflineUrlIndex();i.put(OfflineKeys.key(99,"standard"),"other");i.put(key("lossless"),"bad")
-        assertNull(i.recallRecord(listOf(key("lossless")),42){false})
+        assertNull(i.recallRecord(42, "lossless"){false})
     }
     @Test fun legacyStringMapMigratesToUnknownRatherThanFull() {
         val i=OfflineUrlIndex.fromJson("""{"song:42:standard":"old"}""")
@@ -65,8 +65,38 @@ class OfflineContentRecoveryTest {
         val i=OfflineUrlIndex();i.put(key("standard"),"legacy")
         i.put(key("standard"),"full",OfflineContent(OfflineContent.FULL))
         i.put(key("standard~trial_0_45"),"trial",OfflineContent(OfflineContent.TRIAL,0,45))
-        assertEquals("full",i.recallRecord(listOf(key("standard")),42){true}!!.second.url)
-        assertEquals(OfflineContent.FULL,i.recallRecord(listOf(key("standard")),42){true}!!.second.content.kind)
+        assertEquals("full",i.recallRecord(42, "standard"){true}!!.second.url)
+        assertEquals(OfflineContent.FULL,i.recallRecord(42, "standard"){true}!!.second.content.kind)
+    }
+
+    @Test fun probesRequestedQualityFirstAndPreservesOrderWithinEachContentRank() {
+        val index = OfflineUrlIndex()
+        val full = OfflineContent(OfflineContent.FULL)
+        val trial = OfflineContent(OfflineContent.TRIAL, 0, 45)
+        val requestedFull = key("lossless~full-v1")
+        val requestedTrial = key("lossless~trial_0_45")
+        val requestedLegacy = key("lossless")
+        val otherFull = key("hires")
+        val otherTrial = key("standard~trial_0_45")
+        val secondFull = key("standard")
+        index.put(otherFull, "higher", full)
+        index.put(requestedLegacy, "legacy")
+        index.put(otherTrial, "preview", trial)
+        index.put(requestedTrial, "requested-preview", trial)
+        index.put(secondFull, "lower", full)
+        index.put(requestedFull, "requested-full", full)
+
+        val visited = mutableListOf<String>()
+        val hit = index.recallRecord(42, "lossless") {
+            visited.add(it)
+            it == secondFull
+        }
+
+        assertEquals(
+            listOf(requestedFull, requestedTrial, requestedLegacy, otherFull, secondFull),
+            visited,
+        )
+        assertEquals("lower", hit?.second?.url)
     }
     @Test fun fullDownloadKeepsHistoricalKeySoExistingFilesStillHit() {
         val url=OfflineKeys.withContentKey("https://x/a",42,"lossless",OfflineContent(OfflineContent.FULL))

@@ -1943,7 +1943,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      */
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
-        val hit = OfflineUrlStore.recallRecord(app, songId, listOf(level)) { key ->
+        val hit = OfflineUrlStore.recallRecord(app, songId, level) { key ->
             key !in failedUrlKeys && OfflineKeys.key(songId, OfflineKeys.levelOf(key) ?: level) !in failedUrlKeys &&
                 OfflineAudioCache.coversStart(app, key)
         } ?: return null
