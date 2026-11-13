@@ -263,6 +263,31 @@ class BackgroundQueueTest {
         }
     }
 
+    @Test
+    fun aPendingCacheWriteBecomesVisibleOnlyAfterItsFirstSpanCommits() {
+        val songId = 961_006L
+        val key = OfflineKeys.key(songId, "higher")
+        val cache = OfflineAudioCache.get(app)
+        cache.removeResource(key)
+        val pending = cache.startReadWrite(key, 0L, 128L)
+        try {
+            OfflineLibrary.record(app, songId, "正在写入", null, null, cacheKey = key, level = "higher")
+            assertTrue("The range is reserved by the writer", key in cache.keys)
+            assertFalse(OfflineAudioCache.librarySnapshot(app).tracks.any { it.songId == songId })
+
+            val file = cache.startFile(key, 0L, 128L)
+            file.writeBytes(ByteArray(128))
+            cache.commitFile(file, 128L)
+
+            val snapshot = OfflineAudioCache.librarySnapshot(app)
+            assertEquals("正在写入", snapshot.tracks.single { it.songId == songId }.name)
+            assertEquals(128L, snapshot.bytesBySong[songId])
+        } finally {
+            cache.releaseHoleSpan(pending)
+            OfflineAudioCache.removeSong(app, songId)
+        }
+    }
+
     private fun pendingTrackId(): Long? {
         val player = PlaybackService.instance?.player ?: return null
         val next = player.currentMediaItemIndex + 1

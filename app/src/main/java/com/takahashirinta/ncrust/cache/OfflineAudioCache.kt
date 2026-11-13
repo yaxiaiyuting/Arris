@@ -186,17 +186,25 @@ object OfflineAudioCache {
         val revision = OfflineLibrary.currentRevision()
         val current = runCatching { get(app) }.getOrNull()
         val keys = current?.let { runCatching { it.keys }.getOrNull() }
-        // A cache read failure gives no basis for removing tracks from the local index.
+        // A reserved range can create a key before its first span is committed. Keep its metadata.
         val songsInCache = keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf)
         val tracks = OfflineLibrary.reconcileAndList(app, revision, songsInCache)
         if (current == null || keys == null || tracks.isEmpty()) return OfflineCacheSnapshot(tracks, emptyMap())
 
         val songIds = tracks.mapTo(HashSet(tracks.size), OfflineTrack::songId)
+        var unreadableSongs: MutableSet<Long>? = null
         val bytesBySong = OfflineKeys.sumBytesBySong(keys, songIds) { key ->
             runCatching { current.getCachedBytes(key, 0L, C.LENGTH_UNSET.toLong()) }
+                .onFailure {
+                    val unreadable = unreadableSongs ?: HashSet<Long>().also { unreadableSongs = it }
+                    OfflineKeys.songIdOf(key)?.let(unreadable::add)
+                }
                 .getOrNull()?.takeIf { it > 0L }
         }
-        return OfflineCacheSnapshot(tracks, bytesBySong)
+        val visible = if (bytesBySong.size == tracks.size) tracks else tracks.filter {
+            it.songId in bytesBySong || unreadableSongs?.contains(it.songId) == true
+        }
+        return OfflineCacheSnapshot(visible, bytesBySong)
     }
 
     /**

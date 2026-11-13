@@ -287,8 +287,6 @@ object OfflineLibrary {
         }
     }
 
-    fun size(context: Context): Int = synchronized(this) { index(context).size() }
-
     /**
      * 删一首歌：曲目表与 URL 清单**一起删**（见 [OfflineLibraryIndex.removeWithUrls]）。
      * 音频 span 不在这里删 —— 那是 [OfflineAudioCache.removeSong] 的职责，
