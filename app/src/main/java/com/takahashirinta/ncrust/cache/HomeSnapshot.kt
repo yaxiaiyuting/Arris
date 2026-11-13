@@ -55,10 +55,6 @@ object HomeSnapshot {
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** 最近一次成功写入的时间戳（0 = 从来没写过）。 */
-    fun savedAt(context: Context): Long =
-        runCatching { prefs(context).getLong(KEY_SAVED_AT, 0L) }.getOrDefault(0L)
-
     /**
      * 异步更新快照。同一账号下，null 保留旧栏目，空列表清除旧栏目。
      *
@@ -89,12 +85,12 @@ object HomeSnapshot {
                     encode(Section.TOPLISTS, toplists, cardListType),
                 )
                 val storage = prefs(app)
-                val editor = storage.edit()
                 CookieManager.ifCurrent(started) {
                     val pending = updates.filter { sequence > writtenSequence[it.section.ordinal] }
                     if (pending.isEmpty()) return@ifCurrent
 
-                    if (!sameOwner(storage.all[KEY_OWNER], owner)) editor.clear()
+                    val editor = storage.edit()
+                    if (!storage.matchesOwner(owner)) editor.clear()
                     for ((section, json) in pending) {
                         if (json == null) editor.remove(section.key) else editor.putString(section.key, json)
                         if (section == Section.DAILY) {
@@ -147,6 +143,12 @@ object HomeSnapshot {
 
     /** null 是游客归属，其他类型的磁盘值视为不匹配。 */
     internal fun sameOwner(captured: Any?, current: String?): Boolean = captured == current
+
+    private fun SharedPreferences.matchesOwner(owner: String?): Boolean = try {
+        sameOwner(getString(KEY_OWNER, null), owner)
+    } catch (_: ClassCastException) {
+        false
+    }
 
     private fun encode(section: Section, items: List<*>?, type: Type): Update? {
         if (items == null) return null

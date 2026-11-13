@@ -30,12 +30,19 @@ class SessionAndHomeBoundaryTest {
     private class MemoryContext : ContextWrapper(null) {
         val stores = mutableMapOf<String, MemoryPrefs>()
         var afterSnapshotRead: (() -> Unit)? = null
+        val fullSnapshotReads = AtomicInteger()
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             val base = synchronized(stores) { stores.getOrPut(name) { MemoryPrefs() } }
             if (name != "ncrust_home_cache") return base
             return object : SharedPreferences by base {
+                override fun getString(key: String, defValue: String?): String? {
+                    val value = base.snapshot()[key] ?: return defValue
+                    return value as String
+                }
+
                 override fun getAll(): MutableMap<String, *> {
+                    fullSnapshotReads.incrementAndGet()
                     val result = base.snapshot().toMutableMap()
                     val action = afterSnapshotRead
                     afterSnapshotRead = null
@@ -150,10 +157,29 @@ class SessionAndHomeBoundaryTest {
             HomeSnapshot.save(context, newSongs = listOf(homeSong(202)))
             settle(HomeSnapshot, "ioScope")
 
+            assertEquals(0, context.fullSnapshotReads.get())
             assertEquals(CookieManager.accountOwner(), prefs.getString("owner", null))
             assertFalse(prefs.contains("daily_songs"))
             assertTrue(HomeSnapshot.restoreIntoCache(context))
             assertNull(ContentCache.homeDailySongs)
+            assertEquals(202L, ContentCache.homeNewSongs!!.single().id)
+        }
+    }
+
+    @Test fun invalidStoredOwnerDoesNotBecomeGuestData() = runBlocking {
+        fixture { context ->
+            CookieManager.clearCookie(context)
+            val prefs = context.getSharedPreferences("ncrust_home_cache", 0)
+            prefs.edit().putLong("owner", 42L)
+                .putString("daily_songs", """[{"id":101,"name":"unknown account"}]""").commit()
+
+            HomeSnapshot.save(context, newSongs = listOf(homeSong(202)))
+            settle(HomeSnapshot, "ioScope")
+
+            assertFalse(prefs.contains("owner"))
+            assertFalse(prefs.contains("daily_songs"))
+            assertEquals(0, context.fullSnapshotReads.get())
+            assertTrue(HomeSnapshot.restoreIntoCache(context))
             assertEquals(202L, ContentCache.homeNewSongs!!.single().id)
         }
     }
