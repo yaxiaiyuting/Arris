@@ -40,7 +40,7 @@ internal object ConnectionWarmup {
         .build()
 
     suspend fun warmUp() {
-        val tasks = hosts.map { host -> host to suspend { warm(api, "https://$host/") } }
+        val tasks = hosts.map { host -> suspend { warm(api, "https://$host/") } }
         BoundedParallel.runAll(tasks)
     }
 

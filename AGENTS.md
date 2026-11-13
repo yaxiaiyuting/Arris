@@ -4675,7 +4675,7 @@ release 包在 **API 24 模拟器 / API 33 模拟器 / 真机 S6** 上安装冷�
 
 | 主题 | 文件 |
 |---|---|
-| 并行请求编排的**唯一**原语（硬上限 4 / 三态 / 取消原样传播） | `network/BoundedParallel.kt` |
+| 预热与预取的并行编排（默认上限 4 / 隔离单项失败 / 传播取消） | `network/BoundedParallel.kt` |
 | URL 预加载缓存的**新鲜度判据**（两模型纯函数） | `player/PreloadCachePolicy.kt` |
 | 列表预加载（只封面 / N 按网络分档 / 绝不预取 URL） | `warmup/ListPrefetch.kt` |
 | 连接预热（DNS + TCP/TLS，失败静默，不给 B站预热） | `network/ConnectionWarmup.kt` |

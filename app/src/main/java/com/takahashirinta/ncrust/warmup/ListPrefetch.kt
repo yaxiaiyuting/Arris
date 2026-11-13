@@ -79,7 +79,7 @@ object ListPrefetch {
         if (urls.isEmpty()) return
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
         val tasks = urls.map { url ->
-            url to suspend {
+            suspend {
                 recent.load(url) {
                     listSlots.withPermit { loader.execute(coverRequest(context, url)) is SuccessResult }
                 }

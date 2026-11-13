@@ -2258,17 +2258,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         viewModelScope.launch {
             BoundedParallel.runAll(
                 listOf(
-                    "lyrics" to {
-                        fetchLyrics(track)
-                        true
-                    },
-                    "cover" to {
-                        ListPrefetch.prefetchCover(app, artworkUrl)
-                        true
-                    },
+                    { fetchLyrics(track) },
+                    { ListPrefetch.prefetchCover(app, artworkUrl) },
                 ),
             )
-            Unit
         }
     }
 
@@ -2288,21 +2281,17 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      * 失败完全静默：预取失败不该在日志里伪装成播放故障。
      */
     private suspend fun prefetchNeteaseLyrics(track: TrackKey) {
-        if (track.source != MusicSource.NETEASE || track.id <= 0L) return
-        runCatching {
-            val resp = RetrofitClient.api.getLyric(id = track.id)
-            if (resp.code == 200) {
-                LyricsCache.put(
-                    getApplication(),
-                    track.id,
-                    resp.lrc?.lyric ?: "",
-                    resp.tlyric?.lyric ?: "",
-                    resp.yrc?.lyric ?: "",
-                    resp.romalrc?.lyric ?: "",
-                )
-                Log.d(TAG_TRACK, "prefetched lyric for next track=$track")
-            }
-        }
+        val resp = RetrofitClient.api.getLyric(id = track.id)
+        if (resp.code != 200) return
+        LyricsCache.put(
+            getApplication(),
+            track.id,
+            resp.lrc?.lyric.orEmpty(),
+            resp.tlyric?.lyric.orEmpty(),
+            resp.yrc?.lyric.orEmpty(),
+            resp.romalrc?.lyric.orEmpty(),
+        )
+        Log.d(TAG_TRACK, "prefetched lyric for next track=$track")
     }
 
     /** Main-thread queue edits revoke both pending requests and the Service slot immediately. */
@@ -2405,20 +2394,12 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         preloadJob = viewModelScope.launch {
             try {
                 if (cached == null) launch(Dispatchers.IO) {
-                    val aux = ArrayList<Pair<String, suspend () -> Boolean?>>(3)
-                    if (nextTrack.source == MusicSource.NETEASE && lyricsTtmlEnabled.value) {
-                        aux += "ttml" to {
-                            AmllTtmlClient.prefetch(app, songId)
-                            true
+                    val aux = buildList<suspend () -> Unit> {
+                        if (nextTrack.source == MusicSource.NETEASE) {
+                            if (lyricsTtmlEnabled.value) add { AmllTtmlClient.prefetch(app, songId) }
+                            add { prefetchNeteaseLyrics(nextTrack) }
                         }
-                    }
-                    aux += "lyric-lrc" to {
-                        prefetchNeteaseLyrics(nextTrack)
-                        true
-                    }
-                    aux += "cover" to {
-                        ListPrefetch.prefetchCover(app, artworkUrl)
-                        true
+                        add { ListPrefetch.prefetchCover(app, artworkUrl) }
                     }
                     BoundedParallel.runAll(aux)
                 }
