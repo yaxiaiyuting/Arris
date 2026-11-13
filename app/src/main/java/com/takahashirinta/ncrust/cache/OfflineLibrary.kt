@@ -224,6 +224,7 @@ object OfflineLibrary {
     @Volatile
     private var index: OfflineLibraryIndex? = null
     private var appliedJson: String? = null
+    private var revision = 0L
 
     private fun index(context: Context): OfflineLibraryIndex {
         index?.let { return it }
@@ -278,7 +279,10 @@ object OfflineLibrary {
                     completedAt = now,
                 )
             )
-            if (ok) persist(context, idx)
+            if (ok) {
+                revision++
+                persist(context, idx)
+            }
             ok
         }
     }
@@ -297,22 +301,33 @@ object OfflineLibrary {
             // 联动删 URL：与单测共用同一个纯函数 [OfflineLibraryIndex.removeWithUrls]，
             // 「删曲目必删死条目」这条不变量才有测试盯着（OfflineUrlStore.mutate 负责落盘）。
             val track = OfflineUrlStore.mutate(context) { urls -> idx.removeWithUrls(songId, urls) }
+            if (track != null) revision++
             persist(context, idx)
             track
         }
         return removed != null
     }
 
-    /** Apply the cache key snapshot and return the resulting list under the same index lock. */
-    internal fun reconcileAndList(context: Context, keepSongIds: Set<Long>?): List<OfflineTrack> = synchronized(this) {
+    internal fun currentRevision(): Long = synchronized(this) { revision }
+
+    /** A key snapshot may prune records only if none were written since the scan started. */
+    internal fun reconcileAndList(
+        context: Context,
+        scannedRevision: Long,
+        keepSongIds: Set<Long>?,
+    ): List<OfflineTrack> = synchronized(this) {
         val idx = index(context)
-        if (keepSongIds != null && idx.retainSongIds(keepSongIds) > 0) persist(context, idx)
+        if (revision == scannedRevision && keepSongIds != null && idx.retainSongIds(keepSongIds) > 0) {
+            revision++
+            persist(context, idx)
+        }
         idx.list()
     }
 
     fun clear(context: Context) {
         synchronized(this) {
             index = OfflineLibraryIndex()
+            revision++
             persist(context, index(context))
         }
     }

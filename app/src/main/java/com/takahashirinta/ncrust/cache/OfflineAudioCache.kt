@@ -184,10 +184,12 @@ object OfflineAudioCache {
 
     internal fun librarySnapshot(context: Context): OfflineCacheSnapshot {
         val app = context.applicationContext
+        val revision = OfflineLibrary.currentRevision()
         val current = runCatching { get(app) }.getOrNull()
         val keys = current?.let { runCatching { it.keys }.getOrNull() }
         // A cache read failure gives no basis for removing tracks from the local index.
-        val tracks = OfflineLibrary.reconcileAndList(app, keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf))
+        val songsInCache = keys?.mapNotNullTo(HashSet(), OfflineKeys::songIdOf)
+        val tracks = OfflineLibrary.reconcileAndList(app, revision, songsInCache)
         if (current == null || keys == null || tracks.isEmpty()) return OfflineCacheSnapshot(tracks, emptyMap())
 
         val songIds = tracks.mapTo(HashSet(tracks.size), OfflineTrack::songId)
