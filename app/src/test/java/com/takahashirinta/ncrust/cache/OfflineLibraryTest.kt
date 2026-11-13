@@ -180,6 +180,26 @@ class OfflineLibraryIndexTest {
     }
 
     @Test
+    fun listReusesSnapshotUntilTracksOrTheirOrderChange() {
+        val idx = OfflineLibraryIndex()
+        idx.upsert(track(1L))
+        idx.upsert(track(2L))
+        val initial = idx.list()
+        idx.upsert(track(2L, at = 2_000L))
+        assertSame(initial, idx.list())
+
+        idx.upsert(track(1L, name = "新名", at = 2_000L))
+        assertEquals(listOf(2L, 1L), idx.list().map { it.songId })
+        assertEquals("新名", idx.list().last().name)
+        assertEquals(listOf(1L, 2L), initial.map { it.songId })
+
+        idx.retainSongIds(setOf(1L))
+        assertEquals(listOf(1L), idx.list().map { it.songId })
+        idx.remove(1L)
+        assertTrue(idx.list().isEmpty())
+    }
+
+    @Test
     fun `remove 返回被删的记录，重复删返回 null`() {
         val idx = OfflineLibraryIndex()
         idx.upsert(track(5L))
