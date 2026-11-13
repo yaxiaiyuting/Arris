@@ -70,6 +70,17 @@ com.android.documentsui=文件
 
 ## 一个提醒
 
-Droidloom 是**早期预览**，我们为它打了三个补丁（power-manager 全局可选、修饰符拆分、
-标题映射）才在这台 NVIDIA + KWin 的机器上稳定。升级它的包会覆盖 `/usr/bin/droidloom-wayland`，
-届时补丁要重打一遍 —— 见 `docs/ops/droidloom-nvidia.md` 的第 6 节。
+Droidloom 是**早期预览**，我们为它打了补丁才在这台 NVIDIA + KWin 的机器上稳定
+（power-manager 全局可选、按 allocation 逐级选 render target、标题映射；另有服务端装饰与
+滚轮轴两条顺带修的）。升级它的包会覆盖 `/usr/bin/droidloom-wayland`，届时补丁要重打一遍 ——
+见 `docs/ops/droidloom-nvidia.md` 的第 6 节。
+
+补丁现在的落点（2026-11-13）：
+
+- 上游 `main` 已到 release 34（`69956ed`），**仍未合入**我们的改动，`main.rs:3325` 的
+  `zwlr_output_power_manager_v1` 还是硬 `bind`，KWin 上 stock 包照旧起不来。
+- 5 个提交已重基到 release 34，分支 `yaxiaiyuting/droidloom@nvidia-kwin-presentation-v2`。
+  **用分支，别用老的 `.patch`**：`git rebase --onto` 干净无冲突，而按 11-10 那套 mailbox patch
+  直接 `git apply` 会在 3/4、4/4 撞上下文漂移，手合出来的东西才可能把 presenter 弄挂。
+- 本机现在装的就是重基后的构建（`rustc 1.99.1`，`cargo build --release`，sha256 `e9fa1f94d711e72a…`，
+  备份 `/usr/bin/droidloom-wayland.v1` 与 `.orig`）。
