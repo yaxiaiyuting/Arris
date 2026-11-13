@@ -17,6 +17,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineContent
 import com.takahashirinta.ncrust.cache.OfflineKeys
+import com.takahashirinta.ncrust.cache.OfflineLibrary
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
 import com.takahashirinta.ncrust.listen.TogetherSession
 import com.takahashirinta.ncrust.network.NetworkAvailability
@@ -237,6 +238,26 @@ class BackgroundQueueTest {
         }
     }
 
+    @Test
+    fun cacheSnapshotCountsBothSidesOfAGapAndKeepsVariantsTogether() {
+        val songId = 961_005L
+        val firstKey = OfflineKeys.key(songId, "higher")
+        val secondKey = OfflineKeys.key(songId, "standard~trial")
+        val cache = OfflineAudioCache.get(app)
+        try {
+            cache.removeResource(firstKey)
+            cache.removeResource(secondKey)
+            writeCacheSpan(firstKey, 0L, ByteArray(128))
+            writeCacheSpan(firstKey, 512L, ByteArray(64))
+            writeCacheSpan(secondKey, 200L, ByteArray(32))
+            OfflineLibrary.record(app, songId, "缓存计数", null, null, cacheKey = firstKey, level = "higher")
+            assertEquals(224L, OfflineAudioCache.librarySnapshot(app).bytesBySong[songId])
+            assertFalse(OfflineAudioCache.coversStart(app, firstKey))
+        } finally {
+            OfflineAudioCache.removeSong(app, songId)
+        }
+    }
+
     private fun pendingTrackId(): Long? {
         val player = PlaybackService.instance?.player ?: return null
         val next = player.currentMediaItemIndex + 1
@@ -348,20 +369,24 @@ class BackgroundQueueTest {
             url, "higher", 0L, "wav", null,
             cachedContent = OfflineContent(OfflineContent.FULL),
         ))
-        val span = cache.startReadWrite(key, 0, silence.size.toLong())
+        writeCacheSpan(key, 0L, silence)
+        cache.applyContentMetadataMutations(key, ContentMetadataMutations().also {
+            ContentMetadataMutations.setContentLength(it, silence.size.toLong())
+        })
+        assertTrue(OfflineAudioCache.coversStart(app, key))
+    }
+
+    private fun writeCacheSpan(key: String, position: Long, bytes: ByteArray) {
+        val cache = OfflineAudioCache.get(app)
+        val span = cache.startReadWrite(key, position, bytes.size.toLong())
         try {
-            if (span.isHoleSpan) {
-                val file = cache.startFile(key, 0, silence.size.toLong())
-                file.writeBytes(silence)
-                cache.commitFile(file, silence.size.toLong())
-                cache.applyContentMetadataMutations(key, ContentMetadataMutations().also {
-                    ContentMetadataMutations.setContentLength(it, silence.size.toLong())
-                })
-            }
+            assertTrue(span.isHoleSpan)
+            val file = cache.startFile(key, position, bytes.size.toLong())
+            file.writeBytes(bytes)
+            cache.commitFile(file, bytes.size.toLong())
         } finally {
             if (span.isHoleSpan) cache.releaseHoleSpan(span)
         }
-        assertTrue(OfflineAudioCache.coversStart(app, key))
     }
 
     private fun finishCurrentTrack() = main {

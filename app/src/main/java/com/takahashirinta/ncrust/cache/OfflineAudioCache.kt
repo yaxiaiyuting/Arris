@@ -12,6 +12,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 
 import com.takahashirinta.ncrust.bili.BiliCdn
 import androidx.media3.datasource.DataSource
@@ -163,8 +164,8 @@ object OfflineAudioCache {
             .coerceAtLeast(0L)
     }.getOrDefault(0L)
 
-    /** 缓存里是否已有这个 key（离线可播的判据）。 */
-    fun contains(context: Context, key: String): Boolean =
+    /** A legacy key can already have audio bytes or metadata for a different response. */
+    internal fun contains(context: Context, key: String): Boolean =
         runCatching { get(context).keys.contains(key) }.getOrDefault(false)
 
     /** 离线起播前检查从字节 0 开始的连续缓存。SimpleCache 的同键片段已按偏移排序。 */
@@ -191,17 +192,8 @@ object OfflineAudioCache {
 
         val songIds = tracks.mapTo(HashSet(tracks.size), OfflineTrack::songId)
         val bytesBySong = OfflineKeys.sumBytesBySong(keys, songIds) { key ->
-            runCatching {
-                var total = 0L
-                var measured = false
-                for (span in current.getCachedSpans(key)) {
-                    if (span.isCached) {
-                        total += span.length
-                        measured = true
-                    }
-                }
-                if (measured) total else null
-            }.getOrNull()
+            runCatching { current.getCachedBytes(key, 0L, C.LENGTH_UNSET.toLong()) }
+                .getOrNull()?.takeIf { it > 0L }
         }
         return OfflineCacheSnapshot(tracks, bytesBySong)
     }
