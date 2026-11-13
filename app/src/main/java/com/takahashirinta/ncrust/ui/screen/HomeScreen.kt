@@ -89,13 +89,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import android.widget.Toast
 
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     onSongClick: (SongItem) -> Unit,
     onPlaylistClick: (Long) -> Unit = {},
     onPlayPlaylist: (Long) -> Unit = {},
@@ -111,6 +112,7 @@ fun HomeScreen(
     // 会话失效横幅点击 → 走现有登录流程（窄屏网页登录 / 宽屏扫码）。
     onRelogin: () -> Unit = {},
     active: Boolean = true,
+    localContentReady: StateFlow<Boolean> = AppWarmup.ready,
 ) {
     val strings = LocalStrings.current
     // 会话状态：Expired 时顶部一条失效横幅；非 Valid 时每日推荐加一行「登录后为你推荐」
@@ -211,12 +213,11 @@ fun HomeScreen(
         if (active && toplists.isNotEmpty()) loadChartCovers(toplists)
     }
 
-    LaunchedEffect(active, loginGeneration, retryCount) {
+    LaunchedEffect(active, loginGeneration, localContentReady) {
         if (!active) return@LaunchedEffect
         val started = CookieManager.snapshot()
         if (started.loginGeneration != loginGeneration) return@LaunchedEffect
-        // The screen can compose before the disk snapshot has been restored.
-        withTimeoutOrNull(LOCAL_HOME_WAIT_MS) { AppWarmup.ready.first { it } }
+        localContentReady.first { it }
         CookieManager.ifSameLogin(started) { live ->
             if (ContentCache.ownerMatches(live.accountOwner)) {
                 ContentCache.homeDailySongs?.let { if (dailySongs.isEmpty()) dailySongs = it }
@@ -225,6 +226,14 @@ fun HomeScreen(
             }
             if (toplists.isEmpty()) ContentCache.toplistItems?.let { toplists = it }
         }
+    }
+
+    LaunchedEffect(active, loginGeneration, retryCount, localContentReady) {
+        if (!active) return@LaunchedEffect
+        val started = CookieManager.snapshot()
+        if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+        // Give the disk snapshot a short head start before fetching online.
+        withTimeoutOrNull(LOCAL_HOME_WAIT_MS) { localContentReady.first { it } }
         val force = handledRetry != retryCount
         handledRetry = retryCount
         offline = !NetworkAvailability.isOnline(context)

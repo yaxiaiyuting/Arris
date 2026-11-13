@@ -21,6 +21,8 @@ import androidx.core.view.WindowCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.R
+import com.takahashirinta.ncrust.cache.ContentCache
+import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
@@ -28,12 +30,15 @@ import com.takahashirinta.ncrust.ui.components.*
 import com.takahashirinta.ncrust.ui.player.PlayerCard
 import com.takahashirinta.ncrust.ui.player.PlayerCardCallbacks
 import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
+import com.takahashirinta.ncrust.ui.screen.HomeScreen
 import com.takahashirinta.ncrust.ui.screen.RecognizeScreen
 import com.takahashirinta.ncrust.ui.screen.TogetherScreen
 import com.takahashirinta.ncrust.ui.screen.UserScreen
 import com.takahashirinta.ncrust.ui.theme.*
 import io.github.takahashirinta.kanesumi.core.theme.MetroTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -125,6 +130,30 @@ class ArrisVisualReviewTest {
         compose.onNodeWithText("听歌识曲").assertIsDisplayed()
         screenshot("shared-components-light")
     }
+
+    @Test fun lateOfflineHomeSnapshotAppearsWithoutReentering() {
+        assumeFalse(NetworkAvailability.isOnline(compose.activity))
+        val strings = com.takahashirinta.ncrust.ui.i18n.zhCN
+        val ready = MutableStateFlow(false)
+        ContentCache.clearAll()
+        try {
+            show { HomeScreen(onSongClick = {}, localContentReady = ready) }
+            compose.waitUntil(5_000L) {
+                compose.onAllNodesWithText(strings.networkOfflineTitle).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.runOnIdle {
+                ContentCache.homeNewSongs = listOf(song.copy(id = 707L, name = "离线新歌样例", album = null))
+                ready.value = true
+            }
+            compose.waitUntil(3_000L) {
+                compose.onAllNodesWithText("离线新歌样例").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("离线新歌样例").assertIsDisplayed()
+        } finally {
+            ContentCache.clearAll()
+        }
+    }
+
     private fun player(dark: Boolean, scale: Float) {
         MotionPrefs.setUiMotionEnabled(compose.activity, false)
         show(dark, scale) {
