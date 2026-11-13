@@ -2265,21 +2265,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
     }
 
-    /**
-     * v3.1.0 · P0-B：把**下一首**的行级歌词预取进 [LyricsCache]，不进 UI 状态。
-     *
-     * ## 为什么不能直接调 `fetchLyrics(nextTrack)`
-     *
-     * 那条路会写 `lyrics` / `lyricsSongId` 这些**当前曲目**的状态流 ——
-     * 预取一首还没播的歌会把界面上的歌词换成下一首的（正是 v2.1.5 串台的形状）。
-     * 所以这里只做「请求 + 落缓存」：走的是与正式路径**同一张表、同一组字段**
-     * （`LyricsCache.put`），切歌时 `loadNeteaseLyrics` 会以缓存命中把它秒回。
-     *
-     * 只对**ncm**曲目做：QQ 与 B 站的歌词不进这张表（字段形状不同，
-     * 见 `loadQqLyrics` / `loadBiliLyrics` 的 KDoc），给它们预取等于白花一次请求。
-     *
-     * 失败完全静默：预取失败不该在日志里伪装成播放故障。
-     */
+    /** 下一首的网易云歌词只进缓存，由实际起播时的请求更新界面。 */
     private suspend fun prefetchNeteaseLyrics(track: TrackKey) {
         val resp = RetrofitClient.api.getLyric(id = track.id)
         if (resp.code != 200) return
@@ -2557,55 +2543,29 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     private fun trackText(track: LyricTrack): String =
         (track.source?.cacheTag ?: "none") + "/" + track.lines.size
 
-    /**
-     * v2.1.5：取词的**唯一入口**，身份由调用方显式传入。
-     *
-     * 签名从 `fetchLyrics(songId: Long)` 改成 `fetchLyrics(track: TrackKey)` 是本版的关键改动：
-     * 旧签名只带得动一个裸 id，函数体于是只能去读全局的音源字段 ——
-     * 而在跨源自动接续那条路径上那个字段是**上一首**的值。身份变成参数之后，
-     * 「这次请求为谁发的」与「现在播的是谁」在同一个值上比较，串台没有生存空间。
-     */
+    /** 加载当前曲目的歌词，每个挂起步骤后由请求代次校验发布归属。 */
     private suspend fun fetchLyrics(track: TrackKey) {
         // 迟到的旧辅助任务不得重新领号，把协调器的当前曲目切回旧歌。
         if (track != currentTrack) return
-        // 去重必须排在 begin() 之前：同歌并发时第二次直接返回；若先 begin()，第二次会把第一次
-        // 的号作废 —— 第一次的结果整包丢弃、第二次又不干活，歌词反而永远出不来。
-        // v2.1.5：判重的键含音源（跨源同号不会再互相吞掉请求），且必须**仍是当前世代** ——
-        // 否则一次 `onTrackChanged(同一首歌)` 就能把在途请求作废并让重发被去重挡掉（见字段注释）。
+        // 先确认同曲请求仍有效，再决定是否领取新代次。
         activeLoad?.let { if (it.track == track && lyricCoordinator.isCurrent(it)) return }
-        // v1.9.0：领号。此后每个挂起点之后都要问一次「我还是当前号吗」，不是就整包丢弃；
-        // 这是「A 歌请求还在飞、用户已切到 B 歌」时不把 A 的歌词盖到 B 上的唯一保证。
-        // v2.1.5：号里同时带上**曲目身份**，跨源同号也分得开（见 LyricLoadCoordinator）。
         val load = lyricCoordinator.begin(track)
         activeLoad = load
         lyricsLoading.value = true
         Log.i(TAG_TRACK, "lyric request begin: track=$track gen=${load.generation}")
         try {
-            // v2.1.0 · C：qm 的曲目走 QRC 直取（ncm 那套两相取数链对它没有意义 ——
-            // TTML DB 是按 ncm id 索引的，拿 QQ 的 id 去查只会 404，
-            // 极小概率还会命中一首**完全无关**的歌的 TTML）。
-            // v2.1.5：分叉依据是**这次请求的身份**，不是全局字段。
-            if (track.source == MusicSource.QQMUSIC) {
-                loadQqLyrics(track, load)
-                return
+            when (track.source) {
+                MusicSource.QQMUSIC -> loadQqLyrics(track, load)
+                MusicSource.BILIBILI -> loadBiliLyrics(track, load)
+                MusicSource.NETEASE -> {
+                    val netease = loadNeteaseLyrics(track, load)
+                    if (netease.authoritative && lyricCoordinator.isCurrent(load)) {
+                        applyBestLyricSource(track, load, netease)
+                    }
+                }
             }
-            // v3.1.0 · B：B 站音源的取词。**不能**落进下面那条 ncm 的链 ——
-            // TTML DB 是按 ncm id 索引的，拿 B 站的合成 id 去查只会 404
-            // （极小概率命中一首完全无关的歌的 TTML，与 QQ 那条路的理由逐字相同）。
-            if (track.source == MusicSource.BILIBILI) {
-                loadBiliLyrics(track, load)
-                return
-            }
-            val netease = loadNeteaseLyrics(track, load)
-            if (!lyricCoordinator.isCurrent(load)) return
-            // 瞬时失败（风控 / 需登录 / 断网）：保持既有行为 —— 什么都不写、按钮保持可点可重试，
-            // 也**不**去拉 TTML（拉 TTML 的前提是「已经拿到 ncm 的权威答复」）。
-            if (!netease.authoritative) return
-            applyBestLyricSource(track, load, netease)
         } finally {
-            // 只有本次请求仍是"当前在途"时才清加载态。旧歌请求的 finally 若在
-            // 新歌请求在途时无条件清 lyricsLoading=false, 会让 UI 误判新歌"加载已结束
-            // 且无歌词"→ 关歌词回封面, 表现为"听几首后歌词莫名不见"。
+            // 迟到的旧请求不能结束当前曲目的加载。
             if (activeLoad == load && lyricCoordinator.isCurrent(load)) {
                 lyricsLoading.value = false
                 activeLoad = null
@@ -2695,6 +2655,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 return NeteaseLyrics(
                     lrcText, tlyricText, yrcText, romalrcText, authoritative = code == 200
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // 失败不清空已有歌词(网络抖动不该把 UI 变空白), 重试后仍失败才退出
                 if (attempt == 3) {
