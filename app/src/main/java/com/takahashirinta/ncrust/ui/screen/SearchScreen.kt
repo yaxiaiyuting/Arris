@@ -223,8 +223,8 @@ fun SearchScreen(
         if (!isLoading) pullState.refreshing = false
     }
     // v3.1.0 · P0-C：进入搜索结果就预取前 N 首的封面（N 按网络类型；只封面，不预取 URL）。
-    LaunchedEffect(songs) {
-        ListPrefetch.prefetchList(context, "search:${viewModel.query.value}", songs)
+    LaunchedEffect(visibleSongs, currentType) {
+        if (currentType == 1) ListPrefetch.prefetchList(context, visibleSongs)
     }
     // v2.1.4：聚合搜索的排序要知道「用户有哪些平台的会员」（见 SearchRanking）。
     // 这里**现读、不缓存**：登录/登出后下一次搜索立刻按新的会员状态排，

@@ -1,22 +1,17 @@
 package com.takahashirinta.ncrust.warmup
 
 import android.content.Context
-import coil.Coil
-import coil.request.ImageRequest
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
 import com.takahashirinta.ncrust.cache.HomeSnapshot
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.network.ConnectionWarmup
-import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.qq.QqAuthStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,8 +41,6 @@ object AppWarmup {
 
     /** 首页和封面的预热等待预算。 */
     private const val NETWORK_BUDGET_MS = 8_000L
-    // Home 里 tile 显示尺寸约 160dp，取 320px 覆盖 xxhdpi 单张封面
-    private const val COVER_PX = 320
     // 每类内容预取多少张封面——盖住首屏可见部分即可
     private const val PREFETCH_PER_SECTION = 6
 
@@ -104,32 +97,18 @@ object AppWarmup {
         launch { runCatchingCancellable { HomeFeed.newSongs(app, session) } }
     }
 
-    private suspend fun warmHomeCovers(app: Context) = coroutineScope {
-        val loader = Coil.imageLoader(app)
-        val urls = buildSet {
+    private suspend fun warmHomeCovers(app: Context) {
+        val urls = buildList {
             ContentCache.homeDailySongs?.take(PREFETCH_PER_SECTION)?.forEach {
-                CoverUrls.small(it.album?.picUrl?.takeIf(String::isNotBlank))?.let(::add)
+                add(it.album?.picUrl)
             }
             ContentCache.homeRecommendPlaylists?.take(PREFETCH_PER_SECTION)?.forEach {
-                CoverUrls.small(it.coverUrl.takeIf(String::isNotBlank))?.let(::add)
+                add(it.coverUrl)
             }
             ContentCache.homeNewSongs?.take(PREFETCH_PER_SECTION)?.forEach {
-                CoverUrls.small(it.album?.picUrl?.takeIf(String::isNotBlank))?.let(::add)
+                add(it.album?.picUrl)
             }
         }
-        for (chunk in urls.chunked(4)) {
-            chunk.map { url ->
-                async {
-                    runCatchingCancellable {
-                        loader.execute(
-                            ImageRequest.Builder(app)
-                                .data(url)
-                                .size(COVER_PX, COVER_PX)
-                                .build()
-                        )
-                    }
-                }
-            }.awaitAll()
-        }
+        ListPrefetch.prefetchCovers(app, urls)
     }
 }

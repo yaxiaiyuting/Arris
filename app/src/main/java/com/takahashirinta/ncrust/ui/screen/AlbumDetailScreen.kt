@@ -242,7 +242,7 @@ fun AlbumDetailScreen(
     // 只预取封面与元数据，**绝不预取 URL**（URL 有时效，见 ListPrefetch 的 KDoc）。
     val prefetchContext = LocalContext.current
     LaunchedEffect(songItems) {
-        ListPrefetch.prefetchList(prefetchContext, "album:$albumId", songItems)
+        ListPrefetch.prefetchList(prefetchContext, songItems)
     }
     val preferredSource = loaded?.preferredSource
     val availabilityNote = loaded?.availabilityNote.orEmpty()
