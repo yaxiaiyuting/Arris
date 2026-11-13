@@ -72,13 +72,10 @@ internal class PlaybackQueueController(
         val initialSongs = songs
         val epoch = playRequestGeneration.current
         restoreJob = scope.launch {
-            val (saved, cursor) = PlaybackStateManager.getQueue(context) ?: return@launch
-            if (saved.isEmpty()) return@launch
-            val savedIndex = cursor.coerceIn(saved.indices)
             val savedMode = mode
-            val round = if (savedMode == QueueModes.SHUFFLE) {
-                PlaybackStateManager.restoreShuffle(context, saved, savedIndex)
-            } else null
+            val (saved, savedIndex, round) = PlaybackStateManager.getQueue(
+                context, readShuffle = savedMode == QueueModes.SHUFFLE,
+            ) ?: return@launch
             if (!playRequestGeneration.isCurrent(epoch) || songs !== initialSongs || index >= 0) return@launch
 
             val track = player.currentTrackKey
@@ -95,7 +92,7 @@ internal class PlaybackQueueController(
                 player.adoptTrackIdentity(selected.source, selected.id, selected.sourceId, selected.mediaId)
                 currentSong = selected
             }
-            if (index != savedIndex) saveCursor() else saveShuffle()
+            if (index != savedIndex || (mode == QueueModes.SHUFFLE && round == null)) saveCursor()
             preloadCurrentSuccessor()
         }
     }
@@ -109,36 +106,38 @@ internal class PlaybackQueueController(
     }
 
     fun saveQueue(replan: Boolean = true) {
-        PlaybackStateManager.saveQueue(context, songs, index)
         pendingRound = null
-        saveShuffle()
+        PlaybackStateManager.saveQueue(context, songs, index, snapshotShuffle())
         if (replan) preloadCurrentSuccessor()
     }
 
     private fun saveCursor() {
-        PlaybackStateManager.saveQueueCursor(context, songs, index)
-        saveShuffle()
+        PlaybackStateManager.saveQueueCursor(context, songs, index, snapshotShuffle())
     }
 
-    private fun saveShuffle() {
+    private fun snapshotShuffle(): (() -> ShuffleSnapshot)? {
         val queue = songs
         if (mode != QueueModes.SHUFFLE || queue.isEmpty()) {
             shuffleKeysFor = null
             shuffleKeys = null
-            return
+            return null
         }
         val keys = shuffleKeys?.takeIf { shuffleKeysFor === queue }
             ?: lazy { queue.map { QueueKeys.keyOf(it).tag } }.also {
                 shuffleKeysFor = queue
                 shuffleKeys = it
             }
-        PlaybackStateManager.saveShuffle(context, shuffleOrder, shufflePosition, index) { keys.value }
+        val order = shuffleOrder
+        val position = shufflePosition
+        return { ShuffleSnapshot(keys.value, order, position) }
     }
 
     fun resetShuffle() {
         shuffleOrder = emptyList()
         shufflePosition = 0
         pendingRound = null
+        shuffleKeysFor = null
+        shuffleKeys = null
     }
 
     fun clear() {
@@ -153,7 +152,6 @@ internal class PlaybackQueueController(
         index = -1
         currentSong = null
         resetShuffle()
-        saveShuffle()
     }
 
     private fun newRound(): List<Int> = ShuffleRound.newRound(songs.size, index, keyOf = {
@@ -232,27 +230,27 @@ internal class PlaybackQueueController(
         if (service.player.isPlaying || service.isActivelyBuffering()) preloadCurrentSuccessor()
     }
 
-    private fun applyMode(value: Int, replan: Boolean) {
+    private fun applyMode(value: Int) {
         player.invalidatePreload()
         if (value != QueueModes.INFINITY) lastNonInfinityMode = value
         mode = value
         PlaybackStateManager.savePlayMode(context, value)
         if (value == QueueModes.SHUFFLE) reshuffle() else resetShuffle()
-        saveShuffle()
-        if (replan) preloadCurrentSuccessor()
     }
 
     fun cycleMode() {
         fmMode = false
-        applyMode((mode + 1) % 5, replan = true)
+        applyMode((mode + 1) % 5)
+        if (mode == QueueModes.SHUFFLE && index in songs.indices) saveCursor()
+        preloadCurrentSuccessor()
     }
 
     fun replaceAndPlay(queue: List<SongItem>, enterFm: Boolean, startIndex: Int) {
         if (startIndex !in queue.indices) return
         fmMode = enterFm
         when {
-            enterFm -> applyMode(QueueModes.INFINITY, replan = false)
-            mode == QueueModes.INFINITY -> applyMode(lastNonInfinityMode, replan = false)
+            enterFm -> applyMode(QueueModes.INFINITY)
+            mode == QueueModes.INFINITY -> applyMode(lastNonInfinityMode)
             else -> player.invalidatePreload()
         }
         songs = queue
