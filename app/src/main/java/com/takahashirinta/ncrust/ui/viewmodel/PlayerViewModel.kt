@@ -52,7 +52,6 @@ import com.takahashirinta.ncrust.lyric.LyricSourcePrefs
 import com.takahashirinta.ncrust.lyric.LyricTrack
 import com.takahashirinta.ncrust.lyric.LyricTrackMerge
 import com.takahashirinta.ncrust.lyric.LyricTracks
-import com.takahashirinta.ncrust.lyric.LyricTrackSource
 import com.takahashirinta.ncrust.lyric.cacheTag
 import com.takahashirinta.ncrust.lyric.LyricsCache
 import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
@@ -2873,7 +2872,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      * ncm 源的两条副文本轨**按时间戳与原行配对**是既有语义（tlyric/romalrc 与 lrc 是同一份资产、
      * 时间戳同刻），v1.5.0 起就是这么显示的，本版一行不改 —— 分轨合并只在 TTML 胜出时介入。
      */
-    private suspend fun applyNeteaseLyrics(
+    private fun applyNeteaseLyrics(
         track: TrackKey,
         load: LyricLoadCoordinator.Load,
         lines: List<LrcLine>,
@@ -2891,27 +2890,16 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         translatedLyrics.value = translations
         romanizedLyrics.value = romans
-        // v1.9.2：记下这两条轨实际来自谁（观测字段；值未变则不落盘）。
-        LyricsCache.putTrackSources(
-            getApplication(),
-            songId,
-            LyricTrackSource.NETEASE.takeIf { translations.isNotEmpty() },
-            LyricTrackSource.NETEASE.takeIf { romans.isNotEmpty() },
-        )
     }
 
     /** 发布 TTML 主轨和已经对齐到同一时间轴的副轨。 */
-    private suspend fun applyTtmlLyrics(songId: Long, doc: TtmlDoc, tracks: LyricTracks) {
+    private fun applyTtmlLyrics(songId: Long, doc: TtmlDoc, tracks: LyricTracks) {
         if (currentSongId.value != songId) return
         lyrics.value = doc.lines
         translatedLyrics.value = tracks.translation.lines
         romanizedLyrics.value = tracks.roman.lines
         lyricsSongId.value = songId
         lyricsNoContentSongId.value = -1L
-        // v1.9.2：记下两条轨实际来自谁（观测字段；值未变则不落盘）。
-        LyricsCache.putTrackSources(
-            getApplication(), songId, tracks.translation.source, tracks.roman.source
-        )
     }
 
     /**
