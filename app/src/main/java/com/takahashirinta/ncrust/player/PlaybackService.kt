@@ -1759,8 +1759,8 @@ class PlaybackService : MediaLibraryService() {
     private fun currentMediaDisplay(): MediaDisplayLines.Lines =
         mediaDisplay.get(mediaTitle, mediaArtist, mediaLyricFrame)
 
-    private fun updatePlaybackState() {
-        val dur = player.duration.coerceAtLeast(0L)
+    private fun updatePlaybackState(durationMs: Long = player.duration) {
+        val dur = durationMs.coerceAtLeast(0L)
         runCatching { maybeRecordOfflineLibrary(dur) }
 
         // Media3 发布位置和播放状态。应用仅在文案、时长或封面变化时更新媒体元数据。
@@ -1880,6 +1880,10 @@ class PlaybackService : MediaLibraryService() {
     /** Player 的当前选中轨道只代表正在播放的项，预载项不得写当前歌曲的码率。 */
     fun publishStreamBitrate() {
         if (!::player.isInitialized) return
+        publishStreamBitrate(player.duration)
+    }
+
+    private fun publishStreamBitrate(durationMs: Long) {
         val publish = onBitrateChanged ?: return
         val item = player.currentMediaItem ?: return
         val track = trackForMediaId(item.mediaId) ?: return
@@ -1889,7 +1893,7 @@ class PlaybackService : MediaLibraryService() {
         val format = selected?.let { group ->
             (0 until group.length).firstOrNull { group.isTrackSelected(it) }?.let { group.getTrackFormat(it) }
         }
-        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, player.duration) {
+        val bitrate = StreamBitrate.resolve(format?.averageBitrate ?: -1, durationMs) {
             item.localConfiguration?.uri?.toString()?.let(OfflineAudioCache::contentLengthForUrl) ?: 0L
         }
         if (bitrate > 0L) publish(track.source, track.id, bitrate)
@@ -1996,20 +2000,19 @@ class PlaybackService : MediaLibraryService() {
         if (!isActivelyBuffering()) return
         bufferProgressJob = scope.launch {
             while (isActive && isActivelyBuffering()) {
-                observePlaybackProgress(buffering = true)
+                observePlaybackProgress(player.currentPosition, bufferedMs = player.bufferedPosition)
                 delay(1_000L)
             }
         }
     }
 
-    private fun observePlaybackProgress(buffering: Boolean) {
-        val positionMs = player.currentPosition
+    private fun observePlaybackProgress(positionMs: Long, bufferedMs: Long? = null) {
         val stalled = stallWatch.observe(
             SystemClock.elapsedRealtime(), positionMs,
-            if (buffering) player.bufferedPosition else null,
+            bufferedMs,
         )
         if (stalled) playingTrackKey()?.let { track ->
-            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=$buffering")
+            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=${bufferedMs != null}")
             onPlaybackStalled?.invoke(track, positionMs)
         }
     }
@@ -2028,17 +2031,17 @@ class PlaybackService : MediaLibraryService() {
         if (!player.isPlaying) return
         progressJob = scope.launch {
             while (isActive && player.isPlaying) {
-                publishStreamBitrate()
                 val positionMs = player.currentPosition
                 val durationMs = player.duration
+                publishStreamBitrate(durationMs)
                 savePlaybackCheckpoint(positionMs, durationMs)
                 onProgressUpdate?.invoke(positionMs, durationMs)
-                updatePlaybackState()
+                updatePlaybackState(durationMs)
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
-                pushWidgetUpdate()
-                observePlaybackProgress(buffering = false)
+                pushWidgetUpdate(positionMs, durationMs)
+                observePlaybackProgress(positionMs)
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
                 // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降。
@@ -2217,7 +2220,7 @@ class PlaybackService : MediaLibraryService() {
      * 会在暂停 N 秒后被 `scheduleArtworkIdleRelease` 主动释放 —— 那份生命周期只有本类知道。
      * 卡片侧只接收一份快照，不持有任何对本服务的引用。
      */
-    private fun pushWidgetUpdate() {
+    private fun pushWidgetUpdate(positionMs: Long = player.currentPosition, durationMs: Long = player.duration) {
         // 包一层 runCatching：桌面卡片是**次要消费者**，它出任何问题都不许影响播放。
         // 这不是洁癖 —— 本方法跑在 2Hz 的 tick 上，读的是 `player`（lateinit）与封面位图
         // 两条可能出状况的路径；通知那条通路本来就有同样的保护（updateNotify 里的
@@ -2229,10 +2232,10 @@ class PlaybackService : MediaLibraryService() {
                 title = mediaTitle,
                 artist = mediaArtist,
                 isPlaying = player.isPlaying,
-                positionMs = player.currentPosition.coerceAtLeast(0L),
+                positionMs = positionMs.coerceAtLeast(0L),
                 // player.duration 在时长未知时是 C.TIME_UNSET（Long.MIN_VALUE）⇒ 一律夹到 0，
                 // 由 WidgetProgressSpec 判成「这一档不画进度条」。
-                durationMs = player.duration.coerceAtLeast(0L),
+                durationMs = durationMs.coerceAtLeast(0L),
                 artwork = currentArtworkBitmap,
                 accent = currentDominantColor,
             )
