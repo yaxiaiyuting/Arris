@@ -1628,6 +1628,20 @@ fun MainScreen(
         )
     }
 
+    fun preloadQueueItem(index: Int, allowCurrent: Boolean = playMode == QueueModes.SINGLE): Boolean {
+        val song = playbackQueue.getOrNull(index) ?: return false
+        val (title, artist, artwork) = songParams(song)
+        playerViewModel.preloadNextSong(
+            song.id, title, artist, artwork,
+            allowCurrent = allowCurrent,
+            sourceKey = song.source,
+            sourceId = song.sourceId,
+            mediaId = song.mediaId,
+            privilege = song.privilege,
+        )
+        return true
+    }
+
     /** 切换播放模式：写盘 + 维护乱序序列（唯一入口，避免漏掉落盘）。 */
     // 4.0.2：记一个「上一次的非电台模式」。进电台前存，退出电台时恢复 ——
     // 否则"电台听完播歌单"会停在无限模式（上一首还被锁灰）。
@@ -1914,22 +1928,7 @@ fun MainScreen(
                     )
                     PlaybackStateManager.saveQueueCursor(context, playbackQueue, currentQueueIndex)
 
-                    // Immediately preload the next song so ExoPlayer has maximum time to buffer it.
-                    // 下一首由 preloadIndex() 统一决定；乱序轮末会在这里预排 pendingRound，
-                    // 绝不再回绕到 shuffledIndices[0]（那是正在播的当前曲）。
-                    val nextIdx = preloadIndex()
-                    val nextSong = playbackQueue.getOrNull(nextIdx)
-                    if (nextSong != null) {
-                        val (nTitle, nArtist, nArtwork) = songParams(nextSong)
-                        playerViewModel.preloadNextSong(
-                            nextSong.id, nTitle, nArtist, nArtwork,
-                            allowCurrent = playMode == QueueModes.SINGLE,
-                            sourceKey = nextSong.source,
-                            sourceId = nextSong.sourceId,
-                            mediaId = nextSong.mediaId,
-                            privilege = nextSong.privilege,
-                        )
-                    }
+                    preloadQueueItem(preloadIndex())
                 }
             }
             if (deferQueueStart) queueStartActions.submit(startSelected)
@@ -2017,18 +2016,7 @@ fun MainScreen(
                     val stillOnSeed = playbackQueue.getOrNull(currentQueueIndex)?.let {
                         QueueKeys.keyOf(it) == QueueKeys.keyOf(seed)
                     } == true
-                    if (stillOnSeed) {
-                        playbackQueue.getOrNull(startIdx)?.let { next ->
-                            val (t, a, w) = songParams(next)
-                            playerViewModel.preloadNextSong(
-                                next.id, t, a, w,
-                                sourceKey = next.source,
-                                sourceId = next.sourceId,
-                                mediaId = next.mediaId,
-                                privilege = next.privilege,
-                            )
-                        }
-                    }
+                    if (stillOnSeed) preloadQueueItem(startIdx, allowCurrent = false)
                     PlaybackStateManager.saveQueue(context, playbackQueue, currentQueueIndex)
                 }
             }
@@ -2126,12 +2114,16 @@ fun MainScreen(
     // would leave the new "next" track unpreloaded until the following song. Re-plan on every
     // queue/mode change: preloadNextSong already dedupes and honours the gapless setting.
     LaunchedEffect(playbackQueue, playMode) {
-        playbackQueue.getOrNull(preloadIndex())?.let { next ->
-            val (title, artist, artwork) = songParams(next)
-            playerViewModel.preloadNextSong(next.id, title, artist, artwork,
-                allowCurrent = playMode == QueueModes.SINGLE,
-                sourceKey = next.source, sourceId = next.sourceId, mediaId = next.mediaId,
-                privilege = next.privilege)
+        preloadQueueItem(preloadIndex())
+    }
+
+    fun preloadOrExtendQueue() {
+        if (!preloadQueueItem(preloadIndex()) &&
+            playMode == QueueModes.INFINITY && currentQueueIndex >= playbackQueue.lastIndex &&
+            playbackQueue.isNotEmpty()
+        ) {
+            // 在曲终之前把电台或相似曲追加到队列，给下一首留出缓冲时间。
+            launchInfinity(startPlaying = false)
         }
     }
 
@@ -2139,32 +2131,7 @@ fun MainScreen(
     // 切歌时重置预载信号。消费时保留信号，避免进度轮询反复取消并重启同一请求。
     LaunchedEffect(Unit) {
         playerViewModel.needsPreload.collect { needs ->
-            if (!needs) return@collect
-            // 下一首由 preloadIndex() 统一决定（与「点队列切歌/自然衔接后」同一决策），
-            // 免得几处各抄一份 when(playMode) 悄悄分叉。契约：-1 = 按当前模式没有下一首，
-            // 尤其 CYCLE 的单曲队列不能预载自身（[A,A] 自动衔接 = 假单曲循环），
-            // SHUFFLE 轮末也不能回绕到 0（那是正在播的当前曲）。
-            val nextIdx = preloadIndex()
-            val nextSong: SongItem? = playbackQueue.getOrNull(nextIdx)
-            if (nextSong != null) {
-                val (title, artist, artwork) = songParams(nextSong)
-                // 单曲循环模式: 预载自身是实现无缝单曲循环的手段, 显式放行
-                playerViewModel.preloadNextSong(
-                    nextSong.id, title, artist, artwork,
-                    allowCurrent = playMode == QueueModes.SINGLE,
-                    sourceKey = nextSong.source,
-                    sourceId = nextSong.sourceId,
-                    mediaId = nextSong.mediaId,
-                    privilege = nextSong.privilege,
-                )
-            } else if (playMode == QueueModes.INFINITY &&
-                currentQueueIndex >= playbackQueue.size - 1 && playbackQueue.isNotEmpty()
-            ) {
-                // 队列尾 + Infinity: 提前拉相似歌追加, 追加完成时才来得及无缝预载——
-                // 等到自然播完才发起, 相似接口的网络往返会让衔接出现空档。
-                // startPlaying=false: 只追加+预载，当前歌照常播完（旧实现在这里就把歌掐了）。
-                launchInfinity(startPlaying = false)
-            }
+            if (needs) preloadOrExtendQueue()
         }
     }
 
@@ -2251,27 +2218,7 @@ fun MainScreen(
         if (!reconcilePendingSongTransition()) return
         currentSong?.id?.let { playerViewModel.fetchLyricsForSong(it) }
 
-        // Immediately start preloading the song after this one.
-        // 与 needsPreload 共用 preloadIndex：乱序轮末会预排 pendingRound，绝不回绕到 0。
-        val nnIdx = preloadIndex()
-        if (nnIdx < 0 && playMode == QueueModes.INFINITY &&
-            currentQueueIndex >= playbackQueue.size - 1
-        ) {
-            // 队尾 + Infinity：提前续播追加（同样只追加+预载，别把刚起播的这首掐掉）。
-            launchInfinity(startPlaying = false)
-        }
-        val songToPreload = playbackQueue.getOrNull(nnIdx)
-        if (songToPreload != null) {
-            val (pTitle, pArtist, pArtwork) = songParams(songToPreload)
-            playerViewModel.preloadNextSong(
-                songToPreload.id, pTitle, pArtist, pArtwork,
-                allowCurrent = playMode == QueueModes.SINGLE,
-                sourceKey = songToPreload.source,
-                sourceId = songToPreload.sourceId,
-                mediaId = songToPreload.mediaId,
-                privilege = songToPreload.privilege,
-            )
-        }
+        preloadOrExtendQueue()
     }
 
     val onQueueTransition by rememberUpdatedState<(Boolean) -> Unit>({ auto ->
@@ -2461,20 +2408,7 @@ fun MainScreen(
                 newCurrentIndex = currentQueueIndex,
                 shuffledIndices = shuffledIndices,
             )
-            val nextSong = playbackQueue.getOrNull(nextIdx)
-            if (nextSong != null) {
-                val (nTitle, nArtist, nArtwork) = songParams(nextSong)
-                playerViewModel.preloadNextSong(
-                    nextSong.id, nTitle, nArtist, nArtwork,
-                    // 不 allowCurrent：这里预载的**必须**是别人；若插入的恰好等于当前歌，
-                    // QueueInsert 已经在上面按 ALREADY_CURRENT 幂等返回了。
-                    allowCurrent = false,
-                    sourceKey = nextSong.source,
-                    sourceId = nextSong.sourceId,
-                    mediaId = nextSong.mediaId,
-                    privilege = nextSong.privilege,
-                )
-            }
+            preloadQueueItem(nextIdx, allowCurrent = false)
         }
 
         // ── 反馈 ──────────────────────────────────────────────────────────────
