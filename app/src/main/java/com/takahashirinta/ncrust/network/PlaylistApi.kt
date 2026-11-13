@@ -36,8 +36,14 @@ object PlaylistApi {
     private const val USER_PLAYLIST_PATH = "/eapi/user/playlist"
     private const val PLAYLIST_DETAIL_PATH = "/eapi/v6/playlist/detail"
     private const val ACCOUNT_GET_PATH = "/eapi/w/nuser/account/get"
+    private const val HOME_READ_TIMEOUT_SECONDS = 8L
     private suspend fun readEapi(path: String, payload: Map<String, String>): okhttp3.Response =
         com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read { RetrofitClient.eapiPost(path, payload) }
+
+    private suspend fun readHomeEapi(path: String, payload: Map<String, String> = emptyMap()): okhttp3.Response =
+        com.takahashirinta.ncrust.auth.NeteaseSessionRequests.read {
+            RetrofitClient.eapiPostCancellable(path, payload, timeoutSeconds = HOME_READ_TIMEOUT_SECONDS)
+        }
 
     /** 会员状态（weapi）。字段见 `account.VipInfoResponse`。 */
     private const val VIP_INFO_PATH = "/api/music-vip-membership/client/vip/info"
@@ -539,7 +545,7 @@ object PlaylistApi {
      */
     suspend fun getDailyRecommendSongs(forceRefresh: Boolean = false): List<SongItem> = withContext(Dispatchers.IO) {
         val payload = if (forceRefresh) mapOf("timestamp" to System.currentTimeMillis().toString()) else emptyMap()
-        val response = readEapi("/eapi/v2/discovery/recommend/songs", payload)
+        val response = readHomeEapi("/eapi/v2/discovery/recommend/songs", payload)
         val body = response.body?.string() ?: throw Exception("empty response")
         val json = JSONObject(body)
         // 登录失效时这个接口**仍然 200**，只是返回非个性化的通用列表；
@@ -566,7 +572,7 @@ object PlaylistApi {
     }
 
     suspend fun getRecommendPlaylists(): List<PlaylistCard> = withContext(Dispatchers.IO) {
-        val response = readEapi("/eapi/v1/discovery/recommend/resource", emptyMap())
+        val response = readHomeEapi("/eapi/v1/discovery/recommend/resource")
         val body = response.body?.string() ?: throw Exception("empty response")
         val arr = JSONObject(body).optJSONArray("recommend") ?: return@withContext emptyList()
         (0 until minOf(arr.length(), 10)).map { i ->
@@ -587,7 +593,7 @@ object PlaylistApi {
      * 不需要任何新解析代码。默认只取前 [limit] 个（首页/搜索页只展示精选入口）。
      */
     suspend fun getToplists(limit: Int = 12): List<PlaylistCard> = withContext(Dispatchers.IO) {
-        val response = readEapi("/eapi/toplist", emptyMap())
+        val response = readHomeEapi("/eapi/toplist")
         val body = response.body?.string() ?: throw Exception("empty response")
         val arr = JSONObject(body).optJSONArray("list") ?: return@withContext emptyList()
         (0 until minOf(arr.length(), limit)).map { i ->
@@ -610,17 +616,18 @@ object PlaylistApi {
      * 取 `tracks[0].album.picUrl` 即可 —— 实测 HTTP 200、无需加密参数。
      */
     suspend fun getChartFirstSongCover(chartId: Long): String? = withContext(Dispatchers.IO) {
-        val body = RetrofitClient.get("/api/playlist/detail?id=$chartId")
+        val body = RetrofitClient.getCancellable("/api/playlist/detail?id=$chartId", HOME_READ_TIMEOUT_SECONDS)
         val json = JSONObject(body)
         val tracks = json.optJSONObject("result")?.optJSONArray("tracks")
-            ?: json.optJSONArray("playlist")?.let { null }
             ?: return@withContext null
         val first = tracks.optJSONObject(0) ?: return@withContext null
         first.optJSONObject("album")?.optString("picUrl")?.takeIf { it.isNotBlank() }
     }
 
     suspend fun getTopSongs(limit: Int = 30, offset: Int = 0): List<SongItem> = withContext(Dispatchers.IO) {
-        val body = RetrofitClient.get("/api/v1/discovery/new/songs?limit=$limit&offset=$offset")
+        val body = RetrofitClient.getCancellable(
+            "/api/v1/discovery/new/songs?limit=$limit&offset=$offset", HOME_READ_TIMEOUT_SECONDS,
+        )
         val json = JSONObject(body)
         val arr = json.optJSONArray("data") ?: json.optJSONArray("songs")
             ?: return@withContext emptyList()

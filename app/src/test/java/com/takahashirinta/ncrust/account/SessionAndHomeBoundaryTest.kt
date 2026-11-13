@@ -11,11 +11,13 @@ import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
-import com.takahashirinta.ncrust.warmup.AppWarmup
+import com.takahashirinta.ncrust.warmup.HomeFeed
+import java.io.IOException
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.*
@@ -48,7 +50,7 @@ class SessionAndHomeBoundaryTest {
         val scope = field(o, scopeName).get(o) as CoroutineScope
         withTimeout(6000) { scope.coroutineContext[Job]!!.children.toList().joinAll() }
     }
-    private suspend fun fixture(body: suspend (MemoryContext) -> Unit) {
+    private suspend fun fixture(body: suspend CoroutineScope.(MemoryContext) -> Unit) = coroutineScope {
         val context = MemoryContext()
         val guard = field(CookieManager, "guard").get(CookieManager)
         val originals = listOf(CookieManager to "app", NeteaseTokenRefresher to "app", SessionMonitor to "appContext",
@@ -58,6 +60,9 @@ class SessionAndHomeBoundaryTest {
         @Suppress("UNCHECKED_CAST")
         val state = field(SessionMonitor,"_state").get(SessionMonitor) as MutableStateFlow<SessionState>
         val previous = state.value
+        @Suppress("UNCHECKED_CAST")
+        val loginGenerations = field(CookieManager, "_loginGenerations").get(CookieManager) as MutableStateFlow<Long>
+        val previousGeneration = loginGenerations.value
         ContentCache.clearAll()
         field(CookieManager,"app").set(CookieManager,null)
         try {
@@ -69,6 +74,7 @@ class SessionAndHomeBoundaryTest {
             ContentCache.clearAll()
             state.value=previous
             originals.asReversed().forEach { (o,f,v) -> f.set(o,v) }
+            loginGenerations.value = previousGeneration
         }
     }
 
@@ -185,24 +191,109 @@ class SessionAndHomeBoundaryTest {
         }
     }
 
-    @Test fun homeWarmupBudgetReturnsCompletedSectionsWithoutCancellingSlowSection() = runBlocking {
-        val session = CookieManager.snapshot()
-        val daily = CompletableDeferred<List<SongItem>?>()
-        val playlist = PlaylistApi.PlaylistCard(303, "already warm", "", 0)
-        val loads = AppWarmup.HomeLoads(
-            daily = daily,
-            playlists = CompletableDeferred(listOf(playlist)),
-            newSongs = CompletableDeferred(listOf(homeSong(202))),
-            session = session,
-        )
+    @Test fun homeReadersShareASlowRequestAndOtherSectionsCanFinish() = runBlocking {
+        fixture { context ->
+            val dailyEntered = CompletableDeferred<Unit>()
+            val releaseDaily = CountDownLatch(1)
+            val dailyRequests = AtomicInteger()
+            val newSongRequests = AtomicInteger()
+            withHomeTransport({ request ->
+                when (request.url.encodedPath) {
+                    "/eapi/v2/discovery/recommend/songs" -> {
+                        dailyRequests.incrementAndGet()
+                        dailyEntered.complete(Unit)
+                        check(releaseDaily.await(5, TimeUnit.SECONDS))
+                        """{"code":200,"recommend":[{"id":101,"name":"Daily"}]}"""
+                    }
+                    "/api/v1/discovery/new/songs" -> {
+                        newSongRequests.incrementAndGet()
+                        """{"data":[{"id":202,"name":"New"}]}"""
+                    }
+                    else -> error("Unexpected local fixture path")
+                }
+            }) {
+                val session = CookieManager.snapshot()
+                val warmup = async(start = CoroutineStart.UNDISPATCHED) { HomeFeed.dailySongs(context, session) }
+                try {
+                    withTimeout(3_000L) { dailyEntered.await() }
+                    assertNull(withTimeoutOrNull(750L) { HomeFeed.dailySongs(context, session) })
+                    val reentered = async(start = CoroutineStart.UNDISPATCHED) { HomeFeed.dailySongs(context, session) }
+                    assertEquals(202L, HomeFeed.newSongs(context, session).single().id)
+                    assertEquals(202L, HomeFeed.newSongs(context, session).single().id)
+                    assertFalse(warmup.isCompleted)
+                    releaseDaily.countDown()
+                    assertSame(warmup.await(), reentered.await())
+                    assertEquals(101L, ContentCache.homeDailySongs!!.single().id)
+                    assertEquals(1, dailyRequests.get())
+                    assertEquals(1, newSongRequests.get())
+                } finally {
+                    releaseDaily.countDown()
+                }
+            }
+        }
+    }
 
-        val partial = loads.awaitWithin(30)
-        assertNull(partial.daily)
-        assertEquals(listOf(playlist), partial.playlists)
-        assertEquals(202L, partial.newSongs!!.single().id)
-        assertFalse(daily.isCancelled)
-        daily.complete(listOf(homeSong(101)))
-        assertEquals(101L, loads.awaitCompleted().daily!!.single().id)
+    @Test fun homeRequestCannotPublishAfterLoginChangesAndFailedReadsCanRetry() = runBlocking {
+        fixture { context ->
+            val oldEntered = CompletableDeferred<Unit>()
+            val releaseOld = CountDownLatch(1)
+            val newRequests = AtomicInteger()
+            withHomeTransport({ request ->
+                if (request.header("Cookie").orEmpty().contains("fixture-account-A")) {
+                    oldEntered.complete(Unit)
+                    check(releaseOld.await(5, TimeUnit.SECONDS))
+                    """{"data":[{"id":101,"name":"Old"}]}"""
+                } else {
+                    if (newRequests.incrementAndGet() == 1) throw IOException("local fixture failure")
+                    """{"data":[{"id":202,"name":"New"}]}"""
+                }
+            }) {
+                val old = async(start = CoroutineStart.UNDISPATCHED) {
+                    runCatching { HomeFeed.newSongs(context, CookieManager.snapshot()) }
+                }
+                try {
+                    withTimeout(3_000L) { oldEntered.await() }
+                    CookieManager.saveCookie(context, "MUSIC_U=fixture-account-B; __csrf=fixture-csrf-B")
+                    val session = CookieManager.snapshot()
+                    assertTrue(runCatching { HomeFeed.newSongs(context, session) }.exceptionOrNull() is IOException)
+                    assertEquals(202L, HomeFeed.newSongs(context, session).single().id)
+                    releaseOld.countDown()
+                    assertTrue(old.await().isFailure)
+                    assertEquals(202L, ContentCache.homeNewSongs!!.single().id)
+                    assertEquals(2, newRequests.get())
+                } finally {
+                    releaseOld.countDown()
+                }
+            }
+        }
+    }
+
+    private suspend fun withHomeTransport(
+        response: (Request) -> String,
+        block: suspend CoroutineScope.() -> Unit,
+    ) = coroutineScope {
+        val lazy = field(RetrofitClient, "plainClient\$delegate").get(RetrofitClient) as Lazy<*>
+        val previous = lazy.value
+        val value = field(lazy, "_value")
+        val fake = OkHttpClient.Builder()
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<java.net.InetAddress> =
+                    throw AssertionError("DNS prohibited")
+            })
+            .addInterceptor { chain ->
+                val request = chain.request()
+                Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200)
+                    .message("local fixture").body(response(request).toResponseBody()).build()
+            }.build()
+        value.set(lazy, fake)
+        try {
+            block()
+        } finally {
+            settle(HomeFeed)
+            settle(HomeSnapshot, "ioScope")
+            value.set(lazy, previous)
+            fake.dispatcher.executorService.shutdown()
+        }
     }
 
     @Test fun dailyBatchDateSurvivesRestoreAndExpiresAtSix() = runBlocking {

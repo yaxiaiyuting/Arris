@@ -51,7 +51,7 @@ import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.ContentCache
-import com.takahashirinta.ncrust.cache.HomeSnapshot
+import com.takahashirinta.ncrust.warmup.HomeFeed
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
@@ -91,6 +91,7 @@ import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import android.widget.Toast
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.CancellationException
 
 enum class BatchQueueAction { PLAY_NOW, INSERT_NEXT, APPEND }
 
@@ -883,14 +884,18 @@ fun SearchScreen(
                         // E（方案 3 附加）：空查询时展示榜单，复用首页那份 ContentCache 快照，
                         // 未命中/过期才发一次请求（榜单匿名可读，不需要登录）。
                         var toplists by remember { mutableStateOf(ContentCache.toplistItems ?: emptyList()) }
-                        LaunchedEffect(Unit) {
-                            if (ContentCache.toplistItems == null || !ContentCache.isToplistFresh()) {
-                                val owner = CookieManager.accountOwner()
-                                runCatching { PlaylistApi.getToplists() }.getOrNull()?.let {
-                                    ContentCache.putToplist(it)
-                                    toplists = it
-                                    HomeSnapshot.save(context, toplists = it, owner = owner)
-                                }
+                        val loginGeneration by CookieManager.loginGenerations.collectAsState()
+                        LaunchedEffect(loginGeneration) {
+                            if (!com.takahashirinta.ncrust.network.NetworkAvailability.isOnline(context)) return@LaunchedEffect
+                            val started = CookieManager.snapshot()
+                            if (started.loginGeneration != loginGeneration) return@LaunchedEffect
+                            try {
+                                val items = HomeFeed.toplists(context, started)
+                                CookieManager.ifSameLogin(started) { toplists = items }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (_: Exception) {
+                                // Keep the last available chart list.
                             }
                         }
                         if (toplists.isEmpty()) {
