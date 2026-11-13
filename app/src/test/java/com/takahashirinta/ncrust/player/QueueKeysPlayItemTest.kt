@@ -92,7 +92,7 @@ class QueueKeysPlayItemTest {
         val plan = QueueKeys.planPlayItem(listOf(a, b), 0, b)
         assertEquals("B 必须只有一份", listOf(1L, 2L), plan.queue.map { it.id })
         assertEquals(QueueKeys.keyOf(b), QueueKeys.keyOf(plan.queue[plan.playIndex]))
-        assertFalse("队列里出现重复身份", QueueKeys.hasDuplicates(QueueKeys.keysOf(plan.queue)))
+        assertEquals("队列里出现重复身份", plan.queue.size, QueueKeys.keySetOf(plan.queue).size)
         assertPlanValid(plan.queue, plan)
     }
 
@@ -154,7 +154,7 @@ class QueueKeysPlayItemTest {
         val plan = QueueKeys.planPlayItem(listOf(a, b, c), 0, c)
         assertEquals("C 要挪到 A 之后", listOf(1L, 3L, 2L), plan.queue.map { it.id })
         assertEquals(QueueKeys.keyOf(c), QueueKeys.keyOf(plan.queue[plan.playIndex]))
-        assertFalse(QueueKeys.hasDuplicates(QueueKeys.keysOf(plan.queue)))
+        assertEquals(plan.queue.size, QueueKeys.keySetOf(plan.queue).size)
         assertPlanValid(plan.queue, plan)
     }
 
@@ -166,7 +166,7 @@ class QueueKeysPlayItemTest {
         val plan = QueueKeys.planPlayItem(listOf(a, b, c), 2, a)
         assertEquals(QueueKeys.keyOf(a), QueueKeys.keyOf(plan.queue[plan.playIndex]))
         assertEquals("currentIndex 必须等于 playIndex（不变量）", plan.playIndex, plan.currentIndex)
-        assertFalse(QueueKeys.hasDuplicates(QueueKeys.keysOf(plan.queue)))
+        assertEquals(plan.queue.size, QueueKeys.keySetOf(plan.queue).size)
         assertPlanValid(plan.queue, plan)
     }
 
@@ -199,7 +199,7 @@ class QueueKeysPlayItemTest {
                 QueueKeys.keyOf(clicked),
                 QueueKeys.keyOf(plan.queue[plan.playIndex]),
             )
-            assertFalse("点歌之后队列不许出现重复", QueueKeys.hasDuplicates(QueueKeys.keysOf(plan.queue)))
+            assertEquals("点歌之后队列不许出现重复", plan.queue.size, QueueKeys.keySetOf(plan.queue).size)
             queue = plan.queue
             current = plan.currentIndex
         }
