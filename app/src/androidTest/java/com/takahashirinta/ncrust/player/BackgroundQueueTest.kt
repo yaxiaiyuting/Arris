@@ -44,6 +44,45 @@ class BackgroundQueueTest {
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
 
     @Test
+    fun changingSessionLyricSettingRepublishesTheCurrentLineWhilePlaying() {
+        val tracks = prepareTracks(gapless = false)
+        val prefs = app.getSharedPreferences("ncrust_settings", 0)
+        prefs.edit().putBoolean("session_metadata_lyrics", false).apply()
+        val scenario = launchQueue(tracks)
+        try {
+            awaitPlaying(tracks.first().id)
+            main {
+                PlaybackService.mediaLyricFrame = MediaLyricFrame(original = "Fixture lyric")
+                assertEquals(tracks.first().name, PlaybackService.instance?.player?.mediaMetadata?.title)
+                prefs.edit().putBoolean("session_metadata_lyrics", true).apply()
+            }
+            await("System session publishes the same current line after enabling lyrics") {
+                PlaybackService.instance?.player?.mediaMetadata?.title == "Fixture lyric"
+            }
+            main { prefs.edit().putBoolean("session_metadata_lyrics", false).apply() }
+            await("System session restores the song name when lyrics are turned off") {
+                PlaybackService.instance?.player?.mediaMetadata?.title == tracks.first().name
+            }
+            val published = onMain { PlaybackService.instance?.player?.currentMediaItem }
+            main { PlaybackService.mediaLyricFrame = MediaLyricFrame(original = "Next fixture lyric") }
+            SystemClock.sleep(800L)
+            main {
+                val player = requireNotNull(PlaybackService.instance).player
+                assertTrue("Notification lyric changes must not replace the session item", published === player.currentMediaItem)
+                assertEquals(tracks.first().name, player.mediaMetadata.title)
+                assertTrue(player.isPlaying)
+            }
+        } finally {
+            main {
+                PlaybackService.mediaLyricFrame = MediaLyricFrame()
+                prefs.edit().remove("session_metadata_lyrics").apply()
+                app.playback.stopService()
+            }
+            scenario.close()
+        }
+    }
+
+    @Test
     fun linearQueueStagesFirstTrackWithoutPlayingItAtNaturalEnd() {
         val tracks = prepareTracks(gapless = true)
         val scenario = launchQueue(tracks, mode = QueueModes.LINE, startIndex = tracks.lastIndex)
