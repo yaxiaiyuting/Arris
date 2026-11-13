@@ -8,7 +8,19 @@
 
 package com.takahashirinta.ncrust.lyric
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
+import com.takahashirinta.ncrust.testsupport.MemoryPrefs
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -34,6 +46,63 @@ class AmllTtmlClientTest {
     private val songId = 5257138L
     private val urls = AmllTtmlClient.urlsFor(songId)
     private val tt = "<tt xmlns=\"http://www.w3.org/ns/ttml\"><body/></tt>"
+
+    @Test fun playbackJoinsThePreloadEvenIfItsQueueIsCancelled() = runBlocking {
+        val id = 92_000_001L
+        val context = memoryContext()
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val requests = AtomicInteger()
+        val fetcher = TtmlFetcher {
+            if (requests.incrementAndGet() == 1) entered.complete(Unit)
+            release.await()
+            TtmlHttpResult(200, tt)
+        }
+        val preload = async { AmllTtmlClient.prefetch(context, id, fetcher) }
+        withTimeout(5_000L) { entered.await() }
+        val playback = async(start = CoroutineStart.UNDISPATCHED) {
+            AmllTtmlClient.load(context, id, fetcher)
+        }
+        withTimeout(5_000L) {
+            while (AmllTtmlClient.readerCount(id) != 2) delay(5L)
+        }
+        preload.cancelAndJoin()
+        release.complete(Unit)
+
+        assertEquals(tt, withTimeout(5_000L) { playback.await() })
+        assertEquals(1, requests.get())
+        assertEquals(tt, LyricsCache.getTtml(context, id))
+    }
+
+    @Test fun cancellingTheLastReaderReleasesTheFlightForAReplay() = runBlocking {
+        val id = 92_000_002L
+        val context = memoryContext()
+        val entered = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val preload = async {
+            AmllTtmlClient.prefetch(context, id, TtmlFetcher {
+                entered.complete(Unit)
+                try {
+                    awaitCancellation()
+                } finally {
+                    cancelled.complete(Unit)
+                }
+            })
+        }
+        withTimeout(5_000L) { entered.await() }
+        preload.cancelAndJoin()
+        withTimeout(5_000L) { cancelled.await() }
+
+        val retry = FakeFetcher { TtmlHttpResult(200, tt) }
+        assertEquals(tt, withTimeout(5_000L) { AmllTtmlClient.load(context, id, retry) })
+        assertEquals(1, retry.calls.size)
+    }
+
+    private fun memoryContext(): Context = object : ContextWrapper(null) {
+        private val prefs = MemoryPrefs()
+        override fun getApplicationContext(): Context = this
+        override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = prefs
+    }
 
     // ---------- URL 构造 ----------
 

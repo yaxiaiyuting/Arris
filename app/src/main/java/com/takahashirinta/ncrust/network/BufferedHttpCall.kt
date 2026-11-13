@@ -30,7 +30,7 @@ internal suspend fun Call.awaitWarmupResponse() = awaitResponseRead { response -
 }
 
 /** The result owns only memory. The socket is already closed or back in the pool. */
-private suspend fun <T> Call.awaitResponseRead(read: (Response) -> T): T = suspendCancellableCoroutine { cont ->
+internal suspend fun <T> Call.awaitResponseRead(read: (Response) -> T): T = suspendCancellableCoroutine { cont ->
     cont.invokeOnCancellation { cancel() }
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
