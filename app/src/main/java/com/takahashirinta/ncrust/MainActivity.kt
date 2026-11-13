@@ -291,8 +291,7 @@ class MainActivity : ComponentActivity() {
         // **它自己不发起任何请求**，只是拿一个 application context 用来读写缓存；
         // 真正的网络调用只在用户打开歌单页/点刷新时发生（本版不做自动刷新）。
         com.takahashirinta.ncrust.qq.QqPlaylistRepository.init(this)
-        // 冷启动即刻并发启动预热：Home 三条网络 + 封面 Coil 预取。
-        // splash 期间跑完，进入主页时 ContentCache 已就位，无 loader 闪烁。
+        // 先在后台恢复首页快照，再预取网络栏目与封面。
         AppWarmup.start(this)
         // v3.4.13：应用内更新先把上次发现的结果读回来（24 小时窗口内不再联网，
         // 但「用户页横幅 / 导航圆点」必须立刻能显示）。检查本身在 splash 收起后延迟触发。
