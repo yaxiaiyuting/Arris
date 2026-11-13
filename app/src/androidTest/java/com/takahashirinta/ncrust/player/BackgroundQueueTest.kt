@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.takahashirinta.ncrust.MainActivity
 import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.QueueModes
+import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineContent
 import com.takahashirinta.ncrust.cache.OfflineKeys
@@ -129,6 +130,35 @@ class BackgroundQueueTest {
                     service.playingTrackKey()?.id == tracks.first().id && app.playback.queue.index == 0
             }
         } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun logoutRevokesAnAlreadyAttachedSuccessorWithoutStoppingCurrentAudio() {
+        val tracks = prepareTracks(gapless = true)
+        CookieManager.saveCookie(app, "MUSIC_U=local-test; __csrf=local-test")
+        val scenario = launchQueue(tracks)
+        try {
+            await("The old account has a successor attached") {
+                PlaybackService.instance?.let {
+                    it.player.isPlaying && it.playingTrackKey()?.id == tracks.first().id &&
+                        it.player.mediaItemCount == 2
+                } == true
+            }
+            removeTask(scenario)
+            // There is no second valid URL after logout, so a reload cannot mask the old slot.
+            OfflineAudioCache.get(app).removeResource(OfflineKeys.key(tracks[1].id, "higher"))
+            CookieManager.clearCookie(app)
+            await("Logout removes only the successor from Media3") {
+                PlaybackService.instance?.let {
+                    it.player.isPlaying && it.playingTrackKey()?.id == tracks.first().id &&
+                        it.player.mediaItemCount == 1
+                } == true
+            }
+        } finally {
+            CookieManager.clearCookie(app)
             main { app.playback.stopService() }
             scenario.close()
         }

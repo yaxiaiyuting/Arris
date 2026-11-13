@@ -30,6 +30,7 @@ import com.takahashirinta.ncrust.account.PlaybackNoticeTracker
 import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.account.classifyPlayback
+import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
@@ -67,6 +68,7 @@ import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.SongPrivilege
 import com.takahashirinta.ncrust.qq.QqApi
+import com.takahashirinta.ncrust.qq.QqAuthStore
 import com.takahashirinta.ncrust.qq.QqLyricAlignment
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
@@ -421,8 +423,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
 
     // 当前歌的歌曲详情 privilege：降档重试 / 换档重播会重新取链，判定要用同一份权益信息。
     private var lastSongPrivilege: SongPrivilege? = null
-    // 预载时拿到的 privilege：自动接续时不在 playSong 路径上，只能靠槽位里的这份。
-    private var preloadedPrivilege: SongPrivilege? = null
     private val privilegeBySongId = java.util.concurrent.ConcurrentHashMap<Long, SongPrivilege>()
 
     /**
@@ -553,16 +553,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     // 需要充足时间, 20s 碰到慢网络/冷缓存会来不及, 无缝退化成硬切。
     private val PRELOAD_THRESHOLD_MS = 60_000L
 
-    // Metadata for the in-flight preload; applied when ExoPlayer auto-transitions.
-    // All reads/writes happen on the main thread.
-    private var preloadedTitle = ""
-    private var preloadedArtist = ""
-    private var preloadedArtwork = ""
-    // A3：预载结果整体留存 —— 自动切歌时要据此重算音质状态（br/type/songMaxLevel 都要用）。
-    private var preloadedResult: SongUrlResult? = null
-    private var preloadedRequestedLevel = ""
-    /** Identity of the single slot already accepted by the media service. */
-    private var preloadedTrack: TrackKey? = null
     /**
      * v2.1.5：`PlaybackService` 从**真正起播的那一项**反解出的身份，在
      * [PlaybackService.onTrackTransitioned] 里写入、在 `onSongTransitioned` 里消费。
@@ -592,8 +582,19 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     // （服务端给的绝对过期时刻，不是一个时长）。字段与语义与 v3.0.0 逐字相同。
     private val preloadCache = linkedMapOf<TrackKey, PreloadCacheEntry>()
     private val CACHE_TTL_MS = PreloadCachePolicy.DEFAULT_TTL_MS
-    private class PreloadRequest(val track: TrackKey)
+    private data class PreloadRequest(val track: TrackKey, val level: String, val account: Long?)
+    private data class PreparedPreload(
+        val request: PreloadRequest,
+        val title: String,
+        val artist: String,
+        val artwork: String,
+        val privilege: SongPrivilege?,
+        val result: SongUrlResult,
+    )
     private var preloading: PreloadRequest? = null
+    private var preparedPreload: PreparedPreload? = null
+    /** An offline miss has no slot, but can be retried when a route becomes available. */
+    private var offlinePreloadMiss: PreloadRequest? = null
 
     /**
      * v3.1.0 · P0-A：开播时的并行辅助腿（歌词 + 封面）。
@@ -721,9 +722,27 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 }
             }
         }
+        viewModelScope.launch(Dispatchers.Main) {
+            CookieManager.loginGenerations.collect { revision ->
+                revalidateAccountPreload(MusicSource.NETEASE, revision)
+            }
+        }
+        viewModelScope.launch(Dispatchers.Main) {
+            QqAuthStore.authRevisions.collect { revision ->
+                revalidateAccountPreload(MusicSource.QQMUSIC, revision)
+            }
+        }
         viewModelScope.launch {
             networkObserver.changes().collectLatest { route ->
-                if (!recovery.networkChanged(route)) return@collectLatest
+                val request = pendingPreloadRequest()
+                val replacePreload = request != null && request.level !=
+                    requestedPreloadLevel(request.track, usesWifi = route.usesWifi)
+                if (replacePreload) invalidatePreload()
+                val recover = recovery.networkChanged(route)
+                if (replacePreload || recover && offlinePreloadMiss != null) {
+                    queue.preloadCurrentSuccessor()
+                }
+                if (!recover) return@collectLatest
                 val revision = playGate.current
                 delay(500L) // Coalesce related default-route callbacks.
                 refreshPlaybackNetwork()
@@ -917,14 +936,15 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             }
             // 服务端上报的是**真正起播那一项**的身份/元数据；只有 AUTO 且没有身份时
             // 才退回本地预载槽位（老形状/无 id 项的兼容路径）。
-            val nextTrack = transitionedTrack ?: if (auto) preloadedTrack else null
+            val prepared = preparedPreload
+            val nextTrack = transitionedTrack ?: if (auto) prepared?.request?.track else null
             val nextTitle = transitionedTitle.takeIf { it.isNotBlank() }
-                ?: if (auto) preloadedTitle else ""
+                ?: if (auto) prepared?.title.orEmpty() else ""
             val nextArtist = transitionedArtist.takeIf { it.isNotBlank() }
-                ?: if (auto) preloadedArtist else ""
+                ?: if (auto) prepared?.artist.orEmpty() else ""
             val nextArtwork = transitionedArtwork.takeIf { it.isNotBlank() }
-                ?: if (auto) preloadedArtwork else currentSongArtwork.value.orEmpty()
-            val wasPreloaded = nextTrack != null && nextTrack == preloadedTrack
+                ?: if (auto) prepared?.artwork.orEmpty() else currentSongArtwork.value.orEmpty()
+            val usedPreload = prepared?.takeIf { it.request.track == nextTrack }
 
             if (nextTrack != null && nextTrack.id > 0L) {
                 // v3.7.9 · J07：身份落定与「是否换歌」**解耦**。
@@ -948,10 +968,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     currentSongArtist.value = nextArtist.ifBlank { currentSongArtist.value.orEmpty() }
                     currentSongArtwork.value = nextArtwork
                     currentBitrate.value = 0L
-                    lastSongPrivilege = if (wasPreloaded) preloadedPrivilege else privilegeBySongId[nextTrack.id]
-                    if (wasPreloaded) {
-                        lastRequestedLevel = preloadedRequestedLevel
-                        preloadedResult?.let { applyQualityVerdict(lastRequestedLevel, it) }
+                    lastSongPrivilege = if (usedPreload != null) usedPreload.privilege else privilegeBySongId[nextTrack.id]
+                    if (usedPreload != null) {
+                        lastRequestedLevel = usedPreload.request.level
+                        applyQualityVerdict(lastRequestedLevel, usedPreload.result)
                     }
                     // 每次真正换歌都按 tracker 还原试听标记：手动起播 / 车机 / 预载
                     // 三条路径共用同一份记录，完整歌曲会把上一首的 true 清掉。
@@ -980,7 +1000,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     recovery.begin(wanted = livePlayer?.playWhenReady == true)
                     recovery.resolved()
                 }
-                clearPreloadedState()
+                preparedPreload = null
+                offlinePreloadMiss = null
                 needsPreload = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
                 beginListening(nextTrack.id, restart = auto && !changed)
@@ -1282,8 +1303,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      * 读取当前**生效的偏好档位**：设置页 wifi_quality / mobile_quality 按当前网络二选一。
      * 统一入口，避免设置页、播放路径、预载路径各写一份（Bug1 根因之一）。
      */
-    private fun effectivePreferredLevel(prefs: SharedPreferences): String =
-        if (isOnWifi()) qualityApiLevels.getOrElse(prefs.getInt("wifi_quality", 3)) { "lossless" }
+    private fun effectivePreferredLevel(prefs: SharedPreferences, usesWifi: Boolean = isOnWifi()): String =
+        if (usesWifi) qualityApiLevels.getOrElse(prefs.getInt("wifi_quality", 3)) { "lossless" }
         else qualityApiLevels.getOrElse(prefs.getInt("mobile_quality", 1)) { "higher" }
 
     /**
@@ -1396,8 +1417,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     }
 
     private fun qualityAccountRevision(source: MusicSource): Long? = when (source) {
-        MusicSource.NETEASE -> com.takahashirinta.ncrust.auth.CookieManager.snapshot().loginGeneration
-        MusicSource.QQMUSIC -> com.takahashirinta.ncrust.qq.QqAuthStore.currentAuthRevision()
+        MusicSource.NETEASE -> CookieManager.snapshot().loginGeneration
+        MusicSource.QQMUSIC -> QqAuthStore.currentAuthRevision()
         else -> null
     }
 
@@ -1791,7 +1812,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         // 缓存条目带档位:播放失败降档重试时,绝不会把上一档(可能已证明播不出声)的 URL 原样喂回。
         val cachedEntry = freshPreload(track, selectedQuality)
         if (cachedEntry != null) {
-            clearPreloadedState()
             val cachedResult = cachedEntry.asResult()
             val entitlement = classifyEntitlement(track.source, cachedResult, selectedQuality, effectivePrivilege)
             when (entitlement?.let(::actionFor)) {
@@ -1913,8 +1933,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     }
                     return@launch
                 }
-                // setMediaItem 会替换整个播放列表，槽位随之作废。
-                clearPreloadedState()
                 // v3.1.0 · P0-A：取词与封面已在本函数开头并行发起（startAuxiliaryLoad），
                 // 这里**只**替换播放列表。原先那两行（reset + launch）留在这里的含义是
                 // 「等取链回来再开始取词」—— 那正是本版要拆掉的串行。
@@ -2288,14 +2306,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     }
 
     /**
-     * 清空「待播槽位」的本地镜像（preloaded*），与 PlaybackService.clearPendingNext 成对。
-     *
-     * 任何一次**替换 ExoPlayer 播放列表**的开播动作都必须调用它（playSong 两条路径、
-     * stopService）。否则残留的待播身份 会同时造成两个后果：
-     *  1. preloadNextSong 误判「这首已经在槽位里」而不再预载 → 无缝播放静默失效；
-     *  2. onSongTransitioned 把一首并不在播放列表里的歌当成已切歌 → 串台。
-     */
-    /**
      * v3.1.0 · P0-A：开播时的**并行辅助腿** —— 歌词 + 封面，与取链同时跑。
      *
      * 三件事都在这里定死，不在调用点各写一遍：
@@ -2367,19 +2377,29 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         preloadJob?.cancel()
         preloadJob = null
         preloading = null
-        clearPreloadedState()
+        preparedPreload = null
+        offlinePreloadMiss = null
         PlaybackService.instance?.discardPreload()
     }
 
-    private fun clearPreloadedState() {
-        preloadedTitle = ""
-        preloadedArtist = ""
-        preloadedArtwork = ""
-        preloadedResult = null
-        preloadedRequestedLevel = ""
-        preloadedPrivilege = null
-        preloadedTrack = null
+    private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: offlinePreloadMiss
+
+    private fun revalidateAccountPreload(source: MusicSource, revision: Long) {
+        val request = pendingPreloadRequest() ?: return
+        if (request.track.source != source || request.account == revision) return
+        invalidatePreload()
+        queue.preloadCurrentSuccessor()
     }
+
+    private fun requestedPreloadLevel(track: TrackKey, usesWifi: Boolean = isOnWifi()): String =
+        qualityCeiling.effectiveRequest(
+            preferred = effectivePreferredLevel(
+                getApplication<Application>().getSharedPreferences("ncrust_settings", 0), usesWifi,
+            ),
+            key = track.tag,
+            ladderLowToHigh = qualityApiLevels,
+            nowMs = System.currentTimeMillis(),
+        )
 
     private fun freshPreload(track: TrackKey, quality: String, throughMs: Long = 0L): PreloadCacheEntry? =
         preloadCache[track]?.takeIf {
@@ -2404,9 +2424,19 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val owner = currentTrack ?: return
         val nextTrack = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         if (!allowCurrent && nextTrack == owner) return
+        val quality = requestedPreloadLevel(nextTrack)
+        val account = qualityAccountRevision(nextTrack.source)
+        val request = PreloadRequest(nextTrack, quality, account)
+        if (preloading == request) return
+
+        val untilTransition = (duration.value - currentPosition.value).coerceIn(0L, PRELOAD_THRESHOLD_MS)
+        val cached = freshPreload(nextTrack, quality, throughMs = untilTransition)
+        val attached = preparedPreload
+        if (attached?.request == request && cached != null) return
+        if (attached != null) invalidatePreload()
+
         val service = PlaybackService.instance
         if (service?.playingTrackKey() == owner && artworkUrl.isNotBlank()) service.prepareNextArtwork(artworkUrl)
-        if (preloading?.track == nextTrack) return
 
         val effectivePrivilege = privilege ?: privilegeBySongId[songId]
         if (privilege != null) {
@@ -2415,21 +2445,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
 
         val app = getApplication<Application>()
-        val quality = qualityCeiling.effectiveRequest(
-            preferred = effectivePreferredLevel(app.getSharedPreferences("ncrust_settings", 0)),
-            key = nextTrack.tag,
-            ladderLowToHigh = qualityApiLevels,
-            nowMs = System.currentTimeMillis(),
-        )
-        val untilTransition = (duration.value - currentPosition.value).coerceIn(0L, PRELOAD_THRESHOLD_MS)
-        val cached = freshPreload(nextTrack, quality, throughMs = untilTransition)
-        if (nextTrack == preloadedTrack && cached != null) return
         val version = playGate.current
-        val account = qualityAccountRevision(nextTrack.source)
         val queueVersion = com.takahashirinta.ncrust.player.preloadGeneration
         val queueRevision = queueVersion.current()
-        val request = PreloadRequest(nextTrack)
         preloadJob?.cancel()
+        offlinePreloadMiss = null
         preloading = request
         preloadJob = viewModelScope.launch {
             try {
@@ -2453,10 +2473,15 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 }
                 val result = cached?.asResult() ?: withContext(Dispatchers.IO) {
                     fetchUrlOfflineFirst(songRefOf(nextTrack.source, songId, sourceId, mediaId), quality).result
-                } ?: return@launch
+                }
                 if (!playGate.isCurrent(version) || !queueVersion.accepts(queueRevision) ||
-                    account != qualityAccountRevision(nextTrack.source)
+                    account != qualityAccountRevision(nextTrack.source) ||
+                    quality != requestedPreloadLevel(nextTrack)
                 ) return@launch
+                if (result == null) {
+                    if (!NetworkAvailability.isOnline(app)) offlinePreloadMiss = request
+                    return@launch
+                }
                 val entitlement = classifyEntitlement(nextTrack.source, result, quality, effectivePrivilege)
                 if (entitlement != null && actionFor(entitlement) != EntitlementAction.PLAY) return@launch
                 if (cached == null) {
@@ -2479,13 +2504,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     )
                 ) return@launch
                 if (entitlement != null) recordTrialInfo(songId, entitlement)
-                preloadedTitle = title
-                preloadedArtist = artist
-                preloadedArtwork = artworkUrl
-                preloadedResult = result
-                preloadedRequestedLevel = quality
-                preloadedPrivilege = effectivePrivilege
-                preloadedTrack = nextTrack
+                preparedPreload = PreparedPreload(request, title, artist, artworkUrl, effectivePrivilege, result)
                 val command = com.takahashirinta.ncrust.player.PlaybackCommands.intent(app).apply {
                     putExtra("action", "preload_next")
                     putExtra("preloadRevision", queueRevision)
@@ -3154,7 +3173,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         app.startService(intent)
         isPlaying.value = false
-        clearPreloadedState()
         resetLyricsForNewSong()
         // v3.7.9 · J07：停止后必须清掉「实际在播身份」。否则 StatsRecorder 的
         // `playingTrackKey ?: currentTrackKey` 会一直拿到这条旧身份，把后续（重新开播的
