@@ -2224,13 +2224,11 @@ private fun MainScreen(
                                 navController.navigate(NavRoutes.song(detail.id))
                                 return@withContext
                             }
-                            playerViewModel.invalidatePreload()
                             playbackQueue = listOf(detail)
                             currentQueueIndex = 0
                             queue.resetShuffle()
                             queue.saveQueue(replan = false)
-                            val (t, a, w) = songParams(detail)
-                            playerViewModel.prepareSongWithoutPlay(detail.id, t, a, w)
+                            playerViewModel.prepareSongWithoutPlay(detail)
                         }
                     }
                 }

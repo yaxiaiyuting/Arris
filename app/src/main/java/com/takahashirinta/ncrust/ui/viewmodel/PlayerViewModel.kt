@@ -98,6 +98,7 @@ import com.takahashirinta.ncrust.player.resolveFailureAction
 import com.takahashirinta.ncrust.player.resolveFailureTextFor
 import com.takahashirinta.ncrust.player.PlaybackStateManager
 import com.takahashirinta.ncrust.player.PlaybackQueueController
+import com.takahashirinta.ncrust.player.songParams
 import com.takahashirinta.ncrust.stats.StatsRecorder
 import com.takahashirinta.ncrust.player.PreloadCacheEntry
 import com.takahashirinta.ncrust.player.PreloadCachePolicy
@@ -3040,32 +3041,41 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         viewModelScope.launch { fetchLyrics(track) }
     }
 
-    /**
-     * 只载入歌曲元数据, 不取链不播放(剪贴板分享的单曲场景)。
-     * 之后用户按下播放键 → togglePlayPause 检测到 duration==0 且 songId>0,
-     * 自动走全量 playSong 路径开播。
-     */
-    fun prepareSongWithoutPlay(songId: Long, title: String, artist: String, artworkUrl: String) {
+    /** Select the track now and resolve its audio only when Play is pressed. */
+    internal fun prepareSongWithoutPlay(song: SongItem) {
+        queue.cancelPendingSelection()
         invalidatePlaybackIntent()
-        latestPlaySongId = songId
-        resetLyricsForNewSong()
-        // v2.1.5：身份必须与 currentSongId 同步落下（旧代码只写 id，音源留在上一首上）。
-        val track = TrackKey.of(null, songId)
+        invalidatePreload()
+        needsPreload = false
+        latestRetryRequest = null
+        val track = TrackKey.ofSong(song)
+        val (title, artist, artworkUrl) = songParams(song)
+        PlaybackService.instance?.stagePausedSelection(track, title, artist, artworkUrl)
+        playingIdentity.clear()
         currentTrack = track
+        latestPlaySongId = track.id
+        lastSongPrivilege = song.privilege
+        lastVerdictResult = null
+        currentIsTrial.value = false
+        currentContentKnown = false
+        currentQualityIndex.value = preferredQualityIndex.value
+        qualityStatus.value = QualityStatus.NORMAL
+        currentBitrate.value = 0L
+        resumedFromMs.value = 0L
+        resetLyricsForNewSong()
         lyricCoordinator.onTrackChanged(track)
-        currentSongId.value = songId
+        currentSongId.value = track.id
         currentSongName.value = title
         currentSongArtist.value = artist
         currentSongArtwork.value = artworkUrl
         queue.showSelection(track)
-        currentPosition.value = 0L
         duration.value = 0L
-        progress.value = 0f
         isPlaying.value = false
-        viewModelScope.launch { fetchLyrics(track) }
         PlaybackStateManager.saveState(
-            getApplication(), songId, title, artist, artworkUrl, false
+            getApplication(), track.id, title, artist, artworkUrl, false,
+            sourceKey = track.source.key, sourceId = track.sourceId, mediaId = track.mediaId,
         )
+        viewModelScope.launch { fetchLyrics(track) }
     }
 
     private fun resumeUnpreparedSelection(): Boolean {
@@ -3104,17 +3114,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
 
     internal fun replayCurrent() {
         PlaybackService.instance?.replayEndedItem()
-    }
-
-    /** 仅暂停播放,保留当前歌曲与队列(LINE 模式队尾停用)。 */
-    fun pausePlayback() {
-        queue.cancelPendingSelection()
-        invalidatePlaybackIntent()
-        isPlaying.value = false
-        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
-            putExtra("action", "pause")
-        }
-        getApplication<Application>().startService(intent)
     }
 
     fun seekTo(position: Long) {

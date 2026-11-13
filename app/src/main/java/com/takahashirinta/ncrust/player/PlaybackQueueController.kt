@@ -379,7 +379,7 @@ internal class PlaybackQueueController(
                     index = 0
                     currentSong = songs.first()
                     saveCursor()
-                    player.pausePlayback()
+                    player.prepareSongWithoutPlay(songs.first())
                 }
             QueueModes.INFINITY -> if (index < songs.lastIndex) playAt(index + 1, origin, defer = defer)
                 else extendQueue(origin)

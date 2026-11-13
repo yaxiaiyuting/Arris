@@ -1007,6 +1007,17 @@ class PlaybackService : MediaLibraryService() {
         } else null
     }
 
+    internal fun stagePausedSelection(track: TrackKey, title: String, artist: String, artwork: String) {
+        pendingSelection = null
+        player.pause()
+        player.stop()
+        player.clearMediaItems()
+        if (artwork.isNotBlank() && currentArtworkUrl != artwork) clearCurrentArtwork()
+        updateTrackMetadata(track, title, artist, artwork)
+        LiveUpdateNotifier.cancel(this)
+        if (isServiceStarted) updateNotify() else pushWidgetUpdate()
+    }
+
     /** Media3 prepares the following item when the current stream is not loading. */
     internal fun setGaplessPreloadEnabled(enabled: Boolean) {
         val config = if (enabled) queuePreload else ExoPlayer.PreloadConfiguration.DEFAULT
@@ -1080,25 +1091,28 @@ class PlaybackService : MediaLibraryService() {
             intent.getStringExtra("mediaId"),
         ) ?: return false
         pendingSelection = null
-        intent.getStringExtra("title")?.let { mediaTitle = it }
-        intent.getStringExtra("artist")?.let { mediaArtist = it }
-        mediaSongId = identity.id
-        mediaSourceKey = identity.source.key
-        mediaSourceId = identity.sourceId
-        mediaMediaId = identity.mediaId
-
-        val artwork = intent.getStringExtra("artwork")
-        if (artwork.isNullOrBlank()) clearCurrentArtwork()
-        else {
-            currentArtworkUrl = artwork
-            loadArtwork(artwork, takePreparedArtwork(artwork))
-        }
+        updateTrackMetadata(identity, intent.getStringExtra("title"), intent.getStringExtra("artist"),
+            intent.getStringExtra("artwork"))
 
         val startPlaying = intent.getBooleanExtra("startPlaying", true)
         persistPlaybackState(startPlaying)
         playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
         if (!isServiceStarted) updateNotify()
         return true
+    }
+
+    private fun updateTrackMetadata(track: TrackKey, title: String?, artist: String?, artwork: String?) {
+        title?.let { mediaTitle = it }
+        artist?.let { mediaArtist = it }
+        mediaSongId = track.id
+        mediaSourceKey = track.source.key
+        mediaSourceId = track.sourceId
+        mediaMediaId = track.mediaId
+        if (artwork.isNullOrBlank()) clearCurrentArtwork()
+        else {
+            currentArtworkUrl = artwork
+            loadArtwork(artwork, takePreparedArtwork(artwork))
+        }
     }
 
     private fun persistPlaybackState(playing: Boolean) {

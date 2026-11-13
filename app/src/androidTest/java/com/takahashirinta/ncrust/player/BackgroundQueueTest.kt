@@ -38,6 +38,103 @@ class BackgroundQueueTest {
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
 
     @Test
+    fun linearQueueStagesFirstTrackWithoutPlayingItAtNaturalEnd() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks, mode = QueueModes.LINE, startIndex = tracks.lastIndex)
+        try {
+            awaitPlaying(tracks.last().id)
+            removeTask(scenario)
+            finishCurrentTrack()
+            await("Linear queue stops and selects its first track") {
+                app.playback.queue.index == 0 && !app.playback.isPlaying.value
+            }
+            main {
+                assertEquals(tracks.first().id, app.playback.currentSongId.value)
+                assertEquals(tracks.first().id, PlaybackStateManager.getState(app)?.songId)
+                assertEquals(tracks.first().id, PlaybackService.mediaSongId)
+                assertFalse(requireNotNull(PlaybackService.instance).hasPlayableItem())
+                app.startService(PlaybackCommands.intent(app).putExtra("action", "resume"))
+            }
+            awaitPlaying(tracks.first().id)
+        } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun manualNextAtLinearTailClearsTheStoppedTrackProgress() {
+        val tracks = prepareTracks(gapless = false)
+        val scenario = launchQueue(tracks, mode = QueueModes.LINE, startIndex = tracks.lastIndex)
+        try {
+            awaitPlaying(tracks.last().id)
+            main {
+                requireNotNull(PlaybackService.instance).player.seekTo(10_000L)
+                app.playback.queue.skip(forward = true)
+                assertEquals(tracks.first().id, app.playback.currentSongId.value)
+                assertEquals(0L, app.playback.currentPosition.value)
+                assertEquals(0L, app.playback.duration.value)
+                assertFalse(app.playback.isPlaying.value)
+            }
+        } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun shuffleKeepsItsPlannedSuccessorAtTheRoundBoundary() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks, mode = QueueModes.SHUFFLE)
+        try {
+            awaitPlaying(tracks.first().id)
+            val round = onMain { app.playback.queue.shuffleOrder.toList() }
+            assertEquals(tracks.indices.toSet(), round.toSet())
+            removeTask(scenario)
+            for (next in round.drop(1)) {
+                finishCurrentTrack()
+                awaitPlaying(tracks[next].id)
+            }
+            val last = round.last()
+            await("The next round is already in Media3") {
+                app.playback.queue.shufflePosition == round.lastIndex &&
+                    PlaybackService.instance?.player?.mediaItemCount == 2
+            }
+            finishCurrentTrack()
+            await("The next round starts at the item after the previous round's last track") {
+                val queue = app.playback.queue
+                val service = PlaybackService.instance ?: return@await false
+                queue.shufflePosition == 1 && queue.shuffleOrder.firstOrNull() == last &&
+                    queue.index == queue.shuffleOrder[1] && queue.index != last &&
+                    service.player.isPlaying && service.playingTrackKey()?.id == tracks[queue.index].id
+            }
+        } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun singleTrackRepeatsAfterRemovalWithoutAnAttachedPreload() {
+        val tracks = prepareTracks(gapless = false)
+        val scenario = launchQueue(tracks, mode = QueueModes.SINGLE)
+        try {
+            awaitPlaying(tracks.first().id)
+            removeTask(scenario)
+            finishCurrentTrack()
+            await("Single track is playing again from the beginning") {
+                val service = PlaybackService.instance ?: return@await false
+                val player = service.player
+                player.isPlaying && player.currentPosition in 100L..2_000L &&
+                    service.playingTrackKey()?.id == tracks.first().id && app.playback.queue.index == 0
+            }
+        } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
     fun removingTaskDuringCurrentSelectionKeepsForegroundService() {
         val tracks = prepareTracks(gapless = false)
         val scenario = launchQueue(tracks)
@@ -73,12 +170,7 @@ class BackgroundQueueTest {
                         service.player.mediaItemCount == if (gapless) 2 else 1
                 } == true
             }
-            scenario.onActivity { it.finishAndRemoveTask() }
-            val until = SystemClock.elapsedRealtime() + 8_000L
-            while (scenario.state != Lifecycle.State.DESTROYED &&
-                SystemClock.elapsedRealtime() < until
-            ) SystemClock.sleep(50)
-            assertEquals(Lifecycle.State.DESTROYED, scenario.state)
+            removeTask(scenario)
             main { assertEquals(tracks[0].id, PlaybackService.instance?.playingTrackKey()?.id) }
 
             finishCurrentTrack()
@@ -113,14 +205,23 @@ class BackgroundQueueTest {
         }
     }
 
-    private fun launchQueue(tracks: List<SongItem>) =
+    private fun launchQueue(tracks: List<SongItem>, mode: Int = QueueModes.CYCLE, startIndex: Int = 0) =
         ActivityScenario.launch(MainActivity::class.java).also { scenario ->
             scenario.onActivity {
                 val queue = app.playback.queue
-                while (queue.mode != QueueModes.CYCLE) queue.cycleMode()
-                queue.replaceAndPlay(tracks, enterFm = false, startIndex = 0)
+                while (queue.mode != mode) queue.cycleMode()
+                queue.replaceAndPlay(tracks, enterFm = false, startIndex = startIndex)
             }
         }
+
+    private fun removeTask(scenario: ActivityScenario<MainActivity>) {
+        scenario.onActivity { it.finishAndRemoveTask() }
+        val until = SystemClock.elapsedRealtime() + 8_000L
+        while (scenario.state != Lifecycle.State.DESTROYED &&
+            SystemClock.elapsedRealtime() < until
+        ) SystemClock.sleep(50)
+        assertEquals(Lifecycle.State.DESTROYED, scenario.state)
+    }
 
     private fun cacheSilence(songId: Long) {
         val silence = app.assets.open("playback-regression-silence.wav").use { it.readBytes() }
@@ -163,6 +264,12 @@ class BackgroundQueueTest {
 
     private fun main(action: () -> Unit) {
         instrumentation.runOnMainSync { action() }
+    }
+
+    private fun <T> onMain(action: () -> T): T {
+        val result = java.util.concurrent.FutureTask(action)
+        instrumentation.runOnMainSync(result)
+        return result.get()
     }
 
     private fun await(description: String, condition: () -> Boolean) {
