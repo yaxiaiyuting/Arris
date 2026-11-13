@@ -1140,10 +1140,6 @@ private fun MainScreen(
     val nextItemHolder = androidx.compose.runtime.remember {
         androidx.compose.runtime.mutableStateOf<SongItem?>(null)
     }
-    /** 成员侧：把房主的下一首追加进本机队列（起播入口在上面）。 */
-    val appendNextHolder = androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<((SongItem) -> Unit)?>(null)
-    }
     androidx.compose.runtime.DisposableEffect(playerViewModel) {
         val session = com.takahashirinta.ncrust.listen.TogetherSession
         var followJob: Job? = null
@@ -1246,6 +1242,7 @@ private fun MainScreen(
                 val request = candidate?.let { snapshot.followGeneration to it }
                 if (request == nextRequest) return
                 nextJob?.cancel()
+                playerViewModel.queue.setRoomSuccessor(snapshot.followGeneration, owner, null)
                 nextRequest = request
                 if (candidate == null || candidate == owner) return
                 val playbackEpoch = com.takahashirinta.ncrust.player.playRequestGeneration.current
@@ -1263,7 +1260,7 @@ private fun MainScreen(
                         com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(playbackEpoch) &&
                         com.takahashirinta.ncrust.player.PlaybackService.instance?.playingTrackKey() == owner
                     ) {
-                        appendNextHolder.value?.invoke(next)
+                        playerViewModel.queue.setRoomSuccessor(snapshot.followGeneration, owner, next)
                     } else if (nextRequest == request) {
                         nextRequest = null
                     }
@@ -1277,6 +1274,9 @@ private fun MainScreen(
                     nextJob?.cancel()
                     nextRequest = null
                     resolvedLocal = null
+                    playerViewModel.currentTrackKey?.let { owner ->
+                        playerViewModel.queue.setRoomSuccessor(snapshot.followGeneration, owner, null)
+                    }
                 }
                 activeFollow = snapshot
                 val requested = snapshot.songId?.let { TrackKey.of(snapshot.sourceKey, it) }
@@ -1798,12 +1798,6 @@ private fun MainScreen(
             .coerceAtLeast(0)
         if (playMode == QueueModes.SHUFFLE) queue.reshuffle()
         queue.saveQueue()
-    }
-
-    // 桥接层拿到「把一首歌追加到队尾」的入口（一起听同步下一首用）。
-    // 必须放在 appendToQueue 定义之后：Kotlin 的局部函数不能先用后声明。
-    androidx.compose.runtime.SideEffect {
-        appendNextHolder.value = { song -> insertNext(song) }
     }
 
     fun replaceQueueAndPlay(songs: List<SongItem>, enterFm: Boolean = false, startIndex: Int = 0) {

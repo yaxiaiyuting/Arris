@@ -1026,6 +1026,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     internal fun enqueuePreload(intent: Intent) {
+        val room = intent.getLongExtra("roomGeneration", -1L).takeIf { intent.hasExtra("roomGeneration") }
+        if (!com.takahashirinta.ncrust.listen.TogetherSession.memberPlayback.value.allowsPreload(room)) return
         val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
         if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return
         val nextUrl = intent.getStringExtra("url") ?: return

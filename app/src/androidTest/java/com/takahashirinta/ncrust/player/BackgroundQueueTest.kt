@@ -18,8 +18,12 @@ import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineContent
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
+import com.takahashirinta.ncrust.listen.TogetherSession
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.source.TrackKey
+import java.net.InetAddress
+import java.net.ServerSocket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -162,6 +166,78 @@ class BackgroundQueueTest {
             main { app.playback.stopService() }
             scenario.close()
         }
+    }
+
+    @Test
+    fun aMemberWithoutItsScreenDoesNotAdvanceThroughTheLocalQueue() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks)
+        try {
+            await("First track has a local successor attached") {
+                PlaybackService.instance?.let {
+                    it.player.isPlaying && it.playingTrackKey()?.id == tracks.first().id &&
+                        it.player.mediaItemCount == 2
+                } == true
+            }
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { room ->
+                room.soTimeout = 3_000
+                assertTrue(TogetherSession.joinLan("127.0.0.1:${room.localPort}"))
+                room.accept().use {
+                    removeTask(scenario)
+                    finishCurrentTrack()
+                    await("Member waits at the current track's end") {
+                        PlaybackService.instance?.let { service ->
+                            service.player.playbackState == Player.STATE_ENDED &&
+                                service.playingTrackKey()?.id == tracks.first().id
+                        } == true
+                    }
+                }
+            }
+        } finally {
+            TogetherSession.leave()
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    @Test
+    fun closingRoomDropsItsUnplayedSuccessorAndRestoresTheLocalQueue() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks)
+        try {
+            awaitPlaying(tracks.first().id)
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { room ->
+                room.soTimeout = 3_000
+                assertTrue(TogetherSession.joinLan("127.0.0.1:${room.localPort}"))
+                room.accept().use {
+                    val generation = requireNotNull(TogetherSession.memberPlayback.value.generation)
+                    val roomTrack = tracks.last().copy(id = 961_004L, name = "房间测试 961004")
+                    cacheSilence(roomTrack.id)
+                    main {
+                        app.playback.queue.setRoomSuccessor(generation, TrackKey.ofSong(tracks.first()), roomTrack)
+                    }
+                    await("Member preloads the room's next track without saving it to the local queue") {
+                        pendingTrackId() == roomTrack.id && app.playback.queue.songs.none { it.id == roomTrack.id }
+                    }
+                }
+                await("The LAN host closed and the original local successor is attached") {
+                    !TogetherSession.connected && pendingTrackId() == tracks[1].id
+                }
+                finishCurrentTrack()
+                awaitPlaying(tracks[1].id)
+            }
+        } finally {
+            TogetherSession.leave()
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    private fun pendingTrackId(): Long? {
+        val player = PlaybackService.instance?.player ?: return null
+        val next = player.currentMediaItemIndex + 1
+        if (next >= player.mediaItemCount) return null
+        return TrackKey.fromMediaId(player.getMediaItemAt(next).mediaId)?.id
     }
 
     @Test

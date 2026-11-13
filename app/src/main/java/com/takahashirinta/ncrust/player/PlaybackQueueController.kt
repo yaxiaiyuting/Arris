@@ -48,6 +48,7 @@ internal class PlaybackQueueController(
     private var extensionJob: Job? = null
     private var extension: Extension? = null
     private var pendingTransition: Transition? = null
+    private var roomSuccessor: RoomSuccessor? = null
     private var shuffleKeysFor: List<SongItem>? = null
     private var shuffleKeys: Lazy<List<String>>? = null
 
@@ -59,7 +60,13 @@ internal class PlaybackQueueController(
         var startOrigin: PlayOrigin?,
     )
 
-    private data class Transition(val auto: Boolean, val track: TrackKey?, val epoch: Int)
+    private data class Transition(
+        val auto: Boolean,
+        val track: TrackKey?,
+        val epoch: Int,
+        val playedRoomSuccessor: SongItem?,
+    )
+    private data class RoomSuccessor(val generation: Long, val owner: TrackKey, val song: SongItem)
 
     fun restore() {
         val initialSongs = songs
@@ -89,7 +96,7 @@ internal class PlaybackQueueController(
                 currentSong = selected
             }
             if (index != savedIndex) saveCursor() else saveShuffle()
-            preloadItem(preloadIndex())
+            preloadCurrentSuccessor()
         }
     }
 
@@ -140,6 +147,7 @@ internal class PlaybackQueueController(
         extensionJob?.cancel()
         extension = null
         pendingTransition = null
+        roomSuccessor = null
         player.invalidatePreload()
         songs = emptyList()
         index = -1
@@ -183,16 +191,45 @@ internal class PlaybackQueueController(
 
     fun preloadItem(index: Int, allowCurrent: Boolean = mode == QueueModes.SINGLE): Boolean {
         val song = songs.getOrNull(index) ?: return false
-        val (title, artist, artwork) = songParams(song)
-        player.preloadNextSong(
-            song.id, title, artist, artwork, allowCurrent,
-            song.source, song.sourceId, song.mediaId, song.privilege,
-        )
+        preloadSong(song, allowCurrent)
         return true
     }
 
+    private fun preloadSong(song: SongItem, allowCurrent: Boolean, roomGeneration: Long? = null) {
+        val (title, artist, artwork) = songParams(song)
+        player.preloadNextSong(
+            song.id, title, artist, artwork, allowCurrent,
+            song.source, song.sourceId, song.mediaId, song.privilege, roomGeneration,
+        )
+    }
+
     fun preloadCurrentSuccessor() {
+        val follow = TogetherSession.memberPlayback.value
+        if (follow.generation != null) {
+            val next = roomSuccessor?.takeIf {
+                follow.allowsPreload(it.generation) && it.owner == player.currentTrackKey
+            } ?: return
+            preloadSong(next.song, allowCurrent = false, roomGeneration = next.generation)
+            return
+        }
         preloadItem(preloadIndex())
+    }
+
+    /** A proposed room track belongs to the room until Media3 actually starts it. */
+    fun setRoomSuccessor(generation: Long, owner: TrackKey, song: SongItem?) {
+        if (!TogetherSession.memberPlayback.value.allowsPreload(generation)) return
+        if (song != null && PlaybackService.instance?.playingTrackKey() != owner) return
+        val next = song?.let { RoomSuccessor(generation, owner, it) }
+        if (next == roomSuccessor) return
+        roomSuccessor = next
+        player.invalidatePreload()
+        if (next != null) preloadCurrentSuccessor()
+    }
+
+    fun onMemberPlaybackChanged(follow: TogetherSession.MemberPlayback) {
+        roomSuccessor?.let { if (!follow.allowsPreload(it.generation)) roomSuccessor = null }
+        val service = PlaybackService.instance ?: return
+        if (service.player.isPlaying || service.isActivelyBuffering()) preloadCurrentSuccessor()
     }
 
     private fun applyMode(value: Int, replan: Boolean) {
@@ -202,7 +239,7 @@ internal class PlaybackQueueController(
         PlaybackStateManager.savePlayMode(context, value)
         if (value == QueueModes.SHUFFLE) reshuffle() else resetShuffle()
         saveShuffle()
-        if (replan) preloadItem(preloadIndex())
+        if (replan) preloadCurrentSuccessor()
     }
 
     fun cycleMode() {
@@ -290,8 +327,10 @@ internal class PlaybackQueueController(
         )
     }
 
-    fun onMediaTransition(auto: Boolean, track: TrackKey?) {
-        pendingTransition = Transition(auto, track, playRequestGeneration.current)
+    fun onMediaTransition(auto: Boolean, track: TrackKey?, room: Long?) {
+        val played = roomSuccessor?.takeIf { room == it.generation && track == QueueKeys.keyOf(it.song) }
+        if (played != null) roomSuccessor = null
+        pendingTransition = Transition(auto, track, playRequestGeneration.current, played?.song)
         // Apply playlist changes after Media3 has left its listener.
         scope.launch(Dispatchers.Main) {
             if (reconcileTransition()) preloadOrExtendQueue()
@@ -301,7 +340,19 @@ internal class PlaybackQueueController(
     private fun reconcileTransition(): Boolean {
         val transition = pendingTransition ?: return false
         pendingTransition = null
-        if (songs.isEmpty() || selections.hasPending || !playRequestGeneration.isCurrent(transition.epoch)) return false
+        if (selections.hasPending || !playRequestGeneration.isCurrent(transition.epoch)) return false
+        transition.playedRoomSuccessor?.let { next ->
+            val plan = QueueKeys.planPlayItem(songs, index, next)
+            songs = plan.queue
+            index = plan.playIndex
+            currentSong = songs[index]
+            if (mode == QueueModes.SHUFFLE) {
+                if (plan.queueChanged) reshuffle() else alignShuffle(usePendingRound = false)
+            }
+            if (plan.queueChanged) saveQueue(replan = false) else saveCursor()
+            return true
+        }
+        if (songs.isEmpty()) return false
         val mapped = indexOf(transition.track)
         if (mapped >= 0) {
             index = mapped
@@ -324,7 +375,7 @@ internal class PlaybackQueueController(
     }
 
     fun onPlaybackEnded() {
-        if (selections.hasPending || TogetherSession.memberWithoutPlaybackSource()) return
+        if (selections.hasPending || TogetherSession.memberPlayback.value.generation != null) return
         reconcileTransition()
         val playing = PlaybackService.instance?.playingTrackKey()
         if (playing != null && songs.isNotEmpty()) {
@@ -343,7 +394,7 @@ internal class PlaybackQueueController(
     }
 
     fun canSkipUnplayable(roomGeneration: Long?): Boolean =
-        roomGeneration == null && !TogetherSession.memberWithoutPlaybackSource() &&
+        roomGeneration == null && TogetherSession.memberPlayback.value.generation == null &&
             songs.isNotEmpty() && mode != QueueModes.SINGLE
 
     fun onUnplayable() {
@@ -399,7 +450,10 @@ internal class PlaybackQueueController(
     }
 
     fun preloadOrExtendQueue() {
-        if (TogetherSession.memberWithoutPlaybackSource()) return
+        if (TogetherSession.memberPlayback.value.generation != null) {
+            preloadCurrentSuccessor()
+            return
+        }
         if (!preloadItem(preloadIndex()) && mode == QueueModes.INFINITY && index == songs.lastIndex) {
             extendQueue(startOrigin = null)
         }
@@ -431,7 +485,7 @@ internal class PlaybackQueueController(
                     }
                 }
                 if (continuation.isEmpty() || !isCurrent(request) ||
-                    TogetherSession.memberWithoutPlaybackSource()
+                    TogetherSession.memberPlayback.value.generation != null
                 ) return@launch
                 val start = songs.size
                 player.invalidatePreload()

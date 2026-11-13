@@ -31,6 +31,7 @@ import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.account.classifyPlayback
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.listen.TogetherSession
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
@@ -582,7 +583,12 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     // （服务端给的绝对过期时刻，不是一个时长）。字段与语义与 v3.0.0 逐字相同。
     private val preloadCache = linkedMapOf<TrackKey, PreloadCacheEntry>()
     private val CACHE_TTL_MS = PreloadCachePolicy.DEFAULT_TTL_MS
-    private data class PreloadRequest(val track: TrackKey, val level: String, val account: Long?)
+    private data class PreloadRequest(
+        val track: TrackKey,
+        val level: String,
+        val account: Long?,
+        val room: Long?,
+    )
     private data class PreparedPreload(
         val request: PreloadRequest,
         val title: String,
@@ -730,6 +736,18 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         viewModelScope.launch(Dispatchers.Main) {
             QqAuthStore.authRevisions.collect { revision ->
                 revalidateAccountPreload(MusicSource.QQMUSIC, revision)
+            }
+        }
+        viewModelScope.launch(Dispatchers.Main) {
+            TogetherSession.memberPlayback.collect { follow ->
+                pendingPreloadRequest()?.let {
+                    if (!follow.allowsPreload(it.room)) invalidatePreload()
+                }
+                val request = latestRetryRequest
+                if (request?.roomGeneration != null && request.roomGeneration != follow.generation) {
+                    leaveRoomPlayback(request)
+                }
+                queue.onMemberPlaybackChanged(follow)
             }
         }
         viewModelScope.launch {
@@ -945,6 +963,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             val nextArtwork = transitionedArtwork.takeIf { it.isNotBlank() }
                 ?: if (auto) prepared?.artwork.orEmpty() else currentSongArtwork.value.orEmpty()
             val usedPreload = prepared?.takeIf { it.request.track == nextTrack }
+            val preloadRoom = usedPreload?.request?.room
 
             if (nextTrack != null && nextTrack.id > 0L) {
                 // v3.7.9 · J07：身份落定与「是否换歌」**解耦**。
@@ -996,6 +1015,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     latestRetryRequest = RetryRequest(
                         nextTrack, playGate.current, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
                         currentSongArtwork.value.orEmpty(), start, lastSongPrivilege,
+                        roomGeneration = preloadRoom ?: latestRetryRequest?.takeIf { it.track == nextTrack }?.roomGeneration,
+                        startPlaying = livePlayer?.playWhenReady == true,
                     )
                     recovery.begin(wanted = livePlayer?.playWhenReady == true)
                     recovery.resolved()
@@ -1011,7 +1032,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             transitionedTitle = ""
             transitionedArtist = ""
             transitionedArtwork = ""
-            queue.onMediaTransition(auto, nextTrack)
+            queue.onMediaTransition(auto, nextTrack, preloadRoom)
         }
 
         val savedState = PlaybackStateManager.getState(getApplication())
@@ -2384,6 +2405,21 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
 
     private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: offlinePreloadMiss
 
+    private fun leaveRoomPlayback(request: RetryRequest) {
+        invalidatePlaybackIntent()
+        latestRetryRequest = null
+        val service = PlaybackService.instance ?: return
+        if (service.playingTrackKey() != request.track) return
+        val live = service.player
+        latestRetryRequest = request.copy(
+            revision = playGate.current, roomGeneration = null,
+            positionMs = live.currentPosition, startPlaying = live.playWhenReady,
+        )
+        recovery.begin(wanted = live.playWhenReady)
+        recovery.resolved()
+        isBuffering.value = service.isActivelyBuffering()
+    }
+
     private fun revalidateAccountPreload(source: MusicSource, revision: Long) {
         val request = pendingPreloadRequest() ?: return
         if (request.track.source != source || request.account == revision) return
@@ -2419,14 +2455,16 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         mediaId: String? = null,
         // 移植 981e9b3：预载同样要判定试听（否则「直接跳过试听」会被无缝衔接绕过）。
         privilege: SongPrivilege? = null,
+        roomGeneration: Long? = null,
     ) {
         if (!gaplessEnabled || songId <= 0L) return
+        if (!TogetherSession.memberPlayback.value.allowsPreload(roomGeneration)) return
         val owner = currentTrack ?: return
         val nextTrack = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         if (!allowCurrent && nextTrack == owner) return
         val quality = requestedPreloadLevel(nextTrack)
         val account = qualityAccountRevision(nextTrack.source)
-        val request = PreloadRequest(nextTrack, quality, account)
+        val request = PreloadRequest(nextTrack, quality, account, roomGeneration)
         if (preloading == request) return
 
         val untilTransition = (duration.value - currentPosition.value).coerceIn(0L, PRELOAD_THRESHOLD_MS)
@@ -2476,6 +2514,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 }
                 if (!playGate.isCurrent(version) || !queueVersion.accepts(queueRevision) ||
                     account != qualityAccountRevision(nextTrack.source) ||
+                    !TogetherSession.memberPlayback.value.allowsPreload(roomGeneration) ||
                     quality != requestedPreloadLevel(nextTrack)
                 ) return@launch
                 if (result == null) {
@@ -2517,6 +2556,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     putExtra("sourceKey", nextTrack.source.key)
                     putExtra("sourceId", sourceId)
                     putExtra("mediaId", mediaId)
+                    roomGeneration?.let { putExtra("roomGeneration", it) }
                 }
                 liveService.enqueuePreload(command)
             } catch (e: CancellationException) {
