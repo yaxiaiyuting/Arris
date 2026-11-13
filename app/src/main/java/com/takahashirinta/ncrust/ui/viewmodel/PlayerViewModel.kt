@@ -97,6 +97,8 @@ import com.takahashirinta.ncrust.player.maySkipOnUrlFailure
 import com.takahashirinta.ncrust.player.resolveFailureAction
 import com.takahashirinta.ncrust.player.resolveFailureTextFor
 import com.takahashirinta.ncrust.player.PlaybackStateManager
+import com.takahashirinta.ncrust.player.PlaybackQueueController
+import com.takahashirinta.ncrust.stats.StatsRecorder
 import com.takahashirinta.ncrust.player.PreloadCacheEntry
 import com.takahashirinta.ncrust.player.PreloadCachePolicy
 import com.takahashirinta.ncrust.player.PlayReporter
@@ -115,7 +117,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import com.takahashirinta.ncrust.ui.theme.CoverThemeColors
 
-class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+class PlayerViewModel internal constructor(application: Application) : AndroidViewModel(application) {
     val isPlaying = MutableStateFlow(false)
     val currentPosition = MutableStateFlow(0L)
     val duration = MutableStateFlow(0L)
@@ -206,8 +208,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var fontScaleWriteJob: kotlinx.coroutines.Job? = null
 
     val isBuffering = MutableStateFlow(false)
-    // Emits true when the current song enters the preload window (last 20 s).
-    val needsPreload = MutableStateFlow(false)
+    // Checked on the player thread. Each track enters the preload window once.
+    private var needsPreload = false
 
     val currentSongId = MutableStateFlow<Long?>(null)
     val currentSongName = MutableStateFlow<String?>(null)
@@ -243,13 +245,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     /** 当前歌曲的音源（UI 用它画音源标识）。 */
     val currentSource = MutableStateFlow(MusicSource.NETEASE)
 
-    private var onSongEndedCallback: (() -> Unit)? = null
-    private var onSongPreviousCallback: (() -> Unit)? = null
-    private var onSongNextCallback: (() -> Unit)? = null
-    // 参数 = 本次过渡是否为 ExoPlayer 自然衔接（AUTO）。UI 层据此决定「队列索引能不能
-    // 拿模式推断兜底」：非 AUTO（手动/系统控件/车机 seek）时应用队列并没有推进。
-    private var onSongTransitionedCallback: ((Boolean) -> Unit)? = null
-    private var onUnplayableCallback: (() -> Unit)? = null
+    internal val queue = PlaybackQueueController(application, this, viewModelScope)
     private var playJob: Job? = null
     private var preloadJob: Job? = null
 
@@ -258,8 +254,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val listeningClock = com.takahashirinta.ncrust.player.ListeningClock(android.os.SystemClock::elapsedRealtime)
     // 同理防止同一首歌重复上报「开始播放」（startplay）。
     private var lastStartReportedSongId = -1L
-
-    /** B4：本歌最近一次已落盘的进度，避免每 500ms 的采样都写一次 SharedPreferences。 */
 
     /** B4：本次起播的续播位置（0 = 从 0 分 0 秒开始）。 */
     val resumedFromMs = MutableStateFlow(0L)
@@ -378,7 +372,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
          */
         val QUALITY_LEVELS = QualityLadder.LEVELS
 
-        /** B4：进度落盘间隔。2Hz 采样下最多每 5s 写一次，兼顾续播精度与 IO 开销。 */
     }
 
     /** 服务端**实际**返回的档位索引（可能因设备解码能力 / 会员权限 / 版权低于偏好）。 */
@@ -628,19 +621,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     // 单测抓不到：项目里没有 Robolectric，构造 AndroidViewModel 需要真 Application，
     // 所以只有「装到真机冷启」能暴露。**新增供 fetchLyrics 使用的字段时，一律放这一段。**
 
-    // 同一首歌的歌词请求只允许一个在途(playSong / onSongTransitioned / 冷启动恢复
-    // 会并发发起, 不打去重会瞬间打 3×n 个请求, 触发服务端限流反而更拉胯)。
-    //
-    // v2.1.5：判重的键从裸 songId 换成 [TrackKey]（裸 id 会把「ncm 123」与
-    // 「QQ 123」当成同一首歌而误判为「已在途」，直接吞掉新歌的请求），
-    // 并且**同时要求那次请求仍然是当前世代**。
-    //
-    // 后一条是真机踩出来的（S6 / API 24，跨源自动接续）：`MainActivity` 在切歌回调里
-    // 会再调一次 `fetchLyricsForSong(当前 id)`，而那个方法会 `onTrackChanged` 让世代前进。
-    // 只按「曲目相同」去重时，结果是**在途请求被作废、重发又被去重挡掉** ——
-    // 表现是切歌后歌词永远不出现（`applyBestLyricSource` 一次都没跑，日志里只剩
-    // 一行 `fetchLyrics cache hit`）。加上世代判据后，被作废的请求不再算「在途」，
-    // 于是要么原请求继续有效、要么补发一次，不存在「两边都不干活」的窗口。
+    // 同一音源、曲目和代次只保留一份在途歌词请求。已作废的请求不阻挡新请求。
     private var activeLoad: LyricLoadCoordinator.Load? = null
 
     /**
@@ -841,11 +822,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
 
-            // Signal the preload window once per song (guarded by !needsPreload.value).
-            if (gaplessEnabled && dur > 0 && pos > 1_000L && !needsPreload.value) {
+            if (gaplessEnabled && dur > 0 && pos > 1_000L && !needsPreload) {
                 val remaining = dur - pos
                 if (remaining in 1L..PRELOAD_THRESHOLD_MS) {
-                    needsPreload.value = true
+                    needsPreload = true
+                    queue.preloadOrExtendQueue()
                 }
             }
         }
@@ -858,11 +839,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 lastReportedSongId = sid
                 PlayReporter.reportPlay(sid, listenedMs, isWifi = isOnWifi())
             }
-            onSongEndedCallback?.invoke()
+            queue.onPlaybackEnded()
         }
-        PlaybackService.onPlaybackPrevious = { onSongPreviousCallback?.invoke() }
-        PlaybackService.onPlaybackNext = { onSongNextCallback?.invoke() }
-        PlaybackService.onPlaybackInterrupted = { invalidatePlaybackIntent() }
+        PlaybackService.onPlaybackPrevious = { queue.skip(forward = false) }
+        PlaybackService.onPlaybackNext = { queue.skip(forward = true) }
+        PlaybackService.onPlaybackInterrupted = {
+            queue.cancelPendingSelection()
+            invalidatePlaybackIntent()
+        }
         PlaybackService.onPlaybackResumeRequested = { resumeUnpreparedSelection() }
         PlaybackService.onIsPlayingChanged = { playing ->
             listeningClock.setPlaying(playing)
@@ -996,7 +980,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     recovery.resolved()
                 }
                 clearPreloadedState()
-                needsPreload.value = false
+                needsPreload = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
                 beginListening(nextTrack.id, restart = auto && !changed)
                 reportStartplay(nextTrack.id)
@@ -1005,7 +989,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             transitionedTitle = ""
             transitionedArtist = ""
             transitionedArtwork = ""
-            onSongTransitionedCallback?.invoke(auto)
+            queue.onMediaTransition(auto, nextTrack)
         }
 
         val savedState = PlaybackStateManager.getState(getApplication())
@@ -1067,11 +1051,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 isPlaying.value = false
             }
 
-            if (savedState.songId > 0) {
-                // 身份就是上面落下的那一个（含 bit62 推断出的音源），不要再从裸 id 现构。
-                currentTrack?.let { t -> viewModelScope.launch { fetchLyrics(t) } }
+            currentTrack?.takeIf { it.id > 0 }?.let { track ->
+                queue.showSelection(track)
+                viewModelScope.launch { fetchLyrics(track) }
             }
         }
+        queue.restore()
+        StatsRecorder.attach(application, this)
     }
 
     /**
@@ -1104,12 +1090,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 身份变全了，歌词也值得重取一次（QQ 取词同样需要 songmid）。
         viewModelScope.launch { fetchLyrics(merged) }
     }
-
-    fun setOnSongEndedCallback(callback: () -> Unit) { onSongEndedCallback = callback }
-    fun setOnSongPreviousCallback(callback: () -> Unit) { onSongPreviousCallback = callback }
-    fun setOnSongNextCallback(callback: () -> Unit) { onSongNextCallback = callback }
-    fun setOnSongTransitionedCallback(callback: (Boolean) -> Unit) { onSongTransitionedCallback = callback }
-    fun setOnUnplayableCallback(callback: () -> Unit) { onUnplayableCallback = callback }
 
     /**
      * 切歌时立即清空旧歌词并置加载态。
@@ -1145,10 +1125,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         service?.setGaplessPreloadEnabled(gaplessEnabled)
         if (wasEnabled && !gaplessEnabled) {
-            needsPreload.value = false
+            needsPreload = false
             invalidatePreload()
         }
-        if (!wasEnabled && gaplessEnabled && service?.player?.isPlaying == true) needsPreload.value = true
+        if (!wasEnabled && gaplessEnabled && service?.player?.isPlaying == true) {
+            needsPreload = true
+            queue.preloadOrExtendQueue()
+        }
     }
 
     /**
@@ -1729,6 +1712,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentSongArtist.value = artist
         currentSongArtwork.value = artworkUrl
         currentSongId.value = songId
+        queue.showSelection(track)
         isBuffering.value = true
         lyricCoordinator.onTrackChanged(track)
         val ref = songRefOf(track.source, songId, sourceId, mediaId)
@@ -1752,7 +1736,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // 把歌词挂在 playJob 上会让「快速连点两首歌」把第一首的取词变成一次
         // 静默的半途而废。它们必须是兄弟，不是父子。
         startAuxiliaryLoad(track, artworkUrl)
-        needsPreload.value = false
+        needsPreload = false
         refreshGaplessSetting()
 
         val prefs = getApplication<Application>().getSharedPreferences("ncrust_settings", 0)
@@ -1813,10 +1797,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 EntitlementAction.SKIP_TRIAL -> {
                     val reason = (entitlement as PlaybackEntitlement.Trial).reason
                     emitTrialSkip(songId, title, reason)
-                    if (autoSkipGuard.requestAutoSkip()) {
-                        onUnplayableCallback?.invoke()
+                    if (queue.canSkipUnplayable(roomGeneration) && autoSkipGuard.requestAutoSkip()) {
+                        queue.onUnplayable()
                     } else {
-                        stopForQualityFailure(songId, "连续跳过试听片段已达上限")
+                        stopForQualityFailure(songId, "试听片段无法自动接续")
                     }
                     return
                 }
@@ -1920,10 +1904,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     withContext(Dispatchers.Main) {
                         if (!playGate.isCurrent(fetchVersion) || !roomStillOwnsRequest()) return@withContext
                         emitTrialSkip(songId, title, reason)
-                        if (autoSkipGuard.requestAutoSkip()) {
-                            onUnplayableCallback?.invoke()
+                        if (queue.canSkipUnplayable(roomGeneration) && autoSkipGuard.requestAutoSkip()) {
+                            queue.onUnplayable()
                         } else {
-                            stopForQualityFailure(songId, "连续跳过试听片段已达上限")
+                            stopForQualityFailure(songId, "试听片段无法自动接续")
                         }
                     }
                     return@launch
@@ -2137,17 +2121,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         "PlayerViewModel",
                         "unresolvable track songId=$songId (${effective.diag()}) -> skip",
                     )
-                    if (autoSkipGuard.requestAutoSkip()) {
+                    if (queue.canSkipUnplayable(latestRetryRequest?.roomGeneration) && autoSkipGuard.requestAutoSkip()) {
                         Log.w(
                             "PlayerViewModel",
                             "auto skip #${autoSkipGuard.consecutiveSkips} for songId=$songId",
                         )
-                        onUnplayableCallback?.invoke()
+                        queue.onUnplayable()
                     } else {
                         showResolveFailureHint(effective)
                         stopForQualityFailure(
                             songId,
-                            "连续自动跳歌已达上限 ${AutoSkipGuard.MAX_CONSECUTIVE_AUTO_SKIPS} 次",
+                            "无法继续自动接续",
                         )
                     }
                 }
@@ -2523,30 +2507,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (preloading === request) preloading = null
             }
         }
-    }
-
-    /**
-     * 外部（非播放路径）请求某首歌的歌词。
-     *
-     * v2.1.5：只有裸 id 时按 [TrackKey.of] 推断音源（QQ 的 id 带 bit62 标志位，
-     * 推得出；songmid 推不出，所以 QQ 曲目会取不到词）。要拿到 QQ 歌词，
-     * 调用方应当走播放路径 —— 那里有队列里的完整 [SongItem]。
-     */
-    fun fetchLyricsForSong(songId: Long) {
-        if (songId <= 0L) return
-        val bare = TrackKey.of(null, songId)
-        // 已经是当前曲目时**原样沿用**现有身份，不要用只有裸 id 的那份覆盖它 ——
-        // QQ 曲目的 songmid / media_mid 只存在于播放路径传下来的身份里，
-        // 覆盖掉就等于把「能取到词」变成「缺 songmid 取不到」。
-        val track = currentTrack?.takeIf { it == bare } ?: bare
-        // 同一首歌不重复作废在途请求：本方法的语义是「请确保这首歌有歌词」，
-        // 不是「换歌了」。无条件 onTrackChanged 会把刚发出的请求作废，
-        // 而调用方（MainActivity 的切歌回调）恰恰是在自动接续的取词刚发出之后调它。
-        if (currentTrack != track) {
-            currentTrack = track
-            lyricCoordinator.onTrackChanged(track)
-        }
-        viewModelScope.launch { fetchLyrics(track) }
     }
 
     /** v1.9.0：一次 ncm 歌词取数的结果。抽出来是为了让「缓存命中」与「网络返回」共用同一条源选择路径。 */
@@ -3097,6 +3057,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentSongName.value = title
         currentSongArtist.value = artist
         currentSongArtwork.value = artworkUrl
+        queue.showSelection(track)
         currentPosition.value = 0L
         duration.value = 0L
         progress.value = 0f
@@ -3131,6 +3092,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayPause() {
+        queue.cancelPendingSelection()
         if (!isPlaying.value && resumeUnpreparedSelection()) return
         isPlaying.value = !isPlaying.value
         if (!isPlaying.value) invalidatePlaybackIntent()
@@ -3140,8 +3102,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         getApplication<Application>().startService(intent)
     }
 
+    internal fun replayCurrent() {
+        PlaybackService.instance?.replayEndedItem()
+    }
+
     /** 仅暂停播放,保留当前歌曲与队列(LINE 模式队尾停用)。 */
     fun pausePlayback() {
+        queue.cancelPendingSelection()
         invalidatePlaybackIntent()
         isPlaying.value = false
         val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
@@ -3176,6 +3143,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopService() {
         invalidatePlaybackIntent()
+        queue.clear()
         val app = getApplication<Application>()
         PlaybackStateManager.clearState(app)
         PlaybackStateManager.clearQueue(app)
@@ -3197,6 +3165,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         currentSongName.value = null
         currentSongArtist.value = null
         currentSongArtwork.value = null
+        currentTrack = null
+        latestRetryRequest = null
+        currentPosition.value = 0L
+        duration.value = 0L
+        progress.value = 0f
     }
 
     override fun onCleared() {

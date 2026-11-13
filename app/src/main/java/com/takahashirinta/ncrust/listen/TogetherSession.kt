@@ -119,6 +119,8 @@ object TogetherSession {
     fun isCurrentFollow(generation: Long): Boolean =
         member?.let { it.generation == generation && it.owner === link } == true
 
+    internal fun memberWithoutPlaybackSource(): Boolean = member != null && source == null
+
     fun launchFollow(generation: Long, block: suspend CoroutineScope.() -> Unit): Job? =
         member?.takeIf { isCurrentFollow(generation) && it.generation == generation }?.scope?.launch(block = block)
 

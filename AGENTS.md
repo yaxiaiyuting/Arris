@@ -314,7 +314,7 @@ statusBarsPadding() 下推到 2016，吃事件的是卡片根 Box 自己的两�
 - a **2 Hz** progress ticker (`delay(500)`);
 - error reporting: both `onPlayerError` and `onAudioSinkError` invoke the static `onPlaybackError(songId)`.
 
-`PlayerViewModel` holds all playback state as `MutableStateFlow` (isPlaying, position, duration, progress, buffering, current song metadata, lyrics, `currentQualityIndex`, `needsPreload`). `PlaybackStateManager` persists the last song + queue to SharedPreferences via Gson so playback survives process kill.
+`NcrustApplication` lazily owns one `PlayerViewModel` per process. The model receives service playback events and holds the progress, buffering, lyrics, and quality flows. `PlaybackStateManager` persists the last track, resume positions, queue, and shuffle order for the next launch.
 
 **Song URL resolution** (`SongUrlFetcher`) starts at the selected quality and falls back down the ladder. Exact ladders:
 
@@ -363,7 +363,7 @@ Defaults: Wi-Fi = 3 (lossless), Mobile = 1 (higher). The selected label shows as
 
 ### Queue Management
 
-All queue operations live in `MainScreen` (not `PlayerViewModel`): `replaceQueueAndPlay`, `playSongItem`, `insertNext`, `appendToQueue`, `insertAllNext`, `appendAllToQueue`, `removeFromQueue`, `moveInQueue`, `playFromQueue`, `playNext`, `playPrevious`, `generateShuffledIndices`, `launchInfinity`, `startFm`.
+`PlaybackQueueController` owns the queue, cursor, shuffle rounds, next-track preload, and radio continuation on the main thread. `MainScreen` submits user actions and displays queue state. Media controls and natural transitions use the same controller after the activity task is removed.
 
 **Critical invariant:** `playbackQueue[currentQueueIndex]` must always equal the currently playing song. When deduping a queue mutation, record the current song's id first, filter, then re-locate the index — a naive `.filter` can drop an earlier duplicate and point `currentQueueIndex` at the wrong item. Every mutation calls `PlaybackStateManager.saveQueue(...)`, and any mutation in SHUFFLE mode regenerates the shuffled-index list.
 

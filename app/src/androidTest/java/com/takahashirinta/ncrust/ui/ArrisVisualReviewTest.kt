@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.test.platform.app.InstrumentationRegistry
+import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
@@ -129,7 +130,8 @@ class ArrisVisualReviewTest {
         show(dark, scale) {
             val density = LocalDensity.current
             BoxWithConstraints {
-                PlayerCard(song = song, isPlaying = false, screenHeightPx = with(density) { maxHeight.toPx() },
+                PlayerCard(song = song, playerViewModel = (compose.activity.application as NcrustApplication).playback,
+                    isPlaying = false, screenHeightPx = with(density) { maxHeight.toPx() },
                     progress = remember { Animatable(1f) }, totalDragDistancePx = with(density) { maxHeight.toPx() },
                     playbackQueue = listOf(song), currentQueueIndex = 0, playMode = 0,
                     callbacks = PlayerCardCallbacks(onPlayPause = {}, onDismiss = {}))

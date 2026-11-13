@@ -9,10 +9,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import com.takahashirinta.ncrust.network.SongItem
+import com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel
 
 @Composable
 fun PlayerCardOverlay(
     song: SongItem?,
+    playerViewModel: PlayerViewModel,
     isPlaying: Boolean,
     progress: Animatable<Float, AnimationVector1D>,
     collapsedOffsetY: Float,
@@ -80,6 +82,7 @@ fun PlayerCardOverlay(
     ) {
         PlayerCard(
             song = song,
+            playerViewModel = playerViewModel,
             isPlaying = isPlaying,
             screenHeightPx = screenHeightPx,
             progress = progress,

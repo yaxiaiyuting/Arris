@@ -1920,6 +1920,16 @@ class PlaybackService : MediaLibraryService() {
      */
     internal fun hasPlayableItem(): Boolean = player.currentMediaItem != null
 
+    /** Restart a completed item when single-track repeat has no attached preload. */
+    internal fun replayEndedItem() {
+        if (player.playbackState == Player.STATE_ENDED && player.playWhenReady &&
+            player.currentMediaItem != null
+        ) {
+            player.seekTo(0)
+            player.prepare()
+        }
+    }
+
     private fun resumePlayback() {
         if (onPlaybackResumeRequested?.invoke() == true) return
         // **空播放列表绝不能 play()**（v3.8.1 修）。
