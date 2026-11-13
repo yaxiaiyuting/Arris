@@ -28,7 +28,7 @@ data class MediaLyricFrame(
     val options: MediaLyricOptions = MediaLyricOptions(),
 ) {
     // Include the secondary text and preferences: late translations/order changes must refresh too.
-    val notificationKey: String? get() = original?.takeIf { it.isNotBlank() }?.let {
+    val notificationKey: String? = original?.takeIf { it.isNotBlank() }?.let {
         "${it.length}:$it${translation?.length ?: -1}:${translation.orEmpty()}:${options.bilingual}:${options.translationFirst}"
     }
 }
@@ -38,16 +38,30 @@ class MediaLyricTrack private constructor(
     private val main: List<LrcLine>,
     private val translations: Array<String?>,
 ) {
+    private var lastIndex = Int.MIN_VALUE
+    private var lastFrame: MediaLyricFrame? = null
+
     fun at(positionMs: Long, enabled: Boolean, options: MediaLyricOptions): MediaLyricFrame {
-        if (!enabled || positionMs < 0L) return MediaLyricFrame(options = options)
+        val index = if (enabled && positionMs >= 0L) lineIndex(positionMs) else -1
+        val previous = lastFrame
+        if (index == lastIndex && previous?.options == options) return previous
+        val next = MediaLyricFrame(main.getOrNull(index)?.text, translations.getOrNull(index), options)
+        lastIndex = index
+        lastFrame = next
+        return next
+    }
+
+    private fun lineIndex(positionMs: Long): Int {
+        if (lastIndex in main.indices && main[lastIndex].timeMs <= positionMs &&
+            (lastIndex == main.lastIndex || positionMs < main[lastIndex + 1].timeMs)
+        ) return lastIndex
         var lo = 0
         var hi = main.size
         while (lo < hi) {
             val mid = (lo + hi) ushr 1
             if (main[mid].timeMs <= positionMs) lo = mid + 1 else hi = mid
         }
-        val index = lo - 1
-        return MediaLyricFrame(main.getOrNull(index)?.text, translations.getOrNull(index), options)
+        return lo - 1
     }
 
     companion object {

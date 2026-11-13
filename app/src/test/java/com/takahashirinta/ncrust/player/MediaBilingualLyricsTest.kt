@@ -7,6 +7,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MediaBilingualLyricsTest {
+    @Test fun repeatedProgressSamplesReuseTheCurrentFrameAndItsNotificationKey() {
+        val track = MediaLyricTrack.from(original, translated)
+        val options = MediaLyricOptions()
+        val first = track.at(1_000L, true, options)
+        val key = first.notificationKey
+        for (position in 1_001L..1_999L) {
+            val sample = track.at(position, true, options)
+            assertSame(first, sample)
+            assertSame(key, sample.notificationKey)
+        }
+        val second = track.at(2_000L, true, options)
+        assertEquals("Two", second.original)
+        assertNotEquals(first, second)
+        val translatedFirst = track.at(2_000L, true, options.copy(translationFirst = true))
+        assertNotEquals(second.notificationKey, translatedFirst.notificationKey)
+        assertEquals("One", track.at(1_000L, true, options).original)
+    }
+
     private fun line(at: Long, text: String) = LrcLine(timeMs = at, text = text)
     private val original = listOf(line(1000, "One"), line(2000, "Two"), line(3000, "Three"))
     private val translated = listOf(line(1000, "一"), line(2000, "二"), line(3000, "三"))
