@@ -210,103 +210,61 @@ object LibraryManager {
         }
     }
 
-    private fun isLoggedIn(context: Context) = CookieManager.hasCookie(context)
+    private enum class FavoriteTarget { SONG, ALBUM }
+    private data class FavoriteKey(val target: FavoriteTarget, val id: Long)
+    private class FavoriteWrite(val enabled: Boolean, val loginGeneration: Long)
 
-    /** 网易云收藏按曲目串行，只发送原登录下仍有效的最新意图。 */
-    private fun pushLike(songId: Long, like: Boolean) {
-        if (!SavedSongSync.isRemoteLikeEligible(songId)) {
-            Log.w(TAG, "pushLike blocked: cross-source id=$songId like=$like")
-            return
+    private val favoriteWrites = HashMap<FavoriteKey, FavoriteWrite>()
+
+    /** Publish under the same lock as the local edit so simultaneous clicks keep their order. */
+    private fun enqueueFavoriteWrite(
+        target: FavoriteTarget,
+        id: Long,
+        enabled: Boolean,
+        started: NeteaseSessionSnapshot,
+    ) {
+        if (started.cookie.isNullOrBlank()) return
+        val key = FavoriteKey(target, id)
+        val startWorker = synchronized(favoriteWrites) {
+            if (CookieManager.loginGenerations.value != started.loginGeneration) return
+            favoriteWrites.put(key, FavoriteWrite(enabled, started.loginGeneration)) == null
         }
-        // 归属判据是**登录代次**，不是 cookie 字节：同账号续期只换票（revision 变、
-        // 代次不变），那条意图仍然属于同一个账号，不能被当成"换号"丢掉。
-        latestLikeIntent[songId] = LikeIntent(
-            like = like,
-            seq = likeIntentSeq.incrementAndGet(),
-            ownerGeneration = CookieManager.snapshot().loginGeneration,
-        )
+        if (startWorker) startFavoriteWorker(key)
+    }
+
+    private fun startFavoriteWorker(key: FavoriteKey) {
         ioScope.launch {
-            val mutex = likeMutexes.getOrPut(songId) { Mutex() }
-            mutex.withLock {
-                while (true) {
-                    val intent = latestLikeIntent[songId] ?: return@withLock
-                    // 每轮都取当前快照：同账号续期后要拿新票发，旧票会被服务端 301。
-                    val live = CookieManager.snapshot()
-                    if (live.loginGeneration != intent.ownerGeneration) {
-                        // 换号/登出：只条件删除"自己领取的那一条"。期间别人写过新意图 ⇒
-                        // remove 失败（值不同），那条留给它自己的 worker，不在这里陪葬。
-                        latestLikeIntent.remove(songId, intent)
-                        Log.w(TAG, "pushLike aborted: session changed id=$songId like=${intent.like}")
-                        return@withLock
+            var write = synchronized(favoriteWrites) { favoriteWrites[key] } ?: return@launch
+            while (true) {
+                try {
+                    // Renewal keeps the generation, so a queued write can use the renewed credential.
+                    val session = CookieManager.snapshot()
+                    if (session.loginGeneration == write.loginGeneration) {
+                        val sent = when (key.target) {
+                            FavoriteTarget.SONG -> PlaylistApi.likeSong(key.id, write.enabled, session)
+                            FavoriteTarget.ALBUM -> PlaylistApi.subAlbum(key.id, write.enabled, session)
+                        }
+                        if (!sent) Log.w(TAG, "Favorite write failed: $key enabled=${write.enabled}")
                     }
-                    val sent = runCatching { PlaylistApi.likeSong(songId, intent.like, live) }
-                        .getOrDefault(false)
-                    // 自己仍是最新一条 ⇒ 收工；否则说明期间又点了（或换了账号又点），继续补发。
-                    if (latestLikeIntent.remove(songId, intent)) {
-                        if (!sent) Log.w(TAG, "pushLike failed id=$songId like=${intent.like}")
-                        return@withLock
-                    }
+                } catch (e: CancellationException) {
+                    if (finishFavoriteWrite(key, write) != null) startFavoriteWorker(key)
+                    throw e
+                } catch (_: Exception) {
+                    Log.w(TAG, "Favorite write failed: $key enabled=${write.enabled}")
                 }
+                write = finishFavoriteWrite(key, write) ?: return@launch
             }
         }
     }
 
-    /**
-     * 一条待写的收藏意图。`seq` 全局递增 ⇒ 两条意图永不相等，
-     * `ConcurrentHashMap.remove(key, value)` 才能精确表达"删掉我领取的那一条"。
-     */
-    private data class LikeIntent(val like: Boolean, val seq: Long, val ownerGeneration: Long)
-
-    /** 每首歌的写入门闩（串行化同一曲目的收藏/取消）。 */
-    private val likeMutexes = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
-    /** 每首歌的最新意图（带归属）；被覆盖的旧意图不再发往云端。 */
-    private val latestLikeIntent = java.util.concurrent.ConcurrentHashMap<Long, LikeIntent>()
-    /** 意图发布序号（R1）：让条件删除成为"按值判定"，而不是"按 key 清空"。 */
-    private val likeIntentSeq = AtomicLong()
-
-    /**
-     * 把「收藏/取消专辑」推到云端 —— **与 [pushLike] 同构**（H01）。
-     *
-     * 旧实现每次独立 `ioScope.launch`：先 sub 后 unsub 时两条请求并发，迟到的那条
-     * （可能是旧的 sub）最后落地，云端最终状态与用户最后一次点击相反。这里按专辑串行 +
-     * 最新意图覆盖 + 钉住登录代次，三条不变量与单曲收藏完全一致。
-     */
-    private fun pushSubAlbum(albumId: Long, sub: Boolean) {
-        latestAlbumIntent[albumId] = AlbumSubIntent(
-            sub = sub,
-            seq = albumIntentSeq.incrementAndGet(),
-            ownerGeneration = CookieManager.snapshot().loginGeneration,
-        )
-        ioScope.launch {
-            val mutex = albumMutexes.getOrPut(albumId) { Mutex() }
-            mutex.withLock {
-                while (true) {
-                    val intent = latestAlbumIntent[albumId] ?: return@withLock
-                    val live = CookieManager.snapshot()
-                    if (live.loginGeneration != intent.ownerGeneration) {
-                        latestAlbumIntent.remove(albumId, intent)
-                        Log.w(TAG, "pushSubAlbum aborted: session changed albumId=$albumId sub=${intent.sub}")
-                        return@withLock
-                    }
-                    val sent = runCatching { PlaylistApi.subAlbum(albumId, intent.sub, live) }
-                        .getOrDefault(false)
-                    if (latestAlbumIntent.remove(albumId, intent)) {
-                        if (!sent) Log.w(TAG, "pushSubAlbum failed albumId=$albumId sub=${intent.sub}")
-                        return@withLock
-                    }
-                }
-            }
+    /** Advance to the newer intent, or remove the slot atomically so the next edit starts a worker. */
+    private fun finishFavoriteWrite(key: FavoriteKey, write: FavoriteWrite): FavoriteWrite? =
+        synchronized(favoriteWrites) {
+            val latest = favoriteWrites[key]
+            if (latest !== write) return@synchronized latest
+            favoriteWrites.remove(key)
+            null
         }
-    }
-
-    /** 一条待写的专辑订阅意图（H01），字段语义同 [LikeIntent]。 */
-    private data class AlbumSubIntent(val sub: Boolean, val seq: Long, val ownerGeneration: Long)
-
-    private val albumMutexes = java.util.concurrent.ConcurrentHashMap<Long, Mutex>()
-    private val latestAlbumIntent = java.util.concurrent.ConcurrentHashMap<Long, AlbumSubIntent>()
-    private val albumIntentSeq = AtomicLong()
-
-    // ==================== 可观察修订（v3.8.0 · K05 根治） ====================
 
     private val savedRevisionState = MutableStateFlow(0)
 
@@ -329,6 +287,7 @@ object LibraryManager {
             return SavedSongOutcome.REJECTED
         }
         val key = TrackKey.ofSong(song)
+        val session = CookieManager.initializedSnapshot(context)
         val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.addManual(before, song, System.currentTimeMillis())
@@ -338,13 +297,15 @@ object LibraryManager {
                 val ids = ensureLikedIdsLoaded(context)
                 if (key.id !in ids) prependLikedIds(ids, listOf(key.id))
                 likedEditRevision++
+                if (SavedSongSync.isRemoteLikeEligible(key.id)) {
+                    enqueueFavoriteWrite(FavoriteTarget.SONG, key.id, true, session)
+                }
             }
             true
         }
         if (changed) {
             bumpSavedRevision()
             flushNow(context)
-            if (isLoggedIn(context)) pushLike(key.id, true)
             return SavedSongOutcome.ADDED
         }
         return SavedSongOutcome.ALREADY_SAVED
@@ -352,34 +313,33 @@ object LibraryManager {
 
     fun saveSongs(context: Context, newSongs: List<SongItem>) {
         if (newSongs.isEmpty()) return
-        val added = mutableListOf<SongItem>()
-        synchronized(songsLock) {
+        val session = CookieManager.initializedSnapshot(context)
+        val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
             val after = SavedSongSync.addManualAll(before, newSongs, System.currentTimeMillis())
-            if (after !== before) {
-                // 恢复此前已取消的收藏也要同步给云端。
-                val visibleBefore = before.asSequence()
-                    .filter { it.isVisible }
-                    .mapTo(HashSet(before.size)) { it.trackKey }
-                savedSongs = SavedSongTable(after)
-                added += newSongs.filter { TrackKey.ofSong(it) !in visibleBefore }
-                val ncmIds = added.mapNotNull {
-                    val key = TrackKey.ofSong(it)
-                    if (key.source == MusicSource.NETEASE) key.id else null
-                }
-                if (ncmIds.isNotEmpty()) {
-                    val ids = ensureLikedIdsLoaded(context)
-                    val fresh = ncmIds.filterNot { it in ids }
-                    if (fresh.isNotEmpty()) prependLikedIds(ids, fresh)
-                    likedEditRevision++
+            if (after === before) return@synchronized false
+
+            val visibleBefore = before.asSequence().filter { it.isVisible }
+                .mapTo(HashSet(before.size)) { it.trackKey }
+            savedSongs = SavedSongTable(after)
+            val ncmIds = newSongs.mapNotNullTo(LinkedHashSet()) { song ->
+                val key = TrackKey.ofSong(song)
+                key.id.takeIf { key.source == MusicSource.NETEASE && key !in visibleBefore }
+            }
+            if (ncmIds.isNotEmpty()) {
+                val ids = ensureLikedIdsLoaded(context)
+                val fresh = ncmIds.filterNot { it in ids }
+                if (fresh.isNotEmpty()) prependLikedIds(ids, fresh)
+                likedEditRevision++
+                for (id in ncmIds) {
+                    if (SavedSongSync.isRemoteLikeEligible(id)) enqueueFavoriteWrite(FavoriteTarget.SONG, id, true, session)
                 }
             }
+            true
         }
-        if (added.isNotEmpty()) {
-            // K05：只有**可见表真的多了条目**才推进修订。
+        if (changed) {
             bumpSavedRevision()
             flushNow(context)
-            if (isLoggedIn(context)) added.forEach { pushLike(TrackKey.ofSong(it).id, true) }
         }
     }
 
@@ -394,6 +354,7 @@ object LibraryManager {
         // 调用点传的是裸 `song.id`（SongItem 的 id 自带 bit62 标志），
         // 所以音源可以直接从 id 推出来，不需要额外参数。
         val key = TrackKey.of(null, songId)
+        val session = CookieManager.initializedSnapshot(context)
         val changed = synchronized(songsLock) {
             val before = ensureSongsLoaded(context).entries
             val ids = if (key.source == MusicSource.NETEASE) ensureLikedIdsLoaded(context) else null
@@ -416,14 +377,18 @@ object LibraryManager {
             }
             if (after !== before) savedSongs = SavedSongTable(after)
             val changed = after !== before || changedInIds
-            if (changed && ids != null) likedEditRevision++
+            if (changed && ids != null) {
+                likedEditRevision++
+                if (SavedSongSync.isRemoteLikeEligible(songId)) {
+                    enqueueFavoriteWrite(FavoriteTarget.SONG, songId, false, session)
+                }
+            }
             changed
         }
         if (changed) {
             // K05：取消收藏同样是一次真表变更（tombstone），红心必须跟着灭。
             bumpSavedRevision()
             flushNow(context)
-            if (isLoggedIn(context)) pushLike(songId, false)
         }
         return changed
     }
@@ -471,6 +436,7 @@ object LibraryManager {
 
     /** 收藏专辑（订阅云端）：先落本地缓存，再异步同步云端。 */
     fun subscribeAlbum(context: Context, album: AlbumInfo) {
+        val session = CookieManager.initializedSnapshot(context)
         synchronized(albumsLock) {
             // 先推进修订号再改表：refreshFromCloud 的复核读的是同一个计数。
             albumEditRevision.incrementAndGet()
@@ -479,13 +445,14 @@ object LibraryManager {
             albums.add(album)
             for (saved in previous) if (saved.albumId != album.albumId) albums.add(saved)
             cachedAlbums = SavedAlbumTable(albums)
+            enqueueFavoriteWrite(FavoriteTarget.ALBUM, album.albumId, true, session)
         }
         scheduleFlush(context)
-        if (isLoggedIn(context)) pushSubAlbum(album.albumId, true)
     }
 
     /** 取消收藏专辑：仅移除专辑订阅（不影响收藏单曲，二者解耦）。 */
     fun removeAlbum(context: Context, albumId: Long) {
+        val session = CookieManager.initializedSnapshot(context)
         val removed: Boolean
         synchronized(albumsLock) {
             val albums = ensureAlbumsLoaded(context).entries
@@ -493,12 +460,10 @@ object LibraryManager {
             if (removed) {
                 cachedAlbums = SavedAlbumTable(albums.filterNot { it.albumId == albumId })
                 albumEditRevision.incrementAndGet()
+                enqueueFavoriteWrite(FavoriteTarget.ALBUM, albumId, false, session)
             }
         }
-        if (removed) {
-            scheduleFlush(context)
-            if (isLoggedIn(context)) pushSubAlbum(albumId, false)
-        }
+        if (removed) scheduleFlush(context)
     }
 
     // ==================== 云端同步 ====================

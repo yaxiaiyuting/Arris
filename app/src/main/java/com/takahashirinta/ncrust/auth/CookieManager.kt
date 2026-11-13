@@ -110,7 +110,7 @@ object CookieManager {
         true
     }
 
-    private fun initializedSnapshot(context: Context): NeteaseSessionSnapshot = synchronized(guard) {
+    internal fun initializedSnapshot(context: Context): NeteaseSessionSnapshot = synchronized(guard) {
         init(context)
         guard.snapshot()
     }
