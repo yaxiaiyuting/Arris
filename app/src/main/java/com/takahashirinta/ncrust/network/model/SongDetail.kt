@@ -100,20 +100,6 @@ data class AlbumItem(
     @SerializedName("mid") val mid: String? = null
 )
 
-data class SongDetailResponse(
-    @SerializedName("songs") val songs: List<SongDetail>
-)
-
-data class SongDetail(
-    @SerializedName("id") val id: Long,
-    @SerializedName("name") val name: String,
-    @SerializedName("ar") val artists: List<ArtistItem>,
-    @SerializedName("al") val album: AlbumItem,
-    @SerializedName("dt") val duration: Long,
-    @SerializedName("no") val trackNumber: Int?,
-    @SerializedName("mv") val mvId: Long?
-)
-
 data class LyricResponse(
     @SerializedName("code") val code: Int = 200,
     @SerializedName("lrc") val lrc: LyricContent?,

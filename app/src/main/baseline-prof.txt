@@ -46,7 +46,6 @@ Lcom/takahashirinta/ncrust/ui/screen/SearchScreenKt;
 Lcom/takahashirinta/ncrust/ui/screen/UserScreen;
 Lcom/takahashirinta/ncrust/ui/screen/UserScreenKt;
 Lcom/takahashirinta/ncrust/ui/viewmodel/SearchViewModel;
-Lcom/takahashirinta/ncrust/ui/viewmodel/SongViewModel;
 
 # ── 通用组件 ─────────────────────────────────────────────────────────
 Lcom/takahashirinta/ncrust/ui/components/SongCardKt;
