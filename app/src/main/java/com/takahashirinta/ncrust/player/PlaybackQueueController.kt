@@ -257,7 +257,7 @@ internal class PlaybackQueueController(
         }
         songs = queue
         index = startIndex
-        PlaybackStateManager.clearSongPositions(context, queue.map { it.id })
+        PlaybackStateManager.clearSongPositions(context, queue)
         if (mode == QueueModes.SHUFFLE) reshuffle()
         saveQueue(replan = false)
         playAt(startIndex)

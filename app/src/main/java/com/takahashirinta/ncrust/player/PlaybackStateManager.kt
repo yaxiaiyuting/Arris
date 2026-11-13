@@ -249,19 +249,18 @@ object PlaybackStateManager {
         }
     }
 
-    /**
-     * 4.0.2：**批量撤销续播进度**（一次性写盘）。
-     *
-     * 用于「整张新歌单 / 库页播放全部」这类**全新队列**：这些歌不该继承上次听到哪儿，
-     * 否则点播放全部第一首会从中间开始。只清传入的 id，不动其它歌的记录。
-     */
-    fun clearSongPositions(context: Context, songIds: Collection<Long>) {
-        if (songIds.isEmpty()) return
+    /** 播放整张歌单时撤销这些曲目的断点，一次提交所有删除。 */
+    internal fun clearSongPositions(context: Context, queue: List<SongItem>) {
+        if (queue.isEmpty()) return
         val map = ensurePositionsLoaded(context)
         synchronized(positionLock) {
-            var removed = false
-            songIds.forEach { if (map.remove(it) != null) removed = true }
-            if (removed) schedulePositionFlushLocked(context, immediate = true)
+            val oldSize = map.size
+            if (oldSize == 0) return
+            for (song in queue) {
+                map.remove(song.id)
+                if (map.isEmpty()) break
+            }
+            if (map.size != oldSize) schedulePositionFlushLocked(context, immediate = true)
         }
     }
 
