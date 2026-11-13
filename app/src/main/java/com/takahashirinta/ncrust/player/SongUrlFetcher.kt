@@ -164,18 +164,24 @@ object SongUrlFetcher {
      * 传输层失败后的**全局限速**：断流类故障通常持续几秒到几十秒，这段时间里继续按次重试
      * 只会把服务端的拒流窗口拖长。冷却期内直接返回"网络失败"，不再发请求。
      */
-    private val transportCooldownUntil = java.util.concurrent.atomic.AtomicLong(0L)
+    private val transportLock = Any()
+    private var routeGeneration = 0L
+    private var transportCooldownUntil = 0L
     private const val TRANSPORT_COOLDOWN_MS = 3_000L
-    private fun coolingDown(): Boolean =
-        System.nanoTime() / 1_000_000L < transportCooldownUntil.get()
+
     /** Reset transport backoff and DNS after a route or proxy change. */
     fun onNetworkRouteChanged() {
-        transportCooldownUntil.set(0L)
+        synchronized(transportLock) {
+            routeGeneration++
+            transportCooldownUntil = 0L
+        }
         com.takahashirinta.ncrust.network.DnsCache.clear()
     }
 
-    private fun startCooldown() {
-        transportCooldownUntil.set(System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS)
+    private fun startCooldown(generation: Long) = synchronized(transportLock) {
+        if (generation == routeGeneration) {
+            transportCooldownUntil = System.nanoTime() / 1_000_000L + TRANSPORT_COOLDOWN_MS
+        }
     }
 
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? =
@@ -195,7 +201,10 @@ object SongUrlFetcher {
 
     private suspend fun fetchInner(songId: Long, level: String): ResolveOutcome {
         com.takahashirinta.ncrust.auth.NeteaseTokenRefresher.scheduleIfNeeded()
-        if (coolingDown()) {
+        val requestRoute = synchronized(transportLock) {
+            routeGeneration.takeUnless { System.nanoTime() / 1_000_000L < transportCooldownUntil }
+        }
+        if (requestRoute == null) {
             // 刚被服务端拒过流：直接按网络失败处理，别再去敲同一扇门。
             Log.w(TAG, "transport cooldown active songId=$songId — failing fast")
             return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
@@ -307,7 +316,7 @@ object SongUrlFetcher {
                 } catch (e: java.io.IOException) {
                     if (retriedTransport) {
                         Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
-                        startCooldown()
+                        startCooldown(requestRoute)
                         return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
                     }
                     retriedTransport = true

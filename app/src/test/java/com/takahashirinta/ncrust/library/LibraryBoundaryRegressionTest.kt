@@ -18,7 +18,6 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -73,7 +72,7 @@ class LibraryBoundaryRegressionTest {
         restorers.asReversed().forEach { it() }
         resetLibrary()
         field(CookieManager, "app").set(CookieManager, null)
-        (field(SongUrlFetcher, "transportCooldownUntil").get(SongUrlFetcher) as AtomicLong).set(0)
+        SongUrlFetcher.onNetworkRouteChanged()
     }
     private fun intercept(owner: Any, lazyName: String, answer: (Request) -> String) {
         val delegate = field(owner, lazyName + "$" + "delegate").get(owner) as Lazy<*>

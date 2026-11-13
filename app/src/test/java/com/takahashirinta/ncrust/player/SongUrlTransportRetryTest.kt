@@ -6,7 +6,6 @@ import com.takahashirinta.ncrust.source.*
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -16,21 +15,21 @@ import org.junit.Test
 class SongUrlTransportRetryTest {
     private fun field(owner: Any, name: String) = owner.javaClass.getDeclaredField(name).apply { isAccessible = true }
     private val song = SongItem(987654321, "fixture", null, null, 200000)
-    private fun intercept(answer: (Int) -> String, block: suspend (AtomicInteger, AtomicLong) -> Unit) = runBlocking {
+    private fun intercept(answer: (Int) -> String, block: suspend (AtomicInteger, () -> Long) -> Unit) = runBlocking {
         val delegate = field(RetrofitClient, "plainClient\$delegate").get(RetrofitClient) as Lazy<*>
         val original = delegate.value
         val value = delegate.javaClass.getDeclaredField("_value").apply { isAccessible = true }
-        val cooldown = field(SongUrlFetcher, "transportCooldownUntil").get(SongUrlFetcher) as AtomicLong
+        val cooldown = field(SongUrlFetcher, "transportCooldownUntil")
         val count = AtomicInteger()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("fixture")
                 .body(answer(count.incrementAndGet()).toResponseBody()).build()
         }.build()
-        cooldown.set(0); value.set(delegate, client)
+        SongUrlFetcher.onNetworkRouteChanged(); value.set(delegate, client)
         SourceRouter.register(NeteaseSourceProvider)
-        try { block(count, cooldown) }
+        try { block(count) { cooldown.getLong(SongUrlFetcher) } }
         finally {
-            value.set(delegate, original); cooldown.set(0)
+            value.set(delegate, original); SongUrlFetcher.onNetworkRouteChanged()
             client.dispatcher.executorService.shutdown()
         }
     }
@@ -38,7 +37,7 @@ class SongUrlTransportRetryTest {
         intercept({ throw IOException("fixture offline") }) { count, cooldown ->
             val result = SourceRouter.resolveUrlOutcome(song, "standard")
             assertEquals(ResolveFailureKind.NETWORK, result.failure?.kind)
-            assertTrue(cooldown.get() > System.nanoTime() / 1_000_000)
+            assertTrue(cooldown() > System.nanoTime() / 1_000_000)
             assertEquals(2, count.get())
             assertEquals(
                 ResolveFailureKind.NETWORK,
@@ -53,7 +52,7 @@ class SongUrlTransportRetryTest {
         }) { count, cooldown ->
             assertNotNull(SongUrlFetcher.fetch(song.id, "standard"))
             assertEquals(2, count.get())
-            assertEquals(0L, cooldown.get())
+            assertEquals(0L, cooldown())
         }
 
     @Test fun `business rejection after transport retry keeps its own classification`() =
@@ -62,7 +61,7 @@ class SongUrlTransportRetryTest {
         }) { count, cooldown ->
             val result = SourceRouter.resolveUrlOutcome(song, "standard")
             assertEquals(ResolveFailureKind.UNKNOWN, result.failure?.kind)
-            assertEquals(0L, cooldown.get())
+            assertEquals(0L, cooldown())
             assertEquals(2, count.get())
         }
 
@@ -77,9 +76,42 @@ class SongUrlTransportRetryTest {
                 withTimeout(2000) { job.join() }
                 assertTrue(job.isCancelled)
                 assertEquals(1, count.get())
-                assertEquals(0L, cooldown.get())
+                assertEquals(0L, cooldown())
                 release.countDown()
             }
         } finally { release.countDown() }
+    }
+
+    @Test fun lateFailureFromThePreviousRouteDoesNotCoolDownTheNewRoute() = runBlocking {
+        val oldRetryStarted = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val body = """{"data":[{"id":987654321,"code":200,"url":"https://fixture.invalid/audio.mp3","level":"standard","br":128000,"type":"mp3"}]}"""
+        try {
+            intercept({ attempt ->
+                when (attempt) {
+                    1 -> throw IOException("fixture old route")
+                    2 -> {
+                        oldRetryStarted.complete(Unit)
+                        release.await()
+                        throw IOException("fixture old route retry")
+                    }
+                    else -> body
+                }
+            }) { count, _ ->
+                val old = async { SongUrlFetcher.fetchOutcome(song.id, "standard") }
+                try {
+                    withTimeout(5_000L) { oldRetryStarted.await() }
+                    SongUrlFetcher.onNetworkRouteChanged()
+                    release.countDown()
+                    assertEquals(ResolveFailureKind.NETWORK, old.await().failure?.kind)
+                    assertNotNull(SongUrlFetcher.fetch(song.id, "standard"))
+                    assertEquals(3, count.get())
+                } finally {
+                    release.countDown()
+                }
+            }
+        } finally {
+            release.countDown()
+        }
     }
 }
