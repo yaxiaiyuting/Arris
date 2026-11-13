@@ -61,6 +61,7 @@ import com.takahashirinta.ncrust.cache.OfflineAudioCache
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineLibrary
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
+import com.takahashirinta.ncrust.listen.TogetherSession
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.flac.FlacExtractor
 import androidx.media3.extractor.mp3.Mp3Extractor
@@ -929,9 +930,8 @@ class PlaybackService : MediaLibraryService() {
         }.onFailure { Log.w("PlaybackService", "cancel stale media3 notification failed", it) }
     }
 
-    private fun roomOwnsPlayback(intent: Intent): Boolean =
-        !intent.hasExtra("roomGeneration") || com.takahashirinta.ncrust.listen.TogetherSession
-            .isCurrentFollow(intent.getLongExtra("roomGeneration", -1L))
+    private fun Intent.playbackRoom(): Long? =
+        getLongExtra("roomGeneration", -1L).takeIf { hasExtra("roomGeneration") }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val platformResult = super.onStartCommand(intent, flags, startId)
@@ -942,10 +942,6 @@ class PlaybackService : MediaLibraryService() {
         when (intent?.getStringExtra("action")) {
             "preload_next" -> {
                 enqueuePreload(intent)
-                return START_NOT_STICKY
-            }
-            "wait_for_url" -> {
-                waitForPlaybackSelection(intent)
                 return START_NOT_STICKY
             }
             "pause_failed" -> {
@@ -996,16 +992,14 @@ class PlaybackService : MediaLibraryService() {
         return START_NOT_STICKY
     }
 
-    internal fun waitForPlaybackSelection(intent: Intent) {
-        val revision = intent.getIntExtra("playRevision", -1)
-        if (!roomOwnsPlayback(intent) || !playRequestGeneration.isCurrent(revision)) return
+    internal fun waitForPlaybackSelection(revision: Int, room: Long? = null, startPlaying: Boolean = true) {
+        if (!playRequestGeneration.isCurrent(revision) ||
+            room != null && !TogetherSession.isCurrentFollow(room)
+        ) return
         clearPendingNext()
         player.stop()
         player.clearMediaItems()
-        pendingSelection = if (intent.getBooleanExtra("startPlaying", true)) {
-            val room = intent.getLongExtra("roomGeneration", -1L).takeIf { intent.hasExtra("roomGeneration") }
-            PendingSelection(revision, room)
-        } else null
+        pendingSelection = if (startPlaying) PendingSelection(revision, room) else null
     }
 
     internal fun stagePausedSelection(track: TrackKey, title: String, artist: String, artwork: String) {
@@ -1026,8 +1020,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     internal fun enqueuePreload(intent: Intent) {
-        val room = intent.getLongExtra("roomGeneration", -1L).takeIf { intent.hasExtra("roomGeneration") }
-        if (!com.takahashirinta.ncrust.listen.TogetherSession.memberPlayback.value.allowsPreload(room)) return
+        if (!TogetherSession.memberPlayback.value.allowsPreload(intent.playbackRoom())) return
         val owner = com.takahashirinta.ncrust.source.TrackKey.fromMediaId(intent.getStringExtra("preloadOwner"))
         if (!admitPreload(preloadGeneration.accepts(intent.getLongExtra("preloadRevision", -1L)), owner, playingTrackKey())) return
         val nextUrl = intent.getStringExtra("url") ?: return
@@ -1083,7 +1076,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun applyResolvedPlayback(intent: Intent, url: String): Boolean {
-        if (!roomOwnsPlayback(intent) || (intent.hasExtra("playRevision") &&
+        val room = intent.playbackRoom()
+        if ((room != null && !TogetherSession.isCurrentFollow(room)) || (intent.hasExtra("playRevision") &&
                 !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1)))
         ) return false
         val songId = intent.getLongExtra("songId", -1L)
@@ -2447,7 +2441,7 @@ class PlaybackService : MediaLibraryService() {
         val selection = pendingSelection
         if (selection != null && playRequestGeneration.isCurrent(selection.revision) &&
             (selection.roomGeneration == null ||
-                com.takahashirinta.ncrust.listen.TogetherSession.isCurrentFollow(selection.roomGeneration))
+                TogetherSession.isCurrentFollow(selection.roomGeneration))
         ) return true
         return onPlaybackEnded != null && pendingCompletion?.let(::ownsCompletion) == true
     }

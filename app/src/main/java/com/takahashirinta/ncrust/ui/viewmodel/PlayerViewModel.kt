@@ -1718,17 +1718,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         // Tell the UI which song was requested before any IO. Never leave old audio playing
         // beneath a new request, or reuse the old duration/position when that request fails.
         if (origin != PlayOrigin.QUALITY_SWITCH && origin != PlayOrigin.QUALITY_RETRY) {
-            PlaybackService.instance?.let { service ->
-                val wait = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
-                    putExtra("action", "wait_for_url")
-                    putExtra("playRevision", fetchVersion)
-                    roomGeneration?.let {
-                        putExtra("roomGeneration", it)
-                        putExtra("startPlaying", startPlaying)
-                    }
-                }
-                service.waitForPlaybackSelection(wait)
-            }
+            PlaybackService.instance?.waitForPlaybackSelection(fetchVersion, roomGeneration, startPlaying)
             playingIdentity.clear()
             currentPosition.value = 0L
             duration.value = 0L

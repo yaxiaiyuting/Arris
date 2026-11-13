@@ -279,7 +279,7 @@ class BackgroundQueueTest {
             main {
                 val service = requireNotNull(PlaybackService.instance)
                 val revision = app.playback.beginUserPlayIntent()
-                service.waitForPlaybackSelection(PlaybackCommands.intent(app).putExtra("playRevision", revision))
+                service.waitForPlaybackSelection(revision)
                 assertFalse(service.hasPlayableItem())
                 service.onTaskRemoved(null)
                 val next = tracks[1]
