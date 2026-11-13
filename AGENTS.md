@@ -150,7 +150,7 @@ Under `com.takahashirinta.ncrust/`:
 | `auth/` | `CookieManager` (SharedPreferences, **单一凭证来源**), `NeteaseSessionGuard` (revision + login generation), `NeteaseTokenRefresher` (on-demand renewal), `NeteaseSessionRequests` (one-retry read seam), `NeteaseVipStore`, `QrPair` / `QrPairClient` / `QrPairServer` (LAN QR handoff) |
 | `library/` | `LibraryManager` (cloud-synced liked songs + subscribed albums), `SearchHistoryManager` |
 | `cache/` | `ContentCache` — in-memory network snapshot (home + LRU detail caches + user profile)；**v1.6.0 · D1 / v2.0.0 · T3**：`OfflineKeys`（cache key 纯逻辑）、`OfflineUrlStore`（key→最后成功播放的 URL，≤300 LRU）、`OfflineAudioCache`（media3 `SimpleCache`，`filesDir/offline/audio`）、`OfflineLibrary`（离线曲目索引，≤300 LRU）；**v3.7.3**：`OfflineContent`（full / trial 归属随文件持久化，FULL 沿用历史 key，只有试听加 `~trial_<start>_<end>`） |
-| `lyric/` | `LrcParser` (`[MM:SS.mm]` → `LrcLine.timeMs`), `YrcParser` / `YrcAligner` (word-level), `SweepTrack` (sweep cursor), `LyricsDisplayPrefs`; **v1.9.0**: `TtmlParser` / `TtmlScanner` (AMLL TTML), `AmllTtmlClient`, `LyricSourceChain`, `LyricRequestGate`; `LyricsCache` (200-entry persistent cache, LRC + TTML) |
+| `lyric/` | `LrcParser` (`[MM:SS.mm]` → `LrcLine.timeMs`), `YrcParser` / `YrcAligner` (word-level), `SweepTrack` (sweep cursor), `LyricsDisplayPrefs`; **v1.9.0**: `TtmlParser` / `TtmlScanner` (AMLL TTML), `AmllTtmlClient`, `LyricSourceChain`, `LyricLoadCoordinator`; `LyricsCache` (200-entry persistent cache, LRC + TTML) |
 | `warmup/` | `AppWarmup` — cold-start preload singleton |
 | `power/` | `BackgroundActivity` — battery-optimisation whitelist intents |
 | `ui/navigation/` | `NavRoutes` route constants and `MainNavGraph` |

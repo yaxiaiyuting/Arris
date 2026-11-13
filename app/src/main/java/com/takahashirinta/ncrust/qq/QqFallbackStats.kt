@@ -158,9 +158,7 @@ data class QqFallbackCounters(
  * 2. `+=` 不是原子操作 —— `@Volatile` 只保证可见性、不保证读-改-写；
  * 3. `synchronized` 会让主线程 2Hz 的心跳与 IO 线程争锁。
  *    `AtomicLong.incrementAndGet()` 无锁、约纳秒级。
- *
- * 这条结论不是新发明的：`LyricRequestGate` 的注释里已经写过同一件事
- * （「线程安全用 AtomicLong 而不是 @Volatile + synchronized：这里的操作只有自增」）。
+
  */
 class QqFallbackCounter(private val clock: () -> Long = System::currentTimeMillis) {
 

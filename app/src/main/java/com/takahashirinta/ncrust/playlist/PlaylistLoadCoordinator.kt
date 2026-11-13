@@ -78,7 +78,7 @@ class PlaylistLoadCoordinator {
         EMPTY,
     }
 
-    /** UI 状态机。与 `LyricLoadCoordinator.State` 同形，便于两处的心智模型一致。 */
+    /** 当前歌单的加载与显示状态。 */
     sealed interface State {
         /** 还没有确定主体（未登录、或还没进页面）。 */
         data object Idle : State

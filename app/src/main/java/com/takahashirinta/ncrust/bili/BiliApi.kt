@@ -477,9 +477,7 @@ object BiliApi {
      * **直接就是 LRC 文本**（`[00:33.26]让我掉下眼泪的
 …`）。
      *
-     * @return LRC 正文；服务端没有这份数据时返回 **null**（「没有这个数据源」），
-     *   有但为空时返回**空串**（「这首歌确实没有歌词」）—— 这个两义性与
-     *   `LyricLoadCoordinator.State` 的 Empty / Error 之分是同一条纪律。
+     * @return LRC 正文。服务端缺少歌词数据时返回 null，内容为空时返回空串。
      *
      * ⚠️ v3.2.0 · P0-C：`suspend` + 内部换到 [Dispatchers.IO]（见类文档）。
      * 播放链的取词入口（`PlayerViewModel.startAuxiliaryLoad`）就在主线程上，

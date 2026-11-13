@@ -602,36 +602,9 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     /** An offline miss has no slot, but can be retried when a route becomes available. */
     private var offlinePreloadMiss: PreloadRequest? = null
 
-    // ⚠️ 下面这三个**必须声明在 init 块之前**（v1.9.0 · S1 hotfix）。
-    //
-    // Kotlin 的属性初始化与 init 块**按声明顺序**执行，而 init 块里的
-    // `viewModelScope.launch { fetchLyrics(...) }` 在 Main.immediate 下可能**在构造期就同步跑起来**
-    // （构造本身就在主线程）—— 于是 fetchLyrics 会在构造函数返回之前执行。
-    // 声明在 init 之后的属性此刻还是默认值：引用类型是 null，基本类型是 0。
-    //
-    // 实测崩溃（v1.9.0 首次真机安装，PCL110）：
-    // `NullPointerException: Attempt to invoke virtual method 'long ...LyricRequestGate.begin()'
-    //  on a null object reference` at PlayerViewModel.<init> → fetchLyrics。
-    // 老代码里「正在取词的那首歌」是 Long（读成 0 只是判等失真，不崩），所以这个坑一直潜伏；
-    // v1.9.0 新增的闸门、v2.1.5 新增的 [lyricCoordinator] 与 [STALE_NETEASE_LYRICS]
-    // 都是**对象引用**，一读就炸。
-    //
-    // 单测抓不到：项目里没有 Robolectric，构造 AndroidViewModel 需要真 Application，
-    // 所以只有「装到真机冷启」能暴露。**新增供 fetchLyrics 使用的字段时，一律放这一段。**
-
+    // Main.immediate can call fetchLyrics during init. Initialize its state before those launches.
     // 同一音源、曲目和代次只保留一份在途歌词请求。已作废的请求不阻挡新请求。
     private var activeLoad: LyricLoadCoordinator.Load? = null
-
-    /**
-     * v1.9.0 引入 / v2.1.5 收敛：歌词加载协调器（见 [LyricLoadCoordinator]）。
-     *
-     * 去重（[lyricsFetchingTrack]）挡的是「同一首歌的重复请求」，协调器挡的是
-     * 「旧歌的响应盖掉新歌」**以及**「另一个音源的响应盖掉当前歌」——
-     * 两件事必须分开：A 歌请求还在飞时切到 B，去重放行 B，协调器作废 A。
-     *
-     * 它同时拥有 UI 状态机（Idle / Loading / Loaded / Empty / Error）与「当前曲目身份」，
-     * 所以「这份歌词属于哪首歌」只有一个答案，不再需要在每个挂起点各判一次。
-     */
     private val lyricCoordinator = LyricLoadCoordinator()
 
     /**
@@ -643,28 +616,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      * 「起播的是谁 / 请求为谁发的 / 落到哪首上」。
      */
     private val TAG_TRACK = "NcrustTrack"
-
-    /**
-     * B 站取词的**三义结果**（v3.3.0 · 需求 7）。
-     *
-     * 存在的唯一理由是「失败」与「确实没有歌词」**不能再共用一个 null**。
-     * 旧实现是 `runCatching { fetchLyric(...) }.getOrNull()`，两种含义折叠在一起，
-     * 然后一律 `markEmpty` ⇒ 断网/风控时歌词按钮**永久置灰、点不动、无法重试**，
-     * 而用户看不出与「这首歌没词」的区别。
-     *
-     * 对照 QQ 那条路用的是 `lyricCoordinator.fail(...)`，`PlayerCard` 的注释也明写
-     * 「失败保持可点」—— B 站这条当年把那条纪律绕过去了。
-     *
-     * 用 sealed class 而不是 `Pair<Boolean, String?>`：后者在调用点读不出意图，
-     * 而这两种情况在**处置上完全相反**（一个 markEmpty、一个 fail）。
-     */
-    private sealed interface BiliLyricOutcome {
-        /** 取到了（`body` 为 null = 没有可用字幕/数据源；空串 = 确实没有歌词正文）。 */
-        data class Of(val body: String?) : BiliLyricOutcome
-
-        /** 取不到：网络失败 / 风控 / 解析异常。**可重试**。 */
-        data object Transport : BiliLyricOutcome
-    }
 
     /**
      * 播放器当前曲目身份（只读镜像，给诊断与渲染判据用）。
@@ -972,12 +923,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     // 每次真正换歌都按 tracker 还原试听标记：手动起播 / 车机 / 预载
                     // 三条路径共用同一份记录，完整歌曲会把上一首的 true 清掉。
                     restoreTrialState(nextTrack.id)
-                    // ② 作废所有在途请求 + 置 Loading：旧歌词不会残留到新歌词就绪。
+                    // 作废上一首的在途歌词请求。
                     lyricCoordinator.onTrackChanged(nextTrack)
                     Log.i(
                         TAG_TRACK,
-                        "transition(auto=$auto) -> currentTrack=$nextTrack " +
-                            "cacheKey=${lyricCoordinator.cacheKeyOf(nextTrack)}",
+                        "transition(auto=$auto) -> currentTrack=$nextTrack",
                     )
                     viewModelScope.launch { fetchLyrics(nextTrack) }
                 } else {
@@ -1737,7 +1687,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val ref = songRefOf(track.source, songId, sourceId, mediaId)
         Log.i(
             TAG_TRACK,
-            "playSong -> currentTrack=$track cacheKey=${lyricCoordinator.cacheKeyOf(track)}"
+            "playSong -> currentTrack=$track"
         )
         // ★ v3.1.0 · P0-A：**取链与歌词同时发起**。
         //
@@ -2551,32 +2501,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val romalrc: List<LrcLine> = emptyList(),
     )
 
-    /**
-     * v2.1.0 · C：qm 歌词（QRC 逐字 + 翻译 + 音译）。
-     *
-     * **不经过 `LyricsCache`**：那张表存的是 ncm 的字段形状（lrc/tlyric/yrc/romalrc/ttml），
-     * 往里塞 QQ 的数据要么新加字段 + 迁移逻辑（v1.9.3 的教训：加字段 = 加迁移逻辑 = 加单测），
-     * 要么污染 ncm 的字段语义。本版的取舍是**每次播放现取**（一次请求，实测 QRC 十几 KB），
-     * 代价是断网时 QQ 曲目没有歌词 —— 已在 release notes 的未验证/已知问题里写明。
-     * [LyricLoadCoordinator.cacheKeyOf] 对 QQ 曲目返回 null，把这条约定变成可执行的判据。
-     *
-     * 瞬时失败（网络错误）**什么都不写**，与 ncm 侧同一契约：歌词按钮保持可点、
-     * 用户重试能再来一次；只有服务端明确回答（哪怕是「没有歌词」）才落状态。
-     *
-     * ## v2.1.5：身份来自参数，**不再读全局字段**
-     *
-     * 旧实现在这里读 `currentSongSourceKey` / `currentSongSourceId` 构造 ref。
-     * 那正是跨源串台的最后一步：自动接续时它们是**上一首**的取值，
-     * 于是「为 ncm 新歌取词」变成了「用上一首 QQ 曲目的 songmid 去问 QQ」——
-     * 拿回来的是上一首的 QRC，而且因为请求确实是当前代而通过了所有闸门。
-     * 现在 ref 只能由 [track] 构造，物理上不可能问错歌。
-     */
+    /** QQ takes its track identity from the request and reads QRC, translation and romanization together. */
     private suspend fun loadQqLyrics(track: TrackKey, load: LyricLoadCoordinator.Load) {
         val ref = songRefOf(track.source, track.id, track.sourceId, track.mediaId)
         if (!ref.isResolvable) {
-            // QQ 曲目缺 songmid 时取词无从谈起。记进状态机而不是静默返回，
-            // 这样探针能区分「没请求」与「请求了但没载荷」。
-            lyricCoordinator.fail(load, "qq track missing sourceId (songmid)")
             Log.w(TAG_TRACK, "qq lyric skipped: track=$track missing songmid")
             return
         }
@@ -2587,10 +2515,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         } catch (_: Exception) {
             null
         }
-        if (pack == null) {
-            lyricCoordinator.fail(load, "qq lyric request failed")
-            return
-        }
+        if (pack == null) return
         if (!lyricCoordinator.isCurrent(load)) {
             // 旧响应后到 —— 整包丢弃（v2.1.5 的核心不变量）。
             Log.i(TAG_TRACK, "qq lyric DROPPED (stale): track=$track")
@@ -2598,7 +2523,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         if (pack.isEmpty) {
             // 服务端明确说「这首歌没有歌词」——记下来，UI 显示暂无歌词而不是一直转圈。
-            lyricCoordinator.markEmpty(load)
             lyricsNoContentSongId.value = track.id
             return
         }
@@ -2609,7 +2533,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             val alignment = QqLyricAlignment(lines)
             alignment.align(pack.transLines) to alignment.align(pack.romaLines)
         }
-        if (!lyricCoordinator.accept(load, lines.size)) return
+        if (!lyricCoordinator.isCurrent(load)) return
         lyrics.value = lines
         translatedLyrics.value = translations
         romanizedLyrics.value = romans
@@ -2618,85 +2542,35 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         Log.i(TAG_TRACK, "qq lyric APPLIED track=$track lines=" + lines.size)
     }
 
-    /**
-     * v3.1.0 · B：B 站音源的取词。
-     *
-     * ## 两条腿的歌词能力不同，这里如实分派
-     *
-     * - **音频区曲目**（`sourceId = au:<auid>`）：`song/info` 的 `lyric` 字段就是
-     *   **LRC 原文**，直接交给既有的 [LrcParser]（不新写解析器）。
-     * - **视频音轨**（`sourceId = bv:...`）：B 站没有歌词数据源 ⇒
-     *   `BiliSourceProvider.fetchLyric` 返回 null，这里记 [LyricLoadCoordinator.markEmpty]
-     *   （「这首歌没有歌词」），而不是 [LyricLoadCoordinator.fail] ——
-     *   重试一百次也不会有歌词，把它标成可重试的错误只会让界面白转圈。
-     *
-     * 缓存：**不走 [LyricsCache]**。那张表存的是 ncm 的字段形状
-     * （lrc/tlyric/yrc/romalrc/ttml），往里塞 B 站的数据要么新加字段 + 迁移逻辑
-     * （v1.9.3 的教训），要么污染 ncm 的字段语义 —— 与 QQ 那条路同一取舍
-     * （见 `loadQqLyrics` 的 KDoc）。代价是每次播放现取一次，已写进未验证项。
-     */
+    /** Transient errors leave the retry action available. Only a confirmed empty result disables it. */
     private suspend fun loadBiliLyrics(track: TrackKey, load: LyricLoadCoordinator.Load) {
         val ref = songRefOf(track.source, track.id, track.sourceId, track.mediaId)
-        // ── v3.3.0 · P0：**三义返回**（正文 / 确无歌词 / 取不到）──────────────────────
-        //
-        // 用户反馈第 7 条「b站音源歌词问题」的另一半。旧实现是
-        // `runCatching { fetchLyric(...) }.getOrNull()`，把「网络失败/风控」
-        // 与「这首确实没有歌词」**折叠成同一个 null**，然后一律 `markEmpty`：
-        // 后果是歌词按钮**永久置灰、点不动、无法重试**，而用户完全无法区分
-        // 「这首歌没词」与「刚才断网了」。
-        //
-        // 对照 QQ 那条路（`loadQqLyrics`）用的是 `fail`，`PlayerCard` 的注释也明写
-        // 「失败保持可点」—— B 站这条把那条纪律绕过去了。
-        //
-        // 所以这里用一个显式的结果类型把三义分开，异常不再被吞成「没有歌词」。
-        val outcome = try {
-            BiliLyricOutcome.Of(BiliSourceProvider.fetchLyric(ref))
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            // 取消是控制流，不是失败：原样抛出，否则「切歌」会被记成一次取词失败。
+        val raw = try {
+            BiliSourceProvider.fetchLyric(ref)
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.w(TAG_TRACK, "bili lyric transport failed track=$track", e)
-            BiliLyricOutcome.Transport
+            return
         }
         if (!lyricCoordinator.isCurrent(load)) {
             Log.i(TAG_TRACK, "bili lyric DROPPED (stale): track=$track")
             return
         }
-        when (outcome) {
-            // 取不到（网络/风控/解析失败）⇒ **可重试的失败**，按钮保持可点。
-            is BiliLyricOutcome.Transport -> {
-                lyricCoordinator.fail(load, "bili lyric transport failed")
-                Log.i(TAG_TRACK, "bili lyric ERROR track=$track（保持可重试）")
-                return
-            }
-            is BiliLyricOutcome.Of -> {
-                val raw = outcome.body
-                // null = 这个数据源没有可用字幕/音频区没有这份数据；空串 = 确实没有歌词正文。
-                // 两者都是「重试一百次也不会有」⇒ markEmpty 是对的处置。
-                if (raw.isNullOrBlank()) {
-                    lyricCoordinator.markEmpty(load)
-                    lyricsNoContentSongId.value = track.id
-                    Log.i(TAG_TRACK, "bili lyric EMPTY track=$track (source=${if (raw == null) "none" else "blank"})")
-                    return
-                }
-                val lines = withContext(Dispatchers.Default) { LrcParser.parse(raw) }
-                if (!lyricCoordinator.isCurrent(load)) return
-                if (lines.isEmpty()) {
-                    lyricCoordinator.markEmpty(load)
-                    lyricsNoContentSongId.value = track.id
-                    return
-                }
-                if (!lyricCoordinator.accept(load, lines.size)) return
-                lyrics.value = lines
-                // B 站只给一份主轨（视频字幕也没有译文/音译接口），
-                // 所以译文与音译显式清空 —— 而不是沿用上一首的（那正是 v2.1.5 的串台形状）。
-                translatedLyrics.value = emptyList()
-                romanizedLyrics.value = emptyList()
-                lyricsSongId.value = track.id
-                lyricsNoContentSongId.value = -1L
-                Log.i(TAG_TRACK, "bili lyric APPLIED track=$track lines=" + lines.size)
-            }
+        val lines = if (raw.isNullOrBlank()) emptyList()
+            else withContext(Dispatchers.Default) { LrcParser.parse(raw) }
+        if (!lyricCoordinator.isCurrent(load)) return
+        if (lines.isEmpty()) {
+            lyricsNoContentSongId.value = track.id
+            Log.i(TAG_TRACK, "bili lyric EMPTY track=$track")
+            return
         }
+        lyrics.value = lines
+        translatedLyrics.value = emptyList()
+        romanizedLyrics.value = emptyList()
+        lyricsSongId.value = track.id
+        lyricsNoContentSongId.value = -1L
+        Log.i(TAG_TRACK, "bili lyric APPLIED track=$track lines=${lines.size}")
     }
 
     /** 日志用：「来源/行数」。 */
@@ -2746,10 +2620,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             if (!lyricCoordinator.isCurrent(load)) return
             // 瞬时失败（风控 / 需登录 / 断网）：保持既有行为 —— 什么都不写、按钮保持可点可重试，
             // 也**不**去拉 TTML（拉 TTML 的前提是「已经拿到 ncm 的权威答复」）。
-            if (!netease.authoritative) {
-                lyricCoordinator.fail(load, "netease lyrics not authoritative")
-                return
-            }
+            if (!netease.authoritative) return
             applyBestLyricSource(track, load, netease)
         } finally {
             // 只有本次请求仍是"当前在途"时才清加载态。旧歌请求的 finally 若在

@@ -248,11 +248,7 @@ object BiliSourceProvider : MusicSourceProvider {
      * ⚠️ 音频区那条路**不是** `song/info` 的 `lyric` 字段 —— 实测它是 LRC 文件的 **URL**，
      * 当正文用会解析出 0 行（见下面 [BiliParse.looksLikeUrl] 的守卫说明）。
      *
-     * ## 三义性：null（没有数据源/取不到）vs 空串（确实没有歌词）
-     *
-     * 调用方（`PlayerViewModel.loadBiliLyrics`）按这个区分 [LyricLoadCoordinator.markEmpty]
-     * 与 `fail` —— 把「网络失败」说成「这首歌没有歌词」会让重试按钮永久置灰，
-     * 那是本版要从另一头修掉的缺陷。所以这里**绝不把失败折叠成空串**。
+     * 缺少数据源返回 null，无歌词正文返回空串。网络失败抛异常，由播放器保留重试入口。
      */
     suspend fun fetchLyric(song: SongItem): String? {
         if (!isEnabled) return null
