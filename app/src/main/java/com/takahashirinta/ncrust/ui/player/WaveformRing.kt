@@ -48,27 +48,8 @@ class WaveformRing(
     private val midRing = FloatArray(capacity)
     private val highRing = FloatArray(capacity)
 
-    /**
-     * v3.3.2 / v3.6.3：与 [ring] 逐槽对齐的**到达时刻**（调用方的时间基准，毫秒；0 = 没给）。
-     *
-     * ## 为什么柱间隔必须在 push 这一侧测
-     *
-     * 旧写法在 **UI 消费处**倒推间隔（`sinceBarMs / 消费根数`），而消费只能发生在帧上：
-     * 一根真实 100ms 的柱会被量成 100 / 116.7 / 133.3ms 三者之一（60Hz），
-     * 滑动平均因此**永远收敛不到真值** —— 真机同口径实测从 100ms 一路爬到 155ms 且不停。
-     * 在 push 处测的是**音频缓冲自己的节拍**，与 vsync 无关。
-     *
-     * v3.6.3 又补了一层：真实链路会把多根柱放进**同一次回调**（同一个时间戳）。
-     * 按「相邻两根」测会得到 `0, 0, 300ms`，把每根 100ms 读成 300ms ⇒ 画面一顿一冲。
-     * 现在按批折算（见 [batchStarts] / [batchSizes]），并把结果发布给 [publishedGapMs]。
-     *
-     * ## 代价（音频线程）
-     *
-     * 两次数组写（stamp、gap 不需要逐槽了，只发布标量）与两次 volatile 写，
-     * **没有分配、没有锁、没有系统调用** —— 与既有的四个 float 写同级。
-     * 时间戳由调用方传入（`SystemClock.uptimeMillis()`），所以本类仍然不依赖 Android。
-     */
-    private val arriveStampMs = LongArray(capacity)
+    /** 只需知道一列是否带时间戳，实际到达时间由批次估算器保存。 */
+    private val timedColumns = BooleanArray(capacity)
 
     /**
      * v3.6.3：**已经按每根柱折算过**的到达间隔（毫秒），音频线程写、UI 线程读。
@@ -97,14 +78,12 @@ class WaveformRing(
      *
      * 为什么要按「批」而不是按「根」记：真实链路会把多根柱放进同一次回调（同一个时间戳）。
      * 按相邻两根测会得到 `0, 0, 300ms`；只按上一批柱数折算，又会在批次大小变化时失真。
-     * 记下最近 8 批的「起点 + 柱数」，就能算
-     * `(最新批起点 − 最早批起点) ÷ 中间各批柱数之和` —— 这是**每根柱真正占用的时间**，
-     * 对「每批 1 根」「每批 3 根」「批大小变化」都成立。
+     * 同时记下每批第一根柱的序号，两端序号之差就是测量区间内的柱数。
      */
     private val batchStarts = LongArray(GAP_BATCHES)
 
-    /** 与 [batchStarts] 对齐：这一批里有几根柱。 */
-    private val batchSizes = IntArray(GAP_BATCHES)
+    private val batchFirstColumns = IntArray(GAP_BATCHES)
+    private var timestampedColumns = 0
 
     /** [batchStarts] 里有效批次数（≤ [GAP_BATCHES]）。 */
     private var batchCount: Int = 0
@@ -312,20 +291,12 @@ class WaveformRing(
     /** B 档：呼吸相位（0..1 循环）。 */
     private var breathePhase = 0f
 
-    /**
-     * 音频线程：推入一根柱（全带 RMS + 低频能量，都是 0..1）。
-     *
-     * 两个值**共用同一个 writeIndex**：单写者语义不变，UI 侧快照一次游标就能拿到
-     * 对齐的一对值。
-     *
-     * v3.0.0：多收一个 [mix]（明亮度占比，0..1）。它同样共用 `writeIndex`，
-     * 所以「柱高、低频、明亮度」三者永远来自**同一个音频缓冲**，不会错帧。
-     * 老调用点（只给 RMS，或给 RMS + 低频）继续可用：默认 `bass = value`、`mix = 0`。
-     */
+    /** 音频线程同时发布全带与三个频带的幅值。 */
     fun push(value: Float, low: Float = value, mid: Float = 0f, high: Float = 0f, arrivalAtMs: Long = 0L) {
         // NaN / Inf 防御：环形缓冲的边界读在和写者赛跑时理论上可能读到半个值
         // （见 pump 的注释）。宁可画成静音，也不要让 NaN 传染给整块画布。
-        val slot = writeIndex % capacity
+        val index = writeIndex
+        val slot = index % capacity
         ring[slot] = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
         lowRing[slot] = if (low.isFinite()) low.coerceIn(0f, 1f) else 0f
         midRing[slot] = if (mid.isFinite()) mid.coerceIn(0f, 1f) else 0f
@@ -334,8 +305,8 @@ class WaveformRing(
         // 槽位与 writeIndex 一次自增绑定，非 volatile；但 UI 侧永远读 `[0, snapshot)`，
         // 而 snapshot 是**自增之后**才发布的，所以这一槽对读者一定已经写完。
         if (arrivalAtMs > 0L) recordBatch(arrivalAtMs)
-        arriveStampMs[slot] = arrivalAtMs
-        writeIndex += 1
+        timedColumns[slot] = arrivalAtMs > 0L
+        writeIndex = index + 1
     }
 
     /**
@@ -348,25 +319,17 @@ class WaveformRing(
      * 这个式子对「每批 1 根」「每批 3 根」「批次大小变化」都成立 —— 见 [batchStarts]。
      */
     private fun recordBatch(arrivalAtMs: Long) {
+        val column = timestampedColumns++
         val last = (batchNext - 1 + GAP_BATCHES) % GAP_BATCHES
-        if (batchCount > 0 && arrivalAtMs - batchStarts[last] <= BATCH_WINDOW_MS) {
-            // 同一批：只加柱数。最新批自己的柱数不进分母（它还没走完），所以不重新发布。
-            batchSizes[last] += 1
-            return
-        }
+        if (batchCount > 0 && arrivalAtMs - batchStarts[last] <= BATCH_WINDOW_MS) return
         batchStarts[batchNext] = arrivalAtMs
-        batchSizes[batchNext] = 1
+        batchFirstColumns[batchNext] = column
         batchNext = (batchNext + 1) % GAP_BATCHES
         if (batchCount < GAP_BATCHES) batchCount += 1
         if (batchCount < 2) return
         val newest = (batchNext - 1 + GAP_BATCHES) % GAP_BATCHES
         val oldest = (batchNext - batchCount + GAP_BATCHES) % GAP_BATCHES
-        var slots = 0
-        var i = oldest
-        while (i != newest) {
-            slots += batchSizes[i]
-            i = (i + 1) % GAP_BATCHES
-        }
+        val slots = batchFirstColumns[newest] - batchFirstColumns[oldest]
         if (slots <= 0) return
         val span = batchStarts[newest] - batchStarts[oldest]
         if (span <= 0L) return
@@ -587,7 +550,7 @@ class WaveformRing(
         // 注意：读到的是"某一时刻的值"，写者可能刚好覆盖同一格（只在溢出时发生）。
         // 单根柱失真在视觉上不可见，也不影响后续帧 —— 因此这里不用锁。
         val slot = readIndex % capacity
-        if (arriveStampMs[slot] > 0L) timestampedInput = true
+        if (timedColumns[slot]) timestampedInput = true
         appendColumn(ring[slot], lowRing[slot], midRing[slot], highRing[slot], blank = false)
         readIndex += 1
         return true

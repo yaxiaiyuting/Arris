@@ -8,6 +8,7 @@
 
 package com.takahashirinta.ncrust.ui.player
 
+import com.takahashirinta.ncrust.ui.player.waveform.VisualizerEffects
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,6 +37,22 @@ import org.junit.Test
  *    所以窗口每帧最多平移一格、相位只回绕一格。
  */
 class WaveformScrollBatchArrivalTest {
+
+    @Test
+    fun batchesKeepTheirIntervalWhenTheirSizeChangesAndTheWindowWraps() {
+        val ring = WaveformRing(capacity = 64, barCount = 16)
+        var time = 1_000L
+        repeat(20) { batch ->
+            val bars = batch % 5 + 1
+            repeat(bars) {
+                ring.push(.5f, arrivalAtMs = time)
+                ring.push(.5f) // Untimed input is excluded from the arrival estimator.
+            }
+            ring.pump(true, 16f, VisualizerEffects.BASELINE, time)
+            assertEquals(100f, ring.phaseIntervalMsForTest(), 0f)
+            time += 100L * bars
+        }
+    }
 
     private fun runBurst(
         seconds: Double,
