@@ -10,9 +10,13 @@
 
 package com.takahashirinta.ncrust.library
 
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
+import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -35,6 +39,34 @@ import org.junit.Test
  * 三种形状各有一组用例，还有一组「混在一起」的。
  */
 class SearchHistoryCodecTest {
+
+    @Test
+    fun removingHistoryReturnsOnlyTheUpdatedSectionAfterOneRead() {
+        val now = System.currentTimeMillis()
+        val removed = item(1, timestamp = now, source = "netease")
+        val sameNumber = item(1, timestamp = now, source = "qqmusic", sourceId = "fixture")
+        val expired = item(2, timestamp = now - 15L * 24 * 60 * 60 * 1000)
+        val albums = SearchHistoryCodec.encode(listOf(item(3, timestamp = now)))
+        val songs = SearchHistoryCodec.encode(listOf(removed, sameNumber, expired))
+        val memory = MemoryPrefs(mutableMapOf("songs" to songs, "albums" to albums))
+        val reads = mutableListOf<String>()
+        val prefs = object : SharedPreferences by memory {
+            override fun getString(key: String, defValue: String?): String? {
+                reads.add(key)
+                return memory.getString(key, defValue)
+            }
+        }
+        val context = object : ContextWrapper(null) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = prefs
+        }
+
+        val visible = SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_LYRIC, removed)
+
+        assertEquals(listOf(sameNumber), visible)
+        assertEquals(listOf("songs"), reads)
+        assertEquals(listOf(sameNumber), SearchHistoryCodec.decode(memory.getString("songs", null)))
+        assertEquals(albums, memory.getString("albums", null))
+    }
 
     private fun item(
         id: Long,

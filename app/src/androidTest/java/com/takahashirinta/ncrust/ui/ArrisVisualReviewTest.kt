@@ -22,6 +22,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.R
 import com.takahashirinta.ncrust.cache.ContentCache
+import com.takahashirinta.ncrust.library.SearchHistoryManager
 import com.takahashirinta.ncrust.network.NetworkAvailability
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
@@ -32,6 +33,7 @@ import com.takahashirinta.ncrust.ui.player.PlayerCardCallbacks
 import com.takahashirinta.ncrust.ui.player.motion.MotionPrefs
 import com.takahashirinta.ncrust.ui.screen.HomeScreen
 import com.takahashirinta.ncrust.ui.screen.RecognizeScreen
+import com.takahashirinta.ncrust.ui.screen.SearchScreen
 import com.takahashirinta.ncrust.ui.screen.TogetherScreen
 import com.takahashirinta.ncrust.ui.screen.UserScreen
 import com.takahashirinta.ncrust.ui.theme.*
@@ -112,6 +114,30 @@ class ArrisVisualReviewTest {
         show { UserScreen() }
         compose.onNodeWithText(com.takahashirinta.ncrust.ui.i18n.zhCN.tabUser).assertIsDisplayed()
         screenshot("settings-light")
+    }
+    @Test fun clearingOneSearchHistorySectionKeepsTheOtherSectionVisible() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("search_history", android.content.Context.MODE_PRIVATE)
+        val album = "隔离测试专辑"
+        val track = "隔离测试歌曲"
+        val now = System.currentTimeMillis()
+        prefs.edit().clear()
+            .putString("songs", """[{"id":11,"title":"$track","timestamp":$now}]""")
+            .putString("albums", """[{"id":22,"title":"$album","timestamp":$now}]""")
+            .apply()
+        try {
+            show { SearchScreen(onSongClick = {}, onAlbumClick = {}, onArtistClick = {}) }
+            compose.onNodeWithText(track).assertIsDisplayed()
+            compose.onNodeWithText(album).assertIsDisplayed()
+            val clearLabel = com.takahashirinta.ncrust.ui.i18n.zhCN.searchHistoryClear
+            compose.onAllNodesWithText(clearLabel)[0].performClick()
+            compose.onNodeWithText(track).assertDoesNotExist()
+            compose.onNodeWithText(album).assertIsDisplayed()
+            assertTrue(SearchHistoryManager.getSongs(context).isEmpty())
+            assertTrue(SearchHistoryManager.getAlbums(context).single().title == album)
+        } finally {
+            prefs.edit().clear().apply()
+        }
     }
     @Test fun libraryComponents() {
         show {

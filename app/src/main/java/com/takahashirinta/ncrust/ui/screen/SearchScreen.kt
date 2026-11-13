@@ -264,19 +264,15 @@ fun SearchScreen(
         onDispose { keyboard?.hide() }
     }
 
-    // Search history state — loaded from SharedPreferences, refreshed whenever query clears
-    var songHistory by remember { mutableStateOf(SearchHistoryManager.getSongs(context)) }
-    var albumHistory by remember { mutableStateOf(SearchHistoryManager.getAlbums(context)) }
-    var artistHistory by remember { mutableStateOf(SearchHistoryManager.getArtists(context)) }
-
-    fun refreshHistory() {
-        songHistory = SearchHistoryManager.getSongs(context)
-        albumHistory = SearchHistoryManager.getAlbums(context)
-        artistHistory = SearchHistoryManager.getArtists(context)
+    val queryEmpty = query.isEmpty()
+    var songHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getSongs(context) else emptyList())
     }
-
-    LaunchedEffect(query) {
-        if (query.isEmpty()) refreshHistory()
+    var albumHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getAlbums(context) else emptyList())
+    }
+    var artistHistory by remember(queryEmpty) {
+        mutableStateOf(if (queryEmpty) SearchHistoryManager.getArtists(context) else emptyList())
     }
 
     // v2.6.1 · P0：消费外部投递的关键词（「转到歌手」身份不可信时的兜底落点）。
@@ -290,7 +286,7 @@ fun SearchScreen(
         onExternalQueryConsumed()
     }
 
-    val showHistory = query.isEmpty() &&
+    val showHistory = queryEmpty &&
         (songHistory.isNotEmpty() || albumHistory.isNotEmpty() || artistHistory.isNotEmpty())
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -396,7 +392,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryTracks,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_SONG)
-                                    refreshHistory()
+                                    songHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -473,8 +469,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_SONG, item)
-                                            refreshHistory()
+                                            songHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_SONG, item,
+                                            )
                                         },
                                     )
                                 }
@@ -488,7 +485,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryAlbums,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_ALBUM)
-                                    refreshHistory()
+                                    albumHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -508,8 +505,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_ALBUM, item)
-                                            refreshHistory()
+                                            albumHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_ALBUM, item,
+                                            )
                                         },
                                     )
                                 }
@@ -523,7 +521,7 @@ fun SearchScreen(
                                 title = strings.searchCategoryArtists,
                                 onClear = {
                                     SearchHistoryManager.clearSection(context, SearchHistoryManager.TYPE_ARTIST)
-                                    refreshHistory()
+                                    artistHistory = emptyList()
                                 },
                                 clearLabel = strings.searchHistoryClear
                             )
@@ -543,8 +541,9 @@ fun SearchScreen(
                                         textColor = Color.Red.copy(alpha = 0.85f),
                                         onClick = {
                                             onDismiss()
-                                            SearchHistoryManager.remove(context, SearchHistoryManager.TYPE_ARTIST, item)
-                                            refreshHistory()
+                                            artistHistory = SearchHistoryManager.remove(
+                                                context, SearchHistoryManager.TYPE_ARTIST, item,
+                                            )
                                         },
                                     )
                                 }
