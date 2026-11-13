@@ -162,20 +162,16 @@ object OfflineUrlStore {
     private const val PREFS = "ncrust_offline"
     private const val KEY_URLS = "urls"
 
-    @Volatile
     private var index: OfflineUrlIndex? = null
     private var appliedJson: String? = null
 
-    private fun index(context: Context): OfflineUrlIndex {
+    private fun indexLocked(context: Context): OfflineUrlIndex {
         index?.let { return it }
-        synchronized(this) {
-            index?.let { return it }
-            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
-            appliedJson = null
-            index = loaded
-            return loaded
-        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
+        appliedJson = null
+        index = loaded
+        return loaded
     }
 
     private fun persist(context: Context, idx: OfflineUrlIndex) {
@@ -194,7 +190,7 @@ object OfflineUrlStore {
      * `synchronized + persist`，加一个写方法就多一次漏落盘的机会。
      */
     internal fun <T> mutate(context: Context, block: (OfflineUrlIndex) -> T): T = synchronized(this) {
-        val idx = index(context)
+        val idx = indexLocked(context)
         val result = block(idx)
         persist(context, idx)
         result
@@ -223,7 +219,7 @@ object OfflineUrlStore {
      *  a legacy record whose full/trial classification is still [OfflineContent.UNKNOWN]. */
     fun contentForUrl(context: Context, url: String): OfflineContent? = synchronized(this) {
         val key = OfflineKeys.keyOf(url) ?: return@synchronized null
-        index(context).record(key)?.takeIf { it.url == url }?.content
+        indexLocked(context).record(key)?.takeIf { it.url == url }?.content
     }
     internal fun recallRecord(
         context: Context,
@@ -231,7 +227,7 @@ object OfflineUrlStore {
         level: String,
         usable: (String) -> Boolean,
     ): Pair<String, OfflineUrlRecord>? =
-        synchronized(this) { index(context).recallRecord(songId, level, usable) }
+        synchronized(this) { indexLocked(context).recallRecord(songId, level, usable) }
 
     fun clear(context: Context) {
         mutate(context) { it.clear() }

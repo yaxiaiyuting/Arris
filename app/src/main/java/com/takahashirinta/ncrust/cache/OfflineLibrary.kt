@@ -230,21 +230,17 @@ object OfflineLibrary {
     private const val PREFS = "ncrust_offline"
     private const val KEY_TRACKS = "tracks"
 
-    @Volatile
     private var index: OfflineLibraryIndex? = null
     private var appliedJson: String? = null
     private var revision = 0L
 
-    private fun index(context: Context): OfflineLibraryIndex {
+    private fun indexLocked(context: Context): OfflineLibraryIndex {
         index?.let { return it }
-        synchronized(this) {
-            index?.let { return it }
-            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val loaded = OfflineLibraryIndex.fromJson(prefs.getString(KEY_TRACKS, null))
-            appliedJson = null
-            index = loaded
-            return loaded
-        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val loaded = OfflineLibraryIndex.fromJson(prefs.getString(KEY_TRACKS, null))
+        appliedJson = null
+        index = loaded
+        return loaded
     }
 
     private fun persist(context: Context, idx: OfflineLibraryIndex) {
@@ -275,7 +271,7 @@ object OfflineLibrary {
     ): Boolean {
         if (songId <= 0L) return false
         return synchronized(this) {
-            val idx = index(context)
+            val idx = indexLocked(context)
             val ok = idx.upsert(
                 OfflineTrack(
                     songId = songId,
@@ -304,7 +300,7 @@ object OfflineLibrary {
     fun remove(context: Context, songId: Long): Boolean {
         if (songId <= 0L) return false
         val removed = synchronized(this) {
-            val idx = index(context)
+            val idx = indexLocked(context)
             // 联动删 URL：与单测共用同一个纯函数 [OfflineLibraryIndex.removeWithUrls]，
             // 「删曲目必删死条目」这条不变量才有测试盯着（OfflineUrlStore.mutate 负责落盘）。
             val track = OfflineUrlStore.mutate(context) { urls -> idx.removeWithUrls(songId, urls) }
@@ -323,7 +319,7 @@ object OfflineLibrary {
         scannedRevision: Long,
         keepSongIds: Set<Long>?,
     ): List<OfflineTrack> = synchronized(this) {
-        val idx = index(context)
+        val idx = indexLocked(context)
         if (revision == scannedRevision && keepSongIds != null && idx.retainSongIds(keepSongIds) > 0) {
             revision++
             persist(context, idx)
@@ -333,9 +329,10 @@ object OfflineLibrary {
 
     fun clear(context: Context) {
         synchronized(this) {
-            index = OfflineLibraryIndex()
+            val empty = OfflineLibraryIndex()
+            index = empty
             revision++
-            persist(context, index(context))
+            persist(context, empty)
         }
     }
 }
