@@ -1,5 +1,27 @@
 # Arris 主线源码查验与交接
 
+## 11 月 13 日启动、缓存、网络和统计续查
+
+从 `bbc21de` 接续，源码验收到 `885e22a`。本轮 11 个本地源码提交，涉及 `app/src` 下 40 个文件（生产源码 30 个，测试 10 个）。范围按实际修改和验证记录。
+
+| 提交 | 查验范围与变化 |
+| --- | --- |
+| `2811757` | `AppWarmup`、`HomeFeed`、`HomeScreen` 和 `SearchScreen` 共用栏目请求。隔离测试让日推等待者在 750 毫秒超时后重进，日推实际发出一次请求，新歌独立就绪。换号后旧结果被拒，失败可以重新请求。 |
+| `5120f62`、`ea53bd5` | 首页、搜索和三个详情页的封面按规范化 URL 去重。所有列表共用四个并发名额。前页取消时，仍可见页面能接手同一 URL，回归验证重叠的两个等待者只发出一次接手请求。 |
+| `2a0d227` | `OfflineLibrary` 用索引修订号校验 `OfflineAudioCache` 的键快照。回归覆盖在扫描后新增曲目，旧扫描不能删掉它。 |
+| `e22c2de`、`3f6cdcd` | 启动页本地恢复等待上限为 3 秒。首页 700 毫秒等待结束后可以先显示空态，离线快照恢复后自动填充。Android 14 上旧接线等不到新歌，修后在同一页面显示。真实 `MainActivity` 冷启动进入库页，切回首页后也读到了预置的虚构磁盘快照。 |
+| `4061afe` | `ConnectionWarmup` 从实际在播的网易云媒体地址确定预热目标，复用 `MediaHttp` 的池和 TLS 配置。一次回环连接服务了预热和音频请求，短响应只排空，不解码正文。整次预热限时 5 秒并可取消。 |
+| `a9f7c6e` | `HomeSnapshot` 更新栏目时只读归属键，避免每次复制整份 prefs 映射。回归验证保存阶段整表读取为零，损坏的归属字段不会变成游客快照。保留已有键。 |
+| `5725e8e` | `StatsStore` 与 `StatsCommitGate` 让统计采样、取快照与清空内存无需等待前一次磁盘提交。阻塞写入的 JVM 夹具在旧代码上领号超时，改后可取得顺序并正确写入最新数据。 |
+| `c36e569` | 删除无业务入口的旧歌词请求序号类和只写不读的协调器状态。网易云、QQ 和 B 站仍用曲目身份与请求代次校验，界面沿用歌词就绪与确无内容的状态。 |
+| `885e22a` | 离线起播检查在同一缓存状态下用最多两次 Media3 区间查询，省去复制片段树。Android 14 真缓存覆盖中段、空洞、补齐空洞与同曲多档位。 |
+
+离线全量 JVM 3,593 项通过、13 项跳过，零失败。测试总数减少主要来自移除已无调用方的歌词状态及旧缓存片段扫描用例，保留对应请求归属和缓存起播的回归。Debug Lint 0 错误、90 警告，Release Kotlin 编译通过。隔离 Android 14 模拟器 12 项通过。回环连接验证为 HTTP/1.1，真实 CDN、真机切网、启动耗时变化和帧率未实测。4.1.2 正式包仍对应 `50460a5`。
+
+[完整构建日志](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/gradle-checkpoint.log) · [模拟器回归](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/instrumentation-checkpoint.log) · [离线首页基线](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/home-late-baseline.log) · [冷启动烟测](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/cold-start.log) · [统计阻塞基线](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/stats-gate-baseline.xml) · [音频回环验证](/home/duanjb666/.cache/arris-startup-refactor.sY0CZq/connection-warmup.log)
+
+下轮从 `LibraryManager` 的单曲、专辑收藏写入接续。初查两套按 ID 串行逻辑存在进程内长期留存的 Mutex 表。先用拦截请求核对同曲连点、换号及批量收藏，确认安全回收或合并的边界。随后检查播放索引早于首个缓存片段提交的时序，以及 `LyricsCache` 同曲主轨、TTML 和来源标记分别写入时的序列化成本。本轮没有对这些待查路径下结论。
+
 ## 11 月 13 日播放边界与渲染热路径续查
 
 从 `d5585f7` 接续，验证到 `75deeed`。本轮在 `refactor/arris-source` 本地完成九组源码提交，涉及 16 个源码和测试文件。
