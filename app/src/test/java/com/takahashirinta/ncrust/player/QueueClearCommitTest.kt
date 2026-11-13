@@ -17,13 +17,26 @@ import java.util.concurrent.atomic.AtomicInteger
 class QueueClearCommitTest {
     private class MemoryContext : ContextWrapper(null) {
         val prefs = MemoryPrefs()
+        val queueBodyWrites = AtomicInteger()
+        private val countedPrefs = object : SharedPreferences by prefs {
+            override fun edit(): SharedPreferences.Editor {
+                val editor = prefs.edit()
+                return object : SharedPreferences.Editor by editor {
+                    override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                        if (key == "queue") queueBodyWrites.incrementAndGet()
+                        editor.putString(key, value)
+                        return this
+                    }
+                }
+            }
+        }
         @Volatile var beforePrefs: (() -> Unit)? = null
         override fun getApplicationContext(): Context = this
         override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
             val action = beforePrefs
             beforePrefs = null
             action?.invoke()
-            return prefs
+            return countedPrefs
         }
     }
 
@@ -66,6 +79,7 @@ class QueueClearCommitTest {
             manager.saveQueue(context, queue, 0)
             awaitWrites()
             assertEquals(5_000, reads.get())
+            assertEquals(1, context.queueBodyWrites.get())
             val firstJson = context.prefs.getString("queue", null)
             for (index in 1..3) {
                 manager.saveQueueCursor(context, queue, index)
@@ -74,17 +88,20 @@ class QueueClearCommitTest {
                 assertSame(firstJson, context.prefs.getString("queue", null))
             }
             assertEquals(5_000, reads.get())
+            assertEquals("Cursor writes do not rewrite the queue body", 1, context.queueBodyWrites.get())
 
             items[0] = song(6_000)
             manager.saveQueue(context, queue, 0)
             awaitWrites()
             assertEquals(10_000, reads.get())
+            assertEquals(2, context.queueBodyWrites.get())
             assertEquals(6_000L, manager.getQueue(context)?.first?.first()?.id)
 
             manager.clearQueue(context)
             manager.saveQueueCursor(context, queue, 1)
             awaitWrites()
             assertEquals(15_000, reads.get())
+            assertEquals(3, context.queueBodyWrites.get())
             assertEquals(1, context.prefs.getInt("queue_index", -1))
         } finally {
             manager.clearQueue(context)

@@ -70,14 +70,13 @@ object PlaybackStateManager {
     private val flushLock = Any()
     private var queueFlushJob: Job? = null
     private var queueGeneration = 0L
-    private var queueEncoding: QueueEncoding? = null
+    private var savedQueue: SavedQueue? = null
     private var shuffleFlushJob: Job? = null
     private var shuffleGeneration = 0L
 
-    private class QueueEncoding(
+    private class SavedQueue(
         val context: WeakReference<Context>,
         val songs: WeakReference<List<SongItem>>,
-        val json: String,
     )
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -344,21 +343,21 @@ object PlaybackStateManager {
 
     // ---------- 队列持久化 ----------
     fun saveQueue(context: Context, queue: List<SongItem>, currentIndex: Int) =
-        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = false)
+        scheduleQueueWrite(context, queue, currentIndex, cursorOnly = false)
 
-    /** 游标变化时复用同一份只读队列快照。首次保存或换队列时会完整编码。 */
+    /** 队列快照已保存时只提交游标。首次保存或换队列时会完整编码。 */
     internal fun saveQueueCursor(context: Context, queue: List<SongItem>, currentIndex: Int) =
-        scheduleQueueWrite(context, queue, currentIndex, reuseEncoding = true)
+        scheduleQueueWrite(context, queue, currentIndex, cursorOnly = true)
 
     private fun scheduleQueueWrite(
         context: Context,
         queue: List<SongItem>,
         index: Int,
-        reuseEncoding: Boolean,
+        cursorOnly: Boolean,
     ) {
         val app = context.applicationContext
         synchronized(flushLock) {
-            if (!reuseEncoding) queueEncoding = null
+            if (!cursorOnly) savedQueue = null
             val generation = ++queueGeneration
             queueFlushJob?.cancel()
             queueFlushJob = ioScope.launch {
@@ -374,18 +373,20 @@ object PlaybackStateManager {
         index: Int,
         generation: Long,
     ) {
-        val encoded = synchronized(flushLock) {
+        val bodySaved = synchronized(flushLock) {
             if (queueGeneration != generation) return
-            queueEncoding?.takeIf { it.context.get() === context && it.songs.get() === queue }
+            savedQueue?.let { it.context.get() === context && it.songs.get() === queue } == true
         }
         try {
-            val json = encoded?.json ?: withContext(Dispatchers.Default) { gson.toJson(queue) }
+            val body = if (bodySaved) null else withContext(Dispatchers.Default) { gson.toJson(queue) }
             val prefs = getPrefs(context)
             synchronized(flushLock) {
                 if (queueGeneration != generation) return
-                prefs.edit().putString(KEY_QUEUE, json).putInt(KEY_QUEUE_INDEX, index).apply()
-                if (queueGeneration == generation && encoded == null) {
-                    queueEncoding = QueueEncoding(WeakReference(context), WeakReference(queue), json)
+                val editor = prefs.edit()
+                if (body != null) editor.putString(KEY_QUEUE, body)
+                editor.putInt(KEY_QUEUE_INDEX, index).apply()
+                if (queueGeneration == generation && body != null) {
+                    savedQueue = SavedQueue(WeakReference(context), WeakReference(queue))
                 }
             }
         } catch (e: CancellationException) {
@@ -551,7 +552,7 @@ object PlaybackStateManager {
             shuffleFlushJob = null
             queueGeneration++
             shuffleGeneration++
-            queueEncoding = null
+            savedQueue = null
             prefs.edit().remove(KEY_QUEUE).remove(KEY_QUEUE_INDEX).remove(KEY_SHUFFLE).apply()
         }
     }
