@@ -713,9 +713,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 val revision = playGate.current
                 refreshPlaybackNetwork()
                 if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
-                if (currentTrack?.source == MusicSource.NETEASE) {
-                    SongUrlFetcher.lastAudioHost?.let { ConnectionWarmup.warmHost(it) }
-                }
+                if (!recovery.online) return@collectLatest
+                val service = PlaybackService.instance ?: return@collectLatest
+                if (service.playingTrackKey()?.source != MusicSource.NETEASE) return@collectLatest
+                service.player.currentMediaItem?.localConfiguration?.uri?.toString()
+                    ?.let { ConnectionWarmup.warmAudioOrigin(it) }
             }
         }
         viewModelScope.launch(Dispatchers.Main) {

@@ -147,22 +147,8 @@ object RetrofitClient {
             .build()
     }
 
-    /**
-     * 预热专用客户端的工厂：**与业务客户端同源**（Address 兼容 ⇒ 连接真能被复用），
-     * 但保留自己的短超时，且**不挂** [HttpTimingListener]。
-     *
-     * 不挂计时器是有意的：预热打的是 `GET /`，它不是业务请求；
-     * 让它进 `NcrustHttpTiming` 只会给「TTFB 花在哪」这本账添噪声。
-     *
-     * @param connectTimeoutSeconds 预热自己的超时上限（见 `ConnectionWarmup.TIMEOUT_SECONDS`）。
-     */
-    internal fun warmupDerivedClient(
-        connectTimeoutSeconds: Long,
-        readTimeoutSeconds: Long = connectTimeoutSeconds,
-    ): OkHttpClient = baseClient.newBuilder()
-        .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
-        .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
-        .build()
+    /** Derive warmup from the API client so TLS configuration and the pool stay compatible. */
+    internal fun warmupClientBuilder(): OkHttpClient.Builder = baseClient.newBuilder()
 
     private val plainClient: OkHttpClient by lazy {
         baseClient.newBuilder()
