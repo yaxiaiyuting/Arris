@@ -253,6 +253,11 @@ class BackgroundQueueTest {
             OfflineLibrary.record(app, songId, "缓存计数", null, null, cacheKey = firstKey, level = "higher")
             assertEquals(224L, OfflineAudioCache.librarySnapshot(app).bytesBySong[songId])
             assertFalse(OfflineAudioCache.coversStart(app, firstKey))
+            assertFalse(OfflineAudioCache.coversStart(app, secondKey))
+
+            writeCacheSpan(firstKey, 128L, ByteArray(384))
+            assertTrue(OfflineAudioCache.coversStart(app, firstKey))
+            assertEquals(608L, OfflineAudioCache.librarySnapshot(app).bytesBySong[songId])
         } finally {
             OfflineAudioCache.removeSong(app, songId)
         }

@@ -168,14 +168,13 @@ object OfflineAudioCache {
     internal fun contains(context: Context, key: String): Boolean =
         runCatching { get(context).keys.contains(key) }.getOrDefault(false)
 
-    /** 离线起播前检查从字节 0 开始的连续缓存。SimpleCache 的同键片段已按偏移排序。 */
+    /** Cached bytes must form a contiguous prefix. An uncached suffix is allowed. */
     fun coversStart(context: Context, key: String): Boolean = runCatching {
-        OfflineKeys.coversOrderedStart(
-            get(context).getCachedSpans(key),
-            position = { it.position },
-            length = { it.length },
-            isCached = { it.isCached },
-        )
+        val current = get(context)
+        // Media3 1.9.0 guards both the span index and getCachedLength with this monitor.
+        synchronized(current) {
+            OfflineKeys.coversStart { offset, length -> current.getCachedLength(key, offset, length) }
+        }
     }.getOrDefault(false)
 
     /** 已用字节数。 */

@@ -117,25 +117,11 @@ object OfflineKeys {
         return totals
     }
 
-    /** 按偏移升序检查有效片段。须从 0 开始且片段之间无空洞。 */
-    internal inline fun <Span> coversOrderedStart(
-        spans: Iterable<Span>,
-        position: (Span) -> Long,
-        length: (Span) -> Long,
-        isCached: (Span) -> Boolean,
-    ): Boolean {
-        var coveredUpTo = 0L
-        var found = false
-        for (span in spans) {
-            if (!isCached(span)) continue
-            val size = length(span)
-            if (size <= 0L) continue
-            val start = position(span)
-            if (start > coveredUpTo) return false
-            val end = start + size
-            coveredUpTo = if (found) maxOf(coveredUpTo, end) else end
-            found = true
-        }
-        return coveredUpTo > 0L
+    /** Check Media3's signed range lengths. The uncached tail must extend beyond all cached bytes. */
+    internal inline fun coversStart(cachedLength: (offset: Long, limit: Long) -> Long): Boolean {
+        val prefix = cachedLength(0L, Long.MAX_VALUE)
+        if (prefix <= 0L) return false
+        val tail = Long.MAX_VALUE - prefix
+        return tail == 0L || cachedLength(prefix, tail) == -tail
     }
 }
