@@ -1,5 +1,31 @@
 # Arris 主线源码查验与交接
 
+## 11 月 13 日晚离线起播、歌词、波形和切网续查
+
+从 4.1.3-gpl 正式提交 `83c1faa` 接续，验证到 `1d0b180`。本轮 10 个本地源码及回归提交，涉及 `app/src` 下 24 个文件，其中生产源码 14 个、JVM 测试 9 个、Android 测试 1 个。
+
+| 提交 | 查验结果 |
+| --- | --- |
+| `a169374` | 离线起播按请求档位和完整曲、试听、旧记录的既有优先级探测缓存，首个可播项即返回，省掉候选列表和排序。同曲六种缓存变体的 JVM 对照中，请求档命中的线程分配量从约 864 B 降到 56 B，靠后的回退从约 845 B 降到 152 B。两侧各预热 2 万次后测 10 万次。 |
+| `1e2d64f`、`c59629c` | AMLL 和网易云共用读请求协调逻辑，各自隔离。网易云预取与实际起播重叠时共用一次取词和一次缓存写入。取消预取后，仍在等结果的起播可继续。同账号续期可以完成请求，排队的旧账号请求在 Retrofit 拦截器处被拒。保留四次尝试及旧缓存补音译的规则。 |
+| `1e8a352` | 实际 `PlaybackService` 离线复现关闭媒体会话歌词后歌名未恢复。现在设置变化立即刷新系统媒体项。关闭时，通知歌词仍更新，当前 `MediaItem` 引用保持稳定。 |
+| `2bcfd58` | 媒体歌词时钟在同一行复用发布帧及通知比较键。999 次同句采样复用同一对象，回跳与翻译主行切换仍更新。 |
+| `86c56c8` | 波形到达时钟用批次柱序号差计算平均间隔，移除历史批大小的重复求和。256 柱的时间标记从 `LongArray` 改为 `BooleanArray`，数组元素占用从 2048 B 变为 256 B，不含对象头。回归覆盖跨环、无时间戳和不等长批次。 |
+| `109fb99` | 用本地 HTTP 拦截器复现旧线路的两次失败在切网后才返回，重新触发 3 秒全局冷却并挡住新线路首个取链。冷却只由同线路代次的失败设置，新线路可立即发起请求。 |
+| `9d9240c` | 离线列表在索引未改变时直接复用排序快照。排序顺序、同毫秒时的写入顺序、首次缓存时间和 LRU 规则保持一致。回归覆盖同曲重复写、重排、删除和对账。 |
+| `53ff6d6` | 隔离 JVM 在账号已替换、代次通知尚未发出的窗口复现旧响应写入歌词缓存。现在在会话锁内核对并接收条目，整表编码只持有歌词缓存锁。同账号续期保留请求。 |
+| `1d0b180` | 离线 URL 和曲目索引由各自存储对象持锁访问，移除内层重复锁。保留写入失败后重试、跨清单删除的锁顺序与存储键。 |
+
+离线全量 JVM 3,608 项通过、13 项跳过，零失败，覆盖 352 个测试类。Debug Lint 0 错误、90 警告。Debug 应用与测试 APK 构建成功，Release Kotlin 编译通过。`53ff6d6` 在隔离 Android 14 模拟器通过 15 项，覆盖媒体会话、后台队列、离线缓存、首页和搜索历史。分配量来自 HotSpot 线程计数，切网回归来自本地拦截。真机网络切换、后台衔接耗时和波形帧率待实测。正式 4.1.3-gpl 仍对应 `83c1faa`。
+
+以重构开始前 `b042755` 为基线，当前 466 个生产 Kotlin／Java 文件中，174 个含累计 Git 差异，占 **37.3%**。新增文件计入，已删除文件与测试文件排除。
+
+[全量构建](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/gradle-final.log) · [模拟器回归](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/instrumentation-final.log) · [会话开关基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/session-metadata-baseline.log) · [切网基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/route-cooldown-baseline.xml) · [换号基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/netease-login-race-baseline.xml) · [换号回归](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/netease-login-race-final.xml)
+
+[离线取链分配探针](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/OfflineRecallAllocationProbe.kt) · [基线分配量](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/offline-rank-baseline.xml) · [改后分配量](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/offline-rank-final.xml) · [离线排序基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/library-snapshot-baseline.xml)
+
+下轮从 `PlayerViewModel` 的默认网络变化收集器接续。当前离线预载补发在连接池刷新和冷却重置之前触发，先用本地可控请求核对短窗口及连续两次路线变化。随后查离线失败键在主线程写入、IO 读取的并发边界，以及新缓存是否能替代被判失败的旧文件。`NcrustApplication` 持有队列 ViewModel，移除任务后的连续换曲已在隔离模拟器通过。后台队列下一步核对服务重建后恢复游标及待播项的行为。
+
 ## 11 月 13 日收藏、离线缓存、歌词与队列续查
 
 从 `0512ef1` 接续，源码查验到 `8b9b5ae`。本轮 12 个本地提交，涉及 `app/src` 下 32 个文件，其中生产侧 21 个、JVM 测试 9 个、Android 测试 2 个。另同步更新预取入口的仓库说明。
