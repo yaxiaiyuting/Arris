@@ -22,7 +22,10 @@ import com.takahashirinta.ncrust.network.BoundedParallel
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.SongItem
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -77,8 +80,8 @@ object ListPrefetch {
         val loader = runCatching { Coil.imageLoader(context) }.getOrNull() ?: return
         val tasks = urls.map { url ->
             url to suspend {
-                listSlots.withPermit {
-                    recent.load(url) { loader.execute(coverRequest(context, url)) is SuccessResult }
+                recent.load(url) {
+                    listSlots.withPermit { loader.execute(coverRequest(context, url)) is SuccessResult }
                 }
             }
         }
@@ -103,16 +106,37 @@ object ListPrefetch {
 }
 
 internal class RecentCoverLoads(private val nowMs: () -> Long) {
-    private val inFlight = HashSet<String>()
+    private val inFlight = HashMap<String, CompletableDeferred<Boolean>>()
     private val completed = LinkedHashMap<String, Long>()
 
     suspend fun load(url: String, fetch: suspend () -> Boolean) {
-        synchronized(this) {
-            if (completed[url]?.let { nowMs() - it in 0 until WINDOW_MS } == true || !inFlight.add(url)) return
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            var ownsLoad = false
+            val flight = synchronized(this) {
+                if (completed[url]?.let { nowMs() - it in 0 until WINDOW_MS } == true) return
+                inFlight.getOrPut(url) {
+                    ownsLoad = true
+                    CompletableDeferred()
+                }
+            }
+            if (ownsLoad) {
+                fetchOwned(url, flight, fetch)
+                return
+            }
+            // Retry only when the owner left the page. A failed HTTP response ends this batch.
+            if (!flight.await()) return
         }
+    }
+
+    private suspend fun fetchOwned(url: String, flight: CompletableDeferred<Boolean>, fetch: suspend () -> Boolean) {
         var succeeded = false
+        var cancelled = false
         try {
             succeeded = fetch()
+        } catch (e: CancellationException) {
+            cancelled = true
+            throw e
         } finally {
             synchronized(this) {
                 inFlight.remove(url)
@@ -122,6 +146,7 @@ internal class RecentCoverLoads(private val nowMs: () -> Long) {
                     if (completed.size > MAX_RECENT) completed.remove(completed.keys.first())
                 }
             }
+            flight.complete(cancelled)
         }
     }
 

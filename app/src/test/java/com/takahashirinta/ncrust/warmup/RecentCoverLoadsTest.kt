@@ -23,10 +23,13 @@ class RecentCoverLoadsTest {
                 true
             }
         }
-        covers.load("shared") { error("The first request still owns this cover") }
+        val follower = launch(start = CoroutineStart.UNDISPATCHED) {
+            covers.load("shared") { error("The first request still owns this cover") }
+        }
         covers.load("new") { secondRequests++; true }
         release.complete(Unit)
         first.join()
+        follower.join()
 
         time = 59_999L
         covers.load("shared") { error("The first cover is still fresh") }
@@ -49,5 +52,25 @@ class RecentCoverLoadsTest {
         covers.load("retry") { requests++; true }
         covers.load("retry") { error("A successful retry is reusable") }
         assertEquals(2, requests)
+    }
+
+    @Test fun visibleListTakesOverACoverWhenThePreviousListIsCancelled() = runBlocking {
+        val covers = RecentCoverLoads { 0L }
+        val pending = CompletableDeferred<Unit>()
+        val previous = launch(start = CoroutineStart.UNDISPATCHED) {
+            covers.load("shared") { pending.await(); true }
+        }
+        var replacements = 0
+        val visible = launch(start = CoroutineStart.UNDISPATCHED) {
+            covers.load("shared") { replacements++; true }
+        }
+        val overlapping = launch(start = CoroutineStart.UNDISPATCHED) {
+            covers.load("shared") { replacements++; true }
+        }
+        assertEquals(0, replacements)
+        previous.cancelAndJoin()
+        visible.join()
+        overlapping.join()
+        assertEquals(1, replacements)
     }
 }
