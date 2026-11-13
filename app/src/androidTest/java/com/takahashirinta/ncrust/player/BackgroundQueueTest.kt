@@ -37,25 +37,36 @@ class BackgroundQueueTest {
     @Test
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
 
-    private fun runQueue(gapless: Boolean) {
-        assertFalse("Run with mobile data and Wi-Fi disabled", NetworkAvailability.isOnline(app))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
-        }
-        val settings = app.getSharedPreferences("ncrust_settings", 0)
-        settings.edit().putBoolean("gapless_playback", gapless).apply()
-        PlaybackStateManager.savePlayMode(app, QueueModes.CYCLE)
-        val tracks = listOf(961_001L, 961_002L, 961_003L).map { id ->
-            cacheSilence(id)
-            SongItem(id = id, name = "离线测试 $id", artists = null, album = null, duration = 24_000L)
-        }
-        val scenario = ActivityScenario.launch(MainActivity::class.java)
+    @Test
+    fun removingTaskDuringCurrentSelectionKeepsForegroundService() {
+        val tracks = prepareTracks(gapless = false)
+        val scenario = launchQueue(tracks)
         try {
-            scenario.onActivity {
-                val queue = app.playback.queue
-                while (queue.mode != QueueModes.CYCLE) queue.cycleMode()
-                queue.replaceAndPlay(tracks, enterFm = false, startIndex = 0)
+            awaitPlaying(tracks[0].id)
+            main {
+                val service = requireNotNull(PlaybackService.instance)
+                val revision = app.playback.beginUserPlayIntent()
+                service.waitForPlaybackSelection(PlaybackCommands.intent(app).putExtra("playRevision", revision))
+                assertFalse(service.hasPlayableItem())
+                service.onTaskRemoved(null)
+                val next = tracks[1]
+                assertTrue(service.submitResolvedPlayback(PlaybackCommands.intent(app)
+                    .putExtra("playRevision", revision)
+                    .putExtra("url", OfflineKeys.withKey("https://offline.invalid/${next.id}.wav", next.id, "higher"))
+                    .putExtra("songId", next.id)
+                    .putExtra("title", next.name)))
             }
+            awaitPlaying(tracks[1].id)
+        } finally {
+            main { app.playback.stopService() }
+            scenario.close()
+        }
+    }
+
+    private fun runQueue(gapless: Boolean) {
+        val tracks = prepareTracks(gapless)
+        val scenario = launchQueue(tracks)
+        try {
             await("First track ready, expected preload state") {
                 PlaybackService.instance?.let { service ->
                     service.player.isPlaying && service.playingTrackKey()?.id == tracks[0].id &&
@@ -87,6 +98,29 @@ class BackgroundQueueTest {
             scenario.close()
         }
     }
+
+    private fun prepareTracks(gapless: Boolean): List<SongItem> {
+        assertFalse("Run with mobile data and Wi-Fi disabled", NetworkAvailability.isOnline(app))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            instrumentation.uiAutomation.grantRuntimePermission(app.packageName, Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val settings = app.getSharedPreferences("ncrust_settings", 0)
+        settings.edit().putBoolean("gapless_playback", gapless).apply()
+        PlaybackStateManager.savePlayMode(app, QueueModes.CYCLE)
+        return listOf(961_001L, 961_002L, 961_003L).map { id ->
+            cacheSilence(id)
+            SongItem(id = id, name = "离线测试 $id", artists = null, album = null, duration = 24_000L)
+        }
+    }
+
+    private fun launchQueue(tracks: List<SongItem>) =
+        ActivityScenario.launch(MainActivity::class.java).also { scenario ->
+            scenario.onActivity {
+                val queue = app.playback.queue
+                while (queue.mode != QueueModes.CYCLE) queue.cycleMode()
+                queue.replaceAndPlay(tracks, enterFm = false, startIndex = 0)
+            }
+        }
 
     private fun cacheSilence(songId: Long) {
         val silence = app.assets.open("playback-regression-silence.wav").use { it.readBytes() }

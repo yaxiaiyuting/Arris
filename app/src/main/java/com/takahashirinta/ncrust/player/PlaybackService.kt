@@ -141,6 +141,10 @@ class PlaybackService : MediaLibraryService() {
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
     private var isServiceStarted = false
+    private data class PendingSelection(val revision: Int, val roomGeneration: Long?)
+    private data class PendingCompletion(val revision: Int, val item: MediaItem)
+    private var pendingSelection: PendingSelection? = null
+    private var pendingCompletion: PendingCompletion? = null
     private var currentArtworkUrl: String? = null
     /** v2.1.0 · C：当前媒体项的音源身份（车机/通知路径按它路由取链）。 */
     private var mediaSourceKey: String? = null
@@ -645,19 +649,7 @@ class PlaybackService : MediaLibraryService() {
                         "STATE_ENDED count=${player.mediaItemCount} " +
                             "index=${player.currentMediaItemIndex} songId=$mediaSongId",
                     )
-                    val endedItem = player.currentMediaItem
-                    val revision = playRequestGeneration.current
-                    // Dispatch outside the player listener; the next track may mutate the playlist.
-                    scope.launch {
-                        val current = player.currentMediaItem
-                        if (isServiceStarted && endedItem != null && current?.mediaId == endedItem.mediaId &&
-                            current.localConfiguration?.uri == endedItem.localConfiguration?.uri &&
-                            playRequestGeneration.isCurrent(revision) && player.playbackState == Player.STATE_ENDED &&
-                            player.playWhenReady
-                        ) {
-                            onPlaybackEnded?.invoke()
-                        }
-                    }
+                    dispatchCompletion()
                 }
                 onBufferingChanged?.invoke(state == Player.STATE_BUFFERING)
                 updatePlaybackState()
@@ -754,6 +746,7 @@ class PlaybackService : MediaLibraryService() {
                 // 停止服务）：这不是一次「起播」，不能上报给 UI —— 否则会拿上一首的
                 // identity 回查并预载下一首，等于在错误清理之后凭空恢复播放意图。
                 if (mediaItem == null) return
+                pendingSelection = null
                 val auto = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO
                 // v2.1.5：起播项的音源**从 item 自己身上读**。item 是 ExoPlayer 真正播的
                 // 那一份，而 pendingNext* 是旁路（last-write-wins）—— 身份必须跟着 item 走，
@@ -956,6 +949,7 @@ class PlaybackService : MediaLibraryService() {
             }
             "pause_failed" -> {
                 if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+                pendingSelection = null
                 player.pause()
                 return START_NOT_STICKY
             }
@@ -1002,12 +996,15 @@ class PlaybackService : MediaLibraryService() {
     }
 
     internal fun waitForPlaybackSelection(intent: Intent) {
-        if (!roomOwnsPlayback(intent) ||
-            !playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))
-        ) return
+        val revision = intent.getIntExtra("playRevision", -1)
+        if (!roomOwnsPlayback(intent) || !playRequestGeneration.isCurrent(revision)) return
         clearPendingNext()
         player.stop()
         player.clearMediaItems()
+        pendingSelection = if (intent.getBooleanExtra("startPlaying", true)) {
+            val room = intent.getLongExtra("roomGeneration", -1L).takeIf { intent.hasExtra("roomGeneration") }
+            PendingSelection(revision, room)
+        } else null
     }
 
     /** Media3 prepares the following item when the current stream is not loading. */
@@ -1082,6 +1079,7 @@ class PlaybackService : MediaLibraryService() {
             intent.getStringExtra("sourceId"),
             intent.getStringExtra("mediaId"),
         ) ?: return false
+        pendingSelection = null
         intent.getStringExtra("title")?.let { mediaTitle = it }
         intent.getStringExtra("artist")?.let { mediaArtist = it }
         mediaSongId = identity.id
@@ -2399,6 +2397,35 @@ class PlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
+    private fun dispatchCompletion() {
+        val item = player.currentMediaItem ?: return
+        val completion = PendingCompletion(playRequestGeneration.current, item)
+        pendingCompletion = completion
+        // Queue changes happen after Media3 leaves the listener.
+        scope.launch {
+            if (pendingCompletion !== completion) return@launch
+            pendingCompletion = null
+            if (isServiceStarted && ownsCompletion(completion)) onPlaybackEnded?.invoke()
+        }
+    }
+
+    private fun ownsCompletion(completion: PendingCompletion): Boolean {
+        val current = player.currentMediaItem ?: return false
+        return player.playWhenReady && player.playbackState == Player.STATE_ENDED &&
+            playRequestGeneration.isCurrent(completion.revision) &&
+            current.mediaId == completion.item.mediaId &&
+            current.localConfiguration?.uri == completion.item.localConfiguration?.uri
+    }
+
+    private fun hasPendingPlayback(): Boolean {
+        val selection = pendingSelection
+        if (selection != null && playRequestGeneration.isCurrent(selection.revision) &&
+            (selection.roomGeneration == null ||
+                com.takahashirinta.ncrust.listen.TogetherSession.isCurrentFollow(selection.roomGeneration))
+        ) return true
+        return onPlaybackEnded != null && pendingCompletion?.let(::ownsCompletion) == true
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         if (hasActivePlaybackIntent()) {
             if (!isServiceStarted) updateNotify()
@@ -2406,6 +2433,10 @@ class PlaybackService : MediaLibraryService() {
                 Log.i("PlaybackService", "Activity task removed, retaining active media playback")
                 return
             }
+        }
+        if (isServiceStarted && hasPendingPlayback()) {
+            Log.i("PlaybackService", "Activity task removed during a playback transition")
+            return
         }
         Log.d("PlaybackService", "onTaskRemoved")
         isServiceStarted = false
@@ -2415,6 +2446,8 @@ class PlaybackService : MediaLibraryService() {
         mediaTitle = "Arris"
         mediaArtist = ""
         mediaSongId = null
+        pendingSelection = null
+        pendingCompletion = null
         clearPendingNext()
         clearCurrentArtwork()
         stopSelf()
