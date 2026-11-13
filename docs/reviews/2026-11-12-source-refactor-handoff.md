@@ -1,5 +1,22 @@
 # Arris 主线源码查验与交接
 
+## 11 月 13 日后台队列接续
+
+本轮从 `934e3a8` 开始。预载、队列生命周期及媒体服务交接分别提交到本地 `refactor/arris-source`。
+
+| 提交 | 已查验的范围与改动 |
+| --- | --- |
+| `e942f1e` | 统一 `MainActivity.kt` 的预载参数，保留单曲自预载、乱序轮次和队尾续播的原入口 |
+| `8ec5d07` | `NcrustApplication.kt` 持有进程内的播放器。队列、媒体按键、随机轮次和预载由 `PlaybackQueueController.kt` 管理，页面重建后沿用当前队列。取链、重试、试听判定和歌词读取继续用 `PlayerViewModel.kt` 的既有入口。检查了播放器卡片、歌词分享、统计和一起听的接线 |
+| `19177fc` | `PlaybackService.kt` 在移除最近任务时保留仍属当前代次的取链与已排队的曲终处理，过期操作仍按播放代次、媒体项和房间归属过滤 |
+| `a92df6d` | `PlaybackService.kt` 的码率、断点、媒体面板、桌面组件和卡播观察共用 500 毫秒进度采样。每轮少读两次位置和三次时长，事件触发的刷新仍单独采样 |
+
+Android 14 隔离模拟器断网运行三项 `BackgroundQueueTest`。实际移除 Activity 任务后，有无缝预载与无预载两条路径都从第一首自动播到第三首，重开页面时标题对应真实在播项。第三项在真实服务里模拟取链结果尚未返回，再送入本地缓存地址，验证移除任务期间前台服务能接受当前代次的结果。曲终排队与任务移除恰好同帧的路径做了源码校验。 [模拟器验证](/home/duanjb666/.cache/arris-queue-emulator.phDW5T/instrumentation-final.log) · [媒体服务日志](/home/duanjb666/.cache/arris-queue-emulator.phDW5T/playback-final.log)
+
+离线 JVM 3,603 项通过、13 项跳过。Debug Lint 0 错误、90 警告，Release Kotlin 编译通过。后台验证使用 Debug 测试包，4.1.2 正式包保持原发布产物。 [构建日志](/home/duanjb666/.cache/arris-progress-snapshot.Fjlzpv/gradle.log)
+
+下轮优先覆盖随机轮末、顺序队尾、单曲循环和一起听断开时的后台行为，并验证当前待播链接在账号或网络切换后的归属。随后检查无码率格式的缓存元数据读取。
+
 ## 11 月 12 日 20:10 UTC 续查
 
 本轮从 `a4aadf1` 接续，源码验收到 `b540200`。四组改动已分别提交到本地 `refactor/arris-source`。
