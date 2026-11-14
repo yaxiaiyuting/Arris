@@ -721,6 +721,35 @@ data class Strings(
     // 4.0.0：均衡器入口（SettingsStrings 的字段在 Strings 上暴露成同名只读属性 ——
     // SettingsRegistryTest 用 StringsSnapshot 反射采集可读路径，裸 key 必须在这里有落点）
     val equalizerEntryLabel: String get() = settings.equalizerEntryLabel
+    val liveUpdatesSettings: String get() = when (this) {
+        zhCN -> "实时通知"
+        zhTW -> "即時通知"
+        jpJP, jpMY -> "ライブアップデート"
+        koNK -> "실시간 알림"
+        deDE -> "Live-Updates"
+        ruRU -> "Обновления в реальном времени"
+        else -> "Live updates"
+    }
+    val cacheSongLabel: String get() = when (this) {
+        zhCN -> "缓存整首歌"
+        zhTW -> "快取整首歌"
+        else -> "Cache full track"
+    }
+    val cachedTrackReady: String get() = when (this) {
+        zhCN -> "整首歌已缓存"
+        zhTW -> "整首歌已快取"
+        else -> "Track cached"
+    }
+    val cancelCachingLabel: String get() = when (this) {
+        zhCN -> "停止缓存"
+        zhTW -> "停止快取"
+        else -> "Stop caching"
+    }
+    val preparingCacheLabel: String get() = when (this) {
+        zhCN -> "正在缓存"
+        zhTW -> "正在快取"
+        else -> "Caching"
+    }
     val equalizerEntryHint: String get() = settings.equalizerEntryHint
     val lyricsInMediaSessionLabel: String get() = settings.lyricsInMediaSessionLabel
     val lyricsInMediaSessionHint: String get() = settings.lyricsInMediaSessionHint

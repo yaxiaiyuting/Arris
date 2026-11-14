@@ -124,7 +124,7 @@ object OfflineAudioCache {
      * 缓存读写与回源使用同一套键。回源共享 MediaHttp 的 DNS 和连接池，
      * B 站媒体由单独的上游工厂提供对应 User-Agent。
      */
-    fun dataSourceFactory(context: Context): DataSource.Factory {
+    fun dataSourceFactory(context: Context): CacheDataSource.Factory {
         val app = context.applicationContext
         val c = get(app)
         // 音频流统一走 OkHttp（v3.8.9）：默认的 DefaultHttpDataSource 用 HttpURLConnection，
@@ -153,7 +153,7 @@ object OfflineAudioCache {
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
-    private fun cacheKeyFor(url: String, host: String?): String =
+    internal fun cacheKeyFor(url: String, host: String?): String =
         BiliCdn.cacheKeyFor(url, host) ?: OfflineKeys.keyOf(url) ?: url
 
     /** 只读当前缓存的完整文件长度元数据；不是已缓存片段的长度，不触发网络。 */

@@ -783,6 +783,7 @@ class SettingsRegistryTest {
             "action.check_update",
             "action.background_activity",
             "action.equalizer_open",
+            "action.live_update_settings",
         "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",
         )
 

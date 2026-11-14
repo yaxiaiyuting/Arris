@@ -16,6 +16,7 @@ import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.QueueModes
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
+import com.takahashirinta.ncrust.cache.OfflineCacheDownload
 import com.takahashirinta.ncrust.cache.OfflineContent
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineLibrary
@@ -26,6 +27,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.TrackKey
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -43,6 +46,47 @@ class BackgroundQueueTest {
 
     @Test
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
+
+    @Test
+    fun explicitDownloadWritesACompleteTrackAndReusesItForOfflinePlayback() {
+        val song = SongItem(961_015L, "本地下载夹具", null, null, 24_000L)
+        val payload = app.assets.open("playback-regression-silence.wav").use { it.readBytes() }
+        val completed = LinkedBlockingQueue<Boolean>()
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 5_000
+            val serving = Thread {
+                server.accept().use { socket ->
+                    socket.soTimeout = 5_000
+                    val reader = socket.getInputStream().bufferedReader()
+                    while (!reader.readLine().isNullOrEmpty()) Unit
+                    val response = "HTTP/1.1 200 OK\r\nContent-Length: ${payload.size}\r\n" +
+                        "Content-Type: audio/wav\r\nConnection: close\r\n\r\n"
+                    socket.getOutputStream().apply { write(response.toByteArray()); write(payload); flush() }
+                }
+            }.apply { isDaemon = true; start() }
+            val level = "higher"
+            val url = OfflineKeys.withKey("http://127.0.0.1:${server.localPort}/song.wav", song.id, level)
+            try {
+                assertTrue(OfflineCacheDownload.start(app, song, resolve = {
+                    SongUrlResult(url, level, cachedContent = OfflineContent(OfflineContent.FULL))
+                }, resolvedIsCurrent = { true }, onFinished = { completed.add(it) }))
+                assertEquals(true, completed.poll(12, TimeUnit.SECONDS))
+                val snapshot = OfflineAudioCache.librarySnapshot(app)
+                assertEquals(song.name, snapshot.tracks.single { it.songId == song.id }.name)
+                assertEquals(payload.size.toLong(), snapshot.bytesBySong[song.id])
+            } finally {
+                if (serving.isAlive) server.close()
+                serving.join(1_000)
+            }
+        }
+        launchQueue(listOf(song)).use { scenario ->
+            try {
+                awaitPlaying(song.id)
+            } finally {
+                scenario.onActivity { app.playback.stopService() }
+            }
+        }
+    }
 
     @Test
     fun systemRestartResumesActiveQueueButDoesNotResumePausedAudio() {

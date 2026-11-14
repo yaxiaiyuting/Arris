@@ -34,6 +34,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
 import com.takahashirinta.ncrust.listen.TogetherSession
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
+import com.takahashirinta.ncrust.cache.OfflineCacheDownload
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
 import com.takahashirinta.ncrust.network.NetworkAvailability
@@ -1253,6 +1254,20 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         if (usesWifi) qualityApiLevels.getOrElse(prefs.getInt("wifi_quality", 3)) { "lossless" }
         else qualityApiLevels.getOrElse(prefs.getInt("mobile_quality", 1)) { "higher" }
 
+    internal fun cacheSong(song: SongItem, onFinished: suspend (Boolean) -> Unit): Boolean {
+        val app = getApplication<Application>()
+        val track = TrackKey.ofSong(song)
+        val account = qualityAccountRevision(track.source)
+        val level = effectivePreferredLevel(prefs())
+        return OfflineCacheDownload.start(app, song, resolve = {
+            val result = SourceRouter.resolveUrlOutcome(song, level).result ?: return@start null
+            val content = result.cachedContent
+            val trial = result.playbackItem?.freeTrialInfo != null ||
+                content?.kind == com.takahashirinta.ncrust.cache.OfflineContent.TRIAL
+            result.takeUnless { trial }
+        }, resolvedIsCurrent = { qualityAccountRevision(track.source) == account }, onFinished = onFinished)
+    }
+
     /**
      * 设置项「非会员遇到 VIP 歌曲」：true = 播放试听片段（默认），false = 直接跳过。
      * 每次播放都现读：设置页改完立刻生效，不需要额外的状态同步。
@@ -1530,6 +1545,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     fun lastVerdictRequestedForDiagnostics(): String = lastVerdictRequested
 
     fun lastPlayedLevelForDiagnostics(): String = lastPlayedLevel
+
+    internal fun currentPlaybackQualityLevel(): String? = lastVerdictResult?.let {
+        QualityAssessment.measuredLevel(it.br, it.type) ?: it.actualLevel
+    }
 
     fun lastVerdictResultForDiagnostics(): SongUrlResult? = lastVerdictResult
 

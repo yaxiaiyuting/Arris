@@ -64,6 +64,7 @@
         </activity>
 
         <receiver android:name=".player.PlaybackActionReceiver" android:exported="false" />
+        <receiver android:name=".player.LiveUpdateDismissReceiver" android:exported="false" />
 
         <service
             android:name=".recognize.PlaybackRecognitionService"

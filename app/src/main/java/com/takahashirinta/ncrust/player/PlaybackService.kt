@@ -991,7 +991,7 @@ class PlaybackService : MediaLibraryService() {
                 isServiceStarted = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 // v1.6.0 · D3：撤掉实时更新通知，别在状态栏留一条不动的进度条。
-                LiveUpdateNotifier.cancel(this)
+                LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
                 mediaTitle = "Arris"
                 mediaArtist = ""
                 mediaSongId = null
@@ -1084,7 +1084,7 @@ class PlaybackService : MediaLibraryService() {
         player.clearMediaItems()
         if (artwork.isNotBlank() && currentArtworkUrl != artwork) clearCurrentArtwork()
         updateTrackMetadata(track, title, artist, artwork)
-        LiveUpdateNotifier.cancel(this)
+        LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
         if (isServiceStarted) updateNotify() else pushWidgetUpdate()
     }
 
@@ -2089,6 +2089,7 @@ class PlaybackService : MediaLibraryService() {
                 savePlaybackCheckpoint(positionMs, durationMs)
                 onProgressUpdate?.invoke(positionMs, durationMs)
                 updatePlaybackState(durationMs)
+                if (android.os.Build.VERSION.SDK_INT >= 36) updateLivePlayback(positionMs, durationMs)
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
@@ -2210,23 +2211,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun updateNotify() {
-        // v1.6.0 · D3：API 36 的实时更新（Live Updates）。与媒体通知并行、互不依赖，
-        // 失败只打日志（见 LiveUpdateNotifier）。
-        runCatching {
-            val songId = player.currentMediaItem?.mediaId
-            if (songId != null) {
-                val display = currentMediaDisplay()
-                LiveUpdateNotifier.update(
-                    this,
-                    title = display.title,
-                    artist = display.subtitle,
-                    trackInfo = display.trackInfo,
-                    positionMs = player.currentPosition.coerceAtLeast(0L),
-                    durationMs = player.duration.takeIf { it > 0L } ?: 0L,
-                    isPlaying = player.isPlaying,
-                )
-            }
-        }
+        if (android.os.Build.VERSION.SDK_INT >= 36) updateLivePlayback(player.currentPosition, player.duration)
         try {
             if (BuildConfig.DEBUG) probeNotifyBuilds++
             val n = buildNotification()
@@ -2248,6 +2233,32 @@ class PlaybackService : MediaLibraryService() {
         // 放在 try/catch **之外**：通知发不出去（渠道被关、RemoteServiceException）
         // 不该连带桌面卡片一起不更新 —— 两者是同一份数据的两个消费者，不互为前提。
         pushWidgetUpdate()
+    }
+
+    private fun updateLivePlayback(positionMs: Long, durationMs: Long) {
+        val track = playingTrackKey()
+        if (track == null || !hasActivePlaybackIntent()) {
+            LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
+            return
+        }
+        val playback = (callbackOwner as? com.takahashirinta.ncrust.ui.viewmodel.PlayerViewModel)
+            ?.takeIf { it.currentTrackKey == track }
+        val strings = com.takahashirinta.ncrust.ui.i18n.stringsForCode(
+            com.takahashirinta.ncrust.ui.i18n.currentLanguageCode(),
+        )
+        val level = playback?.currentPlaybackQualityLevel() ?: player.currentMediaItem?.localConfiguration
+            ?.uri?.toString()?.let(OfflineKeys::keyOf)?.let(OfflineKeys::levelOf)
+        val quality = strings.qualityOptions.getOrNull(QualityLadder.LEVELS.indexOf(level))
+        val album = playback?.queue?.currentSong?.takeIf { QueueKeys.keyOf(it) == track }?.album?.name
+            ?: player.mediaMetadata.albumTitle?.toString()
+        val elapsed = positionMs.coerceAtLeast(0L)
+        LiveUpdateNotifier.post(
+            this, LiveUpdateKind.PLAYBACK, track, mediaTitle,
+            listOfNotNull(mediaArtist.takeIf(String::isNotBlank), quality).joinToString(" · "),
+            percent = progressPercent(elapsed, durationMs),
+            subText = album?.takeIf(String::isNotBlank),
+            elapsedMs = elapsed.takeIf { player.isPlaying && durationMs >= 120_000L && player.playbackParameters.speed == 1f },
+        )
     }
 
     /**
@@ -2425,7 +2436,7 @@ class PlaybackService : MediaLibraryService() {
         observeVisualizationVolume(false)
         com.takahashirinta.ncrust.audio.EqualizerController.release()
         Log.d("PlaybackService", "onDestroy")
-        LiveUpdateNotifier.cancel(this)
+        LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
         instance = null
         isServiceStarted = false
         progressJob?.cancel()
@@ -2499,7 +2510,7 @@ class PlaybackService : MediaLibraryService() {
         isServiceStarted = false
         bufferProgressJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        LiveUpdateNotifier.cancel(this)
+        LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
         mediaTitle = "Arris"
         mediaArtist = ""
         mediaSongId = null
