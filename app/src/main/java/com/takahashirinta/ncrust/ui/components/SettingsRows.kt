@@ -259,7 +259,8 @@ internal fun SettingActionRow(
     label: String,
     onClick: () -> Unit,
     accent: Boolean = false,
-    trailing: String? = null
+    trailing: String? = null,
+    subtitle: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -269,13 +270,21 @@ internal fun SettingActionRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MetroText(
-            label,
-            color = if (accent) LocalMetroColors.current.primary
-            else LocalMetroColors.current.onBackground,
-            style = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
-            modifier = Modifier.weight(1f)
-        )
+        Column(Modifier.weight(1f)) {
+            MetroText(
+                label,
+                color = if (accent) LocalMetroColors.current.primary else LocalMetroColors.current.onBackground,
+                style = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+            )
+            if (subtitle != null) {
+                MetroText(
+                    subtitle,
+                    color = LocalMetroColors.current.onSurfaceVariant,
+                    style = LocalMetroTypography.current.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp, end = 12.dp),
+                )
+            }
+        }
         if (trailing != null) {
             MetroText(
                 trailing,

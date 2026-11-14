@@ -2249,14 +2249,15 @@ class PlaybackService : MediaLibraryService() {
         val level = playback?.currentPlaybackQualityLevel() ?: player.currentMediaItem?.localConfiguration
             ?.uri?.toString()?.let(OfflineKeys::keyOf)?.let(OfflineKeys::levelOf)
         val quality = strings.qualityOptions.getOrNull(QualityLadder.LEVELS.indexOf(level))
-        val album = playback?.queue?.currentSong?.takeIf { QueueKeys.keyOf(it) == track }?.album?.name
-            ?: player.mediaMetadata.albumTitle?.toString()
+        val album = playback?.queue?.currentSong?.takeIf { QueueKeys.keyOf(it) == track }
+            ?.album?.name?.takeIf(String::isNotBlank)
+            ?: player.mediaMetadata.albumTitle?.toString()?.takeIf(String::isNotBlank)
         val elapsed = positionMs.coerceAtLeast(0L)
         LiveUpdateNotifier.post(
             this, LiveUpdateKind.PLAYBACK, track, mediaTitle,
             listOfNotNull(mediaArtist.takeIf(String::isNotBlank), quality).joinToString(" · "),
             percent = progressPercent(elapsed, durationMs),
-            subText = album?.takeIf(String::isNotBlank),
+            subText = album,
             elapsedMs = elapsed.takeIf { player.isPlaying && durationMs >= 120_000L && player.playbackParameters.speed == 1f },
         )
     }
