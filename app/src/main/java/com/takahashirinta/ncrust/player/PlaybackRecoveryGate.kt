@@ -2,11 +2,15 @@
 package com.takahashirinta.ncrust.player
 
 import com.takahashirinta.ncrust.network.PlaybackNetworkRoute
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 /** Main-thread state. A usable new route can recover only the last unpaused request. */
 internal class PlaybackRecoveryGate(initialRoute: PlaybackNetworkRoute) {
     private var route = initialRoute
     val online: Boolean get() = route.online
+    private val routeRefreshPending = MutableStateFlow(false)
     var wanted = false; private set
     var resolving = false; private set
     var waiting = false; private set
@@ -25,5 +29,27 @@ internal class PlaybackRecoveryGate(initialRoute: PlaybackNetworkRoute) {
         val changed = next != route
         route = next
         return changed && next.online
+    }
+
+    suspend fun awaitRouteRefresh() {
+        if (routeRefreshPending.value) routeRefreshPending.first { !it }
+    }
+
+    /** Called from collectLatest so a newer route takes over a pending refresh. */
+    suspend fun updateRoute(
+        next: PlaybackNetworkRoute,
+        onChange: (refreshing: Boolean) -> Unit,
+        refresh: suspend () -> Unit,
+        onReady: () -> Unit,
+    ) {
+        val recover = networkChanged(next)
+        routeRefreshPending.value = recover
+        onChange(recover)
+        if (!recover) return
+        // Keep preloads waiting through coalesced online callbacks and cancelled refreshes.
+        delay(500L)
+        refresh()
+        onReady()
+        routeRefreshPending.value = false
     }
 }

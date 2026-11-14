@@ -601,8 +601,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     )
     private var preloading: PreloadRequest? = null
     private var preparedPreload: PreparedPreload? = null
-    /** An offline miss has no slot, but can be retried when a route becomes available. */
-    private var offlinePreloadMiss: PreloadRequest? = null
+    /** A transport failure can be retried when the default route changes. */
+    private var preloadNetworkMiss: PreloadRequest? = null
 
     // Main.immediate can call fetchLyrics during init. Initialize its state before those launches.
     // 同一音源、曲目和代次只保留一份在途歌词请求。已作废的请求不阻挡新请求。
@@ -694,19 +694,18 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         viewModelScope.launch {
             networkObserver.changes().collectLatest { route ->
-                val request = pendingPreloadRequest()
-                val replacePreload = request != null && request.level !=
-                    requestedPreloadLevel(request.track, usesWifi = route.usesWifi)
-                if (replacePreload) invalidatePreload()
-                val recover = recovery.networkChanged(route)
-                if (replacePreload || recover && offlinePreloadMiss != null) {
-                    queue.preloadCurrentSuccessor()
-                }
-                if (!recover) return@collectLatest
                 val revision = playGate.current
-                delay(500L) // Coalesce related default-route callbacks.
-                refreshPlaybackNetwork()
-                if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
+                recovery.updateRoute(route, onChange = { refreshing ->
+                    val request = pendingPreloadRequest()
+                    val qualityChanged = request != null && request.level !=
+                        requestedPreloadLevel(request.track, usesWifi = route.usesWifi)
+                    if (qualityChanged || refreshing && (preloading != null || preloadNetworkMiss != null)) {
+                        invalidatePreload()
+                        queue.preloadCurrentSuccessor()
+                    }
+                }, refresh = ::refreshPlaybackNetwork, onReady = {
+                    if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
+                })
             }
         }
 
@@ -948,7 +947,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     recovery.resolved()
                 }
                 preparedPreload = null
-                offlinePreloadMiss = null
+                preloadNetworkMiss = null
                 needsPreload = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
                 beginListening(nextTrack.id, restart = auto && !changed)
@@ -2258,11 +2257,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         preloadJob = null
         preloading = null
         preparedPreload = null
-        offlinePreloadMiss = null
+        preloadNetworkMiss = null
         PlaybackService.instance?.discardPreload()
     }
 
-    private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: offlinePreloadMiss
+    private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: preloadNetworkMiss
 
     private fun leaveRoomPlayback(request: RetryRequest) {
         invalidatePlaybackIntent()
@@ -2347,10 +2346,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val queueVersion = com.takahashirinta.ncrust.player.preloadGeneration
         val queueRevision = queueVersion.current()
         preloadJob?.cancel()
-        offlinePreloadMiss = null
+        preloadNetworkMiss = null
         preloading = request
         preloadJob = viewModelScope.launch {
             try {
+                recovery.awaitRouteRefresh()
                 if (cached == null) launch(Dispatchers.IO) {
                     val aux = buildList<suspend () -> Unit> {
                         if (neteaseSession != null) {
@@ -2361,16 +2361,17 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     }
                     BoundedParallel.runAll(aux)
                 }
-                val result = cached?.asResult() ?: withContext(Dispatchers.IO) {
-                    fetchUrlOfflineFirst(songRefOf(nextTrack.source, songId, sourceId, mediaId), quality).result
-                }
+                val outcome = if (cached == null) withContext(Dispatchers.IO) {
+                    fetchUrlOfflineFirst(songRefOf(nextTrack.source, songId, sourceId, mediaId), quality)
+                } else null
+                val result = cached?.asResult() ?: outcome?.result
                 if (!playGate.isCurrent(version) || !queueVersion.accepts(queueRevision) ||
                     account != qualityAccountRevision(nextTrack.source) ||
                     !TogetherSession.memberPlayback.value.allowsPreload(roomGeneration) ||
                     quality != requestedPreloadLevel(nextTrack)
                 ) return@launch
                 if (result == null) {
-                    if (!NetworkAvailability.isOnline(app)) offlinePreloadMiss = request
+                    if (outcome?.failure?.kind == ResolveFailureKind.NETWORK) preloadNetworkMiss = request
                     return@launch
                 }
                 val entitlement = classifyEntitlement(nextTrack.source, result, quality, effectivePrivilege)

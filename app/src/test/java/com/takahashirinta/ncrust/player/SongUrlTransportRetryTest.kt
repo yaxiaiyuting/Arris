@@ -1,5 +1,6 @@
 package com.takahashirinta.ncrust.player
 
+import com.takahashirinta.ncrust.network.PlaybackNetworkRoute
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.*
@@ -7,6 +8,8 @@ import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
@@ -112,6 +115,55 @@ class SongUrlTransportRetryTest {
             }
         } finally {
             release.countDown()
+        }
+    }
+
+    @Test fun reconnectResetsTransportBeforeTheSuccessorTriesToResolve() = runBlocking {
+        val offline = PlaybackNetworkRoute(null, false)
+        val first = PlaybackNetworkRoute(1L, true)
+        val second = PlaybackNetworkRoute(2L, true)
+        val body = """{"data":[{"id":987654321,"code":200,"url":"https://fixture.invalid/audio.mp3","level":"standard","br":128000,"type":"mp3"}]}"""
+        val refreshing = CompletableDeferred<Unit>()
+        val found = CompletableDeferred<SongUrlResult?>()
+        intercept({ if (it <= 2) throw IOException("fixture old route") else body }) { count, cooldown ->
+            assertEquals(ResolveFailureKind.NETWORK, SongUrlFetcher.fetchOutcome(song.id, "standard").failure?.kind)
+            assertTrue(cooldown() > System.nanoTime() / 1_000_000)
+            val gate = PlaybackRecoveryGate(offline)
+            val routes = MutableStateFlow(offline)
+            coroutineScope {
+                var preload: Job? = null
+                fun requestSuccessor() {
+                    preload?.cancel()
+                    preload = launch {
+                        gate.awaitRouteRefresh()
+                        found.complete(SongUrlFetcher.fetch(song.id, "standard"))
+                    }
+                }
+                val watch = launch(start = CoroutineStart.UNDISPATCHED) {
+                    routes.collectLatest { route ->
+                        gate.updateRoute(route, onChange = { changed ->
+                            if (changed) requestSuccessor()
+                        }, refresh = {
+                            if (route == first) {
+                                refreshing.complete(Unit)
+                                awaitCancellation()
+                            }
+                            SongUrlFetcher.onNetworkRouteChanged()
+                        }, onReady = {})
+                    }
+                }
+                try {
+                    routes.value = first
+                    withTimeout(3_000L) { refreshing.await() }
+                    assertFalse("No successor should see the old cooldown", found.isCompleted)
+                    routes.value = second
+                    assertNotNull(withTimeout(2_000L) { found.await() })
+                    assertEquals(3, count.get())
+                } finally {
+                    watch.cancelAndJoin()
+                    preload?.cancelAndJoin()
+                }
+            }
         }
     }
 }
