@@ -1,5 +1,24 @@
 # Arris 主线源码查验与交接
 
+## 11 月 14 日后台续播、切网预载与实时通知
+
+从 `a464430` 接续，源码到 `e284586`。本轮在 `refactor/arris-source` 本地提交四组改动，涉及 `app/src` 下 27 个文件。累计从 `b042755` 起，现有生产 Kotlin／Java 文件中 181 / 468 个存在 Git 差异，占 **38.7%**。
+
+| 提交 | 改动和证据 |
+| --- | --- |
+| `9b48903` | 默认线路变化时先更新连接池、DNS 与传输冷却，再放行下一曲预取。旧版在拦截夹具的冷却窗口内直接丢掉下一曲；两次连续线路变化后新版只向最终线路成功发出一次请求。 |
+| `fbd748e` | 沿用 Media3 播放期间的 CPU／网络唤醒锁。媒体前台服务在主动播放或换曲期间采用 `START_STICKY`；系统用空 Intent 重建时，从原曲与队列断点恢复。手动暂停与停止会清除恢复资格。本地 Android 14 重建服务用例从第二首的 8 秒位置恢复、重新装入后续项，并验证暂停后不恢复。该用例直接调用重建回调。 |
+| `1e74a08` | 「播放与音质」增加实时通知三态及系统入口。ProgressStyle 使用请求提升 extra、低重要度静音通道。播放卡显示歌名、歌手、可知的音质与专辑，常速长曲使用系统计时。识曲、一起听等待、更新下载和整曲缓存按任务发布与撤回。整曲缓存复用 Media3，QQ／网易仅使用实际取得的非试听音频。 |
+| `e284586` | 立即取消整曲缓存时也执行任务收尾，释放槽位后可以开启下一次缓存。 |
+
+Android 16.1 隔离模拟器确认公开 action 打开 Arris 对应的系统通知页，页面含 Live updates 开关。夹具发布的真实通知携带 `FLAG_PROMOTED_ONGOING`，应用读回「已提升」。Android 16.0 镜像的专用 action 无接收方，应用通知路线可打开。Android 14 的隔离回归包括本地 HTTP 整曲缓存，再关掉源端口验证播放从缓存读取。真机 ROM 的胶囊样式、后台冻结策略和被系统终止后的实际调度仍需真机数据。
+
+最终源码全量 JVM 3,609 项通过、13 项跳过，Debug Lint 0 错误、93 警告，Release Kotlin 编译通过。Android 14 的 17 项和 Android 16.1 的 1 项均通过，使用的是取消调度收尾前的 `1e74a08`。本轮额度五小时约 5% 时停止扩展，周窗口约 10%。
+
+[构建日志](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/gradle-final-cancel.log) · [切网旧版](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/reconnect-baseline.xml) · [切网回归](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/reconnect-final.xml) · [Android 14 回归](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/instrumentation-final.log) · [Android 16.1 系统设置](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/promotion-settings-api361.xml) · [通知标记回读](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/live-api361-results.log)
+
+下一轮优先核对厂商把服务冻结但进程仍在时的 READY 时钟与音频焦点，接着处理离线失败键的跨线程读写及重新缓存后失效问题。正式 4.1.3-gpl 仍指向 `83c1faa`。续跑每 305 分钟。
+
 ## 11 月 13 日晚离线起播、歌词、波形和切网续查
 
 从 4.1.3-gpl 正式提交 `83c1faa` 接续，验证到 `1d0b180`。本轮 10 个本地源码及回归提交，涉及 `app/src` 下 24 个文件，其中生产源码 14 个、JVM 测试 9 个、Android 测试 1 个。
