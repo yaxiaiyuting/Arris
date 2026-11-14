@@ -1,5 +1,13 @@
 # Arris 主线源码查验与交接
 
+## 11 月 14 日实时通知设置回读
+
+`c9dac7a` 续接本地 4.1.4 测试包源码 `be59ae3`。系统开关关闭时，仍在进行的任务保留最新通知内容。从系统设置返回时重新核对开关，补发仍在进行且用户未划掉的任务。读回只匹配实时通知通道与本功能的通知 ID。设置页保留三态，未提升时区分系统通知、实时通知开关、通道、无活跃任务和系统未提升。歌曲通知继续显示歌曲名、歌手、可用音质和专辑；专辑空值可回退到媒体项的专辑字段。缓存、识曲、一起听等待和安装包下载沿用各自的任务收尾。
+
+Android 16.1 隔离模拟器，系统页确有 Arris 的 Live updates 开关。关闭时通知未发出且回读对应开关状态。重新打开后真实通知带 `FLAG_PROMOTED_ONGOING`，应用读回「已提升」。另一项用例通过权限闸门夹具验证，返回时即使等待任务没再发进度，也会用最新内容补发，已结束任务不会出现；完成撤回后读回空闲。两组开关状态共 3 项通过。离线 JVM 3,609 项通过、13 项跳过，Debug Lint 0 错误、93 警告，Release Kotlin 编译通过。现有签名 4.1.4 包仍对应 `be59ae3`。 [构建](/home/duanjb666/.cache/arris-live-update.BBGyJR/gradle.log) · [系统设置](/home/duanjb666/.cache/arris-live-update.BBGyJR/promotion-settings.xml) · [关闭开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-off.log) · [打开开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-on.log)
+
+周额度约 6% 时收尾。下一轮核对工作树中离线失败键的在途改动，优先用同档完整／试听键和 CDN 换签名夹具确认失败状态与缓存字节的归属。播放队列当前保存曲目、游标与随机顺序，通知暂以专辑提供来源信息。
+
 ## 11 月 14 日后台续播、切网预载与实时通知
 
 从 `a464430` 接续，源码到 `e284586`。本轮在 `refactor/arris-source` 本地提交四组改动，涉及 `app/src` 下 27 个文件。累计从 `b042755` 起，现有生产 Kotlin／Java 文件中 181 / 468 个存在 Git 差异，占 **38.7%**。
