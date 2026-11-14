@@ -56,6 +56,9 @@ import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.takahashirinta.ncrust.BuildConfig
+import com.takahashirinta.ncrust.NcrustApplication
+import com.takahashirinta.ncrust.auth.NeteaseTokenRefresher
+import com.takahashirinta.ncrust.qq.QqMusicSourceProvider
 import java.lang.ref.WeakReference
 import com.takahashirinta.ncrust.bili.BiliAuthStore
 import com.takahashirinta.ncrust.bili.BiliPrefs
@@ -85,6 +88,7 @@ import com.takahashirinta.ncrust.MainActivity
 import com.takahashirinta.ncrust.library.LibraryManager
 import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.network.PlaylistApi
+import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.MusicSource
 import com.takahashirinta.ncrust.source.SourceIds
@@ -152,6 +156,8 @@ class PlaybackService : MediaLibraryService() {
     /** R2：运行中 PCM 需求监听；随 Service 销毁取消，不做轮询。 */
     private var pcmDemandJob: Job? = null
     private var isServiceStarted = false
+    private var restartJob: Job? = null
+    private var canRestoreCurrentItem = true
     private data class PendingSelection(val revision: Int, val roomGeneration: Long?)
     private data class PendingCompletion(val revision: Int, val item: MediaItem)
     private var pendingSelection: PendingSelection? = null
@@ -685,6 +691,7 @@ class PlaybackService : MediaLibraryService() {
                         Player.EVENT_POSITION_DISCONTINUITY,
                     )
                 ) {
+                    persistServiceResumeIntent()
                     restartStallObservation()
                 }
             }
@@ -838,6 +845,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                     }
                     if (!sameAsConfigured && itemSource != null && itemSongId != null && itemSongId > 0L) {
+                        canRestoreCurrentItem = TogetherSession.memberPlayback.value.generation == null
                         persistPlaybackState(player.playWhenReady)
                     }
                     updatePlaybackState()
@@ -887,6 +895,7 @@ class PlaybackService : MediaLibraryService() {
                 // 播完的项统一清掉：列表收敛回「当前 + 至多一首待播」。
                 val finishedItems = player.currentMediaItemIndex
                 if (finishedItems > 0) player.removeMediaItems(0, finishedItems)
+                canRestoreCurrentItem = TogetherSession.memberPlayback.value.generation == null
                 persistPlaybackState(player.playWhenReady)
                 updatePlaybackState()
                 updateNotify()
@@ -948,24 +957,35 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val platformResult = super.onStartCommand(intent, flags, startId)
+        if (intent == null) return resumeSystemRestart(startId)
         // Public media-session commands remain handled by Media3; custom start extras are private.
-        if (!PlaybackCommands.authorized(intent)) return platformResult
-        Log.d("PlaybackService", "onStartCommand action=${intent?.getStringExtra("action")}")
+        if (!PlaybackCommands.authorized(intent)) {
+            return if (intent.action == Intent.ACTION_MEDIA_BUTTON) platformResult else START_NOT_STICKY
+        }
+        Log.d("PlaybackService", "onStartCommand action=${intent.getStringExtra("action")}")
 
-        when (intent?.getStringExtra("action")) {
+        when (intent.getStringExtra("action")) {
             "preload_next" -> {
                 enqueuePreload(intent)
-                return START_NOT_STICKY
+                return playbackStartMode()
             }
             "pause_failed" -> {
-                if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return START_NOT_STICKY
+                if (!playRequestGeneration.isCurrent(intent.getIntExtra("playRevision", -1))) return playbackStartMode()
                 pendingSelection = null
+                PlaybackStateManager.saveServiceResumeIntent(this, false)
                 player.pause()
                 return START_NOT_STICKY
             }
-            "pause" -> { onPlaybackInterrupted?.invoke(); player.pause() }
+            "pause" -> {
+                restartJob?.cancel()
+                restartJob = null
+                PlaybackStateManager.saveServiceResumeIntent(this, false)
+                onPlaybackInterrupted?.invoke()
+                player.pause()
+            }
             "resume" -> { resumePlayback() }
             "stop" -> {
+                restartJob?.cancel()
                 onPlaybackInterrupted?.invoke()
                 PlaybackStateManager.clearState(this)
                 isServiceStarted = false
@@ -992,7 +1012,7 @@ class PlaybackService : MediaLibraryService() {
             "next" -> onPlaybackNext?.invoke()
         }
 
-        val url = intent?.getStringExtra("url")
+        val url = intent.getStringExtra("url")
         if (url != null) {
             if (!applyResolvedPlayback(intent, url) && !isServiceStarted) {
                 // A queued startForegroundService can arrive after its selection was revoked.
@@ -1002,7 +1022,48 @@ class PlaybackService : MediaLibraryService() {
         } else if (!isServiceStarted && mediaTitle != "Arris") {
             updateNotify()
         }
-        return START_NOT_STICKY
+        return playbackStartMode()
+    }
+
+    private fun playbackStartMode(): Int =
+        if (hasActivePlaybackIntent() || hasPendingPlayback() || restartJob?.isActive == true) {
+            START_STICKY
+        } else {
+            START_NOT_STICKY
+        }
+
+    private fun resumeSystemRestart(startId: Int): Int {
+        if (hasActivePlaybackIntent() || hasPendingPlayback() || restartJob?.isActive == true) return START_STICKY
+        val saved = PlaybackStateManager.serviceResumeState(this)
+        if (saved == null) {
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+
+        // Consume the restart once. Successful preparation arms it again for the new item.
+        PlaybackStateManager.saveServiceResumeIntent(this, false)
+        mediaTitle = saved.songName
+        mediaArtist = saved.songArtist
+        updateNotify()
+        if (!isServiceStarted) {
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+        RetrofitClient.init(this)
+        NeteaseTokenRefresher.init(this)
+        QqMusicSourceProvider.registerForPlayback(this)
+        val revision = playRequestGeneration.current
+        restartJob = scope.launch {
+            val resumed = (application as NcrustApplication).playback.resumeAfterServiceRestart(saved.songId, revision)
+            if (!resumed && !hasActivePlaybackIntent() && !hasPendingPlayback()) stopSelfResult(startId)
+        }
+        return START_STICKY
+    }
+
+    private fun persistServiceResumeIntent() {
+        val track = playingTrackKey()
+        val active = canRestoreCurrentItem && track != null && track.id == mediaSongId && hasActivePlaybackIntent()
+        PlaybackStateManager.saveServiceResumeIntent(this, active)
     }
 
     internal fun waitForPlaybackSelection(revision: Int, room: Long? = null, startPlaying: Boolean = true) {
@@ -1016,6 +1077,7 @@ class PlaybackService : MediaLibraryService() {
     }
 
     internal fun stagePausedSelection(track: TrackKey, title: String, artist: String, artwork: String) {
+        PlaybackStateManager.saveServiceResumeIntent(this, false)
         pendingSelection = null
         player.pause()
         player.stop()
@@ -1104,9 +1166,11 @@ class PlaybackService : MediaLibraryService() {
         updateTrackMetadata(identity, intent.getStringExtra("title"), intent.getStringExtra("artist"),
             intent.getStringExtra("artwork"))
 
+        canRestoreCurrentItem = room == null
         val startPlaying = intent.getBooleanExtra("startPlaying", true)
         persistPlaybackState(startPlaying)
         playUrl(url, intent.getLongExtra("startPositionMs", 0L), startPlaying)
+        persistServiceResumeIntent()
         if (!isServiceStarted) updateNotify()
         return true
     }
@@ -1132,6 +1196,7 @@ class PlaybackService : MediaLibraryService() {
             sourceKey = mediaSourceKey,
             sourceId = mediaSourceId,
             mediaId = mediaMediaId,
+            resumeService = playing && canRestoreCurrentItem,
         )
     }
 
@@ -1947,8 +2012,9 @@ class PlaybackService : MediaLibraryService() {
     )
 
     internal fun onUiBackgrounding() {
-        if (!hasActivePlaybackIntent()) return
+        if (!hasActivePlaybackIntent() && !hasPendingPlayback()) return
         if (!isServiceStarted) updateNotify()
+        savePlaybackCheckpoint(player.currentPosition, player.duration, explicit = true)
         Log.d(
             "PlaybackService",
             "UI leaving playback state=${player.playbackState} foreground=$isServiceStarted " +
@@ -2429,6 +2495,7 @@ class PlaybackService : MediaLibraryService() {
             return
         }
         Log.d("PlaybackService", "onTaskRemoved")
+        PlaybackStateManager.saveServiceResumeIntent(this, false)
         isServiceStarted = false
         bufferProgressJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)

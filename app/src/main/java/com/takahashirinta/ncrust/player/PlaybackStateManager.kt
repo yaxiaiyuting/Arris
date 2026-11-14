@@ -42,6 +42,7 @@ object PlaybackStateManager {
     private const val KEY_SONG_SOURCE_ID = "song_source_id"
     private const val KEY_SONG_MEDIA_ID = "song_media_id"
     private const val KEY_IS_PLAYING = "is_playing"
+    private const val KEY_RESUME_SERVICE = "resume_media_service"
     private const val KEY_HAS_STATE = "has_state"
 
     // 队列持久化 key
@@ -93,6 +94,7 @@ object PlaybackStateManager {
         sourceKey: String? = null,
         sourceId: String? = null,
         mediaId: String? = null,
+        resumeService: Boolean = false,
     ) {
         getPrefs(context).edit()
             .putBoolean(KEY_HAS_STATE, true)
@@ -104,6 +106,7 @@ object PlaybackStateManager {
             .putString(KEY_SONG_SOURCE, sourceKey)
             .putString(KEY_SONG_SOURCE_ID, sourceId)
             .putString(KEY_SONG_MEDIA_ID, mediaId)
+            .putBoolean(KEY_RESUME_SERVICE, resumeService)
             .apply()
     }
 
@@ -114,6 +117,18 @@ object PlaybackStateManager {
 
     fun updatePlayingState(context: Context, isPlaying: Boolean) {
         getPrefs(context).edit().putBoolean(KEY_IS_PLAYING, isPlaying).apply()
+    }
+
+    internal fun saveServiceResumeIntent(context: Context, active: Boolean) {
+        val prefs = getPrefs(context)
+        if (prefs.getBoolean(KEY_RESUME_SERVICE, false) != active) {
+            prefs.edit().putBoolean(KEY_RESUME_SERVICE, active).apply()
+        }
+    }
+
+    internal fun serviceResumeState(context: Context): SavedState? {
+        if (!getPrefs(context).getBoolean(KEY_RESUME_SERVICE, false)) return null
+        return getState(context)?.takeIf { it.songId > 0 }
     }
 
     /**
@@ -133,6 +148,7 @@ object PlaybackStateManager {
             .remove(KEY_SONG_SOURCE_ID)
             .remove(KEY_SONG_MEDIA_ID)
             .remove(KEY_IS_PLAYING)
+            .remove(KEY_RESUME_SERVICE)
             .remove(KEY_HAS_STATE)
             .apply()
     }

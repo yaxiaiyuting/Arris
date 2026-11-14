@@ -1792,10 +1792,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             }
             submitResolvedPlayback(intent)
             isPlaying.value = startPlaying
-            if (roomGeneration == null) PlaybackStateManager.saveState(
-                getApplication(), songId, title, artist, artworkUrl, true,
-                sourceKey = ref.source, sourceId = sourceId, mediaId = mediaId,
-            )
             return
         }
 
@@ -2825,6 +2821,16 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             currentSongArtwork.value.orEmpty(), sourceKey = currentSongSourceKey,
             sourceId = currentSongSourceId, mediaId = currentSongMediaId,
             startPositionMs = saved?.positionMs ?: currentPosition.value, privilege = lastSongPrivilege)
+        return true
+    }
+
+    internal suspend fun resumeAfterServiceRestart(songId: Long, revision: Int): Boolean {
+        queue.awaitRestored()
+        val track = currentTrack?.takeIf { it.id == songId && playGate.isCurrent(revision) } ?: return false
+        if (TogetherSession.memberPlayback.value.generation != null) return false
+        playSong(track.id, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
+            currentSongArtwork.value.orEmpty(), sourceKey = track.source.key,
+            sourceId = track.sourceId, mediaId = track.mediaId, privilege = lastSongPrivilege)
         return true
     }
 

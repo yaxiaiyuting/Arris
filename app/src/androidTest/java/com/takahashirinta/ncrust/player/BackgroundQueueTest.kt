@@ -2,6 +2,7 @@
 package com.takahashirinta.ncrust.player
 
 import android.Manifest
+import android.app.Service
 import android.os.Build
 import android.os.SystemClock
 import androidx.lifecycle.Lifecycle
@@ -42,6 +43,59 @@ class BackgroundQueueTest {
 
     @Test
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
+
+    @Test
+    fun systemRestartResumesActiveQueueButDoesNotResumePausedAudio() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks, startIndex = 1)
+        try {
+            val selected = tracks[1]
+            awaitPlaying(selected.id)
+            val original = onMain { requireNotNull(PlaybackService.instance) }
+            main {
+                original.player.seekTo(8_000L)
+                assertEquals(
+                    Service.START_STICKY,
+                    original.onStartCommand(PlaybackCommands.intent(app).putExtra("action", "seek")
+                        .putExtra("position", 8_000L), 0, 0),
+                )
+            }
+            removeTask(scenario)
+            main { original.stopSelf() }
+            await("The first service instance was released") { PlaybackService.instance == null }
+            val restarted = startServiceForSystemCallback(Service.START_STICKY)
+            await("The restarted service resumes the same item and its checkpoint") {
+                restarted.player.isPlaying && restarted.playingTrackKey()?.id == selected.id &&
+                    restarted.player.currentPosition >= 8_000L && app.playback.queue.index == 1
+            }
+            await("The queue stages the successor behind the restored track") {
+                restarted.player.mediaItemCount == 2
+            }
+            main { restarted.onStartCommand(PlaybackCommands.intent(app).putExtra("action", "pause"), 0, 0) }
+            await("User pause revoked the restart intent") {
+                !restarted.player.playWhenReady && PlaybackStateManager.serviceResumeState(app) == null
+            }
+            main { restarted.stopSelf() }
+            await("The second service instance was released") { PlaybackService.instance == null }
+            val paused = startServiceForSystemCallback(Service.START_NOT_STICKY)
+            main { assertFalse(paused.hasPlayableItem()) }
+        } finally {
+            scenario.close()
+            ActivityScenario.launch(MainActivity::class.java).use {
+                it.onActivity { app.playback.stopService() }
+            }
+        }
+    }
+
+    private fun startServiceForSystemCallback(expectedMode: Int): PlaybackService {
+        app.startService(PlaybackCommands.intent(app))
+        await("Android has created a fresh service") { PlaybackService.instance != null }
+        return onMain {
+            val service = requireNotNull(PlaybackService.instance)
+            assertEquals(expectedMode, service.onStartCommand(null, 0, 0))
+            service
+        }
+    }
 
     @Test
     fun changingSessionLyricSettingRepublishesTheCurrentLineWhilePlaying() {

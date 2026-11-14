@@ -148,8 +148,7 @@ object QqMusicSourceProvider : MusicSourceProvider {
      * 与 `RetrofitClient.init(this)` 并列调用。**幂等**，重复调用无副作用。
      */
     fun install(context: Context) {
-        QqClient.init(context)
-        SourceRouter.register(this)
+        registerForPlayback(context)
         // v2.5.4 · C：把上一进程落盘的兜底统计读回来（幂等，只读一次）。
         // 放在这里而不是 Application.onCreate：本函数已经是「进程启动时接线」的既有落点。
         runCatching { QqProbeStore.ensureSeeded(context) }
@@ -160,6 +159,11 @@ object QqMusicSourceProvider : MusicSourceProvider {
         // v3.4.9：登录态的**主动续期**（票据寿命还剩不到 12 小时就静默换一张新票）。
         // 必须异步：它是一次网络往返，而这个函数跑在 MainActivity.onCreate 里。
         maybeRefreshLogin(context)
+    }
+
+    internal fun registerForPlayback(context: Context) {
+        QqClient.init(context)
+        SourceRouter.register(this)
     }
 
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
