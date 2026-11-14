@@ -19,6 +19,7 @@ import com.takahashirinta.ncrust.source.TrackKey
 import com.takahashirinta.ncrust.source.isResolvable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
@@ -55,6 +56,7 @@ internal object OfflineCacheDownload {
     }
 
     @Synchronized
+    @kotlin.OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun start(
         context: Context,
         song: SongItem,
@@ -66,7 +68,7 @@ internal object OfflineCacheDownload {
         val task = Task(context.applicationContext, song)
         active = task
         publish(task, null)
-        task.job = scope.launch {
+        task.job = scope.launch(start = CoroutineStart.ATOMIC) {
             var completed = false
             try {
                 val result = withTimeout(20_000L) { resolve() } ?: return@launch
@@ -110,7 +112,7 @@ internal object OfflineCacheDownload {
             publish(task, progressPercent(cached, length))
         }
         synchronized(this) {
-            if (active !== task) return
+            if (active !== task || task.canceled) throw CancellationException()
             task.writer = writer
         }
         runInterruptible { writer.cache() }
