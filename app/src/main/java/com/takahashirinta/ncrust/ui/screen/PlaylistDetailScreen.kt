@@ -27,6 +27,11 @@ package com.takahashirinta.ncrust.ui.screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -503,10 +508,30 @@ private fun SelectionBarAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    // 连点只留最后一次反馈。
+    //
+    // 为什么不用默认 ripple：它是「一次按压一次动画」，快速连点会排出一串动画，
+    // 手指停下之后还要挨个播完（真机反馈的「点完以后出现很多次被点击的动画」）。
+    // 这里用一个可被新点击打断的 Animatable：新点击先 snapTo 到起点再淡出，
+    // 旧动画立刻作废，永远只有最后一次在播。
+    val feedback = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interaction,
+                indication = null,
+            ) {
+                scope.launch {
+                    feedback.snapTo(0.16f)
+                    feedback.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                }
+                onClick()
+            }
+            .background(if (enabled) color.copy(alpha = feedback.value) else Color.Transparent)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

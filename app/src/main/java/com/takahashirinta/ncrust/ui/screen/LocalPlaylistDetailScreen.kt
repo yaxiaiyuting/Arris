@@ -12,6 +12,10 @@ package com.takahashirinta.ncrust.ui.screen
 
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,15 +43,12 @@ import com.takahashirinta.ncrust.local.LocalTrackOrigin
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
-import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.PlaylistCoverPlaceholder
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
-import com.takahashirinta.ncrust.ui.components.pullToRefresh
-import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.controls.MetroButton
 import io.github.takahashirinta.kanesumi.controls.MetroDialog
@@ -135,12 +136,6 @@ fun LocalPlaylistDetailScreen(
     var selecting by remember { mutableStateOf(false) }
     var selectedTags by remember { mutableStateOf(emptySet<String>()) }
     val listState = rememberLazyListState()
-    val pullState = rememberPullToRefreshState()
-    // 加载结束后必须把 refreshing 清掉：指示器由它驱动，漏清会「没拉也一直转圈」。
-    // 放在 LaunchedEffect 里而不只依赖滚动事件，用户不滚动也能自愈。
-    LaunchedEffect(isSyncing) {
-        if (!isSyncing) pullState.refreshing = false
-    }
 
     fun reload() {
         val (m, t) = LocalPlaylistRepository.read(context, playlistKey)
@@ -190,12 +185,11 @@ fun LocalPlaylistDetailScreen(
     }
 
     fun runSync(force: Boolean) {
-        if (isSyncing) { pullState.refreshing = false; return }
-        val m = meta ?: run { pullState.refreshing = false; return }
+        if (isSyncing) return
+        val m = meta ?: return
         if (!m.hasRemoteSource) {
             // 纯本地歌单没有可同步的来源：这次下拉不产生加载，必须立刻收掉指示器
             // （否则 refreshing 永远为 true —— 指示器一直挂在顶部转）。
-            pullState.refreshing = false
             Toast.makeText(context, strings.localPlaylistSyncNoSource, Toast.LENGTH_SHORT).show()
             return
         }
@@ -225,7 +219,6 @@ fun LocalPlaylistDetailScreen(
             }
             reload()
             isSyncing = false
-            pullState.refreshing = false
         }
     }
 
@@ -291,16 +284,9 @@ fun LocalPlaylistDetailScreen(
         // 右上角：同步 + 更多（清空 / 删除）。**必须在顶部 scrim** ——
         // 详情页底部的按钮会落进「播放器死带」（AGENTS.md 的 Compose 触摸陷阱第 2 条）。
         listState = listState,
-        contentModifier = Modifier.pullToRefresh(
-            state = pullState,
-            loading = { isSyncing },
-            // 「在顶部」的判据只有 LazyListState 能回答：第一项可见且偏移为 0。
-            // 不看它就会把「往下滚列表」误判成下拉刷新（PullToRefresh 的 KDoc 里那条）。
-            atTop = {
-                listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-            },
-            onRefresh = { runSync(force = true) },
-        ),
+        // 本地歌单的「刷新」只能同步远端来源，而纯本地歌单根本没有来源 —— 下拉刷新在这里
+        // 只会在按钮行里留一个转圈的空壳（真机视频）。同步入口保留在右上角那个按钮。
+
         onTopEndAction = { runSync(force = true) },
         topEndIcon = Icons.Default.Refresh,
         topEndContentDescription = strings.localPlaylistSync,
@@ -403,9 +389,6 @@ fun LocalPlaylistDetailScreen(
             }
         },
     ) {
-        // 指示器作为列表第一项：贴在内容区顶部，跟着列表走；放在 header 的 Column 里会
-        // 落进按钮行中间（真机截图里那个悬在「播放全部」右边的圆环）。
-        item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
         if (visible.isEmpty()) {
             item(key = "empty") {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -511,8 +494,20 @@ private fun LocalSelectionAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    // 与云端选择条同一套反馈：可被新点击打断的 Animatable，连点只留最后一次。
+    val feedback = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val interaction = remember { MutableInteractionSource() }
     Box(
-        modifier = Modifier.heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onClick)
+        modifier = Modifier.heightIn(min = 48.dp)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = null) {
+                scope.launch {
+                    feedback.snapTo(0.16f)
+                    feedback.animateTo(0f, tween(220))
+                }
+                onClick()
+            }
+            .background(if (enabled) color.copy(alpha = feedback.value) else Color.Transparent)
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
