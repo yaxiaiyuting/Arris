@@ -102,11 +102,15 @@ internal object OfflineCacheDownload {
         val key = requireNotNull(OfflineKeys.keyOf(result.url))
         val mediaCache = OfflineAudioCache.get(app)
         val maxBytes = OfflineAudioCache.maxBytes(app)
+        // v4.1.5：只有**这次真的写进了字节**才算「这条 URL 能取到完整文件」的证据。
+        // 整首已经在盘上（`added == 0`）的条目这次什么都没验证，不该顺手解除别的失败判决。
+        var wroteBytes = false
         val writer = CacheWriter(
             OfflineAudioCache.dataSourceFactory(app).createDataSourceForDownloading(),
             DataSpec.Builder().setUri(uri).setFlags(DataSpec.FLAG_ALLOW_CACHE_FRAGMENTATION).build(),
             null,
-        ) { length, cached, _ ->
+        ) { length, cached, added ->
+            if (added > 0L) wroteBytes = true
             if (!resolvedIsCurrent() || cached > maxBytes || length > maxBytes
             ) throw java.io.IOException("Cache authorization changed or file exceeds limit")
             publish(task, progressPercent(cached, length))
@@ -121,6 +125,10 @@ internal object OfflineCacheDownload {
             if (active !== task || !resolvedIsCurrent()) throw CancellationException()
             val length = ContentMetadata.getContentLength(mediaCache.getContentMetadata(key))
             check(length != C.LENGTH_UNSET.toLong() && length > 0L && mediaCache.isCached(key, 0L, length))
+            // v4.1.5：下载拿到的是完整文件 ⇒ 这条 URL 现在**确实能取到字节**，把「不可播」
+            // 标记解除。注意它证明的只是「URL 是活的」，不证明「本机能解码」—— 后者真出问题
+            // 会在起播时由播放失败那条路重新标记，两条记录各自只对自己观察到的事实负责。
+            if (wroteBytes) OfflineUrlStore.setPlaybackUsable(result.url, true)
             OfflineLibrary.record(
                 app, task.song.id, task.song.name, task.song.artists?.joinToString(" / ") { it.name },
                 task.song.album?.picUrl, task.song.duration ?: 0L, key, result.actualLevel,
