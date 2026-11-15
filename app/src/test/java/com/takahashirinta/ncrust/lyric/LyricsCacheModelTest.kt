@@ -14,6 +14,9 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
+import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.network.model.LyricContent
+import com.takahashirinta.ncrust.network.model.LyricResponse
 import com.takahashirinta.ncrust.testsupport.MemoryPrefs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -45,7 +48,11 @@ class LyricsCacheModelTest {
         val previous = fields.map { it.get(LyricsCache) }
         fields.first().set(LyricsCache, null)
         try {
-            LyricsCache.put(context, 501L, "new", "new translation", romalrc = "romanized")
+            LyricsCache.putNetease(
+                context, 501L,
+                LyricResponse(200, LyricContent("new"), LyricContent("new translation"), romalrc = LyricContent("romanized")),
+                CookieManager.snapshot(),
+            )
             val persisted = gson.fromJson(prefs.getString("entries", null), JsonObject::class.java)
                 .getAsJsonObject("501")
             assertEquals("new", persisted["lrc"].asString)

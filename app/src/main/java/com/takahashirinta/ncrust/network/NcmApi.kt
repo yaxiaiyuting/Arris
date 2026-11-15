@@ -1,4 +1,5 @@
 package com.takahashirinta.ncrust.network
+import com.takahashirinta.ncrust.auth.NeteaseSessionSnapshot
 import com.takahashirinta.ncrust.network.model.SongUrlResponse
 import com.takahashirinta.ncrust.network.model.*
 import retrofit2.http.Field
@@ -7,6 +8,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Tag
 
 interface NcmApi {
     /**
@@ -82,7 +84,8 @@ interface NcmApi {
         // 不传 yv 时响应里连 yrc 这个 key 都不存在。
         @Field("yv") yv: String = "-1",
         @Field("ytv") ytv: String = "0",
-        @Field("yrv") yrv: String = "0"
+        @Field("yrv") yrv: String = "0",
+        @Tag session: NeteaseSessionSnapshot? = null,
     ): LyricResponse
 
     @FormUrlEncoded

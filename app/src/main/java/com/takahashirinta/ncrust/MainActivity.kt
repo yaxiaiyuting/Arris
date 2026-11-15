@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.PlaylistPlay
 // 用同一个图标是实打实的误导。QueuePlayNext 的语义（排队并下一个播）正好。
 import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -184,6 +185,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private var liveUpdateDestination by mutableStateOf<String?>(null)
 
     /**
      * 把未捕获异常写进 `filesDir/last_crash.txt`（v3.8.1）。
@@ -256,6 +258,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        readLiveUpdateDestination(intent)
         installCrashRecorder()
         // 手机锁竖屏、大屏(平板/折叠展开/车机)放开方向。见 applyOrientationPolicy。
         applyOrientationPolicy()
@@ -435,6 +438,8 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         MainScreen(
                             playerViewModel = playerViewModel,
+                            liveUpdateDestination = liveUpdateDestination,
+                            onLiveUpdateOpened = { liveUpdateDestination = null },
                             celebrationsReady = !showSplash && !guidePending && notificationsResolved && !showBatteryPrompt,
                             showFirstRunGuide = !showSplash && guidePending,
                             onFinishFirstRunGuide = {
@@ -535,10 +540,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.takahashirinta.ncrust.player.LiveUpdateNotifier.onForeground(this)
         // Notify the playback owner of the actual time spent outside this activity.
         com.takahashirinta.ncrust.network.AppForegroundTracker.onForeground()
         // 回前台且距上次判定 ≥ 30 分钟才复核（登录失效最常见的时间窗就是"隔天再打开"）。
         SessionMonitor.onResume(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readLiveUpdateDestination(intent)
+    }
+
+    private fun readLiveUpdateDestination(intent: Intent) {
+        val key = com.takahashirinta.ncrust.player.LiveUpdateNotifier.EXTRA_OPEN
+        liveUpdateDestination = intent.getStringExtra(key)
+        intent.removeExtra(key)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -1058,6 +1075,8 @@ private enum class LikedBulkAction { PLAY, INSERT, APPEND }
 @Composable
 private fun MainScreen(
     playerViewModel: PlayerViewModel,
+    liveUpdateDestination: String? = null,
+    onLiveUpdateOpened: () -> Unit = {},
     celebrationsReady: Boolean = true,
     showFirstRunGuide: Boolean = false,
     onFinishFirstRunGuide: () -> Unit = {},
@@ -2235,12 +2254,53 @@ private fun MainScreen(
     // v3.4.13：更新页与「关于」同一套全屏覆盖层。放在关于之前判断，这样从关于页
     // 点「检查更新 → 发现新版本」进来后，返回会落回关于页而不是直接回主界面。
     var showUpdate by remember { mutableStateOf(false) }
+    var showRecognize by remember { mutableStateOf(false) }
+    var showTogether by remember { mutableStateOf(false) }
+    var showOfflineCache by remember { mutableStateOf(false) }
+    LaunchedEffect(liveUpdateDestination) {
+        when (liveUpdateDestination) {
+            com.takahashirinta.ncrust.player.LiveUpdateKind.DOWNLOAD.name -> {
+                showOfflineCache = false
+                showUpdate = true
+                showRecognize = false
+                showTogether = false
+            }
+            com.takahashirinta.ncrust.player.LiveUpdateKind.RECOGNITION.name -> {
+                showOfflineCache = false
+                showUpdate = false
+                showRecognize = true
+                showTogether = false
+            }
+            com.takahashirinta.ncrust.player.LiveUpdateKind.ROOM.name -> {
+                showOfflineCache = false
+                showUpdate = false
+                showRecognize = false
+                showTogether = true
+            }
+            com.takahashirinta.ncrust.player.LiveUpdateKind.AUDIO_CACHE.name -> {
+                showUpdate = false
+                showRecognize = false
+                showTogether = false
+                showOfflineCache = true
+            }
+            else -> Unit
+        }
+        if (liveUpdateDestination != null) onLiveUpdateOpened()
+    }
+    if (showOfflineCache) {
+        com.takahashirinta.ncrust.ui.screen.OfflineCacheManagerDialog(
+            onDismiss = { showOfflineCache = false },
+            currentSongId = playerViewModel.currentSongId.value ?: -1L,
+            onPlayTrack = { item ->
+                if (item != null) playSongItem(item)
+                showOfflineCache = false
+            },
+        )
+    }
     if (showUpdate) {
         UpdatePageOverlay(onClose = { showUpdate = false })
         return
     }
-    var showRecognize by remember { mutableStateOf(false) }
-    var showTogether by remember { mutableStateOf(false) }
     if (showRecognize) {
         RecognizeScreen(onBack = { showRecognize = false })
         return
@@ -3098,7 +3158,21 @@ private fun MainScreen(
                             pendingLocalSong = song
                             showAddToLocalPlaylist = true
                         },
-                    ) + menuSongActions + listOf(
+                    ) + menuSongActions + listOfNotNull(
+                        if (com.takahashirinta.ncrust.cache.OfflineCacheDownload.supports(song)) {
+                            SongMenuAction(Icons.Default.FileDownload, LocalStrings.current.cacheSongLabel) {
+                                val app = context.applicationContext
+                                val copy = stringsForCode(getSavedLanguageCode(app))
+                                if (playerViewModel.cacheSong(song) { success ->
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            val text = if (success) copy.cachedTrackReady else copy.offlineCacheOperationFailed
+                                            Toast.makeText(app, text, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }) {
+                                    showOfflineCache = true
+                                }
+                            }
+                        } else null,
                         // v2.5.0 · D：「添加到下一首播放」。放在全局菜单里（而不是各 Screen
                         // 各自加一条），是因为这里才是**全应用唯一的歌曲入口** ——
                         // 首页/歌单/专辑/歌手/收藏/搜索/本地歌单全部经由此处，

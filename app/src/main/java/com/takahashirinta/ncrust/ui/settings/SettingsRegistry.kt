@@ -968,6 +968,7 @@ object SettingsRegistry {
 
         // ── 歌词 ─────────────────────────────────────────────────────────────────────
         add(action("action.equalizer_open", SettingsGroup.PLAYBACK, "equalizerEntryLabel", "equalizerEntryHint"))
+        add(action("action.live_update_settings", SettingsGroup.PLAYBACK, "liveUpdatesSettings"))
         add(
             pref(
                 key = "lyrics_translation",

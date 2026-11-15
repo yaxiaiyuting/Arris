@@ -81,38 +81,41 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
         encoded = null
     }
 
-    /**
-     * 离线兜底用：先按 [preferredKeys] 的顺序找，再退化成「这首歌的**任意**档位」。
-     * 离线时能放出来比「档位严格一致」重要得多（缓存里是什么档就放什么档）。
-     */
-    fun recall(preferredKeys: List<String>, songId: Long): Pair<String, String>? =
-        recallRecord(preferredKeys, songId) { true }?.let { it.first to it.second.url }
-
-    fun recallRecord(preferredKeys: List<String>, songId: Long, usable: (String) -> Boolean): Pair<String, OfflineUrlRecord>? {
+    /** 先查请求档位，同档完整曲优先。同优先级保持索引中的写入顺序。 */
+    fun recallRecord(
+        songId: Long,
+        preferredLevel: String?,
+        usable: (String) -> Boolean,
+    ): Pair<String, OfflineUrlRecord>? {
         val songKeys = keysBySong[songId] ?: return null
         if (songKeys.size == 1) {
             val key = songKeys.first()
-            val record = map.getValue(key)
-            return if (usable(key)) key to record else null
+            return if (usable(key)) key to map.getValue(key) else null
         }
-        val levels = preferredKeys.mapNotNull(OfflineKeys::levelOf)
-        val candidates = ArrayList<RecallCandidate>(songKeys.size)
-        for (key in songKeys) {
-            val preferred = levels.indexOf(OfflineKeys.levelOf(key))
-            candidates.add(RecallCandidate(key, map.getValue(key), if (preferred < 0) levels.size else preferred))
+        val level = preferredLevel?.takeUnless { ':' in it }?.substringBefore('~')?.ifEmpty { null }
+        if (level != null) {
+            findUsable(songKeys, level, preferred = true, usable)?.let { return it }
         }
-        candidates.sortWith(recallOrder)
-        val hit = candidates.firstOrNull { usable(it.key) } ?: return null
-        return hit.key to hit.record
+        return findUsable(songKeys, level, preferred = false, usable)
     }
 
-    private class RecallCandidate(val key: String, val record: OfflineUrlRecord, val levelRank: Int) {
-        val contentRank: Int = when {
-            !record.content.known -> 2
-            record.content.kind == OfflineContent.FULL -> 0
-            record.content.kind == OfflineContent.TRIAL -> 1
-            else -> 2
+    private fun findUsable(
+        keys: Set<String>,
+        level: String?,
+        preferred: Boolean,
+        usable: (String) -> Boolean,
+    ): Pair<String, OfflineUrlRecord>? {
+        // 每档只有三种内容优先级，直接按优先级扫描，避免为候选项分配对象并排序。
+        for (kind in recallKinds) {
+            for (key in keys) {
+                val record = map.getValue(key)
+                val actualKind = if (record.content.known) record.content.kind else OfflineContent.UNKNOWN
+                if (actualKind == kind && (level != null && OfflineKeys.hasLevel(key, level)) == preferred && usable(key)) {
+                    return key to record
+                }
+            }
         }
+        return null
     }
 
     fun size(): Int = map.size
@@ -124,10 +127,7 @@ internal class OfflineUrlIndex(private val maxEntries: Int = MAX_ENTRIES) {
 
         private val gson = Gson()
         private val unknownContent = OfflineContent()
-        private val recallOrder = Comparator<RecallCandidate> { first, second ->
-            val byLevel = first.levelRank.compareTo(second.levelRank)
-            if (byLevel == 0) first.contentRank.compareTo(second.contentRank) else byLevel
-        }
+        private val recallKinds = arrayOf(OfflineContent.FULL, OfflineContent.TRIAL, OfflineContent.UNKNOWN)
 
         fun fromJson(json: String?): OfflineUrlIndex {
             val idx = OfflineUrlIndex()
@@ -162,20 +162,16 @@ object OfflineUrlStore {
     private const val PREFS = "ncrust_offline"
     private const val KEY_URLS = "urls"
 
-    @Volatile
     private var index: OfflineUrlIndex? = null
     private var appliedJson: String? = null
 
-    private fun index(context: Context): OfflineUrlIndex {
+    private fun indexLocked(context: Context): OfflineUrlIndex {
         index?.let { return it }
-        synchronized(this) {
-            index?.let { return it }
-            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
-            appliedJson = null
-            index = loaded
-            return loaded
-        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val loaded = OfflineUrlIndex.fromJson(prefs.getString(KEY_URLS, null))
+        appliedJson = null
+        index = loaded
+        return loaded
     }
 
     private fun persist(context: Context, idx: OfflineUrlIndex) {
@@ -194,7 +190,7 @@ object OfflineUrlStore {
      * `synchronized + persist`，加一个写方法就多一次漏落盘的机会。
      */
     internal fun <T> mutate(context: Context, block: (OfflineUrlIndex) -> T): T = synchronized(this) {
-        val idx = index(context)
+        val idx = indexLocked(context)
         val result = block(idx)
         persist(context, idx)
         result
@@ -223,10 +219,15 @@ object OfflineUrlStore {
      *  a legacy record whose full/trial classification is still [OfflineContent.UNKNOWN]. */
     fun contentForUrl(context: Context, url: String): OfflineContent? = synchronized(this) {
         val key = OfflineKeys.keyOf(url) ?: return@synchronized null
-        index(context).record(key)?.takeIf { it.url == url }?.content
+        indexLocked(context).record(key)?.takeIf { it.url == url }?.content
     }
-    fun recallRecord(context: Context, songId: Long, levels: List<String>, usable: (String) -> Boolean): Pair<String, OfflineUrlRecord>? =
-        synchronized(this) { index(context).recallRecord(levels.map { OfflineKeys.key(songId, it) }, songId, usable) }
+    internal fun recallRecord(
+        context: Context,
+        songId: Long,
+        level: String,
+        usable: (String) -> Boolean,
+    ): Pair<String, OfflineUrlRecord>? =
+        synchronized(this) { indexLocked(context).recallRecord(songId, level, usable) }
 
     fun clear(context: Context) {
         mutate(context) { it.clear() }

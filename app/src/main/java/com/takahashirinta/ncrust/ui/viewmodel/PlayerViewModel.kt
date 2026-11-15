@@ -31,8 +31,10 @@ import com.takahashirinta.ncrust.account.SessionMonitor
 import com.takahashirinta.ncrust.account.SessionState
 import com.takahashirinta.ncrust.account.classifyPlayback
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.auth.NeteaseSessionChangedException
 import com.takahashirinta.ncrust.listen.TogetherSession
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
+import com.takahashirinta.ncrust.cache.OfflineCacheDownload
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineUrlStore
 import com.takahashirinta.ncrust.network.NetworkAvailability
@@ -41,6 +43,7 @@ import com.takahashirinta.ncrust.player.QualityAccessEvidence
 import com.takahashirinta.ncrust.player.QualityLadder
 import com.takahashirinta.ncrust.player.QualityStatus
 import com.takahashirinta.ncrust.lyric.AmllTtmlClient
+import com.takahashirinta.ncrust.lyric.CachedLyrics
 import com.takahashirinta.ncrust.lyric.LrcLine
 import com.takahashirinta.ncrust.lyric.LrcParser
 import com.takahashirinta.ncrust.lyric.YrcParser
@@ -57,6 +60,7 @@ import com.takahashirinta.ncrust.lyric.LyricsCache
 import com.takahashirinta.ncrust.lyric.LyricsDisplayPrefs
 import com.takahashirinta.ncrust.lyric.LyricsSweepQuality
 import com.takahashirinta.ncrust.lyric.LyricsWordAnimationMode
+import com.takahashirinta.ncrust.lyric.NeteaseLyricReads
 import com.takahashirinta.ncrust.lyric.TtmlDoc
 import com.takahashirinta.ncrust.lyric.TtmlParser
 import com.takahashirinta.ncrust.bili.BiliSourceProvider
@@ -598,8 +602,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     )
     private var preloading: PreloadRequest? = null
     private var preparedPreload: PreparedPreload? = null
-    /** An offline miss has no slot, but can be retried when a route becomes available. */
-    private var offlinePreloadMiss: PreloadRequest? = null
+    /** A transport failure can be retried when the default route changes. */
+    private var preloadNetworkMiss: PreloadRequest? = null
 
     // Main.immediate can call fetchLyrics during init. Initialize its state before those launches.
     // 同一音源、曲目和代次只保留一份在途歌词请求。已作废的请求不阻挡新请求。
@@ -653,9 +657,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     internal fun settlePlayingIdentity(next: TrackKey): Boolean =
         playingIdentity.settle(next, currentTrack)
 
-    /** 闸门判定「这次请求已经被新歌取代」时的返回：调用方拿到它只会原样丢弃，不会写任何状态。 */
-    private val STALE_NETEASE_LYRICS = NeteaseLyrics("", "", "", "", authoritative = false)
-
     init {
         viewModelScope.launch {
             AppForegroundTracker.events.collectLatest { idleMs ->
@@ -694,19 +695,18 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
         viewModelScope.launch {
             networkObserver.changes().collectLatest { route ->
-                val request = pendingPreloadRequest()
-                val replacePreload = request != null && request.level !=
-                    requestedPreloadLevel(request.track, usesWifi = route.usesWifi)
-                if (replacePreload) invalidatePreload()
-                val recover = recovery.networkChanged(route)
-                if (replacePreload || recover && offlinePreloadMiss != null) {
-                    queue.preloadCurrentSuccessor()
-                }
-                if (!recover) return@collectLatest
                 val revision = playGate.current
-                delay(500L) // Coalesce related default-route callbacks.
-                refreshPlaybackNetwork()
-                if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
+                recovery.updateRoute(route, onChange = { refreshing ->
+                    val request = pendingPreloadRequest()
+                    val qualityChanged = request != null && request.level !=
+                        requestedPreloadLevel(request.track, usesWifi = route.usesWifi)
+                    if (qualityChanged || refreshing && (preloading != null || preloadNetworkMiss != null)) {
+                        invalidatePreload()
+                        queue.preloadCurrentSuccessor()
+                    }
+                }, refresh = ::refreshPlaybackNetwork, onReady = {
+                    if (playGate.isCurrent(revision)) recoverCurrentRequest(networkRefreshed = true)
+                })
             }
         }
 
@@ -948,7 +948,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     recovery.resolved()
                 }
                 preparedPreload = null
-                offlinePreloadMiss = null
+                preloadNetworkMiss = null
                 needsPreload = false
                 // 无缝接续没有经过 playUrl，起播时点在这条 AUTO 回调里补。
                 beginListening(nextTrack.id, restart = auto && !changed)
@@ -1254,6 +1254,20 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         if (usesWifi) qualityApiLevels.getOrElse(prefs.getInt("wifi_quality", 3)) { "lossless" }
         else qualityApiLevels.getOrElse(prefs.getInt("mobile_quality", 1)) { "higher" }
 
+    internal fun cacheSong(song: SongItem, onFinished: suspend (Boolean) -> Unit): Boolean {
+        val app = getApplication<Application>()
+        val track = TrackKey.ofSong(song)
+        val account = qualityAccountRevision(track.source)
+        val level = effectivePreferredLevel(prefs())
+        return OfflineCacheDownload.start(app, song, resolve = {
+            val result = SourceRouter.resolveUrlOutcome(song, level).result ?: return@start null
+            val content = result.cachedContent
+            val trial = result.playbackItem?.freeTrialInfo != null ||
+                content?.kind == com.takahashirinta.ncrust.cache.OfflineContent.TRIAL
+            result.takeUnless { trial }
+        }, resolvedIsCurrent = { qualityAccountRevision(track.source) == account }, onFinished = onFinished)
+    }
+
     /**
      * 设置项「非会员遇到 VIP 歌曲」：true = 播放试听片段（默认），false = 直接跳过。
      * 每次播放都现读：设置页改完立刻生效，不需要额外的状态同步。
@@ -1532,6 +1546,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
 
     fun lastPlayedLevelForDiagnostics(): String = lastPlayedLevel
 
+    internal fun currentPlaybackQualityLevel(): String? = lastVerdictResult?.let {
+        QualityAssessment.measuredLevel(it.br, it.type) ?: it.actualLevel
+    }
+
     fun lastVerdictResultForDiagnostics(): SongUrlResult? = lastVerdictResult
 
     fun setQualityPreference(index: Int) {
@@ -1688,21 +1706,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             TAG_TRACK,
             "playSong -> currentTrack=$track"
         )
-        // ★ v3.1.0 · P0-A：**取链与歌词同时发起**。
-        //
-        // v3.0.0 的形状是「取链（阻塞）→ 取链返回 → 才 launch 取词」，
-        // 两段 RTT **相加**。探针实测这两段各自 P50 在 80~250ms 量级
-        // （`docs/verification/v3.1.0/net-research/net-latency-breakdown.md` §1），
-        // 相加就是用户感知里那一段「点了没反应」。
-        //
-        // 现在：身份先落地（上一行的 onTrackChanged），随后立刻开辅助腿
-        //（歌词 + 封面），取链那条腿在下面照旧跑 —— 两者在时间上重叠。
-        //
-        // ⚠️ 为什么歌词**不**放进 playJob：playJob 会被下一次 playSong `cancel()`，
-        // 而 `loadNeteaseLyrics` 的重试循环用的是 `catch (e: Exception)`，
-        // 会把 CancellationException 一起吞掉（v2.5.2 点名的形状）。
-        // 把歌词挂在 playJob 上会让「快速连点两首歌」把第一首的取词变成一次
-        // 静默的半途而废。它们必须是兄弟，不是父子。
+        // 取链和歌词并行，取链重试可以独立取消。
         startAuxiliaryLoad(track, artworkUrl)
         needsPreload = false
         refreshGaplessSetting()
@@ -1807,10 +1811,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             }
             submitResolvedPlayback(intent)
             isPlaying.value = startPlaying
-            if (roomGeneration == null) PlaybackStateManager.saveState(
-                getApplication(), songId, title, artist, artworkUrl, true,
-                sourceKey = ref.source, sourceId = sourceId, mediaId = mediaId,
-            )
             return
         }
 
@@ -1943,7 +1943,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      */
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
-        val hit = OfflineUrlStore.recallRecord(app, songId, listOf(level)) { key ->
+        val hit = OfflineUrlStore.recallRecord(app, songId, level) { key ->
             key !in failedUrlKeys && OfflineKeys.key(songId, OfflineKeys.levelOf(key) ?: level) !in failedUrlKeys &&
                 OfflineAudioCache.coversStart(app, key)
         } ?: return null
@@ -2265,21 +2265,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
     }
 
-    /** 下一首的网易云歌词只进缓存，由实际起播时的请求更新界面。 */
-    private suspend fun prefetchNeteaseLyrics(track: TrackKey) {
-        val resp = RetrofitClient.api.getLyric(id = track.id)
-        if (resp.code != 200) return
-        LyricsCache.put(
-            getApplication(),
-            track.id,
-            resp.lrc?.lyric.orEmpty(),
-            resp.tlyric?.lyric.orEmpty(),
-            resp.yrc?.lyric.orEmpty(),
-            resp.romalrc?.lyric.orEmpty(),
-        )
-        Log.d(TAG_TRACK, "prefetched lyric for next track=$track")
-    }
-
     /** Main-thread queue edits revoke both pending requests and the Service slot immediately. */
     fun invalidatePreload() {
         com.takahashirinta.ncrust.player.preloadGeneration.invalidate()
@@ -2287,11 +2272,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         preloadJob = null
         preloading = null
         preparedPreload = null
-        offlinePreloadMiss = null
+        preloadNetworkMiss = null
         PlaybackService.instance?.discardPreload()
     }
 
-    private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: offlinePreloadMiss
+    private fun pendingPreloadRequest() = preloading ?: preparedPreload?.request ?: preloadNetworkMiss
 
     private fun leaveRoomPlayback(request: RetryRequest) {
         invalidatePlaybackIntent()
@@ -2351,7 +2336,8 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val nextTrack = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         if (!allowCurrent && nextTrack == owner) return
         val quality = requestedPreloadLevel(nextTrack)
-        val account = qualityAccountRevision(nextTrack.source)
+        val neteaseSession = if (nextTrack.source == MusicSource.NETEASE) CookieManager.snapshot() else null
+        val account = neteaseSession?.loginGeneration ?: qualityAccountRevision(nextTrack.source)
         val request = PreloadRequest(nextTrack, quality, account, roomGeneration)
         if (preloading == request) return
 
@@ -2375,30 +2361,32 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val queueVersion = com.takahashirinta.ncrust.player.preloadGeneration
         val queueRevision = queueVersion.current()
         preloadJob?.cancel()
-        offlinePreloadMiss = null
+        preloadNetworkMiss = null
         preloading = request
         preloadJob = viewModelScope.launch {
             try {
+                recovery.awaitRouteRefresh()
                 if (cached == null) launch(Dispatchers.IO) {
                     val aux = buildList<suspend () -> Unit> {
-                        if (nextTrack.source == MusicSource.NETEASE) {
+                        if (neteaseSession != null) {
                             if (lyricsTtmlEnabled.value) add { AmllTtmlClient.prefetch(app, songId) }
-                            add { prefetchNeteaseLyrics(nextTrack) }
+                            add { NeteaseLyricReads.read(app, songId, neteaseSession, refresh = true) }
                         }
                         add { ListPrefetch.prefetchCover(app, artworkUrl) }
                     }
                     BoundedParallel.runAll(aux)
                 }
-                val result = cached?.asResult() ?: withContext(Dispatchers.IO) {
-                    fetchUrlOfflineFirst(songRefOf(nextTrack.source, songId, sourceId, mediaId), quality).result
-                }
+                val outcome = if (cached == null) withContext(Dispatchers.IO) {
+                    fetchUrlOfflineFirst(songRefOf(nextTrack.source, songId, sourceId, mediaId), quality)
+                } else null
+                val result = cached?.asResult() ?: outcome?.result
                 if (!playGate.isCurrent(version) || !queueVersion.accepts(queueRevision) ||
                     account != qualityAccountRevision(nextTrack.source) ||
                     !TogetherSession.memberPlayback.value.allowsPreload(roomGeneration) ||
                     quality != requestedPreloadLevel(nextTrack)
                 ) return@launch
                 if (result == null) {
-                    if (!NetworkAvailability.isOnline(app)) offlinePreloadMiss = request
+                    if (outcome?.failure?.kind == ResolveFailureKind.NETWORK) preloadNetworkMiss = request
                     return@launch
                 }
                 val entitlement = classifyEntitlement(nextTrack.source, result, quality, effectivePrivilege)
@@ -2448,17 +2436,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             }
         }
     }
-
-    /** v1.9.0：一次 ncm 歌词取数的结果。抽出来是为了让「缓存命中」与「网络返回」共用同一条源选择路径。 */
-    private data class NeteaseLyrics(
-        val lrc: String,
-        val tlyric: String,
-        val yrc: String,
-        /** v1.9.2：音译轨原文（romalrc）。与 rv 参数无关，实测 rv=0 也会返回，缺 key 时为空串。 */
-        val romalrc: String,
-        /** 服务端 code==200 的**权威**答复（有歌词或确无歌词）；false = 瞬时失败，不能判成「确无歌词」。 */
-        val authoritative: Boolean,
-    )
 
     /** ncm 一侧解析好的三条轨（主轨 + 译文 + 音译），一次解析、两相共用。 */
     private data class NeteaseTracks(
@@ -2559,7 +2536,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                 MusicSource.BILIBILI -> loadBiliLyrics(track, load)
                 MusicSource.NETEASE -> {
                     val netease = loadNeteaseLyrics(track, load)
-                    if (netease.authoritative && lyricCoordinator.isCurrent(load)) {
+                    if (netease != null && lyricCoordinator.isCurrent(load)) {
                         applyBestLyricSource(track, load, netease)
                     }
                 }
@@ -2573,101 +2550,37 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         }
     }
 
-    /**
-     * 取 ncm 那份歌词：先缓存、后网络（含既有 4 次退避重试）。
-     *
-     * 缓存命中也不在这里直接落地：TTML 开关是**播放期**策略，缓存里只有 LRC 原文，
-     * 最终显示哪一份统一交给 [applyBestLyricSource] 用 [LyricSourceChain] 决定。
-     */
+    /** 先读缓存。旧条目缺音译字段时尝试补齐，失败后仍可显示原有歌词。 */
     private suspend fun loadNeteaseLyrics(
         track: TrackKey,
         load: LyricLoadCoordinator.Load,
-    ): NeteaseLyrics {
+    ): CachedLyrics? {
         val songId = track.id
-        // 先查本地缓存：命中则不再打网络（歌词几乎不变）。
-        // 这是进程被杀重进时歌词能秒回、且不受冷启动风控/限流影响的关键。
-        val cached = LyricsCache.get(getApplication(), songId)
-        if (!lyricCoordinator.isCurrent(load)) return STALE_NETEASE_LYRICS
-        // v1.9.2：升级前写下的条目没有 romalrc 字段（Gson Unsafe ⇒ null）。那不是「这首歌没有音译」，
-        // 而是「这份缓存没记过音译」—— 继续当命中用会让音译回退对升级用户永远不生效（LRC 条目没有
-        // TTL，只有 200 条的 LRU 上限）。所以这种条目按 miss 处理，重取一次把字段补上；
-        // 补完（哪怕是空串）就恢复缓存命中。**网络失败时回落到这份老缓存**（见 degraded()），
-        // 不能让离线用户从「有歌词」变成「没歌词」。
-        val legacyEntry = cached?.takeIf { LyricsCache.needsRomalrcRefetch(it) }
-        if (cached != null && legacyEntry == null) {
-            Log.d("PlayerViewModel", "fetchLyrics cache hit id=$songId lrc=${cached.lrc.length}")
-            return NeteaseLyrics(
-                cached.lrc, cached.tlyric, cached.yrc.orEmpty(), cached.romalrc.orEmpty(),
-                authoritative = true
-            )
-        }
-        if (legacyEntry != null) {
-            Log.d("PlayerViewModel", "fetchLyrics 老缓存缺 romalrc，重取一次 id=$songId")
-        }
-        // 老缓存兜底：只在「本来就要打网络」的路径上用，语义与缓存命中完全一致
-        // （缓存只写 code==200 的权威结果），没有条目时等价于原来的 STALE_NETEASE_LYRICS。
-        fun degraded(): NeteaseLyrics = legacyEntry?.let {
-            NeteaseLyrics(
-                it.lrc, it.tlyric, it.yrc.orEmpty(), it.romalrc.orEmpty(), authoritative = true
-            )
-        } ?: STALE_NETEASE_LYRICS
-        // 失败重试(最多 4 次, 递增退避): 冷启动时 AppWarmup 与恢复请求同时在
-        // 打网络, 歌词请求的瞬时超时/限流不该让歌词永久消失。关键是**响应层面的
-        // 失败也要重试** —— 服务端风控(-460/-462)或需登录(301)返回的 code!=200
-        // 响应里 lrc 为空, 旧实现当成"这首歌没歌词"直接结束, 用户必须切歌才能
-        // 重新触发加载; 这些失败码是瞬时的, 退避重试大概率能拿到真歌词。
-        // code==200 是服务端的权威答复(有歌词或无歌词), 不再重试。
+        val app = getApplication<Application>()
+        val session = CookieManager.snapshot()
+        val cached = LyricsCache.get(app, songId)
+        if (!lyricCoordinator.isCurrent(load)) return null
+        if (cached != null && !LyricsCache.needsRomalrcRefetch(cached)) return cached
+
+        // 传输和业务失败均可重试。只有 code 200 表示歌词可用或确无内容。
         repeat(4) { attempt ->
             try {
-                val lyricResponse = RetrofitClient.api.getLyric(id = songId)
-                // 已经切歌了就别再解析/重试：这一整轮请求的结果对当前歌没有任何意义。
-                if (!lyricCoordinator.isCurrent(load)) return STALE_NETEASE_LYRICS
-                val code = lyricResponse.code
-                val lrcText = lyricResponse.lrc?.lyric ?: ""
-                val tlyricText = lyricResponse.tlyric?.lyric ?: ""
-                // v1.5.0 · B：逐字时间轴。实测该曲没挂逐字资产时响应里连 yrc 这个 key
-                // 都没有(不是 null)，所以这里为空是常态，不是错误。
-                val yrcText = lyricResponse.yrc?.lyric ?: ""
-                // v1.9.2：音译轨。同一个响应里本来就有这个字段（实测与 rv 取值无关），
-                // 此前一直没有解析，于是「TTML 胜出」时音译轨只能是 TTML 那一份（多半为空）。
-                val romalrcText = lyricResponse.romalrc?.lyric ?: ""
-                if (code != 200 && attempt < 3) {
-                    Log.w("PlayerViewModel", "fetchLyrics unsettled songId=$songId code=$code, retry ${attempt + 1}")
-                    delay(700L + attempt * 400L)
-                    if (!lyricCoordinator.isCurrent(load)) return STALE_NETEASE_LYRICS
-                    return@repeat
-                }
-                // 只缓存 code==200 的权威结果(有歌词/确无歌词)。code!=200 是瞬时
-                // 失败(风控/需登录), 不写缓存也不置"确无歌词", 按钮保持可点可重试。
-                if (code == 200) {
-                    LyricsCache.put(
-                        getApplication(), songId, lrcText, tlyricText, yrcText, romalrcText
-                    )
-                }
-                // 瞬时失败（风控 / 需登录）且手上有老缓存：用它，别把已有歌词判成没有。
-                if (code != 200) return degraded()
-                Log.d(
-                    "PlayerViewModel",
-                    "fetchLyrics id=$songId code=$code lrc=${lrcText.length} " +
-                        "tlyric=${tlyricText.length} yrc=${yrcText.length} " +
-                        "romalrc=${romalrcText.length} current=${currentSongId.value}"
-                )
-                return NeteaseLyrics(
-                    lrcText, tlyricText, yrcText, romalrcText, authoritative = code == 200
-                )
+                val reply = NeteaseLyricReads.read(app, songId, session, refresh = false)
+                if (!lyricCoordinator.isCurrent(load)) return null
+                if (reply != null) return reply
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: NeteaseSessionChangedException) {
+                return cached
             } catch (e: Exception) {
-                // 失败不清空已有歌词(网络抖动不该把 UI 变空白), 重试后仍失败才退出
-                if (attempt == 3) {
-                    Log.e("PlayerViewModel", "fetchLyrics failed for songId=$songId", e)
-                    return degraded()
-                }
+                if (attempt == 3) Log.e("PlayerViewModel", "fetchLyrics failed for songId=$songId", e)
+            }
+            if (attempt < 3) {
                 delay(700L + attempt * 400L)
-                if (!lyricCoordinator.isCurrent(load)) return STALE_NETEASE_LYRICS
+                if (!lyricCoordinator.isCurrent(load)) return null
             }
         }
-        return STALE_NETEASE_LYRICS
+        return cached
     }
 
     /**
@@ -2683,7 +2596,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     private suspend fun applyBestLyricSource(
         track: TrackKey,
         load: LyricLoadCoordinator.Load,
-        netease: NeteaseLyrics,
+        netease: CachedLyrics,
     ) {
         val songId = track.id
         val sourcePrefs = LyricSourcePrefs(
@@ -2697,9 +2610,9 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         val parsed = if (netease.lrc.isNotEmpty()) {
             withContext(Dispatchers.Default) {
                 NeteaseTracks(
-                    lines = parseLyrics(netease.lrc, netease.yrc),
+                    lines = parseLyrics(netease.lrc, netease.yrc.orEmpty()),
                     tlyric = if (netease.tlyric.isEmpty()) emptyList() else LrcParser.parse(netease.tlyric),
-                    romalrc = if (netease.romalrc.isEmpty()) emptyList() else LrcParser.parse(netease.romalrc),
+                    romalrc = if (netease.romalrc.isNullOrEmpty()) emptyList() else LrcParser.parse(netease.romalrc),
                 )
             }
         } else {
@@ -2927,6 +2840,16 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             currentSongArtwork.value.orEmpty(), sourceKey = currentSongSourceKey,
             sourceId = currentSongSourceId, mediaId = currentSongMediaId,
             startPositionMs = saved?.positionMs ?: currentPosition.value, privilege = lastSongPrivilege)
+        return true
+    }
+
+    internal suspend fun resumeAfterServiceRestart(songId: Long, revision: Int): Boolean {
+        queue.awaitRestored()
+        val track = currentTrack?.takeIf { it.id == songId && playGate.isCurrent(revision) } ?: return false
+        if (TogetherSession.memberPlayback.value.generation != null) return false
+        playSong(track.id, currentSongName.value.orEmpty(), currentSongArtist.value.orEmpty(),
+            currentSongArtwork.value.orEmpty(), sourceKey = track.source.key,
+            sourceId = track.sourceId, mediaId = track.mediaId, privilege = lastSongPrivilege)
         return true
     }
 

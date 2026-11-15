@@ -8,6 +8,9 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import com.takahashirinta.ncrust.cache.OfflineCacheDownload
+import com.takahashirinta.ncrust.ui.components.SettingActionRow
+
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -34,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,9 +113,11 @@ internal fun OfflineCacheManagerDialog(
     var limitMb by remember { mutableStateOf(OfflineAudioCache.maxMb(context)) }
     var limitExpanded by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<OfflineTrack?>(null) }
+    val activeDownload by OfflineCacheDownload.progress.collectAsState()
+    val downloadingSong = activeDownload?.song?.id
 
     // 读取与对账都要走 SimpleCache / 文件系统，放 IO 线程；组合期不阻塞。
-    LaunchedEffect(reload) {
+    LaunchedEffect(reload, downloadingSong) {
         val (snapshot, total) = withContext(Dispatchers.IO) {
             OfflineAudioCache.librarySnapshot(context) to OfflineAudioCache.sizeBytes(context)
         }
@@ -229,6 +235,19 @@ internal fun OfflineCacheManagerDialog(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
             )
 
+            activeDownload?.let { download ->
+                MetroText(
+                    download.song.name,
+                    color = metro.onBackground,
+                    style = LocalMetroTypography.current.bodyLarge,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                SettingActionRow(
+                    label = strings.cancelCachingLabel,
+                    trailing = download.percent?.let { "$it%" } ?: strings.preparingCacheLabel,
+                    onClick = { OfflineCacheDownload.cancel() },
+                )
+            }
             MetroText(
                 strings.offlineCacheListTitle(tracks.size),
                 color = metro.onBackground,
@@ -288,6 +307,7 @@ internal fun OfflineCacheManagerDialog(
                 // 删除要动 SimpleCache 与 prefs，放 IO；完成后重读列表与用量（reload 变化即重跑）。
                 scope.launch {
                     val removed = withContext(Dispatchers.IO) {
+                        OfflineCacheDownload.cancel(target.songId)?.join()
                         runCatching { OfflineAudioCache.removeSong(context, target.songId) }.getOrDefault(false)
                     }
                     Toast.makeText(context, if (removed) strings.offlineCacheDeleted else strings.offlineCacheOperationFailed, Toast.LENGTH_SHORT).show()
@@ -543,6 +563,7 @@ internal fun OfflineLibraryTab(
                 deleteTarget = null
                 scope.launch {
                     val removed = withContext(Dispatchers.IO) {
+                        OfflineCacheDownload.cancel(target.songId)?.join()
                         runCatching { OfflineAudioCache.removeSong(context, target.songId) }.getOrDefault(false)
                     }
                     Toast.makeText(context, if (removed) strings.offlineCacheDeleted else strings.offlineCacheOperationFailed, Toast.LENGTH_SHORT).show()

@@ -97,9 +97,13 @@ internal class PlaybackQueueController(
         }
     }
 
+    suspend fun awaitRestored() {
+        restoreJob?.join()
+    }
+
     suspend fun resumeSavedSelection() {
         val epoch = playRequestGeneration.current
-        restoreJob?.join()
+        awaitRestored()
         if (playRequestGeneration.isCurrent(epoch) && PlaybackService.instance?.hasPlayableItem() != true) {
             playAt(index)
         }

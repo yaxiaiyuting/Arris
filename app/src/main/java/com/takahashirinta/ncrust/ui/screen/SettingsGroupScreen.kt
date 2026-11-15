@@ -918,6 +918,10 @@ private fun SettingsPreferenceGroupPage(
                         )
                     }
 
+                    SettingsRowKind.LIVE_UPDATES -> item(key = entry.id) {
+                        LiveUpdateSettingsRow()
+                    }
+
                     SettingsRowKind.ACTION_JUMP -> item(key = entry.id) {
                         // ── v3.3.0 · 用户反馈第 5 条「后台播放明明有一个可以打开的图标但是点不动」──
                         //
@@ -1056,6 +1060,7 @@ private fun SettingsPreferenceGroupPage(
                             context.cacheDir?.listFiles()?.filter { it.name != CacheUsage.IMAGE_CACHE_DIR }
                                 ?.map { it.deleteRecursively() }?.all { it } ?: true
                         }.getOrDefault(false) && ok
+                        com.takahashirinta.ncrust.cache.OfflineCacheDownload.cancel()?.join()
                         ok = runCatching { OfflineAudioCache.clear(context) }.getOrDefault(false) && ok
                         measureCacheUsage(context) to ok
                     }

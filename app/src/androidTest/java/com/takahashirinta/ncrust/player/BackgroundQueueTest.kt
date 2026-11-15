@@ -2,6 +2,7 @@
 package com.takahashirinta.ncrust.player
 
 import android.Manifest
+import android.app.Service
 import android.os.Build
 import android.os.SystemClock
 import androidx.lifecycle.Lifecycle
@@ -15,6 +16,7 @@ import com.takahashirinta.ncrust.NcrustApplication
 import com.takahashirinta.ncrust.QueueModes
 import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.cache.OfflineAudioCache
+import com.takahashirinta.ncrust.cache.OfflineCacheDownload
 import com.takahashirinta.ncrust.cache.OfflineContent
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.cache.OfflineLibrary
@@ -25,6 +27,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.TrackKey
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -42,6 +46,139 @@ class BackgroundQueueTest {
 
     @Test
     fun removalStillAdvancesAtNaturalEndWithoutPreload() = runQueue(gapless = false)
+
+    @Test
+    fun explicitDownloadWritesACompleteTrackAndReusesItForOfflinePlayback() {
+        val song = SongItem(961_015L, "本地下载夹具", null, null, 24_000L)
+        val payload = app.assets.open("playback-regression-silence.wav").use { it.readBytes() }
+        val completed = LinkedBlockingQueue<Boolean>()
+        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+            server.soTimeout = 5_000
+            val serving = Thread {
+                server.accept().use { socket ->
+                    socket.soTimeout = 5_000
+                    val reader = socket.getInputStream().bufferedReader()
+                    while (!reader.readLine().isNullOrEmpty()) Unit
+                    val response = "HTTP/1.1 200 OK\r\nContent-Length: ${payload.size}\r\n" +
+                        "Content-Type: audio/wav\r\nConnection: close\r\n\r\n"
+                    socket.getOutputStream().apply { write(response.toByteArray()); write(payload); flush() }
+                }
+            }.apply { isDaemon = true; start() }
+            val level = "higher"
+            val url = OfflineKeys.withKey("http://127.0.0.1:${server.localPort}/song.wav", song.id, level)
+            try {
+                assertTrue(OfflineCacheDownload.start(app, song, resolve = {
+                    SongUrlResult(url, level, cachedContent = OfflineContent(OfflineContent.FULL))
+                }, resolvedIsCurrent = { true }, onFinished = { completed.add(it) }))
+                assertEquals(true, completed.poll(12, TimeUnit.SECONDS))
+                val snapshot = OfflineAudioCache.librarySnapshot(app)
+                assertEquals(song.name, snapshot.tracks.single { it.songId == song.id }.name)
+                assertEquals(payload.size.toLong(), snapshot.bytesBySong[song.id])
+            } finally {
+                if (serving.isAlive) server.close()
+                serving.join(1_000)
+            }
+        }
+        launchQueue(listOf(song)).use { scenario ->
+            try {
+                awaitPlaying(song.id)
+            } finally {
+                scenario.onActivity { app.playback.stopService() }
+            }
+        }
+    }
+
+    @Test
+    fun systemRestartResumesActiveQueueButDoesNotResumePausedAudio() {
+        val tracks = prepareTracks(gapless = true)
+        val scenario = launchQueue(tracks, startIndex = 1)
+        try {
+            val selected = tracks[1]
+            awaitPlaying(selected.id)
+            val original = onMain { requireNotNull(PlaybackService.instance) }
+            main {
+                original.player.seekTo(8_000L)
+                assertEquals(
+                    Service.START_STICKY,
+                    original.onStartCommand(PlaybackCommands.intent(app).putExtra("action", "seek")
+                        .putExtra("position", 8_000L), 0, 0),
+                )
+            }
+            removeTask(scenario)
+            main { original.stopSelf() }
+            await("The first service instance was released") { PlaybackService.instance == null }
+            val restarted = startServiceForSystemCallback(Service.START_STICKY)
+            await("The restarted service resumes the same item and its checkpoint") {
+                restarted.player.isPlaying && restarted.playingTrackKey()?.id == selected.id &&
+                    restarted.player.currentPosition >= 8_000L && app.playback.queue.index == 1
+            }
+            await("The queue stages the successor behind the restored track") {
+                restarted.player.mediaItemCount == 2
+            }
+            main { restarted.onStartCommand(PlaybackCommands.intent(app).putExtra("action", "pause"), 0, 0) }
+            await("User pause revoked the restart intent") {
+                !restarted.player.playWhenReady && PlaybackStateManager.serviceResumeState(app) == null
+            }
+            main { restarted.stopSelf() }
+            await("The second service instance was released") { PlaybackService.instance == null }
+            val paused = startServiceForSystemCallback(Service.START_NOT_STICKY)
+            main { assertFalse(paused.hasPlayableItem()) }
+        } finally {
+            scenario.close()
+            ActivityScenario.launch(MainActivity::class.java).use {
+                it.onActivity { app.playback.stopService() }
+            }
+        }
+    }
+
+    private fun startServiceForSystemCallback(expectedMode: Int): PlaybackService {
+        app.startService(PlaybackCommands.intent(app))
+        await("Android has created a fresh service") { PlaybackService.instance != null }
+        return onMain {
+            val service = requireNotNull(PlaybackService.instance)
+            assertEquals(expectedMode, service.onStartCommand(null, 0, 0))
+            service
+        }
+    }
+
+    @Test
+    fun changingSessionLyricSettingRepublishesTheCurrentLineWhilePlaying() {
+        val tracks = prepareTracks(gapless = false)
+        val prefs = app.getSharedPreferences("ncrust_settings", 0)
+        prefs.edit().putBoolean("session_metadata_lyrics", false).apply()
+        val scenario = launchQueue(tracks)
+        try {
+            awaitPlaying(tracks.first().id)
+            main {
+                PlaybackService.mediaLyricFrame = MediaLyricFrame(original = "Fixture lyric")
+                assertEquals(tracks.first().name, PlaybackService.instance?.player?.mediaMetadata?.title)
+                prefs.edit().putBoolean("session_metadata_lyrics", true).apply()
+            }
+            await("System session publishes the same current line after enabling lyrics") {
+                PlaybackService.instance?.player?.mediaMetadata?.title == "Fixture lyric"
+            }
+            main { prefs.edit().putBoolean("session_metadata_lyrics", false).apply() }
+            await("System session restores the song name when lyrics are turned off") {
+                PlaybackService.instance?.player?.mediaMetadata?.title == tracks.first().name
+            }
+            val published = onMain { PlaybackService.instance?.player?.currentMediaItem }
+            main { PlaybackService.mediaLyricFrame = MediaLyricFrame(original = "Next fixture lyric") }
+            SystemClock.sleep(800L)
+            main {
+                val player = requireNotNull(PlaybackService.instance).player
+                assertTrue("Notification lyric changes must not replace the session item", published === player.currentMediaItem)
+                assertEquals(tracks.first().name, player.mediaMetadata.title)
+                assertTrue(player.isPlaying)
+            }
+        } finally {
+            main {
+                PlaybackService.mediaLyricFrame = MediaLyricFrame()
+                prefs.edit().remove("session_metadata_lyrics").apply()
+                app.playback.stopService()
+            }
+            scenario.close()
+        }
+    }
 
     @Test
     fun linearQueueStagesFirstTrackWithoutPlayingItAtNaturalEnd() {

@@ -44,6 +44,8 @@ import androidx.lifecycle.withResumed
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.takahashirinta.ncrust.auth.CookieManager
+import com.takahashirinta.ncrust.player.LiveUpdateKind
+import com.takahashirinta.ncrust.player.LiveUpdateNotifier
 import com.takahashirinta.ncrust.recognize.*
 import com.takahashirinta.ncrust.ui.components.ArrisButton
 import com.takahashirinta.ncrust.ui.components.ArrisPageHeader
@@ -145,6 +147,7 @@ fun RecognizeScreen(onBack: () -> Unit) {
         }
         val captureSource = source
         val attempt = ++generation
+        val liveOwner = Any()
         phase = RecognitionPhase.AUTHORIZATION
         result = null
         status = "正在确认录音权限…"
@@ -177,7 +180,11 @@ fun RecognizeScreen(onBack: () -> Unit) {
                     else "正在聆听，请保持音源清晰。"
                 val ticker = launch {
                     for (left in 10 downTo 1) {
-                        if (generation == attempt) countdown = left
+                        if (generation == attempt) {
+                            countdown = left
+                            LiveUpdateNotifier.post(context, LiveUpdateKind.RECOGNITION, liveOwner,
+                                "听歌识曲", "正在采集声音", percent = (10 - left) * 10)
+                        }
                         delay(1_000)
                     }
                     if (generation == attempt) countdown = 0
@@ -215,6 +222,7 @@ fun RecognizeScreen(onBack: () -> Unit) {
                 }
                 phase = RecognitionPhase.MATCHING
                 status = "正在寻找这段旋律…"
+                LiveUpdateNotifier.post(context, LiveUpdateKind.RECOGNITION, liveOwner, "听歌识曲", status)
                 val outcome = withContext(Dispatchers.IO) {
                     NeteaseRecognizeProvider(cookieProvider = { cookie }).recognize(clip)
                 }
@@ -238,6 +246,7 @@ fun RecognizeScreen(onBack: () -> Unit) {
             } catch (_: Exception) {
                 if (generation == attempt) status = "识别暂未成功，请稍后重试。"
             } finally {
+                LiveUpdateNotifier.cancel(context, LiveUpdateKind.RECOGNITION, liveOwner)
                 if (generation == attempt) {
                     phase = RecognitionPhase.IDLE
                     countdown = 0

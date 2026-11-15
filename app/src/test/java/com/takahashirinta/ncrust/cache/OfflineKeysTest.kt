@@ -135,18 +135,18 @@ class OfflineUrlIndexTest {
         val idx = OfflineUrlIndex()
         idx.put(OfflineKeys.key(7L, "standard"), "http://s")
         // 用户现在选的是无损 —— 严格找会落空，退化后仍能拿到 standard 那份
-        val got = idx.recall(listOf(OfflineKeys.key(7L, "lossless")), 7L)
+        val got = idx.recallRecord(7L, "lossless") { true }
         assertEquals(OfflineKeys.key(7L, "standard"), got?.first)
-        assertEquals("http://s", got?.second)
-        assertNull(idx.recall(listOf(OfflineKeys.key(8L, "lossless")), 8L))
+        assertEquals("http://s", got?.second?.url)
+        assertNull(idx.recallRecord(8L, "lossless") { true })
     }
 
     @Test
     fun `recall 不会把别的歌当成命中`() {
         val idx = OfflineUrlIndex()
         idx.put(OfflineKeys.key(11L, "lossless"), "http://11")
-        assertNull(idx.recall(emptyList(), 12L))
-        assertEquals("http://11", idx.recall(emptyList(), 11L)?.second)
+        assertNull(idx.recallRecord(12L, null) { true })
+        assertEquals("http://11", idx.recallRecord(11L, null) { true }?.second?.url)
     }
 
     @Test

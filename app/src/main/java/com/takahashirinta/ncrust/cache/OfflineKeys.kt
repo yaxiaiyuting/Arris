@@ -72,10 +72,18 @@ object OfflineKeys {
         val separator = qualitySeparator(key)
         if (separator < 0) return null
         val start = separator + 1
-        val suffix = key.indexOf('~', start)
-        val end = if (suffix >= 0) suffix else key.length
-        return key.substring(start, end).ifEmpty { null }
+        return key.substring(start, levelEnd(key, start)).ifEmpty { null }
     }
+
+    internal fun hasLevel(key: String, level: String): Boolean {
+        val separator = qualitySeparator(key)
+        if (separator < 0 || level.isEmpty()) return false
+        val start = separator + 1
+        return levelEnd(key, start) - start == level.length && key.startsWith(level, start)
+    }
+
+    private fun levelEnd(key: String, start: Int): Int =
+        key.indexOf('~', start).takeIf { it >= 0 } ?: key.length
 
     /** 从 key 里解出歌曲 id；解不出返回 null。 */
     fun songIdOf(key: String): Long? {

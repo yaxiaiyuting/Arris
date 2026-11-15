@@ -10,6 +10,9 @@
 package com.takahashirinta.ncrust.update
 
 import android.content.Context
+import com.takahashirinta.ncrust.player.LiveUpdateKind
+import com.takahashirinta.ncrust.player.LiveUpdateNotifier
+import com.takahashirinta.ncrust.player.progressPercent
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
@@ -215,6 +218,7 @@ object UpdateService {
 
     private val _download = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val download: StateFlow<DownloadState> = _download.asStateFlow()
+    private var downloadNoticeContext: Context? = null
 
     private var downloadJob: Job? = null
     private var downloader: UpdateDownloader? = null
@@ -406,6 +410,7 @@ object UpdateService {
         downloader = active
         activeTarget = target
         val generation = downloadGeneration.incrementAndGet()
+        downloadNoticeContext = appContext
         val batch = SegmentedDownload.Batch()
         segmentBatch = batch
         publish(generation, DownloadState.Downloading(0L, info.assetSize, target))
@@ -444,7 +449,8 @@ object UpdateService {
     fun cancelDownload() {
         // 推高代次：旧任务之后的所有写状态（含 catch / finally）都被 publish 挡掉，
         // 不会覆盖紧接着新开的下载。
-        downloadGeneration.incrementAndGet()
+        val canceled = downloadGeneration.getAndIncrement()
+        downloadNoticeContext?.let { LiveUpdateNotifier.cancel(it, LiveUpdateKind.DOWNLOAD, canceled) }
         segmentBatch?.cancel()
         segmentBatch = null
         downloader?.cancel()
@@ -458,7 +464,19 @@ object UpdateService {
     /** 只有代次仍是当前任务的回调才允许写状态。 */
     @Synchronized
     private fun publish(generation: Long, state: DownloadState) {
-        if (downloadGeneration.get() == generation) _download.value = state
+        if (downloadGeneration.get() != generation) return
+        _download.value = state
+        val context = downloadNoticeContext ?: return
+        when (state) {
+            is DownloadState.Downloading -> LiveUpdateNotifier.post(
+                context, LiveUpdateKind.DOWNLOAD, generation, "Arris 更新",
+                "正在下载安装包", progressPercent(state.downloaded, state.total),
+            )
+            is DownloadState.Verifying -> LiveUpdateNotifier.post(
+                context, LiveUpdateKind.DOWNLOAD, generation, "Arris 更新", "正在校验安装包",
+            )
+            else -> LiveUpdateNotifier.cancel(context, LiveUpdateKind.DOWNLOAD, generation)
+        }
     }
 
     /**

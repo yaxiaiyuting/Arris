@@ -13,6 +13,7 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
 import com.takahashirinta.ncrust.network.model.ArtistItem
 import com.takahashirinta.ncrust.source.SourceIds
+import java.util.Collections
 
 /**
  * 离线曲目索引的一条记录（v2.0.0 · T3 · 离线缓存 Phase 2）。**纯数据**，JVM 可单测。
@@ -116,6 +117,12 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
     private val map = LinkedHashMap<Long, OfflineTrack>()
     private var lastUpsertedSongId = 0L
     private var encoded: String? = null
+    private var sortedTracks: List<OfflineTrack>? = null
+
+    private fun invalidateSnapshots() {
+        encoded = null
+        sortedTracks = null
+    }
 
     /** 写入 / 更新一条记录。返回 false 表示主键非法、被忽略。 */
     fun upsert(track: OfflineTrack): Boolean {
@@ -128,7 +135,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
         map.remove(track.songId)
         map[track.songId] = merged
         lastUpsertedSongId = track.songId
-        encoded = null
+        invalidateSnapshots()
         while (map.size > maxEntries) {
             val it = map.keys.iterator()
             if (!it.hasNext()) break
@@ -141,7 +148,7 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
     /** 删一条。返回被删掉的记录（本来就没有则 null）。 */
     fun remove(songId: Long): OfflineTrack? {
         val removed = map.remove(songId)
-        if (removed != null) encoded = null
+        if (removed != null) invalidateSnapshots()
         return removed
     }
 
@@ -170,14 +177,16 @@ internal class OfflineLibraryIndex(private val maxEntries: Int = MAX_ENTRIES) {
                 dropped++
             }
         }
-        if (dropped > 0) encoded = null
+        if (dropped > 0) invalidateSnapshots()
         return dropped
     }
 
     fun get(songId: Long): OfflineTrack? = map[songId]
 
     /** 按 [OfflineTrack.completedAt] 倒序（同时刻保持写入顺序）。 */
-    fun list(): List<OfflineTrack> = map.values.sortedByDescending { it.completedAt ?: 0L }
+    fun list(): List<OfflineTrack> = sortedTracks ?: Collections.unmodifiableList(
+        map.values.sortedByDescending { it.completedAt ?: 0L },
+    ).also { sortedTracks = it }
 
     fun size(): Int = map.size
 
@@ -221,21 +230,17 @@ object OfflineLibrary {
     private const val PREFS = "ncrust_offline"
     private const val KEY_TRACKS = "tracks"
 
-    @Volatile
     private var index: OfflineLibraryIndex? = null
     private var appliedJson: String? = null
     private var revision = 0L
 
-    private fun index(context: Context): OfflineLibraryIndex {
+    private fun indexLocked(context: Context): OfflineLibraryIndex {
         index?.let { return it }
-        synchronized(this) {
-            index?.let { return it }
-            val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val loaded = OfflineLibraryIndex.fromJson(prefs.getString(KEY_TRACKS, null))
-            appliedJson = null
-            index = loaded
-            return loaded
-        }
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val loaded = OfflineLibraryIndex.fromJson(prefs.getString(KEY_TRACKS, null))
+        appliedJson = null
+        index = loaded
+        return loaded
     }
 
     private fun persist(context: Context, idx: OfflineLibraryIndex) {
@@ -266,7 +271,7 @@ object OfflineLibrary {
     ): Boolean {
         if (songId <= 0L) return false
         return synchronized(this) {
-            val idx = index(context)
+            val idx = indexLocked(context)
             val ok = idx.upsert(
                 OfflineTrack(
                     songId = songId,
@@ -295,7 +300,7 @@ object OfflineLibrary {
     fun remove(context: Context, songId: Long): Boolean {
         if (songId <= 0L) return false
         val removed = synchronized(this) {
-            val idx = index(context)
+            val idx = indexLocked(context)
             // 联动删 URL：与单测共用同一个纯函数 [OfflineLibraryIndex.removeWithUrls]，
             // 「删曲目必删死条目」这条不变量才有测试盯着（OfflineUrlStore.mutate 负责落盘）。
             val track = OfflineUrlStore.mutate(context) { urls -> idx.removeWithUrls(songId, urls) }
@@ -314,7 +319,7 @@ object OfflineLibrary {
         scannedRevision: Long,
         keepSongIds: Set<Long>?,
     ): List<OfflineTrack> = synchronized(this) {
-        val idx = index(context)
+        val idx = indexLocked(context)
         if (revision == scannedRevision && keepSongIds != null && idx.retainSongIds(keepSongIds) > 0) {
             revision++
             persist(context, idx)
@@ -324,9 +329,10 @@ object OfflineLibrary {
 
     fun clear(context: Context) {
         synchronized(this) {
-            index = OfflineLibraryIndex()
+            val empty = OfflineLibraryIndex()
+            index = empty
             revision++
-            persist(context, index(context))
+            persist(context, empty)
         }
     }
 }

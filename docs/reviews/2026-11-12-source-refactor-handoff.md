@@ -1,5 +1,60 @@
 # Arris 主线源码查验与交接
 
+## 11 月 14 日实时通知设置回读
+
+`c9dac7a` 续接本地 4.1.4 测试包源码 `be59ae3`。系统开关关闭时，仍在进行的任务保留最新通知内容。从系统设置返回时重新核对开关，补发仍在进行且用户未划掉的任务。读回只匹配实时通知通道与本功能的通知 ID。设置页保留三态，未提升时区分系统通知、实时通知开关、通道、无活跃任务和系统未提升。歌曲通知继续显示歌曲名、歌手、可用音质和专辑；专辑空值可回退到媒体项的专辑字段。缓存、识曲、一起听等待和安装包下载沿用各自的任务收尾。
+
+Android 16.1 隔离模拟器，系统页确有 Arris 的 Live updates 开关。关闭时通知未发出且回读对应开关状态。重新打开后真实通知带 `FLAG_PROMOTED_ONGOING`，应用读回「已提升」。另一项用例通过权限闸门夹具验证，返回时即使等待任务没再发进度，也会用最新内容补发，已结束任务不会出现；完成撤回后读回空闲。两组开关状态共 3 项通过。离线 JVM 3,609 项通过、13 项跳过，Debug Lint 0 错误、93 警告，Release Kotlin 编译通过。现有签名 4.1.4 包仍对应 `be59ae3`。 [构建](/home/duanjb666/.cache/arris-live-update.BBGyJR/gradle.log) · [系统设置](/home/duanjb666/.cache/arris-live-update.BBGyJR/promotion-settings.xml) · [关闭开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-off.log) · [打开开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-on.log)
+
+11 月 15 日收尾时复核了 4.1.4-gpl 签名 APK 与 mapping 的 SHA-256，APK v2 签名校验通过。签名包的构建点为 `be59ae3`，系统设置返回后补发通知的修复已提交到 `c9dac7a`。通知目前以专辑提供歌曲来源信息。 [签名测试包记录](/home/duanjb666/deepseek/arris/dist/v4.1.4-gpl-test/VERIFICATION.md)
+
+离线失败键仍有四个文件的在途改动，分别在 `OfflineUrlStore.kt`、`OfflineCacheDownload.kt`、`PlaybackService.kt` 和 `PlayerViewModel.kt`。上面的回归使用含这组改动的工作树构建。下轮先补同档完整／试听键与 CDN 换签名后的独立回归，确认链接变化时仍共享缓存字节的情况，随后查验写入新字节后解除失败标记的条件。已在工作树外备份这组改动，并核验补丁可应用到 `64329df`。收尾时周额度约 6%。 [离线缓存补丁](/home/duanjb666/.cache/arris-closeout.GxJH1Y/offline-cache-work-in-progress.patch)
+
+## 11 月 14 日后台续播、切网预载与实时通知
+
+从 `a464430` 接续，源码到 `e284586`。本轮在 `refactor/arris-source` 本地提交四组改动，涉及 `app/src` 下 27 个文件。累计从 `b042755` 起，现有生产 Kotlin／Java 文件中 181 / 468 个存在 Git 差异，占 **38.7%**。
+
+| 提交 | 改动和证据 |
+| --- | --- |
+| `9b48903` | 默认线路变化时先更新连接池、DNS 与传输冷却，再放行下一曲预取。旧版在拦截夹具的冷却窗口内直接丢掉下一曲；两次连续线路变化后新版只向最终线路成功发出一次请求。 |
+| `fbd748e` | 沿用 Media3 播放期间的 CPU／网络唤醒锁。媒体前台服务在主动播放或换曲期间采用 `START_STICKY`；系统用空 Intent 重建时，从原曲与队列断点恢复。手动暂停与停止会清除恢复资格。本地 Android 14 重建服务用例从第二首的 8 秒位置恢复、重新装入后续项，并验证暂停后不恢复。该用例直接调用重建回调。 |
+| `1e74a08` | 「播放与音质」增加实时通知三态及系统入口。ProgressStyle 使用请求提升 extra、低重要度静音通道。播放卡显示歌名、歌手、可知的音质与专辑，常速长曲使用系统计时。识曲、一起听等待、更新下载和整曲缓存按任务发布与撤回。整曲缓存复用 Media3，QQ／网易仅使用实际取得的非试听音频。 |
+| `e284586` | 立即取消整曲缓存时也执行任务收尾，释放槽位后可以开启下一次缓存。 |
+
+Android 16.1 隔离模拟器确认公开 action 打开 Arris 对应的系统通知页，页面含 Live updates 开关。夹具发布的真实通知携带 `FLAG_PROMOTED_ONGOING`，应用读回「已提升」。Android 16.0 镜像的专用 action 无接收方，应用通知路线可打开。Android 14 的隔离回归包括本地 HTTP 整曲缓存，再关掉源端口验证播放从缓存读取。真机 ROM 的胶囊样式、后台冻结策略和被系统终止后的实际调度仍需真机数据。
+
+最终源码全量 JVM 3,609 项通过、13 项跳过，Debug Lint 0 错误、93 警告，Release Kotlin 编译通过。Android 14 的 17 项和 Android 16.1 的 1 项均通过，使用的是取消调度收尾前的 `1e74a08`。本轮额度五小时约 5% 时停止扩展，周窗口约 10%。
+
+[构建日志](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/gradle-final-cancel.log) · [切网旧版](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/reconnect-baseline.xml) · [切网回归](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/reconnect-final.xml) · [Android 14 回归](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/instrumentation-final.log) · [Android 16.1 系统设置](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/promotion-settings-api361.xml) · [通知标记回读](/home/duanjb666/.cache/arris-route-recovery.3UzwMj/live-api361-results.log)
+
+下一轮优先核对厂商把服务冻结但进程仍在时的 READY 时钟与音频焦点，接着处理离线失败键的跨线程读写及重新缓存后失效问题。正式 4.1.3-gpl 仍指向 `83c1faa`。续跑每 305 分钟。
+
+## 11 月 13 日晚离线起播、歌词、波形和切网续查
+
+从 4.1.3-gpl 正式提交 `83c1faa` 接续，验证到 `1d0b180`。本轮 10 个本地源码及回归提交，涉及 `app/src` 下 24 个文件，其中生产源码 14 个、JVM 测试 9 个、Android 测试 1 个。
+
+| 提交 | 查验结果 |
+| --- | --- |
+| `a169374` | 离线起播按请求档位和完整曲、试听、旧记录的既有优先级探测缓存，首个可播项即返回，省掉候选列表和排序。同曲六种缓存变体的 JVM 对照中，请求档命中的线程分配量从约 864 B 降到 56 B，靠后的回退从约 845 B 降到 152 B。两侧各预热 2 万次后测 10 万次。 |
+| `1e2d64f`、`c59629c` | AMLL 和网易云共用读请求协调逻辑，各自隔离。网易云预取与实际起播重叠时共用一次取词和一次缓存写入。取消预取后，仍在等结果的起播可继续。同账号续期可以完成请求，排队的旧账号请求在 Retrofit 拦截器处被拒。保留四次尝试及旧缓存补音译的规则。 |
+| `1e8a352` | 实际 `PlaybackService` 离线复现关闭媒体会话歌词后歌名未恢复。现在设置变化立即刷新系统媒体项。关闭时，通知歌词仍更新，当前 `MediaItem` 引用保持稳定。 |
+| `2bcfd58` | 媒体歌词时钟在同一行复用发布帧及通知比较键。999 次同句采样复用同一对象，回跳与翻译主行切换仍更新。 |
+| `86c56c8` | 波形到达时钟用批次柱序号差计算平均间隔，移除历史批大小的重复求和。256 柱的时间标记从 `LongArray` 改为 `BooleanArray`，数组元素占用从 2048 B 变为 256 B，不含对象头。回归覆盖跨环、无时间戳和不等长批次。 |
+| `109fb99` | 用本地 HTTP 拦截器复现旧线路的两次失败在切网后才返回，重新触发 3 秒全局冷却并挡住新线路首个取链。冷却只由同线路代次的失败设置，新线路可立即发起请求。 |
+| `9d9240c` | 离线列表在索引未改变时直接复用排序快照。排序顺序、同毫秒时的写入顺序、首次缓存时间和 LRU 规则保持一致。回归覆盖同曲重复写、重排、删除和对账。 |
+| `53ff6d6` | 隔离 JVM 在账号已替换、代次通知尚未发出的窗口复现旧响应写入歌词缓存。现在在会话锁内核对并接收条目，整表编码只持有歌词缓存锁。同账号续期保留请求。 |
+| `1d0b180` | 离线 URL 和曲目索引由各自存储对象持锁访问，移除内层重复锁。保留写入失败后重试、跨清单删除的锁顺序与存储键。 |
+
+离线全量 JVM 3,608 项通过、13 项跳过，零失败，覆盖 352 个测试类。Debug Lint 0 错误、90 警告。Debug 应用与测试 APK 构建成功，Release Kotlin 编译通过。`53ff6d6` 在隔离 Android 14 模拟器通过 15 项，覆盖媒体会话、后台队列、离线缓存、首页和搜索历史。分配量来自 HotSpot 线程计数，切网回归来自本地拦截。真机网络切换、后台衔接耗时和波形帧率待实测。正式 4.1.3-gpl 仍对应 `83c1faa`。
+
+以重构开始前 `b042755` 为基线，当前 466 个生产 Kotlin／Java 文件中，174 个含累计 Git 差异，占 **37.3%**。新增文件计入，已删除文件与测试文件排除。
+
+[全量构建](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/gradle-final.log) · [模拟器回归](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/instrumentation-final.log) · [会话开关基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/session-metadata-baseline.log) · [切网基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/route-cooldown-baseline.xml) · [换号基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/netease-login-race-baseline.xml) · [换号回归](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/netease-login-race-final.xml)
+
+[离线取链分配探针](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/OfflineRecallAllocationProbe.kt) · [基线分配量](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/offline-rank-baseline.xml) · [改后分配量](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/offline-rank-final.xml) · [离线排序基线](/home/duanjb666/.cache/arris-offline-lyric.m3Vest/library-snapshot-baseline.xml)
+
+下轮从 `PlayerViewModel` 的默认网络变化收集器接续。当前离线预载补发在连接池刷新和冷却重置之前触发，先用本地可控请求核对短窗口及连续两次路线变化。随后查离线失败键在主线程写入、IO 读取的并发边界，以及新缓存是否能替代被判失败的旧文件。`NcrustApplication` 持有队列 ViewModel，移除任务后的连续换曲已在隔离模拟器通过。后台队列下一步核对服务重建后恢复游标及待播项的行为。
+
 ## 11 月 13 日收藏、离线缓存、歌词与队列续查
 
 从 `0512ef1` 接续，源码查验到 `8b9b5ae`。本轮 12 个本地提交，涉及 `app/src` 下 32 个文件，其中生产侧 21 个、JVM 测试 9 个、Android 测试 2 个。另同步更新预取入口的仓库说明。

@@ -44,6 +44,10 @@ class NcrustApplication : Application(), ImageLoaderFactory {
         ClientIdentity.init(this)
         // v1.2.0 · A2：档位表 7 → 8 档（新增 jymaster），把旧的档位索引一次性迁移过来。
         QualityLadder.migrate(getSharedPreferences(QualityLadder.PREFS, Context.MODE_PRIVATE))
+        com.takahashirinta.ncrust.player.LiveUpdateNotifier.clearAbandoned(this)
+        if (android.os.Build.VERSION.SDK_INT >= 36) {
+            com.takahashirinta.ncrust.listen.TogetherSession.initLiveUpdates(this)
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

@@ -13,12 +13,6 @@ import android.util.Log
 import com.takahashirinta.ncrust.network.awaitResponseRead
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import okhttp3.OkHttpClient
@@ -86,12 +80,10 @@ object AmllTtmlClient {
     /** 网络异常的统一 code：没拿到任何 HTTP 响应。 */
     const val NETWORK_ERROR = -1
 
-    private class Download(val result: Deferred<String?>, var readers: Int = 0)
+    private val downloads = SharedLyricReads<Long, String?>()
 
-    private val downloads = HashMap<Long, Download>()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    internal fun readerCount(songId: Long): Int = synchronized(downloads) { downloads[songId]?.readers ?: 0 }
+    @androidx.annotation.VisibleForTesting
+    internal fun readerCount(songId: Long): Int = downloads.readerCount(songId)
 
     /**
      * 一个镜像。[template] 里的 `%d` 是 ncm songId。
@@ -196,25 +188,11 @@ object AmllTtmlClient {
     suspend fun load(context: Context, songId: Long, fetcher: TtmlFetcher = OkHttpTtmlFetcher): String? {
         LyricsCache.getTtml(context, songId)?.let { return it }
         val app = context.applicationContext
-        val download = synchronized(downloads) {
-            downloads.getOrPut(songId) {
-                Download(scope.async(start = CoroutineStart.LAZY) {
-                    // Another reader may have filled the cache before we acquired the slot.
-                    LyricsCache.getTtml(app, songId) ?: fetch(songId, fetcher)?.also {
-                        currentCoroutineContext().ensureActive()
-                        LyricsCache.putTtml(app, songId, it)
-                    }
-                })
-            }.also { it.readers++ }
-        }
-        try {
-            return download.result.await()
-        } finally {
-            synchronized(downloads) {
-                if (--download.readers == 0) {
-                    downloads.remove(songId)
-                    download.result.cancel()
-                }
+        return downloads.read(songId) {
+            // Another reader may have filled the cache before we acquired the slot.
+            LyricsCache.getTtml(app, songId) ?: fetch(songId, fetcher)?.also {
+                currentCoroutineContext().ensureActive()
+                LyricsCache.putTtml(app, songId, it)
             }
         }
     }

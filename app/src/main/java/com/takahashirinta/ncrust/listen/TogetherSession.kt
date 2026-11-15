@@ -5,6 +5,10 @@
 
 package com.takahashirinta.ncrust.listen
 
+import android.content.Context
+import com.takahashirinta.ncrust.player.LiveUpdateKind
+import com.takahashirinta.ncrust.player.LiveUpdateNotifier
+
 import android.util.Log
 
 import java.util.UUID
@@ -162,7 +166,7 @@ object TogetherSession {
                     session.samples.addLast(RoomClock.Sample(msg.t0, msg.t0 + rtt, msg.relayNow))
                 }
             }
-            is RoomWire.Presence -> _members.value = msg.members
+            is RoomWire.Presence -> updatePresence(owner, msg.members)
             is RoomWire.Closed -> connectionClosed(owner, 4001, msg.reason)
             else -> Unit
         }
@@ -183,6 +187,30 @@ object TogetherSession {
     val roomId: StateFlow<String> = _roomId
     private val _members = MutableStateFlow(0)
     val members: StateFlow<Int> = _members
+    @Volatile private var notificationContext: Context? = null
+
+    internal fun initLiveUpdates(context: Context) {
+        notificationContext = context.applicationContext
+    }
+
+    @Synchronized
+    private fun updateRoomNotice(owner: RoomLink, waiting: Boolean) {
+        if (link !== owner) return
+        val context = notificationContext ?: return
+        if (waiting) {
+            LiveUpdateNotifier.post(context, LiveUpdateKind.ROOM, owner, "一起听",
+                if (_isHost.value) "等待听友加入" else "正在连接房间")
+        } else {
+            LiveUpdateNotifier.cancel(context, LiveUpdateKind.ROOM, owner)
+        }
+    }
+
+    @Synchronized
+    private fun updatePresence(owner: RoomLink, count: Int) {
+        if (link !== owner) return
+        _members.value = count
+        if (_isHost.value) updateRoomNotice(owner, waiting = count <= 1)
+    }
     private val _isHost = MutableStateFlow(false)
     val isHost: StateFlow<Boolean> = _isHost
 
@@ -235,6 +263,7 @@ object TogetherSession {
         _status.value = "连接中…"
         val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "host", "房主"), fixedIps, secret)
         link = ws
+        updateRoomNotice(ws, waiting = true)
         ws.onOpen = {
             if (link === ws) {
                 _status.value = "已创建房间 $code"
@@ -245,7 +274,7 @@ object TogetherSession {
         ws.onMessage = { msg ->
             if (link === ws) when (msg) {
                 is RoomWire.Ping -> ws.send(RoomWire.Pong(msg.t0, nowMs()))
-                is RoomWire.Presence -> _members.value = msg.members
+                is RoomWire.Presence -> updatePresence(ws, msg.members)
                 else -> Unit
             }
         }
@@ -262,10 +291,16 @@ object TogetherSession {
         _roomId.value = code
         _status.value = "连接中…"
         val ws = RoomLink.Wss(RoomDirectory.roomUrl(base, code, "member", "成员"), fixedIps)
-        ws.onOpen = { if (link === ws) _status.value = "已加入房间 $code" }
+        ws.onOpen = {
+            if (link === ws) {
+                _status.value = "已加入房间 $code"
+                updateRoomNotice(ws, waiting = false)
+            }
+        }
         ws.onClosed = { c, r -> connectionClosed(ws, c, r) }
         ws.onMessage = { msg -> memberMessage(ws, msg) }
         registerMember(ws)
+        updateRoomNotice(ws, waiting = true)
         ws.connect()
     }
 
@@ -282,14 +317,15 @@ object TogetherSession {
         lan.onMessage = { msg ->
             when (msg) {
                 is RoomWire.Ping -> lan.send(RoomWire.Pong(msg.t0, nowMs()))
-                is RoomWire.Presence -> _members.value = msg.members
+                is RoomWire.Presence -> updatePresence(lan, msg.members)
                 else -> Unit
             }
         }
         lan.onClosed = { _, _ -> }
+        link = lan
         lan.startHost()
         startHostLoop(lan)
-        link = lan
+        updateRoomNotice(lan, waiting = _members.value <= 1)
         val addr = lan.address()
         _status.value = if (addr != null) "局域网房间：$addr（同一 WiFi/热点可加入）" else "局域网房间已启动，但没找到局域网地址"
         return addr
@@ -313,8 +349,14 @@ object TogetherSession {
         }
         lan.onMessage = { msg -> memberMessage(lan, msg) }
         lan.onClosed = { c, r -> connectionClosed(lan, c, r) }
-        lan.onOpen = { if (link === lan) _status.value = "已加入局域网 $address" }
+        lan.onOpen = {
+            if (link === lan) {
+                _status.value = "已加入局域网 $address"
+                updateRoomNotice(lan, waiting = false)
+            }
+        }
         registerMember(lan)
+        updateRoomNotice(lan, waiting = true)
         lan.startMember()
         return true
     }
@@ -334,7 +376,7 @@ object TogetherSession {
                 is RoomWire.Ping -> scope.launch(Dispatchers.IO) {
                     if (this@TogetherSession.link === link) link.send(RoomWire.Pong(msg.t0, nowMs()))
                 }
-                is RoomWire.Presence -> _members.value = msg.members
+                is RoomWire.Presence -> updatePresence(link, msg.members)
                 else -> Unit
             }
         }
@@ -350,6 +392,7 @@ object TogetherSession {
                 return null
             }
             startHostLoop(link)
+            updateRoomNotice(link, waiting = _members.value <= 1)
             _status.value = "P2P 房间码：$code"
             return code
         }
@@ -368,8 +411,14 @@ object TogetherSession {
         val link = P2pLink.join(parsed.third)
         link.onMessage = { msg -> memberMessage(link, msg) }
         link.onClosed = { c, r -> connectionClosed(link, c, r) }
-        link.onOpen = { if (this.link === link) _status.value = "P2P 已连通（${parsed.first}:${parsed.second}）" }
+        link.onOpen = {
+            if (this.link === link) {
+                _status.value = "P2P 已连通（${parsed.first}:${parsed.second}）"
+                updateRoomNotice(link, waiting = false)
+            }
+        }
         registerMember(link)
+        updateRoomNotice(link, waiting = true)
         try {
             link.startMember(parsed.first, parsed.second)
         } catch (e: Exception) {
@@ -384,6 +433,7 @@ object TogetherSession {
         stopHostLoop()
         val old = link
         link = null
+        if (old != null) notificationContext?.let { LiveUpdateNotifier.cancel(it, LiveUpdateKind.ROOM, old) }
         member?.scope?.cancel()
         member = null
         publishMemberPlayback()

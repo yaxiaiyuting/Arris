@@ -259,6 +259,7 @@ class WaveformSettingsGatingTest {
                 "bilibili_quality_cap", "bilibili_prefer_flac", "keep_screen_on",
                 // 4.0.0：均衡器入口（播放与音质页）
                 "action.equalizer_open",
+                "action.live_update_settings",
             ),
             SettingsRenderPlan.plannedRowsOf("playback").map { it.id },
         )
