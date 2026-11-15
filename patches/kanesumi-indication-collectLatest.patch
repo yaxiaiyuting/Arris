@@ -1,0 +1,45 @@
+From bd682d6debf107347e49803e600c47178a8774e6 Mon Sep 17 00:00:00 2001
+From: yaxiaiyuting <jiangtianyou189@qq.com>
+Date: Sun, 15 Nov 2026 13:28:50 +0000
+Subject: [PATCH] =?UTF-8?q?fix(core):=20=E7=82=B9=E5=87=BB=E5=8F=8D?=
+ =?UTF-8?q?=E9=A6=88=E6=94=B9=E7=94=A8=20collectLatest=EF=BC=8C=E8=BF=9E?=
+ =?UTF-8?q?=E7=82=B9=E5=8F=AA=E6=92=AD=E6=9C=80=E6=96=B0=E4=B8=80=E6=AC=A1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+原来用 collect 串行 await 每个 animateTo，连点时动画排队，手指停下后还要挨个播完
+（Arris 的迷你播放条上一首/暂停/下一首、分段控件都踩到）。改成 collectLatest：
+新交互到达即取消上一条动画。
+---
+ .../takahashirinta/kanesumi/core/theme/MetroIndication.kt  | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/kanesumi-core/src/main/java/io/github/takahashirinta/kanesumi/core/theme/MetroIndication.kt b/kanesumi-core/src/main/java/io/github/takahashirinta/kanesumi/core/theme/MetroIndication.kt
+index 1a1f3ed..57908a2 100644
+--- a/kanesumi-core/src/main/java/io/github/takahashirinta/kanesumi/core/theme/MetroIndication.kt
++++ b/kanesumi-core/src/main/java/io/github/takahashirinta/kanesumi/core/theme/MetroIndication.kt
+@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+ import androidx.compose.ui.node.DelegatableNode
+ import androidx.compose.ui.node.DrawModifierNode
++import kotlinx.coroutines.flow.collectLatest
+ import kotlinx.coroutines.launch
+ 
+ /**
+@@ -63,7 +64,11 @@ private class MetroIndicationNode(
+ 
+     override fun onAttach() {
+         coroutineScope.launch {
+-            interactionSource.interactions.collect { interaction ->
++            // collectLatest 而不是 collect：后者会**串行**await 每个 animateTo，
++            // 于是连点时按下/松手的动画排成一队，手指停下以后还要挨个播完
++            // （真机反馈的「连点之后反复闪」「暂停/上一首/下一首连点闪很多下」）。
++            // collectLatest 在新交互到达时取消上一条动画，永远只有最新的那次在播。
++            interactionSource.interactions.collectLatest { interaction ->
+                 when (interaction) {
+                     is PressInteraction.Press -> alpha.animateTo(
+                         targetValue = 1f,
+-- 
+2.56.1
+
