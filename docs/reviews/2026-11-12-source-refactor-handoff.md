@@ -6,7 +6,9 @@
 
 Android 16.1 隔离模拟器，系统页确有 Arris 的 Live updates 开关。关闭时通知未发出且回读对应开关状态。重新打开后真实通知带 `FLAG_PROMOTED_ONGOING`，应用读回「已提升」。另一项用例通过权限闸门夹具验证，返回时即使等待任务没再发进度，也会用最新内容补发，已结束任务不会出现；完成撤回后读回空闲。两组开关状态共 3 项通过。离线 JVM 3,609 项通过、13 项跳过，Debug Lint 0 错误、93 警告，Release Kotlin 编译通过。现有签名 4.1.4 包仍对应 `be59ae3`。 [构建](/home/duanjb666/.cache/arris-live-update.BBGyJR/gradle.log) · [系统设置](/home/duanjb666/.cache/arris-live-update.BBGyJR/promotion-settings.xml) · [关闭开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-off.log) · [打开开关](/home/duanjb666/.cache/arris-live-update.BBGyJR/when-system-toggle-on.log)
 
-周额度约 6% 时收尾。下一轮核对工作树中离线失败键的在途改动，优先用同档完整／试听键和 CDN 换签名夹具确认失败状态与缓存字节的归属。播放队列当前保存曲目、游标与随机顺序，通知暂以专辑提供来源信息。
+11 月 15 日收尾时复核了 4.1.4-gpl 签名 APK 与 mapping 的 SHA-256，APK v2 签名校验通过。签名包的构建点为 `be59ae3`，系统设置返回后补发通知的修复已提交到 `c9dac7a`。通知目前以专辑提供歌曲来源信息。 [签名测试包记录](/home/duanjb666/deepseek/arris/dist/v4.1.4-gpl-test/VERIFICATION.md)
+
+离线失败键仍有四个文件的在途改动，分别在 `OfflineUrlStore.kt`、`OfflineCacheDownload.kt`、`PlaybackService.kt` 和 `PlayerViewModel.kt`。上面的回归使用含这组改动的工作树构建。下轮先补同档完整／试听键与 CDN 换签名后的独立回归，确认链接变化时仍共享缓存字节的情况，随后查验写入新字节后解除失败标记的条件。已在工作树外备份这组改动，并核验补丁可应用到 `64329df`。收尾时周额度约 6%。 [离线缓存补丁](/home/duanjb666/.cache/arris-closeout.GxJH1Y/offline-cache-work-in-progress.patch)
 
 ## 11 月 14 日后台续播、切网预载与实时通知
 
