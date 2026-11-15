@@ -1,0 +1,9 @@
+{
+  "tests": 3622,
+  "passed": 3618,
+  "skipped": 4,
+  "failures": 0,
+  "errors": 0,
+  "classes": 352,
+  "lint": { "errors": 0, "warnings": 93 }
+}
