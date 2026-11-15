@@ -158,17 +158,10 @@ fun PullToRefreshIndicator(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMetroColors.current
-    val visible = state.refreshing || state.dragPx > 0f
-    // 收起时的淡出：没有它，指示器是"啪"地消失，看起来像布局跳动。
-    val presence by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(160),
-        label = "pullToRefreshPresence",
-    )
-    // 展开时跟手：下拉多少就露多少（`progress` 已把 maxDragPx 归一化到 0..1），
-    // 只在下拉刚开始时给一个下限，避免出现"一条几乎看不见的缝"。
-    val dragReveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx).coerceAtLeast(0.15f)
-    val reveal = dragReveal * presence
+    // 只跟手，不做时间轴动画：这个指示器挂在 header 里，列表滚动/重组时会重新挂载，
+    // 任何 `animateXxxAsState` 都会在重挂载时从头播一次 —— 用户看到的就是「动画反复触发」。
+    // 位移本身就是连续量，直接映射成透明度已经足够顺滑。
+    val reveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx).coerceAtLeast(0.15f)
     if (reveal <= 0.01f) return
     Box(
         modifier = modifier

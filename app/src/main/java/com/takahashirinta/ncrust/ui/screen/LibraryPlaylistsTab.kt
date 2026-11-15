@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.takahashirinta.ncrust.local.LocalPlaylistRepository
 import com.takahashirinta.ncrust.local.LocalPlaylist
 import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.playlist.PlaylistDegradation
@@ -148,6 +149,8 @@ fun LibraryPlaylistsTab(
     val colors = LocalMetroColors.current
     val typography = LocalMetroTypography.current
     val context = LocalContext.current
+    // 本地歌单的「第一首歌封面」缓存：按 playlistKey.tag 记，进页面只读一次。
+    val localCovers = remember { androidx.compose.runtime.mutableStateMapOf<String, String?>() }
 
     // ---- QQ 歌单：本页自己加载（与 v2.2.0 删除的 QQ 歌单列表页同一套闸门与仓库，不另写一条数据路径）----
     val coordinator = remember { PlaylistLoadCoordinator() }
@@ -245,9 +248,18 @@ fun LibraryPlaylistsTab(
                 )
             }
             items(localPlaylists, key = { "local-" + it.key.tag }, span = { gridSpan(listMode) }) { pl ->
+                // 本地歌单没有远端封面：取第一首可见歌的专辑图（每张歌单只读一次，按 tag 缓存）。
+                val cover by produceState(localCovers[pl.key.tag], pl.key.tag) {
+                    if (localCovers.containsKey(pl.key.tag)) return@produceState
+                    val first = LocalPlaylistRepository.read(context, pl.key).second
+                        .firstOrNull { it.isVisible }?.song?.album?.picUrl
+                    localCovers[pl.key.tag] = first
+                    value = first
+                }
                 LocalPlaylistItem(
                     playlist = pl,
                     listMode = listMode,
+                    coverUrl = cover,
                     modifier = Modifier.fillMaxWidth().animateItem(
                         fadeInSpec = tween(150, easing = MetroDefault),
                         placementSpec = tween(220, easing = MetroDefault),
@@ -636,6 +648,7 @@ private fun QqPlaylistItem(
 private fun LocalPlaylistItem(
     playlist: LocalPlaylist,
     listMode: Boolean,
+    coverUrl: String?,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -644,7 +657,7 @@ private fun LocalPlaylistItem(
     val subtitle = if (playlist.hasRemoteSource) strings.localPlaylistSync else strings.localPlaylistLocalBadge
     if (listMode) {
         PlaylistListRow(
-            coverUrl = null,
+            coverUrl = coverUrl,
             title = playlist.name,
             subtitle = subtitle,
             modifier = modifier,
@@ -656,18 +669,26 @@ private fun LocalPlaylistItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    // v2.5.0 · B：本地歌单格子没有封面图，占位色块与同格封面同形
-                    // （栅格 minSize=160dp ⇒ 单元格 ≥160dp ⇒ AppShapes.large）。
+                    // 栅格 minSize=160dp ⇒ 单元格 ≥160dp ⇒ AppShapes.large。
                     .clip(AppShapes.large)
                     .background(colors.surfaceVariant),
                 contentAlignment = Alignment.Center,
             ) {
-                MetroIcon(
-                    imageVector = Icons.Default.PlaylistPlay,
-                    contentDescription = null,
-                    tint = colors.primary.copy(alpha = 0.45f),
-                    sizeDp = 32.dp,
-                )
+                // 优先第一首歌的专辑图；空歌单才退回名字占位（不再画通用播放列表图标）。
+                if (!coverUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = coverUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().appCoverFrame(shape = AppShapes.large),
+                    )
+                } else {
+                    PlaylistCoverPlaceholder(
+                        name = playlist.name,
+                        letterSize = 40.sp,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
             MetroText(
