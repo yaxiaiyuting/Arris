@@ -74,8 +74,9 @@ fun rememberPullToRefreshState(): PullToRefreshState = remember { PullToRefreshS
 fun Modifier.pullToRefresh(
     state: PullToRefreshState,
     atTop: () -> Boolean,
+    loading: () -> Boolean = { false },
     onRefresh: () -> Unit,
-): Modifier = this.nestedScroll(PullToRefreshConnection(state, atTop, onRefresh))
+): Modifier = this.nestedScroll(PullToRefreshConnection(state, atTop, loading, onRefresh))
 
 /**
  * 下拉刷新的手势接线（J16 抽出来是为了能被单测直接驱动）。
@@ -97,6 +98,8 @@ fun Modifier.pullToRefresh(
 internal class PullToRefreshConnection(
     private val state: PullToRefreshState,
     private val atTop: () -> Boolean,
+    /** 调用方真实的「正在加载」。用来兜底清掉被遗忘的 refreshing（见 onPostScroll）。 */
+    private val loading: () -> Boolean = { false },
     private val onRefresh: () -> Unit,
 ) : NestedScrollConnection {
 
@@ -112,6 +115,13 @@ internal class PullToRefreshConnection(
         source: NestedScrollSource,
     ): Offset {
         if (source != NestedScrollSource.Drag) return Offset.Zero
+        // 兜底：上一轮刷新已经结束，但调用方没把 refreshing 清掉（Album/Artist 两页就没有清）。
+        // 不清的话指示器会一直转、而且后续下拉被下面的「刷新中忽略」永久吞掉 ——
+        // 用户看到的就是「没拉也在转圈」「拉不下来」。
+        if (state.refreshing && !loading()) {
+            state.refreshing = false
+            state.reset()
+        }
         // 刷新进行中：把本次手势剩下的位移**全部忽略**。
         // 不加这条，用户一次拉得很长会持续累加 dragPx —— 越过阈值先触发一次刷新、随后
         // 又被 reset 归零、再被后续位移重新累加，于是指示器淡出又淡入、刷新也可能重复触发

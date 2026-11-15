@@ -136,6 +136,11 @@ fun LocalPlaylistDetailScreen(
     var selectedTags by remember { mutableStateOf(emptySet<String>()) }
     val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
+    // 加载结束后必须把 refreshing 清掉：指示器由它驱动，漏清会「没拉也一直转圈」。
+    // 放在 LaunchedEffect 里而不只依赖滚动事件，用户不滚动也能自愈。
+    LaunchedEffect(isSyncing) {
+        if (!isSyncing) pullState.refreshing = false
+    }
 
     fun reload() {
         val (m, t) = LocalPlaylistRepository.read(context, playlistKey)
@@ -281,6 +286,7 @@ fun LocalPlaylistDetailScreen(
         listState = listState,
         contentModifier = Modifier.pullToRefresh(
             state = pullState,
+            loading = { isSyncing },
             // 「在顶部」的判据只有 LazyListState 能回答：第一项可见且偏移为 0。
             // 不看它就会把「往下滚列表」误判成下拉刷新（PullToRefresh 的 KDoc 里那条）。
             atTop = {
