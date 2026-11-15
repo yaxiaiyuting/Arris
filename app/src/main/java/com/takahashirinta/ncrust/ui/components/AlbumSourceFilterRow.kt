@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.ui.components
 
+import com.takahashirinta.ncrust.ui.components.singleShotClick
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -92,7 +93,7 @@ fun AlbumSourceFilterRow(
                 modifier = Modifier
                     .widthIn(min = 48.dp)
                     .heightIn(min = 24.dp)
-                    .selectable(selected = isSelected, onClick = { onSelect(filter) }),
+                    .singleShotClick { onSelect(filter) },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 MetroText(

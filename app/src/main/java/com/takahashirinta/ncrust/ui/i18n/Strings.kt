@@ -1256,13 +1256,16 @@ data class SourceStrings(
 )
 
 /**
- * v2.2.0 · qm 用户歌单文案组。
+ * v2.2.0 · qm 用户歌单文案组（v-next 起也承载 ncm 歌单详情页的多选文案）。
  *
  * 单独成组的原因见 [Strings.playlists] 的 KDoc（dex 255 参数寄存器上限）。
  * 文案契约：
  * - 「离线」必须说清是**本地缓存**，不承诺「数据是最新的」；
  * - 「登录已过期」必须给**重新登录**出口，不能只显示一句话；
  * - 收藏/自建要分开说，且**不出现「合并」字样** —— 本版不做跨源合并。
+ * - 多选那 6 条（`selectionCount` / `selectAll` / `clearSelection` / `exitSelection` /
+ *   `moreActions` / `removeFailed`）**不能**说成「删除」：歌单里的动作是「移出」，
+ *   曲目本身还在库里，文案说错会让人以为歌没了。
  */
 data class PlaylistsStrings(
     /** 页面标题。 */
@@ -1313,6 +1316,26 @@ data class PlaylistsStrings(
      * 「值不值得展开」，而一个不带数字的「已收起」回答不了这个问题。
      */
     val sectionExpandAll: (Int) -> String,
+
+    // ---- 歌单详情「长按进入多选」的选择条与行尾菜单 ----
+    //
+    // 为什么不新开一个组：`Strings` 的主构造器已经在预算线上 —— 148 个参数
+    // ⇒ 155 个 dex 槽，余量正好 100（`StringsConstructorBudgetTest` 里
+    // `余量不足 100 个槽位` 那条断言钉住的就是这个数）。再加**一个组参数**就会
+    // 把它压到 99 而变红。而这几条文案服务的就是歌单页，放进本组不改变
+    // 「从组里能看出功能线」这件事（本组本来就是「歌单」这条线的集合）。
+    /** 选择条上的「已选 N 首」，参数是选中数量。 */
+    val selectionCount: (Int) -> String,
+    /** 选择条上的「全选」。 */
+    val selectAll: String,
+    /** 已全选时同一个按钮变成「取消全选」。 */
+    val clearSelection: String,
+    /** 选择条上「✕」的无障碍描述：退出多选（不是退出页面）。 */
+    val exitSelection: String,
+    /** 行尾「⋯」按钮的无障碍描述：打开该曲目的单条菜单。 */
+    val moreActions: String,
+    /** 批量移出失败（网络 / 限流 / 服务端拒绝）。 */
+    val removeFailed: String,
 )
 
 /**

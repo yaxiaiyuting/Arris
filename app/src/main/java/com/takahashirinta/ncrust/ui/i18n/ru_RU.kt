@@ -555,6 +555,13 @@ val ruRU = Strings(
         layoutList = "Список",
         sectionCollapse = "Свернуть",
         sectionExpandAll = { n -> "Показать все $n" },
+        // Детали плейлиста «долгое нажатие = множественный выбор»: панель выбора + меню в конце строки.
+        selectionCount = { n -> "Выбрано: $n" },
+        selectAll = "Выбрать все",
+        clearSelection = "Снять выбор",
+        exitSelection = "Выйти из выбора",
+        moreActions = "Другие действия",
+        removeFailed = "Не удалось удалить, повторите позже",
     ),
         tags = TagsStrings(
             playable = "Доступно",

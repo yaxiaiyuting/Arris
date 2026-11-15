@@ -554,6 +554,13 @@ scanConnecting = "평판에 연결중…",
         layoutList = "목록식",
         sectionCollapse = "접기",
         sectionExpandAll = { n -> "전체 펼치기 ${n}개" },
+        // 재생목록 상세 「길게 눌러 여러 곡 선택」: 선택 막대 + 줄 끝 메뉴.
+        selectionCount = { n -> "선택 $n 곡" },
+        selectAll = "전체 선택",
+        clearSelection = "선택 해제",
+        exitSelection = "선택 종료",
+        moreActions = "더 많은 조작",
+        removeFailed = "제거에 실패했습니다. 잠시 후 다시 시도하십시오",
     ),
         tags = TagsStrings(
             playable = "재생가능",

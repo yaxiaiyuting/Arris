@@ -236,7 +236,7 @@ class PlaybackService : MediaLibraryService() {
         // coefficients for 6->1 …`）。只看 errorCode 的话无法把它分类成「输出链故障」，
         // 于是会在一个已经坏掉的 AudioSink 上继续重试 8 次 —— 那正是用户看到的
         // 「循环切音质 + 反复抢音频焦点」。见 [PlaybackFailure]。
-        var onPlaybackError: ((Long, PlaybackFailure) -> Unit)? = null
+        internal var onPlaybackError: ((Long, PlaybackFailure, String?) -> Unit)? = null
         /**
          * 一次曲目过渡（AUTO / 手动 setMediaItem / 系统媒体控件 / 车机 seek）完成。
          *
@@ -697,6 +697,17 @@ class PlaybackService : MediaLibraryService() {
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 observeVisualizationVolume(isPlaying && currentPcmDemand().requiresPcm)
+                // v4.1.5：真的出声了 ⇒ 这条 URL 是能播的，解除离线兜底里的「不可播」标记。
+                //
+                // 为什么只有这里算「成功起播」：取链成功什么都没证明（URL 可以是死的）；
+                // `prepare()` 进 STATE_READY 只证明容器解得开；**只有 isPlaying 翻真**才同时
+                // 证明「URL 还能取到字节 + 解码链认这个文件 + AudioSink 渲染得出来」。
+                // 不在这里解除的话，一次 403、一次换号前的会员判定、甚至一次误判，都会把
+                // 这个档位从离线回放里摘掉，直到进程结束或清单被清空。
+                if (isPlaying) {
+                    player.currentMediaItem?.localConfiguration?.uri?.toString()
+                        ?.let { OfflineUrlStore.setPlaybackUsable(it, true) }
+                }
                 // B：暂停即预约释放封面位图，恢复播放则取消释放并补回封面。
                 if (isPlaying) onPlaybackActive()
                 else if (!hasActivePlaybackIntent()) scheduleArtworkIdleRelease()
@@ -732,6 +743,7 @@ class PlaybackService : MediaLibraryService() {
                 // UI 还显示"在播",实际既没声音也不跳歌。现在上报给 ViewModel
                 // 降档重试,最低档仍失败则由 ViewModel 跳歌。
                 val failure = failureOf(error)
+                val failedUrl = player.currentMediaItem?.localConfiguration?.uri?.toString()
                 Log.e(
                     "PlaybackService",
                     "Playback error for songId=$mediaSongId code=${error.errorCodeName}" +
@@ -751,7 +763,7 @@ class PlaybackService : MediaLibraryService() {
                     player.stop()
                     player.clearMediaItems()
                 }.onFailure { Log.w("PlaybackService", "stop after error failed", it) }
-                onPlaybackError?.invoke(mediaSongId ?: -1L, failure)
+                onPlaybackError?.invoke(mediaSongId ?: -1L, failure, failedUrl)
             }
             override fun onMediaItemTransition(
                 mediaItem: androidx.media3.common.MediaItem?,
@@ -916,13 +928,14 @@ class PlaybackService : MediaLibraryService() {
                 eventTime: AnalyticsListener.EventTime,
                 audioSinkError: Exception
             ) {
+                val failedUrl = player.currentMediaItem?.localConfiguration?.uri?.toString()
                 Log.e("PlaybackService", "AudioSink error: ${audioSinkError.message}", audioSinkError)
                 // v2.2.1 · P0：输出链故障同样先 stop（reset sink + 释放音频焦点）再上报。
                 runCatching {
                     player.stop()
                     player.clearMediaItems()
                 }
-                onPlaybackError?.invoke(mediaSongId ?: -1L, failureOf(audioSinkError))
+                onPlaybackError?.invoke(mediaSongId ?: -1L, failureOf(audioSinkError), failedUrl)
             }
         })
         createNotificationChannel()

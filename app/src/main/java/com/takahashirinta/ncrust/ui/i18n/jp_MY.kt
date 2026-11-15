@@ -554,6 +554,13 @@ val jpMY = Strings(
         layoutList = "列 式",
         sectionCollapse = "收 縮",
         sectionExpandAll = { n -> "盡 展 $n 項" },
+        // 曲之帳 詳「長押 撰」：撰條 + 行末 操。
+        selectionCount = { n -> "撰 $n 曲" },
+        selectAll = "盡 撰",
+        clearSelection = "撰 解",
+        exitSelection = "撰 止",
+        moreActions = "他 操",
+        removeFailed = "除 不 成",
     ),
         tags = TagsStrings(
             playable = "奏 可",

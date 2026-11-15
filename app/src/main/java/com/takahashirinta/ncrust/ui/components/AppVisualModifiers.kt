@@ -31,6 +31,15 @@ import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.theme.LocalNcrustColors
 import kotlinx.coroutines.launch
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.composed
+import androidx.compose.ui.semantics.Role
+import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 /**
  * v2.5.0 · B：**专辑封面边框包裹**（任务书 §4.1）。
  *
@@ -132,4 +141,61 @@ fun Modifier.appPressScale(
                 }
             }
         }
+}
+
+/**
+ * 「一次点击只留一次反馈」的可点区域。
+ *
+ * ## 为什么不用默认 indication（ripple）
+ *
+ * Compose 的 ripple 是**一次按压一次动画**：快速连点时动画彼此独立地排队播放，
+ * 手指停下之后还要挨个播完 —— 在分段控件、多选条这类窄控件上尤其明显
+ * （用户报的「连点之后还在反复闪」「圆角窗口里动画重复」）。
+ *
+ * 这里改成**可被打断**的一次性反馈：新点击先把透明度 snap 到峰值，再淡回 0；
+ * 旧的 `Animatable` 动画会被新的 `snapTo` 立刻取消，所以永远只有最后一次在播。
+ *
+ * 语义与 `Modifier.clickable(enabled, onClick)` 完全一致，只是换了反馈形式；
+ * 无障碍语义（Role/Role.Tab 等）由调用方通过 [role] 传，保持与原来一致。
+ */
+fun Modifier.singleShotClick(
+    enabled: Boolean = true,
+    role: Role? = null,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val feedback = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val interaction = remember { MutableInteractionSource() }
+    val tint = LocalMetroColors.current.primary
+    this
+        .then(
+            if (role != null) {
+                Modifier.selectable(
+                    selected = false,
+                    interactionSource = interaction,
+                    indication = null,
+                    enabled = enabled,
+                    role = role,
+                ) {
+                    scope.launch {
+                        feedback.snapTo(0.14f)
+                        feedback.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
+                    }
+                    onClick()
+                }
+            } else {
+                Modifier.clickable(
+                    enabled = enabled,
+                    interactionSource = interaction,
+                    indication = null,
+                ) {
+                    scope.launch {
+                        feedback.snapTo(0.14f)
+                        feedback.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
+                    }
+                    onClick()
+                }
+            }
+        )
+        .background(tint.copy(alpha = feedback.value))
 }

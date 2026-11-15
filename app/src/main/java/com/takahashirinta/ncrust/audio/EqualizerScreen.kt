@@ -5,6 +5,7 @@
 
 package com.takahashirinta.ncrust.audio
 
+import com.takahashirinta.ncrust.ui.components.singleShotClick
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -117,7 +118,7 @@ private fun EqualizerPresetRow(name: String, selected: Boolean, onClick: () -> U
     val colors = LocalMetroColors.current
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .selectable(selected, role = Role.RadioButton, onClick = onClick)
+            .singleShotClick(role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,7 @@
 package com.takahashirinta.ncrust.ui.theme
 
+import com.takahashirinta.ncrust.ui.components.singleShotClick
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -44,7 +46,7 @@ fun ThemeColorSelector(
                 Box(
                     Modifier.size(48.dp).clip(AppShapes.medium)
                         .background(if (isSelected) LocalMetroColors.current.onBackground.copy(alpha = .065f) else Color.Transparent)
-                        .selectable(isSelected, role = Role.RadioButton, onClick = { onSelect(index) })
+                        .singleShotClick(role = Role.RadioButton) { onSelect(index) }
                         .semantics { contentDescription = name },
                     contentAlignment = Alignment.Center,
                 ) {

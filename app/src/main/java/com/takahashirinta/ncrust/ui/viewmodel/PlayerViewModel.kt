@@ -523,15 +523,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         runCatching { Toast.makeText(app, text, Toast.LENGTH_LONG).show() }
     }
 
-    /**
-     * v2.2.1 · P0：本会话内**已经证明播不出来**的 URL（离线缓存 key）。
-     *
-     * 存在的理由：离线兜底会「退化成这首歌的任意档位」，于是把一条坏链反复喂回播放器
-     * （实测固定点：请求 exhigh → 兜底给 lossless 的旧链 → 失败 → 又请求 exhigh → 又是同一条）。
-     * 一个 URL 失败过就不再进第二次，是这条环路的最后一道闸。
-     */
-    private val failedUrlKeys = mutableSetOf<String>()
-
     /** v2.2.1 · P0：本次开播请求的来源。决定失败时是「重试 / 停下」还是「跳歌」。 */
     private var lastPlayOrigin: PlayOrigin = PlayOrigin.USER
 
@@ -674,11 +665,18 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         viewModelScope.launch(Dispatchers.Main) {
             CookieManager.loginGenerations.collect { revision ->
                 revalidateAccountPreload(MusicSource.NETEASE, revision)
+                // v4.1.5 换号 / 登出：URL 上的「不可播」结论属于**上一个账号**的那批链接
+                // （403 多半是会员/版权判定），换了身份就该重新判一次 —— 否则上一个账号
+                // 的坏链会把这个档位的离线兜底一直关着，直到进程结束。
+                // 首次发射是当前代次，那时集合本来就是空的，无副作用。
+                OfflineUrlStore.clearPlaybackFailures()
             }
         }
         viewModelScope.launch(Dispatchers.Main) {
             QqAuthStore.authRevisions.collect { revision ->
                 revalidateAccountPreload(MusicSource.QQMUSIC, revision)
+                // 同上：QQ 音源也是独立的账号身份，换号同样要作废旧 URL 的失败结论。
+                OfflineUrlStore.clearPlaybackFailures()
             }
         }
         viewModelScope.launch(Dispatchers.Main) {
@@ -853,10 +851,10 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         // v2.2.1 · P0：回调现在带失败描述（errorCode + cause），重试策略由
         // [QualityRetryGuard] 决定 —— 单调、去重、有上限、带音频焦点节流。
         // 回调在主线程；仅把带归属的延迟任务交给统一重试调度器。
-        PlaybackService.onPlaybackError = { sid, failure ->
+        PlaybackService.onPlaybackError = { sid, failure, url ->
             // v2.5.4 · C：兜底曲目的失败计数（同样只对兜底 id 生效，内部短路去重）。
             QqProbeCounters.onPlaybackFailure(sid, currentTrack?.sourceId)
-            handlePlaybackError(sid, failure)
+            handlePlaybackError(sid, failure, url)
         }
 
         // Called on the main thread by ExoPlayer's onMediaItemTransition. 现在**所有**过渡
@@ -1944,8 +1942,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     private fun recallOfflineCache(songId: Long, level: String): SongUrlResult? {
         val app = getApplication<Application>()
         val hit = OfflineUrlStore.recallRecord(app, songId, level) { key ->
-            key !in failedUrlKeys && OfflineKeys.key(songId, OfflineKeys.levelOf(key) ?: level) !in failedUrlKeys &&
-                OfflineAudioCache.coversStart(app, key)
+            OfflineAudioCache.coversStart(app, key)
         } ?: return null
         val storedLevel = OfflineKeys.levelOf(hit.first)
         val actualLevel = storedLevel ?: level
@@ -2139,11 +2136,26 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
      * | 无节流 | 每次重试立刻 `play()` ⇒ 视频被反复打断 | 两次自动重取之间至少 [QualityRetryGuard.MIN_RESTART_INTERVAL_MS] |
      * | 最低档失败 ⇒ `onUnplayable` ⇒ 跳歌 | **音质问题被当成播放问题**，整条队列无限跳 | 自动重试路径**永不跳歌**：熔断后进「暂停 + 错误态」等用户手动操作 |
      */
-    private fun handlePlaybackError(songId: Long, failure: PlaybackFailure) {
+    private fun handlePlaybackError(songId: Long, failure: PlaybackFailure, url: String?) {
         if (songId <= 0 || songId != currentSongId.value || currentTrack?.id != songId) return
         if (playbackRetries.hasPending) return
+        // v4.1.5：**这条 URL 播不出来**才把它从离线兜底里摘掉，判据见 [poisonsOfflineUrl]。
+        //
+        // 为什么必须带 URL 而不是档位：离线兜底会退化成同一首歌的任意档位，而同一个档位上
+        // 的 URL 每 20 分钟就换一条。旧实现记的是「本会话失败的档位」（`failedUrlKeys` 里
+        // 存 `song:42:exhigh`），粒度比 URL 粗：换个档位同样被禁，换条新 URL 也解不开。
+        // 现在标记跟着「实际起播的那条 URL」走，重新解析出新 URL 即自动恢复
+        // （`OfflineUrlIndex.put` 里「URL 变了就解除」那条），真的播出声了也会恢复
+        // （`PlaybackService.onIsPlayingChanged`）。
+        if (url != null && poisonsOfflineUrl(failure)) {
+            OfflineUrlStore.setPlaybackUsable(url, false)
+            // 只打 key（`song:42:lossless`），**不打 URL** —— 播放 URL 带签名与 authSecret。
+            Log.w(
+                "PlayerViewModel",
+                "offline url dropped songId=$songId code=${failure.errorCodeName} key=${OfflineKeys.keyOf(url)}",
+            )
+        }
         if (failure.looksLikeSource) {
-            if (lastPlayedLevel.isNotEmpty()) failedUrlKeys.add(OfflineKeys.key(songId, lastPlayedLevel))
             currentTrack?.let(preloadCache::remove)
             latestRetryRequest = latestRetryRequest?.copy(positionMs = currentPosition.value)
             onUrlUnavailable(songId, lastRequestedLevel, lastPlayOrigin,
@@ -2163,13 +2175,6 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         if (dedupeKey == lastErrorKey && now - lastErrorHandledAt < 1_500L) return
         lastErrorKey = dedupeKey
         lastErrorHandledAt = now
-
-        // 本会话内不再重放这条链：离线兜底会「退化成这首歌的任意档位」，
-        // 不记住失败的话，坏链会被反复喂回播放器（实测的固定点就是这么来的）。
-        if (songId > 0 && lastPlayedLevel.isNotEmpty()) {
-            failedUrlKeys.add(OfflineKeys.key(songId, lastPlayedLevel))
-            if (failedUrlKeys.size > 128) failedUrlKeys.clear()
-        }
 
         // 输出链故障：本档已经被证明会打坏 AudioSink，本首歌内不要再碰它。
         // 实测触发者是 QQ 的「臻品音质」档（Q001 = 6 声道 FLAC）：media3 的
@@ -2952,6 +2957,42 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         super.onCleared()
     }
 }
+
+/**
+ * v4.1.5：这次播放失败能不能断定「**这条 URL / 这份字节本身**播不出来」？
+ *
+ * 判据只回答这一个问题 —— 它决定要不要把这条 URL 从离线兜底里摘掉
+ * （[com.takahashirinta.ncrust.cache.OfflineUrlStore.setPlaybackUsable]）。摘掉的代价是
+ * 「这个档位在本进程内不再参与离线回放」，所以**判错的方向必须是保守的**：宁可让一条坏链
+ * 多挨一次，也不要让一条好链被禁掉。
+ *
+ * | 失败 | 判据 | 结论 | 为什么 |
+ * |---|---|---|---|
+ * | 服务端拒绝这条 URL（403 过期 / 404 没了 / 不是音频） | `IO_BAD_HTTP_STATUS` `IO_FILE_NOT_FOUND` `IO_NO_PERMISSION` `IO_INVALID_HTTP_CONTENT_TYPE` | **摘** | 重新拿同一条 URL 只会再被拒一次；这正是「固定点」的来源 |
+ * | 字节不是它能认的容器（截断/换成了 HTML） | `PARSING_*` | **摘** | 文件本身坏了，重播多少次都一样 |
+ * | 网络抖动（连不上 / 超时 / IO 未分类） | `IO_NETWORK_CONNECTION_*` `TIMEOUT` `IO_UNSPECIFIED` | 不摘 | URL 是好的，坏的是那一刻的网络。地铁里听一次歌就把这个档位的离线兜底全禁掉，是绝对不能接受的误伤 |
+ * | 设备解码不了（位深/采样率/声道） | `DECODING_*` `DECODER_*` | 不摘 | 文件是好的，是本机解码链的问题；该档位已由 [QualityRetryGuard.markUnusable] 单独记账，把 URL 也摘掉会连带藏掉一份**可以播**的离线字节 |
+ * | 音频输出链故障 | `AUDIO_SINK_ERROR`（见 `PlaybackService.failureOf(Exception)`） | 不摘 | 同上：坏的是 sink，暂停/换档之后文件本身还能播 |
+ * | 读位置越界 / 其它 | `IO_READ_POSITION_OUT_OF_RANGE` 等 | 不摘 | 也可能是「服务端提前掐了连接」，不构成对 URL 的判决 |
+ *
+ * media3 有时把真实的 HTTP 状态码只留在 root cause 里（`errorCode` 仍是 IO_UNSPECIFIED），
+ * 所以额外看一眼 cause 文本；**只认 4xx**：5xx 是服务端临时故障，不该变成一个文件的判决。
+ */
+internal fun poisonsOfflineUrl(failure: PlaybackFailure): Boolean {
+    val code = failure.errorCodeName.uppercase()
+    if (code.startsWith("ERROR_CODE_PARSING")) return true
+    if (code in serverRejectedUrlCodes) return true
+    val cause = ((failure.causeClass ?: "") + " " + (failure.causeMessage ?: "")).lowercase()
+    return cause.contains("response code: 4") || cause.contains("filenotfoundexception")
+}
+
+/** 服务端对这条 URL 说了「不」的四类 media3 错误码（详见 [poisonsOfflineUrl] 的表）。 */
+private val serverRejectedUrlCodes = setOf(
+    "ERROR_CODE_IO_BAD_HTTP_STATUS",
+    "ERROR_CODE_IO_FILE_NOT_FOUND",
+    "ERROR_CODE_IO_NO_PERMISSION",
+    "ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE",
+)
 
 /**
  * v3.3.2 · P0：**开播请求的代际闸门**（纯逻辑，JVM 可单测）。

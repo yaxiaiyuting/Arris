@@ -114,7 +114,7 @@ internal fun ArrisSegmentedTabs(
             val active = selected == index
             val usable = enabled?.getOrNull(index) ?: true
             Box(Modifier.weight(1f).heightIn(min = 48.dp).clip(AppShapes.medium)
-                .selectable(active, enabled = usable, role = Role.Tab, onClick = { onSelect(index) }),
+                .singleShotClick(enabled = usable, role = Role.Tab) { onSelect(index) },
                 contentAlignment = Alignment.Center) {
                 ArrisSelection(active, Modifier.matchParentSize())
                 MetroText(label,
@@ -139,7 +139,7 @@ internal fun ArrisChip(
     val c = LocalMetroColors.current
     // The drawn capsule is inset; the whole 48dp height remains accessible to touch.
     Box(modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).clip(AppShapes.full)
-        .selectable(selected, role = Role.Tab, onClick = onClick), contentAlignment = Alignment.Center) {
+        .singleShotClick(role = Role.Tab, onClick = onClick), contentAlignment = Alignment.Center) {
         Box(Modifier.matchParentSize().padding(vertical = 6.dp).clip(AppShapes.full)
             .background(if (selected) c.onBackground.copy(alpha = .065f) else Color.Transparent)
             .border(.7.dp, c.onBackground.copy(alpha = if (selected) .20f else .08f), AppShapes.full))
@@ -222,7 +222,7 @@ internal fun ArrisBottomNav(
                 val active = selected == index
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(AppShapes.large)
-                        .selectable(selected = active, role = Role.Tab, onClick = { onSelect(index) }),
+                        .singleShotClick(role = Role.Tab) { onSelect(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(
