@@ -552,10 +552,12 @@ class StringsConstructorBudgetTest {
         //   这 3 条也确实不属于那条业务线（`source` 是「音源与账号」，这 3 条只服务
         //   「官方 App 扫码」这一条登录方式）。
         assertEquals(148, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
-        // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
+        // 组本身的规模被钉住（17 → 21 → 27）：再往里加文案请先看组预算 120 还剩多少。
+        // 21 → 27：歌单详情「长按进入多选」的 6 条（选择条 + 行尾更多菜单），
+        // 外层**没有**加参数 —— 148 + 1 个组参数会把「余量 ≥100 槽位」那条断言压到 99。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            21,
+            27,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaylistsStrings")),
         )
     }
@@ -928,5 +930,42 @@ class StringsConstructorBudgetTest {
             assertTrue("${s.widget.widgetEmpty} 是空串", s.widget.widgetEmpty.isNotBlank())
             assertTrue("${s.widget.widgetOpenApp} 丢了品牌名", s.widget.widgetOpenApp.contains("Arris"))
         }
+    }
+
+    /**
+     * 歌单详情「长按进入多选」的 6 条文案（进 `PlaylistsStrings`，外层一个参数都没加）。
+     *
+     * 三条断言各挡一种「不会编译失败」的事故：
+     *  - **八种语言都非空**（含 `selectionCount` 在 0 / 1 / 大数上）；
+     *  - **`selectAll` 与 `clearSelection` 不撞词** —— 选择条上是同一个按钮的两个状态，
+     *    撞词就意味着「已全选」时按钮长得和「全选」一样，用户不知道点下去会发生什么；
+     *  - **`selectionCount(n)` 里真的带数字** —— 少了它，选择条永远显示同一句话。
+     */
+    @Test
+    fun `歌单多选的 6 条文案在八种语言里都可用且不撞词`() {
+        val presets = listOf(
+            "zh-CN" to zhCN, "zh-TW" to zhTW, "en-US" to en, "ja-JP" to jpJP,
+            "ja-MY" to jpMY, "ko-KP" to koNK, "de-DE" to deDE, "ru-RU" to ruRU,
+        )
+        val selectAll = mutableSetOf<String>()
+        presets.forEach { (code, s) ->
+            val p = s.playlists
+            listOf(0, 1, 7, 999).forEach { n ->
+                val text = p.selectionCount(n)
+                assertTrue("$code 的 selectionCount($n) 为空", text.isNotBlank())
+                assertTrue("$code 的 selectionCount($n) 没带数字：$text", text.contains(n.toString()))
+            }
+            listOf(p.selectAll, p.clearSelection, p.exitSelection, p.moreActions, p.removeFailed)
+                .forEach { assertTrue("$code 有一条多选文案是空串", it.isNotBlank()) }
+            assertTrue(
+                "$code 的「全选」与「取消全选」撞词了：${p.selectAll}",
+                p.selectAll != p.clearSelection,
+            )
+            selectAll += p.selectAll
+        }
+        assertTrue(
+            "八种语言的「全选」只出现 ${selectAll.size} 种写法 —— 疑似整块文案回落成了同一份",
+            selectAll.size >= 6,
+        )
     }
 }
