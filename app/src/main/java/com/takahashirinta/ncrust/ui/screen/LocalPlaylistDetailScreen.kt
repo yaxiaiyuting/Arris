@@ -23,13 +23,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import com.takahashirinta.ncrust.local.LocalPlaylist
 import com.takahashirinta.ncrust.local.LocalPlaylistRepository
+import com.takahashirinta.ncrust.network.CoverUrls
 import com.takahashirinta.ncrust.local.LocalPlaylistStore
 import com.takahashirinta.ncrust.local.LocalSyncOutcome
 import com.takahashirinta.ncrust.local.LocalTrackOrigin
@@ -38,6 +41,7 @@ import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
 import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.PlaylistCoverPlaceholder
+import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
@@ -309,13 +313,27 @@ fun LocalPlaylistDetailScreen(
                 // 本应用内新建的歌单在服务端没有封面（本地也没有），标题旁给一块名字占位，
                 // 否则这一页看上去像"缺了封面"的半成品。
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PlaylistCoverPlaceholder(
-                        name = meta?.name ?: strings.localPlaylistSectionTitle,
-                        letterSize = 26.sp,
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(AppShapes.small),
-                    )
+                    // 封面优先用**第一首歌的专辑封面**（多数播放器就是这个做法），
+                    // 只有歌单为空或那首歌也没封面时才退回名字占位。
+                    val coverUrl = playable.firstOrNull()?.album?.picUrl
+                    if (!coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = CoverUrls.small(coverUrl),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(72.dp)
+                                .appCoverFrame(shape = AppShapes.small),
+                        )
+                    } else {
+                        PlaylistCoverPlaceholder(
+                            name = meta?.name ?: strings.localPlaylistSectionTitle,
+                            letterSize = 26.sp,
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(AppShapes.small),
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
                     Column {
                         MetroText(
