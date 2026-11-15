@@ -10,6 +10,8 @@
 
 package com.takahashirinta.ncrust.ui.screen
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -18,9 +20,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import com.takahashirinta.ncrust.local.LocalPlaylist
@@ -32,6 +37,8 @@ import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
 import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
+import com.takahashirinta.ncrust.ui.components.PlaylistCoverPlaceholder
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
@@ -42,6 +49,7 @@ import io.github.takahashirinta.kanesumi.controls.MetroButton
 import io.github.takahashirinta.kanesumi.controls.MetroDialog
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
+import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
 import io.github.takahashirinta.kanesumi.core.theme.MetroText
 import kotlinx.coroutines.launch
 
@@ -117,6 +125,11 @@ fun LocalPlaylistDetailScreen(
     var isSyncing by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    // 多选：与云端歌单详情同一套交互（长按进入、点行切换、返回键先退出）。
+    // 这里按 trackKey.tag 记账而不是 songId：本地歌单的行可能还没有对应曲目（song == null），
+    // tag 才是这一行的稳定身份。
+    var selecting by remember { mutableStateOf(false) }
+    var selectedTags by remember { mutableStateOf(emptySet<String>()) }
     val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
 
@@ -124,6 +137,47 @@ fun LocalPlaylistDetailScreen(
         val (m, t) = LocalPlaylistRepository.read(context, playlistKey)
         meta = m
         tracks = t
+    }
+
+    /** 行尾「⋯」的单条菜单（内容与旧的长按菜单逐项一致，只是换了入口）。 */
+    fun openRowMenu(song: SongItem, tag: String) {
+        onShowSongMenu(
+            song,
+            listOf(
+                SongMenuAction(Icons.Default.Refresh, strings.actionInsertNext) { onSongInsertNext(song) },
+                SongMenuAction(Icons.Default.MoreVert, strings.actionAppendToQueue) { onSongAppendToQueue(song) },
+                // 规则 6：移除 = 打 tombstone，不是删除记录。
+                SongMenuAction(Icons.Default.Delete, strings.localPlaylistRemoveTrack) {
+                    val key = tracks.firstOrNull { it.trackKey.tag == tag }?.trackKey ?: return@SongMenuAction
+                    val ok = LocalPlaylistRepository.removeTrack(context, playlistKey, key) != null
+                    reload()
+                    Toast.makeText(
+                        context,
+                        if (ok) strings.localPlaylistRemoved else strings.localPlaylist.syncFailed,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+            ),
+        )
+    }
+
+    /** 批量从本地歌单移除选中行（逐条 tombstone，失败即停并保留选中集）。 */
+    fun removeSelected() {
+        if (selectedTags.isEmpty()) return
+        var failed = false
+        selectedTags.forEach { tag ->
+            val key = tracks.firstOrNull { it.trackKey.tag == tag }?.trackKey ?: return@forEach
+            if (LocalPlaylistRepository.removeTrack(context, playlistKey, key) == null) failed = true
+        }
+        reload()
+        if (!failed) {
+            Toast.makeText(context, strings.localPlaylistRemoved, Toast.LENGTH_SHORT).show()
+            selecting = false
+            selectedTags = emptySet()
+        } else {
+            Toast.makeText(context, strings.localPlaylist.syncFailed, Toast.LENGTH_SHORT).show()
+            selectedTags = selectedTags.filterTo(mutableSetOf()) { tag -> tracks.any { it.trackKey.tag == tag } }
+        }
     }
 
     fun runSync(force: Boolean) {
@@ -239,17 +293,44 @@ fun LocalPlaylistDetailScreen(
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 8.dp),
             ) {
-                MetroText(
-                    meta?.name ?: strings.localPlaylistSectionTitle,
-                    color = colors.onSurface,
-                    style = typography.titleLarge,
-                )
-                Spacer(Modifier.height(4.dp))
-                MetroText(
-                    strings.playlistTrackCount(visible.size),
-                    color = colors.onSurfaceVariant,
-                    style = typography.bodySmall,
-                )
+                if (selecting) {
+                    LocalSelectionBar(
+                        count = selectedTags.size,
+                        allSelected = selectedTags.size == tracks.size && tracks.isNotEmpty(),
+                        onExit = { selecting = false; selectedTags = emptySet() },
+                        onToggleAll = {
+                            val all = tracks.map { it.trackKey.tag }.toSet()
+                            selectedTags = if (selectedTags == all) emptySet() else all
+                        },
+                        onRemove = { removeSelected() },
+                    )
+                    PullToRefreshIndicator(state = pullState)
+                } else {
+                // 本应用内新建的歌单在服务端没有封面（本地也没有），标题旁给一块名字占位，
+                // 否则这一页看上去像"缺了封面"的半成品。
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlaylistCoverPlaceholder(
+                        name = meta?.name ?: strings.localPlaylistSectionTitle,
+                        letterSize = 26.sp,
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(AppShapes.small),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        MetroText(
+                            meta?.name ?: strings.localPlaylistSectionTitle,
+                            color = colors.onSurface,
+                            style = typography.titleLarge,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        MetroText(
+                            strings.playlistTrackCount(visible.size),
+                            color = colors.onSurfaceVariant,
+                            style = typography.bodySmall,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (playable.isNotEmpty()) {
@@ -289,6 +370,7 @@ fun LocalPlaylistDetailScreen(
                     }
                 }
                 PullToRefreshIndicator(state = pullState)
+                }
             }
         },
     ) {
@@ -310,29 +392,23 @@ fun LocalPlaylistDetailScreen(
                 SongCard(
                     song = song,
                     style = SongCardStyle.COMPACT,
-                    onClick = { onSongClick(song) },
+                    modifier = Modifier.background(
+                        if (row.trackKey.tag in selectedTags) LocalMetroColors.current.surfaceVariant
+                        else Color.Transparent
+                    ),
+                    onClick = {
+                        // 多选时点行 = 切换选中，绝不触发播放。
+                        if (selecting) selectedTags = selectedTags.toggleTag(row.trackKey.tag)
+                        else onSongClick(song)
+                    },
+                    // 长按 = 进多选并选中该行；单条菜单改由行尾「⋯」承担，两个入口不再抢同一个手势。
                     onShowMenu = {
-                        onShowSongMenu(
-                            song,
-                            listOf(
-                                SongMenuAction(Icons.Default.Refresh, strings.actionInsertNext) {
-                                    onSongInsertNext(song)
-                                },
-                                SongMenuAction(Icons.Default.MoreVert, strings.actionAppendToQueue) {
-                                    onSongAppendToQueue(song)
-                                },
-                                // 规则 6：移除 = 打 tombstone，不是删除记录。
-                                SongMenuAction(Icons.Default.Delete, strings.localPlaylistRemoveTrack) {
-                                    val ok = LocalPlaylistRepository.removeTrack(context, playlistKey, row.trackKey) != null
-                                    reload()
-                                    Toast.makeText(
-                                        context,
-                                        if (ok) strings.localPlaylistRemoved else strings.localPlaylist.syncFailed,
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                },
-                            ),
-                        )
+                        selectedTags = if (selecting) selectedTags.toggleTag(row.trackKey.tag)
+                        else setOf(row.trackKey.tag).also { selecting = true }
+                    },
+                    actions = when {
+                        selecting -> ({ LocalSelectionMark(row.trackKey.tag in selectedTags) })
+                        else -> ({ LocalMenuButton { openRowMenu(song, row.trackKey.tag) } })
                     },
                 )
             }
@@ -343,4 +419,105 @@ fun LocalPlaylistDetailScreen(
     // 所以这里只能用「是否在顶部」这样一个与具体 state 无关的判据：
     // DetailScaffold 的列表在顶部时 firstVisibleItemIndex == 0，而我们拿不到那个 state，
     // 于是用 pullState 的位移累计 + 阈值即可 —— 阈值逻辑在 PullToRefresh 里已单测）。
+}
+
+/** 选中集切换：字符串 tag 版的 toggle（`PlaylistSelection` 只认 songId，本地行没有）。 */
+private fun Set<String>.toggleTag(tag: String): Set<String> =
+    if (tag in this) this - tag else this + tag
+
+/**
+ * 本地歌单的多选条。
+ *
+ * 为什么不做成和云端详情页同一个 `PlaylistSelectionBar`：那个是 `PlaylistDetailScreen`
+ * 的私有实现，且动作集不同（云端是「移出歌单」/「下一首播放」，本地只有「从本地歌单移除」）。
+ * 复制这 40 行比把两边耦合成一个带 6 个参数的通用控件更容易读。
+ */
+@Composable
+private fun LocalSelectionBar(
+    count: Int,
+    allSelected: Boolean,
+    onExit: () -> Unit,
+    onToggleAll: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val colors = LocalMetroColors.current
+    val typography = LocalMetroTypography.current
+    val strings = LocalStrings.current
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.heightIn(min = 48.dp).clickable(onClick = onExit).padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            MetroText("✕", color = colors.onBackground, style = typography.titleMedium)
+        }
+        MetroText(
+            strings.playlists.selectionCount(count),
+            modifier = Modifier.weight(1f),
+            color = colors.onBackground,
+            style = typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        LocalSelectionAction(
+            text = if (allSelected) strings.playlists.clearSelection else strings.playlists.selectAll,
+            color = colors.onBackground,
+            onClick = onToggleAll,
+        )
+        LocalSelectionAction(
+            text = strings.localPlaylistRemoveTrack,
+            color = if (count > 0) colors.primary else colors.onSurfaceVariant,
+            enabled = count > 0,
+            onClick = onRemove,
+        )
+    }
+}
+
+@Composable
+private fun LocalSelectionAction(
+    text: String,
+    color: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.heightIn(min = 48.dp).clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroText(text, color = color, style = LocalMetroTypography.current.bodyMedium, maxLines = 1)
+    }
+}
+
+/** 行尾勾选框：与云端详情页同一个视觉（方块 + 勾），多选时替换掉「⋯」。 */
+@Composable
+private fun LocalSelectionMark(checked: Boolean) {
+    val colors = LocalMetroColors.current
+    Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .background(if (checked) colors.primary else colors.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) {
+                MetroText("✓", color = colors.onPrimary, style = LocalMetroTypography.current.bodySmall)
+            }
+        }
+    }
+}
+
+/** 行尾「⋯」：单条菜单入口（长按已改为进多选）。 */
+@Composable
+private fun LocalMenuButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(40.dp).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        MetroIcon(
+            imageVector = Icons.Default.MoreVert,
+            contentDescription = LocalStrings.current.playlists.moreActions,
+            tint = LocalMetroColors.current.onSurfaceVariant,
+            sizeDp = 20.dp,
+        )
+    }
 }

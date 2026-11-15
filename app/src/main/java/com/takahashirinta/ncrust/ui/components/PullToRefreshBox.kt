@@ -112,10 +112,18 @@ internal class PullToRefreshConnection(
         source: NestedScrollSource,
     ): Offset {
         if (source != NestedScrollSource.Drag) return Offset.Zero
+        // 刷新进行中：把本次手势剩下的位移**全部忽略**。
+        // 不加这条，用户一次拉得很长会持续累加 dragPx —— 越过阈值先触发一次刷新、随后
+        // 又被 reset 归零、再被后续位移重新累加，于是指示器淡出又淡入、刷新也可能重复触发
+        // （用户报的「拉很长导致动画多次触发」）。
+        if (state.refreshing) return Offset.Zero
         if (available.y > 0f && atTop()) {
-            state.dragPx += available.y
+            // 封顶到 MAX_DRAG_PX：进度是归一化的，再多的位移没有视觉收益，
+            // 留着只会让"回弹距离"和真实位移脱节。
+            state.dragPx = (state.dragPx + available.y).coerceAtMost(PullToRefresh.MAX_DRAG_PX)
             if (PullToRefresh.shouldTrigger(state.dragPx, true, state.refreshing)) {
-                state.reset()
+                // 触发后**不清零**：清零会让指示器在刷新期间闪一下（presence 1→0→1）。
+                // 位移留到 onPreFling 或刷新结束时再归零。
                 state.refreshing = true
                 onRefresh()
             }
