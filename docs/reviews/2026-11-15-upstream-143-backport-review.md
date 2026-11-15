@@ -137,3 +137,27 @@ Arris 走 `arris.de5.net/api/latest` + 多镜像 + `UpdateMirrors`，与上游�
 - **同一条服务器接口会出现两套实现**（我们 + 上游）：改协议认知时两边都要改，否则又是一次
   "主线/LTS 双线回移"的老账。建议以 `spec/fixtures` 为唯一事实来源。
 - **测试 pin 会动**：Arris 有若干"契约测试"锁死文案与设置项数量，新增设置/词条要同步更新 pin。
+
+## 复核（2026-11-15 下午，动手前逐项核对本仓实现）
+
+上表的 P0 三项**在 Arris 里已经存在**，是我第一版排错了：当时按"上游改了哪个文件"去映射，
+没有逐个核对本仓是否早已实现。证据：
+
+| 项 | 上游提交 | Arris 现状 |
+|---|---|---|
+| 播放上报 clientlog + eapi + osx 身份 | `6d4814d` | `player/PlayReporter.kt` 头部即写明"通道 `POST https://clientlog.music.163.com/eapi/feedback/weblog`，eapi 加密 + os=osx 身份"，并已拆 `startplay` / `play`（≥80% 或自然结束）、每首去重 |
+| 收藏走 xeapi `/api/v1/radio/like` + `checkToken` + 502 语义 | `bf1a8be` `4410100` `293430c` | `network/PlaylistApi.kt:1020-1085` 已有完整实现与依据，并保留 weapi/eapi 仅作回退 |
+| 扫码登录 eapi + PC 身份 + `type=3`（修 −462） | `108ddb9` | `auth/QrLoginProtocol.kt:4-9` 已记录 −462 实测并走 eapi + PC 身份 |
+| 网页登录只认可用 `MUSIC_U` | `c2977ae` | `auth/CookieManager.isUsable` 要求 `MUSIC_U` **与** `__csrf` 同时存在，比上游"非空 MUSIC_U"更严 |
+| 收藏专辑翻页取全量 | `9acf753` | `PlaylistApi.getSubscribedAlbums` 已有 100 页循环 + 去重 + 无进展检测 + 登录代次校验，是上游那版的上位实现 |
+| 系统手动下一首 vs 自然结束 | `9a4f75c` | 不适用：Arris 已换成 Media3 `MediaSession`（`playbackSession`），没有上游那条 `MediaSessionCompat.onSkipToNext → onPlaybackEnded` 的错误接线 |
+
+结论修正：**上游 1.4.3 在 Android 侧没有"必须回移"的协议/播放正确性修复**。
+剩余差异集中在两类，都不是"搬代码"能解决的：
+
+1. **UI/交互细节**：歌单详情长按多选、歌曲菜单挪到行尾、播放列表构图重整（`a439577` `4f0247b`）；
+   我们的界面是 Kanesumi 重写版，只能按交互稿重做。
+2. **上游新增的测试夹具**：`spec/fixtures/{quality,queue,lrc}`（本仓目前只有 crypto/entitlement/update）。
+   这属于"对齐规格"，可以移植，但**不改变任何用户可见行为**。
+
+下次要动的正确顺序：先决定要不要那两个 UI 交互，再决定要不要补夹具；P0 回移清单作废。
