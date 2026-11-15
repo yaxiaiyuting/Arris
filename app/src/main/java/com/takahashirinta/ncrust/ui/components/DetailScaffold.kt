@@ -31,6 +31,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
@@ -254,16 +255,28 @@ fun DetailHeader(
                 .padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 20.dp),
             verticalAlignment = Alignment.Bottom
         ) {
-            AsyncImage(
-                model = CoverUrls.large(coverUrl),
-                contentDescription = strings.coverDesc,
-                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(LocalMetroColors.current.surfaceVariant),
-                // v2.5.0 · B：220dp ≥ 160dp ⇒ AppShapes.large（尺寸→形状规则见下方窄屏封面）。
-                modifier = Modifier
-                    .size(220.dp)
-                    .appCoverFrame(shape = AppShapes.large),
-                contentScale = ContentScale.Crop
-            )
+            if (coverUrl.isNullOrBlank()) {
+                // 自建歌单没有封面：画名字占位，别给一块纯灰底板（看起来像没加载出来）。
+                PlaylistCoverPlaceholder(
+                    name = title,
+                    letterSize = 64.sp,
+                    modifier = Modifier
+                        .size(220.dp)
+                        .clip(AppShapes.large)
+                        .appCoverFrame(shape = AppShapes.large),
+                )
+            } else {
+                AsyncImage(
+                    model = CoverUrls.large(coverUrl),
+                    contentDescription = strings.coverDesc,
+                    placeholder = androidx.compose.ui.graphics.painter.ColorPainter(LocalMetroColors.current.surfaceVariant),
+                    // v2.5.0 · B：220dp ≥ 160dp ⇒ AppShapes.large（尺寸→形状规则见下方窄屏封面）。
+                    modifier = Modifier
+                        .size(220.dp)
+                        .appCoverFrame(shape = AppShapes.large),
+                    contentScale = ContentScale.Crop
+                )
+            }
             Spacer(Modifier.width(24.dp))
             Column(modifier = Modifier.weight(1f)) {
                 DetailHeaderInfoRow(
@@ -285,17 +298,29 @@ fun DetailHeader(
     Column(modifier = Modifier.fillMaxWidth()) {
         // v2.5.0 · B：封面圆角 + 1dp 描边。形状按**渲染边长**选（≥160dp → large，
         // <160dp → small）；窄屏这里是 fillMaxWidth 的方封面，手机上 ≥320dp ⇒ large。
-        AsyncImage(
-            model = CoverUrls.large(coverUrl),
-            contentDescription = strings.coverDesc,
-            // 纯色占位:详情首开封面解码完成前不闪空块(Metro 直接落图,不做 crossfade)
-            placeholder = androidx.compose.ui.graphics.painter.ColorPainter(LocalMetroColors.current.surfaceVariant),
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .appCoverFrame(shape = AppShapes.large),
-            contentScale = ContentScale.Crop
-        )
+        if (coverUrl.isNullOrBlank()) {
+            PlaylistCoverPlaceholder(
+                name = title,
+                letterSize = 72.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(AppShapes.large)
+                    .appCoverFrame(shape = AppShapes.large),
+            )
+        } else {
+            AsyncImage(
+                model = CoverUrls.large(coverUrl),
+                contentDescription = strings.coverDesc,
+                // 纯色占位:详情首开封面解码完成前不闪空块(Metro 直接落图,不做 crossfade)
+                placeholder = androidx.compose.ui.graphics.painter.ColorPainter(LocalMetroColors.current.surfaceVariant),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .appCoverFrame(shape = AppShapes.large),
+                contentScale = ContentScale.Crop
+            )
+        }
         Spacer(Modifier.height(20.dp))
         DetailHeaderInfoRow(
             title = title,

@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.takahashirinta.ncrust.local.LocalPlaylist
 import com.takahashirinta.ncrust.network.PlaylistApi
@@ -45,6 +46,7 @@ import com.takahashirinta.ncrust.playlist.PlaylistResult
 import com.takahashirinta.ncrust.qq.QqPlaylistRepository
 import com.takahashirinta.ncrust.source.Playlist
 import com.takahashirinta.ncrust.ui.BottomOverlayInsetDp
+import com.takahashirinta.ncrust.ui.components.PlaylistCoverPlaceholder
 import com.takahashirinta.ncrust.ui.components.appCoverFrame
 import com.takahashirinta.ncrust.ui.components.appPressScale
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -726,6 +728,13 @@ private fun PlaylistListRow(
                     // 圆角 + 1dp 描边；形状按渲染边长：48dp < 160dp ⇒ AppShapes.small。
                     modifier = Modifier.fillMaxSize().appCoverFrame(shape = AppShapes.small),
                 )
+            } else {
+                // 自建歌单没有封面：用名字占位，空底板会被误读成「封面没加载出来」。
+                PlaylistCoverPlaceholder(
+                    name = title,
+                    letterSize = 20.sp,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -768,6 +777,13 @@ private fun PlaylistCardCell(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().appCoverFrame(shape = AppShapes.large),
+                )
+            } else {
+                // 同上：自建歌单没有封面时用名字占位。
+                PlaylistCoverPlaceholder(
+                    name = title,
+                    letterSize = 40.sp,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }
