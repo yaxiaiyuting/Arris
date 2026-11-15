@@ -36,9 +36,8 @@ class PullToRefreshConnectionTest {
     // JVM 单测里可直接构造，不需要 Compose 运行时。
     private fun newState() = PullToRefreshState()
 
-    // 第三参数是新增的 `loading` 兜底：默认一直「不在加载」，与调用方刷新结束后的真实状态一致。
     private fun connection(state: PullToRefreshState) =
-        PullToRefreshConnection(state, { atTop }, { false }, { refreshCount++ })
+        PullToRefreshConnection(state, { atTop }, { refreshCount++ })
 
     private fun PullToRefreshConnection.dragDown(px: Float) {
         onPostScroll(Offset.Zero, Offset(0f, px), NestedScrollSource.Drag)

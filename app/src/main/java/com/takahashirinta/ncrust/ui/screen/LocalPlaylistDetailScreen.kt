@@ -190,8 +190,15 @@ fun LocalPlaylistDetailScreen(
     }
 
     fun runSync(force: Boolean) {
-        if (isSyncing) return
-        val m = meta ?: return
+        if (isSyncing) { pullState.refreshing = false; return }
+        val m = meta ?: run { pullState.refreshing = false; return }
+        if (!m.hasRemoteSource) {
+            // 纯本地歌单没有可同步的来源：这次下拉不产生加载，必须立刻收掉指示器
+            // （否则 refreshing 永远为 true —— 指示器一直挂在顶部转）。
+            pullState.refreshing = false
+            Toast.makeText(context, strings.localPlaylistSyncNoSource, Toast.LENGTH_SHORT).show()
+            return
+        }
         isSyncing = true
         scope.launch {
             val outcome = LocalPlaylistRepository.sync(context, m, force = force)
@@ -314,7 +321,6 @@ fun LocalPlaylistDetailScreen(
                         },
                         onRemove = { removeSelected() },
                     )
-                    PullToRefreshIndicator(state = pullState)
                 } else {
                 // 本应用内新建的歌单在服务端没有封面（本地也没有），标题旁给一块名字占位，
                 // 否则这一页看上去像"缺了封面"的半成品。
@@ -393,11 +399,13 @@ fun LocalPlaylistDetailScreen(
                         MetroText(strings.localPlaylistDelete, color = colors.onSurfaceVariant, style = typography.bodyMedium)
                     }
                 }
-                PullToRefreshIndicator(state = pullState)
                 }
             }
         },
     ) {
+        // 指示器作为列表第一项：贴在内容区顶部，跟着列表走；放在 header 的 Column 里会
+        // 落进按钮行中间（真机截图里那个悬在「播放全部」右边的圆环）。
+        item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
         if (visible.isEmpty()) {
             item(key = "empty") {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
