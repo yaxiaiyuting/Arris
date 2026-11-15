@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -146,17 +148,42 @@ fun PullToRefreshIndicator(
     state: PullToRefreshState,
     modifier: Modifier = Modifier,
 ) {
+    val colors = LocalMetroColors.current
     val visible = state.refreshing || state.dragPx > 0f
-    if (!visible) return
+    // 收起时的淡出：没有它，指示器是"啪"地消失，看起来像布局跳动。
+    val presence by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(160),
+        label = "pullToRefreshPresence",
+    )
+    // 展开时跟手：下拉多少就露多少（`progress` 已把 maxDragPx 归一化到 0..1），
+    // 只在下拉刚开始时给一个下限，避免出现"一条几乎看不见的缝"。
+    val dragReveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx).coerceAtLeast(0.15f)
+    val reveal = dragReveal * presence
+    if (reveal <= 0.01f) return
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp),
+            .height(40.dp)
+            // 一层半透明底板 + 底边细线：指示器是"盖在内容上"的一层，而不是内容自己长出来的。
+            // 之前没有这层，转圈直接叠在列表文字上，观感很怪（用户反馈「没有遮罩过渡」）。
+            .graphicsLayer {
+                alpha = reveal
+                translationY = -(1f - reveal) * size.height
+            }
+            .background(colors.surface.copy(alpha = 0.94f)),
         contentAlignment = Alignment.Center,
     ) {
         MetroProgressIndicator(
-            color = LocalMetroColors.current.primary,
+            color = colors.primary,
             // indeterminate 的指示器不需要进度参数；下拉过程中它只要「转起来」就够表达状态。
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.surfaceVariant),
         )
     }
 }
