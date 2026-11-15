@@ -122,8 +122,9 @@ internal class PullToRefreshConnection(
             // 留着只会让"回弹距离"和真实位移脱节。
             state.dragPx = (state.dragPx + available.y).coerceAtMost(PullToRefresh.MAX_DRAG_PX)
             if (PullToRefresh.shouldTrigger(state.dragPx, true, state.refreshing)) {
-                // 触发后**不清零**：清零会让指示器在刷新期间闪一下（presence 1→0→1）。
-                // 位移留到 onPreFling 或刷新结束时再归零。
+                // 触发后归零：指示器由 `refreshing` 维持挂载（visible 不依赖 dragPx），
+                // 归零不会让它闪；留着位移反而会在刷新结束后被下一次滚动事件二次消费。
+                state.reset()
                 state.refreshing = true
                 onRefresh()
             }
