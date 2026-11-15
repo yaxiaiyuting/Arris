@@ -109,10 +109,10 @@ fun PlaylistDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     val strings = LocalStrings.current
     val isOwned = info?.isOwnedBy(ownerUid) == true
-    // 多选里**唯一**真实的批量动作是「移出歌单」，它只在本人自建的歌单上存在
-    // （他人歌单服务端 404）。所以长按进入多选也只在那种歌单上生效；其余歌单的
-    // 长按保持原来的单条菜单 —— 否则用户会进到一个没有任何动作的选择条。
-    val canSelect = isOwned && songs.isNotEmpty()
+    // 长按一律进多选：用户对「长按 = 选歌」的预期与歌单归属无关。是否**能移出**由
+    // isOwned 单独判定（他人歌单服务端会 404），不能移出的歌单改用「添加到下一首播放」
+    // 这个所有歌单都成立的动作 —— 否则选择条会是一个没有任何动作的死开关。
+    val canSelect = songs.isNotEmpty()
 
     fun loadSongs() {
         coroutineScope.launch {
@@ -373,9 +373,10 @@ fun PlaylistDetailScreen(
                             else onSongClick(song)
                         },
                         onShowMenu = {
-                            // 长按：自己的歌单直接进多选并选中该行；其余情况保持原来的单条菜单。
-                            if (canSelect && !selecting) selection = selection.enter(song.id)
-                            else openSongMenu(song)
+                            // 长按 = 进多选并选中该行；已经在多选里就等同于点一下（切换）。
+                            // 原来的单条菜单改由行尾「⋯」承担，两个入口不再抢同一个手势。
+                            selection = if (selecting) selection.toggle(song.id)
+                            else selection.enter(song.id)
                         },
                         actions = when {
                             // 多选时行尾换成复选框（与长按进来的那一行同位置，视线不用跳）。
@@ -400,6 +401,15 @@ fun PlaylistDetailScreen(
                     else selection.selectAll(all)
                 },
                 onRemove = { removeSelected() },
+                removeEnabled = isOwned,
+                onInsertNext = {
+                    val picked = songs.filter { it.id in selection.ids }
+                    if (picked.isNotEmpty()) {
+                        onInsertNext(picked)
+                        selection = selection.exit()
+                        Toast.makeText(context, strings.queue.queueAddToNextDone, Toast.LENGTH_SHORT).show()
+                    }
+                },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
         }
@@ -419,6 +429,8 @@ private fun PlaylistSelectionBar(
     onExit: () -> Unit,
     onToggleAll: () -> Unit,
     onRemove: () -> Unit,
+    removeEnabled: Boolean,
+    onInsertNext: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMetroColors.current
@@ -461,13 +473,23 @@ private fun PlaylistSelectionBar(
                 color = colors.onBackground,
                 onClick = onToggleAll,
             )
-            SelectionBarAction(
-                text = strings.removeFromPlaylist,
-                // 一首都没选时置灰：这个动作没有可作用的对象，点下去只会弹失败提示。
-                color = if (count > 0) colors.primary else colors.onSurfaceVariant,
-                enabled = count > 0,
-                onClick = onRemove,
-            )
+            if (removeEnabled) {
+                SelectionBarAction(
+                    text = strings.removeFromPlaylist,
+                    // 一首都没选时置灰：这个动作没有可作用的对象，点下去只会弹失败提示。
+                    color = if (count > 0) colors.primary else colors.onSurfaceVariant,
+                    enabled = count > 0,
+                    onClick = onRemove,
+                )
+            } else {
+                // 他人/收藏歌单不能移出（服务端 404），给一个所有歌单都成立的动作。
+                SelectionBarAction(
+                    text = strings.actionAddToNext,
+                    color = if (count > 0) colors.primary else colors.onSurfaceVariant,
+                    enabled = count > 0,
+                    onClick = onInsertNext,
+                )
+            }
         }
         MetroDivider()
     }
