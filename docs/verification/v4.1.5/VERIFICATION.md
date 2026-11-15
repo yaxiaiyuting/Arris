@@ -3,7 +3,7 @@
 2026-11-15。Android 10 及以上，versionCode 230，versionName `4.1.5-gpl`。
 
 - 源码：`refactor/arris-source`，构建提交 `11871e1`（自 `v4.1.4-gpl` 起 19 个提交）。
-- 包名 `com.takahashirinta.ncrust`，minSdk 29，targetSdk 36；APK 10,720,912 字节，
+- 包名 `com.takahashirinta.ncrust`，minSdk 29，targetSdk 36；APK 10,737,296 字节，
   SHA-256 `eaa98029c7a8bd87f5e4c107fd5628759aa5aedcd89f9df227c7eb37cba9bea9`。
 - 签名：APK Signature Scheme v2 通过，证书 `e62eca39…dfbbec82`（与 4.1.0–4.1.4 同一把）。
 - `next-version.sh` 三源交叉（tag / 已发布 APK 229 / 工作区 229）⇒ 230。
