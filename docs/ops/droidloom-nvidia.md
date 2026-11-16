@@ -33,6 +33,28 @@ droidloomctl launch --component com.takahashirinta.ncrust/com.takahashirinta.ncr
 ⚠️ **`--component` 不能省**。只给包名的形式在这里 10/10 失败（`Activity start failed: -91`），
 Settings 偶尔成功，不可靠。
 
+## 2.5 上游进展与我们现在维护什么（2026-11-16 更新）
+
+**上游 0.1.0-37 起已自行修掉我们前两条补丁所描述的问题**，本机已核实（runtime+image 39）：
+
+| 我们的补丁 | 上游状态 | 结论 |
+|---|---|---|
+| 0001 `zwlr_output_power_manager_v1` 可选 | `b7ac285`（同时把 explicit sync 也做成可选） | **退役**，用 stock 即可 |
+| 0002 无 linear 时选合成器 GPU 的布局 | `1f315e8`（走 Vulkan 查询 + 在合成器 GPU 上分配，比我们的逐级回退更彻底） | **退役** |
+| 0003 服务端装饰（标题栏/拖动） | 未修，见上游 issue **#23** | 仍需我们这版 |
+| 0004 滚轮 / 触控板 → 触摸拖拽 | 未修，见上游 issue **#24** | 仍需我们这版 |
+
+实测日志（stock 39）：`droidloom-gpu-server: … window buffers in VRAM (the compositor imports 6 of its layouts)`，
+无 `Wayland global bind failure`。所以 **`95-render-node-nvidia.conf` 那个 render node override 也不再需要**
+（stock 会自己从 DMA-BUF feedback 打开合成器主设备），文件已改名为 `.disabled`。
+
+我们现任 presenter 的构建来源：`yaxiaiyuting/droidloom` 分支 `kwin-decorations-and-wheel`
+（重基到上游 `cfd34ab`，两条提交 `84836c7` 装饰 + `a6c94c0` 滚轮），本机已装并在 39 runtime 下验证起得来。
+
+> 注意：`a6c94c0` 里有一处与旧版不同的关键修正 —— 旧版把 12–60ms 的样本时间塞给共享的
+> `input_time::Stream`，而那个流**拒绝晚于 receipt 的时间**，所以时间戳铺开实际上被压回同一瞬间；
+> 现在样本走独立的 `wheel_times` 流，铺开才真正生效。
+
 ## 3. 三个坑（按发现顺序）
 
 ### 3.1 presenter 把 wlroots 专有全局当必需
@@ -108,6 +130,11 @@ UnsetEnvironment=GBM_BACKEND
 - `screencap` 在 cell 里只给空 PNG（`FLAG_SECURE`），像素级取证要靠宿主侧截图或 `uiautomator dump`。
 
 ## 6. 回滚
+
+> 2026-11-16：现在回滚 = `sudo pacman -U droidloom-{runtime,image}-0.1.0-39-x86_64.pkg.tar.zst` +
+> `sudo install -m755 <旧二进制> /usr/bin/droidloom-wayland`。包缓存见 `/tmp/dl-pkg`（会随重启清空，
+> 需要长期保留时自己搬到持久目录）。旧补丁二进制在 `/usr/bin/droidloom-wayland.{orig,v1,v2,v3}`。
+
 
 ```bash
 ~/droidloom-nvidia/rollback.sh --dry-run   # 先看计划
