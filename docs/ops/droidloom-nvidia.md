@@ -33,42 +33,34 @@ droidloomctl launch --component com.takahashirinta.ncrust/com.takahashirinta.ncr
 ⚠️ **`--component` 不能省**。只给包名的形式在这里 10/10 失败（`Activity start failed: -91`），
 Settings 偶尔成功，不可靠。
 
-## 2.5 上游进展与我们现在维护什么（2026-11-16 更新）
+## 2.5 上游全部接手，我们零补丁（2026-11-18 更新）
 
-**上游 0.1.0-37 起已自行修掉我们前两条补丁所描述的问题**，本机已核实（runtime+image 39）：
+四条补丁**全部退役**，本机跑 `droidloom-runtime + image 0.1.0-46` 的上游原版 presenter。
 
-| 我们的补丁 | 上游状态 | 结论 |
+| 我们提的问题 | 上游实现 | 我们的补丁 |
 |---|---|---|
-| 0001 `zwlr_output_power_manager_v1` 可选 | `b7ac285`（同时把 explicit sync 也做成可选） | **退役**，用 stock 即可 |
-| 0002 无 linear 时选合成器 GPU 的布局 | `1f315e8`（走 Vulkan 查询 + 在合成器 GPU 上分配，比我们的逐级回退更彻底） | **退役** |
-| 0003 服务端装饰（标题栏/拖动） | 未修，见上游 issue **#23** | 仍需我们这版 |
-| 0004 滚轮 / 触控板 → 触摸拖拽 | 未修，见上游 issue **#24** | 仍需我们这版 |
+| output power manager 当必需 | `b7ac285`（顺带把 explicit sync 也做成可选） | 退役 |
+| 只认 linear 修饰符 | `1f315e8`（Vulkan 查询 + 在合成器 GPU 上分配） | 退役 |
+| 窗口无标题栏、不能拖（**#23**） | `166b5b89` `RequestServer` + `f7ea7950` 先销毁 decoration 再销毁 toplevel | 退役 |
+| 滚轮/触控板不滚（**#24**） | `7eae524f` **wire ABI 8 原生 `ACTION_SCROLL`** | 退役 |
 
-实测日志（stock 39）：`droidloom-gpu-server: … window buffers in VRAM (the compositor imports 6 of its layouts)`，
-无 `Wayland global bind failure`。所以 **`95-render-node-nvidia.conf` 那个 render node override 也不再需要**
-（stock 会自己从 DMA-BUF feedback 打开合成器主设备），文件已改名为 `.disabled`。
+`95-render-node-nvidia.conf` 也不再需要（stock 从 DMA-BUF feedback 自己打开合成器主设备），
+文件已改名 `.disabled`。我们此前的分支（`kwin-decorations-and-wheel`、`scroll-residual-on-42`）
+只作历史留档，**不要再用**：里面那套合成触摸拖拽已被上游的协议层方案取代。
 
-我们现任 presenter 的构建来源：`yaxiaiyuting/droidloom` 分支 `kwin-decorations-and-wheel`
-（重基到上游 `cfd34ab`，两条提交 `84836c7` 装饰 + `a6c94c0` 滚轮），本机已装并在 39 runtime 下验证起得来。
+## 2.5.1 教训：先找协议层，再考虑合成事件
 
-> 注意：`a6c94c0` 里有一处与旧版不同的关键修正 —— 旧版把 12–60ms 的样本时间塞给共享的
-> `input_time::Stream`，而那个流**拒绝晚于 receipt 的时间**，所以时间戳铺开实际上被压回同一瞬间；
-> 现在样本走独立的 `wheel_times` 流，铺开才真正生效。
+滚轮这件事我们绕了一大圈：拿不到轴事件 → 用合成触摸拖拽去"骗" Android → 于是要处理
+零时长拖拽、时间戳铺开（还被 `input_time::Stream` 的"不接受未来时间"打回）、触控板小增量累加、
+每格像素手感、弹窗期间的隐式 grab……每一条都是自己给自己造的坑。
 
-## 2.6 滚轮/触控板的三条实测结论（2026-11-17）
+上游的做法是一行协议定义的距离：**输入桥加一条记录（wire ABI 8），直接送
+`ACTION_SCROLL` + `AXIS_VSCROLL/AXIS_HSCROLL`**。列表、Compose、WebView 本来就通过
+`onGenericMotionEvent` 处理它，于是：没有 fling 叠在每格之上、不伪装成手指骗过游戏和地图、
+不和真实触摸抢接触点、触控板"手指移多少内容移多少"（64dp/格按密度换算，不做整格取整）。
 
-装的是「呆萌（DieMoe233）在 issue #24 的两个补丁 + 我们一条残量累加」的 42 基座自编版，
-真机跑下来有三条必须记住：
-
-1. **默认档位必须全接受**。他那版 `DROIDLOOM_WHEEL` 默认是 `touch`，而 `accepts()` 只给
-   `Some(Wheel)` 放行，于是 `axis_source=finger` 的触控板帧**整段被丢**，表现为"触控板完全没反应"。
-   我们把默认改成 `touchpad`（`Some(Wheel)` 在这个档位照样过），`off`/`touch` 仍可收窄。
-2. **触控板的 `absolute` 不是格数**。实测每帧 `absolute≈2.2…12.3`（一次滑动约 30 帧），
-   按"≥1.0 就是一格"会把一帧当一格、一次滑动直接跳一屏。现在按 `15 轴单位 = 1 格`换算，
-   **余量跨帧累加**、方向反转清残量、单帧上限 ±4 格。
-3. **弹窗会吃掉全场轴事件**。Android 里开过溢出菜单/弹窗之后，宿主机所有客户端的滚轮都失效
-   （连 KDE 启动器都不滚），**重启 presenter 即恢复**。怀疑是 popup 的隐式 pointer grab 没释放；
-   已在 issue #24 里作为独立线索提给上游。遇到"滚轮突然全死"先 restart，不要怀疑 KDE。
+**结论写在这里：跨层桥接一个能力时，先问"协议层有没有原生通道"，再考虑在应用层伪造事件。**
+伪造只是在协议缺这层能力时的权宜，代价会以"手感参数 + 时序补丁 + 边界态"的形式反复回来。
 
 ## 3. 三个坑（按发现顺序）
 
