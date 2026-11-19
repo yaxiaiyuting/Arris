@@ -1,0 +1,44 @@
+# 发版后自动把站点 URL 推给 Bing / Yandex / IndexNow 聚合端点。
+#
+# 为什么放在 GitHub Actions 而不是 Worker：Cloudflare 的共享出口 IP 被这三家长期限流
+# （实测稳定 429），而 Actions runner 的出口 IP 通常直接 200/202。
+# 也可以手动触发：Actions → indexnow → Run workflow。
+name: indexnow
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit site URLs
+        env:
+          HOST: arris.de5.net
+          KEY: arris-de5-net-20261119
+        run: |
+          set -u
+          payload=$(python3 - <<'PY'
+          import json, os
+          host = os.environ["HOST"]; key = os.environ["KEY"]
+          urls = [f"https://{host}/", f"https://{host}/llms.txt", f"https://{host}/llms-full.txt",
+                  f"https://{host}/feed.xml", f"https://{host}/api/releases"]
+          print(json.dumps({"host": host, "key": key,
+                            "keyLocation": f"https://{host}/{key}.txt",
+                            "urlList": urls}, ensure_ascii=False))
+          PY
+          )
+          failed=0
+          for endpoint in "https://www.bing.com/indexnow" "https://yandex.com/indexnow" "https://api.indexnow.org/indexnow"; do
+            code=$(curl -sS -m 60 -o /dev/null -w '%{http_code}' -X POST "$endpoint" \
+              -H 'content-type: application/json; charset=utf-8' --data "$payload" || echo 000)
+            echo "$endpoint -> $code"
+            case "$code" in
+              200|202) ;;
+              *) failed=1 ;;
+            esac
+          done
+          # 429 是出口限流，不算失败（feed + sitemap 仍会被轮询）；其他错误才让 job 红。
+          if [ "$failed" = "1" ]; then echo "::warning::some IndexNow endpoints did not accept the submission"; fi
