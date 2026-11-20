@@ -109,14 +109,32 @@ internal object QqScanSession {
             currentCoroutineContext().ensureActive()
             val now = SystemClock.elapsedRealtime()
             if (now - lastPingAt >= pingEveryMs) {
-                session.ping()
-                lastPingAt = now
+                if (!session.ping()) {
+                    Log.w(TAG, "ping 失败，尝试重新建立连接...")
+                    if (session.reopen()) {
+                        lastPingAt = SystemClock.elapsedRealtime()
+                    }
+                } else {
+                    lastPingAt = now
+                }
             }
             when (val event = session.awaitEvent(EVENT_WAIT_MS)) {
                 null -> Unit
                 QqQrMqttSession.Event.Scanned -> _state.value = State(Status.SCANNED, bitmap)
                 QqQrMqttSession.Event.Expired -> return Status.EXPIRED
                 QqQrMqttSession.Event.Canceled, is QqQrMqttSession.Event.Failed -> return Status.FAILED
+                QqQrMqttSession.Event.Disconnected -> {
+                    // 切后台/切屏调用扫码镜头时，Android 可能切断后台连接；在有效期内重新握手并重连，不判失败
+                    Log.i(TAG, "MQTT 连接断开，尝试重新建立连接并订阅...")
+                    kotlinx.coroutines.delay(1000L)
+                    if (session.reopen()) {
+                        Log.i(TAG, "MQTT 重新连接成功，继续等待推送")
+                        lastPingAt = SystemClock.elapsedRealtime()
+                    } else {
+                        Log.w(TAG, "MQTT 暂未连通（可能处于后台），等待下一次重试")
+                        kotlinx.coroutines.delay(2000L)
+                    }
+                }
                 is QqQrMqttSession.Event.Credentials -> {
                     // QqClient 的请求可取消，返回主线程后再由 QqApi 提交凭证。
                     val attempt = QqApi.loginWithScanCode(qrCodeId, event.uin, event.token)

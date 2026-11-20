@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,6 +37,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.takahashirinta.ncrust.qq.QqQrClient
 import com.takahashirinta.ncrust.qq.QqQrLogin
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
@@ -80,6 +85,7 @@ fun QqQrLoginDialog(
 ) {
     val strings = LocalStrings.current
     val colors = LocalMetroColors.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     var qr by remember { mutableStateOf<QqQrClient.QrCode?>(null) }
     var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -87,11 +93,31 @@ fun QqQrLoginDialog(
     var loadFailed by remember { mutableStateOf(false) }
     // 换一张二维码时 +1，用来重启下面的轮询协程。
     var generation by remember { mutableStateOf(0) }
+    var resumeTrigger by remember { mutableIntStateOf(0) }
+    var isForeground by remember {
+        mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+
     // 连续「服务端拒绝」次数（403/空 body/解析不出 ptuiCB）与连续「网络异常」次数。
     // 两者分开计数：前者重试无意义、到阈值就降级；后者是抖动、继续重试。
     var unavailableStreak by remember { mutableStateOf(0) }
     var networkStreak by remember { mutableStateOf(0) }
     val degraded = unavailableStreak >= DEGRADE_AFTER_UNAVAILABLE
+
+    // 监听生命周期：用户切到 QQ/相册扫码确认后回到应用时，立刻发起一次轮询，并重置后台造成的被拒/超时抖动
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isForeground = true
+                unavailableStreak = 0
+                resumeTrigger++
+            } else if (event == Lifecycle.Event.ON_PAUSE) {
+                isForeground = false
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     // 取二维码
     LaunchedEffect(generation) {
@@ -111,12 +137,11 @@ fun QqQrLoginDialog(
         if (bitmap == null) loadFailed = true
     }
 
-    // 轮询
-    LaunchedEffect(qr, generation) {
+    // 轮询：进入页面或从后台切回前台（resumeTrigger 变化）时立刻发起一次探测
+    LaunchedEffect(qr, generation, resumeTrigger) {
         val code = qr ?: return@LaunchedEffect
         val deadline = System.currentTimeMillis() + QqQrLogin.QR_TTL_SECONDS * 1000L
         while (System.currentTimeMillis() < deadline) {
-            delay(POLL_INTERVAL_MS)
             when (val result = QqQrClient.poll(code.qrsig)) {
                 is QqQrLogin.PollResult.Status -> {
                     unavailableStreak = 0
@@ -139,15 +164,18 @@ fun QqQrLoginDialog(
                     }
                 }
                 is QqQrLogin.PollResult.Unavailable -> {
-                    // 服务端明确回绝：再轮询也是同一个结果，累计到阈值就交给降级逻辑
-                    unavailableStreak++
-                    networkStreak = 0
-                    if (unavailableStreak >= DEGRADE_AFTER_UNAVAILABLE) return@LaunchedEffect
+                    // 仅在前台活跃时计入回绝次数；后台休眠/网络受限时不误判降级
+                    if (isForeground) {
+                        unavailableStreak++
+                        networkStreak = 0
+                        if (unavailableStreak >= DEGRADE_AFTER_UNAVAILABLE) return@LaunchedEffect
+                    }
                 }
                 QqQrLogin.PollResult.NetworkError -> {
                     networkStreak++
                 }
             }
+            delay(POLL_INTERVAL_MS)
         }
         // 超时：让用户能刷新，而不是永远停在「等待扫码」
         status = QqQrLogin.QrStatus.EXPIRED
@@ -240,9 +268,10 @@ private const val POLL_INTERVAL_MS = 2_000L
 /**
  * 连续被服务端回绝多少次就自动降级到网页登录。
  *
- * 3 次 ≈ 6 秒：单次 403 可能只是风控的一个嗝，连着三次就不是了，再轮询下去只是让用户干等。
+ * 15 次 ≈ 30 秒：必须保证用户在同一台手机切屏到 QQ 扫描相册/相机确认时有充分的等待窗口，
+ * 避免因后台网络休眠抖动误触降级。
  */
-private const val DEGRADE_AFTER_UNAVAILABLE = 3
+private const val DEGRADE_AFTER_UNAVAILABLE = 15
 
 /** 降级提示至少显示这么久，再切页面 —— 否则用户只看到界面闪一下，不知道发生了什么。 */
 private const val DEGRADE_NOTICE_MS = 2_000L
