@@ -10,6 +10,7 @@
 
 package com.takahashirinta.ncrust.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -110,9 +112,18 @@ internal class PullToRefreshConnection(
         source: NestedScrollSource,
     ): Offset {
         if (source != NestedScrollSource.Drag) return Offset.Zero
+        // 刷新进行中：把本次手势剩下的位移**全部忽略**。
+        // 不加这条，用户一次拉得很长会持续累加 dragPx —— 越过阈值先触发一次刷新、随后
+        // 又被 reset 归零、再被后续位移重新累加，于是指示器淡出又淡入、刷新也可能重复触发
+        // （用户报的「拉很长导致动画多次触发」）。
+        if (state.refreshing) return Offset.Zero
         if (available.y > 0f && atTop()) {
-            state.dragPx += available.y
+            // 封顶到 MAX_DRAG_PX：进度是归一化的，再多的位移没有视觉收益，
+            // 留着只会让"回弹距离"和真实位移脱节。
+            state.dragPx = (state.dragPx + available.y).coerceAtMost(PullToRefresh.MAX_DRAG_PX)
             if (PullToRefresh.shouldTrigger(state.dragPx, true, state.refreshing)) {
+                // 触发后归零：指示器由 `refreshing` 维持挂载（visible 不依赖 dragPx），
+                // 归零不会让它闪；留着位移反而会在刷新结束后被下一次滚动事件二次消费。
                 state.reset()
                 state.refreshing = true
                 onRefresh()
@@ -146,17 +157,35 @@ fun PullToRefreshIndicator(
     state: PullToRefreshState,
     modifier: Modifier = Modifier,
 ) {
-    val visible = state.refreshing || state.dragPx > 0f
-    if (!visible) return
+    val colors = LocalMetroColors.current
+    // 只跟手，不做时间轴动画：这个指示器挂在 header 里，列表滚动/重组时会重新挂载，
+    // 任何 `animateXxxAsState` 都会在重挂载时从头播一次 —— 用户看到的就是「动画反复触发」。
+    // 位移本身就是连续量，直接映射成透明度已经足够顺滑。
+    val reveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx).coerceAtLeast(0.15f)
+    if (reveal <= 0.01f) return
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp),
+            .height(40.dp)
+            // 一层半透明底板 + 底边细线：指示器是"盖在内容上"的一层，而不是内容自己长出来的。
+            // 之前没有这层，转圈直接叠在列表文字上，观感很怪（用户反馈「没有遮罩过渡」）。
+            .graphicsLayer {
+                alpha = reveal
+                translationY = -(1f - reveal) * size.height
+            }
+            .background(colors.surface.copy(alpha = 0.94f)),
         contentAlignment = Alignment.Center,
     ) {
         MetroProgressIndicator(
-            color = LocalMetroColors.current.primary,
+            color = colors.primary,
             // indeterminate 的指示器不需要进度参数；下拉过程中它只要「转起来」就够表达状态。
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(colors.surfaceVariant),
         )
     }
 }

@@ -149,6 +149,11 @@ fun AlbumDetailScreen(
     // `DetailScaffold` 从 v2.3.0 就暴露了 `listState` 与 `contentModifier` 这两个口子。
     val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
+    // 加载结束后必须把 refreshing 清掉：指示器由它驱动，漏清会「没拉也一直转圈」。
+    // 放在 LaunchedEffect 里而不只依赖滚动事件，用户不滚动也能自愈。
+    LaunchedEffect(isLoading) {
+        if (!isLoading) pullState.refreshing = false
+    }
     var filter by remember { mutableStateOf(SourceFilter.BOTH) }
     var showPlayAllDialog by remember { mutableStateOf(false) }
     // 专辑收藏状态: 本地缓存是即时真源(云端异步同步), 切换后自增 tick 刷新。
@@ -196,6 +201,8 @@ fun AlbumDetailScreen(
             error = strings.loadFailed(e.message)
         } finally {
             isLoading = false
+            // 下拉刷新的指示器由 refreshing 驱动：加载结束必须显式清掉，否则会一直转圈。
+            pullState.refreshing = false
         }
     }
 

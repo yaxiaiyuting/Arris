@@ -31,12 +31,9 @@ import com.takahashirinta.ncrust.local.LocalTrackOrigin
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.source.PlaylistKey
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
-import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.SongCard
 import com.takahashirinta.ncrust.ui.components.SongCardStyle
 import com.takahashirinta.ncrust.ui.components.SongMenuAction
-import com.takahashirinta.ncrust.ui.components.pullToRefresh
-import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.ui.i18n.LocalStrings
 import io.github.takahashirinta.kanesumi.controls.MetroButton
 import io.github.takahashirinta.kanesumi.controls.MetroDialog
@@ -118,7 +115,6 @@ fun LocalPlaylistDetailScreen(
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    val pullState = rememberPullToRefreshState()
 
     fun reload() {
         val (m, t) = LocalPlaylistRepository.read(context, playlistKey)
@@ -155,7 +151,6 @@ fun LocalPlaylistDetailScreen(
             }
             reload()
             isSyncing = false
-            pullState.refreshing = false
         }
     }
 
@@ -221,15 +216,8 @@ fun LocalPlaylistDetailScreen(
         // 右上角：同步 + 更多（清空 / 删除）。**必须在顶部 scrim** ——
         // 详情页底部的按钮会落进「播放器死带」（AGENTS.md 的 Compose 触摸陷阱第 2 条）。
         listState = listState,
-        contentModifier = Modifier.pullToRefresh(
-            state = pullState,
-            // 「在顶部」的判据只有 LazyListState 能回答：第一项可见且偏移为 0。
-            // 不看它就会把「往下滚列表」误判成下拉刷新（PullToRefresh 的 KDoc 里那条）。
-            atTop = {
-                listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-            },
-            onRefresh = { runSync(force = true) },
-        ),
+        // 本地歌单的「刷新」只能同步远端来源，而纯本地歌单根本没有来源 —— 下拉刷新在这里
+        // 只会在按钮行里留一个转圈的空壳（真机视频）。同步入口保留在右上角那个按钮。
         onTopEndAction = { runSync(force = true) },
         topEndIcon = Icons.Default.Refresh,
         topEndContentDescription = strings.localPlaylistSync,
@@ -288,7 +276,6 @@ fun LocalPlaylistDetailScreen(
                         MetroText(strings.localPlaylistDelete, color = colors.onSurfaceVariant, style = typography.bodyMedium)
                     }
                 }
-                PullToRefreshIndicator(state = pullState)
             }
         },
     ) {
@@ -339,8 +326,4 @@ fun LocalPlaylistDetailScreen(
         }
     }
 
-    // 下拉刷新挂在内容 LazyColumn 上（DetailScaffold 内部持有它自己的 listState，
-    // 所以这里只能用「是否在顶部」这样一个与具体 state 无关的判据：
-    // DetailScaffold 的列表在顶部时 firstVisibleItemIndex == 0，而我们拿不到那个 state，
-    // 于是用 pullState 的位移累计 + 阈值即可 —— 阈值逻辑在 PullToRefresh 里已单测）。
 }

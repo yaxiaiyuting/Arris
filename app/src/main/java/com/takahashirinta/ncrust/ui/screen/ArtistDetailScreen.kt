@@ -141,6 +141,11 @@ fun ArtistDetailScreen(
     // 那两个参数**就是为这件事留的口子**（见它的 KDoc），所以这里只是把它们用上。
     val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
+    // 加载结束后必须把 refreshing 清掉：指示器由它驱动，漏清会「没拉也一直转圈」。
+    // 放在 LaunchedEffect 里而不只依赖滚动事件，用户不滚动也能自愈。
+    LaunchedEffect(isLoading) {
+        if (!isLoading) pullState.refreshing = false
+    }
     var filter by remember { mutableStateOf(SourceFilter.BOTH) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -179,6 +184,8 @@ fun ArtistDetailScreen(
             error = strings.loadFailed(e.message)
         } finally {
             isLoading = false
+            // 下拉刷新的指示器由 refreshing 驱动：加载结束必须显式清掉，否则会一直转圈。
+            pullState.refreshing = false
         }
     }
 
