@@ -12,8 +12,8 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.1.5--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
-[![APK](https://img.shields.io/badge/APK-10.24%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.1.6--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![APK](https://img.shields.io/badge/APK-10.26%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Compose-BOM%202024.12-blue?style=flat-square&logo=jetpackcompose)](https://developer.android.com/jetpack/compose)
@@ -38,6 +38,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.1.6** | 2026-11-20 | 生日祝福视觉重构（深林香槟金、声波呼吸环、信笺卡片、音乐典藏卡）、舞台几何恒定、WebView 去石台抬升、QQ 扫码切后台不再误判失败 |
 | **4.1.5** | 2026-11-15 | 歌单详情长按进入多选（云端与本地），自建歌单用第一首歌封面；离线 URL 记住可播状态；连点不再排队播动画；本地歌单去掉下拉刷新 |
 | **4.1.4** | 2026-11-15 | 系统重建媒体服务后按原曲/队列/断点恢复后台播放；Android 16 实时通知（设置页三态、播放卡、缓存/下载/识曲/一起听接入）；离线起播按优先级取缓存档位 |
 | **4.1.3** | 2026-11-13 | 源码重构一轮：队列、游标与随机轮次同批保存，收藏按登录串行，离线曲目等片段落盘，AMLL 预取与实际起播共享下载 |
@@ -398,6 +399,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.1.6-gpl | 2026-11-20 | **生日祝福视觉重构**：深林→极光夜空渐变、香槟金体系、声波呼吸环、双层信笺卡片与错峰淡入、音乐典藏卡、时光生日信函；**舞台几何恒定**（不再升降/缩放）；**WebView 去石台抬升**修高频闪烁；**QQ 扫码**切后台/断连不误判（重连 + 前台即时探测 + Cookie 两域合并） |
 | v4.1.5-gpl | 2026-11-15 | **歌单长按多选**（云端「移出歌单 / 下一首播放」、本地「从本地歌单移除」，菜单挪到行尾）；自建歌单取**第一首歌封面**；**离线 URL 可播状态**（只对服务端拒绝型错误记失败，网络抖动不记）；**连点只播最新一次反馈**（Kanesumi indication 改 collectLatest）；本地歌单移除下拉刷新；`MetroTextField` 点任意位置可聚焦 |
 | v4.1.4-gpl | 2026-11-15 | **后台服务重建后恢复播放**（媒体前台服务 + Media3 唤醒锁，按原曲/队列/断点续播）；**Android 16 实时通知**（设置三态回读、播放卡、整曲缓存/下载/识曲/一起听接入并撤回）；歌词按登录代次接收、网易云预取与起播共用请求；离线起播按优先级取缓存档位 |
 | v4.1.3-gpl | 2026-11-13 | **源码重构与性能修复**：队列/游标/随机轮次同批保存（游标写入 4→1）、收藏按登录账号串行并去重、离线曲目等首个片段落盘、缓存对账不再误删新曲、AMLL 预取与实际起播共享下载、单曲页合并详情请求、搜索历史分区更新。无新界面 |
