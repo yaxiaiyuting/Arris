@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.unit.dp
@@ -114,17 +118,38 @@ fun QqLoginOverlay(
 ) {
     val context = LocalContext.current
     val strings = LocalStrings.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     var webView by remember { mutableStateOf<WebView?>(null) }
     // 「互联已登录但缺音乐票据」时只补一次导航，避免与用户的操作打架。
     var nudged by remember { mutableStateOf(false) }
 
+    // 监听生命周期：切回前台时恢复 WebView 活跃状态并刷新 Cookie
+    DisposableEffect(lifecycle, webView) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                webView?.onResume()
+                CookieManager.getInstance().flush()
+                val current = webView?.url
+                if (current.isNullOrEmpty() || current == "about:blank") {
+                    webView?.loadUrl(startUrl?.takeIf { it.isNotEmpty() } ?: HOME_URL)
+                }
+            } else if (event == Lifecycle.Event.ON_PAUSE) {
+                webView?.onPause()
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+
     // 轮询 cookie：登录成功的权威判据（见 KDoc）。
     LaunchedEffect(webView) {
         val view = webView ?: return@LaunchedEffect
+        var attemptsWithoutKey = 0
         while (true) {
-            delay(COOKIE_POLL_MS)
             val cookieManager = CookieManager.getInstance()
-            val cookie = cookieManager.getCookie(COOKIE_PROBE_URL)
+            val cookieY = cookieManager.getCookie(COOKIE_PROBE_URL)
+            val cookieQq = cookieManager.getCookie("https://qq.com/")
+            val cookie = QqCookie.merge(cookieQq, cookieY)
             if (!cookie.isNullOrEmpty()) {
                 if (QqCookie.isLoggedIn(cookie)) {
                     // 用 merge 语义落盘（QqAuthStore.saveCookie 内部就是 merge）：
@@ -140,12 +165,17 @@ fun QqLoginOverlay(
                     onLoggedIn()
                     return@LaunchedEffect
                 }
-                if (!nudged && QqCookie.uinOf(cookie) != null) {
+                if (QqCookie.uinOf(cookie) != null) {
+                    attemptsWithoutKey++
                     // 互联已登录、音乐票据还没换到 —— 回首页让 y.qq.com 的脚本完成交换。
-                    nudged = true
-                    view.loadUrl(HOME_URL)
+                    // 若切屏或后台休眠导致脚本未执行，每隔数轮重新导航一次促使换票
+                    if (!nudged || attemptsWithoutKey % 4 == 0) {
+                        nudged = true
+                        view.loadUrl(HOME_URL)
+                    }
                 }
             }
+            delay(COOKIE_POLL_MS)
         }
     }
 
@@ -206,13 +236,18 @@ fun QqLoginOverlay(
                             return true
                         }
                     }
-                    CookieManager.getInstance().removeAllCookies(null)
+                    if (startUrl.isNullOrEmpty() && injectCookies.isNullOrEmpty()) {
+                        CookieManager.getInstance().removeAllCookies(null)
+                    }
                     // 扫码流程带过来的 cookie 先注入（见参数说明）。
                     if (!injectCookies.isNullOrEmpty()) {
                         val cm = CookieManager.getInstance()
                         for (host in INJECT_HOSTS) {
                             for (pair in injectCookies.split("; ")) {
-                                if (pair.contains('=')) cm.setCookie(host, pair)
+                                if (pair.contains('=')) {
+                                    cm.setCookie(host, pair)
+                                    cm.setCookie(host, "$pair; Domain=.qq.com; Path=/")
+                                }
                             }
                         }
                         cm.flush()
@@ -248,7 +283,13 @@ fun QqLoginOverlay(
 private const val HOME_URL = "https://y.qq.com/"
 
 /** 注入 cookie 时覆盖的域：ptlogin 的票据挂在 `.qq.com`，音乐侧的票据挂在 `y.qq.com`。 */
-private val INJECT_HOSTS = listOf("https://qq.com", "https://y.qq.com")
+private val INJECT_HOSTS = listOf(
+    "https://qq.com",
+    "https://y.qq.com",
+    "https://ssl.ptlogin2.qq.com",
+    "https://ptlogin2.qq.com",
+    "https://graph.qq.com",
+)
 
 /**
  * 探测 cookie 用的固定 URL。

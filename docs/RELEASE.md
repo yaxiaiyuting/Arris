@@ -54,6 +54,23 @@ wrangler deploy
 curl -s https://arris.de5.net/get/latest.apk | sha256sum   # 对齐产物
 ```
 
+### 4.1 让 Bing / Yandex / Google 立刻知道有新版本
+
+`wrangler deploy` 之后跑一次（**必须在部署之后**，否则推的是旧页面）：
+
+```bash
+tools/indexnow-submit.sh                    # 仓库根目录执行
+```
+
+它会向 `https://www.bing.com/indexnow`、`https://yandex.com/indexnow`、
+`https://api.indexnow.org/indexnow` 三个端点推送 `/`、`/llms.txt`、`/llms-full.txt`、
+`/feed.xml`、`/api/releases`，逐条打印状态；`200/202` 即送达，`429` 说明出口 IP
+被限流（换网络或隔几小时再跑一次）。
+
+> 为什么在本机跑而不在 Worker 里跑：Cloudflare 的共享出口 IP 长期被这三家限流，
+> 实测 Worker 侧稳定 429，而本机出口通常直接 200。Atom feed（`/feed.xml`）是第二条
+> 发现通道，Google/Bing 抓取器会自己轮询它。
+
 ## 5. README
 
 - 顶部徽章：version / APK 体积

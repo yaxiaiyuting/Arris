@@ -528,8 +528,8 @@ android {
         // v4.1.5（歌单多选 + 离线可播状态 + 上游夹具）：versionCode 出处 `tools/next-version.sh`
         //   三源交叉（tag/已发布 APK 229 + 工作区 229 ⇒ 230）。本版加歌单详情长按多选、
         //   离线 URL 可播状态记忆，并把上游音质/队列/歌词夹具接进单测；未改 applicationId、签名与接口。
-        versionCode = 230
-        versionName = "4.1.5-gpl"
+        versionCode = 233
+        versionName = "4.1.6-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

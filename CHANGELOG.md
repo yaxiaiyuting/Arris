@@ -3,6 +3,34 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.1.6-gpl — 生日祝福视觉重构、扫码登录可靠性与 WebView 闪烁（2026-11-20）
+
+主线 · Android 10 及以上 · versionCode 233 · 正式版
+
+- **生日祝福视觉重构**：新增 `CelebrationDesign` 设计层——午夜深林到极光幽绿的夜空渐变（`#07130D → #132B1F`）、香槟金系统（`#FFE9C8 → #F3C486`）、微光磨砂玻璃背板与金丝描边、统一药丸胶囊按钮。吹蜡烛阶段加入声波呼吸环；祝福语改为双层信笺卡片、三行错峰淡入，核心一句加粗暖金；自由听众席升级为音乐典藏卡（波形微标 + 高亮曲名 + 就听这首/换一首/继续听歌）；迟到的生日祝福改为「时光生日信函」；日期选择对话框改用极圆角容器。
+- **舞台几何恒定**：`footerReserve` 固定（生日 210dp / 听众 140dp）、`footerLift` 恒为 0，Tux、蛋糕与背景在全流程不再上下跳动或缩放。灭烛到暗幕平滑承接（0.67 → 全暗），不再白屏闪一下。
+- **WebView 祝福页去掉石台抬升**：`#svg-scene` 改为静态 `translateX(-50%)`，删除 `--final-rise` / `--final-shrink` 与 `motion.js` 里 1.7s 的 `--final-frame` 补间。原先每帧亚像素偏移让整张 SVG（石台、石阶高光缝、高斯渐变池）重栅格化，表现为高频抖动。
+- **QQ 扫码登录可靠性**：切后台/断连不再误判失败——ping 失败先重连、新增 `Disconnected` 分支、回到前台立刻做一次状态探测；后台期间失败不计入降级计数，阈值从 3 次/6 秒放宽到 15 次/30 秒；带跳转凭证时跳过 `removeAllCookies`；Cookie 注入覆盖 `ssl.ptlogin2.qq.com`、`graph.qq.com` 并设 `.qq.com` 根域，探测时合并 `y.qq.com` 与 `qq.com` 两域。
+
+验证：全量 JVM 通过，`assembleRelease` 成功，APK Signature Scheme v2 校验通过。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v4.1.6-gpl) · [官网直链](https://arris.de5.net/get/Arris-v4.1.6-gpl.apk) · SHA-256 `49eddb14a1d2090951c3b4d0c596ca16673815665e9d0521502b5ca3f3a43265`
+
+## v3.7.38-gpl（LTS）— 回移多选、封面与下拉刷新（2026-11-20）
+
+LTS · Android 7 及以上 · versionCode 231 · 正式版
+
+- **歌单长按多选**（云端与本地）：`PlaylistSelection` 状态机、顶部选择条（已选 N 首 / 全选 / 取消全选 / 移出歌单）、行尾「⋯」单条菜单；非自建歌单的批量动作是「添加到下一首播放」，本地歌单是「从本地歌单移除」。
+- **歌单封面**：没有封面时取第一首歌的专辑图；空歌单退回名字首字占位。详情页、库界面卡片式与列表式三处统一。
+- **下拉刷新**：指示器改为纯跟手并加半透明底板与分隔线；修掉「刷新后一直转圈」「拉不下来」；本地歌单页移除下拉刷新（没有可同步的远端来源）。
+- **离线可播状态**：失败标记下沉到 `OfflineUrlStore` 并跟随 URL；只有服务端拒绝型错误才记失败，真正出声即解除，换号/登出清空。
+- **生日祝福视觉重构与 WebView 闪烁修复**：与主线同源。
+- **QQ 扫码登录可靠性**：与主线同源（切后台/断连不误判、Cookie 两域合并）。
+
+验证：3465 项 JVM 测试通过（4 条既有探针守卫跳过），`assembleRelease` 成功，v2 签名校验通过。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v3.7.38-gpl) · [官网直链](https://arris.de5.net/get/Arris-v3.7.38-gpl.apk) · SHA-256 `0b199665e2cf5fcddec1a16293fd5fdf9fd059d0b9cc95d89dc945066f96e1f4`
+
 ## v4.1.5-gpl — 歌单多选、离线可播状态与点击反馈（2026-11-15）
 
 主线 · Android 10 及以上 · versionCode 230 · 正式版

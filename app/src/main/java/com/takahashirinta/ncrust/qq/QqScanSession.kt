@@ -148,8 +148,14 @@ object QqScanSession {
 
             while (isActive && System.currentTimeMillis() < deadline) {
                 if (System.currentTimeMillis() - lastPingAt >= pingEveryMs) {
-                    session.ping()
-                    lastPingAt = System.currentTimeMillis()
+                    // ping 失败通常意味着连接已被系统掐断（切后台/切屏调用相机）：
+                    // 在二维码有效期内重连并续订，不把这种情况判成登录失败。
+                    if (!session.ping()) {
+                        Log.w(TAG, "ping 失败，尝试重新建立连接")
+                        if (session.reopen()) lastPingAt = System.currentTimeMillis()
+                    } else {
+                        lastPingAt = System.currentTimeMillis()
+                    }
                 }
                 when (val event = session.awaitEvent(EVENT_WAIT_MS)) {
                     null -> Unit
@@ -164,6 +170,19 @@ object QqScanSession {
                     is QqQrMqttSession.Event.Failed -> {
                         Log.w(TAG, "MQTT 失败：${event.detail}")
                         return finish(Status.FAILED, Failure.SOCKET_UNAVAILABLE)
+                    }
+
+                    // 后台断连 ≠ 登录失败：等一会重连，仍然失败就继续等下一次心跳重试，
+                    // 直到二维码到期或用户取消。
+                    QqQrMqttSession.Event.Disconnected -> {
+                        Log.i(TAG, "MQTT 连接断开，尝试重连并续订")
+                        kotlinx.coroutines.delay(1_000L)
+                        if (session.reopen()) {
+                            Log.i(TAG, "MQTT 重连成功，继续等待推送")
+                            lastPingAt = System.currentTimeMillis()
+                        } else {
+                            kotlinx.coroutines.delay(2_000L)
+                        }
                     }
 
                     is QqQrMqttSession.Event.Credentials -> {

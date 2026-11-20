@@ -99,6 +99,9 @@ internal class QqQrMqttSession(
         /** `timeout`：二维码过期。 */
         data object Expired : Event()
 
+        /** 连接断开（可重新建立连接）。 */
+        data object Disconnected : Event()
+
         /** `loginFailed`：服务端拒绝（payload 里有原因，只进日志）。 */
         data class Failed(val detail: String) : Event()
 
@@ -336,8 +339,8 @@ internal class QqQrMqttSession(
                     eventOf(frame)?.let { return it }
                 }
                 MqttCodec.DISCONNECT -> {
-                    Log.w(TAG, "服务端断开（DISCONNECT）")
-                    return Event.Failed("server disconnect")
+                    Log.w(TAG, "MQTT 连接断开（DISCONNECT）")
+                    return Event.Disconnected
                 }
                 else -> {
                     if (BuildConfig.DEBUG) Log.d(TAG, "忽略报文 type=${frame.type}")
@@ -392,6 +395,14 @@ internal class QqQrMqttSession(
 
     /** 协商后的 keep-alive（秒）。上层据此决定 PINGREQ 的间隔。 */
     fun keepAliveSeconds(): Int = keepAliveSeconds
+
+    /**
+     * 切屏、切后台或网络抖动断开后，重置旧连接并重新建立 WebSocket 握手与 MQTT 订阅。
+     */
+    suspend fun reopen(): Boolean {
+        transport.reset()
+        return open()
+    }
 
     fun close() {
         runCatching { transport.send(MqttCodec.disconnect()) }

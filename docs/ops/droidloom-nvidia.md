@@ -33,6 +33,35 @@ droidloomctl launch --component com.takahashirinta.ncrust/com.takahashirinta.ncr
 ⚠️ **`--component` 不能省**。只给包名的形式在这里 10/10 失败（`Activity start failed: -91`），
 Settings 偶尔成功，不可靠。
 
+## 2.5 上游全部接手，我们零补丁（2026-11-18 更新）
+
+四条补丁**全部退役**，本机跑 `droidloom-runtime + image 0.1.0-46` 的上游原版 presenter。
+
+| 我们提的问题 | 上游实现 | 我们的补丁 |
+|---|---|---|
+| output power manager 当必需 | `b7ac285`（顺带把 explicit sync 也做成可选） | 退役 |
+| 只认 linear 修饰符 | `1f315e8`（Vulkan 查询 + 在合成器 GPU 上分配） | 退役 |
+| 窗口无标题栏、不能拖（**#23**） | `166b5b89` `RequestServer` + `f7ea7950` 先销毁 decoration 再销毁 toplevel | 退役 |
+| 滚轮/触控板不滚（**#24**） | `7eae524f` **wire ABI 8 原生 `ACTION_SCROLL`** | 退役 |
+
+`95-render-node-nvidia.conf` 也不再需要（stock 从 DMA-BUF feedback 自己打开合成器主设备），
+文件已改名 `.disabled`。我们此前的分支（`kwin-decorations-and-wheel`、`scroll-residual-on-42`）
+只作历史留档，**不要再用**：里面那套合成触摸拖拽已被上游的协议层方案取代。
+
+## 2.5.1 教训：先找协议层，再考虑合成事件
+
+滚轮这件事我们绕了一大圈：拿不到轴事件 → 用合成触摸拖拽去"骗" Android → 于是要处理
+零时长拖拽、时间戳铺开（还被 `input_time::Stream` 的"不接受未来时间"打回）、触控板小增量累加、
+每格像素手感、弹窗期间的隐式 grab……每一条都是自己给自己造的坑。
+
+上游的做法是一行协议定义的距离：**输入桥加一条记录（wire ABI 8），直接送
+`ACTION_SCROLL` + `AXIS_VSCROLL/AXIS_HSCROLL`**。列表、Compose、WebView 本来就通过
+`onGenericMotionEvent` 处理它，于是：没有 fling 叠在每格之上、不伪装成手指骗过游戏和地图、
+不和真实触摸抢接触点、触控板"手指移多少内容移多少"（64dp/格按密度换算，不做整格取整）。
+
+**结论写在这里：跨层桥接一个能力时，先问"协议层有没有原生通道"，再考虑在应用层伪造事件。**
+伪造只是在协议缺这层能力时的权宜，代价会以"手感参数 + 时序补丁 + 边界态"的形式反复回来。
+
 ## 3. 三个坑（按发现顺序）
 
 ### 3.1 presenter 把 wlroots 专有全局当必需
@@ -155,6 +184,11 @@ NVIDIA 节点走零拷贝 dmabuf（RSS 8.5 MB），AMD 节点靠 LINEAR 回退�
 - `screencap` 在 cell 里只给空 PNG（`FLAG_SECURE`），像素级取证要靠宿主侧截图或 `uiautomator dump`。
 
 ## 6. 回滚
+
+> 2026-11-16：现在回滚 = `sudo pacman -U droidloom-{runtime,image}-0.1.0-39-x86_64.pkg.tar.zst` +
+> `sudo install -m755 <旧二进制> /usr/bin/droidloom-wayland`。包缓存见 `/tmp/dl-pkg`（会随重启清空，
+> 需要长期保留时自己搬到持久目录）。旧补丁二进制在 `/usr/bin/droidloom-wayland.{orig,v1,v2,v3}`。
+
 
 ```bash
 ~/droidloom-nvidia/rollback.sh --dry-run   # 先看计划

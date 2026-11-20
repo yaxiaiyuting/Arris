@@ -346,10 +346,6 @@
       if (f) S(f, 0, { scaleX: 0.7, scaleY: 0.3 });
       if (N.glows[i]) S(N.glows[i], 0, { opacity: 0 });
     });
-    // v4.0.2 · 闪烁修复：**不要再动 filter: blur()**。
-    // 真机最后几下"背景升起"闪一下，和当年星空用 filter:brightness() 是同一类问题 ——
-    // 那组文字每帧都要重新栅格化整块（大字号 + 4 行同时动），合成层被打断就闪。
-    // 现在只动 yPercent / opacity / rotation 三个纯合成层属性，效果几乎一样但不重绘。
     if (N.lines.length) S(N.lines, 0, { yPercent: 112, opacity: 0, rotation: 0.6 });
     S(N.bloom, 0, { opacity: 0 });
     S(EYES, 0, { scaleY: 1 });
@@ -798,9 +794,7 @@
        ══════════════════════════════════════════════════ */
     const BLESS = A.bless || 41.95;
     if (new URLSearchParams(location.search).has('app')) {
-      // Ease the portrait floor and subject up together before the letter enters.
-      F($('stage'), BLESS - 1.82, { '--final-frame': 0 },
-        { '--final-frame': 1 }, 1.7, E.drift);
+      // 保持竖屏石台与主体位置静止固定，不进行抬升或缩放，彻底消除 WebView 中 SVG 逐帧重栅格化导致的边缘与渐变闪烁抖动
       F($('blessing'), BLESS - 0.12, { '--letter-light': 0 },
         { '--letter-light': 1 }, 1.35, E.drift);
     }
@@ -813,7 +807,6 @@
       const isTitle = (i === 0);
       const t = BLESS + (isTitle ? 0.10 : 0.38 + i * (0.32 + jit(0.016)));
       const dur = isTitle ? 0.78 : 1.05 + jit(0.05);
-      // 同上：不起 filter，只走合成层（yPercent / opacity / rotation）。
       F(el, t, { yPercent: 112, opacity: 0, rotation: 0.6 },
         { yPercent: 0, opacity: 1, rotation: 0 }, dur, E.arrive);
     });
