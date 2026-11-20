@@ -81,6 +81,7 @@ function llmsTxt(origin) {
     "",
     "## 完整说明（给检索与引用）",
     `- ${origin}/llms-full.txt`,
+    `- 版本更新流（Atom）：${origin}/feed.xml`,
     "",
     "## 机器可读",
     `- API 目录：${origin}/.well-known/api-catalog`,
@@ -323,13 +324,17 @@ export default {
         "Allow: /",
         "Disallow: /api/feedback",
         "",
+        // Cloudflare 的 Content Signals 约定：Googlebot 不认这条，会在 Search Console 里
+        // 报「忽略的规则」（只是 warning，不影响抓取），但它对支持该约定的抓取方有意义，保留。
         `Content-Signal: ${CONTENT_SIGNAL}`,
         "",
         "# AI 爬虫：显式放行，便于检索与引用（内容就是公开文档 + 下载页）",
         ...AI_BOTS.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", ""]),
-        "LLMs-Txt: /llms.txt",
-        "Feed: " + url.origin + "/feed.xml",
-        "LLMs-Full-Txt: /llms-full.txt",
+        // ⚠️ 这里**不要**加 LLMs-Txt / Feed / LLMs-Full-Txt 之类的自定义指令：
+        // robots.txt 只认 User-agent / Allow / Disallow / Sitemap / Crawl-delay 这几种字段，
+        // 自定义字段会被 Google 判成「语法有误」（实测第 33–35 行全红）。
+        // llms.txt 与 feed.xml 的发现走两条合法路径：HTML 的 <link rel="alternate">，
+        // 以及 llms.txt 正文里的链接。
         "Sitemap: " + url.origin + "/sitemap.xml",
         "",
       ].join("\n");
