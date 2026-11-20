@@ -66,7 +66,7 @@ internal fun CelebrationFrame(
     placement: CelebrationPlacement,
     heading: @Composable () -> Unit,
     footer: @Composable () -> Unit,
-    footerReserve: Dp = 12.dp,
+    footerReserve: Dp = 210.dp,
     footerLift: Dp = 0.dp,
 ) {
     val reserve by animateDpAsState(

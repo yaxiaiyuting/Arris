@@ -88,19 +88,32 @@ internal class CelebrationArtView(context: Context) : View(context) {
         val artX=left+(sceneWidth-400*artScale)/2
         val artY=top+(sceneHeight-360*artScale)/2
         val waiting=stage==CelebrationPhase.WAITING
-        val lit=stage==CelebrationPhase.LIGHTING || waiting
+        val extinguishingGlow = if(stage==CelebrationPhase.EXTINGUISHING) (1f - seconds / 0.4f).coerceIn(0f, 1f) else 0f
+        val lit=stage==CelebrationPhase.LIGHTING || waiting || (stage==CelebrationPhase.EXTINGUISHING && extinguishingGlow > 0f)
         canvas.save();canvas.translate(artX,artY);canvas.scale(artScale,artScale)
         if(kind==CelebrationKind.LISTENER) {
             drawTux(canvas,listener,88f,60f,.8f,if(animate)sin(seconds*.7f)*1.4f else 0f)
         } else {
-            drawBirthday(canvas,0f,seconds,lit)
+            drawBirthday(canvas,0f,seconds,lit,extinguishingGlow)
         }
         canvas.restore()
-        if(kind==CelebrationKind.BIRTHDAY && lit) {paint.shader=shade;paint.alpha=if(stage==CelebrationPhase.LIGHTING)(255*(seconds/1.15f).coerceIn(0f,1f)).toInt() else 255
-            canvas.save();canvas.translate(artX+274*artScale,artY+196*artScale);canvas.scale(310*artScale,205*artScale);canvas.drawRect(-20f,-20f,20f,20f,paint);canvas.restore();paint.shader=null;paint.alpha=255}
+        if(kind==CelebrationKind.BIRTHDAY && lit) {
+            val shadeAlpha = when (stage) {
+                CelebrationPhase.LIGHTING -> (255*(seconds/1.15f).coerceIn(0f,1f)).toInt()
+                CelebrationPhase.EXTINGUISHING -> (255*extinguishingGlow).toInt()
+                else -> 255
+            }
+            paint.shader=shade;paint.alpha=shadeAlpha
+            canvas.save();canvas.translate(artX+274*artScale,artY+196*artScale);canvas.scale(310*artScale,205*artScale);canvas.drawRect(-20f,-20f,20f,20f,paint);canvas.restore();paint.shader=null;paint.alpha=255
+        }
         if(stage==CelebrationPhase.EXTINGUISHING) {paint.color=Color.BLACK;paint.alpha=(seconds/1.1f*170).toInt().coerceIn(0,170);canvas.drawRect(-2000f,0f,2400f,h,paint);paint.alpha=255}
         if(stage==CelebrationPhase.BLACKOUT || stage==CelebrationPhase.FIREWORKS || stage==CelebrationPhase.BLESSING) {
-            val opacity=when(stage) {CelebrationPhase.BLACKOUT->(seconds/.45f).coerceIn(0f,1f);CelebrationPhase.BLESSING->(1-seconds/1.7f).coerceIn(0f,1f);else->1f}
+            // BLACKOUT 平滑承接 EXTINGUISHING 末尾的 170 alpha (约 0.67f)，不再产生瞬时白屏闪烁
+            val opacity=when(stage) {
+                CelebrationPhase.BLACKOUT->(0.67f + (seconds/.45f).coerceIn(0f,1f)*0.33f).coerceIn(0f,1f)
+                CelebrationPhase.BLESSING->(1-seconds/1.7f).coerceIn(0f,1f)
+                else->1f
+            }
             paint.color=Color.BLACK;paint.alpha=(opacity*255).toInt();canvas.drawRect(-2000f,0f,2400f,h,paint);paint.alpha=255
             if(stage!=CelebrationPhase.BLACKOUT && animate) {
                 if(fire==null) fire=FireworkPainter(h)
@@ -109,7 +122,8 @@ internal class CelebrationArtView(context: Context) : View(context) {
         }
         if(stage==CelebrationPhase.DONE || stage==CelebrationPhase.BLESSING) {
             val breath=if(animate)(.35f+.15f*sin(seconds*.7f)) else .4f
-            paint.shader=cone;paint.alpha=(breath*120).toInt();canvas.save();canvas.translate(200f,h*.8f);canvas.scale(1.3f,.4f);canvas.drawCircle(0f,0f,128f,paint);canvas.restore();paint.shader=null;paint.alpha=255
+            val coneFade=if(stage==CelebrationPhase.BLESSING) (seconds/1.7f).coerceIn(0f,1f) else 1f
+            paint.shader=cone;paint.alpha=(breath*120*coneFade).toInt();canvas.save();canvas.translate(200f,h*.8f);canvas.scale(1.3f,.4f);canvas.drawCircle(0f,0f,128f,paint);canvas.restore();paint.shader=null;paint.alpha=255
         }
         canvas.restore()
         if(animate && isAttachedToWindow && windowVisibility==VISIBLE) postInvalidateOnAnimation()
@@ -117,7 +131,7 @@ internal class CelebrationArtView(context: Context) : View(context) {
     private fun drawTux(c:Canvas,d:Drawable,x:Float,y:Float,s:Float,bob:Float=0f) {
         c.save();c.translate(x,y+bob);c.scale(s,s);d.setBounds(0,-70,360,310);d.draw(c);c.restore()
     }
-    private fun drawBirthday(c:Canvas,y:Float,t:Float,lit:Boolean) {
+    private fun drawBirthday(c:Canvas,y:Float,t:Float,lit:Boolean,extinguishingGlow:Float=0f) {
         val a=when(stage) {CelebrationPhase.ARRIVING->(t/(CelebrationTiming.ARRIVE/1000f)).coerceIn(0f,1f);else->1f}
         val arrive=1-(1-a).pow(3)
         val placing=if(stage==CelebrationPhase.PLACING)(t/(CelebrationTiming.PLACE/1000f)).coerceIn(0f,1f) else if(stage==CelebrationPhase.ARRIVING)0f else 1f
@@ -132,8 +146,9 @@ internal class CelebrationArtView(context: Context) : View(context) {
         }
         val cx=236+38*placing-263*(1-arrive);val cy=y+228+59*placing
         if(lit) {
-            paint.shader=cone;paint.alpha=230;c.save();c.translate(cx,cy-91);c.drawCircle(0f,0f,128f,paint);c.restore()
-            paint.shader=floor;paint.alpha=200;c.save();c.translate(258f,y+294);c.scale(137f,27f);c.drawCircle(0f,0f,1f,paint);c.restore();paint.shader=null;paint.alpha=255
+            val glow = if(stage==CelebrationPhase.EXTINGUISHING) extinguishingGlow else 1f
+            paint.shader=cone;paint.alpha=(230*glow).toInt();c.save();c.translate(cx,cy-91);c.drawCircle(0f,0f,128f,paint);c.restore()
+            paint.shader=floor;paint.alpha=(200*glow).toInt();c.save();c.translate(258f,y+294);c.scale(137f,27f);c.drawCircle(0f,0f,1f,paint);c.restore();paint.shader=null;paint.alpha=255
         }
         c.save();c.translate(cx,cy);cake.setBounds(-80,-115,80,15);cake.draw(c)
         for(i in 0..2) {
