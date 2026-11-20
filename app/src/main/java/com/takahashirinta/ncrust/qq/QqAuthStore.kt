@@ -122,8 +122,14 @@ object QqAuthStore {
      * 能被 [QqRefreshCommitGuard] 判成迟到。
      */
     fun saveCookie(context: Context, cookie: String) = withAuthLock {
-        val merged = QqCookie.merge(getCookie(context), cookie)
+        val old = getCookie(context)
+        val merged = QqCookie.merge(old, cookie)
         prefs(context).edit().putString(KEY_COOKIE, merged).apply()
+        // v3.7.38 换号：账号身份变了（uin 变了）就把「这条 URL 播不出来」的结论作废 ——
+        // 那是**上一个账号**的会员/版权判定结果，不该继续关着新账号的离线兜底。
+        if (QqCookie.uinOf(old) != QqCookie.uinOf(merged)) {
+            com.takahashirinta.ncrust.cache.OfflineUrlStore.clearPlaybackFailures()
+        }
         noteAuthMutationLocked()
     }
 
@@ -156,6 +162,8 @@ object QqAuthStore {
         // 登出/换号后不能再按"我是会员"隐藏「需会员」角标。
         vipSnapshot = false
         QqRefreshStore.clear(context)
+        // v3.7.38 登出：同 [saveCookie] 的换号分支。
+        com.takahashirinta.ncrust.cache.OfflineUrlStore.clearPlaybackFailures()
         prefs(context).edit()
             .remove(KEY_COOKIE)
             .remove(KEY_NICK)

@@ -87,6 +87,10 @@ object CookieManager {
             if (!com.takahashirinta.ncrust.cache.ContentCache.ownerMatches(owner)) {
                 com.takahashirinta.ncrust.cache.ContentCache.bindOwner(owner)
                 com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
+                // v3.7.38 换号：离线兜底里「这条 URL 播不出来」的结论属于**上一个账号**的
+                // 那批链接（403 多半是会员/版权判定），换了身份就该重新判一次 —— 否则上一个
+                // 账号的坏链会把这个档位的离线兜底一直关着，直到进程结束。
+                com.takahashirinta.ncrust.cache.OfflineUrlStore.clearPlaybackFailures()
             }
         }
     }
@@ -137,6 +141,8 @@ object CookieManager {
             // S14：登出后首页个性化内容一个字节都不该留（换账号/未登录都不读旧资料）。
             com.takahashirinta.ncrust.cache.ContentCache.bindOwner(null)
             com.takahashirinta.ncrust.cache.HomeSnapshot.clear(context)
+            // v3.7.38 登出：同 [saveCookie] 的换号分支，URL 的「不可播」结论随身份一起作废。
+            com.takahashirinta.ncrust.cache.OfflineUrlStore.clearPlaybackFailures()
         }
     }
 }

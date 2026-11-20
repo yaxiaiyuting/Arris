@@ -114,6 +114,38 @@ data class PlaybackFailure(
 }
 
 /**
+ * 这条失败**是否说明 URL 本身不能用了**（v3.7.38 · 回移自主线 4.1.5）。
+ *
+ * 只有这一类失败才允许把 URL 从离线兜底的候选里摘掉。判据刻意**宁窄勿宽**：
+ *
+ * | 判据 | 为什么算 |
+ * |---|---|
+ * | `ERROR_CODE_PARSING_*` | 服务端把 HTML/错误页当音频返回了 —— 同一条 URL 再试也一样 |
+ * | 四类「服务端说了不」的 IO 码 | 403 过期 / 404 / 无权限 / content-type 不对，都是**这条 URL** 的属性 |
+ * | cause 里出现 `response code: 4` | media3 把 HTTP 状态塞在 cause 消息里（实测路径） |
+ * | cause 是 `FileNotFoundException` | 本地缓存文件真的没了 |
+ *
+ * 反过来，**输出链故障（[FailureKind.SINK]）绝不算**：那条 URL 是好的，坏的是解码/声道
+ * 矩阵 —— 把它摘掉只会让同一个故障在离线时更早暴露。`classifyFailure` 先于本函数分类，
+ * 调用方据此把 SINK 挡在外面。
+ */
+internal fun poisonsOfflineUrl(failure: PlaybackFailure): Boolean {
+    val code = failure.errorCodeName.uppercase()
+    if (code.startsWith("ERROR_CODE_PARSING")) return true
+    if (code in serverRejectedUrlCodes) return true
+    val cause = ((failure.causeClass ?: "") + " " + (failure.causeMessage ?: "")).lowercase()
+    return cause.contains("response code: 4") || cause.contains("filenotfoundexception")
+}
+
+/** 服务端对这条 URL 说了「不」的四类 media3 错误码（详见 [poisonsOfflineUrl] 的表）。 */
+private val serverRejectedUrlCodes = setOf(
+    "ERROR_CODE_IO_BAD_HTTP_STATUS",
+    "ERROR_CODE_IO_FILE_NOT_FOUND",
+    "ERROR_CODE_IO_NO_PERMISSION",
+    "ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE",
+)
+
+/**
  * 把一次播放失败分类。
  *
  * ⚠️ 判据是 `causeClass`/`causeMessage` 而**不是** errorCode：实测那次是

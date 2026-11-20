@@ -81,6 +81,7 @@ import com.takahashirinta.ncrust.player.QualityCeilingMemory
 import com.takahashirinta.ncrust.player.QualityRetryGuard
 import com.takahashirinta.ncrust.player.SourceFallbackHintGate
 import com.takahashirinta.ncrust.player.classifyFailure
+import com.takahashirinta.ncrust.player.poisonsOfflineUrl
 import com.takahashirinta.ncrust.player.ResolveFailure
 import com.takahashirinta.ncrust.player.ResolveFailureAction
 import com.takahashirinta.ncrust.player.ResolveFailureKind
@@ -912,10 +913,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // v2.2.1 · P0：回调现在带失败描述（errorCode + cause），重试策略由
         // [QualityRetryGuard] 决定 —— 单调、去重、有上限、带音频焦点节流。
         // 回调在主线程；仅把带归属的延迟任务交给统一重试调度器。
-        PlaybackService.onPlaybackError = { sid, failure ->
+        PlaybackService.onPlaybackError = { sid, failure, url ->
             // v2.5.4 · C：兜底曲目的失败计数（同样只对兜底 id 生效，内部短路去重）。
             QqProbeCounters.onPlaybackFailure(sid, currentTrack?.sourceId)
-            handlePlaybackError(sid, failure)
+            handlePlaybackError(sid, failure, url)
         }
 
         // Called on the main thread by ExoPlayer's onMediaItemTransition. 现在**所有**过渡
@@ -2167,9 +2168,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * | 无节流 | 每次重试立刻 `play()` ⇒ 视频被反复打断 | 两次自动重取之间至少 [QualityRetryGuard.MIN_RESTART_INTERVAL_MS] |
      * | 最低档失败 ⇒ `onUnplayable` ⇒ 跳歌 | **音质问题被当成播放问题**，整条队列无限跳 | 自动重试路径**永不跳歌**：熔断后进「暂停 + 错误态」等用户手动操作 |
      */
-    private fun handlePlaybackError(songId: Long, failure: PlaybackFailure) {
+    private fun handlePlaybackError(songId: Long, failure: PlaybackFailure, url: String?) {
         if (songId <= 0 || songId != currentSongId.value || currentTrack?.id != songId) return
         if (playbackRetries.hasPending) return
+        // v3.7.38：**这条 URL 播不出来**才把它从离线兜底里摘掉，判据见 [poisonsOfflineUrl]。
+        //
+        // 为什么必须带 URL 而不是档位：离线兜底会退化成同一首歌的任意档位，而同一个档位上
+        // 的 URL 每 20 分钟就换一条。本分支原来的 `failedUrlKeys` 记的是「本会话失败的
+        // 档位」（`song:42:exhigh`），粒度比 URL 粗：换个档位同样被禁，换条新 URL 也解不开。
+        // 现在标记跟着「实际起播的那条 URL」走，重新解析出新 URL 即自动恢复
+        // （`OfflineUrlIndex.put` 里「URL 变了就解除」那条），真的播出声了也会恢复
+        // （`PlaybackService.onIsPlayingChanged`）。
+        if (url != null && poisonsOfflineUrl(failure)) {
+            OfflineUrlStore.setPlaybackUsable(url, false)
+            // 只打 key（`song:42:lossless`），**不打 URL** —— 播放 URL 带签名与 authSecret。
+            Log.w(
+                "PlayerViewModel",
+                "offline url dropped songId=$songId code=${failure.errorCodeName} key=${OfflineKeys.keyOf(url)}",
+            )
+        }
         if (failure.looksLikeSource) {
             if (lastPlayedLevel.isNotEmpty()) failedUrlKeys.add(OfflineKeys.key(songId, lastPlayedLevel))
             preloadCache.remove(songId)
