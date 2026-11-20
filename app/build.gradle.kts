@@ -531,8 +531,11 @@ android {
         // versionCode 出处：上一版（v3.7.30 / build.gradle 117）⇒ 本版 **118**（取 max+1）。
         // 3.7.33：LTS 的 119 已用完，120 已由 3.8.0 使用。三源核对最大值 214，取 215。
         // 3.7.34：版本三源核对最大值 215，取 216。
-        versionCode = 225
-        versionName = "3.7.37-gpl"
+        // 3.7.38（本版）：回移主线 4.x 的五项（歌单/本地歌单多选、歌单封面、下拉刷新、
+        //   离线兜底可播闸门）。主线已用到 233，LTS 上一版是 225 ⇒ 任务书取 **231**：
+        //   既大于本分支的 225（可覆盖安装），又给主线留出了 232/233 的号段。
+        versionCode = 231
+        versionName = "3.7.38-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
