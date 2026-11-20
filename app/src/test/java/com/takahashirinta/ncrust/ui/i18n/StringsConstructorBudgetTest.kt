@@ -552,10 +552,13 @@ class StringsConstructorBudgetTest {
         //   这 3 条也确实不属于那条业务线（`source` 是「音源与账号」，这 3 条只服务
         //   「官方 App 扫码」这一条登录方式）。
         assertEquals(148, primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.Strings")))
-        // 组本身的规模被钉住（17 → 21）：再往里加文案请先看组预算 120 还剩多少。
+        // 组本身的规模被钉住（17 → 21 → 27）：再往里加文案请先看组预算 120 还剩多少。
+        // v3.7.38：+6 条歌单多选的选择条／行尾菜单文案（回移自主线 4.x），21 → 27。
+        //   仍然**没有**动外层主构造器（148 一字未变）—— 正是这条纪律的正向用法：
+        //   6 条文案进既有组，付的是组预算（27 / 120），不是 dex 槽。
         assertEquals(
             "PlaylistsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言",
-            21,
+            27,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.PlaylistsStrings")),
         )
     }

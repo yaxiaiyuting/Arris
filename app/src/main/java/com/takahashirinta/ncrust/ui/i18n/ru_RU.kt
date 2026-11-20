@@ -539,6 +539,12 @@ val ruRU = Strings(
         layoutList = "Список",
         sectionCollapse = "Свернуть",
         sectionExpandAll = { n -> "Показать все $n" },
+        selectionCount = { n -> "Выбрано: $n" },
+        selectAll = "Выбрать все",
+        clearSelection = "Снять выбор",
+        exitSelection = "Выйти из выбора",
+        moreActions = "Другие действия",
+        removeFailed = "Не удалось удалить, повторите позже",
     ),
         tags = TagsStrings(
             playable = "Доступно",

@@ -539,6 +539,12 @@ val zhCN = Strings(
         layoutList = "列表式",
         sectionCollapse = "收起",
         sectionExpandAll = { n -> "展开全部 $n 个" },
+        selectionCount = { n -> "已选 $n 首" },
+        selectAll = "全选",
+        clearSelection = "取消全选",
+        exitSelection = "退出选择",
+        moreActions = "更多操作",
+        removeFailed = "移除失败，请稍后重试",
     ),
         tags = TagsStrings(
             playable = "可播放",

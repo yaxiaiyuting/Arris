@@ -539,6 +539,12 @@ val deDE = Strings(
         layoutList = "Liste",
         sectionCollapse = "Einklappen",
         sectionExpandAll = { n -> "Alle $n anzeigen" },
+        selectionCount = { n -> "$n ausgewählt" },
+        selectAll = "Alle auswählen",
+        clearSelection = "Auswahl aufheben",
+        exitSelection = "Auswahl beenden",
+        moreActions = "Weitere Aktionen",
+        removeFailed = "Entfernen fehlgeschlagen, bitte später erneut versuchen",
     ),
         tags = TagsStrings(
             playable = "Abspielbar",

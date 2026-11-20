@@ -539,6 +539,12 @@ val en = Strings(
         layoutList = "List",
         sectionCollapse = "Collapse",
         sectionExpandAll = { n -> "Show all $n" },
+        selectionCount = { n -> "Selected: $n" },
+        selectAll = "Select all",
+        clearSelection = "Clear selection",
+        exitSelection = "Exit selection",
+        moreActions = "More actions",
+        removeFailed = "Remove failed, try again later",
     ),
         tags = TagsStrings(
             playable = "Playable",

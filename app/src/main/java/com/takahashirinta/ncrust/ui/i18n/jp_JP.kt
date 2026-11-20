@@ -539,6 +539,12 @@ val jpJP = Strings(
         layoutList = "リスト",
         sectionCollapse = "折りたたむ",
         sectionExpandAll = { n -> "すべて表示（$n 件）" },
+        selectionCount = { n -> "選択中 $n 曲" },
+        selectAll = "すべて選択",
+        clearSelection = "選択を解除",
+        exitSelection = "選択を終了",
+        moreActions = "その他の操作",
+        removeFailed = "削除に失敗しました。しばらくしてから再試行してください",
     ),
         tags = TagsStrings(
             playable = "再生可",
