@@ -1,106 +1,131 @@
-/* The film stays intact in landscape. Portrait reframes the foreground, while
-   fireworks use a full-height, uniformly scaled canvas instead of stretching. */
-body.arris { background:#08160f; }
-body.arris #stage { box-shadow:none; }
-body.arris .blessing .line > span { white-space:normal;text-wrap:pretty;overflow-wrap:anywhere; }
-body.arris .ui { display:none !important; }
-/* v3.6.4：应用内去掉整屏混合/颗粒合成层，避免 WebView tile memory 超限。 */
-body.arris .grain { display:none !important; }
-body.arris .fin-tone-lift, body.arris .fin-tone-warm, body.arris .fin-halation { display:none !important; }
-/* v3.6.4：场景 + 灯光层里所有 screen / soft-light / lighten 在 WebView 上都要
-   额外的全屏合成图块；模拟器实测 tile memory 超限（画面成块消失再补上）。
-   应用内改为普通 alpha 合成：渐变本身带透明度，光感仍在，但不再为混合模式
-   分配整屏图块。浏览器预览（无 body.arris）保留原混合效果。 */
+/*
+ * Arris 生日动画适配样式
+ * v3.9.0 视觉重构：
+ *   - 按钮升级为符合 Arris 统一设计语言的药丸胶囊风格 (border-radius: 50vh)
+ *   - 祝福信笺卡片升级为优雅的香槟金丝微光磨砂信函 (border-radius: 28px)
+ *   - 优化移动端触控反馈与间距排版
+ *   - 保留 WebView 内存与合成图块优化约束 (避免全屏混合模式与图块超限)
+ */
+
+body.arris { background: #08160f; }
+body.arris #stage { box-shadow: none; }
+body.arris .blessing .line > span { white-space: normal; text-wrap: pretty; overflow-wrap: anywhere; }
+body.arris .ui { display: none !important; }
+
+/* 应用内去掉整屏混合/颗粒合成层，避免 WebView tile memory 超限 */
+body.arris .grain { display: none !important; }
+body.arris .fin-tone-lift, body.arris .fin-tone-warm, body.arris .fin-halation { display: none !important; }
+
+/* 场景图层普通合成模式 */
 body.arris #svg-env *, body.arris #svg-scene *,
 body.arris #lx-light, body.arris #lx-ember { mix-blend-mode: normal !important; }
-body.arris.portrait #stage { width:100vw; height:100vh; aspect-ratio:auto; }
+
+body.arris.portrait #stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 body.arris.portrait #svg-scene {
-  width:210.526vw; height:118.421vw; left:50%; top:calc(44vh - 59.2105vw);
-  transform:translate(-50%,calc(var(--final-frame,0) * var(--final-rise,-1vh)))
-    scale(calc(1 - var(--final-frame,0) * var(--final-shrink,0)));
-  max-width:none;
+  width: 210.526vw; height: 118.421vw; left: 50%; top: calc(44vh - 59.2105vw);
+  transform: translateX(-50%);
+  max-width: none;
 }
-body.arris.portrait .fx { width:100%;height:100%; }
-body.arris.portrait #stage .caption { top:12%;left:7%;font-size:12px;letter-spacing:.16em; }
+body.arris.portrait .fx { width: 100%; height: 100%; }
+body.arris.portrait #stage .caption { top: 12%; left: 7%; font-size: 12px; letter-spacing: .16em; }
+
 body.arris.portrait .blessing {
-  bottom:auto;left:7%;right:7%;width:auto;
+  bottom: auto; left: 7%; right: 7%; width: auto;
 }
-body.arris.portrait .blessing .line.title { font-size:calc(clamp(25px,7vw,34px) * var(--wish-scale,1));line-height:1.35; }
-body.arris.portrait .blessing .body { font-size:calc(clamp(12px,3.5vw,17px) * var(--wish-scale,1));line-height:1.7;letter-spacing:.02em; }
-body.arris.portrait .blessing .body.last { font-size:calc(clamp(14px,4vw,19px) * var(--wish-scale,1));margin-top:10px; }
-@media (max-height:650px) and (orientation:portrait) {
-  body.arris.portrait #svg-scene { top:calc(34vh - 59.2105vw); --final-rise:-12vh; }
-  body.arris.portrait .blessing .line.title { font-size:calc(24px * var(--wish-scale,1)); }
-  body.arris.portrait .blessing .body { font-size:calc(12px * var(--wish-scale,1));line-height:1.45; }
+body.arris.portrait .blessing .line.title { font-size: calc(clamp(26px, 7.5vw, 36px) * var(--wish-scale, 1)); line-height: 1.35; font-weight: 700; }
+body.arris.portrait .blessing .body { font-size: calc(clamp(13px, 3.6vw, 17px) * var(--wish-scale, 1)); line-height: 1.7; letter-spacing: .02em; }
+body.arris.portrait .blessing .body.last { font-size: calc(clamp(15px, 4.2vw, 20px) * var(--wish-scale, 1)); margin-top: 12px; font-weight: 600; }
+
+@media (max-height: 650px) and (orientation: portrait) {
+  body.arris.portrait #svg-scene { top: calc(34vh - 59.2105vw); }
+  body.arris.portrait .blessing .line.title { font-size: calc(24px * var(--wish-scale, 1)); }
+  body.arris.portrait .blessing .body { font-size: calc(12px * var(--wish-scale, 1)); line-height: 1.45; }
 }
 
-/* The final actions belong to the wishes' flow, including their measured height. */
-body.arris .arris-actions { pointer-events:auto; display:none; gap:8px; margin-top:12px; text-align:center; }
+/* 操作按钮组：优雅药丸胶囊 */
+body.arris .arris-actions { pointer-events: auto; display: none; gap: 10px; margin-top: 18px; text-align: center; }
 body.arris.arris-done .arris-actions,
-body.arris .measure-actions .arris-actions { display:flex; }
-body.arris .measure-actions .arris-actions { visibility:hidden; }
-body.arris .arris-actions button {
-  flex:1; min-width:0; min-height:48px; padding:10px 12px;
-  border:1px solid #ffe8c784; border-radius:12px; cursor:pointer; font:650 14px/1.5 system-ui,sans-serif;
-  overflow-wrap:anywhere; color:#303626; background:linear-gradient(135deg,#ffe8c7,#f5c98e);
-  -webkit-tap-highlight-color:transparent;
-}
-body.arris .arris-actions button + button { border-color:#b7cfb440; color:#deebdb; background:#7b9d801a; }
-body.arris .arris-actions button:focus-visible { outline:2px solid #ffe8c7; outline-offset:3px; }
-body.arris .arris-actions button:active { opacity:.75; }
-body.arris:not(.portrait) .blessing .line.title { font-size:calc(clamp(28px,3.2vw,52px) * var(--wish-scale,1)); }
-body.arris:not(.portrait) .blessing .body { font-size:calc(clamp(12px,1.15vw,19px) * var(--wish-scale,1)); }
-body.arris:not(.portrait) .blessing .body.last { font-size:calc(clamp(14px,1.35vw,22px) * var(--wish-scale,1)); }
+body.arris .measure-actions .arris-actions { display: flex; }
+body.arris .measure-actions .arris-actions { visibility: hidden; }
 
-/* In-app finale: champagne on evergreen, with the letter set apart from the scene. */
+body.arris .arris-actions button {
+  flex: 1; min-width: 0; min-height: 50px; padding: 12px 18px;
+  border: none; border-radius: 50vh; cursor: pointer;
+  font: 650 14px/1.5 system-ui, -apple-system, sans-serif;
+  letter-spacing: .02em;
+  overflow-wrap: anywhere;
+  color: #14281c;
+  background: linear-gradient(135deg, #ffe9c8, #f3c486);
+  box-shadow: 0 4px 16px rgba(243, 196, 134, 0.25);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s ease, opacity .15s ease;
+}
+
+body.arris .arris-actions button + button {
+  color: #d4e2d6;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+body.arris .arris-actions button:focus-visible { outline: 2px solid #ffe8c7; outline-offset: 3px; }
+body.arris .arris-actions button:active { opacity: .8; transform: scale(.97); }
+
+body.arris:not(.portrait) .blessing .line.title { font-size: calc(clamp(28px, 3.2vw, 52px) * var(--wish-scale, 1)); }
+body.arris:not(.portrait) .blessing .body { font-size: calc(clamp(12px, 1.15vw, 19px) * var(--wish-scale, 1)); }
+body.arris:not(.portrait) .blessing .body.last { font-size: calc(clamp(14px, 1.35vw, 22px) * var(--wish-scale, 1)); }
+
+/* 祝福信笺卡片：磨砂香槟金丝微光 */
 body.arris .blessing {
-  box-sizing:border-box;
-  top:calc(var(--letter-top, 21%) - var(--letter-lift, 0px));
-  padding:clamp(12px,2.2vw,28px);
-  text-align:left;
+  box-sizing: border-box;
+  top: calc(var(--letter-top, 21%) - var(--letter-lift, 0px));
+  padding: clamp(16px, 2.6vw, 32px);
+  text-align: left;
 }
 body.arris.portrait .blessing {
-  --letter-top:61%;
-  text-align:center;
+  --letter-top: 61%;
+  text-align: center;
 }
-@media (max-height:650px) and (orientation:portrait) {
-  body.arris.portrait .blessing { --letter-top:49%; }
+@media (max-height: 650px) and (orientation: portrait) {
+  body.arris.portrait .blessing { --letter-top: 49%; }
 }
 body.arris:not(.portrait) .blessing {
-  right:4%;
-  width:35%;
-  padding:clamp(10px,1.5vw,24px);
-}
-body.arris .blessing::before {
-  inset:0;
-  border:1px solid transparent;
-  border-radius:20px;
-  background:linear-gradient(150deg,#173125f2,#0b1b14f7 72%) padding-box,
-             linear-gradient(135deg,#e6c69672,#81a8913b 48%,#223b2d) border-box;
-  filter:none;
-  box-shadow:0 14px 38px #02090666;
-  opacity:var(--letter-light,0);
-}
-body.arris .blessing.on::before { opacity:var(--letter-light,0); }
-body.arris .blessing::after { display:none; }
-body.arris .blessing .line.title { margin-bottom:.32em; font-weight:700; }
-body.arris .blessing .body { color:#e1e9dd; margin-top:.3em; text-shadow:none; }
-body.arris .blessing .body.last { color:#ffe1b3; margin-top:.58em; }
-body.arris.arris-done .blessing:not(.measure-actions) .arris-actions button {
-  animation:arris-letter-action .42s cubic-bezier(.2,.72,.2,1) both;
-}
-body.arris.arris-done .blessing:not(.measure-actions) .arris-actions button + button { animation-delay:.07s; }
-@keyframes arris-letter-action {
-  from { opacity:0; transform:translateY(5px); }
-  to { opacity:1; transform:translateY(0); }
-}
-@media (prefers-reduced-motion:reduce) {
-  body.arris.arris-done .arris-actions button { animation:none !important; }
+  right: 4%;
+  width: 35%;
+  padding: clamp(12px, 1.8vw, 28px);
 }
 
-@media (max-height:500px) and (orientation:portrait) {
-  body.arris.portrait #svg-scene { --final-shrink:.09; }
+body.arris .blessing::before {
+  inset: 0;
+  border: 1px solid transparent;
+  border-radius: 28px;
+  background: linear-gradient(150deg, rgba(20, 44, 32, 0.95), rgba(9, 23, 17, 0.97) 72%) padding-box,
+             linear-gradient(135deg, rgba(230, 198, 150, 0.5), rgba(129, 168, 145, 0.25) 48%, rgba(31, 54, 41, 0.6)) border-box;
+  filter: none;
+  box-shadow: 0 16px 44px rgba(2, 9, 6, 0.55);
+  opacity: var(--letter-light, 0);
 }
-@media (max-height:420px) and (orientation:landscape) {
-  body.arris .arris-actions button { padding-inline:5px; font-size:clamp(12px,1.65vw,14px); }
+body.arris .blessing.on::before { opacity: var(--letter-light, 0); }
+body.arris .blessing::after { display: none; }
+
+body.arris .blessing .line.title { margin-bottom: .36em; font-weight: 700; color: #fff7ea; }
+body.arris .blessing .body { color: #b4c8b8; margin-top: .35em; text-shadow: none; }
+body.arris .blessing .body.last { color: #ffe8c2; margin-top: .62em; }
+
+body.arris.arris-done .blessing:not(.measure-actions) .arris-actions button {
+  animation: arris-letter-action .42s cubic-bezier(.2, .72, .2, 1) both;
+}
+body.arris.arris-done .blessing:not(.measure-actions) .arris-actions button + button { animation-delay: .08s; }
+
+@keyframes arris-letter-action {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.arris.arris-done .arris-actions button { animation: none !important; }
+}
+
+@media (max-height: 420px) and (orientation: landscape) {
+  body.arris .arris-actions button { padding-inline: 8px; font-size: clamp(12px, 1.65vw, 14px); }
 }
