@@ -794,9 +794,7 @@
        ══════════════════════════════════════════════════ */
     const BLESS = A.bless || 41.95;
     if (new URLSearchParams(location.search).has('app')) {
-      // Ease the portrait floor and subject up together before the letter enters.
-      F($('stage'), BLESS - 1.82, { '--final-frame': 0 },
-        { '--final-frame': 1 }, 1.7, E.drift);
+      // 保持竖屏石台与主体位置静止固定，不进行抬升或缩放，彻底消除 WebView 中 SVG 逐帧重栅格化导致的边缘与渐变闪烁抖动
       F($('blessing'), BLESS - 0.12, { '--letter-light': 0 },
         { '--letter-light': 1 }, 1.35, E.drift);
     }
