@@ -104,8 +104,8 @@ internal object HttpTimingListener {
         private var remoteAddress: java.net.InetAddress? = null
         private var reusedConnection = false
         // v4.1.10 · A：本次 call **是否曾经**从池子里捡到连接（粘性）。
-        // 之前只有「最后一次 connectionAcquired」的状态：复用连接失败后 OkHttp 自动重试新建连接，
-        // 会把 reused 覆盖成 false，于是「复用死连接」这个事实在日志里消失。
+        // 之前只有「最后一次 connectionAcquired」的状态：一次复用失败之后 OkHttp 自动重试
+        // 新建连接会把 reused 覆盖成 false，于是「复用死连接」这个事实在日志里消失。
         private var sawReusedConnection = false
         // 本次 call 实际尝试过的路由顺序（含失败原因）。这是「换了地址族到底有没有被用上」
         // 唯一可信的证据：只记最后一个地址会把「v6 先失败、v4 再超时」误读成「只试了 v4」。
@@ -161,13 +161,6 @@ internal object HttpTimingListener {
             runCatching { connection.route().socketAddress.address }.getOrNull()?.let { remoteAddress = it }
         }
 
-        private fun family(ip: java.net.InetAddress?): String = when (ip) {
-            null -> "none"
-            is java.net.Inet4Address -> "v4"
-            is java.net.Inet6Address -> "v6"
-            else -> "?"
-        }
-
         private fun between(from: Long, to: Long): Long = if (from > 0 && to >= from) to - from else -1L
 
         override fun requestHeadersEnd(call: Call, request: okhttp3.Request) {
@@ -212,6 +205,24 @@ internal object HttpTimingListener {
                 -1L
             }
             val total = (if (responseBodyEnd > 0) responseBodyEnd else now) - callStart
+
+            // v4.1.10 · B：把「哪一族成败」记进按 host 的健康记忆，并拿到本次的回退判定。
+            // 只在**新建连接**上记成功（复用不证明这一族现在可达）；失败按实际远端族记。
+            val family = AddressFamily.of(remoteAddress)
+            val healthNow = AddressPreference.nowMs()
+            val verdict = if (failed == null) {
+                if (connectEnd > 0) AddressHealth.onConnectSuccess(url.host, family, healthNow)
+                else FailoverVerdict.NONE
+            } else {
+                AddressHealth.onTransportFailure(url.host, family, healthNow)
+            }
+            // v4.1.10 · C3：见过一次流级复位就记下来（限时对该 host 改用 HTTP/1.1）。
+            if (failed != null && StreamResetMemo.isStreamReset(failed)) {
+                StreamResetMemo.record(url.host, healthNow)
+            }
+            val healthFields = " fam=${family?.label() ?: "none"} failover=${verdict.label()}" +
+                " reused=${if (sawReusedConnection) "true" else "false"}"
+
             // 只打 path（不带 query/host）：query 里可能有搜索关键词，
             // 而 logcat 是**其它应用读不到但 adb 读得到**的通道 —— 少写一点用户输入。
             //
@@ -220,16 +231,14 @@ internal object HttpTimingListener {
             // 「TLS 被掐」，而这三者的修法完全不同。
             val diagnosis = if (failed != null) {
                 " host=${url.host} addr=${remoteAddress?.hostAddress ?: "none"}" +
-                    " fam=${family(remoteAddress)}" +
+                    healthFields +
                     " dns=${between(dnsStart, dnsEnd)}ms" +
                     " conn=${between(connectStart, connectEnd)}ms" +
                     " tls=${between(secureStart, secureEnd)}ms" +
-                    // 粘性：本次 call 只要拿到过池内连接就算 reused，供「熄屏后复用死连接」取证。
-                    " reused=${if (sawReusedConnection) "true" else "false"}" +
                     " tried=${if (attemptedRoutes.isEmpty()) "-" else attemptedRoutes.joinToString(">")}" +
                     " msg=${failed.message?.replace('\n', ' ')?.take(120).orEmpty()}"
             } else {
-                ""
+                healthFields
             }
             Log.i(
                 TAG,
@@ -242,7 +251,8 @@ internal object HttpTimingListener {
             if (failed == null && connectEnd > 0) {
                 NetworkDiagnostics.logRoute(
                     url.host,
-                    "addr=${remoteAddress?.hostAddress ?: "none"} fam=${family(remoteAddress)}" +
+                    "addr=${remoteAddress?.hostAddress ?: "none"} fam=${family?.label() ?: "none"}" +
+                        " failover=${verdict.label()}" +
                         " dns=${between(dnsStart, dnsEnd)}ms" +
                         " conn=${between(connectStart, connectEnd)}ms" +
                         " tls=${between(secureStart, secureEnd)}ms total=${total}ms",

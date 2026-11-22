@@ -133,14 +133,23 @@ object AddressPreference {
      * - 默认（`preferIpv6 = false`）：与 [order] 完全一致，行为逐字节不变；
      * - 回退窗口内：IPv6 地址排前面、IPv4 跟在后面（保留 v4 作最后兜底），
      *   只有一族时原样返回那一族。
+     * - 回退窗口内且给了 [preferred]（v4.1.10，来自 [AddressHealth] 的按 host 记忆）：
+     *   **那一族排前面**、另一族跟在后面。它只在窗口内生效 —— 窗口本身（3 分钟、
+     *   由 [onTransportFailure] 开关）**一行没改**，[preferred] 只决定窗口内的顺序。
      */
-    internal fun select(all: List<InetAddress>, preferIpv6: Boolean): List<InetAddress> {
+    internal fun select(
+        all: List<InetAddress>,
+        preferIpv6: Boolean,
+        preferred: AddressFamily? = null,
+    ): List<InetAddress> {
         if (!preferIpv6) return order(all)
         if (all.isEmpty()) return all
         val v6 = all.filterIsInstance<Inet6Address>()
         val v4 = all.filterIsInstance<Inet4Address>()
         return when {
             v6.isEmpty() -> all
+            v4.isEmpty() -> all
+            preferred == AddressFamily.V4 -> v4 + v6
             else -> v6 + v4
         }
     }
@@ -159,13 +168,19 @@ object AddressPreference {
         override fun lookup(hostname: String): List<InetAddress> {
             val all = delegate.lookup(hostname)
             val preferIpv6 = isIpv6Preferred()
-            val selected = select(all, preferIpv6)
+            // v4.1.10 · B：窗口内优先「这个 host 最近成功的那一族」（窗口外不生效）。
+            val preferred = if (preferIpv6) {
+                AddressHealth.preferredWithinWindow(hostname, nowMs())
+            } else {
+                null
+            }
+            val selected = select(all, preferIpv6, preferred)
             // 只在回退窗口内打一行（限流）：证明「换地址族」真的作用到了解析结果上，
             // 否则「切了策略但 OkHttp 仍然只试 v4」这种事故在日志里看不出来。
             if (preferIpv6 && NetworkDiagnostics.shouldLog(hostname)) {
                 android.util.Log.i(
                     "NcrustNetDiag",
-                    "dns host=$hostname preferIpv6=true all=" +
+                    "dns host=$hostname preferIpv6=true preferFam=${preferred?.label() ?: "-"} all=" +
                         all.joinToString(",") { "${it.hostAddress}" } +
                         " -> " + selected.joinToString(",") { "${it.hostAddress}" },
                 )
