@@ -531,8 +531,11 @@ android {
         // v4.1.7（本版）：熄屏/后台播放中断修复。versionCode 出处 = 4.1.6 的 233 + 1 = **234**
         //   （4.1.6 已发布、占着 233；本版只改播放失败处置，未改 applicationId / 签名 / 接口 /
         //   清单里的前台服务与权限）。versionName 走 gpl 线 +0.0.1 ⇒ "4.1.7-gpl"。
-        versionCode = 234
-        versionName = "4.1.7-gpl"
+        // v4.1.8（本版）：播放卡死自愈 + 通知重建降频。versionCode 出处 = 4.1.7 的 234 + 1 = **235**
+        //   （已核 `dist/` 内全部 APK 的 `aapt2 dump badging`：最高 234，235 未被占用）。
+        //   只改播放侧的卡顿判据/自愈与通知节流，未改 applicationId、签名、清单权限与接口。
+        versionCode = 235
+        versionName = "4.1.8-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
