@@ -153,8 +153,22 @@ object AddressPreference {
      * 「AppHttp 建出来的客户端确实用的是这条策略」。
      */
     class IPv4FirstDns : Dns {
-        override fun lookup(hostname: String): List<InetAddress> =
-            select(Dns.SYSTEM.lookup(hostname), isIpv6Preferred())
+        override fun lookup(hostname: String): List<InetAddress> {
+            val all = Dns.SYSTEM.lookup(hostname)
+            val preferIpv6 = isIpv6Preferred()
+            val selected = select(all, preferIpv6)
+            // 只在回退窗口内打一行（限流）：证明「换地址族」真的作用到了解析结果上，
+            // 否则「切了策略但 OkHttp 仍然只试 v4」这种事故在日志里看不出来。
+            if (preferIpv6 && NetworkDiagnostics.shouldLog(hostname)) {
+                android.util.Log.i(
+                    "NcrustNetDiag",
+                    "dns host=$hostname preferIpv6=true all=" +
+                        all.joinToString(",") { "${it.hostAddress}" } +
+                        " -> " + selected.joinToString(",") { "${it.hostAddress}" },
+                )
+            }
+            return selected
+        }
     }
 
     val ipv4First: Dns = IPv4FirstDns()
