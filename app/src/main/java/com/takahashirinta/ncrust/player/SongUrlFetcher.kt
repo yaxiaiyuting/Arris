@@ -175,6 +175,9 @@ object SongUrlFetcher {
             routeGeneration++
             transportCooldownUntil = 0L
         }
+        // 换网之后地址族的可达性可能整个反过来（Wi-Fi 通 v6 / 蜂窝只通 v4），
+        // 上一张网的偏置不能带过来。
+        com.takahashirinta.ncrust.network.AddressPreference.clearIpv6Preference()
         com.takahashirinta.ncrust.network.DnsCache.clear()
     }
 
@@ -314,13 +317,31 @@ object SongUrlFetcher {
                 } catch (e: com.takahashirinta.ncrust.auth.NeteaseSessionChangedException) {
                     throw e // A different account must not be retried as a broken connection.
                 } catch (e: java.io.IOException) {
+                    // v4.1.9：连接层失败先做两件事 —— ① 留证据（host / 解析地址 / 地址族 /
+                    // 异常 message，HttpTimingListener 另外给出 dns/conn/tls 分段）；
+                    // ② 换地址族重试。实测同一域名的 A 记录 TCP 8/8 超时、AAAA 的 443
+                    // 建连成功，而 IPv4-only 的解析策略把客户端钉死在死地址上。
+                    val preferIpv6 = com.takahashirinta.ncrust.network.AddressPreference.onTransportFailure()
                     if (retriedTransport) {
                         Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
+                        com.takahashirinta.ncrust.network.NetworkDiagnostics.logFailure(
+                            SONG_URL_PATH, RetrofitClient.eapiHost, e,
+                            "level=$tryLevel preferIpv6=$preferIpv6 retry=exhausted",
+                        )
                         startCooldown(requestRoute)
                         return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
                     }
                     retriedTransport = true
-                    Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
+                    Log.w(
+                        TAG,
+                        "transport failure level=$tryLevel, retrying once " +
+                            "(dns=${if (preferIpv6) "ipv6-preferred" else "ipv4-only"})",
+                        e,
+                    )
+                    com.takahashirinta.ncrust.network.NetworkDiagnostics.logFailure(
+                        SONG_URL_PATH, RetrofitClient.eapiHost, e,
+                        "level=$tryLevel preferIpv6=$preferIpv6",
+                    )
                     // 连接池 + DNS 缓存一起清：代理开关会让同一域名的解析结果在
                     // fake-ip 与真实 IP 之间切换，只清连接池仍会连到旧地址。
                     RetrofitClient.evictIdleConnections()

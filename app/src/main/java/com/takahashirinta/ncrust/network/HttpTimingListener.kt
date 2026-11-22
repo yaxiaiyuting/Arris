@@ -93,6 +93,78 @@ internal object HttpTimingListener {
         private var responseHeadersStart = 0L
         private var responseBodyEnd = 0L
 
+        // v4.1.9：失败时必须能回答「DNS / TCP / TLS 哪一层」。三个段各自计时，
+        // 连接复用时全部为 0（那时根本不会有 dnsStart/connectStart 回调）。
+        private var dnsStart = 0L
+        private var dnsEnd = 0L
+        private var connectStart = 0L
+        private var connectEnd = 0L
+        private var secureStart = 0L
+        private var secureEnd = 0L
+        private var remoteAddress: java.net.InetAddress? = null
+        private var reusedConnection = false
+        // 本次 call 实际尝试过的路由顺序（含失败原因）。这是「换了地址族到底有没有被用上」
+        // 唯一可信的证据：只记最后一个地址会把「v6 先失败、v4 再超时」误读成「只试了 v4」。
+        private val attemptedRoutes = ArrayList<String>(4)
+
+        override fun dnsStart(call: Call, domainName: String) {
+            dnsStart = SystemClock.elapsedRealtime()
+        }
+
+        override fun dnsEnd(call: Call, domainName: String, inetAddressList: List<java.net.InetAddress>) {
+            dnsEnd = SystemClock.elapsedRealtime()
+        }
+
+        override fun connectStart(call: Call, inetSocketAddress: java.net.InetSocketAddress, proxy: java.net.Proxy) {
+            connectStart = SystemClock.elapsedRealtime()
+            remoteAddress = inetSocketAddress.address
+            attemptedRoutes += "${inetSocketAddress.address?.hostAddress}:${inetSocketAddress.port}"
+        }
+
+        override fun connectFailed(
+            call: Call,
+            inetSocketAddress: java.net.InetSocketAddress,
+            proxy: java.net.Proxy,
+            protocol: okhttp3.Protocol?,
+            ioe: IOException,
+        ) {
+            attemptedRoutes += "${inetSocketAddress.address?.hostAddress}:${inetSocketAddress.port}!" +
+                (ioe.message?.take(48) ?: ioe.javaClass.simpleName)
+        }
+
+        override fun secureConnectStart(call: Call) {
+            secureStart = SystemClock.elapsedRealtime()
+        }
+
+        override fun secureConnectEnd(call: Call, handshake: okhttp3.Handshake?) {
+            secureEnd = SystemClock.elapsedRealtime()
+        }
+
+        override fun connectEnd(
+            call: Call,
+            inetSocketAddress: java.net.InetSocketAddress,
+            proxy: java.net.Proxy,
+            protocol: okhttp3.Protocol?,
+        ) {
+            connectEnd = SystemClock.elapsedRealtime()
+            remoteAddress = inetSocketAddress.address
+        }
+
+        override fun connectionAcquired(call: Call, connection: okhttp3.Connection) {
+            // 从池子里捡到的连接不会走 connectStart；新建连接一定会先 connectStart。
+            reusedConnection = connectStart == 0L
+            runCatching { connection.route().socketAddress.address }.getOrNull()?.let { remoteAddress = it }
+        }
+
+        private fun family(ip: java.net.InetAddress?): String = when (ip) {
+            null -> "none"
+            is java.net.Inet4Address -> "v4"
+            is java.net.Inet6Address -> "v6"
+            else -> "?"
+        }
+
+        private fun between(from: Long, to: Long): Long = if (from > 0 && to >= from) to - from else -1L
+
         override fun requestHeadersEnd(call: Call, request: okhttp3.Request) {
             requestHeadersEnd = SystemClock.elapsedRealtime()
         }
@@ -137,11 +209,39 @@ internal object HttpTimingListener {
             val total = (if (responseBodyEnd > 0) responseBodyEnd else now) - callStart
             // 只打 path（不带 query/host）：query 里可能有搜索关键词，
             // 而 logcat 是**其它应用读不到但 adb 读得到**的通道 —— 少写一点用户输入。
+            //
+            // v4.1.9：失败时把「哪一层」补上 —— dns/conn/tls 三段各自耗时 + 实际远端地址与
+            // 地址族。`failed=SocketException` 单独一行无法区分「解析错了」「TCP 被重置」
+            // 「TLS 被掐」，而这三者的修法完全不同。
+            val diagnosis = if (failed != null) {
+                " host=${url.host} addr=${remoteAddress?.hostAddress ?: "none"}" +
+                    " fam=${family(remoteAddress)}" +
+                    " dns=${between(dnsStart, dnsEnd)}ms" +
+                    " conn=${between(connectStart, connectEnd)}ms" +
+                    " tls=${between(secureStart, secureEnd)}ms" +
+                    " reused=${reusedConnection}" +
+                    " tried=${if (attemptedRoutes.isEmpty()) "-" else attemptedRoutes.joinToString(">")}" +
+                    " msg=${failed.message?.replace('\n', ' ')?.take(120).orEmpty()}"
+            } else {
+                ""
+            }
             Log.i(
                 TAG,
                 "path=${url.encodedPath} ttfb=${ttfb}ms body=${body}ms total=${total}ms" +
-                    (failed?.let { " failed=${it.javaClass.simpleName}" } ?: ""),
+                    (failed?.let { " failed=${it.javaClass.simpleName}" } ?: "") +
+                    diagnosis,
             )
+            // 成功且**这次新建了连接**时补一条路由证据（限流在 NetworkDiagnostics 里）：
+            // 「修复后到底走的是 v4 还是 v6」必须能从 release 日志直接读出来。
+            if (failed == null && connectEnd > 0) {
+                NetworkDiagnostics.logRoute(
+                    url.host,
+                    "addr=${remoteAddress?.hostAddress ?: "none"} fam=${family(remoteAddress)}" +
+                        " dns=${between(dnsStart, dnsEnd)}ms" +
+                        " conn=${between(connectStart, connectEnd)}ms" +
+                        " tls=${between(secureStart, secureEnd)}ms total=${total}ms",
+                )
+            }
         }
     }
 }

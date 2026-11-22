@@ -28,6 +28,8 @@ object RetrofitClient {
     // eapi 客户端接口域：官方/参考实现全部 eapi 打到 interface.music.163.com（非 music.163.com）。
     // 读接口在 music 上宽松可通,但写操作(如 /eapi/radio/like)发错 host 会被判 -460 风险。
     internal const val API_URL = "https://interface.music.163.com"
+    /** 取链 eapi 的主机名（不带 scheme）：失败日志要用它，不能只写死一个字符串常量。 */
+    internal val eapiHost: String get() = INTERFACE_URL.substringAfter("://")
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private const val IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     // 扫码登录的 eapi 只认 PC 客户端身份：host 用 interfacepc，UA 用桌面客户端（协议见
