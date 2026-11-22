@@ -3,6 +3,21 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.1.10-gpl — 取链不再被死地址拖死：地址族回退、流级重试与请求去重（2026-11-22）
+
+主线 · Android 10 及以上 · versionCode 243 · 正式版
+
+- **取链失败换地址族重试**：`AddressPreference` 在连接层失败后进入 3 分钟 IPv6 优先窗口，重试用尽进 3 分钟冷却、期间不再来回翻面，换网（`clearFailoverState`）一并清空。根因是真机现场量到的：`interface3.music.163.com` 的 A 记录 `117.135.207.67:443` 被 SYN 黑洞（8/8 超时），同域 AAAA `2409:8c6a:b021:1400:0:4:0:3` 可以连（`nc` exit=0）；旧逻辑「有 IPv4 就丢掉 IPv6」把客户端钉死在死地址上，每首歌付 2×8s 后判 `failure=NETWORK`、把播放按停。`interface` / `interfacepc` / `interface3` 三个主机名解析到同一条 A 记录，换域名不解决问题。修后同一坏窗口：`conn=3271ms tls=72ms`、`level=jymaster ok in 10045ms`（正常网络 1259ms）。
+- **地址族健康记忆**（`network/AddressHealth.kt`）：按 host 记住哪一族成功/失败（记忆 10 分钟、pending 2 分钟），判定抽成纯函数 `FailoverVerdict`；失败日志带 `fam=` 与 `failover=ok/fail`，回退胜负可统计。真机 v4 时通时断的那段窗口实测胜率 **2/4**。
+- **同一 `(songId, level)` 的在飞请求合并**（`player/InFlightCoalescer.kt`）：预载与正式播放两路取链此前零去重，同一首歌并发两次；现在单飞、发起方代管、等待方接管，同一首歌三次跳曲的请求数 2.0 → 1.67。
+- **`REFUSED_STREAM` 按流级重试，能力探测不再取消请求**：`fetchQualityCapability` 的 1.2 秒 `withTimeoutOrNull` 会把在飞连接直接砍掉，服务端因此回 `CANCEL`；现在预算不变但不取消请求，`REFUSED_STREAM` 归流级可重试，见过复位的 host 5 分钟内直接走 h1（`network/StreamResetMemo.kt`）。3 分钟窗口内复位日志 3 → 1。
+- **复用连接上的流级复位换新连接重试一次**（`player/ReusedConnectionRetry.kt` 判定表）；失败日志里的 `reused=` 改为粘性记录本次 call 是否复用过连接 —— 此前 OkHttp 换新连接会把 `reused` 覆盖成 false，正好抹掉证据。这一项同时证伪了「熄屏期间是复用连接被对端悄悄关掉」的猜测：整段会话 245 次失败全是新建连接，8 次 `reused=true` 全是流级复位，没有一次「复用 + SocketException」。
+- **诊断**：`NcrustNetDiag` 一行给出 host、解析出的全部地址与异常（release 可见，按 host 5 秒、5 分钟 20 条限流）；`HttpTimingListener` 输出 dns / conn / tls 分段并带 `addr=` `fam=` `tried=`。
+
+验证：全量 JVM **3758 例 / 0 失败 / 15 跳过**（369 suites）；真机（PLC110 / Android 17 / ColorOS 16）装 243 后同一坏窗口取链成功、`media_session` 持续 PLAYING。v4.1.9-gpl 为内部测试包，未发布，内容全部并入本版。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v4.1.10-gpl) · [官网直链](https://arris.de5.net/get/Arris-v4.1.10-gpl.apk) · SHA-256 `a561a5569c120f8c08d5437bfb603855b97387d1c7a94ad72b22761e4803bb46`
+
 ## v4.1.8-gpl — 后台播放保护引导、播放卡顿自愈与通知节流（2026-11-22）
 
 主线 · Android 10 及以上 · versionCode 240 · 正式版
