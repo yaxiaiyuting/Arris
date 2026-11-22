@@ -1882,6 +1882,78 @@ data class SettingsStrings(
      * 以及它**不会**影响另外两个音源。
      */
     val bilibiliEnabledDescription: String,
+    // ---------- v4.2.0：后台播放保护引导页（厂商保活白名单） ----------
+    // 文案单开一组（`backgroundGuide`）而不是继续平铺在本组：本组已有 91 个参数、
+    // 逼近 `StringsConstructorBudgetTest` 的组硬上限 120，22 条平铺进去会把余量吃到 7。
+    // 嵌在 settings 里而不是给外层 `Strings` 加组参数，是为了不动主构造器的 148/150 预算。
+    val backgroundGuide: BackgroundGuideStrings,
+)
+
+
+/**
+ * v4.2.0：**后台播放保护**引导页的文案组（22 条）。
+ *
+ * ## 为什么是这个形状
+ *
+ * 每一档 OEM 的「三步说明」是**一条三行文案**（`stepsXxx`），由
+ * `power/OemBackgroundGuide.kt` 按 `'\n'` 拆成 `List<String>`，而不是 3×7=21 条独立字段：
+ * 21 条独立文案 × 8 语言 = 168 个字符串，而它们的唯一差别只是**分隔**。
+ * 拆行交给代码后，译文里「哪三行」是作者一眼能看全的一件事，也不会出现
+ * 「第 2 步漏翻、第 3 步和别的档位串了」这种只在某个语言里坏掉的问题。
+ * 单测（`OemBackgroundGuideTest`）对 8 种语言逐档断言「恰好三行、无空行」。
+ *
+ * ## 措辞纪律
+ *
+ * 文案**不承诺效果**：把 Arris 加进厂商白名单只能降低被清理的概率，
+ * 各 ROM 的一键清理/省电策略仍可能杀掉进程 —— 所以只写「说明怎么设置」，
+ * 不写「设置后一定不被杀」。同理，最近任务锁定一律写成本机型的**具体手势**，
+ * 因为「长按卡片」和「下拉卡片」在不同 ROM 上是两种完全不同的操作。
+ */
+data class BackgroundGuideStrings(
+    /** 引导页标题，同时也是设置页那一行的标题。 */
+    val pageTitle: String,
+    /** 设置页那一行的副标题（说明这一行能解决什么）。 */
+    val entryHint: String,
+    /** 「后台运行状态」小节标题。 */
+    val statusSection: String,
+    /** 未关闭电池优化时的按钮文案。 */
+    val requestOptimize: String,
+    /** 「厂商保活设置」小节标题，参数是识别到的档位显示名（如 `HyperOS / MIUI`）。 */
+    val oemSection: (String) -> String,
+    /** 厂商引导卡片底部「去设置」按钮文案。 */
+    val openSettings: String,
+    /** 「锁定最近任务」小节标题。 */
+    val recentsSection: String,
+    /** 为什么要锁最近任务（与机型无关的通用说明）。 */
+    val recentsIntro: String,
+    /** ColorOS / OPPO / OnePlus / realme：三行设置步骤。 */
+    val stepsColorOs: String,
+    /** HyperOS / MIUI：三行设置步骤。 */
+    val stepsMiui: String,
+    /** OriginOS / FuntouchOS：三行设置步骤。 */
+    val stepsOriginOs: String,
+    /** HarmonyOS / EMUI / MagicOS：三行设置步骤。 */
+    val stepsEmui: String,
+    /** Flyme：三行设置步骤。 */
+    val stepsFlyme: String,
+    /** One UI：三行设置步骤。 */
+    val stepsOneUi: String,
+    /** 未识别到厂商定制系统时的通用三行步骤。 */
+    val stepsOther: String,
+    /** ColorOS 系：最近任务卡片怎么锁。 */
+    val recentsColorOs: String,
+    /** MIUI / HyperOS：最近任务卡片怎么锁。 */
+    val recentsMiui: String,
+    /** OriginOS 系：最近任务卡片怎么锁。 */
+    val recentsOriginOs: String,
+    /** HarmonyOS / EMUI：最近任务卡片怎么锁。 */
+    val recentsEmui: String,
+    /** Flyme：最近任务卡片怎么锁。 */
+    val recentsFlyme: String,
+    /** One UI：最近任务卡片怎么锁。 */
+    val recentsOneUi: String,
+    /** 其他系统：最近任务卡片怎么锁（通用表述）。 */
+    val recentsOther: String,
 )
 
 

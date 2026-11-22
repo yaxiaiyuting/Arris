@@ -76,6 +76,31 @@ val koNK = Strings(
     back = "돌아가기",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "배경 재생 보호",
+            entryHint = "기종별 상주 허용 명단에 Arris를 넣어 화면 잠금 뒤 정지되는 일을 줄입니다",
+            statusSection = "배경 실행 상태",
+            requestOptimize = "전지 최적화 끄기",
+            oemSection = { profile -> "제조사 상주 설정 · $profile" },
+            openSettings = "설정 열기",
+            recentsSection = "최근 사용 항목 잠그기",
+            recentsIntro = "체계의 《한번에 정리》는 최근 사용 항목까지 지웁니다. Arris 항목을 잠그면 정리에서 제외됩니다.",
+            stepsColorOs = "설정 → 전지 → 앱 전력 관리에서 Arris 찾기\n《배경 실행 허용》과 《자동 시작 허용》 켜기\n《전력 절약 보호》에서 Arris를 《배경 실행 허용》으로 두기",
+            stepsMiui = "설정 → 앱 → 앱 관리 → Arris\n《자동 시작》 켜기\n《전지 절약책》에서 《제한 없음》 고르기",
+            stepsOriginOs = "설정 → 전지 → 배경 전력 관리에서 Arris 찾기\n《배경에서 전력 많이 쓰기 허용》 켜기\ni 관리자 → 앱 관리 → 자동 시작에서 Arris 허용",
+            stepsEmui = "설정 → 전지 → 시작 관리에서 Arris 찾기\n《자동 관리》 끄기\n《자동 시작 허용》《련관 시작 허용》《배경 활동 허용》 표시하기",
+            stepsFlyme = "설정 → 전력 관리 → 배경 관리에서 Arris 찾기\n《배경에서 계속 실행》 고르기\n휴대전화 관리자 → 권한 관리 → 자동 시작에서 Arris 허용",
+            stepsOneUi = "설정 → 전지 → 배경 사용 제한에서 Arris 찾기\nArris를 《잠들지 않는 앱》에 넣기\n《자동 맞춤 전지》의 범위에서 Arris 빼기",
+            stepsOther = "설정 → 앱 → Arris → 전지\n《제한 없음 / 배경 실행 허용》 고르기\n자동 시작 관리에서 Arris의 자동 시작 허용",
+            recentsColorOs = "최근 사용 항목에서 Arris 항목을 길게 눌러 자물쇠 표시를 누릅니다(처음에는 《잠김》을 알립니다).",
+            recentsMiui = "최근 사용 항목에서 Arris 항목을 아래로 끌어 자물쇠 표시를 누릅니다(항목 모서리에 자물쇠가 보이면 성공).",
+            recentsOriginOs = "최근 사용 항목에서 Arris 항목을 길게 눌러 자물쇠 표시를 누릅니다.",
+            recentsEmui = "최근 사용 항목에서 Arris 항목을 아래로 끌어 자물쇠 표시를 누릅니다. 길게 누른 뒤 《잠그기》를 골라도 됩니다.",
+            recentsFlyme = "최근 사용 항목에서 Arris 항목을 길게 눌러 자물쇠 표시를 누릅니다.",
+            recentsOneUi = "최근 사용 항목에서 Arris 항목을 길게 눌러 《열린대로 두기》를 누릅니다. 오른쪽 우 메뉴에서도 잠글 수 있습니다.",
+            recentsOther = "최근 사용 항목에서 Arris 항목을 길게 누르거나 아래로 끌어 《잠그기》를 고릅니다.",
+        ),
         // v2.8.0: 두단계 설정 메뉴의 7개 첫째단계 묶음 카드 (차례 = SettingsGroup 선언 차례).
         settingsGroupAccountTitle = "계정과 로그인",
         settingsGroupAccountSubtitle = "ncm와 qm 계정",

@@ -76,6 +76,31 @@ val jpMY = Strings(
     back = "戻",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "背景 再世 の 護",
+            entryHint = "機 ごと の 常駐 許可 帳 に Arris を 加へ、鎖 の 後 の 停止 を 減らす",
+            statusSection = "背景 運行 の 狀",
+            requestOptimize = "電池 の 最適化 を 解く",
+            oemSection = { profile -> "廠 ごと の 常駐 設定 · $profile" },
+            openSettings = "設定 を 開く",
+            recentsSection = "最近 の 業 を 鎖す",
+            recentsIntro = "「一括 掃除」 は 最近 の 業 の 札 も 消す。Arris の 札 を 鎖せば 掃除 の 外 に 置かる。",
+            stepsColorOs = "設定 → 電池 → 應用 電力 管理 に て Arris を 擇ぶ\n「背景 運行 を 許す」 と 「自起動 を 許す」 を 開く\n「電力 節約 の 護」 に て Arris を 「背景 運行 を 許す」 に 定む",
+            stepsMiui = "設定 → 應用 → 應用 管理 → Arris\n「自起動」 を 開く\n「省電 の 策」 に 入り 「限り 無し」 を 擇ぶ",
+            stepsOriginOs = "設定 → 電池 → 背景 電力 管理 に て Arris を 擇ぶ\n「背景 の 高 耗電 を 許す」 を 開く\ni 管家 → 應用 管理 → 自起動 に て Arris を 許す",
+            stepsEmui = "設定 → 電池 → 起動 管理 に て Arris を 擇ぶ\n「自動 管理」 を 閉づ\n「自起動 を 許す」「關聯 起動 を 許す」「背景 活動 を 許す」 を 點す",
+            stepsFlyme = "設定 → 電量 管理 → 背景 管理 に て Arris を 擇ぶ\n「背景 運行 を 保つ」 を 擇ぶ\n手機 管家 → 權限 管理 → 自起動 に て Arris を 許す",
+            stepsOneUi = "設定 → 電池 → 背景 使用 の 限 に て Arris を 擇ぶ\nArris を 「眠らぬ 應用」 に 加ふ\n「自適 電池」 の 範圍 より Arris を 除く",
+            stepsOther = "設定 → 應用 → Arris → 電池\n「限り 無し / 背景 運行 を 許す」 を 擇ぶ\n自起動 管理 に て Arris の 自起動 を 許す",
+            recentsColorOs = "最近 の 業 に て Arris の 札 を 長押し → 鎖 の 印 を 點す（初 に 「鎖せり」 と 告ぐ）。",
+            recentsMiui = "最近 の 業 に て Arris の 札 を 下 に 引く → 鎖 の 印 を 點す（札 の 隅 に 鎖 現れなば 成れり）。",
+            recentsOriginOs = "最近 の 業 に て Arris の 札 を 長押し → 鎖 の 印 を 點す。",
+            recentsEmui = "最近 の 業 に て Arris の 札 を 下 に 引く → 鎖 の 印 を 點す。長押し の 後 「鎖す」 も 擇べし。",
+            recentsFlyme = "最近 の 業 に て Arris の 札 を 長押し → 鎖 の 印 を 點す。",
+            recentsOneUi = "最近 の 業 に て Arris の 札 を 長押し → 「開きたる まま に 保つ」 を 點す。右上 の 目次 より も 鎖し 得べし。",
+            recentsOther = "最近 の 業 に て Arris の 札 を 長押し、或ひは 下 に 引きて 「鎖す」 を 擇ぶ。",
+        ),
         // v2.8.0：二段 設定 の 七 枚 の 群 札（順 は SettingsGroup の 宣言 に 同じ）。
         settingsGroupAccountTitle = "口座 と 入",
         settingsGroupAccountSubtitle = "ncm と qm の 口座",

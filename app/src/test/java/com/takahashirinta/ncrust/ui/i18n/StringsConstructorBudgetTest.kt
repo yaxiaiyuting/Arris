@@ -116,6 +116,9 @@ class StringsConstructorBudgetTest {
         "com.takahashirinta.ncrust.ui.i18n.AccountStrings",
         // v3.4.13 / c14b1be：应用内更新文案（28 条）。
         "com.takahashirinta.ncrust.ui.i18n.UpdateStrings",
+        // v4.2.0：后台播放保护引导页（22 条）。挂在 `SettingsStrings` 下作为子组，
+        // 外层 `Strings` 的主构造参数一个都没加；漏登记就会变成监控盲区。
+        "com.takahashirinta.ncrust.ui.i18n.BackgroundGuideStrings",
     )
 
     /** dex 槽位算式：`this(1) + N + ceil(N/32) 个默认值 mask + DefaultConstructorMarker(1)`。 */
@@ -359,7 +362,8 @@ class StringsConstructorBudgetTest {
             // AboutStrings / PlayerUiStrings 本版一条都没加。
             // v3.4.8：86 → 87（+1 条 `lyricsTranslationHint`：把「译文开关作用于哪些音源」
             // 写出来 —— 那是「所有音源的字幕语言都在同一处」这句承诺的可见部分）。
-            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 91,
+            // v4.2.0：91 → 92（+`backgroundGuide` 子组参数；22 条文案在子组里，不占本组参数）。
+            "com.takahashirinta.ncrust.ui.i18n.SettingsStrings" to 92,
             "com.takahashirinta.ncrust.ui.i18n.AboutStrings" to 27,
             "com.takahashirinta.ncrust.ui.i18n.PlayerUiStrings" to 32,
         )
@@ -589,8 +593,8 @@ class StringsConstructorBudgetTest {
         )
         assertEquals(
             "SettingsStrings 的参数数变了 —— 若是有意加文案，请同步改这条断言" +
-                "（v3.4.8：86 → 87，+lyricsTranslationHint）",
-            91,
+                "（v3.4.8：86 → 87，+lyricsTranslationHint；v4.2.0：91 → 92，+backgroundGuide 子组）",
+            92,
             primaryParams(Class.forName("com.takahashirinta.ncrust.ui.i18n.SettingsStrings")),
         )
         // 组没有默认参数 ⇒ 既没有默认值 mask、也没有 DefaultConstructorMarker：槽位 = this + N。

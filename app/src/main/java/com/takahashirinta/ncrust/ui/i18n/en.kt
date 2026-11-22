@@ -76,6 +76,31 @@ val en = Strings(
     back = "Back",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "Background playback protection",
+            entryHint = "Add Arris to this phone maker's keep-alive list so playback survives lock-screen cleanups",
+            statusSection = "Background status",
+            requestOptimize = "Turn off battery optimization",
+            oemSection = { profile -> "Vendor keep-alive settings · $profile" },
+            openSettings = "Open settings",
+            recentsSection = "Lock the recent-task card",
+            recentsIntro = "A one-tap cleanup also clears recent-task cards; lock the Arris card so cleanup skips it.",
+            stepsColorOs = "Settings → Battery → App battery management → find Arris\nEnable \"Allow background activity\" and \"Allow auto-start\"\nThen open \"Power saving protection\" and set Arris to \"Allow background running\"",
+            stepsMiui = "Settings → Apps → Manage apps → Arris\nEnable \"Autostart\"\nOpen \"Battery saver\" and choose \"No restrictions\"",
+            stepsOriginOs = "Settings → Battery → Background power management → find Arris\nEnable \"Allow high background power use\"\nOpen iManager → App management → Autostart and allow Arris",
+            stepsEmui = "Settings → Battery → Launch manager → find Arris\nTurn off \"Manage automatically\"\nTick \"Auto-launch\", \"Secondary launch\" and \"Run in background\"",
+            stepsFlyme = "Settings → Power → Background management → find Arris\nChoose \"Keep running in background\"\nOpen Phone manager → Permissions → Autostart and allow Arris",
+            stepsOneUi = "Settings → Battery → Background usage limits → find Arris\nAdd Arris to \"Never sleeping apps\"\nExclude Arris from \"Adaptive battery\"",
+            stepsOther = "Settings → Apps → Arris → Battery\nChoose \"Unrestricted\" (or \"Allow background activity\")\nAllow Arris to auto-start in the autostart manager",
+            recentsColorOs = "In Recents, long-press the Arris card and tap the lock icon (it confirms \"Locked\").",
+            recentsMiui = "In Recents, pull the Arris card down and tap the lock icon (a lock badge appears in the corner).",
+            recentsOriginOs = "In Recents, long-press the Arris card and tap the lock icon.",
+            recentsEmui = "In Recents, pull the Arris card down and tap the lock icon; a long press also offers \"Lock\".",
+            recentsFlyme = "In Recents, long-press the Arris card and tap the lock icon.",
+            recentsOneUi = "In Recents, long-press the Arris card and tap \"Keep open\", or lock the app from the Recents menu.",
+            recentsOther = "In Recents, long-press or pull down the Arris card and pick \"Lock\".",
+        ),
         // v2.8.0: the 7 top-level group cards of the two-level settings menu
         // (order = SettingsGroup declaration order).
         settingsGroupAccountTitle = "Account & Sign-in",
