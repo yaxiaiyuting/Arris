@@ -330,7 +330,11 @@ object RetrofitClient {
             timeout().timeout(timeoutSeconds, TimeUnit.SECONDS)
         }
         return if (request.url.encodedPath == "/eapi/song/enhance/player/url/v1") {
-            call.awaitPlaybackRead {
+            // v4.1.10 · C3：这个 host 最近用 h2 被对端复位过（StreamResetMemo，5 分钟 TTL）
+            // 就直接走 HTTP/1.1 池。真机实测「新建 h2 连接的第一个流必被 CANCEL、h1 必成」，
+            // 每首歌白付一次连接 + 一次往返 + 一次 RST_STREAM。只在真见过复位后生效。
+            val h2First = !StreamResetMemo.prefersHttp1(request.url.host, AddressPreference.nowMs())
+            call.awaitPlaybackRead(h2First) {
                 playbackHttp1Client.newCall(request).apply { timeout().timeout(timeoutSeconds, TimeUnit.SECONDS) }
             }
         } else call.awaitBufferedResponse()
