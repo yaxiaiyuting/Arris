@@ -528,8 +528,11 @@ android {
         // v4.1.5（歌单多选 + 离线可播状态 + 上游夹具）：versionCode 出处 `tools/next-version.sh`
         //   三源交叉（tag/已发布 APK 229 + 工作区 229 ⇒ 230）。本版加歌单详情长按多选、
         //   离线 URL 可播状态记忆，并把上游音质/队列/歌词夹具接进单测；未改 applicationId、签名与接口。
-        versionCode = 233
-        versionName = "4.1.6-gpl"
+        // v4.1.7（本版）：熄屏/后台播放中断修复。versionCode 出处 = 4.1.6 的 233 + 1 = **234**
+        //   （4.1.6 已发布、占着 233；本版只改播放失败处置，未改 applicationId / 签名 / 接口 /
+        //   清单里的前台服务与权限）。versionName 走 gpl 线 +0.0.1 ⇒ "4.1.7-gpl"。
+        versionCode = 234
+        versionName = "4.1.7-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
