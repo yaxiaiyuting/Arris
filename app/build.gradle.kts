@@ -534,8 +534,12 @@ android {
         // v4.1.8（本版）：播放卡死自愈 + 通知重建降频。versionCode 出处 = 4.1.7 的 234 + 1 = **235**
         //   （已核 `dist/` 内全部 APK 的 `aapt2 dump badging`：最高 234，235 未被占用）。
         //   只改播放侧的卡顿判据/自愈与通知节流，未改 applicationId、签名、清单权限与接口。
-        versionCode = 241
-        versionName = "4.1.9-gpl"
+        // v4.1.10（本版）：取链的网络收尾 —— 地址族健康记忆、eapi 请求合并与 RST_STREAM 归类。
+        //   versionCode 出处 = 4.1.9 的 241 + 1 = **242**（已核 `dist/` 内全部 APK 的
+        //   `aapt2 dump badging`：最高 241，242 未被占用）。只改网络/取链侧的观测与重试决策，
+        //   未改 applicationId、签名、接口、清单权限与动画。
+        versionCode = 242
+        versionName = "4.1.10-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
