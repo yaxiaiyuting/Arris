@@ -103,6 +103,10 @@ internal object HttpTimingListener {
         private var secureEnd = 0L
         private var remoteAddress: java.net.InetAddress? = null
         private var reusedConnection = false
+        // v4.1.10 · A：本次 call **是否曾经**从池子里捡到连接（粘性）。
+        // 之前只有「最后一次 connectionAcquired」的状态：复用连接失败后 OkHttp 自动重试新建连接，
+        // 会把 reused 覆盖成 false，于是「复用死连接」这个事实在日志里消失。
+        private var sawReusedConnection = false
         // 本次 call 实际尝试过的路由顺序（含失败原因）。这是「换了地址族到底有没有被用上」
         // 唯一可信的证据：只记最后一个地址会把「v6 先失败、v4 再超时」误读成「只试了 v4」。
         private val attemptedRoutes = ArrayList<String>(4)
@@ -153,6 +157,7 @@ internal object HttpTimingListener {
         override fun connectionAcquired(call: Call, connection: okhttp3.Connection) {
             // 从池子里捡到的连接不会走 connectStart；新建连接一定会先 connectStart。
             reusedConnection = connectStart == 0L
+            if (reusedConnection) sawReusedConnection = true
             runCatching { connection.route().socketAddress.address }.getOrNull()?.let { remoteAddress = it }
         }
 
@@ -219,7 +224,8 @@ internal object HttpTimingListener {
                     " dns=${between(dnsStart, dnsEnd)}ms" +
                     " conn=${between(connectStart, connectEnd)}ms" +
                     " tls=${between(secureStart, secureEnd)}ms" +
-                    " reused=${reusedConnection}" +
+                    // 粘性：本次 call 只要拿到过池内连接就算 reused，供「熄屏后复用死连接」取证。
+                    " reused=${if (sawReusedConnection) "true" else "false"}" +
                     " tried=${if (attemptedRoutes.isEmpty()) "-" else attemptedRoutes.joinToString(">")}" +
                     " msg=${failed.message?.replace('\n', ' ')?.take(120).orEmpty()}"
             } else {
