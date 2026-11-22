@@ -87,6 +87,7 @@ import com.takahashirinta.ncrust.player.GuardAction
 import com.takahashirinta.ncrust.player.MediaLyricFrame
 import com.takahashirinta.ncrust.player.MediaLyricOptions
 import com.takahashirinta.ncrust.player.MediaLyricTrack
+import com.takahashirinta.ncrust.player.NetworkWaitBackoff
 import com.takahashirinta.ncrust.player.PlayOrigin
 import com.takahashirinta.ncrust.player.PlaybackFailure
 import com.takahashirinta.ncrust.player.PlaybackService
@@ -307,6 +308,17 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
     private val networkObserver = com.takahashirinta.ncrust.network.DefaultNetworkObserver(application)
     private val recovery = com.takahashirinta.ncrust.player.PlaybackRecoveryGate(networkObserver.snapshot())
 
+    /**
+     * v4.1.7 · P0：网络型失败的等待退避（见 [NetworkWaitBackoff] 的 KDoc 与真机日志）。
+     *
+     * 与 [urlRetryGate] 的分工是**按失败性质**分的，不是按调用点：
+     *  - `urlRetryGate`：**结构性/一次性**失败（这条链取不到、档位没有权限）—— 定额 2 次、3 秒间隔，
+     *    用完就停，因为再试也是同一个结果；
+     *  - `networkWait`：**环境型**失败（DNS 解析不了、连接被掐、读流超时）—— 没有次数上限、
+     *    按 2s→30s 退避一直等，只有等满 10 分钟才停。熄屏后 Wi-Fi 省电/Doze 掐网属于这一类。
+     */
+    private val networkWait = com.takahashirinta.ncrust.player.NetworkWaitBackoff()
+
     private suspend fun refreshPlaybackNetwork() = withContext(Dispatchers.IO) {
         AppHttp.evictIdleConnections()
         RetrofitClient.evictIdleConnections()
@@ -327,7 +339,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             PlaybackService.instance?.reprepareStalledItem(saved.track, stalledPositionMs) == true
         ) return
         if (!NetworkAvailability.isOnline(getApplication())) return
-        if (networkRefreshed) urlRetryGate.onUserAction()
+        if (networkRefreshed) {
+            urlRetryGate.onUserAction()
+            // v4.1.7：新路由 = 新机会，不等退避（旧实现在这里也要等满 3 秒定额间隔）。
+            networkWait.reset()
+        }
         if (!urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
             recovery.failed(true)
             isBuffering.value = false
@@ -358,6 +374,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
 
     private fun invalidatePlaybackIntent() {
         recovery.cancel()
+        networkWait.reset()
         isBuffering.value = false
         playbackRetries.cancel()
         playGate.next()
@@ -814,6 +831,9 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         PlaybackService.onIsPlayingChanged = { playing ->
             listeningClock.setPlaying(playing)
             isPlaying.value = playing
+            // v4.1.7：真的出声了 ⇒ 「连续网络故障」这一轮结束（与 PlaybackGuard 里
+            // 「播出声才清零」同一个判据），下一次抖动从 2s 重新退避。
+            if (playing) networkWait.reset()
             // 兜底：车机 / 媒体键等不经过 playUrl 的起播路径也补一次 startplay。
             // 同曲去重由 reportStartplay 负责，playUrl 已经报过时这里是空操作。
             if (playing) reportStartplay(currentSongId.value ?: -1L)
@@ -1665,15 +1685,19 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
             PlayOrigin.USER -> {
                 autoSkipGuard.onUserAction()
                 urlRetryGate.onUserAction()
+                networkWait.reset()
             }
 
             PlayOrigin.QUALITY_SWITCH -> {
                 qualityRetryGuard.resetAll()
                 urlRetryGate.onUserAction()
+                networkWait.reset()
             }
 
             else -> Unit
         }
+        // v4.1.7：**换歌**（不是同曲重试）也结束上一轮的等待窗口 —— 新歌有自己的 10 分钟额度。
+        if (origin != PlayOrigin.QUALITY_RETRY) networkWait.reset()
         val track = TrackKey.of(sourceKey, songId, sourceId, mediaId)
         if (origin != PlayOrigin.QUALITY_RETRY) urlRetryGate.onNewSong(track.tag)
         // 换歌（含用户手点）时忘掉上一首的「最后成功档位」。
@@ -2028,14 +2052,7 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         recovery.failed(networkFailure)
         isBuffering.value = false
         if (networkFailure) {
-            if (!NetworkAvailability.isOnline(getApplication())) {
-                stopForQualityFailure(songId, "等待网络恢复")
-            } else if (urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
-                schedulePlaybackRetry(songId, requested, UrlRetryGate.MIN_INTERVAL_MS)
-            } else {
-                showResolveFailureHint(effective)
-                stopForQualityFailure(songId, "取链网络失败且重试额度已用尽")
-            }
+            handleNetworkFailure(songId, requested, effective)
             return
         }
         Log.w(
@@ -2098,20 +2115,11 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
                     }
                 }
 
-                // ② 网络失败：**有界重试同一个档位**，不跳歌。额度用尽则停下 + 提示。
-                ResolveFailureAction.RETRY -> {
-                    if (urlRetryGate.requestRetry(android.os.SystemClock.elapsedRealtime())) {
-                        Log.w(
-                            "PlayerViewModel",
-                            "network failure, retry #${UrlRetryGate.MAX_ATTEMPTS_PER_SONG -
-                                urlRetryGate.remaining()} songId=$songId level=$requested",
-                        )
-                        schedulePlaybackRetry(songId, requested, UrlRetryGate.MIN_INTERVAL_MS)
-                    } else {
-                        showResolveFailureHint(effective)
-                        stopForQualityFailure(songId, "取链网络失败且重试额度已用尽")
-                    }
-                }
+                // ② 网络失败：**等网络回来**，不跳歌。
+                //    v4.1.7 起与上面的 NETWORK 早退分支走**同一套**处置（`handleNetworkFailure`）——
+                //    同一个语义在两处各写一遍，必然有一天会漂移。当前只有 NETWORK 会映射到本分支，
+                //    它已在上面被拦下，所以这里实际是「映射表将来放宽」时的安全带。
+                ResolveFailureAction.RETRY -> handleNetworkFailure(songId, requested, effective)
 
                 // ③ 权限 / 版权 / 读不懂：**停下 + 说清楚原因，绝不跳歌**。
                 //    这是本版与 v3.1.0 最大的行为差异，也是用户报的那个 P0 的正面修复。
@@ -2249,6 +2257,78 @@ class PlayerViewModel internal constructor(application: Application) : AndroidVi
         // 的码率会让人以为还在放。
         currentBitrate.value = 0L
         // 静音停下（保留当前歌与队列，用户点一下就能重来）。
+        val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
+            putExtra("action", "pause_failed")
+            putExtra("playRevision", playGate.current)
+        }
+        runCatching { getApplication<Application>().startService(intent) }
+    }
+
+    /**
+     * v4.1.7 · P0：**网络型失败的唯一处置**。
+     *
+     * 旧行为（真机日志见 [NetworkWaitBackoff] 的 KDoc）：3 秒后重试一次、再 3 秒后重试一次，
+     * 两次都没链就 `stopForQualityFailure` ⇒ `pause_failed`，于是「熄屏/后台时网络抖一下」
+     * 直接变成一次永久暂停，而恢复只能靠 `ConnectivityManager` 发一次 route 变化 ——
+     * 「Wi-Fi 一直连着、出口短暂不通」这种最常见的形状永远不会触发那个回调。
+     *
+     * 现在的行为：按 2s→5s→10s→20s→30s 退避**一直**等到网络回来（10 分钟上限，见
+     * [NetworkWaitBackoff.DEFAULT_WINDOW_MS]），期间只把播放器按停、不降级、不清播放意图；
+     * 任何一次重试成功即自动续播，用户不需要回来点一下。
+     *
+     * 注意**不**推进 `playGate`：等待期间用户点别的歌会照常打断这条等待
+     * （那条路径会 `invalidatePlaybackIntent` → `networkWait.reset()`），
+     * 而 `PlaybackRetryScheduler` 自己也会按代际与身份作废旧的重试。
+     */
+    private fun handleNetworkFailure(songId: Long, requested: String, failure: ResolveFailure) {
+        // 同一次故障可能从两条路各报一次（取链失败 / ExoPlayer 的 IO 错误）。
+        // 已经有一次等待中的重试时**不叠加**：叠加会把退避阶梯白推进一格，还会重复按停。
+        if (playbackRetries.hasPending) return
+        val nowElapsed = android.os.SystemClock.elapsedRealtime()
+        val waitMs = networkWait.nextDelay(nowElapsed)
+        if (waitMs == null) {
+            Log.w(
+                "PlayerViewModel",
+                "network wait exhausted after ${networkWait.waitedMs(nowElapsed)}ms songId=$songId " +
+                    "(${failure.diag()})",
+            )
+            showResolveFailureHint(failure)
+            stopForQualityFailure(
+                songId,
+                "取链网络失败，等待 " + (NetworkWaitBackoff.DEFAULT_WINDOW_MS / 60_000L) + " 分钟仍未恢复",
+            )
+            return
+        }
+        parkForNetworkWait(songId, waitMs, failure)
+        schedulePlaybackRetry(songId, requested, waitMs)
+    }
+
+    /**
+     * v4.1.7 · P0：网络型失败的「靠边等」—— 把播放器按停，但**不放弃**这次播放意图。
+     *
+     * 与 [stopForQualityFailure] 的三点差别，每一点都是故意的：
+     *
+     *  1. **不置 [QualityStatus.DOWNGRADED]**：网络断了不是音质问题。旧实现在这里打「已降级」角标，
+     *     用户看到的是「音质被降了」，实际只是没网；
+     *  2. **不清 [PlaybackRecoveryGate]**：`recovery.waiting` 继续为 true，重试成功后
+     *     `recovery.resolved()` 会自动收敛，route 变化那条恢复路径也照旧可用；
+     *  3. **只在这首歌确实没有声音时才按停**：当前项还在出声（例如失败的是「下一首」的预载取链）
+     *     时按停会把一首好好的歌掐掉 —— 那是比中断更差的体验。
+     */
+    private fun parkForNetworkWait(songId: Long, waitMs: Long, failure: ResolveFailure) {
+        val service = PlaybackService.instance
+        val stillAudible = service?.player?.isPlaying == true
+        // 还在出声时不改 isPlaying —— UI 与耳朵必须一致，这里只是「不放弃」。
+        if (!stillAudible) isPlaying.value = false
+        isBuffering.value = false
+        qualityStatus.value = QualityStatus.NORMAL
+        Log.w(
+            "PlayerViewModel",
+            "network wait: songId=$songId retry in ${waitMs}ms audible=$stillAudible " +
+                "waited=${networkWait.waitedMs(android.os.SystemClock.elapsedRealtime())}ms " +
+                "(${failure.diag()})",
+        )
+        if (stillAudible) return
         val intent = com.takahashirinta.ncrust.player.PlaybackCommands.intent(getApplication()).apply {
             putExtra("action", "pause_failed")
             putExtra("playRevision", playGate.current)
