@@ -203,17 +203,46 @@ internal fun BackgroundGuideOverlay(onDismiss: () -> Unit) {
                         if (index != guide.steps.lastIndex) Spacer(Modifier.height(8.dp))
                     }
                     Spacer(Modifier.height(14.dp))
-                    ArrisButton(
-                        text = texts.openSettings,
-                        modifier = Modifier.fillMaxWidth(),
-                        primary = false,
-                        onClick = {
-                            val launched = OemBackgroundActions.openStartupSettings(context, profile)
-                            if (!launched) {
-                                Toast.makeText(context, strings.batteryJumpFailed, Toast.LENGTH_SHORT).show()
+                    // 这一档的两个开关在**两个不同页面**（ColorOS 实测：「自启动」在 设置→应用，
+                    // 「耗电管理」在 设置→应用→应用详情）。只给一个「去设置」按钮会把人送到第一个页面，
+                    // 第二个还得自己摸回去。所以按候选深链逐个给按钮，并给电池那一档标注自动检测状态。
+                    val links = OemBackgroundGuide.linksOf(profile)
+                    if (links.size >= 2) {
+                        // 只给「两个开关」各一颗按钮；第 3 条起是同档的兜底候选，由 openLink 在失败时自动接管，
+                        // 不再单独出按钮（否则用户会看到两颗都写着"允许后台运行"的按钮）。
+                        repeat(2) { index ->
+                            // 第 2 颗按钮只在**还没授权**时出现：已授权时系统对话框根本不会弹出，
+                            // 留着按钮只会让用户觉得"点了没反应"（ColorOS 上实测如此）。
+                            val show = true
+                            if (show) {
+                                ArrisButton(
+                                    text = if (index == 0) texts.stepAutoStart
+                                    else texts.stepBattery + if (unrestricted) "  ✓" else "",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    primary = false,
+                                    onClick = {
+                                        val launched = OemBackgroundActions.openLink(context, profile, index)
+                                        if (!launched) {
+                                            Toast.makeText(context, strings.batteryJumpFailed, Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                )
+                                Spacer(Modifier.height(8.dp))
                             }
-                        },
-                    )
+                        }
+                    } else {
+                        ArrisButton(
+                            text = texts.openSettings,
+                            modifier = Modifier.fillMaxWidth(),
+                            primary = false,
+                            onClick = {
+                                val launched = OemBackgroundActions.openStartupSettings(context, profile)
+                                if (!launched) {
+                                    Toast.makeText(context, strings.batteryJumpFailed, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        )
+                    }
                 }
 
                 SectionTitle(texts.recentsSection)

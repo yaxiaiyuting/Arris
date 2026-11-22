@@ -23,10 +23,13 @@ import com.takahashirinta.ncrust.account.PlaybackItem
 import com.takahashirinta.ncrust.cache.OfflineKeys
 import com.takahashirinta.ncrust.network.ClientIdentity
 import com.takahashirinta.ncrust.network.RetrofitClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -132,6 +135,14 @@ object SongUrlFetcher {
         val confirmed: Boolean = false,
     )
 
+    /**
+     * v4.1.10 · C2：能力探测（`/eapi/v3/song/detail`）的**等待**预算。
+     *
+     * 与 v4.1.9 的 `withTimeoutOrNull(1_200L)` **数值相同** —— 调用方的延迟没有变化，
+     * 变的只是「超时之后要不要把已经发出的请求砍掉」：现在不砍（见 [awaitQualityCapability]）。
+     */
+    private const val CAPABILITY_BUDGET_MS = 1_200L
+
     private val deniedLevels = java.util.concurrent.ConcurrentHashMap<String, LevelDenial>()
     private const val DENIED_TTL_MS = 10 * 60_000L
     private fun sessionGeneration(): Long =
@@ -175,6 +186,15 @@ object SongUrlFetcher {
             routeGeneration++
             transportCooldownUntil = 0L
         }
+        // 换网之后地址族的可达性可能整个反过来（Wi-Fi 通 v6 / 蜂窝只通 v4），
+        // 上一张网的偏置不能带过来。
+        com.takahashirinta.ncrust.network.AddressPreference.clearFailoverState()
+        // v4.1.10 · B：按 host 的「哪一族最近成功/失败」记忆同样是**这张网**的属性。
+        com.takahashirinta.ncrust.network.AddressHealth.onNetworkRouteChanged()
+        // v4.1.10 · C3：换网可能换一整套中间设备，「h2 会被复位」的结论也不作数。
+        com.takahashirinta.ncrust.network.StreamResetMemo.clear()
+        // v4.1.10 · C1：在飞登记同样属于上一张网 —— 新网的调用者不得 join 旧路由的结论。
+        inFlightFetches.clear()
         com.takahashirinta.ncrust.network.DnsCache.clear()
     }
 
@@ -187,8 +207,42 @@ object SongUrlFetcher {
     suspend fun fetch(songId: Long, level: String = "lossless"): SongUrlResult? =
         fetchOutcome(songId, level).result
 
+    /** 去重键：**同一首歌 + 同一档位**才是同一份请求（档位不同不能合并，结果不同）。 */
+    private data class FetchKey(val songId: Long, val level: String)
+
+    /**
+     * v4.1.10 · C1：取链工作跑在**自己的 scope** 上，而不是调用方的 scope。
+     *
+     * 这样「预载刚发出、用户点下一首」时，第二路调用会 join 第一路，而**不会**因为
+     * `playJob.cancel()` 把已经发出的 HTTP 请求一起砍掉 —— 砍掉正是服务端看到的
+     * `RST_STREAM(CANCEL)`。代价是一次取链最多多活 8 秒（`eapiPostCancellable` 的调用上限）。
+     */
+    private val inFlightFetches = InFlightCoalescer<FetchKey, ResolveOutcome>()
+
+    /**
+     * v4.1.10 · C2：能力探测**故意**跑在自己的 scope 上（不是发起方的 job）——
+     * 请求一旦发出就不因为「等太久了」被砍掉，见 [awaitQualityCapability]。
+     */
+    private val capabilityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val inFlightCapability = InFlightCoalescer<Long, QualityCapability?>()
+
+    /**
+     * v4.1.10 · C1：`(songId, level)` 的取链**同 key 只发一次**，其余等待同一份结果。
+     *
+     * 改动前：预载与正式播放各发一通 `/eapi/song/enhance/player/url/v1`（真机实测该接口
+     * 对并发有阈值，超了用 `REFUSED_STREAM` 拒流）。改动后：第二路只 `await`。
+     */
+    internal suspend fun fetchOutcome(songId: Long, level: String): ResolveOutcome {
+        var leader = false
+        val outcome = inFlightFetches.run(FetchKey(songId, level), onLeader = { leader = true }) {
+            fetchOutcomeOnce(songId, level)
+        }
+        if (!leader) Log.i(TAG, "fetch joined in-flight songId=$songId level=$level — 未重复发送")
+        return outcome
+    }
+
     /** Transport failures stay with the call that observed them, including concurrent same-track reads. */
-    internal suspend fun fetchOutcome(songId: Long, level: String): ResolveOutcome = withContext(Dispatchers.IO) {
+    private suspend fun fetchOutcomeOnce(songId: Long, level: String): ResolveOutcome = withContext(Dispatchers.IO) {
         val startedAt = android.os.SystemClock.elapsedRealtime()
         // fetch timing：回来第一次取链如果卡，日志里能直接看到是哪一段耗的（毫秒）。
         Log.i(TAG, "fetch start songId=$songId level=$level sinceForeground=${com.takahashirinta.ncrust.network.AppForegroundTracker.sinceForegroundMs()}ms")
@@ -259,8 +313,13 @@ object SongUrlFetcher {
             logAttempt(tryLevel, actualLevel, br, type, code, accepted = true)
             // A3：只有"实际文件可能低于请求档位"时才多问一次该曲的档位上限 ——
             // 用来把「账号无权限」和「该曲根本没这个档位」分开。平时不加这次往返。
+            // v4.1.10 · C2：**超时只结束「等」，不取消已发出的连接**。
+            // 旧实现是 `withTimeoutOrNull(1200) { fetchQualityCapability(...) }` —— 超时会把
+            // 在飞的 `/eapi/v3/song/detail` 一起砍掉，服务端看到的就是 `RST_STREAM(CANCEL)`；
+            // 而这份能力数据随后还会被用（它进 `qualityCapabilityCache`）。所以：调用方的等待
+            // 预算仍是 1.2s（延迟不变），请求本身跑在自己的 scope 上，晚到的结果直接进缓存。
             val capability = if (QualityAssessment.needsSongCapability(level, br, type)) {
-                kotlinx.coroutines.withTimeoutOrNull(1_200L) { fetchQualityCapability(songId, session) }
+                awaitQualityCapability(songId, session, CAPABILITY_BUDGET_MS)
             } else null
             val qualityAccess = if (capability?.playableLevel != null || observed.isNotEmpty()) {
                 QualityAccessEvidence(session, capability?.playableLevel, observed.toMap())
@@ -314,13 +373,43 @@ object SongUrlFetcher {
                 } catch (e: com.takahashirinta.ncrust.auth.NeteaseSessionChangedException) {
                     throw e // A different account must not be retried as a broken connection.
                 } catch (e: java.io.IOException) {
+                    // v4.1.9：连接层失败先做两件事 —— ① 留证据（host / 解析地址 / 地址族 /
+                    // 异常 message，HttpTimingListener 另外给出 dns/conn/tls 分段）；
+                    // ② 换地址族重试。实测同一域名的 A 记录 TCP 8/8 超时、AAAA 的 443
+                    // 建连成功，而 IPv4-only 的解析策略把客户端钉死在死地址上。
+                    //
+                    // v4.1.10 · C3：**流级复位不算地址族的错**。`stream was reset: REFUSED_STREAM`
+                    // / `CANCEL` 是这个流被对端拒了，网络与地址族都是好的；把它当建连失败去
+                    // 切地址族，只会给自己加 3 分钟的错偏置。这类失败仍然走同一套「换连接重试
+                    // 一次」（下面照样 evict + 清 DNS 缓存），只是不动地址族、不判 NETWORK。
+                    val streamReset = com.takahashirinta.ncrust.network.StreamResetMemo.isStreamReset(e)
+                    val preferIpv6 = if (streamReset) {
+                        com.takahashirinta.ncrust.network.AddressPreference.isIpv6Preferred()
+                    } else {
+                        com.takahashirinta.ncrust.network.AddressPreference.onTransportFailure()
+                    }
                     if (retriedTransport) {
                         Log.w(TAG, "transport retry exhausted songId=$songId level=$tryLevel", e)
+                        com.takahashirinta.ncrust.network.NetworkDiagnostics.logFailure(
+                            SONG_URL_PATH, RetrofitClient.eapiHost, e,
+                            "level=$tryLevel preferIpv6=$preferIpv6 retry=exhausted",
+                        )
+                        // 两族都失败 ⇒ 进入冷却，接下来的歌不再"失败一次翻一面"地付两次 8s。
+                        com.takahashirinta.ncrust.network.AddressPreference.noteBothFamiliesFailed()
                         startCooldown(requestRoute)
                         return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
                     }
                     retriedTransport = true
-                    Log.w(TAG, "transport failure level=$tryLevel, retrying once", e)
+                    Log.w(
+                        TAG,
+                        "transport failure level=$tryLevel, retrying once " +
+                            "(streamReset=$streamReset fam=${if (preferIpv6) "ipv6-preferred" else "ipv4-only"})",
+                        e,
+                    )
+                    com.takahashirinta.ncrust.network.NetworkDiagnostics.logFailure(
+                        SONG_URL_PATH, RetrofitClient.eapiHost, e,
+                        "level=$tryLevel preferIpv6=$preferIpv6 streamReset=$streamReset",
+                    )
                     // 连接池 + DNS 缓存一起清：代理开关会让同一域名的解析结果在
                     // fake-ip 与真实 IP 之间切换，只清连接池仍会连到旧地址。
                     RetrofitClient.evictIdleConnections()
@@ -345,9 +434,56 @@ object SongUrlFetcher {
 
     private val qualityCapabilityCache = java.util.concurrent.ConcurrentHashMap<Long, QualityCapability>()
 
-    /** maxBrLevel describes the catalog; plLevel describes playback for this login. */
+    /**
+     * v4.1.10 · C2：在 [budgetMs] 内等一份能力数据；**超时不取消已经发出的请求**。
+     *
+     * 选「不取消」而不是「把超时放宽到调用预算」的理由：
+     * ① 放宽超时等于让取链多等最多 8 秒，用户看到的「点了没反应」会变长 —— 与 v4.1.9
+     *    修掉的问题相反；② 这份数据是有价值的（进 `qualityCapabilityCache`，下次免往返），
+     * 砍掉它反而更浪费；③ 并发同 key 走 [inFlightCapability] 合并，两首歌不会各发一份。
+     * 代价：进程在请求返回前被杀时那通请求白跑（上限 8 秒，且只在需要判降级的曲目上发）。
+     */
+    private suspend fun awaitQualityCapability(songId: Long, session: Long, budgetMs: Long): QualityCapability? =
+        withTimeoutOrNull(budgetMs) {
+            inFlightCapability.run(songId) { fetchQualityCapability(songId, session) }
+        }
+
+    /**
+     * maxBrLevel describes the catalog; plLevel describes playback for this login.
+     *
+     * v4.1.10 · A：真机抓到过 `path=/eapi/v3/song/detail … reused=true … stream was reset: CANCEL`
+     * —— 复用连接上的流级复位。这条请求是「可选增强数据」，但一次复位就丢掉它太亏，
+     * 所以按 [ReusedConnectionRetry] 的决策**换一条新连接重试一次**（先 evict，再发）。
+     */
     private suspend fun fetchQualityCapability(songId: Long, session: Long): QualityCapability? {
         qualityCapabilityCache[songId]?.takeIf { it.session == session }?.let { return it }
+        return try {
+            fetchQualityCapabilityOnce(songId, session)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            // 复位 ⇒ 换连接重试一次（evict 掉那条已经出过问题的复用连接）。
+            if (!ReusedConnectionRetry.shouldRetryOnFreshConnection(e, reused = null, alreadyRetried = false)) {
+                Log.w(TAG, "song capability fetch failed for songId=$songId", e)
+                return null
+            }
+            Log.i(TAG, "song capability stream reset for songId=$songId — retrying on a fresh connection")
+            RetrofitClient.evictIdleConnections()
+            try {
+                fetchQualityCapabilityOnce(songId, session)
+            } catch (e2: kotlinx.coroutines.CancellationException) {
+                throw e2
+            } catch (e2: Exception) {
+                Log.w(TAG, "song capability fetch failed for songId=$songId", e2)
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "song capability fetch failed for songId=$songId", e)
+            null
+        }
+    }
+
+    private suspend fun fetchQualityCapabilityOnce(songId: Long, session: Long): QualityCapability? {
         return try {
             val payload = mapOf("c" to JSONArray().put(JSONObject().put("id", songId)).toString())
             val response = RetrofitClient.eapiPostCancellable(
@@ -370,9 +506,6 @@ object SongUrlFetcher {
             cap
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "song capability fetch failed for songId=$songId", e)
-            null
         }
     }
 

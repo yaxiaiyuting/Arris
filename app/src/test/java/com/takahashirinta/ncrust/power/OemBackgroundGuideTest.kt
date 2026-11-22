@@ -129,7 +129,11 @@ class OemBackgroundGuideTest {
         // 数量写在这里而不是「至少一条」：候选表是本版唯一的**可机械审阅**的部分，
         // 加减一条候选应当在 diff 里显式可见。
         val expectedCounts = mapOf(
-            OemProfile.COLOR_OS to 3,
+            // 2026-11-22（PLC110 / ColorOS 16 实测）：厂商那两页都被 android:permission 保护
+            // （OPLUS_COMPONENT_SAFE / com.oplus.permission.safe.SETTINGS），第三方拉起必然
+            // SecurityException（236 版两颗按钮全落到应用详情页就是这样）。因此只保留
+            // **第三方可打开**的两条：应用列表页 + 系统电池优化授权对话框。
+            OemProfile.COLOR_OS to 2,
             OemProfile.MIUI_HYPER_OS to 2,
             OemProfile.ORIGIN_OS to 2,
             OemProfile.HARMONY_EMUI to 2,
@@ -159,9 +163,11 @@ class OemBackgroundGuideTest {
                 assertTrue("$profile 的包名不是合法包名：${link.packageName}", link.packageName.count { it == '.' } >= 2)
                 assertFalse("$profile 的包名不该有空白：${link.packageName}", link.packageName.any { it.isWhitespace() })
                 if (link.className.isNotEmpty()) {
+                    // 只要求「全限定」，不要求以 APK 包名开头：ColorOS 把 Activity 放在
+                    // com.oplus.powermanager.* 下，而 APK 包名是 com.oplus.battery（真机实测）。
                     assertTrue(
                         "$profile 的类名必须全限定：${link.className}",
-                        link.className.startsWith(link.packageName + "."),
+                        link.className.contains('.') && link.className.substringBeforeLast('.').contains('.'),
                     )
                     assertFalse("$profile 的类名不该有空白：${link.className}", link.className.any { it.isWhitespace() })
                 } else {

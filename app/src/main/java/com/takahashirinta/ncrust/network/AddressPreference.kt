@@ -6,6 +6,7 @@
 package com.takahashirinta.ncrust.network
 
 import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
 import okhttp3.Dns
 
@@ -70,14 +71,152 @@ object AddressPreference {
     }
 
     /**
-     * 给 OkHttp 用的 DNS 实现：**有 IPv4 就只用 IPv4**。
+     * 传输层失败后的**地址族回退**窗口（v4.1.9）。
+     *
+     * ## 为什么需要（真机实测，PCL110 / Android 17 / CMCC Wi-Fi，2026-11-22 23:2x）
+     *
+     * | 目标 | 地址 | 结果 |
+     * |---|---|---|
+     * | `interface3.music.163.com` | A `117.135.207.67` | `nc :443` **8/8 Timeout** |
+     * | 同上 | AAAA `2409:8c6a:b021:1400:0:4:0:3` | `nc :443` **exit=0**（连上） |
+     * | 同上 | ICMP v6 | 2/2 回包，208ms |
+     *
+     * [order] 的「有 v4 就只用 v4」在这里把客户端**硬钉在死掉的 v4 上**：每次取链
+     * 先吃满 8s 调用截止（`InterruptedIOException("timeout")`，ttfb=-1），重试再吃一次，
+     * 用户看到的就是「卡 15 秒然后播放失败」。所以失败一次之后必须允许换地址族重试。
+     *
+     * ## 为什么是「切换 + 自动切回」而不是永久偏置
+     *
+     * 反方向同样存在（v6 黑洞、v4 正常，就是 v3.8.1 当年的场景）。所以策略只在
+     * **观察到一次传输层失败之后**生效，且窗口内再失败一次就切回 v4-only ——
+     * 两个方向各最多付一次 8s，不会永久偏置到坏的地址族。
+     *
+     * 不用 `android.os.SystemClock`：纯 JVM 的 `nanoTime` 让这套状态机可以单测。
+     */
+    private const val IPV6_PREFERENCE_WINDOW_MS = 3 * 60_000L
+
+    @Volatile
+    private var ipv6PreferredUntilMs = 0L
+
+    /** 单调时钟（毫秒）；单测可直接传时间。 */
+    internal fun nowMs(): Long = System.nanoTime() / 1_000_000L
+
+    /** 纯函数：失败后该不该走 IPv6（窗口内）。 */
+    internal fun isIpv6Preferred(nowMs: Long = nowMs()): Boolean =
+        ipv6PreferredUntilMs > 0L && nowMs < ipv6PreferredUntilMs
+
+    internal fun preferIpv6For(windowMs: Long = IPV6_PREFERENCE_WINDOW_MS, nowMs: Long = nowMs()) {
+        ipv6PreferredUntilMs = nowMs + windowMs
+    }
+
+    fun clearIpv6Preference() {
+        ipv6PreferredUntilMs = 0L
+    }
+
+    /** 换网时一并清掉冷却：新网络的两族可达性可能与旧网完全相反。 */
+    fun clearFailoverState() {
+        ipv6PreferredUntilMs = 0L
+        bothFailedUntilMs = 0L
+    }
+
+    /**
+     * 传输层失败（`SocketException` / 连接超时）时调用：**第一次切到 IPv6 优先，
+     * IPv6 优先下再失败一次就退回 v4-only**。返回本次之后是否处于 IPv6 优先。
+     *
+     * 这样两个方向的故障各最多付一次超时，然后自动停在能通的那一族上。
+     */
+    fun onTransportFailure(nowMs: Long = nowMs()): Boolean {
+        // 冷却期内**不再翻面**：v4 长时间黑洞时，"失败→切 v6→再失败→切回 v4"会让每首歌
+        // 都付两次 8s 连接超时（真机 00:42–00:43 连续三首歌各吃 2×8s 后判 NETWORK）。
+        // 冷却期内固定住当前族，每首歌最多付一次超时，网络恢复后由成功事件自然解除。
+        if (inBothFailedCooldown(nowMs)) return isIpv6Preferred(nowMs)
+        return if (isIpv6Preferred(nowMs)) {
+            clearIpv6Preference()
+            false
+        } else {
+            preferIpv6For(nowMs = nowMs)
+            true
+        }
+    }
+
+    /** 两族都失败的冷却窗口：3 分钟。比 3 分钟的「IPv6 优先」窗口短不了多少，够躲开瞬时拥塞。 */
+    private const val BOTH_FAILED_COOLDOWN_MS = 3 * 60_000L
+
+    @Volatile
+    private var bothFailedUntilMs = 0L
+
+    internal fun inBothFailedCooldown(nowMs: Long = nowMs()): Boolean =
+        bothFailedUntilMs > 0L && nowMs < bothFailedUntilMs
+
+    /** 两族都失败（重试用尽）时调用：进入冷却，期间不再翻面。 */
+    fun noteBothFamiliesFailed(nowMs: Long = nowMs()) {
+        bothFailedUntilMs = nowMs + BOTH_FAILED_COOLDOWN_MS
+    }
+
+    fun clearBothFailedCooldown() {
+        bothFailedUntilMs = 0L
+    }
+
+    /**
+     * 纯函数：按当前偏好给出**尝试顺序**。
+     *
+     * - 默认（`preferIpv6 = false`）：与 [order] 完全一致，行为逐字节不变；
+     * - 回退窗口内：IPv6 地址排前面、IPv4 跟在后面（保留 v4 作最后兜底），
+     *   只有一族时原样返回那一族。
+     * - 回退窗口内且给了 [preferred]（v4.1.10，来自 [AddressHealth] 的按 host 记忆）：
+     *   **那一族排前面**、另一族跟在后面。它只在窗口内生效 —— 窗口本身（3 分钟、
+     *   由 [onTransportFailure] 开关）**一行没改**，[preferred] 只决定窗口内的顺序。
+     */
+    internal fun select(
+        all: List<InetAddress>,
+        preferIpv6: Boolean,
+        preferred: AddressFamily? = null,
+    ): List<InetAddress> {
+        if (!preferIpv6) return order(all)
+        if (all.isEmpty()) return all
+        val v6 = all.filterIsInstance<Inet6Address>()
+        val v4 = all.filterIsInstance<Inet4Address>()
+        return when {
+            v6.isEmpty() -> all
+            v4.isEmpty() -> all
+            preferred == AddressFamily.V4 -> v4 + v6
+            else -> v6 + v4
+        }
+    }
+
+    /**
+     * 给 OkHttp 用的 DNS 实现：**默认有 IPv4 就只用 IPv4**；传输层失败后的回退窗口内
+     * 改成 IPv6 优先（见 [onTransportFailure]）。
      *
      * 具名类（而不是匿名 object）是为了让 `HttpClientDnsAuditTest` 能断言
      * 「AppHttp 建出来的客户端确实用的是这条策略」。
      */
-    class IPv4FirstDns : Dns {
-        override fun lookup(hostname: String): List<InetAddress> =
-            order(Dns.SYSTEM.lookup(hostname))
+    class IPv4FirstDns(
+        /** 解析来源；单测注入假列表用，默认就是系统解析，生产行为不变。 */
+        private val delegate: Dns = Dns.SYSTEM,
+    ) : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            val all = delegate.lookup(hostname)
+            val preferIpv6 = isIpv6Preferred()
+            // v4.1.10 · B：窗口内优先「这个 host 最近成功的那一族」（窗口外不生效）。
+            val preferred = if (preferIpv6) {
+                AddressHealth.preferredWithinWindow(hostname, nowMs())
+            } else {
+                null
+            }
+            val selected = select(all, preferIpv6, preferred)
+            // 只在回退窗口内打一行（限流）：证明「换地址族」真的作用到了解析结果上，
+            // 否则「切了策略但 OkHttp 仍然只试 v4」这种事故在日志里看不出来。
+            if (preferIpv6 && NetworkDiagnostics.shouldLog(hostname)) {
+                android.util.Log.i(
+                    "NcrustNetDiag",
+                    "dns host=$hostname preferIpv6=true preferFam=${preferred?.label() ?: "-"} all=" +
+                        all.joinToString(",") { "${it.hostAddress}" } +
+                        " -> " + selected.joinToString(",") { "${it.hostAddress}" },
+                )
+            }
+            return selected
+        }
     }
 
     val ipv4First: Dns = IPv4FirstDns()
