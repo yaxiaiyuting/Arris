@@ -329,6 +329,18 @@ class PlaybackService : MediaLibraryService() {
          * v4.1.8：诊断日志的间隔。**默认开启**（release 包也打），因为它的唯一用途就是
          * 「下一次再卡死时能从 logcat 判断是时钟不前进还是数据源卡住」——
          * 只在 debug 包里打等于没有。15 s 一条，一小时 240 行，不会刷屏。
+         *
+         * **怎么读这条日志**（现场归因顺序）：
+         * 1. `stalledFor` 持续增长且 `STALLED` 出现 ⇒ 判据命中，后面必然跟一条
+         *    `Playback stalled` / `Stall self-repair`；
+         * 2. `position` 在涨、`stalledFor=0` ⇒ 播放正常（此时若用户仍说没声音，
+         *    问题在输出设备/音量，不在这条链路）；
+         * 3. 两次 tick 之间出现远超 15 s 的**空洞**：先看空洞结束后的第一条日志 ——
+         *    `state=READY isPlaying=true` 且位置比空洞前更靠后 ⇒ 空洞期间只是没有播放意图
+         *    （暂停 / 音频焦点被抑制，这两段时间本就不打 tick）；位置**和空洞前完全一样**
+         *    ⇒ 主线程或整个进程那段时间被冻结过，判据根本没机会跑（真机 PLC110 上实测
+         *    播放期间 UID 是 FGS 状态、`isFrozen=false`，ColorOS 的 `osense.compress`
+         *    只做内存页压缩，所以这一支在正常前台播放时不应出现）。
          */
         private const val STALL_DIAG_INTERVAL_MS = 15_000L
 
