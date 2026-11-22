@@ -76,6 +76,31 @@ val zhCN = Strings(
     back = "返回",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "后台播放保护",
+            entryHint = "按机型把 Arris 加进系统保活白名单，锁屏后不容易被清理",
+            statusSection = "后台运行状态",
+            requestOptimize = "去关闭电池优化",
+            oemSection = { profile -> "厂商保活设置 · $profile" },
+            openSettings = "去设置",
+            recentsSection = "锁定最近任务",
+            recentsIntro = "系统的「一键清理」会连最近任务卡片一起清掉；把 Arris 的卡片锁住，清理时会被跳过。",
+            stepsColorOs = "设置 → 电池 → 应用耗电管理，找到 Arris\n打开「允许后台运行」与「允许自启动」\n再进入「耗电保护」，把 Arris 设为「允许后台运行」",
+            stepsMiui = "设置 → 应用设置 → 应用管理 → Arris\n打开「自启动」\n进入「省电策略」，选择「无限制」",
+            stepsOriginOs = "设置 → 电池 → 后台耗电管理，找到 Arris\n打开「允许后台高耗电」\n进入 i 管家 → 应用管理 → 自启动，允许 Arris",
+            stepsEmui = "设置 → 电池 → 启动管理，找到 Arris\n关闭「自动管理」\n在弹出的选项里勾选「允许自启动」「允许关联启动」「允许后台活动」",
+            stepsFlyme = "设置 → 电量管理 → 后台管理，找到 Arris\n选择「保持后台运行」\n进入手机管家 → 权限管理 → 自启动，允许 Arris",
+            stepsOneUi = "设置 → 电池 → 后台使用限制，找到 Arris\n把 Arris 加入「永不休眠的应用」\n把 Arris 从「自适应电池」的优化范围里去掉",
+            stepsOther = "设置 → 应用 → Arris → 电池\n选择「不受限制 / 允许后台运行」\n在「自启动管理」里允许 Arris 自启动",
+            recentsColorOs = "在最近任务里长按 Arris 卡片 → 点锁形图标（首次会提示「已锁定」）。",
+            recentsMiui = "在最近任务里下拉 Arris 卡片 → 点锁形图标（卡片角落出现锁即成功）。",
+            recentsOriginOs = "在最近任务里长按 Arris 卡片 → 点锁形图标。",
+            recentsEmui = "在最近任务里下拉 Arris 卡片 → 点锁形图标；长按卡片后也能选「锁定」。",
+            recentsFlyme = "在最近任务里长按 Arris 卡片 → 点锁形图标。",
+            recentsOneUi = "在最近任务里长按 Arris 卡片 → 点「保持打开」；也可以在最近任务右上角菜单里锁定应用。",
+            recentsOther = "在最近任务里长按或下拉 Arris 卡片，找到「锁定 / 加锁」入口。",
+        ),
         // v2.8.0：二级菜单的 7 个一级分组卡片（顺序 = SettingsGroup 声明顺序）。
         settingsGroupAccountTitle = "账号与登录",
         settingsGroupAccountSubtitle = "ncm 与 qm 账号",

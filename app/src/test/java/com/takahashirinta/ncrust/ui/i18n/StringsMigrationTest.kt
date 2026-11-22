@@ -232,7 +232,8 @@ class StringsMigrationTest {
         // v4.1.1：均衡器文件菜单增加 1 个分组节点和 10 条文案。
         val expectedSizes = mapOf(
             // about now contains CelebrationStrings, preserving the 148-slot root constructor.
-            "settings" to 101, "about" to 61, "playerUi" to 39, "waveform" to 42, "bili" to 17,
+            // v4.2.0：settings 101 → 124（新增 `backgroundGuide` 子组：1 条组路径 + 22 条文案）。
+            "settings" to 124, "about" to 61, "playerUi" to 39, "waveform" to 42, "bili" to 17,
         )
         languagePresets.forEach { preset ->
             val captured = StringsSnapshot.capture(preset.strings)

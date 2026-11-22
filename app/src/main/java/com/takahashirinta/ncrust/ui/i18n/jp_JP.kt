@@ -76,6 +76,31 @@ val jpJP = Strings(
     back = "戻る",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "バックグラウンド再生の保護",
+            entryHint = "機種ごとの常駐許可リストに Arris を加え、画面ロック後の停止を減らします",
+            statusSection = "バックグラウンドの状態",
+            requestOptimize = "電池の最適化を解除する",
+            oemSection = { profile -> "メーカー別の常駐設定 · $profile" },
+            openSettings = "設定を開く",
+            recentsSection = "最近使ったアプリをロック",
+            recentsIntro = "「一括クリーン」は最近使ったアプリのカードも消します。Arris のカードをロックすると対象から外れます。",
+            stepsColorOs = "設定 → 電池 → アプリの電力管理 で Arris を選択\n「バックグラウンド実行を許可」と「自動起動を許可」をオン\n「電力節約の保護」で Arris を「バックグラウンド実行を許可」に",
+            stepsMiui = "設定 → アプリ → アプリを管理 → Arris\n「自動起動」をオン\n「省電力」を開き「制限なし」を選ぶ",
+            stepsOriginOs = "設定 → 電池 → バックグラウンド電力管理 で Arris を選択\n「バックグラウンドでの高消費電力を許可」をオン\niManager → アプリ管理 → 自動起動 で Arris を許可",
+            stepsEmui = "設定 → 電池 → 起動管理 で Arris を選択\n「自動管理」をオフ\n「自動起動」「関連起動」「バックグラウンド動作」にチェック",
+            stepsFlyme = "設定 → 電力管理 → バックグラウンド管理 で Arris を選択\n「バックグラウンドで実行し続ける」を選ぶ\nスマホマネージャー → 権限管理 → 自動起動 で Arris を許可",
+            stepsOneUi = "設定 → 電池 → バックグラウンド使用の制限 で Arris を選択\nArris を「スリープしないアプリ」に追加\n「適応バッテリー」の対象から Arris を外す",
+            stepsOther = "設定 → アプリ → Arris → 電池\n「制限なし / バックグラウンド実行を許可」を選ぶ\n自動起動の管理で Arris の自動起動を許可",
+            recentsColorOs = "最近使ったアプリで Arris のカードを長押し → 鍵アイコンをタップ（「ロック済み」と表示されます）。",
+            recentsMiui = "最近使ったアプリで Arris のカードを下へ引き下げ → 鍵アイコンをタップ（カード隅に鍵が出れば成功）。",
+            recentsOriginOs = "最近使ったアプリで Arris のカードを長押し → 鍵アイコンをタップ。",
+            recentsEmui = "最近使ったアプリで Arris のカードを下へ引き下げ → 鍵アイコンをタップ。長押しから「ロック」も選べます。",
+            recentsFlyme = "最近使ったアプリで Arris のカードを長押し → 鍵アイコンをタップ。",
+            recentsOneUi = "最近使ったアプリで Arris のカードを長押し → 「開いたままにする」をタップ。右上のメニューからもロックできます。",
+            recentsOther = "最近使ったアプリで Arris のカードを長押し、または下へ引き下げて「ロック」を選びます。",
+        ),
         // v2.8.0：二段式設定メニューの 7 枚のグループカード（順序 = SettingsGroup 宣言順）。
         settingsGroupAccountTitle = "アカウントとログイン",
         settingsGroupAccountSubtitle = "ncm と qm のアカウント",

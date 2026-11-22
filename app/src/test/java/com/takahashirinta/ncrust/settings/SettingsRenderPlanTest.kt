@@ -66,7 +66,8 @@ class SettingsRenderPlanTest {
                 // v3.2.0：2 → 3（B 站账号块，P1）。三块共用同一个登录框架的不同通道。
                 "account" to 3,      // ncm 账号块 + qm 账号块 + B 站账号块
                 // v3.1.0：+1（B 站音源开关）⇒ 5。它是**内容源开关**，不属于账号页。
-                "general" to 5,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行 / B 站音源
+                // v4.2.0：5 → 6（后台播放保护引导页：厂商保活白名单 + 最近任务锁定）。
+                "general" to 6,      // 语言 / 自动旋转 / 音乐人推荐 / 后台运行 / 后台播放保护 / B 站音源
                 // v3.0.0：动效/波形相关的 8 个可见项从「播放与音质」搬到「外观与动效」
                 // （它们控制的是画面，不是音质）：音频可视化 + 动效强度 + 界面动效总开关
                 // + 五个独立开关 ⇒ 5 + 8 = 13。
@@ -95,7 +96,8 @@ class SettingsRenderPlanTest {
         // v3.4.8：42 → 45（B 站音质上限 / 优先无损 FLAC / 字幕语言，三条都是可见项）。
         // v3.4.11 / 981e9b3：45 → 46（非会员遇到 VIP 歌曲）。
         // v3.4.13：再 +1（自动检查更新）⇒ 47。两笔是不同分组的独立可见项，不能合并计数。
-        assertEquals(58, counts.values.sum())
+        // v4.2.0：58 → 59（后台播放保护引导页；同样是「通用」组里的一条可见项）。
+        assertEquals(59, counts.values.sum())
         // 78 条 registry 条目 = 27 条内部项（从来不渲染） + 4 条库页承载 + 47 条二级页渲染
         //
         // v2.9.0 的内部项从 16 涨到 25：+7 是 v2.8.0 的波形键（降级为迁移源，含此前漏枚举的
@@ -108,7 +110,8 @@ class SettingsRenderPlanTest {
         // v3.4.11 / 981e9b3：75 → 76（非会员遇到 VIP 歌曲，可见项）。
         // v3.4.13：再 +1（update_auto_check）⇒ 77；同轮注册 SessionMonitor 的
         // session_was_logged_in（内部项）⇒ 78。
-        assertEquals(93, SettingsRegistry.allEntries().size)
+        // v4.2.0：93 → 94（后台播放保护引导页，无 prefs key 的可见行为行）。
+        assertEquals(94, SettingsRegistry.allEntries().size)
         // 内部项 26 → 27（新增 session_was_logged_in；v3.0.0 的 5 个动效键与
         // v3.1.0 的 B 站开关**都是可见开关**）。
         assertEquals(31, SettingsRegistry.allEntries().count { it.isInternal })

@@ -397,6 +397,22 @@ object SettingsRegistry {
             )
         )
         add(action("action.background_activity", SettingsGroup.GENERAL, "batteryTitle"))
+        // v4.2.0：**后台播放保护引导页**（厂商保活白名单 + 最近任务锁定）。
+        //
+        // 与上一行的区别：`action.background_activity` 只发 AOSP 那一条
+        // `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，而 ColorOS / MIUI 这类 ROM
+        // 还有**自己的**自启动与后台清理开关，系统白名单并不覆盖它们。这一行进入的引导页
+        // 按机型给三步说明并逐个尝试厂商深链，最后才退到系统兜底页。
+        //
+        // 无 prefs key（纯行为行）：它不落盘，状态从 `PowerManager` 实时读。
+        add(
+            action(
+                "action.background_guide",
+                SettingsGroup.GENERAL,
+                "settings.backgroundGuide.pageTitle",
+                "settings.backgroundGuide.entryHint",
+            )
+        )
         // v3.1.0 · B：**B 站音源的独立开关**（铁律 24：用户可选择是否启用）。
         //
         // 放在「通用」而不是「账号与登录」：它不是一个账号（B 站本轮没有登录接入），

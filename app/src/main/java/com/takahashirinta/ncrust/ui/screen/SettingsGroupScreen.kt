@@ -340,6 +340,8 @@ private fun SettingsPreferenceGroupPage(
     // v2.0.0 · T3：离线缓存管理（全屏 Dialog，见 OfflineCacheOverlay.kt 的 KDoc
     // 说明为什么它不是导航页）。
     var showOfflineCacheManager by remember { mutableStateOf(false) }
+    // v4.2.0：后台播放保护引导页（同样是全屏 Dialog，理由见 BackgroundGuideOverlay.kt 的 KDoc）。
+    var showBackgroundGuide by remember { mutableStateOf(false) }
     val playingSongId by playerViewModel.currentSongId.collectAsState()
 
     // 缓存占用要递归遍历 cacheDir，放 IO 线程算；只在存储页需要，其他页面不付这份开销。
@@ -1023,6 +1025,16 @@ private fun SettingsPreferenceGroupPage(
                         )
                     }
 
+                    // v4.2.0：后台播放保护引导页入口。副标题说明这一行**能解决什么**
+                    // （厂商 ROM 的自启动/清理开关不在 AOSP 白名单里，所以上一行盖不住它）。
+                    SettingsRowKind.BACKGROUND_GUIDE -> item(key = entry.id) {
+                        SettingActionRow(
+                            label = rowTitle(strings, entry, updateStrings),
+                            subtitle = rowSubtitle(strings, entry, updateStrings),
+                            onClick = { showBackgroundGuide = true },
+                        )
+                    }
+
                     SettingsRowKind.ABOUT_OPEN -> item(key = entry.id) {
                         SettingActionRow(
                             label = rowTitle(strings, entry, updateStrings),
@@ -1081,6 +1093,12 @@ private fun SettingsPreferenceGroupPage(
                 // （离线兜底 `recallOfflineCache` 会按 id 找回缓存里的 URL，不需要新路径）。
                 onPlayTrack = { song -> song?.let { onPlaySong(it) } },
             )
+        }
+
+        // v4.2.0：后台播放保护引导页。与上面那个覆盖层同一层（Dialog），
+        // 不做成导航页 —— 它只有「看完就关」一种退出方式，开一条路由要多动三处。
+        if (showBackgroundGuide) {
+            BackgroundGuideOverlay(onDismiss = { showBackgroundGuide = false })
         }
     }
 }
@@ -1179,6 +1197,8 @@ private fun rowTitle(strings: Strings, entry: SettingsEntry, updateStrings: Upda
     "custom_bg_enabled" -> strings.bgSectionTitle
     "offline_cache_mb" -> strings.offlineCacheLimitLabel
     "action.background_activity" -> strings.batteryTitle
+    // v4.2.0：文案住在 `Strings.settings.backgroundGuide` 组（registry 的 titleKey 是组路径）。
+    "action.background_guide" -> strings.settings.backgroundGuide.pageTitle
     "action.about_open" -> strings.aboutButton
     // 6 个波形项的文案住在 `Strings.waveform`（i18n 侧 v2.8.0 新增的组），
     // registry 里 titleKey 为 null 是**刻意**的（见 SettingsRenderPlanTest 的断言）。
@@ -1200,6 +1220,8 @@ private fun rowSubtitle(strings: Strings, entry: SettingsEntry, updateStrings: U
     // v3.4.13：文案暂住在 UpdateStrings
     "update_auto_check" -> updateStrings.autoCheckDescription
     "action.check_update" -> null
+    // v4.2.0：厂商保活引导页那一行的说明（同一组文案）。
+    "action.background_guide" -> strings.settings.backgroundGuide.entryHint
     "page_transition_enabled" -> strings.motion.pageTransitionDescription
     "lyrics_in_media_session" -> strings.lyricsInMediaSessionHint
     "lyrics_romanization" -> strings.lyricsRomanizationHint
