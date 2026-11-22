@@ -446,9 +446,42 @@ object SongUrlFetcher {
             inFlightCapability.run(songId) { fetchQualityCapability(songId, session) }
         }
 
-    /** maxBrLevel describes the catalog; plLevel describes playback for this login. */
+    /**
+     * maxBrLevel describes the catalog; plLevel describes playback for this login.
+     *
+     * v4.1.10 · A：真机抓到过 `path=/eapi/v3/song/detail … reused=true … stream was reset: CANCEL`
+     * —— 复用连接上的流级复位。这条请求是「可选增强数据」，但一次复位就丢掉它太亏，
+     * 所以按 [ReusedConnectionRetry] 的决策**换一条新连接重试一次**（先 evict，再发）。
+     */
     private suspend fun fetchQualityCapability(songId: Long, session: Long): QualityCapability? {
         qualityCapabilityCache[songId]?.takeIf { it.session == session }?.let { return it }
+        return try {
+            fetchQualityCapabilityOnce(songId, session)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            // 复位 ⇒ 换连接重试一次（evict 掉那条已经出过问题的复用连接）。
+            if (!ReusedConnectionRetry.shouldRetryOnFreshConnection(e, reused = null, alreadyRetried = false)) {
+                Log.w(TAG, "song capability fetch failed for songId=$songId", e)
+                return null
+            }
+            Log.i(TAG, "song capability stream reset for songId=$songId — retrying on a fresh connection")
+            RetrofitClient.evictIdleConnections()
+            try {
+                fetchQualityCapabilityOnce(songId, session)
+            } catch (e2: kotlinx.coroutines.CancellationException) {
+                throw e2
+            } catch (e2: Exception) {
+                Log.w(TAG, "song capability fetch failed for songId=$songId", e2)
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "song capability fetch failed for songId=$songId", e)
+            null
+        }
+    }
+
+    private suspend fun fetchQualityCapabilityOnce(songId: Long, session: Long): QualityCapability? {
         return try {
             val payload = mapOf("c" to JSONArray().put(JSONObject().put("id", songId)).toString())
             val response = RetrofitClient.eapiPostCancellable(
@@ -471,9 +504,6 @@ object SongUrlFetcher {
             cap
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "song capability fetch failed for songId=$songId", e)
-            null
         }
     }
 
