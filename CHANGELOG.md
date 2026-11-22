@@ -3,6 +3,20 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.1.8-gpl — 后台播放保护引导、播放卡顿自愈与通知节流（2026-11-22）
+
+主线 · Android 10 及以上 · versionCode 240 · 正式版
+
+- **后台播放保护引导页**（设置 → 通用 → 后台播放保护）：按机型识别 ColorOS / HyperOS / OriginOS / HarmonyOS / EMUI / MagicOS / Flyme / One UI，给出该厂商的三步说明与最近任务锁定方式，并把「关闭电池优化」做成系统授权对话框（真正改变 Doze 白名单的动作）。ColorOS 上「自启动」与「应用耗电管理」两页带签名权限、第三方无法直跳（实测结论已写进代码注释），因此按钮退到设置首页与应用详情页，这两处是系统允许的极限。
+- **播放卡顿自愈**：旧实现只在 `STATE_BUFFERING` 时观察卡顿，READY 但时钟不前进这一支从没人管，且恢复回调挂在 ViewModel 上（后台/熄屏时为空）。现在改为服务侧常驻 2 秒判据（有播放意图 + 位置 N 秒不前进 + 非用户暂停），先由服务自己 `stop → seekTo → prepare`，ViewModel 回调只作补充；同一次卡顿只报一次。
+- **网络抖动不再永久暂停**：取链网络失败改为 2s→5s→10s→20s→30s 退避，窗口内不设次数上限（10 分钟才交回用户），窗口从第一次失败起算；当前项仍在出声时不按停。
+- **通知节流**：状态类更新立即发，内容类（歌词行 / 进度）≥5 秒一档，被限流的一次补发不丢行。真机实测通知重建由 12.3 次/分降到 10.1 次/分，密集段从 1–2 秒收到严格 5 秒（ColorOS 的 `OplusNotificationFixHelper` 每次 `notify()` 触发 2 行日志，之前被误读成 OEM 轮询）。
+- **诊断**：每 15 秒一条 `tick state=… position=… buffered=… suppression=… stalledFor=…`，用来分辨"时钟不前进"与"数据源卡住"；`stalledFor` 持续增长时带 ` STALLED`。
+
+验证：全量 JVM **3717 例 / 0 失败 / 6 跳过**；真机（PLC110 / Android 17 / ColorOS）两次 10 分钟熄屏后台播放 tick 无空洞、`stalledFor` 全程 0；断网实验按 v4.1.7 的退避自动续播。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v4.1.8-gpl) · [官网直链](https://arris.de5.net/get/Arris-v4.1.8-gpl.apk) · SHA-256 `20f7c00282332c02a29f894050ed7aac6065e0a8302bb4d973b921699b33e36b`
+
 ## v4.1.6-gpl — 生日祝福视觉重构、扫码登录可靠性与 WebView 闪烁（2026-11-20）
 
 主线 · Android 10 及以上 · versionCode 233 · 正式版

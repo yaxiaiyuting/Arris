@@ -76,6 +76,31 @@ val deDE = Strings(
     back = "Zurück",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "Hintergrundwiedergabe schützen",
+            entryHint = "Arris in die Dauerlauf-Liste des Herstellers eintragen, damit die Wiedergabe nach dem Sperren weiterläuft",
+            statusSection = "Hintergrundstatus",
+            requestOptimize = "Akku-Optimierung abschalten",
+            oemSection = { profile -> "Herstellereinstellungen · $profile" },
+            openSettings = "Einstellungen öffnen",
+            recentsSection = "Karte der letzten Apps sperren",
+            recentsIntro = "Ein „Alles bereinigen“ entfernt auch die Karten der letzten Apps; eine gesperrte Arris-Karte bleibt erhalten.",
+            stepsColorOs = "Einstellungen → Akku → App-Energieverwaltung → Arris\n„Hintergrundaktivität zulassen“ und „Autostart zulassen“ einschalten\nDann unter „Energieschutz“ Arris auf „Hintergrundausführung zulassen“ stellen",
+            stepsMiui = "Einstellungen → Apps → Apps verwalten → Arris\n„Autostart“ einschalten\n„Akku-Sparmodus“ öffnen und „Keine Einschränkungen“ wählen",
+            stepsOriginOs = "Einstellungen → Akku → Hintergrund-Energieverwaltung → Arris\n„Hohen Hintergrundverbrauch zulassen“ einschalten\niManager → App-Verwaltung → Autostart → Arris erlauben",
+            stepsEmui = "Einstellungen → Akku → Startverwaltung → Arris\n„Automatisch verwalten“ ausschalten\n„Autostart“, „Verknüpfter Start“ und „Im Hintergrund ausführen“ anhaken",
+            stepsFlyme = "Einstellungen → Energie → Hintergrundverwaltung → Arris\n„Im Hintergrund weiterlaufen“ wählen\nPhone-Manager → Berechtigungen → Autostart → Arris erlauben",
+            stepsOneUi = "Einstellungen → Akku → Nutzungslimits im Hintergrund → Arris\nArris zu „Apps, die nie in den Ruhezustand gehen“ hinzufügen\nArris von „Adaptiver Akku“ ausnehmen",
+            stepsOther = "Einstellungen → Apps → Arris → Akku\n„Uneingeschränkt“ bzw. „Hintergrundaktivität zulassen“ wählen\nArris in der Autostart-Verwaltung erlauben",
+            recentsColorOs = "In „Zuletzt verwendet“ die Arris-Karte lange drücken und das Schloss antippen (bestätigt „Gesperrt“).",
+            recentsMiui = "In „Zuletzt verwendet“ die Arris-Karte nach unten ziehen und das Schloss antippen (Schloss erscheint an der Ecke).",
+            recentsOriginOs = "In „Zuletzt verwendet“ die Arris-Karte lange drücken und das Schloss antippen.",
+            recentsEmui = "In „Zuletzt verwendet“ die Arris-Karte nach unten ziehen und das Schloss antippen; langes Drücken bietet ebenfalls „Sperren“.",
+            recentsFlyme = "In „Zuletzt verwendet“ die Arris-Karte lange drücken und das Schloss antippen.",
+            recentsOneUi = "In „Zuletzt verwendet“ die Arris-Karte lange drücken und „Offen halten“ wählen; alternativ im Menü oben rechts sperren.",
+            recentsOther = "In „Zuletzt verwendet“ die Arris-Karte lange drücken oder nach unten ziehen und „Sperren“ wählen.",
+        ),
         // v2.8.0: die 7 Gruppenkarten des zweistufigen Einstellungsmenüs
         // (Reihenfolge = Deklarationsreihenfolge von SettingsGroup).
         settingsGroupAccountTitle = "Konto & Anmeldung",

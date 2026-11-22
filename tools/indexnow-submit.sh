@@ -16,7 +16,13 @@ KEY_LOCATION="https://${HOST}/${KEY}.txt"
 ORIGIN="https://${HOST}"
 
 urls=("${ORIGIN}/" "${ORIGIN}/llms.txt" "${ORIGIN}/llms-full.txt" "${ORIGIN}/feed.xml" "${ORIGIN}/api/releases")
-for extra in "$@"; do urls+=("$extra"); done
+for extra in "$@"; do
+  # IndexNow 要求 payload 里所有 URL 都属于声明的 host；混入别的域名会被整批拒绝（422）。
+  case "$extra" in
+    "https://${HOST}"/*) urls+=("$extra") ;;
+    *) echo "skip $extra（不属于 ${HOST}，IndexNow 会整批 422）" >&2 ;;
+  esac
+done
 
 payload=$(printf '%s\n' "${urls[@]}" | python3 -c 'import json,sys; u=[l.strip() for l in sys.stdin if l.strip()]; print(json.dumps({"host":"arris.de5.net","key":"arris-de5-net-20261119","keyLocation":"https://arris.de5.net/arris-de5-net-20261119.txt","urlList":u}, ensure_ascii=False))')
 

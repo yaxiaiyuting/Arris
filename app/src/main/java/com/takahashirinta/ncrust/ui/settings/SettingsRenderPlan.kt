@@ -65,6 +65,15 @@ enum class SettingsRowKind {
     /** 无 key 的跳转行（跳系统「允许后台活动」）。 */
     ACTION_JUMP,
 
+    /**
+     * v4.2.0：**后台播放保护引导页**入口（全屏 Dialog，含状态回显 + 厂商三步说明 + 深链）。
+     *
+     * 不并进 [ACTION_JUMP]：那一行的行为是「发一条系统 Intent 就结束」，
+     * 而这一行要打开我们自己的页面 —— 把两者塞进同一个 kind 会让 [ACTION_JUMP] 的
+     * 分支里再长出「按 entry.id 分叉」的第二处真相。与 [OFFLINE_MANAGER] 的分法一致。
+     */
+    BACKGROUND_GUIDE,
+
     /** 打开独立页面（均衡器）。与 ACTION_JUMP 的区别：目标是我们自己的页面，不是系统页。 */
     EQUALIZER_OPEN,
     LIVE_UPDATES,
@@ -167,6 +176,8 @@ object SettingsRenderPlan {
             // 通用
             "language_code" -> SettingsRowKind.LANGUAGE_DROPDOWN
             "action.background_activity" -> SettingsRowKind.ACTION_JUMP
+            // v4.2.0：厂商保活引导页（我们自己的全屏页，不是系统页）。
+            "action.background_guide" -> SettingsRowKind.BACKGROUND_GUIDE
 
             // 外观与动效
             "theme_mode" -> SettingsRowKind.THEME_MODE_SEGMENT

@@ -782,6 +782,8 @@ class SettingsRegistryTest {
             "action.account_netease", "action.account_qq", "action.account_bili",
             "action.check_update",
             "action.background_activity",
+            // v4.2.0：后台播放保护引导页（无 prefs key，纯行为行）。
+            "action.background_guide",
             "action.equalizer_open",
             "action.live_update_settings",
         "action.storage_clear_cache", "action.storage_offline_manage", "action.about_open",

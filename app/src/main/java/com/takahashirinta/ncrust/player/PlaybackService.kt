@@ -147,8 +147,18 @@ class PlaybackService : MediaLibraryService() {
     private val visualizationVolume by lazy { PlaybackVisualVolume(this) }
     private var visualizationVolumeJob: Job? = null
     private var progressJob: Job? = null
-    private var bufferProgressJob: Job? = null
-    private val stallWatch = PlaybackStallWatch(timeoutMs = 12_000L)
+    /**
+     * v4.1.8：卡顿观察循环。**与 UI 生命周期、与 `playbackState` 都无关** ——
+     * Service 起来就有，Service 销毁才停（见 [startStallWatch]）。
+     *
+     * 旧实现叫 `bufferProgressJob`，只在 `playbackState == STATE_BUFFERING` 时启动，
+     * 于是「READY 但时钟不动」这一类现场根本没人观察（2026-11-22 真机故障）。
+     */
+    private var stallJob: Job? = null
+    private val stallDetector = PlaybackStallDetector()
+    /** 诊断日志的节流（15 s 一条，别刷屏）与「本窗口内重建了几次通知」计数。 */
+    private var lastStallTickAtMs = 0L
+    private var notifyPostsSinceTick = 0
     private val checkpoint = PlaybackCheckpoint()
     private val queuePreload = ExoPlayer.PreloadConfiguration(12_000_000L)
     private var lastLocalStallRepair: TrackKey? = null
@@ -306,6 +316,33 @@ class PlaybackService : MediaLibraryService() {
 
         /** v1.8.0 · T5：探针 tag（debug 包用来看"到底 post 了几次"）。 */
         private const val TAG_LYRIC_NOTIFY = "NcrustLyricNotify"
+
+        /**
+         * v4.1.8：卡顿观察循环的采样间隔。
+         *
+         * 判据阈值是 [PlaybackStallDetector.DEFAULT_STALL_MS]（12 s），2 s 的采样粒度
+         * 最多让判定晚 2 s；再密就对熄屏功耗不友好了。
+         */
+        private const val STALL_TICK_MS = 2_000L
+
+        /**
+         * v4.1.8：诊断日志的间隔。**默认开启**（release 包也打），因为它的唯一用途就是
+         * 「下一次再卡死时能从 logcat 判断是时钟不前进还是数据源卡住」——
+         * 只在 debug 包里打等于没有。15 s 一条，一小时 240 行，不会刷屏。
+         *
+         * **怎么读这条日志**（现场归因顺序）：
+         * 1. `stalledFor` 持续增长且 `STALLED` 出现 ⇒ 判据命中，后面必然跟一条
+         *    `Playback stalled` / `Stall self-repair`；
+         * 2. `position` 在涨、`stalledFor=0` ⇒ 播放正常（此时若用户仍说没声音，
+         *    问题在输出设备/音量，不在这条链路）；
+         * 3. 两次 tick 之间出现远超 15 s 的**空洞**：先看空洞结束后的第一条日志 ——
+         *    `state=READY isPlaying=true` 且位置比空洞前更靠后 ⇒ 空洞期间只是没有播放意图
+         *    （暂停 / 音频焦点被抑制，这两段时间本就不打 tick）；位置**和空洞前完全一样**
+         *    ⇒ 主线程或整个进程那段时间被冻结过，判据根本没机会跑（真机 PLC110 上实测
+         *    播放期间 UID 是 FGS 状态、`isFrozen=false`，ColorOS 的 `osense.compress`
+         *    只做内存页压缩，所以这一支在正常前台播放时不应出现）。
+         */
+        private const val STALL_DIAG_INTERVAL_MS = 15_000L
 
         /**
          * v2.1.5 · P1 探针 tag：媒体面板（MediaSession metadata）到底发布了什么。
@@ -942,6 +979,8 @@ class PlaybackService : MediaLibraryService() {
         cancelStaleMedia3Notification()
         settings.registerOnSharedPreferenceChangeListener(sessionSettingsListener)
         startProgressUpdates()
+        // v4.1.8：卡顿观察循环随 Service 常驻（**不**随 buffering 状态/UI 生命周期开关）。
+        startStallWatch()
     }
 
     /**
@@ -1792,6 +1831,15 @@ class PlaybackService : MediaLibraryService() {
     private val lyricNotifyHandler = Handler(Looper.getMainLooper())
     private val lyricNotifyRetry = Runnable { onMediaLyricLineChanged(mediaLyricFrame.notificationKey) }
 
+    /**
+     * v4.1.8：通知**内容类**更新的节流（跨歌词行 / Live Update 进度）。
+     *
+     * 真机取证：熄屏后台播放时 ColorOS 侧 `OplusNotificationFixHelper` 每 ~2.5 s 重建
+     * 一次我们的通知（每次都要重解析应用图标）。见 [NotifyPace] 的 KDoc。
+     */
+    private val notifyPace = NotifyPace()
+    private val liveUpdatePace = NotifyPace()
+
     // v2.1.6 · 会话合并：`setPlaybackState` 的去重状态（lastPlaybackStateInt /
     // lastPlaybackStateSentAt / STATE_MIN_INTERVAL_MS）随 legacy 会话一起删掉了 ——
     // 现在 playback state 由 media3 的 MediaSession 自己从 player 转发，
@@ -2058,28 +2106,137 @@ class PlaybackService : MediaLibraryService() {
         return true
     }
 
-    private fun restartStallObservation() {
-        stallWatch.reset()
-        bufferProgressJob?.cancel()
-        bufferProgressJob = null
-        if (!isActivelyBuffering()) return
-        bufferProgressJob = scope.launch {
-            while (isActive && isActivelyBuffering()) {
-                observePlaybackProgress(player.currentPosition, bufferedMs = player.bufferedPosition)
-                delay(1_000L)
+    /**
+     * v4.1.8：**卡顿观察循环的唯一入口**，随 Service 生命周期存在，条件只有一个 —— 服务活着。
+     *
+     * ## 为什么不能再用「buffering 才起循环」
+     *
+     * 旧实现（v4.0.x–v4.1.7）是 `if (!isActivelyBuffering()) return`。真机现场
+     * （2026-11-22 19:45，PLC110 / Android 17，熄屏后台）是 `playbackState=STATE_READY`、
+     * `isPlaying=true`、时钟停在 18396 ms 不动 —— 状态不是 BUFFERING ⇒ 循环从未启动 ⇒
+     * logcat 里既没有 `Playback stalled` 也没有任何恢复动作，而 UI 那一侧
+     * （`PlayerViewModel.onPlaybackStalled`）也就永远收不到回调。
+     *
+     * 所以循环改为**常驻**，把「该不该判卡顿」交给 [PlaybackStallDetector] 回答：
+     * 它看播放意图、看时钟是否前进、看用户动作代数，**不看** `playbackState`。
+     *
+     * ## 频率
+     *
+     * 2 s 一次：判据阈值是 12 s，2 s 的采样粒度对判定的影响 ≤ 2 s；比 1 Hz 少一半唤醒，
+     * 熄屏长听时这点差别是实打实的。诊断日志另外按 15 s 节流（见 [observeStall]）。
+     */
+    private fun startStallWatch() {
+        stallJob?.cancel()
+        stallJob = scope.launch {
+            while (isActive) {
+                observeStall()
+                delay(STALL_TICK_MS)
             }
         }
     }
 
-    private fun observePlaybackProgress(positionMs: Long, bufferedMs: Long? = null) {
-        val stalled = stallWatch.observe(
-            SystemClock.elapsedRealtime(), positionMs,
-            bufferedMs,
+    /** 玩家动作（换歌 / seek / 状态切换）之后重新开一个计时窗口。 */
+    private fun restartStallObservation() {
+        stallDetector.reset()
+    }
+
+    /**
+     * 一次采样 = 一次判定 + 一次诊断节流。**只读 `Player`，不做任何写操作**
+     * （写操作全部收敛在 [handlePlaybackStall] 里，方便单点限流）。
+     */
+    private fun observeStall() {
+        val nowMs = SystemClock.elapsedRealtime()
+        val state = player.playbackState
+        val suppression = player.playbackSuppressionReason
+        val intent = hasActivePlaybackIntent() &&
+            suppression == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+        val positionMs = player.currentPosition
+        val bufferedMs = player.bufferedPosition
+        val reading = stallDetector.observe(
+            PlaybackStallDetector.Sample(
+                nowMs = nowMs,
+                positionMs = positionMs,
+                bufferedMs = bufferedMs,
+                buffering = state == Player.STATE_BUFFERING,
+                playbackIntent = intent,
+                actionGeneration = playRequestGeneration.current.toLong(),
+            ),
         )
-        if (stalled) playingTrackKey()?.let { track ->
-            Log.w("PlaybackService", "Playback stalled at ${positionMs}ms, buffering=${bufferedMs != null}")
-            onPlaybackStalled?.invoke(track, positionMs)
+        if (reading.stalled) handlePlaybackStall(positionMs, bufferedMs, state)
+        if (!intent) {
+            // 暂停 / 空闲：不刷诊断（熄屏暂停时也不该每 15 s 唤醒一次），
+            // 清零时刻是为了恢复播放后立刻能打一条「起点」样本。
+            lastStallTickAtMs = 0L
+            notifyPostsSinceTick = 0
+            return
         }
+        if (lastStallTickAtMs == 0L || nowMs - lastStallTickAtMs >= STALL_DIAG_INTERVAL_MS) {
+            lastStallTickAtMs = nowMs
+            Log.i(
+                "PlaybackService",
+                "tick state=${playbackStateName(state)} isPlaying=${player.isPlaying} " +
+                    "position=$positionMs buffered=$bufferedMs " +
+                    "suppression=${suppressionName(suppression)} " +
+                    "stalledFor=${reading.stalledForMs} notify=$notifyPostsSinceTick" +
+                    if (reading.stalledForMs >= PlaybackStallDetector.DEFAULT_STALL_MS) " STALLED" else "",
+            )
+            notifyPostsSinceTick = 0
+        }
+    }
+
+    /**
+     * 判出卡顿之后：**服务侧先自愈，UI 回调只作补充**（v4.1.8）。
+     *
+     * 现场之所以「切回前台就恢复」，正是因为唯一那条恢复路径挂在
+     * `PlayerViewModel.onPlaybackStalled` 上（`PlayerViewModel.kt:858`，`onCleared` 置 null）：
+     * UI 不在时回调为 null，服务自己什么也不做。现在的顺序是：
+     *
+     * 1. 同曲目就地恢复 [reprepareStalledItem]（`stop → seekTo(位置) → prepare`）——
+     *    不重新取链、不换档，只重建音频输出链，代价最小；
+     * 2. 就地恢复被跳过（本曲这个 revision 已经试过一次）时，才把回调交给 ViewModel
+     *    走更重的「重新取链 + 从卡住位置续播」；
+     * 3. 两条都不可用时至少留下日志 —— 下一次现场可归因。
+     */
+    private fun handlePlaybackStall(positionMs: Long, bufferedMs: Long, state: Int) {
+        val track = playingTrackKey() ?: return
+        Log.w(
+            "PlaybackService",
+            "Playback stalled at ${positionMs}ms, buffering=${state == Player.STATE_BUFFERING}, buffered=$bufferedMs",
+        )
+        val startedAtMs = SystemClock.elapsedRealtime()
+        val repaired = reprepareStalledItem(track, positionMs)
+        if (repaired) {
+            Log.i(
+                "PlaybackService",
+                "Stall self-repair started track=${track.source.key}:${track.id} position=$positionMs " +
+                    "cost=${SystemClock.elapsedRealtime() - startedAtMs}ms",
+            )
+            return
+        }
+        val delegate = onPlaybackStalled
+        Log.i(
+            "PlaybackService",
+            "Stall self-repair skipped track=${track.source.key}:${track.id} position=$positionMs " +
+                "delegate=${if (delegate != null) "viewmodel" else "none"}",
+        )
+        delegate?.invoke(track, positionMs)
+    }
+
+    private fun playbackStateName(state: Int): String = when (state) {
+        Player.STATE_IDLE -> "IDLE"
+        Player.STATE_BUFFERING -> "BUFFERING"
+        Player.STATE_READY -> "READY"
+        Player.STATE_ENDED -> "ENDED"
+        else -> "UNKNOWN($state)"
+    }
+
+    private fun suppressionName(reason: Int): String = when (reason) {
+        Player.PLAYBACK_SUPPRESSION_REASON_NONE -> "NONE"
+        Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS -> "TRANSIENT_FOCUS_LOSS"
+        Player.PLAYBACK_SUPPRESSION_REASON_UNSUITABLE_AUDIO_ROUTE -> "UNSUITABLE_ROUTE"
+        Player.PLAYBACK_SUPPRESSION_REASON_UNSUITABLE_AUDIO_OUTPUT -> "UNSUITABLE_OUTPUT"
+        Player.PLAYBACK_SUPPRESSION_REASON_SCRUBBING -> "SCRUBBING"
+        else -> "OTHER($reason)"
     }
 
     private fun savePlaybackCheckpoint(positionMs: Long, durationMs: Long, explicit: Boolean = false) {
@@ -2102,12 +2259,19 @@ class PlaybackService : MediaLibraryService() {
                 savePlaybackCheckpoint(positionMs, durationMs)
                 onProgressUpdate?.invoke(positionMs, durationMs)
                 updatePlaybackState(durationMs)
-                if (android.os.Build.VERSION.SDK_INT >= 36) updateLivePlayback(positionMs, durationMs)
+                // v4.1.8：Live Update 的进度卡也走节流。它每 1% 变一次内容 ⇒ 按 4 分钟的歌
+                // 算是每 2–3 秒一次 `notify()`；真机 OEM（ColorOS）每次重建都要重解析
+                // 应用图标，实测被刷到 ~2.5 s 一条（见 [NotifyPace] 的 KDoc）。
+                if (android.os.Build.VERSION.SDK_INT >= 36 &&
+                    liveUpdatePace.decide(SystemClock.elapsedRealtime(), NotifyReason.CONTENT) ==
+                    NotifyPace.Decision.Post
+                ) {
+                    updateLivePlayback(positionMs, durationMs)
+                }
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
                 pushWidgetUpdate(positionMs, durationMs)
-                observePlaybackProgress(positionMs)
                 // 500 ms tick：歌词滚动/进度条精度感知不到差异，但把 UI 层 4Hz
                 // 广播降到 2Hz，PlayerViewModel 的三个 StateFlow / SlimProgressBar
                 // 每秒重绘次数直接减半，低端机主线程 snapshot 广播压力显著下降。
@@ -2181,12 +2345,26 @@ class PlaybackService : MediaLibraryService() {
         when (decision) {
             LyricNotifyGate.Decision.Post -> {
                 if (BuildConfig.DEBUG) probeGatePost++
-                lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
-                // Paused playback has no ticker: refresh session metadata with the same frame now.
-                runCatching { updatePlaybackState() }
-                updateNotify()
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG_LYRIC_NOTIFY, "re-post on lyric line change: $line")
+                // v4.1.8：跨行重发是**内容类**更新，再套一层 5 s 的节流。
+                // 真机实测（PLC110 / ColorOS）一行歌词约 2.5 s，直接重发会让系统通知
+                // 每 2.5 s 重建一次（`OplusNotificationFixHelper` 每次都要重解析图标）。
+                // 被限流的这一行**不丢**：按剩余时间补发，补发时取的是最新一行。
+                when (val pace = notifyPace.decide(SystemClock.elapsedRealtime(), NotifyReason.CONTENT)) {
+                    NotifyPace.Decision.Post -> {
+                        lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
+                        // Paused playback has no ticker: refresh session metadata with the same frame now.
+                        runCatching { updatePlaybackState() }
+                        updateNotify()
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG_LYRIC_NOTIFY, "re-post on lyric line change: $line")
+                        }
+                    }
+
+                    is NotifyPace.Decision.Defer -> {
+                        if (BuildConfig.DEBUG) probeGateDefer++
+                        lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
+                        lyricNotifyHandler.postDelayed(lyricNotifyRetry, pace.retryInMs)
+                    }
                 }
             }
 
@@ -2224,6 +2402,9 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun updateNotify() {
+        // v4.1.8：诊断计数 —— 卡顿 tick 日志里会报「这一档（15 s）重建了几次通知」，
+        // 用来在真机上量 OEM 通知重建频率（改前 ~2.5 s 一条，改后应 ≤ 5 s 一条）。
+        notifyPostsSinceTick++
         if (android.os.Build.VERSION.SDK_INT >= 36) updateLivePlayback(player.currentPosition, player.duration)
         try {
             if (BuildConfig.DEBUG) probeNotifyBuilds++
@@ -2454,7 +2635,7 @@ class PlaybackService : MediaLibraryService() {
         instance = null
         isServiceStarted = false
         progressJob?.cancel()
-        bufferProgressJob?.cancel()
+        stallJob?.cancel()
         // v2.0.2：丢掉挂着的歌词重试，别让一个已销毁的服务再收到回调
         lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
         cancelArtworkIdleRelease()
@@ -2522,7 +2703,8 @@ class PlaybackService : MediaLibraryService() {
         Log.d("PlaybackService", "onTaskRemoved")
         PlaybackStateManager.saveServiceResumeIntent(this, false)
         isServiceStarted = false
-        bufferProgressJob?.cancel()
+        // 卡顿循环随 Service 销毁一起停（onDestroy 里还会 cancel 一次 scope）；
+        // 保留播放（上面的早退分支）时**不能**停它 —— 后台熄屏正是它唯一的战场。
         stopForeground(STOP_FOREGROUND_REMOVE)
         LiveUpdateNotifier.cancel(this, LiveUpdateKind.PLAYBACK)
         mediaTitle = "Arris"

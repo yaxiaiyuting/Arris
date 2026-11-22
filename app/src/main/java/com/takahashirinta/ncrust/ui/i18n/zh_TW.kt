@@ -76,6 +76,31 @@ val zhTW = Strings(
     back = "返",
 
     settings = SettingsStrings(
+        // v4.2.0：后台播放保护引导页的 22 条文案（单开一组，理由见 BackgroundGuideStrings 的 KDoc）。
+        backgroundGuide = BackgroundGuideStrings(
+            pageTitle = "背景播放保護",
+            entryHint = "依機型把 Arris 加入系統的常駐允許清單，鎖屏後較不易被清理",
+            statusSection = "背景執行狀態",
+            requestOptimize = "去關閉電池最佳化",
+            oemSection = { profile -> "廠商常駐設定 · $profile" },
+            openSettings = "去設定",
+            recentsSection = "鎖定最近使用的工作",
+            recentsIntro = "系統的「一鍵清理」會連最近工作卡片一起清掉；鎖住 Arris 的卡片後，清理時會被跳過。",
+            stepsColorOs = "設定 → 電池 → 應用程式耗電管理，找到 Arris\n開啟「允許背景執行」與「允許自動啟動」\n再進入「耗電保護」，把 Arris 設為「允許背景執行」",
+            stepsMiui = "設定 → 應用程式設定 → 應用程式管理 → Arris\n開啟「自動啟動」\n進入「省電策略」，選擇「無限制」",
+            stepsOriginOs = "設定 → 電池 → 背景耗電管理，找到 Arris\n開啟「允許背景高耗電」\n進入 i 管家 → 應用程式管理 → 自動啟動，允許 Arris",
+            stepsEmui = "設定 → 電池 → 啟動管理，找到 Arris\n關閉「自動管理」\n在選項中勾選「允許自動啟動」「允許關聯啟動」「允許背景活動」",
+            stepsFlyme = "設定 → 電量管理 → 背景管理，找到 Arris\n選擇「保持背景執行」\n進入手機管家 → 權限管理 → 自動啟動，允許 Arris",
+            stepsOneUi = "設定 → 電池 → 背景使用限制，找到 Arris\n把 Arris 加入「永不休眠的應用程式」\n把 Arris 從「自動調整電池」的最佳化範圍移出",
+            stepsOther = "設定 → 應用程式 → Arris → 電池\n選擇「不受限制 / 允許背景執行」\n在「自動啟動管理」中允許 Arris 自動啟動",
+            recentsColorOs = "在最近工作畫面長按 Arris 卡片 → 點鎖頭圖示（首次會提示「已鎖定」）。",
+            recentsMiui = "在最近工作畫面把 Arris 卡片往下拉 → 點鎖頭圖示（卡片角落出現鎖即成功）。",
+            recentsOriginOs = "在最近工作畫面長按 Arris 卡片 → 點鎖頭圖示。",
+            recentsEmui = "在最近工作畫面把 Arris 卡片往下拉 → 點鎖頭圖示；長按卡片後也能選「鎖定」。",
+            recentsFlyme = "在最近工作畫面長按 Arris 卡片 → 點鎖頭圖示。",
+            recentsOneUi = "在最近工作畫面長按 Arris 卡片 → 點「保持開啟」；也可在右上角選單鎖定應用程式。",
+            recentsOther = "在最近工作畫面長按或下拉 Arris 卡片，找到「鎖定 / 上鎖」入口。",
+        ),
         // v2.8.0：二級選單的 7 個一級分組卡片（順序 = SettingsGroup 宣告順序）。
         settingsGroupAccountTitle = "帳號與登入",
         settingsGroupAccountSubtitle = "ncm 與 qm 帳號",
