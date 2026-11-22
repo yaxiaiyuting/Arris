@@ -70,6 +70,13 @@ data class OemDeepLink(
      * 不带这个 extra 会停在列表页（可用，但要多点一次）。
      */
     val extraPackageName: String? = null,
+    /**
+     * 是否把 `package:<自己的包名>` 塞进 Intent 的 data。
+     *
+     * 系统授权对话框（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`）与应用详情页都靠这个 data 定位到本应用；
+     * 不带 data 时 ColorOS 上直接 `No activity found`。
+     */
+    val dataPackage: Boolean = false,
 )
 
 /**
@@ -125,24 +132,29 @@ object OemBackgroundGuide {
     )
 
     /**
-     * ColorOS 系的三条候选。
+     * ColorOS 系的两条候选：**只放第三方应用确实能打开的入口**。
      *
-     * 三个包分别属于 OPPO 的三代 ROM：`safecenter`（自启动管理，最老也最通用）、
-     * `oplus.battery`（ColorOS 12+ 的启动优化）、`oppoguardelf`（耗电详情）。
-     * 一条都拉不起来时由调用方兜底到应用详情页。
+     * ColorOS 把「自启动」（`com.oplus.battery/...StartupAppListActivity`，受
+     * `oplus.permission.OPLUS_COMPONENT_SAFE` 保护）与「应用耗电管理」
+     * （`...PowerUsageModelActivity`，受 `com.oplus.permission.safe.SETTINGS` 保护）都设成了
+     * 仅系统可访问，第三方拉起一律 `SecurityException` —— 236 版两颗按钮全部落到应用详情页就是这么来的。
      */
     private val COLOR_OS_LINKS = listOf(
+        // 实测（PLC110 / ColorOS 16，2026-11-22，逐个组件验证）：
+        //   「设置 → 应用」这一页（Settings$ManageApplicationsActivity / Settings$AppDashboardActivity）
+        //   虽然 exported=true 且无权限，但 ColorOS 的 Settings 会把它们**重定向到设置首页**
+        //   （am start 后 topResumedActivity 一直是 com.android.settings/.Settings）。
+        //   「自启动」/「应用耗电管理」真正的页面（com.oplus.battery 里那两个）带签名级权限，
+        //   第三方 startActivity 一律 SecurityException。
+        // 因此 ColorOS 上第三方能做到的极限是：打开设置首页 + 打开应用详情页（那里有「耗电管理」）。
         OemDeepLink(
-            packageName = "com.coloros.safecenter",
-            className = "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+            packageName = "com.android.settings",
+            action = "android.settings.SETTINGS",
         ),
         OemDeepLink(
-            packageName = "com.oplus.battery",
-            className = "com.oplus.battery.StartupOptimizeActivity",
-        ),
-        OemDeepLink(
-            packageName = "com.coloros.oppoguardelf",
-            className = "com.coloros.oppoguardelf.powermgr.PowerUsageDetailActivity",
+            packageName = "com.android.settings",
+            action = "android.settings.APPLICATION_DETAILS_SETTINGS",
+            dataPackage = true,
         ),
     )
 

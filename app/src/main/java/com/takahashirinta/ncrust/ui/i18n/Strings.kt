@@ -1927,6 +1927,8 @@ data class BackgroundGuideStrings(
     /** 为什么要锁最近任务（与机型无关的通用说明）。 */
     val recentsIntro: String,
     /** ColorOS / OPPO / OnePlus / realme：三行设置步骤。 */
+    val stepAutoStart: String,
+    val stepBattery: String,
     val stepsColorOs: String,
     /** HyperOS / MIUI：三行设置步骤。 */
     val stepsMiui: String,

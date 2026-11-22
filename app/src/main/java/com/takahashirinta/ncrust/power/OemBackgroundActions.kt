@@ -10,6 +10,8 @@
 
 package com.takahashirinta.ncrust.power
 
+import android.provider.Settings
+import android.net.Uri
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
@@ -74,6 +76,35 @@ object OemBackgroundActions {
      * 只在「未允许」分支调用（已允许时授权框会启动即 finish、屏幕零变化，
      * 所以那种情况在 UI 上根本不显示这个按钮，只显示状态文案）。
      */
+    /**
+     * 打开某一条具体的候选入口（供引导页「按步骤给按钮」用）。
+     *
+     * 与 [openStartupSettings] 的区别：那个是"整档顺序试一遍"，这个只试一条 ——
+     * ColorOS 上「自启动」与「应用耗电管理」是两个不同的页面，用户需要**分别**按下对应按钮，
+     * 而不是让一个按钮把他送去第一个候选。
+     */
+    fun openLink(context: Context, profile: OemProfile, index: Int): Boolean {
+        // 先试用户点的那一条；失败就按该档其余候选继续试（含应用详情页兜底），
+        // 这样某个 ROM 把类名搬走时，用户点「自启动」不会得到一个死按钮。
+        val links = OemBackgroundGuide.linksOf(profile)
+        val ordered = links.drop(index.coerceIn(0, links.lastIndex.coerceAtLeast(0))) +
+            links.take(index.coerceIn(0, links.lastIndex.coerceAtLeast(0)))
+        ordered.forEach { link ->
+            if (launch(context, intentOf(context, link), link.label())) return true
+        }
+        return openApplicationDetails(context)
+    }
+
+    /** 最终兜底：应用详情页。ColorOS 上必须带 `package:` data，否则解析不到。 */
+    fun openApplicationDetails(context: Context): Boolean {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:${context.packageName}"),
+        )
+        if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return launch(context, intent, "ACTION_APPLICATION_DETAILS_SETTINGS(package)")
+    }
+
     fun openBatteryOptimizationSettings(context: Context): Boolean {
         if (launch(context, BackgroundActivity.requestIntent(context), label = "battery-optimization")) return true
         return launch(
@@ -93,9 +124,13 @@ object OemBackgroundActions {
         }
         link.action?.let { intent.action = it }
         link.extraPackageName?.let { key -> intent.putExtra(key, context.packageName) }
+        if (link.dataPackage) intent.data = Uri.parse("package:${context.packageName}")
         if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return intent
     }
+
+    /** 日志里用的可读标签：优先 action，其次类名。 */
+    private fun OemDeepLink.label(): String = action ?: "$packageName/$className"
 
     /**
      * 单次启动。只吞两种「预期内失败」：
