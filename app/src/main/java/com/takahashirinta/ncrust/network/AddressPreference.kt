@@ -113,18 +113,48 @@ object AddressPreference {
         ipv6PreferredUntilMs = 0L
     }
 
+    /** 换网时一并清掉冷却：新网络的两族可达性可能与旧网完全相反。 */
+    fun clearFailoverState() {
+        ipv6PreferredUntilMs = 0L
+        bothFailedUntilMs = 0L
+    }
+
     /**
      * 传输层失败（`SocketException` / 连接超时）时调用：**第一次切到 IPv6 优先，
      * IPv6 优先下再失败一次就退回 v4-only**。返回本次之后是否处于 IPv6 优先。
      *
      * 这样两个方向的故障各最多付一次超时，然后自动停在能通的那一族上。
      */
-    fun onTransportFailure(nowMs: Long = nowMs()): Boolean = if (isIpv6Preferred(nowMs)) {
-        clearIpv6Preference()
-        false
-    } else {
-        preferIpv6For(nowMs = nowMs)
-        true
+    fun onTransportFailure(nowMs: Long = nowMs()): Boolean {
+        // 冷却期内**不再翻面**：v4 长时间黑洞时，"失败→切 v6→再失败→切回 v4"会让每首歌
+        // 都付两次 8s 连接超时（真机 00:42–00:43 连续三首歌各吃 2×8s 后判 NETWORK）。
+        // 冷却期内固定住当前族，每首歌最多付一次超时，网络恢复后由成功事件自然解除。
+        if (inBothFailedCooldown(nowMs)) return isIpv6Preferred(nowMs)
+        return if (isIpv6Preferred(nowMs)) {
+            clearIpv6Preference()
+            false
+        } else {
+            preferIpv6For(nowMs = nowMs)
+            true
+        }
+    }
+
+    /** 两族都失败的冷却窗口：3 分钟。比 3 分钟的「IPv6 优先」窗口短不了多少，够躲开瞬时拥塞。 */
+    private const val BOTH_FAILED_COOLDOWN_MS = 3 * 60_000L
+
+    @Volatile
+    private var bothFailedUntilMs = 0L
+
+    internal fun inBothFailedCooldown(nowMs: Long = nowMs()): Boolean =
+        bothFailedUntilMs > 0L && nowMs < bothFailedUntilMs
+
+    /** 两族都失败（重试用尽）时调用：进入冷却，期间不再翻面。 */
+    fun noteBothFamiliesFailed(nowMs: Long = nowMs()) {
+        bothFailedUntilMs = nowMs + BOTH_FAILED_COOLDOWN_MS
+    }
+
+    fun clearBothFailedCooldown() {
+        bothFailedUntilMs = 0L
     }
 
     /**

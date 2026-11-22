@@ -188,7 +188,7 @@ object SongUrlFetcher {
         }
         // 换网之后地址族的可达性可能整个反过来（Wi-Fi 通 v6 / 蜂窝只通 v4），
         // 上一张网的偏置不能带过来。
-        com.takahashirinta.ncrust.network.AddressPreference.clearIpv6Preference()
+        com.takahashirinta.ncrust.network.AddressPreference.clearFailoverState()
         // v4.1.10 · B：按 host 的「哪一族最近成功/失败」记忆同样是**这张网**的属性。
         com.takahashirinta.ncrust.network.AddressHealth.onNetworkRouteChanged()
         // v4.1.10 · C3：换网可能换一整套中间设备，「h2 会被复位」的结论也不作数。
@@ -394,6 +394,8 @@ object SongUrlFetcher {
                             SONG_URL_PATH, RetrofitClient.eapiHost, e,
                             "level=$tryLevel preferIpv6=$preferIpv6 retry=exhausted",
                         )
+                        // 两族都失败 ⇒ 进入冷却，接下来的歌不再"失败一次翻一面"地付两次 8s。
+                        com.takahashirinta.ncrust.network.AddressPreference.noteBothFamiliesFailed()
                         startCooldown(requestRoute)
                         return ResolveOutcome.failed(ResolveFailureKind.NETWORK, MusicSource.NETEASE)
                     }
