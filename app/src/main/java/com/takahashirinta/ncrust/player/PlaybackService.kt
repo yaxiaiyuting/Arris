@@ -1819,6 +1819,15 @@ class PlaybackService : MediaLibraryService() {
     private val lyricNotifyHandler = Handler(Looper.getMainLooper())
     private val lyricNotifyRetry = Runnable { onMediaLyricLineChanged(mediaLyricFrame.notificationKey) }
 
+    /**
+     * v4.1.8：通知**内容类**更新的节流（跨歌词行 / Live Update 进度）。
+     *
+     * 真机取证：熄屏后台播放时 ColorOS 侧 `OplusNotificationFixHelper` 每 ~2.5 s 重建
+     * 一次我们的通知（每次都要重解析应用图标）。见 [NotifyPace] 的 KDoc。
+     */
+    private val notifyPace = NotifyPace()
+    private val liveUpdatePace = NotifyPace()
+
     // v2.1.6 · 会话合并：`setPlaybackState` 的去重状态（lastPlaybackStateInt /
     // lastPlaybackStateSentAt / STATE_MIN_INTERVAL_MS）随 legacy 会话一起删掉了 ——
     // 现在 playback state 由 media3 的 MediaSession 自己从 player 转发，
@@ -2238,7 +2247,15 @@ class PlaybackService : MediaLibraryService() {
                 savePlaybackCheckpoint(positionMs, durationMs)
                 onProgressUpdate?.invoke(positionMs, durationMs)
                 updatePlaybackState(durationMs)
-                if (android.os.Build.VERSION.SDK_INT >= 36) updateLivePlayback(positionMs, durationMs)
+                // v4.1.8：Live Update 的进度卡也走节流。它每 1% 变一次内容 ⇒ 按 4 分钟的歌
+                // 算是每 2–3 秒一次 `notify()`；真机 OEM（ColorOS）每次重建都要重解析
+                // 应用图标，实测被刷到 ~2.5 s 一条（见 [NotifyPace] 的 KDoc）。
+                if (android.os.Build.VERSION.SDK_INT >= 36 &&
+                    liveUpdatePace.decide(SystemClock.elapsedRealtime(), NotifyReason.CONTENT) ==
+                    NotifyPace.Decision.Post
+                ) {
+                    updateLivePlayback(positionMs, durationMs)
+                }
                 // v3.3.0 · 桌面播放卡片：这里是「整数秒变化」那一档的唯一来源。
                 // 注意它跑在 **2Hz** 的 tick 里，而闸门只放行整数秒 ⇒ 桌面每秒最多被更新一次。
                 // 后台预载的 60s 窗口与上报的 80% 阈值都依赖这条进度回调继续跑。
@@ -2316,12 +2333,26 @@ class PlaybackService : MediaLibraryService() {
         when (decision) {
             LyricNotifyGate.Decision.Post -> {
                 if (BuildConfig.DEBUG) probeGatePost++
-                lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
-                // Paused playback has no ticker: refresh session metadata with the same frame now.
-                runCatching { updatePlaybackState() }
-                updateNotify()
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG_LYRIC_NOTIFY, "re-post on lyric line change: $line")
+                // v4.1.8：跨行重发是**内容类**更新，再套一层 5 s 的节流。
+                // 真机实测（PLC110 / ColorOS）一行歌词约 2.5 s，直接重发会让系统通知
+                // 每 2.5 s 重建一次（`OplusNotificationFixHelper` 每次都要重解析图标）。
+                // 被限流的这一行**不丢**：按剩余时间补发，补发时取的是最新一行。
+                when (val pace = notifyPace.decide(SystemClock.elapsedRealtime(), NotifyReason.CONTENT)) {
+                    NotifyPace.Decision.Post -> {
+                        lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
+                        // Paused playback has no ticker: refresh session metadata with the same frame now.
+                        runCatching { updatePlaybackState() }
+                        updateNotify()
+                        if (BuildConfig.DEBUG) {
+                            Log.d(TAG_LYRIC_NOTIFY, "re-post on lyric line change: $line")
+                        }
+                    }
+
+                    is NotifyPace.Decision.Defer -> {
+                        if (BuildConfig.DEBUG) probeGateDefer++
+                        lyricNotifyHandler.removeCallbacks(lyricNotifyRetry)
+                        lyricNotifyHandler.postDelayed(lyricNotifyRetry, pace.retryInMs)
+                    }
                 }
             }
 
