@@ -152,9 +152,12 @@ object AddressPreference {
      * 具名类（而不是匿名 object）是为了让 `HttpClientDnsAuditTest` 能断言
      * 「AppHttp 建出来的客户端确实用的是这条策略」。
      */
-    class IPv4FirstDns : Dns {
+    class IPv4FirstDns(
+        /** 解析来源；单测注入假列表用，默认就是系统解析，生产行为不变。 */
+        private val delegate: Dns = Dns.SYSTEM,
+    ) : Dns {
         override fun lookup(hostname: String): List<InetAddress> {
-            val all = Dns.SYSTEM.lookup(hostname)
+            val all = delegate.lookup(hostname)
             val preferIpv6 = isIpv6Preferred()
             val selected = select(all, preferIpv6)
             // 只在回退窗口内打一行（限流）：证明「换地址族」真的作用到了解析结果上，
