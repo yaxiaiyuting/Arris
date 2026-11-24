@@ -752,6 +752,8 @@ val zhCN = Strings(
             searchLoadMore = "加载更多",
             searchLoadingMore = "正在加载…",
             searchSourceTotal = { n -> java.lang.String.format("共 %d 首", n) },
+            librarySearchHint = "搜索库中歌曲",
+            librarySearchEmpty = "没有匹配的歌曲",
         ),
 
         bili = BiliStrings(

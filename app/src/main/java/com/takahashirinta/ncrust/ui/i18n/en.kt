@@ -744,6 +744,8 @@ val en = Strings(
             searchLoadMore = "Load more",
             searchLoadingMore = "Loading…",
             searchSourceTotal = { n -> java.lang.String.format("%d total", n) },
+            librarySearchHint = "Search songs in library",
+            librarySearchEmpty = "No matching songs",
         ),
 
         bili = BiliStrings(

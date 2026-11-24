@@ -751,6 +751,8 @@ scanConnecting = "평판에 연결중…",
             searchLoadMore = "더 불러오기",
             searchLoadingMore = "불러오는 중…",
             searchSourceTotal = { n -> java.lang.String.format("총 %d곡", n) },
+            librarySearchHint = "보관한 곡 찾기",
+            librarySearchEmpty = "맞는 곡 없음",
         ),
 
         bili = BiliStrings(

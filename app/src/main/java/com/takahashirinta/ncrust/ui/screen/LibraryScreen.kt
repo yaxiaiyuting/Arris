@@ -50,6 +50,7 @@ import com.takahashirinta.ncrust.auth.CookieManager
 import com.takahashirinta.ncrust.defaultPlaylistName
 import com.takahashirinta.ncrust.library.AlbumInfo
 import com.takahashirinta.ncrust.library.LibraryManager
+import com.takahashirinta.ncrust.library.LibrarySongSearch
 import com.takahashirinta.ncrust.local.LocalPlaylistRepository
 import com.takahashirinta.ncrust.local.LocalPlaylistStore
 import com.takahashirinta.ncrust.network.PlaylistApi
@@ -62,6 +63,7 @@ import com.takahashirinta.ncrust.ui.ResponsiveContent
 import io.github.takahashirinta.kanesumi.anim.sokuou.MetroDefault
 import io.github.takahashirinta.kanesumi.anim.sokuou.rememberMetroFlingBehavior
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
+import io.github.takahashirinta.kanesumi.controls.MetroTextField
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroTypography
 import io.github.takahashirinta.kanesumi.core.theme.MetroIcon
@@ -143,6 +145,13 @@ fun LibraryScreen(
         maxOf(LibraryManager.getLikedSongIds(context).size, savedSongs.size)
     ) }
     var selectedCategory by remember { mutableIntStateOf(0) }
+    // 库页「单曲」tab 的搜索关键词。
+    //
+    // 与下面的 `albumSourceFilter` 同一条理由：状态提到页面级，而不是写在 `0 ->` 分支里 ——
+    // `AnimatedContent` 会把切走的那一支卸载，写在分支里的 `remember` 会随切 tab 重置，
+    // 于是「切去歌单看一眼再切回来」用户刚打的关键词就没了（列表还突然变回全部）。
+    // 它同样是纯 UI 状态：本地过滤，不发请求，不落盘。
+    var songQuery by remember { mutableStateOf("") }
     // v3.4.0：专辑 tab 的**音源筛选档**（全部 / 只看 ncm / 只看 qm）。
     //
     // 状态提升到页面级（而不是塞在 `2 ->` 分支里）的理由：`when (selectedCategory)`
@@ -376,115 +385,181 @@ fun LibraryScreen(
                 label = "LibraryCategoryContent"
             ) { category -> when (category) {
                 0 -> {
-                    if (savedSongs.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            MetroText(strings.noSavedSongs, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodyLarge)
+                    // 库页「单曲」tab 的本地搜索：**只过滤已加载的 savedSongs，不发任何请求**
+                    // （纯逻辑与匹配规则见 LibrarySongSearch 的 KDoc）。
+                    //
+                    // visibleSongs 用 remember 缓存：几百条 × 每个词 3 段 contains 不必每帧重算，
+                    // 只有 savedSongs / songQuery 变化时才重来一次。
+                    val visibleSongs = remember(savedSongs, songQuery) {
+                        LibrarySongSearch.match(savedSongs, songQuery)
+                    }
+                    // 判空走同一个 keyword()：UI 里再写一份 trim 迟早漂移成
+                    // 「输入框看起来在搜索、结果却按未搜索处理」。
+                    val hasKeyword = LibrarySongSearch.keyword(songQuery).isNotEmpty()
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // 搜索框放在**两档空态之前**，并且两档都保留它：
+                        //
+                        // · 「这次没搜到」那一档必须留着 —— 否则用户没有任何入口清掉关键词，
+                        //   空态变成死胡同。这正是 v3.2.0 搜索页踩过的坑：筛选行用
+                        //   「筛选后的结果」决定自己是否可见，因果反了，点进去就再也出不来；
+                        // · 「库里本来没有歌」那一档也留着 —— savedSongs 由后台刷新重读，
+                        //   输关键词期间它可能被刷成空（换账号 / 云端清空），那时同样
+                        //   只有这个输入框能把人放出去。
+                        MetroTextField(
+                            value = songQuery,
+                            onValueChange = { songQuery = it },
+                            placeholder = strings.search.librarySearchHint,
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                        )
+                        // 红心歌单是分页拉下来的：likedTotal（云端总数）可能大于已加载的
+                        // savedSongs.size，此时搜索只能覆盖已加载的那一段。这一行**只说明范围**，
+                        // 不触发任何补齐请求 —— 补齐是上面「滚到末尾」那个 LaunchedEffect 的事。
+                        //
+                        // 文案用两段**既有**计数拼出「已载 N / 总数 M」，不新增第三条文案：
+                        // 它只是范围提示，而每加一条文案都要在 8 个语言文件里各写一遍。
+                        if (likedTotal > savedSongs.size) {
+                            MetroText(
+                                text = strings.searchSourceCount(savedSongs.size) +
+                                    " / " +
+                                    strings.searchSourceTotal(likedTotal),
+                                color = LocalMetroColors.current.onSurfaceVariant,
+                                style = LocalMetroTypography.current.caption,
+                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                            )
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            state = songListState,
-                            contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
-                            flingBehavior = rememberMetroFlingBehavior()
-                        ) {
-                            // Bug2-④：整张红心歌单的「播放全部」入口。
-                            // 显示的是 total（云端数量）而非 savedSongs.size（已加载数量），
-                            // 避免用户以为"我喜欢的歌"只有已翻页的那几十首。
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    MetroText(
-                                        strings.trackCountSongs(likedTotal),
-                                        color = LocalMetroColors.current.onSurfaceVariant,
-                                        style = LocalMetroTypography.current.bodySmall
-                                    )
-                                    if (likedBulkLoading) {
-                                        Spacer(Modifier.width(8.dp))
+                        if (savedSongs.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                MetroText(strings.noSavedSongs, color = LocalMetroColors.current.onSurfaceVariant, style = LocalMetroTypography.current.bodyLarge)
+                            }
+                        } else if (visibleSongs.isEmpty()) {
+                            // 有歌但没命中：这句只描述「这次搜索」，与「库里没有歌」分开 ——
+                            // 前者用户的下一步是改关键词，后者是去别处收藏。
+                            Box(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                MetroText(
+                                    strings.search.librarySearchEmpty,
+                                    color = LocalMetroColors.current.onSurfaceVariant,
+                                    style = LocalMetroTypography.current.bodyLarge,
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                state = songListState,
+                                contentPadding = PaddingValues(bottom = BottomOverlayInsetDp),
+                                flingBehavior = rememberMetroFlingBehavior()
+                            ) {
+                                // Bug2-④：整张红心歌单的「播放全部」入口。
+                                // 未搜索时显示的是 total（云端数量）而非 savedSongs.size（已加载数量），
+                                // 避免用户以为"我喜欢的歌"只有已翻页的那几十首。
+                                item {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         MetroText(
-                                            strings.likedPlayAllLoading(likedTotal),
-                                            color = LocalMetroColors.current.primary,
-                                            style = LocalMetroTypography.current.bodySmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            // 搜索中显示**命中数**：用户此刻问的是「我搜到几首」，
+                                            // 仍显示云端总数（273）而列表只有 3 行会像是坏了。
+                                            // 未搜索时保持 likedTotal —— 它描述的是红心歌单规模，
+                                            // 与 savedSongs.size（已翻页加载的部分）不是同一件事。
+                                            if (hasKeyword) strings.trackCountSongs(visibleSongs.size)
+                                            else strings.trackCountSongs(likedTotal),
+                                            color = LocalMetroColors.current.onSurfaceVariant,
+                                            style = LocalMetroTypography.current.bodySmall
                                         )
-                                    }
-                                    Spacer(Modifier.weight(1f))
-                                    PlayAllButton(onClick = {
-                                        // 后台补齐期间不重复触发；播放本身已经在第一次点击时开始。
-                                        if (!likedBulkLoading) onPlayAllLiked()
-                                    })
-                                    // v3.4.12：旁边的「插播 / 追加」入口。单独放到菜单里而不是
-                                    // 再摆两个按钮：这一行同时要放计数与 loading 文案，320dp 宽
-                                    // 再塞两个按钮必然把歌名/计数挤没。
-                                    Box {
-                                        var showBulkMenu by remember { mutableStateOf(false) }
-                                        MetroIconButton(onClick = { showBulkMenu = true }) {
-                                            MetroIcon(
-                                                imageVector = Icons.Default.MoreVert,
-                                                contentDescription = strings.actionAppendToQueue,
-                                                tint = LocalMetroColors.current.onBackground,
-                                                sizeDp = 22.dp
+                                        if (likedBulkLoading) {
+                                            Spacer(Modifier.width(8.dp))
+                                            MetroText(
+                                                strings.likedPlayAllLoading(likedTotal),
+                                                color = LocalMetroColors.current.primary,
+                                                style = LocalMetroTypography.current.bodySmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
-                                        MetroDropdownMenu(
-                                            expanded = showBulkMenu,
-                                            onDismissRequest = { showBulkMenu = false },
-                                            containerColor = LocalMetroColors.current.surface,
-                                        ) {
-                                            MetroDropdownMenuItem(
-                                                text = strings.insertNextTitle,
-                                                textColor = LocalMetroColors.current.onBackground,
-                                                onClick = {
-                                                    showBulkMenu = false
-                                                    if (!likedBulkLoading) onInsertAllLiked()
-                                                },
-                                            )
-                                            MetroDropdownMenuItem(
-                                                text = strings.actionAppendToQueue,
-                                                textColor = LocalMetroColors.current.onBackground,
-                                                onClick = {
-                                                    showBulkMenu = false
-                                                    if (!likedBulkLoading) onAppendAllLiked()
-                                                },
-                                            )
+                                        Spacer(Modifier.weight(1f))
+                                        PlayAllButton(onClick = {
+                                            // 后台补齐期间不重复触发；播放本身已经在第一次点击时开始。
+                                            if (!likedBulkLoading) onPlayAllLiked()
+                                        })
+                                        // v3.4.12：旁边的「插播 / 追加」入口。单独放到菜单里而不是
+                                        // 再摆两个按钮：这一行同时要放计数与 loading 文案，320dp 宽
+                                        // 再塞两个按钮必然把歌名/计数挤没。
+                                        Box {
+                                            var showBulkMenu by remember { mutableStateOf(false) }
+                                            MetroIconButton(onClick = { showBulkMenu = true }) {
+                                                MetroIcon(
+                                                    imageVector = Icons.Default.MoreVert,
+                                                    contentDescription = strings.actionAppendToQueue,
+                                                    tint = LocalMetroColors.current.onBackground,
+                                                    sizeDp = 22.dp
+                                                )
+                                            }
+                                            MetroDropdownMenu(
+                                                expanded = showBulkMenu,
+                                                onDismissRequest = { showBulkMenu = false },
+                                                containerColor = LocalMetroColors.current.surface,
+                                            ) {
+                                                MetroDropdownMenuItem(
+                                                    text = strings.insertNextTitle,
+                                                    textColor = LocalMetroColors.current.onBackground,
+                                                    onClick = {
+                                                        showBulkMenu = false
+                                                        if (!likedBulkLoading) onInsertAllLiked()
+                                                    },
+                                                )
+                                                MetroDropdownMenuItem(
+                                                    text = strings.actionAppendToQueue,
+                                                    textColor = LocalMetroColors.current.onBackground,
+                                                    onClick = {
+                                                        showBulkMenu = false
+                                                        if (!likedBulkLoading) onAppendAllLiked()
+                                                    },
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed 只为拿下标，
-                            // key 显式传同一条（`it.id`）⇒ LazyColumn 的 diff 行为不变。
-                            itemsIndexed(savedSongs, key = { _, song -> song.id }) { index, song ->
-                                SongCard(
-                                    song = song,
-                                    style = SongCardStyle.LIST,
-                                    modifier = Modifier.listItemAppear(index),
-                                    onClick = { onSongClick(song) },
-                                    onShowMenu = {
-                                        onShowSongMenu(song, listOf(
-                                            SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
-                                                // v2.6.0 · P0：成败由返回值决定（这一页本来就在库里，多数是幂等成功）。
-                                                if (LibraryManager.saveSong(context, song).isSuccess) {
-                                                    Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+                                // v2.5.0 · A：列表入场（淡入 + 上滑）。items → itemsIndexed 只为拿下标，
+                                // key 显式传同一条（`it.id`）⇒ LazyColumn 的 diff 行为不变。
+                                // 搜索只改**画什么**、不改条目身份：key 仍是 song.id，
+                                // LazyColumn 的 diff 行为与过滤前完全一致。
+                                itemsIndexed(visibleSongs, key = { _, song -> song.id }) { index, song ->
+                                    SongCard(
+                                        song = song,
+                                        style = SongCardStyle.LIST,
+                                        modifier = Modifier.listItemAppear(index),
+                                        onClick = { onSongClick(song) },
+                                        onShowMenu = {
+                                            onShowSongMenu(song, listOf(
+                                                SongMenuAction(Icons.Default.LibraryAdd, strings.actionAddToLibrary) {
+                                                    // v2.6.0 · P0：成败由返回值决定（这一页本来就在库里，多数是幂等成功）。
+                                                    if (LibraryManager.saveSong(context, song).isSuccess) {
+                                                        Toast.makeText(context, strings.addedToLibrary, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) {
+                                                    onSongInsertNext(song)
+                                                },
+                                                SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) {
+                                                    onSongAppendToQueue(song)
+                                                },
+                                                SongMenuAction(Icons.Default.Delete, strings.actionRemoveFromLibrary) {
+                                                    LibraryManager.removeSong(context, song.id)
+                                                    savedSongs = LibraryManager.getSavedSongs(context)
+                                                    savedAlbums = LibraryManager.getSavedAlbums(context)
                                                 }
-                                            },
-                                            SongMenuAction(Icons.Default.PlaylistPlay, strings.actionInsertNext) {
-                                                onSongInsertNext(song)
-                                            },
-                                            SongMenuAction(Icons.Default.PlaylistAdd, strings.actionAppendToQueue) {
-                                                onSongAppendToQueue(song)
-                                            },
-                                            SongMenuAction(Icons.Default.Delete, strings.actionRemoveFromLibrary) {
-                                                LibraryManager.removeSong(context, song.id)
-                                                savedSongs = LibraryManager.getSavedSongs(context)
-                                                savedAlbums = LibraryManager.getSavedAlbums(context)
-                                            }
-                                        ))
-                                    }
-                                )
+                                            ))
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

@@ -752,6 +752,8 @@ val jpJP = Strings(
             searchLoadMore = "さらに読み込む",
             searchLoadingMore = "読み込み中…",
             searchSourceTotal = { n -> java.lang.String.format("全 %d 曲", n) },
+            librarySearchHint = "ライブラリ内の曲を検索",
+            librarySearchEmpty = "一致する曲がありません",
         ),
 
         bili = BiliStrings(
