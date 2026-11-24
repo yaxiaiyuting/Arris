@@ -3,6 +3,17 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.1.13-gpl — 修搜索页筛选档浮在结果行上（2026-11-25）
+
+主线 · Android 10 及以上 · versionCode 246 · 正式版
+
+- **搜索页筛选档回到结果上方**：v4.1.12 给搜索页加悬浮下拉指示器时，把整个 `when (currentType)` 包进了 `Box`，于是那一支里的兄弟节点（筛选档、加载行、结果列表）从「竖着排」变成「叠着放」——`只看 ncm / 只看 qm / 只看 B站` 三个胶囊直接压在第一行结果上（用户截图）。现在 `Box` 只当悬浮指示器的画布，里面再包一层 `Column` 恢复竖排，视觉与 v4.1.10 一致、指示器仍是悬浮层。
+- 其余内容与 v4.1.12 完全相同（库页表头收起、单曲搜索与加载更多、艺人页单曲取全、识曲点按即播/长按搜索、后台复活）。**4.1.12 请直接跳过。**
+
+验证：全量 JVM **3795 例 / 0 失败 / 6 跳过**（373 suites）；真机（PLC110 / Android 17 / ColorOS 16）搜「love」确认筛选档在统计行下方、结果从它下面开始。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v4.1.13-gpl) · [官网直链](https://arris.de5.net/get/Arris-v4.1.13-gpl.apk) · SHA-256 `202f1d6d503cdbe142d6c5e3aca1620b13d59852bb55c795e39f3615cabd1c4b`
+
 ## v4.1.12-gpl — 库页表头随拖动收起、单曲搜索与加载更多、艺人页单曲取全（2026-11-25）
 
 主线 · Android 10 及以上 · versionCode 245 · 正式版

@@ -12,7 +12,7 @@
 
 **Arris 是 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust) 的 GPLv3 fork（v3.4.8 起改名），由 [yaxiaiyuting](https://github.com/yaxiaiyuting) 维护。上游原始代码以 MIT 许可发布，本 fork 的修改与新增部分以 GPLv3 分发。**
 
-[![Version](https://img.shields.io/badge/version-4.1.12--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
+[![Version](https://img.shields.io/badge/version-4.1.13--gpl-brightgreen?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![APK](https://img.shields.io/badge/APK-10.33%20MiB-blue?style=flat-square)](https://github.com/yaxiaiyuting/Arris/releases)
 [![API](https://img.shields.io/badge/API-29%2B-green?style=flat-square&logo=android)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-purple?style=flat-square&logo=kotlin)](https://kotlinlang.org)
@@ -38,6 +38,7 @@
 
 | 版本 | 日期 | 要点 |
 |---|---|---|
+| **4.1.13** | 2026-11-25 | 修 4.1.12 搜索页筛选档浮在结果行上（`只看 ncm/qm/B站` 压住第一行）；其余同 4.1.12，**4.1.12 请跳过** |
 | **4.1.12** | 2026-11-25 | 库页表头随拖动收起（听歌识曲/一起听/搜索框/tab 条都能滑走）、单曲本地搜索与「加载更多」、艺人页单曲从 30 首提到最多 200 首、识曲结果点按即播长按搜索、下拉刷新指示器改悬浮层 |
 | **4.1.10** | 2026-11-22 | 取链不再被死地址拖死：连接失败换地址族重试（3 分钟窗口 + 两族都失败后冷却）、地址族健康记忆、同一 `(songId, level)` 在飞合并、`REFUSED_STREAM` 按流级重试、能力探测不再取消请求 |
 | **4.1.8** | 2026-11-22 | 后台播放保护引导（按 OEM 自动跳转）、播放卡顿服务侧自愈、网络抖动退避、通知更新节流 |
@@ -402,6 +403,7 @@ app/src/main/java/com/takahashirinta/ncrust/
 
 | 版本 | 日期 | 内容 |
 |---|---|---|
+| v4.1.13-gpl | 2026-11-25 | **修搜索页筛选档浮在结果行上**：v4.1.12 把搜索页的 `when` 包进 `Box` 后兄弟节点变成叠放，筛选档压住第一行结果；改成 Box 内再包一层 Column 恢复竖排。内容与 4.1.12 相同 |
 | v4.1.12-gpl | 2026-11-25 | **库页表头随拖动收起**（整块高度缩 + 上滑出 + 裁顶边，不是压扁；惯性段参与收起、手势结束按甩动方向吸附到两端）；**单曲 tab 本地搜索**（只过滤已收藏、三段分别匹配、多词 AND、不带 Locale）与显式**「加载更多」**；**艺人页单曲最多 200 首**（改走 `/eapi/v1/artist/songs` 按艺人 id 分页，回落名字搜索）；**识曲结果点按即播/长按搜索**；**下拉刷新指示器改悬浮层**（不再挤进列表）；**后台死掉时服务自己重新取链续播**（15 秒判死 + 不设次数上限的退避 + 30 分钟窗口） |
 | v4.1.10-gpl | 2026-11-22 | **取链的地址族回退**（连接失败后 3 分钟 IPv6 优先窗口；真机上 `interface3.music.163.com` 的 A 记录被 SYN 黑洞而 AAAA 可连，旧逻辑「有 A 就不用 AAAA」每首歌付 2×8s 后把播放按停）；**两族都失败后冷却 3 分钟**不再来回翻面；**地址族健康记忆**（按 host 记成功/失败，回退胜率可统计）；**同一 `(songId, level)` 在飞合并**（请求数 2.0 → 1.67）；**`REFUSED_STREAM` 按流级重试**、能力探测超时不再取消请求（复位日志 3 → 1）；复用连接上的流级复位换新连接重试一次；`NcrustNetDiag` 失败行给出解析出的全部地址 |
 | v4.1.8-gpl | 2026-11-22 | **后台播放保护引导页**（识别 ColorOS / MIUI / OriginOS / EMUI / Flyme / One UI，给出厂商三步与最近任务锁定，ColorOS 的两页受签名权限保护、按钮退到设置首页与应用详情）；**播放卡顿自愈**（服务侧 2s 判据，READY 冻结也能判，先服务自愈再交给 VM）；**网络抖动退避**（2s→30s，10 分钟内不把播放按停）；**通知节流**（内容类 ≥5s 一档，补发不丢行） |
