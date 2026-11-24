@@ -13,6 +13,7 @@ package com.takahashirinta.ncrust.crosssource
 import android.content.Context
 import android.util.Log
 import com.takahashirinta.ncrust.network.NeteaseAvailabilityApi
+import com.takahashirinta.ncrust.network.PlaylistApi
 import com.takahashirinta.ncrust.network.RetrofitClient
 import com.takahashirinta.ncrust.network.SongItem
 import com.takahashirinta.ncrust.network.model.AlbumItem
@@ -92,7 +93,7 @@ data class TrackPage(
  *
  * | 页面 | 探测对象 | 请求数 | 为什么不是别的 |
  * |---|---|---|---|
- * | 艺人页 | 该艺人的**曲目列表**（两源合并后 ≤60 首） | ncm ≤1 批 + QQ ≤2 批 | **不逐张专辑探测** —— 44 张专辑 × 2 源 = 88 次请求，艺人页会变成不可用。专辑行的音源偏好因此由**艺人级**的可播放比例决定 |
+ * | 艺人页 | 该艺人的**曲目列表**（v4.1.12 起 ncm ≤200 首 + QQ ≤30 首，**每侧**只探前 [PROBE_LIMIT] 首） | ncm 1~2 页取歌 + 1 批探测 + QQ 1 批探测 | **不逐张专辑探测** —— 44 张专辑 × 2 源 = 88 次请求，艺人页会变成不可用。专辑行的音源偏好因此由**艺人级**的可播放比例决定 |
  * | 专辑页 | 该专辑的**曲目列表** | ncm ≤1 批 + QQ ≤1 批 | 一屏之内，成本与主请求同级 |
  * | 单曲页 | 两源各自的**那一首** | ≤2 次 | 只有一首 |
  *
@@ -110,8 +111,38 @@ object CatalogAggregator {
 
     private const val TAG = "CatalogAggregator"
 
-    /** 一页最多探测多少首。超过的部分留在 `UNKNOWN`（宁可少标，不拖住页面）。 */
-    private const val PROBE_LIMIT = 60
+    /**
+     * 艺人页 ncm 曲目**一页**取多少首（v4.1.12）。
+     *
+     * 实测 `/eapi/v1/artist/songs` 一页上限是 200（`limit=200` 回 200，`limit=300` 也只回 200），
+     * 一页 100 的响应约 438KB、200 约 845KB（详见 `PlaylistApi.getArtistSongIdsOrNull` 的表）。
+     * 取 100 而不是 200：一次 200 首要在**一个响应**里付 845KB，而两页 100 可以
+     * 在第一页就短页/失败时提前收手（小艺人多半 1 页就到底）。
+     */
+    internal const val ARTIST_SONGS_PAGE = 100
+
+    /**
+     * 艺人页 ncm 曲目最多翻几页（2 页 = 200 首）。
+     *
+     * 为什么不是无限翻：`offset` 分页本身可用（实测 offset=100/200 各回 100 条且不重复），
+     * 但艺人页是「一进来就要渲染」的页面 —— 周杰伦有 1000+ 首，翻到底要 10 页 / 4MB，
+     * 而用户不会滑到第 200 行以后。停在 200 首，剩下的交给搜索。
+     */
+    internal const val ARTIST_SONGS_MAX_PAGES = 2
+
+    /**
+     * **每一侧**最多探测多少首（v4.1.12：从「两侧合计 60」改成「每侧 100」）。
+     *
+     * 为什么必须按侧算：旧值 60 是「合并后总数」的上限，艺人页两侧各 30 首时正好够。
+     * ncm 一侧抬到 100~200 首之后，同一个 60 会把 QQ 那一侧整个挤出预算 ——
+     * QQ 曲目全部落进 `UNKNOWN`。而 [preferredSource] 正是按 `playable` 计数决定
+     * 「默认切到哪一源」的，那等于**悄悄废掉特性 D 的跨源判定**
+     * （周杰伦这类「ncm 无版权、QQ 能播」的艺人会一直默认 ncm）。
+     *
+     * 按侧算之后**请求数与改动前一致**（ncm 1 批 + QQ 1 批，`NeteaseAvailabilityApi.BATCH = 100`），
+     * 只是 ncm 那一批从 60 首变成 100 首。超过部分留在 `UNKNOWN`（宁可少标，不拖住页面）。
+     */
+    private const val PROBE_LIMIT = 100
 
     private data class Counterpart<Key, Item>(
         val key: Key,
@@ -270,7 +301,13 @@ object CatalogAggregator {
         }
 
         // ---- 可用性：两首各探一次 ----
-        val probed = runCatching { probe(versions.asSequence().map { it.song }) }.getOrDefault(emptyMap())
+        // 单曲页只有一两个版本，按侧拆开只是为了跟 [probe] 的新签名对齐（两侧各 1 首）。
+        val probed = runCatching {
+            probe(
+                neSongs = versions.map { it.song }.filter { it.musicSource == MusicSource.NETEASE },
+                qqSongs = versions.map { it.song }.filter { it.musicSource == MusicSource.QQMUSIC },
+            )
+        }.getOrDefault(emptyMap())
         val withAvail = versions.map { v ->
             val availability = probed[TrackKey.fromSong(v.song)]
             v.copy(
@@ -383,7 +420,7 @@ object CatalogAggregator {
         neSongs: List<SongItem>,
         qqSongs: List<SongItem>,
     ): Triple<List<AggregatedSong>, Map<MusicSource, Int>, Map<MusicSource, Int>> {
-        val probed = runCatching { probe(neSongs.asSequence() + qqSongs.asSequence()) }.getOrDefault(emptyMap())
+        val probed = runCatching { probe(neSongs, qqSongs) }.getOrDefault(emptyMap())
         return assembleSongsWithProbe(neSongs, qqSongs, probed)
     }
 
@@ -513,14 +550,31 @@ object CatalogAggregator {
 
     // ================================================================== IO ==================================================================
 
-    private suspend fun probe(songs: Sequence<SongItem>): Map<TrackKey, TrackAvailability> {
-        val limited = songs.distinctBy { TrackKey.fromSong(it) }.take(PROBE_LIMIT).toList()
-        if (limited.isEmpty()) return emptyMap()
-        val ne = runCatching { NeteaseAvailabilityApi.probeAvailability(limited) }
-            .onFailure { Log.w(TAG, "netease probe failed", it) }.getOrDefault(emptyMap())
-        val qq = runCatching { QqCatalogApi.probeAvailability(limited) }
-            .onFailure { Log.w(TAG, "qq probe failed", it) }.getOrDefault(emptyMap())
-        return ne + qq
+    /**
+     * 批量可用性探测（v4.1.12：**按侧**限流，见 [PROBE_LIMIT]）。
+     *
+     * 两侧分开传进来不是为了省参数，而是因为预算必须按侧独立：
+     * 艺人页 ncm 一侧现在有 100~200 首，只要还按「合并后取前 N 首」算，
+     * QQ 那一侧就永远排在 ncm 之后、永远探不到（详见 [PROBE_LIMIT]）。
+     */
+    private suspend fun probe(
+        neSongs: List<SongItem>,
+        qqSongs: List<SongItem>,
+    ): Map<TrackKey, TrackAvailability> {
+        val ne = neSongs.distinctBy { TrackKey.fromSong(it) }.take(PROBE_LIMIT)
+        val qq = qqSongs.distinctBy { TrackKey.fromSong(it) }.take(PROBE_LIMIT)
+        if (ne.isEmpty() && qq.isEmpty()) return emptyMap()
+        // 单侧空的时候**不发请求**：`probeAvailability(emptyList())` 现在也返回空 Map，
+        // 但少一次「必然白跑」的调用，且不会在日志里留下一条误导性的失败。
+        val neResult = if (ne.isEmpty()) emptyMap() else {
+            runCatching { NeteaseAvailabilityApi.probeAvailability(ne) }
+                .onFailure { Log.w(TAG, "netease probe failed", it) }.getOrDefault(emptyMap())
+        }
+        val qqResult = if (qq.isEmpty()) emptyMap() else {
+            runCatching { QqCatalogApi.probeAvailability(qq) }
+                .onFailure { Log.w(TAG, "qq probe failed", it) }.getOrDefault(emptyMap())
+        }
+        return neResult + qqResult
     }
 
     /**
@@ -590,10 +644,124 @@ object CatalogAggregator {
         runCatching { QqCatalogApi.artistAlbums(singerMid) }
             .onFailure { Log.w(TAG, "qq artist albums failed", it) }.getOrDefault(emptyList())
 
-    private suspend fun neteaseArtistSongs(anchor: ArtistKey): List<SongItem> = runCatching {
-        RetrofitClient.api.search(keyword = anchor.name, type = 1, limit = 30).result?.songs.orEmpty()
-            .filter { s -> s.artists?.any { it.name == anchor.name } == true }
-    }.onFailure { Log.w(TAG, "ne artist songs failed", it) }.getOrDefault(emptyList())
+    /**
+     * 艺人页 ncm 一侧的曲目（v4.1.12 · 单曲不再截断到 30 首）。
+     *
+     * 主路径是**按艺人 id** 分页取（[neArtistSongsById]），失败/取空才回落到旧实现
+     * （按艺人名搜一次、上限 30 首）。两个理由：
+     *
+     * 1. 名字搜索**必然**混进别人的翻唱与同名艺人 —— 那句
+     *    `artists.any { name == anchor.name }` 只能滤掉「列表里的艺名不匹配」；
+     * 2. 名字搜索的页上限是 30，这是用户报的「歌手详情里单曲只有三十首」的直接原因。
+     *
+     * 回落必须打一行 `Log.i`：这是「个别艺人 id 取不到」的兜底路径，
+     * 线上真出现时，唯一能回答「为什么这个艺人的列表又变回 30 首」的线索就是它。
+     */
+    private suspend fun neteaseArtistSongs(anchor: ArtistKey): List<SongItem> {
+        val artistId = anchor.id.toLongOrNull()?.takeIf { it > 0L }
+        var reason = if (artistId == null) "艺人 id 不是数字（${anchor.id}）" else ""
+        val byId = if (artistId == null) {
+            emptyList()
+        } else {
+            runCatching { neArtistSongsById(artistId) }
+                .onFailure { Log.w(TAG, "ne artist songs by id failed", it) }
+                .getOrElse {
+                    reason = "按 id 取歌抛异常（${it.message ?: it.javaClass.simpleName}）"
+                    emptyList()
+                }
+        }
+        if (byId.isNotEmpty()) return byId
+
+        Log.i(
+            TAG,
+            "ncm 艺人曲目回落到按名字搜索：${anchor.name}（id=${anchor.id}）；原因：" +
+                reason.ifEmpty { "按 id 一页都没取到（接口失败或该艺人确实没有曲目）" },
+        )
+        // 回落路径**保持改动前的原样**（limit=30 + 艺名精确过滤）：它是兜底，不是主路径，
+        // 不在这条路上偷偷扩大口径 —— 否则「回落到搜索」这件事会变得比主路径还难解释。
+        return runCatching {
+            RetrofitClient.api.search(keyword = anchor.name, type = 1, limit = 30).result?.songs.orEmpty()
+                .filter { s -> s.artists?.any { it.name == anchor.name } == true }
+        }.onFailure { Log.w(TAG, "ne artist songs by name failed", it) }.getOrDefault(emptyList())
+    }
+
+    /**
+     * 按艺人 id 取 ncm 曲目：分页取 id → 一次批量详情 → 按热门顺序摆回。
+     *
+     * 详情走 `/eapi/v3/song/detail`（[PlaylistApi.getSongsByIdsOrNull]）而不是自己解析
+     * `/eapi/v1/artist/songs` 的 `songs[]`：那个端点回的是**旧形状**
+     * （`artists[]` / `album` / `duration`），而 `parseSongTrack` 是 ncm 曲目的唯一映射，
+     * 它顺带把 `privilege` / `originCoverType` 带出来 —— 在这里写第二套映射，
+     * 「同一首歌在艺人页和其他页字段不一样」是迟早的事。
+     * 代价是多一次请求（实测 100 首详情 217KB / 200 首 428KB）。
+     */
+    private suspend fun neArtistSongsById(artistId: Long): List<SongItem> {
+        val ids = collectArtistSongIds { limit, offset ->
+            PlaylistApi.getArtistSongIdsOrNull(artistId, limit, offset)
+        }
+        if (ids.isEmpty()) return emptyList()
+        val songs = PlaylistApi.getSongsByIdsOrNull(ids) ?: return emptyList()
+        return orderSongsByIds(ids, songs)
+    }
+
+    /**
+     * 分页收集艺人曲目 id（v4.1.12）。**无网络**：取一页的函数由调用方注入，单测直接钉。
+     *
+     * 停条件（任一成立即停，绝不无限翻）：
+     * 1. 取页失败（`null`）—— 保留已拿到的部分，不让一页失败把整页干掉；
+     * 2. 空页 —— 服务端确认没有更多（实测越界 offset 回 0 条 + `more=false`）；
+     * 3. 短页 —— 这一页不满 [pageSize]，说明已经到底；
+     * 4. 整页都是重复 id —— 偏移分页「回卷」了，继续翻只会把同样的歌再取一遍；
+     * 5. 到 [maxPages] 上限。
+     *
+     * @return 去重后的 id，保持服务端返回顺序（= 热门顺序）。
+     */
+    internal suspend fun collectArtistSongIds(
+        pageSize: Int = ARTIST_SONGS_PAGE,
+        maxPages: Int = ARTIST_SONGS_MAX_PAGES,
+        fetchPage: suspend (limit: Int, offset: Int) -> List<Long>?,
+    ): List<Long> {
+        if (pageSize <= 0 || maxPages <= 0) return emptyList()
+        val out = ArrayList<Long>(pageSize * maxPages)
+        val seen = HashSet<Long>(pageSize * maxPages)
+        for (page in 0 until maxPages) {
+            val ids = fetchPage(pageSize, page * pageSize) ?: break
+            if (ids.isEmpty()) break
+            var fresh = 0
+            for (id in ids) {
+                if (id > 0L && seen.add(id)) {
+                    out += id
+                    fresh++
+                }
+            }
+            if (ids.size < pageSize) break
+            if (fresh == 0) break
+        }
+        return out
+    }
+
+    /**
+     * 把批量详情的结果**按热门顺序摆回去**（v4.1.12，纯函数）。
+     *
+     * 实测 `/eapi/v3/song/detail` 会按请求里 `c` 的顺序返回（2026-11-24，100 首与 200 首
+     * 各测一次，顺序完全一致），但那是**观察**不是契约。一旦服务端换了顺序，
+     * 艺人页的「热门顺序」会静默变成「详情接口的顺序」，而没人会把这当成 bug 报上来。
+     * 所以这里显式按 id 重排一次，顺带丢掉响应里多出来的曲目与重复 id。
+     */
+    internal fun orderSongsByIds(ids: List<Long>, songs: List<SongItem>): List<SongItem> {
+        if (ids.isEmpty() || songs.isEmpty()) return emptyList()
+        val byId = HashMap<Long, SongItem>(songs.size)
+        for (song in songs) {
+            if (song.id > 0L && !byId.containsKey(song.id)) byId[song.id] = song
+        }
+        val out = ArrayList<SongItem>(ids.size)
+        val emitted = HashSet<Long>(ids.size)
+        for (id in ids) {
+            if (!emitted.add(id)) continue
+            byId[id]?.let { out += it }
+        }
+        return out
+    }
 
     private suspend fun qqArtistSongs(anchor: ArtistKey): List<SongItem> =
         runCatching { QqCatalogApi.artistSongs(anchor.id) }

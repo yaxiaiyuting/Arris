@@ -238,21 +238,68 @@ object PlaylistApi {
      * 目标艺人的热门曲 id（v1.4.0 · 音乐人推荐卡片的锚点推导用）。
      * 实测 `/eapi/v1/artist/songs` 对任意艺人都返回 200（周杰伦/小众艺人都可），
      * 而 `/eapi/v1/artist/detail` 与 `/eapi/artist/albums` 已 400 失效（别用）。
+     *
+     * v4.1.12：本函数退化成「失败当空列表」的便利包装，真正的取数在
+     * [getArtistSongIdsOrNull]（艺人页要区分「这一页没取到」与「这一页确实没有」）。
+     * `offset` 是给艺人页翻页用的，默认 0 ⇒ 音乐人推荐卡那条链路逐字节不变。
      */
-    suspend fun getArtistTopSongIds(artistId: Long, limit: Int = 3): List<Long> = withContext(Dispatchers.IO) {
-        val payload = mapOf(
-            "id" to artistId.toString(),
-            "limit" to limit.toString(),
-            "offset" to "0",
-            "order" to "hot"
-        )
-        val response = readEapi("/eapi/v1/artist/songs", payload)
-        val root = JSONObject(response.body?.string() ?: return@withContext emptyList())
-        val arr = root.optJSONArray("songs") ?: return@withContext emptyList()
-        (0 until arr.length()).mapNotNull { i ->
-            arr.optJSONObject(i)?.optLong("id")?.takeIf { it > 0L }
+    suspend fun getArtistTopSongIds(artistId: Long, limit: Int = 3, offset: Int = 0): List<Long> =
+        getArtistSongIdsOrNull(artistId, limit, offset).orEmpty()
+
+    /**
+     * 艺人曲目的**一页 id**（v4.1.12 · 艺人页单曲取全）。
+     *
+     * ## 为什么艺人页必须走这里，而不是搜索
+     *
+     * 旧实现是 `search(keyword = 艺人名, type = 1, limit = 30)`，三个问题叠在一起：
+     * ① **上限 30 首**（搜索接口自己的页），周杰伦这种 4 位数曲库的艺人永远只看到 30 首；
+     * ② **按名字**召回，同名艺人、别人的翻唱都会混进来；调用方那句
+     *    `artists.any { name == 艺人名 }` 只能滤掉「列表里的艺名不匹配」，
+     *    滤不掉「翻唱但署了同一个艺名」；
+     * ③ 搜索的相关性排序 ≠ 这个艺人的热门排序。
+     *
+     * ## 实测（2026-11-24，登录态，周杰伦 id=6452，eapi 通道）
+     *
+     * | 请求 | 结果 |
+     * |---|---|
+     * | `limit=3 / 30 / 100` | 依次回 3 / 30 / 100 条，`more=true` |
+     * | `limit=200` | 回 **200** 条 —— 一页上限就是 200（`limit=300` 仍只回 200） |
+     * | `limit=100&offset=100 / 200` | 各回 100 条，**与上一页不重复**（偏移分页有效） |
+     * | `limit=100&offset=1000` | 0 条 + `more=false`（越界是空页，不是错误码） |
+     * | `order=hot` / 不带 `order` | 前 10 首逐条相同（默认就是热门）；`order=time` 换成「最新发行」序 —— 艺人页要的是 hot，所以显式带上 |
+     *
+     * 响应体量也实测过（同一份响应按 UTF-8 字节数）：30 首 ≈ 149KB、100 首 ≈ 438KB /
+     * 200 首 ≈ 845KB ⇒ 「一页 100、最多两页」是往返次数与体量的折中，
+     * 不是「能取多少就取多少」。
+     *
+     * ## 为什么把失败做成 `null`
+     *
+     * `null` = 这一页**没取到**（网络/业务码失败/形状不对）；空列表 = 服务端确认这一页
+     * 没有曲目。艺人页据此决定要不要回落到「按名字搜索」—— 若用空列表表示失败，
+     * 「请求挂了」会被当成「这个艺人没有歌」，回落永远不会发生，用户看到的是空列表。
+     */
+    suspend fun getArtistSongIdsOrNull(artistId: Long, limit: Int, offset: Int): List<Long>? =
+        withContext(Dispatchers.IO) {
+            if (artistId <= 0L || limit <= 0) return@withContext null
+            val payload = mapOf(
+                "id" to artistId.toString(),
+                "limit" to limit.toString(),
+                "offset" to offset.coerceAtLeast(0).toString(),
+                "order" to "hot"
+            )
+            val response = readEapi("/eapi/v1/artist/songs", payload)
+            val body = response.body?.string() ?: return@withContext null
+            val root = JSONObject(body)
+            // 艺人页现在把这条链路当成主路径，301（未登录）必须在网络层就地转成会话失效，
+            // 否则「艺人页只有 30 首」会变成「艺人页一首都没有」而没人知道是登录过期。
+            reportBusinessCode(root.optInt("code", -1), response)
+            val code = root.optInt("code", -1)
+            if (!response.isSuccessful || code != 200) return@withContext null
+            val arr = root.optJSONArray("songs") ?: return@withContext null
+            (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.optLong("id")?.takeIf { it > 0L }
+            }
         }
-    }
 
     suspend fun getArtistAlbums(artistId: Long): String = withContext(Dispatchers.IO) {
         val payload = mapOf(
