@@ -754,6 +754,8 @@ val ruRU = Strings(
             searchLoadMore = "Загрузить ещё",
             searchLoadingMore = "Загрузка…",
             searchSourceTotal = { n -> java.lang.String.format("всего %d", n) },
+            librarySearchHint = "Поиск песен в библиотеке",
+            librarySearchEmpty = "Нет совпадений",
         ),
 
         bili = BiliStrings(

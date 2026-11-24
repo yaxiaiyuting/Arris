@@ -2302,7 +2302,51 @@ private fun MainScreen(
         return
     }
     if (showRecognize) {
-        RecognizeScreen(onBack = { showRecognize = false })
+        RecognizeScreen(
+            onBack = { showRecognize = false },
+            // 点按结果 = 直接播放：识曲结果只有元数据，真正的可播放身份是
+            // providerTrackId（网易云识曲给的就是 ncm 歌曲 id）。拉不到详情就退到
+            // 「长按搜索」那条路 —— 宁可把用户送到搜索页，也不要一个点了没反应的死按钮。
+            onPlayMatch = { match ->
+                showRecognize = false
+                val id = match.providerTrackId.toLongOrNull()
+                if (id == null) {
+                    tabPager.requestScrollToPage(SEARCH_TAB_INDEX)
+                    pendingSearchQuery = match.title.ifBlank { match.artist }
+                } else {
+                    // 换详情要走一次网络。这一小段里用户完全可能在别处起播，
+                    // 所以先领一个播放意图代次、回来再对一次：对不上就放弃 ——
+                    // 迟到的 playSongItem 会把用户刚点的歌抢掉（v4.1.4 修过同一类抢播）。
+                    // 不用 runCatching：它会把协程取消也吞成 null，让「页面已经离开」
+                    // 变成「拉详情失败」再顺手去切搜索 tab。
+                    val epoch = playerViewModel.beginUserPlayIntent()
+                    coroutineScope.launch {
+                        val song = try {
+                            PlaylistApi.getSongsByIdsOrNull(listOf(id))
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }?.firstOrNull()
+                        if (!com.takahashirinta.ncrust.player.playRequestGeneration.isCurrent(epoch)) {
+                            return@launch
+                        }
+                        if (song != null) {
+                            playSongItem(song)
+                        } else {
+                            tabPager.requestScrollToPage(SEARCH_TAB_INDEX)
+                            pendingSearchQuery = match.title.ifBlank { match.artist }
+                        }
+                    }
+                }
+            },
+            // 长按 = 到搜索页搜这首歌（标题优先，标题为空退回歌手）。
+            onSearchMatch = { match ->
+                showRecognize = false
+                tabPager.requestScrollToPage(SEARCH_TAB_INDEX)
+                pendingSearchQuery = match.title.ifBlank { match.artist }
+            },
+        )
         return
     }
     if (showTogether) {

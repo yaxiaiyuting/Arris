@@ -754,6 +754,8 @@ val deDE = Strings(
             searchLoadMore = "Mehr laden",
             searchLoadingMore = "Wird geladen…",
             searchSourceTotal = { n -> java.lang.String.format("%d insgesamt", n) },
+            librarySearchHint = "Songs in der Bibliothek suchen",
+            librarySearchEmpty = "Keine passenden Songs",
         ),
 
         bili = BiliStrings(

@@ -45,7 +45,6 @@ import com.takahashirinta.ncrust.source.musicSource
 import com.takahashirinta.ncrust.source.trackKey
 import com.takahashirinta.ncrust.ui.components.AlbumSourceTag
 import com.takahashirinta.ncrust.ui.components.DetailHeader
-import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.pullToRefresh
 import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import com.takahashirinta.ncrust.ui.components.DetailScaffold
@@ -271,6 +270,8 @@ fun AlbumDetailScreen(
         error = error,
         onRetry = { reloadTick++ },
         listState = listState,
+        // v4.2.0：指示器由骨架画成悬浮层（曾经是列表第一项，会被 header 切掉一半）。
+        pullToRefreshState = pullState,
         contentModifier = Modifier.pullToRefresh(
             state = pullState,
             loading = { isLoading },
@@ -359,9 +360,6 @@ fun AlbumDetailScreen(
             )
         },
         content = {
-            // 下拉指示器是列表的**第一项**（既有用法）：只在真的拉动或刷新中挂载，
-            // 不做「alpha = 0 常挂载」（AGENTS.md 触摸陷阱第 1 条）。
-            item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
             if (songs.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {

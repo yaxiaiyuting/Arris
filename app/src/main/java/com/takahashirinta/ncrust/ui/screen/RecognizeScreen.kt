@@ -13,7 +13,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -68,9 +70,19 @@ private enum class RecognitionSource(val label: String, val prompt: String, val 
 
 private enum class RecognitionPhase { IDLE, AUTHORIZATION, RECORDING, MATCHING }
 
-/** Only a user-started attempt can capture or submit, and it ends when the screen leaves. */
+/**
+ * Only a user-started attempt can capture or submit, and it ends when the screen leaves.
+ *
+ * 结果卡片上的「点按播放 / 长按去搜索」交给调用方落地：[RecogMatch] 只有元数据（没有播放地址），
+ * 只有调用方知道该拿 providerTrackId 去换详情、还是干脆退到搜索页。两个回调都给空实现，
+ * 这样只关心「返回」的既有调用点不用跟着改，签名扩展是向后兼容的。
+ */
 @Composable
-fun RecognizeScreen(onBack: () -> Unit) {
+fun RecognizeScreen(
+    onBack: () -> Unit,
+    onPlayMatch: (RecogMatch) -> Unit = {},
+    onSearchMatch: (RecogMatch) -> Unit = {},
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -283,9 +295,12 @@ fun RecognizeScreen(onBack: () -> Unit) {
             result = null
         },
         onAction = { if (phase == RecognitionPhase.IDLE) start() else cancel() },
+        onPlayMatch = onPlayMatch,
+        onSearchMatch = onSearchMatch,
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RecognitionContent(
     source: RecognitionSource,
@@ -296,6 +311,8 @@ private fun RecognitionContent(
     onBack: () -> Unit,
     onSelectSource: (RecognitionSource) -> Unit,
     onAction: () -> Unit,
+    onPlayMatch: (RecogMatch) -> Unit,
+    onSearchMatch: (RecogMatch) -> Unit,
 ) {
     val c = LocalMetroColors.current
     val busy = phase != RecognitionPhase.IDLE
@@ -313,7 +330,17 @@ private fun RecognitionContent(
             RecognitionCard(source, phase, countdown, status, result is RecogOutcome.Matched, result != null, onAction)
             val match = (result as? RecogOutcome.Matched)?.match
             if (match != null) {
-                Row(Modifier.fillMaxWidth().arrisSurface().padding(20.dp),
+                Row(Modifier.fillMaxWidth()
+                    // 结果卡片这一整块就是操作区：点按直接播、长按去搜索。
+                    // combinedClickable 排在 arrisSurface 之后，闪切反馈才会被卡片形状裁住；
+                    // 不传 indication ⇒ 走 MetroTheme 注入的 LocalIndication（直角闪切），
+                    // 与 SongCard / ArtistSearchItem 一致 —— 显式写 null 会让这张卡片「点了没反馈」。
+                    .arrisSurface()
+                    .combinedClickable(
+                        onClick = { onPlayMatch(match) },
+                        onLongClick = { onSearchMatch(match) },
+                    )
+                    .padding(20.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).background(c.primary.copy(alpha = .07f), AppShapes.medium),
                         contentAlignment = Alignment.Center) {
@@ -326,6 +353,10 @@ private fun RecognitionContent(
                         if (match.album.isNotBlank()) MetroText(match.album, color = c.onSurfaceVariant, style = LocalMetroTypography.current.caption)
                     }
                 }
+                // 提示只在真有结果时出现：没有结果时这两个手势指向的动作根本不存在，
+                // 常显会变成一句点不动的假承诺。
+                MetroText("点按播放 · 长按去搜索",
+                    color = c.onSurfaceVariant, style = LocalMetroTypography.current.caption)
             }
             MetroText("10 秒聆听 · 网易云账号识别", color = c.primary, style = LocalMetroTypography.current.caption)
             MetroText(source.disclosure,

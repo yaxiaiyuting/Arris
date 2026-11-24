@@ -751,6 +751,8 @@ val jpMY = Strings(
             searchLoadMore = "更に読み込め",
             searchLoadingMore = "読み込み中…",
             searchSourceTotal = { n -> java.lang.String.format("都 %d 曲", n) },
+            librarySearchHint = "庫の曲を探せ",
+            librarySearchEmpty = "合ふ曲なし",
         ),
 
         bili = BiliStrings(
