@@ -159,6 +159,30 @@ class PlaybackService : MediaLibraryService() {
     /** 诊断日志的节流（15 s 一条，别刷屏）与「本窗口内重建了几次通知」计数。 */
     private var lastStallTickAtMs = 0L
     private var notifyPostsSinceTick = 0
+    /**
+     * v4.2.0：服务侧「复活」状态。
+     *
+     * 与 UI 侧的重试预算是**两套独立的东西**（那边用尽就 `stopForQualityFailure`，
+     * 这里只按时间退避、不设次数上限）：熄屏后台时用户没有 UI 可点，
+     * 一条 URL 过期就让播放永久停住是不可接受的。判据全在 [PlaybackRecovery] 里，有单测。
+     */
+    private var lastKnownPositionMs = 0L
+    /**
+     * 「是**失败**把播放停下来的」而不是用户按的暂停。
+     *
+     * 为什么必须分开：`pause_failed` 也会调 `player.pause()`（`playWhenReady` 变 false），
+     * 于是任何一个以 `playWhenReady` 为准的判据都会认为「用户不想听了」——
+     * 而这恰恰是最该复活的那种死法。用户的**显式**暂停/停止/播放都会把它清掉，
+     * 所以它等价于「用户没表态，是系统把播放掐了」。
+     */
+    private var failurePaused = false
+    /** 复活窗口起点（第一次因失败停下）；0 = 还没开始。 */
+    private var resurrectWindowStartMs = 0L
+    private var deadSinceMs = 0L
+    private var resurrectAttempt = 0
+    private var lastResurrectAtMs = 0L
+    private var resurrectJob: Job? = null
+
     private val checkpoint = PlaybackCheckpoint()
     private val queuePreload = ExoPlayer.PreloadConfiguration(12_000_000L)
     private var lastLocalStallRepair: TrackKey? = null
@@ -1026,6 +1050,10 @@ class PlaybackService : MediaLibraryService() {
                 pendingSelection = null
                 PlaybackStateManager.saveServiceResumeIntent(this, false)
                 player.pause()
+                // v4.2.0：这一次是**失败**按下的静音，不是用户按的。留个记号，
+                // 让复活判据（[PlaybackRecovery]）不至于把「系统掐的」当成「用户不想听」。
+                failurePaused = true
+                if (resurrectWindowStartMs == 0L) resurrectWindowStartMs = SystemClock.elapsedRealtime()
                 return START_NOT_STICKY
             }
             "pause" -> {
@@ -1034,9 +1062,12 @@ class PlaybackService : MediaLibraryService() {
                 PlaybackStateManager.saveServiceResumeIntent(this, false)
                 onPlaybackInterrupted?.invoke()
                 player.pause()
+                // 用户自己按的暂停 ⇒ 复活窗口直接关掉（绝不擅自把用户停下的事重新响起来）。
+                clearFailurePause()
             }
             "resume" -> { resumePlayback() }
             "stop" -> {
+                clearFailurePause()
                 restartJob?.cancel()
                 onPlaybackInterrupted?.invoke()
                 PlaybackStateManager.clearState(this)
@@ -1228,6 +1259,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private fun updateTrackMetadata(track: TrackKey, title: String?, artist: String?, artwork: String?) {
+        // 换了一条曲目 ⇒ 上一首的「死与退避」全部作废（同一首歌的复活计数才是有意义的）。
+        resurrectAttempt = 0
+        lastResurrectAtMs = 0L
+        deadSinceMs = 0L
         title?.let { mediaTitle = it }
         artist?.let { mediaArtist = it }
         mediaSongId = track.id
@@ -1457,6 +1492,110 @@ class PlaybackService : MediaLibraryService() {
     fun currentOfflineContent(): com.takahashirinta.ncrust.cache.OfflineContent? =
         player.currentMediaItem?.localConfiguration?.uri?.toString()?.let { OfflineUrlStore.contentForUrl(this, it) }
 
+    /**
+     * 把 [TrackKey] 还原成能交给 [com.takahashirinta.ncrust.source.SourceRouter] 的 `SongItem`。
+     *
+     * 复活路径只需要**身份**（音源 + id + sourceId/mediaId），不需要封面/时长/权益 ——
+     * 那些是 UI 的事。返回 null 表示这首歌按身份就取不了链（qm 缺 `songmid`），
+     * 此时重试多少次都是空的，判据里直接不试（见 [PlaybackRecovery.shouldResurrect] 的
+     * `resolvable`）。
+     */
+    /**
+     * 「死之前放的是哪一首」。
+     *
+     * `onPlayerError` 会 `stop() + clearMediaItems()`（那是 media3 里唯一能把 AudioSink
+     * 复位、把音频焦点放掉的入口），于是 `currentMediaItem == null`、[playingTrackKey] 只能给出
+     * null —— 而复活恰恰要在这个状态下发生。所以身份另留一份：`updateTrackMetadata()`
+     * 每次换歌都会写 `mediaSongId / mediaSourceKey / mediaSourceId / mediaMediaId`，
+     * 用户显式 `"stop"` 时它们会被清成 null（那条路径不该被复活）。
+     */
+    private fun lastResolvedTrack(): TrackKey? {
+        val id = mediaSongId?.takeIf { it > 0L } ?: return null
+        return TrackKey(
+            source = MusicSource.fromKey(mediaSourceKey),
+            id = id,
+            sourceId = mediaSourceId,
+            mediaId = mediaMediaId,
+        )
+    }
+
+    /** 用户显式操作（暂停/停止/重新播放）⇒ 失败标记与复活窗口一起关掉。 */
+    private fun clearFailurePause() {
+        failurePaused = false
+        resurrectWindowStartMs = 0L
+        resurrectAttempt = 0
+        lastResurrectAtMs = 0L
+    }
+
+    private fun songForRecovery(track: TrackKey): com.takahashirinta.ncrust.network.SongItem? {
+        val song = com.takahashirinta.ncrust.network.SongItem(
+            id = track.id,
+            name = mediaTitle,
+            artists = null,
+            album = null,
+            duration = null,
+            source = track.source.key,
+            sourceId = track.sourceId,
+            mediaId = track.mediaId,
+        )
+        // isResolvable 是 `SongSourceExt.kt` 里的扩展属性，要用带 import 的用法才能调，
+        // 这里直接按它的定义判一次（源码 ID 是否齐全），少一个跨包扩展属性的隐式依赖。
+        val resolvable = !song.musicSource.requiresSourceId || !song.sourceId.isNullOrEmpty()
+        return song.takeIf { resolvable }
+    }
+
+    /**
+     * v4.2.0：**服务侧自己的复活** —— 重新取一次链，然后从断点续播。
+     *
+     * 为什么不复用 UI 侧那条恢复链：那条挂在 `PlayerViewModel` 上，并且预算由
+     * `urlRetryGate` 管，用尽就 `stopForQualityFailure` 把播放停掉 —— 熄屏后台时
+     * 用户没有界面可点，一条过期 URL 就足以让播放永久停住（真机表现：解锁后「播放器开着、
+     * 歌没在放、也没报错」）。这里按时间退避、不设次数上限，直到真的出声。
+     *
+     * 三条闸门，缺一不可：
+     * 1. `playRequestGeneration` 变了 ⇒ 用户已经自己操作过（换歌 / 点了别的），本次作废；
+     * 2. 当前曲目不再是当初那首 ⇒ 同上；
+     * 3. 取不到 URL ⇒ 什么都不做，等下一档退避（**不**在这里降档：降档是
+     *    `QualityRetryGuard` 的职责，两条策略混在一起会互相掩盖）。
+     */
+    private fun launchResurrect(track: TrackKey, positionMs: Long) {
+        if (resurrectJob?.isActive == true) return
+        val song = songForRecovery(track) ?: return
+        val revision = playRequestGeneration.current
+        resurrectAttempt += 1
+        lastResurrectAtMs = SystemClock.elapsedRealtime()
+        Log.w(
+            "PlaybackService",
+            "Playback dead track=$track position=$positionMs deadFor=${lastResurrectAtMs - deadSinceMs}ms " +
+                "— refetch attempt=$resurrectAttempt",
+        )
+        resurrectJob = scope.launch {
+            val level = currentQualityLevel()
+            val result = try {
+                com.takahashirinta.ncrust.source.SourceRouter.resolveUrl(song, level)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (!isActive) return@launch
+            if (playRequestGeneration.current != revision || playingTrackKey() != track) {
+                Log.i("PlaybackService", "Resurrect abandoned: 用户已自行操作 track=$track")
+                return@launch
+            }
+            val url = result?.url
+            if (url.isNullOrBlank()) {
+                Log.w("PlaybackService", "Resurrect refetch empty track=$track level=$level，等下一档退避")
+                return@launch
+            }
+            Log.i(
+                "PlaybackService",
+                "Resurrect ok track=$track level=${result.actualLevel} from=$positionMs attempt=$resurrectAttempt",
+            )
+            playUrl(url, positionMs, startPlaying = true)
+        }
+    }
+
     private fun playUrl(url: String, startPositionMs: Long = 0L, startPlaying: Boolean = true) {
         // 只记 songId/标题：取链 URL 带签名参数与 authSecret，不能进 logcat（release 也会打）。
         Log.d(
@@ -1466,6 +1605,9 @@ class PlaybackService : MediaLibraryService() {
         // v1.6.0 · D1：记下这首歌「最后一次成功播放的 URL」。断网时客户端必须先有一个 URL
         // 才会去问 CacheDataSource，而网易的 URL 20 分钟就过期 —— 这份清单就是离线回放的入口。
         runCatching { OfflineUrlStore.rememberFromUrl(this, url) }
+        // 又有东西能播了 ⇒ 失败型暂停的记号/窗口一并作废（无论是用户点播还是本地复活）。
+        failurePaused = false
+        resurrectWindowStartMs = 0L
         // Clear any stale preload metadata; setMediaItem replaces the entire playlist.
         clearPendingNext()
         val mediaItem = buildCurrentMediaItem(url)
@@ -2135,9 +2277,16 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    /** 玩家动作（换歌 / seek / 状态切换）之后重新开一个计时窗口。 */
+    /**
+     * 玩家动作（换歌 / seek / 状态切换）之后重新开一个计时窗口。
+     *
+     * **只重置观测窗口，不重置复活计数**：一次失败的复活本身就会带来一串状态事件
+     * （IDLE → BUFFERING → IDLE），若在这里清零 `lastResurrectAtMs`，退避就形同虚设，
+     * 变成「每 15 秒试一次、一直试」的重试风暴。计数只在真的放出声音、或者换了歌时清零。
+     */
     private fun restartStallObservation() {
         stallDetector.reset()
+        deadSinceMs = 0L
     }
 
     /**
@@ -2163,6 +2312,54 @@ class PlaybackService : MediaLibraryService() {
             ),
         )
         if (reading.stalled) handlePlaybackStall(positionMs, bufferedMs, state)
+        // v4.2.0：最后一道复活判据。位置前进 / 正在出声 / 用户已经不想要它放了 ⇒ 这一轮结束；
+        // 否则从「第一次发现不动」起计时，够 15 秒就由服务自己重新取链续播（见 [PlaybackRecovery]）。
+        //
+        // 判据用的「还想不想要它放」与卡顿判据**不是同一个东西**：卡顿判据要求
+        // `READY/BUFFERING`（[hasActivePlaybackIntent]），而复活要救的恰恰是
+        // 「已经 IDLE 了」那种死法 —— 所以这里另外看 `playWhenReady && 有曲目 && 非 ENDED`。
+        val recoveryTrack = playingTrackKey() ?: lastResolvedTrack()
+        // `playWhenReady` 为 false 有两种含义：用户按了暂停（不该复活），
+        // 或者失败路径的 `pause_failed` 把它静音了（**最该复活**）。用 failurePaused 区分。
+        val stillWanted = player.playWhenReady || failurePaused
+        val wantsRecovery = stillWanted &&
+            recoveryTrack != null &&
+            state != Player.STATE_ENDED &&
+            suppression == Player.PLAYBACK_SUPPRESSION_REASON_NONE &&
+            PlaybackRecovery.withinRetryWindow(nowMs, resurrectWindowStartMs)
+        val advanced = player.isPlaying && positionMs != lastKnownPositionMs
+        deadSinceMs = PlaybackRecovery.nextDeadSinceMs(
+            nowMs = nowMs,
+            deadSinceMs = deadSinceMs,
+            advanced = advanced,
+            playing = player.isPlaying,
+            hasIntent = wantsRecovery,
+        )
+        if (player.isPlaying) {
+            lastKnownPositionMs = positionMs
+            resurrectAttempt = 0
+            lastResurrectAtMs = 0L
+            if (failurePaused || resurrectWindowStartMs != 0L) clearFailurePause()
+        } else if (positionMs > 0 && positionMs != lastKnownPositionMs) {
+            // 暂停态 seek：跟随用户给的新位置。**但不把 `stop()` 之后的 0 当成断点** ——
+            // 复活要从「死之前听到哪儿」续上，这正是 lastKnownPositionMs 存在的理由。
+            lastKnownPositionMs = positionMs
+        }
+        if (wantsRecovery) {
+            val track = recoveryTrack
+            if (track != null && PlaybackRecovery.shouldResurrect(
+                    nowMs = nowMs,
+                    deadSinceMs = deadSinceMs,
+                    hasIntent = wantsRecovery,
+                    playing = player.isPlaying,
+                    attempt = resurrectAttempt,
+                    lastAttemptAtMs = lastResurrectAtMs,
+                    resolvable = songForRecovery(track) != null,
+                )
+            ) {
+                launchResurrect(track, positionMs.coerceAtLeast(lastKnownPositionMs))
+            }
+        }
         if (!intent) {
             // 暂停 / 空闲：不刷诊断（熄屏暂停时也不该每 15 s 唤醒一次），
             // 清零时刻是为了恢复播放后立刻能打一条「起点」样本。
