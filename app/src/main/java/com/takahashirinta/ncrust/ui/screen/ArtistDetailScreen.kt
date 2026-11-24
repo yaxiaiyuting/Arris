@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import com.takahashirinta.ncrust.ui.components.PullToRefreshIndicator
 import com.takahashirinta.ncrust.ui.components.pullToRefresh
 import com.takahashirinta.ncrust.ui.components.rememberPullToRefreshState
 import androidx.compose.material.icons.Icons
@@ -134,7 +133,7 @@ fun ArtistDetailScreen(
 
     // v3.4.11：**下拉刷新**。用户报障：「音乐作者界面里的单曲和专辑仍然没有下滑刷新」。
     //
-    // 复用既有组件（`Modifier.pullToRefresh` + `PullToRefreshIndicator`，
+    // 复用既有组件（`Modifier.pullToRefresh` + 骨架的悬浮指示器 `PullToRefreshOverlay`，
     // v2.3.0 起就在用，此前只有歌单详情页与搜索页接了）—— 不新建组件、不发明新交互。
     // `DetailScaffold` 从 v2.3.0 就把 `listState` 与 `contentModifier` 暴露出来了，
     // 那两个参数**就是为这件事留的口子**（见它的 KDoc），所以这里只是把它们用上。
@@ -229,6 +228,8 @@ fun ArtistDetailScreen(
         error = error,
         onRetry = { reloadTick++ },
         listState = listState,
+        // v4.2.0：指示器由骨架画成悬浮层（曾经是列表第一项，会被 header 切掉一半）。
+        pullToRefreshState = pullState,
         contentModifier = Modifier.pullToRefresh(
             state = pullState,
             loading = { isLoading },
@@ -295,9 +296,6 @@ fun ArtistDetailScreen(
             }
         },
         content = {
-            // 下拉指示器是列表的**第一项**（既有用法，见搜索页 / 歌单详情页）：
-            // 只在真的拉动或刷新中挂载，不做「alpha = 0 常挂载」（AGENTS.md 触摸陷阱第 1 条）。
-            item(key = "pull-refresh") { PullToRefreshIndicator(state = pullState) }
             when (selectedTab) {
                 0 -> {
                     if (albumRows.isEmpty()) {

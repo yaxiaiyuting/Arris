@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -30,6 +31,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.takahashirinta.ncrust.playlist.PullToRefresh
+import com.takahashirinta.ncrust.ui.theme.AppShapes
 import io.github.takahashirinta.kanesumi.controls.MetroProgressIndicator
 import io.github.takahashirinta.kanesumi.core.theme.LocalMetroColors
 
@@ -151,46 +153,76 @@ internal class PullToRefreshConnection(
 }
 
 /**
- * 下拉时出现在列表顶部的进度指示器。
+ * 下拉时浮在内容区顶部的进度指示器（v4.2.0 重写）。
  *
- * 只在真的拉动了（`progress > 0`）或正在刷新时**挂载** —— 不做
- * 「`alpha = 0` 常挂载」（见 AGENTS.md 的 Compose 触摸陷阱第 1 条：
- * `alpha = 0` 不退出命中测试，一个看不见的指示器会变成一块摸不着的死区）。
+ * ## 为什么从「列表第一项」改成「悬浮层」
+ *
+ * v2.3.0 起它的用法是 `LazyColumn` 的**第一项**（`item(key = "pull-refresh")`），
+ * 指示器是一张 40dp 高的全宽底板，并且用 `translationY = -(1 - reveal) * height`
+ * 让它从自己的槽位里**往上滑**。真机（ArtistDetail 页）暴露了两个结构性缺陷：
+ *
+ * 1. **被上面的 header 切掉一半**：往上滑出槽位后，它画的正是 header（同名 tab 行）
+ *    占着的位置，转圈只露出下半圈 —— 用户看到的就是「卡片中间卡着一个半截圆圈」；
+ * 2. **一碰就闪**：`reveal` 有 `coerceAtLeast(0.15f)` 下限，于是手指刚动 1px 就把
+ *    一项 40dp 的 item 插进列表 ⇒ 内容整体下跳 40dp；松手 `reset()` 又把这项摘掉 ⇒
+ *    再跳回去。一次手势里挂载/卸载多次，观感是「闪一下、跳一下、又闪一下」。
+ *
+ * 现在它是**纯悬浮层**：不占布局、不参与 `LazyColumn` 的 diff，因此
+ * **内容一个像素都不会跳**；同时它是 40dp 的小方块（Kanesumi 直角），
+ * 上下左右都在自己范围内，**不存在被谁切掉的可能**。
+ *
+ * ## 挂载条件
+ *
+ * 只在真的拉动了（`progress > 0`）或正在刷新时挂载 —— 不做「`alpha = 0` 常挂载」
+ * （见 AGENTS.md 的 Compose 触摸陷阱第 1 条：`alpha = 0` 不退出命中测试，
+ * 一个看不见的指示器会变成一块摸不着的死区）。
+ *
+ * ## 为什么不用 `animateXxxAsState`
+ *
+ * 位置完全跟手：位移本身就是连续量，直接映射成 alpha / scale 已经足够顺滑；
+ * 任何时间轴动画都会在「挂载的那一帧从头播一次」，而这正是此前
+ * 「动画反复触发」的来源。
+ *
+ * 调用方负责把它放进一个 `Box` 并对齐到 `Alignment.TopCenter`
+ * （见 [DetailScaffold] 的 `pullToRefreshState` 参数）。
  */
 @Composable
-fun PullToRefreshIndicator(
+fun PullToRefreshOverlay(
     state: PullToRefreshState,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMetroColors.current
-    // 只跟手，不做时间轴动画：这个指示器挂在 header 里，列表滚动/重组时会重新挂载，
-    // 任何 `animateXxxAsState` 都会在重挂载时从头播一次 —— 用户看到的就是「动画反复触发」。
-    // 位移本身就是连续量，直接映射成透明度已经足够顺滑。
-    val reveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx).coerceAtLeast(0.15f)
-    if (reveal <= 0.01f) return
+    // 0.06 而不是 0：手指刚碰到屏幕时的 1~2px 抖动不该让指示器闪一下。
+    val reveal = if (state.refreshing) 1f else PullToRefresh.progress(state.dragPx)
+    if (reveal <= 0.06f) return
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
-            // 一层半透明底板 + 底边细线：指示器是"盖在内容上"的一层，而不是内容自己长出来的。
-            // 之前没有这层，转圈直接叠在列表文字上，观感很怪（用户反馈「没有遮罩过渡」）。
+            // 状态栏的那段留白**由调用方给**（详情页在根 Box 里画，需要避开状态栏；
+            // 搜索页的宿主本来就落在标题栏之下，再补一次会把指示器推到第一行结果上）。
+            .height(48.dp)
             .graphicsLayer {
-                alpha = reveal
-                translationY = -(1f - reveal) * size.height
-            }
-            .background(colors.surface.copy(alpha = 0.94f)),
+                alpha = reveal.coerceIn(0f, 1f)
+                // 微微放大：0.86 → 1，让「拉动进度」除了透明度还有一个可读的量。
+                val scale = 0.86f + 0.14f * reveal
+                scaleX = scale
+                scaleY = scale
+                // 只做几 dp 的上浮，目的是「像从上面掉下来」；不再整块滑出可视区。
+                translationY = -(1f - reveal) * 10.dp.toPx()
+            },
         contentAlignment = Alignment.Center,
     ) {
-        MetroProgressIndicator(
-            color = colors.primary,
-            // indeterminate 的指示器不需要进度参数；下拉过程中它只要「转起来」就够表达状态。
-        )
         Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.surfaceVariant),
-        )
+                .size(40.dp)
+                .background(colors.surface, AppShapes.medium),
+            contentAlignment = Alignment.Center,
+        ) {
+            MetroProgressIndicator(
+                sizeDp = 22.dp,
+                color = colors.primary,
+                // indeterminate 的指示器不需要进度参数；下拉过程中它只要「转起来」就够表达状态。
+            )
+        }
     }
 }

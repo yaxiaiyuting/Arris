@@ -88,6 +88,15 @@ fun DetailScaffold(
     listState: LazyListState = rememberLazyListState(),
     /** v2.3.0 · B：挂在内容 `LazyColumn` 上的修饰符（下拉刷新手势从这儿进去）。 */
     contentModifier: Modifier = Modifier,
+    /**
+     * v4.2.0：下拉刷新的状态。传了就由骨架在**内容区顶部**画一盏悬浮指示器。
+     *
+     * 为什么指示器由骨架画、而不是让各页在 `content {}` 里放一个 item：
+     * v2.3.0–v4.1.10 的写法是「指示器 = 列表第一项 + 往上滑出槽位」，真机上
+     * 它会被 header（同名 tab 行）切掉一半，而且一碰就让内容跳动 40dp
+     * （见 [PullToRefreshOverlay] 的 KDoc）。悬浮层不占布局，这两个毛病一起消失。
+     */
+    pullToRefreshState: PullToRefreshState? = null,
     /** 设置等纯色页面使用主题表面渐隐；封面详情仍需深色遮罩保护白色图标。 */
     navigationOverArtwork: Boolean = true,
     content: LazyListScope.() -> Unit
@@ -168,6 +177,18 @@ fun DetailScaffold(
                     }
                 }
             }
+        }
+
+        // 下拉指示器：内容区顶部的悬浮层（不占布局 ⇒ 列表不会跳）。
+        // 顺序放在 Crossfade 之后、返回箭头之前：箭头必须压在最上面，否则刷新中
+        // 那 48dp 的指示器带会盖住它半秒。
+        pullToRefreshState?.let { pullState ->
+            PullToRefreshOverlay(
+                state = pullState,
+                // statusBarsPadding 在这里给：本骨架的根 Box 一直延伸到状态栏下，
+                // 不补这一段的话指示器会盖住时钟与信号。
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding(),
+            )
         }
 
         TopScrimIconButton(
