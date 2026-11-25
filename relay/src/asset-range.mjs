@@ -37,7 +37,7 @@ function sliceStream(body, start, end) {
   });
 }
 
-export async function serveRangedAsset(request, assets, assetUrl, { size, cacheControl } = {}) {
+export async function serveRangedAsset(request, assets, assetUrl, { size, cacheControl, fileName } = {}) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
   }
@@ -47,6 +47,14 @@ export async function serveRangedAsset(request, assets, assetUrl, { size, cacheC
 
   const headers = new Headers(asset.headers);
   headers.set('accept-ranges', 'bytes');
+  // v4.1.14：显式给下载名与 MIME。Cloudflare 的静态资源对 .apk 已经会给
+  // application/vnd.android.package-archive，但浏览器最终用什么名字落盘还看
+  // Content-Disposition —— 尤其是安卓上的第三方浏览器，只看 MIME 就把 .apk 存成 .zip
+  // （用户在官网直链下载到 zip 的现场）。两项都写死，不让客户端自己猜。
+  if (fileName) {
+    headers.set('content-disposition', `attachment; filename="${fileName}"`);
+    headers.set('content-type', 'application/vnd.android.package-archive');
+  }
   if (cacheControl) headers.set('cache-control', cacheControl);
   if (request.method === 'HEAD' && size != null && !headers.has('content-length')) {
     headers.set('content-length', String(size));
