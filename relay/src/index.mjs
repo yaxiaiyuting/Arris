@@ -314,7 +314,9 @@ export default {
       return serveRangedAsset(request, env.ASSETS, assetUrl, {
         size,
         // 落盘文件名与 MIME：见 asset-range.mjs 里的说明。
-        fileName: name,
+        // 别名（latest.apk / lts-latest.apk）落盘用**真实版本名**：用户下完在一堆文件里
+        // 分不清哪个是哪个，「latest.apk」也不利于事后核对版本。
+        fileName: ALIAS_TAGS[name]?.f ?? name,
         // 别名（latest.apk / lts-latest.apk）原来写 no-store —— 每次下载都要重新回源，
         // 国内线路上这一跳就是"忽快忽慢"的主要来源。改成 5 分钟可缓存：
         // 版本更新最多晚 5 分钟生效，但边缘能命中、浏览器也能复用。
