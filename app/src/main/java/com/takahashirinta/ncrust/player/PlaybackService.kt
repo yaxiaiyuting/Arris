@@ -1034,6 +1034,26 @@ class PlaybackService : MediaLibraryService() {
         startProgressUpdates()
         // v4.1.8：卡顿观察循环随 Service 常驻（**不**随 buffering 状态/UI 生命周期开关）。
         startStallWatch()
+        // v4.1.14：**网络恢复 ⇒ 立刻可以再试一次复活**。
+        //
+        // 现场（2026-11-27 23:43–23:45）：取链连续超时导致 `pause_failed`，复活按
+        // 15s→30s→60s→120s→180s 退避重试；等网络恢复时，下一次尝试可能还要再等两三分钟 ——
+        // 用户看到的就是「网早好了，歌一直不放」。这里在网络真正可用时把退避清零，
+        // 2 秒内的下一次 tick 就会重试（是否重试仍由 shouldResurrect 的其余条件把关）。
+        scope.launch {
+            com.takahashirinta.ncrust.network.DefaultNetworkObserver(this@PlaybackService)
+                .changes()
+                .collect { route ->
+                    if (!route.online) return@collect
+                    if (resurrectAttempt == 0 && lastResurrectAtMs == 0L) return@collect
+                    Log.i(
+                        "PlaybackService",
+                        "network available -> reset resurrect backoff (was attempt=$resurrectAttempt)",
+                    )
+                    resurrectAttempt = 0
+                    lastResurrectAtMs = 0L
+                }
+        }
     }
 
     /**
@@ -1289,9 +1309,17 @@ class PlaybackService : MediaLibraryService() {
 
     private fun updateTrackMetadata(track: TrackKey, title: String?, artist: String?, artwork: String?) {
         // 换了一条曲目 ⇒ 上一首的「死与退避」全部作废（同一首歌的复活计数才是有意义的）。
-        resurrectAttempt = 0
-        lastResurrectAtMs = 0L
-        deadSinceMs = 0L
+        //
+        // ⚠️ 判据必须是「身份真的变了」，不能无条件清：UI 侧的重试会把**同一首**重推一次
+        // （`applyResolvedPlayback` → 这里），无条件清就让退避永远停在 15 秒一档 ——
+        // 真机现场（2026-11-27 23:43）就是这样：attempt=2 之后没过多久又变回 attempt=1，
+        // 每次复活都白付 2×8 秒连接超时。
+        val identityChanged = track.id != mediaSongId || track.source.key != mediaSourceKey
+        if (identityChanged) {
+            resurrectAttempt = 0
+            lastResurrectAtMs = 0L
+            deadSinceMs = 0L
+        }
         title?.let { mediaTitle = it }
         artist?.let { mediaArtist = it }
         mediaSongId = track.id
