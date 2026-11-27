@@ -735,7 +735,26 @@ class PlaybackService : MediaLibraryService() {
                 updatePlaybackState()
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                Log.d("PlaybackService", "playWhenReady=$playWhenReady reason=$reason foreground=$isServiceStarted")
+                // v4.1.14：把**为什么会播/停**一次说全。
+                //
+                // 现场（2026-11-27）：用户报「打开拼多多就卡播放」，而 logcat 里只有
+                // `playWhenReady=false reason=1`（USER_REQUEST = 由代码调 pause），
+                // 光看这一行分不清是「媒体键」「焦点被抢」「我们自己按停」还是「UI 点的」。
+                // 加上 suppression（焦点/路由抑制）与播放器状态后，下一次现场至少能直接判类：
+                //   · suppression=AUDIO_FOCUS_LOSS* ⇒ 被别的应用抢了焦点（正确行为，但要决定要不要自动恢复）
+                //   · suppression=NONE + reason=USER_REQUEST ⇒ 我们自己或外部媒体键调的 pause
+                Log.d(
+                    "PlaybackService",
+                    "playWhenReady=$playWhenReady reason=${when (reason) {
+                        Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST -> "USER_REQUEST"
+                        Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS -> "AUDIO_FOCUS_LOSS"
+                        Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY -> "BECOMING_NOISY"
+                        Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE -> "REMOTE"
+                        Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM -> "END_OF_MEDIA_ITEM"
+                        else -> reason.toString()
+                    }} suppression=${suppressionName(player.playbackSuppressionReason)} " +
+                        "state=${playbackStateName(player.playbackState)} foreground=$isServiceStarted",
+                )
                 if (playWhenReady) {
                     cancelArtworkIdleRelease()
                 } else {
@@ -754,6 +773,16 @@ class PlaybackService : MediaLibraryService() {
                 ) {
                     persistServiceResumeIntent()
                     restartStallObservation()
+                }
+                // v4.1.14：抑制原因（焦点 / 路由 / scrub）变化单独记一条 ——
+                // 焦点被抢时 playWhenReady 可能压根不翻（例如瞬时丢失后自动恢复），
+                // 只有这一行能证明「那几秒是被系统按住的」。
+                if (events.contains(Player.EVENT_PLAYBACK_SUPPRESSION_REASON_CHANGED)) {
+                    Log.i(
+                        "PlaybackService",
+                        "suppression changed -> ${suppressionName(player.playbackSuppressionReason)} " +
+                            "playWhenReady=${player.playWhenReady} state=${playbackStateName(player.playbackState)}",
+                    )
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1005,6 +1034,26 @@ class PlaybackService : MediaLibraryService() {
         startProgressUpdates()
         // v4.1.8：卡顿观察循环随 Service 常驻（**不**随 buffering 状态/UI 生命周期开关）。
         startStallWatch()
+        // v4.1.14：**网络恢复 ⇒ 立刻可以再试一次复活**。
+        //
+        // 现场（2026-11-27 23:43–23:45）：取链连续超时导致 `pause_failed`，复活按
+        // 15s→30s→60s→120s→180s 退避重试；等网络恢复时，下一次尝试可能还要再等两三分钟 ——
+        // 用户看到的就是「网早好了，歌一直不放」。这里在网络真正可用时把退避清零，
+        // 2 秒内的下一次 tick 就会重试（是否重试仍由 shouldResurrect 的其余条件把关）。
+        scope.launch {
+            com.takahashirinta.ncrust.network.DefaultNetworkObserver(this@PlaybackService)
+                .changes()
+                .collect { route ->
+                    if (!route.online) return@collect
+                    if (resurrectAttempt == 0 && lastResurrectAtMs == 0L) return@collect
+                    Log.i(
+                        "PlaybackService",
+                        "network available -> reset resurrect backoff (was attempt=$resurrectAttempt)",
+                    )
+                    resurrectAttempt = 0
+                    lastResurrectAtMs = 0L
+                }
+        }
     }
 
     /**
@@ -1260,9 +1309,17 @@ class PlaybackService : MediaLibraryService() {
 
     private fun updateTrackMetadata(track: TrackKey, title: String?, artist: String?, artwork: String?) {
         // 换了一条曲目 ⇒ 上一首的「死与退避」全部作废（同一首歌的复活计数才是有意义的）。
-        resurrectAttempt = 0
-        lastResurrectAtMs = 0L
-        deadSinceMs = 0L
+        //
+        // ⚠️ 判据必须是「身份真的变了」，不能无条件清：UI 侧的重试会把**同一首**重推一次
+        // （`applyResolvedPlayback` → 这里），无条件清就让退避永远停在 15 秒一档 ——
+        // 真机现场（2026-11-27 23:43）就是这样：attempt=2 之后没过多久又变回 attempt=1，
+        // 每次复活都白付 2×8 秒连接超时。
+        val identityChanged = track.id != mediaSongId || track.source.key != mediaSourceKey
+        if (identityChanged) {
+            resurrectAttempt = 0
+            lastResurrectAtMs = 0L
+            deadSinceMs = 0L
+        }
         title?.let { mediaTitle = it }
         artist?.let { mediaArtist = it }
         mediaSongId = track.id

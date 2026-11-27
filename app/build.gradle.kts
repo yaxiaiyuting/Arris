@@ -538,8 +538,8 @@ android {
         //   versionCode 出处 = 4.1.9 的 241 + 1 = **242**（已核 `dist/` 内全部 APK 的
         //   `aapt2 dump badging`：最高 241，242 未被占用）。只改网络/取链侧的观测与重试决策，
         //   未改 applicationId、签名、接口、清单权限与动画。
-        versionCode = 246
-        versionName = "4.1.13-gpl"
+        versionCode = 248
+        versionName = "4.1.14-gpl"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
