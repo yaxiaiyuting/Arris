@@ -3,6 +3,19 @@
 > 本 fork（**Arris**，上游为 [GuitaristRin/Ncrust](https://github.com/GuitaristRin/Ncrust)）的完整版本历史。
 > [README](README.md) 的「版本历史」只列一句话亮点，**逐版本详解在这里**。
 >
+## v4.1.14-gpl — 后台播放的复活链路：退避不再被清零、网络恢复立刻重试（2026-11-27）
+
+主线 · Android 10 及以上 · versionCode 248 · 正式版
+
+- **网络恢复立刻重试**：真机现场（23:43–23:45）取链连续超时导致 `pause_failed` 把播放按停，复活按 15s→180s 退避重试；而网络可能在 10 秒后就恢复了，用户看到的是「网早好了、歌一直不放」。现在服务订阅 `DefaultNetworkObserver.changes()`，路由一旦 online 就把退避清零，2 秒内的下一次 tick 立刻重试。实测：断网 → 切歌触发 `pause_failed` → 恢复网络 → **1.5 秒内恢复播放**（`ok in 1186ms`）。
+- **复活退避不再被「重推同一首」清零**：`updateTrackMetadata` 原来无条件清 `resurrectAttempt`，而 UI 侧重试会把同一首重推一次 ⇒ 日志里 `attempt=2` 之后又变回 `attempt=1`，退避永远停在 15 秒一档，每次复活都白付 2×8 秒连接超时。改成只有**曲目身份真的变了**才清零。
+- **播放启停日志一次说全**：`playWhenReady` 的 `reason` 现在打名字（USER_REQUEST / AUDIO_FOCUS_LOSS / BECOMING_NOISY / REMOTE / END_OF_MEDIA_ITEM），并附 `suppression` 与 `playbackState`；`suppression` 变化单独记一条。此前现场只留下 `reason=1` 这种裸数字，分不清「媒体键 / 焦点被抢 / 自己按停」——本轮就有一条是把 adb 注入的媒体键误当成 App 卡的。
+- 顺带把设备 logd 环形缓冲调到 16 MiB 用于排障（设备侧设置，不在安装包里）。
+
+验证：全量 JVM **3795 例 / 0 失败 / 6 跳过**（373 suites）；`assembleRelease` 成功；发布包与手机上的测试包**同哈希**（`07ea76d8…`）。真机（PLC110 / Android 17 / ColorOS 16）断网/恢复实验见上。
+
+[GitHub Release](https://github.com/yaxiaiyuting/Arris/releases/tag/v4.1.14-gpl) · [官网直链](https://arris.de5.net/get/Arris-v4.1.14-gpl.apk) · SHA-256 `07ea76d8c3cd41bb49af11181aeb16702ebfc8853a97671b53c3d72fbeade4d8`
+
 ## v4.1.13-gpl — 修搜索页筛选档浮在结果行上（2026-11-25）
 
 主线 · Android 10 及以上 · versionCode 246 · 正式版
